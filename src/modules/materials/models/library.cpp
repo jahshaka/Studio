@@ -13,7 +13,12 @@ For more information see the LICENSE file
 
 QVector<NodeLibraryItem*> NodeLibrary::getItems()
 {
-	return items;
+	// Hidden entries are load aliases (NodeLibraryItem::hidden) — constructible
+	// by name, never listed. Every palette goes through here or filter().
+	QVector<NodeLibraryItem*> visible;
+	for (auto item : items)
+		if (!item->hidden) visible.append(item);
+	return visible;
 }
 
 QVector<NodeLibraryItem*> NodeLibrary::filter(QString name)
@@ -21,6 +26,7 @@ QVector<NodeLibraryItem*> NodeLibrary::filter(QString name)
 	QVector<NodeLibraryItem*> filtered;
 
 	for (auto item : items) {
+		if (item->hidden) continue;
 		if (item->displayName.toLower().contains(name))
 			filtered.append(item);
 	}
@@ -36,6 +42,17 @@ void NodeLibrary::addNode(QString name, QString displayName, QIcon icon, NodeCat
 void NodeLibrary::addNode(QString name, QString displayName, QString iconPath, NodeCategory type, std::function<NodeModel *()> factoryFunction)
 {
 	items.append(new NodeLibraryItem{ name, displayName, QIcon(iconPath) ,type, factoryFunction });
+}
+
+bool NodeLibrary::addAlias(QString name, QString existingName)
+{
+	for (auto item : items) {
+		if (item->name != existingName) continue;
+		items.append(new NodeLibraryItem{ name, item->displayName, item->icon,
+		                                  item->nodeCategory, item->factoryFunction, true });
+		return true;
+	}
+	return false;
 }
 
 bool NodeLibrary::hasNode(QString name)

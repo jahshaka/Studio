@@ -125,6 +125,14 @@ public:
 		bool hasMaster = false;
 		bool hasPbrMaster = false;
 		QString name;
+		/// THE MATERIAL'S ONE UV TRANSFORM (MATERIAL_UV_NODES_SPEC 3.2, D-1a).
+		/// When every sampler in every master sub-graph reads the mesh UVs
+		/// through the SAME constant tiling/offset/rotation, that transform is
+		/// lifted OFF the graph and onto the material: the samplers compile as
+		/// if their UV were the bake UV (so a bare texture chain passes through
+		/// at full resolution) and runCompiled lands textureScale/Offset/
+		/// Rotation beside the maps. `valid == false` carries the reason.
+		BakeProgram::UvFold uvFold;
 		// The master's Blend Mode setting (material state, not texel math):
 		// runCompiled lands it on the emitted alphaMode after the auto rules.
 		BlendMode blendMode = BlendMode::Opaque;
@@ -132,6 +140,10 @@ public:
 	};
 
 	static CompiledGraph compile(NodeGraph* graph, BakeProgram::TextureResolver resolver = {});
+
+	/// Intersects every socket's admissible UV transform into the material's
+	/// one, applies it to the compiled programs, and records it on `compiled`.
+	static void resolveUvFold(CompiledGraph& compiled);
 	static Result runCompiled(const CompiledGraph& compiled, const Options& opts);
 
 	static Result run(NodeGraph* graph, const Options& opts,

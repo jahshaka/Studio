@@ -88,7 +88,15 @@ int main(int argc, char **argv)
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     auto pbr = iris::PbrMaterial::create();
     pbr->setBaseColor(QColor(200, 40, 40));
-    pbr->setTextureScale(2.0f);
+    // Per-axis tiling + a rotated offset (MATERIAL_UV_NODES_SPEC phase 2): the
+    // exporter has to translate OUR transform (rotation in degrees about the
+    // texture CENTRE, counter-clockwise) into glTF's (radians about the
+    // ORIGIN, clockwise, offset applied after) — so the numbers in the file
+    // are not the numbers on the material, and this fixture pins the
+    // arithmetic rather than the pass-through.
+    pbr->setTextureScale(2.0f, 3.0f);
+    pbr->setTextureOffset(0.25f, 0.0f);
+    pbr->setTextureRotation(90.0f);
     pbr->setEmissiveColor(QColor(0, 255, 0));
     pbr->setEmissiveIntensity(3.0f);
     {
@@ -317,7 +325,47 @@ int main(int argc, char **argv)
     CHECK(hasExt("KHR_materials_transmission"), "KHR_materials_transmission used (glass)");
     CHECK(hasExt("KHR_materials_ior"), "KHR_materials_ior used (refractive glass)");
     CHECK(hasExt("KHR_materials_emissive_strength"), "KHR_materials_emissive_strength used");
-    CHECK(hasExt("KHR_texture_transform"), "KHR_texture_transform used (textureScale=2)");
+    CHECK(hasExt("KHR_texture_transform"), "KHR_texture_transform used (textureScale=[2,3])");
+
+    // The transform itself, on the cube's base-colour texture reference.
+    {
+        bool checked = false;
+        auto transformOf = [](const QJsonObject &m) {
+            // whichever slot the fixture's material actually textures
+            for (const char *k : { "baseColorTexture", "metallicRoughnessTexture" }) {
+                const QJsonObject ref = m["pbrMetallicRoughness"].toObject()[k].toObject();
+                const QJsonObject xf = ref["extensions"].toObject()["KHR_texture_transform"].toObject();
+                if (!xf.isEmpty()) return xf;
+            }
+            for (const char *k : { "normalTexture", "emissiveTexture" }) {
+                const QJsonObject ref = m[k].toObject();
+                const QJsonObject xf = ref["extensions"].toObject()["KHR_texture_transform"].toObject();
+                if (!xf.isEmpty()) return xf;
+            }
+            return QJsonObject();
+        };
+        for (const auto &mv : root["materials"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            const QJsonObject xf = transformOf(m);
+            if (xf.isEmpty()) continue;
+            checked = true;
+            const QJsonArray sc = xf["scale"].toArray();
+            CHECK(sc.size() == 2 && qFuzzyCompare(sc[0].toDouble() + 1.0, 3.0)
+                  && qFuzzyCompare(sc[1].toDouble() + 1.0, 4.0),
+                  "KHR_texture_transform carries the per-axis scale [2,3]");
+            // ours: R(90 CCW) about the centre, offset (0.25, 0). glTF wants the
+            // bias b = R*(o - 0.5) + 0.5; R*(-0.25, -0.5) = (0.5, -0.25), so
+            // b = (1.0, 0.25) — and a rotation of -pi/2, because glTF's
+            // positive direction is the other way round.
+            const QJsonArray off = xf["offset"].toArray();
+            CHECK(off.size() == 2 && std::fabs(off[0].toDouble() - 1.0) < 1e-5
+                  && std::fabs(off[1].toDouble() - 0.25) < 1e-5,
+                  "KHR_texture_transform offset is the rotated centre bias, not the raw offset");
+            CHECK(std::fabs(xf["rotation"].toDouble() + 1.5707963) < 1e-5,
+                  "KHR_texture_transform rotation is -90 degrees in radians (glTF's sign)");
+        }
+        CHECK(checked, "a material carries the texture transform");
+    }
 
     const QJsonArray lights = root["extensions"].toObject()["KHR_lights_punctual"]
                                   .toObject()["lights"].toArray();

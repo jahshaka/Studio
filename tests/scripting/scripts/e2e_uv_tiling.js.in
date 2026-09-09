@@ -1,0 +1,107 @@
+// scripting.e2e.uv_tiling — MATERIAL_UV_NODES_SPEC phase 3, end to end through
+// the verbs.
+//
+// The question this answers is the one the whole feature turns on: when a user
+// tiles a texture, does the tiling ride the MATERIAL (full-resolution source,
+// no map written) or get RESAMPLED into a baked map (a 4x tiling into a 1024
+// bake keeps 256 px per tile)? So it asserts both routes and the boundary
+// between them, plus the two-number spellings material.set accepts.
+//
+// Headless on purpose: every verb here is document-side. The PIXEL evidence
+// that the material's transform actually tiles, offsets and rotates the render
+// lives in tests/engine (pbr_texture_scale_tiles_uvs), which owns a GPU.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b) { return Math.abs(a - b) < 1e-4; }
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+var texPath = fixtures + "/implane_wide.png";
+
+var proj = project.create("UV Tiling " + Date.now());
+assert(proj.length > 10, "project.create");
+
+// ---- the owner's shape: ONE texture node with a UV pin -------------------
+var shaderGuid = materials.createGraph("UvTilingFx");
+assert(shaderGuid.length > 10, "materials.createGraph");
+
+var masterId = null;
+graph.nodes().forEach(function (n) { if (n.master) masterId = n.id; });
+assert(masterId !== null, "the new graph has a master node");
+
+var tex = graph.addNode("texture");
+assert(graph.setValue(tex, texPath), "graph.setValue: the texture node takes an image path");
+
+var uv = graph.addNode("uv");
+assert(uv.length > 0, "graph.addNode('uv') — the merged UV node exists");
+assert(graph.setValue(uv, { tileX: 4, tileY: 4 }), "graph.setValue: tiling 4x4");
+
+// UV -> texture.UV (input 0), texture.RGBA (output 1) -> Base Color
+assert(graph.connect(uv, 0, tex, 0), "uv.UV -> texture.UV (the input the owner asked for)");
+assert(graph.connect(tex, 1, masterId, "Base Color"), "texture.RGBA -> Base Color");
+
+// ---- the fold ------------------------------------------------------------
+var info = graph.bakeInfo();
+assert(info.fold !== null && info.fold !== undefined, "bakeInfo reports a fold");
+assert(info.fold.scale[0] === 4 && info.fold.scale[1] === 4, "bakeInfo.fold.scale == [4,4]");
+assert(info.fold.samplers === 1, "bakeInfo.fold covers the one sampler");
+assert(info.perSocket["Base Color"] === "passthrough",
+       "the folded chain is PASSTHROUGH — the full-resolution source binds, nothing resamples");
+
+var baked = graph.bake({ resolution: 64 });
+assert(Object.keys(baked.maps).length === 0, "the fold writes NO baked map at all");
+assert(baked.values.textureScale[0] === 4 && baked.values.textureScale[1] === 4,
+       "values.textureScale == [4,4] lands on the material instead");
+assert(baked.values.textureRotation === undefined, "no rotation key when there is no rotation");
+
+// ---- it reaches a scene material ----------------------------------------
+var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+assert(graph.toMaterial(cube) === true, "graph.toMaterial applies to the cube");
+var mat = material.get(cube);
+assert(near(mat.textureScale, 4) && near(mat.textureScaleV, 4),
+       "the scene material carries the tiling on both axes");
+assert(("" + mat.baseColorMap).length > 0, "and still has the source image bound");
+
+// ---- per-axis tiling and an offset fold too ------------------------------
+assert(graph.setValue(uv, { tileX: 4, tileY: 1, offsetX: 0.25, offsetY: 0.5 }),
+       "graph.setValue: per-axis tiling with an offset");
+var info2 = graph.bakeInfo();
+assert(info2.fold.scale[0] === 4 && info2.fold.scale[1] === 1, "fold.scale == [4,1]");
+assert(near(info2.fold.offset[0], 0.25) && near(info2.fold.offset[1], 0.5), "fold.offset == [0.25,0.5]");
+
+// ---- a second, DIFFERENT transform refuses the fold ----------------------
+var tex2 = graph.addNode("texture");
+assert(graph.setValue(tex2, texPath), "second texture node");
+var uv2 = graph.addNode("uv");
+assert(graph.setValue(uv2, { tileX: 2, tileY: 2 }), "second UV node, tiled differently");
+assert(graph.connect(uv2, 0, tex2, 0), "uv2 -> texture2.UV");
+assert(graph.connect(tex2, 1, masterId, "Emissive"), "texture2.RGBA -> Emissive");
+
+var info3 = graph.bakeInfo();
+assert(info3.fold === null, "two different transforms refuse the fold");
+assert(("" + info3.foldReason).length > 10, "and bakeInfo says why, in words");
+assert(info3.perSocket["Base Color"] === "baked", "the textures resample into baked maps instead");
+
+var baked3 = graph.bake({ resolution: 64 });
+assert(("" + baked3.maps.baseColorMap).indexOf("BakedMaps/") === 0,
+       "the resample route writes a real map under BakedMaps/");
+assert(baked3.values.textureScale === undefined, "and lands no transform on the material");
+
+// ---- material.set takes both spellings ----------------------------------
+assert(material.set(cube, { textureScale: 3 }), "material.set: a number means uniform tiling");
+var m1 = material.get(cube);
+assert(near(m1.textureScale, 3) && near(m1.textureScaleV, 3), "a number sets BOTH axes");
+
+assert(material.set(cube, { textureScale: [2, 5] }), "material.set: [u,v] sets the axes apart");
+var m2 = material.get(cube);
+assert(near(m2.textureScale, 2) && near(m2.textureScaleV, 5), "per-axis tiling landed");
+
+assert(material.set(cube, { textureOffset: [0.1, 0.2], textureRotation: 45 }),
+       "material.set: textureOffset [u,v] + textureRotation degrees");
+var m3 = material.get(cube);
+assert(near(m3.textureOffsetU, 0.1) && near(m3.textureOffsetV, 0.2), "the offset landed");
+assert(near(m3.textureRotation, 45), "the rotation landed");
+
+console.log("UV TILING E2E OK");

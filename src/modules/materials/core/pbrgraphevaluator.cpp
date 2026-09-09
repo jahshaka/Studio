@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "pbrgraphevaluator.h"
 
+#include <QJsonArray>
+
 #include <QColor>
 #include <QDebug>
 #include <QJsonObject>
@@ -66,6 +68,31 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 		}
 		else if (key == "alphaMode")
 			material->setValue(key, values[key].toInt());
+		// THE FOLDED UV TRANSFORM (MATERIAL_UV_NODES_SPEC 3.2). `textureScale`
+		// is a two-element array when the axes differ and a plain number when
+		// they do not — and every material written before per-axis tiling
+		// existed carries the number, so both spellings are read here forever.
+		else if (key == "textureScale" || key == "textureOffset") {
+			const auto val = values[key];
+			const bool isScale = key == "textureScale";
+			double u = isScale ? 1.0 : 0.0, v = u;
+			if (val.isArray()) {
+				const auto arr = val.toArray();
+				u = arr.size() > 0 ? arr[0].toDouble(u) : u;
+				v = arr.size() > 1 ? arr[1].toDouble(u) : u;
+			}
+			else {
+				u = v = val.toDouble(u);
+			}
+			if (isScale) {
+				material->setValue(QStringLiteral("textureScale"), u);   // sets both axes
+				material->setValue(QStringLiteral("textureScaleV"), v);
+			}
+			else {
+				material->setValue(QStringLiteral("textureOffsetU"), u);
+				material->setValue(QStringLiteral("textureOffsetV"), v);
+			}
+		}
 		else
 			material->setValue(key, values[key].toDouble());
 	}

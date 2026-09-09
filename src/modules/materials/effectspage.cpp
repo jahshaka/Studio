@@ -1262,6 +1262,7 @@ void EffectsPage::generateTileNode()
 	QSize currentSize(90, 90);
 
 	for (NodeLibraryItem *tile : graph->library->items) {
+		if (tile->hidden) continue; // load aliases are not palette entries
 		auto item = new QListWidgetItem;
 		item->setText(tile->displayName);
 		item->setData(Qt::DisplayRole, tile->displayName);

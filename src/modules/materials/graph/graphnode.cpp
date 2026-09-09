@@ -119,8 +119,6 @@ void GraphNode::setHeaderWidget(QWidget *widget)
 void GraphNode::addInSocket(SocketModel *socket)
 {
 	auto sock = new Socket(this, SocketType::In, socket->name);
-	auto y = calcHeight();
-	sock->setPos(-sock->getRadius(), y);
 	sock->node = this;
 	sock->socketIndex = inSocketCount++;
 	sock->setSocketColor(socket->socketColor);
@@ -130,8 +128,6 @@ void GraphNode::addInSocket(SocketModel *socket)
 void GraphNode::addOutSocket(SocketModel *socket)
 {
 	auto sock = new Socket(this, SocketType::Out, socket->name);
-	auto y = calcHeight();
-	sock->setPos(nodeWidth + sock->getRadius(), y);
 	sock->node = this;
 	sock->socketIndex = outSocketCount++;
 	sock->setSocketColor(socket->socketColor);
@@ -141,7 +137,63 @@ void GraphNode::addOutSocket(SocketModel *socket)
 void GraphNode::addSocket(Socket* sock)
 {
 	sockets.append(sock);
+	// Positions are assigned by ROW, not by insertion order, so they have to be
+	// recomputed every time the set changes — the scene adds every input first
+	// and every output second (GraphNodeScene::addNodeModel), and pairing them
+	// is only possible once both sides are known.
+	layoutSockets();
 	calcPath();
+}
+
+int GraphNode::socketRowCount() const
+{
+	return qMax(inSocketCount, outSocketCount);
+}
+
+// PAIRED ROWS (D-4). Sockets used to stack in insertion order — every input
+// down the left edge, then every output continuing down the right — so a node
+// with one input and one output drew them on DIFFERENT rows and nothing was
+// ever "opposite" anything. Row i now holds input i on the left and output i on
+// the right, which is what the owner's "UV at the top left, opposite the texture
+// output on the right" describes, and it is the NodeGraphQt look the theme
+// already committed to.
+//
+// Label collision is not a risk at these widths: an input label starts ~10px in
+// and an output label ends ~30px from the right of a 170px card, and our socket
+// names are short words. A node that ever needs two long names on one row wants
+// a wider card, not a different layout.
+void GraphNode::layoutSockets()
+{
+	QVector<Socket*> ins, outs;
+	for (auto sock : sockets)
+		(sock->socketType == SocketType::In ? ins : outs).append(sock);
+
+	int y = titleHeight + 20;   // title + padding, as calcHeight has always had it
+	const int rows = qMax(ins.size(), outs.size());
+	for (int r = 0; r < rows; ++r) {
+		Socket* in = r < ins.size() ? ins[r] : nullptr;
+		Socket* out = r < outs.size() ? outs[r] : nullptr;
+		const float h = qMax(in ? in->calcHeight() : 0.0f, out ? out->calcHeight() : 0.0f);
+		if (in) in->setPos(-in->getRadius(), y);
+		if (out) out->setPos(nodeWidth + out->getRadius(), y);
+		y += int(h) + increment;
+	}
+}
+
+int GraphNode::socketRowsHeight()
+{
+	QVector<Socket*> ins, outs;
+	for (auto sock : sockets)
+		(sock->socketType == SocketType::In ? ins : outs).append(sock);
+	int h = 0;
+	const int rows = qMax(ins.size(), outs.size());
+	for (int r = 0; r < rows; ++r) {
+		Socket* in = r < ins.size() ? ins[r] : nullptr;
+		Socket* out = r < outs.size() ? outs[r] : nullptr;
+		h += int(qMax(in ? in->calcHeight() : 0.0f, out ? out->calcHeight() : 0.0f));
+		h += increment; // padding
+	}
+	return h;
 }
 
 void GraphNode::setWidget(QWidget *widget)
@@ -177,12 +229,7 @@ int GraphNode::calcHeight()
 {
 	int height = 0;
 	height += titleHeight + 20;// title + padding
-
-	for (auto socket : sockets)
-	{
-		height += socket->calcHeight();
-		height += increment; // padding
-	}
+	height += socketRowsHeight();
 
 	if (proxyWidget != nullptr && !doNotCheckProxyWidgetHeight)
 		height += proxyWidget->size().height();
@@ -227,14 +274,11 @@ Socket *GraphNode::getOutSocket(int index)
 
 void GraphNode::layout()
 {
+	layoutSockets();
+
 	int height = 0;
 	height += titleHeight + 20;// title + padding
-
-	for (auto socket : sockets)
-	{
-		height += socket->calcHeight();
-		height += increment; // padding
-	}
+	height += socketRowsHeight();
 
 	if (proxyWidget != nullptr && !doNotCheckProxyWidgetHeight) {
 		proxyWidget->setPos((nodeWidth - proxyWidget->size().width()) / 2,

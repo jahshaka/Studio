@@ -241,6 +241,14 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		if (type == "truncate")
 			type = "trunc";
 
+		// THE UV MERGE (MATERIAL_UV_NODES_SPEC D-3). "texCoords" (bare UV) and
+		// "uvTransform" (uv*tiling+offset) are one "uv" node now. Both are
+		// registered as hidden library aliases, so this is a RENAME on load,
+		// not a rebuild: the alias node keeps in 0/1/2 and out 0 at the same
+		// indices, and connections are stored BY INDEX, so nothing re-points.
+		// `texCoords` had no inputs at all, so its saves reference out 0 only.
+		const bool wasUvAlias = (type == "texCoords" || type == "uvTransform");
+
 		// master nodes are constructed directly, not through the library:
 		// "PbrMaterial" is the PBR master (default for new graphs),
 		// "Material" the legacy Blinn-Phong one
@@ -343,6 +351,13 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 
 		nodeModel->deserializeWidgetValue(nodeObj["value"]);
 		auto storedTitle = nodeObj["title"].toString();
+		// A merged alias whose stored title is just the OLD DEFAULT takes the
+		// new node's name — the user never renamed it, and leaving "UV
+		// Transform" on a card that is now the UV node would be the merge
+		// showing through. A title the user actually chose is kept, as always.
+		if (wasUvAlias && (storedTitle == QLatin1String("UV Transform")
+		                   || storedTitle == QLatin1String("Texture Coordinate")))
+			storedTitle.clear();
 		if (!storedTitle.isEmpty())
 			nodeModel->title = storedTitle;
 

@@ -113,7 +113,8 @@ private:
 	QVBoxLayout* mEditorLayout = nullptr;
 
 	// live editors for the current node (type-dependent)
-	QVector<QDoubleSpinBox*> mNumberBoxes;   // float / vector2/3/4 components
+	QVector<QDoubleSpinBox*> mNumberBoxes;   // float / vector2/3/4 / uv components
+	QComboBox* mUvSetCombo = nullptr;        // the UV node's UV-set row
 	ColorPickerWidget* mColorSwatch = nullptr;
 	QPushButton* mTextureButton = nullptr;
 };

@@ -468,6 +468,23 @@ set_tests_properties(scripting.e2e.image_material PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# MATERIAL_UV_NODES_SPEC phase 3: the UV input end to end — the fold (a
+# uniform tiling rides the material, no map is baked, the source binds at full
+# resolution), the resample route when two textures tile differently, and the
+# two-number spellings material.set accepts. Document verbs only -> --headless;
+# the pixel proof that the material's transform tiles/offsets/rotates the
+# render belongs to tests/engine (pbr_texture_scale_tiles_uvs).
+configure_file(scripts/e2e_uv_tiling.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-uv_tiling)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.uv_tiling
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.uv_tiling PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # IMAGE_PLANE_SPEC §6: pinned library assets hydrate on project REOPEN —
 # add-to-project → close → reopen → material.apply by the pinned guid onto a
 # cube → document material asserted. Document verbs only -> --headless;
@@ -761,6 +778,7 @@ jah_no_display(
     scripting.e2e.import_pipeline
     scripting.e2e.decals
     scripting.e2e.image_material
+    scripting.e2e.uv_tiling
     scripting.e2e.pinned_reopen
     scripting.e2e.world_modes
     scripting.e2e.looks

@@ -477,6 +477,102 @@ int main(int argc, char** argv)
         CHECK(near(c["r"].toDouble(), 0.6, 1e-5) && near(c["g"].toDouble(), 0.8, 1e-5),
               "op: uvTransform widget values survive serialize/deserialize");
     }
+
+    // ============ THE UV NODE (MATERIAL_UV_NODES_SPEC D-3/D-5) ============
+    {
+        Rig r; // the merge: "uvTransform" and "texCoords" both construct a `uv`
+        auto a = r.graph->library->createNode("uvTransform");
+        auto b = r.graph->library->createNode("texCoords");
+        auto c = r.graph->library->createNode("uv");
+        CHECK(a && b && c, "uv: all three typeNames construct");
+        CHECK(a->typeName == "uv" && b->typeName == "uv" && c->typeName == "uv",
+              "uv: the old typeNames are aliases of the one node");
+        CHECK(a->title == "UV" && b->title == "UV", "uv: aliases carry the new title");
+        LibraryV1 lib;
+        bool listed = false;
+        for (auto item : lib.getItems())
+            if (item->name == "texCoords" || item->name == "uvTransform") listed = true;
+        CHECK(!listed, "uv: the aliases are NOT palette entries");
+    }
+    {
+        Rig r; // rotation about the texture centre, 90 degrees
+        auto op = r.add("uv");
+        QJsonObject widget;
+        widget["rotation"] = 90.0;
+        op->deserializeWidgetValue(widget);
+        r.graph->addConnection(r.addVec(2, 1.0, 0.5), 0, op, 0);
+        r.toMaster(op, 0, 0);
+        auto c = baseColorOf(r);
+        // (1, .5) - .5 = (.5, 0); R(90)*(.5,0) = (0,.5); + .5 = (.5, 1)
+        CHECK(near(c["r"].toDouble(), 0.5, 1e-5) && near(c["g"].toDouble(), 1.0, 1e-5),
+              "op: uv rotation 90 about (0.5,0.5)");
+    }
+    {
+        Rig r; // rotation 0 is the plain uv*s+o, bit-for-bit
+        auto op = r.add("uv");
+        QJsonObject widget;
+        widget["tileX"] = 2.0; widget["tileY"] = 2.0;
+        widget["offsetX"] = 0.1; widget["offsetY"] = 0.3;
+        widget["rotation"] = 0.0;
+        op->deserializeWidgetValue(widget);
+        r.graph->addConnection(r.addVec(2, 0.25, 0.25), 0, op, 0);
+        r.toMaster(op, 0, 0);
+        auto c = baseColorOf(r);
+        // The same numbers the retired uvTransform produced (a colour slot
+        // quantizes to QColor's 16 bits, hence 1e-5 here like its neighbours;
+        // the ulp-level claim — that a zero rotation skips the (x-0.5)+0.5
+        // centre round-trip on BOTH backends — is BakeOp::uvRotationIsZero and
+        // is gated by shadergraph.emitter_parity).
+        CHECK(near(c["r"].toDouble(), 0.6, 1e-5) && near(c["g"].toDouble(), 0.8, 1e-5),
+              "op: uv with rotation 0 == uv*(2,2)+(.1,.3)");
+    }
+    {
+        Rig r; // rotation + uvSet round-trip through a save/load
+        auto op = r.add("uv");
+        QJsonObject widget;
+        widget["tileX"] = 3.0; widget["tileY"] = 4.0;
+        widget["offsetX"] = 0.2; widget["offsetY"] = 0.6;
+        widget["rotation"] = 45.0;
+        widget["uvSet"] = 2;
+        op->deserializeWidgetValue(widget);
+        const QJsonObject back = op->serializeWidgetValue().toObject();
+        CHECK(near(back["rotation"].toDouble(), 45.0) && back["uvSet"].toInt() == 2,
+              "op: uv rotation + UV set serialize (texCoords' combo never did)");
+        r.toMaster(op, 0, 0);
+        const QJsonObject saved = r.graph->serialize();
+        NodeGraph* loaded = NodeGraph::deserialize(saved, new LibraryV1());
+        NodeModel* reloaded = nullptr;
+        for (auto node : loaded->nodes.values())
+            if (node->typeName == "uv") reloaded = node;
+        CHECK(reloaded != nullptr, "op: the uv node survives a save/load");
+        if (reloaded) {
+            const QJsonObject w = reloaded->serializeWidgetValue().toObject();
+            CHECK(near(w["tileX"].toDouble(), 3.0) && near(w["tileY"].toDouble(), 4.0)
+                  && near(w["rotation"].toDouble(), 45.0) && w["uvSet"].toInt() == 2,
+                  "op: every uv field round-trips through the file");
+        }
+    }
+    {
+        // TOLERANT-ABSENT: a `uvTransform` saved before rotation existed, and a
+        // `texCoords` whose widget value was never an object at all.
+        LibraryV1 lib;
+        auto old = lib.createNode("uvTransform");
+        QJsonObject legacy;
+        legacy["tileX"] = 2.0; legacy["tileY"] = 2.0;
+        legacy["offsetX"] = 0.0; legacy["offsetY"] = 0.0;
+        old->deserializeWidgetValue(legacy);
+        const QJsonObject back = old->serializeWidgetValue().toObject();
+        CHECK(near(back["rotation"].toDouble(), 0.0) && back["uvSet"].toInt() == 0,
+              "op: a pre-rotation uvTransform loads as rotation 0 / UV set 0");
+        auto bare = lib.createNode("texCoords");
+        bare->deserializeWidgetValue(QJsonValue());   // texCoords serialized nothing
+        const QJsonObject bareBack = bare->serializeWidgetValue().toObject();
+        CHECK(near(bareBack["tileX"].toDouble(), 1.0)
+              && near(bareBack["tileY"].toDouble(), 1.0)
+              && near(bareBack["offsetX"].toDouble(), 0.0)
+              && near(bareBack["rotation"].toDouble(), 0.0),
+              "op: a bare texCoords loads as the identity transform");
+    }
     {
         Rig r; // texelsize Aspect (out 5): 32x64 -> W/H == 0.5
         const QString texPath = QDir::current().absoluteFilePath("parity_tall_32x64.png");

@@ -117,6 +117,60 @@ QStringList writableMaterialKeys(const iris::MaterialPtr &material)
     return keys;
 }
 
+/// THE UV TRANSFORM'S TWO-NUMBER SPELLINGS (MATERIAL_UV_NODES_SPEC phase 3).
+///
+/// The document stores five scalar rows — textureScale (U), textureScaleV,
+/// textureOffsetU, textureOffsetV, textureRotation — because that is what the
+/// property/serialization machinery is built out of and what keeps every file
+/// written before per-axis tiling loading correctly. A SCRIPT should not have
+/// to know that: `material.set(n, { textureScale: [4, 1] })` is the natural
+/// way to write it, and `{ textureScale: 4 }` has to keep meaning uniform
+/// tiling forever, because it is what every existing script says.
+///
+/// So this expands the pair spellings into the scalar keys before anything
+/// else looks at them. `textureOffset` exists ONLY as a pair spelling (there
+/// was never a scalar key by that name), and accepts a single number too, for
+/// symmetry with textureScale.
+QVariantMap expandUvPairKeys(const QVariantMap &values, QString *error)
+{
+    auto pair = [&](const QVariant &v, double &u, double &w) {
+        if (v.canConvert<QVariantList>() && v.typeId() != QMetaType::QString) {
+            const QVariantList list = v.toList();
+            if (list.size() != 2) return false;
+            u = list[0].toDouble();
+            w = list[1].toDouble();
+            return true;
+        }
+        u = w = v.toDouble();
+        return true;
+    };
+
+    QVariantMap out;
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+        const QString &key = it.key();
+        if (key != QLatin1String("textureScale") && key != QLatin1String("textureOffset")) {
+            out.insert(key, it.value());
+            continue;
+        }
+        double u = 0, w = 0;
+        if (!pair(normalizeJs(it.value()), u, w)) {
+            if (error)
+                *error = QStringLiteral("material.set: '%1' takes a number (uniform) or a "
+                                        "two-element array [u, v]").arg(key);
+            return QVariantMap();
+        }
+        if (key == QLatin1String("textureScale")) {
+            out.insert(QStringLiteral("textureScale"), u);
+            out.insert(QStringLiteral("textureScaleV"), w);
+        }
+        else {
+            out.insert(QStringLiteral("textureOffsetU"), u);
+            out.insert(QStringLiteral("textureOffsetV"), w);
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------- materials.*
@@ -409,8 +463,15 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "A container node (an imported model's root) applies to every mesh under it, each with its own material instance. "
           "Also registers preset applies as a project asset, like the presets panel. Undoable.",
           Needs::Document },
-        { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, ...}) -> bool",
-          "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property.",
+        { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
+          "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
+          "THE UV TRANSFORM takes two spellings: `textureScale` and `textureOffset` accept a "
+          "two-element array [u, v] for per-axis tiling/offset, or a plain number meaning both "
+          "axes (which is what every script written before per-axis tiling says, and it keeps "
+          "meaning that). `textureRotation` is degrees, counter-clockwise about the texture "
+          "centre. They are stored as the scalar rows material.properties lists — textureScale, "
+          "textureScaleV, textureOffsetU, textureOffsetV, textureRotation — and material.get "
+          "reports those rows, so a read comes back as numbers, not as the pair.",
           Needs::Document },
         { "get", "material.get(nodeId) -> {property: value}",
           "Reads the node material's editor-facing properties. material.properties(nodeId) is the "
@@ -521,7 +582,13 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     const QStringList &legacyMapKeys = kLegacyMapKeys;
     const QStringList &mapKeys = kMapKeys;
 
-    for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+    // `textureScale: [u, v]` / `textureOffset: [u, v]` become the scalar rows
+    // the document actually stores; a bare number still means uniform.
+    QString pairError;
+    const QVariantMap expanded = expandUvPairKeys(values, &pairError);
+    if (!pairError.isEmpty()) return fail(pairError);
+
+    for (auto it = expanded.constBegin(); it != expanded.constEnd(); ++it) {
         const QString &key = it.key();
         QVariant newValue = normalizeJs(it.value());
 
@@ -743,8 +810,15 @@ QVector<VerbInfo> GraphApi::verbs() const
           "Folds the current graph to PBR material values (the evaluator is GL-free by design). Pure math chains fold; "
           "approximated lists nodes evaluated against the fake fragment context (worldNormal, fresnel, time at t=0, ...).",
           Needs::Document },
-        { "bakeInfo", "graph.bakeInfo() -> {perSocket: {socketName: class}}",
-          "Classifies each master input: 'uniform' | 'passthrough' | 'baked' | 'unsupported' | 'unconnected'.",
+        { "bakeInfo", "graph.bakeInfo() -> {perSocket: {socketName: class}, fold, foldReason?, migrations?}",
+          "Classifies each master input: 'uniform' | 'passthrough' | 'baked' | 'unsupported' | 'unconnected'. "
+          "`fold` is THE UV TRANSFORM ROUTE (MATERIAL_UV_NODES_SPEC): when every texture in the "
+          "graph reads the mesh UVs through the same constant tiling/offset/rotation, that "
+          "transform is lifted onto the MATERIAL — `{scale:[u,v], offset:[u,v], rotation, "
+          "samplers}` — the sources bind at full resolution and no map is baked. `fold: null` "
+          "with `foldReason` means the textures are RESAMPLED into baked maps instead, which "
+          "costs resolution (a 4x tiling into a 1024 bake keeps 256 px per tile), so the reason "
+          "is worth reading. `migrations` lists what loading the graph had to change.",
           Needs::Document },
         { "emitInfo", "graph.emitInfo() -> {accepted, animated, emitted: [socket], fallback: {socket: reason}, "
           "ops: [opKey], pixelSource, vertexSource}",
