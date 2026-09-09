@@ -3053,9 +3053,14 @@ void MainWindow::setupToolBar()
 
 	connect(this, SIGNAL(projectionChangeRequested(bool)), this, SLOT(changeProjection(bool)));	
 
-	connect(sceneView->events(), &EditorViewportEvents::updateToolbarButton, this, [=]() {
-		if (sceneView->editorCamera()->isPerspective) projectionChangeRequested(true);
-		else projectionChangeRequested(false);
+	// A REPORT, NOT A COMMAND. The viewport telling the toolbar what its camera
+	// now is must only repaint the button — routing it through
+	// projectionChangeRequested would make every such report re-issue a view
+	// change (and, since the change is a canonical view now, snap the camera).
+	connect(sceneView->events(), &EditorViewportEvents::updateToolbarButton, this, [this]() {
+		if (!sceneView || !sceneView->editorCamera()) return;
+		syncProjectionButton(sceneView->editorCamera()->isPerspective);
+		setViewsButtonLabel(sceneView->cameraView());
 	});
 
 	// The scroll wheel stepped the fly speed while the camera was flying: show
@@ -4082,9 +4087,14 @@ bool MainWindow::applyCameraView(const QString &name)
 {
     if (!sceneView || !sceneView->setCameraView(name)) return false;
 
-    // projection icon + tooltip stay in sync (changeProjection re-applies the
-    // projection the viewport already set — idempotent)
-    changeProjection(name == QLatin1String("perspective"));
+    // The projection button is a VIEW of the state, so it is updated and never
+    // asked to re-apply anything (it used to call changeProjection, which is
+    // now the command and would recurse).
+    const bool perspective = (name == QLatin1String("perspective"));
+    syncProjectionButton(perspective);
+    // ...and an axis view is remembered, so the toggle's "orthographic" means
+    // "back to the one I was in".
+    if (!perspective) lastOrthographicView = name;
 
     for (QAction *action : viewsActions)
         action->setChecked(action->data().toString() == name);
@@ -4105,16 +4115,40 @@ void MainWindow::setViewsButtonLabel(const QString &view)
     viewsButton->setText(QStringLiteral("Perspective "));
 }
 
+// THE PROJECTION TOGGLE IS A VIEW CHANGE (hygiene lane, 2026-09-09).
+//
+// Three defects in one small function, all of them the same mistake — it did
+// the work itself instead of asking the viewport:
+//
+//  1. It wrote `sceneView->getScene()->camera`, the SCENE's camera node. The
+//     explorer this viewport flies is a different node (EngineSceneViewport::
+//     editorCamera), so the button changed a camera nothing was looking
+//     through and the picture did not change at all until something else
+//     happened to re-push.
+//  2. It never went through setCameraView, so the AXIS-VIEW ROTATION LOCK was
+//     never armed or disarmed (the lock reads the projection precisely because
+//     this button used to bypass it — enginesceneviewport.cpp says so at
+//     cameraRotationLocked) and the per-view camera memory was not consulted.
+//  3. It left the Views label reading "Perspective" over an orthographic
+//     picture, because only applyCameraView relabels it.
+//
+// So it now asks for a canonical view, and "orthographic" means the last AXIS
+// view this window was in (Top on a fresh window). That is the same state the
+// Views menu produces, which is the point: two controls that mean the same
+// thing must not be able to leave the editor in two different states.
 void MainWindow::changeProjection(bool val)
 {
-	if (!val) {
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
-		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
-		cameraView->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));		
-	}
-	else {
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+	applyCameraView(val ? QStringLiteral("perspective") : lastOrthographicView);
+}
+
+void MainWindow::syncProjectionButton(bool perspective)
+{
+	if (!cameraView) return;
+	if (perspective) {
 		cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
 		cameraView->setToolTip(tr("Perspective view | Toggle to switch to orthogonal view"));
+	} else {
+		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
+		cameraView->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));
 	}
 }
