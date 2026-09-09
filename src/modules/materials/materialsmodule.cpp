@@ -88,7 +88,7 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
 
         // graph.paletteTile — where a node tile IS, so the rig can drag it
         // instead of aiming at a fraction of the window (hygiene lane,
-        // 2026-09-09; app.pacing_undo's palette drag).
+        // 2026-09-09; app.input_keys's palette drag).
         GraphApi::PaletteDelegate paletteDelegate;
         paletteDelegate.tile = [effectsPage](const QString &name) {
             return effectsPage->paletteTileRect(name);

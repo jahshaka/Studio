@@ -971,7 +971,7 @@ jah_no_display(scripting.e2e.refusals)
 # AABB of a scene's geometry — and editor.camera's lens, which stopped requiring
 # a rendering engine in the same lane (the saved fov is document state; gating
 # it on a GPU is why the samples' 70 and 75 degree lenses went unnoticed for a
-# week). samples.scale measures the shipped archives THROUGH these two; this
+# week). samples.cleanstart measures the shipped archives THROUGH these two; this
 # gates them against primitives of known size. Document verbs only -> --headless.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_bounds)
 file(MAKE_DIRECTORY ${_home}/run)

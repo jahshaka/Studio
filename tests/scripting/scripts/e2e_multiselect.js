@@ -98,7 +98,7 @@ assert(J(editor.selectionSet()) === J([rootId]), "which replaces the selection w
 // ---- 4b. SELECT ALL (Ctrl+A, §8.7) ----------------------------------------
 // Every node except the World root, in document pre-order, topmost first — and
 // not an undo entry. The KEY half (a focused text field keeps the chord) is
-// app.multiselect_keys; this is the capability the key runs.
+// app.input_keys; this is the capability the key runs.
 var pushesSelAll = editor.undoState().pushes;
 var all = editor.selectAll();
 assert(all.length === scene.nodes().length - 1,

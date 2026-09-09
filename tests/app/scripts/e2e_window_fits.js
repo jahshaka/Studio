@@ -7,7 +7,7 @@
 // of the suite — opened a window taller than a 1080p desktop. With a window
 // manager that is rude; on the WM-less Xvfb the rig uses, nothing clamps
 // anything ever, so the bottom of the window (the Materials palette lives
-// there) was simply off the screen. app.pacing_undo's palette drag aimed at a
+// there) was simply off the screen. app.input_keys's palette drag aimed at a
 // per-mille point computed from the window height and hit the tab bar instead.
 //
 // Runs --headless (offscreen QPA, no engine, no display): the offscreen screen

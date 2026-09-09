@@ -29,13 +29,17 @@
 //   * assets.bakeAll then reopen — the mesh bake landed 2026-09-04 and the
 //     samples are its first real content; a baked open must produce the same
 //     document as an unbaked one,
-//   * SHOWROOM, which scripting.e2e.samples does not cover at all.
+//   * the SCENE-SCALE CONVENTION, in numbers — extents, signature-object
+//     sizes, interior room dimensions, node identity and the saved lens,
+//   * MATERIAL FIDELITY and EXACT COLOURS, per sample, including the fire
+//     plume before AND after the save round trip.
 //
-// PIXELS are asserted with deliberately wide tolerance: Showroom, Particles,
-// Physics and Skeletal are NOT open-to-open pixel-deterministic (particle RNG,
-// GI, physics), so this suite asserts structure + errors + "not obviously
-// broken" (the frame is neither black nor blown out and carries colour), and
-// leaves exact-colour probing to scripting.e2e.samples.
+// TWO PIXEL PASSES, on purpose. renderSanity() is the WIDE one and runs for
+// every sample: Showroom, Particles, Physics and Skeletal are NOT open-to-open
+// pixel-deterministic (particle RNG, GI, physics), so it asserts only "the
+// frame is neither black nor blown out and carries colour". The FIDELITY table
+// is the NARROW one and runs for the five samples whose colours are pinnable —
+// the gold dragon must BE gold.
 
 var SAMPLE = "@SAMPLE@";
 var ZIP = "@SOURCE_DIR@/scenes/" + SAMPLE + ".zip";

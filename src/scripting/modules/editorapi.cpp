@@ -202,7 +202,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "camera", "editor.camera() -> {position:{x,y,z}, rotation:{x,y,z,scalar}, projection:\"perspective\"|\"orthogonal\", orthoSize, fov, nearClip, farClip, rotationLocked}",
           "The editor camera's current pose: local position, local rotation quaternion, projection mode, ortho zoom and LENS (`fov` is the vertical field of view in degrees — the value editor.setCamera writes, "
           "and the one the scene file persists as the saved camera; `nearClip`/`farClip` complete the lens). Read-only — the pixel-free way to assert camera moves (focus, view switches) and the way a scene's "
-          "SAVED camera is checked against the scene-scale convention (samples.scale). A DOCUMENT verb: the editor camera is document state (the scene file's `editor.camera` block), so this answers under "
+          "SAVED camera is checked against the scene-scale convention (samples.cleanstart). A DOCUMENT verb: the editor camera is document state (the scene file's `editor.camera` block), so this answers under "
           "--headless, where the stand-in viewport holds exactly the camera the file loaded. "
           "`rotationLocked` is the AXIS-VIEW LOCK: true while the viewport is in one of the six axis views (editor.view()), which are orthographic measuring views and stay pointed down their axis. "
           "Locked, the rotation GESTURES do nothing — the right-mouse look drag, the Alt+left-mouse orbit and the arcball's own drag are ignored rather than answered by dropping out of the view — "
@@ -1604,7 +1604,7 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
     out["center"] = QVariantMap{ { "r", center.red() }, { "g", center.green() }, { "b", center.blue() } };
 
     // Optional probe points in normalized 0..1 image coordinates: the pixel
-    // gate for the shipped samples (scripting.e2e.samples) asserts material
+    // gate for the shipped samples (samples.cleanstart.*) asserts material
     // fidelity through these — the gold dragon must be gold, not fallback grey.
     // Each probe returns the average of the 5x5 pixel block around the point
     // so the assertions are stable across drivers and minor framing drift.

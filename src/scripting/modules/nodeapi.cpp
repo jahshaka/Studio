@@ -830,7 +830,7 @@ QVariant NodeApi::info(const QString &id)
     // A REFUSAL, NOT AN ERROR (hygiene lane, 2026-09-09). "Is this node still
     // there?" is a question scripts ask constantly — after a delete, after an
     // undo, while walking ids captured earlier — and answering it by throwing
-    // aborted the caller's whole run. app.multiselect_keys had to route around
+    // aborted the caller's whole run. app.input_keys had to route around
     // this verb for exactly that reason. The signature says `| null`, so null
     // is the answer; the reason goes to app.lastError().
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
