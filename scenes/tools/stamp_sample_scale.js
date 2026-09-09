@@ -11,8 +11,9 @@
 // block is measured from the document (services/sceneextents.h) — the stand-in
 // viewport a headless run boots holds the scene and the saved camera, which is
 // everything the measurement needs. Nothing renders, nothing is saved: the
-// scene blob these archives carry goes back out byte-identical, and the ONLY
-// intended difference is jah.manifest.json's new "scene" object:
+// scene blob these archives carry goes back out unchanged unless the identity
+// pass below has something to fix, and the intended difference is
+// jah.manifest.json's new "scene" object:
 //
 //   "scene": { "units": "meters", "unitScale": 1.0,
 //              "extent": { "min": [...], "max": [...], "size": [...] },
@@ -31,6 +32,16 @@
 
 var SAMPLES = ["Matcaps", "Particles", "Physics", "World Background"];
 
+// NODE IDENTITY, fixed here because it is fixed in the DATA (owner's naming
+// style, 2026-09-09: the Unreal numeric suffix). World Background shipped three
+// meshes ALL called "SceneNode24" — an importer leftover — and the first of them
+// carried an EMPTY guid, so scene.find("SceneNode24") returned "" and no
+// guid-addressed verb could reach it at all. The missing guid is repaired in the
+// READER now (a node without one is unaddressable, so one is minted); the NAMES
+// are content and belong here. Anything else that shares a name with a sibling
+// gets the same treatment automatically, below.
+var RENAMES = { "World Background": { "SceneNode24": "Dragon" } };
+
 var TREE = "@TREE@";
 
 function log(m) { console.log("[stamp] " + m); }
@@ -46,6 +57,36 @@ for (var i = 0; i < SAMPLES.length; i++) {
 
     var nodes = scene.nodes().length;
     if (nodes < 2) fail(name + ": opened with " + nodes + " nodes — that is not the sample");
+
+    // ---- identity: every node addressable, every sibling name unique --------
+    // Renames first (the semantic ones), then the numeric suffix for anything
+    // still duplicated. "Dragon", "Dragon2", "Dragon3" — no "Dragon1".
+    var rows = scene.nodes();
+    var wanted = RENAMES[name] || {};
+    var seen = {}, renamed = 0;
+    for (var n = 0; n < rows.length; n++) {
+        var row = rows[n];
+        if (!row.id) fail(name + ": node '" + row.name + "' has no guid — the reader " +
+                          "should have minted one (src/io/scenereader.cpp)");
+        var base = wanted[row.name] || row.name;
+        // SIBLINGS, not the whole scene: two nodes with the same name under
+        // DIFFERENT parents are addressable by path and are how the Particles
+        // sample legitimately carries a "Fire" on the sphere and a "Fire" on the
+        // fire pit. Two under the SAME parent are a coin toss for every verb.
+        var key = (row.parent || "") + "|" + base;
+        var target = base;
+        if (seen[key]) target = base + (seen[key] + 1);
+        seen[key] = (seen[key] || 0) + 1;
+        if (target !== row.name) {
+            if (!node.setProperty(row.id, "name", target))
+                fail(name + ": could not rename '" + row.name + "' to '" + target + "'");
+            log(name + ": renamed '" + row.name + "' -> '" + target + "'");
+            renamed++;
+        }
+    }
+    // A rename is a document edit, so this sample DOES need saving before it is
+    // exported — the four this tool covers are otherwise untouched.
+    if (renamed > 0 && project.save() !== true) fail(name + ": save failed");
 
     // The measurement the manifest will carry, logged so a re-run is auditable.
     var rootId = scene.root();

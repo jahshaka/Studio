@@ -63,7 +63,10 @@ var EXPECTED = {
                      types: { mesh: 11, light: 2 }, objects: 0 },
     "Skeletal Animation": { nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
                             types: { mesh: 4, light: 2 } },
-    "World Background": { nodes: 7, names: ["SceneNode24", "Ground"],
+    // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
+    // were all "SceneNode24" (an importer leftover) and the first had no guid
+    // at all, so no by-name or by-id verb could tell them apart.
+    "World Background": { nodes: 7, names: ["Dragon", "Dragon3", "Ground"],
                           types: { mesh: 4, light: 2 } }
 };
 
