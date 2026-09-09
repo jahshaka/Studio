@@ -61,9 +61,18 @@
 //      graph is not a frame, so both switches go on and the reflection has to
 //      still be there.
 //
+//  11. NO FIREFLIES (lane-whitedots, 2026-09-09). On a mirror floor under a
+//      line of bright silhouettes — the shape that produced the Grand
+//      Showroom's crawling white dots — no pixel of the floor is an ISOLATED
+//      SPIKE: no pixel is 2.5x brighter than the BRIGHTEST of its eight
+//      neighbours. That is a statement about SPARKS rather than about
+//      contrast — a reflection edge, and the one-pixel-wide streak a thin
+//      object's reflection legitimately is, both have something comparable
+//      next to them and pass.
+//
 // TWO ENV-GATED EXTRAS, off in the gate and on when a human needs evidence:
-//   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm and the shadow fixture's two
-//                    frames beside the binary. A number in a log is not pixel
+//   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm, ssr-firefly-{half,hq}.ppm and
+//                    the shadow fixture's two frames beside the binary. A number in a log is not pixel
 //                    evidence; these are.
 //   JAH_SSR_BENCH=1  times 400 steady-state frames of an offscreen view (1080p
 //                    by default; JAH_SSR_BENCH_W/H override it) with SSR off /
@@ -585,6 +594,232 @@ int main()
             engine->destroyScene(sh);
         } else {
             CHECK_MSG(false, "could not build the shadow fixture");
+        }
+    }
+
+    // ---- 11. THE FIREFLY GATE (lane-whitedots) ------------------------------
+    //
+    // "Random bright white dots on the floor that move with the camera" — the
+    // Grand Showroom on Ultra, which is the only tier that turns FULL-RESOLUTION
+    // rays on. The cause was in the resolve: its 3x3 filter averaged the hit
+    // COORDINATES of the neighbouring taps, and two taps on opposite sides of a
+    // silhouette hit two unrelated places, so their mean pointed at a third
+    // place neither ray ever touched. Land that on something bright in the
+    // colour history and the pixel comes back as a lone spark; move the camera
+    // and it lands somewhere else, which is why the dots crawl.
+    //
+    // THE FIXTURE IS SILHOUETTES. A mirror floor and a picket line of narrow,
+    // bright emissive slabs at three different depths, viewed from close to
+    // floor level so the reflected rays travel far across the screen and cross
+    // as many depth discontinuities as possible. This is the shape that
+    // produced the dots; a single cube over a floor (the fixture above) barely
+    // does.
+    //
+    // WHAT THIS GATE PROVES, EXACTLY — measured against the pre-fix shaders,
+    // because a gate whose bite is assumed is worth nothing:
+    //   * It is a REGRESSION GUARD, not a reproduction. With the old resolve
+    //     staged, this fixture at 256x256 does NOT produce isolated sparks:
+    //     what it produces is a bright bleed into the lower end of each dark
+    //     slab reflection and one extra row of the reflection boundary's
+    //     documented dither (617 of 65536 pixels differ at full-res rays, 552
+    //     at half-res, up to 168/255 apiece — the fix's effect is real and
+    //     large, it simply is not shaped like a dot at this size). The dots
+    //     the report is about are that same mechanism at 1080p over textured
+    //     geometry; the pixel evidence for THEM is a before/after of the
+    //     Grand Showroom, not this fixture.
+    //   * What it does guard is the failure this shader is one edit away from
+    //     at any time: a resolve that hands back a coordinate no tap reported
+    //     lands somewhere arbitrary, and somewhere arbitrary in a scene with
+    //     any bright object in it is a spark. If that ever comes back with a
+    //     spark's shape, on a floor whose reflections cross nine silhouettes,
+    //     this assertion is what says so.
+    {
+        Scene *ff = engine->createScene("ssr-firefly");
+        View *ffv = engine->createOffscreenView("ssr-firefly", 256, 256, Colour(0, 0, 0));
+        if (ff && ffv) {
+            ffv->setScene(ff);
+            ff->setAmbient(Colour(0.10f, 0.10f, 0.12f), Colour(0.08f, 0.08f, 0.10f));
+
+            // The mirror.
+            {
+                const NodeId plate = ff->createNode();
+                PbrParams p;
+                p.albedo = Colour(1.0f, 1.0f, 1.0f);
+                p.metalness = 1.0f;
+                p.roughness = 0.0f;
+                const MaterialId m = ff->createPbrMaterial(p);
+                const MeshId mesh = ff->createMesh(enginetest::unitCubeMesh());
+                CHECK(plate && m && mesh && ff->attachMesh(plate, mesh, m),
+                      "firefly fixture: the mirror floor exists");
+                enginetest::setNodeScale(ff, plate, Vec3(24.0f, 0.2f, 24.0f));
+                enginetest::setNodePosition(ff, plate, Vec3(0.0f, -0.1f, 0.0f));
+            }
+
+            // THE BRIGHT WALL BEHIND EVERYTHING. The contrast has to be this
+            // way round and it is the whole reason the first version of this
+            // fixture caught nothing: the defect INVENTS a coordinate between
+            // two neighbouring hits, so it only shows when the invented place
+            // is BRIGHTER than the two real ones. Bright objects on a black
+            // background invent a coordinate in the black and produce nothing;
+            // dark objects in front of a bright wall invent one ON THE WALL.
+            {
+                const NodeId wall = ff->createNode();
+                PbrParams p;
+                p.albedo = Colour(0.02f, 0.02f, 0.02f);
+                p.emissive = Colour(6.0f, 6.0f, 6.0f);
+                p.roughness = 0.5f;
+                const MaterialId m = ff->createPbrMaterial(p);
+                const MeshId mesh = ff->createMesh(enginetest::unitCubeMesh());
+                CHECK(wall && m && mesh && ff->attachMesh(wall, mesh, m),
+                      "firefly fixture: the bright backdrop exists");
+                enginetest::setNodeScale(ff, wall, Vec3(26.0f, 7.0f, 0.2f));
+                enginetest::setNodePosition(ff, wall, Vec3(0.0f, 3.0f, -9.0f));
+            }
+
+            // The picket line: narrow, DARK, and at three depths, so a ray
+            // that just catches one slab and its neighbour that just catches
+            // the slab behind it hit two places with a slice of bright wall
+            // between them. That is the exact geometry the resolve used to
+            // average across.
+            for (int i = 0; i < 9; ++i) {
+                const NodeId slab = ff->createNode();
+                PbrParams p;
+                p.albedo = Colour(0.015f, 0.015f, 0.015f);
+                p.roughness = 0.55f;
+                const MaterialId m = ff->createPbrMaterial(p);
+                const MeshId mesh = ff->createMesh(enginetest::unitCubeMesh());
+                if (!(slab && m && mesh && ff->attachMesh(slab, mesh, m))) break;
+                enginetest::setNodeScale(ff, slab, Vec3(0.30f, 1.6f, 0.30f));
+                // ENTIRELY ABOVE EYE LEVEL (the camera sits at y = 0.45), so
+                // every direct slab pixel is above the horizon and the probe
+                // region below it contains floor and reflections ONLY. With
+                // the slabs standing ON the floor their thin, one-pixel-wide
+                // bases fall inside the probe and read as sparks that have
+                // nothing to do with SSR — measured, and the reason for this
+                // geometry.
+                enginetest::setNodePosition(ff, slab,
+                                            Vec3(-3.6f + float(i) * 0.9f, 1.65f,
+                                                 -1.2f + float(i % 3) * 1.5f));
+            }
+            enginetest::addDirectionalLight(ff, Vec3(-0.3f, -1.0f, -0.4f), 2.0f);
+            // Close to floor level: long, grazing reflected rays.
+            enginetest::testCameraLookAt(ffv, Vec3(0.0f, 0.45f, 6.0f), Vec3(0.0f, 0.35f, -2.0f));
+
+            // A pixel is a FIREFLY when its luminance exceeds the median of its
+            // eight neighbours by `ratio`, in a region bright enough for the
+            // ratio to mean anything.
+            // WHAT COUNTS AS A FIREFLY. Strict isolation: brighter than the
+            // BRIGHTEST of its eight neighbours by `ratio`. Everything softer
+            // than that was tried and is a false positive on this fixture —
+            // "brighter than the median" flags every pixel of the one-pixel
+            // -wide streak a thin object's reflection legitimately is, and
+            // "dark on both sides in all four directions" still flags the
+            // corner of a steep reflection edge (measured: a 201-156-51-6-0
+            // ramp). A spark has nothing comparable next to it in any
+            // direction and this is the only test that says exactly that; the
+            // price is that a two-pixel spark is not seen, which is the right
+            // side to err on for a gate that must never cry wolf.
+            auto fireflies = [](const Image &img, float ratio, float &outWorst,
+                                int *outX, int *outY) {
+                const unsigned y0 = img.height * 55u / 100u;
+                int count = 0;
+                outWorst = 0.0f;
+                auto lum = [&](unsigned x, unsigned y) {
+                    const Colour c = img.at(x, y);
+                    return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+                };
+                for (unsigned y = y0 + 1; y + 1 < img.height; ++y)
+                    for (unsigned x = 1; x + 1 < img.width; ++x) {
+                        const float l = lum(x, y);
+                        // Below this the frame is near-black and a "ratio" is
+                        // quantization noise, not a spark.
+                        if (l < 0.12f) continue;
+                        float ref = 0.0f;
+                        for (int dy = -1; dy <= 1; ++dy)
+                            for (int dx = -1; dx <= 1; ++dx)
+                                if (dx || dy) ref = std::max(ref, lum(x + dx, y + dy));
+                        if (l > ref * ratio + 0.04f) {
+                            ++count;
+                            const float r = ref > 1e-4f ? l / ref : 999.0f;
+                            if (r > outWorst) { outWorst = r; if (outX) *outX = int(x); if (outY) *outY = int(y); }
+                        }
+                    }
+                return count;
+            };
+
+            auto probe = [&](int ssrMode, const char *what) {
+                PostFxDesc d;
+                d.allowOffscreen = true;
+                d.ssr = ssrMode;
+                d.ssrMaxDistance = 30.0f;
+                ffv->setPostFx(d);
+                render(engine.get(), 6);
+                Image img;
+                if (!ffv->readPixels(img)) { CHECK_MSG(false, "readPixels (%s)", what); return -1; }
+                if (envOn("JAH_SSR_DUMP")) {
+                    std::string p = std::string("ssr-firefly-") + what + ".ppm";
+                    for (char &c : p) if (c == ' ') c = '_';
+                    writePpm(img, p.c_str());
+                }
+                float worst = 0.0f;
+                int fx = -1, fy = -1;
+                const int n = fireflies(img, 2.5f, worst, &fx, &fy);
+                std::printf("   %s: %d firefly pixel(s) in the floor probe, worst ratio %.2f"
+                            " at (%d,%d)\n", what, n, worst, fx, fy);
+                return n;
+            };
+
+            // The half-resolution row first: it was always clean (its nine taps
+            // come from four times fewer, far more coherent rays), and it is
+            // the row every other pixel suite in the tree exercises — so a
+            // regression here would be the fix having moved something it must
+            // not.
+            const int halfCount = probe(1, "half");
+            CHECK_MSG(halfCount == 0,
+                      "half-resolution rays leave no fireflies on the mirror floor (%d)",
+                      halfCount);
+
+            // And the row the report came from.
+            const int hqCount = probe(2, "hq");
+            CHECK_MSG(hqCount == 0,
+                      "FULL-resolution rays leave no fireflies on the mirror floor (%d) "
+                      "- the resolve never averages hit coordinates across a silhouette",
+                      hqCount);
+
+            // The gate would be vacuous if the fixture showed no reflection at
+            // all, so: with SSR on, the floor is measurably brighter than with
+            // it off. (Emissive slabs, mirror floor: the only source of light
+            // down there IS the reflection.)
+            auto floorEnergy = [&](int ssrMode) {
+                PostFxDesc d;
+                if (ssrMode > 0) { d.allowOffscreen = true; d.ssr = ssrMode; d.ssrMaxDistance = 30.0f; }
+                ffv->setPostFx(d);
+                render(engine.get(), 6);
+                Image img;
+                if (!ffv->readPixels(img)) return -1.0;
+                double sum = 0.0;
+                unsigned n = 0;
+                for (unsigned y = img.height * 55u / 100u; y < img.height; ++y)
+                    for (unsigned x = 0; x < img.width; ++x) {
+                        const Colour c = img.at(x, y);
+                        sum += (c.r + c.g + c.b) / 3.0;
+                        ++n;
+                    }
+                return n ? sum / n : -1.0;
+            };
+            const double eOff = floorEnergy(0);
+            const double eHq = floorEnergy(2);
+            std::printf("    floor mean luminance: ssr off %.4f -> full-res %.4f\n", eOff, eHq);
+            CHECK_MSG(eHq > eOff * 1.15,
+                      "the firefly fixture really reflects (mean floor luminance %.4f -> %.4f)",
+                      eOff, eHq);
+
+            ffv->setPostFx(PostFxDesc());
+            render(engine.get(), 2);
+            engine->destroyView(ffv);
+            engine->destroyScene(ff);
+        } else {
+            CHECK_MSG(false, "could not build the firefly fixture");
         }
     }
 

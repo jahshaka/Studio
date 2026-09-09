@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QImage>
+#include <QMutex>
 #include <QSet>
 #include <QtConcurrent>
 #include <cmath>
@@ -81,6 +82,30 @@ SocketModel* findMasterInSocket(NodeModel* master, const QString& name)
 // ----------------------------------------------------------------- helpers
 
 namespace {
+
+// A master input the PBR target has nowhere to put, said ONCE per process per
+// (socket, kind).
+//
+// The nine legacy presets all feed a SPECULAR MAP into a socket with no
+// HlmsPbs-compatible target (`{ "Specular", MasterSlot::NoTarget }` — a
+// specular colour map is not a PBR input, and converting one needs the
+// spec-gloss -> metal-rough fit the GLB importer does, which is a follow-up,
+// not a bake rule). It was dropped in complete silence: the texture is listed
+// in Result::eval.unsupportedNodes, which only the materials panel reads, so
+// from a script, a thumbnail or a preview dock the map simply never existed.
+// Once per key, because a bake runs on every graph edit and this is a property
+// of the GRAPH, not of the edit.
+void logUnsupportedOnce(const QString& socketName, const QString& what)
+{
+	static QMutex mutex;
+	static QSet<QString> said;
+	const QString key = socketName + QLatin1Char('|') + what;
+	QMutexLocker lock(&mutex);
+	if (said.contains(key)) return;
+	said.insert(key);
+	qWarning().noquote() << "materials: the" << socketName
+	                     << "input (" + what + ") has no PBR target and is dropped by the bake";
+}
 
 QJsonObject colorToJson(const QColor& c)
 {
@@ -241,6 +266,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 
 	auto unsupported = [&](const QString& socketName, const QString& what) {
 		out.eval.unsupportedNodes.append(socketName + " <- " + what);
+		logUnsupportedOnce(socketName, what);
 	};
 
 	QVector<SlotState> states(compiled.sockets.size());
@@ -311,7 +337,10 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 				double s = v.x; // vecN -> float: leading component
 				if (slot.invertToRoughness) {
 					double gloss = s > 1.0 ? s / 100.0 : s;
-					s = 1.0 - qBound(0.0, gloss, 1.0);
+					// FLOORED: see kLegacyGlossRoughnessFloor. A legacy gloss
+					// of 1 used to land roughness 0, which is a specular
+					// singularity under any normal map.
+					s = qMax(1.0 - qBound(0.0, gloss, 1.0), kLegacyGlossRoughnessFloor);
 				}
 				// FloatSlots are 0-1 quantities on PbrMaterial (audit D6)
 				out.eval.values[slot.valueKey] = qBound(0.0, s, 1.0);
