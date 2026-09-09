@@ -20,6 +20,12 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "data/database/database.h"
+#include "data/project.h"
+#include "data/constants.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include "services/projectassets.h"
+#include <QSqlDatabase>
 
 using namespace scriptmod;
 
@@ -58,6 +64,20 @@ QVector<VerbInfo> ParticlesApi::verbs() const
           "scales as multipliers of particleScale). An empty list clears it. Note a system with "
           "a scale ramp draws SQUARE particles: the renderer's scale affector replaces both "
           "dimensions rather than multiplying them.",
+          Needs::Document },
+        { "setColourRamp", "particles.setColourRamp(id, textureGuid) -> bool",
+          "Binds an image asset as the emitter's COLOUR RAMP: row 0 of the image is sampled "
+          "across a particle's life, which is the classic fire/spark gradient. '' clears it. "
+          "Pinned as a BINDING (a dependency row, no companion material), like the emitter's "
+          "own texture. EXCLUSIVE WITH particles.setColourKeys AND with the colour-fade rows: "
+          "all three WRITE particle colour, so the last affector in the list would silently "
+          "win — this verb refuses a ramp while colour keys exist, and says which to clear. "
+          "RENDERER NOTE: the ramp is loaded BY FILE NAME through the resource system, not as "
+          "a texture id, so it is the resolved file that reaches the renderer.",
+          Needs::Document },
+        { "colourRamp", "particles.colourRamp(id) -> {guid, path}",
+          "The emitter's bound colour ramp: the library guid and the resolved file. Empty guid "
+          "= none.",
           Needs::Document },
         { "timeScale", "particles.timeScale(scale?) -> number",
           "The scene's particle simulation clock: 1 is real time, 0 freezes every emitter, 2 is "
@@ -150,7 +170,71 @@ QVariantMap ParticlesApi::describe(const QString &id)
     m["texture"] = ps->texture ? ps->texture->getSource() : QString();
     m["colourKeys"] = colourKeys(id);
     m["scaleKeys"] = scaleKeys(id);
+    // ADDENDUM A-4: the four affectors the renderer always had.
+    m["colourFade1"] = colorToJs(ps->colourFade1);
+    m["colourFade2"] = colorToJs(ps->colourFade2);
+    m["colourFadeSwitch"] = ps->colourFadeSwitch;
+    m["colourRamp"] = colourRamp(id);
+    m["scaleRate"] = ps->scaleRate;
+    m["scaleRateMultiply"] = ps->scaleRateMultiply;
     return m;
+}
+
+bool ParticlesApi::setColourRamp(const QString &id, const QString &assetGuid)
+{
+    auto ps = emitterOrFail(id, QStringLiteral("particles.setColourRamp"));
+    if (!ps) return false;
+    const QString guid = assetGuid.trimmed();
+
+    // THE EXCLUSIVITY, enforced rather than documented. colourKeys, the colour
+    // FADE rows and this ramp all write particle colour, in affector order —
+    // the last one silently wins. Refusing here, by name, is the difference
+    // between a rule and a trap (MATERIAL_GAPS_SPEC A-4).
+    if (!guid.isEmpty() && !ps->colourKeys.isEmpty())
+        return fail(QStringLiteral("particles.setColourRamp: this emitter already has colour "
+                                   "KEYS, and both write particle colour — clear them first "
+                                   "(particles.setColourKeys(id, []))"));
+
+    if (guid.isEmpty()) {
+        if (host.db && host.project && !ps->colourRampGuid.isEmpty() &&
+            !host.project->getProjectGuid().isEmpty())
+            host.db->deleteDependency(ps->getGUID(), ps->colourRampGuid);
+        ps->colourRampGuid.clear();
+        ps->colourRampImage.clear();
+        return true;
+    }
+    if (!host.db || host.db->fetchAsset(guid).guid.isEmpty())
+        return fail(QStringLiteral("particles.setColourRamp: no asset with guid '%1'").arg(guid));
+    if (!host.project || host.project->getProjectGuid().isEmpty())
+        return fail(QStringLiteral("particles.setColourRamp: no project is open to pin '%1' into")
+                        .arg(guid));
+
+    // BINDING membership, never a direct add: an emitter REFERS to an existing
+    // image, so no companion PBR material is minted — the shared rule the decal
+    // and light bindings follow.
+    ProjectAssets::addToProject(guid, host.db, host.project, ProjectAssets::AddKind::Binding);
+    const QString was = ps->colourRampGuid;
+    if (!was.isEmpty() && was != guid) host.db->deleteDependency(ps->getGUID(), was);
+    host.db->deleteDependency(ps->getGUID(), guid);
+    host.db->createDependency(static_cast<int>(ModelTypes::ParticleSystem),
+                              static_cast<int>(ModelTypes::Texture),
+                              ps->getGUID(), guid, host.project->getProjectGuid());
+    const QString path = AssetCas::resolvePinned(QSqlDatabase::database(),
+                                                 AssetStorePaths::root(),
+                                                 host.project->getProjectGuid(), guid);
+    if (path.isEmpty())
+        return fail(QStringLiteral("particles.setColourRamp: could not resolve the bytes of '%1'")
+                        .arg(guid));
+    ps->colourRampGuid = guid;
+    ps->colourRampImage = path;
+    return true;
+}
+
+QVariantMap ParticlesApi::colourRamp(const QString &id)
+{
+    auto ps = emitterOrFail(id, QStringLiteral("particles.colourRamp"));
+    if (!ps) return QVariantMap();
+    return QVariantMap{ { "guid", ps->colourRampGuid }, { "path", ps->colourRampImage } };
 }
 
 QVariantList ParticlesApi::colourKeys(const QString &id)

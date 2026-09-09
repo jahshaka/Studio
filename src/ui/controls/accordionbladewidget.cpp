@@ -245,6 +245,15 @@ PropertyWidget *AccordianBladeWidget::addPropertyWidget()
     return props;
 }
 
+AccordianBladeWidget *AccordianBladeWidget::addSection(const QString &title)
+{
+    auto *section = new AccordianBladeWidget(this);
+    section->setPanelTitle(title);
+    section->project = project;   // the pickers inside it need the live Project
+    addRow(section);              // starts COLLAPSED — the ctor collapses
+    return section;
+}
+
 HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(
         const QString& name,
         float start,

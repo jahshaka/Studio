@@ -178,7 +178,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "clearOverrides", "world.clearOverrides() -> object",
           "Drops every pinned row and re-applies the current mode. Returns world.settings(). Undoable.",
           Needs::Document },
-        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius, distortionStrength}) -> object",
+        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius, distortionStrength}) -> object",
           "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal PINS the exposure, which is the deterministic setting the secondary surfaces (thumbnails, previews, screenshots) grade with; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres; distortionStrength is a global multiplier on every distortion material's own strength (0 is inert — the frame is bit for bit the frame with no distortion at all). Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
           Needs::Document },
         // ---- THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1) ----------------------
@@ -229,7 +229,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "setMode", "world.setMode({mode}) -> string",
           "Alias of world.mode — same arguments, same result (and, called with no argument, the "
           "same read).", Needs::Document },
-        { "setPostFx", "world.setPostFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
+        { "setPostFx", "world.setPostFx({exposure, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius}) -> object",
           "Alias of world.postFx — same arguments, same result.", Needs::Document },
     };
 }

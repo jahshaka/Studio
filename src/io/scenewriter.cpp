@@ -182,6 +182,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["exposureMax"] = scene->exposureMax;
     sceneObj["bloomEnabled"] = scene->bloomEnabled;
     sceneObj["bloomThreshold"] = scene->bloomThreshold;
+    sceneObj["bloomKnee"] = scene->bloomKnee;
     sceneObj["ssaoEnabled"] = scene->ssaoEnabled;
     sceneObj["ssaoScale"] = scene->ssaoScale;
     sceneObj["ssaoPower"] = scene->ssaoPower;
@@ -803,6 +804,15 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["wind"]             = jsonVector3(node->wind);
     sceneNodeObject["emitColourStart"]  = jsonColor(node->emitColourStart);
     sceneNodeObject["emitColourEnd"]    = jsonColor(node->emitColourEnd);
+    // ADDENDUM A-4. Written unconditionally, read tolerant-absent: every
+    // default is neutral, so an old file with none of these keys loads to
+    // exactly the emitter it always was.
+    sceneNodeObject["colourFade1"]      = jsonColor(node->colourFade1);
+    sceneNodeObject["colourFade2"]      = jsonColor(node->colourFade2);
+    sceneNodeObject["colourFadeSwitch"] = node->colourFadeSwitch;
+    sceneNodeObject["colourRampGuid"]   = node->colourRampGuid;
+    sceneNodeObject["scaleRate"]        = node->scaleRate;
+    sceneNodeObject["scaleRateMultiply"]= node->scaleRateMultiply;
 
     QJsonArray colourKeys;
     for (const iris::ParticleColourKey &k : node->colourKeys) {

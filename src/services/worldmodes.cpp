@@ -633,6 +633,25 @@ static QVector<ParamRow> buildPostFxParams()
         out.append(p);
     }
     {
+        // ADDENDUM A-6. The renderer's bright pass has always taken TWO
+        // thresholds (min, full) and the engine hard-coded full = min + 2.
+        // Exposed as a WIDTH rather than a second absolute value: a width
+        // cannot invert, so the renderer's own `full <= min` clamp becomes
+        // unreachable instead of being a state the panel can ask for and the
+        // renderer silently refuses. Default 2.0 = byte-identical to before.
+        ParamRow p;
+        p.id = QStringLiteral("bloomKnee");
+        p.label = QStringLiteral("Bloom Knee");
+        p.ownerRowId = QStringLiteral("bloom");
+        p.minValue = 0.01; p.maxValue = 32.0; p.perPixelStep = 0.05; p.decimals = 2;
+        p.doc = QStringLiteral("How wide the ramp above the threshold is. A narrow knee is a "
+                               "hard cut — only the brightest pixels bloom; a wide one fades "
+                               "the effect in across a range of brightnesses.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->bloomKnee); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->bloomKnee = float(v); };
+        out.append(p);
+    }
+    {
         ParamRow p;
         p.id = QStringLiteral("ssaoPower");
         p.label = QStringLiteral("AO Power");

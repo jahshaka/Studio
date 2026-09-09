@@ -2291,6 +2291,375 @@ void pbr_texture_scale_tiles_uvs() {
     CHECK_MSG(identical, "the identity UV transform renders byte-identical pixels");
 }
 
+// THE SPECULAR / FRESNEL WORKFLOWS (MATERIAL_GAPS_SPEC GAP 1), and the trap
+// that would otherwise make them a silent-corruption feature.
+//
+// setMetalness, setFresnel and setIndexOfRefraction ALL WRITE ONE FLOAT in the
+// datablock (mFresnelR). Each asserts the workflow it requires, and our Ogre is
+// built RelWithDebInfo, so NDEBUG compiles every one of those asserts out: a
+// push that called two of them would corrupt one with the other with NO
+// diagnostic anywhere, and the next frame would do it again.
+//
+// dumpMaterial reads the LIVE datablock through Ogre's own serializer, and that
+// serializer writes `metalness` in the metallic workflow and `fresnel` in the
+// other two — never both. So "exactly one block is present" is a mechanical,
+// non-visual assertion of the rule, and it is the fence this feature needs.
+//
+// The pixel half is here too: the SAME surface under the SAME light must render
+// differently in a metallic and a specular workflow, or the switch is decorative.
+void pbr_workflow_writes_exactly_one_of_metalness_and_fresnel() {
+    Fixture fx;
+    View *v = fx.view("workflow-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("workflow-scene");               REQUIRE(s);
+    v->setScene(s);
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 2.2f), Vec3(0.0f, 0.0f, 0.0f));
+    s->setAmbient(Colour(0.25f, 0.25f, 0.25f), Colour(0.2f, 0.2f, 0.2f));
+    enginetest::addDirectionalLight(s, Vec3(0.2f, -0.3f, -1.0f), 3.14159f);
+
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p;
+    p.albedo = Colour(0.9f, 0.9f, 0.9f);
+    p.roughness = 0.2f;
+    p.metalness = 1.0f;
+    MaterialId mat = s->createPbrMaterial(p);
+    REQUIRE(mat != 0);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+    render(fx.e);
+
+    const auto has = [](const std::string &dump, const char *key) {
+        return dump.find(key) != std::string::npos;
+    };
+
+    // ---- 1. the DEFAULT is metallic, and it is OURS ----
+    // The datablock's own constructed default is SpecularWorkflow; every
+    // material this engine creates is made metallic by applyPbr. If that ever
+    // stops being true, every existing scene changes shading model silently.
+    std::string dump = s->dumpMaterial(mat);
+    CHECK_MSG(!dump.empty(), "dumpMaterial: %s", fx.e->lastError().c_str());
+    CHECK_MSG(has(dump, "\"metalness\""),
+              "a default material is METALLIC and writes a metalness block");
+    CHECK_MSG(!has(dump, "\"fresnel\""),
+              "...and writes NO fresnel block — they are the same float");
+    Image metalImg; REQUIRE(v->readPixels(metalImg));
+    const Px metalPx = centre(metalImg);
+    std::printf("    metallic workflow: %d %d %d\n", metalPx.r, metalPx.g, metalPx.b);
+
+    // ---- 2. the specular workflow flips exactly one block ----
+    p.workflow = PbrParams::Workflow::Specular;
+    p.ior = 1.5f;                      // F0 = 0.04, the dielectric default
+    CHECK_MSG(s->setPbrMaterial(mat, p), "%s", fx.e->lastError().c_str());
+    render(fx.e);
+    dump = s->dumpMaterial(mat);
+    CHECK_MSG(has(dump, "specular_ogre"), "the datablock reports the specular workflow");
+    CHECK_MSG(has(dump, "\"fresnel\""), "a specular material writes a fresnel block");
+    CHECK_MSG(!has(dump, "\"metalness\""),
+              "...and NO metalness block — exactly one of the two is ever written");
+    Image specImg; REQUIRE(v->readPixels(specImg));
+    const Px specPx = centre(specImg);
+    std::printf("    specular workflow: %d %d %d\n", specPx.r, specPx.g, specPx.b);
+    CHECK_MSG(std::abs(specPx.r - metalPx.r) > 5 || std::abs(specPx.g - metalPx.g) > 5 ||
+              std::abs(specPx.b - metalPx.b) > 5,
+              "the workflow reaches PIXELS: a full metal and a dielectric differ "
+              "(%d %d %d vs %d %d %d)", metalPx.r, metalPx.g, metalPx.b,
+              specPx.r, specPx.g, specPx.b);
+
+    // ---- 3. the IOR is converted with the renderer's own formula ----
+    // F0 = ((1-ior)/(1+ior))^2. At 2.4 that is 0.1696...; the dump carries the
+    // computed value, so this asserts the conversion rather than the setter.
+    p.ior = 2.4f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e);
+    dump = s->dumpMaterial(mat);
+    CHECK_MSG(has(dump, "0.169"), "F0 is computed from the IOR by the renderer's formula");
+
+    // ---- 4. an explicit F0 replaces the IOR-derived one ----
+    p.useFresnelColour = true;
+    p.fresnelColour = Colour(0.5f, 0.25f, 0.125f);
+    p.separateFresnel = true;          // per-channel: a shader permutation, not a value
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e);
+    dump = s->dumpMaterial(mat);
+    CHECK_MSG(!has(dump, "0.169"), "an explicit F0 replaces the IOR-derived one");
+    CHECK_MSG(has(dump, "\"fresnel\""), "and it is still the fresnel block that carries it");
+    CHECK_MSG(!has(dump, "\"metalness\""), "still no metalness block");
+
+    // ---- 5. Specular-as-Fresnel is the third workflow, not an alias ----
+    p.workflow = PbrParams::Workflow::SpecularAsFresnel;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e);
+    dump = s->dumpMaterial(mat);
+    CHECK_MSG(has(dump, "specular_fresnel"),
+              "the third workflow reports itself distinctly");
+
+    // ---- 6. kS is live in EVERY workflow, metallic included ----
+    p.workflow = PbrParams::Workflow::Metallic;
+    p.specularColour = Colour(0.2f, 0.4f, 0.8f);
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e);
+    dump = s->dumpMaterial(mat);
+    CHECK_MSG(has(dump, "\"metalness\""), "back to metallic");
+    CHECK_MSG(!has(dump, "\"fresnel\""), "and the fresnel block is gone again");
+    CHECK_MSG(has(dump, "\"specular\""),
+              "kS is written in the metallic workflow too (the renderer's own rule)");
+
+    // ---- 7. the round trip is lossless, and idempotent ----
+    p.specularColour = Colour(1.0f, 1.0f, 1.0f);
+    p.metalness = 1.0f;
+    p.useFresnelColour = false;
+    p.separateFresnel = false;
+    p.ior = 1.5f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image backImg; REQUIRE(v->readPixels(backImg));
+    CHECK_MSG(near(centre(backImg), Colour(metalPx.r/255.0f, metalPx.g/255.0f, metalPx.b/255.0f), 3),
+              "metallic -> specular -> metallic restores the original image (%d %d %d vs %d %d %d)",
+              centre(backImg).r, centre(backImg).g, centre(backImg).b,
+              metalPx.r, metalPx.g, metalPx.b);
+    // The engine-side idempotency guard: pushing the SAME params again is a
+    // no-op that succeeds and changes nothing.
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image againImg; REQUIRE(v->readPixels(againImg));
+    CHECK_MSG(pixelHash(againImg) == pixelHash(backImg),
+              "an unchanged push changes nothing at all");
+}
+
+// SRGB IS PART OF A TEXTURE'S IDENTITY (MATERIAL_GAPS_SPEC I-2), a pre-existing
+// bug this program fixed in passing.
+//
+// loadTexture(path, srgb) decides the pixel format from `srgb`, but the dedup
+// index used to be keyed on the PATH ALONE — so the FIRST binding of a file
+// fixed its colour space for the whole process, and a second caller asking for
+// the other space silently got the first one's texture. It was latent while
+// every slot had a fixed flag; the workflow switch (the shared metallic/specular
+// unit changes colour space with the workflow) and detail layers make it
+// reachable.
+//
+// Asserted mechanically: two loads of ONE file in the two colour spaces must be
+// two DIFFERENT texture ids, and destroying one must not take the other's index
+// entry with it.
+void texture_cache_keys_on_colour_space() {
+    Fixture fx;
+    // A VIEW FIRST, even though this test renders nothing: a render window must
+    // exist before createSceneManager or the backend segfaults (the engine's
+    // documented ordering contract). Without it this passes in a full run —
+    // where an earlier test made the window — and fails alone.
+    View *v = fx.view("srgbkey-view", 32, 32, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("srgbkey-scene"); REQUIRE(s);
+    v->setScene(s);
+    // A mid-grey image: sRGB and linear decodes of the same bytes are visibly
+    // different values, which is the whole reason the key matters.
+    // The header is ONE LINE and the image is not tiny, matching the other .ppm
+    // fixtures in this file: a multi-line header and a 2x2 image both fail to
+    // load through FreeImage here, and the failure presents as "cannot open
+    // file", which reads like the file is missing when it is not.
+    const std::string path = "srgbkey.ppm";
+    {
+        std::FILE *f = std::fopen(path.c_str(), "wb");
+        REQUIRE(f != nullptr);
+        std::fprintf(f, "P6 8 8 255\n");
+        for (int i = 0; i < 64; ++i) { const unsigned char q[3] = { 128, 128, 128 }; std::fwrite(q, 1, 3, f); }
+        std::fclose(f);
+    }
+    const TextureId srgb = s->loadTexture(path, true);
+    CHECK_MSG(srgb != 0, "loadTexture(sRGB): %s", fx.e->lastError().c_str());
+    const TextureId linear = s->loadTexture(path, false);
+    CHECK_MSG(linear != 0, "loadTexture(linear): %s", fx.e->lastError().c_str());
+    CHECK_MSG(srgb != linear,
+              "the same file in two colour spaces is TWO textures, not one "
+              "(got id %u twice)", srgb);
+    // Dedup still works WITHIN a colour space — the fix must not turn every
+    // load into a new texture.
+    CHECK_MSG(s->loadTexture(path, true) == srgb, "an sRGB reload dedups to the sRGB texture");
+    CHECK_MSG(s->loadTexture(path, false) == linear, "a linear reload dedups to the linear one");
+    // And the index stays in step: destroying one leaves the other findable.
+    CHECK(s->destroyTexture(srgb));
+    CHECK_MSG(s->loadTexture(path, false) == linear,
+              "destroying the sRGB texture did not evict the linear one's index entry");
+    const TextureId srgb2 = s->loadTexture(path, true);
+    CHECK_MSG(srgb2 != 0 && srgb2 != linear, "and the sRGB one loads again as its own texture");
+    // DESTROY BEFORE DELETING THE FILE. Ogre keeps a texture-metadata cache
+    // keyed by file name and revisits it at shutdown; a live TextureGpu whose
+    // source file has vanished aborts the process there, long after the test
+    // has passed. (Found exactly that way.)
+    CHECK(s->destroyTexture(linear));
+    CHECK(s->destroyTexture(srgb2));
+    // THE FIXTURE FILE IS DELIBERATELY LEFT ON DISK. Ogre re-opens every file
+    // it has ever loaded a texture from when it writes its TEXTURE METADATA
+    // CACHE at shutdown; a DESTROYED texture whose source file has since
+    // vanished throws there and takes the teardown with it (`free(): invalid
+    // pointer`, long after this test has passed). The sky fixtures in this file
+    // may delete theirs because they never destroy the texture. 200 bytes in
+    // the test's own working directory is the cheap, honest answer.
+}
+
+// RUNTIME TEXTURE WRITES (ADDENDUM A-1) and the ordering claim that makes them
+// usable per frame.
+//
+// The claim under test is not "the pixels change" — that is the easy half. It is
+// that the upload RECORDS INTO THE OPEN COMMAND BUFFER, ahead of this frame's
+// draws, so the new pixels RENDER with no flush at all. There is NO flush call
+// anywhere in the first half of this test, deliberately: if the ordering claim
+// were wrong the second render would show the old colour and this would fail.
+//
+// And the refusals, which are the whole safety of the verb: a file-loaded
+// texture is POOLED and shared by every material that loaded that path, and a
+// decal slice is shared PROCESS-WIDE and refcounted. Both are refused by name.
+void update_texture_rewrites_pixels_without_a_flush() {
+    Fixture fx;
+    View *v = fx.view("updtex-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("updtex-scene");             REQUIRE(s);
+    v->setScene(s);
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 2.2f), Vec3(0.0f, 0.0f, 0.0f));
+    s->setAmbient(Colour(0.8f, 0.8f, 0.8f), Colour(0.7f, 0.7f, 0.7f));
+
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = Colour(1, 1, 1); p.roughness = 1.0f;
+    MaterialId mat = s->createPbrMaterial(p);
+    REQUIRE(mat != 0);
+
+    // A 2x2 solid RED texture, pixel-born.
+    std::vector<unsigned char> pix(2 * 2 * 4);
+    const auto fill = [&pix](unsigned char r, unsigned char g, unsigned char b) {
+        for (int i = 0; i < 4; ++i) {
+            pix[size_t(i) * 4 + 0] = r; pix[size_t(i) * 4 + 1] = g;
+            pix[size_t(i) * 4 + 2] = b; pix[size_t(i) * 4 + 3] = 255;
+        }
+    };
+    fill(255, 0, 0);
+    TextureId tex = s->createTexture(2, 2, pix.data(), true);
+    CHECK_MSG(tex != 0, "%s", fx.e->lastError().c_str());
+    CHECK(s->setPbrTexture(mat, PbrTextureSlot::Albedo, tex));
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    const Px red = centre(img);
+    std::printf("    before update: %d %d %d\n", red.r, red.g, red.b);
+    CHECK_MSG(red.r > red.g + 40 && red.r > red.b + 40,
+              "the cube samples the RED texture first (%d %d %d)", red.r, red.g, red.b);
+
+    // ---- the write. NO flush, no wait, no re-bind. ----
+    fill(0, 255, 0);
+    CHECK_MSG(s->updateTexture(tex, 2, 2, pix.data()), "%s", fx.e->lastError().c_str());
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px green = centre(img);
+    std::printf("    after update:  %d %d %d\n", green.r, green.g, green.b);
+    CHECK_MSG(green.g > green.r + 40 && green.g > green.b + 40,
+              "the SAME texture now samples GREEN, with no flush and no re-bind (%d %d %d)",
+              green.r, green.g, green.b);
+
+    // Repeatable: a second write in the same session is not an allocation and
+    // not a special case.
+    fill(0, 0, 255);
+    CHECK(s->updateTexture(tex, 2, 2, pix.data()));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px blue = centre(img);
+    CHECK_MSG(blue.b > blue.r + 40 && blue.b > blue.g + 40,
+              "and again (%d %d %d)", blue.r, blue.g, blue.b);
+
+    // ---- the refusals ----
+    CHECK_MSG(!s->updateTexture(tex, 4, 4, pix.data()),
+              "a size mismatch is REFUSED (a Vulkan texture cannot resize)");
+    CHECK_MSG(!s->updateTexture(0, 2, 2, pix.data()), "an unknown id is refused");
+    CHECK_MSG(!s->updateTexture(tex, 2, 2, nullptr), "null pixels are refused");
+
+    // A FILE-LOADED texture is pooled and shared by path: refused by name.
+    const std::string path = "updtex.ppm";
+    {
+        std::FILE *f = std::fopen(path.c_str(), "wb");
+        REQUIRE(f != nullptr);
+        std::fprintf(f, "P6 8 8 255\n");   // one-line header, like the other fixtures here
+        for (int i = 0; i < 64; ++i) { const unsigned char q[3] = { 200, 100, 50 }; std::fwrite(q, 1, 3, f); }
+        std::fclose(f);
+    }
+    const TextureId fileTex = s->loadTexture(path, true);
+    CHECK_MSG(fileTex != 0, "loadTexture: %s", fx.e->lastError().c_str());
+    CHECK_MSG(!s->updateTexture(fileTex, 8, 8, pix.data()),
+              "a FILE-LOADED texture is refused — its format and mips come from the file "
+              "and it is pooled by path");
+    // Destroyed, and the file LEFT ON DISK — see the note in
+    // texture_cache_keys_on_colour_space: Ogre's shutdown metadata-cache write
+    // re-opens it, and a destroyed texture whose file is gone aborts teardown.
+    if (fileTex) CHECK(s->destroyTexture(fileTex));
+}
+
+// PER-MATERIAL REFLECTION CUBEMAP (ADDENDUM A-5).
+//
+// Two spheres under one sky reflection; the hero one gets its own solid-colour
+// cube. Its reflection must carry the override's tint and the other's must not.
+// The fence that matters is the LAST assertion: the override, like the global
+// cubemap, must go dark under automatic PCC — the shader's one env-probe slot
+// holds a cube ARRAY there and a manual cubemap is not merely wrong, it is
+// UNCOMPILABLE (the 2026-09-07 measurement in OgreSky.cpp).
+void per_material_reflection_cubemap_overrides_the_sky() {
+    Fixture fx;
+    View *v = fx.view("matcube-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("matcube-scene");               REQUIRE(s);
+    v->setScene(s);
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 3.2f), Vec3(0.0f, 0.0f, 0.0f));
+    s->setAmbient(Colour(0.1f, 0.1f, 0.1f), Colour(0.1f, 0.1f, 0.1f));
+
+    // Six solid faces, all the same colour: a cube whose every direction is
+    // that colour, so no camera angle can make the assertion accidental.
+    const auto solidFaces = [&](unsigned char r, unsigned char g, unsigned char b,
+                                TextureId out[6]) {
+        std::vector<unsigned char> face(16 * 16 * 4);
+        for (size_t i = 0; i < 16 * 16; ++i) {
+            face[i * 4 + 0] = r; face[i * 4 + 1] = g; face[i * 4 + 2] = b; face[i * 4 + 3] = 255;
+        }
+        for (int i = 0; i < 6; ++i) out[i] = s->createTexture(16, 16, face.data(), true);
+    };
+
+    TextureId skyFaces[6];  solidFaces(40, 40, 40, skyFaces);     // a dark grey world
+    TextureId heroFaces[6]; solidFaces(255, 40, 40, heroFaces);   // a RED world
+    for (int i = 0; i < 6; ++i) { REQUIRE(skyFaces[i] != 0); REQUIRE(heroFaces[i] != 0); }
+
+    CHECK_MSG(s->setSkyReflection(skyFaces), "setSkyReflection: %s", fx.e->lastError().c_str());
+    const TextureId heroCube = s->createCubemap(heroFaces);
+    CHECK_MSG(heroCube != 0, "createCubemap: %s", fx.e->lastError().c_str());
+
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams mirror;
+    mirror.albedo = Colour(0.05f, 0.05f, 0.05f);
+    mirror.metalness = 1.0f;
+    mirror.roughness = 0.02f;      // a near-mirror: what it shows IS its environment
+    MaterialId plainMat = s->createPbrMaterial(mirror);
+    MaterialId heroMat  = s->createPbrMaterial(mirror);
+    REQUIRE(plainMat != 0); REQUIRE(heroMat != 0);
+    CHECK_MSG(s->setPbrTexture(heroMat, PbrTextureSlot::Reflection, heroCube),
+              "%s", fx.e->lastError().c_str());
+
+    NodeId plain = s->createNode(), hero = s->createNode();
+    CHECK(s->attachMesh(plain, mesh, plainMat));
+    CHECK(s->attachMesh(hero, mesh, heroMat));
+    s->setNodeTransform(plain, Vec3(-1.1f, 0, 0), Quat(), Vec3(0.9f, 0.9f, 0.9f));
+    s->setNodeTransform(hero,  Vec3( 1.1f, 0, 0), Quat(), Vec3(0.9f, 0.9f, 0.9f));
+
+    render(fx.e, 2); Image img; REQUIRE(v->readPixels(img));
+    const Px plainPx = px(img, img.width / 4, img.height / 2);
+    const Px heroPx  = px(img, img.width * 3 / 4, img.height / 2);
+    std::printf("    plain %d %d %d | hero %d %d %d\n",
+                plainPx.r, plainPx.g, plainPx.b, heroPx.r, heroPx.g, heroPx.b);
+    CHECK_MSG(heroPx.r > heroPx.g + 15 && heroPx.r > heroPx.b + 15,
+              "the OVERRIDDEN material reflects its own RED cube (%d %d %d)",
+              heroPx.r, heroPx.g, heroPx.b);
+    CHECK_MSG(!(plainPx.r > plainPx.g + 15),
+              "...and the material beside it still reflects the grey sky (%d %d %d)",
+              plainPx.r, plainPx.g, plainPx.b);
+
+    // Clearing the override falls back to the global cube, through the same
+    // one function — no separate un-bind path to get wrong.
+    CHECK(s->setPbrTexture(heroMat, PbrTextureSlot::Reflection, 0));
+    render(fx.e, 2); REQUIRE(v->readPixels(img));
+    const Px cleared = px(img, img.width * 3 / 4, img.height / 2);
+    std::printf("    cleared: %d %d %d\n", cleared.r, cleared.g, cleared.b);
+    CHECK_MSG(!(cleared.r > cleared.g + 15),
+              "clearing the override returns the material to the sky reflection (%d %d %d)",
+              cleared.r, cleared.g, cleared.b);
+
+    CHECK(s->destroyTexture(heroCube));
+}
+
 // THE UNLIT SHADING MODEL (HLMS_ADOPTION P4a). Unlit is not a lighting preset
 // on the PBR pipeline — it is the OTHER backend material family, so the switch
 // destroys the material, rebuilds it and re-attaches every renderable while
@@ -3881,6 +4250,13 @@ int main(int argc, char **argv) {
         { "pbr_additive_adds_modulate_multiplies",  pbr_additive_adds_modulate_multiplies },
         { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
         { "pbr_texture_scale_tiles_uvs",            pbr_texture_scale_tiles_uvs },
+        { "pbr_workflow_writes_exactly_one_of_metalness_and_fresnel",
+                                                    pbr_workflow_writes_exactly_one_of_metalness_and_fresnel },
+        { "texture_cache_keys_on_colour_space",     texture_cache_keys_on_colour_space },
+        { "update_texture_rewrites_pixels_without_a_flush",
+                                                    update_texture_rewrites_pixels_without_a_flush },
+        { "per_material_reflection_cubemap_overrides_the_sky",
+                                                    per_material_reflection_cubemap_overrides_the_sky },
         { "unlit_shading_model_ignores_lighting",   unlit_shading_model_ignores_lighting },
         { "unlit_keeps_its_base_colour_map",        unlit_keeps_its_base_colour_map },
         { "unlit_refuses_rigged_meshes",            unlit_refuses_rigged_meshes },

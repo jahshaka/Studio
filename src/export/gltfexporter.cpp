@@ -45,6 +45,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/import/materialhelper.h"
 #include "irisgl/document/scenegraph/skybake.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/core/properties/property.h"
@@ -394,6 +395,60 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         const float hi = std::max(pbr->roughnessLowerBound, pbr->roughnessUpperBound);
         mr["roughnessFactor"] = double(std::max(lo, std::min(pbr->roughnessFactor, hi)));
     }
+
+    // ---- SPECULAR WORKFLOWS: converted at export (MATERIAL_GAPS_SPEC §2.6) --
+    //
+    // glTF 2.0's core material model is metallic-roughness, and our viewer is
+    // ours to keep simple, so a specular-workflow material is CONVERTED here
+    // rather than exported through KHR_materials_specular. The conversion is
+    // the import lane's own function run in the other direction — ONE
+    // conversion, two callers, never a second copy (§2.5). The authored
+    // workflow, kS and F0 ride extras.jah.material below, so a round trip
+    // through our own format loses nothing, and the web target does NOT claim
+    // specular-workflow parity — the same honesty the decal block carries.
+    //
+    // A METALLIC material takes none of this: its glTF is byte-identical to
+    // what it was before workflows existed.
+    if (pbr->workflow != 0) {
+        const QColor bc = pbr->baseColor;
+        const float diffuse[4] = { float(bc.redF()) * pbr->baseColorFactor,
+                                   float(bc.greenF()) * pbr->baseColorFactor,
+                                   float(bc.blueF()) * pbr->baseColorFactor,
+                                   float(bc.alphaF()) };
+        // Workflow 1 (Specular) hands the conversion its kS. Workflow 2
+        // (Specular-as-Fresnel) has no kS to speak of — the specular VALUE is
+        // the F0 — so F0 is what goes in, which is the same quantity the
+        // conversion's dielectric-vs-metal test is written against.
+        QColor spec = pbr->specularColor;
+        if (pbr->workflow == 2) {
+            spec = pbr->useFresnelColor ? pbr->fresnelColor : QColor();
+            if (!spec.isValid()) {
+                // F0 from the IOR, the renderer's own formula.
+                const float ior = std::max(1.0f, pbr->ior);
+                const float f = (1.0f - ior) / (1.0f + ior);
+                const int v = int(std::lround(std::min(1.0f, f * f) * 255.0f));
+                spec = QColor(v, v, v);
+            }
+        }
+        const float specular[3] = { float(spec.redF()), float(spec.greenF()),
+                                    float(spec.blueF()) };
+        QColor convertedBase;
+        float convertedMetal = 0.0f, convertedRough = 0.0f;
+        iris::MaterialHelper::specularGlossinessToMetallicRoughness(
+            diffuse, specular, 1.0f - pbr->roughnessFactor,
+            convertedBase, convertedMetal, convertedRough);
+        // Only the FACTORS are converted. A bound specular map has no
+        // metallic-roughness channel to land in (its RGB is a colour), and
+        // inventing one would be a lie — the same call the importer used to
+        // make in reverse.
+        mr["baseColorFactor"] = colorArray(float(convertedBase.redF()),
+                                           float(convertedBase.greenF()),
+                                           float(convertedBase.blueF()),
+                                           float(bc.alphaF()) * pbr->alpha);
+        mr["metallicFactor"] = double(convertedMetal);
+        mr["roughnessFactor"] = double(convertedRough);
+        mr.remove("metallicRoughnessTexture");
+    }
     m["pbrMetallicRoughness"] = mr;
 
     const QString normalSrc = textureSlotSource(pbr, "u_normalMap");
@@ -546,6 +601,61 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // faked onto some near-miss extension. A three.js viewer always receives
     // shadows and always adds emissive on top; that divergence is real and
     // documented, not papered over.
+    // ---- DETAIL LAYERS: NOT EXPORTED, DECLARED (D-3 (a) / §3.6) ----------
+    // glTF has no detail-map concept at all. The two honest alternatives are
+    // baking the layers into a composited albedo/normal at publish (3-4 d: 13
+    // blend modes reimplemented on the CPU plus a pixel oracle proving the CPU
+    // composite matches the GPU) and an extras + viewer-shader path that buys
+    // parity only in our own viewer. v1 does neither and SAYS SO — the same
+    // honesty the decal block carries — so nobody reads a plain base material
+    // in a stock viewer as a lost map.
+    {
+        bool anyDetail = !pbr->detailWeightMap.isEmpty();
+        for (int i = 0; i < iris::PbrMaterial::kDetailLayers && !anyDetail; ++i)
+            anyDetail = !pbr->detail[i].map.isEmpty() || !pbr->detail[i].normalMap.isEmpty();
+        if (anyDetail) {
+            c.warnings.append(QStringLiteral(
+                "material '%1': detail layers are NOT exported — glTF has no detail-map "
+                "concept, and the web target does not claim detail parity. The base maps "
+                "are exported as authored.")
+                .arg(pbr->getName().isEmpty() ? QStringLiteral("material") : pbr->getName()));
+            // Recorded in extras so a round trip through our OWN format can see
+            // that something was dropped, and what.
+            jah["detailLayersDropped"] = true;
+        }
+    }
+
+    // The authored WORKFLOW, verbatim, so a round trip through our own format
+    // is lossless even though the glTF above is a conversion. Written only on
+    // a non-metallic material, so a metallic one's extras are unchanged.
+    if (pbr->workflow != 0) {
+        QJsonObject wf;
+        wf["workflow"] = QString::fromLatin1(
+            iris::PbrMaterial::workflowNames().value(pbr->workflow, "Metallic"));
+        wf["specularColor"] = colorArray(float(pbr->specularColor.redF()),
+                                         float(pbr->specularColor.greenF()),
+                                         float(pbr->specularColor.blueF()));
+        wf["ior"] = double(pbr->ior);
+        wf["useFresnelColor"] = pbr->useFresnelColor;
+        wf["fresnelColor"] = colorArray(float(pbr->fresnelColor.redF()),
+                                        float(pbr->fresnelColor.greenF()),
+                                        float(pbr->fresnelColor.blueF()));
+        wf["separateFresnel"] = pbr->separateFresnel;
+        jah["material"] = wf;
+        // KHR_materials_ior on top of the conversion, when the material's IOR
+        // is not the glTF/renderer default: it is the one part of a specular
+        // workflow core glTF genuinely carries, and three.js honours it.
+        // NOT written on a refractive material (alphaMode 6) — that arm writes
+        // its own KHR_materials_ior from refractionStrength, and a second write
+        // would silently replace it.
+        if (pbr->alphaMode != 6 && std::abs(pbr->ior - 1.5f) > 1e-3f) {
+            c.useExtension("KHR_materials_ior");
+            QJsonObject ext = m["extensions"].toObject();
+            QJsonObject ior; ior["ior"] = double(pbr->ior);
+            ext["KHR_materials_ior"] = ior;
+            m["extensions"] = ext;
+        }
+    }
     if (pbr->brdf != 0) jah["brdf"] = iris::PbrMaterial::brdfEngineName(pbr->brdf);
     if (!pbr->receiveShadows) jah["receiveShadows"] = false;
     if (pbr->emissiveAsLightmap) jah["emissiveAsLightmap"] = true;
@@ -1119,10 +1229,19 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             d["metalness"] = double(decal->metalness);
             d["roughness"] = double(decal->roughness);
             d["ignoreAlphaDiffuse"] = decal->ignoreAlphaDiffuse;
-            if (!decal->resolvedTexturePath.isEmpty()) {
-                const QImage img = loadDocumentImage(decal->resolvedTexturePath, c);
-                if (!img.isNull()) d["image"] = imageToDataUri(img, false);   // PNG always: the alpha channel IS the decal mask
-            }
+            // All THREE maps, not just the diffuse one: the packaging walker
+            // has always carried the normal and emissive paths, so writing only
+            // `image` here lost them on a glTF round trip through our own
+            // format (MATERIAL_GAPS_SPEC §1.5). Still data only, still not
+            // rendered.
+            const auto embedMap = [&](const QString &path, const char *key) {
+                if (path.isEmpty()) return;
+                const QImage img = loadDocumentImage(path, c);
+                if (!img.isNull()) d[QLatin1String(key)] = imageToDataUri(img, false);   // PNG always: the alpha channel IS the decal mask
+            };
+            embedMap(decal->resolvedTexturePath, "image");
+            embedMap(decal->resolvedNormalPath, "normalImage");
+            embedMap(decal->resolvedEmissivePath, "emissiveImage");
             jah["decal"] = d;
         }
 

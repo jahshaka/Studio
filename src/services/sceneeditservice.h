@@ -51,6 +51,14 @@ struct ImagePlaneOptions
     bool doubleSided = true;
 };
 
+/// Which of a decal's three projected maps a binding call targets
+/// (MATERIAL_GAPS_SPEC §4). The three atlases already exist end to end — the
+/// engine, the document, the serializer, the panel and the mirror all carry
+/// normal and emissive; only the edit service and the registry verb were
+/// diffuse-only, which is what made the panel's normal/emissive rows bypass
+/// the dependency bookkeeping entirely.
+enum class DecalMapKind { Diffuse, Normal, Emissive };
+
 /// Options for SceneEditService::addDecal (DECALS_SPEC §5.5). Defaults are a
 /// 1 m sticker half a metre deep — big enough to see, small enough not to
 /// swallow the scene.
@@ -154,6 +162,16 @@ public:
     /// land here): pins the guid as a dependency, rewrites the dependency row
     /// and re-resolves the path. False when the node is not a decal.
     bool setDecalTexture(const iris::DecalNodePtr &decal, const QString &textureGuid);
+    /// Rebinds ANY of a decal's three maps — the generalisation of
+    /// setDecalTexture, which is now the Diffuse-kind alias. One function,
+    /// three kinds: BINDING pin, dependency row rewritten (the old guid's row
+    /// deleted), CAS resolve. An empty guid clears the map.
+    ///
+    /// Dependency rows are keyed by (node guid, asset guid), so a decal that
+    /// binds the SAME image to two kinds keeps one row and clearing one kind
+    /// must not delete it while the other still holds it — handled here.
+    bool setDecalMap(const iris::DecalNodePtr &decal, DecalMapKind kind,
+                     const QString &textureGuid);
     /// Binds (or, with an empty guid, clears) an emitter's particle image, the
     /// same way setDecalTexture binds a decal's: a BINDING membership and a
     /// dependency row, never a copy and never a companion material. Until this

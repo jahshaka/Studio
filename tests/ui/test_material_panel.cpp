@@ -223,9 +223,25 @@ static void testTextureRow()
 
     PanelRig rig;
     auto textures = rig.panel.findChildren<TexturePickerWidget *>();
-    // FIVE, not six: HLMS_ADOPTION P2 removed the Occlusion Map row along with
-    // the rest of the AO ghost (the renderer has no AO input to bind it to).
-    CHECK(textures.size() == 5, "texture: five map rows exist (no Occlusion Map)");
+    // RE-PINNED, MATERIAL_GAPS_SPEC GAP 2: the panel's map rows are now the five
+    // base maps plus, per detail layer, a diffuse and a normal map, plus the one
+    // detail WEIGHT mask. Counted from the document's own constant so raising
+    // kDetailLayers does not break this again.
+    //
+    // Still FIVE base maps, not six: HLMS_ADOPTION P2 removed the Occlusion Map
+    // row along with the rest of the AO ghost (the renderer has no AO input to
+    // bind it to), and that is what the second assertion below fences.
+    const int kExpectedMaps = 5 + iris::PbrMaterial::kDetailLayers * 2 + 1;
+    CHECK(textures.size() == kExpectedMaps,
+          "texture: five base map rows + two per detail layer + the weight mask");
+    {
+        // The Occlusion row must stay GONE, whatever the detail count is.
+        bool occlusion = false;
+        for (auto *prop : rig.pbr->properties)
+            if (prop && prop->name.contains(QStringLiteral("occlusion"), Qt::CaseInsensitive))
+                occlusion = true;
+        CHECK(!occlusion, "texture: there is still no Occlusion Map row");
+    }
     if (textures.isEmpty()) return;
 
     // rows appear in property order; the first texture property is baseColorMap

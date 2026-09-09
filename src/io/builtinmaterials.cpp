@@ -300,6 +300,27 @@ iris::PbrMaterialPtr fromMeshData(const iris::MeshMaterialData &data)
         bindIfFile(QStringLiteral("baseColorMap"), data.baseColorTexture);
         bindIfFile(QStringLiteral("metallicMap"),  data.metallicTexture);
         bindIfFile(QStringLiteral("roughnessMap"), data.roughnessTexture);
+
+        // ---- the WORKFLOW (MATERIAL_GAPS_SPEC GAP 1) ----------------------
+        // A spec-gloss or KHR_materials_specular source now arrives in its own
+        // workflow instead of converted. The IOR rides along on EVERY workflow
+        // (inert on metallic, restored by a switch); kS and F0 only mean
+        // something on the two specular ones but are stored the same way, for
+        // the same reason.
+        mat->setValue(QStringLiteral("workflow"), data.workflow);
+        mat->setValue(QStringLiteral("ior"), data.ior);
+        if (data.workflow != 0) {
+            mat->setValue(QStringLiteral("specularColor"), data.specularFactor);
+            mat->setValue(QStringLiteral("useFresnelColor"), data.useFresnelColor);
+            if (data.useFresnelColor)
+                mat->setValue(QStringLiteral("fresnelColor"), data.fresnelFactor);
+            // The specular / spec-gloss map binds to the SHARED metallic-specular
+            // texture unit — the renderer reinterprets one unit by workflow, so
+            // `metallicMap` is the right row and only one of the two sources can
+            // fill it. Before the workflow switch this map had nowhere to go and
+            // was dropped with a warning.
+            bindIfFile(QStringLiteral("metallicMap"), data.specularMapTexture);
+        }
         bindIfFile(QStringLiteral("normalMap"),    data.normalTexture);
         bindIfFile(QStringLiteral("emissiveMap"),  data.emissiveTexture);
 

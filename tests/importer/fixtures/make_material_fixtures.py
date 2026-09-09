@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates material_workflows.glb, the fixture for tests/importer/test_importer_materials.cpp.
 
-ONE GLB, five quads, five materials — one per glTF material shape the importer
+ONE GLB, seven quads, seven materials — one per glTF material shape the importer
 has to tell apart. They are written here rather than downloaded so the exact
 bytes under test are reviewable and no third-party content ships in the repo.
 
@@ -30,6 +30,14 @@ bytes under test are reviewable and no third-party content ships in the repo.
                   synthesized material reports metallicFactor 1 / roughnessFactor
                   1 like every other. That is the "a mesh with no material
                   imports black" report; the policy answer is a dielectric.
+    spec_ext      KHR_materials_specular on a metallic-roughness base
+                  (MATERIAL_GAPS_SPEC GAP 1). specularColorFactor is an F0
+                  TINT, so this imports as the renderer's Specular-as-Fresnel
+                  workflow with F0 = specularColorFactor * specularFactor —
+                  natively, not converted.
+    ior_glass     KHR_materials_ior alone, on a plain metallic-roughness base.
+                  The IOR is stored on every workflow (inert while metallic)
+                  so a workflow switch in the editor restores it.
 
 Run:  python3 make_material_fixtures.py     (writes the .glb beside this script)
 """
@@ -116,9 +124,26 @@ def build():
             "emissiveTexture": {"index": 1},
             "extensions": {"KHR_materials_unlit": {}},
         },
+        {   # 5: KHR_materials_specular — F0 tint on a metallic-roughness base
+            "name": "spec_ext",
+            "pbrMetallicRoughness": {"baseColorFactor": [0.5, 0.6, 0.7, 1.0],
+                                     "metallicFactor": 0.0,
+                                     "roughnessFactor": 0.3},
+            "extensions": {"KHR_materials_specular": {
+                "specularFactor": 0.5,
+                "specularColorFactor": [1.0, 0.5, 0.25]}},
+        },
+        {   # 6: KHR_materials_ior alone
+            "name": "ior_glass",
+            "pbrMetallicRoughness": {"baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+                                     "metallicFactor": 0.0,
+                                     "roughnessFactor": 0.1},
+            "extensions": {"KHR_materials_ior": {"ior": 1.8}},
+        },
     ]
 
-    names = ["specgloss", "specgloss_metal", "nopbr", "mr_default", "unlit"]
+    names = ["specgloss", "specgloss_metal", "nopbr", "mr_default", "unlit",
+             "spec_ext", "ior_glass"]
     meshes, nodes = [], []
     for i, name in enumerate(names):
         meshes.append({"name": name, "primitives": [{
@@ -138,7 +163,8 @@ def build():
 
     gltf = {
         "asset": {"version": "2.0", "generator": "jahshaka test fixture"},
-        "extensionsUsed": ["KHR_materials_pbrSpecularGlossiness", "KHR_materials_unlit"],
+        "extensionsUsed": ["KHR_materials_pbrSpecularGlossiness", "KHR_materials_unlit",
+                           "KHR_materials_specular", "KHR_materials_ior"],
         "scene": 0,
         "scenes": [{"nodes": list(range(len(nodes)))}],
         "nodes": nodes,

@@ -134,4 +134,81 @@ var thrown = false;
 try { scene.addDecal("no-such-guid"); } catch (e) { thrown = true; }
 assert(thrown, "scene.addDecal refuses a guid no asset has");
 
+// ---- the three-map verb (MATERIAL_GAPS_SPEC §4 / D-4) ------------------
+// Normal and emissive shipped end to end (engine atlases, document fields,
+// serializer, panel, mirror, packaging walker) with NO verb and NO edit
+// service behind them: the panel wrote the guid straight onto the node, so
+// those two rows produced no dependency row and removed none. This is the
+// repair, driven through the verb the panel now shares.
+var nrmGuid = assets.importFile(fixtures + "/implane_tall.png");
+var emiGuid = assets.importFile(fixtures + "/tiny.png");
+assert(nrmGuid.length > 10 && emiGuid.length > 10, "normal/emissive images imported");
+
+var maps = scene.addDecal(imgGuid);
+assert(node.decalMaps(maps).diffuse.guid === imgGuid, "node.decalMaps reports the diffuse map");
+assert(node.decalMaps(maps).normal.guid === "", "no normal map yet");
+
+// Two maps in ONE call — the reason the verb takes an object rather than a
+// kind argument (D-4): one undo entry, one dependency transaction.
+assert(node.setDecalMaps(maps, { normal: nrmGuid, emissive: emiGuid }) === true,
+       "node.setDecalMaps binds normal + emissive atomically");
+assert(node.decalMaps(maps).normal.guid === nrmGuid, "the normal binding took");
+assert(node.decalMaps(maps).emissive.guid === emiGuid, "the emissive binding took");
+assert(node.decalMaps(maps).normal.path.length > 0,
+       "the normal map resolves its bytes through the CAS");
+assert(node.decalMaps(maps).diffuse.guid === imgGuid,
+       "an absent key leaves that map alone");
+
+// The dependency rows the panel never wrote.
+var mapDeps = assets.dependencies(maps);
+assert(mapDeps.indexOf(nrmGuid) >= 0, "setDecalMaps writes the normal map's dependency row");
+assert(mapDeps.indexOf(emiGuid) >= 0, "setDecalMaps writes the emissive map's dependency row");
+assert(materialGuids().length === materialsBefore,
+       "binding normal/emissive mints NO companion PBR material either");
+
+// Clearing removes the row — the other half the panel never did.
+assert(node.setDecalMaps(maps, { emissive: "" }) === true, "'' clears a map");
+assert(node.decalMaps(maps).emissive.guid === "", "the emissive map is cleared");
+assert(assets.dependencies(maps).indexOf(emiGuid) < 0,
+       "clearing a map deletes its dependency row");
+assert(assets.dependencies(maps).indexOf(nrmGuid) >= 0,
+       "clearing one map leaves the others' rows alone");
+
+// One image bound to two kinds shares ONE row, and clearing one kind must not
+// pull the row out from under the other.
+assert(node.setDecalMaps(maps, { emissive: nrmGuid }) === true, "same image on a second kind");
+assert(node.setDecalMaps(maps, { normal: "" }) === true, "clear the first kind");
+assert(assets.dependencies(maps).indexOf(nrmGuid) >= 0,
+       "the shared dependency row survives while the other kind still holds it");
+
+// Validation happens BEFORE any write: a bad guid changes nothing.
+var beforeBad = node.decalMaps(maps).diffuse.guid;
+var badMaps = false;
+try { node.setDecalMaps(maps, { diffuse: imgGuid, normal: "no-such-guid" }); }
+catch (e) { badMaps = true; }
+assert(badMaps, "node.setDecalMaps refuses a guid no asset has");
+assert(node.decalMaps(maps).diffuse.guid === beforeBad,
+       "a refused call wrote NOTHING (validate-all-then-apply)");
+var badKey = false;
+try { node.setDecalMaps(maps, { specular: imgGuid }); } catch (e) { badKey = true; }
+assert(badKey, "node.setDecalMaps refuses an unknown map name");
+var emptyMaps = false;
+try { node.setDecalMaps(maps, {}); } catch (e) { emptyMaps = true; }
+assert(emptyMaps, "node.setDecalMaps refuses an empty object");
+var notADecal = false;
+try { node.setDecalMaps(scene.root(), { diffuse: imgGuid }); } catch (e) { notADecal = true; }
+assert(notADecal, "node.setDecalMaps refuses a node that is not a decal");
+
+// The alias still works and still means diffuse.
+assert(node.setDecalTexture(maps, imgGuid) === true, "the setDecalTexture alias still binds");
+assert(node.decalMaps(maps).diffuse.guid === imgGuid, "the alias writes the DIFFUSE map");
+
+// ---- the maps survive a save/reopen ------------------------------------
+assert(project.save() === true, "project.save (with decal maps)");
+assert(project.open(proj) === true, "project.open (reopen)");
+assert(node.decalMaps(maps).emissive.guid === nrmGuid,
+       "the emissive binding survives a save/reopen");
+assert(node.decalMaps(maps).emissive.path.length > 0,
+       "and re-resolves its bytes on load");
+
 console.log("decals: ALL OK");

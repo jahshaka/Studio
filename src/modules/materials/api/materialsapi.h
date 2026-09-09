@@ -69,6 +69,8 @@ public:
 
     Q_INVOKABLE bool apply(const QString &nodeId, const QString &presetOrGuid);
     Q_INVOKABLE bool set(const QString &nodeId, const QVariantMap &values);
+    Q_INVOKABLE bool setDetail(const QString &nodeId, int layer, const QVariantMap &values);
+    Q_INVOKABLE QVariantList detail(const QString &nodeId);
     Q_INVOKABLE QVariantMap get(const QString &nodeId);
     Q_INVOKABLE QVariantMap properties(const QString &nodeId);
     Q_INVOKABLE QString dumpDatablock(const QString &nodeId);

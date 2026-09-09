@@ -538,12 +538,44 @@ iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
 
 bool SceneEditService::setDecalTexture(const iris::DecalNodePtr &decal, const QString &textureGuid)
 {
+    // The diffuse-kind alias. Every caller that predates the three-map verb
+    // (the panel's image row, the asset-bin drop, node.setDecalTexture, addDecal)
+    // keeps working unchanged.
+    return setDecalMap(decal, DecalMapKind::Diffuse, textureGuid);
+}
+
+bool SceneEditService::setDecalMap(const iris::DecalNodePtr &decal, DecalMapKind kind,
+                                   const QString &textureGuid)
+{
     if (!decal) return false;
-    const QString oldGuid = decal->textureGuid;
-    decal->textureGuid = textureGuid;
-    decal->resolvedTexturePath.clear();
+
+    QString *guidField = nullptr;
+    QString *pathField = nullptr;
+    switch (kind) {
+    case DecalMapKind::Diffuse:
+        guidField = &decal->textureGuid;  pathField = &decal->resolvedTexturePath;  break;
+    case DecalMapKind::Normal:
+        guidField = &decal->normalGuid;   pathField = &decal->resolvedNormalPath;   break;
+    case DecalMapKind::Emissive:
+        guidField = &decal->emissiveGuid; pathField = &decal->resolvedEmissivePath; break;
+    }
+
+    const QString oldGuid = *guidField;
+    *guidField = textureGuid;
+    pathField->clear();
+
+    // A dependency row is (node, asset) — not (node, asset, slot). Two kinds
+    // bound to the SAME image share one row, so the old guid's row may only be
+    // dropped once no other kind still holds it.
+    const auto stillBound = [&decal](const QString &guid) {
+        return !guid.isEmpty() && (decal->textureGuid == guid ||
+                                   decal->normalGuid == guid ||
+                                   decal->emissiveGuid == guid);
+    };
+
     if (textureGuid.isEmpty()) {
-        if (db && project && !oldGuid.isEmpty() && !project->getProjectGuid().isEmpty())
+        if (db && project && !oldGuid.isEmpty() && !project->getProjectGuid().isEmpty() &&
+            !stillBound(oldGuid))
             db->deleteDependency(decal->getGUID(), oldGuid);
         return true;
     }
@@ -553,13 +585,17 @@ bool SceneEditService::setDecalTexture(const iris::DecalNodePtr &decal, const QS
     // image, so no companion PBR material is minted for it (the shared rule the
     // lights lane landed — LIGHTS_COMPLETION_SPEC D4 / ProjectAssets::AddKind).
     ProjectAssets::addToProject(textureGuid, db, project, ProjectAssets::AddKind::Binding);
-    if (!oldGuid.isEmpty() && oldGuid != textureGuid)
+    if (!oldGuid.isEmpty() && oldGuid != textureGuid && !stillBound(oldGuid))
         db->deleteDependency(decal->getGUID(), oldGuid);
+    // Delete-then-create: `dependencies` has no unique key on (depender,
+    // dependee), so re-binding the same image (or binding it to a second kind)
+    // would otherwise stack duplicate rows the export closure walks twice.
+    db->deleteDependency(decal->getGUID(), textureGuid);
     db->createDependency(static_cast<int>(ModelTypes::Object),
                          static_cast<int>(ModelTypes::Texture),
                          decal->getGUID(), textureGuid, project->getProjectGuid());
 
-    decal->resolvedTexturePath = AssetCas::resolvePinned(
+    *pathField = AssetCas::resolvePinned(
         QSqlDatabase::database(), AssetStorePaths::root(),
         project->getProjectGuid(), textureGuid);
     return true;

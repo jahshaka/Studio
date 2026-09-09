@@ -74,6 +74,14 @@ public:
 	CubeMapWidget*			addCubeMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back);
 
     PropertyWidget*         addPropertyWidget();
+    /// A NESTED, collapsible section inside this blade, titled and closed.
+    /// Returned so the caller can fill it with the same add*() helpers.
+    ///
+    /// Exists so a panel can group a long tail of secondary rows (the
+    /// material panel's Detail Layers, MATERIAL_GAPS_SPEC GAP 2) without
+    /// widening addRow(): "the one place a row enters a blade" stays private
+    /// and this is a named capability rather than a hole in it.
+    AccordianBladeWidget*   addSection(const QString &title);
 
     /// Drops a caller-built widget into the blade's content pane, exactly where
     /// the add*() helpers put theirs. For rows the generic controls do not

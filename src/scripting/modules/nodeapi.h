@@ -59,6 +59,8 @@ public:
     Q_INVOKABLE QVariant lightTexture(const QString &id);
     Q_INVOKABLE bool setDecalTexture(const QString &id, const QString &assetGuid);
     Q_INVOKABLE QVariant decalTexture(const QString &id);
+    Q_INVOKABLE bool setDecalMaps(const QString &id, const QVariant &maps);
+    Q_INVOKABLE QVariant decalMaps(const QString &id);
     Q_INVOKABLE bool setParticleTexture(const QString &id, const QString &assetGuid);
     Q_INVOKABLE QVariant particleTexture(const QString &id);
     Q_INVOKABLE bool setPlanarReflector(const QString &id, bool enabled);
