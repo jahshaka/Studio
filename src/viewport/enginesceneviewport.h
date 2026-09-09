@@ -126,6 +126,11 @@ public:
     void setShowGrid(bool value) override { mShowGrid = value; }
     bool getShowGiVolume() const override { return mShowGiVolume; }
     void setShowGiVolume(bool value) override { mShowGiVolume = value; }
+    /// The shadow-atlas inspector (SHADOW_TOOLING_SPEC.md §4.4). Not persisted,
+    /// like the GI volume beside it: a diagnostic you turn on to answer one
+    /// question and turn off again.
+    bool getShowShadowAtlas() const override { return mShowShadowAtlas; }
+    void setShowShadowAtlas(bool value) override { mShowShadowAtlas = value; }
     // G / editor.gameView: hide every in-viewport editor helper (grid, light
     // wires, outline, gizmo) — docks and toolbars untouched. Not persisted.
     void setGameView(bool enabled) override { mGameView = enabled; }
@@ -425,6 +430,7 @@ private:
     /// GI volume boxes (fix 9). Diagnostic, default off, not persisted — it is
     /// a thing you turn on while chasing a lighting question.
     bool mShowGiVolume = false;
+    bool mShowShadowAtlas = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     QHash<QString, ViewCameraState> mViewStates; // per-view camera memory (session-only)
     bool mGameView = false;             // G: helpers hidden; never persisted

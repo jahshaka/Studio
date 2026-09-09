@@ -1692,6 +1692,10 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
         d.lines.push_back(tr("Piloting: %1").arg(name).toStdString());
         d.lines.push_back(tr("Esc or the camera menu to eject").toStdString());
     }
+    // The shadow-atlas inspector: engine-drawn, on the same HUD, and off in
+    // every offscreen view (it never sets allowOffscreen) so screenshots and
+    // pixel suites stay clean.
+    d.shadowAtlas = mShowShadowAtlas;
     if (mShowStats) {
         d.stats = true;
         d.corner = jahshaka::engine::OverlayCorner::TopLeft;

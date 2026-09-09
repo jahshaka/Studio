@@ -235,6 +235,15 @@ public:
     virtual bool getShowGiVolume() const { return false; }
     virtual void setShowGiVolume(bool) {}
 
+    /// THE SHADOW-ATLAS INSPECTOR — a strip of thumbnails showing what the
+    /// renderer rasterised into each rectangle of its one shadow atlas, with
+    /// the light each map belongs to and whether that map is static
+    /// (SPECS/SHADOW_TOOLING_SPEC.md §4.4). A diagnostic: never persisted, and
+    /// drawn by the engine's own HUD rather than by Qt for the reason the
+    /// loading cover is (the viewport is a native window).
+    virtual bool getShowShadowAtlas() const { return false; }
+    virtual void setShowShadowAtlas(bool) {}
+
     /// Game View (G): hides every in-viewport editor helper (grid, light
     /// wires, selection outline, gizmo). Docks/toolbars untouched, never
     /// persisted. Only the engine viewport implements it.

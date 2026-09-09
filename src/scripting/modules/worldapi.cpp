@@ -116,6 +116,14 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
+        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, mapped:[{slot, node, static, dirty, pssm}], unmapped:[guid], shadowPassesLastFrame, staticMapRendersLastFrame}",
+          "What the SHADOW ATLAS is actually doing, as opposed to what was asked for — the same \"the renderer beats the request\" reading as world.giStatus() and world.antiAliasing(). "
+          "It exists because the renderer keeps a fixed number of point/spot shadow maps and fills them with the casters closest to the camera, DROPPING the rest without a word: 'casters' is how many shadow-casting point and spot lights the scene has, 'focusedMaps' how many of them can have a map at once, and 'unmapped' NAMES the lights that got none — the lights whose shadows are silently missing. Empty is the healthy state. "
+          "'budget' is the ceiling actually in force (world.shadows' mapBudget, clamped by what the resolution can afford: 16 maps at 1024, 8 at 2048, 4 at 4096, 2 at 8192), 'requestedBudget' what was asked for before that clamp. 'maps' counts TEXTURE rectangles (pssmSplits + focusedMaps) while 'mapped' has one entry per LIGHT SLOT — three of the rectangles belong to the one directional light, which is why slot 0 is flagged 'pssm'. Each entry names the light's guid, and whether its map is 'static' (rendered once and kept — see the light's Static Shadow row) and currently 'dirty' (scheduled to re-render). "
+          "'atlasWidth'/'atlasHeight'/'atlasBytes' are the one depth texture all of this is packed into; the point-light cube scratch (~48 MB, allocated once for any point caster) is not counted. "
+          "'shadowPassesLastFrame' and 'staticMapRendersLastFrame' are the cost readings: how many shadow-node passes the last frame ran, and how many of those were a static map re-rendering — 0 for a settled static map, which is the whole point of the feature. ASKING TURNS THEM ON (a per-pass listener is not free), so the FIRST call reports 0 and every call after a rendered frame reports the truth, exactly like app.stats' metricsRecording. "
+          "'live' is false without an engine viewport, and the numbers are then the document's request rather than a measurement.",
+          Needs::Document },
         { "refreshShadows", "world.refreshShadows() -> bool",
           "Re-renders every STATIC shadow map in the scene once, on the next frame — the shadow twin of world.refreshGi(). A light whose 'Static Shadow' is on has its shadow map rendered once and kept, which saves six cube-face passes plus a copy every frame for a fixed lamp; the renderer re-renders it by itself when the light moves or changes, when geometry is attached or destroyed, and when ANY transform in the document changes. This verb is for the case the renderer cannot see — a material or a texture edited outside those paths, or a script that wants the re-render to have happened before its next read. Harmless and cheap with no static lights (it sets a flag). It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
@@ -693,6 +701,64 @@ bool WorldApi::refreshGi()
     // its next sync and re-solves once.
     ++scene->giRefreshSerial;
     return true;
+}
+
+QVariantMap WorldApi::shadowStatus()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.shadowStatus"));
+    if (!scene) return QVariantMap();
+    // The ACHIEVED reading, exactly like world.giStatus(): ask the renderer when
+    // there is one, and report live:false with the document's request when there
+    // is not, so a headless --script run never mistakes an unmeasured value for
+    // a measurement.
+    IEditorViewport::ShadowStatusInfo st;
+    if (host.isEngineReady() && host.viewport) st = host.viewport->shadowStatus();
+    QVariantMap out;
+    out[QStringLiteral("live")] = st.available;
+    out[QStringLiteral("requestedBudget")] = scene->shadowMapBudget;
+    if (!st.available) {
+        out[QStringLiteral("resolution")] = scene->shadowResolution;
+        out[QStringLiteral("maps")] = 0;
+        out[QStringLiteral("pssmSplits")] = 0;
+        out[QStringLiteral("focusedMaps")] = 0;
+        out[QStringLiteral("casters")] = 0;
+        out[QStringLiteral("budget")] = scene->shadowMapBudget;
+        out[QStringLiteral("atlasWidth")] = 0;
+        out[QStringLiteral("atlasHeight")] = 0;
+        out[QStringLiteral("atlasBytes")] = 0;
+        out[QStringLiteral("mapped")] = QVariantList();
+        out[QStringLiteral("unmapped")] = QVariantList();
+        out[QStringLiteral("shadowPassesLastFrame")] = 0;
+        out[QStringLiteral("staticMapRendersLastFrame")] = 0;
+        return out;
+    }
+    out[QStringLiteral("resolution")] = st.resolution;
+    out[QStringLiteral("maps")] = st.maps;
+    out[QStringLiteral("pssmSplits")] = st.pssmSplits;
+    out[QStringLiteral("focusedMaps")] = st.focusedMaps;
+    out[QStringLiteral("casters")] = st.casters;
+    out[QStringLiteral("budget")] = st.budget;
+    out[QStringLiteral("requestedBudget")] = st.requestedBudget;
+    out[QStringLiteral("atlasWidth")] = st.atlasWidth;
+    out[QStringLiteral("atlasHeight")] = st.atlasHeight;
+    out[QStringLiteral("atlasBytes")] = double(st.atlasBytes);
+    QVariantList mapped;
+    for (const IEditorViewport::ShadowMapEntry &e : st.mapped) {
+        QVariantMap m;
+        m[QStringLiteral("slot")] = e.slot;
+        m[QStringLiteral("node")] = e.node;
+        m[QStringLiteral("static")] = e.isStatic;
+        m[QStringLiteral("dirty")] = e.dirty;
+        m[QStringLiteral("pssm")] = e.pssm;
+        mapped.append(m);
+    }
+    out[QStringLiteral("mapped")] = mapped;
+    QVariantList unmapped;
+    for (const QString &g : st.unmapped) unmapped.append(g);
+    out[QStringLiteral("unmapped")] = unmapped;
+    out[QStringLiteral("shadowPassesLastFrame")] = st.shadowPassesLastFrame;
+    out[QStringLiteral("staticMapRendersLastFrame")] = st.staticMapRendersLastFrame;
+    return out;
 }
 
 bool WorldApi::refreshShadows()

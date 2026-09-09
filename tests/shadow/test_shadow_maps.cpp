@@ -506,6 +506,73 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
     e->destroyScene(s);
 }
 
+// ---------------------------------------------------------------------------
+// T6 — THE ATLAS INSPECTOR DRAWS (SHADOW_TOOLING_SPEC.md §4.4).
+//
+// It also answers the spec's open question (§8): can HlmsUnlit sample the D32
+// shadow atlas on our Vulkan pin? Upstream's ShadowMapDebugging sample does it,
+// but nothing in this tree ever had. If it cannot, this case is where it says
+// so — the tiles are drawn from that texture and nothing else.
+static void t6_atlas_overlay(Engine *e, View *v)
+{
+    std::printf("-- T6: the shadow-atlas overlay draws its tiles\n");
+    Room room = buildRoom(e, v, "t6", 2);
+    if (!room.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    render(e, 8);
+    Image off;
+    if (!v->readPixels(off)) { std::printf("FAIL: readPixels\n"); ++failures; return; }
+
+    ViewOverlayDesc d;
+    d.shadowAtlas = true;
+    d.allowOffscreen = true;   // the offscreen opt-in; only a suite ever sets it
+    v->setOverlay(d);
+    render(e, 8);
+    Image on;
+    v->readPixels(on);
+
+    // The strip lives along the BOTTOM. Count pixels that changed there against
+    // pixels that changed in the top half, which must be none: an overlay that
+    // altered the picture would be a defect, not a diagnostic.
+    unsigned changedBottom = 0, changedTop = 0;
+    for (unsigned y = 0; y < on.height; ++y) {
+        for (unsigned x = 0; x < on.width; ++x) {
+            const int a2 = lum(on, x, y), b2 = lum(off, x, y);
+            if (std::abs(a2 - b2) > 4) { (y > on.height / 2u ? changedBottom : changedTop)++; }
+        }
+    }
+    std::printf("    pixels changed by the overlay: bottom %u, top %u\n", changedBottom, changedTop);
+    CHECK(changedBottom > 200u, "the atlas strip draws in the bottom half (%u px)", changedBottom);
+    CHECK(changedTop == 0u, "and changes NOTHING above it (%u px)", changedTop);
+
+    // ...and the tiles show the ATLAS, not a flat rectangle. A depth map of a
+    // room has structure; a failed texture bind would be uniform. This is the
+    // assertion that answers the spec's open question about sampling a D32
+    // atlas through HlmsUnlit on this pin.
+    int tileMin = 255, tileMax = 0;
+    for (unsigned y = on.height / 2u; y < on.height; ++y)
+        for (unsigned x = 0; x < on.width; ++x) {
+            if (std::abs(lum(on, x, y) - lum(off, x, y)) <= 4) continue;   // not a tile pixel
+            tileMin = std::min(tileMin, lum(on, x, y));
+            tileMax = std::max(tileMax, lum(on, x, y));
+        }
+    std::printf("    tile luminance range: %d..%d\n", tileMin, tileMax);
+    CHECK(tileMax - tileMin > 8, "the tiles show the atlas's CONTENT, not a flat fill (%d..%d)",
+          tileMin, tileMax);
+
+    // ...and it goes away again, which is what keeps every screenshot and pixel
+    // suite unaffected.
+    v->setOverlay(ViewOverlayDesc());
+    render(e, 8);
+    Image back;
+    v->readPixels(back);
+    unsigned differing = 0;
+    for (size_t i = 0; i < back.rgba.size() && i < off.rgba.size(); ++i)
+        if (back.rgba[i] != off.rgba[i]) ++differing;
+    CHECK(differing == 0u, "turning it off restores the frame byte for byte (%u bytes differ)",
+          differing);
+    e->destroyScene(room.scene);
+}
+
 int main(int argc, char **argv)
 {
     const std::string only = argc > 1 ? argv[1] : std::string();
@@ -530,6 +597,7 @@ int main(int argc, char **argv)
     if (only.empty() || only == "t1")  t1_four_lamps(engine.get(), v);
     if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
     if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);
+    if (only.empty() || only == "t6")  t6_atlas_overlay(engine.get(), v);
 
     engine.reset();
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
