@@ -106,4 +106,51 @@ assert(editor.undoState().pushes === before,
        "no selection verb pushes an undo step (" + before + " -> " +
        editor.undoState().pushes + ")");
 
+// ---- 6. the PRIMARY's outline colour (D4 b) --------------------------------
+// The VERB half of the primary-outline row: the persisted values, the clamps,
+// the derivation and the refusals. The PIXEL half — that the primary's band
+// actually takes this colour and the secondaries' do not — is
+// app.multiselect_outline, which needs a GPU; everything below runs headless.
+var o = editor.outline();
+assert(typeof o.width === "number" && o.width >= 1, "outline().width is a number: " + o.width);
+assert(o.color.length === 7 && o.color[0] === "#", "outline().color is a hex colour: " + o.color);
+assert(o.primaryColorStored === false,
+       "a fresh profile has no stored primary colour (" + o.primaryColorStored + ")");
+assert(o.primaryColor !== o.color,
+       "and the DERIVED primary differs from the outline colour: " +
+       o.color + " -> " + o.primaryColor);
+
+// The derivation FOLLOWS the outline colour: a user who never touches the
+// primary row still gets a primary that is lighter than THEIR colour.
+// ODD channel values on purpose: halving (255 + c) is exact only for odd c, so
+// the expected value below is a whole number and not a rounding coin-toss.
+var dark = editor.setOutline({ color: "#113355" });
+assert(dark.color === "#113355", "color round-trips: " + dark.color);
+assert(dark.primaryColorStored === false, "setting the base colour stores no primary");
+assert(dark.primaryColor !== "#113355" && dark.primaryColor !== o.primaryColor,
+       "the derived primary moved with it: " + dark.primaryColor);
+// Halfway to white, per channel: 0x11 -> 0x88, 0x33 -> 0x99, 0x55 -> 0xaa.
+assert(dark.primaryColor === "#8899aa",
+       "and it is the base lifted halfway to white (" + dark.primaryColor + ")");
+
+var chosen = editor.setOutline({ primaryColor: "#00ff00" });
+assert(chosen.primaryColor === "#00ff00" && chosen.primaryColorStored === true,
+       "an explicit primary colour is stored and wins: " + J(chosen));
+assert(chosen.color === "#113355", "and does not disturb the base colour");
+var cleared = editor.setOutline({ primaryColor: null });
+assert(cleared.primaryColorStored === false,
+       "null clears the stored choice back to derived: " + J(cleared));
+assert(cleared.primaryColor === dark.primaryColor,
+       "and the derived value comes back unchanged: " + cleared.primaryColor);
+
+var w = editor.setOutline({ width: 500 });
+assert(w.width === 30, "width is CLAMPED, not refused (500 -> " + w.width + ")");
+editor.setOutline({ width: 3, color: "#3498db", primaryColor: null });
+
+var threw = false;
+try { editor.setOutline({ color: "not-a-colour" }); } catch (e) { threw = true; }
+assert(threw, "an unparseable colour is REFUSED, not silently defaulted");
+threw = false;
+try { editor.setOutline({ nope: 1 }); } catch (e) { threw = true; }
+assert(threw, "an unknown key is refused");
 console.log("scripting.e2e.multiselect: ALL PASS");

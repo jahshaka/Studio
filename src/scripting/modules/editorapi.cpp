@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
+#include "services/outlinesettings.h"
 #include "services/undoservice.h"
 #include "bridge/enginehost.h"
 #include "data/settingsmanager.h"
@@ -118,7 +119,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
@@ -145,7 +146,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "things gameView hides: it is a diagnostic, not an editor helper, and \"what is my frame "
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
-          "render through an offscreen view and the overlay is excluded from those by construction.",
+          "render through an offscreen view and the overlay is excluded from those by construction. "
+          "`outlineWidth`, `outlineColor` and `outlinePrimaryColor` are the selection highlight's "
+          "LOOK, READ-ONLY here (they are persisted preferences, written by editor.setOutline): "
+          "`outlinePrimaryColor` is the brighter colour the PRIMARY member of a multi-selection is "
+          "drawn in, and is unused with a single object selected.",
           Needs::Engine },
         { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, shadowAtlas}) -> bool",
           "Turns the viewport's editor helpers on and off — the View Options rows, the G key and "
@@ -159,6 +164,26 @@ QVector<VerbInfo> EditorApi::verbs() const
           "not yet follow a script-driven change (same as editor.setCameraMode) — the viewport "
           "does; `physicsDebug` is the exception, its menu checkmark follows.",
           Needs::Engine },
+        { "outline", "editor.outline() -> {width, color, primaryColor, primaryColorStored}",
+          "The SELECTION OUTLINE's three persisted values (Preferences \u2192 Viewport): `width` in "
+          "Preferences units 1..30 (the mirror draws an inverted hull scaled by 1 + width/150), "
+          "`color` the colour every selected object is outlined in, and `primaryColor` the colour "
+          "the PRIMARY member of a MULTI-selection gets instead \u2014 the last-clicked object, the "
+          "one the gizmo pivots on (EDITOR_MULTISELECT_SPEC D4 b, Blender's rule). With a single "
+          "object selected there is nothing to contrast against, so the primary colour is not used "
+          "and a one-node selection draws exactly as it did before this existed. "
+          "`primaryColorStored` is false when no primary colour was ever chosen \u2014 `primaryColor` "
+          "is then DERIVED from `color` (lifted halfway to white) and follows it, which is why the "
+          "derived value is reported rather than an empty string.",
+          Needs::Document },
+        { "setOutline", "editor.setOutline({width?, color?, primaryColor?}) -> {width, color, primaryColor, primaryColorStored}",
+          "Writes the selection outline's look and returns what resulted \u2014 the same persisted "
+          "values the Preferences rows write, and the same push onto the open scene, so the page "
+          "and the verb can never disagree. Omitted keys keep their value; an unknown key is "
+          "REFUSED. Colours take anything QColor parses (\"#rrggbb\", \"red\"); `width` is clamped "
+          "to 1..30. Passing `primaryColor: null` CLEARS the stored choice and puts the primary "
+          "back on its derived value (`color` lifted halfway to white).",
+          Needs::Document },
         { "setView", "editor.setView(\"top\"|\"bottom\"|\"left\"|\"right\"|\"front\"|\"back\"|\"perspective\") -> bool",
           "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Each view remembers its camera between visits: \"perspective\" returns to its remembered free/orbit pose, each ortho view to its own pan and zoom (a first visit gets the standard axis framing). Session-only memory; works in both camera modes. "
           "The six AXIS views are ROTATION-LOCKED: they are orthographic measuring views that stay pointed down their axis, so rotation gestures are ignored there until you return to \"perspective\" (editor.camera().rotationLocked reports it).",
@@ -743,6 +768,14 @@ QVariantMap EditorApi::overlays()
     // setOverlays refuses "gridPlane" like any other unknown key.
     out["gridPlane"] = host.viewport->gridPlane();
     out["shadowAtlas"] = host.viewport->getShowShadowAtlas();
+    // The selection highlight's LOOK rides along, read-only like gridPlane:
+    // `selectionWireframe` above already answers "which style", and a caller
+    // asserting the highlight wanted the colours in the same breath. Writing
+    // them is editor.setOutline's job (they are persisted preferences, not
+    // session toggles), and setOverlays refuses them like any unknown key.
+    out["outlineWidth"] = outlinesettings::width();
+    out["outlineColor"] = outlinesettings::color().name();
+    out["outlinePrimaryColor"] = outlinesettings::primaryColor().name();
     return out;
 }
 
@@ -764,7 +797,9 @@ bool EditorApi::setOverlays(const QVariantMap &change)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("editor.setOverlays: unknown overlay '%1' (known: %2). "
                                        "The frame-stats readout is 'stats', not 'fps' — it shows "
-                                       "frame time, draws and triangles, not just a frame rate.")
+                                       "frame time, draws and triangles, not just a frame rate; "
+                                       "the outline width and colours editor.overlays() reports "
+                                       "are written by editor.setOutline, not here.")
                             .arg(it.key(), known.join(", ")));
         // A non-boolean here used to mean "0" everywhere in Qt's variant
         // conversion; on this surface it means the caller guessed the type.
@@ -804,6 +839,98 @@ bool EditorApi::setOverlays(const QVariantMap &change)
     if (change.contains("shadowAtlas"))
         host.viewport->setShowShadowAtlas(change.value("shadowAtlas").toBool());
     return true;
+}
+
+// ---- the selection outline (EDITOR_MULTISELECT_SPEC D4 b) ------------------
+//
+// NOT on setOverlays: every key there is a boolean session toggle, and these
+// three are persisted preferences of a different type. They read and write
+// services/outlinesettings.h — the SAME functions the Preferences rows call —
+// so there is one definition of the clamps, the defaults and the derivation.
+
+namespace {
+
+/// The read-back shape both verbs return.
+QVariantMap outlineState()
+{
+    QVariantMap out;
+    out["width"] = outlinesettings::width();
+    out["color"] = outlinesettings::color().name();
+    out["primaryColor"] = outlinesettings::primaryColor().name();
+    auto *settings = SettingsManager::getDefaultManager();
+    const QString stored =
+        settings ? settings->getValue(outlinesettings::primaryColorKey(), QString()).toString()
+                 : QString();
+    out["primaryColorStored"] = QColor(stored).isValid();
+    return out;
+}
+
+} // namespace
+
+QVariantMap EditorApi::outline()
+{
+    return outlineState();
+}
+
+QVariantMap EditorApi::setOutline(const QVariantMap &change)
+{
+    static const QStringList known = { "width", "color", "primaryColor" };
+    if (change.isEmpty()) {
+        fail(QStringLiteral("editor.setOutline: nothing to change — pass a map ({%1}); "
+                            "editor.outline() reads the current values").arg(known.join(", ")));
+        return QVariantMap();
+    }
+    for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("editor.setOutline: unknown key '%1' (known: %2)")
+                     .arg(it.key(), known.join(", ")));
+            return QVariantMap();
+        }
+    }
+    if (change.contains("width")) {
+        const QVariant v = scriptmod::normalizeJs(change.value("width"));
+        bool ok = false;
+        const int w = v.toInt(&ok);
+        if (!ok) {
+            fail(QStringLiteral("editor.setOutline: 'width' must be a number (%1..%2), got '%3'")
+                     .arg(outlinesettings::minWidth()).arg(outlinesettings::maxWidth())
+                     .arg(v.toString()));
+            return QVariantMap();
+        }
+        outlinesettings::setWidth(w);
+    }
+    // A colour key is validated before ANYTHING is written for it: QColor
+    // silently produces an invalid colour from a typo, and an invalid colour
+    // means "use the default" one level down — so a misspelled name would
+    // quietly reset the row instead of being refused.
+    const auto takeColour = [&](const char *key, QColor &out, bool &clear) -> bool {
+        const QVariant v = scriptmod::normalizeJs(change.value(QString::fromLatin1(key)));
+        clear = !v.isValid() || v.isNull();
+        if (clear) return true;
+        out = QColor(v.toString());
+        if (!out.isValid()) {
+            fail(QStringLiteral("editor.setOutline: '%1' is not a colour ('%2') — use \"#rrggbb\" "
+                                "or a colour name").arg(QString::fromLatin1(key), v.toString()));
+            return false;
+        }
+        return true;
+    };
+    if (change.contains("color")) {
+        QColor c; bool clear = false;
+        if (!takeColour("color", c, clear)) return QVariantMap();
+        outlinesettings::setColor(clear ? QColor() : c);
+    }
+    if (change.contains("primaryColor")) {
+        QColor c; bool clear = false;
+        if (!takeColour("primaryColor", c, clear)) return QVariantMap();
+        // null CLEARS: the primary goes back to being derived from `color`.
+        outlinesettings::setPrimaryColor(clear ? QColor() : c);
+    }
+    // Onto the live document immediately — the mirror reads the scene every
+    // frame, so this is what makes the change visible without closing a dialog.
+    if (host.services && host.services->sceneEdit)
+        outlinesettings::apply(host.services->sceneEdit->scene().data());
+    return outlineState();
 }
 
 bool EditorApi::setView(const QString &view)

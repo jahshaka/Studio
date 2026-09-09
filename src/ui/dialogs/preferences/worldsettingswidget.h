@@ -35,8 +35,10 @@ public:
     explicit WorldSettingsWidget(Database *db, SettingsManager* settings);
     ~WorldSettingsWidget();
 
-    int outlineWidth;
-    QColor outlineColor;
+    // (outlineWidth / outlineColor deleted 2026-09-09: the page's private copy
+    // of the two values MainWindow::updateSceneSettings read. Both live in
+    // services/outlinesettings.h now, with the primary colour beside them, so
+    // the verbs and the page cannot hold different answers.)
     QString defaultProjectDirectory;
     QString defaultEditorPath;
     bool showFps;
@@ -86,6 +88,7 @@ private:
 private slots:
     void outlineWidthChanged(double width);
     void outlineColorChanged(QColor color);
+    void outlinePrimaryColorChanged(QColor color);
     void showFpsChanged(bool show);
 	void setShowPerspectiveLabel(bool show);
 	void enableAutoSave(bool state);

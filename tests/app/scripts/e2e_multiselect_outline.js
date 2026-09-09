@@ -95,6 +95,74 @@ assert(both.right >= 1,
        "the SECONDARY is outlined too — the mirror walks N roots (" +
        both.right + " probes in its half)");
 
+// ---- THE PRIMARY IS A DIFFERENT COLOUR (D4 b) -------------------------------
+// The claim: in a MULTI-selection the primary's outline carries
+// `outlinePrimaryColor` and every other member carries `outlineColor` — and
+// with a SINGLE selection the primary colour is not used at all, so a one-node
+// selection draws exactly as it did before the colour existed.
+//
+// THE PROBE TRICK HERE is NOT the style toggle: it is holding the selection
+// AND the secondary colour fixed and changing ONLY `primaryColor`. That leaves
+// the gizmo, the grid, the lighting and the secondary's band bit-for-bit
+// identical between the two shots, so every differing probe is the PRIMARY's
+// band and nothing else. Changing which node is primary would move the gizmo
+// (it pivots on the primary) and poison exactly that.
+//
+// The two colours are opposite channels on purpose: "differs" then means a
+// real colour change and not a rounding wobble in the post chain.
+function outlineDelta(tag, first, second) {
+    editor.setOutline(first);  editor.frame(2);
+    var a = probeColours(tag + "_a");
+    editor.setOutline(second); editor.frame(2);
+    var b = probeColours(tag + "_b");
+    return countDiff(a, b);
+}
+
+// A red secondary throughout; the primary flips red -> green.
+var RED = { color: "#ff0000", primaryColor: "#ff0000" };
+var GRN = { color: "#ff0000", primaryColor: "#00ff00" };
+
+// primary = left (the first entry of the set).
+editor.select([left, right]);
+assert(editor.selectionSet().length === 2, "both cubes selected, primary = left");
+var pl = outlineDelta("primary_left", RED, GRN);
+console.log("primary=left, primaryColor red->green -> left " + pl.left + ", right " + pl.right);
+assert(pl.left >= 1,
+       "the PRIMARY's band takes the primary colour (" + pl.left + " probes changed)");
+assert(pl.right === 0,
+       "the SECONDARY's band is untouched by the primary colour (" + pl.right + " probes changed)");
+
+// primary = right — the same set, the other way round. This is the half of the
+// claim that a hard-coded "the first shell is brighter" would fail.
+editor.select([right, left]);
+assert(editor.selectionSet().length === 2, "both cubes selected, primary = right");
+var pr = outlineDelta("primary_right", RED, GRN);
+console.log("primary=right, primaryColor red->green -> left " + pr.left + ", right " + pr.right);
+assert(pr.right >= 1,
+       "the primary colour follows the PRIMARY, not the list order (" + pr.right + " probes)");
+assert(pr.left === 0,
+       "the other member stays on the secondary colour (" + pr.left + " probes)");
+
+// A SINGLE selection ignores the primary colour entirely: byte-for-byte.
+editor.select(left);
+assert(editor.selectionSet().length === 1, "one cube selected");
+var one2 = outlineDelta("single", RED, GRN);
+console.log("single selection, primaryColor red->green -> left " + one2.left +
+            ", right " + one2.right);
+assert(one2.left === 0 && one2.right === 0,
+       "with ONE node selected the primary colour changes no pixel at all (" +
+       one2.left + "/" + one2.right + ") — there is nothing to contrast with");
+
+// And the verb reports what it wrote, including the DERIVED primary.
+editor.setOutline({ color: "#3498db", primaryColor: null });
+var st = editor.outline();
+assert(st.primaryColorStored === false, "primaryColor: null clears the stored choice");
+assert(st.color === "#3498db", "color round-trips (" + st.color + ")");
+assert(st.primaryColor !== st.color,
+       "the derived primary is LIGHTER than the outline colour (" + st.primaryColor + ")");
+assert(editor.overlays().outlinePrimaryColor === st.primaryColor,
+       "editor.overlays() reports the same primary colour");
+
 // ---- deselect: neither half moves -------------------------------------------
 editor.selectNone();
 var none = styleDelta("none");

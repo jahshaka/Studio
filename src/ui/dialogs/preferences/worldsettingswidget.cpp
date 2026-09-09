@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include <QProcess>
 
 #include "services/framepacing.h"
+#include "services/outlinesettings.h"
 #include "services/shortcutregistry.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginehost.h"
@@ -239,14 +240,17 @@ void WorldSettingsWidget::changeDefaultDirectory()
 
 void WorldSettingsWidget::outlineWidthChanged(double width)
 {
-    settings->setValue("outline_width", (int) width);
-    outlineWidth = width;
+    outlinesettings::setWidth(int(width));
 }
 
 void WorldSettingsWidget::outlineColorChanged(QColor color)
 {
-    settings->setValue("outline_color", color.name());
-    outlineColor = color;
+    outlinesettings::setColor(color);
+}
+
+void WorldSettingsWidget::outlinePrimaryColorChanged(QColor color)
+{
+    outlinesettings::setPrimaryColor(color);
 }
 
 void WorldSettingsWidget::showFpsChanged(bool show)
@@ -353,6 +357,11 @@ void WorldSettingsWidget::configureViewport()
 
 	auto selectionOutlineWidth = new QLabel("Selection Outline Width :");
 	auto selectionOutlineColor = new QLabel("Selection Outline Color :");
+	// D4 (b), the Blender rule: in a multi-selection the PRIMARY (last-clicked)
+	// object's outline is brighter than the rest, so "which one am I about to
+	// transform" is answerable without looking at the outliner. With a single
+	// selection there is nothing to contrast, so this colour is not used.
+	auto primaryOutlineColor = new QLabel("Primary Outline Color :");
 	auto enableAutoSave = new QLabel("Enable Autosave :");
 	// POST_CHAIN_SPEC.md §11: process-wide and consumed at MESH BUILD time, so it
 	// cannot honestly be a per-scene (World Mode) row — a mesh built while it was
@@ -360,12 +369,19 @@ void WorldSettingsWidget::configureViewport()
 	auto optimizeShadowMeshes = new QLabel("Optimize Shadow Meshes :");
 
 	setSizePolicyForWidgets(selectionOutlineColor);
+	setSizePolicyForWidgets(primaryOutlineColor);
 	setSizePolicyForWidgets(selectionOutlineWidth);
 	setSizePolicyForWidgets(enableAutoSave);
 	setSizePolicyForWidgets(optimizeShadowMeshes);
 
 	auto spinbox = new QDoubleSpinBox;
 	auto colorPicker = new ColorPickerWidget;
+	auto primaryColorPicker = new ColorPickerWidget;
+	primaryColorPicker->setToolTip(
+		"The colour of the PRIMARY object's outline when more than one object is "
+		"selected — the one the gizmo pivots on and the properties panel shows. "
+		"Everything else in the selection keeps the Selection Outline Color above. "
+		"With a single object selected this colour is not used.");
 	auto checkbox = new QCheckBox;
 	auto shadowMeshCheckbox = new QCheckBox;
 	shadowMeshCheckbox->setToolTip(
@@ -384,17 +400,20 @@ void WorldSettingsWidget::configureViewport()
 	shadowMeshLayout->addStretch();
 	shadowMeshLayout->addWidget(shadowMeshCheckbox);
 
-	StyleSheet::setStyle({ selectionOutlineColor,selectionOutlineWidth,enableAutoSave,
-	                       optimizeShadowMeshes,spinbox,checkbox,shadowMeshCheckbox });
+	StyleSheet::setStyle({ selectionOutlineColor,primaryOutlineColor,selectionOutlineWidth,
+	                       enableAutoSave,optimizeShadowMeshes,spinbox,checkbox,
+	                       shadowMeshCheckbox });
 
 	layout->addWidget(selectionOutlineWidth, 0, 0);
 	layout->addWidget(spinbox, 0, 2);
 	layout->addWidget(selectionOutlineColor, 1, 0);
 	layout->addWidget(colorPicker, 1, 2);
-	layout->addWidget(enableAutoSave, 2, 0);
-	layout->addLayout(checkboxLayout, 2, 2);
-	layout->addWidget(optimizeShadowMeshes, 3, 0);
-	layout->addLayout(shadowMeshLayout, 3, 2);
+	layout->addWidget(primaryOutlineColor, 2, 0);
+	layout->addWidget(primaryColorPicker, 2, 2);
+	layout->addWidget(enableAutoSave, 3, 0);
+	layout->addLayout(checkboxLayout, 3, 2);
+	layout->addWidget(optimizeShadowMeshes, 4, 0);
+	layout->addLayout(shadowMeshLayout, 4, 2);
 
 	// ---- the camera preview inset (CAMERAS_SPEC D3) ----------------------
 	// Two rows, both persisted, both written through IEditorViewport — which
@@ -421,10 +440,10 @@ void WorldSettingsWidget::configureViewport()
 	pipSpin->setToolTip("How wide the preview is, as a percentage of the viewport's width. "
 	                    "Its height follows the camera's aspect ratio.");
 	StyleSheet::setStyle({ pipLabel, pipSizeLabel, pipCheckbox, pipSpin });
-	layout->addWidget(pipLabel, 4, 0);
-	layout->addLayout(pipLayout, 4, 2);
-	layout->addWidget(pipSizeLabel, 5, 0);
-	layout->addWidget(pipSpin, 5, 2);
+	layout->addWidget(pipLabel, 5, 0);
+	layout->addLayout(pipLayout, 5, 2);
+	layout->addWidget(pipSizeLabel, 6, 0);
+	layout->addWidget(pipSpin, 6, 2);
 	// The stored values, read the same way the viewport reads them at startup
 	// (the page may open before a viewport exists).
 	pipCheckbox->setChecked(settings->getValue("camera/pip", true).toBool());
@@ -460,8 +479,8 @@ void WorldSettingsWidget::configureViewport()
 		"off: frames go out as fast as they are made, with tearing. Changing this rebuilds "
 		"the viewport's swapchain, so expect one dropped frame.");
 	StyleSheet::setStyle({ pacingLabel, pacingCombo });
-	layout->addWidget(pacingLabel, 6, 0);
-	layout->addWidget(pacingCombo, 6, 2);
+	layout->addWidget(pacingLabel, 7, 0);
+	layout->addWidget(pacingCombo, 7, 2);
 	{
 		bool ok = false;
 		const framepacing::Mode stored = framepacing::modeFromName(
@@ -503,8 +522,8 @@ void WorldSettingsWidget::configureViewport()
 		"it costs a handful of counter reads once per interval and never touches the "
 		"frame path. 0 turns it off.");
 	StyleSheet::setStyle({ perfLabel, perfSpin });
-	layout->addWidget(perfLabel, 7, 0);
-	layout->addWidget(perfSpin, 7, 2);
+	layout->addWidget(perfLabel, 8, 0);
+	layout->addWidget(perfSpin, 8, 2);
 	perfSpin->setValue(qBound(0, settings->getValue("log/perfSampleSeconds",
 	                                                PerfSampler::defaultSeconds()).toInt(), 3600));
 	connect(perfSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int seconds) {
@@ -519,20 +538,24 @@ void WorldSettingsWidget::configureViewport()
 	layout->setColumnStretch(1, 50);
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
-	// Default halved 6 -> 3 (2026-08-30). A stored 6 is indistinguishable from
-	// the old default, so treat it AS the new default; any other stored value is
-	// a deliberate user choice and is kept.
-	int storedOutlineWidth = settings->getValue("outline_width", 3).toInt();
-	if (storedOutlineWidth == 6) storedOutlineWidth = 3;
-	outlineWidth = storedOutlineWidth;   // read by MainWindow::updateSceneSettings
-	                                     // before the spinbox ever fires
-	spinbox->setValue(storedOutlineWidth);
-	colorPicker->setColor(settings->getValue("outline_color", "#3498db").toString());
+	// The three outline values come from outlinesettings, which is also what
+	// the verbs and MainWindow::updateSceneSettings read — this page no longer
+	// carries its own copy of the keys, the clamps or the legacy 6 -> 3 default
+	// fold (SCRIPTING_SPEC §2.3: the UI calls the capability).
+	spinbox->setRange(outlinesettings::minWidth(), outlinesettings::maxWidth());
+	spinbox->setValue(outlinesettings::width());
+	colorPicker->setColor(outlinesettings::color());
+	// The picker always shows a CONCRETE colour: with no stored primary the
+	// derived one (the outline colour lifted halfway to white) is what the
+	// viewport actually draws, so showing it is showing the truth.
+	primaryColorPicker->setColor(outlinesettings::primaryColor());
 	checkbox->setChecked(settings->getValue("auto_save", true).toBool());
 	shadowMeshCheckbox->setChecked(settings->getValue("shadow_mesh_optimization", true).toBool());
 
 	connect(spinbox, SIGNAL(valueChanged(double)), this, SLOT(outlineWidthChanged(double)));
 	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QColor)));
+	connect(primaryColorPicker, SIGNAL(onColorChanged(QColor)),
+	        this, SLOT(outlinePrimaryColorChanged(QColor)));
 	connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(enableAutoSave(bool)));
 	connect(shadowMeshCheckbox, SIGNAL(toggled(bool)), this, SLOT(shadowMeshOptimizationChanged(bool)));
 

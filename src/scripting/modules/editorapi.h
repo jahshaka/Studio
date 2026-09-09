@@ -51,6 +51,11 @@ public:
     Q_INVOKABLE bool isGameView();
     Q_INVOKABLE QVariantMap overlays();
     Q_INVOKABLE bool setOverlays(const QVariantMap &change = QVariantMap());
+    /// The selection outline's look (EDITOR_MULTISELECT_SPEC D4 b). Document
+    /// verbs: they write persisted preferences and push them onto the open
+    /// scene, both of which exist without an engine view.
+    Q_INVOKABLE QVariantMap outline();
+    Q_INVOKABLE QVariantMap setOutline(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE bool setView(const QString &view);
     Q_INVOKABLE QString view();
     Q_INVOKABLE QVariantMap camera();

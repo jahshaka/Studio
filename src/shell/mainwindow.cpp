@@ -176,6 +176,7 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
 #include "services/framepacing.h"
+#include "services/outlinesettings.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
 #include "services/sceneopenrunner.h"
@@ -3645,10 +3646,11 @@ void MainWindow::exitApp()
 
 void MainWindow::updateSceneSettings()
 {
-	if (projectService->isSceneOpen() || !!scene) {
-		scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
-		scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
-	}
+	// All three outline values in one push, from the one place that owns them
+	// (services/outlinesettings.h). The page used to hand over two member
+	// variables it had parsed itself, so a value written by anything other than
+	// the page — a verb, a fresh install's default — was invisible here.
+	if (projectService->isSceneOpen() || !!scene) outlinesettings::apply(scene.data());
 
 	actionSaveScene->setVisible(!prefsDialog->worldSettings->autoSave);
 }

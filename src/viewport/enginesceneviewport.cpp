@@ -1550,7 +1550,13 @@ void EngineSceneViewport::syncFrame(float dtOverride)
                 highlight.append(node);
             }
         }
-        mMirror->setHighlightedNodes(highlight);
+        // The PRIMARY goes over EXPLICITLY (EDITOR_MULTISELECT_SPEC D4 b): the
+        // two exclusions above run per member, so the primary can be filtered
+        // out of `highlight` while secondaries survive — and then "the first
+        // entry" would hand the brighter outline to a node that is not the
+        // primary. The mirror re-checks membership and drops a primary that is
+        // not in the list.
+        mMirror->setHighlightedNodes(highlight, mSelectedNode);
         // Grid spacing = the translate snap size ([ and ] re-space it live).
         pushGridForView(helpers && !mPlaying);
         // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
