@@ -15,7 +15,9 @@
 #include <cmath>
 #include <cstdio>
 
+#include "modules/materials/graph/graphnode.h"
 #include "modules/materials/graph/graphnodescene.h"
+#include "modules/materials/graph/socket.h"
 #include "modules/materials/graph/nodegraph.h"
 #include "modules/materials/models/library.h"
 #include "modules/materials/models/libraryv1.h"
@@ -151,6 +153,81 @@ int main(int argc, char** argv)
     CHECK(scene->selectNodeById(texNode->id), "selectNodeById finds the texture node");
     CHECK(panel->currentView() == NodePropertiesPanel::View::Node,
           "texture node: node view shown (picker button hosts the flow)");
+
+    // ---- PAIRED SOCKET ROWS (MATERIAL_UV_NODES_SPEC D-4) ------------------
+    // The owner's sentence was "a UV input at the top left, opposite the
+    // texture output on the right". Sockets used to stack in INSERTION order —
+    // every input down the left, then every output continuing down the right —
+    // so a node with one input and one output drew them on different rows and
+    // nothing was opposite anything. Row i now holds input i and output i.
+    {
+        auto uvNode = graph->library->createNode("uv");
+        auto *view = scene->addNodeModel(uvNode, 200.0f, 200.0f);
+        CHECK(view != nullptr, "paired rows: the UV node lands on the canvas");
+        if (view) {
+            auto *in0 = view->getInSocket(0);
+            auto *out0 = view->getOutSocket(0);
+            CHECK(in0 != nullptr && out0 != nullptr, "paired rows: uv has an input 0 and an output 0");
+            if (in0 && out0) {
+                CHECK(near(in0->pos().y(), out0->pos().y(), 0.5),
+                      "paired rows: input 0 and output 0 share a row");
+                CHECK(in0->pos().x() < out0->pos().x(),
+                      "paired rows: the input is on the LEFT, the output on the right");
+            }
+            // rows 1..3 are inputs with no output opposite; they must still
+            // step DOWN, not pile up on row 0
+            auto *in1 = view->getInSocket(1);
+            CHECK(in1 != nullptr && in0 != nullptr && in1->pos().y() > in0->pos().y(),
+                  "paired rows: the second input is on the next row down");
+        }
+
+        // The Texture node is the one the owner was looking at: one input (UV)
+        // and two outputs (texture, RGBA). Row 0 must be UV | texture.
+        auto texNode2 = graph->library->createNode("texture");
+        auto *texView = scene->addNodeModel(texNode2, 400.0f, 200.0f);
+        CHECK(texView != nullptr, "paired rows: the Texture node lands on the canvas");
+        if (texView) {
+            auto *uvIn = texView->getInSocket(0);
+            auto *texOut = texView->getOutSocket(0);
+            auto *rgbaOut = texView->getOutSocket(1);
+            CHECK(uvIn != nullptr && texOut != nullptr && rgbaOut != nullptr,
+                  "paired rows: the Texture node has a UV input and TWO outputs");
+            if (uvIn && texOut && rgbaOut) {
+                CHECK(near(uvIn->pos().y(), texOut->pos().y(), 0.5),
+                      "paired rows: the UV input sits opposite the texture output");
+                CHECK(rgbaOut->pos().y() > texOut->pos().y(),
+                      "paired rows: the appended RGBA output is on the next row");
+            }
+        }
+    }
+
+    // ---- the UV node's panel rows (MATERIAL_UV_NODES_SPEC phase 3) --------
+    {
+        auto uvPanelNode = graph->library->createNode("uv");
+        QJsonObject w;
+        w["tileX"] = 4.0; w["tileY"] = 2.0;
+        w["offsetX"] = 0.25; w["offsetY"] = 0.5;
+        w["rotation"] = 30.0; w["uvSet"] = 2;
+        uvPanelNode->deserializeWidgetValue(w);
+        scene->addNodeModel(uvPanelNode, 600.0f, 200.0f);
+        CHECK(scene->selectNodeById(uvPanelNode->id), "uv panel: the node selects");
+        CHECK(panel->currentView() == NodePropertiesPanel::View::Node, "uv panel: node view shown");
+        auto boxes = visibleBoxes<QDoubleSpinBox>(panel);
+        CHECK(boxes.size() == 5, "uv panel: five number rows (tile U/V, offset U/V, rotation)");
+        if (boxes.size() == 5) {
+            CHECK(near(boxes[0]->value(), 4.0) && near(boxes[1]->value(), 2.0),
+                  "uv panel: the tiling rows read the node");
+            CHECK(near(boxes[2]->value(), 0.25) && near(boxes[3]->value(), 0.5),
+                  "uv panel: the offset rows read the node");
+            CHECK(near(boxes[4]->value(), 30.0), "uv panel: the rotation row reads the node");
+            boxes[4]->setValue(90.0);
+            const auto back = uvPanelNode->serializeWidgetValue().toObject();
+            CHECK(near(back["rotation"].toDouble(), 90.0),
+                  "uv panel: a rotation edit writes through to the node");
+            CHECK(near(back["tileX"].toDouble(), 4.0) && back["uvSet"].toInt() == 2,
+                  "uv panel: and leaves every other field alone");
+        }
+    }
 
     // ---- master -> material settings view; edits carry bakeResolution ----
     graph->settings.name = "TestMat";

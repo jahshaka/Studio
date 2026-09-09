@@ -58,6 +58,13 @@ public:
 	void addInSocket(SocketModel *socket);
 	void addOutSocket(SocketModel *socket);
 	void addSocket(Socket* sock);
+	/// PAIRED ROWS (MATERIAL_UV_NODES_SPEC D-4, NODE_UI_SPEC stage S): input i
+	/// and output i share row i, so a node's first input sits at the TOP LEFT
+	/// opposite its first output on the right — the NodeGraphQt convention, and
+	/// what "a UV input opposite the texture output" means on a card.
+	void layoutSockets();
+	int socketRowCount() const;
+	int socketRowsHeight();
 	void setWidget(QWidget* widget);
 	// compact value editor living in the title bar, left of the title text
 	void setHeaderWidget(QWidget* widget);

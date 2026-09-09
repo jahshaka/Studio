@@ -285,6 +285,7 @@ void NodePropertiesPanel::rebuildNodeEditors()
 	mNumberBoxes.clear();
 	mColorSwatch = nullptr;
 	mTextureButton = nullptr;
+	mUvSetCombo = nullptr;
 
 	if (mNode == nullptr)
 		return;
@@ -363,6 +364,61 @@ void NodePropertiesPanel::rebuildNodeEditors()
 		return;
 	}
 #endif
+
+	// THE UV NODE (MATERIAL_UV_NODES_SPEC phase 3). Five numbers and a combo:
+	// the card's inline editors are deliberately cramped into 158px, and this
+	// is where they get labelled rows and room. The ORDER of mNumberBoxes is
+	// the contract the writer below reads back — tile X/Y, offset X/Y,
+	// rotation — so it may not be rearranged without rearranging that.
+	if (type == "uv") {
+		auto obj = value.toObject();
+		struct Field { const char* label; const char* key; double fallback; };
+		static const Field fields[5] = {
+			{ QT_TR_NOOP("Tile U"),   "tileX",    1.0 },
+			{ QT_TR_NOOP("Tile V"),   "tileY",    1.0 },
+			{ QT_TR_NOOP("Offset U"), "offsetX",  0.0 },
+			{ QT_TR_NOOP("Offset V"), "offsetY",  0.0 },
+			{ QT_TR_NOOP("Rotation"), "rotation", 0.0 },
+		};
+		auto writeUv = [this]() {
+			if (mNumberBoxes.size() < 5) return;
+			QJsonObject out;
+			out["tileX"] = mNumberBoxes[0]->value();
+			out["tileY"] = mNumberBoxes[1]->value();
+			out["offsetX"] = mNumberBoxes[2]->value();
+			out["offsetY"] = mNumberBoxes[3]->value();
+			out["rotation"] = mNumberBoxes[4]->value();
+			out["uvSet"] = mUvSetCombo != nullptr ? mUvSetCombo->currentIndex() : 0;
+			writeValue(out);
+		};
+		for (const auto& f : fields) {
+			auto box = makeNumberBox();
+			box->setValue(obj[f.key].toDouble(f.fallback));
+			mNumberBoxes.append(box);
+			connect(box, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+			        [writeUv](double) { writeUv(); });
+			addRow(tr(f.label), box);
+		}
+		auto combo = new QComboBox;
+		combo->addItems({ QStringLiteral("UV 0"), QStringLiteral("UV 1"),
+		                  QStringLiteral("UV 2"), QStringLiteral("UV 3") });
+		combo->setCurrentIndex(qBound(0, obj["uvSet"].toInt(0), 3));
+		mUvSetCombo = combo;
+		connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+		        [writeUv](int) { writeUv(); });
+		addRow(tr("UV Set"), combo);
+
+		// The honest sentence about what the UV set does TODAY: the bake
+		// evaluates every set as UV 0 (MATERIALS_EVALUATOR_SPEC 1.2) and says
+		// so under `approximated`. Storing the choice is what makes a graph
+		// authored for UV 1 survive until there is a second UV stream to read.
+		auto note = new QLabel(tr("Every UV set currently evaluates as UV 0 — the choice is "
+		                          "stored and reported, not yet sampled."));
+		note->setWordWrap(true);
+		note->setStyleSheet("color: rgba(200,200,200,.55);");
+		mEditorLayout->insertWidget(mEditorLayout->count() - 1, note);
+		return;
+	}
 
 	if (type == "texture") {
 		auto button = new QPushButton;
@@ -463,6 +519,21 @@ void NodePropertiesPanel::refreshFromNode()
 		mColorSwatch->setColor(col);
 	}
 #endif
+	else if (type == "uv" && mNumberBoxes.size() >= 5) {
+		auto obj = value.toObject();
+		static const char* keys[5] = { "tileX", "tileY", "offsetX", "offsetY", "rotation" };
+		static const double fallbacks[5] = { 1.0, 1.0, 0.0, 0.0, 0.0 };
+		for (int i = 0; i < 5; ++i) {
+			mNumberBoxes[i]->blockSignals(true);
+			mNumberBoxes[i]->setValue(obj[keys[i]].toDouble(fallbacks[i]));
+			mNumberBoxes[i]->blockSignals(false);
+		}
+		if (mUvSetCombo != nullptr) {
+			mUvSetCombo->blockSignals(true);
+			mUvSetCombo->setCurrentIndex(qBound(0, obj["uvSet"].toInt(0), 3));
+			mUvSetCombo->blockSignals(false);
+		}
+	}
 	else if (type == "texture" && mTextureButton != nullptr) {
 		auto path = static_cast<TextureNode*>(mNode)->getTexturePath();
 		mTextureButton->setIcon(path.isEmpty() ? QIcon() : QIcon(path));
