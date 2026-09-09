@@ -505,6 +505,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // -1 (auto, which resolves OFF while there is no Rayon tier) is what
         // makes those documents render exactly as they always did.
         scene->giDdgi = qBound(-1, sceneObj["giDdgi"].toInt(-1), 1);
+        // The probe source (rayon2 S3): absent in every document written
+        // before it, and -1 (auto = voxel) is exactly what those rendered.
+        scene->giDdgiSource = qBound(-1, sceneObj["giDdgiSource"].toInt(-1), 1);
         scene->giDdgiIntensity =
             float(qBound(0.0, sceneObj["giDdgiIntensity"].toDouble(1.0), 64.0));
         // The ambient sky-visibility strength (the Rayon ambient fix). Absent

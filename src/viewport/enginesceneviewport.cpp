@@ -1632,6 +1632,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.ifdProbes            = st.ifdProbes;
     out.ifdConverged         = st.ifdConverged;
     out.ifdProbesPerFrame    = st.ifdProbesPerFrame;
+    out.ifdRaster            = st.ifdSource == jahshaka::engine::GiSource::Raster;
     return out;
 }
 
