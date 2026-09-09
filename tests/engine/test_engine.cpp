@@ -2193,7 +2193,7 @@ void pbr_texture_scale_tiles_uvs() {
     };
     render(fx.e); Image img1; REQUIRE(v->readPixels(img1));
     const int t1 = transitions(img1);
-    p.uvScale = 4.0f;
+    p.uvScale[0] = p.uvScale[1] = 4.0f;
     CHECK(s->setPbrMaterial(mat, p));
     render(fx.e); Image img4; REQUIRE(v->readPixels(img4));
     const int t4 = transitions(img4);
@@ -2217,10 +2217,78 @@ void pbr_texture_scale_tiles_uvs() {
     CHECK_MSG(probe1.r > probe1.g + 30, "probe is red at scale 1: %d %d %d", probe1.r, probe1.g, probe1.b);
     CHECK_MSG(probe4.g > probe4.r + 30, "probe is green at scale 4: %d %d %d", probe4.r, probe4.g, probe4.b);
     // Back to 1: the tiling is fully reversible at runtime.
-    p.uvScale = 1.0f;
+    p.uvScale[0] = p.uvScale[1] = 1.0f;
     CHECK(s->setPbrMaterial(mat, p));
     render(fx.e); Image imgBack; REQUIRE(v->readPixels(imgBack));
     CHECK_MSG(transitions(imgBack) == t1, "uvScale back to 1 restores the single image");
+
+    // ---- PER-AXIS TILING (MATERIAL_UV_NODES_SPEC). The whole reason
+    // textureScale stopped being one float: tiling U without tiling V. The
+    // stripes are vertical, so tiling U alone must multiply the transitions
+    // exactly as the uniform scale did — and tiling V alone must not change
+    // them at all, which is the assertion that proves the axes are separate.
+    p.uvScale[0] = 4.0f; p.uvScale[1] = 1.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image imgU; REQUIRE(v->readPixels(imgU));
+    const int tU = transitions(imgU);
+    p.uvScale[0] = 1.0f; p.uvScale[1] = 4.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image imgV; REQUIRE(v->readPixels(imgV));
+    const int tV = transitions(imgV);
+    std::printf("    per-axis transitions: U-only %d, V-only %d\n", tU, tV);
+    CHECK_MSG(tU == t4, "tiling U alone tiles the vertical stripes: %d vs %d", tU, t4);
+    CHECK_MSG(tV == t1, "tiling V alone leaves the vertical stripes alone: %d vs %d", tV, t1);
+
+    // ---- OFFSET shifts the stripe phase. Half a texture width in U swaps
+    // which colour the fixed probe lands on, with no tiling at all.
+    p.uvScale[0] = 1.0f; p.uvScale[1] = 1.0f;
+    p.uvOffset[0] = 0.5f; p.uvOffset[1] = 0.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image imgOff; REQUIRE(v->readPixels(imgOff));
+    const Px probeOff = px(imgOff, xProbe, yMid);
+    std::printf("    probe x=%u: offset .5 %d %d %d\n", xProbe, probeOff.r, probeOff.g, probeOff.b);
+    CHECK_MSG(probeOff.g > probeOff.r + 30, "offset 0.5 shifts the probe to green: %d %d %d",
+              probeOff.r, probeOff.g, probeOff.b);
+
+    // ---- ROTATION turns the vertical stripes horizontal. Counted, not
+    // eyeballed: after 90 degrees the middle SCANLINE crosses no edge at all
+    // (it lies inside one stripe) while the middle COLUMN crosses one.
+    auto transitionsColumn = [](const Image &img) {
+        int t = 0; bool haveLast = false, lastRed = false;
+        const unsigned x = img.width / 2;
+        for (unsigned y = 0; y < img.height; ++y) {
+            const Px q = px(img, x, y);
+            if (q.b > q.r && q.b > q.g) continue;
+            const bool red   = q.r > q.g + 30;
+            const bool green = q.g > q.r + 30;
+            if (!red && !green) continue;
+            if (haveLast && red != lastRed) ++t;
+            haveLast = true; lastRed = red;
+        }
+        return t;
+    };
+    p.uvOffset[0] = 0.0f;
+    p.uvRotation = 90.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image imgRot; REQUIRE(v->readPixels(imgRot));
+    const int rotRow = transitions(imgRot), rotCol = transitionsColumn(imgRot);
+    std::printf("    rotation 90: row edges %d, column edges %d\n", rotRow, rotCol);
+    CHECK_MSG(rotRow == 0, "90 degrees leaves no edge along the scanline, got %d", rotRow);
+    CHECK_MSG(rotCol >= 1, "90 degrees puts the edge across the column, got %d", rotCol);
+
+    // ---- IDENTITY IS BIT-EXACT. The transform is affine with a precomputed
+    // bias precisely so that scale 1 / offset 0 / rotation 0 computes the same
+    // lookup it computed before any of this existed. Same bytes, or the claim
+    // in Types.h is not true.
+    p.uvRotation = 0.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image imgIdent; REQUIRE(v->readPixels(imgIdent));
+    bool identical = imgIdent.width == imgBack.width && imgIdent.height == imgBack.height
+                     && imgIdent.rgba.size() == imgBack.rgba.size();
+    if (identical)
+        identical = std::equal(imgIdent.rgba.begin(), imgIdent.rgba.end(),
+                               imgBack.rgba.begin());
+    CHECK_MSG(identical, "the identity UV transform renders byte-identical pixels");
 }
 
 // THE UNLIT SHADING MODEL (HLMS_ADOPTION P4a). Unlit is not a lighting preset

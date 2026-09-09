@@ -706,17 +706,28 @@ BakeProgram BakeProgram::compile(SocketModel* masterInput, const TextureResolver
 	program.unsupportedNodes = QStringList(compiler.unsupported.begin(), compiler.unsupported.end());
 	program.unsupportedNodes.sort();
 
-	if (program.rootOp < 0) {
-		program.classification = SocketClass::Unconnected;
-		return program;
-	}
+	program.reclassify();
+	return program;
+}
 
-	const BakeOp& root = program.ops[program.rootOp];
-	program.animated = root.animated;
+// Recomputes the classification from the op list. Split out of compile()
+// because applyUvFold() rewrites sampler UVs and the answer has to be asked
+// again — that rewrite is the whole point of the fold.
+void BakeProgram::reclassify()
+{
+	if (rootOp < 0) {
+		classification = SocketClass::Unconnected;
+		return;
+	}
+	passthroughPath.clear();
+	passthroughStamp.clear();
+
+	const BakeOp& root = ops[rootOp];
+	animated = root.animated;
 
 	if (!root.unsupportedReason.isEmpty()) {
-		program.classification = SocketClass::Unsupported;
-		return program;
+		classification = SocketClass::Unsupported;
+		return;
 	}
 
 	// Passthrough: a bare texture reference (texture node / texture property
@@ -725,13 +736,13 @@ BakeProgram BakeProgram::compile(SocketModel* masterInput, const TextureResolver
 	if (root.isTextureCarrier) {
 		if (root.imagePath.isEmpty()) {
 			// an empty texture slot is a silent no-op, exactly as before
-			program.classification = SocketClass::Unconnected;
-			return program;
+			classification = SocketClass::Unconnected;
+			return;
 		}
-		program.classification = SocketClass::Passthrough;
-		program.passthroughPath = root.imagePath;
-		program.passthroughStamp = root.imageStamp;
-		return program;
+		classification = SocketClass::Passthrough;
+		passthroughPath = root.imagePath;
+		passthroughStamp = root.imageStamp;
+		return;
 	}
 	// A SAMPLER ROOT over the bake UV is the same picture as binding the source
 	// image, so it passes through too. Two node shapes reach here now: the
@@ -743,18 +754,37 @@ BakeProgram BakeProgram::compile(SocketModel* masterInput, const TextureResolver
 		const auto& uvRef = root.inputs[0];
 		const bool uvIsBakeUv =
 		    (uvRef.op < 0 && uvRef.fallbackKind == BakeInputRef::Uv) ||
-		    (uvRef.op >= 0 && (program.ops[uvRef.op].typeName == "texCoords"
-		                       || isIdentityUvOp(program.ops[uvRef.op])));
+		    (uvRef.op >= 0 && (ops[uvRef.op].typeName == "texCoords"
+		                       || isIdentityUvOp(ops[uvRef.op])));
 		if (uvIsBakeUv) {
-			program.classification = SocketClass::Passthrough;
-			program.passthroughPath = root.imagePath;
-			program.passthroughStamp = root.imageStamp;
-			return program;
+			classification = SocketClass::Passthrough;
+			passthroughPath = root.imagePath;
+			passthroughStamp = root.imageStamp;
+			return;
 		}
 	}
 
-	program.classification = root.varying ? SocketClass::Baked : SocketClass::Uniform;
-	return program;
+	classification = root.varying ? SocketClass::Baked : SocketClass::Uniform;
+}
+
+void BakeProgram::applyUvFold()
+{
+	for (auto& op : ops) {
+		const bool isSampler = op.typeName == "textureSampler"
+		                       || (op.typeName == "texture" && !op.isTextureCarrier);
+		if (!isSampler) continue;
+		const int uvIndex = op.typeName == "textureSampler" ? 1 : 0;
+		if (uvIndex >= op.inputs.size()) continue;
+		BakeInputRef ref;
+		ref.arity = 2;
+		ref.fallbackKind = BakeInputRef::Uv;
+		op.inputs[uvIndex] = ref;
+	}
+	// The `uv` ops are left in the list on purpose: they cost one evaluation of
+	// nothing, and signature() still names them, which is exactly the cache-key
+	// property I-6 asks for — a fold flip must not hit a stale baked map. The
+	// rewritten refs make the signature differ from the unfolded program's.
+	reclassify();
 }
 
 // ----------------------------------------------------------------- evaluate

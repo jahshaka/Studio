@@ -246,18 +246,54 @@ int addTexture(Ctx &c, int imageIdx)
     return idx;
 }
 
-QJsonObject textureRef(Ctx &c, int texIdx, float uvScale)
+/// The material's whole UV transform, as glTF understands it.
+///
+/// KHR_texture_transform's own model is `uv * scale + offset` with a rotation
+/// about the texture ORIGIN, in RADIANS, applied before the scale. Ours is
+/// `R * ((uv * s + o) - 0.5) + 0.5` about the CENTRE, in degrees — so the
+/// offset that goes into the file is not the offset the user typed. It is
+/// exactly the bias the renderer precomputes (OgreMaterials::applyPbr):
+///     b = R * (o - 0.5) + 0.5
+/// and the rotation sign flips because glTF's positive rotation is clockwise
+/// in UV space while ours is counter-clockwise. Getting this wrong shows up as
+/// a web export whose textures sit half a tile off from the editor's, which is
+/// why the arithmetic is written out rather than passed through.
+struct UvTransform
+{
+    float scaleU = 1.0f, scaleV = 1.0f;
+    float offsetU = 0.0f, offsetV = 0.0f;
+    float rotationDeg = 0.0f;
+
+    bool isIdentity() const
+    {
+        return std::fabs(scaleU - 1.0f) < 1e-5f && std::fabs(scaleV - 1.0f) < 1e-5f
+               && std::fabs(offsetU) < 1e-5f && std::fabs(offsetV) < 1e-5f
+               && std::fabs(rotationDeg) < 1e-5f;
+    }
+};
+
+QJsonObject textureRef(Ctx &c, int texIdx, const UvTransform &uv)
 {
     QJsonObject ref;
     ref["index"] = texIdx;
-    if (uvScale > 0.0f && std::fabs(uvScale - 1.0f) > 1e-5f) {
-        c.useExtension("KHR_texture_transform");
-        QJsonObject xf;
-        QJsonArray sc; sc.append(uvScale); sc.append(uvScale);
-        xf["scale"] = sc;
-        QJsonObject ext; ext["KHR_texture_transform"] = xf;
-        ref["extensions"] = ext;
-    }
+    if (uv.scaleU <= 0.0f || uv.scaleV <= 0.0f || uv.isIdentity()) return ref;
+
+    c.useExtension("KHR_texture_transform");
+    const double kPi = 3.14159265358979323846;
+    const double th = double(uv.rotationDeg) * kPi / 180.0;
+    const double cs = std::cos(th), sn = std::sin(th);
+    const double ox = double(uv.offsetU) - 0.5, oy = double(uv.offsetV) - 0.5;
+
+    QJsonObject xf;
+    QJsonArray sc; sc.append(double(uv.scaleU)); sc.append(double(uv.scaleV));
+    xf["scale"] = sc;
+    QJsonArray off;
+    off.append(cs * ox - sn * oy + 0.5);
+    off.append(sn * ox + cs * oy + 0.5);
+    xf["offset"] = off;
+    if (std::fabs(uv.rotationDeg) > 1e-5f) xf["rotation"] = -th;
+    QJsonObject ext; ext["KHR_texture_transform"] = xf;
+    ref["extensions"] = ext;
     return ref;
 }
 
@@ -280,7 +316,9 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     m["name"] = QStringLiteral("pbr");
     QJsonObject mr;
 
-    const float uvScale = pbr->textureScale;
+    const UvTransform uvScale{ pbr->textureScale, pbr->textureScaleV,
+                               pbr->textureOffsetU, pbr->textureOffsetV,
+                               pbr->textureRotation };
     const QColor bc = pbr->baseColor;
     const float bf = pbr->baseColorFactor;
     // Translucent (2) and Additive (4) carry alpha into baseColorFactor.A
@@ -541,7 +579,8 @@ int convertDefaultMaterial(Ctx &c, iris::DefaultMaterial *def, iris::FaceCulling
     const float shin = std::max(0.0f, std::min(def->getShininess(), 128.0f));
     mr["roughnessFactor"] = double(1.0f - std::sqrt(shin / 128.0f) * 0.9f);
     const QString diffSrc = textureSlotSource(def, "u_diffuseTexture");
-    const float uvScale = def->getTextureScale();
+    // The legacy material has one uniform scale and no offset/rotation.
+    const UvTransform uvScale{ def->getTextureScale(), def->getTextureScale(), 0.0f, 0.0f, 0.0f };
     if (!diffSrc.isEmpty()) {
         const QImage img = loadDocumentImage(diffSrc, c);
         const int tex = addTexture(c, addImage(c, "src:" + diffSrc, img, true));

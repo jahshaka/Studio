@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "services/filewriteatomic.h"
 
 #include <QColor>
+#include <QJsonArray>
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QDir>
@@ -178,16 +179,21 @@ QJsonObject GraphBaker::classify(NodeGraph* graph, BakeProgram::TextureResolver 
 	}
 	if (!resolver) resolver = [](const QString& value) { return value; };
 
+	// THROUGH compile(), not per socket: the UV fold is a property of the whole
+	// material, and a bakeInfo that classified each socket in isolation would
+	// report "baked" for a chain the bake is about to pass through.
+	const CompiledGraph compiled = compile(graph, resolver);
+
 	auto master = graph->getMasterNode();
-	for (const auto& slot : masterSlotsFor(master->typeName)) {
-		auto sock = findMasterInSocket(master, slot.socketName);
-		if (!sock) continue;
-		if (!sock->hasConnection()) {
-			perSocket[slot.socketName] = "unconnected";
+	for (const auto& cs : compiled.sockets) {
+		const MasterSlot& slot = cs.slot;
+		if (!cs.connected) {
+			auto sock = findMasterInSocket(master, slot.socketName);
+			if (sock) perSocket[slot.socketName] = "unconnected";
 			continue;
 		}
 
-		auto program = BakeProgram::compile(sock, resolver);
+		const BakeProgram& program = cs.program;
 		using SocketClass = BakeProgram::SocketClass;
 		QString cls = BakeProgram::classToString(program.classification);
 
@@ -207,6 +213,24 @@ QJsonObject GraphBaker::classify(NodeGraph* graph, BakeProgram::TextureResolver 
 		perSocket[slot.socketName] = cls;
 	}
 	out["perSocket"] = perSocket;
+
+	// WHICH ROUTE THE TEXTURES TOOK. A script (and the panel) has to be able to
+	// tell "tiled at render time, full resolution" from "resampled into a map",
+	// because that difference is the entire reason the UV input exists.
+	if (compiled.uvFold.valid) {
+		QJsonObject fold;
+		QJsonArray scale; scale.append(compiled.uvFold.scaleX); scale.append(compiled.uvFold.scaleY);
+		fold["scale"] = scale;
+		QJsonArray offset; offset.append(compiled.uvFold.offsetX); offset.append(compiled.uvFold.offsetY);
+		fold["offset"] = offset;
+		fold["rotation"] = compiled.uvFold.rotationDeg;
+		fold["samplers"] = compiled.uvFold.samplers;
+		out["fold"] = fold;
+	}
+	else {
+		out["fold"] = QJsonValue::Null;
+		if (!compiled.uvFold.reason.isEmpty()) out["foldReason"] = compiled.uvFold.reason;
+	}
 	// What LOADING this graph had to change (NodeGraph::migrationNotes). A
 	// migration that drops a connection has to be visible somewhere a caller
 	// actually looks, and bakeInfo is the "what will this graph produce, and
@@ -240,7 +264,84 @@ GraphBaker::CompiledGraph GraphBaker::compile(NodeGraph* graph, BakeProgram::Tex
 			cs.program = BakeProgram::compile(sock, resolver);
 		out.sockets.append(cs);
 	}
+
+	resolveUvFold(out);
 	return out;
+}
+
+// THE FOLD (MATERIAL_UV_NODES_SPEC 3.2, decision D-1a).
+//
+// Every socket's program answers "what one UV transform do MY samplers share",
+// and this intersects those answers into the material's single transform. The
+// moment two sockets disagree — or any socket cannot express its UVs as one
+// constant transform of the mesh's — the whole material bakes, because a
+// material carries ONE transform and a half-folded graph would render two
+// different pictures from one authored surface.
+//
+// It refuses in one more case that no per-socket analysis can see: a rotation
+// with a NORMAL map bound. Rotating the lookup does not counter-rotate the
+// tangent-space vector the map encodes, on the baked route or the render-time
+// one, so the surface is lit wrong either way — but at least the BAKED route
+// keeps the two routes agreeing with each other, and the reason is reported
+// rather than silently shipped (spec 3.3).
+void GraphBaker::resolveUvFold(CompiledGraph& compiled)
+{
+	using UvFold = BakeProgram::UvFold;
+	UvFold merged;
+	bool haveAny = false;
+	bool normalHasSampler = false;
+
+	for (const auto& cs : compiled.sockets) {
+		if (!cs.connected) continue;
+		const UvFold f = cs.program.uvFold();
+		if (!f.valid) {
+			if (f.reason.isEmpty()) continue;   // no samplers here at all
+			compiled.uvFold = UvFold();
+			compiled.uvFold.reason = cs.slot.socketName + ": " + f.reason;
+			return;
+		}
+		if (cs.slot.target == MasterSlot::NormalSlot && f.samplers > 0)
+			normalHasSampler = true;
+		if (!haveAny) {
+			merged = f;
+			haveAny = true;
+			continue;
+		}
+		if (merged.scaleX != f.scaleX || merged.scaleY != f.scaleY
+		    || merged.offsetX != f.offsetX || merged.offsetY != f.offsetY
+		    || merged.rotationDeg != f.rotationDeg) {
+			compiled.uvFold = UvFold();
+			compiled.uvFold.reason =
+			    QStringLiteral("two master inputs tile differently; the material carries "
+			                   "one transform, so these bake");
+			return;
+		}
+		merged.samplers += f.samplers;
+	}
+
+	if (!haveAny || merged.samplers == 0) return;   // nothing to fold
+
+	if (normalHasSampler && merged.rotationDeg != 0.0) {
+		compiled.uvFold = UvFold();
+		compiled.uvFold.reason =
+		    QStringLiteral("a rotated UV on a normal map would rotate the lookup but not the "
+		                   "tangent-space normal it samples; baking keeps both routes agreeing");
+		return;
+	}
+
+	compiled.uvFold = merged;
+
+	// The identity is a fold that changes nothing: the classification is
+	// already right (a `uv` node at its defaults reads as the bake UV) and
+	// landing scale 1 / offset 0 / rotation 0 would add keys to every graph
+	// material's stored values for no reason.
+	const bool identity = merged.scaleX == 1.0 && merged.scaleY == 1.0
+	                      && merged.offsetX == 0.0 && merged.offsetY == 0.0
+	                      && merged.rotationDeg == 0.0;
+	if (identity) return;
+
+	for (auto& cs : compiled.sockets)
+		if (cs.connected) cs.program.applyUvFold();
 }
 
 GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
@@ -521,6 +622,29 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 			const auto entries = QDir(opts.outputDir).entryList({ "*.png" }, QDir::Files);
 			for (const auto& entry : entries)
 				if (!keepFiles.contains(entry)) QFile::remove(opts.outputDir + "/" + entry);
+		}
+	}
+
+	// ---- the folded UV transform ---------------------------------------
+	// It lands as ordinary material values, so it reaches the renderer through
+	// the same generic key loop every other folded value uses
+	// (PbrGraphEvaluator::materialFromValues -> PbrMaterial::setValue) and the
+	// glTF exporter through the same fields. `textureScale` is written as a
+	// two-element array; a plain number is still read everywhere, which is what
+	// keeps every material written before this loadable.
+	if (compiled.uvFold.valid) {
+		const auto& f = compiled.uvFold;
+		const bool identity = f.scaleX == 1.0 && f.scaleY == 1.0 && f.offsetX == 0.0
+		                      && f.offsetY == 0.0 && f.rotationDeg == 0.0;
+		if (!identity) {
+			QJsonArray scale; scale.append(f.scaleX); scale.append(f.scaleY);
+			out.eval.values["textureScale"] = scale;
+			if (f.offsetX != 0.0 || f.offsetY != 0.0) {
+				QJsonArray offset; offset.append(f.offsetX); offset.append(f.offsetY);
+				out.eval.values["textureOffset"] = offset;
+			}
+			if (f.rotationDeg != 0.0)
+				out.eval.values["textureRotation"] = f.rotationDeg;
 		}
 	}
 

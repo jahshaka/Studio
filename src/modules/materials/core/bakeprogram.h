@@ -203,6 +203,18 @@ public:
 	/// answers into the material's one transform.
 	UvFold uvFold() const;
 
+	/// Rewrites every sampler's UV input to the BAKE UV, as if the transform
+	/// had never been in the graph — the material carries it instead. Only
+	/// legal after uvFold() said yes for the whole graph. Re-runs the
+	/// classification, which is the point: a `texture -> uv(4x) -> sampler ->
+	/// Base Color` chain that was Baked becomes Passthrough, and the source
+	/// image binds at full resolution.
+	void applyUvFold();
+
+	/// Recomputes `classification` (and the passthrough fields) from the op
+	/// list. Split out of compile() so a fold can re-run it.
+	void reclassify();
+
 	// GLSL-parity bilinear sample with repeat wrap of an RGBA8888 image.
 	static Value sampleImage(const QImage& image, double u, double v);
 };

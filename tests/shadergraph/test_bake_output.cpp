@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QThread>
@@ -228,11 +229,14 @@ int main(int argc, char** argv)
               "uvTransform: (3,3) white — the repeated fixture's corner");
     }
 
-    // ---- 3c. the Texture node's OWN UV input (MATERIAL_UV_NODES_SPEC B1) ---
-    // Same picture as 3b, with the sampler node deleted: `uv(tile 2) ->
+    // ---- 3c. the Texture node's OWN UV input, RESAMPLED -------------------
+    // Same picture as 3b with the sampler node deleted: `uv(tile 2) ->
     // texture.UV`, `texture.RGBA -> Base Color`. This is the owner's shape —
-    // one node with a UV pin — and it has to bake the same texels the
-    // two-node chain does.
+    // one node with a UV pin — and when the transform CANNOT be folded onto
+    // the material it has to bake the same texels the two-node chain does.
+    // The UV node is deliberately also read by a splitvector, which is the
+    // documented fold refusal (3.2: a UV consumed outside a sampler), so this
+    // fixture exercises the resample route on purpose rather than by accident.
     {
         const QString texPath = baseDir + "/fixture2x2_texuv.png";
         QImage fix(2, 2, QImage::Format_RGBA8888);
@@ -251,6 +255,9 @@ int main(int argc, char** argv)
         uv->deserializeWidgetValue(widget);
         r.graph->addConnection(uv, 0, tex, 0);   // UV -> texture.UV (input 0)
         r.toMaster(tex, 1, 0);                   // texture.RGBA (out 1) -> Base Color
+        auto split = r.add("splitvector");       // refuses the fold on purpose
+        r.graph->addConnection(uv, 0, split, 0);
+        r.toMaster(split, 0, 2);                 // U -> Roughness
 
         auto res = bake(r, baseDir + "/texuv", 4);
         CHECK(res.maps.contains("baseColorMap"),
@@ -333,9 +340,12 @@ int main(int argc, char** argv)
         uv->deserializeWidgetValue(widget);
         r.graph->addConnection(uv, 0, tex, 0);
         r.toMaster(tex, 1, 0);
+        auto split = r.add("splitvector");       // refuses the fold on purpose
+        r.graph->addConnection(uv, 0, split, 0);
+        r.toMaster(split, 0, 2);
 
         auto res = bake(r, baseDir + "/uvrot", 2);
-        CHECK(res.maps.contains("baseColorMap"), "uv rotation: rotation breaks passthrough");
+        CHECK(res.maps.contains("baseColorMap"), "uv rotation: the resample route runs");
         QImage img(res.eval.values["baseColorMap"].toString());
         img = img.convertToFormat(QImage::Format_RGBA8888);
         // Source R G / B W (row 0 = v 0). uv' = R(90) * (uv - 0.5) + 0.5, so
@@ -350,6 +360,180 @@ int main(int argc, char** argv)
               "uv rotation: (0,1) reads red");
         CHECK(qBlue(img.pixel(1, 1)) == 255 && qRed(img.pixel(1, 1)) == 0,
               "uv rotation: (1,1) reads blue");
+    }
+
+    // ---- 3g. THE FOLD (MATERIAL_UV_NODES_SPEC 3.2, D-1a) ------------------
+    // A uniform tiling in front of every sampler must NOT bake. Baking it
+    // resamples: a 2048-square source tiled 4x into a 1024-square map keeps 256
+    // px per tile. Folded, the material tiles the full-resolution source at
+    // render time and the map file is never written at all.
+    {
+        const QString texPath = baseDir + "/fixture2x2_fold.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.setPixelColor(0, 0, QColor(255, 0, 0));
+        fix.setPixelColor(1, 0, QColor(0, 255, 0));
+        fix.setPixelColor(0, 1, QColor(0, 0, 255));
+        fix.setPixelColor(1, 1, QColor(255, 255, 255));
+        CHECK(fix.save(texPath), "fold: 2x2 fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");
+        QJsonObject widget;
+        widget["tileX"] = 4.0; widget["tileY"] = 4.0;
+        uv->deserializeWidgetValue(widget);
+        r.graph->addConnection(uv, 0, tex, 0);
+        r.toMaster(tex, 1, 0);
+
+        const auto info = PbrGraphEvaluator::bakeInfo(r.graph, nullptr);
+        const auto fold = info["fold"].toObject();
+        CHECK(!info["fold"].isNull(), "fold: bakeInfo reports a fold");
+        CHECK(fold["scale"].toArray().at(0).toDouble() == 4.0
+              && fold["scale"].toArray().at(1).toDouble() == 4.0,
+              "fold: bakeInfo.fold.scale == [4,4]");
+        CHECK(fold["samplers"].toInt() == 1, "fold: one sampler covered");
+        CHECK(info["perSocket"].toObject()["Base Color"].toString() == "passthrough",
+              "fold: the folded chain classifies passthrough, not baked");
+
+        auto res = bake(r, baseDir + "/fold", 4);
+        CHECK(res.maps.isEmpty(), "fold: NO map file is written");
+        CHECK(res.passthrough["baseColorMap"].toString() == texPath,
+              "fold: the full-resolution source binds directly");
+        const auto scale = res.eval.values["textureScale"].toArray();
+        CHECK(scale.size() == 2 && scale[0].toDouble() == 4.0 && scale[1].toDouble() == 4.0,
+              "fold: values.textureScale == [4,4]");
+        CHECK(!res.eval.values.contains("textureRotation"),
+              "fold: no rotation key when there is no rotation");
+    }
+
+    // ---- 3h. per-axis tiling folds too ------------------------------------
+    {
+        const QString texPath = baseDir + "/fixture2x2_fold2.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.fill(QColor(90, 90, 90));
+        CHECK(fix.save(texPath), "fold axes: fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");
+        QJsonObject widget;
+        widget["tileX"] = 4.0; widget["tileY"] = 1.0;
+        widget["offsetX"] = 0.25; widget["offsetY"] = 0.5;
+        uv->deserializeWidgetValue(widget);
+        r.graph->addConnection(uv, 0, tex, 0);
+        r.toMaster(tex, 1, 0);
+
+        auto res = bake(r, baseDir + "/fold2", 4);
+        const auto scale = res.eval.values["textureScale"].toArray();
+        const auto offset = res.eval.values["textureOffset"].toArray();
+        CHECK(scale.size() == 2 && scale[0].toDouble() == 4.0 && scale[1].toDouble() == 1.0,
+              "fold axes: textureScale == [4,1]");
+        CHECK(offset.size() == 2 && offset[0].toDouble() == 0.25 && offset[1].toDouble() == 0.5,
+              "fold axes: textureOffset == [0.25,0.5]");
+        CHECK(res.maps.isEmpty(), "fold axes: still no map file");
+    }
+
+    // ---- 3i. TWO different transforms do NOT fold -------------------------
+    // The material carries ONE transform. Two samplers tiled differently have
+    // to bake, and bakeInfo has to say why in a sentence.
+    {
+        const QString texPath = baseDir + "/fixture2x2_nofold.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.setPixelColor(0, 0, QColor(255, 0, 0));
+        fix.setPixelColor(1, 0, QColor(0, 255, 0));
+        fix.setPixelColor(0, 1, QColor(0, 0, 255));
+        fix.setPixelColor(1, 1, QColor(255, 255, 255));
+        CHECK(fix.save(texPath), "no-fold: fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uvA = r.add("uv");
+        QJsonObject wa; wa["tileX"] = 2.0; wa["tileY"] = 2.0;
+        uvA->deserializeWidgetValue(wa);
+        r.graph->addConnection(uvA, 0, tex, 0);
+        r.toMaster(tex, 1, 0);                       // Base Color, tiled 2x
+
+        auto tex2 = r.add("texture");
+        static_cast<TextureNode*>(tex2)->setTexturePath(texPath);
+        auto uvB = r.add("uv");
+        QJsonObject wb; wb["tileX"] = 4.0; wb["tileY"] = 4.0;
+        uvB->deserializeWidgetValue(wb);
+        r.graph->addConnection(uvB, 0, tex2, 0);
+        r.toMaster(tex2, 1, 4);                      // Emissive, tiled 4x
+
+        const auto info = PbrGraphEvaluator::bakeInfo(r.graph, nullptr);
+        CHECK(info["fold"].isNull(), "no-fold: bakeInfo.fold is null");
+        CHECK(!info["foldReason"].toString().isEmpty(), "no-fold: and it says why");
+
+        auto res = bake(r, baseDir + "/nofold", 4);
+        CHECK(res.maps.contains("baseColorMap") && res.maps.contains("emissiveMap"),
+              "no-fold: both sockets bake maps");
+        CHECK(!res.eval.values.contains("textureScale"),
+              "no-fold: nothing lands on the material");
+        // and the baked map still shows the 4x tiling it was asked for
+        QImage img(res.eval.values["baseColorMap"].toString());
+        img = img.convertToFormat(QImage::Format_RGBA8888);
+        CHECK(qRed(img.pixel(0, 0)) == 255 && qGreen(img.pixel(0, 0)) == 0,
+              "no-fold: the baked map carries the transform instead");
+    }
+
+    // ---- 3j. a UV node feeding MATH refuses the fold ----------------------
+    // `uv -> split -> Roughness` would see transformed UVs in the bake and
+    // untransformed ones at render time — two pictures from one graph.
+    {
+        const QString texPath = baseDir + "/fixture2x2_uvmath.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.fill(QColor(120, 120, 120));
+        CHECK(fix.save(texPath), "uv-math: fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");
+        QJsonObject widget; widget["tileX"] = 4.0; widget["tileY"] = 4.0;
+        uv->deserializeWidgetValue(widget);
+        r.graph->addConnection(uv, 0, tex, 0);
+        r.toMaster(tex, 1, 0);
+        auto split = r.add("splitvector");
+        r.graph->addConnection(uv, 0, split, 0);
+        r.toMaster(split, 0, 2);                     // U -> Roughness
+
+        const auto info = PbrGraphEvaluator::bakeInfo(r.graph, nullptr);
+        CHECK(info["fold"].isNull(), "uv-math: a UV read outside a sampler refuses the fold");
+        auto res = bake(r, baseDir + "/uvmath", 4);
+        CHECK(res.maps.contains("baseColorMap"), "uv-math: the texture bakes instead");
+    }
+
+    // ---- 3k. rotation + a normal map refuses the fold (spec 3.3) ----------
+    {
+        const QString texPath = baseDir + "/fixture2x2_norm.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.fill(QColor(128, 128, 255));
+        CHECK(fix.save(texPath), "normal-rot: fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");
+        QJsonObject widget; widget["tileX"] = 2.0; widget["tileY"] = 2.0;
+        widget["rotation"] = 30.0;
+        uv->deserializeWidgetValue(widget);
+        r.graph->addConnection(uv, 0, tex, 0);
+        r.toMaster(tex, 1, 3);                       // Normal
+
+        const auto info = PbrGraphEvaluator::bakeInfo(r.graph, nullptr);
+        CHECK(info["fold"].isNull(), "normal-rot: the fold refuses rotation on a normal map");
+        CHECK(info["foldReason"].toString().contains("normal"),
+              "normal-rot: and the reason names the normal map");
+
+        // the same graph WITHOUT rotation folds fine
+        QJsonObject w2; w2["tileX"] = 2.0; w2["tileY"] = 2.0;
+        uv->deserializeWidgetValue(w2);
+        const auto info2 = PbrGraphEvaluator::bakeInfo(r.graph, nullptr);
+        CHECK(!info2["fold"].isNull(), "normal-rot: tiling alone on a normal map still folds");
     }
 
     // ---- 4. varying alpha packs into baseColorMap.A ------------------------
