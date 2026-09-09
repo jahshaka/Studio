@@ -773,13 +773,22 @@ set(JAHSHAKA_ANIMATION_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/animation_assets_exp
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export")
 configure_file(scripts/e2e_animation_assets.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets.js @ONLY)
+# A FRESH home per run for BOTH halves (the mcp.e2e.fresh_home pattern): these
+# two assert on absolute row counts — "one animation asset", "an EMPTY library"
+# — and a home that persists across gates accumulates a second copy of
+# everything, so the suite would go red on nothing.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-animation_assets)
+add_test(NAME scripting.e2e.animation_assets.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' '${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export' && mkdir -p '${_home}/run' '${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export'")
+set_tests_properties(scripting.e2e.animation_assets.fresh_home PROPERTIES
+    FIXTURES_SETUP animationAssetsHomeA LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.animation_assets
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.animation_assets PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED animationAssetsHomeA
     FIXTURES_SETUP animation_assets_archive
     LABELS "scripting"
     TIMEOUT 400)
@@ -787,13 +796,17 @@ set_tests_properties(scripting.e2e.animation_assets PROPERTIES
 configure_file(scripts/e2e_animation_assets_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets_import.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-animation_assets_import)
+add_test(NAME scripting.e2e.animation_assets_import.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.animation_assets_import.fresh_home PROPERTIES
+    FIXTURES_SETUP animationAssetsHomeB LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.animation_assets_import
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets_import.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.animation_assets_import PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED animation_assets_archive
+    FIXTURES_REQUIRED "animation_assets_archive;animationAssetsHomeB"
     LABELS "scripting"
     TIMEOUT 400)
 

@@ -40,7 +40,6 @@
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "scripting/modules/moduleshared.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetmetadata.h"
@@ -315,8 +314,9 @@ int main(int argc, char **argv)
         const QJsonObject record2 = service.importSettings(clipGuid);
         CHECK(record2.value("importer").toString() == QLatin1String("animation"),
               "the determinism record names the animation importer");
-        CHECK(scriptmod::assetTypeName(record.type) == QLatin1String("animation"),
-              "the assets.* vocabulary reports 'animation'");
+        // (the assets.* type NAME is asserted by scripting.e2e.animation_assets,
+        // which reads it back through the verb rather than the enum — this
+        // target deliberately does not link the scripting module.)
     }
 
     // ---- 4. the control: meshes + clips stays an Object --------------------

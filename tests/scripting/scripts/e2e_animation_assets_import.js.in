@@ -18,15 +18,23 @@ var ARCHIVE = "@JAHSHAKA_ANIMATION_ARCHIVE@";
 // The library really is empty — otherwise the assertions below prove nothing.
 assert(assets.list({ type: "animation" }).length === 0,
        "this library starts with no animation assets at all");
+assert(project.list().length === 0, "...and there are no projects in it either");
 
 var imported = project.importArchive(ARCHIVE);
 console.log("project.importArchive: " + JSON.stringify(imported));
 assert(imported.guid && imported.guid.length > 10,
        "the archive imported as a new project (" + imported.name + ")");
 
-var animations = assets.list({ type: "animation" });
+// An archive import files its rows under the NEW PROJECT (project_guid set,
+// Editor view filter) — that is how every type arrives, Objects included, so
+// the clip is looked up exactly the way a transported model would be: open
+// the project and list its members.
+assert(project.open(imported.guid), "the imported project opens");
+
+var animations = assets.list({ scope: "project", type: "animation" });
 assert(animations.length === 1, "the ANIMATION asset came across");
 var clip = animations[0].guid;
+assert(animations[0].type === "animation", "...and the project listing types it as one");
 
 var meta = assets.metadata(clip);
 console.log("imported clip metadata: " + JSON.stringify({ kind: meta.kind, clips: meta.clips,
@@ -44,7 +52,7 @@ assert(meta.bones > 40 && meta.rigId.length > 0,
 
 // The character came too, and the clip still plays on it — the pair is what a
 // user actually exported.
-var objects = assets.list({ type: "object" });
+var objects = assets.list({ scope: "project", type: "object" });
 assert(objects.length >= 1, "the character object came across as well");
 
 console.log("PASS e2e_animation_assets_import");

@@ -11,6 +11,9 @@ For more information see the LICENSE file
 
 #include "services/assetimporter.h"
 
+#include <QFileInfo>
+
+#include "data/constants.h"
 #include "data/project.h"
 #include "services/import/assetimportservice.h"
 
@@ -25,7 +28,26 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     AssetImportService service(db, project);
     ImportRequest request;
     request.sourcePath = filePath;
-    request.typeHint = static_cast<int>(ModelTypes::Mesh);
+    // NO TYPE HINT, deliberately (it used to pin ModelTypes::Mesh): this entry
+    // point means "import this MODEL FILE", and which library type a model
+    // file becomes is a property of its CONTENTS, not of the caller's
+    // intention. A file with geometry is an Object; a file with animation and
+    // no geometry is an Animation asset — pinning the mesh importer here made
+    // every Mixamo download "without skin" fail with a message about Draco
+    // compression, which was the owner's report.
+    //
+    // The extension gate keeps the contract narrow: this is still not a
+    // general "import anything" door (that is importFile) — an image handed to
+    // it is refused rather than quietly filed as a texture.
+    const QString suffix = QFileInfo(filePath).suffix().toLower();
+    if (!Constants::MODEL_EXTS.contains(suffix) && !Constants::ANIMATION_EXTS.contains(suffix)) {
+        Result refused;
+        refused.error = QStringLiteral("'%1' is not a model or animation file (%2)")
+                            .arg(QFileInfo(filePath).fileName(),
+                                 QStringList(Constants::ANIMATION_EXTS)
+                                     .join(QStringLiteral(", ")));
+        return refused;
+    }
     const ImportResult imported = service.import(request);
 
     Result result;

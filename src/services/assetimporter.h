@@ -44,10 +44,12 @@ public:
         bool ok() const { return !objectGuid.isEmpty(); }
     };
 
-    /// Imports a mesh file (obj/fbx/dae/blend/glb/gltf) into the global asset
-    /// store. Pure document/DB work — safe headless. `project` is the live
-    /// Project whose guid stamps the created asset rows (Phase 4: was the
-    /// Globals::project static).
+    /// Imports a MODEL FILE (obj/fbx/dae/glb/gltf/ply/stl, plus .bvh mocap)
+    /// into the global asset store. The library type follows the FILE: one
+    /// with geometry becomes an Object, one with animation and no geometry an
+    /// Animation asset (AnimationImporter). Pure document/DB work — safe
+    /// headless. `project` is the live Project whose guid stamps the created
+    /// asset rows (Phase 4: was the Globals::project static).
     static Result importMesh(const QString &filePath, Database *db, Project *project);
 
     /// Imports any library-supported file into the global asset store: ONE

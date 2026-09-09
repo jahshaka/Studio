@@ -619,7 +619,13 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
     // A file with geometry is an Object and belongs to MeshImporter; reaching
     // here means the structural sniff and the parse disagree (an exotic
     // container), and importing it as a clip would silently drop its meshes.
-    if (contents.meshes > 0) {
+    //
+    // EXCEPT when the mesh is not IN the file: assimp SYNTHESISES a stick
+    // figure for a .bvh (SkeletonMeshBuilder), so the parse reports geometry
+    // for a format that has none by definition. The structural answer is the
+    // authority there, which is exactly what shapeOf() is.
+    if (contents.meshes > 0
+        && animfile::shapeOf(request.sourcePath) != animfile::Shape::AnimationOnly) {
         if (errorOut)
             *errorOut = QStringLiteral("\"%1\" carries geometry — import it as a model")
                             .arg(sourceInfo.fileName());

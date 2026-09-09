@@ -214,10 +214,28 @@ struct Segment
     QPointF a, b;
 };
 
+/// The extent of the drawn poses, accumulated point by point. NOT a QRectF
+/// united with degenerate rects: a rect of zero size is `isNull()`, and
+/// uniting with one is a no-op — the bounds would never leave the origin.
+struct Bounds
+{
+    double minX = 0, maxX = 0, minY = 0, maxY = 0;
+    bool empty = true;
+    void add(const QPointF &p)
+    {
+        if (empty) { minX = maxX = p.x(); minY = maxY = p.y(); empty = false; return; }
+        minX = std::min(minX, p.x()); maxX = std::max(maxX, p.x());
+        minY = std::min(minY, p.y()); maxY = std::max(maxY, p.y());
+    }
+    double width() const { return maxX - minX; }
+    double height() const { return maxY - minY; }
+    double centreX() const { return 0.5 * (minX + maxX); }
+};
+
 /// Joint positions of one pose, as parent→child segments in FILE space
 /// (x right, y up — the projection every DCC front view uses).
 QVector<Segment> posePlanar(const aiScene *scene, const aiAnimation *anim, double tick,
-                            QRectF *boundsInOut)
+                            Bounds *boundsInOut)
 {
     QMap<QString, const aiNodeAnim *> channels;
     for (unsigned i = 0; i < anim->mNumChannels; ++i)
@@ -239,13 +257,10 @@ QVector<Segment> posePlanar(const aiScene *scene, const aiAnimation *anim, doubl
 
             const QPointF here(p.x, p.y);
             if (parentPlaced) {
-                segments.append({ QPointF(parentPos.x, parentPos.y), here });
-                if (boundsInOut->isNull())
-                    *boundsInOut = QRectF(here, here);
-                else
-                    *boundsInOut = boundsInOut->united(QRectF(here, here));
-                *boundsInOut = boundsInOut->united(
-                    QRectF(QPointF(parentPos.x, parentPos.y), QPointF(parentPos.x, parentPos.y)));
+                const QPointF from(parentPos.x, parentPos.y);
+                segments.append({ from, here });
+                boundsInOut->add(here);
+                boundsInOut->add(from);
             }
             for (unsigned i = 0; i < node->mNumChildren; ++i)
                 walk(node->mChildren[i], global, true);
@@ -267,10 +282,10 @@ QImage drawPoseStrip(const aiScene *scene, int width, int height)
     // enough to tell two clip files apart at tile size.
     const double samples[3] = { anim->mDuration * 0.1, anim->mDuration * 0.5,
                                 anim->mDuration * 0.9 };
-    QRectF bounds;
+    Bounds bounds;
     QVector<Segment> poses[3];
     for (int i = 0; i < 3; ++i) poses[i] = posePlanar(scene, anim, samples[i], &bounds);
-    if (bounds.isNull() || bounds.height() <= 0.0) return image;
+    if (bounds.empty || bounds.height() <= 0.0) return image;
 
     // ONE transform for all three poses (so root motion reads as motion), and
     // uniform scale (so a skeleton is never stretched into a caricature).
@@ -284,10 +299,10 @@ QImage drawPoseStrip(const aiScene *scene, int width, int height)
     for (int i = 0; i < 3; ++i) {
         const double originX = cellWidth * (i + 0.5);
         const double originY = height - margin;
-        const double centreX = bounds.center().x();
+        const double centreX = bounds.centreX();
         auto project = [&](const QPointF &p) {
             return QPointF(originX + (p.x() - centreX) * scale,
-                           originY - (p.y() - bounds.top()) * scale);
+                           originY - (p.y() - bounds.minY) * scale);
         };
         // The middle pose is the bright one: a thumbnail needs a subject.
         const int alpha = i == 1 ? 255 : 130;
