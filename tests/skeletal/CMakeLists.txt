@@ -149,3 +149,24 @@ target_link_libraries(test_gpu_clips PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6:
 add_dependencies(test_gpu_clips JahshakaEngineMedia)
 add_test(NAME skeletal.gpu_clips COMMAND test_gpu_clips WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 900 LABELS "mirror")
+
+# AVATAR_RIG_PERF_SPEC P1a: the CHARACTER rig — the union of a multi-piece
+# character's per-piece subsets, and the per-piece blend-index remap that makes
+# one rig legal for all of them. Document-side maths plus the engine's attach,
+# count and refusal paths; no rendering, so NO DISPLAY AND NO GPU (the NULL
+# render system, like every document suite).
+add_executable(test_union_rig test_union_rig.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_union_rig PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_union_rig PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_union_rig PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_union_rig)
+add_test(NAME skeletal.union_rig COMMAND test_union_rig WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.union_rig PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 180 LABELS "document")
+jah_no_display(skeletal.union_rig)
