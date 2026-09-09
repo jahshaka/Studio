@@ -108,20 +108,24 @@ var onBone = node.info(cam).position;
 console.log("camera: " + JSON.stringify(before) + " -> " + JSON.stringify(onBone));
 assert(dist(before, onBone) > 0.5,
        "the camera left where it was placed and landed on the bone — the socket drives it");
-// jointTip binds one unit up the rig; the socket adds another. The rig itself
-// was placed at the origin, so the socket sits at y = 2 (times whatever import
-// scale the model carries — the assertion is that it is UP, not the exact
-// number, which belongs to sockets.render).
-assert(onBone.y > before.y === false || onBone.y > 0.1,
-       "…somewhere above the rig's base");
+// AVATAR_RIG_PERF_SPEC decision D4: the renderer hangs the rider off the BONE
+// itself, so a socketed node's own transform is its OFFSET FROM THE SOCKET.
+// Attaching therefore puts it exactly ON the socket — an identity local — and
+// what used to be reported here (the resolved WORLD position, rewritten every
+// frame) is now the socket's job.
+assert(Math.abs(onBone.x) < 1e-4 && Math.abs(onBone.y) < 1e-4 && Math.abs(onBone.z) < 1e-4,
+       "…and sits ON it: a rider's transform is the offset FROM the socket, and attaching " +
+       "starts from zero");
 
-// A socketed node is DRIVEN: a transform written by hand is overwritten.
-node.transform(cam, { position: { x: -20, y: -20, z: -20 } });
+// ...and that transform STICKS: nudging a sword in a hand is an ordinary edit.
+node.transform(cam, { position: { x: 0, y: 0.5, z: 0 } });
 editor.frame(2);
-var reclaimed = node.info(cam).position;
-assert(dist(reclaimed, onBone) < 1e-2,
-       "a transform written onto a socketed node is overwritten on the next frame — " +
-       "that is what 'attached' means");
+var nudged = node.info(cam).position;
+assert(Math.abs(nudged.y - 0.5) < 1e-3,
+       "a transform written onto a socketed node STICKS — it is the offset from the socket, " +
+       "not something the resolver overwrites every frame");
+node.transform(cam, { position: { x: 0, y: 0, z: 0 } });
+editor.frame(2);
 
 // ---- phase D: camera.screenshot, the AI hook ------------------------------
 // Point the camera's lens at something: the settings block is the camera's, and
