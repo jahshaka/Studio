@@ -533,7 +533,20 @@ void PropertyWidget::applyRowConstraints()
     bool haveShading = false;
     const int shadingModel = valueOf(QStringLiteral("shadingModel"), &haveShading);
     const bool unlit = haveShading && shadingModel == 1;
-    if (haveShading) {
+    // DISTORTION (POST_LOOKS_SPEC.md §5.2) greys far more: it draws no surface
+    // at all, so only the displacement map, the strength (opacity) and
+    // two-sidedness mean anything. Handled as its own branch rather than a
+    // longer list on the same one, because the REASON shown to the user is a
+    // different sentence and that is most of the value of greying a row.
+    const bool distortion = haveShading && shadingModel == 2;
+    if (haveShading && distortion) {
+        const QString why = tr("Not used by the Distortion shading model — the object draws "
+                               "nothing of itself, it warps what is behind it. Use the Normal "
+                               "Map as the displacement and Opacity as the strength. The value "
+                               "is kept and returns when the model does.");
+        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenDistortion())
+            constrain(name, false, why);
+    } else if (haveShading) {
         const QString why = tr("Not used by the Unlit shading model — it has no lighting. "
                                "The value is kept and returns when the model does.");
         for (const QString &name : iris::PbrMaterial::rowsUnusedWhenUnlit())
@@ -545,7 +558,7 @@ void PropertyWidget::applyRowConstraints()
     // (the diffuse-fresnel variants of Default included).
     bool haveBrdf = false;
     const int brdfIndex = valueOf(QStringLiteral("brdf"), &haveBrdf);
-    if (haveBrdf && !unlit) {
+    if (haveBrdf && !unlit && !distortion) {
         const bool coatOk = iris::PbrMaterial::brdfSupportsClearCoat(brdfIndex);
         const QString why = tr("Clear coat is only available on the Default BRDF family.");
         constrain(QStringLiteral("clearCoat"), coatOk, why);

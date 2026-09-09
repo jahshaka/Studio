@@ -13,12 +13,16 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/scene.h"
 
+#include "services/looks.h"
+#include "ui/panels/propertywidgets/lookstackeditor.h"
 #include "services/worldmodes.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/dragvaluewidgets.h"
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
+
+#include <QJsonArray>
 
 WorldPostFxPropertyWidget::WorldPostFxPropertyWidget()
 {
@@ -122,6 +126,42 @@ void WorldPostFxPropertyWidget::rebuild()
             });
         }
     }
+
+    buildLooks();
+}
+
+// ---------------------------------------------------------------------------
+// THE LOOKS SUB-SECTION (SPECS/POST_LOOKS_SPEC.md §4.1, phase 5).
+//
+// The stack editor itself is shared with the camera panel's whole-stack
+// override (ui/panels/propertywidgets/lookstackeditor.h): it is the same editor
+// over two different arrays, so it is written once. What belongs HERE is the
+// heading, the array it edits, and what a write means for this panel.
+//
+// NO UNDO COMMAND, deliberately, and it is the one place this section differs
+// from the verbs: the panel writes the scene's array directly, exactly as the
+// rows above write their backing fields directly (worldmodes::setRowValue).
+// Undo for World-panel edits is a recorded gap for the whole section, not
+// something the looks rows should close on their own.
+void WorldPostFxPropertyWidget::buildLooks()
+{
+    if (!scene) return;
+
+    const QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    auto *heading = this->addLabel(tr("Looks"),
+                                   stack.isEmpty() ? tr("none")
+                                                   : tr("%1 in the stack").arg(stack.size()));
+    if (heading)
+        heading->setToolTip(tr("Image filters applied to the finished picture, in order — "
+                               "entry 1 runs first, and the order is part of the look. They "
+                               "are an ART choice, not a quality tier: a World Mode switch "
+                               "never adds or removes one."));
+
+    lookstack::build(this, stack, [this](const QJsonArray &next, bool rebuildPanel) {
+        if (!scene) return;
+        scene->looks = iris::normalizeLookStack(next);
+        applied(rebuildPanel);
+    });
 }
 
 void WorldPostFxPropertyWidget::applied(bool rebuildPanel)

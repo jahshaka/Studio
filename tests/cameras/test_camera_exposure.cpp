@@ -38,6 +38,7 @@
 // Runs with QT_QPA_PLATFORM=offscreen and a reachable DISPLAY (Vulkan).
 
 #include <QGuiApplication>
+#include <QVariantList>
 
 #include <chrono>
 #include <cmath>
@@ -536,9 +537,17 @@ void partC()
     bool allRoundTrip = true;
     for (int i = 0; i < count; ++i) {
         const QString key = QString::fromLatin1(table[i].id);
-        const QVariant value = table[i].type == iris::CameraPostKeyType::Number
-                                   ? QVariant(1.25)
-                                   : (key == QLatin1String("smaa") ? QVariant(-1) : QVariant(1));
+        // A Stack key (POST_LOOKS_SPEC.md §4.1 — `looks`) holds a whole array,
+        // so the value that round-trips it is a list. An EMPTY one is a real
+        // override and is exactly the interesting case: it means "this camera
+        // has no looks" over a world that has some, which is a third state a
+        // boolean could not carry.
+        const QVariant value =
+            table[i].type == iris::CameraPostKeyType::Stack
+                ? QVariant(QVariantList())
+                : (table[i].type == iris::CameraPostKeyType::Number
+                       ? QVariant(1.25)
+                       : (key == QLatin1String("smaa") ? QVariant(-1) : QVariant(1)));
         if (!cam->setPropertyValue(QStringLiteral("postFx.") + key, value)) allRoundTrip = false;
         if (!cam->getPropertyValue(QStringLiteral("postFx.") + key).isValid()) allRoundTrip = false;
         if (!cam->setPropertyValue(QStringLiteral("postFx.") + key, QVariant())) allRoundTrip = false;

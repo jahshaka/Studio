@@ -13,6 +13,11 @@
 // Phase F: SAVE -> CLOSE -> OPEN of the whole block through the real writer and
 //          the real reader, plus the tolerated-absent contract.
 // Phase G: undo — every write is one command in the run's macro, reads are none.
+// Phase H: the generated panel builds, with and without overrides.
+// Phase I: the ONE offscreen opt-in, in pixels.
+// Phase J: the LOOKS stack — the one WHOLE-STACK override, its three states
+//          (inherit / none / its own), the shared validator, the reflected
+//          half, and the save/open round trip.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -260,5 +265,84 @@ var neutralB = camera.screenshot(cam, "camlens-neutral-b.png", { width: 128, hei
 assert(Math.abs(lum(neutralA.center) - lum(neutralB.center)) < 0.5,
        "…while a NEUTRAL readback is untouched by it, which is the determinism law (" +
        lum(neutralA.center).toFixed(2) + " vs " + lum(neutralB.center).toFixed(2) + ")");
+
+// ---- phase J: the LOOKS stack override (POST_LOOKS_SPEC.md §4.1 / D4) -----
+//
+// The one WHOLE-STACK override in the key table, and the reason it is one: a
+// looks stack is an ORDERED LIST, and a sparse per-parameter override over an
+// ordered list stops meaning anything the moment the world reorders or removes
+// an entry. So a camera REPLACES the world's stack or inherits it, and "no
+// looks at all" is an override to the EMPTY array — a third state a boolean
+// could not express.
+var lookCat = world.lookCatalogue();
+assert(lookCat.length >= 1, "the look catalogue is not empty (" + lookCat.length + ")");
+var lookA = lookCat[0].id;
+var lookB = lookCat.length > 1 ? lookCat[1].id : null;
+
+world.addLook(lookA, { amount: 1 });
+assert(world.looks().length === 1, "the WORLD has one look");
+
+var post = camera.postFx(fresh);
+assert(post.overrides.looks === undefined, "a fresh camera does not override looks");
+assert(post.resolved.looks.length === 1,
+       "…and RESOLVES to the world's stack (" + post.resolved.looks.length + ")");
+
+// An EMPTY override is a real one: "this camera has no looks", over a world
+// that has some.
+post = camera.postFx(fresh, { looks: [] });
+assert(post.overrides.looks !== undefined && post.overrides.looks.length === 0,
+       "an EMPTY looks array is an override, not an absence");
+assert(post.resolved.looks.length === 0, "…and resolves to no looks at all");
+
+// A camera's own stack replaces the world's.
+var wanted = [{ id: lookA, params: { amount: 0.25 } }];
+if (lookB) wanted.push({ id: lookB });
+post = camera.postFx(fresh, { looks: wanted });
+assert(post.overrides.looks.length === wanted.length,
+       "a camera's own stack is stored whole (" + post.overrides.looks.length + " entries)");
+assert(post.overrides.looks[0].id === lookA, "…in the order it was given");
+assert(Math.abs(post.overrides.looks[0].params.amount - 0.25) < 1e-6,
+       "…with its parameters");
+
+// The SAME rules as the world's stack, enforced by the SAME validator: unknown
+// ids and duplicates are dropped, parameters clamped.
+post = camera.postFx(fresh, { looks: [{ id: "no-such-look" },
+                                      { id: lookA }, { id: lookA }] });
+assert(post.overrides.looks.length === 1,
+       "an unknown look and a duplicate are dropped (" + post.overrides.looks.length + " left)");
+
+// The reflected (keyframeable) half reaches the same field.
+var reflected = node.getProperty(fresh, "postFx.looks");
+assert(reflected && reflected.length === 1, "node.getProperty reads the stack back");
+node.setProperty(fresh, "postFx.looks", []);
+assert(camera.postFx(fresh).overrides.looks.length === 0,
+       "node.setProperty writes it too");
+
+// SAVE -> CLOSE -> OPEN, through the real writer and the real reader.
+camera.postFx(fresh, { looks: [{ id: lookA, params: { amount: 0.75 } }] });
+project.save();
+project.close();
+project.open(guid);
+post = camera.postFx(fresh);
+assert(post.overrides.looks.length === 1, "the camera's stack survives save -> close -> open");
+assert(Math.abs(post.overrides.looks[0].params.amount - 0.75) < 1e-6, "…with its parameter");
+
+// …and null puts it back on the world.
+post = camera.postFx(fresh, { looks: null });
+assert(post.overrides.looks === undefined, "null clears the override back to inherit");
+assert(post.resolved.looks.length === world.looks().length,
+       "…and the camera resolves to the world's stack again");
+
+// The panel builds for a camera with a stack override, which is the row that
+// opens a whole sub-editor and is therefore the one most likely to break
+// silently when the catalogue changes.
+camera.postFx(fresh, { looks: [{ id: lookA }] });
+assert(editor.select(fresh), "the camera panel builds with a looks override");
+camera.postFx(fresh, { looks: [] });
+assert(editor.select(fresh), "…and with an EMPTY looks override");
+camera.postFx(fresh, { looks: null });
+assert(editor.select(fresh), "…and back on inherit");
+editor.select(null);
+world.removeLook(lookA);
 
 console.log("\nALL CAMERA POST-FX E2E CHECKS PASSED");

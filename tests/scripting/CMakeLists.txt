@@ -552,6 +552,20 @@ set_tests_properties(scripting.e2e.world_modes PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1): the catalogue, the six verbs, the
+# one-instance-per-look rule, clamping, undo and the save/open round trip. The
+# pixel half of the program is the looks.engine suite; these are all document
+# verbs -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-looks)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.looks
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_looks.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.looks PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # RAYON (GI_UNIFIED_SPEC.md §2 / P2): the one GI switch and its quality tier —
 # the new-scene default (Epic), the tier table seen through the verbs, an
 # Advanced pin surviving a tier switch, world.rayon round-tripping through
@@ -744,6 +758,7 @@ jah_no_display(
     scripting.e2e.image_material
     scripting.e2e.pinned_reopen
     scripting.e2e.world_modes
+    scripting.e2e.looks
     scripting.e2e.rayon
     scripting.e2e.folders)
 

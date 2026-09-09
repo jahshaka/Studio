@@ -24,6 +24,7 @@ For more information see the LICENSE file
 
 #include "scripting/apimodule.h"
 #include "commands/worldmodecommand.h"
+#include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/irisglfwd.h"
 #include "services/worldmodes.h"
 
@@ -74,6 +75,21 @@ public:
     Q_INVOKABLE QVariantMap modeTable();
     Q_INVOKABLE QVariantMap postFx(const QVariantMap &params = QVariantMap());
 
+    // ---- THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1) --------------------------
+    // Six verbs over one ordered array. Every write is one undo step and goes
+    // through iris::normalizeLookStack, so the rules — known ids, one instance
+    // per look, parameters clamped — are enforced in one place and the panel
+    // and the verbs cannot disagree with the renderer.
+    Q_INVOKABLE QVariantList looks();
+    Q_INVOKABLE QVariantMap addLook(const QString &id,
+                                    const QVariantMap &params = QVariantMap(),
+                                    int index = -1);
+    Q_INVOKABLE bool removeLook(const QString &id);
+    Q_INVOKABLE bool moveLook(const QString &id, int index);
+    Q_INVOKABLE QVariantMap setLook(const QString &id,
+                                    const QVariantMap &params = QVariantMap());
+    Q_INVOKABLE QVariantList lookCatalogue();
+
     // ---- set* aliases (AI_SURFACE_PROGRAM_SPEC §3.A item #10, owner D5) ----
     // Nine of this module's verbs are NOUNS that write (world.fog({...}) sets
     // the fog) while the rest of the surface spells a write set* — so an agent
@@ -109,6 +125,13 @@ private:
     void pushSunLinkUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid);
     void pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
                            const WorldModeCommand::Snapshot &before);
+    /// One undo step for one looks-stack edit; `before` is the array as it was.
+    void pushLooksUndo(const QString &text, const iris::ScenePtr &scene,
+                       const QJsonArray &before);
+    /// One stack entry in the shape world.looks() reports.
+    static QVariantMap lookState(const QJsonObject &entry);
+    /// The index of `id` in `stack`, or -1.
+    static int lookIndexOf(const QJsonArray &stack, const QString &id);
     /// Applies a Rayon state as ONE undoable step (the tier rewrites three
     /// backing fields, exactly like a World Mode rewrites thirteen).
     void applyRayon(const iris::ScenePtr &scene, bool enabled,

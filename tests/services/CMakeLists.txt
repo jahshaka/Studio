@@ -18,6 +18,25 @@ add_test(NAME services.core COMMAND test_services
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 
+# services.looks — the looks catalogue (POST_LOOKS_SPEC.md §4.1). Links the
+# presentation table and IrisGL (the document half of the catalogue lives
+# there, with SceneMirror and the scene reader as its other consumers). No
+# engine, no display: this is a table-agreement and validator test.
+find_package(Qt6 REQUIRED COMPONENTS Core)
+add_executable(test_looks_registry test_looks_registry.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/looks.cpp)
+set_target_properties(test_looks_registry PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_looks_registry PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_looks_registry PRIVATE IrisGL Qt6::Core)
+add_test(NAME services.looks COMMAND test_looks_registry
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(services.looks PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     LABELS "services")
+jah_no_display(services.looks)
+
 # engine.error_pump — STABILITY_PROGRAM_SPEC Lane 1. The only suite in the tree
 # that links BOTH the engine and a Studio service, because that is exactly the
 # seam it tests: Engine::takeLastError() on one side, EngineErrorPump on the

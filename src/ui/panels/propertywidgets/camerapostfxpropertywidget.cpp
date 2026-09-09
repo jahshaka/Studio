@@ -14,7 +14,9 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 
+#include "irisgl/document/scenegraph/looks.h"
 #include "services/worldmodes.h"
+#include "ui/panels/propertywidgets/lookstackeditor.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/dragvaluewidgets.h"
@@ -45,6 +47,9 @@ QString labelFor(const QString &key)
 {
     if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key)) return p->label;
     if (const worldmodes::Row *r = worldmodes::row(key)) return r->label;
+    // The looks stack has no World Mode row and never will: looks are an art
+    // choice, not a scalability tier (POST_LOOKS_SPEC §7 R10).
+    if (key == QLatin1String("looks")) return QStringLiteral("Looks");
     return key;
 }
 
@@ -168,6 +173,61 @@ void CameraPostFxPropertyWidget::rebuild()
             // the same choice the World section makes.
             auto *lbl = this->addLabel(label, QStringLiteral("not available yet"));
             if (lbl) lbl->setToolTip(tooltipFor(key));
+            continue;
+        }
+
+        if (table[i].type == iris::CameraPostKeyType::Stack) {
+            // THE WHOLE-STACK OVERRIDE (POST_LOOKS_SPEC.md §4.1 / D4). Three
+            // states and not two, because "no looks" and "the world's looks"
+            // are different answers and a checkbox cannot say both: Inherit
+            // clears the key, "None" overrides with an EMPTY stack, and "This
+            // camera's own" opens the same stack editor the World panel uses,
+            // seeded with whatever the world currently has (so turning the
+            // override on does not change the picture by itself).
+            const bool overridden = camera->hasPostOverride(key);
+            const QJsonArray own = camera->postOverrideStack(key);
+            const iris::ScenePtr scene = sceneOf(camera);
+            const QJsonArray worldStack =
+                scene ? iris::normalizeLookStack(scene->looks) : QJsonArray();
+
+            auto *combo = this->addComboBox(QStringLiteral("Looks"));
+            combo->addItem(QStringLiteral("Inherit (%1)")
+                               .arg(worldStack.isEmpty()
+                                        ? QStringLiteral("none")
+                                        : QStringLiteral("%1 from the world").arg(worldStack.size())),
+                           QStringLiteral("inherit"));
+            combo->addItem(QStringLiteral("None (this camera)"), QStringLiteral("none"));
+            combo->addItem(QStringLiteral("This camera's own"), QStringLiteral("own"));
+            combo->setCurrentIndex(!overridden ? 0 : (own.isEmpty() ? 1 : 2));
+            combo->setToolTip(QStringLiteral(
+                "The image filters applied to the finished picture while THIS camera is the "
+                "one you are looking through. A camera's stack REPLACES the world's rather "
+                "than adding to it — an override over an ordered list is only well defined "
+                "as a replacement."));
+            connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this,
+                    [this, key, combo, worldStack](int row) {
+                        if (!camera || row < 0) return;
+                        const QString choice = combo->getItemData(row).toString();
+                        if (choice == QLatin1String("inherit")) {
+                            camera->clearPostOverride(key);
+                        } else if (choice == QLatin1String("none")) {
+                            camera->setPostOverride(key, QJsonArray().toVariantList());
+                        } else if (!camera->hasPostOverride(key) ||
+                                   camera->postOverrideStack(key).isEmpty()) {
+                            // Seed from the world, so switching to "own" is a
+                            // starting point rather than a blank page.
+                            camera->setPostOverride(key, worldStack.toVariantList());
+                        }
+                        applied(true);
+                    });
+
+            if (overridden && !own.isEmpty()) {
+                lookstack::build(this, own, [this, key](const QJsonArray &next, bool rebuildPanel) {
+                    if (!camera) return;
+                    camera->setPostOverride(key, next.toVariantList());
+                    applied(rebuildPanel);
+                });
+            }
             continue;
         }
 

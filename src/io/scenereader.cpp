@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/looks.h"
 #include <QSharedPointer>
 #include "io/assetiobase.h"
 #include <QDir>
@@ -566,6 +567,18 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->smaaPreset = qBound(-1, sceneObj["smaaPreset"].toInt(-1), 3);
     scene->ssrMode = qBound(0, sceneObj["ssrMode"].toInt(0), 2);
     scene->refractionsMode = qBound(0, sceneObj["refractionsMode"].toInt(0), 2);
+    // Distortion: absent = AUTO, which is what a document written before the
+    // feature existed means (it holds no distortion material, so auto costs it
+    // nothing and a user who adds one later sees it work).
+    scene->distortionMode = qBound(0, sceneObj["distortionMode"].toInt(1), 2);
+    scene->distortionStrength =
+        float(qBound(0.0, sceneObj["distortionStrength"].toDouble(1.0), 8.0));
+    // The looks stack. Absent = empty = the renderer's behaviour before this
+    // feature existed, byte for byte. Everything a file can get wrong — an
+    // unknown look id (a document from a newer build), the same look twice, a
+    // parameter out of range or missing — is handled in ONE place, the
+    // document's own validator, which every write path also goes through.
+    scene->looks = iris::normalizeLookStack(sceneObj["looks"].toArray());
 
     // Planar reflections: absent means "follow the world mode" on all three
     // (-1 / 0 / -1), which is what every document written before this feature
