@@ -8,6 +8,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 else()
     set(JAH_SELFTEST_ENV "")
 endif()
+# THE LAST TWO SUITES THAT WROTE THE SHARED SETTINGS FILE (hygiene lane,
+# 2026-09-09). These two run with their WORKING_DIRECTORY set to the BINARY's
+# directory — deliberately, so `media/` and the relative ogre log resolve the
+# way a developer's own launch resolves them — and they carried no scratch
+# HOME, so under QT_DEBUG they wrote (and re-rolled `[assets] storeId` in)
+# build-linux/bin/jahsettings.ini: the developer's own file, which is the
+# ENGINEERING_DEBT_SPEC ADDENDUM 6 defect exactly. Measured after a full 249-
+# suite gate: these were the only two left doing it.
+#
+# The working directory is UNCHANGED (nothing about asset resolution moves);
+# only the data root is redirected, which takes the settings file, the library
+# database and the asset store with it.
+set(_selftest_root ${CMAKE_CURRENT_BINARY_DIR}/selftest-data)
+file(MAKE_DIRECTORY ${_selftest_root})
+set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 add_test(NAME app.engine_selftest
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --engine-selftest "${CMAKE_CURRENT_BINARY_DIR}/selftest.png"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
