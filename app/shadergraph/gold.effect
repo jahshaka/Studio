@@ -7,20 +7,20 @@
     "fog": true,
     "fragment_shader": "shader.frag",
     "lighting": true,
-    "name": "",
+    "name": "Gold",
     "pbrMaterial": {
-        "surfaceType": "surface",
+        "surfaceType": "pbr",
         "unsupportedNodes": [
-            "Specular <- float"
         ],
         "values": {
             "baseColor": {
-                "a": 0,
+                "a": 1,
                 "b": 0.009994659572839737,
                 "g": 0.8500038385391235,
                 "r": 1
             },
-            "roughness": 0
+            "metallic": 1,
+            "roughness": 0.25
         }
     },
     "properties": [
@@ -30,58 +30,66 @@
     "shadergraph": {
         "connections": [
             {
-                "id": "c2571e26-9000-4845-815e-ca66d5c68b50",
-                "leftNodeId": "19535b10-d252-43f7-a066-caf05a1372b6",
+                "id": "a71c9f20-0011-4d3b-9c5e-2f8b1a4c0001",
+                "leftNodeId": "a71c9f20-0002-4d3b-9c5e-2f8b1a4c00aa",
                 "leftNodeSocketIndex": 0,
-                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+                "rightNodeId": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
                 "rightNodeSocketIndex": 0
             },
             {
-                "id": "d4ab85d8-9667-4fe9-bdbc-98f1f1b5fb5f",
-                "leftNodeId": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "id": "a71c9f20-0012-4d3b-9c5e-2f8b1a4c0002",
+                "leftNodeId": "a71c9f20-0003-4d3b-9c5e-2f8b1a4c00ab",
                 "leftNodeSocketIndex": 0,
-                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
-                "rightNodeSocketIndex": 2
+                "rightNodeId": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
+                "rightNodeSocketIndex": 1
             },
             {
-                "id": "dca54c4d-c55c-4be1-b8f3-0a233e4d98ac",
-                "leftNodeId": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "id": "a71c9f20-0013-4d3b-9c5e-2f8b1a4c0003",
+                "leftNodeId": "a71c9f20-0004-4d3b-9c5e-2f8b1a4c00ac",
                 "leftNodeSocketIndex": 0,
-                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
-                "rightNodeSocketIndex": 1
+                "rightNodeId": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
+                "rightNodeSocketIndex": 2
             }
         ],
-        "masternode": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+        "masternode": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
         "materialGuid": "",
         "nodes": [
             {
-                "id": "19535b10-d252-43f7-a066-caf05a1372b6",
+                "id": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
+                "value": "",
+                "x": 260,
+                "y": 20
+            },
+            {
+                "id": "a71c9f20-0002-4d3b-9c5e-2f8b1a4c00aa",
                 "title": "Color",
                 "type": "color",
                 "value": {
-                    "a": 0,
+                    "a": 1,
                     "b": 0.009994659572839737,
                     "g": 0.8500038385391235,
                     "r": 1
                 },
-                "x": -108,
-                "y": -31.68000030517578
+                "x": -140,
+                "y": -60
             },
             {
-                "id": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "id": "a71c9f20-0003-4d3b-9c5e-2f8b1a4c00ab",
                 "title": "Float",
                 "type": "float",
                 "value": 1,
-                "x": -83.52001190185547,
-                "y": 276.4800109863281
+                "x": -140,
+                "y": 120
             },
             {
-                "id": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
-                "title": "Surface Material",
-                "type": "Material",
-                "value": "",
-                "x": 200,
-                "y": 50
+                "id": "a71c9f20-0004-4d3b-9c5e-2f8b1a4c00ac",
+                "title": "Float",
+                "type": "float",
+                "value": 0.25,
+                "x": -140,
+                "y": 260
             }
         ],
         "settings": {
@@ -92,12 +100,13 @@
             "cullMode": "Back",
             "depthTest": true,
             "fog": true,
-            "name": "",
+            "name": "Gold",
             "receiveShadow": true,
             "renderLayer": "Opaque",
             "zWrite": true
         }
     },
+    "surfaceType": "pbr",
     "type": "shadergraph",
     "uniforms": [
     ],
