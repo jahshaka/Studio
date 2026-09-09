@@ -20,7 +20,7 @@
 // scripting.e2e.anim documents), so editor.undo() from inside this file can
 // never reach the steps it just made. What it CAN prove is that the commands
 // were recorded, via undoState().pushes. The atomicity is gated where a user
-// actually meets it: app.multiselect_keys presses Delete and then Ctrl+Z as
+// actually meets it: app.input_keys presses Delete and then Ctrl+Z as
 // REAL KEYS, with no script macro anywhere, and asserts every member comes back.
 
 function assert(cond, msg) {

@@ -30,8 +30,16 @@ struct CliOptions
     /// --dump-api-docs <file.md>: write the registry-generated verb reference.
     QString dumpDocsPath;
     /// --mcp-port=N: serve MCP on 127.0.0.1:N for this run (implies enabled;
-    /// the session token is printed to stdout). With --headless: offscreen,
-    /// document verbs only; otherwise windowed with the engine viewport up.
+    /// the session token and the BOUND PORT are printed to stdout). With
+    /// --headless: offscreen, document verbs only; otherwise windowed with the
+    /// engine viewport up.
+    ///
+    /// N = 0 means EPHEMERAL — the OS picks a free port and the app prints
+    /// "MCP: port <n>" for the caller to read back. It does NOT mean "off",
+    /// which is why the flag needs a seen-flag of its own: several driver
+    /// suites boot the app at once and two of them naming one port is what
+    /// made a -j4 gate unsafe (TEST_GATE_AUDIT.md §4.1).
+    bool mcpServe = false;
     quint16 mcpPort = 0;
     /// --data-root <dir>: THE hermetic-run flag (WINDOWS_BUILD_SPEC §6.2 W9,
     /// ENGINEERING_DEBT_SPEC ADDENDUM 6). Redirects the library database, the

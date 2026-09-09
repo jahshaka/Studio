@@ -96,7 +96,7 @@ target_link_libraries(test_engine_error_pump PRIVATE IrisGL JahshakaEngine Qt6::
 add_dependencies(test_engine_error_pump JahshakaEngineMedia)
 add_test(NAME engine.error_pump COMMAND test_engine_error_pump
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(engine.error_pump PROPERTIES TIMEOUT 600 LABELS "services")
+set_tests_properties(engine.error_pump PROPERTIES TIMEOUT 120 LABELS "services")
 
 # services.memory — session-registry OWNERSHIP (deep audit 2026-09, area 3).
 # Links only the two registries it tests plus IrisGL (the SceneNodePtr payload
@@ -182,3 +182,15 @@ jah_tsan_lane(services.memory)
 # only leak; the registry ownership it actually tests is clean).
 jah_lsan_lane(services.core)
 jah_lsan_blocked(services.memory)
+
+# ---------------------------------------------------------------------------
+# DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
+# claims — in its own comment, or by running --headless, or by building nothing
+# but a document — that it needs no X server. The claim was never enforced, so
+# it drifted: a suite that quietly opened a display still passed on a developer
+# box and would have failed the first CI runner without one, and every
+# unnecessary X connection is one more thing four parallel jobs contend over.
+# jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
+# the claim into a gate. Verified 2026-09-09: each of these passes displayless
+# with the same assertion count it has with a display.
+jah_no_display(services.core)

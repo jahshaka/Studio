@@ -16,8 +16,23 @@
 # mirror TU, which is not part of either library), because "document edit ->
 # engine-visible" is by definition a both-sides measurement.
 #
-# LABEL `benchmark`: this suite is minutes, not seconds. `ctest -LE benchmark`
-# skips it when you want the fast gate; the full gate runs it.
+# TWO ROWS PER BENCH SINCE 2026-09-09 (TEST_GATE_AUDIT.md §5 step 1):
+#
+#   <bench>.benchmark  --assert  LABELS "benchmark"        NIGHTLY, RUN_SERIAL
+#   <bench>.smoke      --smoke   LABELS "benchmark-smoke"  MERGE, parallel
+#
+# The full `--assert` run is a TIMING VERDICT: five minutes of scene-graph
+# measurement compared against a committed baseline, RUN_SERIAL because a
+# parallel ctest schedule turns its regress clause into random reds. A merge
+# gate paid the whole of that wall time (287 s recorded, 518 s in a live -j2
+# gate) for a verdict its own comment already disowns on a loaded box. What a
+# merge gate needs is the STRUCTURAL half — every document node reached the
+# engine, the static tags landed, a frame rendered — which is what `--smoke`
+# runs, at one scale, in about fifteen seconds, with no baseline compare and no
+# dispersion bound, so it neither needs nor deserves RUN_SERIAL.
+#
+# `ctest -LE benchmark` therefore still skips the minutes and now KEEPS the
+# structure; a nightly / pre-tag run drops -LE and gets the verdict.
 find_package(Qt6 REQUIRED COMPONENTS Gui)
 
 # The fingerprint the baseline file records. Resolved at CONFIGURE time — a
@@ -64,6 +79,15 @@ set_tests_properties(scenegraph.benchmark PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 1200 LABELS "benchmark"
     RUN_SERIAL TRUE)
 
+add_test(NAME scenegraph.smoke COMMAND bench_scenegraph --smoke
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
+# NOT RUN_SERIAL, deliberately: --smoke asserts nothing about time, so a
+# parallel schedule cannot change its answer. Its own working directory because
+# both rows write an Ogre log.
+set_tests_properties(scenegraph.smoke PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "benchmark-smoke")
+
 # THE RIG-PERF BENCH (SPECS/AVATAR_RIG_PERF_SPEC.md P0 / P3).
 #
 # Same shape as bench_scenegraph — one binary, `--assert` for ctest and
@@ -100,3 +124,9 @@ add_test(NAME rigperf.benchmark COMMAND bench_rigperf --assert
 set_tests_properties(rigperf.benchmark PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "benchmark"
     RUN_SERIAL TRUE)
+
+add_test(NAME rigperf.smoke COMMAND bench_rigperf --smoke
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
+set_tests_properties(rigperf.smoke PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "benchmark-smoke")

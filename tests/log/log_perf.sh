@@ -16,13 +16,12 @@
 #      same shape app.pacing_undo uses, and for the same reason: the only way
 #      to observe a timer is to let it run.
 #
-# usage: log_perf.sh <jahshaka-binary> <script.js> <mcp-port>
+# usage: log_perf.sh <jahshaka-binary> <script.js> <mcp-port, 0 for ephemeral>
 set -u
 
 BIN="$1"
 SCRIPT="$2"
 PORT="$3"
-URL="http://127.0.0.1:${PORT}/mcp"
 fail=0
 
 # ---------------------------------------------------------------------------
@@ -75,19 +74,24 @@ trap cleanup EXIT
 "$BIN" --mcp-port="$PORT" --log-dir "$TLOGDIR" > "$APPLOG" 2>&1 &
 APP_PID=$!
 
-TOKEN=""
+# THE PORT IS READ BACK, NOT ASSUMED (TEST_GATE_AUDIT.md §4.1). This suite and
+# app.multiselect_keys both hard-coded 8751; RUN_SERIAL on the other one was the
+# only thing keeping them apart, which is what made -j4 unsafe.
+TOKEN=""; BOUND=""
 for _ in $(seq 1 240); do
     kill -0 "$APP_PID" 2>/dev/null || break
     TOKEN=$(grep -m1 '^MCP: token ' "$APPLOG" 2>/dev/null | sed 's/^MCP: token //')
-    [ -n "$TOKEN" ] && break
+    BOUND=$(grep -m1 '^MCP: port '  "$APPLOG" 2>/dev/null | sed 's/^MCP: port //')
+    [ -n "$TOKEN" ] && [ -n "$BOUND" ] && break
     sleep 0.5
 done
-if [ -z "$TOKEN" ]; then
-    echo "log.perf: FAIL — the app never published an MCP token"
+if [ -z "$TOKEN" ] || [ -z "$BOUND" ]; then
+    echo "log.perf: FAIL — the app never published an MCP token and port"
     tail -40 "$APPLOG"
     exit 1
 fi
-echo "log.perf: ok — the app is up on port $PORT with its event loop running"
+URL="http://127.0.0.1:${BOUND}/mcp"
+echo "log.perf: ok — the app is up on port $BOUND with its event loop running"
 
 js() {
     local payload response inner
@@ -114,16 +118,20 @@ js 'project.create("Log Perf Timer " + Date.now())' > /dev/null || fail=1
 js 'scene.addPrimitive("Cube")' > /dev/null || fail=1
 js 'app.space("editor")' > /dev/null || true
 
-# One second per sample, then wait FIVE in real time with the loop turning.
+# One second per sample, then wait THREE in real time with the loop turning.
+# (Was five. The two windows below were 8 s of the suite's 37 and both were
+# picked round rather than measured: a 1 s sampler nominally produces 3 lines
+# in 3 s, and the threshold below keeps the same 2-in-3 margin over nominal
+# that 3-in-5 had — TEST_GATE_AUDIT.md §3.)
 js 'JSON.stringify(log.perf(1))' > /dev/null || fail=1
 MARK=$(js 'log.mark("timer window")')
-sleep 5
+sleep 3
 COUNT=$(js 'log.since('"$MARK"', {}).filter(function(r){return /\]perf: /.test(r);}).length')
 
-if [ "${COUNT:-0}" -ge 3 ]; then
-    echo "log.perf: ok — the 1 s timer produced $COUNT lines in a 5 s window"
+if [ "${COUNT:-0}" -ge 2 ]; then
+    echo "log.perf: ok — the 1 s timer produced $COUNT lines in a 3 s window"
 else
-    echo "log.perf: FAIL — only ${COUNT:-0} perf lines in a 5 s window at a 1 s interval"
+    echo "log.perf: FAIL — only ${COUNT:-0} perf lines in a 3 s window at a 1 s interval"
     fail=1
 fi
 
@@ -161,10 +169,13 @@ fi
 # cannot make, because there the timer could never have fired anyway.
 js 'JSON.stringify(log.perf(0))' > /dev/null || fail=1
 OFFMARK=$(js 'log.mark("timer off window")')
-sleep 3
+# Two seconds at a 1 s interval: a sampler that ignored log.perf(0) would have
+# produced two lines by now, so this window is as convicting as the three it
+# replaces and costs a second less.
+sleep 2
 OFFCOUNT=$(js 'log.since('"$OFFMARK"', {}).filter(function(r){return /\]perf: /.test(r);}).length')
 if [ "${OFFCOUNT:-1}" = "0" ]; then
-    echo "log.perf: ok — the sampler is silent for 3 s after log.perf(0), with the loop running"
+    echo "log.perf: ok — the sampler is silent for 2 s after log.perf(0), with the loop running"
 else
     echo "log.perf: FAIL — $OFFCOUNT perf lines after log.perf(0)"
     fail=1

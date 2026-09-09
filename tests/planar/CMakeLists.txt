@@ -25,7 +25,7 @@ jahshaka_planar_test(test_planar)
 target_link_libraries(test_planar PRIVATE JahshakaEngine)
 add_test(NAME engine.planar COMMAND test_planar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.planar PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(engine.planar PROPERTIES TIMEOUT 120 LABELS "engine")
 
 if(JAHSHAKA_ASAN)
     jahshaka_planar_test(test_planar_asan)
@@ -36,6 +36,6 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
-    set_tests_properties(engine.planar_asan PROPERTIES TIMEOUT 900 LABELS "engine"
+    set_tests_properties(engine.planar_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endif()

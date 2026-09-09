@@ -19,7 +19,7 @@ target_compile_definitions(test_thumbnails PRIVATE
 target_link_libraries(test_thumbnails PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_thumbnails JahshakaEngineMedia)
 add_test(NAME thumbnails.engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnails WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # Shader-asset thumbnails (VISUAL_PARITY_SPEC item 5): MaterialReader::
 # parseShaderAsPbr turns a stored graph definition into the evaluator's
@@ -92,4 +92,4 @@ add_dependencies(test_shader_thumbnail JahshakaEngineMedia)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 add_test(NAME thumbnails.shader COMMAND ${CMAKE_BINARY_DIR}/bin/test_shader_thumbnail
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
-set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

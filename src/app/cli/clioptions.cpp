@@ -23,8 +23,9 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) o.scriptPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
-        else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) o.mcpPort = quint16(QByteArray(argv[i] + 11).toUInt());
-        else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) o.mcpPort = quint16(QByteArray(argv[++i]).toUInt());
+        // 0 is EPHEMERAL, not "off" — see CliOptions::mcpServe.
+        else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) { o.mcpServe = true; o.mcpPort = quint16(QByteArray(argv[i] + 11).toUInt()); }
+        else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) { o.mcpServe = true; o.mcpPort = quint16(QByteArray(argv[++i]).toUInt()); }
         else if (qstrcmp(argv[i], "--clear-shader-cache") == 0) o.clearShaderCache = true;
         else if (qstrcmp(argv[i], "--profile") == 0) o.profile = true;
         else if (qstrncmp(argv[i], "--data-root=", 12) == 0) o.dataRoot = QString::fromLocal8Bit(argv[i] + 12);

@@ -168,7 +168,7 @@ add_test(NAME scripting.e2e.memory
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.memory PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    TIMEOUT 300)
+    TIMEOUT 120)
 
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-anim)
 file(MAKE_DIRECTORY ${_home}/run)
@@ -262,7 +262,7 @@ add_test(NAME scripting.e2e.mesh_roundtrip
 set_tests_properties(scripting.e2e.mesh_roundtrip PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # AI_SURFACE_PROGRAM_SPEC lane D #7 + #12: assets.importAndPlace — the correct
 # import in ONE call — and, where #12 used to gate scene.addViewer, the REMOVAL
@@ -280,7 +280,7 @@ add_test(NAME scripting.e2e.world_reach
 set_tests_properties(scripting.e2e.world_reach PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # AI_SURFACE_PROGRAM_SPEC lane D #14: node.physics / node.physicsInfo — the last
 # UI-with-no-verb domain. Every scalar and both enums round-trip, every refusal
@@ -304,7 +304,7 @@ add_test(NAME scripting.e2e.ai_surface
 set_tests_properties(scripting.e2e.ai_surface PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # AI_SURFACE_PROGRAM_SPEC lane B #8 (verb half): scene.nodes({subtree, depth,
 # include}). describe_scene is only the byte-carrying view of these options, so
@@ -375,7 +375,7 @@ add_test(NAME scripting.e2e.light_bindings
 set_tests_properties(scripting.e2e.light_bindings PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-metadata)
 file(MAKE_DIRECTORY ${_home}/run)
@@ -424,24 +424,11 @@ set_tests_properties(scripting.e2e.store_root PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
-# The shipped sample scenes (the ONE data artifact Jahshaka ships): each
-# bundled archive must import through the consolidated pipeline and open
-# with content on a FRESH install (phase-4 archive format: catalog snapshot
-# + manifest v2 + CAS objects, pins written on import). Runs ENGINE-UP (no
-# --headless) since the grey-dragon regression: the gate renders every
-# opened sample offscreen and asserts material fidelity at pixel probes
-# (the gold dragon must be gold), plus the document-level material and
-# texture-path assertions.
-configure_file(scripts/e2e_samples.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_samples.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-samples)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.samples
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_samples.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.samples PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 480)
+# The shipped sample scenes are gated by samples.cleanstart.* — one row per
+# sample, each on a VIRGIN home. scripting.e2e.samples used to re-import five of
+# them into one shared home to probe their colours; its probes, its material
+# assertions and its Particles save round trip live in
+# tests/samples/scripts/cleanstart.js.in since 2026-09-09 (TEST_GATE_AUDIT.md §2).
 
 # The ONE import pipeline (phase 3): determinism record + checkConsistency +
 # identical object sets on double import, in the real binary.
@@ -501,7 +488,7 @@ add_test(NAME scripting.e2e.image_material
 set_tests_properties(scripting.e2e.image_material PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # MATERIAL_UV_NODES_SPEC phase 3: the UV input end to end — the fold (a
 # uniform tiling rides the material, no map is baked, the source binds at full
@@ -518,7 +505,7 @@ add_test(NAME scripting.e2e.uv_tiling
 set_tests_properties(scripting.e2e.uv_tiling PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # IMAGE_PLANE_SPEC §6: pinned library assets hydrate on project REOPEN —
 # add-to-project → close → reopen → material.apply by the pinned guid onto a
@@ -637,7 +624,7 @@ add_test(NAME scripting.e2e.rayon
 set_tests_properties(scripting.e2e.rayon PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # OUTLINER FOLDERS (SCENEGRAPH_SPEC.md §6b): scene.folders/createFolder/
 # renameFolder/removeFolder + node.setFolder/folder. The two LAWS are the point
@@ -729,7 +716,7 @@ add_test(NAME scripting.e2e.locomotion
 set_tests_properties(scripting.e2e.locomotion PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 120)
 
 # The DEFAULT AVATAR fixture's contract: beta_mannequin.dae (generated by
 # tests/avatar from the shipped Skeletal Animation sample — Mixamo Beta, full
@@ -748,7 +735,7 @@ add_test(NAME scripting.e2e.mannequin
 set_tests_properties(scripting.e2e.mannequin PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 120)
 
 # The Avatar module AS VERBS (verb-coverage audit F15) plus avatar.loadClip
 # (F5): spawn -> possess -> setMovement clamping -> setLocomotionAsset's six
@@ -767,7 +754,7 @@ add_test(NAME scripting.e2e.avatar_verbs
 set_tests_properties(scripting.e2e.avatar_verbs PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 400)
+    TIMEOUT 120)
 
 # ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that
 # used to be refused with a wrong message, the type-filtered listing, the
@@ -804,7 +791,7 @@ set_tests_properties(scripting.e2e.animation_assets PROPERTIES
     FIXTURES_REQUIRED animationAssetsHomeA
     FIXTURES_SETUP animation_assets_archive
     LABELS "scripting"
-    TIMEOUT 400)
+    TIMEOUT 120)
 
 configure_file(scripts/e2e_animation_assets_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets_import.js @ONLY)
@@ -821,7 +808,7 @@ set_tests_properties(scripting.e2e.animation_assets_import PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED "animation_assets_archive;animationAssetsHomeB"
     LABELS "scripting"
-    TIMEOUT 400)
+    TIMEOUT 120)
 
 # The PLAYER space's verbs (verb-coverage audit F1): player.play/stop/playing/
 # restart/state driving the real EnginePlayerView through PlayerService, and
@@ -860,7 +847,7 @@ add_test(NAME scripting.e2e.fitsize
 set_tests_properties(scripting.e2e.fitsize PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 jah_no_display(
     scripting.e2e.avatar_verbs
@@ -911,7 +898,7 @@ add_test(NAME scripting.e2e.glb_textures
 set_tests_properties(scripting.e2e.glb_textures PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # AVATAR_RIG_PERF_SPEC §3.5: the rig-cost read surface, in the real binary with
 # the ENGINE UP — `available` is half of what the suite checks, and a headless
@@ -944,7 +931,7 @@ add_test(NAME scripting.e2e.avatar_assets
 set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 400)
+    TIMEOUT 120)
 
 # --- multi-selection (EDITOR_MULTISELECT_SPEC §5) ---------------------------
 # Both are document-only, so they run --headless (offscreen platform, NULL
@@ -977,14 +964,14 @@ add_test(NAME scripting.e2e.refusals
 set_tests_properties(scripting.e2e.refusals PROPERTIES
     ENVIRONMENT "HOME=${_ref_home};JAHSHAKA_DATA_ROOT=${_ref_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 120)
 jah_no_display(scripting.e2e.refusals)
 
 # SCENE-SCALE CONVENTION (owner 2026-09-08), verb half: scene.bounds — the world
 # AABB of a scene's geometry — and editor.camera's lens, which stopped requiring
 # a rendering engine in the same lane (the saved fov is document state; gating
 # it on a GPU is why the samples' 70 and 75 degree lenses went unnoticed for a
-# week). samples.scale measures the shipped archives THROUGH these two; this
+# week). samples.cleanstart measures the shipped archives THROUGH these two; this
 # gates them against primitives of known size. Document verbs only -> --headless.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_bounds)
 file(MAKE_DIRECTORY ${_home}/run)
@@ -994,7 +981,7 @@ add_test(NAME scripting.e2e.scene_bounds
 set_tests_properties(scripting.e2e.scene_bounds PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # scripting.e2e.ogre_samples — SPECS/OGRE_SAMPLES_TAB_SPEC.md §6, the API-first
 # half of the Ogre-samples tab: app.ogreSamples() (the curated inventory the
@@ -1037,3 +1024,15 @@ set_tests_properties(scripting.e2e.detail_layers PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 240)
+
+# ---------------------------------------------------------------------------
+# DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
+# claims — in its own comment, or by running --headless, or by building nothing
+# but a document — that it needs no X server. The claim was never enforced, so
+# it drifted: a suite that quietly opened a display still passed on a developer
+# box and would have failed the first CI runner without one, and every
+# unnecessary X connection is one more thing four parallel jobs contend over.
+# jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
+# the claim into a gate. Verified 2026-09-09: each of these passes displayless
+# with the same assertion count it has with a display.
+jah_no_display(scripting.e2e.animation_assets scripting.e2e.animation_assets_import scripting.e2e.avatar_assets scripting.e2e.glb_textures scripting.e2e.memory scripting.e2e.scene_bounds scripting.engine)

@@ -5,9 +5,11 @@
 # whole test is sequential Engine create/destroy in one process, which only
 # works because of ogre-patch 0002 (see test_engine_recreate).
 #
-# TIMEOUT is generous: every one of the corruption cases seeds a fresh cache
-# with a real cold engine cycle first, and there are three attacks across every
-# file in the directory.
+# TIMEOUT is 6x the measured run with a 60 s floor, like every other row since
+# TEST_GATE_AUDIT.md §3: the corruption cases restore a byte snapshot of the
+# seeded cache before each attack instead of re-seeding with another engine
+# cycle, which took the plain run from 36 s to ~25 s and the sanitised twin
+# (which additionally runs --corruption-only) from 572 s to ~215 s.
 add_executable(test_shader_cache test_shader_cache.cpp)
 set_target_properties(test_shader_cache PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
@@ -20,7 +22,7 @@ target_link_libraries(test_shader_cache PRIVATE JahshakaEngine)
 add_dependencies(test_shader_cache JahshakaEngineMedia)
 add_test(NAME shadercache.container COMMAND test_shader_cache
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadercache.container PROPERTIES TIMEOUT 900 LABELS "shadercache")
+set_tests_properties(shadercache.container PROPERTIES TIMEOUT 180 LABELS "shadercache")
 
 if(JAHSHAKA_ASAN)
     # The sanitised twin. "A corrupt file did not crash us" is not a claim you
@@ -40,15 +42,20 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_shader_cache_asan PRIVATE -fsanitize=address)
     target_link_libraries(test_shader_cache_asan PRIVATE JahshakaEngineAsan)
     add_dependencies(test_shader_cache_asan JahshakaEngineMedia)
-    add_test(NAME shadercache.container_asan COMMAND test_shader_cache_asan
+    add_test(NAME shadercache.container_asan COMMAND test_shader_cache_asan --corruption-only
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/asan")
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/asan")
     # LeakSanitizer off for the same reason tests/engine turns it off: the only
     # leaks it finds are inside libdbus-1, reached from the Vulkan loader's
     # device-select layer. Use-after-free / overflow detection is the point.
+    # LABEL `shadercache-attack`, NOT `shadercache` (TEST_GATE_AUDIT.md §5
+    # step 7). The merge tier excludes this label; it used to exclude
+    # `shadercache`, which took shadercache.app, .warmup and .warmup_pass — 35 s
+    # of real product contract — down with the 572 s twin. This row is the only
+    # one that costs minutes, so it is the only one that carries the label.
     set_tests_properties(shadercache.container_asan PROPERTIES
         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
-        TIMEOUT 1800 LABELS "shadercache")
+        TIMEOUT 1500 LABELS "shadercache;shadercache-attack")
 endif()
 
 # The application-level contract: the verbs, --clear-shader-cache, and the
@@ -82,7 +89,7 @@ target_link_libraries(test_warm_up PRIVATE JahshakaEngine)
 add_dependencies(test_warm_up JahshakaEngineMedia)
 add_test(NAME shadercache.warmup COMMAND test_warm_up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 600 LABELS "shadercache")
+set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 120 LABELS "shadercache")
 
 # THE SAME SUITE, THE OTHER ROUTE (SHADER_CACHE_AUDIT F2). ogre-patch 0016 makes
 # Ogre's CompositorPassWarmUp usable at all — without it the very first
@@ -98,4 +105,4 @@ add_test(NAME shadercache.warmup_pass COMMAND test_warm_up
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 set_tests_properties(shadercache.warmup_pass PROPERTIES
     ENVIRONMENT "JAHSHAKA_WARMUP_PASS=1"
-    TIMEOUT 600 LABELS "shadercache")
+    TIMEOUT 120 LABELS "shadercache")

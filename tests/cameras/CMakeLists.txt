@@ -87,7 +87,7 @@ add_dependencies(test_camera_play_routing JahshakaEngineMedia)
 add_test(NAME cameras.play_routing COMMAND test_camera_play_routing
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.play_routing PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "mirror")
+    TIMEOUT 120 LABELS "mirror")
 
 # ---- cameras.body ---------------------------------------------------------
 # The camera BODY + FRUSTUM wires (phase 2b) and the PiP inset (phase 2c), in
@@ -112,7 +112,7 @@ add_dependencies(test_camera_body JahshakaEngineMedia)
 add_test(NAME cameras.body COMMAND test_camera_body
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.body PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "mirror")
+    TIMEOUT 120 LABELS "mirror")
 
 # ---- cameras.pip ----------------------------------------------------------
 # THE PiP TONEMAP (CAMERAS_SPEC §7.2 Route C, POST_CHAIN_SPEC §14's fourth
@@ -140,7 +140,7 @@ add_dependencies(test_camera_pip JahshakaEngineMedia)
 add_test(NAME cameras.pip COMMAND test_camera_pip
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.pip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "mirror")
+    TIMEOUT 120 LABELS "mirror")
 
 # ---- cameras.exposure -----------------------------------------------------
 # CAMERA_LENS_SPEC §4/§5 (P3 + P4): the per-VIEW post-chain globals listener and

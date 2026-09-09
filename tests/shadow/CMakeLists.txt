@@ -44,4 +44,4 @@ target_link_libraries(test_shadow_maps PRIVATE JahshakaEngine)
 add_dependencies(test_shadow_maps JahshakaEngineMedia)
 add_test(NAME lights.shadows COMMAND test_shadow_maps
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(lights.shadows PROPERTIES TIMEOUT 900 LABELS "engine")
+set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")

@@ -142,6 +142,37 @@ endfunction()
 # on this box, where a display is always reachable and the claim would otherwise
 # be untested. Apply it to every document/headless suite; never to a suite that
 # renders (they need a display, honestly and permanently).
+# THE TIMEOUT POLICY (TEST_GATE_AUDIT.md §3, applied across tests/ 2026-09-09).
+#
+# Every row's TIMEOUT is 6x its measured seconds with a floor, and nothing else.
+# It used to be whatever number felt safe when the row was written: 25 suites
+# sat between 38x and 173x of their measured time and a hundred more above that,
+# with 600 s and 900 s ceilings on suites that take one second. That is not
+# safety, it is a hang costing ten minutes of a gate the owner wants to finish
+# in ten.
+#
+# THE FLOOR IS 120 s, NOT THE AUDIT'S 60. Contention on this box is measured in
+# multiples, not percentages: samples.cleanstart.Matcaps runs 18.7 s solo and
+# 36.5 s at -j2, CLAUDE.md's gate facts record threading.newproject_stall at
+# 1.8x headroom under four live Vulkan lanes, and most of these rows are three
+# to seven seconds of which four are an engine boot. A 60 s floor on a five
+# second boot-bound suite is twelve-fold headroom that one bad afternoon eats;
+# 120 keeps the whole point of the change (a hang costs two minutes instead of
+# ten) with margin nobody has to argue about.
+#
+# The CONTENTION CLASS — CLAUDE.md's solo-retry list — gets 300 s instead:
+# open.responsive, archive.responsive, app.engine_selftest_validation,
+# threading.{newproject_stall,mode,mode_serial}, scripting.e2e.{player_verbs,
+# space_switch,sun_light}, gi.budget, app.watchdog_stall, claude.chat,
+# ui.media_lazy, shadergraph.bake_output and the perf.* suites.
+#
+# DOCUMENTED EXCEPTIONS, each with its reason at its own registration:
+# cameras.e2e (900, it times out under GI-rebuild contention starving the
+# mode-2 compile pool) and app.input_keys (600, one long chain of synthesised
+# keys with fixed sleeps between them).
+#
+# A new row takes 6x its own measured seconds, or the floor, whichever is more.
+
 function(jah_no_display)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION

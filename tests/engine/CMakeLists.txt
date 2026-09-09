@@ -35,7 +35,11 @@ function(jahshaka_engine_test target)
     add_test(NAME ${target} COMMAND ${target}
              # The backend writes its log to the working directory.
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(${target} PROPERTIES TIMEOUT 600)
+    # 6x measured with a 120 s floor, like every other row since
+    # TEST_GATE_AUDIT.md §3: test_engine measures 11.5 s and its sanitised twin
+    # 20 s, so 600 was a fifty-fold ceiling and a hang cost ten minutes of a
+    # gate the owner wants to finish in ten.
+    set_tests_properties(${target} PROPERTIES TIMEOUT 120)
 endfunction()
 
 jahshaka_engine_test(test_engine)
@@ -72,7 +76,7 @@ target_compile_definitions(test_engine_recreate PRIVATE
 target_link_libraries(test_engine_recreate PRIVATE JahshakaEngine)
 add_dependencies(test_engine_recreate JahshakaEngineMedia)
 add_test(NAME test_engine_recreate COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 600)
+set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 120)
 
 # Decals (DECALS_SPEC.md): pixel-asserted projected textures, and the permanent
 # home of the phase-0 spike's UV / -Y / pool findings.
@@ -86,7 +90,7 @@ target_compile_definitions(test_decals PRIVATE
 target_link_libraries(test_decals PRIVATE JahshakaEngine)
 add_dependencies(test_decals JahshakaEngineMedia)
 add_test(NAME decals.engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(decals.engine PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(decals.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # The ON-SCREEN (swapchain) path — Linux/X11 only, and the only suite in the tree
 # that binds a View to a native window. It never MAPS that window, so it is safe
@@ -105,7 +109,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_dependencies(test_engine_window JahshakaEngineMedia)
     add_test(NAME engine.window COMMAND test_engine_window
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.window PROPERTIES TIMEOUT 600 LABELS "engine")
+    set_tests_properties(engine.window PROPERTIES TIMEOUT 120 LABELS "engine")
 endif()
 
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)

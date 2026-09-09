@@ -1,7 +1,7 @@
 #pragma once
 // Measuring what a scene actually OCCUPIES, in world units (SAMPLE_SCALE lane,
 // 2026-09-09). One implementation, two callers: the `scene.bounds` verb and the
-// samples.scale suite that reads it.
+// samples.cleanstart suites that read it.
 //
 // WHY NOT gibounds::fit. That one unions bounding SPHERES on purpose — a pinned
 // GI volume that clipped its own subject is the worse failure, so it is

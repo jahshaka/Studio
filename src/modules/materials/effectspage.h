@@ -141,7 +141,7 @@ public:
 	/// The node palette is a QTabWidget of icon lists along the bottom of this
 	/// page, and dragging a tile onto the canvas is the ONE graph edit no verb
 	/// can make (the graph.* mutation verbs work on a script-local NodeGraph,
-	/// never the page's), so app.pacing_undo has to perform the real gesture.
+	/// never the page's), so app.input_keys has to perform the real gesture.
 	/// It used to aim at a per-mille point measured from one window size; when
 	/// the suite became hermetic the window opened taller and that point landed
 	/// on the tab bar. This answers the question properly: select the tab that

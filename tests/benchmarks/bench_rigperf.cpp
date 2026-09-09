@@ -157,18 +157,27 @@ static void recordCounter(const char *id, double v)
 
 int main(int argc, char **argv)
 {
-    bool assertMode = false, quick = false, noShare = false;
+    // --smoke: the STRUCTURAL equalities without the timing verdict
+    // (TEST_GATE_AUDIT.md §3). This bench is only a second, but it is
+    // RUN_SERIAL and labelled `benchmark`, so the merge gate has never run it
+    // at all — and the three counts it asserts (one SkeletonInstance per
+    // character, one setClipStates per character per frame, streamed bones ==
+    // characters x piece-local bones) are structural facts that hold under any
+    // load. `--smoke` is what the merge gate runs; `--assert` keeps the
+    // dispersion bound and stays nightly.
+    bool assertMode = false, quick = false, noShare = false, smoke = false;
     int characters = 4;
     std::string recordPath, note;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--assert") assertMode = true;
         else if (a == "--quick") quick = true;
+        else if (a == "--smoke") { smoke = true; quick = true; assertMode = true; }
         else if (a == "--record" && i + 1 < argc) recordPath = argv[++i];
         else if (a == "--characters" && i + 1 < argc) characters = std::atoi(argv[++i]);
         else if (a == "--no-share") noShare = true;
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
-        else { std::printf("bench_rigperf [--assert] [--record <file>] [--characters N] "
+        else { std::printf("bench_rigperf [--assert] [--smoke] [--record <file>] [--characters N] "
                            "[--note <text>] [--quick]\n"); return 2; }
     }
     if (characters < 1) characters = 1;
@@ -293,7 +302,9 @@ int main(int argc, char **argv)
 
     // ---- the gate --------------------------------------------------------
     if (assertMode) {
-        CHECK(computeStats(tickMs).rcv < 0.35, "tick measurement is usable (rcv < 0.35)");
+        // DISPERSION IS A QUIET-BOX MEASUREMENT — see --smoke above.
+        if (!smoke)
+            CHECK(computeStats(tickMs).rcv < 0.35, "tick measurement is usable (rcv < 0.35)");
         CHECK(pushesPerFrame > 0.5, "the scene really is pushing clips every frame");
         if (kStructuralGateArmed && !noShare) {
             CHECK(rs.instances == size_t(characters),

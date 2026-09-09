@@ -28,7 +28,7 @@ jahshaka_ssr_test(test_ssr)
 target_link_libraries(test_ssr PRIVATE JahshakaEngine)
 add_test(NAME ssr.engine COMMAND test_ssr
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ssr.engine PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 
 if(JAHSHAKA_ASAN)
     jahshaka_ssr_test(test_ssr_asan)
@@ -39,6 +39,6 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
-    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 900 LABELS "engine"
+    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endif()

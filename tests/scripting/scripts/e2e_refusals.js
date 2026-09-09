@@ -7,7 +7,7 @@
 // caller's whole run over a question it deliberately asked. The reason is not
 // lost: app.lastError() carries it.
 //
-// Three verbs were wrong (and app.multiselect_keys had to route around the
+// Three verbs were wrong (and app.input_keys had to route around the
 // first of them): node.info() raised for a node that was gone,
 // editor.selection() answered `undefined` where it documents `null`, and
 // editor.copy() raised on an empty selection although its own doc says copying

@@ -28,7 +28,7 @@ jahshaka_piece_test(test_piece_spike test_piece_spike.cpp)
 add_test(NAME pieces.spike
          COMMAND test_piece_spike "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(pieces.spike PROPERTIES TIMEOUT 600 LABELS "pieces")
+set_tests_properties(pieces.spike PROPERTIES TIMEOUT 120 LABELS "pieces")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pieces")
 
 # shadergraph.emitter_parity — THE DIFFERENTIAL ORACLE. Needs BOTH halves: the
@@ -74,7 +74,7 @@ add_dependencies(test_emitter_parity JahshakaEngineMedia)
 add_test(NAME shadergraph.emitter_parity
          COMMAND test_emitter_parity "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadergraph.emitter_parity PROPERTIES TIMEOUT 900 LABELS "pieces")
+set_tests_properties(shadergraph.emitter_parity PROPERTIES TIMEOUT 120 LABELS "pieces")
 
 # shadergraph.emitter_pieces — naming, dedup, the piece-collision allow-list,
 # the fallback reasons and the baker hand-off. Graph slice only: no engine, no
@@ -113,7 +113,7 @@ target_link_libraries(test_emitter_pieces PRIVATE IrisGL Qt6::Widgets Qt6::Sql Q
 add_test(NAME shadergraph.emitter_pieces COMMAND test_emitter_pieces
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.emitter_pieces PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "pieces")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "pieces")
 
 # pieces.mirror — the document -> mirror -> renderer hop for a graph material
 # that carries a generated piece. Same source slice as tests/materialpreview
@@ -162,4 +162,16 @@ add_dependencies(test_piece_mirror JahshakaEngineMedia)
 add_test(NAME pieces.mirror COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(pieces.mirror PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "pieces")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "pieces")
+
+# ---------------------------------------------------------------------------
+# DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
+# claims — in its own comment, or by running --headless, or by building nothing
+# but a document — that it needs no X server. The claim was never enforced, so
+# it drifted: a suite that quietly opened a display still passed on a developer
+# box and would have failed the first CI runner without one, and every
+# unnecessary X connection is one more thing four parallel jobs contend over.
+# jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
+# the claim into a gate. Verified 2026-09-09: each of these passes displayless
+# with the same assertion count it has with a display.
+jah_no_display(shadergraph.emitter_pieces)

@@ -141,6 +141,13 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
     }
 
     McpServer *mcp = window.mcp();
+    // THE PORT, ON ITS OWN LINE AND MACHINE-READABLE (TEST_GATE_AUDIT.md §4.1).
+    // `--mcp-port=0` binds an EPHEMERAL port, which is the only way several
+    // driver suites can boot the app at once — two of them hard-coded 8751 and
+    // were kept apart by RUN_SERIAL alone, which is what made -j4 unsafe. A
+    // caller that asked for 0 has to be told what it got, and parsing it out of
+    // the URL line is a URL parser every shell script would have to carry.
+    std::printf("MCP: port %u\n", unsigned(mcp->port()));
     std::printf("MCP: listening on http://127.0.0.1:%u/mcp\n", unsigned(mcp->port()));
     std::printf("MCP: token %s\n", qPrintable(mcp->token()));
     std::printf("MCP: connect with: %s\n", qPrintable(mcp->connectCommand()));

@@ -34,7 +34,7 @@ target_compile_definitions(test_jahlog PRIVATE
 target_link_libraries(test_jahlog PRIVATE IrisGL Qt6::Core Qt6::Gui)
 add_test(NAME log.core COMMAND test_jahlog WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(log.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 300 LABELS "log")
+    TIMEOUT 120 LABELS "log")
 # No display at all: the whole point of the services.core shape.
 jah_no_display(log.core)
 
@@ -79,8 +79,9 @@ set_tests_properties(log.engine PROPERTIES
 # log.perf — the periodic performance sampler (SESSION_LOG_SPEC §10 phase 4
 # gate). TWO halves in one script: the LINE through --script, and the TIMER
 # under --mcp-port, because a QTimer only fires while an event loop is turning
-# and a --script run never turns one. Its own MCP port (mcp.e2e and
-# app.pacing_undo both take theirs and all three may run in one gate).
+# and a --script run never turns one. An EPHEMERAL MCP port (0): this suite and
+# the input-synthesis driver both used to name 8751, and only the other one's
+# RUN_SERIAL kept them from colliding (TEST_GATE_AUDIT.md §4.1).
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_LOGPERF_CURL curl)
     find_program(JAH_LOGPERF_JQ jq)
@@ -91,7 +92,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_perf.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                          "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_perf.js"
-                         8751
+                         0
                  WORKING_DIRECTORY ${_lp_home}/run)
         set_tests_properties(log.perf PROPERTIES
             ENVIRONMENT "HOME=${_lp_home};JAHSHAKA_DATA_ROOT=${_lp_home}/.local/share/Jahshaka"

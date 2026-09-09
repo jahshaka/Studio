@@ -22,6 +22,17 @@
 # $1 = the Jahshaka binary
 set -u
 
+# THE ONE SUITE THAT MUST NOT INHERIT JAHSHAKA_DATA_ROOT (lead law, 2026-09-10).
+# Arm 6 runs the binary with NO override at all and asserts that the settings
+# file is then where it has always been. Every agent launch, Xvfb rig and gate
+# wrapper on this box exports JAHSHAKA_DATA_ROOT for hygiene, so an INHERITED
+# one silently deletes that assertion — and the whole gate would have to be run
+# as `env -u JAHSHAKA_DATA_ROOT ctest` forever to avoid it. Scrubbed here, once,
+# so no caller has to know. Arms 2 and 5 set the variable per command, which is
+# unaffected by this; the registration carries the same scrub as a property so
+# the contract is visible where the test is declared.
+unset JAHSHAKA_DATA_ROOT
+
 BIN="$1"
 BINDIR="$(cd "$(dirname "$BIN")" && pwd)"
 SHARED_INI="$BINDIR/jahsettings.ini"

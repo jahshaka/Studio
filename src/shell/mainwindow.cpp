@@ -333,7 +333,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// DESKTOP. Under a window manager that is merely rude; under none (the Xvfb
 	// rig) nothing ever clamps it, so everything along the bottom edge — the
 	// Materials palette lives there — is off the screen and unreachable, which
-	// is what mis-aimed app.pacing_undo's palette drag.
+	// is what mis-aimed app.input_keys's palette drag.
 	//
 	// The .ui size stays the PREFERRED one: only the screen shrinks it.
 	if (!restoreGeometry(settings->getValue("geometry", "").toByteArray()))
@@ -3380,7 +3380,7 @@ void MainWindow::setupShortcuts()
     // A text field is safe: QLineEdit/QTextEdit accept the ShortcutOverride for
     // their standard editing keys, so a WindowShortcut never fires while one
     // has focus (the tree's inline rename editor is the case that matters, and
-    // app.multiselect_keys probes it on the rig).
+    // app.input_keys probes it on the rig).
     reg.add("edit.delete", "Delete Selection", "Editing", QKeySequence(Qt::Key_Delete), this,
             [this]() { deleteActiveSpace(); });
     reg.add("edit.duplicate", "Duplicate Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_D), this,

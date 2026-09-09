@@ -2,7 +2,7 @@
 //
 // The two reads the SCENE-SCALE CONVENTION is measured with (owner 2026-09-08:
 // "we need a default scene size and to respect it for all sample scenes").
-// samples.scale asserts the shipped archives through them; this file asserts
+// samples.cleanstart asserts the shipped archives through them; this file asserts
 // the VERBS themselves, against primitives whose size is known from the mesh
 // files rather than from a sample somebody may re-author:
 //

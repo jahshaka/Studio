@@ -22,7 +22,7 @@ target_link_libraries(test_light_falloff PRIVATE JahshakaEngine)
 add_dependencies(test_light_falloff JahshakaEngineMedia)
 add_test(NAME lights.falloff COMMAND test_light_falloff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(lights.falloff PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(lights.falloff PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # lights.masks is the RUNTIME half of build-ogre.sh's
 # OGRE_CONFIG_ENABLE_FINE_LIGHT_MASK_GRANULARITY guard: with the flag dropped
@@ -42,7 +42,7 @@ target_link_libraries(test_light_masks PRIVATE JahshakaEngine)
 add_dependencies(test_light_masks JahshakaEngineMedia)
 add_test(NAME lights.masks COMMAND test_light_masks
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(lights.masks PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(lights.masks PROPERTIES TIMEOUT 120 LABELS "engine")
 
 add_executable(test_light_hygiene test_light_hygiene.cpp)
 set_target_properties(test_light_hygiene PROPERTIES
@@ -58,7 +58,7 @@ target_link_libraries(test_light_hygiene PRIVATE JahshakaEngine)
 add_dependencies(test_light_hygiene JahshakaEngineMedia)
 add_test(NAME lights.hygiene COMMAND test_light_hygiene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(lights.hygiene PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(lights.hygiene PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # lights.icons — the 2026-09-08 icon fix: an editor helper billboard draws in
 # the overlay pass (after the post chain, no depth test) instead of being
@@ -77,4 +77,4 @@ target_link_libraries(test_light_icons PRIVATE JahshakaEngine)
 add_dependencies(test_light_icons JahshakaEngineMedia)
 add_test(NAME lights.icons COMMAND test_light_icons
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(lights.icons PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(lights.icons PROPERTIES TIMEOUT 120 LABELS "engine")
