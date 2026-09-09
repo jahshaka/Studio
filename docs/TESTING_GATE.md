@@ -18,9 +18,10 @@ carries the rules.
 Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
 its selection; the lead's merge audit reads that line.
 
-`-j4` is the ceiling on this box (RTX 4080 16 GB: ~3 GB of VRAM per Vulkan boot today, ~1.6
-after the probe-shadow fix; boots are CPU-bound too — expect ~1.6× over -j2, not 2×). Drop
-to `-j2` while another Vulkan instance is live (a sibling gate, the owner's app).
+`-j4` is the ceiling on this box (RTX 4080 16 GB: ~1.6 GB of VRAM per Vulkan boot since the
+probe-shadow merge of 2026-09-10, ~3 GB before; boots are CPU-bound too — expect ~1.6× over
+-j2, not 2×). One sibling gate at -j4 fits beside yours; drop to `-j2` only when two or more
+other Vulkan gates (or the owner's app plus one) are live.
 
 ## 2. Every gate, regardless of tier
 
