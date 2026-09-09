@@ -41,48 +41,13 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/assethelper.h"
+#include "services/rigsignature.h"
 
 namespace avatar
 {
 
 namespace {
 
-// Exporter placeholders that carry no information. Mixamo names EVERY clip
-// "mixamo.com"; the FBX SDK's default take names are the other three. A file
-// of N such clips would otherwise show as N identical rows (§0.8).
-//
-// "Motion" is the BVH case and it is not a heuristic: the format has no place
-// to record a clip name, so assimp's BVHLoader::CreateAnimation hard-codes
-// `anim->mName.Set("Motion")` for every .bvh file that will ever exist. Left
-// off this list, a mocap library loads as "Motion", "Motion 2", "Motion 3" —
-// with it, each clip shows as its own file's base name, which is the only
-// information the format actually carries.
-bool isJunkClipName(const QString &raw)
-{
-    static const QSet<QString> junk = {
-        QStringLiteral("mixamo.com"), QStringLiteral("take 001"),
-        QStringLiteral("default take"), QStringLiteral("unreal take"),
-        QStringLiteral("armature|mixamo.com|layer0"), QStringLiteral("animstack::take 001"),
-        QStringLiteral("motion"),
-    };
-    return raw.trimmed().isEmpty() || junk.contains(raw.trimmed().toLower());
-}
-
-// assimp's FBX importer preserves the exporter's pivots as extra nodes named
-// `<bone>_$AssimpFbx$_Rotation` / `_Translation` / `_Scaling`, and MOST of a
-// Mixamo clip's channels target those, not bones: 46 of Walking(1).fbx's 52.
-// A rig-match test that counted channels would therefore be measuring pivot
-// bookkeeping, so the match ratio is computed over the BONE channels only.
-bool isPivotChannel(const QString &name)
-{
-    return name.contains(QStringLiteral("$AssimpFbx$"));
-}
-
-// How much of a clip has to land on the loaded rig before it is worth playing.
-// A same-rig Mixamo clip scores 1.0 (verified: Ely + Walking/Running/Idle all
-// match 6 of 6 bone channels, and even their pivot channels match 48 of 52);
-// a foreign rig scores 0. Half is a wide gap to fall into.
-const double kRigMatchThreshold = 0.5;
 
 /// Vertical extent of the mesh AABBs under `n`, in WORLD space. Byte for byte
 /// the walk AvatarMovement::fitCapsuleToNode uses for its capsule height
@@ -172,8 +137,9 @@ HeightNormalization normalizeCharacterHeight(const iris::SceneNodePtr &node, flo
 
 QString AvatarPreviewModel::displayNameFor(const QString &rawName, const QString &sourceBaseName)
 {
-    if (!isJunkClipName(rawName)) return rawName;
-    return sourceBaseName.isEmpty() ? QStringLiteral("Clip") : sourceBaseName;
+    // ONE implementation (rigsignature.h): the module's Load Animation… route
+    // and the scene's avatar.loadClip must name the same clip the same way.
+    return rig::displayNameFor(rawName, sourceBaseName);
 }
 
 AvatarPreviewModel::AvatarPreviewModel()
@@ -672,51 +638,34 @@ bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, Clip
     // The clip -> bone join is by SCENE-NODE NAME (SceneNode::updateAnimation
     // matches `anim->boneAnimations.contains(node->name)`), so a clip from
     // another rig loads, plays, and moves absolutely nothing. Score every clip
-    // against the loaded rig's node names and refuse the file when none lands.
-    struct Scored { QString raw; iris::SkeletalAnimationPtr skel; ClipLoadReport report; double ratio = 0.0; };
-    QVector<Scored> scored;
-    for (auto it = anims.constBegin(); it != anims.constEnd(); ++it) {
-        Scored s;
-        s.raw = it.key();
-        s.skel = it.value();
-        if (!s.skel) continue;
-        for (auto ch = s.skel->boneAnimations.constBegin(); ch != s.skel->boneAnimations.constEnd(); ++ch) {
-            ++s.report.channels;
-            if (isPivotChannel(ch.key())) continue;
-            ++s.report.boneChannels;
-            if (mNodeNames.contains(ch.key())) ++s.report.matched;
-            else if (s.report.unmatched.size() < 5) s.report.unmatched.append(ch.key());
-        }
-        s.ratio = s.report.boneChannels > 0
-                      ? double(s.report.matched) / double(s.report.boneChannels)
-                      : 0.0;
-        scored.append(s);
-    }
-    if (scored.isEmpty()) return fail(QStringLiteral("%1 contains no animation").arg(info.fileName()));
+    // against the loaded rig's node names and refuse the file when none lands
+    // — through the ONE matcher (rigsignature.h), so the module and the scene
+    // verbs give the same file the same answer, word for word.
+    const QVector<rig::ClipScore> scored = rig::scoreClips(anims, mNodeNames);
+    const int best = rig::bestClip(scored);
+    if (best < 0) return fail(QStringLiteral("%1 contains no animation").arg(info.fileName()));
 
-    int best = 0;
-    for (int i = 1; i < scored.size(); ++i)
-        if (scored[i].ratio > scored[best].ratio) best = i;
-    if (scored[best].ratio < kRigMatchThreshold) {
-        if (report) *report = scored[best].report;
-        const auto &r = scored[best].report;
-        const QString names = r.unmatched.isEmpty() ? QStringLiteral("(pivot channels only)")
-                                                    : r.unmatched.join(QStringLiteral(", "));
-        return fail(QStringLiteral("%1 is animating a different rig — %2 of its %3 bones exist "
-                                   "in '%4' (no match for %5)")
-                        .arg(info.fileName())
-                        .arg(r.matched)
-                        .arg(r.boneChannels)
-                        .arg(mName, names));
+    auto toReport = [](const rig::ClipScore &s) {
+        ClipLoadReport r;
+        r.channels = s.channels;
+        r.boneChannels = s.boneChannels;
+        r.matched = s.matched;
+        r.unmatched = s.unmatched;
+        return r;
+    };
+
+    if (scored[best].ratio < rig::kRigMatchThreshold) {
+        if (report) *report = toReport(scored[best]);
+        return fail(rig::mismatchMessage(scored[best], info.fileName(), mName));
     }
 
     QSet<QString> used;
     for (const auto &clip : mClips) used.insert(clip.display);
 
     const QString sourceBase = info.completeBaseName();
-    ClipLoadReport out = scored[best].report;
+    ClipLoadReport out = toReport(scored[best]);
     for (const auto &s : scored) {
-        if (s.ratio < kRigMatchThreshold) continue;     // a foreign clip in a mixed file
+        if (s.ratio < rig::kRigMatchThreshold) continue;   // a foreign clip in a mixed file
         Clip clip;
         clip.raw = s.raw;
         clip.source = info.absoluteFilePath();

@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QSet>
 #include <QTemporaryDir>
+#include <functional>
 #include <cmath>
 #include <cstdio>
 
@@ -26,12 +27,14 @@
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/animation/clipextractor.h"
+#include "irisgl/import/importflags.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "modules/avatar/avatarpreviewmodel.h"
+#include "services/rigsignature.h"
 
 #include "../support/documentgraph.h"
 static int failures = 0;
@@ -377,6 +380,59 @@ int main(int argc, char **argv)
         CHECK(mismatchError.contains("hips"), "X5: ... and the message names the unmatched bone");
         CHECK(cross.clips().size() == before, "X5: ... and nothing was added");
         CHECK(mismatch.matched == 0 && mismatch.boneChannels == 1, "X5: ... 0 of 1 bones matched");
+        // T2 (AVATAR_ASSET_SPEC §9) — ONE MATCHER. The module used to own its
+        // own copy of the pivot rule, the 0.5 threshold and this sentence, and
+        // `avatar.loadClip` owned a second one; a user who tried the same file
+        // in the page and in the scene got two different stories. Both routes
+        // now call rigsignature.h, so the refusal is reproducible from the
+        // shared code alone — character for character, count for count.
+        {
+            QSet<QString> rigNames;
+            std::function<void(const iris::SceneNodePtr &)> collect =
+                [&](const iris::SceneNodePtr &n) {
+                    if (!n) return;
+                    rigNames.insert(n->getName());
+                    for (int i = 0; i < n->childCount(); ++i)
+                        if (auto *c = n->childAt(i)) collect(c->sharedFromThis());
+                };
+            collect(cross.fragment());
+
+            Assimp::Importer importer;
+            const aiScene *scene = importer.ReadFile(kMismatchAnim.toStdString(),
+                                                     iris::ImportFlags::ClipNamesOnly);
+            CHECK(scene != nullptr, "T2: the mismatch fixture parses");
+            const auto anims = iris::Mesh::extractAnimations(scene, kMismatchAnim);
+            const QVector<rig::ClipScore> scored = rig::scoreClips(anims, rigNames);
+            const int best = rig::bestClip(scored);
+            CHECK(best >= 0, "T2: the shared matcher scored the same file");
+            CHECK(scored[best].matched == mismatch.matched
+                      && scored[best].boneChannels == mismatch.boneChannels,
+                  "T2: the shared matcher's ratio is the module's ratio");
+            CHECK(scored[best].ratio < rig::kRigMatchThreshold,
+                  "T2: ... and it is below the ONE threshold");
+            CHECK(mismatchError
+                      == rig::mismatchMessage(scored[best], QFileInfo(kMismatchAnim).fileName(),
+                                              cross.name()),
+                  "T2: the module's refusal IS rig::mismatchMessage, word for word");
+            CHECK(scored[best].unmatched.contains("hips"),
+                  "T2: ... and the unmatched bone names come from the shared scorer");
+        }
+
+        // T2b — the shared naming rule. `displayNameFor` is what makes
+        // "Walking.fbx" bind the walk role, and both routes call it.
+        CHECK(rig::isJunkClipName("mixamo.com") && rig::isJunkClipName("Take 001")
+                  && rig::isJunkClipName("Motion") && !rig::isJunkClipName("Idle"),
+              "T2b: the junk-name set (Mixamo, the FBX SDK takes, assimp's BVH 'Motion')");
+        CHECK(rig::displayNameFor("mixamo.com", "Walking") == "Walking"
+                  && rig::displayNameFor("Idle", "Walking") == "Idle"
+                  && rig::displayNameFor("mixamo.com", QString()) == "Clip",
+              "T2b: a junk name becomes the file's base name, a real one survives");
+        CHECK(rig::isPivotChannel("mixamorig:Hips_$AssimpFbx$_Rotation")
+                  && !rig::isPivotChannel("mixamorig:Hips"),
+              "T2b: the assimp FBX pivot rule");
+        CHECK(avatar::AvatarPreviewModel::displayNameFor("mixamo.com", "Walking")
+                  == rig::displayNameFor("mixamo.com", "Walking"),
+              "T2b: the module's display-name entry point forwards to the one rule");
 
         // --- X6: the error cases a script can hit ---
         avatar::AvatarPreviewModel empty;

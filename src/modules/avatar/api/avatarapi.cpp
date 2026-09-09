@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "services/assetservice.h"
 #include "services/assetstorepaths.h"
 #include "services/projectassets.h"
+#include "services/rigsignature.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
@@ -1051,12 +1052,6 @@ iris::SceneNodePtr clipHostFor(const iris::SceneNodePtr &character)
     return host ? host : character;
 }
 
-/// assimp's FBX pivot nodes, which most of a Mixamo clip's channels address.
-bool isPivotChannelName(const QString &name)
-{
-    return name.contains(QStringLiteral("$AssimpFbx$"));
-}
-
 }   // namespace
 
 bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &character,
@@ -1096,46 +1091,18 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     QSet<QString> rigNames;
     collectNodeNames(character, rigNames);
 
-    struct Scored { QString raw; iris::SkeletalAnimationPtr skel;
-                    int channels = 0, boneChannels = 0, matched = 0;
-                    QStringList unmatched; double ratio = 0.0; };
-    QVector<Scored> scored;
-    for (auto it = anims.constBegin(); it != anims.constEnd(); ++it) {
-        if (it.value().isNull()) continue;
-        Scored s;
-        s.raw = it.key();
-        s.skel = it.value();
-        for (auto ch = s.skel->boneAnimations.constBegin();
-             ch != s.skel->boneAnimations.constEnd(); ++ch) {
-            ++s.channels;
-            if (isPivotChannelName(ch.key())) continue;
-            ++s.boneChannels;
-            if (rigNames.contains(ch.key())) ++s.matched;
-            else if (s.unmatched.size() < 5) s.unmatched.append(ch.key());
-        }
-        s.ratio = s.boneChannels > 0 ? double(s.matched) / double(s.boneChannels) : 0.0;
-        scored.append(s);
-    }
-    if (scored.isEmpty()) {
+    // ONE matcher (rigsignature.h): the module's Load Animation… and this verb
+    // must give the same file the same answer, down to the wording of the
+    // refusal — two copies of a refusal tell the user two different stories.
+    const QVector<rig::ClipScore> scored = rig::scoreClips(anims, rigNames);
+    const int best = rig::bestClip(scored);
+    if (best < 0) {
         record(QStringLiteral("%1: '%2' contains no animation").arg(v, shown));
         return false;
     }
-
-    // Half is the threshold the preview uses and for the same reason: a
-    // same-rig Mixamo clip scores 1.0 and a foreign one scores 0.
-    const double kThreshold = 0.5;
-    int best = 0;
-    for (int i = 1; i < scored.size(); ++i)
-        if (scored[i].ratio > scored[best].ratio) best = i;
-    if (scored[best].ratio < kThreshold) {
-        const auto &r = scored[best];
-        const QString names = r.unmatched.isEmpty() ? QStringLiteral("(pivot channels only)")
-                                                    : r.unmatched.join(QStringLiteral(", "));
-        record(QStringLiteral("%1: '%2' is animating a different rig — %3 of its %4 bones exist "
-                              "in '%5' (no match for %6)")
-                   .arg(v, shown)
-                   .arg(r.matched).arg(r.boneChannels)
-                   .arg(character->getName(), names));
+    if (scored[best].ratio < rig::kRigMatchThreshold) {
+        record(QStringLiteral("%1: %2")
+                   .arg(v, rig::mismatchMessage(scored[best], shown, character->getName())));
         return false;
     }
 
@@ -1147,15 +1114,15 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     QVariantList addedNames;
     QList<iris::AnimationPtr> added;
     for (const auto &s : scored) {
-        if (s.ratio < kThreshold) continue;    // a foreign clip in a mixed file
+        if (s.ratio < rig::kRigMatchThreshold) continue;    // a foreign clip in a mixed file
         auto clip = iris::Animation::createFromSkeletalAnimation(s.skel);
         if (clip.isNull()) continue;
         // The same display-name rule the preview uses: every Mixamo clip is
         // literally called "mixamo.com", so a junk name becomes the FILE's base
         // name — which is what makes "Walking.fbx" bind the walk role.
         const QString base = nameOverride.isEmpty()
-                                 ? avatar::AvatarPreviewModel::displayNameFor(
-                                       s.raw, QFileInfo(shown).completeBaseName())
+                                 ? rig::displayNameFor(s.raw,
+                                                       QFileInfo(shown).completeBaseName())
                                  : nameOverride;
         QString unique = base;
         for (int suffix = 2; used.contains(unique); ++suffix)
