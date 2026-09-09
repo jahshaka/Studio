@@ -113,9 +113,17 @@ assert(node.setStatic(stat, false) === true, "node.setStatic(false) switches bac
 assert(node.isStatic(stat) === false, "...and it reads back as dynamic");
 assert(node.remove(stat), "node.remove(static probe)");
 
-// ---- error surface: engine guard errors are catchable, bad ids throw ----
+// ---- error surface: guard errors are catchable; a bad id READS null, WRITES throw ----
+// The split landed with the refusal contract (hygiene lane, 2026-09-09):
+// asking ABOUT a node that is not there is a question with an answer (null,
+// with the reason in app.lastError), while asking to CHANGE one is an error.
+// A read that threw aborted whole scripts over a lookup they had asked for.
+assert(node.info("no-such-guid") === null, "a bad node id READS as null, not an exception");
+assert(String(app.lastError()).indexOf("no-such-guid") >= 0,
+       "and the refusal names the id: " + app.lastError());
 thrown = false;
-try { node.info("no-such-guid"); } catch (e) { thrown = true; assert(("" + e).indexOf("no-such-guid") >= 0, "bad id error names the id"); }
-assert(thrown, "bad node id throws");
+try { node.setProperty("no-such-guid", "name", "x"); }
+catch (e) { thrown = true; assert(("" + e).indexOf("no-such-guid") >= 0, "bad id error names the id"); }
+assert(thrown, "a WRITE to a bad node id still throws");
 
 console.log("e2e_build_scene: ALL OK (" + verbCount + " verbs registered)");
