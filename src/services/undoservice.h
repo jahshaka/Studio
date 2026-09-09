@@ -72,12 +72,27 @@ public:
     void resetSavedCount() { mSavedCount = 0; }
     bool savedCountMatchesCurrent() const;
 
+    /// "What was LOADED is not what should be SAVED."
+    ///
+    /// The scene reader can heal a stored scene on the way in (a texture slot
+    /// naming the model a texture came in with instead of the texture — the
+    /// GLB texture-loss defect, io/scenereader.cpp). The document in memory is
+    /// then correct and the one on disk is not, with no undo command anywhere
+    /// to say so: the whole dirty story here is the undo stack, and a repaired
+    /// load pushes nothing. This flag is that missing signal — it makes the
+    /// project read dirty until the next save, so the close prompt offers to
+    /// write the corrected scene instead of discarding the repair every time.
+    /// Cleared by markSaved(), exactly like the saved count.
+    void markContentRepaired() { mContentRepaired = true; }
+    bool contentRepaired() const { return mContentRepaired; }
+
 private:
     QUndoStack *mStack = nullptr;
     StudioServices *mServices = nullptr;
     bool mScriptMacroOpen = false;
     quint64 mPushCount = 0;
     int  mSavedCount = 0;
+    bool mContentRepaired = false;
 };
 
 #endif // UNDOSERVICE_H

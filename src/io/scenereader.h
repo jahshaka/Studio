@@ -102,7 +102,20 @@ public:
     /// join(projectFolder, name) resolution is GONE.
     QString resolveAssetPath(const QString &guid);
 
+    /// One material texture slot's stored guid, healed if it names the model
+    /// the texture was imported inside instead of the texture (the GLB
+    /// texture-loss defect — scenereader.cpp has the story). Returns `stored`
+    /// unchanged when there is nothing to repair, and counts what it repairs.
+    QString repairTextureSlot(const QString &stored, const QString &slotName);
+
+    int repairedSlots = 0;
+
 public:
+    /// How many texture slots this reader had to heal on the way in. Non-zero
+    /// means the SAVED scene is wrong and the next save fixes it — which is
+    /// why the caller marks the project dirty (ProjectService::readProjectScene).
+    int repairedTextureSlots() const { return repairedSlots; }
+
     iris::ScenePtr readScene(const QString &projectPath,
                              const QByteArray &sceneBlob,
                              iris::PostProcessManagerPtr postMan,

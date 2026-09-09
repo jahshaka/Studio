@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include <QSharedPointer>
 #include "io/assetiobase.h"
+#include "services/assetcas.h"   // AssetCas::GuidPreference (the guid a path means)
 #include "io/sceneformat.h"
 #include <QDir>
 #include <QFile>
@@ -109,14 +110,22 @@ public:
 	static QJsonObject jsonVector4(iris::Vec4 vec);
 	static QJsonObject jsonQuaternion(iris::Quat q);
 
-    /// The asset guid behind a RESOLVED texture path, for the writers that
-    /// persist textures as guids (particle emitters, material texture
-    /// properties). Goes through the CAS oid first — since the store landed an
-    /// object's file name is its sha256, so the old match-by-display-name found
-    /// nothing and the reference was written as "" — then falls back to the
-    /// legacy by-name lookup for files that still live in a project folder.
-    /// Empty means "not a catalogued asset"; callers decide what to write then.
-    static QString assetGuidForTexturePath(const QString &path);
+    /// The asset guid behind a RESOLVED file path, for the writers that
+    /// persist references as guids (particle emitters, material texture
+    /// properties, skeletal-clip sources). Goes through the CAS oid first —
+    /// since the store landed an object's file name is its sha256, so the old
+    /// match-by-display-name found nothing and the reference was written as ""
+    /// — then falls back to the legacy by-name lookup for files that still
+    /// live in a project folder. Empty means "not a catalogued asset";
+    /// callers decide what to write then.
+    ///
+    /// `prefer` says what the reference MEANS, because one stored object can
+    /// back several assets: a texture map must ask for the Texture asset or it
+    /// gets the model the texture was imported inside (AssetCas::
+    /// GuidPreference — the GLB texture-loss defect, 2026-09-09).
+    static QString assetGuidForTexturePath(
+        const QString &path,
+        AssetCas::GuidPreference prefer = AssetCas::GuidPreference::Texture);
 
     static QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
 	static QString getLightNodeTypeName(iris::LightType lightType);

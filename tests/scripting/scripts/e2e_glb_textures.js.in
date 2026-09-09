@@ -1,0 +1,108 @@
+// scripting.e2e.glb_textures — the owner's "the glb imports still don't work,
+// they import without the textures" (2026-09-09), end to end.
+//
+// The maps were never lost at IMPORT; they were lost at SAVE. The writer stored
+// each texture map as the guid it recovered from the resolved store path, and
+// that lookup answered with the .glb OBJECT rather than the member Texture
+// (both assets are backed by the same stored object, both are pinned — see
+// AssetCas::guidForStorePath). The reader then resolved that guid back to the
+// model file, so on reopen baseColorMap pointed at a .glb and the material came
+// back bare.
+//
+// So the assertion that matters is not "import produced textures" — that always
+// passed — but "the SAME material still names the SAME image files after a
+// save, close and reopen". Document verbs only -> --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var fixture = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+
+var proj = project.create("GLB Textures " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+var placed = assets.importAndPlace(fixture, { position: { x: 0, y: 0, z: 0 } });
+assert(placed.nodeId && placed.nodeId.length > 10,
+       "assets.importAndPlace -> node " + placed.nodeId);
+
+// The mesh nodes under the placed root — the ones that carry materials.
+function meshNodesUnder(id) {
+    var all = scene.nodes();
+    var kept = {};
+    kept[id] = true;
+    var out = [];
+    for (var i = 0; i < all.length; ++i) {
+        if (kept[all[i].parent] || all[i].id === id) kept[all[i].id] = true;
+        if (kept[all[i].id] && all[i].type === "mesh") out.push(all[i]);
+    }
+    return out;
+}
+
+var meshes = meshNodesUnder(placed.nodeId);
+assert(meshes.length >= 1, "the placed model has mesh nodes: " + meshes.length);
+
+// Every texture slot the imported material filled, and with what.
+var MAPS = ["baseColorMap", "normalMap", "metallicMap", "roughnessMap", "emissiveMap"];
+function mapsOf(nodeId) {
+    var props = material.get(nodeId);
+    var out = {};
+    for (var i = 0; i < MAPS.length; ++i) {
+        var v = props[MAPS[i]];
+        if (v && ("" + v).length > 0) out[MAPS[i]] = "" + v;
+    }
+    return out;
+}
+
+var before = mapsOf(meshes[0].id);
+var slotNames = Object.keys(before);
+assert(slotNames.length >= 2,
+       "the imported material carries texture maps: " + JSON.stringify(before));
+
+// Right after import the maps are image files — never the model file. (This
+// half always passed; it is here so a regression can be told apart.)
+var everyImage = true, noneIsTheModel = true;
+for (var i = 0; i < slotNames.length; ++i) {
+    var p = before[slotNames[i]].toLowerCase();
+    everyImage = everyImage && (p.indexOf(".png") > 0 || p.indexOf(".jpg") > 0);
+    noneIsTheModel = noneIsTheModel && p.indexOf(".glb") < 0;
+}
+assert(everyImage, "after import every map is an image file");
+assert(noneIsTheModel, "after import no map is the .glb");
+
+// ---- save, close, REOPEN — where they used to disappear --------------------
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(proj) === true, "project.open (REOPEN)");
+
+var meshesAfter = meshNodesUnder(placed.nodeId);
+assert(meshesAfter.length === meshes.length,
+       "the same mesh nodes came back: " + meshesAfter.length);
+
+var after = mapsOf(meshesAfter[0].id);
+var afterNames = Object.keys(after);
+assert(afterNames.length === slotNames.length,
+       "THE SAME NUMBER OF MAPS SURVIVED: " + afterNames.length + " vs " + slotNames.length
+           + " -> " + JSON.stringify(after));
+
+// Compared by FILE NAME, not by the whole path: in the store a file's name IS
+// its sha256, so the base name is the content identity, while the path form a
+// resolver produces (canonical, or project-relative with ../) is not part of
+// the contract.
+function baseName(p) { var i = ("" + p).lastIndexOf("/"); return ("" + p).substr(i + 1).toLowerCase(); }
+
+var sameFiles = true, stillImages = true, stillNotTheModel = true;
+for (var j = 0; j < slotNames.length; ++j) {
+    var slot = slotNames[j];
+    var reopened = baseName(after[slot] || "");
+    sameFiles = sameFiles && reopened === baseName(before[slot]);
+    stillImages = stillImages && (reopened.indexOf(".png") > 0 || reopened.indexOf(".jpg") > 0);
+    stillNotTheModel = stillNotTheModel && reopened.indexOf(".glb") < 0;
+}
+assert(stillImages, "every reopened map is still an image file");
+assert(stillNotTheModel,
+       "NO reopened map resolves to the .glb (the defect, exactly): " + JSON.stringify(after));
+assert(sameFiles, "every map reopened as the very file it was saved with");
+
+console.log("scripting.e2e.glb_textures PASSED");
