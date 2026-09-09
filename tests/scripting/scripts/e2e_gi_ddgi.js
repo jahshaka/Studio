@@ -192,3 +192,37 @@ assert(Math.abs(gi.ddgiIntensity - 1.75) < 1e-4, "ddgiIntensity survives save/cl
 st = world.giStatus();
 assert(st.ifdBound === true, "the reopened scene binds its field again");
 console.log("gi.ddgi e2e complete");
+
+// ---- the raster field's SHADOWED workspace survives an atlas rebuild -------
+// Code review 2026-09-10 (probe-shadow lane): the raster IrradianceField owns
+// ONE workspace for its whole life, and at High with probe shadows it names
+// the probe shadow node. `dropGiForShadowRebuild` only knew the PCC arm, so a
+// Shadow Quality change with VCT + DDGI-raster and NO PCC deleted the node
+// definition under the field's live workspace: a use-after-free at the next
+// raster sweep or at teardown (~CompositorNode reads its definition). Three
+// atlas rebuilds, then GI off/on (the teardown), on exactly that shape.
+var rasterShadow = project.create("DDGI raster shadow rebuild " + Date.now());
+assert(rasterShadow.length > 10, "a fresh project for the raster-shadow rebuild");
+scene.addPrimitive("cube", { position: { x: 0, y: 0.5, z: 0 } });
+var rsLamp = scene.addLight("point", { position: { x: 1, y: 3, z: 2 } });
+assert(node.setProperty(rsLamp, "castShadow", true), "a shadow-casting lamp");
+assert(world.gi({ mode: "vct", quality: "high", ddgi: true, ddgiSource: "raster", probeShadows: true }),
+       "VCT + DDGI raster + shadowed captures, no PCC");
+editor.frame(30, 1 / 60);
+st = world.giStatus();
+assert(st.ifdBound === true && st.ifdSource === "raster", "the raster field is bound (" + st.ifdSource + ")");
+assert(st.pccBound === false, "no PCC arm in this shape (the gap was exactly here)");
+assert(st.probeShadows === true, "the raster captures are shadowed");
+var rsRes = [1024, 4096, 2048];
+for (var ri = 0; ri < rsRes.length; ri++) {
+    assert(world.setShadowResolution(rsRes[ri]) === rsRes[ri], "atlas rebuild to " + rsRes[ri]);
+    editor.frame(40, 1 / 60);   // the raster sweep runs on the rebuilt node
+    st = world.giStatus();
+    assert(st.ifdBound === true && st.probeShadows === true,
+           "field still bound and shadowed after the rebuild to " + rsRes[ri]);
+}
+assert(world.rayon({ enabled: false }).enabled === false, "GI off: the field's workspace is torn down");
+editor.frame(5, 1 / 60);
+assert(world.rayon({ enabled: true }).enabled === true, "GI on again");
+editor.frame(5, 1 / 60);
+console.log("raster-shadowed field survived three atlas rebuilds and a teardown");
