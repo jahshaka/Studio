@@ -11,8 +11,10 @@ For more information see the LICENSE file
 
 #include "services/clipboardservice.h"
 
+#include <QClipboard>
 #include <QDateTime>
 #include <QDir>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QSet>
 #include <QUndoStack>
@@ -60,6 +62,15 @@ ClipboardService::ClipboardService(Database *database, Project *proj,
         // test hosts) still gets a working clipboard — an in-process one.
         if (SystemClipboardBackend::available()) backend = new SystemClipboardBackend;
         else                                    backend = new MemoryClipboardBackend;
+    }
+    // WHEN THE CLIPBOARD CHANGES, AND ONLY THEN. Without this the cache could
+    // only ever avoid the re-PARSE: contents() still pulled the bytes across
+    // the X11 selection every time it was asked, which is a synchronous round
+    // trip to whichever process owns the selection — and the tree's context
+    // menu asks once just to decide whether to offer a Paste row.
+    if (QGuiApplication::instance()) {
+        if (QClipboard *clipboard = QGuiApplication::clipboard())
+            connect(clipboard, &QClipboard::dataChanged, this, [this]() { cacheValid = false; });
     }
 }
 
@@ -124,9 +135,18 @@ ClipboardCopyResult ClipboardService::publish(const Envelope &envelope, int item
 {
     ClipboardCopyResult result;
     const QByteArray payload = envelope.toText();
+    if (qint64(payload.size()) > clipboardformat::kMaxPayloadBytes) {
+        result.error = QStringLiteral("payload too large (%1 MB)")
+                           .arg(payload.size() / (1024.0 * 1024.0), 0, 'f', 1);
+        return result;
+    }
     backend->setPayload(payload);
     cachedText = payload;
     cachedEnvelope = envelope;
+    // Our own publish fires dataChanged (asynchronously on X11), so the flag is
+    // set AFTER the write and may be cleared again by that signal — which costs
+    // one re-read, never a wrong answer.
+    cacheValid = true;
     result.items = items;
     result.assets = envelope.assets.size();
     result.bytes = payload.size();
@@ -230,7 +250,9 @@ ClipboardCopyResult ClipboardService::copyAssets(const QStringList &guids)
 
 Envelope ClipboardService::contents() const
 {
+    if (cacheValid) return cachedEnvelope;              // no transfer at all
     const QByteArray payload = backend->payload();
+    cacheValid = true;
     if (payload.isEmpty()) {
         cachedText.clear();
         cachedEnvelope = Envelope();
@@ -258,6 +280,7 @@ bool ClipboardService::setText(const QByteArray &payload, QString *errorOut)
     backend->setPayload(payload);
     cachedText = payload;
     cachedEnvelope = envelope;
+    cacheValid = true;
     if (errorOut) errorOut->clear();
     return true;
 }

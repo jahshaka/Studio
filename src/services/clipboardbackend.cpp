@@ -27,6 +27,11 @@ void SystemClipboardBackend::setPayload(const QByteArray &payload)
     QClipboard *clipboard = available() ? QGuiApplication::clipboard() : nullptr;
     if (!clipboard) return;
     if (payload.isEmpty()) { clipboard->clear(); return; }
+    // The ceiling applies to what we PUBLISH too: a clipboard manager archives
+    // every text/plain it sees, and handing one tens of megabytes stalls it and
+    // syncs it to the user's phone. Refusing leaves the previous payload alone,
+    // which is the same contract an empty copy has.
+    if (qint64(payload.size()) > clipboardformat::kMaxPayloadBytes) return;
 
     // ONE QMimeData carrying the SAME bytes twice. Ownership passes to Qt.
     auto *mime = new QMimeData;
@@ -43,12 +48,17 @@ QByteArray SystemClipboardBackend::payload() const
     if (!mime) return QByteArray();
 
     const QString custom = QString::fromLatin1(clipboardformat::kMimeType());
-    if (mime->hasFormat(custom)) return mime->data(custom);
+    if (mime->hasFormat(custom)) {
+        const QByteArray data = mime->data(custom);
+        if (qint64(data.size()) > clipboardformat::kMaxPayloadBytes) return QByteArray();
+        return data;
+    }
     if (!mime->hasText()) return QByteArray();
 
     // text/plain: only if it IS one of ours. A clipboard holding a paragraph
     // of prose must cost a prefix test, never a JSON parse (§6.2).
     const QByteArray text = mime->text().toUtf8();
+    if (qint64(text.size()) > clipboardformat::kMaxPayloadBytes) return QByteArray();
     if (!clipboardformat::Envelope::looksLikeEnvelope(text)) return QByteArray();
     return text;
 }

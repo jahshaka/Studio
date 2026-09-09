@@ -188,8 +188,16 @@ private:
     UndoService *undo;
     ClipboardBackend *backend;
 
-    /// The LAST PAYLOAD WE SAW (D3 b): bytes plus their parse. The clipboard
-    /// is the truth; this only avoids re-parsing it.
+    /// The LAST PAYLOAD WE SAW (D3 b): bytes plus their parse. The clipboard is
+    /// the truth; this only avoids re-READING and re-parsing it.
+    ///
+    /// `cacheValid` is driven by QClipboard::dataChanged, and the read it saves
+    /// is not a memcpy: on X11 the selection OWNER serves the data, so every
+    /// `contents()` was a synchronous round trip to another process — once per
+    /// Ctrl+V, once per tree right-click (the menu asks whether it should offer
+    /// a Paste row), and once more for the paste itself. Nothing invalidates
+    /// while the clipboard has not changed.
+    mutable bool cacheValid = false;
     mutable QByteArray cachedText;
     mutable clipboardformat::Envelope cachedEnvelope;
 };

@@ -65,6 +65,21 @@ inline const char *kFormatId() { return "jahshaka.clipboard"; }
 /// The envelope version this build writes.
 constexpr int kVersion = 1;
 
+/// THE CEILING on a payload, in bytes. Not a policy about how much a user may
+/// copy — the inline budget (`clipboard/inlineLimitBytes`, 4 MB) is that — but
+/// a bound on what this process will PARSE or PUBLISH. A clipboard is a shared
+/// resource any application can fill: on X11 the selection owner serves the
+/// bytes, clipboard MANAGERS archive every `text/plain` they see (and sync them
+/// to phones), and a 500 MB text selection from another app must cost a size
+/// check here rather than a base64 decode of half a gigabyte.
+constexpr qint64 kMaxPayloadBytes = 64ll * 1024 * 1024;
+
+/// How much of a payload the cheap sniff looks at. Generous on purpose: the
+/// marker leads the payloads WE write, but a payload that went through a
+/// pretty-printer or any tool that re-sorted the keys puts `assets` first, and
+/// refusing those would break the one property this format exists for.
+constexpr int kSniffBytes = 8192;
+
 /// The custom MIME type the payload is offered under beside `text/plain`
 /// (D2 c): our own paste reads it without sniffing, other applications ignore
 /// it, and clipboard MANAGERS do not archive it.

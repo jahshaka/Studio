@@ -322,6 +322,30 @@ void testEnvelope()
     CHECK(!newer.isNull() && newer.items.size() == 2,
           "a NEWER envelope version still yields its known items (forward tolerance)");
 
+    // ---- the ceiling and the sniff window ---------------------------------
+    //
+    // A clipboard is a shared resource any application can fill; a 500 MB text
+    // selection from somebody else's log file must cost a size check here, not
+    // a base64 decode.
+    QByteArray huge = "{\"format\":\"jahshaka.clipboard\",\"version\":1,\"items\":[{\"kind\":\"node\",\"pad\":\"";
+    huge += QByteArray(int(kMaxPayloadBytes) + 16, 'A');
+    huge += "\"}]}";
+    QString hugeError;
+    CHECK(Envelope::fromText(huge, &hugeError).isNull() &&
+          hugeError.contains(QLatin1String("too large")),
+          "a payload over the ceiling is refused BY SIZE, with the size in the message");
+    CHECK(!Envelope::looksLikeEnvelope(huge),
+          "and the sniff refuses it too, so nothing downstream parses it");
+
+    // The sniff window is generous on purpose: a payload whose keys were
+    // re-sorted by a JSON tool puts `assets` first and the marker further in.
+    QJsonObject reordered = QJsonDocument::fromJson(text).object();
+    const QByteArray sorted = QJsonDocument(reordered).toJson(QJsonDocument::Compact);
+    CHECK(!sorted.startsWith("{\"format\""), "the re-sorted payload does NOT lead with the marker");
+    CHECK(Envelope::looksLikeEnvelope(sorted),
+          "and the sniff still recognises it (a pretty-printer must not break a paste)");
+    CHECK(!Envelope::fromText(sorted).isNull(), "and it parses");
+
     QString junkError;
     CHECK(Envelope::fromText(QByteArray("not json at all"), &junkError).isNull() &&
           !junkError.isEmpty(),

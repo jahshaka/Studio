@@ -164,6 +164,9 @@ Envelope Envelope::fromText(const QByteArray &text, QString *error)
         return Envelope();
     };
     if (text.trimmed().isEmpty()) return fail(QStringLiteral("the clipboard is empty"));
+    if (qint64(text.size()) > kMaxPayloadBytes)
+        return fail(QStringLiteral("payload too large (%1 MB)")
+                        .arg(text.size() / (1024.0 * 1024.0), 0, 'f', 1));
 
     // PARSE, then decide what to say. The cheap prefix sniff is the BACKEND's
     // job (it decides whether a `text/plain` clipboard is worth handing over at
@@ -240,10 +243,13 @@ Envelope Envelope::fromText(const QByteArray &text, QString *error)
 
 bool Envelope::looksLikeEnvelope(const QByteArray &text)
 {
-    // The first non-space bytes must be the object opener and the format
-    // marker. Deliberately a PREFIX test on the raw bytes: a 30 MB clipboard
-    // from another application must cost a strncmp, not a JSON parse.
-    const QByteArray head = text.left(96).trimmed();
+    // A BOUNDED prefix test on the raw bytes: a 30 MB clipboard from another
+    // application must cost a memchr, not a JSON parse. The window is
+    // kSniffBytes rather than one line's worth because a payload rewritten by
+    // a JSON tool has its keys SORTED and `assets` — the base64 — leads, and
+    // refusing those would break the one property this format exists for.
+    if (qint64(text.size()) > kMaxPayloadBytes) return false;
+    const QByteArray head = text.left(kSniffBytes).trimmed();
     if (!head.startsWith('{')) return false;
     return head.contains(QByteArray("\"format\"")) &&
            head.contains(QByteArray(kFormatId()));
