@@ -4,6 +4,8 @@
 #                evaluator still existed. That --write-golden mode was deleted
 #                with the evaluator it read, so this file cannot be regenerated
 #                from the tip: check those commits out if you ever need to.
+#                The full recipe, and why no writer will be restored, is in
+#                README-golden_document_poses.md beside this file.
 #
 # Each line: <fixture>|<clip>|<time>|<bone>  px py pz  qx qy qz qw  sx sy sz
 # — one bone's parent-local TRS (a root bone's frame is the mesh node),
