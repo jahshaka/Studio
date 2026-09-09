@@ -274,6 +274,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "(applicationDirPath in a Debug build). READ-ONLY on purpose: a setter would have to "
           "move a live database and a live asset store while they are open.",
           Needs::Document },
+        { "lastError", "app.lastError() -> string | null",
+          "Why the last verb answered falsy. Verbs REFUSE by returning their documented falsy "
+          "value (false / 0 / null) rather than throwing — an exception would abort the whole "
+          "script over an answer it asked for — and the reason is recorded here. Thrown "
+          "precondition errors land here too. Null when nothing has failed yet; never cleared, "
+          "so read it right after the call you are diagnosing.",
+          Needs::Document },
         { "window", "app.window() -> {x, y, width, height, minWidth, minHeight, visible, fullScreen, fits, screen:{name, width, height, availWidth, availHeight}}",
           "The main window's geometry and the screen it is on, in pixels — the coordinates a rig "
           "synthesising mouse input works in. `fits` is width/height against the screen's AVAILABLE "
@@ -496,6 +503,16 @@ QVariantMap AppApi::dataRoot()
 // authors 1612x1530 and nothing clamped it before MainWindow::fitToScreen, so on
 // a 1080p desktop — or a WM-less Xvfb, where nothing resizes anything ever — the
 // bottom of the window simply was not on the screen.
+// The reason behind the last falsy answer (hygiene lane, 2026-09-09). Verbs
+// REFUSE by returning their documented falsy value — false, 0, null — instead
+// of throwing, because a refusal is an answer and an exception aborts the whole
+// run. The message is not lost: it lands here.
+QVariant AppApi::lastError()
+{
+    if (host.lastError.isEmpty()) return jsNull();
+    return host.lastError;
+}
+
 QVariantMap AppApi::window()
 {
     QVariantMap out;

@@ -87,6 +87,12 @@ struct ScriptHost
     std::function<void(const QString &)> beginUndoMacro;
     std::function<void()> endUndoMacro;
 
+    /// The last thing a verb refused or threw, whichever came last (ApiModule::
+    /// refuse/fail). Read back by app.lastError(): a refusal answers with a
+    /// falsy VALUE rather than an exception, so this is where the reason goes.
+    /// One session, one slot: it is a diagnostic, not a queue.
+    QString lastError;
+
     bool isProjectOpen() const { return projectOpen && projectOpen(); }
     bool isEngineReady() const { return engineReady && engineReady(); }
 };

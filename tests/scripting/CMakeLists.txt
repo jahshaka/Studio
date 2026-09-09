@@ -827,3 +827,20 @@ foreach(_ms multiselect multiselect_edit)
         LABELS "scripting" TIMEOUT 300)
     jah_no_display(scripting.e2e.${_ms})
 endforeach()
+
+# --- refusals (hygiene lane, 2026-09-09) ------------------------------------
+# A verb whose documented answer is "no" RETURNS it (false / 0 / null) instead
+# of throwing: an exception aborts the caller's whole run over a question it
+# asked on purpose. node.info on a deleted node, editor.selection with nothing
+# selected, editor.copy on an empty selection — plus the other half, that real
+# misuse still throws. Document verbs only -> --headless, no display.
+set(_ref_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-refusals)
+file(MAKE_DIRECTORY ${_ref_home}/run)
+add_test(NAME scripting.e2e.refusals
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_refusals.js --headless
+         WORKING_DIRECTORY ${_ref_home}/run)
+set_tests_properties(scripting.e2e.refusals PROPERTIES
+    ENVIRONMENT "HOME=${_ref_home};JAHSHAKA_DATA_ROOT=${_ref_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
+jah_no_display(scripting.e2e.refusals)

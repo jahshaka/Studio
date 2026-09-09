@@ -25,6 +25,7 @@ For more information see the LICENSE file
 
 #include <QObject>
 #include <QString>
+#include <QVariant>
 #include <QVector>
 #include "scripting/scripthost.h"
 
@@ -63,7 +64,22 @@ protected:
 
     /// Throws `message` as a JS error in the engine this module is installed in.
     /// Always returns false so verbs can `return fail(...)` / `if (!...) return x;`.
+    /// For PRECONDITIONS and misuse only — see refuse() for the other half.
     bool fail(const QString &message) const;
+
+    /// A REFUSAL: the verb was called correctly and the answer is simply "no"
+    /// (nothing is selected, no node has that id, the stack is empty). The
+    /// registry's documented return type is the contract — a verb that says
+    /// `-> bool` answers false, `-> n` answers 0, `-> id | null` answers null —
+    /// and a refusal must NOT throw, because a throw aborts the caller's whole
+    /// script over an answer it asked for. The message is recorded as the
+    /// session's last error (app.lastError) so nothing is lost by not throwing.
+    /// Always returns false, like fail(), so verbs can `return refuse(...)`.
+    bool refuse(const QString &message) const;
+
+    /// JS `null`. An invalid QVariant bridges to `undefined`, which is not the
+    /// value a documented `id | null` promises — this one is.
+    static QVariant jsNull();
 
     ScriptHost &host;
 };

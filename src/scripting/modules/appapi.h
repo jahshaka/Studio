@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE QVariantList apiProblems();
     Q_INVOKABLE QVariantMap dataRoot();
     Q_INVOKABLE QVariantMap window();
+    Q_INVOKABLE QVariant lastError();
 };
 
 #endif // SCRIPTING_APPAPI_H
