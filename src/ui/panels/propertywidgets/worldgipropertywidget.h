@@ -54,6 +54,7 @@ protected slots:
     void onQualityChanged(int row);
     void onLightChanged(int row);
     void onBouncesChanged(float value);
+    void onDynamicProbesChanged(float value);
     void onBoundsMinChanged(iris::Vec3 value);
     void onBoundsMaxChanged(iris::Vec3 value);
     void onPccGridChanged(iris::Vec3 value);
@@ -75,6 +76,7 @@ private:
     ComboBoxWidget *quality = nullptr;
     ComboBoxWidget *lightSelector = nullptr;
     HFloatSliderWidget *bounces = nullptr;
+    HFloatSliderWidget *dynamicProbes = nullptr;
     DragVector3Widget *boundsMin = nullptr;
     DragVector3Widget *boundsMax = nullptr;
     DragVector3Widget *pccGrid = nullptr;

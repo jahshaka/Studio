@@ -320,6 +320,70 @@ int main()
           "after ceil(probes / budget) frames budget 1 has caught up with budget 4");
 
     // =======================================================================
+    // (e) EPIC'S DYNAMIC PROBES (GiParams::dynamicProbes; the Rayon tier
+    //     table's Epic column, owner option (b) 2026-09-09)
+    // =======================================================================
+    // The sweep spends budget 1 on ONE probe a frame, best-first; (d) above
+    // showed that one frame after the move the reflection is "on the way".
+    // Epic reserves `dynamicProbes` EXTRA captures per frame for probes whose
+    // area covers a box that moved THIS frame. Two probes of this 2x1x2 grid
+    // cover the slab's strip along the +Z wall, so with budget 1 + 2 dynamic
+    // the frame after the move re-captures BOTH covering probes instead of
+    // one — and the picture after one frame is further along than the sweep
+    // alone got it. Three more things are pinned: the reservation is reported
+    // resolved; at rest it spends NOTHING (the column is free until something
+    // moves); and the frame after the mover settles it is back to zero.
+    static const int kDynamic = 2;
+    moveMover(kMoverParked);
+    hybrid.updateBudget = 1;
+    hybrid.dynamicProbes = 0;
+    CHECK(s->setGlobalIllumination(hybrid), "budget 1, NO dynamic probes (High's row)");
+    render(engine.get(), 8);
+    moveMover(kMoverOnRay);
+    render(engine.get(), 1);
+    const Colour sweepOneFrame = mirrorPixel();
+    show("budget 1 / dynamic 0, ONE frame after the move", sweepOneFrame);
+    CHECK(s->giStatus().dynamicProbes == 0 && s->giStatus().dynamicProbeUpdates == 0,
+          "no reservation: giStatus reports 0 dynamic probes, 0 spent");
+
+    moveMover(kMoverParked);
+    hybrid.dynamicProbes = kDynamic;
+    CHECK(s->setGlobalIllumination(hybrid), "budget 1 + 2 dynamic probes (Epic's row)");
+    render(engine.get(), 8);      // settled and parked: two full sweeps
+    {
+        const GiStatus st = s->giStatus();
+        std::printf("   giStatus at rest: updates/frame=%d dynamicProbes=%d dynamicProbeUpdates=%d\n",
+                    st.probeUpdatesPerFrame, st.dynamicProbes, st.dynamicProbeUpdates);
+        CHECK(st.probeUpdatesPerFrame == 1, "the budget is still one probe a frame");
+        CHECK(st.dynamicProbes == kDynamic, "giStatus reports the RESOLVED reservation (2)");
+        CHECK(st.dynamicProbeUpdates == 0, "and at REST it spends nothing (free until something moves)");
+    }
+    const Colour dynRest = mirrorPixel();
+    CHECK(std::fabs(dynRest.r - oneParked.r) < 0.06f && std::fabs(dynRest.g - oneParked.g) < 0.06f,
+          "a reservation on a still scene renders the same picture as none");
+
+    moveMover(kMoverOnRay);
+    render(engine.get(), 1);
+    const Colour dynOneFrame = mirrorPixel();
+    show("budget 1 / dynamic 2, ONE frame after the move", dynOneFrame);
+    {
+        const GiStatus st = s->giStatus();
+        std::printf("   giStatus the frame after the move: dynamicProbeUpdates=%d\n", st.dynamicProbeUpdates);
+        CHECK(st.dynamicProbeUpdates >= 1,
+              "the frame after the move SPENT the reservation on a probe covering the slab");
+    }
+    // THE MEASURED DELTA (Epic's column must change the picture, not just a
+    // counter): one frame of budget 1 + 2 dynamic gets the reflection greener
+    // than one frame of budget 1 alone did, on the identical scene state.
+    CHECK((dynOneFrame.g - dynOneFrame.r) > (sweepOneFrame.g - sweepOneFrame.r) + 0.02f,
+          "dynamic probes: ONE frame after the move the reflection is further along than the sweep alone");
+    CHECK(dynOneFrame.g > sweepOneFrame.g + 0.02f,
+          "dynamic probes: measurably greener after one frame (the mover's reflection followed it)");
+    render(engine.get(), 2);
+    CHECK(s->giStatus().dynamicProbeUpdates == 0,
+          "and once the mover settles the reservation spends nothing again");
+
+    // =======================================================================
     // FRAME COST (spec §7: budget the re-render cost). Printed, plus a shape
     // assertion. Debug build on whatever GPU is running the gate.
     // =======================================================================

@@ -350,10 +350,11 @@ QVector<Row> buildRows()
     }
 
     // ---- Global illumination = RAYON (GI_UNIFIED_SPEC.md §2) ---------------
-    // ONE row is the dial the World Mode drives; the three below it are the
+    // ONE row is the dial the World Mode drives; the five below it are the
     // machinery that dial consumes, and they are `rayonTiered` — resolved by
     // the RAYON tier, not by the World Mode, because two dials must never own
-    // one backing field.
+    // one backing field. THE TABLE ITSELF is kRayonTable further down; the
+    // tier[] columns here must agree with it (gi.tiers pins both).
     {
         Row r;
         r.id = QStringLiteral("rayon");
@@ -379,12 +380,13 @@ QVector<Row> buildRows()
                                 "surfaces and colours everything it lands on, recomputed live "
                                 "instead of baked. The quality tier picks the techniques for you: "
                                 "Low bounces one light off the scene (cheapest, no voxels); Medium "
-                                "voxelizes the lit volume and cone-traces the bounce out of it; "
-                                "High adds a grid of reflection probes with HDR, shadowed captures; "
-                                "Epic adds the irradiance field, which replaces the cone-traced "
-                                "diffuse with probe-stored bounce that cannot leak through walls. "
-                                "Every knob a tier sets is still reachable one by one under "
-                                "Advanced, and anything you set there stays set.");
+                                "voxelizes the lit volume and feeds an irradiance field from it — "
+                                "probe-stored bounce that cannot leak through walls; High adds a "
+                                "grid of reflection probes with HDR, shadowed captures; Epic adds "
+                                "three light bounces and dynamic reflection probes that follow "
+                                "whatever moves, frame by frame. Every knob a tier sets is still "
+                                "reachable one by one under Advanced, and anything you set there "
+                                "stays set.");
         r.get = [](const iris::ScenePtr &s) {
             if (!s || s->giMode == iris::GiMode::OFF) return 0;
             return qBound(0, s->giTier, 3) + 1;
@@ -410,7 +412,8 @@ QVector<Row> buildRows()
                       { QStringLiteral("vct_pcc_hybrid"),   QStringLiteral("VCT + Probes"),      3 } };
         // RAYON columns (Low, Medium, High, Epic) — not world-mode ones.
         // Low keeps Instant Radiosity (spec §9 D1: "low is really low"); the
-        // top two tiers are the hybrid and differ only in the field.
+        // top two tiers are the hybrid and differ in the giBounces and
+        // giDynamicProbes rows below, not here.
         r.tier[0] = 1; r.tier[1] = 2; r.tier[2] = 3; r.tier[3] = 3;
         r.cost = QStringLiteral("Which technique Rayon uses. Instant Radiosity re-traces on light "
                                 "moves and sees only the driving light; VCT re-voxelizes on "
@@ -452,7 +455,10 @@ QVector<Row> buildRows()
         r.rayonTiered = true;
         r.options = { { QStringLiteral("off"), QStringLiteral("Off"), 0 },
                       { QStringLiteral("on"),  QStringLiteral("On"),  1 } };
-        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 0; r.tier[3] = 1;
+        // Owner option (b), 2026-09-09: every voxel tier feeds the field — it
+        // is the one diffuse arm that is right in both open and sealed scenes
+        // (rayon2 S1-S3). Low has no voxel volume to feed it from.
+        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
         r.cost = QStringLiteral("The irradiance field: a grid of probes over the lit volume storing "
                                 "the bounced light arriving from every direction, plus a depth map "
                                 "that decides what each probe can actually see. It is the LEAK FIX "
@@ -460,13 +466,58 @@ QVector<Row> buildRows()
                                 "a wall from empty space. Turning it on turns the voxel-cone "
                                 "diffuse OFF (it replaces that term rather than adding to it); "
                                 "reflections, probes and planar are untouched. Needs a voxel "
-                                "technique (VCT or VCT + Probes) to be fed from. Epic's defining "
-                                "feature, and the only tier that turns it on.");
+                                "technique (VCT or VCT + Probes) to be fed from, which is why "
+                                "every tier from Medium up turns it on and Low cannot.");
         // -1 (auto) is what a scene no tier has ever been applied to holds, and
         // the engine renders it as OFF — so that is what it RESOLVES to. Any
         // tier application writes a concrete 0/1 through.
         r.get = [](const iris::ScenePtr &s) { return s->giDdgi > 0 ? 1 : 0; };
         r.set = [](const iris::ScenePtr &s, int v) { s->giDdgi = v ? 1 : 0; };
+        out.append(r);
+    }
+    // EPIC'S TWO COLUMNS (owner option (b), 2026-09-09): what makes the top
+    // tier a tier of its own now that High is DDGI-fed too. Both are ordinary
+    // Int rows over document fields the engine already consumes; the engine's
+    // quality dial is untouched (it is the RESOLUTION dial, and Epic changes
+    // no resolution).
+    {
+        Row r;
+        r.id = QStringLiteral("giBounces");
+        r.label = QStringLiteral("Rayon Light Bounces");
+        r.group = QStringLiteral("Global Illumination");
+        r.type = RowType::Int;
+        r.rayonTiered = true;
+        r.minValue = 1; r.maxValue = 4;
+        r.tier[0] = 1; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 3;
+        r.cost = QStringLiteral("Total light bounces, 1-4. Each bounce past the first is another "
+                                "light-propagation pass over the whole voxel volume on every "
+                                "re-solve (128^3 at High/Epic), and the irradiance field is fed "
+                                "from that volume, so the extra bounces reach the probe-stored "
+                                "diffuse too. Epic's column: 3; every other tier 1. Under "
+                                "Instant Radiosity it is the ray bounce count instead.");
+        r.get = [](const iris::ScenePtr &s) { return qBound(1, s->giNumBounces, 4); };
+        r.set = [](const iris::ScenePtr &s, int v) { s->giNumBounces = qBound(1, v, 4); };
+        out.append(r);
+    }
+    {
+        Row r;
+        r.id = QStringLiteral("giDynamicProbes");
+        r.label = QStringLiteral("Rayon Dynamic Probes");
+        r.group = QStringLiteral("Global Illumination");
+        r.type = RowType::Int;
+        r.rayonTiered = true;
+        r.minValue = 0; r.maxValue = 8;
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 0; r.tier[3] = 2;
+        r.cost = QStringLiteral("Extra reflection-probe re-captures per frame, on top of the GI "
+                                "Update Budget, reserved for the probes covering whatever MOVED "
+                                "this frame — so a moving object's reflection follows it frame by "
+                                "frame instead of waiting its turn in the budget's sweep. Costs "
+                                "nothing while the scene is still; while something moves, up to "
+                                "this many probe captures a frame (~2 ms each in Debug). Epic's "
+                                "column: 2; every other tier 0 (the sweep alone). VCT + Probes "
+                                "only.");
+        r.get = [](const iris::ScenePtr &s) { return qBound(0, s->giDynamicProbes, 8); };
+        r.set = [](const iris::ScenePtr &s, int v) { s->giDynamicProbes = qBound(0, v, 8); };
         out.append(r);
     }
 
@@ -731,15 +782,27 @@ const QStringList &postFxRowIds()
 
 namespace {
 
-/// technique (GiMode ordinal), quality (GiQuality ordinal), ddgi (0/1),
-/// per tier: Low, Medium, High, Epic.
-struct RayonRow { int technique, quality, ddgi; };
+/// THE RAYON TIER TABLE (worldmodes.h's comment is the readable form). Per
+/// tier: technique (GiMode ordinal), quality (GiQuality ordinal), ddgi (0/1),
+/// bounces (total, 1..4), dynamicProbes (0..8). Owner option (b), 2026-09-09.
+struct RayonRow { int technique, quality, ddgi, bounces, dynamicProbes; };
 const RayonRow kRayonTable[4] = {
-    /* Low    */ { 1, 0, 0 },   // Instant Radiosity, low, no field
-    /* Medium */ { 2, 1, 0 },   // VCT, 64^3
-    /* High   */ { 3, 2, 0 },   // VCT + probes, 128^3, HDR + shadowed captures
-    /* Epic   */ { 3, 2, 1 },   // ... plus the irradiance field @ intensity 1.0
+    /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
+    /* Medium */ { 2, 1, 1, 1, 0 },   // VCT 64^3, DDGI-fed (voxel source)
+    /* High   */ { 3, 2, 1, 1, 0 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
+    /* Epic   */ { 3, 2, 1, 3, 2 },   // ... plus 3 bounces and 2 dynamic probes a frame
 };
+/// The five rayonTiered row ids, in kRayonTable column order.
+const int kRayonRowCount = 5;
+int rayonColumn(const RayonRow &r, int i) {
+    switch (i) {
+    case 0: return r.technique;
+    case 1: return r.quality;
+    case 2: return r.ddgi;
+    case 3: return r.bounces;
+    default: return r.dynamicProbes;
+    }
+}
 
 int tierIndex(RayonTier t) { return qBound(0, int(t), 3); }
 
@@ -755,7 +818,8 @@ QString rayonRowId() { return QStringLiteral("rayon"); }
 QStringList rayonRowIds()
 {
     return { QStringLiteral("giMode"), QStringLiteral("giQuality"),
-             QStringLiteral("giDdgi") };
+             QStringLiteral("giDdgi"), QStringLiteral("giBounces"),
+             QStringLiteral("giDynamicProbes") };
 }
 
 QString rayonTierName(RayonTier t)
@@ -796,6 +860,20 @@ bool rayonEnabled(const iris::ScenePtr &scene)
 int rayonTechnique(RayonTier t) { return kRayonTable[tierIndex(t)].technique; }
 int rayonQuality(RayonTier t)   { return kRayonTable[tierIndex(t)].quality; }
 int rayonDdgi(RayonTier t)      { return kRayonTable[tierIndex(t)].ddgi; }
+int rayonBounces(RayonTier t)   { return kRayonTable[tierIndex(t)].bounces; }
+int rayonDynamicProbes(RayonTier t) { return kRayonTable[tierIndex(t)].dynamicProbes; }
+
+namespace {
+/// The five values a scene RENDERS, in kRayonTable column order.
+void rayonHave(const iris::ScenePtr &s, int have[5])
+{
+    have[0] = int(s->giMode);
+    have[1] = int(s->giQuality);
+    have[2] = s->giDdgi > 0 ? 1 : 0;
+    have[3] = qBound(1, s->giNumBounces, 4);
+    have[4] = qBound(0, s->giDynamicProbes, 8);
+}
+}   // namespace
 
 void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier)
 {
@@ -819,6 +897,8 @@ void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier)
     // The machinery: written unless the user pinned it.
     if (!pinned(scene, "giQuality")) scene->giQuality = iris::GiQuality(qBound(0, row.quality, 2));
     if (!pinned(scene, "giDdgi"))    scene->giDdgi = row.ddgi;
+    if (!pinned(scene, "giBounces")) scene->giNumBounces = row.bounces;
+    if (!pinned(scene, "giDynamicProbes")) scene->giDynamicProbes = row.dynamicProbes;
     if (!pinned(scene, "giMode")) scene->giMode = iris::GiMode(qBound(1, row.technique, 3));
     else if (scene->giMode == iris::GiMode::OFF) {
         // A pin of "off" is what an Advanced technique picker set to Off would
@@ -840,12 +920,11 @@ QStringList rayonDeviations(const iris::ScenePtr &scene)
     // whatever the machinery rows say, so the tier row reads Off, not Custom.
     if (!scene || !rayonEnabled(scene)) return out;
     const RayonRow &want = kRayonTable[tierIndex(rayonTier(scene))];
-    const int have[3] = { int(scene->giMode), int(scene->giQuality),
-                          scene->giDdgi > 0 ? 1 : 0 };
-    const int wanted[3] = { want.technique, want.quality, want.ddgi };
+    int have[5];
+    rayonHave(scene, have);
     const QStringList ids = rayonRowIds();
-    for (int i = 0; i < 3; ++i) {
-        if (have[i] == wanted[i]) continue;
+    for (int i = 0; i < kRayonRowCount; ++i) {
+        if (have[i] == rayonColumn(want, i)) continue;
         const Row *r = row(ids[i]);
         out << (r ? r->label : ids[i]);
     }
@@ -862,45 +941,51 @@ void clearRayonOverrides(const iris::ScenePtr &scene)
 void deriveRayonFromDocument(const iris::ScenePtr &scene)
 {
     if (!scene) return;
-    // WHAT THE DOCUMENT RENDERS, read before anything is written. giDdgi -1
-    // (auto, never tiered) renders as OFF — that is the value to preserve.
+    // WHAT THE DOCUMENT RENDERS, read before anything is written.
     const int technique = qBound(0, int(scene->giMode), 3);
     const int quality   = qBound(0, int(scene->giQuality), 2);
-    const int ddgi      = scene->giDdgi > 0 ? 1 : 0;
     const bool enabled  = technique != 0;
 
-    // THE TIER (spec §2's migration table, at this phase's tier contents):
-    // an enabled scene keeps its technique, so the technique picks the tier;
-    // an off scene has no technique to speak of, so its quality does.
+    // THE TIER (spec §2's migration table, at option (b)'s contents): an
+    // enabled scene keeps its technique, so the technique picks the tier; an
+    // off scene has no technique to speak of, so its quality does. The hybrid
+    // derives High, never Epic: Epic's columns (three bounces, dynamic probes)
+    // did not exist before the tier table, so no pre-tier document rendered
+    // them — a P1-era explicit field opt-in IS the new High row.
     RayonTier tier = RayonTier::Medium;
     if (enabled) {
         tier = technique == 1 ? RayonTier::Low
              : technique == 2 ? RayonTier::Medium
-                              : (ddgi ? RayonTier::Epic : RayonTier::High);
+                              : RayonTier::High;
     } else {
         tier = quality == 0 ? RayonTier::Low
              : quality == 1 ? RayonTier::Medium
                             : RayonTier::High;
     }
     scene->giTier = tierIndex(tier);
+    const RayonRow &want = kRayonTable[tierIndex(tier)];
+
+    // THE FIELD'S TRI-STATE. -1 in a pre-tier document means the author never
+    // touched it — "the tier decides" — and the tier now decides ON at Medium
+    // and High (owner option (b): the five shipped vct+medium samples, and the
+    // two hybrid ones, come up DDGI-fed; that re-pin is deliberate and is the
+    // ONLY rendered value this derivation may move). An explicit 0/1 is what
+    // the document rendered and is preserved like every other field.
+    if (scene->giDdgi < 0) scene->giDdgi = want.ddgi;
 
     // PIN WHAT DEVIATES, DROP WHAT DOES NOT. A pin whose value is the tier's
     // own is noise: it would freeze that field through every future tier switch
     // and make the dial look broken, and dropping it changes no value at all.
-    const RayonRow &want = kRayonTable[tierIndex(tier)];
-    const int have[3]   = { technique, quality, ddgi };
-    const int wanted[3] = { want.technique, want.quality, want.ddgi };
+    int have[5];
+    rayonHave(scene, have);
     const QStringList ids = rayonRowIds();
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < kRayonRowCount; ++i) {
         // The technique is never pinned while Rayon is off: OFF is the enable
         // state, not a deviation (setRayon owns that field then).
         const bool skip = (i == 0 && !enabled);
-        if (!skip && have[i] != wanted[i]) scene->worldOverrides.insert(ids[i], have[i]);
-        else                               scene->worldOverrides.remove(ids[i]);
+        if (!skip && have[i] != rayonColumn(want, i)) scene->worldOverrides.insert(ids[i], have[i]);
+        else                                          scene->worldOverrides.remove(ids[i]);
     }
-    // Normalise the tri-state: the document's rendered DDGI value becomes the
-    // field, so "auto" only ever means "no tier was ever applied".
-    scene->giDdgi = ddgi;
 
     // AND THE TIER ROW ITSELF. A scene whose World Mode would resolve Rayon to
     // something else must pin the dial, or the next mode switch (or a reader

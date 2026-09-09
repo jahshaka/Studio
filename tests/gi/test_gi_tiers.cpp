@@ -10,23 +10,28 @@
 //
 // WHAT IT GATES, in order:
 //   1. THE TABLE      — each tier resolves to exactly the documented technique,
-//                       quality and irradiance-field state;
+//                       quality, irradiance-field state, bounce count and
+//                       dynamic-probe reservation (owner option (b), 2026-09-09:
+//                       Medium/High DDGI-fed, Epic = its own column);
 //   2. THE SWITCH     — off is giMode OFF and nothing else, the tier is
 //                       remembered across an off/on trip, and turning off does
 //                       not silently keep a technique pin alive;
 //   3. PINS           — an Advanced edit deviates, survives a tier switch, is
 //                       reported as a deviation, and can be handed back;
 //   4. THE WORLD MODE — one owner: applying a World Mode drives the Rayon row
-//                       and NOT the three rows underneath it, and Low/Medium/
+//                       and NOT the five rows underneath it, and Low/Medium/
 //                       High resolve to what they always did;
 //   5. NEW SCENES     — born Realtime-Epic (owner decision D2), through the
 //                       same path MainWindow::createDefaultScene uses;
-//   6. MIGRATION      — the seven shipped samples' REAL serialized GI blocks
-//                       (read out of their databases for this suite) derive a
-//                       tier without changing one rendered value. That is the
-//                       whole acceptance criterion for the unification: an
-//                       existing scene must open pixel-identical, and it does
-//                       so BY CONSTRUCTION if no field the renderer reads moves.
+//   6. MIGRATION      — the five pre-tier shipped samples' REAL serialized GI
+//                       blocks (read out of their databases for this suite)
+//                       derive a tier that preserves technique, quality and
+//                       bounces exactly and moves ONE value on purpose: the
+//                       untouched field tri-state follows the tier, which is
+//                       the owner's re-pin of the vct+medium samples to the
+//                       DDGI-fed Medium row (the pixel evidence is in the
+//                       lane report; the numbers moved WITH the decision, not
+//                       with a tolerance).
 #include <QGuiApplication>
 #include <cstdio>
 
@@ -51,6 +56,8 @@ static iris::ScenePtr freshScene()
 static int giMode(const iris::ScenePtr &s)    { return int(s->giMode); }
 static int giQuality(const iris::ScenePtr &s) { return int(s->giQuality); }
 static int giDdgi(const iris::ScenePtr &s)    { return s->giDdgi > 0 ? 1 : 0; }
+static int giBounces(const iris::ScenePtr &s) { return s->giNumBounces; }
+static int giDynamic(const iris::ScenePtr &s) { return s->giDynamicProbes; }
 
 // ---------------------------------------------------------------------------
 // 1. THE TABLE
@@ -58,21 +65,35 @@ static int giDdgi(const iris::ScenePtr &s)    { return s->giDdgi > 0 ? 1 : 0; }
 static void testTierTable()
 {
     std::printf("\n-- 1. the tier table --\n");
-    struct Want { RayonTier tier; int mode, quality, ddgi; const char *name; };
+    // THE TABLE AS SHIPPED (worldmodes.h carries the readable form). Every
+    // column that is a registry row is pinned here; the derived columns
+    // (voxel resolution, probe faces/HDR/shadows, the 8192-probe field grid,
+    // ddgiSource auto = voxel) follow giQuality / the engine and are pinned
+    // by gi.modes, gi.pcc_mirror and gi.ddgi.
+    struct Want { RayonTier tier; int mode, quality, ddgi, bounces, dynamic; const char *name; };
     const Want wants[] = {
-        { RayonTier::Low,    1, 0, 0, "Low = Instant Radiosity, low quality, no field" },
-        { RayonTier::Medium, 2, 1, 0, "Medium = VCT, medium voxels, no field" },
-        { RayonTier::High,   3, 2, 0, "High = VCT + probes, high quality, no field" },
-        { RayonTier::Epic,   3, 2, 1, "Epic = VCT + probes, high quality, FIELD ON" },
+        { RayonTier::Low,    1, 0, 0, 1, 0, "Low = Instant Radiosity, low quality, no field, 1 bounce, no dynamic probes" },
+        { RayonTier::Medium, 2, 1, 1, 1, 0, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce, no dynamic probes" },
+        { RayonTier::High,   3, 2, 1, 1, 0, "High = VCT + probes 128^3, FIELD ON, 1 bounce, no dynamic probes" },
+        { RayonTier::Epic,   3, 2, 1, 3, 2, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces, TWO dynamic probes" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setRayon(s, true, w.tier);
-        CHECK(giMode(s) == w.mode && giQuality(s) == w.quality && giDdgi(s) == w.ddgi, w.name);
+        CHECK(giMode(s) == w.mode && giQuality(s) == w.quality && giDdgi(s) == w.ddgi &&
+                  giBounces(s) == w.bounces && giDynamic(s) == w.dynamic, w.name);
+        // The accessors ARE the table (one owner): what they say per column
+        // must be what the tier wrote.
+        CHECK(worldmodes::rayonTechnique(w.tier) == w.mode &&
+                  worldmodes::rayonQuality(w.tier) == w.quality &&
+                  worldmodes::rayonDdgi(w.tier) == w.ddgi &&
+                  worldmodes::rayonBounces(w.tier) == w.bounces &&
+                  worldmodes::rayonDynamicProbes(w.tier) == w.dynamic,
+              "the column accessors agree with the write-through");
         CHECK(s->giTier == int(w.tier), "the tier is recorded on the document");
         CHECK(worldmodes::rayonEnabled(s), "and Rayon reads enabled");
         CHECK(!worldmodes::rayonCustom(s), "a freshly applied tier is not Custom");
-        // The write-through invariant, for each of the three rows: the backing
+        // The write-through invariant, for each of the five rows: the backing
         // field IS the resolved value, so every existing reader (the mirror,
         // the serializer, world.gi) sees the tier without knowing it exists.
         for (const QString &id : worldmodes::rayonRowIds()) {
@@ -81,6 +102,31 @@ static void testTierTable()
                       worldmodes::resolved(s, *r) == worldmodes::tierValue(*r, worldmodes::mode(s), s),
                   qPrintable(QStringLiteral("write-through holds for %1").arg(id)));
         }
+    }
+    CHECK(worldmodes::rayonRowIds().size() == 5, "the tier writes exactly five rows through");
+    // High and Epic differ in TWO rows and nowhere else — the whole point of
+    // Epic's column (before option (b) they differed only in the field, and
+    // once High is DDGI-fed that would have collapsed them onto one row).
+    {
+        auto h = freshScene(), e = freshScene();
+        worldmodes::setRayon(h, true, RayonTier::High);
+        worldmodes::setRayon(e, true, RayonTier::Epic);
+        CHECK(giMode(h) == giMode(e) && giQuality(h) == giQuality(e) && giDdgi(h) == giDdgi(e),
+              "High and Epic share technique, quality and the field");
+        CHECK(giBounces(e) > giBounces(h) && giDynamic(e) > giDynamic(h),
+              "and Epic alone carries the extra bounces and the dynamic probes");
+        // The engine-side columns each cost something real and are gated where
+        // they render: gi.ddgi (bounces 1 -> 3 on the DDGI-fed floor) and
+        // gi.dynamic_probes (one frame of catch-up at budget 1).
+    }
+    // A tier switch DOWN from Epic hands the columns back: a Medium scene has
+    // one bounce and no reservation, whatever it was before.
+    {
+        auto s = freshScene();
+        worldmodes::setRayon(s, true, RayonTier::Epic);
+        worldmodes::setRayon(s, true, RayonTier::Medium);
+        CHECK(giBounces(s) == 1 && giDynamic(s) == 0,
+              "Medium after Epic is back to 1 bounce and 0 dynamic probes");
     }
     // The intensity is NOT tiered: 1.0 is the calibrated default and a scene
     // that trimmed it must keep the trim across a tier switch.
@@ -160,6 +206,23 @@ static void testPins()
     worldmodes::clearRayonOverrides(s);
     CHECK(giDdgi(s) == 1 && !worldmodes::rayonCustom(s),
           "Reset Advanced Settings hands every Rayon row back to the tier");
+
+    // And so are Epic's two columns: the Advanced "Light Bounces" and "Dynamic
+    // Probes" rows go through the registry, so an edit there is a pin.
+    CHECK(worldmodes::setRowValue(s, QStringLiteral("giBounces"), 2), "pin the bounces to 2 at Epic");
+    CHECK(giBounces(s) == 2 && worldmodes::rayonCustom(s), "Epic at 2 bounces is Custom");
+    CHECK(worldmodes::rayonDeviations(s) == QStringList{ QStringLiteral("Rayon Light Bounces") },
+          "and the deviation is named");
+    worldmodes::setRayon(s, true, RayonTier::High);
+    CHECK(giBounces(s) == 2 && giDynamic(s) == 0,
+          "a tier switch keeps the pinned bounces and moves the unpinned dynamic probes");
+    CHECK(!worldmodes::setRowValue(s, QStringLiteral("giBounces"), 9), "an out-of-range bounce count is refused");
+    CHECK(!worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), -1), "and so is a negative reservation");
+    CHECK(worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), 4), "pin 4 dynamic probes at High");
+    CHECK(giDynamic(s) == 4 && worldmodes::rayonDeviations(s).size() == 2, "two named deviations now");
+    worldmodes::clearRayonOverrides(s);
+    CHECK(giBounces(s) == 1 && giDynamic(s) == 0 && !worldmodes::rayonCustom(s),
+          "and Reset hands both columns back to High");
 }
 
 // ---------------------------------------------------------------------------
@@ -172,18 +235,19 @@ static void testWorldModeOwnership()
     // before the unification, or every scene on them would change when this
     // landed: Low and Medium had GI off, High had Instant Radiosity at low
     // quality. Epic is the one column that moves (owner decision D2).
-    struct Want { worldmodes::Mode mode; int giMode, giQuality, ddgi; const char *name; };
+    struct Want { worldmodes::Mode mode; int giMode, giQuality, ddgi, bounces, dynamic; const char *name; };
     const Want wants[] = {
-        { worldmodes::Mode::Low,    0, 0, 0, "World Low leaves GI off, as it always did" },
-        { worldmodes::Mode::Medium, 0, 1, 0, "World Medium leaves GI off, as it always did" },
-        { worldmodes::Mode::High,   1, 0, 0, "World High is Instant Radiosity at low quality, as it always did" },
-        { worldmodes::Mode::Epic,   3, 2, 1, "World Epic is the hybrid at high quality WITH the field (D2)" },
+        { worldmodes::Mode::Low,    0, 0, 0, 1, 0, "World Low leaves GI off, as it always did" },
+        { worldmodes::Mode::Medium, 0, 1, 0, 1, 0, "World Medium leaves GI off, as it always did" },
+        { worldmodes::Mode::High,   1, 0, 0, 1, 0, "World High is Instant Radiosity at low quality, as it always did" },
+        { worldmodes::Mode::Epic,   3, 2, 1, 3, 2, "World Epic is Rayon Epic: the hybrid, high, the field, 3 bounces, 2 dynamic probes" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setMode(s, w.mode);
         CHECK(giMode(s) == w.giMode && giDdgi(s) == w.ddgi, w.name);
-        if (w.giMode != 0) CHECK(giQuality(s) == w.giQuality, "  ... and its quality");
+        if (w.giMode != 0) CHECK(giQuality(s) == w.giQuality && giBounces(s) == w.bounces &&
+                                     giDynamic(s) == w.dynamic, "  ... and its quality, bounces and dynamic probes");
     }
 
     // A pinned Rayon dial survives a World Mode switch like any other pin —
@@ -191,7 +255,8 @@ static void testWorldModeOwnership()
     auto s = freshScene();
     worldmodes::setMode(s, worldmodes::Mode::Epic);
     CHECK(worldmodes::setRowValue(s, worldmodes::rayonRowId(), 2), "pin the Rayon dial to Medium");
-    CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 0, "the pin resolved Medium through");
+    CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1 && giDynamic(s) == 0,
+          "the pin resolved Medium through (VCT, medium, DDGI-fed, 1 bounce, no dynamic probes)");
     worldmodes::setMode(s, worldmodes::Mode::Low);
     CHECK(giMode(s) == 2 && giQuality(s) == 1,
           "and World Low did NOT switch it off — the pin won");
@@ -215,53 +280,61 @@ static void testNewSceneDefault()
     CHECK(worldmodes::rayonTier(s) == RayonTier::Epic, "at Epic");
     CHECK(giMode(s) == 3 && giQuality(s) == 2 && giDdgi(s) == 1,
           "which is the hybrid, high quality, irradiance field on");
+    CHECK(giBounces(s) == 3 && giDynamic(s) == 2, "with three bounces and two dynamic probes (Epic's column)");
     CHECK(s->giDdgiIntensity == 1.0f, "at the calibrated intensity 1.0");
+    CHECK(s->giDdgiSource == -1, "and the field's source left at auto (voxel at every tier)");
 }
 
 // ---------------------------------------------------------------------------
-// 6. MIGRATION — the seven shipped samples, from their real databases
+// 6. MIGRATION — the five pre-tier shipped samples, from their real databases
 // ---------------------------------------------------------------------------
 static void testMigration()
 {
     std::printf("\n-- 6. migration --\n");
     // THE REAL SERIALIZED VALUES, read out of scenes/*.zip's databases on
-    // 2026-09-08 (five carry vct+medium with no GI pins; Mirror Room and
-    // Showroom carry the hybrid at high quality WITH giMode/giQuality pins from
-    // when those were World Mode rows). All seven are on worldMode "epic".
+    // 2026-09-09. Three (Matcaps, Particles, Physics) carry vct+medium, giDdgi
+    // ABSENT (-1), giNumBounces 1, no GI pins and NO giTier — the
+    // pre-unification shape, so they derive here. Skeletal Animation and World
+    // Background were re-staged under the one-day P2 table and carry
+    // giTier=medium with giDdgi normalised to 0 and no field pin: those take
+    // the reader's option-(b) bump instead (scenereader.cpp: a tier-carrying
+    // document without `giDynamicProbes` has its tier re-applied, pins
+    // honoured), which is the tier application section 1 pins — modelled
+    // below as the same setRayon call. Mirror Room and Showroom carry
+    // giTier=epic and were re-staged by this lane to Epic's columns without
+    // the generator pins. All seven are on worldMode "epic".
     struct Sample {
         const char *name;
-        int giMode, giQuality, giDdgi;   // as serialized (-1 = the absent tri-state)
-        bool hasGiPins;
+        int giMode, giQuality, giDdgi, giBounces;   // as serialized (-1 = the absent tri-state)
         RayonTier wantTier;
         const char *why;
     };
     const Sample samples[] = {
-        { "Matcaps",           2, 1, -1, false, RayonTier::Medium, "vct + medium -> Medium" },
-        { "Particles",         2, 1, -1, false, RayonTier::Medium, "vct + medium -> Medium" },
-        { "Physics",           2, 1, -1, false, RayonTier::Medium, "vct + medium -> Medium" },
-        { "Skeletal Animation",2, 1, -1, false, RayonTier::Medium, "vct + medium -> Medium" },
-        { "World Background",  2, 1, -1, false, RayonTier::Medium, "vct + medium -> Medium" },
-        { "Mirror Room",       3, 2, -1, true,  RayonTier::High,   "hybrid + high -> High" },
-        { "Showroom",          3, 2, -1, true,  RayonTier::High,   "hybrid + high -> High" },
+        { "Matcaps",           2, 1, -1, 1, RayonTier::Medium, "vct + medium -> Medium" },
+        { "Particles",         2, 1, -1, 1, RayonTier::Medium, "vct + medium -> Medium" },
+        { "Physics",           2, 1, -1, 1, RayonTier::Medium, "vct + medium -> Medium" },
     };
     for (const Sample &sm : samples) {
         auto s = freshScene();
         s->giMode = iris::GiMode(sm.giMode);
         s->giQuality = iris::GiQuality(sm.giQuality);
         s->giDdgi = sm.giDdgi;
+        s->giNumBounces = sm.giBounces;
         s->worldMode = int(worldmodes::Mode::Epic);
-        if (sm.hasGiPins) {
-            s->worldOverrides.insert(QStringLiteral("giMode"), sm.giMode);
-            s->worldOverrides.insert(QStringLiteral("giQuality"), sm.giQuality);
-        }
         // What the renderer reads, BEFORE.
-        const int mode0 = giMode(s), quality0 = giQuality(s), ddgi0 = giDdgi(s);
+        const int mode0 = giMode(s), quality0 = giQuality(s), bounces0 = giBounces(s), dyn0 = giDynamic(s);
 
         worldmodes::deriveRayonFromDocument(s);
 
-        // THE ACCEPTANCE CRITERION: not one rendered value moved.
-        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giDdgi(s) == ddgi0,
-              qPrintable(QStringLiteral("%1: renders IDENTICALLY after migration").arg(sm.name)));
+        // THE ACCEPTANCE CRITERION, option (b): technique, quality, bounces and
+        // dynamic probes did not move — and the untouched field FOLLOWED THE
+        // TIER, which for a vct+medium document is ON. That is the owner's
+        // re-pin of these five samples (Rayon-2 S1-S3: the DDGI-fed arm is the
+        // one that is right in open AND sealed scenes), taken here on purpose.
+        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giBounces(s) == bounces0 && giDynamic(s) == dyn0,
+              qPrintable(QStringLiteral("%1: technique, quality, bounces, dynamic probes preserved").arg(sm.name)));
+        CHECK(giDdgi(s) == 1,
+              qPrintable(QStringLiteral("%1: the untouched field follows the tier -> DDGI-fed (the re-pin)").arg(sm.name)));
         CHECK(worldmodes::rayonTier(s) == sm.wantTier, sm.why);
         CHECK(!worldmodes::rayonCustom(s),
               qPrintable(QStringLiteral("%1: reads as its tier, not as Custom").arg(sm.name)));
@@ -270,17 +343,52 @@ static void testMigration()
         CHECK(s->worldOverrides.contains(worldmodes::rayonRowId()),
               qPrintable(QStringLiteral("%1: the Rayon dial is pinned against the World Mode").arg(sm.name)));
         worldmodes::setMode(s, worldmodes::Mode::Epic);
-        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giDdgi(s) == ddgi0,
+        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giDdgi(s) == 1 && giBounces(s) == bounces0,
               qPrintable(QStringLiteral("%1: and re-applying its World Mode still changes nothing").arg(sm.name)));
-        // The redundant pins the two hand-tuned samples carried are dropped —
-        // they were the same values the derived tier gives, and leaving them
-        // would freeze those rows through every future tier switch.
-        if (sm.hasGiPins)
-            CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")) &&
-                      !s->worldOverrides.contains(QStringLiteral("giQuality")),
-                  qPrintable(QStringLiteral("%1: redundant row pins dropped").arg(sm.name)));
     }
 
+    // The P2-table shape of Skeletal Animation and World Background (giTier
+    // medium, field normalised to 0, dial pinned against world Epic, nothing
+    // else pinned): the reader re-applies the tier, and the field comes up.
+    {
+        auto s = freshScene();
+        s->giMode = iris::GiMode::VCT;
+        s->giQuality = iris::GiQuality::MEDIUM;
+        s->giDdgi = 0;
+        s->giTier = int(RayonTier::Medium);
+        s->worldMode = int(worldmodes::Mode::Epic);
+        s->worldOverrides.insert(worldmodes::rayonRowId(), 2);
+        worldmodes::setRayon(s, worldmodes::rayonEnabled(s), worldmodes::rayonTier(s));
+        CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1 && giDynamic(s) == 0,
+              "Skeletal/World Background: the re-applied Medium tier turns the field on, nothing else moves");
+        CHECK(!worldmodes::rayonCustom(s) && s->worldOverrides.value(worldmodes::rayonRowId()).toInt() == 2,
+              "reads as Medium (not Custom), dial pin kept");
+        // The same shape with the field PINNED off keeps it off — a pin is a pin.
+        s->giDdgi = 0;
+        s->worldOverrides.insert(QStringLiteral("giDdgi"), 0);
+        worldmodes::setRayon(s, worldmodes::rayonEnabled(s), worldmodes::rayonTier(s));
+        CHECK(giDdgi(s) == 0 && worldmodes::rayonCustom(s), "a pinned field survives the re-application");
+    }
+
+    // The pre-re-stage shape of the two hybrid samples (hybrid + high, field
+    // absent, giMode/giQuality pins from their World-Mode-row days): derives
+    // High — DDGI-fed now — with the redundant pins dropped.
+    {
+        auto s = freshScene();
+        s->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        s->giQuality = iris::GiQuality::HIGH;
+        s->giDdgi = -1;
+        s->worldMode = int(worldmodes::Mode::Epic);
+        s->worldOverrides.insert(QStringLiteral("giMode"), 3);
+        s->worldOverrides.insert(QStringLiteral("giQuality"), 2);
+        worldmodes::deriveRayonFromDocument(s);
+        CHECK(worldmodes::rayonTier(s) == RayonTier::High, "hybrid + high, field untouched -> High");
+        CHECK(giDdgi(s) == 1 && giBounces(s) == 1 && giDynamic(s) == 0, "DDGI-fed, one bounce, no dynamic probes");
+        CHECK(!worldmodes::rayonCustom(s), "reads as High, not Custom");
+        CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")) &&
+                  !s->worldOverrides.contains(QStringLiteral("giQuality")),
+              "redundant row pins dropped");
+    }
     // A scene that DEVIATES from every tier keeps its deviation as a pin.
     {
         auto s = freshScene();
@@ -293,6 +401,45 @@ static void testMigration()
         CHECK(s->worldOverrides.value(QStringLiteral("giQuality")).toInt() == 2,
               "because the deviation became a pin");
         CHECK(worldmodes::rayonCustom(s), "which is exactly what 'Custom' means");
+    }
+    // An EXPLICIT field value is preserved, both ways: a document that opted
+    // out renders without the field (pinned, Custom); one that opted in at
+    // Medium IS the Medium row now and needs no pin.
+    {
+        auto s = freshScene();
+        s->giMode = iris::GiMode::VCT;
+        s->giQuality = iris::GiQuality::MEDIUM;
+        s->giDdgi = 0;
+        s->worldMode = int(worldmodes::Mode::Epic);
+        worldmodes::deriveRayonFromDocument(s);
+        CHECK(giDdgi(s) == 0 && s->worldOverrides.value(QStringLiteral("giDdgi")).toInt() == 0,
+              "an explicit field OFF survives as a pin");
+        CHECK(worldmodes::rayonCustom(s), "and reads Custom (Medium without its field)");
+    }
+    {
+        auto s = freshScene();
+        s->giMode = iris::GiMode::VCT;
+        s->giQuality = iris::GiQuality::MEDIUM;
+        s->giDdgi = 1;
+        s->worldMode = int(worldmodes::Mode::Epic);
+        worldmodes::deriveRayonFromDocument(s);
+        CHECK(giDdgi(s) == 1 && !s->worldOverrides.contains(QStringLiteral("giDdgi")) &&
+                  !worldmodes::rayonCustom(s),
+              "a P1-era explicit field ON at Medium is the Medium row: no pin, not Custom");
+    }
+    // A hand-set bounce count deviates and is kept as a pin (Epic's column is
+    // a row like any other; nothing is owed to old data, but what the document
+    // rendered is preserved where preserving costs nothing).
+    {
+        auto s = freshScene();
+        s->giMode = iris::GiMode::VCT;
+        s->giQuality = iris::GiQuality::MEDIUM;
+        s->giNumBounces = 3;
+        s->worldMode = int(worldmodes::Mode::Epic);
+        worldmodes::deriveRayonFromDocument(s);
+        CHECK(worldmodes::rayonTier(s) == RayonTier::Medium && giBounces(s) == 3 &&
+                  s->worldOverrides.value(QStringLiteral("giBounces")).toInt() == 3,
+              "vct + medium at 3 bounces derives Medium with the bounces pinned");
     }
     // A GI-off document stays off, derives a plausible tier from its quality,
     // and pins nothing about the technique (OFF is the enable, not a deviation).
@@ -311,8 +458,9 @@ static void testMigration()
         worldmodes::setMode(s, worldmodes::Mode::Epic);
         CHECK(giMode(s) == 0, "so re-applying Epic does NOT switch GI on behind the user");
     }
-    // A P1-era scene that opted into the field explicitly derives Epic and
-    // keeps it — the one legacy shape that lands on the top tier.
+    // A P1-era scene that opted into the field explicitly on the hybrid is
+    // the new HIGH row, not Epic: no pre-tier document could have rendered
+    // Epic's bounces or dynamic probes, so Epic is only ever chosen.
     {
         auto s = freshScene();
         s->giMode = iris::GiMode::VCT_PCC_HYBRID;
@@ -320,7 +468,7 @@ static void testMigration()
         s->giDdgi = 1;
         s->worldMode = int(worldmodes::Mode::Custom);
         worldmodes::deriveRayonFromDocument(s);
-        CHECK(worldmodes::rayonTier(s) == RayonTier::Epic, "hybrid + high + field derives Epic");
+        CHECK(worldmodes::rayonTier(s) == RayonTier::High, "hybrid + high + field derives High (never Epic)");
         CHECK(giDdgi(s) == 1 && !worldmodes::rayonCustom(s), "with nothing pinned");
         CHECK(!s->worldOverrides.contains(worldmodes::rayonRowId()),
               "a Custom-mode scene needs no dial pin: no tier can clobber it");

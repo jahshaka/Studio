@@ -107,14 +107,12 @@ void WorldGiPropertyWidget::rebuild()
     QString tierTip =
         tr("How much machinery Rayon uses. Low bounces one light off the scene (cheapest — and "
            "the one tier where emissive surfaces and area lights contribute nothing). Medium "
-           "voxelizes the lit volume and cone-traces the bounce out of it. High adds a grid of "
-           "reflection probes, captured in HDR with shadows. Epic adds the irradiance field, "
-           "which replaces the cone-traced diffuse with probe-stored bounce that cannot leak "
-           "through walls.\n\n"
-           "New scenes start at Epic.\n\n"
-           "Known gap at Epic: with the irradiance field on, ambient light inside the lit volume "
-           "has no source, so an OPEN scene reads 15-25% darker in the mid-ground (a sealed room "
-           "is unaffected). Drop to High, or raise the field's Intensity under Advanced.");
+           "voxelizes the lit volume and feeds an irradiance field from it: probe-stored bounce "
+           "that cannot leak through walls. High adds a grid of reflection probes, captured in "
+           "HDR with shadows. Epic adds three light bounces and dynamic reflection probes — the "
+           "probes covering whatever moves re-capture every frame instead of waiting their turn "
+           "in the update budget.\n\n"
+           "New scenes start at Epic.");
     if (!deviations.isEmpty())
         tierTip += tr("\n\nCUSTOM: %1 %2 been set by hand and no longer follow the tier. They stay "
                       "that way through tier switches; Advanced > Reset Advanced Settings hands "
@@ -223,8 +221,8 @@ void WorldGiPropertyWidget::rebuild()
         connect(lightSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldGiPropertyWidget::onLightChanged);
 
-        bounces = this->addFloatValueSlider(tr("Light Bounces"), 1.0f, 4.0f,
-                                            float(scene->giNumBounces));
+        bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
+                                            1.0f, 4.0f, float(scene->giNumBounces));
         connect(bounces, SIGNAL(valueChanged(float)), SLOT(onBouncesChanged(float)));
         break;
     }
@@ -243,8 +241,14 @@ void WorldGiPropertyWidget::rebuild()
         connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldGiPropertyWidget::onQualityChanged);
 
-        bounces = this->addFloatValueSlider(tr("Light Bounces"), 1.0f, 4.0f,
-                                            float(scene->giNumBounces));
+        // A Rayon tier row (Epic's column: 3): an edit here PINS it, like the
+        // technique and quality above, and the mark says so.
+        bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
+                                            1.0f, 4.0f, float(scene->giNumBounces));
+        bounces->setToolTip(tr("Total light bounces, 1-4. Each bounce past the first is another "
+                               "light-propagation pass over the whole voxel volume on every "
+                               "re-solve, and the irradiance field is fed from that volume so it "
+                               "sees them too. Epic sets 3; the other tiers 1."));
         connect(bounces, SIGNAL(valueChanged(float)), SLOT(onBouncesChanged(float)));
 
         // COMPACT, SCRUBBABLE ROWS (owner report 2026-09-07). These were
@@ -266,11 +270,22 @@ void WorldGiPropertyWidget::rebuild()
             // that cannot ask for a probe grid nobody could afford.
             pccGrid = this->addDragVector3(tr("Grid"), scene->giPccGrid, 1.0, 16.0, 0.05, 0);
             connect(pccGrid, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onPccGridChanged);
+            // DYNAMIC PROBES (Epic's other column). A Rayon tier row; pins.
+            dynamicProbes = this->addFloatValueSlider(
+                tr("Dynamic Probes") + pinMark(scene, "giDynamicProbes"), 0.0f, 8.0f,
+                float(qBound(0, scene->giDynamicProbes, 8)));
+            dynamicProbes->setToolTip(
+                tr("Extra reflection-probe re-captures per frame, on top of the GI Update "
+                   "Budget, reserved for the probes covering whatever MOVED this frame — so a "
+                   "moving object's reflection follows it frame by frame instead of waiting "
+                   "its turn in the budget's sweep. Costs nothing while the scene is still. "
+                   "Epic sets 2; the other tiers 0 (the sweep alone)."));
+            connect(dynamicProbes, SIGNAL(valueChanged(float)), SLOT(onDynamicProbesChanged(float)));
         }
 
-        // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). Epic's defining feature,
-        // and the reason the tier row carries a warning: it REPLACES the
-        // cone-traced diffuse rather than adding to it.
+        // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). On at every voxel tier
+        // since option (b); it REPLACES the cone-traced diffuse rather than
+        // adding to it.
         ddgiToggle = this->addCheckBox(tr("Irradiance Field (DDGI)") + pinMark(scene, "giDdgi"),
                                        scene->giDdgi > 0);
         ddgiToggle->setValue(scene->giDdgi > 0);
@@ -279,8 +294,8 @@ void WorldGiPropertyWidget::rebuild()
                "every direction, plus a depth map that decides what each probe can see. It is "
                "the leak fix: a cone cannot tell a wall from empty space, and this can.\n\n"
                "Turning it on turns the voxel-cone diffuse OFF — it replaces that term rather "
-               "than adding to it. Reflections, probes and planar are untouched. Epic turns it "
-               "on; the other tiers leave it off."));
+               "than adding to it. Reflections, probes and planar are untouched. Every voxel "
+               "tier (Medium, High, Epic) turns it on; Low has no volume to feed it from."));
         connect(ddgiToggle, &CheckBoxWidget::valueChanged,
                 this, &WorldGiPropertyWidget::onDdgiToggled);
         if (scene->giDdgi > 0) {
@@ -344,8 +359,10 @@ void WorldGiPropertyWidget::rebuild()
 
     // Only worth offering when there is something to hand back — the same rule
     // the World Mode panel's "Reset All Pinned Rows" follows.
-    if (!deviations.isEmpty() || !pinMark(scene, "giMode").isEmpty() ||
-        !pinMark(scene, "giQuality").isEmpty() || !pinMark(scene, "giDdgi").isEmpty()) {
+    bool anyPin = !deviations.isEmpty();
+    for (const QString &id : worldmodes::rayonRowIds())
+        anyPin = anyPin || scene->worldOverrides.contains(id);
+    if (anyPin) {
         resetAdvancedButton = new QPushButton(tr("Reset Advanced Settings"));
         resetAdvancedButton->setToolTip(tr("Drops the settings you pinned here (*) and lets the "
                                            "quality tier decide them again."));
@@ -408,7 +425,14 @@ void WorldGiPropertyWidget::onLightChanged(int row)
 
 void WorldGiPropertyWidget::onBouncesChanged(float value)
 {
-    if (!!scene) scene->giNumBounces = qBound(1, qRound(value), 4);
+    // Through the registry: the write AND the pin, so a later tier switch
+    // does not silently undo the edit (worldmodes.h's one invariant).
+    if (!!scene) worldmodes::setRowValue(scene, QStringLiteral("giBounces"), qBound(1, qRound(value), 4));
+}
+
+void WorldGiPropertyWidget::onDynamicProbesChanged(float value)
+{
+    if (!!scene) worldmodes::setRowValue(scene, QStringLiteral("giDynamicProbes"), qBound(0, qRound(value), 8));
 }
 
 void WorldGiPropertyWidget::onBoundsMinChanged(iris::Vec3 value)

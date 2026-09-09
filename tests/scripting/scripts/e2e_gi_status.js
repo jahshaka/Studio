@@ -179,16 +179,19 @@ threw = "";
 try { world.gi({ updateBudge: 1 }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("updateBudge") >= 0,
        "world.gi REFUSES the near-miss key by name (updateBudge is not updateBudget): " + threw);
-// The two keys this replaced are REFUSED rather than silently aliased: a script
+// The key this replaced is REFUSED rather than silently aliased: a script
 // written against the old model must fail loudly and be told the new spelling.
+// ('dynamicProbes' is a LIVE key again since the Rayon tier table gained
+// Epic's column — with a different meaning: extra moved-covering re-captures
+// on top of the budget, not the retired nearest-N; scripting.e2e.rayon and
+// gi.dynamic_probes gate it.)
 threw = "";
 try { world.gi({ autoRefresh: false }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("autoRefresh") >= 0 && threw.indexOf("updateBudget") >= 0,
        "world.gi refuses the retired autoRefresh key and names updateBudget: " + threw);
-threw = "";
-try { world.gi({ dynamicProbes: 1 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("dynamicProbes") >= 0 && threw.indexOf("updateBudget") >= 0,
-       "world.gi refuses the retired dynamicProbes key and names updateBudget: " + threw);
+assert(world.gi({ dynamicProbes: 1 }) && world.get().gi.dynamicProbes === 1,
+       "world.gi accepts dynamicProbes (Epic's column) and world.get().gi reads it back");
+assert(world.gi({ dynamicProbes: 0 }), "and back to the sweep alone for the cases below");
 
 // A grid of two, one update a frame. quality stays low so the six face renders
 // a probe update costs are 128px ones.
