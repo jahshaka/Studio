@@ -27,6 +27,15 @@ BINDIR="$(cd "$(dirname "$BIN")" && pwd)"
 SHARED_INI="$BINDIR/jahsettings.ini"
 fail=0
 
+# THE WORKING DIRECTORY SURVIVES BETWEEN RUNS (ctest sets it to a fixed scratch
+# dir), so every artifact this script makes has to be cleared FIRST. Learned by
+# failing: run A found the shared file present and saved shared.ini.bak; run B
+# found it ABSENT, and the stale backup from run A then "restored" a file that
+# was supposed to stay gone. A test whose verdict depends on what the previous
+# run left behind is not a gate.
+rm -f shared.ini.bak report.js run1.log run2.log run3.log run4.log
+rm -rf root-cli root-env root-wins
+
 check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1; fi }
 
 # The shared settings file, as it is right now. It may not exist (a clean build
