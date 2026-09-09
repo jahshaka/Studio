@@ -2216,13 +2216,21 @@ void MainWindow::setupDockWidgets()
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
+    // THE DEFAULT LAYOUT. Presets lives in the RIGHT COLUMN, under Properties
+    // (owner layout, 2026-09-08) — it used to open in the BOTTOM area beside
+    // the Asset Browser and the Timeline, which is not where anybody uses it
+    // and not the column PanelMetrics sizes it for: `presetsPanelWidth` IS
+    // `rightColumnWidth`, and a bottom-area Presets panel forced that width
+    // onto a dock that spans the whole window instead.
+    //
+    // splitDockWidget, not addDockWidget: it puts the two in ONE column split
+    // vertically, which is the arrangement the shared width constant describes.
     viewPort->addDockWidget(Qt::LeftDockWidgetArea, sceneHierarchyDock);
     viewPort->addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
+    viewPort->splitDockWidget(sceneNodePropertiesDock, presetsDock, Qt::Vertical);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, assetDock);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
-    viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
-
 
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
@@ -2256,8 +2264,14 @@ void MainWindow::applyRightColumnWidthOnce()
     rightColumnSized = true;
     QTimer::singleShot(0, this, [this]() {
         if (!viewPort || !sceneNodePropertiesDock) return;
-        viewPort->resizeDocks({ sceneNodePropertiesDock },
-                              { PanelMetrics::rightColumnWidth }, Qt::Horizontal);
+        // BOTH docks in the column, from the one constant. Presets sits under
+        // Properties in the default layout now, and a horizontal resizeDocks
+        // that names only one of a vertically split pair leaves the other free
+        // to argue about the width.
+        QList<QDockWidget *> column{ sceneNodePropertiesDock };
+        QList<int> widths{ PanelMetrics::rightColumnWidth };
+        if (presetsDock) { column << presetsDock; widths << PanelMetrics::rightColumnWidth; }
+        viewPort->resizeDocks(column, widths, Qt::Horizontal);
     });
 }
 
