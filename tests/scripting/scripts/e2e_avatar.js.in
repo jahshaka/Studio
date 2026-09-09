@@ -118,12 +118,18 @@ assert(avatar.time() === 0, "stop rewinds to 0");
 // The character is already loaded; WALK is an ANIMATION-ONLY file (zero
 // meshes) for the same rig, MISMATCH one for a different rig.
 var clipsBefore = avatar.clips().length;
-// {asset:false} — INSPECTION. This fixture is an animation-only .glb (zero
-// meshes), which the mesh import pipeline refuses; the ASSET route is proved
-// against an importable clip by scripting.e2e.avatar_assets and by
-// avatar.loadClip in avatar_verbs. The option is explicit for exactly that
-// reason: the limitation is visible here rather than hidden in a fallback.
-var added = avatar.loadAnimation(WALK, { asset: false });
+// THE FILE BECOMES AN ASSET. This fixture is an animation-only .glb (zero
+// meshes) — the shape the mesh import pipeline refused outright until it got
+// a type of its own (ModelTypes::Animation), which is why this call used to
+// need an {asset:false} escape hatch to inspect the file without keeping it.
+// The escape hatch is gone with the reason for it: the clip imports as an
+// Animation row here, with no project open at all (importing is a LIBRARY
+// operation; pinning is the project one).
+var added = avatar.loadAnimation(WALK);
+assert(added.asset && added.asset.length > 10,
+       "the animation-only file became an Animation asset (" + added.asset + ")");
+assert(assets.metadata(added.asset).kind === "animation",
+       "... typed as one in the library");
 assert(!!added && added.added === 1, "avatar.loadAnimation added one clip -> " + JSON.stringify(added.match));
 assert(added.match.matched === added.match.boneChannels && added.match.matched > 0,
        "every bone channel of the clip matched the loaded rig");
@@ -151,9 +157,18 @@ assert(avatar.stop(), "stop");
 
 // a clip for a DIFFERENT rig is refused by name, not silently loaded
 var refusedRig = "";
-try { avatar.loadAnimation(MISMATCH, { asset: false }); } catch (e) { refusedRig = String(e); }
+try { avatar.loadAnimation(MISMATCH); } catch (e) { refusedRig = String(e); }
 assert(refusedRig.indexOf("hips") >= 0, "a foreign rig is refused, naming the bone: " + refusedRig);
 assert(avatar.clips().length === clipsBefore + 1, "... and nothing was added");
+// The FILE is still a perfectly good clip file — it simply animates another
+// skeleton — so it is in the library; what was refused is putting it on THIS
+// character. (The import happens first, deliberately: the rig test needs the
+// clips, and a clip file is not invalid for being for someone else.)
+// (by NAME, not by count: this suite's home is not wiped between runs, so the
+// library accumulates across gates.)
+assert(assets.list({ type: "animation" }).filter(function (a) {
+           return a.name === "rig_mismatch_anim"; }).length >= 1,
+       "the refused clip is still an Animation asset (it fits a different rig)");
 
 // root motion is a preview policy, and it is OFF by default
 assert(avatar.preview().rootMotion === false, "root motion is off by default (walk in place)");
