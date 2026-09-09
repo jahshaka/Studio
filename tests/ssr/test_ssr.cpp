@@ -90,6 +90,18 @@
 //      8.04 px, mismatch 0.005) while being seven times too strong, so the
 //      only assertion that separates the two is how big the occlusion is.
 //
+//      AND THE HIGHLIGHTS (riders lane, ogre-patch 0024). SSR and SSAO were the
+//      screen-space half of the owner report; the other half was HlmsPbs
+//      itself, whose viewDir = normalize( -inPs.pos ) assumes a pinhole and so
+//      slides every view-dependent term (NdotV, Fresnel, the half vector, the
+//      probe lookup) with the fragment's screen position under an ortho pan.
+//      A glossy sphere's specular highlight is the visible symptom: measured
+//      pre-patch on this fixture the whole shaded sphere fails to translate
+//      (shifted mismatch of the sphere window well above the noise floor)
+//      while with the patch it is a pure translation. The section asserts the
+//      highlight centroid moves by exactly the pan and the sphere window is
+//      the same picture translated.
+//
 // TWO ENV-GATED EXTRAS, off in the gate and on when a human needs evidence:
 //   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm, ssr-firefly-{half,hq}.ppm, the
 //                    shadow fixture's two frames and the four orthographic footprints
@@ -153,6 +165,35 @@ static int failures = 0;
         std::printf("\n");                                                      \
         if (!(cond)) ++failures;                                                \
     } while (0)
+
+/// A unit UV sphere (radius 0.5, like unitCubeMesh's extents): the specular
+/// highlight fixture of section 12's PBS half needs a curved surface.
+static MeshData unitSphereMesh(unsigned rings = 24, unsigned segments = 48)
+{
+    MeshData d;
+    const float kPi = 3.14159265358979f;
+    for (unsigned r = 0; r <= rings; ++r) {
+        const float v = float(r) / float(rings);
+        const float phi = v * kPi;
+        for (unsigned s = 0; s <= segments; ++s) {
+            const float u = float(s) / float(segments);
+            const float theta = u * 2.0f * kPi;
+            const float nx = std::sin(phi) * std::cos(theta);
+            const float ny = std::cos(phi);
+            const float nz = std::sin(phi) * std::sin(theta);
+            d.positions.insert(d.positions.end(), { 0.5f * nx, 0.5f * ny, 0.5f * nz });
+            d.normals.insert(d.normals.end(), { nx, ny, nz });
+            d.uvs.insert(d.uvs.end(), { u, v });
+        }
+    }
+    const unsigned stride = segments + 1u;
+    for (unsigned r = 0; r < rings; ++r)
+        for (unsigned s = 0; s < segments; ++s) {
+            const unsigned a = r * stride + s, b = a + stride;
+            d.indices.insert(d.indices.end(), { a, b, a + 1u, a + 1u, b, b + 1u });
+        }
+    return d;
+}
 
 static void render(Engine *e, int frames = 3)
 {
@@ -1153,6 +1194,110 @@ int main()
                           "gives (window mass %.1f; 243 correct, 1702 with the "
                           "perspective-only form)", m0);
             }
+        }
+
+        // ---- THE HIGHLIGHTS (ogre-patch 0024) -----------------------------
+        // The same statement for HlmsPbs' OWN view-dependent shading, measured
+        // on plain frames (no post chain at all): a glossy dielectric sphere
+        // under the directional light, seen by the ortho camera at the two
+        // poses. With the pinhole viewDir the highlight sits at a different
+        // place on the sphere at each pose (the eye direction differs per
+        // pixel, so the half vector does), and the whole sphere's Fresnel
+        // shading changes too; with the patch every fragment looks the same
+        // way and the panned frame is the first one translated.
+        //
+        // The camera is brought CLOSE for this: the pinhole error grows with
+        // the fragment's view-space xy over its distance, and an ortho camera
+        // parked 8.6 units out (the pose above) makes a 0.25-unit pan a
+        // fraction of a degree, which a 48 px sphere cannot resolve.
+        {
+            const NodeId sphere = os->createNode();
+            {
+                PbrParams p;
+                p.albedo = Colour(0.8f, 0.8f, 0.8f);
+                p.metalness = 0.0f;
+                p.roughness = 0.25f;
+                os->attachMesh(sphere, os->createMesh(unitSphereMesh()),
+                               os->createPbrMaterial(p));
+                enginetest::setNodeScale(os, sphere, Vec3(3.0f, 3.0f, 3.0f));
+                enginetest::setNodePosition(os, sphere, Vec3(2.2f, 1.6f, -1.0f));
+            }
+            auto closePoseAt = [&](float dx) {
+                CameraDesc c = enginetest::testCameraDescLookAt(Vec3(dx, 3.0f, 3.5f),
+                                                                Vec3(dx, 0.0f, 0.0f));
+                c.orthographic = true;
+                c.orthoSize    = kOrthoSize;
+                c.farClip      = kFarA;
+                return c;
+            };
+            auto plain = [&](const CameraDesc &c, std::vector<float> &lum, Image &img) {
+                ov->setCamera(c);
+                ov->setPostFx(PostFxDesc());
+                render(engine.get(), 4);
+                if (!ov->readPixels(img) || img.width != kW || img.height != kH) return false;
+                lum.assign(size_t(kW) * kH, 0.0f);
+                for (unsigned y = 0; y < kH; ++y)
+                    for (unsigned x = 0; x < kW; ++x) {
+                        const Colour c4 = img.at(x, y);
+                        lum[size_t(y) * kW + x] = 0.2126f * c4.r + 0.7152f * c4.g + 0.0722f * c4.b;
+                    }
+                return true;
+            };
+            std::vector<float> l0, l1;
+            Image i0, i1;
+            const bool got = plain(closePoseAt(0.0f), l0, i0) &&
+                             plain(closePoseAt(kPanWorld), l1, i1);
+            CHECK(got, "ortho highlight: both plain poses rendered and read back");
+            if (got) {
+                if (envOn("JAH_SSR_DUMP")) {
+                    writePpm(i0, "pbs-ortho-plain-0.ppm");
+                    writePpm(i1, "pbs-ortho-plain-1.ppm");
+                }
+                // The highlight CORE: pixels within 90% of the window's peak
+                // luminance. Its centroid must move by the pan and nothing else.
+                auto core = [&](const std::vector<float> &l, int x0, int x1,
+                                float &cx, float &cy, float &mass) {
+                    float peak = 0.0f;
+                    for (unsigned y = 0; y < kH; ++y)
+                        for (int x = x0; x < x1; ++x)
+                            peak = std::max(peak, l[size_t(y) * kW + unsigned(x)]);
+                    double sum = 0.0, wx = 0.0, wy = 0.0;
+                    for (unsigned y = 0; y < kH; ++y)
+                        for (int x = x0; x < x1; ++x) {
+                            const float v = l[size_t(y) * kW + unsigned(x)];
+                            if (v < 0.9f * peak) continue;
+                            sum += v; wx += double(x) * v; wy += double(y) * v;
+                        }
+                    mass = float(sum);
+                    cx = sum > 0.0 ? float(wx / sum) : -1.0f;
+                    cy = sum > 0.0 ? float(wy / sum) : -1.0f;
+                    return peak;
+                };
+                float cx0, cy0, m0, cx1, cy1, m1;
+                const float peak0 = core(l0, kWinLo + kPanPixels, kWinHi + kPanPixels, cx0, cy0, m0);
+                const float peak1 = core(l1, kWinLo, kWinHi, cx1, cy1, m1);
+                const float mism = shiftedMismatch(l0, l1, kPanPixels, kWinLo, kWinHi);
+                std::printf("   ortho highlight: peak %.3f -> %.3f, core mass %.2f -> %.2f, "
+                            "centroid (%.2f, %.2f) -> (%.2f, %.2f) (expected x %.2f), "
+                            "shifted mismatch %.4f\n",
+                            peak0, peak1, m0, m1, cx0, cy0, cx1, cy1, cx0 - float(kPanPixels), mism);
+                CHECK_MSG(peak0 > 0.6f && m0 > 0.5f,
+                          "the sphere has a specular highlight at all (peak %.3f, core mass %.2f)",
+                          peak0, m0);
+                CHECK_MSG(cx0 > 0.0f && std::fabs(cx1 - (cx0 - float(kPanPixels))) < 0.5f &&
+                          std::fabs(cy1 - cy0) < 0.5f,
+                          "the HIGHLIGHT PANS WITH THE SCENE: centroid (%.2f, %.2f) -> "
+                          "(%.2f, %.2f), expected (%.2f, %.2f)",
+                          cx0, cy0, cx1, cy1, cx0 - float(kPanPixels), cy0);
+                CHECK_MSG(m0 > 0.0f && std::fabs(m1 - m0) / m0 < 0.10f,
+                          "the highlight keeps its size across the pan (core mass %.2f -> %.2f)",
+                          m0, m1);
+                CHECK_MSG(mism < 0.01f,
+                          "the panned PBS frame IS the first one translated (every "
+                          "view-dependent term, not just the highlight): shifted mismatch %.4f",
+                          mism);
+            }
+            os->removeNode(sphere);
         }
 
         // ---- THE FALLBACK SWITCH ------------------------------------------
