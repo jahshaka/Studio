@@ -22,11 +22,7 @@ For more information see the LICENSE file
 #include <functional>
 #include <limits>
 
-#include "assimp/Importer.hpp"
-#include "assimp/postprocess.h"
-#include "assimp/scene.h"
 
-#include "irisgl/import/importflags.h"
 
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/logger.h"
@@ -34,6 +30,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/import/graphicshelper.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -625,16 +622,13 @@ bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, Clip
     // them. Reading the clip without the unit factor would drive a metre-scale
     // rig with centimetre-scale offsets — a rig that flies apart on the first
     // frame (the FBX unit-scale fix, importflags.h).
-    Assimp::Importer importer;
-    const aiScene *scene =
-        importer.ReadFile(path.toStdString().c_str(), iris::ImportFlags::ClipNamesOnly);
-    if (!scene)
-        return fail(QStringLiteral("could not read %1 (%2)")
-                        .arg(info.fileName(), QString::fromUtf8(importer.GetErrorString())));
-    if (scene->mNumAnimations == 0)
+    QString readError;
+    const auto anims =
+        iris::GraphicsHelper::loadAnimationsFromClipFile(info.absoluteFilePath(), &readError);
+    if (!readError.isEmpty())
+        return fail(QStringLiteral("could not read %1 (%2)").arg(info.fileName(), readError));
+    if (anims.isEmpty())
         return fail(QStringLiteral("%1 contains no animation").arg(info.fileName()));
-
-    const auto anims = iris::Mesh::extractAnimations(scene, info.absoluteFilePath());
 
     // The clip -> bone join is by SCENE-NODE NAME (SceneNode::updateAnimation
     // matches `anim->boneAnimations.contains(node->name)`), so a clip from

@@ -20,16 +20,14 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include <functional>
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
 
-#include "irisgl/import/importflags.h"
 
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "modules/avatar/avatarsockets.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/import/graphicshelper.h"
 #include "irisgl/document/animation/locomotion.h"
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/physics/environment.h"
@@ -1340,20 +1338,17 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     // come out identical either way (measured, avatarpreviewmodel.cpp) — but
     // the file's UNIT FACTOR still applies, because a clip's translation keys
     // are in the file's units and the character was parsed with it
-    // (ImportFlags::ClipNamesOnly, the FBX unit-scale fix).
-    Assimp::Importer importer;
-    const aiScene *scene =
-        importer.ReadFile(absolutePath.toStdString().c_str(), iris::ImportFlags::ClipNamesOnly);
-    if (!scene) {
-        record(QStringLiteral("%1: could not read the clip file (%2)")
-                   .arg(v, QString::fromUtf8(importer.GetErrorString())));
+    // (ImportFlags::ClipNamesOnly via GraphicsHelper::loadAnimationsFromClipFile, the FBX unit-scale fix).
+    QString readError;
+    const auto anims = iris::GraphicsHelper::loadAnimationsFromClipFile(absolutePath, &readError);
+    if (!readError.isEmpty()) {
+        record(QStringLiteral("%1: could not read the clip file (%2)").arg(v, readError));
         return false;
     }
-    if (scene->mNumAnimations == 0) {
+    if (anims.isEmpty()) {
         record(QStringLiteral("%1: '%2' contains no animation").arg(v, shown));
         return false;
     }
-    const auto anims = iris::Mesh::extractAnimations(scene, absolutePath);
 
     QSet<QString> rigNames;
     collectNodeNames(character, rigNames);
