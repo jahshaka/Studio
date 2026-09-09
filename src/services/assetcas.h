@@ -149,6 +149,15 @@ QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &
 QString textureGuidForSlot(QSqlDatabase conn, const QString &storedGuid,
                            const QString &slotName);
 
+/// textureGuidForSlot with the tolerant-read POLICY around it: returns
+/// `storedGuid` untouched when there is nothing to repair, and logs one line
+/// when there is. This is the form every reader wants — SceneReader,
+/// MaterialReader and AssetHelper all resolve texture slots and all three had
+/// (or, for AssetHelper, could not have) their own copy of the same five lines.
+/// `who` names the caller in the log ("material reader", "asset helper").
+QString repairTextureSlot(const QString &storedGuid, const QString &slotName,
+                          const char *who);
+
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.
 bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,

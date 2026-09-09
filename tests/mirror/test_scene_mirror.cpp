@@ -228,7 +228,7 @@ int main(int argc, char **argv)
         values["shininess"] = 0.0;
         auto converted = BuiltinMaterials::fromBuiltin(
             QStringLiteral("00000000-0000-0000-0000-000000000001"), values,
-            [](const QString &p) { return p; });
+            [](const QString &p, const QString &) { return p; });
         CHECK(!converted.isNull(), "the reserved Default guid converts to a PbrMaterial");
         CHECK(converted->getName() == QStringLiteral("Default"),
               "...and it is still called Default");
@@ -244,7 +244,7 @@ int main(int argc, char **argv)
         texValues["diffuseTexture"] = pngPath;
         auto texConverted = BuiltinMaterials::fromBuiltin(
             QStringLiteral("00000000-0000-0000-0000-000000000001"), texValues,
-            [](const QString &p) { return p; });
+            [](const QString &p, const QString &) { return p; });
         meshNode2->setMaterial(texConverted);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("converted Default builtin: diffuseTexture", img);
@@ -259,7 +259,7 @@ int main(int argc, char **argv)
         flatValues["color"] = QStringLiteral("#00cc22");
         auto flat = BuiltinMaterials::fromBuiltin(
             QStringLiteral("00000000-0000-0000-0000-000000000004"), flatValues,
-            [](const QString &p) { return p; });
+            [](const QString &p, const QString &) { return p; });
         CHECK(flat->shadingModel == 1, "the Flat builtin converts to the UNLIT shading model");
         meshNode2->setMaterial(flat);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
