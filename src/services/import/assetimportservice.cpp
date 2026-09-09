@@ -95,6 +95,37 @@ QString humanSize(qint64 bytes)
 
 }  // namespace
 
+QString AssetImportService::relistUnlistedMatch(const QString &sourcePath) const
+{
+    if (!db) return QString();
+    QSqlDatabase conn = QSqlDatabase::database();
+    if (!conn.isOpen()) return QString();
+
+    // The common case pays exactly this: an unlisted row only exists after a
+    // library delete that projects vetoed, so most libraries answer 0 here and
+    // the source file is never hashed twice.
+    QSqlQuery any(conn);
+    if (!any.exec("SELECT COUNT(*) FROM assets WHERE listed = 0") || !any.next()
+        || any.value(0).toInt() == 0)
+        return QString();
+
+    const QString oid = AssetCas::hashFile(sourcePath);
+    if (oid.isEmpty()) return QString();
+
+    // Same BYTES as an unlisted row's source = the same asset. The type is
+    // derived from the content, so identical bytes cannot mean a different
+    // kind of asset — no sniff needed (and no second sniff paid).
+    QSqlQuery match(conn);
+    match.prepare("SELECT AF.asset_guid FROM asset_files AF "
+                  "JOIN assets A ON A.guid = AF.asset_guid "
+                  "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 LIMIT 1");
+    match.addBindValue(oid);
+    if (!match.exec() || !match.next()) return QString();
+
+    const QString guid = match.value(0).toString();
+    return db->setAssetListed(guid, true) ? guid : QString();
+}
+
 AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request,
                                                     QString *error) const
 {
@@ -118,6 +149,7 @@ ImportResult AssetImportService::import(const ImportRequest &request,
     // covers every import route the app has.
     QElapsedTimer clock;
     clock.start();
+
     PreparedImport prepared = prepare(request, progress);
     ImportResult out = prepared.ok() ? commit(prepared, progress) : prepared.result;
 
@@ -229,6 +261,21 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     const ImportRequest &request = prepared.request;
     StagedAsset &staged = prepared.staged;
     ImportResult result = prepared.result;
+
+    // RE-LISTING (see relistUnlistedMatch): the DB half is the only half that
+    // may touch the database (prepare runs on a worker), so this is where the
+    // check that stops a duplicate row lives — once, for both entry points.
+    // The staged convert is thrown away; correctness beats the wasted work.
+    if (const QString relisted = relistUnlistedMatch(request.sourcePath); !relisted.isEmpty()) {
+        ImportResult back;
+        back.assetGuid = relisted;
+        back.warnings = result.warnings;
+        JAH_LOG(JahLog::assets, Display,
+                QStringLiteral("import: '%1' is the content of UNLISTED asset %2 — re-listed it "
+                               "in the library instead of creating a duplicate row")
+                    .arg(QFileInfo(request.sourcePath).fileName(), relisted));
+        return back;
+    }
 
     // ---- store + register (one transaction) ----
     if (!commitStagedAsset(request, staged, result, progress)) return result;

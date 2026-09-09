@@ -452,7 +452,15 @@ int main(int argc, char **argv)
         QSqlDatabase live = QSqlDatabase::database();
         const QString bakeObject = AssetStorePaths::objectPathIn(root, oidBake, "jmb");
         CHECK(QFileInfo::exists(bakeObject), "the bake is still on disk before its asset dies");
-        CHECK(db.deleteAsset("guidCow"), "the asset that owns the bake is deleted");
+        // guidCow is PINNED by projP (the copy-on-write fixture above), and a
+        // library delete never takes a pinned asset out of a project (owner
+        // law, 2026-09-09) — it unlists the row and keeps every byte the pin
+        // resolves, bake included. The bake dies with the asset when the asset
+        // really dies, which is the explicit hard delete.
+        CHECK(db.deleteAsset("guidCow"), "the LIBRARY delete of the pinned asset succeeds");
+        CHECK(scalar(live, "SELECT COUNT(*) FROM asset_files WHERE oid = '" + oidBake + "'") == 1,
+              "... and keeps the bake's content mapping (the row was unlisted, not deleted)");
+        CHECK(db.deleteAsset("guidCow", /*force*/ true), "the asset that owns the bake is deleted");
         CHECK(scalar(live, "SELECT COUNT(*) FROM asset_files WHERE oid = '" + oidBake + "'") == 0,
               "the delete dropped the bake's asset_files row");
 

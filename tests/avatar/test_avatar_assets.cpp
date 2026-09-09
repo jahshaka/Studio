@@ -376,9 +376,11 @@ int main(int argc, char **argv)
 
     // ---- R6: deleting a library avatar that projects pin ------------------
     //
-    // Not a spec gate but a FINDING the spec asked about (§13): `deleteAsset`
-    // drops every project's pin with no warning. Asserted so the behaviour is
-    // recorded rather than discovered by a user whose project lost a character.
+    // The finding the spec asked about (§13) — "deleteAsset drops every
+    // project's pin with no warning" — was FIXED by the library-delete lane
+    // (owner law, 2026-09-09): a library delete now UNLISTS a pinned asset.
+    // The avatar keeps its pin, its version and its content in every project
+    // that used it; only the explicit hard delete takes it out of them.
     {
         const QString objectGuid = makeObjectRow(&db, kRig, "Doomed", QString());
         const QString guid = AvatarAssets::create(objectGuid, AvatarAssets::Scope::Library, &db,
@@ -387,9 +389,13 @@ int main(int argc, char **argv)
         CHECK(!AvatarAssets::projectVersion(guid, &projectA).isEmpty(),
               "R6: a project pins the library avatar");
         db.deleteAsset(guid);
+        CHECK(!AvatarAssets::projectVersion(guid, &projectA).isEmpty(),
+              "R6: a LIBRARY delete leaves the project's pin alone — the project "
+              "keeps its character (the asset row is unlisted, not deleted)");
+        CHECK(!db.isAssetListed(guid), "R6: ... and the avatar is gone from the library listing");
+        db.deleteAsset(guid, /*force*/ true);
         CHECK(AvatarAssets::projectVersion(guid, &projectA).isEmpty(),
-              "R6: deleteAsset removes the project's pin TOO — a library delete "
-              "silently takes the asset out of every project that used it");
+              "R6: the explicit hard delete DOES take it out of every project");
     }
 
     std::printf(failures ? "\n%d FAILURES\n" : "\nall avatar-asset checks passed\n", failures);

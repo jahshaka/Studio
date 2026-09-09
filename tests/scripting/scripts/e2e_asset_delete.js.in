@@ -24,11 +24,24 @@ function mustThrow(fn, msg) {
     try { fn(); } catch (e) { threw = true; }
     assert(threw, msg);
 }
+// The suite's library DB is NOT wiped between ctest runs, and importing
+// content that matches an UNLISTED row re-lists that row instead of making a
+// duplicate (library-delete law). So an interrupted earlier run could hand us
+// a row that already carries a pin: take the leftover out for good and import
+// again, so every assertion below starts from a genuinely fresh row.
+function freshImport(path) {
+    var guid = assets.importFile(path);
+    if (assets.pins(guid).length > 0) {
+        assets.remove(guid, { force: true });
+        guid = assets.importFile(path);
+    }
+    return guid;
+}
 
 project.create("asset_delete_" + Date.now());
 
 // ---- a real library row, with stored content and a project pin ------------
-var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+var png = freshImport("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
 assert(png.length > 10, "assets.importFile(png) -> " + png);
 assert(assetByGuid(png) !== null, "the imported asset is listed in the library");
 
@@ -43,10 +56,85 @@ mustThrow(function () { assets.remove("no-such-guid-at-all"); },
           "assets.remove of an unknown guid fails");
 
 // ---- the deep variant takes the dependency rows with it ------------------
-var wav = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+var wav = freshImport("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
 assert(wav.length > 10, "assets.importFile(wav) -> " + wav);
 assert(assets.remove(wav, { keepShared: false }) === true,
        "assets.remove(keepShared:false) reports success");
 assert(assetByGuid(wav) === null, "the deep-removed asset is gone too");
+
+// ==========================================================================
+// LIBRARY DELETE KEEPS PROJECT PINS (owner law, 2026-09-09)
+// ==========================================================================
+// "Deleting an asset from the LIBRARY should not delete it from a project."
+// A delete of a PINNED asset unlists it: gone from the library listing,
+// present for every project that pinned it, its content still REFERENCED.
+
+function pinnedListing(guid) {
+    return assets.pins(guid).map(function (p) { return p.name; });
+}
+function gcObjectIds() {
+    // the classes block of the sweep report; `id` of an unreferenced object is
+    // its content id (oid)
+    return assets.gc({ dryRun: true }).classes.unreferencedObjects.items
+                 .map(function (i) { return i.id; });
+}
+
+var stamp = Date.now();
+var projA = project.create("libdel_A_" + stamp);
+assert(projA.length > 10, "project A created -> " + projA);
+
+var clip = freshImport("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+assert(clip.length > 10, "a second library asset imported -> " + clip);
+var clipOid = assets.importSettings(clip).sourceOid;
+assert(clipOid.length === 64, "its stored content id is known: " + clipOid);
+assert(assetByGuid(clip) !== null, "it is listed in the library");
+assert(assets.pins(clip).length === 0, "nothing pins it yet");
+assert(assets.metadata(clip).listed === true, "assets.metadata reports it listed");
+assert(assets.metadata(clip).pinCount === 0, "... with a pin count of 0");
+
+// ---- pin it into project A ------------------------------------------------
+assert(assets.addToProject(clip) === clip, "assets.addToProject pins it (same guid)");
+assert(assets.pins(clip).length === 1, "assets.pins sees exactly one project");
+assert(pinnedListing(clip)[0] === "libdel_A_" + stamp,
+       "... named: " + pinnedListing(clip).join(", "));
+
+// ---- the library delete: an UNLIST ---------------------------------------
+var errorBefore = app.lastError();   // sticky: the mustThrow calls above set one
+assert(assets.remove(clip) === true, "assets.remove of a PINNED asset reports success");
+assert(app.lastError() === errorBefore,
+       "... and records NO new error (an unlist is a success, not a refusal)");
+assert(assetByGuid(clip) === null, "the library listing no longer shows it");
+assert(assets.metadata(clip).listed === false, "assets.metadata reports listed: false");
+assert(assets.metadata(clip).pinCount === 1, "... and pinCount 1");
+assert(pinnedListing(clip)[0] === "libdel_A_" + stamp,
+       "assets.pins STILL names project A — the pin survived the library delete");
+assert(gcObjectIds().indexOf(clipOid) === -1,
+       "assets.gc reports its content as REFERENCED, not reclaimable");
+
+// ---- and project A still resolves it --------------------------------------
+var projB = project.create("libdel_B_" + stamp);
+assert(project.open(projA) === true, "project A reopened");
+var inProject = assets.list({ scope: "project" }).filter(function (a) { return a.guid === clip; });
+assert(inProject.length === 1, "the unlisted asset is still a member of project A");
+assert(assets.metadata(clip).guid === clip, "and still resolves by guid");
+
+// ---- re-importing the same content RE-LISTS the same row ------------------
+var again = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+assert(again === clip, "re-importing the same content re-lists the SAME row, no duplicate");
+assert(assetByGuid(clip) !== null, "... and the library tile is back");
+assert(assets.metadata(clip).listed === true, "... listed again");
+assert(assets.pins(clip).length === 1, "... with its pin untouched");
+
+// ---- force: the hard delete ----------------------------------------------
+mustThrow(function () { assets.remove(clip, { everywhere: true }); },
+          "assets.remove refuses an unknown option instead of ignoring it");
+assert(assets.remove(clip, { force: true }) === true, "assets.remove(force) reports success");
+assert(assetByGuid(clip) === null, "the asset is gone from the library");
+mustThrow(function () { assets.pins(clip); }, "assets.pins of a deleted asset fails");
+assert(project.open(projA) === true, "project A reopened after the hard delete");
+assert(assets.list({ scope: "project" }).filter(function (a) { return a.guid === clip; }).length === 0,
+       "the hard delete DID take it out of the project");
+assert(gcObjectIds().indexOf(clipOid) !== -1,
+       "and its content is now reclaimable by assets.gc");
 
 console.log("asset delete e2e passed");

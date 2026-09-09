@@ -94,7 +94,8 @@ inline constexpr const char *kAssetsTableForRebuild =
     "    asset             BLOB,"
     "    tags              BLOB,"
     "    properties        BLOB,"
-    "    view_filter       INTEGER"
+    "    view_filter       INTEGER,"
+    "    listed            INTEGER NOT NULL DEFAULT 1"
     ")";
 } // namespace CasSchema
 

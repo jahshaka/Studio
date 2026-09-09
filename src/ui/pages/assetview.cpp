@@ -97,6 +97,7 @@ For more information see the LICENSE file
 #include "services/import/assetimportservice.h"
 #include "services/import/importbatchrunner.h"
 #include "ui/dialogs/toast.h"
+#include "services/assetdelete.h"
 #include "services/projectassets.h"
 #include "services/imagematerial.h"
 #include "services/fitsize.h"
@@ -1227,7 +1228,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	});
 
 	connect(deleteFromLibrary, &QPushButton::pressed, [this]() {
-		removeAssetFromProject(selectedGridItem);
+		deleteAssetFromLibrary(selectedGridItem);
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
@@ -2275,6 +2276,19 @@ static QString metadataTableHtml(const MetadataRows &rows)
 	return html;
 }
 
+namespace {
+// "Kitchen, Showroom and 2 more" — a confirmation has to name the projects it
+// is talking about without growing to the size of the library.
+QString pinnedProjectNames(const QVector<AssetPinRecord> &pins)
+{
+	QStringList names;
+	for (const AssetPinRecord &pin : pins) names << pin.projectName;
+	if (names.size() <= 3) return names.join(QStringLiteral(", "));
+	const QStringList head = names.mid(0, 3);
+	return QObject::tr("%1 and %n more", "", names.size() - 3).arg(head.join(QStringLiteral(", ")));
+}
+} // namespace
+
 void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 {
 	if (!widget->metadata.isEmpty()) {
@@ -2303,6 +2317,16 @@ void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 				backfillMetadata(widget, guid, record.type);
 			}
 			refreshFitRow(guid, record.type, meta);
+		}
+		// USED BY (library delete keeps project pins): the pin count is what
+		// decides whether Delete removes this asset or merely unlists it, so
+		// the user gets to see it BEFORE pressing the button.
+		{
+			const auto pins = assetdelete::pins(db, widget->metadata["guid"].toString());
+			rows.append({ tr("Used by"),
+			              pins.isEmpty() ? tr("no projects")
+			                             : tr("%n project(s): %1", "", pins.size())
+			                                   .arg(pinnedProjectNames(pins)) });
 		}
 		rows.append({ tr("Public"), widget->metadata["is_public"].toBool() ? tr("true") : tr("false") });
 		rows.append({ tr("Author"), widget->metadata["author"].toString() });
@@ -2699,8 +2723,8 @@ void AssetView::wireTile(AssetGridItem *gridItem)
 		moveAssetToDrawer(item, drawerId);
 	});
 
-	connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-		removeAssetFromProject(item);
+	connect(gridItem, &AssetGridItem::deleteAssetFromLibrary, [this](AssetGridItem *item) {
+		deleteAssetFromLibrary(item);
 	});
 
 	connect(gridItem, &AssetGridItem::rebuildThumbnail, [this](AssetGridItem *item) {
@@ -2862,47 +2886,82 @@ void AssetView::clearLoadingTile()
 	loadingTile = nullptr;
 }
 
-void AssetView::removeAssetFromProject(AssetGridItem *item)
+// LIBRARY DELETE (owner, 2026-09-09): deleting from the library never takes
+// an asset out of a project. The decision and the write both live in
+// services/assetdelete.h — the same code `assets.remove` runs (API-first) —
+// and this function is the two-step confirmation in front of it.
+void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 {
-	auto option = QMessageBox::question(this,
-	    "Deleting Asset", "Are you sure you want to delete this asset?",
-	    QMessageBox::Yes | QMessageBox::Cancel);
+	if (!item || item->metadata.isEmpty()) return;
+	const QString guid = item->metadata["guid"].toString();
+	const QString name = item->metadata["name"].toString();
+	const QVector<AssetPinRecord> pins = assetdelete::pins(db, guid);
 
-	if (option == QMessageBox::Yes) {
-	    // Whatever the retired per-guid view left for this asset goes with it
-	    // (a no-op, and TRUE, when there is nothing there — the case every
-	    // asset imported since the view was retired is in). The CONTENT is
-	    // assets.gc's to reclaim: only it can tell a shared object from an
-	    // exclusive one.
-	    if (IrisUtils::removeDir(AssetStorePaths::legacyFolder(item->metadata["guid"].toString()))) {
-	        fastGrid->deleteTile(item);
-			// if the item is being used soft delete it
-			//db->deleteAsset(item->metadata["guid"].toString());
-            bool deleted = true;
-            db->deleteAssetAndDependencies(item->metadata["guid"].toString(), &deleted);
-            // A refused delete must not pass as a done one — the catalog rows
-            // survive and the asset comes back on the next library refresh.
-            if (!deleted) {
-                QMessageBox::warning(this, "Delete Failed!",
-                    "The library database refused the delete; the asset is still catalogued. "
-                    "See jahshaka.log for the failing query.", QMessageBox::Ok);
-            }
+	bool force = false;
+	if (pins.isEmpty()) {
+		if (QMessageBox::question(this, tr("Delete Asset"),
+		        tr("Delete \u201c%1\u201d from the library? No project uses it.").arg(name),
+		        QMessageBox::Yes | QMessageBox::Cancel) != QMessageBox::Yes)
+			return;
+	}
+	else {
+		// Step one: the honest default — it leaves every project alone.
+		QMessageBox box(this);
+		box.setWindowTitle(tr("Delete Asset"));
+		box.setText(tr("\u201c%1\u201d is used by %n project(s).", "", pins.size()));
+		box.setInformativeText(
+		    tr("Removing it from the library leaves it in %1 — those projects keep working. "
+		       "Deleting it everywhere takes it out of them too, and cannot be undone.")
+		        .arg(pinnedProjectNames(pins)));
+		QPushButton *unlist = box.addButton(tr("Remove From Library"), QMessageBox::AcceptRole);
+		QPushButton *everywhere = box.addButton(tr("Delete Everywhere\u2026"), QMessageBox::DestructiveRole);
+		box.addButton(QMessageBox::Cancel);
+		box.setDefaultButton(unlist);
+		box.exec();
+		if (box.clickedButton() == everywhere) {
+			// Step two: the destructive one is never one click away.
+			if (QMessageBox::warning(this, tr("Delete Everywhere"),
+			        tr("Delete \u201c%1\u201d from the library AND from %n project(s) (%2)? "
+			           "This cannot be undone.", "", pins.size()).arg(name, pinnedProjectNames(pins)),
+			        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
+				return;
+			force = true;
+		}
+		else if (box.clickedButton() != unlist) {
+			return;
+		}
+	}
 
-			item->metadata = QJsonObject();
-			renameWidget->setVisible(false);
-			tagWidget->setVisible(false);
-			updateAsset->setVisible(false);
+	// keepShared false: the page has always deleted the dependency closure
+	// with the asset (each member judged by its OWN pins inside the service).
+	const auto outcome = assetdelete::remove(db, guid, /*keepShared*/ false, force);
+	if (!outcome.ok) {
+		QMessageBox::warning(this, tr("Delete Failed!"),
+		    tr("The library database refused the delete; the asset is still catalogued. "
+		       "See jahshaka.log for the failing query."), QMessageBox::Ok);
+		return;
+	}
 
-			if (selectedGridItem == item) selectedGridItem = nullptr;
-			updateAddToProjectButton();
-			deleteFromLibrary->setEnabled(false);
+	fastGrid->deleteTile(item);
+	item->metadata = QJsonObject();
+	renameWidget->setVisible(false);
+	tagWidget->setVisible(false);
+	updateAsset->setVisible(false);
 
-			fetchMetadata(item);
-	        clearViewer();
-	    }
-	    else {
-	        QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);
-	    }
+	if (selectedGridItem == item) selectedGridItem = nullptr;
+	updateAddToProjectButton();
+	deleteFromLibrary->setEnabled(false);
+
+	fetchMetadata(item);
+	clearViewer();
+
+	if (outcome.unlisted) {
+		// The user must know the asset did NOT vanish from their projects.
+		Toast *t = new Toast(this);
+		t->showToast(tr("Removed From Library"),
+		             tr("%1 is still used by %n project(s) and stays in them.", "",
+		                outcome.pinCount).arg(name),
+		             0, parent->pos(), QRect());
 	}
 }
 

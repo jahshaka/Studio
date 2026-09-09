@@ -141,7 +141,7 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 
 	QAction remove("Delete", this);
 	connect(&remove, &QAction::triggered, this, [this]() {
-		emit removeAssetFromProject(this);
+		emit deleteAssetFromLibrary(this);
 	});
 	menu.addAction(&remove);
 

@@ -158,7 +158,28 @@ public:
     bool deleteProject(const QString &guid);
 	bool destroyTable(const QString &table);
 	void wipeDatabase();
-    bool deleteAsset(const QString &guid);
+    /// LIBRARY DELETE KEEPS PROJECT PINS (owner, 2026-09-09).
+    ///
+    /// An asset a project PINS is not deleted by a library delete: the row is
+    /// UNLISTED (listed = 0) and nothing else changes — no asset_files rows,
+    /// no project_assets rows, no sidecar, no content. The asset keeps
+    /// resolving by guid for every project that pinned it (open, scene read,
+    /// thumbnails, export) and simply stops appearing in library listings.
+    /// With NO pins the row is deleted exactly as it always was.
+    ///
+    /// `force` is the hard delete ("Delete everywhere"): pins are dropped and
+    /// the rows go regardless. The CONTENT is never unlinked here either way —
+    /// reclaiming it is assets.gc's job.
+    ///
+    /// Reports whether the write actually ran; an unlist that succeeded is
+    /// true, like a delete that succeeded.
+    bool deleteAsset(const QString &guid, bool force = false);
+    /// Library visibility, written directly (the unlist half of the above and
+    /// the re-list an import performs). False on an unknown guid.
+    bool setAssetListed(const QString &guid, bool listed);
+    /// Is the row a library tile? True for every row a delete never touched;
+    /// false for an unlisted row AND for a guid that names nothing.
+    bool isAssetListed(const QString &guid);
     /// Deletes a drawer AND its sub-drawers; every asset of the subtree moves
     /// to Uncategorized (0). Ids <= 0 (the root and Uncategorized) are refused.
     bool deleteCollection(const int &collectionId);
@@ -171,7 +192,11 @@ public:
     /// could not run (closed connection, failed statement) must never look
     /// like a successful one to the caller.
     QStringList deleteFolderAndDependencies(const QString &guid, bool *ok = nullptr);
-    QStringList deleteAssetAndDependencies(const QString &guid, bool *ok = nullptr);
+    /// `force` carries the hard delete through the whole closure (see
+    /// deleteAsset): without it, any member a project still pins is unlisted
+    /// instead of removed.
+    QStringList deleteAssetAndDependencies(const QString &guid, bool *ok = nullptr,
+                                           bool force = false);
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
 
     // UPDATE ===============================================================================
@@ -222,11 +247,17 @@ public:
     /// This is THE source assets.list({scope:'project'}) and the editor's
     /// project panel share.
     QVector<AssetRecord> fetchProjectPinnedAssets(const QString &projectGuid, bool includeDependencies = true);
+    /// The other direction: which PROJECTS pin this asset (guid + name, named
+    /// by the projects table; a pin whose project row is gone reports the guid
+    /// as its name). This is what `assets.pins` answers and what the Assets
+    /// page's delete confirmation counts.
+    QVector<AssetPinRecord> fetchAssetPins(const QString &guid);
+    /// How many projects pin this asset — the count without the names.
+    int countAssetPins(const QString &guid);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
 	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);
 	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
-    QVector<AssetRecord> fetchThumbnails();
     QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
     /// The drawer plus all its descendants (breadth-first); empty when the id

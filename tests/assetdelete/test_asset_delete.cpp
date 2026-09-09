@@ -4,11 +4,15 @@
 // [info] level).
 //
 // Covers, against the REAL Database class on a throwaway SQLite file:
-//   1. deleteAsset removes the asset row, its asset_files content mapping AND
-//      its project_assets pins, and the delete trigger decrements the shared
-//      files.refcount — content still referenced by another asset survives.
+//   1. deleteAsset UNLISTS an asset a project pins and touches nothing else
+//      (owner law 2026-09-09: a library delete never takes an asset out of a
+//      project); with force — or with no pins — it removes the asset row, its
+//      asset_files content mapping AND its project_assets pins, and the delete
+//      trigger decrements the shared files.refcount, so content still
+//      referenced by another asset survives.
 //   2. deleteAssetAndDependencies takes the dependency edges with it and
-//      reports success through its `ok` out-param.
+//      reports success through its `ok` out-param — judging every member of
+//      the closure by its OWN pins.
 //   3. A delete attempted on a CLOSED connection returns FALSE (never a silent
 //      "true" over surviving rows) and leaves the in-memory AssetManager cache
 //      alone — the regression that made the whole class of failures invisible.
@@ -26,6 +30,9 @@
 //   8. addFavorite is idempotent (INSERT OR REPLACE over a PRIMARY KEY).
 //   9. The .jaf version gate parses integer components instead of running the
 //      first three characters through toFloat()*10.
+//  10. The pin reads (countAssetPins/fetchAssetPins), the library-listing
+//      split (an unlisted row resolves by guid but is not a tile) and the
+//      reaping of an unlisted row whose last pinning project is deleted.
 //
 // Framework-free; non-zero exit on failure. Runs under QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
@@ -144,8 +151,31 @@ int main(int argc, char **argv)
     CHECK(refcountOf(sharedOid) == 2, "shared object refcount 2 (victim + keeper)");
     CHECK(refcountOf(ownOid) == 1, "private object refcount 1");
 
-    // --- 1. deleteAsset cleans all three tables and the refcounts -----------
-    CHECK(db.deleteAsset(victimGuid), "deleteAsset reports success");
+    // --- 1a. A PINNED asset is UNLISTED, not deleted ------------------------
+    //
+    // The owner's law (2026-09-09): deleting from the library never takes an
+    // asset out of a project. The victim is pinned, so the delete must change
+    // exactly ONE thing — library visibility.
+    CHECK(db.countAssetPins(victimGuid) == 1, "the victim is pinned by one project");
+    CHECK(db.deleteAsset(victimGuid), "deleteAsset on a PINNED asset reports success");
+    CHECK(countWhere("assets", "guid", victimGuid) == 1, "... and the asset row SURVIVES");
+    CHECK(!db.isAssetListed(victimGuid), "... unlisted");
+    CHECK(!db.fetchAsset(victimGuid).listed, "... which fetchAsset reports");
+    CHECK(!db.fetchAsset(victimGuid).guid.isEmpty(),
+          "... while the row still resolves BY GUID (every pin keeps working)");
+    CHECK(countWhere("asset_files", "asset_guid", victimGuid) == 2,
+          "... its content mapping is untouched (assets.gc still sees the bytes as live)");
+    CHECK(countWhere("project_assets", "asset_guid", victimGuid) == 1, "... its pin is untouched");
+    CHECK(refcountOf(sharedOid) == 2, "... and no refcount moved");
+    {
+        bool listed = false;
+        for (const auto &row : db.fetchAssetsForAssetView())
+            if (row.guid == victimGuid) listed = true;
+        CHECK(!listed, "... the library listing no longer shows it");
+    }
+
+    // --- 1b. force takes it everywhere -------------------------------------
+    CHECK(db.deleteAsset(victimGuid, /*force*/ true), "deleteAsset(force) reports success");
     CHECK(countWhere("assets", "guid", victimGuid) == 0, "asset row deleted");
     CHECK(countWhere("asset_files", "asset_guid", victimGuid) == 0, "asset_files rows deleted");
     CHECK(countWhere("project_assets", "asset_guid", victimGuid) == 0, "project pin deleted");
@@ -178,10 +208,22 @@ int main(int argc, char **argv)
     db.deleteAssetAndDependencies(parentGuid, &ok);
     CHECK(ok, "deleteAssetAndDependencies reports success");
     CHECK(countWhere("assets", "guid", parentGuid) == 0, "parent asset row deleted");
-    CHECK(countWhere("assets", "guid", childGuid) == 0, "dependent child asset row deleted");
-    CHECK(countWhere("asset_files", "asset_guid", childGuid) == 0, "child content mapping deleted");
-    CHECK(countWhere("project_assets", "asset_guid", childGuid) == 0, "child pin deleted");
+    // The CLOSURE obeys the same law, member by member: the child is pinned,
+    // so it is unlisted and everything it needs to keep serving that pin —
+    // its content mapping and the pin itself — stays.
+    CHECK(countWhere("assets", "guid", childGuid) == 1, "pinned child asset row SURVIVES");
+    CHECK(!db.isAssetListed(childGuid), "... unlisted");
+    CHECK(countWhere("asset_files", "asset_guid", childGuid) == 1, "child content mapping kept");
+    CHECK(countWhere("project_assets", "asset_guid", childGuid) == 1, "child pin kept");
+    CHECK(refcountOf(childOid) == 1, "child's object is still referenced");
     CHECK(countWhere("dependencies", "depender", parentGuid) == 0, "dependency edge deleted");
+
+    bool forcedOk = false;
+    db.deleteAssetAndDependencies(childGuid, &forcedOk, /*force*/ true);
+    CHECK(forcedOk, "deleteAssetAndDependencies(force) reports success");
+    CHECK(countWhere("assets", "guid", childGuid) == 0, "forced: child asset row deleted");
+    CHECK(countWhere("asset_files", "asset_guid", childGuid) == 0, "forced: content mapping deleted");
+    CHECK(countWhere("project_assets", "asset_guid", childGuid) == 0, "forced: child pin deleted");
     CHECK(refcountOf(childOid) == 0, "child's object refcount back to 0");
 
     // --- 4. the sibling drift: positional SQL bound by name ------------------
@@ -384,6 +426,69 @@ int main(int argc, char **argv)
         CHECK(!Database::jafVersionAccepted("0.0.1"),  "0.0.1 rejected");
         CHECK(!Database::jafVersionAccepted(""),       "an empty version is rejected");
         CHECK(!Database::jafVersionAccepted("beta"),   "a non-numeric version is rejected");
+    }
+
+    // --- 10. LIBRARY DELETE KEEPS PROJECT PINS: the reads and the reaping ---
+    //
+    // The pin read the Assets page and `assets.pins` share, the listing split
+    // (unlisted rows resolve by guid but are not tiles), and the one thing an
+    // unlist must not leak: a row nobody can see and nobody pins.
+    {
+        const QString projA = "proj-pins-a", projB = "proj-pins-b";
+        CHECK(db.createProject(projA, "Kitchen"), "project A created");
+        CHECK(db.createProject(projB, "Showroom"), "project B created");
+
+        const QString shared = db.createAssetEntry(
+            "guid-two-pins", "two-pins.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        CHECK(!shared.isEmpty(), "the two-pin asset row created");
+        QString oid, e;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, shared, "source", "two-pins.png", &oid, &e),
+              "the pinned asset has content");
+        CHECK(AssetCas::writePin(conn, projA, shared, oid), "project A pins it");
+        CHECK(AssetCas::writePin(conn, projB, shared, oid), "project B pins it");
+
+        CHECK(db.countAssetPins(shared) == 2, "countAssetPins sees both projects");
+        const auto pins = db.fetchAssetPins(shared);
+        CHECK(pins.size() == 2, "fetchAssetPins returns both");
+        QStringList names;
+        for (const auto &pin : pins) names << pin.projectName;
+        CHECK(names.contains("Kitchen") && names.contains("Showroom"),
+              "... named by their PROJECT names, not their guids");
+
+        bool tile = false;
+        for (const auto &row : db.fetchAssetsForAssetView()) if (row.guid == shared) tile = true;
+        CHECK(tile, "the library listing shows it while it is listed");
+
+        CHECK(db.deleteAsset(shared), "the library delete succeeds");
+        tile = false;
+        for (const auto &row : db.fetchAssetsForAssetView()) if (row.guid == shared) tile = true;
+        CHECK(!tile, "... and it stops being a library tile");
+        CHECK(db.countAssetPins(shared) == 2, "... with both pins intact");
+        CHECK(!db.fetchLibraryAssetGuids().contains(shared),
+              "... and out of the library guid scan too");
+
+        // Re-listing, the other direction: an import of the same content
+        // brings the row back (services/import — asserted here at the write
+        // it performs, which is all this layer owns).
+        CHECK(db.setAssetListed(shared, true), "setAssetListed(true) re-lists it");
+        tile = false;
+        for (const auto &row : db.fetchAssetsForAssetView()) if (row.guid == shared) tile = true;
+        CHECK(tile, "... and the tile is back");
+        CHECK(db.deleteAsset(shared), "unlisted again for the reaping check");
+
+        // The one leak an unlist could cause: deleting the LAST project that
+        // pinned an unlisted row must finish the delete the user asked for.
+        CHECK(db.deleteProject(projA), "project A deleted");
+        CHECK(countWhere("assets", "guid", shared) == 1,
+              "the unlisted row survives while project B still pins it");
+        CHECK(db.deleteProject(projB), "project B deleted");
+        CHECK(countWhere("assets", "guid", shared) == 0,
+              "the last pin gone: the unlisted row is finally deleted");
+        CHECK(countWhere("asset_files", "asset_guid", shared) == 0,
+              "... with its content mapping, so assets.gc can reclaim the bytes");
+        CHECK(!db.setAssetListed(shared, true), "setAssetListed on an unknown guid is FALSE");
     }
 
     // --- 7. wipeDatabase clears the CAS catalog too (DESTRUCTIVE — last) ----

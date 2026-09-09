@@ -302,7 +302,7 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
                   QString *errorOut)
 {
     QSqlQuery assetQuery(conn);
-    assetQuery.prepare("SELECT name, type, view_filter, collection, author, license, properties, tags "
+    assetQuery.prepare("SELECT name, type, view_filter, collection, author, license, properties, tags, listed "
                        "FROM assets WHERE guid = ?");
     assetQuery.addBindValue(guid);
     if (!assetQuery.exec() || !assetQuery.next()) {
@@ -323,6 +323,10 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     if (props.isObject()) sidecar["properties"] = props.object();
     const QJsonDocument tags = QJsonDocument::fromJson(assetQuery.value(7).toByteArray());
     if (tags.isObject()) sidecar["tags"] = tags.object();
+    // LIBRARY VISIBILITY (library delete keeps project pins): recorded so a
+    // rebuildCatalog does not resurrect an unlisted row as a library tile.
+    // Absent in older sidecars — the reader defaults to listed.
+    sidecar["listed"] = assetQuery.value(8).toInt() != 0;
 
     QJsonArray files;
     QSqlQuery filesQuery(conn);
