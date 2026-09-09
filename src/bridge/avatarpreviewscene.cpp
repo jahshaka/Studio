@@ -152,7 +152,7 @@ void AvatarPreviewScene::frameSubject()
 
     mSubjectRadius = bound.radius;
     mPivot = bound.pos;
-    mDistFromPivot = preview::framingDistance(bound.radius, camera->angle);
+    mDistFromPivot = preview::framingDistance(bound.radius, camera->effectiveFovDegrees());
     applyGrid();                                  // the grid follows the subject's scale
     // A Mixamo character imports 138-179 units tall; iris's default farClip is
     // 500 and the framing distance is ~2.9 radii, so without this the subject

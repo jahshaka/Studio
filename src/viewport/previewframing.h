@@ -51,6 +51,14 @@ inline iris::AABB worldBoundingBox(const iris::SceneNodePtr &node)
 
 /// The legacy framing rule: back the camera off until 1.2 radii fill the
 /// vertical FOV. AssetViewer::addNodeToScene / ThumbnailGenerator.
+///
+/// `fovDegrees` IS THE RENDERED VERTICAL ANGLE, never `CameraNode::angle`.
+/// A free camera on a window wider than its framing aspect is drawn at a
+/// NARROWED vertical angle (viewport/freecamerapolicy.h), so the authored
+/// number is not the frustum on screen and framing against it puts the subject
+/// outside the picture — F focused too tight on every window wider than 16:9.
+/// `CameraNode::effectiveFovDegrees()` is the one function that answers this,
+/// and it is what the gizmo's screen-constant scale already reads.
 inline float framingDistance(float radius, float fovDegrees)
 {
     return (radius * 1.2f) / qTan(qDegreesToRadians(fovDegrees / 2.0f));

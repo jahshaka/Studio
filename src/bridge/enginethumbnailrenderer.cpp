@@ -152,7 +152,7 @@ static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
         bound.radius = 1;
         for (auto &sphere : spheres) bound = iris::BoundingSphere::merge(bound, sphere);
     }
-    const float dist = preview::framingDistance(bound.radius, cam->angle);
+    const float dist = preview::framingDistance(bound.radius, cam->effectiveFovDegrees());
     // The clip planes must follow the framing distance: a large model (cm-scaled
     // glb) framed at ~2.9 * radius sat beyond the default farClip of 500 and
     // rendered a blank thumbnail (ASSETS_AUDIT.md finding 3).
