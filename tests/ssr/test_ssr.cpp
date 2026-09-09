@@ -68,9 +68,18 @@
 //      same way; the frame must therefore be the SAME PICTURE, TRANSLATED. The
 //      section measures the effect's own footprint (on minus off at one pose,
 //      so everything that is not the effect cancels) at two poses 8 px apart
-//      and asserts it translated by exactly that. SSAO gets the same treatment,
-//      because it reconstructs a position from depth the same way and had the
-//      same defect (ogre-patch 0019).
+//      and asserts it translated by exactly that - measured with the fix in:
+//      centroid 113.05 -> 105.05 for an 8 px pan, mass 2655.8 -> 2656.0, and a
+//      shifted mismatch of 0.000. Without it, SSR under an ortho camera is not
+//      merely wrong on this fixture, it is DEAD: footprint 0.0, four of the
+//      five assertions red.
+//
+//      SSAO gets the same treatment because it reconstructs a position from
+//      depth the same way and had the same defect (ogre-patch 0019) - PLUS a
+//      magnitude band, because the pan alone does not catch it. Measured
+//      against the pre-patch code: it translates perfectly well (centroid
+//      8.04 px, mismatch 0.005) while being seven times too strong, so the
+//      only assertion that separates the two is how big the occlusion is.
 //
 // TWO ENV-GATED EXTRAS, off in the gate and on when a human needs evidence:
 //   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm, the shadow fixture's two
@@ -697,11 +706,20 @@ int main()
         const float kPanWorld  = 0.25f;
         const int   kPanPixels = 8;
 
-        auto poseAt = [&](float dx) {
+        // A FAR CLIP THAT IS TRIED AND REJECTED, recorded so nobody spends the
+        // afternoon again: rendering the same pose at two far planes looks like
+        // an exact test of the reconstruction (the correct one is far-plane
+        // independent), and it is not - the perspective-only form's error under
+        // an ortho camera lands almost entirely in xy, which the ortho
+        // projection then divides straight back out, so BOTH reconstructions
+        // are far-clip invariant to within 0.5%. Measured, both ways round.
+        const float kFarA = 1000.0f;      // the CameraDesc default
+        auto poseAt = [&](float dx, float farClip) {
             CameraDesc c = enginetest::testCameraDescLookAt(Vec3(dx, 5.0f, 7.0f),
                                                             Vec3(dx, 0.0f, 0.0f));
             c.orthographic = true;
             c.orthoSize    = kOrthoSize;
+            c.farClip      = farClip;
             return c;
         };
 
@@ -733,13 +751,23 @@ int main()
             return true;
         };
 
-        // Total footprint and its horizontal centroid, ignoring the noise floor
-        // (one 8-bit level on one channel is 0.004; 0.02 is five of them).
-        auto footprint = [&](const std::vector<float> &d, float *outMass) {
+        // Total footprint and its horizontal centroid over a WINDOW, ignoring
+        // the noise floor (one 8-bit level on one channel is 0.004; 0.02 is
+        // five of them).
+        //
+        // THE WINDOW IS NOT DECORATION. A pan moves content OUT of one edge of
+        // the frame and brings new content IN at the other, so a measure taken
+        // over the whole frame is reading the clipping as much as the
+        // translation — measured, on the first run of this section: SSR's
+        // footprint covers the entire glossy floor and its full-frame centroid
+        // moved 5.89 px for an 8 px pan. The two poses are compared over the
+        // region they actually share, and only there (kWinLo/kWinHi below).
+        auto footprint = [&](const std::vector<float> &d, int x0, int x1,
+                             float *outMass) {
             double sum = 0.0, weighted = 0.0;
             for (unsigned y = 0; y < kH; ++y)
-                for (unsigned x = 0; x < kW; ++x) {
-                    const float v = d[size_t(y) * kW + x];
+                for (int x = x0; x < x1; ++x) {
+                    const float v = d[size_t(y) * kW + unsigned(x)];
                     if (v < 0.02f) continue;
                     sum += v;
                     weighted += double(x) * v;
@@ -747,15 +775,33 @@ int main()
             if (outMass) *outMass = float(sum);
             return sum > 0.0 ? float(weighted / sum) : -1.0f;
         };
+        // The shared region, in each frame's own coordinates: the camera moved
+        // +x, so the picture moved LEFT, and what frame 1 shows at x is what
+        // frame 0 showed at x + kPanPixels.
+        //
+        // THE 40 px MARGIN IS SSR's OWN SCREEN EDGE FADE, and it is the one
+        // part of the frame that is ENTITLED not to translate. The marcher
+        // fades a hit out over `smoothstep( 0.0, 0.12, ... )` of the frame —
+        // 30.7 px at this width — because the information genuinely stops at
+        // the border, and that ramp is anchored to the SCREEN rather than to
+        // the scene (JahSsrRayMarch_ps.glsl says so where it is written).
+        // Measured, on this fixture: inside a 16 px margin the comparison reads
+        // 6.70 px of an 8 px pan and a 0.019 mismatch; outside the ramp, at 40,
+        // it reads 8.00 and 0.0004 with the mass identical to the last digit.
+        // The margin is therefore excluding a known screen-space term, not
+        // hiding a residue.
+        const int kWinLo = 40;
+        const int kWinHi = int(kW) - 40 - kPanPixels;
 
         // Sum |D1(x) - D0(x + shift)| over the interior as a FRACTION of the
         // effect's own magnitude there: 0 is a perfect translation, 1 is "the
         // two frames have nothing to do with each other".
         auto shiftedMismatch = [&](const std::vector<float> &d0,
-                                   const std::vector<float> &d1, int shift) {
+                                   const std::vector<float> &d1, int shift,
+                                   int x0, int x1) {
             double err = 0.0, mag = 0.0;
             for (unsigned y = 0; y < kH; ++y)
-                for (int x = 16; x + shift < int(kW) - 16; ++x) {
+                for (int x = x0; x < x1; ++x) {
                     const float a = d1[size_t(y) * kW + unsigned(x)];
                     const float b = d0[size_t(y) * kW + unsigned(x + shift)];
                     err += std::fabs(a - b);
@@ -784,14 +830,14 @@ int main()
             ofx.allowOffscreen = true;
             ofx.ssr = 1;
             std::vector<float> d0, d1;
-            const bool got = capture(poseAt(0.0f), ofx, d0) &&
-                             capture(poseAt(kPanWorld), ofx, d1);
+            const bool got = capture(poseAt(0.0f, kFarA), ofx, d0) &&
+                             capture(poseAt(kPanWorld, kFarA), ofx, d1);
             CHECK(got, "ortho SSR: both poses rendered and read back");
             if (got) {
                 float m0 = 0.0f, m1 = 0.0f;
-                const float c0 = footprint(d0, &m0);
-                const float c1 = footprint(d1, &m1);
-                const float mism = shiftedMismatch(d0, d1, kPanPixels);
+                const float c0 = footprint(d0, kWinLo + kPanPixels, kWinHi + kPanPixels, &m0);
+                const float c1 = footprint(d1, kWinLo, kWinHi, &m1);
+                const float mism = shiftedMismatch(d0, d1, kPanPixels, kWinLo, kWinHi);
                 std::printf("   ortho SSR: mass %.1f -> %.1f, centroid %.2f -> %.2f "
                             "(expected %.2f), shifted mismatch %.3f\n",
                             m0, m1, c0, c1, c0 - float(kPanPixels), mism);
@@ -802,13 +848,13 @@ int main()
                 CHECK_MSG(m0 > 5.0f,
                           "SSR produces a reflection under an ORTHOGRAPHIC camera "
                           "at all (footprint %.1f)", m0);
-                CHECK_MSG(c0 > 0.0f && std::fabs(c1 - (c0 - float(kPanPixels))) < 2.0f,
+                CHECK_MSG(c0 > 0.0f && std::fabs(c1 - (c0 - float(kPanPixels))) < 0.5f,
                           "the reflection PANS WITH THE SCENE: centroid %.2f -> %.2f, "
                           "expected %.2f", c0, c1, c0 - float(kPanPixels));
-                CHECK_MSG(m0 > 0.0f && std::fabs(m1 - m0) / m0 < 0.20f,
+                CHECK_MSG(m0 > 0.0f && std::fabs(m1 - m0) / m0 < 0.05f,
                           "the reflection keeps its strength across the pan "
                           "(%.1f -> %.1f)", m0, m1);
-                CHECK_MSG(mism < 0.30f,
+                CHECK_MSG(mism < 0.02f,
                           "the panned frame IS the first one translated: shifted "
                           "mismatch %.3f", mism);
             }
@@ -824,14 +870,14 @@ int main()
             ofx.ssao = true;
             ofx.ssaoScale = 1.0f;
             std::vector<float> d0, d1;
-            const bool got = capture(poseAt(0.0f), ofx, d0) &&
-                             capture(poseAt(kPanWorld), ofx, d1);
+            const bool got = capture(poseAt(0.0f, kFarA), ofx, d0) &&
+                             capture(poseAt(kPanWorld, kFarA), ofx, d1);
             CHECK(got, "ortho SSAO: both poses rendered and read back");
             if (got) {
                 float m0 = 0.0f, m1 = 0.0f;
-                const float c0 = footprint(d0, &m0);
-                const float c1 = footprint(d1, &m1);
-                const float mism = shiftedMismatch(d0, d1, kPanPixels);
+                const float c0 = footprint(d0, kWinLo + kPanPixels, kWinHi + kPanPixels, &m0);
+                const float c1 = footprint(d1, kWinLo, kWinHi, &m1);
+                const float mism = shiftedMismatch(d0, d1, kPanPixels, kWinLo, kWinHi);
                 std::printf("   ortho SSAO: mass %.1f -> %.1f, centroid %.2f -> %.2f "
                             "(expected %.2f), shifted mismatch %.3f\n",
                             m0, m1, c0, c1, c0 - float(kPanPixels), mism);
@@ -842,12 +888,35 @@ int main()
                 CHECK_MSG(m0 > 5.0f,
                           "SSAO occludes something under an ORTHOGRAPHIC camera "
                           "at all (footprint %.1f)", m0);
-                CHECK_MSG(c0 > 0.0f && std::fabs(c1 - (c0 - float(kPanPixels))) < 2.0f,
+                CHECK_MSG(c0 > 0.0f && std::fabs(c1 - (c0 - float(kPanPixels))) < 0.5f,
                           "the occlusion PANS WITH THE SCENE: centroid %.2f -> %.2f, "
                           "expected %.2f", c0, c1, c0 - float(kPanPixels));
-                CHECK_MSG(mism < 0.30f,
+                CHECK_MSG(mism < 0.02f,
                           "the panned AO frame IS the first one translated: shifted "
                           "mismatch %.3f", mism);
+
+                // AND THE ASSERTION THAT ACTUALLY CATCHES THE SSAO DEFECT,
+                // which the pan does NOT. Measured against the perspective-only
+                // reconstruction (the code before ogre-patch 0019, run on this
+                // exact fixture): it translates correctly - centroid 8.04 px
+                // for an 8 px pan, mismatch 0.005 - because it is wrong by a
+                // factor that is itself a function of the surface, so it MOVES
+                // with the scene and reads as a plausible occlusion. What it
+                // cannot fake is the SIZE of it: pre-0019 the shader
+                // reconstructs a view-space z of -1/t where metres are wanted,
+                // the kernel then swamps the depth comparison, and the
+                // occlusion comes out roughly seven times too strong and twice
+                // as wide (window mass 1702, 10.4% of the frame covered,
+                // against 243 and 5.6% once the branch is right).
+                //
+                // A magnitude band is a blunter instrument than the rest of
+                // this section and it is deliberate: the fixture is offscreen,
+                // fixed-geometry and deterministic, and the two values are 7x
+                // apart, so a 3x band is unambiguous in both directions.
+                CHECK_MSG(m0 > 80.0f && m0 < 800.0f,
+                          "the occlusion is the SIZE an ortho reconstruction "
+                          "gives (window mass %.1f; 243 correct, 1702 with the "
+                          "perspective-only form)", m0);
             }
         }
 
