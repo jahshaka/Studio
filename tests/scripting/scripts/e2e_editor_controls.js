@@ -639,10 +639,12 @@ assert(byName.Jump.latched === true && byName.Sprint.latched === false,
     "Jump is the latched action, Sprint is held");
 assert(byName.Look.mouse === true && byName.Look.keys.length === 0,
     "Look is the mouse, with no keys by default");
-assert(byName.Move.keys.join(",") === "W,S,A,D", "Move defaults to W/S/A/D");
+assert(byName.Move.keys.join(",") === "W,S,A,D,Up,Down,Left,Right",
+    "Move defaults to W/S/A/D AND the arrows — the player takes both spellings");
 assert(byName.Jump.keys.join(",") === "Space", "Jump defaults to Space (the owner's ask)");
 assert(byName.Sprint.keys.join(",") === "Shift", "Sprint defaults to Shift");
-assert(byName.Move.display === "W / S / A / D", "the Preferences display text is generated");
+assert(byName.Move.display === "W / S / A / D / Up / Down / Left / Right",
+    "the Preferences display text is generated");
 
 var st = input.state();
 assert(st.move.x === 0 && st.move.y === 0 && st.jump === false && st.sprint === false,
@@ -690,7 +692,8 @@ assert(input.bindings()[0].display === "Up / Down / Left / Right",
 // Restore — and the reset must leave NO override rows behind, so the shared
 // settings file this ran against is byte-for-byte what it was.
 assert(input.resetBindings(), "input.resetBindings()");
-assert(input.bindings()[0].keys.join(",") === "W,S,A,D", "Move is back to W/S/A/D");
+assert(input.bindings()[0].keys.join(",") === "W,S,A,D,Up,Down,Left,Right",
+       "Move is back to the shipped eight");
 assert(input.bindings()[2].keys.join(",") === "Space", "Jump is back to Space");
 
 console.log("editor_controls: gameplay input verbs verified");

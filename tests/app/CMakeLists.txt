@@ -122,8 +122,28 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             RUN_SERIAL TRUE
             TIMEOUT 500
             LABELS "app")
+        # app.navigation_keys — the editor's fly moved to the ARROW CLUSTER and
+        # W/A/S/D/Q/E were freed (owner decision 2026-09-09). input.fly_controls
+        # pins the movement maths headless; what only a live window can answer
+        # is whether the key ARRIVES (the arrows are WindowShortcut material all
+        # over the app and only reach the fly through the viewport's
+        # ShortcutOverride) and whether the freed letter now reaches the tool
+        # shortcut while the right button is held — which was the point of the
+        # change. Its own Xvfb, its own port, RUN_SERIAL like every
+        # input-synthesis suite.
+        set(_nk_home ${CMAKE_CURRENT_BINARY_DIR}/navigation-keys-home)
+        file(MAKE_DIRECTORY ${_nk_home}/run)
+        add_test(NAME app.navigation_keys
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/navigation_keys.sh"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8753
+                 WORKING_DIRECTORY ${_nk_home}/run)
+        set_tests_properties(app.navigation_keys PROPERTIES
+            ENVIRONMENT "HOME=${_nk_home};JAHSHAKA_DATA_ROOT=${_nk_home}/.local/share/Jahshaka"
+            RUN_SERIAL TRUE
+            TIMEOUT 500
+            LABELS "app")
     else()
-        message(STATUS "app.pacing_undo skipped: needs xdotool, curl, jq and Xvfb")
+        message(STATUS "app.pacing_undo / app.multiselect_keys / app.navigation_keys skipped: need xdotool, curl, jq and Xvfb")
     endif()
 endif()
 

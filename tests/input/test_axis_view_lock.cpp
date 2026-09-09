@@ -29,9 +29,10 @@ For more information see the LICENSE file
 //   * an MMB pan still moves the camera, and moves it IN THE VIEW PLANE: the
 //     displacement's component along the view axis is zero;
 //   * the wheel still zooms — orthoSize moves, the pose does not;
-//   * the fly keys still fly, on the camera's own basis: W/S pan up and down
-//     the screen, A/D strafe, Q/E dolly along the view axis, and none of them
-//     touches the rotation;
+//   * the fly keys still fly, on the camera's own basis: Up/Down pan up and
+//     down the screen, Left/Right strafe, PageUp/PageDown dolly along the view
+//     axis, and none of them touches the rotation (the editor's fly moved from
+//     W/A/S/D/Q/E to the arrow cluster on 2026-09-09; the letters are free);
 //   * unlocking restores rotation.
 //
 // Plus the pole defect this work found: strafing with the fly keys used
@@ -231,36 +232,47 @@ int main(int argc, char **argv)
                                   turned);
         };
 
-        const auto w = fly({ Qt::Key_W }, true);
-        const auto s = fly({ Qt::Key_S }, true);
-        const auto d = fly({ Qt::Key_D }, true);
-        const auto a = fly({ Qt::Key_A }, true);
-        const auto e = fly({ Qt::Key_E }, true);
-        const auto q = fly({ Qt::Key_Q }, true);
-        std::printf("    locked fly W (%.3f %.3f %.3f)  D (%.3f %.3f %.3f)  E (%.3f %.3f %.3f)\n",
-                    w.first.x(), w.first.y(), w.first.z(),
-                    d.first.x(), d.first.y(), d.first.z(),
-                    e.first.x(), e.first.y(), e.first.z());
-        CHECK(!w.second && !s.second && !d.second && !a.second && !e.second && !q.second,
+        const auto up   = fly({ Qt::Key_Up }, true);
+        const auto down = fly({ Qt::Key_Down }, true);
+        const auto rght = fly({ Qt::Key_Right }, true);
+        const auto left = fly({ Qt::Key_Left }, true);
+        const auto pgup = fly({ Qt::Key_PageUp }, true);
+        const auto pgdn = fly({ Qt::Key_PageDown }, true);
+        std::printf("    locked fly Up (%.3f %.3f %.3f)  Right (%.3f %.3f %.3f)  "
+                    "PgUp (%.3f %.3f %.3f)\n",
+                    up.first.x(), up.first.y(), up.first.z(),
+                    rght.first.x(), rght.first.y(), rght.first.z(),
+                    pgup.first.x(), pgup.first.y(), pgup.first.z());
+        CHECK(!up.second && !down.second && !rght.second && !left.second &&
+              !pgup.second && !pgdn.second,
               "free/LOCKED: no fly key rotates the camera");
         // Top view: the view axis is -Y, the screen's up is world -Z, right is +X.
-        CHECK(nearf(w.first.y(), 0.f) && w.first.z() < -1.0f,
-              "free/LOCKED: W PANS up the screen (world -Z in a top view), it does not dolly");
-        CHECK(nearf(s.first.y(), 0.f) && s.first.z() > 1.0f, "free/LOCKED: S pans back down");
-        CHECK(nearf(d.first.y(), 0.f) && d.first.x() > 1.0f,
-              "free/LOCKED: D strafes right IN THE PLANE (the pole where forward x up dies)");
-        CHECK(nearf(a.first.y(), 0.f) && a.first.x() < -1.0f, "free/LOCKED: A strafes left");
-        CHECK(e.first.y() > 1.0f && nearf(e.first.x(), 0.f) && nearf(e.first.z(), 0.f),
-              "free/LOCKED: E dollies OUT along the view axis (up, from a top view)");
-        CHECK(q.first.y() < -1.0f, "free/LOCKED: Q dollies in");
+        CHECK(nearf(up.first.y(), 0.f) && up.first.z() < -1.0f,
+              "free/LOCKED: Up PANS up the screen (world -Z in a top view), it does not dolly");
+        CHECK(nearf(down.first.y(), 0.f) && down.first.z() > 1.0f,
+              "free/LOCKED: Down pans back down");
+        CHECK(nearf(rght.first.y(), 0.f) && rght.first.x() > 1.0f,
+              "free/LOCKED: Right strafes right IN THE PLANE (the pole where forward x up dies)");
+        CHECK(nearf(left.first.y(), 0.f) && left.first.x() < -1.0f,
+              "free/LOCKED: Left strafes left");
+        CHECK(pgup.first.y() > 1.0f && nearf(pgup.first.x(), 0.f) && nearf(pgup.first.z(), 0.f),
+              "free/LOCKED: PageUp dollies OUT along the view axis (up, from a top view)");
+        CHECK(pgdn.first.y() < -1.0f, "free/LOCKED: PageDown dollies in");
+
+        // ...and the letters do nothing in an axis view either.
+        const auto wLocked = fly({ Qt::Key_W }, true);
+        const auto eLocked = fly({ Qt::Key_E }, true);
+        CHECK(wLocked.first.isNull() && eLocked.first.isNull(),
+              "free/LOCKED: W and E are not fly keys any more, here either");
 
         // THE POLE DEFECT, unlocked: a perspective camera looking straight down
         // strafed NOWHERE before the camera-right fallback.
-        const auto dUnlocked = fly({ Qt::Key_D }, false);
-        std::printf("    unlocked straight-down D -> (%.3f %.3f %.3f)\n",
+        const auto dUnlocked = fly({ Qt::Key_Right }, false);
+        std::printf("    unlocked straight-down Right -> (%.3f %.3f %.3f)\n",
                     dUnlocked.first.x(), dUnlocked.first.y(), dUnlocked.first.z());
         CHECK(dUnlocked.first.x() > 1.0f,
-              "free/UNLOCKED at the pole: D still strafes (forward x worldUp degenerates there)");
+              "free/UNLOCKED at the pole: Right still strafes (forward x worldUp degenerates "
+              "there)");
     }
 
     // ---- 4. the arcball in a locked axis view ----------------------------

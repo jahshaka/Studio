@@ -70,15 +70,26 @@ int main(int argc, char **argv)
     {
         InputMap map;
         const auto move = map.bindings(InputAction::Move);
-        CHECK(move.size() == 4, "Move binds four keys by default");
+        // EIGHT since 2026-09-09: the editor's fly moved off W/A/S/D onto the
+        // arrow cluster, and the PLAYER kept both spellings so a hand arriving
+        // from the editor does not have to change grip to walk. They are
+        // ordinary bindings on the one Move action, not an alias table.
+        CHECK(move.size() == 8, "Move binds W/A/S/D AND the arrows by default");
         bool w = false, s = false, aa = false, d = false;
+        bool up = false, dn = false, lf = false, rt = false;
         for (const auto &b : move) {
             if (b.key == Qt::Key_W && near(b.x, 0) && near(b.y, +1)) w = true;
             if (b.key == Qt::Key_S && near(b.x, 0) && near(b.y, -1)) s = true;
             if (b.key == Qt::Key_A && near(b.x, -1) && near(b.y, 0)) aa = true;
             if (b.key == Qt::Key_D && near(b.x, +1) && near(b.y, 0)) d = true;
+            if (b.key == Qt::Key_Up    && near(b.x, 0) && near(b.y, +1)) up = true;
+            if (b.key == Qt::Key_Down  && near(b.x, 0) && near(b.y, -1)) dn = true;
+            if (b.key == Qt::Key_Left  && near(b.x, -1) && near(b.y, 0)) lf = true;
+            if (b.key == Qt::Key_Right && near(b.x, +1) && near(b.y, 0)) rt = true;
         }
         CHECK(w && s && aa && d, "W/S/A/D carry +Y/-Y/-X/+X");
+        CHECK(up && dn && lf && rt,
+              "and the arrows carry EXACTLY the same vectors — one action, two spellings");
         CHECK(map.bindings(InputAction::Jump).size() == 1 &&
               map.bindings(InputAction::Jump)[0].key == Qt::Key_Space, "Jump defaults to Space");
         CHECK(map.bindings(InputAction::Sprint).size() == 1 &&
@@ -86,14 +97,16 @@ int main(int argc, char **argv)
         CHECK(map.bindings(InputAction::Look).isEmpty(), "Look binds no keys — it is the mouse");
         CHECK(map.displayText(InputAction::Look) == "Mouse",
               "Look's Preferences row reads Mouse, not '(unbound)'");
-        CHECK(map.displayText(InputAction::Move) == "W / S / A / D",
-              "Move's Preferences row lists its keys");
+        CHECK(map.displayText(InputAction::Move) == "W / S / A / D / Up / Down / Left / Right",
+              "Move's Preferences row lists its keys, both spellings");
 
         // The ShortcutOverride set (§8.3) is exactly the bound keys.
         CHECK(map.isBound(Qt::Key_W) && map.isBound(Qt::Key_Space) && map.isBound(Qt::Key_Shift),
               "the gameplay keys are bound");
         CHECK(!map.isBound(Qt::Key_E) && !map.isBound(Qt::Key_R) && !map.isBound(Qt::Key_F),
               "the gizmo keys E/R and focus F are NOT gameplay keys");
+        CHECK(map.isBound(Qt::Key_Up) && map.isBound(Qt::Key_PageUp) == false,
+              "the arrows are gameplay keys; PageUp (the editor fly's lift) is not");
         bool found = false;
         CHECK(map.actionForKey(Qt::Key_A, &found) == InputAction::Move && found, "A belongs to Move");
         map.actionForKey(Qt::Key_G, &found);
@@ -174,7 +187,7 @@ int main(int argc, char **argv)
         CHECK(map.bindings(InputAction::Jump).size() == 1 &&
               map.bindings(InputAction::Jump)[0].key == Qt::Key_Return,
               "bindings persist through jahsettings.ini");
-        CHECK(map.bindings(InputAction::Move).size() == 4,
+        CHECK(map.bindings(InputAction::Move).size() == 8,
               "an action with a stored row does not disturb the others");
     }
     {
@@ -182,7 +195,7 @@ int main(int argc, char **argv)
         QSettings ini(dir.filePath("empty.ini"), QSettings::IniFormat);
         InputMap map;
         map.load(ini);
-        CHECK(map.bindings(InputAction::Move).size() == 4, "an empty settings file keeps defaults");
+        CHECK(map.bindings(InputAction::Move).size() == 8, "an empty settings file keeps defaults");
     }
 
     // ---- latch vs held: THE gate row --------------------------------------

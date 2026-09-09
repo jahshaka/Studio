@@ -198,8 +198,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "--headless, where the stand-in viewport holds exactly the camera the file loaded. "
           "`rotationLocked` is the AXIS-VIEW LOCK: true while the viewport is in one of the six axis views (editor.view()), which are orthographic measuring views and stay pointed down their axis. "
           "Locked, the rotation GESTURES do nothing — the right-mouse look drag, the Alt+left-mouse orbit and the arcball's own drag are ignored rather than answered by dropping out of the view — "
-          "while panning (middle-mouse drag), zooming (the wheel, which moves `orthoSize`) and the fly keys keep working; the fly keys move on the camera's own basis there, so W/S pan up and down "
-          "the screen and Q/E dolly along the view axis. It constrains GESTURES only: editor.setCamera and editor.frameNode still write any pose they are given, and a camera being PILOTED is never "
+          "while panning (middle-mouse drag), zooming (the wheel, which moves `orthoSize`) and the fly keys keep working; the fly keys move on the camera's own basis there, so Up/Down pan up and down "
+          "the screen and PageUp/PageDown dolly along the view axis. It constrains GESTURES only: editor.setCamera and editor.frameNode still write any pose they are given, and a camera being PILOTED is never "
           "locked. editor.setView(\"perspective\") clears it and restores the remembered perspective pose.",
           Needs::Document },
         { "setCamera", "editor.setCamera({position?, lookAt? | rotation?, fov?}) -> {position, rotation, projection, orthoSize, fov}",

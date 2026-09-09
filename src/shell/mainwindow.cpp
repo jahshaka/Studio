@@ -3287,8 +3287,12 @@ void MainWindow::setupShortcuts()
             [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("front"); });
     reg.add("view.back", "Back View", "Camera", QKeySequence(Qt::SHIFT | Qt::Key_Z), this,
             [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("back"); });
+    // The ARROW CLUSTER, not W/A/S/D (owner decision 2026-09-09): the editor's
+    // fly moved off the letters so tool shortcuts can have them back. The
+    // PLAYER still answers to both spellings — its rows are the Gameplay
+    // section below, driven by the InputMap.
     reg.addFixed("camera.fly", "Fly Camera (free camera)", "Camera",
-                 "RMB (hold) + W/A/S/D + Q/E \xc2\xb7 Shift: 3x");
+                 "RMB (hold) + Arrow keys + PageUp/PageDown \xc2\xb7 Shift: 3x");
     reg.addFixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
     // Held-modifier input, like the fly keys: listed read-only, never a
     // QShortcut. Alt ON the gizmo keeps its duplicate-while-dragging meaning

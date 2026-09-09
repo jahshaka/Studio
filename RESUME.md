@@ -14,7 +14,7 @@ Headless suites + `--headless` script runs only, EXPLICIT DISPLAY on every invoc
 1. [x] Primary outline colour (Blender way) — irisgl Scene + SceneMirror, prefs row,
        editor.outline()/setOutline verbs, overlays() report, app.multiselect_outline extension.
 2. [x] Unreal naming: Duplicate + Paste -> "Cube" -> "Cube2" -> "Cube3", unique among siblings.
-3. [ ] Navigation: editor fly moves to arrows + PageUp/PageDown; W/A/S/D/Q/E freed.
+3. [x] Navigation: editor fly moves to arrows + PageUp/PageDown; W/A/S/D/Q/E freed.
        Player keeps BOTH. Docs + Preferences text.
 4. [ ] Ctrl+A `edit.selectAll` shortcut yielding to text fields.
 
@@ -26,3 +26,7 @@ Headless suites + `--headless` script runs only, EXPLICIT DISPLAY on every invoc
 - step 2 DONE: services/nodenaming.h|.cpp; duplicateNode + insertFragment rename.
   Verified: services.selection_set PASS (12 naming cases), scripting.e2e.multiselect_edit PASS
   (Cube -> Cube2 -> Cube3 -> Cube4, paste Cube5, free name under another parent kept).
+- step 3 DONE: irisgl c7bbb7d (arrow bindings on Move) + Studio commit below.
+  Verified headless: input.actions, input.fly_controls, input.axis_view_lock PASS.
+  app.navigation_keys (new rig suite) WRITTEN BUT UNRUN — needs the Vulkan/Xvfb gate.
+  scripting.e2e.editor_controls updated (Move now 8 keys) — needs a display, unrun.

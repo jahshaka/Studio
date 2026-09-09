@@ -87,8 +87,10 @@ public:
 	/// yaw/pitch. Plain fly behaviour returns when the drag ends.
 	void setAltOrbit(bool active, const iris::Vec3 &pivot) override;
 
-	/// True while the fly keys should own W/A/S/D/Q/E (RMB held) — the viewport
-	/// uses this to withhold those keys from the shortcut system.
+	/// True while the fly keys should own the arrow cluster (RMB held) — the
+	/// viewport uses this to withhold Up/Down/Left/Right/PageUp/PageDown from
+	/// the shortcut system. W/A/S/D/Q/E are NOT fly keys in the editor any
+	/// more (owner decision 2026-09-09); the player still takes both.
 	bool isFlying() const { return rightMouseDown; }
 };
 
