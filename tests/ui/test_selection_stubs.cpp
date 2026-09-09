@@ -72,6 +72,14 @@ bool SceneEditService::setDecalTexture(const iris::DecalNodePtr &, const QString
     return false;
 }
 
+// MATERIAL_GAPS_SPEC §4: the decal panel's normal and emissive rows now route
+// through the SERVICE like its image row, so this layout suite needs the stub
+// too. (It never binds anything — it measures widget geometry.)
+bool SceneEditService::setDecalMap(const iris::DecalNodePtr &, DecalMapKind, const QString &)
+{
+    return false;
+}
+
 ProjectAssets::Result ProjectAssets::addToProject(const QString &, Database *, Project *, AddKind)
 {
     return ProjectAssets::Result();

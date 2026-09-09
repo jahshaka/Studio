@@ -132,7 +132,8 @@ QVector<VerbInfo> NodeApi::verbs() const
           "The light's bound area mask: the library guid, the resolved file, and whether this light actually samples it (area + not accurate). Empty guid = none.",
           Needs::Document },
         { "setDecalTexture", "node.setDecalTexture(id, textureGuid) -> bool",
-          "Binds an image asset as a DECAL's projected picture; '' clears it (the decal then draws its wire box and projects nothing). Pinned as a BINDING (a dependency row, no companion material). All decal images share one reserved 512x512 sRGB pool, 32 distinct images per process, and whatever image is bound is resampled into it aspect-preserved with transparent padding; the 33rd is REFUSED rather than silently sampling another decal's picture. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
+          "Binds an image asset as a DECAL's projected picture; '' clears it (the decal then draws its wire box and projects nothing). Pinned as a BINDING (a dependency row, no companion material). All decal images share one reserved 512x512 sRGB pool, 32 distinct images per process, and whatever image is bound is resampled into it aspect-preserved with transparent padding; the 33rd is REFUSED rather than silently sampling another decal's picture. Undoable (the project pin it creates is not removed again — an unused pin is inert)."
+          " The DIFFUSE-only alias of node.setDecalMaps.",
           Needs::Document },
         { "setParticleTexture", "node.setParticleTexture(id, textureGuid) -> bool",
           "Binds a Texture asset as a particle emitter's image, as a BINDING (a dependency row "
@@ -148,6 +149,12 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "decalTexture", "node.decalTexture(id) -> {guid, path}",
           "The decal's bound image: the library guid and the resolved file. Empty guid = none.",
+          Needs::Document },
+        { "setDecalMaps", "node.setDecalMaps(id, {diffuse?, normal?, emissive?}) -> bool",
+          "Binds any combination of a DECAL's three projected maps in ONE undoable call; '' clears a map, an absent key leaves it alone. Each is pinned as a BINDING (a dependency row, no companion material) and resolved through the CAS. node.setDecalTexture is the diffuse-only alias. RENDERER LIMITS: the normal map is only visible on receiving materials that ALREADY carry a normal map (the shader drops decal normals otherwise); each map kind has its OWN 512x512 pool with the same 32-image ceiling and aspect-preserved resampling as the diffuse pool. Every requested guid is validated before ANY of them is written, so a bad guid changes nothing.",
+          Needs::Document },
+        { "decalMaps", "node.decalMaps(id) -> {diffuse:{guid,path}, normal:{...}, emissive:{...}}",
+          "All three of the decal's map bindings at once — the read counterpart of node.setDecalMaps. Empty guid = that map is unbound.",
           Needs::Document },
         { "setPlanarReflector", "node.setPlanarReflector(id, enabled) -> bool",
           "Makes this object a planar reflection plane — a mirror or a glossy floor. The plane, its size and its normal are derived from the object's own geometry, so the mesh must be FLAT: its thinnest extent no more than a tenth of the next, i.e. a plane or a thin box. A sphere or a cube is refused with a message. The reflecting face is the object's positive thin axis, so the top of a floor reflects and its underside does not. The object is excluded from its own reflection. Whether a plane actually RENDERS depends on world.setPlanarReflections' budget and on being on screen — each active plane is a whole extra scene render per frame. Undoable.",
@@ -970,6 +977,77 @@ QVariant NodeApi::decalTexture(const QString &id)
     if (!decal) return QVariant();
     return QVariantMap{ { "guid", decal->textureGuid },
                         { "path", decal->resolvedTexturePath } };
+}
+
+bool NodeApi::setDecalMaps(const QString &id, const QVariant &maps)
+{
+    auto decal = decalOrFail(id, QStringLiteral("node.setDecalMaps"));
+    if (!decal) return false;
+    const QVariantMap in = maps.toMap();
+    if (in.isEmpty())
+        return fail(QStringLiteral("node.setDecalMaps: expected an object with at least one of "
+                                   "diffuse / normal / emissive"));
+
+    // Parse and validate EVERY requested map before writing any of them: a
+    // partial apply would leave the node half-bound with one undo entry.
+    struct Change { DecalMapKind kind; QString guid; QString was; };
+    QVector<Change> changes;
+    const struct { const char *key; DecalMapKind kind; } kinds[] = {
+        { "diffuse",  DecalMapKind::Diffuse },
+        { "normal",   DecalMapKind::Normal },
+        { "emissive", DecalMapKind::Emissive },
+    };
+    for (const auto &k : kinds) {
+        if (!in.contains(QLatin1String(k.key))) continue;
+        const QString guid = in.value(QLatin1String(k.key)).toString().trimmed();
+        if (!guid.isEmpty() && host.db && host.db->fetchAsset(guid).guid.isEmpty())
+            return fail(QStringLiteral("node.setDecalMaps: no asset with guid '%1'").arg(guid));
+        const QString was = k.kind == DecalMapKind::Diffuse  ? decal->textureGuid
+                          : k.kind == DecalMapKind::Normal   ? decal->normalGuid
+                                                             : decal->emissiveGuid;
+        changes.append({ k.kind, guid, was });
+    }
+    for (const auto &key : in.keys()) {
+        if (key != QLatin1String("diffuse") && key != QLatin1String("normal") &&
+            key != QLatin1String("emissive"))
+            return fail(QStringLiteral("node.setDecalMaps: unknown map '%1' (diffuse, normal, "
+                                       "emissive)").arg(key));
+    }
+    if (changes.isEmpty())
+        return fail(QStringLiteral("node.setDecalMaps: expected an object with at least one of "
+                                   "diffuse / normal / emissive"));
+
+    if (!host.services || !host.services->sceneEdit)
+        return fail(QStringLiteral("node.setDecalMaps: no scene edit service"));
+    SceneEditService *edit = host.services->sceneEdit;
+
+    // THE one binding path, three kinds: dependency row + AddKind::Binding pin
+    // + CAS resolve, exactly what the diffuse row has always had and what the
+    // panel's normal/emissive rows never did (MATERIAL_GAPS_SPEC §1.3).
+    auto apply = [edit, decal](const QVector<Change> &list, bool forward) {
+        for (const auto &c : list) edit->setDecalMap(decal, c.kind, forward ? c.guid : c.was);
+    };
+    apply(changes, /*forward=*/true);
+    // One undo entry for the whole call: setting two maps atomically is the
+    // reason this verb exists rather than a `kind` argument (D-4).
+    recordNodeEdit(QStringLiteral("decal maps"),
+                   [apply, changes]() { apply(changes, true); },
+                   [apply, changes]() { apply(changes, false); });
+    return true;
+}
+
+QVariant NodeApi::decalMaps(const QString &id)
+{
+    auto decal = decalOrFail(id, QStringLiteral("node.decalMaps"));
+    if (!decal) return QVariant();
+    const auto pair = [](const QString &guid, const QString &path) {
+        return QVariantMap{ { "guid", guid }, { "path", path } };
+    };
+    return QVariantMap{
+        { "diffuse",  pair(decal->textureGuid, decal->resolvedTexturePath) },
+        { "normal",   pair(decal->normalGuid, decal->resolvedNormalPath) },
+        { "emissive", pair(decal->emissiveGuid, decal->resolvedEmissivePath) },
+    };
 }
 
 bool NodeApi::setParticleTexture(const QString &id, const QString &assetGuid)

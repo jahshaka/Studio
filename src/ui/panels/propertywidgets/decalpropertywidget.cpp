@@ -139,6 +139,14 @@ void DecalPropertyWidget::onNormalChanged(const QString &path, const QString &gu
 {
     Q_UNUSED(path);
     if (loading || !decalNode) return;
+    // MATERIAL_GAPS_SPEC §4 item 3: these two rows used to call bindMap
+    // directly, which pinned the asset but wrote NO dependency row and removed
+    // none when the guid changed or was cleared. They now go through the same
+    // service the image row does.
+    if (services && services->sceneEdit) {
+        services->sceneEdit->setDecalMap(decalNode, DecalMapKind::Normal, guid);
+        return;
+    }
     bindMap(guid, decalNode->normalGuid, decalNode->resolvedNormalPath);
 }
 
@@ -146,6 +154,10 @@ void DecalPropertyWidget::onEmissiveChanged(const QString &path, const QString &
 {
     Q_UNUSED(path);
     if (loading || !decalNode) return;
+    if (services && services->sceneEdit) {
+        services->sceneEdit->setDecalMap(decalNode, DecalMapKind::Emissive, guid);
+        return;
+    }
     bindMap(guid, decalNode->emissiveGuid, decalNode->resolvedEmissivePath);
 }
 
