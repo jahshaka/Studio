@@ -15,9 +15,10 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/core/properties/property.h"
-#include "irisgl/document/assets/texture2d.h"
 #include <QFileInfo>
+#include "io/builtinmaterials.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/sceneworkerthreads.h"
 #include "bridge/offscreenrenderscope.h"
@@ -161,21 +162,26 @@ static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
     cam->update(0);
 }
 
+// THE THIRD MATERIAL-CONSTRUCTION PATH, retired (hygiene lane, 2026-09-09).
+//
+// This built an iris::DefaultMaterial out of the legacy Blinn fields —
+// diffuse/specular/ambient/shininess plus the diffuse, specular and normal
+// maps — and IGNORED every PBR field the importer reads. A thumbnail of a
+// glTF model was therefore rendered from a lossy back-conversion of data the
+// document already had exactly: baseColorFactor, metallic, roughness, the
+// base-colour/metallic/roughness/emissive maps, and KHR_materials_unlit all
+// went to the floor, so a thumbnail could not agree with the asset preview,
+// the viewport, or the model as imported.
+//
+// It is the third copy of a conversion the tree had already reduced to one:
+// AssetHelper's import path and SceneEditService both call
+// BuiltinMaterials::fromMeshData, and the comment at assethelper.cpp:236
+// records what a SECOND copy already cost (emissiveIntensity dropped on every
+// import). There is nothing in a thumbnail that wants a different answer from
+// the scene, so it now asks the same function.
 iris::MaterialPtr EngineThumbnailRenderer::previewMaterialForMeshData(const iris::MeshMaterialData &data)
 {
-    auto mat = iris::DefaultMaterial::create();
-    mat->setDiffuseColor(data.diffuseColor.isValid() ? data.diffuseColor : QColor(200, 200, 200));
-    mat->setSpecularColor(data.specularColor.isValid() ? data.specularColor : QColor(255, 255, 255));
-    mat->setAmbientColor(QColor(110, 110, 110));
-    mat->setShininess(data.shininess);
-    // The whole point of the thumbnail is the asset's look: keep the maps.
-    if (QFileInfo(data.diffuseTexture).isFile())
-        mat->setDiffuseTexture(iris::Texture2D::load(data.diffuseTexture));
-    if (QFileInfo(data.specularTexture).isFile())
-        mat->setSpecularTexture(iris::Texture2D::load(data.specularTexture));
-    if (QFileInfo(data.normalTexture).isFile())
-        mat->setNormalTexture(iris::Texture2D::load(data.normalTexture));
-    return mat.staticCast<iris::Material>();
+    return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
 }
 
 // (previewMaterialFor and previewMaterials are GONE with HLMS_ADOPTION P4b.
