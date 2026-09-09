@@ -273,6 +273,7 @@ set(SRCS
     src/services/selectionservice.cpp
     src/services/shortcutregistry.cpp
     src/services/gibounds.cpp
+    src/services/sceneextents.cpp
     src/services/sunlink.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp

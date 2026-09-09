@@ -167,6 +167,7 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
     mManifest.kind = QStringLiteral("project");
     mManifest.generator = QStringLiteral("Jahshaka");
     mManifest.created = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    mManifest.scene = mSceneMeta;   // omitted entirely when nobody measured
 
     const QString objectsDir = QDir(mStage->path()).filePath(QStringLiteral("objects"));
     QSet<QString> written;

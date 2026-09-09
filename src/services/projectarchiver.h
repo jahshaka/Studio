@@ -120,6 +120,14 @@ public:
     bool isRunning() const { return mRunning.load(); }
     const Result &result() const { return mResult; }
 
+    /// The manifest's scene-scale block (exportformat::ManifestScene), for
+    /// EXPORTS. The archiver measures nothing itself — it never sees the live
+    /// document, only the database — so the caller that has the open scene
+    /// hands the measurement in (sceneextents::describe builds it). Unset, the
+    /// manifest simply omits the block, exactly as every archive written before
+    /// 2026-09-09 does.
+    void setSceneMetadata(const exportformat::ManifestScene &scene) { mSceneMeta = scene; }
+
     /// Cooperative, safe from any thread. Honoured between zip/extract entries
     /// and between install slices.
     void requestCancel() { mCanceled.store(true); }
@@ -164,6 +172,7 @@ private:
     Project *project = nullptr;
 
     Result mResult;
+    exportformat::ManifestScene mSceneMeta;
     std::atomic<bool> mRunning { false };
     std::atomic<bool> mCanceled { false };
     bool mThreaded = false;

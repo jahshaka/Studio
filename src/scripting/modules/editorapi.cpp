@@ -165,14 +165,17 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "view", "editor.view() -> string",
           "The last canonical view requested via editor.setView (\"perspective\" until one is set). Informational — free orbiting afterwards does not reset it.",
           Needs::Engine },
-        { "camera", "editor.camera() -> {position:{x,y,z}, rotation:{x,y,z,scalar}, projection:\"perspective\"|\"orthogonal\", orthoSize, rotationLocked}",
-          "The editor camera's current pose: local position, local rotation quaternion, projection mode and ortho zoom. Read-only — the pixel-free way to assert camera moves (focus, view switches). "
+        { "camera", "editor.camera() -> {position:{x,y,z}, rotation:{x,y,z,scalar}, projection:\"perspective\"|\"orthogonal\", orthoSize, fov, nearClip, farClip, rotationLocked}",
+          "The editor camera's current pose: local position, local rotation quaternion, projection mode, ortho zoom and LENS (`fov` is the vertical field of view in degrees — the value editor.setCamera writes, "
+          "and the one the scene file persists as the saved camera; `nearClip`/`farClip` complete the lens). Read-only — the pixel-free way to assert camera moves (focus, view switches) and the way a scene's "
+          "SAVED camera is checked against the scene-scale convention (samples.scale). A DOCUMENT verb: the editor camera is document state (the scene file's `editor.camera` block), so this answers under "
+          "--headless, where the stand-in viewport holds exactly the camera the file loaded. "
           "`rotationLocked` is the AXIS-VIEW LOCK: true while the viewport is in one of the six axis views (editor.view()), which are orthographic measuring views and stay pointed down their axis. "
           "Locked, the rotation GESTURES do nothing — the right-mouse look drag, the Alt+left-mouse orbit and the arcball's own drag are ignored rather than answered by dropping out of the view — "
           "while panning (middle-mouse drag), zooming (the wheel, which moves `orthoSize`) and the fly keys keep working; the fly keys move on the camera's own basis there, so W/S pan up and down "
           "the screen and Q/E dolly along the view axis. It constrains GESTURES only: editor.setCamera and editor.frameNode still write any pose they are given, and a camera being PILOTED is never "
           "locked. editor.setView(\"perspective\") clears it and restores the remembered perspective pose.",
-          Needs::Engine },
+          Needs::Document },
         { "setCamera", "editor.setCamera({position?, lookAt? | rotation?, fov?}) -> {position, rotation, projection, orthoSize, fov}",
           "Places the editor camera and returns the pose that resulted (the same shape editor.camera() reports, plus `fov`). "
           "`position` is the world-space eye point ({x,y,z} or [x,y,z]); every key is optional, so `{position:…}` alone moves "
@@ -824,7 +827,14 @@ QString EditorApi::view()
 QVariantMap EditorApi::camera()
 {
     QVariantMap out;
-    if (!requireEngine()) return out;
+    // NOT requireEngine (lane-samplescale 2026-09-09): the editor camera is
+    // DOCUMENT state — the scene file's `editor.camera` block, restored into
+    // whatever viewport is in play — and the headless stand-in
+    // (HeadlessEditorViewport) holds the very camera the file loaded. Gating
+    // the read on a render device made "what lens did this scene save?"
+    // answerable only with a GPU, which is why the samples' saved cameras went
+    // unchecked. The SETTER still needs the engine; only this read moved.
+    if (!host.viewport) { fail("editor.camera: no viewport"); return out; }
     auto cam = host.viewport->editorCamera();
     if (!cam) { fail("editor.camera: no editor camera"); return out; }
     const iris::Vec3 pos = cam->getLocalPos();
@@ -835,6 +845,15 @@ QVariantMap EditorApi::camera()
     out["projection"] = cam->projMode == iris::CameraProjection::Perspective
                             ? QStringLiteral("perspective") : QStringLiteral("orthogonal");
     out["orthoSize"] = cam->orthoSize;
+    // THE LENS. setCamera has taken `fov` since it landed and camera() never
+    // reported it back — a setter/getter asymmetry that made the saved lens
+    // (the number the fixed-95-degree-cap incident was about) unreadable from a
+    // script. angle is the VERTICAL field of view in degrees; the free-camera
+    // framing policy holds the authored vertical angle at or below 16:9 and
+    // holds the 16:9 HORIZONTAL extent beyond it.
+    out["fov"] = cam->angle;
+    out["nearClip"] = cam->nearClip;
+    out["farClip"] = cam->farClip;
     // THE AXIS-VIEW LOCK, as a readback (owner report 2026-09-08). It is the
     // only way a script — or a user asking "why will my drag not turn the
     // camera" — can tell a locked view from a broken mouse.

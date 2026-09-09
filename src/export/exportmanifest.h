@@ -70,6 +70,36 @@ struct ManifestAsset
     QStringList dependencies;   // guids this asset depends on (outgoing edges)
 };
 
+/// THE SCENE-SCALE BLOCK (owner's scene-scale convention, 2026-09-08;
+/// lane-samplescale 2026-09-09). Optional, and only project archives carry it:
+/// it says what one scene unit MEANS and how big the thing in the archive is,
+/// so a consumer can label or vet a scene WITHOUT opening it — which is exactly
+/// what a sample tile and the Ogre-samples tab need (a tile is drawn before any
+/// project is open, so the document is unreachable and only the archive is on
+/// disk). Manifest key: "scene".
+///
+///   "scene": {
+///     "units": "meters", "unitScale": 1.0,      // metres per scene unit
+///     "extent": { "min": [x,y,z], "max": [...], "size": [...] },
+///     "camera": { "fov": 45.0, "height": 2.5 }  // the SAVED editor camera
+///   }
+///
+/// `extent` is the world AABB of the scene's GEOMETRY excluding the ground
+/// plane (sceneextents::worldAabb over the mesh nodes, minus any node the
+/// caller drops) — the number a human means by "how big is this room". Readers
+/// that do not know the key ignore it; `present` false means the archive
+/// predates the block, never that the scene has no size.
+struct ManifestScene
+{
+    bool present = false;
+    QString units = QStringLiteral("meters");
+    double unitScale = 1.0;
+    double extentMin[3] = { 0, 0, 0 };
+    double extentMax[3] = { 0, 0, 0 };
+    double cameraFov = 0.0;      // vertical field of view, degrees; 0 = unknown
+    double cameraHeight = 0.0;   // the saved eye height, scene units
+};
+
 struct ExportManifest
 {
     int version = 2;         // 1 = legacy single-word manifest
@@ -77,6 +107,7 @@ struct ExportManifest
     QString generator;       // informational
     QString created;         // ISO 8601 UTC, informational
     QVector<ManifestAsset> assets;
+    ManifestScene scene;     ///< optional; written only when `present`
 
     QJsonObject toJson() const;
     QByteArray toBytes() const;                 // pretty JSON, trailing newline
