@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QPixmap>
 #include <QSqlDatabase>
 #include <QStandardPaths>
+#include <cmath>
 
 #include "scripting/modules/moduleshared.h"
 #include "export/exportcontentsource.h"
@@ -38,6 +39,7 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "services/import/assetimportservice.h"
 #include "services/assetmetadata.h"
+#include "services/fitsize.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
 #include "data/database/database.h"
@@ -102,7 +104,22 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
-          "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset.",
+          "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
+          "MODELS also carry the FIT-TO-SIZE block (services/fitsize.h): `extent` {x,y,z} — the model's axis-aligned size in METRES, measured at import after the file's declared unit scale; `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none); `fitKind` ('character' when the file carries a skeleton, else 'object'); `fitScale` — what every instantiation multiplies the root node's scale by (1 = the model measured plausible and is placed exactly as authored); `fitReason` — one sentence, present only when a fit was inferred; and `fitSource` ('auto' = the policy, 'manual' = assets.setFit).",
+          Needs::Document },
+        { "setFit", "assets.setFit(guid, {scale} | {reset: true} | {remeasure: true}) -> {extent, fitScale, fitReason, fitSource, fitKind}",
+          "Overrides, restores or recomputes a MODEL asset's fit-to-size factor — the Assets page's "
+          "\"Imported size\" row, as a verb. Exactly one option: `scale` is a positive multiplier "
+          "recorded as a MANUAL fit (fitSource 'manual'); `reset: true` throws the manual override "
+          "away and recomputes the automatic fit from the recorded extent; `remeasure: true` "
+          "re-measures the model from its stored source file and recomputes the fit from that "
+          "(the page's Re-measure — for a row imported before this feature existed, or one whose "
+          "source was replaced). Returns the resulting block, so a caller never has to re-read it. "
+          "The fit is a property of the ASSET, applied at the root node wherever the asset is "
+          "instantiated, so this changes every FUTURE placement and no node already in a scene. "
+          "Refuses a non-model asset, an unknown guid, a non-positive scale, and any combination "
+          "other than exactly one of the three. NOT undoable — asset mutations never are "
+          "(SCRIPTING_SPEC §1.6.5).",
           Needs::Document },
         { "rename", "assets.rename(guid, name) -> bool",
           "Renames a library asset — the Assets page's name field + Update button, as a verb. "
@@ -425,6 +442,58 @@ QVariantMap AssetsApi::metadata(const QString &guid)
     out["tags"] = QVariant(assettags::parse(record.tags));
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
+    return out;
+}
+
+// FIT TO SIZE (services/fitsize.h): the override half. The measurement and the
+// automatic policy run at import; this is how a user disagrees with them, and
+// how a library imported before the feature existed gets measured.
+QVariantMap AssetsApi::setFit(const QString &guid, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+
+    static const QStringList known = { "scale", "reset", "remeasure" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("assets.setFit: unknown option '%1' (known: %2)")
+                     .arg(it.key(), known.join(", ")));
+            return out;
+        }
+    }
+    const bool wantScale = options.contains(QStringLiteral("scale"));
+    const bool wantReset = normalizeJs(options.value(QStringLiteral("reset"))).toBool();
+    const bool wantRemeasure = normalizeJs(options.value(QStringLiteral("remeasure"))).toBool();
+    if (int(wantScale) + int(wantReset) + int(wantRemeasure) != 1) {
+        fail("assets.setFit: pass exactly one of {scale}, {reset: true} or {remeasure: true}");
+        return out;
+    }
+
+    double scale = 0.0;
+    if (wantScale) {
+        bool ok = false;
+        scale = normalizeJs(options.value(QStringLiteral("scale"))).toDouble(&ok);
+        if (!ok || !(scale > 0.0) || !std::isfinite(scale)) {
+            fail("assets.setFit: 'scale' must be a positive number");
+            return out;
+        }
+    }
+
+    const auto change = wantScale     ? AssetMetadata::FitChange::Manual
+                      : wantRemeasure ? AssetMetadata::FitChange::Remeasure
+                                      : AssetMetadata::FitChange::Reset;
+    QString error;
+    // ONE write (AssetMetadata::writeFit) — the Assets page's "Imported size"
+    // row calls the same one, so a clicked change and a scripted one cannot
+    // produce different blocks.
+    const QJsonObject meta = AssetMetadata::writeFit(host.db, guid, change, scale, &error);
+    if (meta.isEmpty()) {
+        fail(QStringLiteral("assets.setFit: %1").arg(error));
+        return out;
+    }
+
+    out = meta.toVariantMap();
+    out["guid"] = guid;
     return out;
 }
 

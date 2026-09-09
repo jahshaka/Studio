@@ -1,0 +1,124 @@
+// scripting.e2e.fitsize — FIT TO SIZE end to end through the verbs
+// (services/fitsize.h; owner report 2026-09-09: "everything is coming in
+// messed up in the asset module and the avatars").
+//
+// The unit suite (importer.fitsize) pins the measurement and the policy.
+// THIS pins the thing the owner actually does: import a mis-declared file,
+// put it in a scene, and find it the right size — through the real binary,
+// the real library, the real instantiation route, with no viewport help.
+//
+//   import -> assets.metadata reports the block
+//          -> assets.addToScene places it -> node.size measures 1.75 m
+//          -> assets.setFit({scale}) overrides -> the NEXT placement changes
+//          -> assets.setFit({reset}) -> back to the automatic fit
+//          -> assets.setFit({remeasure}) -> the block is rebuilt from the store
+//          -> a plausible model is placed exactly as authored
+//
+// Headless: every verb here is document-side.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b, tol) { return Math.abs(a - b) <= (tol === undefined ? 1e-2 : tol); }
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+var GIANT = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_giant.glb";  // 17.25 m, the Dreyar case
+var PLAIN = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";        //  2.00 m, plausible
+
+var proj = project.create("Fit To Size " + Date.now());
+assert(proj.length > 10, "project.create");
+
+// ---- 1. the import records the measurement and the fit --------------------
+var giant = assets.import(GIANT);
+assert(giant.length > 10, "assets.import(rig2_giant.glb)");
+
+var meta = assets.metadata(giant);
+assert(meta.kind === "model", "the metadata block is a model block");
+assert(meta.extent !== undefined, "an extent was recorded");
+assert(near(meta.extent.y, 17.25), "the file measures 17.25 m tall (got " + meta.extent.y + ")");
+assert(meta.fitKind === "character", "a rigged file is classified as a character");
+assert(near(meta.fitScale, 1.75 / 17.25, 1e-4),
+       "fitScale takes it to the 1.75 m target (got " + meta.fitScale + ")");
+assert(typeof meta.fitReason === "string" && meta.fitReason.length > 10,
+       "fitReason says why in one sentence: " + meta.fitReason);
+assert(meta.fitSource === "auto", "fitSource is 'auto' — the policy, not a human");
+assert(meta.unitScale !== undefined, "unitScale reports the file's own declaration");
+
+// ---- 2. the PLACEMENT is what the fit is for ------------------------------
+assets.addToProject(giant);
+var placed = assets.addToScene(giant, { position: [0, 0, 0] });
+assert(placed.length > 10, "assets.addToScene");
+
+var size = node.size(placed);
+assert(near(size.height, 1.75),
+       "the PLACED character measures 1.75 m tall (got " + size.height + ")");
+// The fit lands on the node's own scale, so it is serialized with the scene
+// and nothing normalizes it a second time on reopen.
+var t = node.transform(placed);
+assert(near(t.scale.y, meta.fitScale, 1e-4),
+       "the fit rode the node's local scale (" + t.scale.y + ")");
+
+// ---- 3. the control: a plausible model is placed EXACTLY as authored ------
+var plain = assets.import(PLAIN);
+var plainMeta = assets.metadata(plain);
+assert(near(plainMeta.fitScale, 1.0, 1e-6), "a 2 m character needs no fit (fitScale 1)");
+assert(plainMeta.fitReason === undefined, "no fitReason when nothing was inferred");
+assets.addToProject(plain);
+var plainNode = assets.addToScene(plain, { position: [3, 0, 0] });
+assert(near(node.size(plainNode).height, 2.0),
+       "the plausible character is placed at its authored 2 m");
+assert(near(node.transform(plainNode).scale.y, 1.0, 1e-6),
+       "and its scale is untouched");
+
+// ---- 4. the OVERRIDE ------------------------------------------------------
+// A human disagrees with the policy: half the target.
+var manual = assets.setFit(giant, { scale: (1.75 / 17.25) / 2 });
+assert(manual.fitSource === "manual", "assets.setFit({scale}) records a manual fit");
+assert(near(assets.metadata(giant).fitScale, manual.fitScale, 1e-9),
+       "the manual fit is persisted");
+
+// The fit is a property of the ASSET: the node already in the scene does not
+// move, and the NEXT placement gets the new size.
+assert(near(node.size(placed).height, 1.75),
+       "the already-placed character is NOT retroactively rescaled");
+var half = assets.addToScene(giant, { position: [6, 0, 0] });
+assert(near(node.size(half).height, 0.875),
+       "a placement made after the override comes in at the overridden size ("
+           + node.size(half).height + ")");
+
+// reset -> the automatic fit is back
+var reset = assets.setFit(giant, { reset: true });
+assert(reset.fitSource === "auto", "assets.setFit({reset}) goes back to the policy");
+assert(near(reset.fitScale, 1.75 / 17.25, 1e-4), "and to the policy's factor");
+var again = assets.addToScene(giant, { position: [9, 0, 0] });
+assert(near(node.size(again).height, 1.75), "a placement after the reset is 1.75 m again");
+
+// remeasure -> the block is rebuilt from the stored source
+var remeasured = assets.setFit(giant, { remeasure: true });
+assert(near(remeasured.extent.y, 17.25),
+       "assets.setFit({remeasure}) re-measures the stored model (" + remeasured.extent.y + ")");
+assert(near(remeasured.fitScale, 1.75 / 17.25, 1e-4), "and recomputes the same fit");
+
+// ---- 5. refusals ----------------------------------------------------------
+mustThrow(function () { assets.setFit(giant, { scale: 0 }); }, "a zero scale is refused");
+mustThrow(function () { assets.setFit(giant, { scale: -2 }); }, "a negative scale is refused");
+mustThrow(function () { assets.setFit(giant, {}); }, "no option at all is refused");
+mustThrow(function () { assets.setFit(giant, { scale: 2, reset: true }); },
+          "two options at once are refused");
+mustThrow(function () { assets.setFit(giant, { size: 2 }); }, "an unknown option is refused");
+mustThrow(function () { assets.setFit("no-such-guid", { reset: true }); },
+          "an unknown guid is refused");
+
+// A node with no geometry measures zero — an answer, not an error.
+var light = scene.addLight("point");
+var lightSize = node.size(light);
+assert(lightSize.x === 0 && lightSize.y === 0 && lightSize.z === 0,
+       "node.size of a light is all zeros");
+mustThrow(function () { node.size("no-such-node"); }, "node.size of an unknown id is refused");
+
+console.log("scripting.e2e.fitsize: all assertions passed");

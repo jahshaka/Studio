@@ -20,7 +20,10 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QStandardPaths>
 #include <QtEndian>
+#include <algorithm>
 #include <functional>
+#include <limits>
+#include <vector>
 
 #include "assimp/Importer.hpp"
 #include "assimp/material.h"
@@ -32,12 +35,14 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/iesprofile.h"
+#include "services/fitsize.h"
 #include "services/rigsignature.h"
 #include "irisgl/document/assets/avatardefinition.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "data/project.h"
 #include "irisgl/core/irisutils.h"
+#include "irisgl/core/logger.h"
 #include "services/videoutils.h"
 
 namespace {
@@ -102,6 +107,90 @@ QString findByExtension(const QString &folder, const QStringList &exts)
         if (exts.contains(file.suffix().toLower()))
             return file.absoluteFilePath();
     return QString();
+}
+
+/// The model's axis-aligned WORLD size, in metres — measured on the parsed
+/// aiScene, which iris::ImportFlags::Canonical has already unit-converted
+/// (aiProcess_GlobalScale). Mesh-local AABBs pushed through each instancing
+/// node's accumulated transform: the same shape as the document-side walk in
+/// fitsize::measureNode, so the number recorded at import and the number a
+/// placed node measures agree.
+fitsize::Extent measureSceneExtent(const aiScene *scene)
+{
+    fitsize::Extent out;
+    if (!scene || scene->mNumMeshes == 0 || !scene->mRootNode) return out;
+
+    // Per-mesh local AABB, computed once even when several nodes instance it.
+    struct Box { aiVector3D mn, mx; bool any = false; };
+    std::vector<Box> boxes(scene->mNumMeshes);
+    for (unsigned i = 0; i < scene->mNumMeshes; ++i) {
+        const aiMesh *mesh = scene->mMeshes[i];
+        if (!mesh || mesh->mNumVertices == 0) continue;
+        Box &box = boxes[i];
+        for (unsigned v = 0; v < mesh->mNumVertices; ++v) {
+            const aiVector3D &p = mesh->mVertices[v];
+            if (!box.any) { box.mn = box.mx = p; box.any = true; continue; }
+            box.mn.x = std::min(box.mn.x, p.x); box.mx.x = std::max(box.mx.x, p.x);
+            box.mn.y = std::min(box.mn.y, p.y); box.mx.y = std::max(box.mx.y, p.y);
+            box.mn.z = std::min(box.mn.z, p.z); box.mx.z = std::max(box.mx.z, p.z);
+        }
+    }
+
+    double lo[3] = { std::numeric_limits<double>::max(), std::numeric_limits<double>::max(),
+                     std::numeric_limits<double>::max() };
+    double hi[3] = { -std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(),
+                     -std::numeric_limits<double>::max() };
+    bool any = false;
+
+    std::function<void(const aiNode *, const aiMatrix4x4 &)> walk =
+        [&](const aiNode *node, const aiMatrix4x4 &parent) {
+            if (!node) return;
+            const aiMatrix4x4 world = parent * node->mTransformation;
+            for (unsigned m = 0; m < node->mNumMeshes; ++m) {
+                const unsigned index = node->mMeshes[m];
+                if (index >= boxes.size() || !boxes[index].any) continue;
+                const Box &box = boxes[index];
+                for (int c = 0; c < 8; ++c) {
+                    aiVector3D corner((c & 1) ? box.mx.x : box.mn.x,
+                                      (c & 2) ? box.mx.y : box.mn.y,
+                                      (c & 4) ? box.mx.z : box.mn.z);
+                    corner *= world;
+                    const double p[3] = { corner.x, corner.y, corner.z };
+                    for (int a = 0; a < 3; ++a) {
+                        lo[a] = std::min(lo[a], p[a]);
+                        hi[a] = std::max(hi[a], p[a]);
+                    }
+                    any = true;
+                }
+            }
+            for (unsigned c = 0; c < node->mNumChildren; ++c) walk(node->mChildren[c], world);
+        };
+    walk(scene->mRootNode, aiMatrix4x4());
+
+    if (!any) return out;
+    out.x = hi[0] - lo[0];
+    out.y = hi[1] - lo[1];
+    out.z = hi[2] - lo[2];
+    out.valid = out.x > 0.0 || out.y > 0.0 || out.z > 0.0;
+    return out;
+}
+
+/// Metres per source unit AS THE FILE DECLARED IT. FBX is the only format in
+/// the set that declares one (GlobalSettings::UnitScaleFactor, documented as
+/// CENTIMETRES per unit — a Mixamo download says 1.0); glTF fixes the metre by
+/// spec and .obj/.ply/.stl declare nothing, so they read 1. Recorded for the
+/// user, never used by the policy: aiProcess_GlobalScale has already applied
+/// it to the geometry this measures.
+double declaredUnitScale(const aiScene *scene)
+{
+    if (!scene || !scene->mMetaData) return 1.0;
+    double factor = 0.0;
+    if (scene->mMetaData->Get("UnitScaleFactor", factor) && factor > 0.0)
+        return factor / 100.0;
+    float ffactor = 0.0f;
+    if (scene->mMetaData->Get("UnitScaleFactor", ffactor) && ffactor > 0.0f)
+        return double(ffactor) / 100.0;
+    return 1.0;
 }
 
 } // namespace
@@ -207,6 +296,19 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
     meta["nodeNames"] = QJsonArray::fromStringList(nodeNames);
     meta["rigId"] = rig::rigId(boneNames);
     meta["animations"] = animations;
+
+    // ---- FIT TO SIZE (services/fitsize.h) ---------------------------------
+    //
+    // The model's measured size in metres and the fit the size policy infers
+    // from it. Computed HERE — the one import-time model-description site —
+    // so it also comes for free on the lazy backfill (forModelFile) and needs
+    // no migration for rows imported before the feature landed.
+    const fitsize::Extent extent = measureSceneExtent(scene);
+    fitsize::writeBlock(meta, extent, declaredUnitScale(scene), !boneNames.isEmpty());
+    if (meta.contains("fitReason"))
+        irisLog(QStringLiteral("import: '%1' %2")
+                    .arg(QFileInfo(sourceFile).fileName(),
+                         meta.value("fitReason").toString()));
     return meta;
 }
 
@@ -391,8 +493,13 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
         // recompute once, persist, and every later call is the fast path
         // again. (Ships-as-new-app means no MIGRATIONS; a lazy backfill that
         // already exists for exactly this is not one.)
+        // Same story a second time (fit-to-size, 2026-09-09): a model block
+        // written before the size policy carries no `fitScale`, so an old
+        // library would place every mis-declared model raw forever. `fitScale`
+        // joins `hasSkeleton` as a version marker — one recompute, persisted,
+        // and the fast path is back.
         if (stored.value("kind").toString() != QLatin1String("model")
-            || stored.contains("hasSkeleton"))
+            || (stored.contains("hasSkeleton") && stored.contains("fitScale")))
             return stored;
     }
 
@@ -422,6 +529,54 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
 
     props["metadata"] = meta;
     db->updateAssetProperties(guid, QJsonDocument(props).toJson());
+    return meta;
+}
+
+QJsonObject AssetMetadata::writeFit(Database *db, const QString &guid, FitChange change,
+                                    double scale, QString *error, const QString &storeRoot)
+{
+    const auto fail = [error](const QString &message) {
+        if (error) *error = message;
+        return QJsonObject();
+    };
+    if (!db) return fail(QStringLiteral("no library is open"));
+
+    const AssetRecord record = db->fetchAsset(guid);
+    if (record.guid.isEmpty())
+        return fail(QStringLiteral("no asset with guid '%1'").arg(guid));
+    if (record.type != static_cast<int>(ModelTypes::Object))
+        return fail(QStringLiteral("'%1' is not a model asset \u2014 only models carry a "
+                                   "measured size to fit").arg(record.name));
+    if (change == FitChange::Manual && (!(scale > 0.0) || !std::isfinite(scale)))
+        return fail(QStringLiteral("a fit scale must be a positive number"));
+
+    // ensure() first: it backfills a row that has no block at all, which is
+    // what makes Reset and Manual work on a pre-feature library.
+    QJsonObject meta = ensure(db, guid, storeRoot);
+
+    if (change == FitChange::Remeasure) {
+        const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
+        QJsonObject fresh = computeForStore(record.type, QDir(root).filePath(guid));
+        if (fresh.isEmpty()) {
+            const QString source = AssetCas::resolveSource(QSqlDatabase::database(), root, guid);
+            if (!source.isEmpty()) fresh = forModelFile(source);
+        }
+        if (fresh.isEmpty())
+            return fail(QStringLiteral("'%1' has no stored model file to re-measure")
+                            .arg(record.name));
+        meta = fresh;
+    } else if (change == FitChange::Manual) {
+        fitsize::writeOverride(meta, scale);
+    } else {
+        fitsize::writeBlock(meta, fitsize::extentOf(meta),
+                            meta.value(QStringLiteral("unitScale")).toDouble(1.0),
+                            meta.value(QStringLiteral("hasSkeleton")).toBool());
+    }
+
+    QJsonObject props = QJsonDocument::fromJson(record.properties).object();
+    props["metadata"] = meta;
+    if (!db->updateAssetProperties(guid, QJsonDocument(props).toJson()))
+        return fail(QStringLiteral("could not write '%1'").arg(record.name));
     return meta;
 }
 

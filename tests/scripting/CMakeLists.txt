@@ -761,6 +761,24 @@ set_tests_properties(scripting.e2e.graph_edit PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# scripting.e2e.fitsize — FIT TO SIZE end to end (services/fitsize.h; owner
+# 2026-09-09: "everything is coming in messed up in the asset module and the
+# avatars"). The unit suite (importer.fitsize) pins the measurement and the
+# policy; this pins what the owner does — import a mis-declared file, place it,
+# and get the right size — through the real binary, the real library and the
+# one instantiation route, plus the assets.setFit override/reset/re-measure
+# round trip. Document verbs only -> --headless.
+configure_file(scripts/e2e_fitsize.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_fitsize.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-fitsize)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.fitsize
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_fitsize.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.fitsize PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 jah_no_display(
     scripting.e2e.avatar_verbs
     scripting.e2e.graph_edit
@@ -789,6 +807,7 @@ jah_no_display(
     scripting.e2e.world_modes
     scripting.e2e.looks
     scripting.e2e.rayon
+    scripting.e2e.fitsize
     scripting.e2e.folders)
 
 # scripting.e2e.glb_textures — the owner's "the glb imports still don't work,

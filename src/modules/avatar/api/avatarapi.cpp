@@ -1012,6 +1012,14 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     // scale lands on the character's own node so its rig, its mesh and every
     // clip that plays on it move together. It is SERIALIZED with the node, and
     // nothing on the OPEN path normalizes, so reopening never scales twice.
+    //
+    // NOT TWICE, EITHER (fit-to-size, 2026-09-09 — the other half of the note
+    // in SceneEditService::addMaterialMesh): addMaterialMesh above has ALREADY
+    // applied the asset's `fitScale` at the root. So this measures the fitted
+    // character, reads a plausible height and does nothing — the ORDER is what
+    // makes that true, and the two rules share one band
+    // (avatar::kMinPlausibleHeight == fitsize::kCharacter.min). An explicit
+    // `height` still wins: it is applied on top of the fit, as a ratio.
     avatar::HeightNormalization norm;
     if (explicitHeight > 0.0 || autoNormalize)
         norm = avatar::normalizeCharacterHeight(node, float(explicitHeight));

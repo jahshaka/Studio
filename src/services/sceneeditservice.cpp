@@ -60,7 +60,9 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root); }
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/materialpreset.h"
+#include "irisgl/core/logger.h"
 #include "services/assetmetadata.h"
+#include "services/fitsize.h"
 #include "services/imagematerial.h"
 #include "services/projectassets.h"
 #include "services/scenenodehelper.h"
@@ -389,6 +391,28 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
             || QFileInfo(source).fileName() == QFileInfo(relPath).fileName())
             anim->skeletalAnimation->source = relPath;
     }
+
+    // ---- FIT TO SIZE (services/fitsize.h) ---------------------------------
+    //
+    // THE one place an asset's fit is applied, because this is THE one
+    // instantiation route: drag-drop, assets.addToScene, assets.importAndPlace
+    // and avatar.spawn all land here. The factor is a property of the ASSET
+    // (its metadata block), so every instance of a mis-declared model comes in
+    // at the same, right size, and `assets.setFit` changes all future ones.
+    //
+    // AVATAR COORDINATION (documented at the other site too,
+    // AvatarApi::spawn): avatar.spawn calls avatar::normalizeCharacterHeight
+    // AFTER this returns, so it measures the ALREADY-FITTED character, finds a
+    // plausible height and does nothing. Nothing is normalized twice.
+    //
+    // ensure() rather than a raw properties read: a library that predates this
+    // feature has no block, and the backfill is the documented way old rows
+    // get one (the rich-metadata precedent). It costs one assimp parse, once
+    // per asset, ever.
+    const double fit = fitsize::fitScaleOf(AssetMetadata::ensure(db, guid));
+    if (fitsize::applyFit(node, fit))
+        irisLog(QStringLiteral("scene: '%1' placed at the asset's fitted size (x%2)")
+                    .arg(node->getName()).arg(fit, 0, 'g', 6));
 
     // Honour the drop position (the viewport computed where the cursor hit the
     // scene) — legacy addMesh does the same; without this every dropped asset

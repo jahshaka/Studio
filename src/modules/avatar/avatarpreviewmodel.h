@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include <memory>
 
 #include "irisgl/irisglfwd.h"
+#include "services/fitsize.h"
 
 namespace avatar
 {
@@ -118,10 +119,17 @@ struct HeightNormalization
 };
 
 /// AUTO leaves anything in [kMinPlausibleHeight, kMaxPlausibleHeight] alone.
-constexpr float kMinPlausibleHeight = 0.5f;
-constexpr float kMaxPlausibleHeight = 3.0f;
+///
+/// ONE SET OF NUMBERS (fit-to-size, 2026-09-09): these are the import-time
+/// size policy's character envelope (fitsize::kCharacter), not a second
+/// opinion. The import fits a mis-declared character at the ASSET, and this
+/// rule then measures the fitted result and finds it plausible — so a
+/// character is never scaled twice. Two independently-written bands would
+/// have made "twice" possible the day one of them moved.
+constexpr float kMinPlausibleHeight = float(fitsize::kCharacter.min);
+constexpr float kMaxPlausibleHeight = float(fitsize::kCharacter.max);
 /// What AUTO scales an implausible character TO — and the room's design height.
-constexpr float kTargetCharacterHeight = 1.75f;
+constexpr float kTargetCharacterHeight = float(fitsize::kCharacter.target);
 
 /// World-space vertical extent of every mesh under `node`, in metres — the
 /// same measure AvatarMovement::fitCapsuleToNode calls the capsule height, so

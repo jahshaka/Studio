@@ -80,6 +80,8 @@ private:
     DragSpinBox* xrot; DragSpinBox* yrot; DragSpinBox* zrot;
     DragSpinBox* xscale; DragSpinBox* yscale; DragSpinBox* zscale;
     QPushButton* resetBtn;
+    /// FIT TO SIZE: the node subtree's measured world size in metres (read-only).
+    class QLabel* sizeLabel = nullptr;
 
     // transform at scrub start, for the single undo command
     iris::Vec3 scrubStartPos;

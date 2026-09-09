@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "viewport/ieditorviewport.h"
+#include "services/fitsize.h"
 #include "services/planarreflectors.h"
 #include "commands/nodeeditcommand.h"
 #include "commands/reparentscenenodecommand.h"
@@ -74,6 +75,16 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "transform", "node.transform(id, {position, rotation, scale}) -> {position, rotation, scale}",
           "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) and returns the result. Undoable.",
+          Needs::Document },
+        { "size", "node.size(id) -> {x, y, z, largest, height}",
+          "The node subtree's MEASURED size in the scene, in metres \u2014 the axis-aligned world "
+          "extent of every mesh under it, which is what the Properties panel's Size row shows. "
+          "This is the ANSWER to \"how big is this thing\", where node.transform's `scale` is the "
+          "CONTROL: a model authored at 100x with a 0.01 scale reads 1 m here and 0.01 there. "
+          "`largest` is max(x, y, z) and `height` is y \u2014 the two dimensions the import-time "
+          "size policy measures a model on (services/fitsize.h: an object on its largest extent, "
+          "a character on its height). All zeros for a node whose subtree carries no geometry "
+          "(a light, an empty, a bone) \u2014 that is not an error, it is the measurement.",
           Needs::Document },
         { "property", "node.property(id, key) -> value",
           "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, spotFalloff, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values. A mesh's `faceCullingMode` comes back as a NAME (\"none\" | \"front\" | \"back\" | \"material\"), never as the document's ordinal.",
@@ -618,6 +629,20 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
     return { { "position", vecToJs(node->getLocalPos()) },
              { "rotation", vecToJs(node->getLocalRot().toEulerAngles()) },
              { "scale", vecToJs(node->getLocalScale()) } };
+}
+
+// FIT TO SIZE (services/fitsize.h): the node's measured world extent. Same
+// walk the Properties panel's Size row and the import-time policy use, so the
+// number a script reads, the number the panel shows and the number the fit was
+// computed against are one number.
+QVariantMap NodeApi::size(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.size"));
+    if (!node) return QVariantMap();
+
+    const fitsize::Extent extent = fitsize::measureNode(node);
+    return { { "x", extent.x }, { "y", extent.y }, { "z", extent.z },
+             { "largest", extent.largest() }, { "height", extent.height() } };
 }
 
 // The reflected key list, read off the document itself rather than kept as a

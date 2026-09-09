@@ -302,7 +302,19 @@ private:
 	void rebuildAssetList();
 	QString assetViewMode = QStringLiteral("tiles");
 
-    QPushButton *normalize;
+	// FIT TO SIZE (services/fitsize.h): the "Imported size: 17.3 m -> fitted to
+	// 1.75 m [Re-measure] [Reset] [Set...]" row. Model rows only; hidden for
+	// everything else. Replaced a dead "Normalize" button that was constructed,
+	// styled and never put in a layout or connected to anything.
+	QWidget *fitRow = nullptr;
+	QLabel *fitLabel = nullptr;
+	QPushButton *fitRemeasure = nullptr;
+	QPushButton *fitReset = nullptr;
+	QPushButton *fitSet = nullptr;
+	/// Renders (or hides) the fit row for the selected tile's metadata block.
+	void refreshFitRow(const QString &guid, int assetType, const QJsonObject &meta);
+	/// Runs one assets.setFit-equivalent write and re-renders the pane.
+	void applyFitChange(const QString &guid, const QVariantMap &options);
 	QLabel *metadataMissing;
 	QLabel *metadataDetails;   // the two-column metadata table (all rows)
 
