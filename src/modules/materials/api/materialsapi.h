@@ -128,6 +128,17 @@ public:
     };
     void setEditDelegate(const EditDelegate &delegate) { mEdit = delegate; }
 
+    /// The page's node PALETTE, in window pixels (hygiene lane, 2026-09-09).
+    /// Dragging a tile out of the palette is the one graph edit no verb can
+    /// make — the mutation verbs work on a script-local NodeGraph, never the
+    /// page's — so the rig has to perform the real gesture, and it needs to be
+    /// told where to aim instead of guessing window fractions. Unset in
+    /// headless slices (there is no palette without a page).
+    struct PaletteDelegate {
+        std::function<QVariantMap(const QString &)> tile;
+    };
+    void setPaletteDelegate(const PaletteDelegate &delegate) { mPalette = delegate; }
+
     Q_INVOKABLE QVariantList nodes();
     Q_INVOKABLE QVariantList connections();
     Q_INVOKABLE QVariantMap nodeInfo(const QString &type);
@@ -153,6 +164,7 @@ public:
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     Q_INVOKABLE QVariantMap undoState();
+    Q_INVOKABLE QVariant paletteTile(const QString &name);
 
 private:
     NodeGraph *graphOrFail(const QString &verb);
@@ -163,6 +175,7 @@ private:
     SelectionDelegate mSelection; // the Effects page, when wired
     UndoDelegate mUndo;           // the Effects page's edit stack, when wired
     EditDelegate mEdit;           // the Effects page's destructive edits
+    PaletteDelegate mPalette;     // where the page's node tiles are on screen
 };
 
 #endif // SCRIPTING_MATERIALSAPI_H

@@ -85,6 +85,15 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
             return effectsPage->removeGraphConnection(id);
         };
         graphApi->setEditDelegate(editDelegate);
+
+        // graph.paletteTile — where a node tile IS, so the rig can drag it
+        // instead of aiming at a fraction of the window (hygiene lane,
+        // 2026-09-09; app.pacing_undo's palette drag).
+        GraphApi::PaletteDelegate paletteDelegate;
+        paletteDelegate.tile = [effectsPage](const QString &name) {
+            return effectsPage->paletteTileRect(name);
+        };
+        graphApi->setPaletteDelegate(paletteDelegate);
     }
     engine.addModule(materialsApi);
     engine.addModule(new MaterialApi(host));

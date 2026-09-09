@@ -794,6 +794,18 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "redo", "graph.redo() -> bool",
           "Redoes the last undone graph edit. False when there is nothing to redo, or with no Materials page.",
           Needs::Window },
+        { "paletteTile", "graph.paletteTile(name) -> {tab, tabIndex, x, y, w, h, clickable, canvas:{x,y,w,h}, window:{w,h}} | null",
+          "Where the node palette's tile called `name` is, in MAIN-WINDOW pixels — the coordinates "
+          "a rig synthesising mouse input works in. SELECTS the tab that owns the tile and scrolls "
+          "it into view first, so the returned rect is one a click can actually land in "
+          "(`clickable` says whether it did). `canvas` is the graph view's rect, the only "
+          "meaningful drop target for a palette drag, and `window` is the size of the window all "
+          "of them are measured in (check it against the window you are clicking). Null with no "
+          "Materials page, or when no "
+          "tile carries that name (matched on the displayed name, case-insensitively). It exists "
+          "because dragging a tile onto the canvas is the one graph edit no verb can make: the "
+          "graph.* mutation verbs work on a script-local graph, never the page's.",
+          Needs::Window },
         { "undoState", "graph.undoState() -> {available, canUndo, canRedo, undoCount, redoCount}",
           "The depth of the Materials page's graph edit stack. `available` is false in sessions with no "
           "Materials page, which is also why the counts are then zero.",
@@ -1288,6 +1300,22 @@ QVariantMap GraphApi::undoState()
     out.insert("undoCount", undoCount);
     out.insert("redoCount", redoCount);
     return out;
+}
+
+QVariant GraphApi::paletteTile(const QString &name)
+{
+    // Both "no page" and "no such tile" are REFUSALS: a caller asking where a
+    // tile is can be told there isn't one without its script being aborted.
+    if (!mPalette.tile) {
+        refuse(QStringLiteral("graph.paletteTile: this session has no Materials page"));
+        return jsNull();
+    }
+    const QVariantMap rect = mPalette.tile(name);
+    if (rect.isEmpty()) {
+        refuse(QStringLiteral("graph.paletteTile: no palette tile called '%1'").arg(name));
+        return jsNull();
+    }
+    return rect;
 }
 
 bool GraphApi::save()
