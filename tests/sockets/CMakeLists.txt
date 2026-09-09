@@ -82,3 +82,27 @@ set_tests_properties(sockets.e2e PROPERTIES
     ENVIRONMENT "HOME=${_sockets_home}"
     LABELS "scripting"
     TIMEOUT 300)
+
+# ---- sockets.tags ---------------------------------------------------------
+# AVATAR_RIG_PERF_SPEC §4: the engine TAG POINTS behind the socket API, the
+# hierarchy contract they must not break (decision D3 = H1, the graph layer's
+# shadow parent), and the mirror's RECONCILER — which replaced a per-frame
+# read-back-plus-FK resolver with event-driven arming. No rendering, so no
+# display and no GPU; the zero-lag claim itself is sockets.render's.
+add_executable(test_socket_tags test_socket_tags.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_socket_tags PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_socket_tags PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_socket_tags PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_socket_tags)
+add_test(NAME sockets.tags COMMAND test_socket_tags
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(sockets.tags PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 300 LABELS "document")
+jah_no_display(sockets.tags)

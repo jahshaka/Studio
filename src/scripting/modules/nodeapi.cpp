@@ -95,9 +95,13 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale, socket?}",
           "Everything scene.nodes() reports, for one node. `socket` is present only while the "
-          "node RIDES a socket ({owner, name}, CAMERAS_SPEC \u00a75) — which is also the answer "
-          "to \"why does node.transform on this thing not stick?\", because a socketed node's "
-          "transform is rewritten every frame.",
+          "node RIDES a socket ({owner, name}, CAMERAS_SPEC \u00a75). A socketed node's "
+          "`position`/`rotation`/`scale` are RELATIVE TO THE SOCKET and they stick — the renderer "
+          "hangs the node off the bone itself, so nothing rewrites them any more "
+          "(AVATAR_RIG_PERF_SPEC §4). Its WORLD transform, on the other hand, is the one the last "
+          "rendered frame produced: a bone's world position cannot be resolved between frames "
+          "(Ogre resolves tag points inside the frame), so a script that moved a character and "
+          "wants the rider's new world position must step a frame first.",
           Needs::Document },
         { "boneNames", "node.boneNames(id) -> [string]",
           "The node's rig, in bone-index order (the index its vertex weights name). Empty for anything unrigged.",
@@ -281,12 +285,16 @@ QVector<VerbInfo> NodeApi::verbs() const
           "nodes attached to it right now.",
           Needs::Document },
         { "attachToSocket", "node.attachToSocket(id, ownerId, socketName) -> bool",
-          "Makes `id` ride `ownerId`'s socket: from the next frame its world transform is "
-          "`boneWorld * socketOffset`, rewritten every frame, so node.transform on it is "
-          "overwritten until it is detached. The node keeps its place in the hierarchy — this is "
-          "NOT a reparent. Refused when the owner does not exist, is not a mesh, has no such "
-          "socket, or lies inside the attached node's own subtree (which would make the socket "
-          "drive its own owner). Undoable.",
+          "Makes `id` ride `ownerId`'s socket: the renderer hangs the node off that BONE, so it "
+          "follows the animation exactly, in the frame that renders it (an engine tag point — "
+          "AVATAR_RIG_PERF_SPEC §4; before that this was a read-back and a CPU rewrite of the "
+          "node's world transform, one frame late). node.transform on a socketed node is its "
+          "offset FROM THE SOCKET and it STICKS — nudging a sword in a hand is a transform edit "
+          "on the sword. The node keeps its place in the hierarchy — this is NOT a reparent: "
+          "scene.nodes, node.info and the outliner all still show it under its own parent. "
+          "Refused when the owner does not exist, is not a mesh, has no such socket, or lies "
+          "inside the attached node's own subtree (which would make the socket drive its own "
+          "owner). Undoable.",
           Needs::Document },
         { "detachFromSocket", "node.detachFromSocket(id) -> bool",
           "Stops driving the node from a socket. It keeps the pose it was last resolved to, so "
