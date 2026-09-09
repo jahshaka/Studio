@@ -8,6 +8,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 else()
     set(JAH_SELFTEST_ENV "")
 endif()
+# THE LAST TWO SUITES THAT WROTE THE SHARED SETTINGS FILE (hygiene lane,
+# 2026-09-09). These two run with their WORKING_DIRECTORY set to the BINARY's
+# directory — deliberately, so `media/` and the relative ogre log resolve the
+# way a developer's own launch resolves them — and they carried no scratch
+# HOME, so under QT_DEBUG they wrote (and re-rolled `[assets] storeId` in)
+# build-linux/bin/jahsettings.ini: the developer's own file, which is the
+# ENGINEERING_DEBT_SPEC ADDENDUM 6 defect exactly. Measured after a full 249-
+# suite gate: these were the only two left doing it.
+#
+# The working directory is UNCHANGED (nothing about asset resolution moves);
+# only the data root is redirected, which takes the settings file, the library
+# database and the asset store with it.
+set(_selftest_root ${CMAKE_CURRENT_BINARY_DIR}/selftest-data)
+file(MAKE_DIRECTORY ${_selftest_root})
+set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 add_test(NAME app.engine_selftest
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --engine-selftest "${CMAKE_CURRENT_BINARY_DIR}/selftest.png"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
@@ -57,7 +72,7 @@ add_test(NAME app.startup_quiet
                  "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
          WORKING_DIRECTORY ${_sq_home}/run)
 set_tests_properties(app.startup_quiet PROPERTIES
-    ENVIRONMENT "HOME=${_sq_home}"
+    ENVIRONMENT "HOME=${_sq_home};JAHSHAKA_DATA_ROOT=${_sq_home}/.local/share/Jahshaka"
     TIMEOUT 300
     LABELS "app")
 
@@ -86,7 +101,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8747
                  WORKING_DIRECTORY ${_pu_home}/run)
         set_tests_properties(app.pacing_undo PROPERTIES
-            ENVIRONMENT "HOME=${_pu_home}"
+            ENVIRONMENT "HOME=${_pu_home};JAHSHAKA_DATA_ROOT=${_pu_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
             TIMEOUT 400
             LABELS "app")
@@ -105,7 +120,7 @@ add_test(NAME app.scene_switch_after_play
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js
          WORKING_DIRECTORY ${_ssap_home}/run)
 set_tests_properties(app.scene_switch_after_play PROPERTIES
-    ENVIRONMENT "HOME=${_ssap_home}"
+    ENVIRONMENT "HOME=${_ssap_home};JAHSHAKA_DATA_ROOT=${_ssap_home}/.local/share/Jahshaka"
     LABELS "app"
     TIMEOUT 300)
 
@@ -118,6 +133,6 @@ add_test(NAME app.selection_outline
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_selection_outline.js
          WORKING_DIRECTORY ${_selo_home}/run)
 set_tests_properties(app.selection_outline PROPERTIES
-    ENVIRONMENT "HOME=${_selo_home}"
+    ENVIRONMENT "HOME=${_selo_home};JAHSHAKA_DATA_ROOT=${_selo_home}/.local/share/Jahshaka"
     LABELS "app"
     TIMEOUT 300)

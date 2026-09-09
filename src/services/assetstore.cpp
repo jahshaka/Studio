@@ -8,6 +8,7 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "services/apppaths.h"
 #include "services/assetstore.h"
 
 #include <QDir>
@@ -330,7 +331,7 @@ QLockFile *sLibraryLock = nullptr;
 QString lockPathFor(const QString &dbPath)
 {
     const QString path = dbPath.isEmpty()
-        ? QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+        ? QDir(AppPaths::dataRoot())
               .filePath(Constants::JAH_DATABASE)
         : dbPath;
     return path + ".lock";

@@ -258,6 +258,50 @@ int main(int argc, char** argv)
             CHECK(near(result.values["metallic"].toDouble(), 1.0), "silver: metallic 1.0");
             CHECK(near(result.values["roughness"].toDouble(), 0.22), "silver: roughness 0.22");
         }
+
+        // gold.effect was the odd one out (hygiene lane, 2026-09-09): it was
+        // still authored on the LEGACY Blinn "Surface Material" master, which
+        // has no Metallic slot at all, so it baked metallic 0 with the graph's
+        // "Specular <- float" listed as an unsupported node — a rough yellow
+        // PLASTIC where the drawer offers a metal. Its colour node also carried
+        // alpha 0. Re-authored on a PbrMaterial master, the same shape as
+        // silver, so this assertion is the same assertion.
+        auto gold = loadEffect("gold.effect");
+        CHECK(gold && gold->getMasterNode(), "gold.effect deserializes with a master node");
+        if (gold) {
+            auto result = PbrGraphEvaluator::evaluate(gold);
+            CHECK(result.hasPbrMaster, "gold: PBR master (was the legacy Blinn one)");
+            CHECK(result.unsupportedNodes.isEmpty(), "gold: no unsupported nodes left");
+            CHECK(near(result.values["metallic"].toDouble(), 1.0), "gold: metallic 1.0");
+            CHECK(near(result.values["roughness"].toDouble(), 0.25), "gold: roughness 0.25");
+            auto goldCol = result.values["baseColor"].toObject();
+            CHECK(near(goldCol["r"].toDouble(), 1.0) && near(goldCol["g"].toDouble(), 0.85) &&
+                      near(goldCol["b"].toDouble(), 0.01),
+                  "gold: the authored gold hue survives the re-authoring");
+            CHECK(near(goldCol["a"].toDouble(), 1.0), "gold: ... at alpha 1 (it was 0)");
+        }
+
+        // THE STORED BLOCK AND THE GRAPH AGREE. A preset ships BOTH halves —
+        // the graph and the pre-evaluated `pbrMaterial` block the loader reads
+        // without running the evaluator — and gold's two halves disagreeing is
+        // how a re-authoring goes half-done.
+        for (const char *name : { "gold.effect", "silver.effect" }) {
+            QFile f(QString(JAHSHAKA_TEST_APP_DIR) + name);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) { CHECK(false, name); continue; }
+            const QJsonObject obj = QJsonDocument::fromJson(f.readAll()).object();
+            const QJsonObject stored = obj["pbrMaterial"].toObject()["values"].toObject();
+            NodeGraph *graph = NodeGraph::deserialize(obj["shadergraph"].toObject(), lib);
+            if (!graph) { CHECK(false, name); continue; }
+            const auto evaluated = PbrGraphEvaluator::evaluate(graph);
+            bool agree = true;
+            for (auto it = stored.constBegin(); it != stored.constEnd(); ++it) {
+                const QJsonValue mine = evaluated.values.value(it.key());
+                if (it.value().isDouble() && !near(mine.toDouble(), it.value().toDouble()))
+                    agree = false;
+            }
+            CHECK(agree, (QString(name) + ": the stored pbrMaterial block matches what its "
+                                          "graph evaluates to").toUtf8().constData());
+        }
     }
 
     // ---- graph 6: the NINE LEGACY PRESETS and the gloss floor ---------------

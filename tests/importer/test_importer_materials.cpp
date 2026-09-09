@@ -18,8 +18,17 @@
 //   4. emissiveIntensity was never set on an import, so an emissive colour or
 //      map was multiplied by the document default 0 and emitted nothing.
 //
-// Fixture: fixtures/material_workflows.glb, five quads with one material shape
-// each (fixtures/make_material_fixtures.py documents them and regenerates it).
+//   5. A primitive with NO material at all — assimp appends a default material
+//      past the end of the file's material array, so the same always-present
+//      keys made it black too (hygiene lane, 2026-09-09). It needs its OWN
+//      fixture: aiProcess_RemoveRedundantMaterials merges assimp's appended
+//      default into any authored material shaped like it, and
+//      material_workflows.glb's `nopbr` is exactly that shape.
+//
+// Fixtures: fixtures/material_workflows.glb (six quads — five material shapes
+// plus the one that gets merged) and fixtures/no_material.glb (one authored
+// material that is NOT default-shaped, plus a primitive with no material).
+// Both have generators beside them that document what is in them.
 // Sections:
 //   1. The conversion formula itself (unit).
 //   2. The five materials through the REAL import path
@@ -208,6 +217,19 @@ int main(int argc, char **argv)
             CHECK(nearly(nopbr->roughnessFactor, 0.5f), "2: ... at the neutral roughness 0.5");
         }
 
+        // (The "nomaterial" quad in this fixture reaches NOTHING: assimp's
+        // appended default material is byte-for-byte what `nopbr` is, and
+        // aiProcess_RemoveRedundantMaterials — in the canonical import preset —
+        // merges the two and remaps the mesh onto nopbr's index. Measured
+        // 2026-09-09: numMaterials=5 for six meshes, mesh[5] -> material 2. So
+        // it is asserted here only as WHAT IT ACTUALLY IS, and the real case
+        // gets its own fixture in section 2b.)
+        auto collapsed = materialNamed(imported, "nomaterial");
+        CHECK(!collapsed.isNull(), "2: the material-less quad still imports a PbrMaterial");
+        if (collapsed)
+            CHECK(nearly(collapsed->metallicFactor, 0.0f),
+                  "2: ...carrying the material assimp merged it onto (nopbr's dielectric)");
+
         // ... while a PRESENT block keeps glTF's own defaults: an omitted
         // metallicFactor IS 1.0 (lotus_elise.glb is a real metallic car).
         auto mrDefault = materialNamed(imported, "mr_default");
@@ -234,6 +256,60 @@ int main(int argc, char **argv)
                   "(Unlit consumes no emissive input)");
             CHECK(unlit->baseColor.red() > 240 && unlit->baseColor.green() > 240,
                   "3: ... and a black baseColorFactor yields to the emissive factor");
+        }
+    }
+
+    // ============ 2b. a mesh with NO material at all ============
+    // THE CASE THE WORKFLOWS FIXTURE CANNOT REACH (hygiene lane, 2026-09-09).
+    //
+    // A glTF primitive with no `material` gets the default material assimp
+    // APPENDS after the file's own (glTF2Importer.cpp:897,
+    // `mMaterialIndex = mNumMaterials - 1`). That material has no entry in the
+    // file's `materials` array, so the importer's file-facts lookup runs off
+    // the end of it — and "no file facts" used to mean "trust assimp's
+    // flattened keys", which are ALWAYS present and carry assimp's own struct
+    // defaults of metallicFactor 1 / roughnessFactor 1. The mesh imported as
+    // full metal, full rough: black under punctual lights with nothing to
+    // reflect, which is the owner-visible symptom.
+    //
+    // fixtures/no_material.glb exists because the appended material must
+    // SURVIVE aiProcess_RemoveRedundantMaterials to be converted at all: its
+    // one authored material is a red metallic-roughness block, deliberately
+    // not default-shaped (make_no_material_fixture.py says why at length).
+    {
+        QTemporaryDir dir;
+        CHECK(dir.isValid(), "2b: temp dir for import");
+        const QString model = QDir(dir.path()).filePath("no_material.glb");
+        CHECK(QFile::copy(fixture("no_material.glb"), model), "2b: fixture copied");
+
+        QStringList texNames, texPaths;
+        bool hasEmbedded = false;
+        auto imported = AssetHelper::extractTexturesAndMaterialFromMesh(
+            model, texNames, texPaths, hasEmbedded, nullptr, dir.path());
+        CHECK(!imported.isNull(), "2b: no_material.glb imports");
+
+        // The authored material is untouched: the policy is about materials
+        // that state NOTHING, and this one states a workflow.
+        auto red = materialNamed(imported, "red");
+        CHECK(!red.isNull(), "2b: the authored quad imports");
+        if (red) {
+            CHECK(nearly(red->metallicFactor, 0.0f), "2b: its authored metallic 0 survives");
+            CHECK(nearly(red->roughnessFactor, 0.6f), "2b: ...and its authored roughness");
+        }
+
+        auto none = materialNamed(imported, "nomaterial");
+        CHECK(!none.isNull(), "2b: the material-less quad imports a PbrMaterial");
+        if (none) {
+            std::printf("    no-material mesh: metallic %.3f roughness %.3f base %s\n",
+                        none->metallicFactor, none->roughnessFactor,
+                        none->baseColor.name().toUtf8().constData());
+            CHECK(nearly(none->metallicFactor, 0.0f),
+                  "2b: a mesh with NO material imports as a DIELECTRIC (was metallic 1 = black)");
+            CHECK(nearly(none->roughnessFactor, 0.5f),
+                  "2b: ...at the neutral roughness 0.5 (was 1.0)");
+            CHECK(none->baseColor.red() > 240 && none->baseColor.green() > 240 &&
+                      none->baseColor.blue() > 240,
+                  "2b: ...and it does not inherit the authored material's colour");
         }
     }
 

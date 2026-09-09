@@ -180,7 +180,14 @@ For more information see the LICENSE file
 #include "services/meshbakestore.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
+#include "services/apppaths.h"
+#include "shell/dockstate.h"
 #include "shell/shutdownorder.h"
+
+/// Where the EDITOR docks' layout lives. Deliberately not "windowState": that
+/// key is the OUTER window's, written by QMainWindow::saveState, and the two
+/// blobs describe two different QMainWindows.
+static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/projectarchiver.h"
 #include "ui/dialogs/progressdialog.h"
 #include "services/sceneeditservice.h"
@@ -711,6 +718,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 	settings->setValue("geometry", saveGeometry());
 	settings->setValue("windowState", saveState());
+	// ...and the EDITOR DOCKS, which live in the nested `viewPort` QMainWindow
+	// and are therefore not in the line above (shell/dockstate.h).
+	DockState::save(viewPort, settings->settings, kViewportDockStateKey);
 
     // Orderly teardown BEFORE the window disappears: dialogs close with a
     // window still on screen, and a mid-flight import batch is aborted and
@@ -834,7 +844,7 @@ void MainWindow::stopAnimWidget()
 void MainWindow::setupProjectDB()
 {
     const QString path = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
+        AppPaths::dataRoot(), Constants::JAH_DATABASE
     );
 
     // Library lock (ASSET_PIPELINE preflight §6.2): held for the app's
@@ -2261,13 +2271,30 @@ void MainWindow::setupDockWidgets()
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
+    // THE DEFAULT LAYOUT. Presets lives in the RIGHT COLUMN, under Properties
+    // (owner layout, 2026-09-08) — it used to open in the BOTTOM area beside
+    // the Asset Browser and the Timeline, which is not where anybody uses it
+    // and not the column PanelMetrics sizes it for: `presetsPanelWidth` IS
+    // `rightColumnWidth`, and a bottom-area Presets panel forced that width
+    // onto a dock that spans the whole window instead.
+    //
+    // splitDockWidget, not addDockWidget: it puts the two in ONE column split
+    // vertically, which is the arrangement the shared width constant describes.
     viewPort->addDockWidget(Qt::LeftDockWidgetArea, sceneHierarchyDock);
     viewPort->addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
+    viewPort->splitDockWidget(sceneNodePropertiesDock, presetsDock, Qt::Vertical);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, assetDock);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
-    viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
 
+    // ...and the USER's layout on top of it, if there is one. The docks belong
+    // to this nested QMainWindow, so MainWindow's own restoreState (which the
+    // constructor calls) never reached them: every move, resize, float, tab
+    // and close was forgotten at exit. `restoredViewportDocks` is what tells
+    // applyRightColumnWidthOnce to keep its hands off — a remembered column
+    // width must win over the compiled-in default (shell/dockstate.h).
+    restoredViewportDocks =
+        settings ? DockState::restore(viewPort, settings->settings, kViewportDockStateKey) : false;
 
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
@@ -2299,10 +2326,21 @@ void MainWindow::applyRightColumnWidthOnce()
 {
     if (rightColumnSized) return;
     rightColumnSized = true;
+    // A RESTORED LAYOUT ALREADY SAID HOW WIDE THE COLUMN IS. This is the
+    // compiled-in DEFAULT width, applied once per session; overriding a width
+    // the user dragged and this window just restored would make the dock state
+    // look like it was not saved at all.
+    if (restoredViewportDocks) return;
     QTimer::singleShot(0, this, [this]() {
         if (!viewPort || !sceneNodePropertiesDock) return;
-        viewPort->resizeDocks({ sceneNodePropertiesDock },
-                              { PanelMetrics::rightColumnWidth }, Qt::Horizontal);
+        // BOTH docks in the column, from the one constant. Presets sits under
+        // Properties in the default layout now, and a horizontal resizeDocks
+        // that names only one of a vertically split pair leaves the other free
+        // to argue about the width.
+        QList<QDockWidget *> column{ sceneNodePropertiesDock };
+        QList<int> widths{ PanelMetrics::rightColumnWidth };
+        if (presetsDock) { column << presetsDock; widths << PanelMetrics::rightColumnWidth; }
+        viewPort->resizeDocks(column, widths, Qt::Horizontal);
     });
 }
 
@@ -3102,9 +3140,14 @@ void MainWindow::setupToolBar()
 
 	connect(this, SIGNAL(projectionChangeRequested(bool)), this, SLOT(changeProjection(bool)));	
 
-	connect(sceneView->events(), &EditorViewportEvents::updateToolbarButton, this, [=]() {
-		if (sceneView->editorCamera()->isPerspective) projectionChangeRequested(true);
-		else projectionChangeRequested(false);
+	// A REPORT, NOT A COMMAND. The viewport telling the toolbar what its camera
+	// now is must only repaint the button — routing it through
+	// projectionChangeRequested would make every such report re-issue a view
+	// change (and, since the change is a canonical view now, snap the camera).
+	connect(sceneView->events(), &EditorViewportEvents::updateToolbarButton, this, [this]() {
+		if (!sceneView || !sceneView->editorCamera()) return;
+		syncProjectionButton(sceneView->editorCamera()->isPerspective);
+		setViewsButtonLabel(sceneView->cameraView());
 	});
 
 	// The scroll wheel stepped the fly speed while the camera was flying: show
@@ -4131,9 +4174,14 @@ bool MainWindow::applyCameraView(const QString &name)
 {
     if (!sceneView || !sceneView->setCameraView(name)) return false;
 
-    // projection icon + tooltip stay in sync (changeProjection re-applies the
-    // projection the viewport already set — idempotent)
-    changeProjection(name == QLatin1String("perspective"));
+    // The projection button is a VIEW of the state, so it is updated and never
+    // asked to re-apply anything (it used to call changeProjection, which is
+    // now the command and would recurse).
+    const bool perspective = (name == QLatin1String("perspective"));
+    syncProjectionButton(perspective);
+    // ...and an axis view is remembered, so the toggle's "orthographic" means
+    // "back to the one I was in".
+    if (!perspective) lastOrthographicView = name;
 
     for (QAction *action : viewsActions)
         action->setChecked(action->data().toString() == name);
@@ -4154,16 +4202,40 @@ void MainWindow::setViewsButtonLabel(const QString &view)
     viewsButton->setText(QStringLiteral("Perspective "));
 }
 
+// THE PROJECTION TOGGLE IS A VIEW CHANGE (hygiene lane, 2026-09-09).
+//
+// Three defects in one small function, all of them the same mistake — it did
+// the work itself instead of asking the viewport:
+//
+//  1. It wrote `sceneView->getScene()->camera`, the SCENE's camera node. The
+//     explorer this viewport flies is a different node (EngineSceneViewport::
+//     editorCamera), so the button changed a camera nothing was looking
+//     through and the picture did not change at all until something else
+//     happened to re-push.
+//  2. It never went through setCameraView, so the AXIS-VIEW ROTATION LOCK was
+//     never armed or disarmed (the lock reads the projection precisely because
+//     this button used to bypass it — enginesceneviewport.cpp says so at
+//     cameraRotationLocked) and the per-view camera memory was not consulted.
+//  3. It left the Views label reading "Perspective" over an orthographic
+//     picture, because only applyCameraView relabels it.
+//
+// So it now asks for a canonical view, and "orthographic" means the last AXIS
+// view this window was in (Top on a fresh window). That is the same state the
+// Views menu produces, which is the point: two controls that mean the same
+// thing must not be able to leave the editor in two different states.
 void MainWindow::changeProjection(bool val)
 {
-	if (!val) {
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
-		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
-		cameraView->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));		
-	}
-	else {
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+	applyCameraView(val ? QStringLiteral("perspective") : lastOrthographicView);
+}
+
+void MainWindow::syncProjectionButton(bool perspective)
+{
+	if (!cameraView) return;
+	if (perspective) {
 		cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
 		cameraView->setToolTip(tr("Perspective view | Toggle to switch to orthogonal view"));
+	} else {
+		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
+		cameraView->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));
 	}
 }

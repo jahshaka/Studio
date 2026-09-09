@@ -67,7 +67,10 @@ struct Trs { iris::Vec3 pos; iris::Quat rot; iris::Vec3 scale; };
 // mode that produced it was deleted with the evaluator it read. The file
 // records what the document evaluator said before it was retired; if the
 // extractor stops agreeing with it, the extractor changed, and no amount of
-// re-running will make that go away.
+// re-running will make that go away. A writer that ran on the TIP would record
+// what the extractor says and compare the extractor with itself — which is why
+// there is a README beside the fixture archiving the recipe (and the two
+// commits it needs) instead of a --write-golden flag in this file.
 static const QString kGolden =
     QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/golden_document_poses.txt");
 

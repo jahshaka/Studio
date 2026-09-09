@@ -56,5 +56,5 @@ add_test(NAME meshbake.roundtrip COMMAND test_mesh_bake
 # developer's real library, and the store root is overridden inside the test
 # on top of that.
 set_tests_properties(meshbake.roundtrip PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "meshbake")

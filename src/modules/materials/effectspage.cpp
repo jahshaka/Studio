@@ -8,6 +8,7 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "services/apppaths.h"
 #include "irisgl/core/math/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include "io/ziphelper.h"
@@ -226,7 +227,7 @@ void EffectsPage::saveShader()
 	requestShaderThumbnail(currentShaderInformation.GUID);
 #else
 
-	auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Materials/MyFx/");
+	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
 	if (!QDir(filePath).exists()) QDir().mkpath(filePath);
 	auto shaderFile = new QFile(filePath + obj["name"].toString());
 	if (shaderFile->open(QIODevice::ReadWrite)) {
@@ -301,7 +302,7 @@ void EffectsPage::saveDefaultShader()
 void EffectsPage::loadShadersFromDisk()
 {
 	// create constants for this
-    auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/Materials/MyFx/");
+    auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
 	QDirIterator it(filePath);
 
 	while (it.hasNext()) {
@@ -508,7 +509,7 @@ void EffectsPage::loadGraph(QString guid)
 
 	this->setNodeGraph(graph);
 #else
-	auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Materials/MyFx/");
+	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
 	QDirIterator it(filePath);
 	QJsonObject obj;
 
@@ -623,7 +624,7 @@ bool EffectsPage::deleteShader(QString guid)
     }
 #else
 
-    auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Materials/MyFx/");
+    auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
     QDirIterator it(filePath);
 
     while (it.hasNext()) {
@@ -1434,7 +1435,7 @@ void EffectsPage::renameShader()
 #if(EFFECT_BUILD_AS_LIB)
 	dataBase->renameAsset(currentProjectShader->data(MODEL_GUID_ROLE).toString(), currentProjectShader->data(Qt::DisplayRole).toString());
 #else
-	auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Materials/MyFx/");
+	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
 	if (!QDir(filePath).exists()) return;
 	auto shaderFileOld = new QFile(filePath + oldName);
 	auto shaderFileNew = new QFile(filePath + newName);
@@ -1931,7 +1932,7 @@ void EffectsPage::editingFinishedOnListItem()
 #else
     // get json obj from file and edit graph like above
 
-    auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Materials/MyFx/");
+    auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
     if (!QDir(filePath).exists()) return;
     auto shaderFileOld = new QFile(filePath + oldName);
     auto shaderFileNew = new QFile(filePath + newName);

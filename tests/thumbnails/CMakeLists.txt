@@ -3,7 +3,10 @@
 # app/content/primitives/sphere.obj (relative to the executable) resolves.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_thumbnails test_thumbnails.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
+    # previewMaterialForMeshData is BuiltinMaterials::fromMeshData now — the one
+    # mesh-data conversion, instead of a third copy that ignored every PBR field.
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
 set_target_properties(test_thumbnails PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")

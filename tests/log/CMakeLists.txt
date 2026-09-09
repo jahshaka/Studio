@@ -54,7 +54,7 @@ add_test(NAME log.events
                  "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events.js"
          WORKING_DIRECTORY ${_le_home}/run)
 set_tests_properties(log.events PROPERTIES
-    ENVIRONMENT "HOME=${_le_home}"
+    ENVIRONMENT "HOME=${_le_home};JAHSHAKA_DATA_ROOT=${_le_home}/.local/share/Jahshaka"
     TIMEOUT 300
     LABELS "log")
 
@@ -72,7 +72,7 @@ add_test(NAME log.engine
                  "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_engine.js"
          WORKING_DIRECTORY ${_lg_home}/run)
 set_tests_properties(log.engine PROPERTIES
-    ENVIRONMENT "HOME=${_lg_home}"
+    ENVIRONMENT "HOME=${_lg_home};JAHSHAKA_DATA_ROOT=${_lg_home}/.local/share/Jahshaka"
     TIMEOUT 400
     LABELS "log")
 
@@ -94,7 +94,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                          8751
                  WORKING_DIRECTORY ${_lp_home}/run)
         set_tests_properties(log.perf PROPERTIES
-            ENVIRONMENT "HOME=${_lp_home}"
+            ENVIRONMENT "HOME=${_lp_home};JAHSHAKA_DATA_ROOT=${_lp_home}/.local/share/Jahshaka"
             TIMEOUT 400
             LABELS "log")
     else()

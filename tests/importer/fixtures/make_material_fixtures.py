@@ -24,6 +24,12 @@ bytes under test are reviewable and no third-party content ships in the repo.
     unlit         KHR_materials_unlit with a BLACK baseColorFactor and the
                   artwork in emissiveTexture/emissiveFactor — the shape of
                   spirit_blossom_kindred.glb.
+    nomaterial    A primitive with NO `material` at all. assimp synthesizes one
+                  aiMaterial for these and APPENDS it after the file's own, so
+                  it has no entry in the JSON `materials` array — and assimp's
+                  synthesized material reports metallicFactor 1 / roughnessFactor
+                  1 like every other. That is the "a mesh with no material
+                  imports black" report; the policy answer is a dielectric.
 
 Run:  python3 make_material_fixtures.py     (writes the .glb beside this script)
 """
@@ -119,6 +125,16 @@ def build():
             "attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2},
             "indices": 3, "material": i}]})
         nodes.append({"name": name, "mesh": i, "translation": [i * 3.0, 0.0, 0.0]})
+
+    # ...and the one primitive with NO `material` key. It is LAST on purpose:
+    # assimp appends its synthesized default material after the file's own, so
+    # this is the mesh whose aiMaterial index runs off the end of the JSON
+    # array — the case the importer has to recognise as "states nothing".
+    meshes.append({"name": "nomaterial", "primitives": [{
+        "attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2},
+        "indices": 3}]})
+    nodes.append({"name": "nomaterial", "mesh": len(meshes) - 1,
+                  "translation": [len(names) * 3.0, 0.0, 0.0]})
 
     gltf = {
         "asset": {"version": "2.0", "generator": "jahshaka test fixture"},

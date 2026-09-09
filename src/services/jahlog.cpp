@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "services/apppaths.h"
 #include "services/jahlog.h"
 
 #include "irisgl/core/logger.h"
@@ -495,7 +496,7 @@ QString defaultLogRoot()
 #ifdef QT_DEBUG
     return QDir(QDir::currentPath()).filePath(QStringLiteral("logs"));
 #else
-    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString base = AppPaths::dataRoot();
     if (base.isEmpty()) return QDir(QDir::currentPath()).filePath(QStringLiteral("logs"));
     return QDir(base).filePath(QStringLiteral("logs"));
 #endif

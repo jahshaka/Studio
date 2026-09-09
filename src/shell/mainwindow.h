@@ -575,7 +575,22 @@ private slots:
 
     void onPlaySceneButton();
 
+	/// The PROJECTION TOGGLE, and it is a CANONICAL VIEW change (hygiene lane,
+	/// 2026-09-09). `true` = perspective; `false` = the last orthographic axis
+	/// view this window was in, "top" until there has been one. It routes
+	/// through applyCameraView, which is the only path that also arms the
+	/// axis-view rotation lock, updates the Views menu and relabels the button.
+	///
+	/// It used to flip `sceneView->getScene()->camera` — the SCENE's camera
+	/// node, which is not the editor camera this viewport flies — leaving the
+	/// explorer's projection untouched, the lock unarmed and the Views label
+	/// reading "Perspective" over an orthographic picture.
 	void changeProjection(bool val);
+
+	/// Icon + tooltip only: what the projection button LOOKS like. Split out of
+	/// changeProjection so the viewport can report a projection it changed
+	/// itself without that report turning into a command.
+	void syncProjectionButton(bool perspective);
 
 private:
     void setupServices();
@@ -711,6 +726,10 @@ private:
     void applyRightColumnWidthOnce();
     /// Whether that has happened — after it has, a user's drag wins.
     bool rightColumnSized = false;
+    /// True when the nested `viewPort` QMainWindow's dock layout came back from
+    /// settings — the once-per-session default column width then stands down
+    /// (shell/dockstate.h).
+    bool restoredViewportDocks = false;
     QTabWidget *presetsTabWidget;
 
     QDockWidget *assetDock;
@@ -731,6 +750,10 @@ private:
     QToolButton *viewsButton = nullptr;
     QMenu *viewsMenu = nullptr;
     QVector<QAction *> viewsActions;   // checkable, ordered as built
+    /// Where the projection toggle goes when it is asked for "orthographic":
+    /// the last axis view this window was in, so Perspective -> Front ->
+    /// Perspective -> (toggle) returns to Front rather than jumping to Top.
+    QString lastOrthographicView = QStringLiteral("top");
     /// The CAMERA SWITCHER (CAMERAS_SPEC D4), beside Views: "Viewport" (the
     /// free explorer) plus every scene camera by name. Rebuilt from the
     /// document each time it opens — cameras are added, renamed and deleted

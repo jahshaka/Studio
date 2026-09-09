@@ -442,7 +442,7 @@ bool EngineSceneViewport::frameNode(iris::SceneNodePtr sceneNode, const EditorFr
     }
     const float dist = framing.distance > 0.0f
                            ? framing.distance
-                           : qMax(1.0f, preview::framingDistance(radius, cam->angle));
+                           : qMax(1.0f, preview::framingDistance(radius, cam->effectiveFovDegrees()));
 
     // Missing yaw/pitch = "keep looking from where I look now", which makes
     // frameNode(id) the verb form of the F key.
@@ -1088,7 +1088,7 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
         target = bounds.getCenter();
         radius = qMax(0.05f, bounds.getSize().length() * 0.5f);
     }
-    const float dist = qMax(1.0f, preview::framingDistance(radius, cam->angle));
+    const float dist = qMax(1.0f, preview::framingDistance(radius, cam->effectiveFovDegrees()));
 
     float nearClip, farClip;
     preview::clipPlanesForFraming(dist, radius, nearClip, farClip);
@@ -1652,6 +1652,35 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
     shot->setScene(mEngineScene);
+
+    // THE GIZMO IS SIZED FOR THE SHOT, NOT FOR THE WINDOW (hygiene lane,
+    // 2026-09-09; the follow-up recorded with the free-camera framing fix).
+    //
+    // Gizmo::updateSize makes the handles a CONSTANT FRACTION of the frame
+    // height, and it does that from `camera->effectiveFovDegrees()` — the
+    // rendered vertical angle, which depends on the camera's ASPECT because of
+    // the wide-aspect framing hold. The last call to it used the VIEWPORT's
+    // aspect; a screenshot is a different frame shape (256x256 in most of the
+    // corpus, against a 2.4:1 window) whose rendered angle is therefore
+    // different, so the gizmo photographed at whatever size the window
+    // happened to want. On a wide window the hold narrows the window's angle
+    // and not the square shot's, and the handles came out ~30% small.
+    //
+    // So: re-size against the SHOT's aspect, re-push the overlay transforms,
+    // take the picture, put the viewport's own sizing back. The rays are the
+    // ones the last refreshOverlay used, deliberately — this must change the
+    // gizmo's SIZE and nothing about which part is highlighted.
+    const iris::CameraNodePtr shotCam = viewCamera();
+    const bool resizeGizmo = shotCam && mGizmo && mOverlay && mSelectedNode && !mGameView;
+    const float viewportAspect = shotCam ? shotCam->aspectRatio : 0.0f;
+    iris::Vec3 gizmoRayPos, gizmoRayDir, gizmoViewDir;
+    if (resizeGizmo) {
+        mouseRay(gizmoRayPos, gizmoRayDir, gizmoViewDir);
+        shotCam->setAspectRatio(float(width) / float(height));
+        mGizmo->updateSize(shotCam);
+        mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
+    }
+
     if (mMirror) {
         mMirror->sync();
         // The shot view starts with a hardcoded background; give it the document
@@ -1703,6 +1732,13 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
             memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
     }
     mEngine->destroyView(shot);
+    // ...and the viewport gets its own sizing back, before anything presents
+    // another on-screen frame.
+    if (resizeGizmo) {
+        shotCam->setAspectRatio(viewportAspect);
+        mGizmo->updateSize(shotCam);
+        mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
+    }
     return result;
 }
 

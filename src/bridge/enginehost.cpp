@@ -1,5 +1,7 @@
 #include "bridge/enginehost.h"
 
+#include "services/apppaths.h"
+
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "viewport/enginerenderdriver.h"
 #include "data/settingsmanager.h"
@@ -155,7 +157,7 @@ EngineConfig EngineHost::resolveConfig()
 #ifdef QT_DEBUG
         cfg.logFile = "jahshaka-ogre.log";
 #else
-        const QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        const QString logDir = AppPaths::dataRoot();
         if (!logDir.isEmpty() && QDir().mkpath(logDir))
             cfg.logFile = QDir(logDir).filePath(QStringLiteral("jahshaka-ogre.log")).toStdString();
         else
@@ -220,7 +222,7 @@ EngineConfig EngineHost::resolveConfig()
 
 QString EngineHost::shaderCacheDirectory()
 {
-    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString base = AppPaths::dataRoot();
     if (base.isEmpty()) return QString();
     return QDir(base).filePath(QStringLiteral("shadercache"));
 }

@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #endif
 
 #include "shell/mainwindow.h"
+#include "services/apppaths.h"
 #include "app/cli/clioptions.h"
 #include "services/assetstorepaths.h"
 #include "services/assetstore.h"
@@ -114,6 +115,19 @@ int main(int argc, char *argv[])
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
 
+    // WHERE THIS RUN KEEPS ITS DATA (services/apppaths.h), resolved BEFORE
+    // anything reads a path. Everything downstream — the session log's release
+    // directory, SettingsManager (which the very next block constructs), the
+    // Upgrader, the library database, the asset store, the shader cache — asks
+    // AppPaths, so `--data-root <dir>` / `JAHSHAKA_DATA_ROOT` redirects the
+    // whole set together. With neither given, every path is exactly where it
+    // has always been.
+    //
+    // It has to be after QApplication (settingsFilePath reads
+    // applicationDirPath) and before the log, and the ordering below it —
+    // Upgrader before AssetStoreService::bootstrapFromSettings — is unchanged.
+    AppPaths::initialize(cli.dataRoot);
+
 	installCrashHandler();   // STABILITY_AUDIT.md §5.1 — backtraces for every fatal
 	                         // signal, ALWAYS on. Linux links -rdynamic so the
 	                         // frames carry names; scripts/debug-crash.sh decodes.
@@ -188,7 +202,7 @@ int main(int argc, char *argv[])
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
 
-    auto dataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    auto dataPath = AppPaths::dataRoot();
     QDir dataDir(dataPath);
     if (!dataDir.exists()) dataDir.mkpath(dataPath);
 

@@ -30,7 +30,7 @@ add_test(NAME perf.offscreen_isolation
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/offscreen_isolation.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(perf.offscreen_isolation PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 240)
 
@@ -73,7 +73,7 @@ add_test(NAME perf.epic_steady_state
                  --script ${CMAKE_CURRENT_BINARY_DIR}/epic_steady_state.js
          WORKING_DIRECTORY ${_ess_home}/run)
 set_tests_properties(perf.epic_steady_state PROPERTIES
-    ENVIRONMENT "HOME=${_ess_home}"
+    ENVIRONMENT "HOME=${_ess_home};JAHSHAKA_DATA_ROOT=${_ess_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_epic_steady_state
     LABELS "perf"
     RUN_SERIAL TRUE

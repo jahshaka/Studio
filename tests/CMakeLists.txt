@@ -226,3 +226,4 @@ add_subdirectory(hygiene)
 # GENERATED SHADER PIECES (HLMS_ADOPTION P5): the backend mechanism the shader
 # graph's emitter targets, and the emitter's own gates.
 add_subdirectory(pieces)
+add_subdirectory(apppaths)

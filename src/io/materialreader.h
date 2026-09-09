@@ -51,6 +51,13 @@ public:
 	/// The flat join(projectFolder, name) resolution is GONE.
 	QString resolveTextureGuid(const QString &guid, Database *db);
 
+	/// A stored texture reference that names the OBJECT a texture was imported
+	/// inside, repaired to the member texture the SLOT must have meant — the
+	/// reader half of the 2026-09-03 save defect (SceneReader::repairTextureSlot
+	/// documents the whole story; this is the same tolerant read on the material
+	/// reader). Returns `stored` untouched when there is nothing to repair.
+	static QString repairTextureSlot(const QString &stored, const QString &slotName);
+
 	/// A saved material definition (shaderGuid + values) as a PbrMaterial.
 	///
 	/// It returns a PbrMaterial because since HLMS_ADOPTION P4b there IS no

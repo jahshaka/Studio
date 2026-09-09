@@ -88,7 +88,16 @@ void MaterialReader::setSource(TextureSource texSrc, QString globalSrcFolder)
 iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shaderGuid, Database* db,
                                                                   const QJsonObject &values)
 {
-	auto resolve = [this, db](const QString &ref) { return resolveTextureGuid(ref, db); };
+	// THE SLOT TRAVELS WITH THE VALUE (hygiene lane, 2026-09-09). A legacy
+	// material's texture rows go through the same repair the typed reader and
+	// SceneReader already run: a slot naming the OBJECT a texture was imported
+	// inside (the 2026-09-03 save defect — every slot on a model collapsed onto
+	// one guid) is resolved to the member texture the slot's role words name.
+	// Without the slot name this resolver could not be given the repair at all,
+	// which is why the resolver signature carries it now.
+	auto resolve = [this, db](const QString &ref, const QString &slot) {
+		return resolveTextureGuid(repairTextureSlot(ref, slot), db);
+	};
 	if (BuiltinMaterials::isBuiltin(shaderGuid))
 		return BuiltinMaterials::fromBuiltin(shaderGuid, values, resolve);
 
@@ -99,6 +108,11 @@ iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shader
 	auto mat = BuiltinMaterials::fromLegacyValues(values, resolve);
 	mat->setGuid(shaderGuid);
 	return mat;
+}
+
+QString MaterialReader::repairTextureSlot(const QString &stored, const QString &slotName)
+{
+	return AssetCas::repairTextureSlot(stored, slotName, "material reader");
 }
 
 QString MaterialReader::resolveTextureGuid(const QString &guid, Database *db)
@@ -254,17 +268,7 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			// pipeline was never wrong (the importer substitutes member guids
 			// itself); one re-saved through SceneWriter between 2026-09-03 and
 			// 2026-09-09 was.
-			QString stored = val.toString();
-			if (!stored.isEmpty()) {
-				const QString repaired = AssetCas::textureGuidForSlot(
-					QSqlDatabase::database(), stored, prop->name);
-				if (!repaired.isEmpty()) {
-					irisLog(QString("material reader: %1 named the object '%2' instead "
-									"of a texture - repaired to '%3'")
-								.arg(prop->name, stored, repaired));
-					stored = repaired;
-				}
-			}
+			const QString stored = repairTextureSlot(val.toString(), prop->name);
 				QString path;
 				if (!stored.isEmpty()) {
 					path = resolveTextureGuid(stored, db);

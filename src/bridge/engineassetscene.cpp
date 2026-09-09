@@ -212,7 +212,7 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
     auto aabb = nodeBoundingBox(node);
     iris::BoundingSphere bound = aabb.getMinimalEnclosingSphere();
     if (bound.radius <= 0.0f) { bound.pos = node->getGlobalPosition(); bound.radius = 1; }
-    const float dist = preview::framingDistance(bound.radius, mCamera->angle);
+    const float dist = preview::framingDistance(bound.radius, mCamera->effectiveFovDegrees());
 
     // The framing distance grows with the subject; the clip planes must follow
     // it or a large model sits entirely beyond its own far plane and renders

@@ -12,6 +12,6 @@ add_test(NAME scene.reopen_fidelity
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/reopen_fidelity.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scene.reopen_fidelity PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)

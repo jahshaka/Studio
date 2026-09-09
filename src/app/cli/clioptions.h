@@ -33,6 +33,15 @@ struct CliOptions
     /// the session token is printed to stdout). With --headless: offscreen,
     /// document verbs only; otherwise windowed with the engine viewport up.
     quint16 mcpPort = 0;
+    /// --data-root <dir>: THE hermetic-run flag (WINDOWS_BUILD_SPEC §6.2 W9,
+    /// ENGINEERING_DEBT_SPEC ADDENDUM 6). Redirects the library database, the
+    /// asset store, the shader cache AND the settings file under one directory.
+    /// `HOME=` cannot do the last of those — under QT_DEBUG `jahsettings.ini`
+    /// is derived from applicationDirPath(), so every run of a build tree
+    /// shares one, which is how a suite came to rewrite the developer's
+    /// `[assets] storeId`. `JAHSHAKA_DATA_ROOT` is the same override as an
+    /// environment variable, and this flag wins over it (services/apppaths.h).
+    QString dataRoot;
     /// --clear-shader-cache: deletes the persistent shader cache BEFORE the
     /// engine starts, then continues into a normal run (SHADER_CACHE_SPEC §4.5).
     /// Our `r.InvalidateCachedShaders`, and the flag every benchmark of a cold

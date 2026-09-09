@@ -44,7 +44,7 @@ set_tests_properties(mcp.e2e.fresh_home PROPERTIES
 add_test(NAME mcp.e2e COMMAND test_mcp_e2e
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(mcp.e2e PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED mcpFreshHome
     LABELS "mcp"
     TIMEOUT 240)

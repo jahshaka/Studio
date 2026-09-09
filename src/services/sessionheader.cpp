@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "services/apppaths.h"
 #include "services/sessionheader.h"
 
 #include "data/constants.h"
@@ -90,7 +91,7 @@ Rows baseRows()
                QCoreApplication::arguments().join(QLatin1Char(' ')) };
     r << Row { QStringLiteral("working dir"), QDir::currentPath() };
     r << Row { QStringLiteral("data root"),
-               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) };
+               AppPaths::dataRoot() };
     r << Row { QStringLiteral("process id"),
                QString::number(QCoreApplication::applicationPid()) };
     r << Row { QStringLiteral("session log"), JahLog::sessionFilePath() };

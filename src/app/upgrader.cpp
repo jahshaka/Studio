@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "services/apppaths.h"
 #include "app/upgrader.h"
 
 #if defined(_WIN32)
@@ -36,7 +37,7 @@ For more information see the LICENSE file
 void Upgrader::checkIfDeprecatedVersion()
 {
 	const QString path = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
+        AppPaths::dataRoot(), Constants::JAH_DATABASE
 	);
 
     if (!QFile(path).exists()) return;
@@ -118,7 +119,7 @@ void Upgrader::checkIfDeprecatedVersion()
                 // amendment 1): the upgrader wipes the PRE-storeRoot install location,
                 // which is always the DEFAULT AppData root — a relocated store set by
                 // the assets/storeRoot setting must never be addressed (or wiped) here.
-                QDir storeDir(IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore"));
+                QDir storeDir(IrisUtils::join(AppPaths::dataRoot(), "AssetStore"));
 				if (!storeDir.removeRecursively()) {
 #ifdef Q_OS_WIN
                     QString storeDirAbsolutePath = storeDir.absolutePath();
@@ -152,7 +153,7 @@ void Upgrader::checkIfDeprecatedVersion()
 void Upgrader::checkIfSchemaNeedsUpdating()
 {
 	const QString path = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
+        AppPaths::dataRoot(), Constants::JAH_DATABASE
 	);
 
 	if (!QFile(path).exists()) return;

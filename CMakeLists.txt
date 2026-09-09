@@ -412,6 +412,7 @@ set(SRCS
 )
 
 set(HEADERS
+    src/shell/dockstate.h
     src/shell/mainwindow.h 
     src/ui/controls/colorvaluewidget.h 
     src/ui/controls/colorpickerwidget.h 
@@ -504,6 +505,7 @@ set(HEADERS
     src/services/assetgc.h
     src/services/assetmigration.h
     src/services/assetstore.h
+    src/services/apppaths.h
     src/services/assetstorepaths.h
     src/data/database/casschema.h
     src/services/audiopeaks.h

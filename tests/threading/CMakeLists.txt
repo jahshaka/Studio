@@ -85,7 +85,7 @@ add_test(NAME threading.mode
                  --script ${CMAKE_CURRENT_BINARY_DIR}/mode.js
          WORKING_DIRECTORY ${_thr_home_par}/run)
 set_tests_properties(threading.mode PROPERTIES
-    ENVIRONMENT "HOME=${_thr_home_par}"
+    ENVIRONMENT "HOME=${_thr_home_par};JAHSHAKA_DATA_ROOT=${_thr_home_par}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_mode
     FIXTURES_SETUP threading_shot_parallel
     LABELS "threading" RUN_SERIAL TRUE TIMEOUT 480)
@@ -99,7 +99,7 @@ add_test(NAME threading.mode_serial
                  --script ${CMAKE_CURRENT_BINARY_DIR}/mode.js
          WORKING_DIRECTORY ${_thr_home_ser}/run)
 set_tests_properties(threading.mode_serial PROPERTIES
-    ENVIRONMENT "HOME=${_thr_home_ser};JAHSHAKA_SCENE_THREADS=1"
+    ENVIRONMENT "HOME=${_thr_home_ser};JAHSHAKA_DATA_ROOT=${_thr_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_mode_serial
     FIXTURES_SETUP threading_shot_serial
     LABELS "threading" RUN_SERIAL TRUE TIMEOUT 480)
@@ -151,7 +151,7 @@ add_test(NAME threading.import_soak
                  --script ${CMAKE_CURRENT_BINARY_DIR}/import_soak.js
          WORKING_DIRECTORY ${_thr_home_soak}/run)
 set_tests_properties(threading.import_soak PROPERTIES
-    ENVIRONMENT "HOME=${_thr_home_soak}"
+    ENVIRONMENT "HOME=${_thr_home_soak};JAHSHAKA_DATA_ROOT=${_thr_home_soak}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_import_soak
     LABELS "threading" RUN_SERIAL TRUE TIMEOUT 900)
 
@@ -166,7 +166,7 @@ add_test(NAME threading.newproject_stall
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.js
          WORKING_DIRECTORY ${_thr_home_stall}/run)
 set_tests_properties(threading.newproject_stall PROPERTIES
-    ENVIRONMENT "HOME=${_thr_home_stall}"
+    ENVIRONMENT "HOME=${_thr_home_stall};JAHSHAKA_DATA_ROOT=${_thr_home_stall}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_newproject_stall
     LABELS "threading" RUN_SERIAL TRUE TIMEOUT 600)
 
@@ -189,7 +189,7 @@ add_test(NAME threading.texture_wait_watchdog
                  --script ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js
          WORKING_DIRECTORY ${_thr_home_wd}/run)
 set_tests_properties(threading.texture_wait_watchdog PROPERTIES
-    ENVIRONMENT "HOME=${_thr_home_wd};JAH_TEXTURE_WAIT_FAULT=1;JAH_TEXTURE_WAIT_MS=300"
+    ENVIRONMENT "HOME=${_thr_home_wd};JAHSHAKA_DATA_ROOT=${_thr_home_wd}/.local/share/Jahshaka;JAH_TEXTURE_WAIT_FAULT=1;JAH_TEXTURE_WAIT_MS=300"
     FIXTURES_REQUIRED threading_home_texture_wait_watchdog
     LABELS "threading" TIMEOUT 300)
 

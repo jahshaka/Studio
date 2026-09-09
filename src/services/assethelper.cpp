@@ -43,11 +43,18 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     // MaterialReader::resolveTextureGuid). Old blobs that stored plain paths
     // still work: an unresolvable value falls back to itself.
     Q_UNUSED(db);
-    const auto resolveTexture = [&](const QString &stored) -> QString {
+    // The SLOT is part of the question (hygiene lane, 2026-09-09): a stored
+    // reference that names the OBJECT a texture was imported inside is repaired
+    // to the member texture the slot's role words name, exactly as the two
+    // readers do (MaterialReader::repairTextureSlot). Before this, the legacy
+    // branch below could not be given the repair at all — the resolver it hands
+    // to BuiltinMaterials had no idea which row it was resolving for.
+    const auto resolveTexture = [&](const QString &stored, const QString &slot) -> QString {
         if (stored.isEmpty()) return stored;
+        const QString ref = AssetCas::repairTextureSlot(stored, slot, "asset helper");
         QSqlDatabase conn = QSqlDatabase::database();
-        const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), stored);
-        return path.isEmpty() ? stored : path;
+        const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), ref);
+        return path.isEmpty() ? ref : path;
     };
 
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -81,7 +88,8 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
                               QVariant::fromValue(values.value(property->name).toVariant().value<QColor>()));
             else if (property->type == iris::PropertyType::Texture)
                 pbr->setValue(property->name,
-                              resolveTexture(values.value(property->name).toString()));
+                              resolveTexture(values.value(property->name).toString(),
+                                             property->name));
             else
                 pbr->setValue(property->name, values.value(property->name).toVariant());
         }

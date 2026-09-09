@@ -57,12 +57,16 @@ bool floatOf(const QJsonObject &values, const char *key, float &out)
     return true;
 }
 
-QString textureOf(const QJsonObject &values, const char *key,
-                  const std::function<QString(const QString &)> &resolve)
+/// `key` is the LEGACY name the value was stored under; `slot` is the PBR row
+/// it lands in. The resolver is given the SLOT, because that is what says which
+/// of an imported model's textures a bare object guid meant
+/// (BuiltinMaterials::TextureResolver).
+QString textureOf(const QJsonObject &values, const char *key, const char *slot,
+                  const BuiltinMaterials::TextureResolver &resolve)
 {
     const QString stored = values.value(QLatin1String(key)).toString();
     if (stored.isEmpty() || !resolve) return QString();
-    return resolve(stored);
+    return resolve(stored, QLatin1String(slot));
 }
 
 /// THE SHININESS REMAP, and it is the mirror's, not a new one
@@ -82,7 +86,7 @@ float roughnessFromShininess(float shininess)
 /// fallback, because a stranger's `.shader` uniforms were almost always copies
 /// of Default's.
 void applyDefaultFamily(const iris::PbrMaterialPtr &mat, const QJsonObject &values,
-                        const std::function<QString(const QString &)> &resolve)
+                        const BuiltinMaterials::TextureResolver &resolve)
 {
     bool found = false;
     // The colour, under any of the four spellings the tree has used.
@@ -115,14 +119,14 @@ void applyDefaultFamily(const iris::PbrMaterialPtr &mat, const QJsonObject &valu
         mat->setValue(QStringLiteral("alphaMode"), 2);
 
     for (const char *key : { "diffuseTexture", "baseColorMap", "albedoMap" }) {
-        const QString p = textureOf(values, key, resolve);
+        const QString p = textureOf(values, key, "baseColorMap", resolve);
         if (!p.isEmpty()) { mat->setValue(QStringLiteral("baseColorMap"), p); break; }
     }
     for (const char *key : { "normalTexture", "normalMap" }) {
-        const QString p = textureOf(values, key, resolve);
+        const QString p = textureOf(values, key, "normalMap", resolve);
         if (!p.isEmpty()) { mat->setValue(QStringLiteral("normalMap"), p); break; }
     }
-    const QString em = textureOf(values, "emissiveMap", resolve);
+    const QString em = textureOf(values, "emissiveMap", "emissiveMap", resolve);
     if (!em.isEmpty()) mat->setValue(QStringLiteral("emissiveMap"), em);
 
     // NOT CARRIED, and deliberately: ambientColor, specularColor,
@@ -153,7 +157,7 @@ bool isBuiltin(const QString &shaderGuid)
 }
 
 iris::PbrMaterialPtr fromBuiltin(const QString &shaderGuid, const QJsonObject &values,
-                                 const std::function<QString(const QString &)> &resolveTexture)
+                                 const TextureResolver &resolveTexture)
 {
     auto mat = iris::PbrMaterial::create();
     mat->setName(builtinName(shaderGuid));
@@ -218,7 +222,7 @@ iris::PbrMaterialPtr fromBuiltin(const QString &shaderGuid, const QJsonObject &v
 }
 
 iris::PbrMaterialPtr fromLegacyValues(const QJsonObject &values,
-                                      const std::function<QString(const QString &)> &resolveTexture)
+                                      const TextureResolver &resolveTexture)
 {
     auto mat = iris::PbrMaterial::create();
     applyDefaultFamily(mat, values, resolveTexture);
@@ -266,7 +270,7 @@ iris::PbrMaterialPtr fromPreset(const MaterialPreset &preset)
     values[QStringLiteral("textureScale")]   = double(preset.textureScale);
     values[QStringLiteral("diffuseTexture")] = preset.diffuseTexture;
     values[QStringLiteral("normalTexture")]  = preset.normalTexture;
-    applyDefaultFamily(mat, values, [](const QString &p) { return p; });
+    applyDefaultFamily(mat, values, [](const QString &p, const QString &) { return p; });
     return mat;
 }
 

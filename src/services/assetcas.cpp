@@ -663,6 +663,16 @@ bool writeStoreInfo(const QString &root, QString *errorOut)
         path, QJsonDocument(info).toJson(QJsonDocument::Indented), errorOut);
 }
 
+QString repairTextureSlot(const QString &storedGuid, const QString &slotName, const char *who)
+{
+    if (storedGuid.isEmpty() || slotName.isEmpty()) return storedGuid;
+    const QString repaired = textureGuidForSlot(QSqlDatabase::database(), storedGuid, slotName);
+    if (repaired.isEmpty()) return storedGuid;
+    irisLog(QString("%1: %2 named the object '%3' instead of a texture - repaired to '%4'")
+                .arg(QLatin1String(who), slotName, storedGuid, repaired));
+    return repaired;
+}
+
 bool readStoreInfo(const QString &root, QString *storeIdOut, int *formatVersionOut)
 {
     QFile file(AssetStorePaths::storeInfoPathIn(root));

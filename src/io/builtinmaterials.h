@@ -48,6 +48,10 @@ namespace iris { struct MeshMaterialData; }
 ///     the same call the 2026-08-31 sample conversion already made by hand.
 namespace BuiltinMaterials
 {
+/// A stored texture reference plus the PBR SLOT it is being bound into, to an
+/// absolute file path. See fromBuiltin for why the slot travels with the value.
+using TextureResolver = std::function<QString(const QString &stored, const QString &slotName)>;
+
 /// Is this one of the six reserved builtin GUIDs?
 bool isBuiltin(const QString &shaderGuid);
 
@@ -58,15 +62,24 @@ QString builtinName(const QString &shaderGuid);
 /// Build the PbrMaterial a reserved builtin GUID now means, with the saved
 /// `values{}` block applied on top of the preset.
 ///
-/// `resolveTexture` turns a stored texture reference (an asset GUID, or a path)
-/// into an absolute file path — the caller owns that, because the two readers
-/// resolve textures differently (project pins vs scene-relative paths). It may
-/// be empty, in which case no texture is bound.
+/// `resolveTexture(stored, slotName)` turns a stored texture reference (an asset
+/// GUID, or a path) into an absolute file path — the caller owns that, because
+/// the two readers resolve textures differently (project pins vs scene-relative
+/// paths). It may be empty, in which case no texture is bound.
+///
+/// `slotName` IS THE PBR SLOT THE VALUE IS BOUND INTO — `baseColorMap`,
+/// `normalMap`, `emissiveMap` — and not the legacy key it was read from
+/// (`diffuseTexture` and friends). It exists because the guid alone is no
+/// longer enough to name a texture: an imported model collapsed every slot onto
+/// the one OBJECT guid, and `AssetCas::textureGuidForSlot` needs the slot's
+/// role words to say which member texture was meant (the 2026-09-03 save
+/// defect, SceneReader::repairTextureSlot). A resolver that does not care may
+/// ignore it.
 ///
 /// NEVER NULL for a reserved GUID: a scene that names a builtin gets the
 /// equivalent preset, never a load failure.
 iris::PbrMaterialPtr fromBuiltin(const QString &shaderGuid, const QJsonObject &values,
-                                 const std::function<QString(const QString &)> &resolveTexture);
+                                 const TextureResolver &resolveTexture);
 
 /// The fallback for a NON-reserved legacy shader material — an imported
 /// `.shader` asset whose GLSL is long gone, or a shader GUID whose definition
@@ -78,7 +91,7 @@ iris::PbrMaterialPtr fromBuiltin(const QString &shaderGuid, const QJsonObject &v
 /// there is no "some other material class" to fall back to, so the fallback has
 /// to be a PbrMaterial that carries across everything that still has a meaning.
 iris::PbrMaterialPtr fromLegacyValues(const QJsonObject &values,
-                                      const std::function<QString(const QString &)> &resolveTexture);
+                                      const TextureResolver &resolveTexture);
 
 /// A drawer/library PRESET (`app/content/materials/*.material`) as a material.
 ///
