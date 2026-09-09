@@ -1,10 +1,18 @@
-// samples.cleanstart.<sample> — ONE shipped sample, ONE virgin HOME, the whole
-// first-run journey the owner takes after a database wipe.
+// samples.cleanstart.<sample> — ONE shipped sample, ONE virgin HOME, EVERY
+// claim the gate makes about that sample.
 //
-// WHY THIS EXISTS, beside scripting.e2e.samples. That suite proves the samples
-// import and render with the right materials, and it does it for all five of
-// its samples in ONE session and ONE home. This one asks the questions a clean
-// start asks and that one cannot:
+// It absorbed the other two sample suites on 2026-09-09 (TEST_GATE_AUDIT.md §2):
+// scripting.e2e.samples, which re-imported five of the same archives into one
+// SHARED home to probe their colours, and the seven samples.scale.* rows, which
+// re-imported all seven headless to read scene.bounds and editor.camera. Both
+// were paying a second (and third) import of content this suite has already
+// imported into a virgin home — 68 s of gate for assertions that are cheaper
+// and STRICTER here, because here they run against the owner's actual first
+// run rather than against a session that had already opened four other
+// projects.
+//
+// What this suite asks, in order: the clean-start journey, then the scene-scale
+// convention, then material fidelity and exact colours.
 //
 //   * a FRESH HOME per sample (one ctest test each), because "it worked after
 //     the previous sample had already populated the store" is not the owner's
@@ -262,6 +270,491 @@ function selectionStaysOutOfTheMirror() {
     editor.select(null);
 }
 
+
+// ===========================================================================
+// THE SCENE-SCALE CONVENTION (folded in from samples.scale.*, 2026-09-09).
+//
+// Seven ctest rows — one per sample, each booting the binary headless for four
+// seconds to import a sample this suite has ALREADY imported two lines above —
+// bought nothing that could not be asserted here (TEST_GATE_AUDIT.md §2). The
+// verbs are document verbs, so they run identically in this engine-up session;
+// the display-free proof that scene.bounds and editor.camera need no GPU lives
+// in scripting.e2e.scene_bounds.
+//
+// THE CONVENTION (owner, 2026-09-08, after the Showroom "looked zoomed and its
+// gizmo huge"): "we need a default scene size and to respect it for all sample
+// scenes we make so the sample scenes don't make things go weird". It reads:
+//
+//   * 1 unit = 1 METRE. Rooms are human-scale, objects are the size the same
+//     object is in the world.
+//   * the SAVED editor camera uses the default explorer lens — 45 degrees
+//     VERTICAL, which is already 72.7 degrees horizontal at 16:9 (a 24 mm
+//     equivalent). The free-camera framing policy renders the authored vertical
+//     angle exactly at or below 16:9 and holds the 16:9 horizontal extent
+//     beyond it (CLAUDE.md), so this number is what the picture is.
+//   * one fly speed therefore feels the same in every sample, and a gizmo is
+//     the same size on screen in every sample — which is what the convention
+//     was asked for.
+//
+// WHY NUMBERS AND NOT PIXELS. The samples drifted to 2x and 4x life size one
+// edit at a time (a 23.5 m hall with 3.4 m display spheres, a 7.2 m dancer),
+// and each drift was invisible on its own because the SAVED CAMERA was widened
+// or pulled back to compensate — the two errors hide each other in every
+// screenshot. Numbers do not hide.
+function near(actual, want, tol, what) {
+    var lo = want * (1 - tol), hi = want * (1 + tol);
+    assert(actual >= lo && actual <= hi,
+           what + " = " + actual.toFixed(2) + " m, pinned at " + want +
+           " +-" + Math.round(tol * 100) + "% [" + lo.toFixed(2) + ", " + hi.toFixed(2) + "]");
+}
+
+// THE ENVELOPE — the part that is true of EVERY shipped sample, with the reason
+// each bound is where it is. These are limits, not pins: they say "this scene
+// is authored in metres and photographed with a scene lens", and nothing else.
+var ENVELOPE = {
+    // 40..60 degrees VERTICAL. 45 is the default explorer lens; below 40 a
+    // sample would ship a telephoto nobody can navigate, above 60 (= 100+
+    // degrees horizontal at 16:9) is the fisheye the 2x rooms needed to fit
+    // themselves in frame, which is exactly the drift this gate exists for.
+    fovMin: 40, fovMax: 60,
+    // The scene's own geometry, ground plane excluded, in metres. 40 m is a
+    // city block: a SAMPLE bigger than that is not a sample of anything. The
+    // floor of 0.5 m catches the opposite failure (an archive that opened
+    // empty measures nothing).
+    extentMax: 40.0, extentMin: 0.5,
+    // The saved eye. Below 0.3 m the camera is in the floor; above 25 m it is
+    // a satellite. (Physics deliberately watches a drop tower from 16 m.)
+    cameraHeightMin: 0.3, cameraHeightMax: 25.0,
+    // A saved camera has to be LOOKING AT its own scene: no further from the
+    // content's centre than 4 radii. This is what catches "the room shrank and
+    // the camera did not" — the failure mode where the numbers move but every
+    // screenshot still looks plausible because the subject is a speck.
+    cameraDistanceRadii: 4.0
+};
+
+// PER-SAMPLE PINS. Measured on the shipped archives (lane-samplescale,
+// 2026-09-09) and re-measured after the re-stage. `extent` is the world AABB of
+// the sample's geometry WITHOUT the built-in 1024 m ground plane; `objects`
+// pins the size of each sample's signature object, which is where "human
+// scale" is actually visible; `room` (the two built-from-primitives samples)
+// pins the INTERIOR — wall to wall, floor top to ceiling bottom.
+//
+// A deliberate re-stage updates this table in the same commit that re-stages,
+// with before/after numbers in the message. That is the whole contract.
+var SCALE = {
+    "Matcaps": {
+        extent: { x: 4.78, y: 3.37, z: 2.14 }, cameraHeight: 5.69, fov: 45,
+        objects: { "StanfordDragon": { y: 3.37 } }
+    },
+    "Mirror Room": {
+        // Re-staged 2026-09-09: 1.75x -> 1x (an 8.5 m room, not 14.9 m).
+        // The floor and ceiling slabs are 18 m squares that overhang the walls
+        // — that is what makes the aggregate extent bigger than the room.
+        extent: { x: 18.0, y: 5.5, z: 18.0 }, cameraHeight: 2.4, fov: 45,
+        room: { width: 8.5, depth: 8.5, height: 3.5 },
+        objects: { "MirrorSphere": { y: 3.0 }, "GreenTeapot": { x: 2.12 } }
+    },
+    "Particles": {
+        extent: { x: 7.14, y: 4.99, z: 7.14 }, cameraHeight: 11.04, fov: 45,
+        objects: { "Fire Pit": { x: 7.14 } }
+    },
+    "Physics": {
+        // The drop tower: metric objects (2 m pipes, a 2.5 m ball) stacked to
+        // 17 m so they can fall. Big, but every object in it is life size.
+        extent: { x: 11.31, y: 12.0, z: 21.0 }, cameraHeight: 16.11, fov: 45,
+        objects: { "ball": { y: 2.48 }, "pipe": { y: 2.0 } }
+    },
+    "Showroom": {
+        // Re-staged 2026-09-09: 2x -> 1x (an 11.75 m gallery under a 3.25 m
+        // ceiling, with 1.7 m display spheres), lens 75 -> 45 degrees.
+        extent: { x: 24.0, y: 4.25, z: 24.0 }, cameraHeight: 2.45, fov: 45,
+        room: { width: 11.75, depth: 11.75, height: 3.25 },
+        objects: { "Sphere_r0": { y: 1.7 }, "GreenTeapot": { x: 1.93 } }
+    },
+    "Skeletal Animation": {
+        // Re-staged 2026-09-09: the Collada rig is in CENTIMETRES and its root
+        // carried scale 0.04, so the dancer stood 7.2 m tall. 0.01 is cm -> m.
+        extent: { x: 1.94, y: 1.81, z: 0.31 }, cameraHeight: 1.28, fov: 45,
+        objects: { "capoeira": { y: 1.81 } }
+    },
+    "World Background": {
+        // Three dragon statues on the shared ground plane; the sample is about
+        // the SKY behind them, so the statues are all the geometry there is.
+        // They were three nodes all called "SceneNode24", the first with an
+        // EMPTY guid (found by this gate 2026-09-09, repaired the same day:
+        // the reader mints a guid for a node that has none, and the sample's
+        // meshes are Dragon / Dragon2 / Dragon3).
+        extent: { x: 8.78, y: 3.37, z: 10.14 }, cameraHeight: 4.14, fov: 45,
+        objects: { "Dragon": { y: 3.37 } }
+    }
+};
+
+// Pin tolerance. Tight enough that a 2x re-scale, a 4x rig-unit slip or a
+// re-framed camera fails; loose enough that a rotated node's AABB, a mesh
+// re-bake or a float32 round trip does not.
+var SCALE_TOL = 0.15;
+
+function checkScale() {
+    var want = SCALE[SAMPLE];
+    assert(!!want, "the suite knows what scale " + SAMPLE + " is authored at");
+
+    // ---- the geometry ------------------------------------------------------
+    // The ground plane is excluded by NAME here rather than by the built-in
+    // mesh path the C++ side uses (services/sceneextents.h), because a script
+    // has no window into meshPath — and every shipped sample calls it "Ground".
+    // It is a 1024 m backdrop present in every scene: left in, it is the only
+    // number any measurement would ever report.
+    var rootId = scene.root();
+    var roots = scene.nodes({ depth: 1 });   // the root itself plus its children
+    var ids = [], i;
+    for (i = 0; i < roots.length; i++) {
+        if (roots[i].id === rootId) continue;          // measuring it measures everything
+        if (roots[i].name === "Ground") continue;
+        ids.push(roots[i].id);
+    }
+    assert(ids.length > 0, "the scene has something to measure (" + ids.length + " root nodes)");
+
+    var b = scene.bounds({ nodes: ids });
+    console.log("bounds: " + J(b));
+    assert(b.nodes > 0, "scene.bounds measured geometry (" + b.nodes + " nodes)");
+
+    // THE ENVELOPE, then the pins.
+    var axes = ["x", "y", "z"];
+    for (i = 0; i < axes.length; i++) {
+        var a = axes[i];
+        assert(b.size[a] <= ENVELOPE.extentMax,
+               "extent." + a + " " + b.size[a].toFixed(2) + " m is inside the envelope (<= " +
+               ENVELOPE.extentMax + " m)");
+    }
+    var biggest = Math.max(b.size.x, b.size.y, b.size.z);
+    assert(biggest >= ENVELOPE.extentMin,
+           "the scene has size at all (largest axis " + biggest.toFixed(2) + " m)");
+    for (i = 0; i < axes.length; i++)
+        near(b.size[axes[i]], want.extent[axes[i]], SCALE_TOL, "extent." + axes[i]);
+
+    // ---- the signature objects ---------------------------------------------
+    for (var name in (want.objects || {})) {
+        var id = scene.find(name);
+        assert(!!id, "the '" + name + "' node is in the scene");
+        var ob = scene.bounds({ nodes: [id] });
+        assert(ob.nodes > 0, name + " has geometry to measure");
+        console.log("  " + name + " size: " + J(ob.size));
+        for (var axis in want.objects[name])
+            near(ob.size[axis], want.objects[name][axis], SCALE_TOL, name + "." + axis);
+    }
+
+    // ---- the room (the samples built from primitives) ----------------------
+    // Interior, not outline: the floor and ceiling slabs overhang the walls, so
+    // the only honest reading of "how big is this room" is wall face to wall
+    // face and floor top to ceiling bottom. A room is human-scale when a person
+    // fits in it — 2.4 m is a domestic ceiling, 4.5 m is a gallery, and
+    // anything above that is the drift this gate exists to stop.
+    if (want.room) {
+        var floor = scene.bounds({ nodes: [scene.find("Floor")] });
+        var ceiling = scene.bounds({ nodes: [scene.find("Ceiling")] });
+        var height = ceiling.min.y - floor.max.y;
+        console.log("  interior height: " + height.toFixed(2) + " m");
+        assert(height >= 2.4 && height <= 4.5,
+               "the ceiling is at a human height (" + height.toFixed(2) + " m, envelope 2.4-4.5)");
+        near(height, want.room.height, SCALE_TOL, "room height");
+
+        var wallNames = SAMPLE === "Showroom" ? ["WallW", "WallE", "WallS", "WallN"]
+                                              : ["WallW", "WallE", "BlueWall", "RedWall"];
+        var w = scene.bounds({ nodes: [scene.find(wallNames[0])] });
+        var e = scene.bounds({ nodes: [scene.find(wallNames[1])] });
+        var s = scene.bounds({ nodes: [scene.find(wallNames[2])] });
+        var n = scene.bounds({ nodes: [scene.find(wallNames[3])] });
+        var width = e.min.x - w.max.x, depth = n.min.z - s.max.z;
+        console.log("  interior floor: " + width.toFixed(2) + " x " + depth.toFixed(2) + " m");
+        near(width, want.room.width, SCALE_TOL, "room width");
+        near(depth, want.room.depth, SCALE_TOL, "room depth");
+    }
+
+    // ---- IDENTITY: every node addressable, every sibling name unique -------
+    //
+    // Not scale, but the same class of thing and found by the same measuring
+    // pass: a node with no guid cannot be reached by ANY verb (scene.find
+    // returns "", node.* refuses, the MCP tools cannot name it, and the
+    // per-node DB row has no key), and two SIBLINGS with one name are a coin
+    // toss for every by-name lookup a script, a test or a user makes. Shipping
+    // either in a sample is shipping a scene the editor cannot fully drive.
+    // World Background shipped both.
+    //
+    // Siblings, deliberately: two nodes with the same name under DIFFERENT
+    // parents are addressable by path and are how the Particles sample carries
+    // a "Fire" on the sphere and a "Fire" on the fire pit.
+    var all = scene.nodes();
+    var byParent = {};
+    for (i = 0; i < all.length; i++) {
+        assert(typeof all[i].id === "string" && all[i].id.length > 10,
+               "'" + all[i].name + "' has a real guid (" + J(all[i].id) + ")");
+        var pkey = (all[i].parent || "<root>") + "|" + all[i].name;
+        assert(!byParent[pkey],
+               "no two siblings share the name '" + all[i].name + "' (parent " +
+               (all[i].parent || "<root>") + ")");
+        byParent[pkey] = true;
+    }
+    console.log("identity: " + all.length + " nodes, all addressable, sibling names unique");
+
+    // ---- the saved camera --------------------------------------------------
+    // editor.camera() is a DOCUMENT verb (lane-samplescale): the stand-in
+    // viewport a headless run boots holds exactly the camera the scene file
+    // loaded, lens included, which is the only way the saved lens can be
+    // asserted without a GPU.
+    var cam = editor.camera();
+    console.log("camera: " + J(cam));
+    assert(cam.projection === "perspective", "the saved camera is perspective");
+    assert(cam.fov >= ENVELOPE.fovMin && cam.fov <= ENVELOPE.fovMax,
+           "the saved lens is a scene lens (" + cam.fov + " deg, envelope " +
+           ENVELOPE.fovMin + "-" + ENVELOPE.fovMax + ")");
+    assert(cam.fov === want.fov, "the saved lens is the pinned " + want.fov + " deg (" + cam.fov + ")");
+
+    assert(cam.position.y >= ENVELOPE.cameraHeightMin && cam.position.y <= ENVELOPE.cameraHeightMax,
+           "the eye is at a usable height (" + cam.position.y.toFixed(2) + " m)");
+    near(cam.position.y, want.cameraHeight, SCALE_TOL, "camera height");
+
+    var dx = cam.position.x - b.center.x, dy = cam.position.y - b.center.y,
+        dz = cam.position.z - b.center.z;
+    var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    var radius = 0.5 * Math.sqrt(b.size.x * b.size.x + b.size.y * b.size.y + b.size.z * b.size.z);
+    console.log("  camera distance " + dist.toFixed(2) + " m, content radius " + radius.toFixed(2) + " m");
+    assert(dist <= radius * ENVELOPE.cameraDistanceRadii,
+           "the saved camera is looking at its own scene (" + dist.toFixed(2) + " m <= " +
+           (radius * ENVELOPE.cameraDistanceRadii).toFixed(2) + " m)");
+}
+
+// ===========================================================================
+// MATERIAL FIDELITY AND EXACT-COLOUR PROBES (folded in from
+// scripting.e2e.samples, 2026-09-09).
+//
+// That suite imported five of these same archives into one shared home and one
+// shared session and probed them — a second 37 s import of content this suite
+// has already imported into a VIRGIN home two lines above (TEST_GATE_AUDIT.md
+// §2). Every one of its claims lives here now, per sample, against the fresh
+// install rather than against a session that had already opened four other
+// projects:
+//
+//   * the materials the conversion owns (the dragons are the drawer's
+//     Gold/Silver/Glass PBR presets — scenes/tools/convert_legacy_materials.py),
+//   * texture properties resolve to store paths, never raw guids,
+//   * PIXELS: an engine screenshot with colour probes (editor.screenshot's
+//     5x5-averaged probe points) — the gold dragon must BE gold, the blue
+//     character blue, the red pipe red. Probes are loose enough for driver
+//     variation (lavapipe CI == GPU per the headless-vulkan spike).
+//   * the SAVE ROUND TRIP for Particles (2026-09-03): the writer recovered a
+//     texture's asset guid by matching its FILE NAME, and since the CAS an
+//     object's file name is its sha256 — so one save wrote "" for every emitter
+//     texture and the next open rendered the fire as large white squares.
+//     Nothing that only imported ever caught it. The round trip this suite
+//     already performs at step 5 is where those assertions now hang.
+//
+// These are the EXACT-colour probes. The wide-tolerance "not obviously broken"
+// pass (renderSanity) stays as it is and runs for every sample; this runs for
+// the five samples whose colours are pinnable. Showroom and Mirror Room have
+// no entry because they never had one — they are not open-to-open pixel
+// deterministic (VCT + planar actors), which is exactly why the Mirror Room's
+// own gate below is a DELTA between two shots rather than an absolute colour.
+
+function bright(p) { return (p.r + p.g + p.b) / 3; }
+function isNeutral(p, tol) {
+    var mx = Math.max(p.r, p.g, p.b), mn = Math.min(p.r, p.g, p.b);
+    return (mx - mn) <= tol;
+}
+function assertTexturePath(matName, key, v) {
+    assert(typeof v === "string" && v.length > 0 && !GUID_RE.test(v) && v.indexOf("/") >= 0,
+           matName + "." + key + " resolves to a file path (" + v + ")");
+}
+function meshesByName(name) {
+    var out = [];
+    var ns = scene.nodes();
+    for (var i = 0; i < ns.length; i++)
+        if (ns[i].type === "mesh" && ns[i].name === name) out.push(ns[i]);
+    return out;
+}
+
+// 15 wall-clock frames used to be enough for everything in these samples. It is
+// not enough for a PARTICLE system: the engine simulates those now, charging
+// each frame the time it actually took, and an offscreen frame takes about a
+// millisecond — so 15 frames buy 15 ms of fire and photograph an empty pit.
+// editor.frame(n, dt) pushes a FIXED step to the particle clock too, so 150
+// frames at 1/60 s is a deterministic 2.5 s of warm-up: past the flame's 1.7 s
+// lifetime, so the plume is full and steady.
+//
+// 960x540 is the size the probe boxes below were mapped at — do not change it
+// without re-mapping them.
+function shoot(name, probePoints) {
+    editor.frame(150, 1.0 / 60.0);
+    var shot = editor.screenshot("samples_" + name + ".png", 960, 540, probePoints);
+    assert(shot.probes && shot.probes.length === probePoints.length,
+           name + ": screenshot with " + probePoints.length + " probes");
+    var line = name + " probes:";
+    for (var i = 0; i < shot.probes.length; i++) line += " " + fmt(shot.probes[i]);
+    console.log(line);
+    return shot.probes;
+}
+
+// ---- the fire-billboard probe (2026-09-03) ---------------------------------
+// The "sphere renders yellow" probe below convicted nothing about the FIRE: it
+// samples the emissive Sphere MESH, which keeps its colour whatever happens to
+// the emitters. When the particle texture stopped reaching BillboardSet2 the
+// sample rendered as large white additive squares over that same yellow sphere
+// and the suite stayed green all day.
+//
+// So probe the PLUME itself, as a population rather than a pixel: particle
+// simulation is stochastic, but its COLOUR is not. A textured fire is warm
+// (red well above blue); an untextured additive quad is flat white, because
+// the datablock falls back to its white vertex colour and the alpha cutout
+// that shapes a flame is exactly what is missing.
+//
+// THE BOX MOVED (2026-09-03, ParticleFX2 adoption). The re-authored sample's
+// flame is a real 1.7 s plume rising out of the pit instead of the legacy
+// 24-second column, so it occupies a different part of the same frame. Mapped
+// with a 20x20 warm-probe grid over the re-authored scene, warmed the same way
+// shoot() warms it: the flame runs x 0.42-0.62, y 0.22-0.73, densest around
+// y 0.32-0.58.
+//
+// Measured over the new box (960x540, 4080): healthy is 30 of 30 warm, 0 white
+// — the box is inside the flame core, so the margin over the >= 8 threshold is
+// the whole point. A lost texture turns an additive system into a saturated
+// white slab rather than a plume, which the white counter catches.
+function firePlumeProbePoints() {
+    var pts = [];
+    for (var yi = 0; yi < 6; yi++)
+        for (var xi = 0; xi < 5; xi++)
+            pts.push({ x: 0.472 + xi * 0.018, y: 0.36 + yi * 0.040 });
+    return pts;
+}
+function assertFireIsFire(probes, when) {
+    var warm = 0, white = 0;
+    for (var i = 0; i < probes.length; i++) {
+        var p = probes[i];
+        var mx = Math.max(p.r, p.g, p.b), mn = Math.min(p.r, p.g, p.b);
+        if (p.r > p.b + 25 && p.r > 60) warm++;
+        if (mn > 140 && (mx - mn) <= 30) white++;
+    }
+    assert(warm >= 8, "Particles" + when + ": the plume is FIRE-coloured (" + warm +
+                      "/" + probes.length + " warm probes)");
+    assert(white <= 2, "Particles" + when + ": no untextured white billboards (" + white +
+                       "/" + probes.length + " flat-white probes)");
+}
+
+// The per-sample fidelity pass, run on the freshly opened project.
+var FIDELITY = {
+    "Matcaps": function () {
+        var dragons = meshesByName("StanfordDragon");
+        assert(dragons.length === 1, "Matcaps: one dragon mesh");
+        var m = material.get(dragons[0].id);
+        assert(m.metallic === 1 && m.baseColor === "#ffd700",
+               "Matcaps: dragon is the Gold PBR preset (metallic=" + m.metallic +
+               " baseColor=" + m.baseColor + ")");
+        assertTexturePath("Matcaps ground", "baseColorMap",
+                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+        var p = shoot("matcaps", [ { x: 0.49, y: 0.49 }, { x: 0.50, y: 0.40 }, { x: 0.15, y: 0.85 } ]);
+        // Gold reads gold even in shadow: strong red-over-blue at two body points.
+        assert(p[0].r > 40 && p[0].r > p[0].b + 30, "Matcaps: dragon body 1 is gold " + fmt(p[0]));
+        assert(p[1].r > 40 && p[1].r > p[1].b + 30, "Matcaps: dragon body 2 is gold " + fmt(p[1]));
+        assert(isNeutral(p[2], 25) && bright(p[2]) > 15 && bright(p[2]) < 160,
+               "Matcaps: checker ground is neutral grey " + fmt(p[2]));
+    },
+    "Particles": function () {
+        var sphereMat = material.get(meshesByName("Sphere")[0].id);
+        // The sphere used the EdgeMaterial builtin. It is a PbrMaterial now
+        // (HLMS_ADOPTION P4b), so its authored colour lives on `baseColor` —
+        // the fresnel rim EdgeMaterial also carried has no material-parameter
+        // home and is documented as lost in src/io/builtinmaterials.cpp.
+        assert(sphereMat.baseColor === "#ffcd37",
+               "Particles: sphere keeps its edge-material colour (" + sphereMat.baseColor + ")");
+        assertTexturePath("Particles ground", "baseColorMap",
+                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+        assertTexturePath("Particles fire pit", "baseColorMap",
+                          material.get(meshesByName("Fire Pit")[0].id).baseColorMap);
+        var particleCount = 0;
+        var ns = scene.nodes();
+        for (var i = 0; i < ns.length; i++) if (ns[i].type === "particles") particleCount++;
+        assert(particleCount >= 4, "Particles: particle systems present (" + particleCount + ")");
+        var p = shoot("particles", [ { x: 0.49, y: 0.645 }, { x: 0.2, y: 0.9 } ]);
+        assert(p[0].r > 120 && p[0].g > 90 && p[0].r > p[0].b + 60,
+               "Particles: sphere renders yellow " + fmt(p[0]));
+        assert(isNeutral(p[1], 25), "Particles: ground is neutral grey " + fmt(p[1]));
+        assertFireIsFire(shoot("particles_plume", firePlumeProbePoints()), "");
+    },
+    "Skeletal Animation": function () {
+        var limb = material.get(meshesByName("Beta_HighLimbsGeoMesh")[0].id);
+        assert(limb.baseColor === "#5ebfe7",
+               "Skeletal: character keeps its blue colour (" + limb.baseColor + ")");
+        var p = shoot("skeletal", [ { x: 0.458, y: 0.363 }, { x: 0.2, y: 0.9 } ]);
+        assert(p[0].b > 60 && p[0].b > p[0].r + 20, "Skeletal: character torso is blue " + fmt(p[0]));
+        assert(isNeutral(p[1], 25), "Skeletal: ground is neutral grey " + fmt(p[1]));
+    },
+    "World Background": function () {
+        // Dragon / Dragon2 / Dragon3 since 2026-09-09 — they were three meshes
+        // all called "SceneNode24", the first of them with an empty guid.
+        var dragons = meshesByName("Dragon").concat(meshesByName("Dragon2"))
+                                            .concat(meshesByName("Dragon3"));
+        assert(dragons.length === 3, "World: three dragon meshes");
+        var byColor = {}, m;
+        for (var i = 0; i < dragons.length; i++) {
+            m = material.get(dragons[i].id);
+            byColor[m.baseColor] = m;
+        }
+        assert(byColor["#f5f5f7"] && byColor["#f5f5f7"].metallic === 1,
+               "World: Silver PBR dragon present");
+        assert(byColor["#ffd700"] && byColor["#ffd700"].metallic === 1,
+               "World: Gold PBR dragon present");
+        assert(byColor["#eef4f8"] && byColor["#eef4f8"].alphaMode === 3 && byColor["#eef4f8"].alpha < 0.5,
+               "World: Glass PBR dragon present (alphaMode 3, alpha " +
+               (byColor["#eef4f8"] ? byColor["#eef4f8"].alpha : "?") + ")");
+        assertTexturePath("World ground", "baseColorMap",
+                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+        var p = shoot("world", [ { x: 0.45,  y: 0.478 },   // gold dragon body highlight
+                                 { x: 0.194, y: 0.463 },   // silver dragon belly highlight
+                                 { x: 0.829, y: 0.533 },   // glass dragon (floor shows through)
+                                 { x: 0.512, y: 0.111 } ]); // cubemap sky: park foliage
+        assert(p[0].r > p[0].b + 40 && p[0].g > p[0].b + 30, "World: gold dragon is gold " + fmt(p[0]));
+        assert(bright(p[1]) > 100, "World: silver dragon renders bright " + fmt(p[1]));
+        assert(bright(p[2]) > 70, "World: glass dragon area is translucent-bright " + fmt(p[2]));
+        assert(p[3].g > p[3].b + 15 && p[3].g > 40, "World: cubemap sky shows the park foliage " + fmt(p[3]));
+    },
+    "Physics": function () {
+        assert(material.get(meshesByName("pipe")[0].id).baseColor === "#c63030",
+               "Physics: red pipe colour kept");
+        assert(material.get(meshesByName("pipe 6")[0].id).baseColor === "#7872bf",
+               "Physics: purple pipe colour kept");
+        var p = shoot("physics", [ { x: 0.327, y: 0.322 },  // red pipe cap
+                                   { x: 0.627, y: 0.841 },  // purple pipe band
+                                   { x: 0.463, y: 0.53 } ]); // teapot
+        // Red reads red even in shade: strong hue ratio (grey fallback has r==g==b).
+        assert(p[0].r > 45 && p[0].r > p[0].g * 2 && p[0].r > p[0].b * 2,
+               "Physics: red pipe cap is red " + fmt(p[0]));
+        assert(p[1].b > 90 && p[1].b > p[1].g + 25, "Physics: purple pipe is purple " + fmt(p[1]));
+        // RE-BASELINED for the Epic World Mode default (POST_CHAIN_SPEC §12
+        // decision 8): a document with no worldMode — which is every shipped
+        // sample — now reads as Epic, which turns VCT global illumination on and
+        // softens/enlarges the shadow atlas. The teapot is the same white
+        // teapot, a few percent dimmer for the indirect bounce; 110 keeps this a
+        // real "bright and neutral" assertion while no longer being tuned to a
+        // GI-off world.
+        assert(bright(p[2]) > 110 && isNeutral(p[2], 35), "Physics: teapot is bright white " + fmt(p[2]));
+    }
+};
+
+// The half that can only be asserted AFTER the save/close/reopen this suite
+// already performs at step 5. Everything a save can silently drop lives here.
+var REOPEN_FIDELITY = {
+    "Particles": function () {
+        // PIXELS FIRST: the emitters are what the owner sees, and the
+        // document-level assertions below only say where the writer went wrong.
+        assertFireIsFire(shoot("particles_plume_resaved", firePlumeProbePoints()),
+                         " after save+reopen");
+        assertTexturePath("Particles ground (reopened)", "baseColorMap",
+                          material.get(meshesByName("Ground")[0].id).baseColorMap);
+        assertTexturePath("Particles fire pit (reopened)", "baseColorMap",
+                          material.get(meshesByName("Fire Pit")[0].id).baseColorMap);
+        assertTexturePath("Particles fire pit (reopened)", "normalMap",
+                          material.get(meshesByName("Fire Pit")[0].id).normalMap);
+    }
+};
+
 // ---------------------------------------------------------------------------
 var want = EXPECTED[SAMPLE];
 assert(!!want, "the suite knows what " + SAMPLE + " should contain");
@@ -290,6 +783,10 @@ for (var t in want.types)
     assert((s.byType[t] || 0) >= want.types[t],
            "at least " + want.types[t] + " " + t + " nodes (" + (s.byType[t] || 0) + ")");
 
+// 2b. THE SCENE-SCALE CONVENTION. Document verbs only, so it costs nothing on
+//     top of the open that just happened.
+checkScale();
+
 // 3. MATERIALS resolve to files, never to bare guids or nothing.
 var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var textured = 0;
@@ -309,6 +806,9 @@ console.log("resolved texture references: " + textured);
 
 // 4. RENDER, then read the pump.
 renderSanity("open");
+// 4b. MATERIALS AND EXACT COLOURS, before the pump is drained: an error raised
+//     while photographing the gold dragon is an error this sample caused.
+if (FIDELITY[SAMPLE]) FIDELITY[SAMPLE]();
 errorsClean("after open");
 if (SAMPLE === "Mirror Room") selectionStaysOutOfTheMirror();
 var s0 = snapshot();
@@ -320,6 +820,12 @@ assert(project.open(imported.guid) === true, "project.open (REOPEN)");
 var d = diffs(s0, snapshot());
 assert(d.length === 0, "the document survived save/close/reopen unchanged: " + J(d));
 renderSanity("reopen");
+// 5b. THE HALF ONLY A ROUND TRIP CAN ASSERT: the writer once recovered a
+//     texture's asset guid by matching its FILE NAME, and since the CAS a file
+//     name is a sha256 — so one save wrote "" for every emitter texture and the
+//     next open rendered the fire as white squares. Nothing that only imported
+//     ever caught it.
+if (REOPEN_FIDELITY[SAMPLE]) REOPEN_FIDELITY[SAMPLE]();
 errorsClean("after reopen");
 
 // 6. BAKE the sample's models, then reopen: an open that LOADS geometry must

@@ -15,9 +15,13 @@
 # assets.bakeAll and reopens again. See scripts/cleanstart.js.in for what each
 # step asserts and why.
 #
-# Complementary to scripting.e2e.samples, which keeps the exact-colour material
-# probes in one shared session; this suite owns the clean-start contract and is
-# the only coverage Showroom has.
+# THE ONLY SAMPLE GATE (TEST_GATE_AUDIT.md §2, 2026-09-09). It absorbed
+# scripting.e2e.samples (exact-colour material probes for five samples in one
+# shared session, plus the Particles save round trip) and the seven
+# samples.scale.* rows (scene.bounds / editor.camera against the scene-scale
+# convention). Both re-imported archives this suite had already imported into a
+# virgin home; every assertion they made is in scripts/cleanstart.js.in now,
+# where it runs per sample against the owner's real first run.
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 set(_samples "Matcaps" "Mirror Room" "Particles" "Physics" "Showroom" "Skeletal Animation" "World Background")
@@ -52,35 +56,4 @@ foreach(SAMPLE IN LISTS _samples)
         FIXTURES_REQUIRED samples_home_${_slug}
         LABELS "scripting"
         TIMEOUT 480)
-endforeach()
-
-# ---------------------------------------------------------------------------
-# samples.scale.* — the SCENE-SCALE CONVENTION, one test per shipped sample.
-#
-# The owner's convention (2026-09-08): 1 unit = 1 metre, human-scale rooms, the
-# default explorer lens on the saved camera, so one fly speed and one gizmo size
-# serve every scene. The samples had drifted to 2x (Showroom, Mirror Room) and
-# 4x (Skeletal Animation's centimetre rig) life size, each drift hidden by a
-# widened or pulled-back saved camera — which is why this gate reads NUMBERS
-# (scene.bounds, editor.camera) and not pixels.
-#
-# HEADLESS, and cheap: every verb is a document verb, so these need no display,
-# no GPU and no fresh HOME fixture — they import into whatever library the HOME
-# already has (a re-import of an already-present sample is fine here; proving
-# the virgin-machine import is samples.cleanstart's job, next door).
-foreach(SAMPLE IN LISTS _samples)
-    string(REPLACE " " "_" _slug "${SAMPLE}")
-    configure_file(scripts/scale.js.in
-                   ${CMAKE_CURRENT_BINARY_DIR}/scale_${_slug}.js @ONLY)
-    set(_scalehome ${CMAKE_CURRENT_BINARY_DIR}/scalehome-${_slug})
-    file(MAKE_DIRECTORY ${_scalehome}/run)
-
-    add_test(NAME samples.scale.${_slug}
-             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                     --script ${CMAKE_CURRENT_BINARY_DIR}/scale_${_slug}.js --headless
-             WORKING_DIRECTORY ${_scalehome}/run)
-    set_tests_properties(samples.scale.${_slug} PROPERTIES
-        ENVIRONMENT "HOME=${_scalehome};JAHSHAKA_DATA_ROOT=${_scalehome}/.local/share/Jahshaka"
-        LABELS "scripting"
-        TIMEOUT 300)
 endforeach()
