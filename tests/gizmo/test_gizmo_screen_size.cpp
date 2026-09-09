@@ -9,7 +9,7 @@
 // projects and picks through the same narrowed angle
 // (CameraNode::effectiveFovDegrees). Sizing against the authored angle while
 // the frame is drawn at the effective one makes the gizmo too big by exactly
-// their tangent ratio — in the shipped Grand Showroom (75-degree camera) that
+// their tangent ratio — in the pre-2026-09-09 Grand Showroom (75-degree camera; re-staged to 45° since — the number stays as the synthetic case) that
 // was 1.35x on a 2.4:1 window, and 1.25x on 16:9 under the 95-degree cap the
 // same report retired. The owner's words: "the gizmo is huge on the 4 silver
 // balls".

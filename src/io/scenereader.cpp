@@ -1128,6 +1128,14 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     int meshIndex = nodeObj["meshIndex"].toInt(0);
     QString meshGUID = nodeObj["guid"].toString();
 
+    if (source.isEmpty() && !nodeObj["mesh"].toString().isEmpty()) {
+        // A mesh the catalog cannot resolve used to load SILENTLY as a mesh node
+        // with no mesh (CLIPBOARD_SPEC audit, 2026-09-09). Say so once per node:
+        // the picture is wrong and the user deserves the file name.
+        qWarning().noquote() << "scene reader: mesh" << nodeObj["mesh"].toString()
+                             << "for node" << nodeObj["name"].toString()
+                             << "did not resolve to a file — the node loads with no mesh";
+    }
     if (!source.isEmpty()) {
         auto mesh = getMesh(source, meshIndex);
 

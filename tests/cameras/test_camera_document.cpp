@@ -355,7 +355,7 @@ int main(int argc, char **argv)
     // ---- 9. THE WIDE-ASPECT FRAMING HOLD ---------------------------------
     // (owner report 2026-09-07; the policy RE-SCOPED 2026-09-08 after the
     // first version shipped a fixed 95-degree horizontal cap and zoomed every
-    // wide-lens scene in — the Grand Showroom's 75-degree camera rendered at
+    // wide-lens scene in — the pre-2026-09-09 Grand Showroom's 75-degree camera (re-staged to 45° since) rendered at
     // 63 degrees vertical on any monitor wider than 3:2, which the owner saw as
     // "imported assets have the wrong scale".)
     //

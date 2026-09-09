@@ -14,7 +14,7 @@
 //
 // THE 2026-09-08 RE-SCOPE, which this suite now also gates. The hold first
 // shipped as a FIXED 95-degree horizontal cap, which bites as a function of the
-// LENS: the shipped Grand Showroom's 75-degree camera crossed it at 1.42:1, so
+// LENS: the pre-2026-09-09 Grand Showroom's 75-degree camera (re-staged to 45° since; the number stays as the synthetic case) crossed it at 1.42:1, so
 // the scene rendered at 63 degrees vertical instead of 75 on every ordinary
 // monitor — everything zoomed in by 1.25x. The policy is now an ASPECT (16:9):
 // at or below it the picture is the authored one, bit for bit, for EVERY lens.
