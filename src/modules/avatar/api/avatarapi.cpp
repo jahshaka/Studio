@@ -157,9 +157,19 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "HEIGHT: a character measuring outside 0.5..3.0 m is scaled to 1.75 m before the "
           "capsule is fitted (the same rule the Avatar page's preview applies, and for the same "
           "reason: a package whose unit declaration is wrong arrives 10x or 100x off). `height` "
-          "sets an exact height in metres instead, and `normalize: false` takes the file's size "
-          "as authored. The result is on the node's own scale and is SERIALIZED, so reopening the "
-          "scene does not normalize again. avatar.movement reports what happened. "
+          "sets an exact height in metres instead. The result is on the node's own scale and is "
+          "SERIALIZED, so reopening the scene does not normalize again. avatar.movement reports "
+          "what happened. "
+          "SINCE FIT-TO-SIZE (services/fitsize.h) the ASSET is measured and fitted at IMPORT, and "
+          "that fit is applied by the shared instantiation this verb calls — so a mis-declared "
+          "character usually arrives here ALREADY the right size and this rule finds nothing to "
+          "do (avatar.movement then reports normalized:false with a plausible sourceHeight, which "
+          "is the no-double-scaling story, not a failure to normalize). `normalize: false` "
+          "therefore skips THIS MODULE'S rule only; it does NOT undo the asset's fit, because the "
+          "fit belongs to the asset and every placement route — drag-drop, assets.addToScene, "
+          "this verb — has to agree about how big a model is. To place a model at the size its "
+          "FILE was authored at, clear the fit on the asset (assets.setFit(guid, {scale: 1})) and "
+          "spawn with normalize:false. "
           "The knobs afterwards are avatar.movement / avatar.setMovement. Undoable.",
           Needs::Document },
         { "loadClip", "avatar.loadClip(nodeId, pathOrAssetGuid, {name?}) -> {asset, file, node, added, clips:[name], match:{channels, boneChannels, matched}}",
@@ -1012,6 +1022,14 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     // scale lands on the character's own node so its rig, its mesh and every
     // clip that plays on it move together. It is SERIALIZED with the node, and
     // nothing on the OPEN path normalizes, so reopening never scales twice.
+    //
+    // NOT TWICE, EITHER (fit-to-size, 2026-09-09 — the other half of the note
+    // in SceneEditService::addMaterialMesh): addMaterialMesh above has ALREADY
+    // applied the asset's `fitScale` at the root. So this measures the fitted
+    // character, reads a plausible height and does nothing — the ORDER is what
+    // makes that true, and the two rules share one band
+    // (avatar::kMinPlausibleHeight == fitsize::kCharacter.min). An explicit
+    // `height` still wins: it is applied on top of the fit, as a ratio.
     avatar::HeightNormalization norm;
     if (explicitHeight > 0.0 || autoNormalize)
         norm = avatar::normalizeCharacterHeight(node, float(explicitHeight));

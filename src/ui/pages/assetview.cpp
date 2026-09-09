@@ -45,6 +45,7 @@ For more information see the LICENSE file
 #include <QComboBox>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -95,6 +96,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/toast.h"
 #include "services/projectassets.h"
 #include "services/imagematerial.h"
+#include "services/fitsize.h"
 #include "services/assetmetadata.h"
 #include "services/avatarassets.h"
 #include "services/audiopeaks.h"
@@ -919,7 +921,12 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	updateAsset->setStyleSheet("background: #3498db");
 	updateAsset->setVisible(false);
 
-    normalize = new QPushButton("Normalize");
+	// FIT TO SIZE (services/fitsize.h) \u2014 the three actions of the "Imported
+	// size" row, created here so the chrome-button styling loop below reaches
+	// them; the row itself is assembled with the metadata table.
+	fitRemeasure = new QPushButton(tr("Re-measure"));
+	fitReset = new QPushButton(tr("Reset"));
+	fitSet = new QPushButton(tr("Set\u2026"));
 
 	addToProject = new QPushButton("Add to Project");
 	addToProject->setStyleSheet(StyleSheet::AssetViewAddToProjectButton());
@@ -937,8 +944,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 			// With the buttons below the box the label alone gives the drop
 			// target its height — keep it a real target, not a thin strip.
 			"#assetDropPadLabel { padding: 24px 8px; }");
-		for (QPushButton *chromeBtn : { browseButton, downloadWorld, normalize,
-		                                deleteFromLibrary })
+		for (QPushButton *chromeBtn : { browseButton, downloadWorld, fitRemeasure,
+		                                fitReset, fitSet, deleteFromLibrary })
 			chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
 		updateAsset->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
 		addToProject->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
@@ -1174,6 +1181,42 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		fetchMetadata(selectedGridItem);
 	});
 
+	// FIT TO SIZE: the three actions of the "Imported size" row. Each is one
+	// AssetMetadata::writeFit call — the same write assets.setFit makes.
+	connect(fitRemeasure, &QPushButton::clicked, this, [this]() {
+		if (!selectedGridItem || selectedGridItem->metadata.isEmpty()) return;
+		applyFitChange(selectedGridItem->metadata["guid"].toString(),
+		               QVariantMap{ { "remeasure", true } });
+	});
+	connect(fitReset, &QPushButton::clicked, this, [this]() {
+		if (!selectedGridItem || selectedGridItem->metadata.isEmpty()) return;
+		applyFitChange(selectedGridItem->metadata["guid"].toString(),
+		               QVariantMap{ { "reset", true } });
+	});
+	connect(fitSet, &QPushButton::clicked, this, [this]() {
+		if (!selectedGridItem || selectedGridItem->metadata.isEmpty()) return;
+		const QString guid = selectedGridItem->metadata["guid"].toString();
+		const QJsonObject meta = selectedGridItem->sceneProperties["metadata"].toObject();
+		const fitsize::Extent extent = fitsize::extentOf(meta);
+		const fitsize::Kind kind = fitsize::kindFromName(meta.value("fitKind").toString());
+		const double measured = extent.valid ? fitsize::measureFor(extent, kind) : 0.0;
+		if (!(measured > 0.0)) {
+			qWarning() << "assets: this asset has no measured size to fit";
+			return;
+		}
+		// The user types the SIZE they want, not a multiplier — a multiplier is
+		// the implementation, a size in metres is the thing they can see.
+		bool ok = false;
+		const double wanted = QInputDialog::getDouble(
+		    this, tr("Fit to Size"),
+		    kind == fitsize::Kind::Character
+		        ? tr("Height in metres (imported %1 m):").arg(measured, 0, 'g', 3)
+		        : tr("Largest side in metres (imported %1 m):").arg(measured, 0, 'g', 3),
+		    measured * fitsize::fitScaleOf(meta), 0.0001, 10000.0, 4, &ok);
+		if (!ok || !(wanted > 0.0)) return;
+		applyFitChange(guid, QVariantMap{ { "scale", wanted / measured } });
+	});
+
 	connect(addToProject, &QPushButton::pressed, [this]() {
 		if (selectedGridItem && !selectedGridItem->metadata.isEmpty())
 			addAssetItemToProject(selectedGridItem);
@@ -1238,6 +1281,33 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	l->addWidget(tagWidget);
 
 	l->addWidget(metadataDetails);
+
+	// ---- FIT TO SIZE (services/fitsize.h) ---------------------------------
+	//
+	// "Imported size: 17.3 m -> fitted to 1.75 m" with the three actions the
+	// verb exposes. The row is the UI half of `assets.setFit`, and it calls the
+	// SAME writes the verb does (API-first: the verb is the capability, this is
+	// a caller of it) so a scripted change and a clicked one cannot diverge.
+	fitRow = new QWidget;
+	{
+		auto *fitLayout = new QVBoxLayout;
+		fitLayout->setContentsMargins(0, 0, 0, 0);
+		fitLayout->setSpacing(4);
+		fitLabel = new QLabel;
+		fitLabel->setWordWrap(true);
+		fitLabel->setTextFormat(Qt::RichText);
+		auto *fitButtons = new QHBoxLayout;
+		fitButtons->setContentsMargins(0, 0, 0, 0);
+		fitButtons->addWidget(fitRemeasure);
+		fitButtons->addWidget(fitReset);
+		fitButtons->addWidget(fitSet);
+		fitLayout->addWidget(fitLabel);
+		fitLayout->addLayout(fitButtons);
+		fitRow->setLayout(fitLayout);
+		fitRow->setVisible(false);
+	}
+	l->addWidget(fitRow);
+
 	l->addWidget(updateAsset);
 
 	metadata->setLayout(l);
@@ -1252,7 +1322,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	auto projectSpecific = new QWidget;
 	auto ll = new QVBoxLayout;
-	// ll->addWidget(normalize);
 	ll->addWidget(addToProject);
 	ll->addWidget(deleteFromLibrary);
 	projectSpecific->setLayout(ll);
@@ -2121,6 +2190,14 @@ static void appendMetadataRows(MetadataRows &rows, const QJsonObject &meta, cons
 		              format.toUpper() });
 
 	if (kind == "model") {
+		// FIT TO SIZE (services/fitsize.h): the measured size in metres. The
+		// fit itself and its actions live in the fit row below the table.
+		const fitsize::Extent extent = fitsize::extentOf(meta);
+		if (extent.valid)
+			rows.append({ "Imported Size",
+			              QStringLiteral("%1 \u00d7 %2 \u00d7 %3 m")
+			                  .arg(extent.x, 0, 'g', 3).arg(extent.y, 0, 'g', 3)
+			                  .arg(extent.z, 0, 'g', 3) });
 		rows.append({ "Vertices", formatCount(meta["vertices"].toInteger()) });
 		rows.append({ "Triangles", formatCount(meta["triangles"].toInteger()) });
 		if (meta["meshes"].toInt() > 1) rows.append({ "Meshes", formatCount(meta["meshes"].toInt()) });
@@ -2196,6 +2273,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 				rows.append({ tr("Details"), QStringLiteral("…") });
 				backfillMetadata(widget, guid, record.type);
 			}
+			refreshFitRow(guid, record.type, meta);
 		}
 		rows.append({ tr("Public"), widget->metadata["is_public"].toBool() ? tr("true") : tr("false") });
 		rows.append({ tr("Author"), widget->metadata["author"].toString() });
@@ -2213,6 +2291,67 @@ void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 		deleteFromLibrary->setEnabled(false);
 
 		metadataDetails->setVisible(false);
+		if (fitRow) fitRow->setVisible(false);
+	}
+}
+
+// ---- FIT TO SIZE (services/fitsize.h) --------------------------------------
+//
+// The "Imported size: 17.3 m -> fitted to 1.75 m [Re-measure] [Reset] [Set...]"
+// row. MODEL rows only: everything else has no measured size, so the row is
+// hidden rather than shown empty. Every button goes through
+// AssetMetadata::writeFit — the one write `assets.setFit` makes.
+void AssetView::refreshFitRow(const QString &guid, int assetType, const QJsonObject &meta)
+{
+	if (!fitRow) return;
+	if (assetType != static_cast<int>(ModelTypes::Object) || meta.isEmpty()) {
+		fitRow->setVisible(false);
+		return;
+	}
+
+	const fitsize::Extent extent = fitsize::extentOf(meta);
+	const double scale = fitsize::fitScaleOf(meta);
+	const fitsize::Kind kind = fitsize::kindFromName(meta.value("fitKind").toString());
+	const bool manual = meta.value("fitSource").toString() == QLatin1String("manual");
+	const double measured = extent.valid ? fitsize::measureFor(extent, kind) : 0.0;
+
+	QString text;
+	if (!extent.valid) {
+		// A row imported before the size policy, or a file with no geometry.
+		text = tr("Imported size: not measured");
+	} else if (!fitsize::isFitted(scale)) {
+		text = tr("Imported size: %1 m \u2014 placed as authored")
+		           .arg(measured, 0, 'g', 3);
+	} else {
+		text = tr("Imported size: %1 m \u2192 fitted to %2 m (\u00d7%3%4)")
+		           .arg(measured, 0, 'g', 3)
+		           .arg(measured * scale, 0, 'g', 3)
+		           .arg(scale, 0, 'g', 4)
+		           .arg(manual ? tr(", by hand") : QString());
+	}
+	fitLabel->setText(text);
+	fitLabel->setToolTip(meta.value("fitReason").toString());
+
+	// Reset is only meaningful when there is something to go back FROM.
+	fitReset->setEnabled(manual || fitsize::isFitted(scale));
+	fitRow->setVisible(true);
+}
+
+void AssetView::applyFitChange(const QString &guid, const QVariantMap &options)
+{
+	QString error;
+	const auto change = options.contains("scale") ? AssetMetadata::FitChange::Manual
+	                  : options.value("remeasure").toBool() ? AssetMetadata::FitChange::Remeasure
+	                                                        : AssetMetadata::FitChange::Reset;
+	const QJsonObject meta = AssetMetadata::writeFit(db, guid, change,
+	                                                 options.value("scale").toDouble(), &error);
+	if (meta.isEmpty()) {
+		qWarning() << "assets: fit change failed:" << error;
+		return;
+	}
+	if (selectedGridItem) {
+		selectedGridItem->sceneProperties["metadata"] = meta;
+		fetchMetadata(selectedGridItem);
 	}
 }
 

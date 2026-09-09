@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include <QGridLayout>
 #include <QLabel>
+
+#include "services/fitsize.h"
 #include <QPushButton>
 
 #include "ui/panels/transformeditor.h"
@@ -59,9 +61,26 @@ TransformEditor::TransformEditor(QWidget* parent) :
     addRow(grid, 1, "Rotation", xrot, yrot, zrot, kRotStepPerPx);
     addRow(grid, 2, "Scale",    xscale, yscale, zscale, kPosScaleStepPerPx);
 
+    // FIT TO SIZE (services/fitsize.h): what this node actually MEASURES in
+    // the scene, in metres. Read-only, and the only number on this panel that
+    // is an answer rather than a control — position/rotation/scale describe
+    // the transform, this describes the result, which is what "1 unit = 1
+    // metre" is about. It is also how a user sees that an imported asset's
+    // fit landed (a fitted character reads ~1.75 m tall here).
+    sizeLabel = new QLabel(this);
+    sizeLabel->setObjectName("sizeLabel");
+    sizeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    {
+        auto *caption = new QLabel("Size", this);
+        caption->setFixedWidth(kTitleWidth);
+        caption->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        grid->addWidget(caption, 3, 0);
+        grid->addWidget(sizeLabel, 3, 1, 1, 3);
+    }
+
     resetBtn = new QPushButton("Reset", this);
     resetBtn->setObjectName("resetBtn");
-    grid->addWidget(resetBtn, 3, 1, 1, 3);
+    grid->addWidget(resetBtn, 4, 1, 1, 3);
 
     adjustSize(); // AccordianBladeWidget sizes the blade from height()
 
@@ -198,6 +217,18 @@ void TransformEditor::refreshUi()
 		xscale->setValue(scale.x());
 		yscale->setValue(scale.y());
 		zscale->setValue(scale.z());
+
+		// The measured world size of this node's subtree, in metres.
+		const fitsize::Extent extent = fitsize::measureNode(sceneNode);
+		sizeLabel->setText(extent.valid
+		                       ? QStringLiteral("%1 \u00d7 %2 \u00d7 %3 m")
+		                             .arg(extent.x, 0, 'g', 3)
+		                             .arg(extent.y, 0, 'g', 3)
+		                             .arg(extent.z, 0, 'g', 3)
+		                       : QStringLiteral("\u2014"));
+	}
+	else if (sizeLabel) {
+		sizeLabel->setText(QString());
 	}
 }
 

@@ -298,3 +298,64 @@ add_test(NAME importer.texture_guids COMMAND test_importer_texture_guids
 set_tests_properties(importer.texture_guids PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
 jah_no_display(importer.texture_guids)
+
+# FIT TO SIZE (services/fitsize.h) — the import-time size policy, owner report
+# 2026-09-09 ("everything is coming in messed up in the asset module and the
+# avatars"). The three unit_cube fixtures pin the MEASUREMENT (one cube
+# declared m / cm / mm), the giant/tiny/plain rig2 fixtures pin the POLICY in
+# both directions with a control, and section 5 pins the ORDER that keeps the
+# Avatar module from normalizing an already-fitted character a second time —
+# which is why this suite links avatarpreviewmodel.cpp. Real pipeline, real
+# store, no engine rendering, no display.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
+add_executable(test_importer_fitsize test_importer_fitsize.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    # the Avatar module's height rule — section 5 asserts it is a NO-OP on a
+    # fitted character (the double-normalisation gate)
+    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarpreviewmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
+    # database.cpp's link closure (same as tests/importer's other suites)
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_importer_fitsize PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_importer_fitsize PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_importer_fitsize PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_importer_fitsize PRIVATE IrisGL
+    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
+jah_document_graph(test_importer_fitsize)
+add_test(NAME importer.fitsize COMMAND test_importer_fitsize
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.fitsize PROPERTIES
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+jah_no_display(importer.fitsize)

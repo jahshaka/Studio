@@ -90,6 +90,23 @@ public:
     static QJsonObject ensure(Database *db, const QString &guid,
                               const QString &storeRoot = QString());
 
+    // ---- FIT TO SIZE (services/fitsize.h) ---------------------------------
+    //
+    // The ONE write behind `assets.setFit` and the Assets page's "Imported
+    // size" row, so a scripted change and a clicked one cannot diverge.
+    // Manual    record `scale` as the asset's fit (fitSource "manual")
+    // Reset     throw the manual override away, recompute the automatic fit
+    //           from the recorded extent
+    // Remeasure re-measure the model from its stored source file and
+    //           recompute everything from that (the pre-feature library case)
+    enum class FitChange { Manual, Reset, Remeasure };
+
+    /// Returns the resulting metadata block, or an empty object with `error`
+    /// set. `storeRoot` is overridable for tests; empty = the real AssetStore.
+    static QJsonObject writeFit(Database *db, const QString &guid, FitChange change,
+                                double scale, QString *error,
+                                const QString &storeRoot = QString());
+
     static QString storeRootPath();
 };
 

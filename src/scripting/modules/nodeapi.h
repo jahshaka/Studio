@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE QString deserialize(const QVariantMap &fragment, const QString &parentId,
                                     int index = -1);
     Q_INVOKABLE QVariantMap transform(const QString &id, const QVariantMap &change = QVariantMap());
+    Q_INVOKABLE QVariantMap size(const QString &id);
     Q_INVOKABLE QVariant property(const QString &id, const QString &key);
     Q_INVOKABLE bool setProperty(const QString &id, const QString &key, const QVariant &value);
     Q_INVOKABLE QVariant properties(const QString &id);
