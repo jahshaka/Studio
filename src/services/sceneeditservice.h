@@ -227,6 +227,22 @@ public:
     /// Ends with an empty selection.
     DeleteSetResult deleteNodes(const QList<iris::SceneNodePtr> &nodes);
 
+    /// SELECT EVERY NODE IN THE SCENE except the World root (Ctrl+A,
+    /// EDITOR_MULTISELECT_SPEC §8.7). The root is excluded by D6, not as a
+    /// special case here: as a member it would swallow the set (every other
+    /// node is its descendant, so the D5 reduction would drop them all) and
+    /// poison delete, transform and focus.
+    ///
+    /// The set is the whole tree in document pre-order, not just the top
+    /// level: "select all" in Blender, Unreal and Maya alike selects every
+    /// object, and the D5 reduction the EDIT verbs apply already turns that
+    /// back into "the roots" wherever acting on both would double up.
+    /// The PRIMARY is the topmost node — the first row of the outliner —
+    /// which is what a keyboard select-all should leave the panels showing.
+    ///
+    /// Not an undo entry (D10: selection is never undoable). Returns the set.
+    QList<iris::SceneNodePtr> selectAll();
+
     /// Duplicates the effective set as ONE undo step and selects the copies
     /// (the primary's copy first). Processed in reverse document order so each
     /// copy lands beside its own original rather than shifting the next one.

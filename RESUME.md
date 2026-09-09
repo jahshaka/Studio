@@ -16,7 +16,7 @@ Headless suites + `--headless` script runs only, EXPLICIT DISPLAY on every invoc
 2. [x] Unreal naming: Duplicate + Paste -> "Cube" -> "Cube2" -> "Cube3", unique among siblings.
 3. [x] Navigation: editor fly moves to arrows + PageUp/PageDown; W/A/S/D/Q/E freed.
        Player keeps BOTH. Docs + Preferences text.
-4. [ ] Ctrl+A `edit.selectAll` shortcut yielding to text fields.
+4. [x] Ctrl+A `edit.selectAll` shortcut yielding to text fields.
 
 ## Log
 - setup done (worktree, irisgl clone, 24 patches, build-ogre.sh, configure ASan)
@@ -30,3 +30,12 @@ Headless suites + `--headless` script runs only, EXPLICIT DISPLAY on every invoc
   Verified headless: input.actions, input.fly_controls, input.axis_view_lock PASS.
   app.navigation_keys (new rig suite) WRITTEN BUT UNRUN — needs the Vulkan/Xvfb gate.
   scripting.e2e.editor_controls updated (Move now 8 keys) — needs a display, unrun.
+- step 4 DONE: SceneEditService::selectAll + editor.selectAll verb + edit.selectAll (Ctrl+A)
+  with the text-field yield in MainWindow::selectAllActiveSpace.
+  Verified headless: scripting.e2e.multiselect PASS. app.multiselect_keys PART 5 written, UNRUN.
+
+## REMAINING (needs the lead's GO — VRAM law)
+Vulkan/display gate: full ctest on my own Xvfb. Specifically new/changed and unrun:
+  app.multiselect_outline (extended), app.multiselect_keys (PART 5), app.navigation_keys (NEW),
+  mirror.document_to_engine, mirror.skinned_outline, cameras.camera_body,
+  scripting.e2e.editor_controls, app.selection_outline (must be unchanged).

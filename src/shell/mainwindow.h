@@ -553,6 +553,7 @@ public slots:
     void duplicateActiveSpace();
     void copyActiveSpace();
     void pasteActiveSpace();
+    void selectAllActiveSpace();
     /// Space: node search on the Materials space, gizmo cycle elsewhere.
     void spaceKeyActiveSpace();
     void redoActiveSpace();

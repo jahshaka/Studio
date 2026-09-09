@@ -964,6 +964,28 @@ SceneEditService::deleteNodes(const QList<iris::SceneNodePtr> &nodes)
     return result;
 }
 
+QList<iris::SceneNodePtr> SceneEditService::selectAll()
+{
+    QList<iris::SceneNodePtr> all;
+    auto sc = scene();
+    if (!sc || !selection) return all;
+    auto root = sc->getRootNode();
+    if (!root) return all;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        for (const auto &child : n->children()) {
+            if (!child) continue;
+            all.append(child);
+            walk(child);
+        }
+    };
+    walk(root);                       // the root itself never joins (D6)
+    if (all.isEmpty()) { selection->clear(); return all; }
+    // Document pre-order already: the walk IS the writer's walk. The first
+    // entry is therefore the topmost outliner row, which becomes the primary.
+    selection->select(all);
+    return selection->selectedSet();
+}
+
 QList<iris::SceneNodePtr>
 SceneEditService::duplicateNodes(const QList<iris::SceneNodePtr> &nodes)
 {

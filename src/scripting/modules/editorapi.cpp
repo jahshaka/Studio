@@ -74,6 +74,14 @@ QVector<VerbInfo> EditorApi::verbs() const
           "subtrees and folder rows are not in it); with no window (--headless) it spans document "
           "pre-order instead, which is the same answer for a fully expanded tree.",
           Needs::Document },
+        { "selectAll", "editor.selectAll() -> [id]",
+          "Selects EVERY node in the scene except the World root (Ctrl+A), and returns the set in "
+          "document pre-order with the topmost node as the primary. The root is out by the same "
+          "rule that keeps it out of any multi-selection (D6): as a member it would swallow the "
+          "set, since every other node is its descendant. The whole tree is selected, not just "
+          "the top level — the edit verbs already reduce a set to its roots, so a nested member "
+          "cannot be acted on twice. Not an undo entry: selection never is.",
+          Needs::Document },
         { "selectNone", "editor.selectNone() -> bool",
           "Clears the selection (the same as editor.select(null)).",
           Needs::Document },
@@ -596,6 +604,22 @@ QVariantList EditorApi::selectRange(const QString &fromId, const QString &toId)
     for (const auto &n : range) if (n.data() != to.data()) ordered.append(n);
     host.services->selection->select(ordered);
     for (const auto &n : host.services->selection->selectedSet())
+        if (n) out.append(n->getGUID());
+    return out;
+}
+
+QVariantList EditorApi::selectAll()
+{
+    QVariantList out;
+    if (!host.services || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return out;
+    }
+    if (!host.services->sceneEdit->scene()) { fail("editor.selectAll: no scene is open"); return out; }
+    // THE SAME CAPABILITY the Ctrl+A shortcut runs (SCRIPTING_SPEC §2.3) —
+    // MainWindow::selectAllActiveSpace calls this service method, it does not
+    // reimplement the walk.
+    for (const auto &n : host.services->sceneEdit->selectAll())
         if (n) out.append(n->getGUID());
     return out;
 }

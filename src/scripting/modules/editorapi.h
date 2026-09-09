@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE bool selectAdd(const QVariant &id = QVariant());
     Q_INVOKABLE bool selectToggle(const QString &id);
     Q_INVOKABLE QVariantList selectRange(const QString &fromId, const QString &toId);
+    Q_INVOKABLE QVariantList selectAll();
     Q_INVOKABLE bool selectNone();
     Q_INVOKABLE QVariantMap deleteSelection();
     Q_INVOKABLE QVariantList duplicateSelection();

@@ -95,6 +95,31 @@ editor.select(n[0]);
 assert(editor.selectToggle(rootId) === true, "ctrl-clicking the root is a plain click");
 assert(J(editor.selectionSet()) === J([rootId]), "which replaces the selection with the root");
 
+// ---- 4b. SELECT ALL (Ctrl+A, §8.7) ----------------------------------------
+// Every node except the World root, in document pre-order, topmost first — and
+// not an undo entry. The KEY half (a focused text field keeps the chord) is
+// app.multiselect_keys; this is the capability the key runs.
+var pushesSelAll = editor.undoState().pushes;
+var all = editor.selectAll();
+assert(all.length === scene.nodes().length - 1,
+       "selectAll takes every node but one (" + all.length + " of " +
+       scene.nodes().length + " document nodes)");
+assert(all.indexOf(scene.root()) === -1, "and the one left out is the World root (D6)");
+assert(J(editor.selectionSet()) === J(all), "the returned set IS the selection");
+assert(editor.selection() === all[0], "the topmost node is the primary");
+// ...and "topmost" is the document's own order, which is what the outliner
+// draws: scene.nodes() walks pre-order from the root, so dropping the root
+// leaves exactly the set selectAll returns, in exactly its order.
+var docOrder = scene.nodes().map(function (x) { return x.id; })
+                    .filter(function (id) { return id !== scene.root(); });
+assert(J(all) === J(docOrder),
+       "the set IS the document's pre-order, root removed: " + J(all) + " vs " + J(docOrder));
+assert(editor.undoState().pushes === pushesSelAll, "selectAll pushes no undo step (D10)");
+// It replaces rather than adds, and it is idempotent.
+editor.select(n[3]);
+var again = editor.selectAll();
+assert(J(again) === J(all), "selectAll from a different selection gives the same set");
+
 // ---- 5. selection is not undoable (D10) -----------------------------------
 var before = editor.undoState().pushes;
 editor.select([n[0], n[1]]);
