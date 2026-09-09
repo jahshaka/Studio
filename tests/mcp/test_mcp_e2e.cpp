@@ -215,11 +215,15 @@ int main(int argc, char **argv)
     {
         const HttpResult r = post(net, url, rpc("tools/list", ++id), token);
         const QJsonArray tools = r.json().value("result").toObject().value("tools").toArray();
-        // Deliberate, not incidental: the tool set is the AI surface's entire
-        // shape, so adding one is a decision that has to be made HERE too.
-        // browse_assets is the sixth (AI_SURFACE_PROGRAM_SPEC lane C #6): the
-        // byte-carrying view of assets.list, which is where its capability is.
-        CHECK(tools.size() == 6, "tools/list has exactly 6 tools");
+        // THE FOUNDING TOOLS ARE THE CONTRACT; THE COUNT IS NOT. This used to
+        // read `tools.size() == 6`, which encoded the "exactly five tools"
+        // policy the owner LIFTED on 2026-09-05 — the toolset grows on merit
+        // now, and scripting stays the capability core. An equality here means
+        // every additive change to the AI surface arrives as a red test with
+        // nothing wrong, which teaches the next person to edit the number
+        // rather than think (TEST_GATE_AUDIT.md §2). What must never happen is
+        // one of the founding six DISAPPEARING, and that is what is asserted.
+        CHECK(tools.size() >= 6, "tools/list carries at least the founding tools");
         QStringList names;
         for (const QJsonValue &t : tools) {
             const QJsonObject tool = t.toObject();
@@ -230,10 +234,16 @@ int main(int argc, char **argv)
             }
         }
         names.sort();
-        CHECK(names == QStringList({ "api_docs", "browse_assets", "describe_scene",
-                                     "run_script", "screenshot", "undo_redo" }),
-              "the six tools are run_script/api_docs/describe_scene/screenshot/"
-              "browse_assets/undo_redo");
+        QStringList missing;
+        for (const QString &f : { QStringLiteral("api_docs"), QStringLiteral("browse_assets"),
+                                  QStringLiteral("describe_scene"), QStringLiteral("run_script"),
+                                  QStringLiteral("screenshot"), QStringLiteral("undo_redo") })
+            if (!names.contains(f)) missing << f;
+        CHECK(missing.isEmpty(),
+              qPrintable(QStringLiteral("tools/list contains the founding tools "
+                                        "run_script/api_docs/describe_scene/screenshot/"
+                                        "browse_assets/undo_redo (missing: %1; present: %2)")
+                             .arg(missing.join(QLatin1Char(',')), names.join(QLatin1Char(',')))));
 
         // The chat dock allows the whole server with a GLOB
         // (ClaudeLaunchConfig::jahshakaMcpToolPattern, asserted in the argv by

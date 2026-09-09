@@ -30,7 +30,7 @@ add_dependencies(test_staging_race JahshakaEngineMedia)
 add_test(NAME threading.staging_race COMMAND test_staging_race
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(threading.staging_race PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "threading")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "threading")
 
 # The race lane (scripts/sanitize.sh tsan): this suite IS an async contract —
 # a worker building document nodes while the render loop runs — so it is a
@@ -88,7 +88,7 @@ set_tests_properties(threading.mode PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_par};JAHSHAKA_DATA_ROOT=${_thr_home_par}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_mode
     FIXTURES_SETUP threading_shot_parallel
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 480)
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
 
 # JAHSHAKA_SCENE_THREADS is the PRIMARY tier's measurement escape hatch
 # (src/bridge/sceneworkerthreads.h:52-56) — pinning it to 1 gives the editor
@@ -102,7 +102,7 @@ set_tests_properties(threading.mode_serial PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_ser};JAHSHAKA_DATA_ROOT=${_thr_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_mode_serial
     FIXTURES_SETUP threading_shot_serial
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 480)
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
 
 add_test(NAME threading.mode_pixels
          COMMAND ${CMAKE_COMMAND} -E compare_files
@@ -146,6 +146,13 @@ add_test(NAME threading.freshhome.import_soak
 set_tests_properties(threading.freshhome.import_soak PROPERTIES
     FIXTURES_SETUP threading_home_import_soak LABELS "threading")
 
+# NOT RUN_SERIAL (TEST_GATE_AUDIT.md §2, 2026-09-09). threading.mode and
+# threading.mode_serial keep theirs and the reason is written above them — four
+# Epic opens compiling shaders at once is the measured origin of the whole
+# contention class. This suite is different in kind: its assertions are
+# PER-ITERATION BUDGETS with 30 s of headroom each, and a soak that a parallel
+# schedule can starve inside a 30 s budget would be reporting a real defect.
+# What it cost was a serial island of 12 s per gate.
 add_test(NAME threading.import_soak
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/import_soak.js
@@ -153,7 +160,7 @@ add_test(NAME threading.import_soak
 set_tests_properties(threading.import_soak PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_soak};JAHSHAKA_DATA_ROOT=${_thr_home_soak}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_import_soak
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 900)
+    LABELS "threading" TIMEOUT 120)
 
 add_test(NAME threading.freshhome.newproject_stall
          COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_stall}
@@ -168,7 +175,7 @@ add_test(NAME threading.newproject_stall
 set_tests_properties(threading.newproject_stall PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_stall};JAHSHAKA_DATA_ROOT=${_thr_home_stall}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_newproject_stall
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 600)
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
 
 # threading.texture_wait_watchdog — the give-up path itself, under the engine's
 # JAH_TEXTURE_WAIT_FAULT hook (the script's header says why a hook is the only

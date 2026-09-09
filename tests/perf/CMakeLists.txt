@@ -77,7 +77,7 @@ set_tests_properties(perf.epic_steady_state PROPERTIES
     FIXTURES_REQUIRED perf_home_epic_steady_state
     LABELS "perf"
     RUN_SERIAL TRUE
-    TIMEOUT 480)
+    TIMEOUT 300)
 
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here

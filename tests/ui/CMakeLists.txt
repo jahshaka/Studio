@@ -153,7 +153,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(ui.engine_view_winid PROPERTIES
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb"
-        TIMEOUT 180 LABELS "ui")
+        TIMEOUT 120 LABELS "ui")
 endif()
 
 # The leak lane (scripts/sanitize.sh lsan): the offscreen widget suites — panel
@@ -499,7 +499,7 @@ jah_document_graph(test_properties_width)
 add_test(NAME ui.properties_width COMMAND test_properties_width
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.properties_width PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.properties_width)
 
 
@@ -601,7 +601,7 @@ jah_document_graph(test_tree_multiselect)
 add_test(NAME ui.tree_multiselect COMMAND test_tree_multiselect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.tree_multiselect PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.tree_multiselect)
 
 # ---------------------------------------------------------------------------

@@ -56,7 +56,7 @@ add_dependencies(test_importer_glb JahshakaEngineMedia)
 add_test(NAME importer.glb COMMAND test_importer_glb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.glb PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 600 LABELS "importer")
+                     TIMEOUT 120 LABELS "importer")
 jah_no_display(importer.glb)
 
 # FBX importer regression suite (assimp-patches/0001): a skin cluster that
@@ -134,7 +134,7 @@ add_dependencies(test_importer_meshformats JahshakaEngineMedia)
 add_test(NAME importer.meshformats COMMAND test_importer_meshformats
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.meshformats PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "importer")
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 
 # Import SECURITY suite (deep audit 2026-09 List A item 1): texture-path and
 # mtllib containment through the ONE pipeline, IES bounds, the per-type source
@@ -190,7 +190,7 @@ jah_document_graph(test_importer_security)
 add_test(NAME importer.security COMMAND test_importer_security
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.security PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 jah_no_display(importer.security)
 
 # ANIMATION-ASSET suite (ModelTypes::Animation): the structural sniff, the
@@ -246,7 +246,7 @@ jah_document_graph(test_importer_animation)
 add_test(NAME importer.animation COMMAND test_importer_animation
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.animation PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 jah_no_display(importer.animation)
 
 # The leak lane (scripts/sanitize.sh lsan): assimp scenes and the importer's own
@@ -305,7 +305,7 @@ add_dependencies(test_importer_materials JahshakaEngineMedia)
 add_test(NAME importer.materials COMMAND test_importer_materials
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.materials PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "importer")
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 
 # TEXTURE-GUID suite (the owner's "GLB imports come in without textures",
 # 2026-09-09): the SAVE + REOPEN half of an imported model. The textures are
@@ -357,7 +357,7 @@ target_link_libraries(test_importer_texture_guids PRIVATE IrisGL
 add_test(NAME importer.texture_guids COMMAND test_importer_texture_guids
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.texture_guids PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 jah_no_display(importer.texture_guids)
 
 # FIT TO SIZE (services/fitsize.h) — the import-time size policy, owner report
@@ -420,5 +420,5 @@ jah_document_graph(test_importer_fitsize)
 add_test(NAME importer.fitsize COMMAND test_importer_fitsize
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.fitsize PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 jah_no_display(importer.fitsize)

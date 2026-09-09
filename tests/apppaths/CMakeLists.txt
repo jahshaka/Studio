@@ -24,6 +24,15 @@ set_tests_properties(app.data_root PROPERTIES
     ENVIRONMENT "HOME=${_dr_home}"
     TIMEOUT 300
     LABELS "app")
+# ...AND IT MUST NOT INHERIT ONE EITHER (lead law, 2026-09-10). The fourth arm
+# asserts `overridden:false`, which an ambient JAHSHAKA_DATA_ROOT — exported by
+# every agent launch and rig wrapper on the box — would silently turn into
+# `true`. The gate used to need `env -u JAHSHAKA_DATA_ROOT ctest` to run this
+# row; it does not any more. (data_root.sh unsets it as well, so the contract
+# holds however the script is invoked.)
+set_property(TEST app.data_root APPEND PROPERTY ENVIRONMENT_MODIFICATION
+             "JAHSHAKA_DATA_ROOT=unset:")
+
 # --headless boots the NULL render system: the whole point of this suite is
 # paths, never a pixel. Run with DISPLAY stripped so that stays true.
 jah_no_display(app.data_root)

@@ -18,7 +18,7 @@ target_compile_definitions(test_skeletal_animation PRIVATE
 target_link_libraries(test_skeletal_animation PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_skeletal_animation JahshakaEngineMedia)
 add_test(NAME skeletal.cpu_skinning COMMAND test_skeletal_animation WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(skeletal.cpu_skinning PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(skeletal.cpu_skinning PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # GPU_SKINNING_SPEC phase 1 / T4: per-node pose ownership, document-only (no
 # engine, no window). Two MeshNodes on ONE mesh asset must hold two poses.
@@ -58,7 +58,7 @@ target_compile_definitions(test_rig_translation PRIVATE
 target_link_libraries(test_rig_translation PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_rig_translation JahshakaEngineMedia)
 add_test(NAME skeletal.rig_translation COMMAND test_rig_translation WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(skeletal.rig_translation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(skeletal.rig_translation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # GPU_SKINNING_SPEC phase 3 / T3-T6: THE gate. The same rig and the same pose,
 # rendered through the retained CPU oracle and through the GPU path, must agree
@@ -79,7 +79,7 @@ target_compile_definitions(test_gpu_parity PRIVATE
 target_link_libraries(test_gpu_parity PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_gpu_parity JahshakaEngineMedia)
 add_test(NAME skeletal.gpu_parity COMMAND test_gpu_parity WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(skeletal.gpu_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 900 LABELS "mirror")
+set_tests_properties(skeletal.gpu_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # The aiScene overload of loadAsSceneFragment: the library/import side of the
 # same single-mesh-rig defect. Document-only.
@@ -123,7 +123,7 @@ target_link_libraries(test_clip_extract PRIVATE IrisGL Qt6::Gui)
 # below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_clip_extract)
 add_test(NAME skeletal.clip_extract COMMAND test_clip_extract WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(skeletal.clip_extract PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "document")
+set_tests_properties(skeletal.clip_extract PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
 jah_no_display(skeletal.clip_extract)
 
 # ANIMATION_ENGINE_MIGRATION_SPEC gates G2-G6: the clip boundary. Same rig, same
@@ -148,7 +148,7 @@ target_compile_definitions(test_gpu_clips PRIVATE
 target_link_libraries(test_gpu_clips PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_gpu_clips JahshakaEngineMedia)
 add_test(NAME skeletal.gpu_clips COMMAND test_gpu_clips WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 900 LABELS "mirror")
+set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # AVATAR_RIG_PERF_SPEC P1a: the CHARACTER rig — the union of a multi-piece
 # character's per-piece subsets, and the per-piece blend-index remap that makes
@@ -168,7 +168,7 @@ target_link_libraries(test_union_rig PRIVATE IrisGL Qt6::Gui)
 jah_document_graph(test_union_rig)
 add_test(NAME skeletal.union_rig COMMAND test_union_rig WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.union_rig PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 180 LABELS "document")
+                     TIMEOUT 120 LABELS "document")
 jah_no_display(skeletal.union_rig)
 
 # AVATAR_RIG_PERF_SPEC P1b: skeleton SHARING and its lifetime rules (§3.2/§3.3),
@@ -203,7 +203,7 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
-    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 600 LABELS "engine"
+    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 120 LABELS "engine"
         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
     jah_no_display(skeletal.share_asan)
 endif()

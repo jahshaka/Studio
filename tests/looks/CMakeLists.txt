@@ -30,7 +30,7 @@ jahshaka_looks_test(test_looks)
 target_link_libraries(test_looks PRIVATE JahshakaEngine)
 add_test(NAME looks.engine COMMAND test_looks
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(looks.engine PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(looks.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 
 if(JAHSHAKA_ASAN)
     jahshaka_looks_test(test_looks_asan)
@@ -41,6 +41,6 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 900 LABELS "engine"
+    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endif()

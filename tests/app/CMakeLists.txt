@@ -187,5 +187,5 @@ add_test(NAME app.window_fits
 set_tests_properties(app.window_fits PROPERTIES
     ENVIRONMENT "HOME=${_wf_home};JAHSHAKA_DATA_ROOT=${_wf_home}/.local/share/Jahshaka"
     LABELS "app"
-    TIMEOUT 180)
+    TIMEOUT 120)
 jah_no_display(app.window_fits)

@@ -93,7 +93,7 @@ target_link_libraries(test_avatar_document PRIVATE IrisGL Qt6::Gui Qt6::Widgets 
 # below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_avatar_document)
 add_test(NAME avatar.document COMMAND test_avatar_document WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(avatar.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "avatar")
+set_tests_properties(avatar.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "avatar")
 jah_no_display(avatar.document)
 
 add_executable(test_avatar_preview test_avatar_preview.cpp ${AVATAR_LOAD_SOURCES}
@@ -113,7 +113,7 @@ target_link_libraries(test_avatar_preview PRIVATE IrisGL JahshakaEngine Qt6::Gui
     Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 add_dependencies(test_avatar_preview JahshakaEngineMedia)
 add_test(NAME avatar.preview COMMAND test_avatar_preview WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(avatar.preview PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "avatar")
+set_tests_properties(avatar.preview PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "avatar")
 
 # avatar.movement — AVATAR_LOCOMOTION_SPEC Stage 2, gates M1-M7.
 #
@@ -139,7 +139,7 @@ jah_document_graph(test_avatar_movement)
 add_test(NAME avatar.movement COMMAND test_avatar_movement
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.movement PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 300 LABELS "avatar")
+    TIMEOUT 120 LABELS "avatar")
 jah_no_display(avatar.movement)
 
 # avatar.possession — AVATAR_LOCOMOTION_SPEC Stage 3, gates P1-P6.
@@ -167,7 +167,7 @@ jah_document_graph(test_avatar_possession)
 add_test(NAME avatar.possession COMMAND test_avatar_possession
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.possession PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 300 LABELS "avatar")
+    TIMEOUT 120 LABELS "avatar")
 jah_no_display(avatar.possession)
 
 # avatar.locomotion — AVATAR_LOCOMOTION_SPEC Stage 4 (S1-S7) and the
@@ -200,7 +200,7 @@ jah_document_graph(test_avatar_locomotion)
 add_test(NAME avatar.locomotion COMMAND test_avatar_locomotion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.locomotion PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 300 LABELS "avatar")
+    TIMEOUT 120 LABELS "avatar")
 jah_no_display(avatar.locomotion)
 
 # avatar.locomotion_mirror — AVATAR_LOCOMOTION_SPEC Stage 5, gates S11 and S13.
@@ -236,7 +236,7 @@ add_dependencies(test_avatar_locomotion_mirror JahshakaEngineMedia)
 add_test(NAME avatar.locomotion_mirror COMMAND test_avatar_locomotion_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.locomotion_mirror PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "avatar")
+    TIMEOUT 120 LABELS "avatar")
 
 # avatar.assets — AVATAR_ASSET_SPEC §9 gates T3-T7.
 #
@@ -312,5 +312,5 @@ jah_document_graph(test_avatar_assets)
 add_test(NAME avatar.assets COMMAND test_avatar_assets
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.assets PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 300 LABELS "avatar")
+    TIMEOUT 120 LABELS "avatar")
 jah_no_display(avatar.assets)

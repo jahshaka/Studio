@@ -1,18 +1,27 @@
-// Characterisation test: the iris:: scene DOCUMENT can be built with NO GL context.
+// Characterisation test: what the iris:: scene DOCUMENT is, field by field.
 //
-// This is step 1 of VIEWPORT_MIGRATION_PLAN.md and the single biggest de-risk of
-// the whole migration: Studio keeps iris::Scene/SceneNode/MeshNode/LightNode as its
-// document model and mirrors it into the engine. That only works if the document
-// no longer needs OpenGL to exist. Before this change, Scene::Scene() compiled a
+// It was born as "the document can be built with NO GL context" — step 1 of
+// VIEWPORT_MIGRATION_PLAN.md, and the single biggest de-risk of the whole
+// migration, because Studio keeps iris::Scene/SceneNode/MeshNode/LightNode as
+// its document model and mirrors it into the engine, which only works if the
+// document does not need OpenGL to exist. Back then Scene::Scene() compiled a
 // shader, LightNode::LightNode() allocated a QOpenGLTexture, and Texture2D::load
 // called qFatal without a current context.
+//
+// THAT PREMISE IS RETIRED (TEST_GATE_AUDIT.md §2, 2026-09-09). The legacy GL
+// renderer was DELETED at step 14 on 2026-08-30: there is no GL in this tree to
+// be accidentally touched, the suite's Qt6::OpenGL link bought nothing, and its
+// "no GL context is current" precondition asserted something about a world that
+// no longer exists. What the body has always actually done — and what it is
+// named for now — is CHARACTERISE the document model: every node, every
+// property, every default, in a suite that boots the NULL render system and
+// runs with no display at all.
 //
 // Runs under QT_QPA_PLATFORM=offscreen. Framework-free; non-zero exit on failure.
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
-#include <QOpenGLContext>
 #include <QImage>
 #include <QSet>
 #include <QStringList>
@@ -58,8 +67,6 @@ int main(int argc, char **argv)
     // before anything builds a document, and destroyed last.
     enginetest::DocumentGraph graph("document-no-gl-ogre.log");
     if (!graph.require()) return 1;
-    CHECK(QOpenGLContext::currentContext() == nullptr, "precondition: no GL context is current");
-
     // --- Scene: previously loaded a sky mesh and compiled a sky shader in its ctor
     auto scene = iris::Scene::create();
     CHECK(!!scene, "iris::Scene constructed without GL");

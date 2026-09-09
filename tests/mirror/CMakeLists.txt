@@ -21,7 +21,7 @@ target_compile_definitions(test_scene_mirror PRIVATE
 target_link_libraries(test_scene_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_scene_mirror JahshakaEngineMedia)
 add_test(NAME mirror.document_to_engine COMMAND test_scene_mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # mirror.skinned_outline — the SELECTION SILHOUETTE over a skinned character.
 # The shell is a second Item over the same mesh; on HlmsUnlit (which has no
@@ -46,4 +46,4 @@ target_link_libraries(test_skinned_outline PRIVATE IrisGL JahshakaEngine Qt6::Gu
 add_dependencies(test_skinned_outline JahshakaEngineMedia)
 add_test(NAME mirror.skinned_outline COMMAND test_skinned_outline WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.skinned_outline PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "mirror")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

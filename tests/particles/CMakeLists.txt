@@ -17,7 +17,7 @@ target_compile_definitions(test_particles PRIVATE
 target_link_libraries(test_particles PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_particles JahshakaEngineMedia)
 add_test(NAME particles.document_to_engine COMMAND test_particles WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "particles")
+set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
 # ParticleFX2 adoption (PARTICLES_FX2_SPEC.md phase 0): the ENGINE's own
 # simulation, with no document and no mirror. Links JahshakaEngine only, plus
@@ -34,7 +34,7 @@ target_link_libraries(test_particles_pfx2 PRIVATE JahshakaEngine Qt6::Gui)
 add_dependencies(test_particles_pfx2 JahshakaEngineMedia)
 add_test(NAME engine.particles_pfx2 COMMAND test_particles_pfx2 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.particles_pfx2 PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 900 LABELS "particles")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
 # The same suite over the SANITISED copy of the backend (tests/engine defines
 # JahshakaEngineAsan; tests/ adds engine before particles). Particle definitions
@@ -60,7 +60,7 @@ if(JAHSHAKA_ASAN)
     # only leaks are libdbus allocations behind the Vulkan loader.
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0"
-        TIMEOUT 1200 LABELS "particles")
+        TIMEOUT 120 LABELS "particles")
 endif()
 
 # THE FIRE GATE (PARTICLES_FX2_SPEC §11 phase 3). Builds the SHIPPING fire preset
@@ -88,4 +88,4 @@ add_dependencies(test_particles_fire JahshakaEngineMedia)
 add_test(NAME particles.fire_shape COMMAND test_particles_fire
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(particles.fire_shape PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "particles")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")

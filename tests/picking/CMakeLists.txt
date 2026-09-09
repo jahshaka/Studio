@@ -39,7 +39,7 @@ target_link_libraries(test_pick_fov_cap PRIVATE IrisGL JahshakaEngine Qt6::Gui Q
 add_dependencies(test_pick_fov_cap JahshakaEngineMedia)
 add_test(NAME picking.fov_cap COMMAND test_pick_fov_cap WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(picking.fov_cap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 600 LABELS "engine")
+                     TIMEOUT 120 LABELS "engine")
 
 # The leak lane (scripts/sanitize.sh lsan): document picking allocates the
 # triangle/BVH scratch per pick.

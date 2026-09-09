@@ -28,7 +28,7 @@ add_test(NAME archive.responsive COMMAND test_archive_responsive
          WORKING_DIRECTORY ${_archive_home}/run)
 set_tests_properties(archive.responsive PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/.local/share/Jahshaka"
-    TIMEOUT 600 LABELS "archive")
+    TIMEOUT 300 LABELS "archive")
 
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.

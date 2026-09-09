@@ -24,4 +24,4 @@ target_compile_definitions(test_engine_asset_viewer PRIVATE
 target_link_libraries(test_engine_asset_viewer PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_engine_asset_viewer JahshakaEngineMedia)
 add_test(NAME assets.engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_asset_viewer WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(assets.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(assets.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

@@ -17,7 +17,7 @@ target_compile_definitions(test_gizmo_overlay PRIVATE
 target_link_libraries(test_gizmo_overlay PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL Qt6::Widgets)
 add_dependencies(test_gizmo_overlay JahshakaEngineMedia)
 add_test(NAME gizmo.overlay COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_overlay WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(gizmo.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(gizmo.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # gizmo.screen_size — "the gizmo is the same size on screen, everywhere"
 # (owner requirement 2026-09-08). Document-only: it projects the gizmo's REAL
@@ -39,7 +39,7 @@ jah_document_graph(test_gizmo_screen_size)
 add_test(NAME gizmo.screen_size COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_screen_size
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(gizmo.screen_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 300 LABELS "document")
+                     TIMEOUT 120 LABELS "document")
 jah_no_display(gizmo.screen_size)
 
 # gizmo.group_transform — the SELECTION SET's transform (EDITOR_MULTISELECT_SPEC
@@ -66,5 +66,5 @@ jah_document_graph(test_gizmo_group)
 add_test(NAME gizmo.group_transform COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_group
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(gizmo.group_transform PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 300 LABELS "document")
+                     TIMEOUT 120 LABELS "document")
 jah_no_display(gizmo.group_transform)

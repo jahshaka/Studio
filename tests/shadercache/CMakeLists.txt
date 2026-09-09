@@ -89,7 +89,7 @@ target_link_libraries(test_warm_up PRIVATE JahshakaEngine)
 add_dependencies(test_warm_up JahshakaEngineMedia)
 add_test(NAME shadercache.warmup COMMAND test_warm_up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 600 LABELS "shadercache")
+set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 120 LABELS "shadercache")
 
 # THE SAME SUITE, THE OTHER ROUTE (SHADER_CACHE_AUDIT F2). ogre-patch 0016 makes
 # Ogre's CompositorPassWarmUp usable at all — without it the very first
@@ -105,4 +105,4 @@ add_test(NAME shadercache.warmup_pass COMMAND test_warm_up
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 set_tests_properties(shadercache.warmup_pass PROPERTIES
     ENVIRONMENT "JAHSHAKA_WARMUP_PASS=1"
-    TIMEOUT 600 LABELS "shadercache")
+    TIMEOUT 120 LABELS "shadercache")

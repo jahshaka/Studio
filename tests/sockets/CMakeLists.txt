@@ -62,7 +62,7 @@ add_dependencies(test_socket_render JahshakaEngineMedia)
 add_test(NAME sockets.render COMMAND test_socket_render
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sockets.render PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "mirror")
+    TIMEOUT 120 LABELS "mirror")
 
 # ---- sockets.e2e ----------------------------------------------------------
 # The real app binary, --script, with HOME redirected to a scratch dir so the
@@ -104,5 +104,5 @@ jah_document_graph(test_socket_tags)
 add_test(NAME sockets.tags COMMAND test_socket_tags
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(sockets.tags PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 300 LABELS "document")
+                     TIMEOUT 120 LABELS "document")
 jah_no_display(sockets.tags)

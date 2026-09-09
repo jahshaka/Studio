@@ -58,7 +58,7 @@ add_test(NAME meshbake.roundtrip COMMAND test_mesh_bake
 # on top of that.
 set_tests_properties(meshbake.roundtrip PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "meshbake")
+    TIMEOUT 120 LABELS "meshbake")
 
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here

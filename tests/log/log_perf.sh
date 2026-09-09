@@ -118,16 +118,20 @@ js 'project.create("Log Perf Timer " + Date.now())' > /dev/null || fail=1
 js 'scene.addPrimitive("Cube")' > /dev/null || fail=1
 js 'app.space("editor")' > /dev/null || true
 
-# One second per sample, then wait FIVE in real time with the loop turning.
+# One second per sample, then wait THREE in real time with the loop turning.
+# (Was five. The two windows below were 8 s of the suite's 37 and both were
+# picked round rather than measured: a 1 s sampler nominally produces 3 lines
+# in 3 s, and the threshold below keeps the same 2-in-3 margin over nominal
+# that 3-in-5 had — TEST_GATE_AUDIT.md §3.)
 js 'JSON.stringify(log.perf(1))' > /dev/null || fail=1
 MARK=$(js 'log.mark("timer window")')
-sleep 5
+sleep 3
 COUNT=$(js 'log.since('"$MARK"', {}).filter(function(r){return /\]perf: /.test(r);}).length')
 
-if [ "${COUNT:-0}" -ge 3 ]; then
-    echo "log.perf: ok — the 1 s timer produced $COUNT lines in a 5 s window"
+if [ "${COUNT:-0}" -ge 2 ]; then
+    echo "log.perf: ok — the 1 s timer produced $COUNT lines in a 3 s window"
 else
-    echo "log.perf: FAIL — only ${COUNT:-0} perf lines in a 5 s window at a 1 s interval"
+    echo "log.perf: FAIL — only ${COUNT:-0} perf lines in a 3 s window at a 1 s interval"
     fail=1
 fi
 
@@ -165,10 +169,13 @@ fi
 # cannot make, because there the timer could never have fired anyway.
 js 'JSON.stringify(log.perf(0))' > /dev/null || fail=1
 OFFMARK=$(js 'log.mark("timer off window")')
-sleep 3
+# Two seconds at a 1 s interval: a sampler that ignored log.perf(0) would have
+# produced two lines by now, so this window is as convicting as the three it
+# replaces and costs a second less.
+sleep 2
 OFFCOUNT=$(js 'log.since('"$OFFMARK"', {}).filter(function(r){return /\]perf: /.test(r);}).length')
 if [ "${OFFCOUNT:-1}" = "0" ]; then
-    echo "log.perf: ok — the sampler is silent for 3 s after log.perf(0), with the loop running"
+    echo "log.perf: ok — the sampler is silent for 2 s after log.perf(0), with the loop running"
 else
     echo "log.perf: FAIL — $OFFCOUNT perf lines after log.perf(0)"
     fail=1

@@ -18,7 +18,7 @@ target_link_libraries(test_gi PRIVATE JahshakaEngine)
 add_dependencies(test_gi JahshakaEngineMedia)
 add_test(NAME gi.modes COMMAND test_gi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.modes PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.modes PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # The REAL PCC gate (REFLECTIONS_ADOPTION_SPEC.md §3): a closed room, a red wall
 # behind the camera and a roughness-0 metal box whose reflection must contain
@@ -41,7 +41,7 @@ target_link_libraries(test_gi_pcc_mirror PRIVATE JahshakaEngine)
 add_dependencies(test_gi_pcc_mirror JahshakaEngineMedia)
 add_test(NAME gi.pcc_mirror COMMAND test_gi_pcc_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.pcc_mirror PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.pcc_mirror PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # GI BOUNDS + PROBE PLACEMENT (spec §4 / P1a). Its own binary for the same
 # process-wide-binding reason as gi.pcc_mirror.
@@ -59,7 +59,7 @@ target_link_libraries(test_gi_pcc_bounds PRIVATE JahshakaEngine)
 add_dependencies(test_gi_pcc_bounds JahshakaEngineMedia)
 add_test(NAME gi.pcc_bounds COMMAND test_gi_pcc_bounds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.pcc_bounds PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.pcc_bounds PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.cliff — THE GI-VOLUME CLIFF (LIGHTING_FIX fix 1) plus the engine half of
 # the re-fit-on-exit contract (fix 2). Its own binary for the same
@@ -78,7 +78,7 @@ target_link_libraries(test_gi_cliff PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cliff JahshakaEngineMedia)
 add_test(NAME gi.cliff COMMAND test_gi_cliff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cliff PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.cliff PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.ambient — THE VCT AMBIENT (LIGHTING_FIX fix 3). Own binary: process-wide
 # HlmsPbs binding, same rule as its siblings.
@@ -96,7 +96,7 @@ target_link_libraries(test_gi_ambient PRIVATE JahshakaEngine)
 add_dependencies(test_gi_ambient JahshakaEngineMedia)
 add_test(NAME gi.ambient COMMAND test_gi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.ambient PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.ambient PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.coalesce — the drag-a-light gate (spec §5 / P2). Links the MIRROR as well
 # as the engine (like tests/mirror) because the coalescing gate is mirror-side
@@ -124,7 +124,7 @@ add_dependencies(test_gi_coalesce JahshakaEngineMedia)
 add_test(NAME gi.coalesce COMMAND test_gi_coalesce
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.coalesce PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 600 LABELS "engine")
+                     TIMEOUT 120 LABELS "engine")
 
 # gi.overlay — THE GI VOLUME OVERLAY (LIGHTING_FIX fix 9). Mirror-linked for the
 # same reason gi.coalesce is: the overlay is mirror-side, the helper channel it
@@ -151,7 +151,7 @@ add_dependencies(test_gi_overlay JahshakaEngineMedia)
 add_test(NAME gi.overlay COMMAND test_gi_overlay
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 600 LABELS "engine")
+                     TIMEOUT 120 LABELS "engine")
 
 # gi.dynamic_probes — DYNAMIC PROBES (REFLECTIONS_ADOPTION_SPEC.md P5a). Its own
 # binary for the same process-wide-HlmsPbs-binding reason as its siblings, and
@@ -171,7 +171,7 @@ target_link_libraries(test_gi_dynamic_probes PRIVATE JahshakaEngine)
 add_dependencies(test_gi_dynamic_probes JahshakaEngineMedia)
 add_test(NAME gi.dynamic_probes COMMAND test_gi_dynamic_probes
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.dynamic_probes PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.dynamic_probes PROPERTIES TIMEOUT 120 LABELS "engine")
 
 
 # gi.budget — THE GI UPDATE BUDGET (FIX WAVE B1-B5). Mirror-linked for the same
@@ -201,7 +201,7 @@ add_dependencies(test_gi_budget JahshakaEngineMedia)
 add_test(NAME gi.budget COMMAND test_gi_budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.budget PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 600 LABELS "engine")
+                     TIMEOUT 300 LABELS "engine")
 
 # PROBE REBUILD PARITY + SHRINK-FIT LOCALITY (2026-09-07 fix wave, defect 2).
 # A CLUTTERED room — free-standing columns, which is what defeats the 1x1
@@ -222,7 +222,7 @@ target_link_libraries(test_gi_pcc_stability PRIVATE JahshakaEngine)
 add_dependencies(test_gi_pcc_stability JahshakaEngineMedia)
 add_test(NAME gi.pcc_stability COMMAND test_gi_pcc_stability
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.pcc_stability PROPERTIES TIMEOUT 900 LABELS "engine")
+set_tests_properties(gi.pcc_stability PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # DDGI — the irradiance-field diffuse layer (GI_UNIFIED_SPEC.md §4 P1). Its own
 # binary for the same process-wide-binding reason as gi.pcc_mirror: the field
@@ -243,7 +243,7 @@ target_link_libraries(test_gi_ddgi PRIVATE JahshakaEngine)
 add_dependencies(test_gi_ddgi JahshakaEngineMedia)
 add_test(NAME gi.ddgi COMMAND test_gi_ddgi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.ddgi PROPERTIES TIMEOUT 900 LABELS "engine")
+set_tests_properties(gi.ddgi PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # RAYON's tier table, pins and migration (GI_UNIFIED_SPEC.md §2 / P2).
 #
@@ -276,7 +276,7 @@ jah_document_graph(test_gi_tiers)
 add_test(NAME gi.tiers COMMAND test_gi_tiers
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    LABELS "document" TIMEOUT 300)
+    LABELS "document" TIMEOUT 120)
 jah_no_display(gi.tiers)
 
 # gi.ddgi_ambient — THE RAYON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
@@ -300,7 +300,7 @@ target_link_libraries(test_gi_ddgi_ambient PRIVATE JahshakaEngine)
 add_dependencies(test_gi_ddgi_ambient JahshakaEngineMedia)
 add_test(NAME gi.ddgi_ambient COMMAND test_gi_ddgi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 900 LABELS "engine")
+set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.ddgi_raster — THE RASTER-FED IRRADIANCE FIELD (GI_UNIFIED_SPEC.md P3 "A2",
 # rayon2 S3): probes fed by six 32x32 scene renders each, re-converging under

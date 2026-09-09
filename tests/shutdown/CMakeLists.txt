@@ -22,7 +22,7 @@ add_test(NAME app.shutdown_order COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_home}/run)
 set_tests_properties(app.shutdown_order PROPERTIES
     ENVIRONMENT "HOME=${_order_home};JAHSHAKA_DATA_ROOT=${_order_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "shutdown")
+    TIMEOUT 120 LABELS "shutdown")
 
 # app.watchdog_stall — Lane 5: a 3 s UI-thread block produces exactly one
 # [warn] and a non-empty stack OF THE UI THREAD; a 100 ms block produces none.

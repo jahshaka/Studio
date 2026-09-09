@@ -34,7 +34,7 @@ target_compile_definitions(test_jahlog PRIVATE
 target_link_libraries(test_jahlog PRIVATE IrisGL Qt6::Core Qt6::Gui)
 add_test(NAME log.core COMMAND test_jahlog WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(log.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 300 LABELS "log")
+    TIMEOUT 120 LABELS "log")
 # No display at all: the whole point of the services.core shape.
 jah_no_display(log.core)
 

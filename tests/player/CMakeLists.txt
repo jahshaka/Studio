@@ -26,7 +26,7 @@ target_compile_definitions(test_engine_player PRIVATE
 target_link_libraries(test_engine_player PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL Qt6::Widgets)
 add_dependencies(test_engine_player JahshakaEngineMedia)
 add_test(NAME player.engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_player WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(player.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(player.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # EDITOR/PLAYER PARITY: the same document through EnginePlayerScene and through
 # the editor viewport's own mirror calls, into two identical offscreen views —
@@ -54,7 +54,7 @@ target_link_libraries(test_editor_player_parity PRIVATE IrisGL JahshakaEngine Qt
 add_dependencies(test_editor_player_parity JahshakaEngineMedia)
 add_test(NAME player.editor_parity COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # ---- player.playback_routing (A1.6) --------------------------------------
 # The play/edit STATE MACHINE — PlaybackService's routing into the viewport,
