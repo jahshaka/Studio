@@ -52,7 +52,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "single-target verb acts on (EDITOR_MULTISELECT_SPEC D2).",
           Needs::Document },
         { "selection", "editor.selection() -> id | null",
-          "The PRIMARY selected node's id, or null. Unchanged by multi-selection: "
+          "The PRIMARY selected node's id, or null (JS null — not undefined). Unchanged by multi-selection: "
           "editor.selectionSet() is the whole set.",
           Needs::Document },
         { "selectionSet", "editor.selectionSet() -> [id]",
@@ -88,7 +88,8 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "copy", "editor.copy() -> n",
           "Copies the selection into the EDITOR clipboard (in-app, never the system clipboard) as "
           "scene fragments and returns how many. Not an undo entry. Copying nothing leaves the "
-          "previous clipboard alone.",
+          "previous clipboard alone and returns 0 — a refusal, not an exception (app.lastError "
+          "carries the reason).",
           Needs::Document },
         { "paste", "editor.paste() -> [id]",
           "Pastes the clipboard beside the primary — same parent, sibling index + 1, local "
@@ -484,9 +485,12 @@ bool EditorApi::select(const QVariant &id)
 
 QVariant EditorApi::selection()
 {
-    if (!host.services || !host.services->selection) return QVariant();
+    // `id | null` means null — an invalid QVariant bridges to `undefined`, and
+    // a script comparing `=== null` (as the docs invite it to) got the wrong
+    // answer (hygiene lane, 2026-09-09).
+    if (!host.services || !host.services->selection) return jsNull();
     auto node = host.services->selection->selected();
-    return node ? QVariant(node->getGUID()) : QVariant();
+    return node ? QVariant(node->getGUID()) : jsNull();
 }
 
 QVariantList EditorApi::selectionSet()
@@ -612,7 +616,11 @@ int EditorApi::copy()
         return 0;
     }
     const auto set = host.services->selection->selectedSet();
-    if (set.isEmpty()) { fail("editor.copy: nothing is selected"); return 0; }
+    // "How many did I copy?" is the verb's whole contract, and zero is a
+    // perfectly good answer — the doc already promised the previous clipboard
+    // survives it. Throwing aborted the caller's script over a documented
+    // outcome (hygiene lane, 2026-09-09).
+    if (set.isEmpty()) { refuse("editor.copy: nothing is selected"); return 0; }
     return host.services->sceneEdit->copyNodes(set);
 }
 
@@ -1457,6 +1465,10 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
 bool EditorApi::beginBatch()
 {
     if (!host.undoStack) return fail("editor.beginBatch: no undo stack in this session");
+    // The RUN's macro is lazy (UndoService::beginScriptMacro) — open it first,
+    // or this batch would become the outer macro and the run's entry would
+    // nest inside the batch instead of the other way round.
+    if (host.services && host.services->undo) host.services->undo->ensureScriptMacroOpen();
     host.undoStack->beginMacro(QStringLiteral("script batch"));
     ++mBatchDepth;
     return true;

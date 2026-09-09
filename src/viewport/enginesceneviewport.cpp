@@ -272,11 +272,11 @@ bool EngineSceneViewport::cameraRotationLocked() const
 {
     if (mPilot || !findAxisView(mCameraView)) return false;
     // AND STILL ORTHOGRAPHIC. The lock's subject is the orthographic measuring
-    // view, not the name — and the toolbar's projection button flips the
-    // projection on its own, without going through setCameraView (it does not
-    // update the Views label either; reported upward, MainWindow is another
-    // lane's file). Reading the projection here means the lock can never
-    // outlive the state it exists to protect, whoever changed it.
+    // view, not the name. The toolbar's projection button used to flip the
+    // projection behind setCameraView's back; it goes through applyCameraView
+    // now (mainwindow.cpp, changeProjection), so the two agree — but reading
+    // the projection here rather than trusting the view name keeps the lock
+    // from ever outliving the state it exists to protect, whoever changed it.
     return mEditorCam && mEditorCam->projMode == iris::CameraProjection::Orthogonal;
 }
 

@@ -26,7 +26,32 @@ void UndoService::push(QUndoCommand *command)
     if (auto studioCommand = dynamic_cast<StudioCommand *>(command))
         studioCommand->setServices(mServices);
     ++mPushCount;
+    // The run's undo entry is created HERE, by the first command that lands —
+    // never at the start of the run (see beginScriptMacro).
+    ensureScriptMacroOpen();
     mStack->push(command);
+}
+
+void UndoService::beginScriptMacro(const QString &text)
+{
+    mMacroText = text;
+    mMacroArmed = true;
+}
+
+void UndoService::ensureScriptMacroOpen()
+{
+    if (!mMacroArmed || mMacroOpen) return;
+    mMacroOpen = true;
+    mStack->beginMacro(mMacroText);
+}
+
+bool UndoService::endScriptMacro()
+{
+    mMacroArmed = false;
+    if (!mMacroOpen) return false;
+    mMacroOpen = false;
+    mStack->endMacro();
+    return true;
 }
 
 void UndoService::undo()

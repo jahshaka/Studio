@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define UNDOSERVICE_H
 
 #include <QtGlobal>
+#include <QString>
 
 // UndoService — the undo spine (APP_ARCHITECTURE_AUDIT §3.3).
 //
@@ -60,9 +61,32 @@ public:
     /// reason) as SceneMirror's GI push counters. Never falls.
     quint64 pushCount() const { return mPushCount; }
 
-    /// True while a script run's one-undo-step macro is open.
+    /// True while a script run is in progress (whether or not the run has
+    /// recorded anything yet — see beginScriptMacro).
     bool isScriptMacroOpen() const { return mScriptMacroOpen; }
     void setScriptMacroOpen(bool open) { mScriptMacroOpen = open; }
+
+    // ---- the script run's ONE undo entry, opened LAZILY ---------------------
+    //
+    // A script run is one undo step. It used to be one QUndoStack MACRO opened
+    // unconditionally at the start of the run — and QUndoStack keeps an EMPTY
+    // macro on the stack, so every query (describe the scene, read a property,
+    // any MCP tool call at all) pushed a do-nothing entry that ate the user's
+    // next Ctrl+Z. Deferring beginMacro to the first command that actually
+    // lands is the fix: a run that records nothing leaves the stack untouched,
+    // a run that records anything is still exactly one entry.
+    //
+    // This is the right place for it because EVERY undo command in the app is
+    // pushed through this service — nothing else calls QUndoStack::push.
+
+    /// Arms the run's macro. Nothing reaches the stack until the first push.
+    void beginScriptMacro(const QString &text);
+    /// Opens the armed macro NOW. For callers that are about to open a nested
+    /// macro of their own (editor.beginBatch), which must sit inside the run's
+    /// entry, not the other way round.
+    void ensureScriptMacroOpen();
+    /// Closes the macro if it ever opened. True when the run left an entry.
+    bool endScriptMacro();
 
     /// Saved-state bookkeeping (was MainWindow::undoStackCount). Preserves a
     /// pre-extraction quirk: the old code stored getUndoStackCount(), whose
@@ -90,6 +114,11 @@ private:
     QUndoStack *mStack = nullptr;
     StudioServices *mServices = nullptr;
     bool mScriptMacroOpen = false;
+    /// The lazy script macro: armed by beginScriptMacro, opened by the first
+    /// push (or ensureScriptMacroOpen), closed by endScriptMacro.
+    bool mMacroArmed = false;
+    bool mMacroOpen = false;
+    QString mMacroText;
     quint64 mPushCount = 0;
     int  mSavedCount = 0;
     bool mContentRepaired = false;

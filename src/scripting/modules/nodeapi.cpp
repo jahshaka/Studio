@@ -95,8 +95,10 @@ QVector<VerbInfo> NodeApi::verbs() const
           "(IES profile, area mask, decal image) are not rows here — node.setLightProfile, "
           "node.setLightTexture and node.setDecalTexture own them.",
           Needs::Document },
-        { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale, socket?}",
-          "Everything scene.nodes() reports, for one node. `socket` is present only while the "
+        { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale, socket?} | null",
+          "Everything scene.nodes() reports, for one node — or NULL when no node has that id "
+          "(a deleted node, a stale id, no scene open). It refuses instead of throwing precisely "
+          "so a script can ask whether a node is still there; app.lastError() carries the reason. `socket` is present only while the "
           "node RIDES a socket ({owner, name}, CAMERAS_SPEC \u00a75). A socketed node's "
           "`position`/`rotation`/`scale` are RELATIVE TO THE SOCKET and they stick — the renderer "
           "hangs the node off the bone itself, so nothing rewrites them any more "
@@ -793,8 +795,23 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
 
 QVariant NodeApi::info(const QString &id)
 {
-    auto node = nodeOrFail(id, QStringLiteral("node.info"));
-    if (!node) return QVariant();
+    // A REFUSAL, NOT AN ERROR (hygiene lane, 2026-09-09). "Is this node still
+    // there?" is a question scripts ask constantly — after a delete, after an
+    // undo, while walking ids captured earlier — and answering it by throwing
+    // aborted the caller's whole run. app.multiselect_keys had to route around
+    // this verb for exactly that reason. The signature says `| null`, so null
+    // is the answer; the reason goes to app.lastError().
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) {
+        refuse(QStringLiteral("node.info: no scene is open"));
+        return jsNull();
+    }
+    auto node = findNodeByGuid(scene->getRootNode(), id);
+    if (!node) {
+        refuse(QStringLiteral("node.info: no node with id '%1'").arg(id));
+        return jsNull();
+    }
     return nodeToJs(node);
 }
 

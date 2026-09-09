@@ -19,7 +19,13 @@ add_executable(test_script_engine test_script_engine.cpp
     # and nothing else — so the "core has zero Studio dependencies" property
     # above still holds in the way that matters: no MainWindow, no engine, no
     # document, no database.
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp)
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    # UndoService is the app's ONE undo sink, and since the run macro became
+    # lazy (opened by the first command that lands, not by the run) the sink IS
+    # the behaviour under test — the fake module pushes through it exactly as
+    # the editor's verbs do. Another leaf: QUndoStack plus a header-only
+    # StudioCommand base, no MainWindow, no engine, no document.
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp)
 set_target_properties(test_script_engine PROPERTIES AUTOMOC ON)
 target_include_directories(test_script_engine PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
@@ -834,7 +840,7 @@ add_test(NAME scripting.e2e.avatar_assets
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_assets.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 400)
 
@@ -850,7 +856,24 @@ foreach(_ms multiselect multiselect_edit)
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_${_ms}.js --headless
              WORKING_DIRECTORY ${_ms_home}/run)
     set_tests_properties(scripting.e2e.${_ms} PROPERTIES
-        ENVIRONMENT "HOME=${_ms_home};QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "HOME=${_ms_home};JAHSHAKA_DATA_ROOT=${_ms_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
         LABELS "scripting" TIMEOUT 300)
     jah_no_display(scripting.e2e.${_ms})
 endforeach()
+
+# --- refusals (hygiene lane, 2026-09-09) ------------------------------------
+# A verb whose documented answer is "no" RETURNS it (false / 0 / null) instead
+# of throwing: an exception aborts the caller's whole run over a question it
+# asked on purpose. node.info on a deleted node, editor.selection with nothing
+# selected, editor.copy on an empty selection — plus the other half, that real
+# misuse still throws. Document verbs only -> --headless, no display.
+set(_ref_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-refusals)
+file(MAKE_DIRECTORY ${_ref_home}/run)
+add_test(NAME scripting.e2e.refusals
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_refusals.js --headless
+         WORKING_DIRECTORY ${_ref_home}/run)
+set_tests_properties(scripting.e2e.refusals PROPERTIES
+    ENVIRONMENT "HOME=${_ref_home};JAHSHAKA_DATA_ROOT=${_ref_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
+jah_no_display(scripting.e2e.refusals)

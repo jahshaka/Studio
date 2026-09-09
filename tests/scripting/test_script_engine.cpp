@@ -4,7 +4,8 @@
 //   - expression evaluation and JSON-native returns
 //   - error reporting with script line numbers and file names
 //   - console.log capture through the ScriptEngine signal
-//   - one-undo-step-per-script macro wrapping (and the opt-out)
+//   - one-undo-step-per-script macro wrapping (and the opt-out), including the
+//     LAZY half: a run that records nothing must leave the stack untouched
 //   - ApiModule precondition guards throw catchable JS errors, never crash
 //   - ApiRegistry::validate() rejects undocumented/misregistered verbs
 //   - api.version / api.help() / api.verbs() enumeration
@@ -16,6 +17,7 @@
 #include <cstdio>
 
 #include "scriptengine.h"
+#include "services/undoservice.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -38,6 +40,11 @@ class FakeModule : public ApiModule
 public:
     using ApiModule::ApiModule;
     int value = 0;
+    /// The app's ONE undo sink. Commands go through it here for the same
+    /// reason they do in the editor: the run's undo macro is opened by the
+    /// first command that reaches the sink, so a module that pushed around it
+    /// would be testing a path that does not exist in the product.
+    UndoService *sink = nullptr;
 
     QString jsName() const override { return QStringLiteral("fake"); }
     QVector<VerbInfo> verbs() const override
@@ -55,7 +62,8 @@ public:
     Q_INVOKABLE double add(double a, double b) { return a + b; }
     Q_INVOKABLE void set(int v)
     {
-        if (host.undoStack) host.undoStack->push(new SetValueCommand(&value, v));
+        if (sink) sink->push(new SetValueCommand(&value, v));
+        else if (host.undoStack) host.undoStack->push(new SetValueCommand(&value, v));
         else value = v;
     }
     Q_INVOKABLE int get() const { return value; }
@@ -91,14 +99,20 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
 
     QUndoStack undoStack;
+    UndoService undoService(&undoStack);
     ScriptHost host;
     host.undoStack = &undoStack;
+    // The run's undo entry: armed at the start of the run, created by the first
+    // command that lands. Exactly the wiring MainWindow does.
+    host.beginUndoMacro = [&undoService](const QString &text) { undoService.beginScriptMacro(text); };
+    host.endUndoMacro = [&undoService]() { undoService.endScriptMacro(); };
     bool projectIsOpen = false;
     host.projectOpen = [&projectIsOpen]() { return projectIsOpen; };
     // engineReady left unset: requireEngine() must fail cleanly, not crash.
 
     ScriptEngine engine(host);
     auto *fake = new FakeModule(host);
+    fake->sink = &undoService;
     engine.addModule(fake);
 
     QStringList consoleLines;
@@ -164,6 +178,34 @@ int main(int argc, char **argv)
     undoStack.clear();   // drop the undone macro (a push would truncate it anyway)
     engine.evaluate("fake.set(5); fake.set(6)", "nomacro.js", false);
     CHECK(undoStack.count() == 2, "wrapUndoMacro=false pushes commands individually");
+
+    // ---- a run that records NOTHING leaves the stack alone -------------------
+    //
+    // The defect this replaced: beginMacro/endMacro ran unconditionally, and
+    // QUndoStack keeps an EMPTY macro as a real entry — so describing a scene
+    // (or any MCP tool call, each of which is a run) pushed a do-nothing step
+    // and the user's next Ctrl+Z undid THAT instead of their last edit.
+    undoStack.clear();
+    fake->value = 0;
+    r = engine.evaluate("fake.set(7)", "edit.js", true);
+    CHECK(r.ok && undoStack.count() == 1, "an editing run leaves exactly one entry");
+    const QString editText = undoStack.text(0);
+    r = engine.evaluate("fake.get() + fake.add(1, 2)", "query.js", true);
+    CHECK(r.ok && r.value.toInt() == 10, "the query run ran");
+    CHECK(undoStack.count() == 1, "a QUERY run pushes no undo entry at all");
+    CHECK(undoStack.canUndo() && undoStack.text(undoStack.index() - 1) == editText,
+          "the top of the stack is still the user's last real edit");
+    undoStack.undo();
+    CHECK(fake->value == 0, "one Ctrl+Z after a query still undoes the EDIT");
+
+    // ...and a run that records something after several queries is still one
+    // entry, i.e. the laziness did not turn into "no macro at all".
+    undoStack.clear();
+    fake->value = 0;
+    r = engine.evaluate("fake.get(); fake.set(1); fake.set(2); fake.get()", "mixed.js", true);
+    CHECK(r.ok && undoStack.count() == 1, "a mixed run is still ONE entry");
+    undoStack.undo();
+    CHECK(fake->value == 0, "and that one entry reverts both of its commands");
 
     // ---- registry metadata ----
     CHECK(engine.registry().validate().isEmpty(), "the real module set validates clean");

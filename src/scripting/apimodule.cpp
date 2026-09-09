@@ -20,6 +20,7 @@ ApiModule::ApiModule(ScriptHost &host, QObject *parent)
 
 bool ApiModule::fail(const QString &message) const
 {
+    host.lastError = message;
     // qjsEngine() finds the QJSEngine that owns this QObject wrapper; the throw
     // becomes a normal JS exception with this verb's call site in the stack.
     if (QJSEngine *engine = qjsEngine(this))
@@ -27,6 +28,22 @@ bool ApiModule::fail(const QString &message) const
     else
         qWarning("script API error (no JS engine attached): %s", qPrintable(message));
     return false;
+}
+
+bool ApiModule::refuse(const QString &message) const
+{
+    // No throw, on purpose (see the header): the answer IS the return value.
+    // Recording it is what keeps a refusal debuggable — app.lastError() reads
+    // this back, and the console prints it for an interactive user.
+    host.lastError = message;
+    return false;
+}
+
+QVariant ApiModule::jsNull()
+{
+    // QMetaType::Nullptr is the one QVariant QJSEngine turns into JS null;
+    // a default-constructed QVariant becomes undefined.
+    return QVariant::fromValue(nullptr);
 }
 
 bool ApiModule::requireProject() const

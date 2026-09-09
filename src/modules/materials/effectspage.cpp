@@ -31,6 +31,8 @@ For more information see the LICENSE file
 #include <QGridLayout>
 #include <QLineEdit>
 #include <QListWidgetItem>
+#include <QAbstractItemView>
+#include <QTabWidget>
 #include <QMenuBar>
 #include <QMenu>
 #include <QFileDialog>
@@ -1359,6 +1361,74 @@ QString EffectsPage::selectedGraphNodeId()
 void EffectsPage::deselectGraphNodes()
 {
 	if (scene != nullptr) scene->deselectAll();
+}
+
+QVariantMap EffectsPage::paletteTileRect(const QString &name)
+{
+	QVariantMap out;
+	if (!tabbedWidget || !graphicsView) return out;
+
+	const QString wanted = name.trimmed().toLower();
+	for (int tab = 0; tab < tabbedWidget->count(); ++tab) {
+		auto *list = qobject_cast<QListWidget *>(tabbedWidget->widget(tab));
+		if (!list) continue;
+		for (int row = 0; row < list->count(); ++row) {
+			QListWidgetItem *item = list->item(row);
+			if (item->text().trimmed().toLower() != wanted) continue;
+
+			// SELECT THE TAB FIRST, and then make Qt lay it out NOW. A tab page
+			// that has never been current has never been given a geometry —
+			// QStackedLayout only positions the current widget — so its item
+			// rects would be measured against a default-sized viewport. The
+			// two activate() calls are what a show() would have done.
+			tabbedWidget->setCurrentIndex(tab);
+			if (QWidget *stack = list->parentWidget())
+				if (QLayout *l = stack->layout()) l->activate();
+			if (QLayout *l = list->layout()) l->activate();
+			list->scrollToItem(item, QAbstractItemView::PositionAtCenter);
+
+			QWidget *window = list->window();
+			const QRect inViewport = list->visualItemRect(item);
+			const QPoint topLeft = list->viewport()->mapTo(window, inViewport.topLeft());
+			out["tab"] = tabbedWidget->tabText(tab);
+			out["tabIndex"] = tab;
+			out["x"] = topLeft.x();
+			out["y"] = topLeft.y();
+			out["w"] = inViewport.width();
+			out["h"] = inViewport.height();
+			// True only when the tile is actually inside the window the caller
+			// is about to click in — a tile scrolled out of a clipped viewport,
+			// or a window hanging off the screen, is not clickable and the
+			// caller must be able to say so instead of clicking blind.
+			const QRect visible(list->viewport()->mapTo(window, QPoint(0, 0)),
+			                    list->viewport()->size());
+			out["clickable"] = visible.contains(QRect(topLeft, inViewport.size()).center())
+			                   && window->rect().contains(QRect(topLeft, inViewport.size()));
+
+			// The DROP TARGET travels with the tile: a palette drag is only
+			// meaningful onto this page's canvas, and a caller that had to
+			// compute the canvas itself would be back to guessing window
+			// fractions — which is the defect this verb exists to remove.
+			const QRect canvas(graphicsView->mapTo(window, QPoint(0, 0)), graphicsView->size());
+			QVariantMap canvasOut;
+			canvasOut["x"] = canvas.x();
+			canvasOut["y"] = canvas.y();
+			canvasOut["w"] = canvas.width();
+			canvasOut["h"] = canvas.height();
+			out["canvas"] = canvasOut;
+			// WHICH window these coordinates are in. This page is a QMainWindow
+			// in its own right (it hosts the graph's docks), so window() is the
+			// app's main window only while the page is parented into it — the
+			// caller must be able to check that its idea of the window and this
+			// one are the same rectangle instead of clicking into thin air.
+			QVariantMap windowOut;
+			windowOut["w"] = window->width();
+			windowOut["h"] = window->height();
+			out["window"] = windowOut;
+			return out;
+		}
+	}
+	return out;
 }
 
 bool EffectsPage::removeGraphNode(const QString& nodeId)

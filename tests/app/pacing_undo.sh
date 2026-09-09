@@ -163,14 +163,21 @@ activate() {
 # XTEST (no --window): xdotool's --window form sends XSendEvent keys, which Qt
 # discards. The window has been clicked, so plain XTEST keys land in it.
 key() { xdotool key --clearmodifiers "$1"; sleep 0.45; }
-# A press-drag-release in window-relative coordinates, given as PER-MILLE of the
-# window so the gesture survives a differently sized display. Qt's drag loop
-# needs real motion events, which XTEST provides; the intermediate steps are not
-# optional (one jump never starts a QDrag).
-drag() {   # $1..$4 = from-x, from-y, to-x, to-y, per mille
+# A press-drag-release in window-relative PIXELS. Qt's drag loop needs real
+# motion events, which XTEST provides; the intermediate steps are not optional
+# (one jump never starts a QDrag).
+#
+# PIXELS, NOT PER-MILLE OF THE WINDOW (hygiene lane, 2026-09-09). This used to
+# take fractions of the window measured once, from a 1612x1060 window. When the
+# suite became hermetic (JAHSHAKA_DATA_ROOT + an empty settings file) there was
+# no stored geometry to restore, so the window opened at the .ui's authored
+# 1612x1530 — and 858 per mille of 1530 is 55 pixels lower than of 1060: it
+# landed on the palette's TAB BAR, which flipped the tab to "Utility" and
+# dragged nothing. The gesture is still real; only the guessing is gone
+# (graph.paletteTile answers where the tile actually is).
+drag() {   # $1..$4 = from-x, from-y, to-x, to-y, window pixels
     local sx sy dx dy i x y
-    sx=$((WIN_W*$1/1000)); sy=$((WIN_H*$2/1000))
-    dx=$((WIN_W*$3/1000)); dy=$((WIN_H*$4/1000))
+    sx=$1; sy=$2; dx=$3; dy=$4
     xdotool mousemove --window "$WIN" "$sx" "$sy"; sleep 0.3
     xdotool mousedown 1; sleep 0.3
     for i in 1 2 3 4 5 6 7 8; do
@@ -292,9 +299,37 @@ note "graph undo state on the page: $u"
 # no good either: the only node on a fresh canvas is the master, and
 # deleteSelectedNodes refuses to delete that one.
 #
-# Per-mille coordinates: the "Time" tile in the Input tab (~57%, 86%) to an
-# empty part of the canvas (~31%, 28%).
-drag 569 858 310 283
+# WHERE the tile is, though, is a question the API answers: graph.paletteTile
+# selects the tab that owns it, scrolls it into view and reports its rect (and
+# the canvas rect) in window pixels. The suite drags the tile's CENTRE — no
+# window fractions anywhere.
+TILE=$(js 'JSON.stringify(graph.paletteTile("Time"))') \
+    || bad "graph.paletteTile is callable on the Materials page"
+note "Time tile: $TILE"
+TX=$(printf '%s' "$TILE" | jq -r '(.x + .w/2) | floor' 2>/dev/null)
+TY=$(printf '%s' "$TILE" | jq -r '(.y + .h/2) | floor' 2>/dev/null)
+TTAB=$(printf '%s' "$TILE" | jq -r '.tab' 2>/dev/null)
+CLICKABLE=$(printf '%s' "$TILE" | jq -r '.clickable' 2>/dev/null)
+# A quarter into the canvas: away from the master node in the middle and well
+# clear of every dock edge.
+CX=$(printf '%s' "$TILE" | jq -r '(.canvas.x + .canvas.w/4) | floor' 2>/dev/null)
+CY=$(printf '%s' "$TILE" | jq -r '(.canvas.y + .canvas.h/4) | floor' 2>/dev/null)
+[ "$TTAB" = "Input" ] \
+    && ok "the Time tile lives in the Input tab, and the verb selected it" \
+    || bad "graph.paletteTile put the Time tile in tab '$TTAB'"
+[ "$CLICKABLE" = "true" ] \
+    && ok "the tile is inside the window and clickable at ${TX},${TY}" \
+    || bad "the tile at ${TX},${TY} is not reachable in a ${WIN_W}x${WIN_H} window"
+# ...and both sides mean the SAME window. The Materials page is a QMainWindow of
+# its own, so its coordinates are the app window's only while it is parented
+# into it; a mismatch here would send the drag somewhere else entirely.
+VW=$(printf '%s' "$TILE" | jq -r '.window.w' 2>/dev/null)
+VH=$(printf '%s' "$TILE" | jq -r '.window.h' 2>/dev/null)
+{ [ "$VW" = "$WIN_W" ] && [ "$VH" = "$WIN_H" ]; } \
+    && ok "the verb measured the window this suite is clicking (${VW}x${VH})" \
+    || bad "the verb measured a ${VW}x${VH} window; xdotool sees ${WIN_W}x${WIN_H}"
+note "drag ${TX},${TY} -> ${CX},${CY} (canvas $(printf '%s' "$TILE" | jq -c '.canvas'))"
+drag "$TX" "$TY" "$CX" "$CY"
 u1=$(js 'graph.undoState().undoCount')
 if [ "${u1:-0}" -gt 0 ] 2>/dev/null; then
     ok "a node dragged onto the canvas landed on the graph's stack (undoCount=$u1)"

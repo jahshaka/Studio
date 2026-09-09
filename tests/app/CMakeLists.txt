@@ -118,7 +118,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8751
                  WORKING_DIRECTORY ${_ms_home}/run)
         set_tests_properties(app.multiselect_keys PROPERTIES
-            ENVIRONMENT "HOME=${_ms_home}"
+            ENVIRONMENT "HOME=${_ms_home};JAHSHAKA_DATA_ROOT=${_ms_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
             TIMEOUT 500
             LABELS "app")
@@ -166,6 +166,24 @@ add_test(NAME app.multiselect_outline
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js
          WORKING_DIRECTORY ${_mso_home}/run)
 set_tests_properties(app.multiselect_outline PROPERTIES
-    ENVIRONMENT "HOME=${_mso_home}"
+    ENVIRONMENT "HOME=${_mso_home};JAHSHAKA_DATA_ROOT=${_mso_home}/.local/share/Jahshaka"
     LABELS "app"
     TIMEOUT 300)
+
+# ---- app.window_fits --------------------------------------------------------
+# A FRESH PROFILE'S WINDOW FITS ON ITS SCREEN (hygiene lane, 2026-09-09).
+# MainWindow::fitToScreen is only reachable when there is no stored geometry, so
+# the suite gets an empty data root and asks app.window() what the boot produced.
+# --headless: offscreen QPA, no engine, no display at all (jah_no_display), and
+# the offscreen screen is smaller than the .ui's authored 1612x1530 — which is
+# the condition the clamp exists for.
+set(_wf_home ${CMAKE_CURRENT_BINARY_DIR}/window-fits-home)
+file(MAKE_DIRECTORY ${_wf_home}/run)
+add_test(NAME app.window_fits
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js --headless
+         WORKING_DIRECTORY ${_wf_home}/run)
+set_tests_properties(app.window_fits PROPERTIES
+    ENVIRONMENT "HOME=${_wf_home};JAHSHAKA_DATA_ROOT=${_wf_home}/.local/share/Jahshaka"
+    LABELS "app"
+    TIMEOUT 180)
+jah_no_display(app.window_fits)

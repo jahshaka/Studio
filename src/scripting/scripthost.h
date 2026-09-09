@@ -24,6 +24,7 @@ For more information see the LICENSE file
 // the live project + services, tests wire them to whatever they are testing.
 
 #include <functional>
+#include <QString>
 
 class ApiRegistry;
 class MainWindow;
@@ -74,6 +75,23 @@ struct ScriptHost
     /// guard operations that must not run inside an open macro (e.g.
     /// UiManager::clearUndoStack). Optional.
     std::function<void(bool)> macroOpenChanged;
+
+    /// THE RUN'S ONE UNDO ENTRY. A script run is one undo step — but the entry
+    /// must not exist until the run actually records something, or a pure QUERY
+    /// (describe the scene, read a property, any MCP tool call) leaves an EMPTY
+    /// macro on the stack and eats the user's next Ctrl+Z. That laziness lives
+    /// in the host's undo sink (UndoService), which is the one place every
+    /// command in the app is pushed through, so ScriptEngine only says WHEN a
+    /// run starts and ends. Unset in hosts with no undo sink: no macro then,
+    /// and wrapUndoMacro has nothing to wrap.
+    std::function<void(const QString &)> beginUndoMacro;
+    std::function<void()> endUndoMacro;
+
+    /// The last thing a verb refused or threw, whichever came last (ApiModule::
+    /// refuse/fail). Read back by app.lastError(): a refusal answers with a
+    /// falsy VALUE rather than an exception, so this is where the reason goes.
+    /// One session, one slot: it is a diagnostic, not a queue.
+    QString lastError;
 
     bool isProjectOpen() const { return projectOpen && projectOpen(); }
     bool isEngineReady() const { return engineReady && engineReady(); }

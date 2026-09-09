@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <QListWidget>
+#include <QVariantMap>
 #include <QMainWindow>
 #include <QWidget>
 #include <QGraphicsPathItem>
@@ -135,6 +136,23 @@ public:
 	bool graphDuplicateSelected();
 	bool graphCopySelected();
 	bool graphPaste();
+	/// WHERE A NODE TILE IS, IN WINDOW PIXELS (hygiene lane, 2026-09-09).
+	///
+	/// The node palette is a QTabWidget of icon lists along the bottom of this
+	/// page, and dragging a tile onto the canvas is the ONE graph edit no verb
+	/// can make (the graph.* mutation verbs work on a script-local NodeGraph,
+	/// never the page's), so app.pacing_undo has to perform the real gesture.
+	/// It used to aim at a per-mille point measured from one window size; when
+	/// the suite became hermetic the window opened taller and that point landed
+	/// on the tab bar. This answers the question properly: select the tab that
+	/// owns `name`, scroll the tile into view, and report its rect — and the
+	/// canvas it must be dropped on — in MAIN-WINDOW coordinates, which is what
+	/// a rig synthesising mouse events works in.
+	///
+	/// Empty map when no tile carries that name. Match is on the tile's
+	/// display name, case-insensitively.
+	QVariantMap paletteTileRect(const QString &name);
+
 	/// Depth of the two halves of that stack — what the verbs report and what a
 	/// test asserts against.
 	int graphUndoCount() const;
