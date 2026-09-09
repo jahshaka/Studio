@@ -651,8 +651,17 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // Skeletal Animation and World Background samples are that
             // shape). A document this build wrote carries the key and is
             // never touched; a pinned field survives either way.
-            else if (!hasDynamicProbesKey)
-                worldmodes::setRayon(scene, worldmodes::rayonEnabled(scene), worldmodes::rayonTier(scene));
+            else if (!hasDynamicProbesKey) {
+                // A P2 document could not carry a `giBounces` pin (the row did
+                // not exist), so a hand-set bounce count would be overwritten
+                // by the tier's — pin it first when it deviates (code review
+                // 2026-09-10). dynamicProbes cannot deviate: it is 0 in every
+                // such document.
+                const worldmodes::RayonTier tier = worldmodes::rayonTier(scene);
+                if (scene->giNumBounces != worldmodes::rayonBounces(tier))
+                    worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), scene->giNumBounces);
+                worldmodes::setRayon(scene, worldmodes::rayonEnabled(scene), tier);
+            }
         }
     }
     // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.

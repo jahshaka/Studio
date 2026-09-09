@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/worldapi.h"
+#include <QtMath>
 
 #include <QDir>
 #include <QFileInfo>
@@ -422,12 +423,30 @@ bool WorldApi::gi(const QVariantMap &params)
     }
     // Bounces and dynamic probes are Rayon tier rows (Epic's two columns): an
     // explicit value PINS, exactly like mode and quality above.
+    // Whole numbers only for the two Epic columns and the budget (code review
+    // 2026-09-10: 2.7 used to round to 3, "abc" to 0).
+    const auto wholeNumber = [&](const char *key, int &out) -> bool {
+        const QVariant raw = params.value(QLatin1String(key));
+        bool numeric = false;
+        const double d = raw.toDouble(&numeric);
+        if (!numeric || d != qFloor(d)) {
+            fail(QStringLiteral("world.gi: %1 must be a whole number, got '%2'").arg(QLatin1String(key), raw.toString()));
+            return false;
+        }
+        out = int(d);
+        return true;
+    };
     if (params.contains("bounces")) {
-        scene->giNumBounces = qBound(1, params.value("bounces").toInt(), 4);
+        int b = 0;
+        if (!wholeNumber("bounces", b)) return false;
+        if (b < 1 || b > 4)
+            return fail(QStringLiteral("world.gi: bounces must be 1..4 (Rayon Epic's column: 3)"));
+        scene->giNumBounces = b;
         worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), scene->giNumBounces);
     }
     if (params.contains("dynamicProbes")) {
-        const int v = params.value("dynamicProbes").toInt();
+        int v = 0;
+        if (!wholeNumber("dynamicProbes", v)) return false;
         if (v < 0 || v > 8)
             return fail(QStringLiteral(
                 "world.gi: dynamicProbes must be 0..8 — extra reflection-probe re-captures per "
