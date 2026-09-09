@@ -63,11 +63,12 @@
 //
 //  11. NO FIREFLIES (lane-whitedots, 2026-09-09). On a mirror floor under a
 //      line of bright silhouettes — the shape that produced the Grand
-//      Showroom's crawling white dots — no pixel of the floor is more than
-//      2.5x the MEDIAN of its eight neighbours, at either resolution row. The
-//      median is what makes this a statement about SPARKS and not about
-//      contrast: a reflection edge keeps half its neighbourhood on its own
-//      side and passes.
+//      Showroom's crawling white dots — no pixel of the floor is an ISOLATED
+//      SPIKE: no pixel is 2.5x brighter than the BRIGHTEST of its eight
+//      neighbours. That is a statement about SPARKS rather than about
+//      contrast — a reflection edge, and the one-pixel-wide streak a thin
+//      object's reflection legitimately is, both have something comparable
+//      next to them and pass.
 //
 // TWO ENV-GATED EXTRAS, off in the gate and on when a human needs evidence:
 //   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm, ssr-firefly-{half,hq}.ppm and
@@ -614,11 +615,24 @@ int main()
     // produced the dots; a single cube over a floor (the fixture above) barely
     // does.
     //
-    // THE DETECTOR IS A MEDIAN, deliberately. A firefly is a pixel far brighter
-    // than its neighbourhood; a reflection EDGE — which this frame is full of,
-    // legitimately — is not, because half of an edge pixel's neighbours are on
-    // its own side and the median follows them. So the assertion is specific to
-    // the defect and does not merely forbid contrast.
+    // WHAT THIS GATE PROVES, EXACTLY — measured against the pre-fix shaders,
+    // because a gate whose bite is assumed is worth nothing:
+    //   * It is a REGRESSION GUARD, not a reproduction. With the old resolve
+    //     staged, this fixture at 256x256 does NOT produce isolated sparks:
+    //     what it produces is a bright bleed into the lower end of each dark
+    //     slab reflection and one extra row of the reflection boundary's
+    //     documented dither (617 of 65536 pixels differ at full-res rays, 552
+    //     at half-res, up to 168/255 apiece — the fix's effect is real and
+    //     large, it simply is not shaped like a dot at this size). The dots
+    //     the report is about are that same mechanism at 1080p over textured
+    //     geometry; the pixel evidence for THEM is a before/after of the
+    //     Grand Showroom, not this fixture.
+    //   * What it does guard is the failure this shader is one edit away from
+    //     at any time: a resolve that hands back a coordinate no tap reported
+    //     lands somewhere arbitrary, and somewhere arbitrary in a scene with
+    //     any bright object in it is a spark. If that ever comes back with a
+    //     spark's shape, on a floor whose reflections cross nine silhouettes,
+    //     this assertion is what says so.
     {
         Scene *ff = engine->createScene("ssr-firefly");
         View *ffv = engine->createOffscreenView("ssr-firefly", 256, 256, Colour(0, 0, 0));
@@ -641,20 +655,50 @@ int main()
                 enginetest::setNodePosition(ff, plate, Vec3(0.0f, -0.1f, 0.0f));
             }
 
-            // The picket line: narrow, bright, and at three depths, so every
-            // slab's edge is a depth discontinuity against the slab behind it.
-            for (int i = 0; i < 9; ++i) {
-                const NodeId slab = ff->createNode();
+            // THE BRIGHT WALL BEHIND EVERYTHING. The contrast has to be this
+            // way round and it is the whole reason the first version of this
+            // fixture caught nothing: the defect INVENTS a coordinate between
+            // two neighbouring hits, so it only shows when the invented place
+            // is BRIGHTER than the two real ones. Bright objects on a black
+            // background invent a coordinate in the black and produce nothing;
+            // dark objects in front of a bright wall invent one ON THE WALL.
+            {
+                const NodeId wall = ff->createNode();
                 PbrParams p;
                 p.albedo = Colour(0.02f, 0.02f, 0.02f);
                 p.emissive = Colour(6.0f, 6.0f, 6.0f);
-                p.roughness = 0.4f;
+                p.roughness = 0.5f;
+                const MaterialId m = ff->createPbrMaterial(p);
+                const MeshId mesh = ff->createMesh(enginetest::unitCubeMesh());
+                CHECK(wall && m && mesh && ff->attachMesh(wall, mesh, m),
+                      "firefly fixture: the bright backdrop exists");
+                enginetest::setNodeScale(ff, wall, Vec3(26.0f, 7.0f, 0.2f));
+                enginetest::setNodePosition(ff, wall, Vec3(0.0f, 3.0f, -9.0f));
+            }
+
+            // The picket line: narrow, DARK, and at three depths, so a ray
+            // that just catches one slab and its neighbour that just catches
+            // the slab behind it hit two places with a slice of bright wall
+            // between them. That is the exact geometry the resolve used to
+            // average across.
+            for (int i = 0; i < 9; ++i) {
+                const NodeId slab = ff->createNode();
+                PbrParams p;
+                p.albedo = Colour(0.015f, 0.015f, 0.015f);
+                p.roughness = 0.55f;
                 const MaterialId m = ff->createPbrMaterial(p);
                 const MeshId mesh = ff->createMesh(enginetest::unitCubeMesh());
                 if (!(slab && m && mesh && ff->attachMesh(slab, mesh, m))) break;
-                enginetest::setNodeScale(ff, slab, Vec3(0.22f, 1.4f, 0.22f));
+                enginetest::setNodeScale(ff, slab, Vec3(0.30f, 1.6f, 0.30f));
+                // ENTIRELY ABOVE EYE LEVEL (the camera sits at y = 0.45), so
+                // every direct slab pixel is above the horizon and the probe
+                // region below it contains floor and reflections ONLY. With
+                // the slabs standing ON the floor their thin, one-pixel-wide
+                // bases fall inside the probe and read as sparks that have
+                // nothing to do with SSR — measured, and the reason for this
+                // geometry.
                 enginetest::setNodePosition(ff, slab,
-                                            Vec3(-3.6f + float(i) * 0.9f, 0.75f,
+                                            Vec3(-3.6f + float(i) * 0.9f, 1.65f,
                                                  -1.2f + float(i % 3) * 1.5f));
             }
             enginetest::addDirectionalLight(ff, Vec3(-0.3f, -1.0f, -0.4f), 2.0f);
@@ -664,6 +708,17 @@ int main()
             // A pixel is a FIREFLY when its luminance exceeds the median of its
             // eight neighbours by `ratio`, in a region bright enough for the
             // ratio to mean anything.
+            // WHAT COUNTS AS A FIREFLY. Strict isolation: brighter than the
+            // BRIGHTEST of its eight neighbours by `ratio`. Everything softer
+            // than that was tried and is a false positive on this fixture —
+            // "brighter than the median" flags every pixel of the one-pixel
+            // -wide streak a thin object's reflection legitimately is, and
+            // "dark on both sides in all four directions" still flags the
+            // corner of a steep reflection edge (measured: a 201-156-51-6-0
+            // ramp). A spark has nothing comparable next to it in any
+            // direction and this is the only test that says exactly that; the
+            // price is that a two-pixel spark is not seen, which is the right
+            // side to err on for a gate that must never cry wolf.
             auto fireflies = [](const Image &img, float ratio, float &outWorst,
                                 int *outX, int *outY) {
                 const unsigned y0 = img.height * 55u / 100u;
@@ -675,20 +730,17 @@ int main()
                 };
                 for (unsigned y = y0 + 1; y + 1 < img.height; ++y)
                     for (unsigned x = 1; x + 1 < img.width; ++x) {
-                        float n[8];
-                        int k = 0;
-                        for (int dy = -1; dy <= 1; ++dy)
-                            for (int dx = -1; dx <= 1; ++dx)
-                                if (dx || dy) n[k++] = lum(x + dx, y + dy);
-                        std::sort(n, n + 8);
-                        const float med = 0.5f * (n[3] + n[4]);
                         const float l = lum(x, y);
                         // Below this the frame is near-black and a "ratio" is
                         // quantization noise, not a spark.
                         if (l < 0.12f) continue;
-                        if (l > med * ratio + 0.04f) {
+                        float ref = 0.0f;
+                        for (int dy = -1; dy <= 1; ++dy)
+                            for (int dx = -1; dx <= 1; ++dx)
+                                if (dx || dy) ref = std::max(ref, lum(x + dx, y + dy));
+                        if (l > ref * ratio + 0.04f) {
                             ++count;
-                            const float r = med > 1e-4f ? l / med : 999.0f;
+                            const float r = ref > 1e-4f ? l / ref : 999.0f;
                             if (r > outWorst) { outWorst = r; if (outX) *outX = int(x); if (outY) *outY = int(y); }
                         }
                     }
