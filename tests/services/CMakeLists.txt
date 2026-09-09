@@ -182,3 +182,28 @@ jah_tsan_lane(services.memory)
 # only leak; the registry ownership it actually tests is clean).
 jah_lsan_lane(services.core)
 jah_lsan_blocked(services.memory)
+
+# services.clipboard — the clipboard's two leaves (CLIPBOARD_SPEC P0): the
+# envelope codec and the key-aware asset walk, plus the in-memory backend.
+# Links the three leaf TUs and IrisGL (the walk's material key table IS
+# iris::PbrMaterial::mapRowNames(), which is the assertion that matters). No
+# database, no engine, no display.
+find_package(Qt6 REQUIRED COMPONENTS Gui)
+add_executable(test_clipboard test_clipboard.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetrefs.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/clipboardbackend.cpp)
+set_target_properties(test_clipboard PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_clipboard PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_clipboard PRIVATE IrisGL Qt6::Gui)
+add_test(NAME services.clipboard COMMAND test_clipboard
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(services.clipboard PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+jah_no_display(services.clipboard)

@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/playbackservice.h"
 #include "services/sceneeditservice.h"
+#include "services/clipboardservice.h"
 #include "services/selectionservice.h"
 #include "services/outlinesettings.h"
 #include "services/undoservice.h"
@@ -95,18 +96,22 @@ QVector<VerbInfo> EditorApi::verbs() const
           "original — and selects the copies. Returns the new ids, the primary's copy first.",
           Needs::Document },
         { "copy", "editor.copy() -> n",
-          "Copies the selection into the EDITOR clipboard (in-app, never the system clipboard) as "
-          "scene fragments and returns how many. Not an undo entry. Copying nothing leaves the "
-          "previous clipboard alone and returns 0 — a refusal, not an exception (app.lastError "
-          "carries the reason).",
+          "DEPRECATED — call clipboard.copy(). An alias kept for scripts written before the "
+          "clipboard became one component: it copies the selection onto the SAME system clipboard "
+          "clipboard.copy writes to (with the asset closure) and returns how many objects went. Not "
+          "an undo entry; copying nothing leaves the previous clipboard alone and returns 0.",
           Needs::Document },
         { "paste", "editor.paste() -> [id]",
-          "Pastes the clipboard beside the primary — same parent, sibling index + 1, local "
-          "transform kept — or at the scene root when nothing is selected. Fresh guids, one undo "
-          "step, and the pasted nodes become the selection.",
+          "DEPRECATED — call clipboard.paste(). An alias: pastes the clipboard's scene objects "
+          "beside the primary — same parent, sibling index + 1, local transform kept — or at the "
+          "scene root when nothing is selected. Fresh guids, one undo step, and the pasted nodes "
+          "become the selection. It returns the new ids only; the missing-asset and skipped-item "
+          "reports are clipboard.paste's.",
           Needs::Document },
         { "clipboard", "editor.clipboard() -> [{format, version, node, parent, index}]",
-          "The editor clipboard's fragments, in the shape node.serialize returns.",
+          "DEPRECATED — call clipboard.contents() (a description) or clipboard.text() (the "
+          "payload). An alias: the clipboard's SCENE-OBJECT items in the shape node.serialize "
+          "returns. Empty when the clipboard holds something that is not a Jahshaka payload.",
           Needs::Document },
         { "gizmoMode", "editor.gizmoMode() -> \"translate\" | \"rotate\" | \"scale\"",
           "The active transform gizmo mode (W/E/R in the viewport; Space cycles).",
@@ -661,9 +666,17 @@ QVariantList EditorApi::duplicateSelection()
     return out;
 }
 
+// ---- the clipboard aliases (CLIPBOARD_SPEC §8) ------------------------------
+//
+// One clipboard, three older names. These three verbs shipped against the
+// in-app QList<SceneFragment> that ClipboardService replaced; they are kept as
+// thin delegates so scripts and the MCP tools written against them keep
+// working, and they now read and write exactly what clipboard.* does. New code
+// calls the clipboard module — the doc strings say so.
+
 int EditorApi::copy()
 {
-    if (!host.services || !host.services->selection || !host.services->sceneEdit) {
+    if (!host.services || !host.services->selection || !host.services->clipboard) {
         fail("editor: not available in this session");
         return 0;
     }
@@ -673,38 +686,41 @@ int EditorApi::copy()
     // survives it. Throwing aborted the caller's script over a documented
     // outcome (hygiene lane, 2026-09-09).
     if (set.isEmpty()) { refuse("editor.copy: nothing is selected"); return 0; }
-    return host.services->sceneEdit->copyNodes(set);
+    const auto result = host.services->clipboard->copyNodes(set);
+    if (!result.ok()) { refuse(QStringLiteral("editor.copy: %1").arg(result.error)); return 0; }
+    return result.items;
 }
 
 QVariantList EditorApi::paste()
 {
     QVariantList out;
-    if (!host.services || !host.services->sceneEdit) {
+    if (!host.services || !host.services->clipboard) {
         fail("editor: not available in this session");
         return out;
     }
-    if (host.services->sceneEdit->clipboard().isEmpty()) {
+    if (host.services->clipboard->contents().isNull()) {
         fail("editor.paste: the clipboard is empty");
         return out;
     }
-    for (const auto &node : host.services->sceneEdit->paste())
-        if (node) out.append(node->getGUID());
+    for (const QString &id : host.services->clipboard->paste().pasted) out.append(id);
     return out;
 }
 
 QVariantList EditorApi::clipboard()
 {
     QVariantList out;
-    if (!host.services || !host.services->sceneEdit) return out;
-    for (const SceneFragment &fragment : host.services->sceneEdit->clipboard()) {
+    if (!host.services || !host.services->clipboard) return out;
+    const auto envelope = host.services->clipboard->contents();
+    for (const auto &item : envelope.items) {
+        if (item.kind != QLatin1String(clipboardformat::kind::node())) continue;
         // The same shape node.serialize returns — session node ids deliberately
         // left out for the same reason it leaves them out.
         out.append(QVariantMap{
             { "format", QString::fromLatin1(sceneformat::kFormatId()) },
-            { "version", sceneformat::kVersion },
-            { "node", fragment.node.toVariantMap() },
-            { "parent", fragment.parentGuid },
-            { "index", fragment.siblingIndex } });
+            { "version", envelope.sceneFormat > 0 ? envelope.sceneFormat : sceneformat::kVersion },
+            { "node", item.nodeObject().toVariantMap() },
+            { "parent", item.parentGuid() },
+            { "index", item.siblingIndex() } });
     }
     return out;
 }

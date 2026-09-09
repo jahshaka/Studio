@@ -105,6 +105,7 @@ class PerfSampler;
 class PlayerService;
 class ProjectService;
 class SceneEditService;
+class ClipboardService;
 class ThumbnailService;
 class AssetService;
 // class SceneNodePropertiesWidget;
@@ -552,6 +553,7 @@ public slots:
     void deleteActiveSpace();
     void duplicateActiveSpace();
     void copyActiveSpace();
+    void cutActiveSpace();
     void pasteActiveSpace();
     void selectAllActiveSpace();
     /// Space: node search on the Materials space, gizmo cycle elsewhere.
@@ -853,6 +855,7 @@ private:
     PlayerService *playerService = nullptr;
     ProjectService *projectService = nullptr;
     SceneEditService *sceneEditService = nullptr;
+    ClipboardService *clipboardService = nullptr;
     ThumbnailService *thumbnailService = nullptr;
     AssetService *assetService = nullptr;
 

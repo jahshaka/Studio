@@ -248,18 +248,17 @@ public:
     /// copy lands beside its own original rather than shifting the next one.
     QList<iris::SceneNodePtr> duplicateNodes(const QList<iris::SceneNodePtr> &nodes);
 
-    /// Captures the effective set into the in-app clipboard (D9 (a)) as scene
-    /// fragments — the same shape node.serialize returns. NOT an undo entry.
-    /// Returns how many fragments were stored.
-    int copyNodes(const QList<iris::SceneNodePtr> &nodes);
-
-    /// Pastes the clipboard beside the PRIMARY (D7 (a)): same parent, sibling
-    /// index + 1, local transform kept; the scene root when nothing is
-    /// selected. One undo step; the pasted roots become the selection.
-    QList<iris::SceneNodePtr> paste();
-
-    /// The in-app clipboard's fragments, in the order they were copied.
-    const QList<SceneFragment> &clipboard() const { return mClipboard; }
+    // COPY / PASTE LIVE IN ClipboardService NOW (CLIPBOARD_SPEC D3 b).
+    //
+    // What used to be here — copyNodes(set), paste(), clipboard(), and the
+    // QList<SceneFragment> behind them — was an IN-APP clipboard, invisible to
+    // a second instance and to every other space in the app. It is deleted,
+    // not wrapped: the system clipboard is the one truth now, and the shell,
+    // the verbs and the tree menu all call services/clipboardservice.h. What
+    // stays here is the NODE DOMAIN's implementation, which the clipboard uses
+    // and does not own: captureFragment / rebuildFragment / insertFragment,
+    // the D7 placement inside insertFragment, and the fresh-guid + naming
+    // rules a paste applies.
 
     // ---- document fragments (SPECS/SCENEGRAPH_SPEC.md §3 step 4 / v1.5) -----
     //
@@ -348,11 +347,6 @@ private:
     IEditorViewport *viewport;
     std::function<iris::ScenePtr()> sceneProvider;
 
-    /// The editor clipboard (D9 (a)): in-app, never the system clipboard — a
-    /// scene fragment on text/plain would land in every text field the user
-    /// Ctrl+Vs into, and a fragment is only meaningful against this database
-    /// (assets travel as guids).
-    QList<SceneFragment> mClipboard;
 };
 
 #endif // SCENEEDITSERVICE_H

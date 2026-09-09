@@ -12,7 +12,8 @@
 //      and a paste lands right after the PRIMARY (D7 a) with FRESH GUIDS.
 //   3. THE SELECTION THAT RESULTS — copies/pastes become the new selection,
 //      primary first; a delete ends with nothing selected.
-//   4. THE CLIPBOARD IS IN-APP (D9 a) and is not part of the document.
+//   4. THE CLIPBOARD IS NOT PART OF THE DOCUMENT (and since CLIPBOARD_SPEC
+//      D3 b it is the SYSTEM clipboard; these verbs are aliases onto it).
 //
 // WHAT IS NOT ASSERTED HERE, and why: that each of these is ONE undo step. A
 // --script run is itself one open macro and QUndoStack refuses to undo into an
@@ -143,7 +144,12 @@ var pastedWithKid = childrenOf(pasted[0]).length > 0 ? pasted[0] : pasted[1];
 assert(childrenOf(pastedWithKid).length === 1, "the pasted subtree carries its child");
 assert(childrenOf(pastedWithKid)[0] !== d1Kid, "with a fresh guid of its own");
 
-// ---- 4. the clipboard is in-app, not the document --------------------------
+// ---- 4. the clipboard is not the document ----------------------------------
+//
+// (It is the SYSTEM clipboard since CLIPBOARD_SPEC D3 b — one component for the
+// whole app, behind these same three verbs, which are aliases onto it now. What
+// this section still gates is unchanged: copying nothing must not lose what was
+// copied a moment ago, and a paste with no selection lands at the root.)
 editor.selectNone();
 // Copying nothing is a REFUSAL, not a silent success — and since the refusal
 // contract landed (hygiene lane, 2026-09-09) it is ANSWERED rather than thrown:

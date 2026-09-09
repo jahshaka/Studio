@@ -1,0 +1,135 @@
+// scripting.e2e.clipboard_xproject — THE CLOSURE AND ITS RESOLUTION
+// (CLIPBOARD_SPEC P1, §3.4).
+//
+// The hard half of "deep". A copied object's document data always travels; its
+// ASSETS are references, and a reference is only as good as the resolution
+// behind it. What this proves, in one process against one real library:
+//
+//   1. THE CLOSURE TRAVELS. Copying a textured cube puts the texture in the
+//      payload — its catalog row, its dependency edges, and (under the 4 MB
+//      budget) its BYTES, base64 in one line of text.
+//   2. A PASTE INTO ANOTHER PROJECT PINS WHAT IT NEEDS. Same library, second
+//      project: the texture is pinned as a BINDING (never a Direct add, which
+//      would mint a companion material nobody asked for) and the pasted
+//      material still resolves its map.
+//   3. STEP 3 OF THE RESOLVER: a payload stripped of its inline bytes but
+//      keeping the real content id still resolves — the object is in this
+//      machine's store, and dedup means content is found by oid, not by path.
+//   4. STEP 5: an UNKNOWN guid with an unfindable oid is MISSING. The items
+//      that need it are REFUSED (a node with no mesh and no log is a bug
+//      report, not a feature) and `allowMissing` opts into pasting it anyway.
+//
+// Points 3 and 4 are driven by REWRITING THE PAYLOAD TEXT in JavaScript and
+// putting it back with clipboard.setText — which is itself the property the
+// format exists for: the clipboard is text a tool can read and edit.
+//
+// Document verbs only -> --headless. Throwing exits non-zero.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function pinnedGuids() {
+    return assets.list({ scope: "project" }).map(function (a) { return a.guid; });
+}
+
+// ---- the library asset ----------------------------------------------------
+var tex = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(typeof tex === "string" && tex.length > 10, "tiny.png imported into the library");
+
+// ---- project A: a textured cube -------------------------------------------
+var projectA = project.create("Clipboard A " + Date.now());
+assert(projectA.length > 10, "project A created");
+var cube = scene.addPrimitive("cube");
+assert(material.set(cube, { baseColorMap: tex }), "the texture bound as baseColorMap");
+assert(("" + material.get(cube).baseColorMap).length > 0, "and the material carries it");
+
+editor.select(cube);
+var copied = clipboard.copy();
+console.log("copy -> " + J(copied));
+assert(copied.items === 1, "one object copied");
+assert(copied.assets >= 1, "and its asset closure travelled: " + copied.assets + " asset(s)");
+assert(copied.inlined >= 1, "with bytes inline (tiny.png is far under the 4 MB budget)");
+
+var payload = JSON.parse(clipboard.text());
+assert(!!payload.assets[tex], "the payload's closure is keyed by asset guid");
+assert(payload.assets[tex].name === "tiny.png", "with the catalog row's name");
+assert(payload.assets[tex].type === "texture", "and its type");
+assert(payload.assets[tex].files.length >= 1, "and its files");
+assert(payload.assets[tex].files[0].oid.length === 64,
+       "each file carries its sha256 content id — the join key in every store");
+assert(payload.assets[tex].files[0].inline.length > 0, "and its bytes, base64");
+assert(payload.source.storeRoot.length > 0,
+       "the payload records the source store root as a same-machine fetch hint");
+
+var resolveA = clipboard.resolve();
+assert(resolveA.known.indexOf(tex) >= 0, "resolve(): this library already has the texture");
+assert(resolveA.missing.length === 0, "and nothing is missing");
+
+// ---- project B: same library, second project ------------------------------
+var projectB = project.create("Clipboard B " + Date.now());
+assert(projectB.length > 10 && projectB !== projectA, "project B created");
+assert(pinnedGuids().indexOf(tex) < 0, "B does not pin the texture yet");
+
+var pastedB = clipboard.paste();
+console.log("paste into B -> " + J(pastedB));
+assert(pastedB.pasted.length === 1, "the object pasted into B");
+assert(pastedB.missing.length === 0, "with nothing missing");
+assert(pastedB.pinned.indexOf(tex) >= 0, "and the texture was PINNED into B: " + J(pastedB.pinned));
+assert(pinnedGuids().indexOf(tex) >= 0, "which assets.list({scope:'project'}) confirms");
+assert(("" + material.get(pastedB.pasted[0]).baseColorMap).length > 0,
+       "the pasted material still resolves its map in the new project");
+
+// ---- step 3: oid only, and this machine's store has the object ------------
+var oidOnly = JSON.parse(clipboard.text());
+// A fresh guid for the SAME bytes: unknown to this catalog, so the resolver
+// cannot take step 1 — but the oid is real and the object is right here.
+var newGuid = "beef0000-0000-4000-8000-000000000001";
+var texEntry = oidOnly.assets[tex];
+delete texEntry.files[0].inline;                 // no bytes: the oid is the whole reference
+delete oidOnly.assets[tex];
+oidOnly.assets[newGuid] = texEntry;
+oidOnly.items[0].node.material.values.baseColorMap = newGuid;
+assert(clipboard.setText(JSON.stringify(oidOnly)).valid, "the rewritten payload is accepted");
+var planOid = clipboard.resolve();
+assert(planOid.importable.indexOf(newGuid) >= 0,
+       "resolve(): an oid-only asset whose object is in THIS store is importable: " + J(planOid));
+var pastedOid = clipboard.paste();
+assert(pastedOid.missing.length === 0, "so the paste needs nothing");
+assert(pastedOid.imported.indexOf(newGuid) >= 0,
+       "and it registered the row over the EXISTING object, no copy: " + J(pastedOid.imported));
+assert(assets.metadata(newGuid).type === "texture",
+       "the new row is a real texture asset in this library");
+assert(pastedOid.pasted.length === 1, "and the object landed");
+
+// ---- step 5: unknown guid, unfindable oid -> MISSING ----------------------
+var broken = JSON.parse(clipboard.text());
+var lostGuid = "beef0000-0000-4000-8000-000000000002";
+var lostEntry = broken.assets[newGuid];
+delete broken.assets[newGuid];
+lostEntry.files[0].oid = "0000000000000000000000000000000000000000000000000000000000000000";
+delete lostEntry.files[0].inline;
+broken.assets[lostGuid] = lostEntry;
+broken.items[0].node.material.values.baseColorMap = lostGuid;
+assert(clipboard.setText(JSON.stringify(broken)).valid, "the broken payload is still valid text");
+
+var plan = clipboard.resolve();
+assert(plan.missing.length === 1 && plan.missing[0].guid === lostGuid,
+       "resolve() reports it missing before anything is written: " + J(plan.missing));
+assert(plan.missing[0].name === "tiny.png", "by name");
+assert(plan.missing[0].neededBy.length > 0,
+       "and says WHAT needs it: " + plan.missing[0].neededBy);
+
+var refused = clipboard.paste();
+console.log("paste with a missing asset -> " + J(refused));
+assert(refused.pasted.length === 0, "the paste is REFUSED by default");
+assert(refused.missing.length === 1 && refused.missing[0].guid === lostGuid, "and says why");
+assert(refused.skipped.length === 1 && refused.skipped[0].kind === "node",
+       "the item that needed it is listed as skipped: " + J(refused.skipped));
+
+var anyway = clipboard.paste({ allowMissing: true });
+assert(anyway.pasted.length === 1, "allowMissing pastes it anyway (Unreal's behaviour)");
+assert(anyway.missing.length === 1, "and still reports the gap");
+
+console.log("scripting.e2e.clipboard_xproject: OK");

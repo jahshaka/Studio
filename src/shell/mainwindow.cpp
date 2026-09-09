@@ -197,6 +197,7 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/sceneextents.h"
 #include "ui/dialogs/progressdialog.h"
 #include "services/sceneeditservice.h"
+#include "services/clipboardservice.h"
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
 #include "ui/style/stylesheet.h"
@@ -977,6 +978,18 @@ void MainWindow::setupServices()
         sceneNodePropertiesWidget->refreshMaterial(type);
     });
 
+    // THE CLIPBOARD (CLIPBOARD_SPEC D3 b) — one component, over the system
+    // clipboard, for every space in the app. Constructed after the services it
+    // drives (the node domain's fragments, the selection, the undo sink) and
+    // handed to the shell, the verbs and the tree menu as one pointer.
+    clipboardService = new ClipboardService(db, project, sceneEditService,
+                                            selectionService, undoService, nullptr, this);
+    connect(clipboardService, &ClipboardService::assetsImported, this,
+            [this](const QStringList &) {
+        // A paste that imported library assets has changed the library.
+        if (assetWidget) assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
+    });
+
     thumbnailService = new ThumbnailService(db, project);
     assetService = new AssetService(db, project);
 
@@ -988,6 +1001,7 @@ void MainWindow::setupServices()
     services->player = playerService;
     services->project = projectService;
     services->sceneEdit = sceneEditService;
+    services->clipboard = clipboardService;
     services->thumbnails = thumbnailService;
     services->assets = assetService;
 
@@ -3387,6 +3401,13 @@ void MainWindow::setupShortcuts()
             [this]() { duplicateActiveSpace(); });
     reg.add("edit.copy", "Copy Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_C), this,
             [this]() { copyActiveSpace(); });
+    // Ctrl+X. The third chord of the set, and the one that was missing: a
+    // clipboard whose copy travels to another instance but whose CUT does not
+    // exist is half a clipboard. Same single-claimant routing, same text-field
+    // rule as the two above (a focused QLineEdit accepts the ShortcutOverride
+    // for Cut before a WindowShortcut can fire).
+    reg.add("edit.cut", "Cut Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_X), this,
+            [this]() { cutActiveSpace(); });
     reg.add("edit.paste", "Paste", "Editing", QKeySequence(Qt::CTRL | Qt::Key_V), this,
             [this]() { pasteActiveSpace(); });
     // Ctrl+A (EDITOR_MULTISELECT_SPEC §8.7, decided 2026-09-09). Same
@@ -3764,14 +3785,31 @@ void MainWindow::copyActiveSpace()
         if (shaderGraph) shaderGraph->graphCopySelected();
         return;
     }
-    // Two clipboards in one app, by space (D9): the graph's is the SYSTEM
-    // clipboard (its nodes are text/plain JSON), the editor's is in-app,
-    // because a scene fragment is only meaningful against this database and
-    // would otherwise land in every text field the user pastes into.
-    if (currentSpace == WindowSpaces::EDITOR && services && services->sceneEdit &&
+    // ONE clipboard now (CLIPBOARD_SPEC D3 b): the editor writes the same
+    // system clipboard the Materials graph does, as a self-identifying text
+    // payload, so a copy crosses to a second instance and back. The Materials
+    // space keeps its own payload shape for one release (§2.2 `graph` items are
+    // P2) — hence the branch above, not a second clipboard.
+    if (currentSpace == WindowSpaces::EDITOR && services && services->clipboard &&
         services->selection) {
-        const int n = services->sceneEdit->copyNodes(services->selection->selectedSet());
-        if (n > 0) showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(n));
+        const auto result = services->clipboard->copyNodes(services->selection->selectedSet());
+        if (result.ok())
+            showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(result.items));
+    }
+}
+
+void MainWindow::cutActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        // The graph has no cut of its own; deliberately NOT a fallback to the
+        // scene, for the reason undoActiveSpace records.
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR && services && services->clipboard &&
+        services->selection) {
+        const auto result = services->clipboard->cutNodes(services->selection->selectedSet());
+        if (result.ok())
+            showViewportToast(tr("Cut"), tr("%1 object(s) cut").arg(result.copy.items));
     }
 }
 
@@ -3809,8 +3847,33 @@ void MainWindow::pasteActiveSpace()
         if (shaderGraph) shaderGraph->graphPaste();
         return;
     }
-    if (currentSpace == WindowSpaces::EDITOR && services && services->sceneEdit)
-        services->sceneEdit->paste();
+    if (currentSpace != WindowSpaces::EDITOR || !services || !services->clipboard) return;
+
+    const auto result = services->clipboard->paste();
+    // WHAT THE PASTE COULD NOT DO IS SAID OUT LOUD. A clipboard that holds
+    // nothing of ours, or objects whose textures this library has never seen,
+    // used to be a silent no-op — the worst possible answer for a chord.
+    if (!result.error.isEmpty()) {
+        showViewportToast(tr("Paste"), result.error);
+        return;
+    }
+    if (!result.missing.isEmpty()) {
+        showViewportToast(tr("Paste"),
+                          tr("%1 object(s) pasted — %2 asset(s) missing from this library")
+                              .arg(result.pasted.size()).arg(result.missing.size()));
+        return;
+    }
+    if (result.pasted.isEmpty()) {
+        const QString reason = result.skipped.isEmpty()
+                                   ? tr("the clipboard holds nothing to paste here")
+                                   : result.skipped.first().reason;
+        showViewportToast(tr("Paste"), reason);
+        return;
+    }
+    QString message = tr("%1 object(s) pasted").arg(result.pasted.size());
+    if (!result.imported.isEmpty())
+        message += tr(", %1 asset(s) imported").arg(result.imported.size());
+    showViewportToast(tr("Paste"), message);
 }
 
 // ---- Space routing (owner decision 2026-09-05) -----------------------------

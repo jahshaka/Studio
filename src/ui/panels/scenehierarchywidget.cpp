@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
+#include "services/clipboardservice.h"
 #include "data/constants.h"
 #include "viewport/ieditorviewport.h"
 #include "services/planarreflectors.h"
@@ -941,6 +942,58 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         action = new QAction(QIcon(), "Duplicate", this);
         connect(action, SIGNAL(triggered()), this, SLOT(duplicateNode()));
         menu.addAction(action);
+    }
+
+    // ---- CUT / COPY / PASTE (CLIPBOARD_SPEC §3.1) --------------------------
+    //
+    // The tree had no clipboard rows at all: Ctrl+C/Ctrl+V were the only way to
+    // reach the capability, which is not how anyone looks for it. These call the
+    // same ClipboardService verbs the chords do — never a second implementation
+    // — and act on the SAME target set the rest of this menu does (the
+    // right-clicked row, or the whole selection when the row is part of it).
+    if (ClipboardService *clip = mainWindow && mainWindow->studioServices()
+                                     ? mainWindow->studioServices()->clipboard : nullptr) {
+        menu.addSeparator();
+        if (!node->isRootNode()) {
+            action = new QAction(QIcon(), tr("Copy"), this);
+            connect(action, &QAction::triggered, this, [clip, targets]() {
+                clip->copyNodes(targets);
+            });
+            menu.addAction(action);
+
+            if (node->isRemovable()) {
+                action = new QAction(QIcon(), tr("Cut"), this);
+                connect(action, &QAction::triggered, this, [clip, targets]() {
+                    clip->cutNodes(targets);
+                });
+                menu.addAction(action);
+            }
+        }
+        // Offered only when there is something a tree paste can land — a menu
+        // row that always exists and usually refuses teaches nothing.
+        const auto payload = clip->contents();
+        if (!payload.itemsOfKind(QLatin1String(clipboardformat::kind::node())).isEmpty()) {
+            action = new QAction(QIcon(), tr("Paste"), this);
+            connect(action, &QAction::triggered, this, [this, clip, node]() {
+                // BESIDE THE CLICKED ROW, which is what a paste in a tree means
+                // (the chord's D7 placement is beside the PRIMARY; here the
+                // right-clicked row is the anchor the user pointed at).
+                ClipboardPasteOptions options;
+                if (auto parent = node->getParent()) {
+                    options.parentGuid = parent->getGUID();
+                    const int after = node->siblingIndex();
+                    options.index = after >= 0 ? after + 1 : -1;
+                } else {
+                    options.parentGuid = node->getGUID();   // the World root itself
+                }
+                const auto result = clip->paste(options);
+                if (!result.missing.isEmpty() && mainWindow)
+                    QMessageBox::warning(this, tr("Paste"),
+                        tr("%1 asset(s) the copied objects need are not in this library.")
+                            .arg(result.missing.size()));
+            });
+            menu.addAction(action);
+        }
     }
 
 	action = new QAction(QIcon(), "Focus Camera", this);
