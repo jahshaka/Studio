@@ -63,3 +63,40 @@ add_test(NAME scenegraph.benchmark COMMAND bench_scenegraph --assert
 set_tests_properties(scenegraph.benchmark PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 1200 LABELS "benchmark"
     RUN_SERIAL TRUE)
+
+# THE RIG-PERF BENCH (SPECS/AVATAR_RIG_PERF_SPEC.md P0 / P3).
+#
+# Same shape as bench_scenegraph — one binary, `--assert` for ctest and
+# `--record <file>` for the committed numbers — but a different subject: four
+# five-piece characters, and the three structural counts (SkeletonInstances,
+# setClipStates calls per frame, bone matrices streamed per pass) the sharing
+# program claims to reduce. P0 records them; P3 arms the equalities.
+add_executable(bench_rigperf bench_rigperf.cpp
+               ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(bench_rigperf PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(bench_rigperf PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(bench_rigperf PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    BENCH_GIT_COMMIT="${JAH_BENCH_COMMIT}"
+    BENCH_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
+    BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+target_link_libraries(bench_rigperf PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+add_dependencies(bench_rigperf JahshakaEngineMedia)
+
+add_test(NAME rigperf.benchmark COMMAND bench_rigperf --assert
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL for the same reason scenegraph.benchmark is: it times wall clock,
+# and a parallel ctest schedule turns the dispersion bound into a coin flip.
+set_tests_properties(rigperf.benchmark PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "benchmark"
+    RUN_SERIAL TRUE)
