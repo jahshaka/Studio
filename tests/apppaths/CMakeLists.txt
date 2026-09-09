@@ -15,6 +15,11 @@ add_test(NAME app.data_root
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/data_root.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
          WORKING_DIRECTORY ${_dr_home}/run)
+# THE ONE SUITE THAT MUST NOT HAVE JAHSHAKA_DATA_ROOT (hygiene batch,
+# 2026-09-09, when every other HOME-only suite got one). Its fourth arm runs the
+# binary with NO override at all and asserts the settings file is then where it
+# has always been — beside the binary in a Debug build — and that the run
+# restores it byte for byte. An override here would delete the assertion.
 set_tests_properties(app.data_root PROPERTIES
     ENVIRONMENT "HOME=${_dr_home}"
     TIMEOUT 300

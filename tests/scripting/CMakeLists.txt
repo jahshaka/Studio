@@ -807,7 +807,7 @@ add_test(NAME scripting.e2e.avatar_assets
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_assets.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 400)
 
@@ -823,7 +823,7 @@ foreach(_ms multiselect multiselect_edit)
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_${_ms}.js --headless
              WORKING_DIRECTORY ${_ms_home}/run)
     set_tests_properties(scripting.e2e.${_ms} PROPERTIES
-        ENVIRONMENT "HOME=${_ms_home};QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "HOME=${_ms_home};JAHSHAKA_DATA_ROOT=${_ms_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
         LABELS "scripting" TIMEOUT 300)
     jah_no_display(scripting.e2e.${_ms})
 endforeach()
