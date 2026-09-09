@@ -65,6 +65,9 @@ signals:
 
 private:
     void rebuild();
+    /// The ordered LOOKS stack (POST_LOOKS_SPEC.md §4.1) — the one part of this
+    /// section that is not a flat list of rows, because a stack is not one.
+    void buildLooks();
     void applied(bool rebuildPanel);
 
     QSharedPointer<iris::Scene> scene;

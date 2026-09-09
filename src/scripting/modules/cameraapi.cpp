@@ -21,6 +21,7 @@ For more information see the LICENSE file
 // the World rows' labels, ranges and availability here — one table for both
 // panels and both verbs, so a camera can never offer a row the world does not.
 #include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/ieditorviewport.h"
@@ -401,7 +402,7 @@ QVector<VerbInfo> CameraApi::verbs() const
           "editor.frame(1) after moving the rig before reading it.",
           Needs::Document },
         { "postFx", "camera.postFx(id, {hdr?, bloom?, bloomThreshold?, ssao?, ssaoPower?, "
-                    "ssaoRadius?, smaa?, ssr?, refractions?}?) -> "
+                    "ssaoRadius?, smaa?, ssr?, refractions?, looks?}?) -> "
                     "{id, overrides, resolved, available}",
           "The camera's PER-CAMERA POST OVERRIDES over the world's post chain "
           "(CAMERA_LENS_SPEC §5), read or written. Each row is TRI-STATE: a key present "
@@ -421,6 +422,15 @@ QVector<VerbInfo> CameraApi::verbs() const
           "EXPOSURE IS NOT HERE — a camera's exposure is its own block, in STOPS, with a mode "
           "(camera.settings' exposureMode/exposure/exposureMin/exposureMax), because it is a "
           "camera setting and not a value layered over the world's. "
+          "LOOKS is the one WHOLE-STACK row: `{looks: [...]}` gives this camera its own "
+          "ordered list of image filters, in world.looks()' shape (entries of {id, enabled?, "
+          "params?}), and it REPLACES the world's stack rather than merging with it — an "
+          "override over an ordered list is only well defined as a replacement, since a "
+          "camera pinning \"radialBlur's centre\" would mean nothing the moment the world "
+          "removed Radial Blur. An EMPTY array is a real override and says \"this camera has "
+          "no looks\" over a world that does; null clears it back to inheriting. Unknown look "
+          "ids, duplicates and out-of-range parameters are dropped or clamped exactly as "
+          "world.addLook does. "
           "SMAA takes only -1 (off): the PRESET is a shader recompile and a per-camera one "
           "would hitch on every cut, so it stays world-level (world.setAntiAliasing), and so "
           "does MSAA. "
@@ -844,6 +854,11 @@ QString postKeyNames()
 QVariant worldPostValue(const iris::ScenePtr &scene, const QString &key)
 {
     if (!scene) return QVariant();
+    // THE ONE STACK KEY (POST_LOOKS_SPEC §4.1 / D4). It is not a worldmodes row
+    // and never will be — looks are an art choice and are deliberately not
+    // tiered — so the world's value for it is the scene's own looks array.
+    if (key == QLatin1String("looks"))
+        return iris::normalizeLookStack(scene->looks).toVariantList();
     if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key))
         return p->get ? QVariant(p->get(scene)) : QVariant();
     if (const worldmodes::Row *r = worldmodes::row(key))
@@ -931,7 +946,16 @@ QVariantMap CameraApi::postFx(const QString &id, const QVariant &options)
     const iris::CameraPostKey *table = iris::cameraPostKeys(count);
     for (int i = 0; i < count; ++i) {
         const QString key = QString::fromLatin1(table[i].id);
-        const QVariant own = cam->postOverride(key);
+        // A Stack key has no scalar reading (postOverride returns invalid for
+        // it by contract), so its presence is asked directly. An override to
+        // the EMPTY stack is a real override and reads as one — that is the
+        // whole difference between "this camera has no looks" and "this camera
+        // inherits the world's".
+        const bool isStack = table[i].type == iris::CameraPostKeyType::Stack;
+        const QVariant own = isStack
+            ? (cam->hasPostOverride(key) ? QVariant(cam->postOverrideStack(key).toVariantList())
+                                         : QVariant())
+            : cam->postOverride(key);
         if (own.isValid()) overrides.insert(key, own);
         const QVariant world = worldPostValue(scene, key);
         resolved.insert(key, own.isValid() ? own : world);

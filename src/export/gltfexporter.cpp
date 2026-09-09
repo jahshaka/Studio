@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include <functional>
 #include <vector>
 
+#include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -1311,6 +1312,24 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         post["tonemap"] = scene->hdrEnabled ? QStringLiteral("hable") : QStringLiteral("neutral");
         post["exposure"] = double(scene->exposure);
         post["bloom"] = scene->hdrEnabled && scene->bloomEnabled;
+        // THE LOOKS STACK, RECORDED AND NOT IMPLEMENTED (POST_LOOKS_SPEC §8).
+        // Looks are editor/player only: the shipped three.js viewer renders the
+        // grade above and ignores this array. It travels anyway — in the
+        // document's own shape, ids and parameters, in frame order — because it
+        // is part of what the scene LOOKS like, and a future viewer that wants
+        // to implement one should not need the project file to find out that it
+        // exists. Only ENABLED entries: a look switched off is not part of the
+        // picture, and a viewer would have no way to know that.
+        QJsonArray looks;
+        for (const QJsonValue &v : iris::normalizeLookStack(scene->looks)) {
+            const QJsonObject entry = v.toObject();
+            if (!entry.value(QStringLiteral("enabled")).toBool(true)) continue;
+            QJsonObject out;
+            out["id"] = entry.value(QStringLiteral("id"));
+            out["params"] = entry.value(QStringLiteral("params"));
+            looks.append(out);
+        }
+        post["looks"] = looks;
         jahScene["post"] = post;
     }
     jahScene["ambientColor"] = scene->ambientColor.name();

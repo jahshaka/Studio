@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonObject>
+#include <QJsonArray>
 
 #include <utility>
 
@@ -35,6 +36,8 @@ For more information see the LICENSE file
 #include "irisgl/core/geometry/boundingsphere.h"
 #include <functional>
 #include "services/worldmodes.h"
+#include "services/looks.h"
+#include "commands/scenelookscommand.h"
 #include "services/gibounds.h"
 #include "services/undoservice.h"
 #include "commands/worldmodecommand.h"
@@ -157,7 +160,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "sunLight", "world.sunLight([id|null]) -> id",
           "Sun coupling: the DIRECTIONAL light the realistic sky's sun drives, by node id. Called with no argument it reads the current link (empty string = none). Given a node id it links that light — its rotation follows the sky's sun angles from then on, in the editor and in the player. Given null or an empty string it unlinks and the light goes back to manual control with the rotation it had before it was linked. One undo step either way; only the realistic sky has a sun, so the link is inert (but remembered) under any other sky type.",
           Needs::Document },
-        { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky, mode, settings}",
+        { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
@@ -175,8 +178,27 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "clearOverrides", "world.clearOverrides() -> object",
           "Drops every pinned row and re-applies the current mode. Returns world.settings(). Undoable.",
           Needs::Document },
-        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
-          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal PINS the exposure, which is the deterministic setting the secondary surfaces (thumbnails, previews, screenshots) grade with; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres. Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
+        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius, distortionStrength}) -> object",
+          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal PINS the exposure, which is the deterministic setting the secondary surfaces (thumbnails, previews, screenshots) grade with; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres; distortionStrength is a global multiplier on every distortion material's own strength (0 is inert — the frame is bit for bit the frame with no distortion at all). Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
+          Needs::Document },
+        // ---- THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1) ----------------------
+        { "looks", "world.looks() -> [{id, label, enabled, params}]",
+          "The scene's LOOKS STACK: the ordered list of image filters the renderer applies to the finished picture, after tonemapping and after anti-aliasing. THE ORDER IS THE FRAME ORDER — entry 0 runs first — and it is the whole authoring model: posterizing a desaturated frame and desaturating a posterized one are different pictures. An empty stack (the default, and every scene made before looks existed) costs exactly nothing: the stage is absent from the renderer's graph rather than switched off inside it, so the frame is bit for bit the frame with no looks at all. Looks are an ART choice and are deliberately NOT part of the World Mode tiers — switching to Low never silently drops somebody's look. Add one with world.addLook, and see world.lookCatalogue() for what exists.",
+          Needs::Document },
+        { "lookCatalogue", "world.lookCatalogue() -> [{id, label, doc, available, params:[{id, label, min, max, default, step, decimals, doc}]}]",
+          "Every look this build implements, with its parameters, their ranges and their defaults — what the World panel's Looks section and this documentation are generated from. 'available' is false for a look declared but not yet implemented by the renderer (there are none today); such a row is offered disabled rather than silently missing. Every look's first parameter is 'amount' and every look is an EXACT identity at amount 0 — the same frame, pixel for pixel, as no look at all — which is what makes a look safe to leave in a stack at zero.",
+          Needs::Document },
+        { "addLook", "world.addLook(id, params?, index?) -> {id, label, enabled, params}",
+          "Adds a look to the scene's stack and returns it. 'id' is one of world.lookCatalogue()'s ids; 'params' is any subset of that look's parameters (the rest take their defaults, and every value is clamped to the catalogue's range); 'index' is where in the stack it goes, 0 being first to run — omitted or out of range appends. A LOOK MAY APPEAR ONLY ONCE in a stack: every look's parameters live on one shared renderer material, so a second copy would be handed the first one's numbers. Adding a look that is already there is refused, and world.moveLook / world.setLook are the verbs for changing where it sits and what it does. One undo step.",
+          Needs::Document },
+        { "removeLook", "world.removeLook(id) -> bool",
+          "Removes a look from the scene's stack. Returns false when the stack does not have it. One undo step. To keep a look but stop it drawing, use world.setLook(id, {enabled: false}) — that leaves its settings in the document.",
+          Needs::Document },
+        { "moveLook", "world.moveLook(id, index) -> bool",
+          "Moves a look to a new position in the stack; 0 runs first. Since the stack order IS the order the filters are applied in, this is how the picture changes without changing any setting. An index past the end lands at the end. Returns false when the stack does not have the look. One undo step.",
+          Needs::Document },
+        { "setLook", "world.setLook(id, {enabled?, ...params}) -> {id, label, enabled, params}",
+          "Changes a look already in the stack: 'enabled' switches it on and off without losing its settings, and any of the look's own parameter names sets that parameter (clamped to the catalogue's range). Returns the look's new state. Scrubbing a parameter is free — it never rebuilds the renderer's graph, unlike adding, removing or reordering. One undo step.",
           Needs::Document },
         { "modeTable", "world.modeTable() -> object",
           "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from.",
@@ -1272,6 +1294,10 @@ QVariantMap WorldApi::get()
     out["mode"] = worldmodes::modeName(worldmodes::mode(scene));
     out["settings"] = settings();
     out["postFx"] = postFx();
+    // The looks stack rides world.get() beside the rest of the post chain: a
+    // script that asks "what does this world look like" must not have to know
+    // the stack is a separate verb.
+    out["looks"] = looks();
     out["fog"] = QVariantMap{ { "enabled", scene->fogEnabled },
                               { "color", colorToJs(scene->fogColor) },
                               { "density", scene->fogDensity },
@@ -1491,6 +1517,222 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
         out[p.id] = p.get(scene);
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1).
+//
+// Six verbs, and not one of them knows a look by name: every one walks the
+// document's catalogue (irisgl/document/scenegraph/looks.h), so a new look is a
+// table row there plus a shader, and nothing here changes. The same discipline
+// the World Mode verbs have had since they were generated from worldmodes::rows.
+//
+// THE RULES ARE ENFORCED IN ONE PLACE and it is not this file: every write
+// hands the whole array to iris::normalizeLookStack, which drops unknown ids,
+// drops a duplicate look, fills in missing parameters and clamps every value.
+// The scene reader calls the same function on the way in from disk. So a
+// hand-edited project file, a script and the panel cannot produce three
+// different notions of a valid stack.
+
+void WorldApi::pushLooksUndo(const QString &text, const iris::ScenePtr &scene,
+                             const QJsonArray &before)
+{
+    if (!host.services || !host.services->undo) return;
+    host.services->undo->push(new SceneLooksCommand(text, scene, before));
+}
+
+int WorldApi::lookIndexOf(const QJsonArray &stack, const QString &id)
+{
+    for (int i = 0; i < stack.size(); ++i)
+        if (stack.at(i).toObject().value(QStringLiteral("id")).toString() == id) return i;
+    return -1;
+}
+
+QVariantMap WorldApi::lookState(const QJsonObject &entry)
+{
+    QVariantMap out;
+    const QString id = entry.value(QStringLiteral("id")).toString();
+    out["id"] = id;
+    // The label comes from the presentation table; a look with no row there is
+    // a build error looks::validate() catches, so falling back to the id is a
+    // belt-and-braces path rather than a supported state.
+    const looks::LookUi *ui = looks::lookUi(id);
+    out["label"] = ui ? ui->label : id;
+    out["enabled"] = entry.value(QStringLiteral("enabled")).toBool(true);
+    QVariantMap params;
+    const QJsonObject p = entry.value(QStringLiteral("params")).toObject();
+    for (auto it = p.constBegin(); it != p.constEnd(); ++it) params[it.key()] = it.value().toDouble();
+    out["params"] = params;
+    return out;
+}
+
+QVariantList WorldApi::looks()
+{
+    QVariantList out;
+    auto scene = sceneOrFail(QStringLiteral("world.looks"));
+    if (!scene) return out;
+    const QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    for (const QJsonValue &v : stack) out.append(lookState(v.toObject()));
+    return out;
+}
+
+QVariantList WorldApi::lookCatalogue()
+{
+    QVariantList out;
+    int count = 0;
+    const iris::LookDef *cat = iris::lookCatalogue(count);
+    for (int i = 0; i < count; ++i) {
+        const iris::LookDef &def = cat[i];
+        const QString id = QString::fromLatin1(def.id);
+        const looks::LookUi *ui = looks::lookUi(id);
+        QVariantMap row;
+        row["id"] = id;
+        row["label"] = ui ? ui->label : id;
+        row["doc"] = ui ? ui->doc : QString();
+        row["available"] = ui ? ui->available : true;
+        QVariantList params;
+        for (int j = 0; j < def.paramCount; ++j) {
+            const iris::LookParamDef &d = def.params[j];
+            const QString pid = QString::fromLatin1(d.id);
+            const looks::ParamUi *pui = looks::paramUi(id, pid);
+            // RANGES COME FROM THE DOCUMENT, labels from the presentation table.
+            // Nothing is restated in two places, so nothing can disagree.
+            params.append(QVariantMap{ { "id", pid },
+                                       { "label", pui ? pui->label : pid },
+                                       { "min", double(d.minValue) },
+                                       { "max", double(d.maxValue) },
+                                       { "default", double(d.defaultValue) },
+                                       { "step", pui ? pui->perPixelStep : 0.01 },
+                                       { "decimals", pui ? pui->decimals : 2 },
+                                       { "doc", pui ? pui->doc : QString() } });
+        }
+        row["params"] = params;
+        out.append(row);
+    }
+    return out;
+}
+
+QVariantMap WorldApi::addLook(const QString &id, const QVariantMap &params, int index)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.addLook"));
+    if (!scene) return out;
+    const iris::LookDef *def = iris::lookDef(id);
+    if (!def) {
+        QStringList known;
+        int count = 0;
+        const iris::LookDef *cat = iris::lookCatalogue(count);
+        for (int i = 0; i < count; ++i) known << QString::fromLatin1(cat[i].id);
+        fail(QStringLiteral("world.addLook: unknown look '%1' (known: %2)")
+                 .arg(id, known.join(QStringLiteral(", "))));
+        return out;
+    }
+    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    if (lookIndexOf(stack, id) >= 0) {
+        // ONE INSTANCE PER LOOK (§7 R2). Refused loudly rather than silently
+        // ignored: a script that adds the same look twice has a bug, and the
+        // shared-material reason it cannot work is not guessable.
+        fail(QStringLiteral("world.addLook: '%1' is already in the stack — a look may appear "
+                            "only once (its parameters live on one shared renderer material). "
+                            "Use world.setLook to change it or world.moveLook to reorder it.")
+                 .arg(id));
+        return out;
+    }
+    QJsonObject given;
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        // An unknown parameter is a typo, and a typo that silently does nothing
+        // is the failure the whole registry model exists to prevent.
+        bool known = false;
+        for (int i = 0; i < def->paramCount; ++i)
+            if (QLatin1String(def->params[i].id) == it.key()) { known = true; break; }
+        if (!known) {
+            QStringList names;
+            for (int i = 0; i < def->paramCount; ++i) names << QString::fromLatin1(def->params[i].id);
+            fail(QStringLiteral("world.addLook: look '%1' has no parameter '%2' (known: %3)")
+                     .arg(id, it.key(), names.join(QStringLiteral(", "))));
+            return out;
+        }
+        given.insert(it.key(), it.value().toDouble());
+    }
+    const QJsonArray before = scene->looks;
+    const QJsonObject entry = iris::makeLookEntry(*def, given, true);
+    if (index < 0 || index > stack.size()) stack.append(entry);
+    else stack.insert(index, entry);
+    scene->looks = stack;
+    pushLooksUndo(QStringLiteral("Add Look"), scene, before);
+    return lookState(entry);
+}
+
+bool WorldApi::removeLook(const QString &id)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.removeLook"));
+    if (!scene) return false;
+    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    const int at = lookIndexOf(stack, id);
+    if (at < 0) return false;
+    const QJsonArray before = scene->looks;
+    stack.removeAt(at);
+    scene->looks = stack;
+    pushLooksUndo(QStringLiteral("Remove Look"), scene, before);
+    return true;
+}
+
+bool WorldApi::moveLook(const QString &id, int index)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.moveLook"));
+    if (!scene) return false;
+    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    const int at = lookIndexOf(stack, id);
+    if (at < 0) return false;
+    const int to = qBound(0, index, stack.size() - 1);
+    if (to == at) return true;
+    const QJsonArray before = scene->looks;
+    const QJsonValue entry = stack.at(at);
+    stack.removeAt(at);
+    stack.insert(to, entry);
+    scene->looks = stack;
+    pushLooksUndo(QStringLiteral("Reorder Looks"), scene, before);
+    return true;
+}
+
+QVariantMap WorldApi::setLook(const QString &id, const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.setLook"));
+    if (!scene) return out;
+    const iris::LookDef *def = iris::lookDef(id);
+    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    const int at = def ? lookIndexOf(stack, id) : -1;
+    if (at < 0) {
+        fail(QStringLiteral("world.setLook: '%1' is not in the scene's stack — "
+                            "world.addLook adds it").arg(id));
+        return out;
+    }
+    QJsonObject entry = stack.at(at).toObject();
+    QJsonObject values = entry.value(QStringLiteral("params")).toObject();
+    bool enabled = entry.value(QStringLiteral("enabled")).toBool(true);
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (it.key() == QLatin1String("enabled")) { enabled = it.value().toBool(); continue; }
+        bool known = false;
+        for (int i = 0; i < def->paramCount; ++i)
+            if (QLatin1String(def->params[i].id) == it.key()) { known = true; break; }
+        if (!known) {
+            QStringList names{ QStringLiteral("enabled") };
+            for (int i = 0; i < def->paramCount; ++i) names << QString::fromLatin1(def->params[i].id);
+            fail(QStringLiteral("world.setLook: look '%1' has no parameter '%2' (known: %3)")
+                     .arg(id, it.key(), names.join(QStringLiteral(", "))));
+            return out;
+        }
+        values.insert(it.key(), it.value().toDouble());
+    }
+    const QJsonArray before = scene->looks;
+    // makeLookEntry re-clamps and re-fills, so the stored entry is canonical
+    // however partial the call was.
+    entry = iris::makeLookEntry(*def, values, enabled);
+    stack.replace(at, entry);
+    scene->looks = stack;
+    pushLooksUndo(QStringLiteral("Change Look"), scene, before);
+    return lookState(entry);
 }
 
 QVariantMap WorldApi::modeTable()

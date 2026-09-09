@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -60,6 +61,25 @@ int main(int argc, char **argv)
 
     // ---- build a document scene that exercises the coverage table ----
     auto scene = iris::Scene::create();
+
+    // A LOOKS STACK (POST_LOOKS_SPEC §8): one enabled look with a non-default
+    // parameter and one DISABLED look, so the export can be asserted to carry
+    // the first and drop the second.
+    {
+        QJsonArray stack;
+        QJsonObject on;
+        on["id"] = QStringLiteral("desaturate");
+        on["enabled"] = true;
+        QJsonObject params;
+        params["amount"] = 0.75;
+        on["params"] = params;
+        stack.append(on);
+        QJsonObject off;
+        off["id"] = QStringLiteral("posterize");
+        off["enabled"] = false;
+        stack.append(off);
+        scene->looks = iris::normalizeLookStack(stack);
+    }
 
     // textured PBR cube (tests tangents, texture transform, metal/rough pack)
     auto cube = iris::MeshNode::create();
@@ -418,6 +438,20 @@ int main(int argc, char **argv)
         CHECK(std::abs(fog["heightDensity"].toDouble() - 0.05) < 1e-7 &&
               fog["heightLevel"].toDouble() == -1.0,
               "height fog exported for information");
+
+        // THE LOOKS STACK, recorded and not implemented (POST_LOOKS_SPEC §8).
+        // The shipped viewer renders the grade and ignores this array; it
+        // travels so a future one does not have to guess. Only ENABLED looks:
+        // a look switched off is not part of the picture.
+        const QJsonObject post = jah["post"].toObject();
+        const QJsonArray looks = post["looks"].toArray();
+        CHECK(looks.size() == 1, "extras.jah.post.looks carries the ENABLED looks only");
+        if (looks.size() == 1) {
+            const QJsonObject l = looks.first().toObject();
+            CHECK(l["id"].toString() == "desaturate", "…by id, in frame order");
+            CHECK(std::abs(l["params"].toObject()["amount"].toDouble() - 0.75) < 1e-7,
+                  "…with its parameters");
+        }
     }
 
     // ---- ExportService: the full folder ----

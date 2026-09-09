@@ -274,6 +274,7 @@ set(SRCS
     src/services/shortcutregistry.cpp
     src/services/gibounds.cpp
     src/services/sunlink.cpp
+    src/services/looks.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
     src/services/animationedits.cpp
@@ -305,6 +306,7 @@ set(SRCS
     src/ui/panels/propertywidgets/skypropertywidget.cpp 
     src/ui/panels/propertywidgets/worldskypropertywidget.cpp
     src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    src/ui/panels/propertywidgets/lookstackeditor.cpp
     src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
     src/ui/panels/propertywidgets/camerapostfxpropertywidget.cpp
     src/ui/panels/propertywidgets/worldaapropertywidget.cpp
@@ -359,6 +361,7 @@ set(SRCS
     src/commands/reparentscenenodecommand.cpp
     src/commands/scenefoldercommand.cpp
     src/commands/sunlightlinkcommand.cpp
+    src/commands/scenelookscommand.cpp
     src/commands/worldmodecommand.cpp
     src/commands/setnodepropertycommand.cpp
     src/commands/nodeeditcommand.cpp
@@ -544,6 +547,7 @@ set(HEADERS
     src/ui/panels/propertywidgets/materialpropertywidget.h 
     src/ui/panels/propertywidgets/worldskypropertywidget.h
     src/ui/panels/propertywidgets/worldgipropertywidget.h 
+    src/ui/panels/propertywidgets/lookstackeditor.h
     src/ui/panels/propertywidgets/worldpostfxpropertywidget.h
     src/ui/panels/propertywidgets/camerapostfxpropertywidget.h 
     src/ui/panels/propertywidgets/worldaapropertywidget.h

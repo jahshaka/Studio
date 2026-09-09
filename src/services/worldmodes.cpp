@@ -238,6 +238,30 @@ QVector<Row> buildRows()
         r.set = [](const iris::ScenePtr &s, int v) { s->refractionsMode = v; };
         out.append(r);
     }
+    {
+        // DISTORTION (POST_LOOKS_SPEC.md §5.3). MACHINERY, so it IS a tiered row
+        // — unlike the looks stack, which is an art choice and deliberately
+        // tierless (§7 R10): a mode switch must never silently drop somebody's
+        // look, but it may reasonably drop a heat-haze pass at Low.
+        Row r;
+        r.id = QStringLiteral("distortion");
+        r.label = QStringLiteral("Distortion");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),  0 },
+                      { QStringLiteral("auto"), QStringLiteral("Auto"), 1 },
+                      { QStringLiteral("on"),   QStringLiteral("On"),   2 } };
+        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
+        r.cost = QStringLiteral("Objects that WARP what is behind them — heat haze, blast "
+                                "waves, shock rings. Give a material the Distortion shading "
+                                "model and its Normal Map becomes the displacement. Auto is "
+                                "the honest setting: the extra target and its two passes only "
+                                "enter the frame while the scene actually holds such a "
+                                "material, so it costs nothing until you make one.");
+        r.get = [](const iris::ScenePtr &s) { return s->distortionMode; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->distortionMode = v; };
+        out.append(r);
+    }
 
     // ---- Shadows -----------------------------------------------------------
     {
@@ -632,6 +656,20 @@ static QVector<ParamRow> buildPostFxParams()
         p.set = [](const iris::ScenePtr &s, double v) { s->ssaoRadius = float(v); };
         out.append(p);
     }
+    {
+        ParamRow p;
+        p.id = QStringLiteral("distortionStrength");
+        p.label = QStringLiteral("Distortion Strength");
+        p.ownerRowId = QStringLiteral("distortion");
+        p.minValue = 0.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("A global multiplier on every distortion material's own "
+                               "strength — one dial for how much the whole scene shimmers. "
+                               "0 is inert: the frame is bit for bit the frame with no "
+                               "distortion at all.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->distortionStrength); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->distortionStrength = float(v); };
+        out.append(p);
+    }
     return out;
 }
 
@@ -656,6 +694,7 @@ const QStringList &postFxRowIds()
     static const QStringList ids = {
         QStringLiteral("hdr"), QStringLiteral("bloom"), QStringLiteral("ssao"),
         QStringLiteral("smaa"), QStringLiteral("ssr"), QStringLiteral("refractions"),
+        QStringLiteral("distortion"),
     };
     return ids;
 }

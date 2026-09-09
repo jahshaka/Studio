@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/qtinterop.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/looks.h"
 #include "io/scenewriter.h"
 #include "io/sceneformat.h"
 #include "services/scenefolders.h"
@@ -188,6 +189,16 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["smaaPreset"] = scene->smaaPreset;
     sceneObj["ssrMode"] = scene->ssrMode;
     sceneObj["refractionsMode"] = scene->refractionsMode;
+    sceneObj["distortionMode"] = scene->distortionMode;
+    sceneObj["distortionStrength"] = scene->distortionStrength;
+    // The looks stack (POST_LOOKS_SPEC §4.1) — an ORDERED array, and the order
+    // is the frame order. Written normalised (known ids, one instance each,
+    // every parameter present and clamped) so a hand-edited file and a file
+    // this application wrote say the same thing after one round trip. An empty
+    // stack is written as an empty array rather than omitted: absent and empty
+    // mean the same to the reader, and writing it keeps a diff between two
+    // saves honest.
+    sceneObj["looks"] = iris::normalizeLookStack(scene->looks);
 
     // Planar reflections (PLANAR_REFLECTIONS_SPEC §6). Budget -1, resolution 0
     // and shadows -1 all mean "follow the world mode"; anything else is an

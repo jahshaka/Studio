@@ -44,10 +44,12 @@ for (var i = 0; i < props.rows.length; i++)
     if (props.rows[i].name === "shadingModel") row = props.rows[i];
 assert(row !== null, "the shadingModel row is declared");
 assert(row.type === "enum", "shadingModel reports type 'enum' (not a bare int)");
-assert(row.options && row.options.length === 2,
-       "shadingModel reports 2 options, got " + (row.options ? row.options.length : "none"));
-assert(row.options[0] === "Lit" && row.options[1] === "Unlit",
-       "the vocabulary is Lit, Unlit — and the INDEX is the stored value");
+// THREE models since POST_LOOKS_SPEC §5.2: Distortion joined the vocabulary.
+assert(row.options && row.options.length === 3,
+       "shadingModel reports 3 options, got " + (row.options ? row.options.length : "none"));
+assert(row.options[0] === "Lit" && row.options[1] === "Unlit" &&
+       row.options[2] === "Distortion",
+       "the vocabulary is Lit, Unlit, Distortion — and the INDEX is the stored value");
 
 // ---- 2. the default is Lit ----
 assert(material.get(cube).shadingModel === 0,
