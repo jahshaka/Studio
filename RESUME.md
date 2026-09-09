@@ -39,3 +39,6 @@ Vulkan/display gate: full ctest on my own Xvfb. Specifically new/changed and unr
   app.multiselect_outline (extended), app.multiselect_keys (PART 5), app.navigation_keys (NEW),
   mirror.document_to_engine, mirror.skinned_outline, cameras.camera_body,
   scripting.e2e.editor_controls, app.selection_outline (must be unchanged).
+
+## HEADLESS GATE (2026-09-09, before the Vulkan gate)
+82/82 no-display suites PASS (`ctest -R <the 82 jah_no_display tests>` with DISPLAY unset, -j4).
