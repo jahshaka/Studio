@@ -44,6 +44,7 @@
 
 #include "../support/documentgraph.h"
 #include "data/database/database.h"
+#include "services/assetservice.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "data/project.h"
@@ -319,6 +320,26 @@ int main(int argc, char **argv)
                       && double(avatar::kTargetCharacterHeight) == fitsize::kCharacter.target,
                   "the avatar band IS fitsize::kCharacter (one set of constants)");
         }
+    }
+
+    // ---- 6. THE LIBRARY ANNOUNCES ITS IMPORTS (lead, 2026-09-09) -----------
+    // A verb-driven import (script, MCP, the avatar module) used to be
+    // invisible on the Assets page until the next launch: only the page's own
+    // dialog added tiles. AssetService::importMesh/importFile now announce the
+    // new asset on onLibraryChanged; the page subscribes. Asserted here on the
+    // service itself, headless.
+    {
+        std::printf("--- section 6: the library announces its imports\n");
+        AssetService assets(&db, &project);
+        QStringList announced;
+        assets.onLibraryChanged([&announced](const QString &guid) { announced << guid; });
+        const auto ok = assets.importMesh(fixture("tests/importer/fixtures/unit_cube_m.fbx"));
+        CHECK(ok.ok(), "a model import through the service succeeds");
+        CHECK(announced.size() == 1 && announced.first() == ok.objectGuid,
+              "exactly one announcement, carrying the new object's guid");
+        const auto bad = assets.importMesh(QStringLiteral("/nonexistent/no-such-model.fbx"));
+        CHECK(!bad.ok(), "a failed import fails");
+        CHECK(announced.size() == 1, "a failed import announces nothing");
     }
 
     std::printf(failures ? "\n%d FAILURE(S)\n" : "\nall checks passed\n", failures);

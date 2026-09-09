@@ -37,7 +37,9 @@ public:
     /// store. Pure document/DB work — safe headless.
     AssetImporter::Result importMesh(const QString &filePath)
     {
-        return AssetImporter::importMesh(filePath, db, project);
+        auto result = AssetImporter::importMesh(filePath, db, project);
+        if (result.ok()) announceLibraryChanged(result.objectGuid);
+        return result;
     }
 
     /// Imports any library-supported file (models, images, audio) into the
@@ -48,7 +50,29 @@ public:
     AssetImporter::Result importFile(const QString &filePath, int drawerId = -1,
                                      int typeHint = -1)
     {
-        return AssetImporter::importFile(filePath, db, project, drawerId, typeHint);
+        auto result = AssetImporter::importFile(filePath, db, project, drawerId, typeHint);
+        if (result.ok()) announceLibraryChanged(result.objectGuid);
+        return result;
+    }
+
+    // THE LIBRARY CHANGED (lead, 2026-09-09; animtype-lane finding): an import
+    // made through a VERB — a script, MCP, the avatar module — used to be
+    // invisible on the Assets page until the next launch, because only the
+    // page's own import dialog added tiles. Every import now goes through the
+    // two entry points above, so the announcement lives here, on the service
+    // every caller already holds; the page subscribes once. Same shape and
+    // same lifetime rules as onPinChanged below (callback list, no QObject; a
+    // subscriber touching widgets must marshal to its own thread).
+    using LibraryChangedFn = std::function<void(const QString &assetGuid)>;
+    void onLibraryChanged(LibraryChangedFn callback)
+    {
+        if (callback) librarySubscribers.push_back(std::move(callback));
+    }
+    void announceLibraryChanged(const QString &assetGuid)
+    {
+        if (assetGuid.isEmpty()) return;
+        const auto subscribers = librarySubscribers;
+        for (const auto &callback : subscribers) callback(assetGuid);
     }
 
     // ---- THE PIN-CHANGE ANNOUNCEMENT (AVATAR_ASSET_SPEC §4 D4) ------------
@@ -83,6 +107,7 @@ private:
     Database *db;
     Project *project;   // the live Project (Phase 4: was Globals::project)
     std::vector<PinChangedFn> pinSubscribers;
+    std::vector<LibraryChangedFn> librarySubscribers;
 };
 
 #endif // ASSETSERVICE_H

@@ -82,6 +82,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/services.h"
+#include "services/assetservice.h"
 #include "services/assetstore.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
@@ -1749,6 +1750,27 @@ int AssetView::selectedDrawerId() const
 	const int id = treeWidget->currentItem()
 	    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1;
 	return id > 0 ? id : 0;   // root/none selected -> Uncategorized
+}
+
+// The page mirrors the LIBRARY, not just its own import dialog: an import made
+// by a verb (script, MCP, the avatar module's Import Avatar/Animation) announces
+// itself on the AssetService, and the tile appears here without a relaunch
+// (lead, 2026-09-09; the animtype lane found scripted imports invisible until
+// the next launch, for every type). Queued to this widget's thread: the
+// announcement fires on the caller's thread, and an ImportBatchRunner caller is
+// a worker. Idempotent against the dialog's own path (tileByGuid guard).
+void AssetView::setServices(StudioServices *s)
+{
+	services = s;
+	if (!services || !services->assets) return;
+	QPointer<AssetView> self(this);
+	services->assets->onLibraryChanged([self](const QString &guid) {
+		if (!self) return;
+		QMetaObject::invokeMethod(self, [self, guid]() {
+			if (!self || !self->fastGrid) return;
+			if (!self->fastGrid->tileByGuid(guid)) self->addLibraryTileForAsset(guid);
+		}, Qt::QueuedConnection);
+	});
 }
 
 void AssetView::addLibraryTileForAsset(const QString &guid)

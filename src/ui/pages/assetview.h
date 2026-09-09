@@ -121,7 +121,7 @@ public:
 	/// legacy AssetViewer. MainWindow passes the engine one in engine mode.
 	AssetView(Database *handle, QWidget *parent = Q_NULLPTR, IAssetViewer *previewViewer = nullptr);
 	/// Phase 4: scene-open checks go through the services, not ambient statics.
-	void setServices(StudioServices *s) { services = s; }
+	void setServices(StudioServices *s);   // subscribes to the library announcements (assetview.cpp)
 	/// The one live Project, wired by the shell in MainWindow::setupServices
 	/// (Phase 4: was the Globals::project static). Forwarded to the preview
 	/// viewer, which reads it for relative animation paths.

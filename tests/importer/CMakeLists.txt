@@ -371,6 +371,7 @@ jah_no_display(importer.texture_guids)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 add_executable(test_importer_fitsize test_importer_fitsize.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetimporter.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
