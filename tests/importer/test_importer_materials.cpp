@@ -18,8 +18,13 @@
 //   4. emissiveIntensity was never set on an import, so an emissive colour or
 //      map was multiplied by the document default 0 and emitted nothing.
 //
-// Fixture: fixtures/material_workflows.glb, five quads with one material shape
-// each (fixtures/make_material_fixtures.py documents them and regenerates it).
+//   5. A primitive with NO material at all — assimp synthesizes one and
+//      appends it past the end of the file's material array, so the same
+//      always-present keys made it black too (hygiene lane, 2026-09-09).
+//
+// Fixture: fixtures/material_workflows.glb, six quads: five with one material
+// shape each plus one with no material (fixtures/make_material_fixtures.py
+// documents them and regenerates it).
 // Sections:
 //   1. The conversion formula itself (unit).
 //   2. The five materials through the REAL import path
@@ -206,6 +211,26 @@ int main(int argc, char **argv)
             CHECK(nearly(nopbr->metallicFactor, 0.0f),
                   "2: a material with NO pbr block imports as a dielectric (was metallic 1)");
             CHECK(nearly(nopbr->roughnessFactor, 0.5f), "2: ... at the neutral roughness 0.5");
+        }
+
+        // --- THE SAME POLICY, ONE INDEX FURTHER OUT (hygiene lane, 2026-09-09).
+        // A primitive with no `material` at all gets the aiMaterial assimp
+        // SYNTHESIZES and appends after the file's own — so its index runs off
+        // the end of the JSON `materials` array, the file facts came back
+        // "invalid", and the importer fell back to assimp's always-present
+        // metallic/roughness keys (1.0 / 1.0). A mesh that declares no material
+        // imported as full metal, full rough: black, the same symptom defect 2
+        // fixed for a material that declares no workflow.
+        auto noMaterial = materialNamed(imported, "nomaterial");
+        CHECK(!noMaterial.isNull(), "2: a primitive with NO material still imports a PbrMaterial");
+        if (noMaterial) {
+            std::printf("    nomaterial: metallic %.3f roughness %.3f base %s\n",
+                        noMaterial->metallicFactor, noMaterial->roughnessFactor,
+                        noMaterial->baseColor.name().toUtf8().constData());
+            CHECK(nearly(noMaterial->metallicFactor, 0.0f),
+                  "2: a mesh with NO material imports as a dielectric (was metallic 1)");
+            CHECK(nearly(noMaterial->roughnessFactor, 0.5f),
+                  "2: ... at the neutral roughness 0.5");
         }
 
         // ... while a PRESENT block keeps glTF's own defaults: an omitted
