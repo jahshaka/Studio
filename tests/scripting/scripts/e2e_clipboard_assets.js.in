@@ -59,6 +59,18 @@ assert(plan.known.indexOf(tex) < 0, "resolve(): the guid is no longer known here
 assert(plan.importable.indexOf(tex) >= 0, "but it IS importable — the payload has the bytes");
 assert(plan.missing.length === 0, "so nothing is missing");
 
+// NO SIDE EFFECTS FROM A REFUSED PASTE (spec §3.1). Pasting a library tile
+// into the EDITOR is a refusal — and a refusal must not import the asset on the
+// way to saying no, which is exactly what it did before the plan/apply split.
+var wrongFirst = clipboard.paste();          // target defaults to the tree
+assert(wrongFirst.pasted.length === 0, "pasting a tile into the editor creates no objects");
+assert(wrongFirst.imported.length === 0 && wrongFirst.pinned.length === 0,
+       "and imports NOTHING: " + J(wrongFirst));
+assert(storeGuids().indexOf(tex) < 0,
+       "the library is untouched by the refusal: " + J(storeGuids()));
+assert(wrongFirst.skipped.length === 1 && wrongFirst.skipped[0].kind === "asset",
+       "and it says where tiles paste: " + J(wrongFirst.skipped));
+
 var pasted = clipboard.paste({ target: "assets" });
 console.log("paste into the library -> " + J(pasted));
 assert(pasted.imported.indexOf(tex) >= 0, "the asset was imported UNDER ITS ORIGINAL GUID");
@@ -72,12 +84,6 @@ assert(storeGuids().indexOf(tex) >= 0, "and it lists in the library again");
 var cube = scene.addPrimitive("cube");
 assert(material.set(cube, { baseColorMap: tex }), "the re-imported texture binds to a material");
 assert(("" + material.get(cube).baseColorMap).length > 0, "and resolves to real bytes");
-
-// ---- an asset payload is not a scene paste --------------------------------
-var wrongTarget = clipboard.paste();          // target defaults to the tree
-assert(wrongTarget.pasted.length === 0, "pasting a tile into the editor creates no objects");
-assert(wrongTarget.skipped.length === 1 && wrongTarget.skipped[0].kind === "asset",
-       "and says where tiles paste: " + J(wrongTarget.skipped));
 
 // ---- idempotence: pasting the same tile twice is one asset ---------------
 var twice = clipboard.paste({ target: "assets" });

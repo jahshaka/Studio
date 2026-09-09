@@ -313,95 +313,171 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
         return result;
     }
 
-    // ---- resolution first (outside the undo macro, D7) ---------------------
-    ClipboardResolver resolver(db, project);
-    const ClipboardResolveReport report = resolver.apply(envelope);
-    result.imported = report.imported;
-    result.pinned = report.pinned;
-    result.missing = report.missing;
-    QSet<QString> missingGuids;
-    for (const auto &missing : report.missing) missingGuids.insert(missing.guid);
+    // THE ORDER OF THIS FUNCTION IS THE CONTRACT (spec §3.1, "nothing partial
+    // happens"). It used to resolve FIRST and decide afterwards, which made
+    // every refusal a side effect: pasting a scene object with target 'assets'
+    // still pinned every texture it referenced, pasting a library tile into the
+    // editor still imported it while reporting `skipped`, an item refused for
+    // one missing mesh still dragged its other assets into the project, and a
+    // paste with no scene open imported the lot before finding out. So:
+    //
+    //   1. decide WHICH ITEMS COULD LAND (target routing only — pure);
+    //   2. check the preconditions those items need (a scene, a real parent);
+    //   3. PLAN the resolution of exactly what those items reference;
+    //   4. drop the items whose assets are missing (unless allowMissing);
+    //   5. only now APPLY, restricted to what the survivors need;
+    //   6. land them in one undo macro.
+    //
+    // Steps 1-4 write nothing at all.
 
     const bool toAssets = options.target == QLatin1String("assets");
 
-    // ---- the document half -------------------------------------------------
-    QVector<const ClipItem *> nodeItems;
+    // ---- 1. what could land -----------------------------------------------
+    QVector<const ClipItem *> nodeCandidates;
+    QVector<const ClipItem *> assetCandidates;
     for (const ClipItem &item : envelope.items) {
-        if (item.kind != QLatin1String(clipboardformat::kind::node())) {
-            if (item.kind == QLatin1String(clipboardformat::kind::asset())) {
-                // Asset items are the resolver's business and it has already
-                // run: on the Assets page that IS the paste.
-                if (!toAssets)
-                    result.skipped.append({ item.kind,
-                        QStringLiteral("library assets paste in the Assets page") });
+        if (item.kind == QLatin1String(clipboardformat::kind::node())) {
+            if (toAssets) {
+                result.skipped.append({ item.kind,
+                    QStringLiteral("scene objects paste in the editor") });
                 continue;
             }
+            nodeCandidates.append(&item);
+        } else if (item.kind == QLatin1String(clipboardformat::kind::asset())) {
+            if (!toAssets) {
+                result.skipped.append({ item.kind,
+                    QStringLiteral("library assets paste in the Assets page") });
+                continue;
+            }
+            assetCandidates.append(&item);
+        } else {
             result.skipped.append({ item.kind,
                 QStringLiteral("this build has no paste for '%1' items").arg(item.kind) });
-            continue;
         }
-        if (toAssets) {
-            result.skipped.append({ item.kind,
-                QStringLiteral("scene objects paste in the editor") });
-            continue;
-        }
-        // REFUSED, not pasted with holes (D5): a node whose mesh guid does not
-        // resolve loads with NO mesh and no log — an invisible node the user
-        // would report as a bug. `allowMissing` opts into Unreal's behaviour.
-        if (!options.allowMissing) {
-            bool blocked = false;
-            for (const QString &guid : neededGuids(item, envelope))
-                if (missingGuids.contains(guid)) { blocked = true; break; }
-            if (blocked) {
-                result.skipped.append({ item.kind,
-                    QStringLiteral("'%1' needs an asset this library does not have")
-                        .arg(item.displayName()) });
-                continue;
-            }
-        }
-        nodeItems.append(&item);
     }
+    if (nodeCandidates.isEmpty() && assetCandidates.isEmpty()) return result;
 
-    if (nodeItems.isEmpty()) return result;
-
-    auto sc = scene();
-    if (!sc || !sceneEdit) {
-        result.error = QStringLiteral("no scene is open");
-        return result;
-    }
-
-    // D7: beside the PRIMARY — its parent, its sibling index + 1 — which is
-    // exactly where Duplicate puts a copy. The scene root when nothing is
-    // selected, or when an explicit parent was named.
+    // ---- 2. the preconditions, BEFORE anything is written ------------------
+    iris::ScenePtr sc;
     iris::SceneNodePtr parent;
     int index = options.index;
-    if (!options.parentGuid.isEmpty()) {
-        std::function<iris::SceneNodePtr(const iris::SceneNodePtr &)> find =
-            [&](const iris::SceneNodePtr &node) -> iris::SceneNodePtr {
-                if (!node) return iris::SceneNodePtr();
-                if (node->getGUID() == options.parentGuid) return node;
-                for (const auto &child : node->children())
-                    if (auto hit = find(child)) return hit;
-                return iris::SceneNodePtr();
-            };
-        parent = find(sc->getRootNode());
-        if (!parent) {
-            result.error = QStringLiteral("no node with id '%1'").arg(options.parentGuid);
+    if (!nodeCandidates.isEmpty()) {
+        sc = scene();
+        if (!sc || !sceneEdit) {
+            result.error = QStringLiteral("no scene is open");
             return result;
         }
-    } else if (selection) {
-        if (auto primary = selection->selected()) {
-            if (!primary->isRootNode() && !!primary->getParent()) {
-                parent = primary->getParent();
-                if (index < 0) {
-                    const int after = primary->siblingIndex();
-                    index = after >= 0 ? after + 1 : -1;
+        // D7: beside the PRIMARY — its parent, its sibling index + 1 — which is
+        // exactly where Duplicate puts a copy. The scene root when nothing is
+        // selected, or when an explicit parent was named.
+        if (!options.parentGuid.isEmpty()) {
+            std::function<iris::SceneNodePtr(const iris::SceneNodePtr &)> find =
+                [&](const iris::SceneNodePtr &node) -> iris::SceneNodePtr {
+                    if (!node) return iris::SceneNodePtr();
+                    if (node->getGUID() == options.parentGuid) return node;
+                    for (const auto &child : node->children())
+                        if (auto hit = find(child)) return hit;
+                    return iris::SceneNodePtr();
+                };
+            parent = find(sc->getRootNode());
+            if (!parent) {
+                result.error = QStringLiteral("no node with id '%1'").arg(options.parentGuid);
+                return result;
+            }
+        } else if (selection) {
+            if (auto primary = selection->selected()) {
+                if (!primary->isRootNode() && !!primary->getParent()) {
+                    parent = primary->getParent();
+                    if (index < 0) {
+                        const int after = primary->siblingIndex();
+                        index = after >= 0 ? after + 1 : -1;
+                    }
                 }
             }
         }
+        if (!parent) parent = sc->getRootNode();
     }
-    if (!parent) parent = sc->getRootNode();
 
+    // ---- 3. plan the resolution of what those items reference --------------
+    const auto needsOf = [&](const QVector<const ClipItem *> &items) {
+        QSet<QString> out;
+        for (const ClipItem *item : items)
+            for (const QString &guid : neededGuids(*item, envelope)) out.insert(guid);
+        return out;
+    };
+    QSet<QString> candidateNeeds = needsOf(nodeCandidates);
+    candidateNeeds.unite(needsOf(assetCandidates));
+
+    ClipboardResolver resolver(db, project);
+    const ClipboardResolveReport plan = resolver.plan(envelope, &candidateNeeds);
+    if (!plan.error.isEmpty()) {
+        result.error = plan.error;
+        return result;
+    }
+    result.missing = plan.missing;
+    QSet<QString> missingGuids;
+    for (const auto &missing : plan.missing) missingGuids.insert(missing.guid);
+
+    // ---- 4. drop what cannot be satisfied ---------------------------------
+    const auto blocked = [&](const ClipItem &item) {
+        if (options.allowMissing) return false;
+        for (const QString &guid : neededGuids(item, envelope))
+            if (missingGuids.contains(guid)) return true;
+        return false;
+    };
+    QVector<const ClipItem *> nodeItems, assetItems;
+    for (const ClipItem *item : nodeCandidates) {
+        // REFUSED, not pasted with holes (D5): a node whose mesh guid does not
+        // resolve loads with NO mesh and no log — an invisible node the user
+        // would report as a bug. `allowMissing` opts into Unreal's behaviour.
+        if (blocked(*item)) {
+            result.skipped.append({ item->kind,
+                QStringLiteral("'%1' needs an asset this library does not have")
+                    .arg(item->displayName()) });
+            continue;
+        }
+        nodeItems.append(item);
+    }
+    for (const ClipItem *item : assetCandidates) {
+        if (blocked(*item)) {
+            result.skipped.append({ item->kind,
+                QStringLiteral("'%1' cannot be imported: its content is not available here")
+                    .arg(item->displayName()) });
+            continue;
+        }
+        assetItems.append(item);
+    }
+    // NOTHING SURVIVED = nothing happens. Not one row, not one pin.
+    if (nodeItems.isEmpty() && assetItems.isEmpty()) return result;
+
+    // ---- 5. apply, restricted to what the survivors need -------------------
+    QSet<QString> landingNeeds = needsOf(nodeItems);
+    landingNeeds.unite(needsOf(assetItems));
+    const ClipboardResolveReport applied = resolver.apply(envelope, &landingNeeds);
+    result.imported = applied.imported;
+    result.pinned = applied.pinned;
+    // An asset the PLAN found importable and the apply could not register (a
+    // CAS write that failed, a row the database refused) is not "known" and not
+    // "missing" — it is a hole, and a node pasted over one carries a dangling
+    // guid with no log at all. Both halves are reported and the paste refuses.
+    for (const auto &missing : applied.missing) {
+        bool seen = false;
+        for (const auto &known : result.missing)
+            if (known.guid == missing.guid) { seen = true; break; }
+        if (!seen) result.missing.append(missing);
+    }
+    if (!applied.error.isEmpty()) {
+        result.error = applied.error;
+        if (!result.imported.isEmpty()) emit assetsImported(result.imported);
+        return result;
+    }
+
+    if (nodeItems.isEmpty()) {                    // an Assets-page paste is done
+        if (!result.imported.isEmpty()) emit assetsImported(result.imported);
+        return result;
+    }
+
+    // ---- 6. the document half, in one undo macro --------------------------
     const bool macro = nodeItems.size() > 1 && undo && undo->stack();
     if (macro) undo->stack()->beginMacro(tr("Paste %1 objects").arg(nodeItems.size()));
     QList<iris::SceneNodePtr> pastedNodes;
@@ -411,8 +487,8 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
         // A CROSS-LIBRARY guid rewrite, when one happened, is applied by the
         // key-aware walk — never the textual replace the archive import path
         // still does (spec §3.2; recorded there as a live contradiction).
-        if (!report.guidMap.isEmpty())
-            assetrefs::remapAssetGuids(fragment.node, report.guidMap);
+        if (!applied.guidMap.isEmpty())
+            assetrefs::remapAssetGuids(fragment.node, applied.guidMap);
         fragment.parentGuid = item->parentGuid();
         fragment.siblingIndex = item->siblingIndex();
         // insertFragment mints fresh node guids, applies the Cube -> Cube2

@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include <QTemporaryDir>
 
+#include <memory>
+
 #include "data/database/database.h"
 #include "data/project.h"
 #include "io/assetrefs.h"
@@ -35,14 +37,16 @@ ClipboardResolver::ClipboardResolver(Database *database, Project *proj)
 {
 }
 
-ClipboardResolveReport ClipboardResolver::plan(const Envelope &envelope) const
+ClipboardResolveReport ClipboardResolver::plan(const Envelope &envelope,
+                                               const QSet<QString> *limitTo) const
 {
-    return run(envelope, false);
+    return run(envelope, false, limitTo);
 }
 
-ClipboardResolveReport ClipboardResolver::apply(const Envelope &envelope)
+ClipboardResolveReport ClipboardResolver::apply(const Envelope &envelope,
+                                                const QSet<QString> *limitTo)
 {
-    return run(envelope, true);
+    return run(envelope, true, limitTo);
 }
 
 namespace {
@@ -69,7 +73,8 @@ QHash<QString, QString> neededByMap(const Envelope &envelope)
 
 } // namespace
 
-ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool commit) const
+ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool commit,
+                                              const QSet<QString> *limitTo) const
 {
     ClipboardResolveReport report;
     if (!db) { report.error = QStringLiteral("no library is open"); return report; }
@@ -89,13 +94,19 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
             siblingRoot = envelope.source.storeRoot;
     }
 
-    QTemporaryDir staging;      // inline bytes land here; dies with this call
+    // Inline bytes land here — and ONLY for a commit: a dry run that wrote a
+    // few megabytes of staged files to answer "what would happen" is a side
+    // effect of a question.
+    std::unique_ptr<QTemporaryDir> staging;
+    if (commit) staging = std::make_unique<QTemporaryDir>();
     QStringList toPin;
 
     for (auto it = envelope.assets.constBegin(); it != envelope.assets.constEnd(); ++it) {
         ClipAsset asset = it.value();
         asset.guid = it.key();
         if (asset.guid.isEmpty() || assetrefs::isReservedGuid(asset.guid)) continue;
+        // Only what the caller is going to use (see plan()'s note).
+        if (limitTo && !limitTo->contains(asset.guid)) continue;
 
         // ---- step 1: known here, at the right type -------------------------
         const AssetRecord record = db->fetchAsset(asset.guid);
@@ -121,19 +132,19 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
         for (const ClipFile &file : asset.files) {
             QString path;
             if (!file.inlineData.isEmpty()) {                       // step 2
-                if (staging.isValid()) {
+                if (!commit) {
+                    // The dry run knows the bytes are here; it does not need
+                    // them on disk to say so.
+                    path = QStringLiteral(":inline:");
+                } else if (staging && staging->isValid()) {
                     const QString name = file.name.isEmpty()
                                              ? QStringLiteral("%1.%2").arg(file.oid, file.ext)
                                              : file.name;
-                    path = QDir(staging.path()).filePath(
+                    path = QDir(staging->path()).filePath(
                         QStringLiteral("%1-%2").arg(located.size()).arg(name));
                     QFile out(path);
                     if (out.open(QIODevice::WriteOnly)) out.write(file.inlineData);
                     else path.clear();
-                } else {
-                    // No staging dir means we cannot write the bytes anywhere;
-                    // the dry run does not need one, so this is a plan-only path.
-                    path = QStringLiteral(":inline:");
                 }
             } else if (!file.oid.isEmpty()) {
                 const QString local = AssetStorePaths::objectPathIn(localRoot, file.oid, file.ext);

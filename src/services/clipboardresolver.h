@@ -57,6 +57,7 @@ For more information see the LICENSE file
 // this time" is a fork of the one pipeline every other import shares.
 
 #include <QHash>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -97,15 +98,26 @@ class ClipboardResolver
 public:
     ClipboardResolver(Database *db, Project *project);
 
-    /// Dry run: what a paste would find, import or miss. No writes.
-    ClipboardResolveReport plan(const clipboardformat::Envelope &envelope) const;
+    /// Dry run: what a paste would find, import or miss. No writes — no rows,
+    /// no pins, and no staged bytes either (`plan` never touches the disk).
+    ///
+    /// `limitTo`, when given, restricts the walk to those guids: a paste
+    /// resolves only what the items it is ACTUALLY GOING TO LAND need. Without
+    /// it a paste imported and pinned the whole payload's closure before it had
+    /// decided anything — so a node paste aimed at the Assets page still pinned
+    /// every texture, and an item refused for a missing mesh still dragged its
+    /// other assets into the project (spec §3.1, "nothing partial happens").
+    ClipboardResolveReport plan(const clipboardformat::Envelope &envelope,
+                                const QSet<QString> *limitTo = nullptr) const;
 
     /// Steps 1-4 for real: ingest, register, pin. Idempotent (CAS dedup, pin
     /// upsert), which is what lets it sit OUTSIDE the paste's undo macro.
-    ClipboardResolveReport apply(const clipboardformat::Envelope &envelope);
+    ClipboardResolveReport apply(const clipboardformat::Envelope &envelope,
+                                 const QSet<QString> *limitTo = nullptr);
 
 private:
-    ClipboardResolveReport run(const clipboardformat::Envelope &envelope, bool commit) const;
+    ClipboardResolveReport run(const clipboardformat::Envelope &envelope, bool commit,
+                               const QSet<QString> *limitTo) const;
     /// Registers one asset (bytes already located at `sourcePath`).
     bool registerAsset(const clipboardformat::ClipAsset &asset,
                        const QVector<QPair<clipboardformat::ClipFile, QString>> &files,

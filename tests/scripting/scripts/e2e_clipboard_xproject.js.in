@@ -124,6 +124,11 @@ assert(plan.missing[0].neededBy.length > 0,
 var refused = clipboard.paste();
 console.log("paste with a missing asset -> " + J(refused));
 assert(refused.pasted.length === 0, "the paste is REFUSED by default");
+// AND THE REFUSAL WRITES NOTHING (spec §3.1). The whole point of planning
+// before applying: an item refused for one missing texture must not drag the
+// rest of the payload's closure into the project on its way out.
+assert(refused.imported.length === 0 && refused.pinned.length === 0,
+       "a refused paste imports and pins nothing: " + J(refused));
 assert(refused.missing.length === 1 && refused.missing[0].guid === lostGuid, "and says why");
 assert(refused.skipped.length === 1 && refused.skipped[0].kind === "node",
        "the item that needed it is listed as skipped: " + J(refused.skipped));
@@ -131,5 +136,22 @@ assert(refused.skipped.length === 1 && refused.skipped[0].kind === "node",
 var anyway = clipboard.paste({ allowMissing: true });
 assert(anyway.pasted.length === 1, "allowMissing pastes it anyway (Unreal's behaviour)");
 assert(anyway.missing.length === 1, "and still reports the gap");
+
+// ---- a node paste aimed at the Assets page pins nothing -------------------
+//
+// Same rule from the other side: the items cannot land there, so the closure
+// they reference must not be resolved, imported or pinned "just in case".
+var projectC = project.create("Clipboard C " + Date.now());
+assert(projectC.length > 10, "project C created");
+editor.select(scene.addPrimitive("cube"));
+var cubeWithTex = editor.selection();
+assert(material.set(cubeWithTex, { baseColorMap: tex }), "a textured cube in project C");
+clipboard.copy();
+var wrongTarget = clipboard.paste({ target: "assets" });
+assert(wrongTarget.pasted.length === 0, "a scene object does not paste into the library");
+assert(wrongTarget.imported.length === 0 && wrongTarget.pinned.length === 0,
+       "and nothing was imported or pinned by the refusal: " + J(wrongTarget));
+assert(wrongTarget.skipped.length === 1 && wrongTarget.skipped[0].kind === "node",
+       "it is reported as skipped: " + J(wrongTarget.skipped));
 
 console.log("scripting.e2e.clipboard_xproject: OK");
