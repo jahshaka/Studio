@@ -291,6 +291,20 @@ int main(int argc, char** argv)
         lib->addNode("texture", "Texture", QIcon(), NodeCategory::Texture,
                      []() -> NodeModel * { return new TextureNode(); });
 
+        // THE PRESETS' IMAGES MUST BE FINDABLE, or the test measures the wrong
+        // thing. Their texture nodes carry APP-RELATIVE names
+        // ("materials_to_graph/brick spec.jpg"); TextureNode::deserializeWidget
+        // Value only takes the path branch when QFileInfo::exists() says so,
+        // and otherwise files the string as an asset guid with no path — which
+        // is a texture socket the baker then reads as UNCONNECTED. (That is
+        // also why the shipped files' own `unsupportedNodes` blocks are empty:
+        // they were re-saved in exactly that state.) In the app
+        // MaterialHelper::resolveAppRelativeTextures resolves them against the
+        // shadergraph asset folder before anything evaluates; here, working
+        // from that folder is the same thing with no database.
+        const QString cwdBefore = QDir::currentPath();
+        QDir::setCurrent(JAHSHAKA_TEST_APP_DIR);
+
         struct Row { const char *file; double roughness; bool specMap; };
         const Row rows[] = {
             { "materials_to_graph/Brick.effect",         0.85, true },
@@ -309,7 +323,7 @@ int main(int argc, char** argv)
 
         for (const Row &row : rows) {
             const std::string name(row.file);
-            QFile f(QString(JAHSHAKA_TEST_APP_DIR) + row.file);
+            QFile f(QString(row.file));
             if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
                 CHECK(false, (name + ": opens").c_str());
                 continue;
@@ -352,6 +366,8 @@ int main(int argc, char** argv)
                 CHECK(reported, msg);
             }
         }
+
+        QDir::setCurrent(cwdBefore);
 
         // The floor itself, on a graph built here: legacy gloss 1.0 is the
         // value every one of those presets used to carry.
