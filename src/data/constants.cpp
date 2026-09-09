@@ -61,12 +61,16 @@ namespace Contants
     // suite that proves a .blend loads through our paths (the three-part rule
     // in that file's allowlist comment).
     QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "glb", "gltf", "ply", "stl"};
-    // Animation formats. bvh is MOCAP — the file is a joint hierarchy and a
-    // table of channel values, with no geometry in the format at all — so it
-    // belongs to the Avatar module's cross-file clip path and NOT to
-    // MODEL_EXTS: assimp synthesises a stick-figure mesh for a .bvh
+    // Animation formats: the extensions a ModelTypes::Animation row can be
+    // imported from (AnimationImporter sniffs a MODEL_EXT whose file carries
+    // no geometry, plus every .bvh) and what the Avatar module's file dialogs
+    // offer. bvh is MOCAP — the file is a joint hierarchy and a table of
+    // channel values, with no geometry in the format at all — so it stays out
+    // of MODEL_EXTS: assimp synthesises a stick-figure mesh for a .bvh
     // (SkeletonMeshBuilder), and importing one as a model would put that bogus
-    // stick figure in the asset library.
+    // stick figure in the asset library. It is a first-class Animation asset
+    // now, not a session-only file (it was neither before: no importer sniffed
+    // it, so a .bvh could not be kept at all).
     QList<QString> ANIMATION_EXTS = MODEL_EXTS + QList<QString>{ "bvh" };
     QList<QString> WHITELIST    = { "txt", "frag", "vert", "vs", "fs", "mtl"};
     // IES photometric profiles. NOT in WHITELIST: they get a real importer

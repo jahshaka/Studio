@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
+#include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetgc.h"
 #include "services/assetservice.h"
@@ -82,6 +83,7 @@ int typeFromName(const QString &name)
     if (n == "particles") return static_cast<int>(ModelTypes::ParticleSystem);
     if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
     if (n == "avatar") return static_cast<int>(ModelTypes::Avatar);
+    if (n == "animation" || n == "clip") return static_cast<int>(ModelTypes::Animation);
     return -1;
 }
 
@@ -140,11 +142,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "The asset's tags, [] when it has none (also in assets.metadata's read).",
           Needs::Document },
         { "import", "assets.import(path) -> guid",
-          "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable.",
+          "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable. "
+          "THE TYPE FOLLOWS THE FILE, not the extension: a model file that carries animation and NO geometry — a Mixamo download 'without skin', a .bvh capture — is stored as an ANIMATION asset (its own library type; every mesh path refuses a zero-mesh file), while a file with meshes stays an object even when it also carries clips. "
+          "Read the type back with assets.metadata(guid).kind or assets.list({type: 'animation'}).",
           Needs::Document },
         { "importFile", "assets.importFile(path, drawerId?, {typeHint}) -> guid",
-          "Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
-          "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list.",
+          "Imports any library-supported file (models, animation clips, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
+          "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, animation, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list.",
           Needs::Document },
         { "drawers", "assets.drawers() -> [{id, name, parent}]",
           "The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0.",
@@ -563,7 +567,15 @@ QString AssetsApi::import(const QString &path)
         return QString();
     }
     // Best effort thumbnail when the engine is up; headless-doc runs skip it.
-    if (host.isEngineReady()) refreshThumbnail(result.objectGuid);
+    // OBJECTS ONLY: the engine render exists because a mesh import's tile is
+    // otherwise blank. Every other type this entry point can now produce (an
+    // ANIMATION asset — a model file with no geometry) was given its final
+    // thumbnail by its importer, and asking for a rebuild here threw the whole
+    // verb AFTER a successful import, which is a passing import reported as a
+    // failure (found driving the real UI, where the engine IS up).
+    if (host.isEngineReady()
+        && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object))
+        refreshThumbnail(result.objectGuid);
     return result.objectGuid;
 }
 
@@ -896,6 +908,18 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
         // when decode fails, so this always writes something sensible.
         const QPixmap thumb = VideoUtils::thumbnailFor(storeFileFor(guid));
         return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(thumb));
+    }
+    if (record.type == static_cast<int>(ModelTypes::Animation)) {
+        // The POSE STRIP the import drew, redrawn — a clip file has no engine
+        // render to make (there is nothing to put the clip ON), so this is the
+        // same three projected poses, from the stored bytes. Document-only,
+        // like the image and audio rows above it.
+        QImage strip;
+        animfile::read(storeFileFor(guid), &strip, 256, 256);
+        if (strip.isNull())
+            return fail("assets.refreshThumbnail: could not read the animation");
+        return host.db->updateAssetThumbnail(
+            guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(strip)));
     }
     if (record.type == static_cast<int>(ModelTypes::File)) {
         return host.db->updateAssetThumbnail(

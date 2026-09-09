@@ -30,11 +30,12 @@ re-exported sample that changes shape fails LOUDLY here instead of in a suite:
      byte-identical to beta_mannequin.dae's, which is guaranteed here by both
      files coming out of the same source document.
 
-NOT a .bvh, deliberately: .bvh is in Constants::ANIMATION_EXTS (the Avatar
-page's file dialog) but has NO importer — FileImporter sniffs only
-Constants::WHITELIST — so a .bvh cannot become a project asset and therefore
-cannot ride a scene reopen or an archive export. avatar.loadClip needs a format
-the ONE import pipeline accepts, which is Constants::MODEL_EXTS.
+NOT a .bvh, deliberately: this fixture is the COLLADA half of the Mixamo pair
+(same document, same joint names as beta_mannequin.dae by construction), which
+is what makes it prove the clip <-> rig join. A .bvh IS importable now — it
+lands as a ModelTypes::Animation asset through AnimationImporter, and
+tests/avatar/fixtures/rig2_walk.bvh is the fixture for that route — but it
+carries a different skeleton and so cannot stand in here.
 
 Usage: make_beta_walk.py <repo-root> <output.dae>
 """

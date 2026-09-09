@@ -12,6 +12,7 @@ add_executable(test_desktops_db test_desktops_db.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp

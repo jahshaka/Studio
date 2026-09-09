@@ -63,6 +63,7 @@ set(AVATAR_LOAD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
@@ -252,6 +253,7 @@ add_executable(test_avatar_assets test_avatar_assets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp

@@ -11,6 +11,7 @@ add_executable(test_importer_glb test_importer_glb.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
@@ -96,6 +97,7 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
@@ -149,6 +151,7 @@ add_executable(test_importer_security test_importer_security.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
@@ -190,6 +193,62 @@ set_tests_properties(importer.security PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
 jah_no_display(importer.security)
 
+# ANIMATION-ASSET suite (ModelTypes::Animation): the structural sniff, the
+# clip reader (clip table + rig signature + pose strip) and the three import
+# outcomes — clip file, model file, refusal. No engine, no display: the whole
+# subject is file CONTENT and catalog rows. The binary-FBX cases are
+# synthesised in the test (the walker reads record headers only), so no real
+# character file has to ship as a fixture; the animation-only GLB, the rigged
+# control and the .bvh are the avatar module's committed fixtures.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
+add_executable(test_importer_animation test_importer_animation.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    # database.cpp's link closure (same set tests/importasync links)
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp)
+set_target_properties(test_importer_animation PROPERTIES AUTOMOC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_importer_animation PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_importer_animation PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_importer_animation PRIVATE IrisGL
+    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
+# A document node is an engine node now (SCENEGRAPH_SPEC D2) — the headless
+# engine, NULL render system, no display, no GPU. jah_no_display proves it.
+jah_document_graph(test_importer_animation)
+add_test(NAME importer.animation COMMAND test_importer_animation
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.animation PROPERTIES
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+jah_no_display(importer.animation)
+
 # The leak lane (scripts/sanitize.sh lsan): assimp scenes and the importer's own
 # buffers. Only the two suites that do NOT link the engine — importer.glb and
 # importer.meshformats bring a Vulkan device up, which is what the lane's
@@ -212,6 +271,7 @@ add_executable(test_importer_materials test_importer_materials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
@@ -263,6 +323,7 @@ add_executable(test_importer_texture_guids test_importer_texture_guids.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp

@@ -59,6 +59,7 @@ QString typeNameOf(int type)
     case ModelTypes::File: return "file";
     case ModelTypes::LightProfile: return "lightprofile";
     case ModelTypes::Avatar: return "avatar";
+    case ModelTypes::Animation: return "animation";
     default: return "asset";
     }
 }

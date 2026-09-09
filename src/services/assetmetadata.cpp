@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "assimp/scene.h"
 
 #include "data/constants.h"
+#include "services/animationfile.h"
 #include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/iesprofile.h"
@@ -386,6 +387,41 @@ QJsonObject AssetMetadata::forLightProfileFile(const QString &filePath)
     return meta;
 }
 
+QJsonObject AssetMetadata::forAnimationFile(const QString &filePath)
+{
+    QJsonObject meta;
+    meta["kind"] = "animation";
+    meta["format"] = formatOf(filePath);
+    meta["fileSize"] = sizeOf(filePath);
+
+    const animfile::Contents contents = animfile::read(filePath);
+    if (!contents.parsed) {
+        // A block is still written (format/fileSize) so the lazy backfill does
+        // not re-parse an unreadable file on every inspection; the absent clip
+        // table is the tell.
+        meta["error"] = contents.error;
+        return meta;
+    }
+
+    QJsonArray clips;
+    for (const auto &clip : contents.clips) {
+        QJsonObject entry;
+        entry["name"] = clip.name;
+        entry["rawName"] = clip.rawName;
+        entry["length"] = clip.length;
+        entry["channels"] = clip.channels;
+        entry["boneChannels"] = clip.boneChannels;
+        clips.append(entry);
+    }
+    meta["clips"] = clips;
+    meta["duration"] = contents.duration;
+    meta["bones"] = contents.boneChannelNames.size();
+    meta["boneNames"] = QJsonArray::fromStringList(contents.boneChannelNames);
+    // The join key with a model row's rig block: equal rigId = same skeleton.
+    meta["rigId"] = contents.rigId;
+    return meta;
+}
+
 QJsonObject AssetMetadata::forAvatarFile(const QString &filePath)
 {
     QJsonObject meta;
@@ -456,6 +492,11 @@ QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFo
         if (!definition.isEmpty()) return forAvatarFile(definition);
         break;
     }
+    case ModelTypes::Animation: {
+        const QString clip = findByExtension(storeFolder, Constants::ANIMATION_EXTS);
+        if (!clip.isEmpty()) return forAnimationFile(clip);
+        break;
+    }
     default:
         break;
     }
@@ -518,6 +559,7 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
             case ModelTypes::Video: meta = forVideoFile(source); break;
             case ModelTypes::LightProfile: meta = forLightProfileFile(source); break;
             case ModelTypes::Avatar: meta = forAvatarFile(source); break;
+            case ModelTypes::Animation: meta = forAnimationFile(source); break;
             default: meta = forGenericFile(source); break;
             }
         }

@@ -14,6 +14,9 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QColor>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QComboBox>
@@ -463,6 +466,87 @@ void AvatarPage::onSaveClicked()
     refreshFromModel();
 }
 
+QString AvatarPage::chooseAnimation()
+{
+    // THE LIBRARY FIRST. Since animation clips are a library type of their own
+    // (ModelTypes::Animation), the clips this user already imported are the
+    // obvious answer to "load an animation", and re-picking the file off disk
+    // would mint nothing new — the import is content-addressed, so the second
+    // import of the same bytes resolves to the same object anyway. The file
+    // dialog stays one button away for the first time a clip is seen.
+    //
+    // The rows come from the VERB (avatar.animations), never from a Database:
+    // a module page that reached for one would be reaching past its host
+    // (avatarpage.h) — and the verb is also what answers `fits`, using the
+    // same rig join `loadAnimation` refuses on.
+    const QVariantList rows = mApi->quietly([&] { return mApi->animations(); });
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Load Animation"));
+    dialog.resize(460, 420);
+    auto *layout = new QVBoxLayout(&dialog);
+
+    auto *list = new QListWidget(&dialog);
+    for (const QVariant &row : rows) {
+        const QVariantMap clip = row.toMap();
+        const QStringList clipNames = clip.value(QStringLiteral("clips")).toStringList();
+        const double duration = clip.value(QStringLiteral("duration")).toDouble();
+        QString label = clip.value(QStringLiteral("name")).toString();
+        if (duration > 0.0) label += tr("   %1 s").arg(duration, 0, 'f', 1);
+        if (clipNames.size() > 1) label += tr("   %1 clips").arg(clipNames.size());
+        auto *item = new QListWidgetItem(label, list);
+        // The rig answer, spelled out: a clip authored on another skeleton
+        // loads nothing, and the user should learn that BEFORE picking it.
+        const bool fits = clip.value(QStringLiteral("fits")).toBool();
+        item->setToolTip(fits ? tr("Fits the loaded character")
+                              : tr("Authored on a different rig — it will be refused"));
+        if (!fits) item->setForeground(QColor(150, 150, 155));
+        item->setData(Qt::UserRole, clip.value(QStringLiteral("guid")));
+    }
+    if (list->count() == 0) {
+        auto *empty = new QLabel(tr("No animation clips in the library yet — import one "
+                                    "with the button below."), &dialog);
+        empty->setWordWrap(true);
+        layout->addWidget(empty);
+    }
+    layout->addWidget(list, 1);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                         &dialog);
+    auto *importButton = buttons->addButton(tr("Import File…"), QDialogButtonBox::ActionRole);
+    buttons->button(QDialogButtonBox::Ok)->setEnabled(false);
+    layout->addWidget(buttons);
+
+    QString chosen;
+    connect(list, &QListWidget::currentItemChanged, &dialog,
+            [&](QListWidgetItem *item, QListWidgetItem *) {
+                buttons->button(QDialogButtonBox::Ok)->setEnabled(item != nullptr);
+            });
+    connect(list, &QListWidget::itemDoubleClicked, &dialog, [&](QListWidgetItem *) {
+        dialog.accept();
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(importButton, &QPushButton::clicked, &dialog, [&]() {
+        // ANIMATION_EXTS, not MODEL_EXTS: a mocap .bvh has no geometry, and it
+        // is a first-class Animation asset now (AnimationImporter) rather than
+        // the session-only oddity it used to be.
+        QStringList filters;
+        for (const auto &ext : Constants::ANIMATION_EXTS) filters.append("*." + ext);
+        const QString path = QFileDialog::getOpenFileName(
+            &dialog, tr("Import an animation"), QFileInfo(mModel->filePath()).absolutePath(),
+            tr("Animations (%1)").arg(filters.join(' ')));
+        if (path.isEmpty()) return;
+        chosen = path;
+        dialog.accept();
+    });
+
+    if (dialog.exec() != QDialog::Accepted) return QString();
+    if (!chosen.isEmpty()) return chosen;               // the file the user picked
+    if (auto *item = list->currentItem()) return item->data(Qt::UserRole).toString();
+    return QString();
+}
+
 void AvatarPage::onLoadAnimationClicked()
 {
     if (!mApi || !mModel) return;
@@ -471,17 +555,13 @@ void AvatarPage::onLoadAnimationClicked()
                                  tr("Load a character first — an animation needs a rig to play on."));
         return;
     }
-    // ANIMATION_EXTS, not MODEL_EXTS: a mocap .bvh has no geometry, so it is
-    // loadable HERE (clips only) and nowhere else in the app.
-    QStringList filters;
-    for (const auto &ext : Constants::ANIMATION_EXTS) filters.append("*." + ext);
-    const QString path = QFileDialog::getOpenFileName(
-        this, tr("Load an animation"), QFileInfo(mModel->filePath()).absolutePath(),
-        tr("Animations (%1)").arg(filters.join(' ')));
-    if (path.isEmpty()) return;
+    // A LIBRARY GUID OR A FILE PATH — avatar.loadAnimation takes either, and a
+    // file it takes becomes an Animation asset on the way in.
+    const QString pathOrGuid = chooseAnimation();
+    if (pathOrGuid.isEmpty()) return;
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const QVariant result = mApi->quietly([&] { return mApi->loadAnimation(path); });
+    const QVariant result = mApi->quietly([&] { return mApi->loadAnimation(pathOrGuid); });
     QApplication::restoreOverrideCursor();
     // A rig mismatch is a REFUSAL, not a silent no-op: the verb throws, and
     // the message names the bones the loaded rig does not have.

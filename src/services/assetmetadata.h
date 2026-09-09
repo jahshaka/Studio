@@ -49,6 +49,9 @@ struct aiScene;
 //   video: duration (ms), width, height, frameRate, videoCodec (whatever
 //          the container reports; GUI thread only — see above)
 //   file:  format/fileSize only (shaders, materials, skies, particles, misc)
+//   animation: clips:[{name, rawName, length (seconds), channels,
+//          boneChannels}], duration, boneNames, bones, rigId — the clip's own
+//          rig signature, so a clip advertises which rigs it fits
 //   lightprofile: verticalAngles, horizontalAngles, coneType, peakCandela,
 //          lumensPerLamp, inputWatts, normalisationFactor, manufacturer,
 //          luminaire (IesProfile::metadata)
@@ -71,6 +74,14 @@ public:
     /// `normalisationFactor` the mirror divides light intensity by so that
     /// binding a profile changes the falloff's SHAPE and not its brightness.
     static QJsonObject forLightProfileFile(const QString &filePath);
+
+    /// ANIMATION CLIP FILES (ModelTypes::Animation): the clip table
+    /// [{name, rawName, length (seconds), channels, boneChannels}], the bone
+    /// names the channels DRIVE and the `rigId` hashed over them — the same
+    /// hash the model side computes over its bone names, so "does this clip
+    /// fit that rig" is a string compare between two rows. Read by
+    /// animfile::read (one assimp parse, ClipNamesOnly).
+    static QJsonObject forAnimationFile(const QString &filePath);
 
     /// The avatar DEFINITION block (AVATAR_ASSET_SPEC §3.1): what the tile and
     /// the module's library list show without opening the avatar — its name,
