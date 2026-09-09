@@ -105,7 +105,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons.",
           Needs::Engine },
         { "focusSelection", "editor.focusSelection() -> bool",
-          "Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. "
+          "Frames the selection in the editor camera (the F key): bounds-aware distance, current view direction kept. "
+          "With more than one node selected it frames the UNION of their world bounds, in one framing, so the whole set "
+          "ends up on screen (a member with no meshes contributes its origin). "
           "IN A ROTATION-LOCKED AXIS VIEW it CENTRES instead: the camera keeps its axis orientation, slides along the view axis until the node is centred, and the framing is done by the ortho zoom "
           "(backing off is invisible in an orthographic projection) — turning to face the node there would tilt a \"top\" view off the axis it is named after.",
           Needs::Engine },

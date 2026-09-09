@@ -138,3 +138,19 @@ set_tests_properties(app.selection_outline PROPERTIES
     ENVIRONMENT "HOME=${_selo_home}"
     LABELS "app"
     TIMEOUT 300)
+
+# ---- app.multiselect_outline ------------------------------------------------
+# EVERY member of a selection SET is outlined, not just the primary
+# (EDITOR_MULTISELECT_SPEC §2.3/D4 a). Two cubes, one per half of the frame,
+# probed in their own half — a secondary that quietly stopped drawing would pass
+# every verb suite in the program and fail only here. Same hull<->wireframe
+# style-toggle trick as app.selection_outline, so the gizmo cancels out.
+set(_mso_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-outline-home)
+file(MAKE_DIRECTORY ${_mso_home}/run)
+add_test(NAME app.multiselect_outline
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js
+         WORKING_DIRECTORY ${_mso_home}/run)
+set_tests_properties(app.multiselect_outline PROPERTIES
+    ENVIRONMENT "HOME=${_mso_home}"
+    LABELS "app"
+    TIMEOUT 300)
