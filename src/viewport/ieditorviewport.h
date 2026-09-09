@@ -433,6 +433,30 @@ public:
     /// assert it on a REAL one, through the real app.
     virtual MirrorStats mirrorStats() const { return {}; }
 
+    /// WHAT THE SCENE'S RIGS COST right now (AVATAR_RIG_PERF_SPEC §3.5), read
+    /// through scene.rigStats().
+    ///
+    /// A character made of several skinned pieces used to cost one
+    /// SkeletonInstance, one clip push and one WHOLE-RIG bone stream PER PIECE;
+    /// on the character rig it costs one instance, one push, and each piece
+    /// streams only its own bones. None of that is visible in the document or in
+    /// pixels — a shared character and an unshared one render identically — so
+    /// this is the only place the optimisation can be observed at all, which is
+    /// exactly why it is a verb and not a log line.
+    ///
+    /// `available` false means there is no engine to ask (the document-only
+    /// stand-in viewports), and the other fields are then meaningless rather
+    /// than merely zero — the same contract MirrorStats has.
+    struct RigStatsInfo {
+        bool available = false;
+        int rigged = 0;         ///< nodes carrying a skinned renderable
+        int instances = 0;      ///< distinct SkeletonInstances behind them
+        int shared = 0;         ///< nodes rendering from another node's instance
+        int streamedBones = 0;  ///< bone matrices the Hlms streams per pass, summed
+        quint64 clipPushes = 0; ///< SceneMirror::clipStatePushes(), cumulative
+    };
+    virtual RigStatsInfo rigStats() const { return {}; }
+
     /// DIAGNOSTIC: what the RENDERER's material for this document node
     /// actually ends up holding, as text (Scene::dumpMaterial). Empty when
     /// this viewport has no mirror, the node is not mirrored, or it carries no

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "commands/scenefoldercommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
+#include "viewport/ieditorviewport.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
@@ -157,6 +158,22 @@ QVector<VerbInfo> SceneApi::verbs() const
           "WHILE PLAYING re-arms possession immediately — no stop/start round trip. This is "
           "deliberately not a World Mode row: world.modeTable is the scalability registry, and "
           "a gameplay decision has no business following low/medium/high/epic.",
+          Needs::Document },
+        { "rigStats", "scene.rigStats() -> {available, rigged, instances, shared, streamedBones, bonesPerRiggedNode, clipPushes}",
+          "What this scene's SKINNED CHARACTERS cost the renderer right now "
+          "(AVATAR_RIG_PERF_SPEC). An imported character is usually several skinned pieces on "
+          "one skeleton, and each piece used to cost a SkeletonInstance of its own (evaluated "
+          "every frame), a clip push of its own, and a stream of the WHOLE rig's bone matrices "
+          "on every render pass. On the character rig the pieces share one instance, the clips "
+          "are pushed once, and each piece streams only the bones it actually weights. "
+          "`rigged` counts skinned nodes, `instances` the distinct skeletons behind them "
+          "(so `rigged - instances` is what sharing saved), `shared` the nodes rendering from "
+          "another node's skeleton, `streamedBones` the bone matrices the shader is handed per "
+          "pass summed over the scene, and `clipPushes` the mirror's cumulative count of "
+          "per-frame clip pushes — sample it across editor.frame(n) to get pushes per frame. "
+          "None of this is visible in the document or in pixels, which is exactly why it is a "
+          "verb. `available` is false when this session's viewport has no engine (the "
+          "document-only stand-ins) and every other field is then meaningless rather than zero.",
           Needs::Document },
         { "folders", "scene.folders() -> [path]",
           "Every OUTLINER FOLDER in the scene, sorted, ancestors included "
@@ -733,6 +750,29 @@ void SceneApi::recordFolderEdit(const QString &text, const iris::ScenePtr &scene
 {
     if (!host.services || !host.services->undo) return;
     host.services->undo->push(new SceneFolderCommand(text, scene, before));
+}
+
+QVariantMap SceneApi::rigStats()
+{
+    // Needs::Document, not Needs::Engine, for the same reason
+    // editor.mirrorStats() is: the verb has an honest answer without an engine
+    // (available:false), and a headless script asking what its rigs cost should
+    // be told "nothing is rendering them" rather than refused.
+    QVariantMap out;
+    const IEditorViewport::RigStatsInfo s =
+        host.viewport ? host.viewport->rigStats() : IEditorViewport::RigStatsInfo{};
+    out.insert("available", s.available);
+    out.insert("rigged", s.rigged);
+    out.insert("instances", s.instances);
+    out.insert("shared", s.shared);
+    out.insert("streamedBones", s.streamedBones);
+    // The derived number a reader actually wants: with the identity map this is
+    // the whole rig's bone count for every piece, and with the character rig it
+    // is the average piece's own bone count.
+    out.insert("bonesPerRiggedNode",
+               s.rigged ? double(s.streamedBones) / double(s.rigged) : 0.0);
+    out.insert("clipPushes", QVariant::fromValue(qulonglong(s.clipPushes)));
+    return out;
 }
 
 QVariantList SceneApi::folders()

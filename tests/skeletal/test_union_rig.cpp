@@ -301,8 +301,10 @@ int main(int argc, char **argv)
         const RigStats rs = ms->rigStats();
         CHECK(rs.rigged == 5 && rs.streamedBones == multipiece::pieceLocalBoneTotal(),
               "rigStats agrees");
-        CHECK(rs.instances == 5 && rs.shared == 0,
-              "...and it is still FIVE SkeletonInstances: sharing is P1b");
+        std::printf("    instances=%zu shared=%zu streamed=%zu\n", rs.instances, rs.shared,
+                    rs.streamedBones);
+        CHECK(rs.instances == 1 && rs.shared == 4,
+              "...on ONE SkeletonInstance: four pieces follow the body (P1b)");
 
         // The per-frame clip push, steady state: one per skinned NODE today.
         doc->updateSceneAnimation(0.1f);
@@ -310,8 +312,40 @@ int main(int argc, char **argv)
         const quint64 before = mirror.clipStatePushes();
         doc->updateSceneAnimation(0.2f);
         mirror.sync();
-        CHECK(mirror.clipStatePushes() - before == 5,
-              "five clip pushes per frame — one per piece (P1b makes it one per character)");
+        const quint64 pushes = mirror.clipStatePushes() - before;
+        std::printf("    clip pushes this frame: %llu\n", (unsigned long long)pushes);
+        CHECK(pushes == 1,
+              "ONE clip push per frame for the whole character (was one per piece)");
+
+        // ---- a piece the USER MOVES un-shares itself (§3.4, §5.3) --------
+        //
+        // Ogre's shared bones carry the MASTER's node transform, so a piece that
+        // is no longer where the master is may not share — it goes back to its
+        // own instance, correct and slower, and comes back when it does.
+        {
+            const iris::MeshNodePtr hair = hero.pieces.last();
+            hair->setLocalPos(iris::Vec3(0.75f, 0, 0));
+            doc->updateSceneAnimation(0.3f);
+            mirror.sync();
+            const NodeId hairNode = mirror.engineNode(hair.data());
+            CHECK(!ms->sharesSkeleton(hairNode), "a moved piece stops sharing");
+            const RigStats moved = ms->rigStats();
+            CHECK(moved.instances == 2 && moved.shared == 3,
+                  "...onto an instance of its own; the other three still share");
+            // Its clips come back with it: a piece on its own instance that was
+            // never given clips would freeze at bind pose.
+            const quint64 before2 = mirror.clipStatePushes();
+            doc->updateSceneAnimation(0.4f);
+            mirror.sync();
+            CHECK(mirror.clipStatePushes() - before2 == 2,
+                  "the un-shared piece is driven by its own clip push");
+
+            hair->setLocalPos(iris::Vec3(0, 0, 0));
+            doc->updateSceneAnimation(0.5f);
+            mirror.sync();
+            CHECK(ms->sharesSkeleton(hairNode), "moving it back re-shares it");
+            CHECK(ms->rigStats().instances == 1, "one instance again");
+        }
 
         mirror.setSource(nullptr);
         dg.engine()->destroyScene(ms);

@@ -54,6 +54,11 @@ public:
     /// The per-scene "what does Play do" setting (AVATAR_LOCOMOTION_SPEC §8.5).
     /// Serialized; the possession it arms is not.
     Q_INVOKABLE QVariant playMode(const QVariant &mode = QVariant());
+    /// What this scene's RIGS cost the renderer right now
+    /// (AVATAR_RIG_PERF_SPEC §3.5). The only surface the character-rig
+    /// optimisation is visible through — a shared character and an unshared one
+    /// render identically.
+    Q_INVOKABLE QVariantMap rigStats();
 
     // ---- outliner folders (SCENEGRAPH_SPEC §6b) ---------------------------
     Q_INVOKABLE QVariantList folders();

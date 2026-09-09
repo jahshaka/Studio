@@ -170,3 +170,40 @@ add_test(NAME skeletal.union_rig COMMAND test_union_rig WORKING_DIRECTORY "${CMA
 set_tests_properties(skeletal.union_rig PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 180 LABELS "document")
 jah_no_display(skeletal.union_rig)
+
+# AVATAR_RIG_PERF_SPEC P1b: skeleton SHARING and its lifetime rules (§3.2/§3.3),
+# which is also the spike the spec asked for before P1b was estimated — kept as
+# a gate instead of thrown away. Engine only (no document, no Qt), on the NULL
+# render system: no display, no GPU. Built a SECOND time against the sanitised
+# backend when JAHSHAKA_ASAN is on, because every trap here is a dangling
+# pointer and ASan is the instrument that names them.
+function(jahshaka_share_test target)
+    add_executable(${target} test_skeleton_share.cpp)
+    set_target_properties(${target} PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(${target} PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    add_dependencies(${target} JahshakaEngineMedia)
+endfunction()
+
+jahshaka_share_test(test_skeleton_share)
+target_link_libraries(test_skeleton_share PRIVATE JahshakaEngine)
+add_test(NAME skeletal.share COMMAND test_skeleton_share
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.share PROPERTIES TIMEOUT 300 LABELS "engine")
+jah_no_display(skeletal.share)
+
+if(JAHSHAKA_ASAN)
+    jahshaka_share_test(test_skeleton_share_asan)
+    target_link_libraries(test_skeleton_share_asan PRIVATE JahshakaEngineAsan)
+    add_test(NAME skeletal.share_asan COMMAND test_skeleton_share_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    # LeakSanitizer off for the same reason tests/engine gives: the only leaks
+    # are Ogre's own, and this suite is here for use-after-free, not for leaks.
+    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 600 LABELS "engine"
+        ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    jah_no_display(skeletal.share_asan)
+endif()

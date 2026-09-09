@@ -172,6 +172,7 @@ public:
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
     MirrorStats mirrorStats() const override;
+    RigStatsInfo rigStats() const override;
     QString dumpMaterial(const QString &nodeGuid) const override;
 
     void begin() override;
