@@ -170,6 +170,8 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["shadowResolution"] = scene->shadowResolution;
     // Shadow FILTER quality; -1 = Auto (softest requesting light wins).
     sceneObj["shadowFilterTier"] = scene->shadowFilterTier;
+    // How many point/spot lights may hold a shadow map; 0 = Auto (the tier's).
+    sceneObj["shadowMapBudget"] = scene->shadowMapBudget;
     sceneObj["particleTimeScale"] = scene->particleTimeScale;
     // Post-processing chain (POST_CHAIN_SPEC §§3-7). Engine-viewport settings,
     // so they live beside antiAliasing rather than anywhere near the materials.
@@ -1024,6 +1026,9 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["shadowType"] = evalShadowTypeName(shadowMap->shadowType);
     sceneNodeObject["shadowSize"] = shadowMap->resolution;
     sceneNodeObject["shadowBias"] = shadowMap->bias;
+    // Static shadow map (SHADOW_TOOLING_SPEC.md §4.3); absent means false in
+    // every scene written before it existed, which is also its default.
+    sceneNodeObject["shadowStatic"] = shadowMap->staticMap;
 }
 
 void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)

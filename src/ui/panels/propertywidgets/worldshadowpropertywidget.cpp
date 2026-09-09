@@ -105,10 +105,38 @@ void WorldShadowPropertyWidget::rebuild()
                        derived > 0 ? QStringLiteral("%1 (largest light request)").arg(effective)
                                    : QStringLiteral("no shadow-casting light yet"));
     }
-    if (effective > 0)
+    // THE ATLAS, AS THE RENDERER BUILT IT (SHADOW_TOOLING_SPEC.md §4.2). The
+    // layout is packed into columns now, not a fixed R x 3.5R strip, so the
+    // live figures are read back rather than computed whenever an engine is
+    // there to ask; atlasMegabytes() stays the offline estimate.
+    IEditorViewport::ShadowStatusInfo st;
+    if (sceneView && sceneView->isInitialized()) st = sceneView->shadowStatus();
+    if (st.available && st.atlasWidth > 0) {
+        this->addLabel("Atlas Memory",
+                       QStringLiteral("~%1 MB VRAM (%2 x %3, %4 point/spot maps)")
+                           .arg(int(st.atlasBytes / (1024 * 1024)))
+                           .arg(st.atlasWidth).arg(st.atlasHeight).arg(st.focusedMaps));
+    } else if (effective > 0) {
         this->addLabel("Atlas Memory", QStringLiteral("~%1 MB VRAM (%2 x %3)")
                                            .arg(atlasMegabytes(effective))
                                            .arg(effective).arg(qRound(effective * 3.5)));
+    }
+
+    // THE EXCEEDED CASE, said out loud (owner decision D5: panel + status +
+    // log, no toast). Before this, a scene with more shadow-casting lamps than
+    // the atlas has maps simply showed fewer shadows than it had lights, and
+    // WHICH lamp went dark changed as the camera moved.
+    const int unmapped = st.available ? int(st.unmapped.size()) : 0;
+    if (unmapped > 0) {
+        this->addLabel("Shadow Maps",
+                       QStringLiteral("%1 of %2 shadow-casting lights have a map — %3 cast no "
+                                      "shadow. Raise Shadow Map Budget in World Modes, or turn "
+                                      "off Cast Shadows on distant lights.")
+                           .arg(st.casters - unmapped).arg(st.casters).arg(unmapped));
+    } else if (st.available && st.casters > 0) {
+        this->addLabel("Shadow Maps", QStringLiteral("%1 of %1 shadow-casting lights have a map")
+                                          .arg(st.casters));
+    }
 }
 
 void WorldShadowPropertyWidget::onQualityChanged(int row)

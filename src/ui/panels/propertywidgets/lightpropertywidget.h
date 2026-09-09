@@ -94,6 +94,7 @@ protected slots:
     void clearMask();
 
     void shadowTypeChanged(QString name);
+    void shadowStaticChanged(bool on);
     void shadowSizeChanged(QString size);
 	void shadowBiasChanged(float bias);
 
@@ -152,6 +153,7 @@ private:
     QPushButton *maskClear = nullptr;
     QLabel *maskNote = nullptr;
 
+    CheckBoxWidget* shadowStatic;
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;
     HFloatSliderWidget* shadowBias;

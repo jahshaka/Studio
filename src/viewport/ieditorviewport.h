@@ -19,6 +19,8 @@
 #include <QImage>
 #include <QSize>
 #include <QString>
+#include <QStringList>
+#include <QVector>
 #include <QVector3D>
 #include "irisgl/irisglfwd.h"
 
@@ -247,6 +249,15 @@ public:
     virtual bool getShowGiVolume() const { return false; }
     virtual void setShowGiVolume(bool) {}
 
+    /// THE SHADOW-ATLAS INSPECTOR — a strip of thumbnails showing what the
+    /// renderer rasterised into each rectangle of its one shadow atlas, with
+    /// the light each map belongs to and whether that map is static
+    /// (SPECS/SHADOW_TOOLING_SPEC.md §4.4). A diagnostic: never persisted, and
+    /// drawn by the engine's own HUD rather than by Qt for the reason the
+    /// loading cover is (the viewport is a native window).
+    virtual bool getShowShadowAtlas() const { return false; }
+    virtual void setShowShadowAtlas(bool) {}
+
     /// Game View (G): hides every in-viewport editor helper (grid, light
     /// wires, selection outline, gizmo). Docks/toolbars untouched, never
     /// persisted. Only the engine viewport implements it.
@@ -397,6 +408,38 @@ public:
         int  ifdProbesPerFrame = 0;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
+
+    /// WHAT THE SHADOW ATLAS IS, as opposed to what the scene asked for
+    /// (SPECS/SHADOW_TOOLING_SPEC.md §7) — the same reading as giStatus() and
+    /// for the same reason: the renderer has a FIXED number of point/spot
+    /// shadow maps and silently drops the casters that do not fit, so nothing
+    /// downstream could tell "this lamp casts no shadow" from "this lamp's
+    /// shadow was dropped". `available` false means there is no engine to ask.
+    struct ShadowMapEntry {
+        int     slot = 0;        ///< 0 = the directional/PSSM slot, 1..N the focused maps
+        QString node;            ///< the light's document guid, empty when it is not ours
+        bool    isStatic = false;
+        bool    dirty = false;
+        bool    pssm = false;
+    };
+    struct ShadowStatusInfo {
+        bool available = false;
+        int  resolution = 0;     ///< the atlas base size in force
+        int  maps = 0;           ///< pssmSplits + focusedMaps
+        int  pssmSplits = 0;
+        int  focusedMaps = 0;    ///< point/spot maps the atlas has room for
+        int  lightSlots = 0;     ///< 1 + focusedMaps: the length of `mapped`
+        int  casters = 0;        ///< shadow-casting point/spot lights in the scene
+        int  budget = 0;         ///< the effective ceiling (resolution-capped)
+        int  requestedBudget = 0;
+        int  atlasWidth = 0, atlasHeight = 0;
+        qint64 atlasBytes = 0;
+        QVector<ShadowMapEntry> mapped;
+        QStringList unmapped;    ///< guids of casters with no map — the silent failures
+        int shadowPassesLastFrame = 0;
+        int staticMapRendersLastFrame = 0;
+    };
+    virtual ShadowStatusInfo shadowStatus() const { return {}; }
 
     /// Whether the renderer ACCEPTED this node as a planar-reflection plane.
     /// The plane, its size and its normal are derived from the mesh's own

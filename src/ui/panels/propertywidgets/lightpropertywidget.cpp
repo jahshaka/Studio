@@ -165,6 +165,21 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
                        "Shadow Quality overrides that."));
     //shadowBias = this->addFloatValueSlider("Shadow Bias",0,1);
 
+    // STATIC SHADOW (SHADOW_TOOLING_SPEC.md §4.3). Renders this light's shadow
+    // map ONCE and keeps it until something invalidates it, instead of
+    // re-rendering it every frame — for a point light that is six cube-face
+    // passes plus a copy saved per frame. Hidden for directional lights (their
+    // PSSM splits follow the camera) and for area lights (which never cast):
+    // the renderer ignores the flag for both, and a control that does nothing
+    // is worse than no control.
+    shadowStatic = this->addCheckBox("Static Shadow");
+    shadowStatic->setToolTip(
+        QStringLiteral("Render this light's shadow map once and keep it. The renderer "
+                       "re-renders it by itself when the light moves or changes, when "
+                       "geometry is added, removed or MOVED, and on world.refreshShadows(). "
+                       "Best for a fixed lamp over scenery that does not move: a shadow that "
+                       "is re-dirtied every frame simply costs what a dynamic one costs."));
+
 	shadowAlpha = this->addFloatValueSlider("Shadow Transparency", 0, 1.f);
 	shadowColor = this->addColorPicker("Shadow Color");
 
@@ -199,6 +214,7 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 	connect(shadowColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(shadowColorChanged(QColor)));
 	connect(shadowColor->getPicker(), SIGNAL(onSetColor(QColor)), this, SLOT(shadowColorChanged(QColor)));
 
+    connect(shadowStatic, SIGNAL(valueChanged(bool)), this, SLOT(shadowStaticChanged(bool)));
     connect(shadowType, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowTypeChanged(QString)));
     connect(shadowSize, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowSizeChanged(QString)));
     //connect(shadowBias, SIGNAL(valueChanged(float)), this, SLOT(shadowBiasChanged(float)));
@@ -257,10 +273,21 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 
         shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap->resolution));
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
+        shadowStatic->setValue(lightNode->shadowMap->staticMap);
         //shadowBias->setValue(lightNode->shadowMap->bias);
 
         // Point lights: legacy never shadowed them (controls hidden); the engine
         // does, so engine mode keeps Shadow Type/Size. Tint stays per-backend.
+        // Static shadow maps are a POINT/SPOT feature: a directional light's
+        // splits follow the camera and an area light never casts, so the
+        // renderer ignores the flag for both (the document still stores it, so
+        // switching a light's type back does not lose the setting).
+        if (lightNode->getLightType()==iris::LightType::Point ||
+            lightNode->getLightType()==iris::LightType::Spot) {
+            shadowStatic->show();
+        } else {
+            shadowStatic->hide();
+        }
         if (lightNode->getLightType()==iris::LightType::Area) {
             // Ogre-Next cannot shadow area lights: hide every shadow control.
             shadowSize->hide();
@@ -460,6 +487,15 @@ void LightPropertyWidget::shadowTypeChanged(QString name)
 {
     auto shadowType = evalShadowMapType(name);
     lightNode->shadowMap->shadowType = shadowType;
+}
+
+void LightPropertyWidget::shadowStaticChanged(bool on)
+{
+    if (!lightNode) return;
+    // THE DOCUMENT FIELD IS THE API, exactly as the rows above: SceneMirror
+    // pushes it inside LightDesc at the next sync, which is the same path
+    // node.setProperty(guid, "shadowStatic", ...) takes.
+    lightNode->shadowMap->staticMap = on;
 }
 
 void LightPropertyWidget::shadowSizeChanged(QString size)

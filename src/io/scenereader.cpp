@@ -535,6 +535,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int sr = sceneObj["shadowResolution"].toInt(0);
         scene->shadowResolution = sr <= 0 ? 0 : qBound(256, sr, 8192);
     }
+    // Shadow-map BUDGET: absent (every scene written before shadow tooling)
+    // means Auto, i.e. follow the World Mode tier.
+    {
+        const int sb = sceneObj["shadowMapBudget"].toInt(0);
+        scene->shadowMapBudget = sb <= 0 ? 0 : qBound(2, sb, 16);
+    }
     // Shadow FILTER quality: absent means Auto (-1); otherwise 0/1/2.
     {
         const int sf = sceneObj["shadowFilterTier"].toInt(-1);
@@ -1220,6 +1226,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     //shadow data
     auto shadowMap = lightNode->shadowMap;
     shadowMap->bias = (float)nodeObj["shadowBias"].toDouble(0.0015f);
+    // Absent in every scene written before static shadow maps: false, which is
+    // also the default for a new light (owner decision D2).
+    shadowMap->staticMap = nodeObj["shadowStatic"].toBool(false);
     // ensure shadow map size isnt too big ro too small
     auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
     shadowMap->setResolution(res);

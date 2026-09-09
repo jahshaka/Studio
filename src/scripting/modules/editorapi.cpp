@@ -66,13 +66,21 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
           "engine-drawn frame-stats readout in the viewport's top-left corner (F3), "
           "`physicsDebug` the Bullet debug drawer (collision shapes and contacts, View → "
           "Wireframes → Physics Debug Overlay — only ever visible while a simulation runs), "
+          "`shadowAtlas` a strip of thumbnails along the bottom showing what the renderer "
+          "rasterised into each rectangle of its ONE shadow atlas, captioned with the light each "
+          "map belongs to and whether that map is static (and dirty). It is how you see that a "
+          "lamp has no shadow map at all, or that a static map is being re-rendered when it should "
+          "not be; world.shadowStatus() is the same information as numbers. Off by default, never "
+          "persisted, and never drawn in an offscreen view, so screenshots and pixel tests are "
+          "unaffected. Process-wide like the stats readout: with two on-screen views both show the "
+          "atlas the primary one rendered. "
           "`giVolume` the wireframe boxes around the GI lit volume and the reflection-probe "
           "region world.giStatus() reports (off by default, drawn only while GI is on — the lit "
           "volume is the one thing in a GI scene a user cannot otherwise see, and an object "
@@ -87,7 +95,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
           "render through an offscreen view and the overlay is excluded from those by construction.",
           Needs::Engine },
-        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume}) -> bool",
+        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, shadowAtlas}) -> bool",
           "Turns the viewport's editor helpers on and off — the View Options rows, the G key and "
           "the F3 stats readout, as one verb. Omitted keys keep their value; an unknown key is "
           "REFUSED (a silently ignored overlay key is indistinguishable from a broken renderer). "
@@ -426,6 +434,7 @@ QVariantMap EditorApi::overlays()
     // READ-ONLY (it is a consequence of editor.setView, not a setting):
     // setOverlays refuses "gridPlane" like any other unknown key.
     out["gridPlane"] = host.viewport->gridPlane();
+    out["shadowAtlas"] = host.viewport->getShowShadowAtlas();
     return out;
 }
 
@@ -436,7 +445,8 @@ bool EditorApi::setOverlays(const QVariantMap &change)
     // read it and then guessed "fps" got the refusal below, and a caller who
     // trusted it never learned `stats` or `physicsDebug` existed.
     static const QStringList known = { "grid", "lightWires", "selectionWireframe",
-                                      "stats", "physicsDebug", "gameView", "giVolume" };
+                                      "stats", "physicsDebug", "gameView", "giVolume",
+                                      "shadowAtlas" };
     if (change.isEmpty())
         return fail(QStringLiteral("editor.setOverlays: nothing to change — pass a map ({%1}); "
                                    "editor.overlays() reads the current values")
@@ -481,6 +491,10 @@ bool EditorApi::setOverlays(const QVariantMap &change)
     // diagnostic you turn on to answer "is that object inside the lit volume?"
     // and the answer stops mattering the moment it is yes.
     if (change.contains("giVolume")) host.viewport->setShowGiVolume(change.value("giVolume").toBool());
+    // The shadow-atlas inspector (SHADOW_TOOLING_SPEC.md §4.4): the same
+    // "diagnostic, not persisted" contract as giVolume above.
+    if (change.contains("shadowAtlas"))
+        host.viewport->setShowShadowAtlas(change.value("shadowAtlas").toBool());
     return true;
 }
 

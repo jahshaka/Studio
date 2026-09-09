@@ -75,10 +75,21 @@ QVector<VerbInfo> WorldApi::verbs() const
           "both curves are half fogged). `start` no longer affects rendering on its own. "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
-        { "shadows", "world.shadows({enabled}) -> bool",
-          "Toggles shadow rendering. `enabled` is the only key this verb takes — anything else is "
-          "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
-          "(world.setShadowResolution, node.setProperty on the light).",
+        { "shadows", "world.shadows({enabled, mapBudget}) -> bool",
+          "Shadow rendering for the scene. 'enabled' toggles it. "
+          "'mapBudget' is HOW MANY POINT AND SPOT LIGHTS MAY HOLD A SHADOW MAP AT ONCE — 2..16, or "
+          "\"auto\" (the default) to follow the World Mode tier, which asks for 2/4/8/8 at "
+          "low/medium/high/epic. It matters because the renderer keeps ONE shadow atlas with a fixed "
+          "number of point/spot maps and fills them with the casters closest to the camera, dropping "
+          "the rest in silence: with a budget of two, a room with three shadow-casting lamps shows "
+          "two shadows, and WHICH lamp is missing changes as you move. It is a CEILING, not an "
+          "allocation — the renderer counts the scene's casters, steps the atlas {2,4,8,16} up to "
+          "this value, and never shrinks it again within a session (the memory comes back when the "
+          "scene closes). Empty maps cost no shaders; each map that a POINT light fills costs six "
+          "cube-face renders and a copy every frame, which is the real price. A light beyond the "
+          "budget still LIGHTS the scene, it just casts no shadow; world.shadowStatus() names those "
+          "lights. The resolution is world.setShadowResolution and the per-light filter/bias rows "
+          "are node.setProperty on the light; any other key here is REFUSED.",
           Needs::Document },
         { "gi", "world.gi({tier, mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity, ddgiAmbient}) -> bool",
           "Global illumination — the full surface, of which world.rayon is the product-named shorthand. "
@@ -104,6 +115,17 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
+          Needs::Document },
+        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, mapped:[{slot, node, static, dirty, pssm}], unmapped:[guid], shadowPassesLastFrame, staticMapRendersLastFrame}",
+          "What the SHADOW ATLAS is actually doing, as opposed to what was asked for — the same \"the renderer beats the request\" reading as world.giStatus() and world.antiAliasing(). "
+          "It exists because the renderer keeps a fixed number of point/spot shadow maps and fills them with the casters closest to the camera, DROPPING the rest without a word: 'casters' is how many shadow-casting point and spot lights the scene has, 'focusedMaps' how many of them can have a map at once, and 'unmapped' NAMES the lights that got none — the lights whose shadows are silently missing. Empty is the healthy state. "
+          "'budget' is the ceiling actually in force (world.shadows' mapBudget, clamped by what the resolution can afford: 16 maps at 1024, 8 at 2048, 4 at 4096, 2 at 8192), 'requestedBudget' what was asked for before that clamp. 'maps' counts TEXTURE rectangles (pssmSplits + focusedMaps) while 'mapped' has one entry per LIGHT SLOT — three of the rectangles belong to the one directional light, which is why slot 0 is flagged 'pssm'. Each entry names the light's guid, and whether its map is 'static' (rendered once and kept — see the light's Static Shadow row) and currently 'dirty' (scheduled to re-render). "
+          "'atlasWidth'/'atlasHeight'/'atlasBytes' are the one depth texture all of this is packed into; the point-light cube scratch (~48 MB, allocated once for any point caster) is not counted. "
+          "'shadowPassesLastFrame' and 'staticMapRendersLastFrame' are the cost readings: how many shadow-node passes the last frame ran, and how many of those were a static map re-rendering — 0 for a settled static map, which is the whole point of the feature. ASKING TURNS THEM ON (a per-pass listener is not free), so the FIRST call reports 0 and every call after a rendered frame reports the truth, exactly like app.stats' metricsRecording. "
+          "'live' is false without an engine viewport, and the numbers are then the document's request rather than a measurement.",
+          Needs::Document },
+        { "refreshShadows", "world.refreshShadows() -> bool",
+          "Re-renders every STATIC shadow map in the scene once, on the next frame — the shadow twin of world.refreshGi(). A light whose 'Static Shadow' is on has its shadow map rendered once and kept, which saves six cube-face passes plus a copy every frame for a fixed lamp; the renderer re-renders it by itself when the light moves or changes, when geometry is attached or destroyed, and when ANY transform in the document changes. This verb is for the case the renderer cannot see — a material or a texture edited outside those paths, or a script that wants the re-render to have happened before its next read. Harmless and cheap with no static lights (it sets a flag). It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
         { "fitGiBounds", "world.fitGiBounds({nodes, margin}) -> {boundsMin, boundsMax}",
           "PINS the global-illumination bounds to the given objects: the union of their world bounds plus an optional margin is written into the scene's giBoundsMin/giBoundsMax, which switches the lit volume off automatic. 'nodes' is a list of node ids and is REQUIRED — there is deliberately no 'whatever is selected' default (the World panel's Fit Bounds To Scene button passes the scene's contents; a caller that wants a selection passes it). Children are included, so fitting an imported model's root fits the model rather than its origin. Returns the box it wrote. Clear the pin — hand the volume back to the automatic fit, which world.giStatus() reports — by setting both corners equal again through world.gi.",
@@ -270,13 +292,33 @@ bool WorldApi::shadows(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.shadows"));
     if (!scene) return false;
-    static const QStringList known = { QStringLiteral("enabled") };
+    static const QStringList known = { QStringLiteral("enabled"), QStringLiteral("mapBudget") };
     const QString refusal = refuseUnknownKeys(
         QStringLiteral("world.shadows"), params, known,
         QStringLiteral("Shadow RESOLUTION is world.setShadowResolution; the per-light filter and "
                        "bias rows are node.setProperty on the light."));
     if (!refusal.isEmpty()) return fail(refusal);
     if (params.contains("enabled")) scene->shadowEnabled = params.value("enabled").toBool();
+    // HOW MANY point/spot lights may hold a shadow map at once
+    // (SHADOW_TOOLING_SPEC.md §4.1). A CEILING: the engine derives the actual
+    // count from the scene's casters, steps it {2,4,8,16} up to this value and
+    // never shrinks it again within a session. "auto" (or 0) hands the decision
+    // back to the World Mode tier.
+    if (params.contains("mapBudget")) {
+        const QVariant v = params.value("mapBudget");
+        int budget = 0;
+        if (v.typeId() == QMetaType::QString) {
+            if (v.toString().compare(QStringLiteral("auto"), Qt::CaseInsensitive) != 0)
+                return fail(QStringLiteral("world.shadows: mapBudget must be 2..16 or \"auto\""));
+        } else {
+            budget = v.toInt();
+            if (budget != 0 && (budget < 2 || budget > 16))
+                return fail(QStringLiteral("world.shadows: mapBudget must be 2..16 or \"auto\" "
+                                           "(got %1)").arg(budget));
+        }
+        scene->shadowMapBudget = budget;
+        worldmodes::pinRowValue(scene, QStringLiteral("shadowMapBudget"), budget);
+    }
     return true;
 }
 
@@ -658,6 +700,75 @@ bool WorldApi::refreshGi()
     // player scene. Bumping the serial is the whole verb; the mirror notices on
     // its next sync and re-solves once.
     ++scene->giRefreshSerial;
+    return true;
+}
+
+QVariantMap WorldApi::shadowStatus()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.shadowStatus"));
+    if (!scene) return QVariantMap();
+    // The ACHIEVED reading, exactly like world.giStatus(): ask the renderer when
+    // there is one, and report live:false with the document's request when there
+    // is not, so a headless --script run never mistakes an unmeasured value for
+    // a measurement.
+    IEditorViewport::ShadowStatusInfo st;
+    if (host.isEngineReady() && host.viewport) st = host.viewport->shadowStatus();
+    QVariantMap out;
+    out[QStringLiteral("live")] = st.available;
+    out[QStringLiteral("requestedBudget")] = scene->shadowMapBudget;
+    if (!st.available) {
+        out[QStringLiteral("resolution")] = scene->shadowResolution;
+        out[QStringLiteral("maps")] = 0;
+        out[QStringLiteral("pssmSplits")] = 0;
+        out[QStringLiteral("focusedMaps")] = 0;
+        out[QStringLiteral("casters")] = 0;
+        out[QStringLiteral("budget")] = scene->shadowMapBudget;
+        out[QStringLiteral("atlasWidth")] = 0;
+        out[QStringLiteral("atlasHeight")] = 0;
+        out[QStringLiteral("atlasBytes")] = 0;
+        out[QStringLiteral("mapped")] = QVariantList();
+        out[QStringLiteral("unmapped")] = QVariantList();
+        out[QStringLiteral("shadowPassesLastFrame")] = 0;
+        out[QStringLiteral("staticMapRendersLastFrame")] = 0;
+        return out;
+    }
+    out[QStringLiteral("resolution")] = st.resolution;
+    out[QStringLiteral("maps")] = st.maps;
+    out[QStringLiteral("pssmSplits")] = st.pssmSplits;
+    out[QStringLiteral("focusedMaps")] = st.focusedMaps;
+    out[QStringLiteral("casters")] = st.casters;
+    out[QStringLiteral("budget")] = st.budget;
+    out[QStringLiteral("requestedBudget")] = st.requestedBudget;
+    out[QStringLiteral("atlasWidth")] = st.atlasWidth;
+    out[QStringLiteral("atlasHeight")] = st.atlasHeight;
+    out[QStringLiteral("atlasBytes")] = double(st.atlasBytes);
+    QVariantList mapped;
+    for (const IEditorViewport::ShadowMapEntry &e : st.mapped) {
+        QVariantMap m;
+        m[QStringLiteral("slot")] = e.slot;
+        m[QStringLiteral("node")] = e.node;
+        m[QStringLiteral("static")] = e.isStatic;
+        m[QStringLiteral("dirty")] = e.dirty;
+        m[QStringLiteral("pssm")] = e.pssm;
+        mapped.append(m);
+    }
+    out[QStringLiteral("mapped")] = mapped;
+    QVariantList unmapped;
+    for (const QString &g : st.unmapped) unmapped.append(g);
+    out[QStringLiteral("unmapped")] = unmapped;
+    out[QStringLiteral("shadowPassesLastFrame")] = st.shadowPassesLastFrame;
+    out[QStringLiteral("staticMapRendersLastFrame")] = st.staticMapRendersLastFrame;
+    return out;
+}
+
+bool WorldApi::refreshShadows()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.refreshShadows"));
+    if (!scene) return false;
+    // Same reasoning as refreshGi, verbatim: the document carries a monotonic
+    // serial and the MIRROR owns the push, so the verb behaves identically in
+    // the editor, under --headless and in a player scene.
+    ++scene->shadowRefreshSerial;
     return true;
 }
 
@@ -1151,6 +1262,7 @@ QVariantMap WorldApi::get()
     out["shadows"] = scene->shadowEnabled;
     out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
     out["shadowResolution"] = scene->shadowResolution;   // 0 = Auto; the verb reads the applied value
+    out["shadowMapBudget"] = scene->shadowMapBudget;     // 0 = Auto (the World Mode tier's value)
     out["ambientFromSky"] = scene->ambientFromSky;
     // Resolved, not raw: the three document fields carry "follow" sentinels and
     // a caller reading world.get() wants what the renderer will do.

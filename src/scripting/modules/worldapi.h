@@ -46,6 +46,10 @@ public:
     Q_INVOKABLE QVariantMap rayon(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap giStatus();
     Q_INVOKABLE bool refreshGi();
+    /// Re-render every static shadow map once (SHADOW_TOOLING_SPEC.md §4.3).
+    Q_INVOKABLE bool refreshShadows();
+    /// What the shadow atlas ACHIEVED (SHADOW_TOOLING_SPEC.md §7).
+    Q_INVOKABLE QVariantMap shadowStatus();
     Q_INVOKABLE QVariantMap fitGiBounds(const QVariantMap &params);
     Q_INVOKABLE int antiAliasing();
     Q_INVOKABLE int setAntiAliasing(int samples);
