@@ -145,11 +145,15 @@ assert(childrenOf(pastedWithKid)[0] !== d1Kid, "with a fresh guid of its own");
 
 // ---- 4. the clipboard is in-app, not the document --------------------------
 editor.selectNone();
-// Copying nothing is a REFUSED verb (it raises), not a silent success — and a
-// refusal must not clear what was copied a moment ago.
-var refused = false;
-try { editor.copy(); } catch (e) { refused = true; }
-assert(refused, "copying with nothing selected is refused, not silently accepted");
+// Copying nothing is a REFUSAL, not a silent success — and since the refusal
+// contract landed (hygiene lane, 2026-09-09) it is ANSWERED rather than thrown:
+// the verb documents `-> n`, so it returns 0 and records why, instead of
+// aborting the caller's whole script over an outcome its own doc allows.
+// Either way it must not clear what was copied a moment ago.
+var copied = editor.copy();
+assert(copied === 0, "copying with nothing selected returns 0, not a silent success");
+assert(String(app.lastError()).indexOf("nothing is selected") >= 0,
+       "and says why: " + app.lastError());
 assert(editor.clipboard().length === 2,
        "and leaves the previous clipboard alone — Ctrl+C on empty space must not lose it");
 var atRoot = editor.paste();
