@@ -157,9 +157,19 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "HEIGHT: a character measuring outside 0.5..3.0 m is scaled to 1.75 m before the "
           "capsule is fitted (the same rule the Avatar page's preview applies, and for the same "
           "reason: a package whose unit declaration is wrong arrives 10x or 100x off). `height` "
-          "sets an exact height in metres instead, and `normalize: false` takes the file's size "
-          "as authored. The result is on the node's own scale and is SERIALIZED, so reopening the "
-          "scene does not normalize again. avatar.movement reports what happened. "
+          "sets an exact height in metres instead. The result is on the node's own scale and is "
+          "SERIALIZED, so reopening the scene does not normalize again. avatar.movement reports "
+          "what happened. "
+          "SINCE FIT-TO-SIZE (services/fitsize.h) the ASSET is measured and fitted at IMPORT, and "
+          "that fit is applied by the shared instantiation this verb calls — so a mis-declared "
+          "character usually arrives here ALREADY the right size and this rule finds nothing to "
+          "do (avatar.movement then reports normalized:false with a plausible sourceHeight, which "
+          "is the no-double-scaling story, not a failure to normalize). `normalize: false` "
+          "therefore skips THIS MODULE'S rule only; it does NOT undo the asset's fit, because the "
+          "fit belongs to the asset and every placement route — drag-drop, assets.addToScene, "
+          "this verb — has to agree about how big a model is. To place a model at the size its "
+          "FILE was authored at, clear the fit on the asset (assets.setFit(guid, {scale: 1})) and "
+          "spawn with normalize:false. "
           "The knobs afterwards are avatar.movement / avatar.setMovement. Undoable.",
           Needs::Document },
         { "loadClip", "avatar.loadClip(nodeId, pathOrAssetGuid, {name?}) -> {asset, file, node, added, clips:[name], match:{channels, boneChannels, matched}}",

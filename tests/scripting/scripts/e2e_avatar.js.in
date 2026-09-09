@@ -385,30 +385,71 @@ var groundAfter = scene.find("Ground");
 assert(node.collision(groundAfter) === false,
        "the COLLISION flag round-tripped too (written only when the user overrode the default)");
 
-// ---- spawn HEIGHT normalization (the Dreyar case, in the scene) -----------
+// ---- spawn HEIGHT: the Dreyar case in the scene, and WHO scales it --------
 // Last, so nothing above sees the extra avatars.
+//
+// Since FIT TO SIZE (services/fitsize.h) there are TWO rules that could scale
+// a mis-declared character, and the whole point is that exactly ONE of them
+// ever does. The asset is measured and fitted at IMPORT, and the fit is
+// applied by the shared instantiation avatar.spawn calls — so by the time this
+// module's height rule runs it is looking at an already-correct character and
+// does nothing. This block asserts both halves: the fitted path (nothing is
+// scaled twice) and, with the asset's fit cleared, the module's own rule still
+// working exactly as it always did.
 {
     var gGuid = assets.import(GIANT);
     assert(assets.addToProject(gGuid) === gGuid, "the 17.25 m character joins the project");
+    assert(Math.abs(assets.metadata(gGuid).extent.y - 17.25) < 0.05,
+           "the asset measured 17.25 m at import");
 
+    // ---- (a) the ordinary path: the ASSET's fit did it, once ----
     var big = avatar.spawn(gGuid, { position: { x: 4, y: 0, z: 0 } });
     var bigKnobs = avatar.movement(big);
     console.log("spawned giant: " + JSON.stringify(bigKnobs));
-    assert(bigKnobs.normalized === true && Math.abs(bigKnobs.sourceHeight - 17.25) < 0.05,
-           "avatar.spawn normalized the 17.25 m character");
     assert(Math.abs(bigKnobs.characterHeight - 1.75) < 0.02,
-           "... to " + bigKnobs.characterHeight.toFixed(3) + " m");
+           "the spawned 17.25 m character stands " + bigKnobs.characterHeight.toFixed(3) + " m");
+    assert(bigKnobs.normalized === false && Math.abs(bigKnobs.sourceHeight - 1.75) < 0.02,
+           "... and THIS MODULE did not scale it: the asset arrived fitted (sourceHeight "
+               + bigKnobs.sourceHeight.toFixed(3) + " m). NO DOUBLE NORMALISATION.");
     assert(Math.abs(bigKnobs.capsuleHeight - 1.75) < 0.02,
-           "... and the CAPSULE was fitted to the normalized body, not the raw one");
+           "... and the CAPSULE was fitted to that body, not to the raw 17.25 m one");
 
+    // An explicit height still wins — it is applied on top of the asset's fit.
     var exact = avatar.spawn(gGuid, { position: { x: 6, y: 0, z: 0 }, height: 2.2 });
     assert(Math.abs(avatar.movement(exact).characterHeight - 2.2) < 0.02,
-           "avatar.spawn({height: 2.2}) sets an exact height");
+           "avatar.spawn({height: 2.2}) sets an exact height on top of the fit");
 
-    var raw = avatar.spawn(gGuid, { position: { x: 8, y: 0, z: 0 }, normalize: false });
+    // normalize:false skips THIS MODULE'S rule; it does not undo the asset's
+    // fit, because the fit belongs to the asset and drag-drop, addToScene and
+    // spawn all have to agree about how big a model is.
+    var kept = avatar.spawn(gGuid, { position: { x: 8, y: 0, z: 0 }, normalize: false });
+    var keptKnobs = avatar.movement(kept);
+    assert(keptKnobs.normalized === false && Math.abs(keptKnobs.characterHeight - 1.75) < 0.02,
+           "avatar.spawn({normalize: false}) still honours the ASSET's fit ("
+               + keptKnobs.characterHeight.toFixed(2) + " m)");
+
+    // ---- (b) the module's own rule, still exactly as it was ----
+    // Clearing the asset's fit is how you get a model at the size its FILE was
+    // authored at — and it puts the height rule back in charge, which is the
+    // path this block has gated since the unit fix. Both are asserted so that
+    // moving the work to the asset cannot silently delete the coverage.
+    assert(Math.abs(assets.setFit(gGuid, { scale: 1 }).fitScale - 1) < 1e-9,
+           "assets.setFit({scale: 1}) clears the asset's fit");
+
+    var unfitted = avatar.spawn(gGuid, { position: { x: 10, y: 0, z: 0 } });
+    var unfittedKnobs = avatar.movement(unfitted);
+    assert(unfittedKnobs.normalized === true
+               && Math.abs(unfittedKnobs.sourceHeight - 17.25) < 0.05,
+           "with the fit cleared, avatar.spawn normalizes the 17.25 m character itself");
+    assert(Math.abs(unfittedKnobs.characterHeight - 1.75) < 0.02,
+           "... to " + unfittedKnobs.characterHeight.toFixed(3) + " m");
+    assert(Math.abs(unfittedKnobs.capsuleHeight - 1.75) < 0.02,
+           "... and the CAPSULE was fitted to the normalized body, not the raw one");
+
+    var raw = avatar.spawn(gGuid, { position: { x: 12, y: 0, z: 0 }, normalize: false });
     var rawKnobs = avatar.movement(raw);
     assert(rawKnobs.normalized === false && rawKnobs.characterHeight > 17,
-           "avatar.spawn({normalize: false}) takes the file's size as authored: " +
+           "and with the fit cleared, normalize:false takes the file's size as authored: " +
            rawKnobs.characterHeight.toFixed(2) + " m");
 }
 
