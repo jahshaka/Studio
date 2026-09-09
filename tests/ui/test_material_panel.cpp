@@ -446,9 +446,11 @@ static void testShadingModelRowConstraints()
     CHECK(modelRow != nullptr, "shadingModel: the picker exists as a dropdown");
     if (!modelRow) return;
     auto *combo = modelRow->getWidget();
-    CHECK(combo->count() == 2, "shadingModel: two models");
-    CHECK(combo->itemText(0) == "Lit" && combo->itemText(1) == "Unlit",
-          "shadingModel: Lit and Unlit, in that order (the index is the stored value)");
+    // THREE models since POST_LOOKS_SPEC §5.2: Distortion joined Lit and Unlit.
+    CHECK(combo->count() == 3, "shadingModel: three models");
+    CHECK(combo->itemText(0) == "Lit" && combo->itemText(1) == "Unlit" &&
+              combo->itemText(2) == "Distortion",
+          "shadingModel: Lit, Unlit, Distortion, in that order (the index is the stored value)");
 
     // One representative of each row KIND, all in rowsUnusedWhenUnlit().
     auto *roughness = sliderRow(&rig.panel, propId(rig.pbr, "roughness"));      // float
@@ -500,6 +502,28 @@ static void testShadingModelRowConstraints()
     CHECK(qAbs(rig.pbr->roughnessFactor - 0.23f) < 1e-3f,
           "shadingModel: the authored roughness is KEPT, not zeroed");
 
+    // DISTORTION greys far more than Unlit (POST_LOOKS_SPEC §5.2): the object
+    // draws no surface at all, so even the base colour — the one thing Unlit
+    // renders — goes. What is LEFT is the authoring surface: the normal map
+    // (read as the screen-space displacement field) and the opacity (its own
+    // strength). Asserting the survivors matters more than asserting the
+    // casualties: a model that greyed everything would pass a "these are
+    // disabled" test and be unusable.
+    combo->setCurrentIndex(2);           // Distortion
+    CHECK(rig.pbr->shadingModel == 2, "shadingModel: Distortion reaches the field");
+    CHECK(normalMap->isEnabled(),
+          "shadingModel: the normal map STAYS live on Distortion — it is the "
+          "displacement field, and reusing that picker is why this is a shading "
+          "model and not a new node type");
+    CHECK(baseColor && !baseColor->isEnabled(),
+          "shadingModel: base colour goes on Distortion (unlike Unlit)");
+    CHECK(!roughness->isEnabled() && !brdf->isEnabled() && !emissive->isEnabled(),
+          "shadingModel: the PBR rows are gone too");
+    CHECK(!baseColor->toolTip().isEmpty(),
+          "shadingModel: and the disabled rows say WHY, in Distortion's own words");
+    CHECK(qAbs(rig.pbr->roughnessFactor - 0.23f) < 1e-3f,
+          "shadingModel: the authored roughness survives Distortion as well");
+
     combo->setCurrentIndex(0);           // back to Lit
     CHECK(roughness->isEnabled() && brdf->isEnabled() && receive->isEnabled() &&
           emissive->isEnabled() && normalMap->isEnabled(),
@@ -508,7 +532,7 @@ static void testShadingModelRowConstraints()
           "shadingModel: and the value is still there");
 
     rig.undo.undo();
-    CHECK(rig.pbr->shadingModel == 1, "shadingModel: undo steps back one pick");
+    CHECK(rig.pbr->shadingModel == 2, "shadingModel: undo steps back one pick");
     rig.undo.redo();
     CHECK(rig.pbr->shadingModel == 0, "shadingModel: redo re-applies it");
 }

@@ -539,18 +539,34 @@ void PropertyWidget::applyRowConstraints()
     // longer list on the same one, because the REASON shown to the user is a
     // different sentence and that is most of the value of greying a row.
     const bool distortion = haveShading && shadingModel == 2;
-    if (haveShading && distortion) {
-        const QString why = tr("Not used by the Distortion shading model — the object draws "
-                               "nothing of itself, it warps what is behind it. Use the Normal "
-                               "Map as the displacement and Opacity as the strength. The value "
-                               "is kept and returns when the model does.");
-        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenDistortion())
-            constrain(name, false, why);
-    } else if (haveShading) {
-        const QString why = tr("Not used by the Unlit shading model — it has no lighting. "
-                               "The value is kept and returns when the model does.");
-        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenUnlit())
-            constrain(name, !unlit, why);
+    if (haveShading) {
+        // EVERY ROW EITHER MODEL CAN CONSTRAIN IS WRITTEN EXPLICITLY, and that
+        // is the whole reason this is a union rather than one list per branch.
+        // The two models constrain overlapping but DIFFERENT sets — Distortion
+        // greys the base colour, which Unlit renders; Unlit greys the normal
+        // map, which Distortion READS as its displacement field — so a row
+        // touched by one model and not the other has to be told to come back.
+        // Disabling only what the current model forbids leaves the previous
+        // model's greying behind: Lit -> Unlit -> Distortion left the Normal
+        // Map dead, i.e. the one row Distortion is authored through
+        // (caught by ui.material_panel, 2026-09-09).
+        const QVector<QString> &unlitRows = iris::PbrMaterial::rowsUnusedWhenUnlit();
+        const QVector<QString> &distortRows = iris::PbrMaterial::rowsUnusedWhenDistortion();
+        const QVector<QString> &forbidden = distortion ? distortRows : unlitRows;
+        const QString why = distortion
+            ? tr("Not used by the Distortion shading model — the object draws nothing of "
+                 "itself, it warps what is behind it. Use the Normal Map as the displacement "
+                 "and Opacity as the strength. The value is kept and returns when the model "
+                 "does.")
+            : tr("Not used by the Unlit shading model — it has no lighting. "
+                 "The value is kept and returns when the model does.");
+        QStringList touched;
+        for (const QString &name : unlitRows) touched << name;
+        for (const QString &name : distortRows)
+            if (!touched.contains(name)) touched << name;
+        const bool constrainedModel = unlit || distortion;
+        for (const QString &name : touched)
+            constrain(name, !(constrainedModel && forbidden.contains(name)), why);
     }
 
     // ---- 2. the clear coat's BRDF family (HLMS_ADOPTION P1) ----
