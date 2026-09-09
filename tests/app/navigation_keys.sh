@@ -24,13 +24,12 @@
 # before Qt treats it as active (Qt::WindowShortcut needs an active window),
 # and letters and arrows arrive clean (unlike F-keys, which arrive as Alt+F*).
 #
-# usage: navigation_keys.sh <jahshaka-binary> <port>
+# usage: navigation_keys.sh <jahshaka-binary> <mcp-port, 0 for ephemeral>
 # cwd is a scratch run dir (ctest sets it); HOME is a scratch home.
 set -u
 
 BIN="$1"
 PORT="$2"
-URL="http://127.0.0.1:${PORT}/mcp"
 LOG="$PWD/app.log"
 
 fail=0
@@ -79,19 +78,24 @@ note "own display $DISP (pid $XVFB_PID)"
 "$BIN" --mcp-port="$PORT" > "$LOG" 2>&1 &
 APP_PID=$!
 
-TOKEN=""
+# THE PORT IS READ BACK, NOT ASSUMED (TEST_GATE_AUDIT.md §4.1). ctest passes
+# 0, the app binds an ephemeral port and prints it beside the token; two suites
+# that both hard-coded 8751 is exactly what made -j4 unsafe.
+TOKEN=""; BOUND=""
 for _ in $(seq 1 240); do
     kill -0 "$APP_PID" 2>/dev/null || break
     TOKEN=$(grep -m1 '^MCP: token ' "$LOG" 2>/dev/null | sed 's/^MCP: token //')
-    [ -n "$TOKEN" ] && break
+    BOUND=$(grep -m1 '^MCP: port '  "$LOG" 2>/dev/null | sed 's/^MCP: port //')
+    [ -n "$TOKEN" ] && [ -n "$BOUND" ] && break
     sleep 0.5
 done
-if [ -z "$TOKEN" ]; then
-    echo "navigation_keys: the app never published an MCP token"
+if [ -z "$TOKEN" ] || [ -z "$BOUND" ]; then
+    echo "navigation_keys: the app never published an MCP token and port"
     tail -40 "$LOG"
     exit 1
 fi
-ok "app is up on port $PORT"
+URL="http://127.0.0.1:${BOUND}/mcp"
+ok "app is up on port $BOUND"
 
 js() {
     local payload response inner

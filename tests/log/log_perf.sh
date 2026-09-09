@@ -16,13 +16,12 @@
 #      same shape app.pacing_undo uses, and for the same reason: the only way
 #      to observe a timer is to let it run.
 #
-# usage: log_perf.sh <jahshaka-binary> <script.js> <mcp-port>
+# usage: log_perf.sh <jahshaka-binary> <script.js> <mcp-port, 0 for ephemeral>
 set -u
 
 BIN="$1"
 SCRIPT="$2"
 PORT="$3"
-URL="http://127.0.0.1:${PORT}/mcp"
 fail=0
 
 # ---------------------------------------------------------------------------
@@ -75,19 +74,24 @@ trap cleanup EXIT
 "$BIN" --mcp-port="$PORT" --log-dir "$TLOGDIR" > "$APPLOG" 2>&1 &
 APP_PID=$!
 
-TOKEN=""
+# THE PORT IS READ BACK, NOT ASSUMED (TEST_GATE_AUDIT.md §4.1). This suite and
+# app.multiselect_keys both hard-coded 8751; RUN_SERIAL on the other one was the
+# only thing keeping them apart, which is what made -j4 unsafe.
+TOKEN=""; BOUND=""
 for _ in $(seq 1 240); do
     kill -0 "$APP_PID" 2>/dev/null || break
     TOKEN=$(grep -m1 '^MCP: token ' "$APPLOG" 2>/dev/null | sed 's/^MCP: token //')
-    [ -n "$TOKEN" ] && break
+    BOUND=$(grep -m1 '^MCP: port '  "$APPLOG" 2>/dev/null | sed 's/^MCP: port //')
+    [ -n "$TOKEN" ] && [ -n "$BOUND" ] && break
     sleep 0.5
 done
-if [ -z "$TOKEN" ]; then
-    echo "log.perf: FAIL — the app never published an MCP token"
+if [ -z "$TOKEN" ] || [ -z "$BOUND" ]; then
+    echo "log.perf: FAIL — the app never published an MCP token and port"
     tail -40 "$APPLOG"
     exit 1
 fi
-echo "log.perf: ok — the app is up on port $PORT with its event loop running"
+URL="http://127.0.0.1:${BOUND}/mcp"
+echo "log.perf: ok — the app is up on port $BOUND with its event loop running"
 
 js() {
     local payload response inner

@@ -107,3 +107,15 @@ set_tests_properties(export.raw PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscree
 # properties, and export.web additionally L2).
 jah_lsan_lane(export.raw)
 jah_lsan_blocked(export.web export.walkers)
+
+# ---------------------------------------------------------------------------
+# DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
+# claims — in its own comment, or by running --headless, or by building nothing
+# but a document — that it needs no X server. The claim was never enforced, so
+# it drifted: a suite that quietly opened a display still passed on a developer
+# box and would have failed the first CI runner without one, and every
+# unnecessary X connection is one more thing four parallel jobs contend over.
+# jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
+# the claim into a gate. Verified 2026-09-09: each of these passes displayless
+# with the same assertion count it has with a display.
+jah_no_display(export.raw)

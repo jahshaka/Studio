@@ -292,8 +292,9 @@ int main(int argc, char *argv[])
     SessionHeader::addProvider(QStringLiteral("mcp"), [&cli] {
         SessionHeader::Rows r;
         r << SessionHeader::Row { QStringLiteral("port"),
-                                  cli.mcpPort ? QString::number(cli.mcpPort)
-                                              : QStringLiteral("(off for this run)") };
+                                  !cli.mcpServe ? QStringLiteral("(off for this run)")
+                                  : cli.mcpPort  ? QString::number(cli.mcpPort)
+                                                 : QStringLiteral("(ephemeral)") };
         return r;
     });
     SessionHeader::emitBlock();
@@ -365,7 +366,7 @@ int main(int argc, char *argv[])
     if (!cli.scriptPath.isEmpty())
         return runScriptFile(window, app, cli.scriptPath, cli.headlessScript);
 
-    if (cli.mcpPort > 0)
+    if (cli.mcpServe)
         return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);
 
     //window.setAttribute(Qt::WA_DontShowOnScreen);

@@ -23,16 +23,17 @@ endif()
 set(_selftest_root ${CMAKE_CURRENT_BINARY_DIR}/selftest-data)
 file(MAKE_DIRECTORY ${_selftest_root})
 set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
-add_test(NAME app.engine_selftest
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --engine-selftest "${CMAKE_CURRENT_BINARY_DIR}/selftest.png"
-         WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
-set_tests_properties(app.engine_selftest PROPERTIES
-    ENVIRONMENT "${JAH_SELFTEST_ENV}"
-    TIMEOUT 120
-    LABELS "app")
 
-# The same self-test under the Vulkan validation layer: any "Validation Error" in the
-# output fails the test. This is what caught the stale depth buffer on resize.
+# THE SELF-TEST, ONCE — under the validation layer (TEST_GATE_AUDIT.md §2).
+# There used to be a second row, app.engine_selftest, running the identical
+# command WITHOUT the layer. It was a strict subset: this one fails on the
+# process return code too, so everything the plain row could catch this row
+# catches, and both wrote into the same data root, which is one of the things
+# -j4 could not have. The `--engine-selftest` binary path itself is unchanged
+# (it is also how the sha256 smoke is taken by hand).
+#
+# Any "Validation Error" in the output fails the test. This is what caught the
+# stale depth buffer on resize.
 add_test(NAME app.engine_selftest_validation
          COMMAND bash -c "\"$<TARGET_FILE:${CMAKE_PROJECT_NAME}>\" --engine-selftest \"${CMAKE_CURRENT_BINARY_DIR}/selftest_validation.png\" > \"${CMAKE_CURRENT_BINARY_DIR}/validation.log\" 2>&1; rc=$?; if grep -q 'Validation Error' \"${CMAKE_CURRENT_BINARY_DIR}/validation.log\"; then grep -m3 'Validation Error' \"${CMAKE_CURRENT_BINARY_DIR}/validation.log\"; exit 1; fi; exit $rc"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
@@ -98,7 +99,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # A port of its own: mcp.e2e picks its own and both may run in one gate.
         add_test(NAME app.pacing_undo
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/pacing_undo.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8747
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_pu_home}/run)
         set_tests_properties(app.pacing_undo PROPERTIES
             ENVIRONMENT "HOME=${_pu_home};JAHSHAKA_DATA_ROOT=${_pu_home}/.local/share/Jahshaka"
@@ -115,7 +116,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         file(MAKE_DIRECTORY ${_ms_home}/run)
         add_test(NAME app.multiselect_keys
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/multiselect_keys.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8751
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ms_home}/run)
         set_tests_properties(app.multiselect_keys PROPERTIES
             ENVIRONMENT "HOME=${_ms_home};JAHSHAKA_DATA_ROOT=${_ms_home}/.local/share/Jahshaka"
@@ -135,7 +136,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         file(MAKE_DIRECTORY ${_nk_home}/run)
         add_test(NAME app.navigation_keys
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/navigation_keys.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8753
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_nk_home}/run)
         set_tests_properties(app.navigation_keys PROPERTIES
             ENVIRONMENT "HOME=${_nk_home};JAHSHAKA_DATA_ROOT=${_nk_home}/.local/share/Jahshaka"
