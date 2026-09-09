@@ -199,6 +199,9 @@ int main(int argc, char **argv)
     // ---- 4. the control: detached, the same two times are the same shot ---
     // Without this, "the frames differ" is satisfied by any per-frame noise.
     CHECK(doc->detachFromSocket(cam), "detach");
+    // Placed by hand right after detaching, with no sync in between: the mirror
+    // takes the camera off its bone on the next sync and an explicit write wins
+    // over the pose-keeping bake (SceneMirror::RiderState::lastLocal*).
     cam->setLocalPos(iris::Vec3(0, 2, 0));
     cam->setLocalRot(iris::Quat());
     Image ctrlA, ctrlB;
