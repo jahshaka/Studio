@@ -329,7 +329,9 @@ int main()
     // actually ships (medium and up), the ambient recovered here is not merely
     // a replacement for the term DDGI removed — it is the first correct ambient
     // those scenes have had. The assertion is therefore against the RAW
-    // ambient, which is what the number should have been all along.
+    // ambient, which is what the number should have been all along. (Patch
+    // 0021, rayon2 S2, since restored 65% of it to the VCT-only tiers; the
+    // fence below pins that.)
     // =====================================================================
     std::printf("\n== case 2: the shipped tier (anisotropic VCT) ==\n");
     {
@@ -354,12 +356,15 @@ int main()
         std::printf("   FINDING: anisotropic VCT keeps %.1f%% of the raw ambient on open floor "
                     "(isotropic keeps ~93%%) — the ambient was already gone at this tier "
                     "BEFORE any irradiance field was bound\n", kept * 100.0f);
-        // A FENCE, not a wish: this pins the upstream behaviour so that a pin
-        // bump (or a future fix to the anisotropic march) tells us instead of
-        // silently changing what "the ambient gap" means.
-        CHECK(kept < 0.25f,
-              "FENCE: anisotropic voxel cone tracing loses most of the ambient on its own "
-              "(upstream behaviour, found by this lane and reported for the ledger)");
+        // A FENCE, not a wish: this pins PATCH 0021's behaviour (rayon2 S2) so
+        // that a pin bump, a dropped patch loop, or a future upstream fix tells
+        // us instead of silently changing what "the ambient gap" means. The
+        // unpatched march kept 4.3%; the patch's min3-one-mip-finer escape
+        // keeps 65.2% (measured), deliberately short of the isotropic path's
+        // 93% because the exact route floods sealed rooms (build record).
+        CHECK(kept > 0.50f && kept < 0.80f,
+              "FENCE: with patch 0021 anisotropic voxel cone tracing keeps most of the "
+              "ambient (65% measured; 4% unpatched; the exact 95% route is rejected)");
 
         GiParams fix = ref;
         fix.ddgi = GiToggle::On;
