@@ -289,6 +289,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		return sceneView->isInitialized();
 	};
 	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
+	// The run's one undo entry, ARMED here and created by the first command
+	// that lands (UndoService::push) — a query script must leave the stack
+	// alone (hygiene lane, 2026-09-09).
+	scriptHost->beginUndoMacro = [this](const QString &text) { undoService->beginScriptMacro(text); };
+	scriptHost->endUndoMacro = [this]() { undoService->endScriptMacro(); };
 	scriptEngine = new ScriptEngine(*scriptHost, this);
 	registerStudioModules(*scriptEngine);
 	for (auto *module : modules) module->registerApi(*scriptEngine);

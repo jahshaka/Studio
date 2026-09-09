@@ -1457,6 +1457,10 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
 bool EditorApi::beginBatch()
 {
     if (!host.undoStack) return fail("editor.beginBatch: no undo stack in this session");
+    // The RUN's macro is lazy (UndoService::beginScriptMacro) — open it first,
+    // or this batch would become the outer macro and the run's entry would
+    // nest inside the batch instead of the other way round.
+    if (host.services && host.services->undo) host.services->undo->ensureScriptMacroOpen();
     host.undoStack->beginMacro(QStringLiteral("script batch"));
     ++mBatchDepth;
     return true;

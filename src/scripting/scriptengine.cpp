@@ -177,9 +177,14 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     // a still-set flag aborts the next script before its first statement.
     mJs.setInterrupted(false);
 
-    const bool useMacro = wrapUndoMacro && mHost.undoStack != nullptr;
+    // ONE UNDO ENTRY PER RUN — and only if the run records something. The
+    // host's undo sink opens the macro on the first command that lands
+    // (ScriptHost::beginUndoMacro); a run that only reads leaves the stack
+    // exactly as it found it, which is the whole point: describing a scene
+    // must not cost the user their next Ctrl+Z.
+    const bool useMacro = wrapUndoMacro && mHost.beginUndoMacro && mHost.endUndoMacro;
     if (useMacro) {
-        mHost.undoStack->beginMacro(QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName()));
+        mHost.beginUndoMacro(QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName()));
         if (mHost.macroOpenChanged) mHost.macroOpenChanged(true);
     }
 
@@ -199,7 +204,7 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
 
     if (useMacro) {
         if (mHost.macroOpenChanged) mHost.macroOpenChanged(false);
-        mHost.undoStack->endMacro();
+        mHost.endUndoMacro();
     }
 
     if (value.isError() || !stackTrace.isEmpty()) {

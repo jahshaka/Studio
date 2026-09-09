@@ -19,7 +19,13 @@ add_executable(test_script_engine test_script_engine.cpp
     # and nothing else — so the "core has zero Studio dependencies" property
     # above still holds in the way that matters: no MainWindow, no engine, no
     # document, no database.
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp)
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    # UndoService is the app's ONE undo sink, and since the run macro became
+    # lazy (opened by the first command that lands, not by the run) the sink IS
+    # the behaviour under test — the fake module pushes through it exactly as
+    # the editor's verbs do. Another leaf: QUndoStack plus a header-only
+    # StudioCommand base, no MainWindow, no engine, no document.
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp)
 set_target_properties(test_script_engine PROPERTIES AUTOMOC ON)
 target_include_directories(test_script_engine PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
