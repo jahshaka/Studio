@@ -374,6 +374,10 @@ public:
         /// reflection is frozen until world.refreshGi() asks for more. Every
         /// probe still refreshes within ceil(probeCount / this) frames.
         int  probeUpdatesPerFrame = 0;
+        /// Rayon Epic's DYNAMIC PROBES, resolved: extra moved-covering probe
+        /// re-captures per frame reserved on top of the budget, and how many
+        /// the renderer actually spent on the last frame (0 at rest).
+        int  dynamicProbes = 0, dynamicProbeUpdates = 0;
         /// The union of the probes' fitted parallax shapes (FIX WAVE A2). Must
         /// lie inside the probe region; a shape that escaped it is what makes
         /// reflections go black in hard-edged, cluster-shaped patches.

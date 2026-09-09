@@ -79,9 +79,10 @@ struct Row {
     ///
     /// It exists because two dials must never own one backing field. Rayon's
     /// technique, quality and DDGI rows used to be world-mode rows; the world
-    /// mode now drives the single `rayon` row, and THAT row writes these three
-    /// through. setMode() therefore skips them (the rayon row already wrote
-    /// them, honouring their pins) and tierValue() reads their Rayon column.
+    /// mode now drives the single `rayon` row, and THAT row writes the five
+    /// Rayon rows (technique, quality, field, bounces, dynamic probes) through.
+    /// setMode() therefore skips them (the rayon row already wrote them,
+    /// honouring their pins) and tierValue() reads their Rayon column.
     bool     rayonTiered = false;
 
     /// The backing field. Both are null for a row with no backing field yet
@@ -135,31 +136,48 @@ const Row *row(const QString &id);
 // ONE dial where there were five: the World panel shows an on/off toggle, a
 // quality tier and the update budget, and everything the tier consumes moves
 // under an Advanced disclosure. NOTHING new was invented to do it — a Rayon
-// tier is a registry row (`rayon`) whose write-through targets are three other
-// registry rows (`giMode`, `giQuality`, `giDdgi`, all `rayonTiered`). The
-// invariant is the same one line as everywhere else in this file:
+// tier is a registry row (`rayon`) whose write-through targets are five other
+// registry rows (`giMode`, `giQuality`, `giDdgi`, `giBounces`,
+// `giDynamicProbes`, all `rayonTiered`). The invariant is the same one line as
+// everywhere else in this file:
 //
 //     a backing field is ALWAYS the resolved value.
 //
-// THE TABLE (spec §2, with the phase's decided contents):
+// THE TABLE (spec §2; owner decision 2026-09-09 night, option (b): Medium and
+// High are DDGI-fed — the field is the only diffuse arm that is right in both
+// open and sealed scenes (rayon2 S1-S3) — and Epic has a column of its own so
+// it no longer collapses onto High). ONE table, ONE owner: `kRayonTable` in
+// worldmodes.cpp; the engine's GiQuality stays three-valued (it is the
+// RESOLUTION dial — voxels, probe faces — and Epic changes no resolution), so
+// Epic's two extra columns are ordinary document fields the engine already
+// reads (numBounces) or now reads (dynamicProbes), written through like the
+// other three.
 //
-//   tier    technique                voxels/probes   DDGI
-//   Low     Instant Radiosity (D1)   quality low     off
-//   Medium  VCT                      quality medium  off
-//   High    VCT + probes (hybrid)    quality high    off   (HDR + shadowed
-//                                                           probe captures come
-//                                                           from quality high)
-//   Epic    VCT + probes (hybrid)    quality high    ON  @ ddgiIntensity 1.0
+//   tier    technique             voxels  ddgi  ddgiSource  DDGI grid  bounces  dynamicProbes  probe faces/HDR/shadows  budget
+//   Low     Instant Radiosity     —       off   —           —          1        0              —                        (dial)
+//   Medium  VCT                   64^3    ON    auto=voxel  8192 fit   1        0              — (no probes)            (dial)
+//   High    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   1        0              512 / HDR / shadowed     (dial)
+//   Epic    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   3        2              512 / HDR / shadowed     (dial)
+//
+// Derived columns (not rows): voxels and probe faces/HDR/shadows follow
+// `giQuality` (OgreGi.cpp giVoxelResolution / buildPcc); the DDGI grid is the
+// engine's fixed 8192-probe aspect fit (kIfdTotalProbes); ddgiSource "auto" is
+// voxel at every tier — the raster feed (3.4-9 ms per probe, rayon2 S3) is an
+// Advanced opt-in and never a default. Epic's two columns are each measured:
+// bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7), dynamic
+// probes 0 -> 2 makes a mover's reflection catch up in ONE frame at budget 1
+// (gi.dynamic_probes case e).
 //
 // The GI UPDATE BUDGET is deliberately NOT in the table: it is a "how fast may
 // this keep up" control, not a "how much machinery" one, and it stays a visible
-// row of its own (owner decision D5).
+// row of its own (owner decision D5); Epic's dynamic probes ride ON TOP of it.
 //
 // WHETHER RAYON IS ON is `scene->giMode != OFF` — there is no second flag.
 // `scene->giTier` remembers the quality across an off/on trip.
 enum class RayonTier { Low = 0, Medium = 1, High = 2, Epic = 3 };
 
-/// The registry id of the tier row, and of the three rows it writes through.
+/// The registry id of the tier row, and of the five rows it writes through
+/// (giMode, giQuality, giDdgi, giBounces, giDynamicProbes — in that order).
 QString     rayonRowId();
 QStringList rayonRowIds();
 
@@ -172,11 +190,15 @@ QStringList rayonTierNames();
 RayonTier rayonTier(const iris::ScenePtr &scene);
 bool      rayonEnabled(const iris::ScenePtr &scene);
 
-/// What the tier resolves each of its rows to. `technique` is a GiMode ordinal,
-/// `quality` a GiQuality ordinal, `ddgi` 0/1.
+/// What the tier resolves each of its rows to — THE TABLE, read one column at
+/// a time. `technique` is a GiMode ordinal, `quality` a GiQuality ordinal,
+/// `ddgi` 0/1, `bounces` the total light bounces (1..4), `dynamicProbes` the
+/// per-frame moved-covering probe re-captures reserved on top of the budget.
 int rayonTechnique(RayonTier t);
 int rayonQuality(RayonTier t);
 int rayonDdgi(RayonTier t);
+int rayonBounces(RayonTier t);
+int rayonDynamicProbes(RayonTier t);
 
 /// Applies a Rayon state: records the tier, writes each `rayonTiered` row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes
@@ -200,11 +222,16 @@ void clearRayonOverrides(const iris::ScenePtr &scene);
 /// MIGRATION (spec §2's table), for a document written before the tier existed:
 /// derives the tier its serialized GI settings correspond to, PINS every field
 /// that deviates from that tier, and pins the tier row itself when the scene's
-/// World Mode would resolve it to something else. It writes no field it is not
-/// preserving, so the scene renders IDENTICALLY by construction — that is the
-/// whole acceptance criterion. Redundant pins (a pinned value that IS the
-/// derived tier's) are dropped, so a migrated scene reads as its tier and not
-/// as "Custom".
+/// World Mode would resolve it to something else. Technique, quality, bounces
+/// and dynamic probes are preserved exactly (a deviation becomes a pin), so
+/// those render IDENTICALLY by construction. The ONE field that may move is
+/// the irradiance field: a document's tri-state -1 ("auto") means "the tier
+/// decides", and since option (b) Medium and High decide ON — that is the
+/// owner's re-pin of the shipped vct+medium samples, taken here and nowhere
+/// else; an explicit 0/1 in the document is preserved (pinned if it deviates).
+/// Redundant pins (a pinned value that IS the derived tier's) are dropped, so a
+/// migrated scene reads as its tier and not as "Custom". Epic is never
+/// derived: no pre-tier document could have rendered its columns.
 void deriveRayonFromDocument(const iris::ScenePtr &scene);
 
 QString    modeName(Mode m);            ///< "custom" | "low" | "medium" | "high" | "epic"

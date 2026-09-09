@@ -37,37 +37,38 @@ editor.frame(2);
 // UPDATED BY THE RAYON UNIFICATION (GI_UNIFIED_SPEC §2 / P2, owner decision
 // D2). This phase used to assert that the field defaults to the string "auto"
 // and resolves OFF "while there is no quality tier". The tier exists now, new
-// scenes are born on its top rung, and Epic is the one rung that turns the
-// field on — so a NEW scene's default is a resolved `true`. The compatibility
-// statement that used to live here has not been dropped, it has moved to where
-// it can still be true: an EXISTING document derives the tier its serialized
-// settings correspond to and never lands on Epic unless it already asked for a
-// field (gi.tiers' migration cases, plus the byte-identical sample opens the
-// lane measured).
+// scenes are born on its top rung, and every voxel tier turns the field on
+// (owner option (b), 2026-09-09: Medium/High DDGI-fed; only Low, which has no
+// voxel volume, resolves it off) — so a NEW scene's default is a resolved
+// `true`. An EXISTING document derives its tier and its untouched field
+// follows it (gi.tiers' migration cases; the sample re-pin is in the
+// rayontiers lane report).
 var gi = world.get().gi;
 console.log("gi defaults = " + JSON.stringify(gi));
 assert(gi.tier === "epic", "a new scene is born at the Epic tier: " + gi.tier);
-assert(gi.ddgi === true, "and Epic is the tier that turns the irradiance field on");
+assert(gi.ddgi === true, "and Epic, like every voxel tier, turns the irradiance field on");
 assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
        "ddgiIntensity defaults to 1.0 (the renderer's raw brightness, measured to be the "
        + "right one: the field lands at ~86% of the cone-traced diffuse it replaces)");
 
-// The rest of this suite is about the VERB, so the scene is put where every
-// pre-Rayon document sits: a plain-VCT tier, whose field is off. That the tier
-// switch alone turns the field off — no explicit ddgi key anywhere — is itself
-// the write-through statement this phase makes.
-assert(world.gi({ tier: "medium", mode: "vct", quality: "low", bounces: 1,
+// The rest of this suite is about the VERB, so the scene is put on a VCT
+// technique whose TIER resolves the field off: since option (b) that is the
+// Low tier (its column is off — Instant Radiosity has no voxel volume) with
+// the technique pinned to VCT, which is exactly the "vct + low" shape gi.tiers
+// derives for a hand-set pre-Rayon document. That the tier alone turns the
+// field off — no explicit ddgi key anywhere — is itself the write-through
+// statement this phase makes.
+assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1,
                   boundsMin: { x: -6, y: -1, z: -6 },
-                  boundsMax: { x: 6, y: 6, z: 6 } }), "world.gi(vct at the Medium tier)");
-assert(world.get().gi.ddgi === false, "the Medium tier resolves the field OFF");
+                  boundsMax: { x: 6, y: 6, z: 6 } }), "world.gi(vct pinned at the Low tier)");
+assert(world.get().gi.ddgi === false, "the Low tier resolves the field OFF");
 editor.frame(4);
 var st = world.giStatus();
 console.log("giStatus(vct, field off) = " + JSON.stringify(st));
 assert(st.live === true, "giStatus is LIVE (the engine viewport answered)");
 assert(st.vctBound === true, "VCT is bound");
 assert(st.ifdBound === false,
-       "and no field is bound below Epic — which is what makes every scene written before "
-       + "this feature render unchanged");
+       "and no field is bound at Low — the tier's column, written through");
 assert(st.ifdProbes === 0 && st.ifdProbesPerFrame === 0 && st.ifdConverged === false,
        "no field means no probes, no batch, and nothing converged");
 
@@ -154,7 +155,7 @@ editor.frame(4);
 // "auto" is an INPUT spelling, not a stored state: it drops the pin and hands
 // the decision back to the Rayon tier, which then WRITES ITS ANSWER THROUGH
 // (services/worldmodes.h — a backing field is always the resolved value). The
-// scene is on Medium here, so the answer is off.
+// scene is on Low here, so the answer is off.
 assert(world.get().gi.ddgi === false,
        "auto hands the decision to the tier, and the tier's answer is what the document holds");
 assert(world.giStatus().ifdBound === false, "so the field is unbound again");

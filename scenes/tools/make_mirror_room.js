@@ -140,10 +140,15 @@ node.setProperty(l2, "distance", LIGHT_RANGE);
 // ---- global illumination ---------------------------------------------------
 // Bounds pinned to the ROOM: auto-fit spreads the probes over inflated bounds
 // (reflections P4), and a mis-placed probe is exactly what this sample shows.
-assert(world.gi({ mode: "vct_pcc_hybrid", quality: "high", bounces: 2,
-                  boundsMin: sv({ x: -4.6, y: -0.6, z: -4.6 }),
+// THE TIER, not its columns (lane-rayontiers, 2026-09-09): naming mode /
+// quality / bounces here PINNED them, so the archive opened as "Custom" the
+// moment the Epic row moved. Epic IS the hybrid at high quality with the
+// field, three bounces and two dynamic probes; bounds and the probe grid are
+// not tier rows and stay explicit.
+assert(world.rayon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Rayon Epic");
+assert(world.gi({ boundsMin: sv({ x: -4.6, y: -0.6, z: -4.6 }),
                   boundsMax: sv({ x: 4.6, y: 4.6, z: 4.6 }),
-                  pccGrid: { x: 3, y: 2, z: 3 } }), "GI: VCT + probes, room bounds");
+                  pccGrid: { x: 3, y: 2, z: 3 } }), "GI: room bounds + probe grid");
 editor.frame(10);
 console.log("giStatus: " + JSON.stringify(world.giStatus()));
 

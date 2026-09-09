@@ -81,6 +81,9 @@ int main(int argc, char **argv)
     // Exactly what MainWindow::createDefaultScene does: a new scene is Epic.
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
+    CHECK(scene->giNumBounces == 3 && scene->giDynamicProbes == 2,
+          "a new Epic scene carries Epic's column (3 bounces, 2 dynamic probes)");
+
     WorldGiPropertyWidget panel;
     panel.setScene(scene);
 
@@ -110,8 +113,9 @@ int main(int argc, char **argv)
         if (tier) tier->setCurrentIndex(1);   // Medium
         pump();
         CHECK(scene->giMode == iris::GiMode::VCT && int(scene->giQuality) == 1 &&
-                  scene->giDdgi == 0,
-              "picking Medium wrote the technique, the quality and the field through");
+                  scene->giDdgi == 1 && scene->giNumBounces == 1 && scene->giDynamicProbes == 0,
+              "picking Medium wrote the technique, the quality (DDGI-fed), the bounces and "
+              "the dynamic probes through");
         CHECK(scene->giTier == int(worldmodes::RayonTier::Medium),
               "and recorded the tier on the document");
     }

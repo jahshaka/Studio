@@ -238,6 +238,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giLight"] = scene->giLightGuid;
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giUpdateBudget"] = scene->giUpdateBudget;   // FIX WAVE B1
+    sceneObj["giDynamicProbes"] = scene->giDynamicProbes;  // Rayon Epic's column
     sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);
     // Hybrid probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Always written:
     // they are cheap, and a scene that pinned one must reopen with it. Readers

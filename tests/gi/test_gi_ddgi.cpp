@@ -39,6 +39,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -434,6 +435,66 @@ int main(int argc, char **argv)
         CHECK(frames == expected,
               "the re-converge takes EXACTLY ceil(probes / batch) frames");
     }
+
+    // ---- 5b. EPIC'S BOUNCES COLUMN (the Rayon tier table, option (b)) ------
+    // Epic differs from High by `numBounces` 3 against 1 (and the dynamic
+    // probes, gated in gi.dynamic_probes). Bounces are VctLighting's extra
+    // light-propagation passes (OgreVctLighting.h:290 update(numBounces);
+    // setAllowMultipleBounces :204-213), and the field cone-traces the volume
+    // they land in — IrradianceField has no bounce of its own at this pin
+    // (OgreIrradianceField.h:266-268: a bounce-count change is a reset(), i.e.
+    // the field re-reads the volume). So the column must show on the DDGI-fed
+    // floor: more red bounce at 3 than at 1, and it costs a measurable
+    // re-solve. Printed and pinned as a direction, never as a wall clock.
+    {
+        std::printf("\n-- 5b. Epic's bounces column on the DDGI-fed floor --\n");
+        float bounce[5] = { 0, 0, 0, 0, 0 };
+        double solveMs[5] = { 0, 0, 0, 0, 0 };
+        for (int nb : { 1, 3 }) {
+            GiParams gb = vctBase();
+            gb.ddgi = GiToggle::On;
+            gb.numBounces = nb;
+            // Timed THROUGH the readback: the rebuild only records GPU work,
+            // and readPixels is what waits for it (the AsyncTextureTicket
+            // flush) — a wall clock that stopped before it would measure the
+            // command submission, not the re-solve.
+            const auto t0 = std::chrono::steady_clock::now();
+            CHECK(r.scene->setGlobalIllumination(gb), "DDGI-fed rebuild at the requested bounce count");
+            render(e, 2);
+            r.view->readPixels(img);
+            solveMs[nb] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            const Colour f = img.at(kFloorX, kFloorY);
+            bounce[nb] = (f.r - f.g) - (baseFloor.r - baseFloor.g);
+            std::printf("   bounces %d: floor red bounce %.4f  (rebuild + 2 frames + readback %.1f ms)\n",
+                        nb, bounce[nb], solveMs[nb]);
+        }
+        CHECK(bounce[3] > bounce[1] + 0.003f,
+              "three bounces put MORE red on the DDGI-fed floor than one (Epic's column is visible)");
+        // The same re-solve at HIGH quality (128^3: eight times the voxels each
+        // propagation pass walks), printed for the record — Epic is a High
+        // tier, so this is the cost the column actually carries. Not asserted:
+        // a wall clock on a shared box is a flake, not a gate.
+        for (int nb : { 1, 3 }) {
+            GiParams gb = vctBase();
+            gb.ddgi = GiToggle::On;
+            gb.quality = GiQuality::High;
+            gb.numBounces = nb;
+            const auto t0 = std::chrono::steady_clock::now();
+            r.scene->setGlobalIllumination(gb);
+            render(e, 2);
+            r.view->readPixels(img);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            const Colour f = img.at(kFloorX, kFloorY);
+            std::printf("   HIGH (128^3) bounces %d: floor red bounce %.4f  (rebuild + 2 frames + readback %.1f ms)\n",
+                        nb, (f.r - f.g) - (baseFloor.r - baseFloor.g), ms);
+        }
+        std::printf("   bounces 1 -> 3: red bounce x%.2f, re-solve x%.2f\n",
+                    bounce[1] > 0.0f ? bounce[3] / bounce[1] : 0.0f,
+                    solveMs[1] > 0.0 ? solveMs[3] / solveMs[1] : 0.0);
+    }
+    // Back to the suite's reference parameters for the lifecycle cases.
+    CHECK(r.scene->setGlobalIllumination(ddgi), "reference DDGI parameters restored");
+    render(e, 2);
 
     // ---- 6. lifecycle: the spike's four shapes ---------------------------
     // (a) a full refresh under a live bound field.
