@@ -877,3 +877,19 @@ set_tests_properties(scripting.e2e.refusals PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 jah_no_display(scripting.e2e.refusals)
+
+# SCENE-SCALE CONVENTION (owner 2026-09-08), verb half: scene.bounds — the world
+# AABB of a scene's geometry — and editor.camera's lens, which stopped requiring
+# a rendering engine in the same lane (the saved fov is document state; gating
+# it on a GPU is why the samples' 70 and 75 degree lenses went unnoticed for a
+# week). samples.scale measures the shipped archives THROUGH these two; this
+# gates them against primitives of known size. Document verbs only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_bounds)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.scene_bounds
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_bounds.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.scene_bounds PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)

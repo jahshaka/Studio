@@ -192,7 +192,10 @@ assert(project.close(), "Skeletal Animation.zip: project.close");
 
 // ---- World Background: silver + gold + glass dragons, cubemap sky ----------
 importAndOpen("World Background.zip", 2);
-dragons = meshesByName("SceneNode24");
+// Dragon / Dragon2 / Dragon3 since 2026-09-09 — they were three meshes all
+// called "SceneNode24", the first of them with an empty guid.
+dragons = meshesByName("Dragon").concat(meshesByName("Dragon2"))
+                                .concat(meshesByName("Dragon3"));
 assert(dragons.length === 3, "World: three dragon meshes");
 var byColor = {};
 for (i = 0; i < dragons.length; i++) {

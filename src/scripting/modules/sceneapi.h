@@ -59,6 +59,10 @@ public:
     /// optimisation is visible through — a shared character and an unshared one
     /// render identically.
     Q_INVOKABLE QVariantMap rigStats();
+    /// How big the scene (or a named part of it) actually is, in world units.
+    /// The measurement the 1 unit = 1 metre scene-scale convention is checked
+    /// against (samples.scale).
+    Q_INVOKABLE QVariantMap bounds(const QVariant &options = QVariant());
 
     // ---- outliner folders (SCENEGRAPH_SPEC §6b) ---------------------------
     Q_INVOKABLE QVariantList folders();

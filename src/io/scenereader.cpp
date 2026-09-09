@@ -788,7 +788,17 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     //read name
     sceneNode->name = nodeObj["name"].toString("");
-	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
+    // A NODE WITHOUT A GUID IS UNADDRESSABLE — no script verb, no MCP tool, no
+    // per-node DB row and no undo command can name it — so one is MINTED here
+    // rather than carried through as "".
+    //
+    // The default argument to QJsonValue::toString() only substitutes when the
+    // value is not a STRING at all, so a file carrying `"guid": ""` (the
+    // shipped World Background sample's first dragon did, found 2026-09-09 by
+    // scene.find returning an empty id) sailed straight past it. Minting is the
+    // only repair that can work: the identity was never written down.
+    const QString storedGuid = nodeObj["guid"].toString();
+    sceneNode->setGUID(storedGuid.isEmpty() ? GUIDManager::generateGUID() : storedGuid);
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
     // Absent = false: the writer only emits the key when the flag is on.
@@ -1397,7 +1407,10 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
 {
     auto particleNode = iris::ParticleSystemNode::create();
 
-    particleNode->setGUID(nodeObj["guid"].toString());
+    // Same rule as readSceneNode's: an empty guid is not an identity.
+    const QString storedParticleGuid = nodeObj["guid"].toString();
+    particleNode->setGUID(storedParticleGuid.isEmpty() ? GUIDManager::generateGUID()
+                                                       : storedParticleGuid);
     particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
     particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
     particleNode->setDissipation(nodeObj["dissipate"].toBool());

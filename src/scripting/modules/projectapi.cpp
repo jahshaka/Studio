@@ -32,6 +32,8 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "ui/pages/projectmanager.h"
 #include "services/projectarchiver.h"
+#include "services/sceneextents.h"
+#include "viewport/ieditorviewport.h"
 
 QVector<VerbInfo> ProjectApi::verbs() const
 {
@@ -447,6 +449,13 @@ QVariantMap ProjectApi::exportArchive(const QString &path)
     // runs have no event loop to slice against). The threaded twin is
     // project.exportArchiveAsync.
     ProjectArchiver archiver(host.db, host.project);
+    // The manifest's scene-scale block: what one unit means and how big the
+    // scene is, measured from the LIVE document (the archiver only ever sees
+    // the database). This is what lets a sample tile say "12 x 3.3 x 12 m"
+    // without opening the project.
+    if (host.viewport)
+        archiver.setSceneMetadata(sceneextents::describe(host.viewport->getScene(),
+                                                         host.viewport->editorCamera()));
     const auto r = archiver.exportArchive(path);
     if (!r.ok()) { fail(QStringLiteral("project.exportArchive: %1").arg(r.error)); return out; }
     out["path"] = r.path;
@@ -475,6 +484,9 @@ bool ProjectApi::exportArchiveAsync(const QString &path)
     ProjectArchiver *&a = sessionArchiver();
     if (a && a->isRunning()) return fail("project.exportArchiveAsync: an archive operation is already running");
     if (!a) a = new ProjectArchiver(host.db, host.project);
+    if (host.viewport)
+        a->setSceneMetadata(sceneextents::describe(host.viewport->getScene(),
+                                                   host.viewport->editorCamera()));
     return a->startExport(path);
 }
 

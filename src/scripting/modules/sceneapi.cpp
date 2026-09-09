@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "viewport/ieditorviewport.h"
 #include "services/sceneeditservice.h"
+#include "services/sceneextents.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -158,6 +159,22 @@ QVector<VerbInfo> SceneApi::verbs() const
           "WHILE PLAYING re-arms possession immediately — no stop/start round trip. This is "
           "deliberately not a World Mode row: world.modeTable is the scalability registry, and "
           "a gameplay decision has no business following low/medium/high/epic.",
+          Needs::Document },
+        { "bounds", "scene.bounds({nodes?, includePoints?}) -> {min, max, size, center, nodes}",
+          "The world-space axis-aligned box the scene's GEOMETRY occupies, in scene units. With no "
+          "argument it measures every root-level node and everything under them; `nodes` is an array "
+          "of ids to measure instead (their descendants always come with them, so measuring an "
+          "imported model's root measures the model).\n\n"
+          "WHAT CONTRIBUTES. Mesh nodes contribute their mesh's local AABB pushed through the node's "
+          "global transform — the number a human means by 'how big is this room'. Lights, empties, "
+          "particle systems and cameras contribute NOTHING unless `includePoints: true`, which adds "
+          "each one's global position as a degenerate point: 'how big is the room' and 'how far out "
+          "does the rig reach' are different questions and the caller has to say which one it asked. "
+          "A rotated node reads as the AABB of its rotated box, which is the standard approximation; "
+          "nothing here inflates by a bounding radius (world.fitGiBounds does, deliberately, and is "
+          "the wrong tool for measuring a room: a 24 x 0.5 x 24 floor slab has a 17 m bounding sphere).\n\n"
+          "Returns null-ish (an empty object) when nothing in the selection has geometry. THE SCENE-SCALE "
+          "CONVENTION (owner 2026-09-08) reads 1 unit = 1 metre, and this is the verb that measures it.",
           Needs::Document },
         { "rigStats", "scene.rigStats() -> {available, rigged, instances, shared, streamedBones, bonesPerRiggedNode, clipPushes}",
           "What this scene's SKINNED CHARACTERS cost the renderer right now "
@@ -750,6 +767,71 @@ void SceneApi::recordFolderEdit(const QString &text, const iris::ScenePtr &scene
 {
     if (!host.services || !host.services->undo) return;
     host.services->undo->push(new SceneFolderCommand(text, scene, before));
+}
+
+QVariantMap SceneApi::bounds(const QVariant &options)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail();
+    if (!scene) return out;
+
+    const QVariant normalized = scriptmod::normalizeJs(options);
+    QVariantMap params;
+    if (normalized.isValid() && !normalized.isNull()) {
+        if (normalized.typeId() != QMetaType::QVariantMap) {
+            fail("scene.bounds: the argument is an object — {nodes?, includePoints?}");
+            return out;
+        }
+        params = normalized.toMap();
+    }
+    static const QStringList knownKeys{ QStringLiteral("nodes"), QStringLiteral("includePoints") };
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (!knownKeys.contains(it.key())) {
+            fail(QStringLiteral("scene.bounds: unknown option '%1' (known: %2)")
+                     .arg(it.key(), knownKeys.join(QStringLiteral(", "))));
+            return out;
+        }
+    }
+    const bool includePoints = params.value(QStringLiteral("includePoints"), false).toBool();
+
+    QList<iris::SceneNodePtr> subjects;
+    if (params.contains(QStringLiteral("nodes"))) {
+        const QVariant raw = scriptmod::normalizeJs(params.value(QStringLiteral("nodes")));
+        const QVariantList ids = raw.typeId() == QMetaType::QVariantList ? raw.toList()
+                                                                        : QVariantList{ raw };
+        for (const QVariant &v : ids) {
+            const QString id = v.toString();
+            auto node = findNodeByGuid(scene->getRootNode(), id);
+            if (!node) {
+                fail(QStringLiteral("scene.bounds: no node with id '%1'").arg(id));
+                return out;
+            }
+            subjects.append(node);
+        }
+        if (subjects.isEmpty()) {
+            fail("scene.bounds: {nodes: []} measures nothing — omit the key to measure the scene");
+            return out;
+        }
+    } else {
+        subjects = scene->getRootNode()->children();
+    }
+
+    iris::Vec3 mn, mx;
+    int counted = 0;
+    if (!sceneextents::worldAabb(subjects, includePoints, mn, mx, &counted)) {
+        // NOT a failure: an empty scene, or a selection of lights measured
+        // without includePoints, legitimately has no extent. `nodes: 0` says so.
+        out["nodes"] = 0;
+        return out;
+    }
+    const iris::Vec3 size = mx - mn;
+    out["min"] = vecToJs(mn);
+    out["max"] = vecToJs(mx);
+    out["size"] = vecToJs(size);
+    out["center"] = vecToJs(iris::Vec3((mn.x() + mx.x()) * 0.5f, (mn.y() + mx.y()) * 0.5f,
+                                       (mn.z() + mx.z()) * 0.5f));
+    out["nodes"] = counted;
+    return out;
 }
 
 QVariantMap SceneApi::rigStats()

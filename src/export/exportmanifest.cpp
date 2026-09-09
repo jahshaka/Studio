@@ -65,6 +65,28 @@ QJsonObject ExportManifest::toJson() const
         assetArr.append(ao);
     }
     root["assets"] = assetArr;
+
+    if (scene.present) {
+        QJsonObject so;
+        so["units"] = scene.units;
+        so["unitScale"] = scene.unitScale;
+        QJsonArray mn, mx, size;
+        for (int i = 0; i < 3; ++i) {
+            mn.append(scene.extentMin[i]);
+            mx.append(scene.extentMax[i]);
+            size.append(scene.extentMax[i] - scene.extentMin[i]);
+        }
+        QJsonObject extent;
+        extent["min"] = mn;
+        extent["max"] = mx;
+        extent["size"] = size;
+        so["extent"] = extent;
+        QJsonObject cam;
+        cam["fov"] = scene.cameraFov;
+        cam["height"] = scene.cameraHeight;
+        so["camera"] = cam;
+        root["scene"] = so;
+    }
     return root;
 }
 
@@ -151,6 +173,25 @@ ExportManifest ExportManifest::fromBytes(const QByteArray &bytes, QString *error
         for (const auto &dv : ao["dependencies"].toArray())
             a.dependencies.append(dv.toString());
         m.assets.append(a);
+    }
+
+    // The optional scene-scale block. Absent in every archive written before
+    // 2026-09-09 and in every non-project export, which is why nothing here
+    // fails when it is missing — `present` stays false.
+    if (root.contains("scene") && root["scene"].isObject()) {
+        const QJsonObject so = root["scene"].toObject();
+        m.scene.present = true;
+        m.scene.units = so["units"].toString(QStringLiteral("meters"));
+        m.scene.unitScale = so["unitScale"].toDouble(1.0);
+        const QJsonObject extent = so["extent"].toObject();
+        const QJsonArray mn = extent["min"].toArray(), mx = extent["max"].toArray();
+        for (int i = 0; i < 3; ++i) {
+            if (mn.size() > i) m.scene.extentMin[i] = mn[i].toDouble();
+            if (mx.size() > i) m.scene.extentMax[i] = mx[i].toDouble();
+        }
+        const QJsonObject cam = so["camera"].toObject();
+        m.scene.cameraFov = cam["fov"].toDouble();
+        m.scene.cameraHeight = cam["height"].toDouble();
     }
     return m;
 }

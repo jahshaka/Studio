@@ -189,6 +189,7 @@ For more information see the LICENSE file
 /// blobs describe two different QMainWindows.
 static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/projectarchiver.h"
+#include "services/sceneextents.h"
 #include "ui/dialogs/progressdialog.h"
 #include "services/sceneeditservice.h"
 #include "services/thumbnailservice.h"
@@ -2189,6 +2190,11 @@ void MainWindow::exportSceneAsZip()
         archiveProgress->setValue(0);
         archiveProgress->show();
     }
+    // The manifest's scene-scale block, measured from the live document — the
+    // archiver only ever sees the database (services/sceneextents.h).
+    if (sceneView)
+        archiver->setSceneMetadata(sceneextents::describe(sceneView->getScene(),
+                                                          sceneView->editorCamera()));
     archiver->startExport(filePath);
 }
 void MainWindow::setupDockWidgets()
