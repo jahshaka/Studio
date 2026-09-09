@@ -212,7 +212,50 @@ int main(int argc, char **argv)
     CHECK(std::fabs(cam->getGlobalPosition().y() - 2.0f) < 1e-4f,
           "a detached camera keeps the transform it was given (nothing drives it any more)");
 
-    // ---- 5. teardown, in the documented order ----------------------------
+    // ---- 5. ZERO LAG: one sync + one frame is the RIGHT frame -------------
+    //
+    // AVATAR_RIG_PERF_SPEC §4 / P2b. The `step` helper above syncs and renders
+    // TWICE per clip time, and its comment says why: the socket resolver read
+    // the pose back from the LAST rendered frame, so the first pair put the pose
+    // in the engine and the second moved the rider onto it. That is the frame of
+    // lag this program removes — the rider now hangs off a TagPoint Ogre
+    // resolves inside the frame, and (P2b) the view's camera rides the rider's
+    // node instead of a description read before it.
+    //
+    // So: re-attach, and take each shot with ONE sync and ONE frame.
+    {
+        CHECK(doc->attachToSocket(cam, arm->getGUID(), "head", &error), "re-attached for P2b");
+        cam->setLocalPos(iris::Vec3(0, 0, 0));       // the rider's local is socket-relative now
+        cam->setLocalRot(iris::Quat());
+        const auto oneStep = [&](float t, Image &out) {
+            doc->updateSceneAnimation(t);
+            mirror.sync();
+            mirror.applyCamera(cam, view);
+            engine->renderOneFrame();
+            view->readPixels(out);
+        };
+        Image warm;
+        oneStep(0.0f, warm);      // arms the tag and the camera binding
+        oneStep(0.0f, warm);
+        CHECK(view->cameraNode() != 0, "the view's camera rides the socketed camera's node");
+        Image single0, single1;
+        oneStep(0.0f, single0);
+        show("P2b t=0, one sync + one frame", single0);
+        CHECK(isRed(centre(single0)),
+              "at rest, ONE sync + ONE frame already shows the marker dead centre");
+        oneStep(1.0f, single1);
+        show("P2b t=1, one sync + one frame", single1);
+        CHECK(!isRed(centre(single1)),
+              "and after ONE sync + ONE frame at t=1 the shot has ALREADY moved — the frame of "
+              "read-back lag is gone");
+        CHECK(imageDiff(single0, single1) > 0.02,
+              "the two single-step shots really differ");
+        // ...and the hierarchy contract still holds while it rides.
+        CHECK(cam->getParent().data() == doc->getRootNode().data(),
+              "the socketed camera is still a child of its document parent");
+    }
+
+    // ---- 6. teardown, in the documented order ----------------------------
     mirror.setSource(iris::ScenePtr());
     engine->destroyView(view);
     engine->destroyScene(target);
