@@ -8,6 +8,7 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "services/apppaths.h"
 #include "services/assetstorepaths.h"
 
 #include <QDir>
@@ -25,7 +26,7 @@ QString AssetStorePaths::join(const QString &a, const QString &b)
 
 QString AssetStorePaths::defaultRoot()
 {
-    return join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
+    return join(AppPaths::dataRoot(),
                 QStringLiteral("AssetStore"));
 }
 

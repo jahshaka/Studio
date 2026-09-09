@@ -198,7 +198,7 @@ add_test(NAME cameras.e2e
 # already allows. If cameras.e2e ever fails with an ASSERTION under contention
 # rather than a timeout, that reasoning is void and the lock is the answer.
 set_tests_properties(cameras.e2e PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 900)
 
@@ -214,7 +214,7 @@ add_test(NAME cameras.e2e.lens
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js
          WORKING_DIRECTORY ${_lens_home}/run)
 set_tests_properties(cameras.e2e.lens PROPERTIES
-    ENVIRONMENT "HOME=${_lens_home}"
+    ENVIRONMENT "HOME=${_lens_home};JAHSHAKA_DATA_ROOT=${_lens_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
 
@@ -230,7 +230,7 @@ add_test(NAME cameras.e2e.postfx
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_postfx.js
          WORKING_DIRECTORY ${_post_home}/run)
 set_tests_properties(cameras.e2e.postfx PROPERTIES
-    ENVIRONMENT "HOME=${_post_home}"
+    ENVIRONMENT "HOME=${_post_home};JAHSHAKA_DATA_ROOT=${_post_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
 
@@ -243,7 +243,7 @@ add_test(NAME cameras.e2e.pilot
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.js
          WORKING_DIRECTORY ${_pilot_home}/run)
 set_tests_properties(cameras.e2e.pilot PROPERTIES
-    ENVIRONMENT "HOME=${_pilot_home}"
+    ENVIRONMENT "HOME=${_pilot_home};JAHSHAKA_DATA_ROOT=${_pilot_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
 
@@ -262,6 +262,6 @@ add_test(NAME cameras.e2e.axis_lock
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js
          WORKING_DIRECTORY ${_axis_home}/run)
 set_tests_properties(cameras.e2e.axis_lock PROPERTIES
-    ENVIRONMENT "HOME=${_axis_home}"
+    ENVIRONMENT "HOME=${_axis_home};JAHSHAKA_DATA_ROOT=${_axis_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)

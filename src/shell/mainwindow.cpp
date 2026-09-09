@@ -179,6 +179,7 @@ For more information see the LICENSE file
 #include "services/meshbakestore.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
+#include "services/apppaths.h"
 #include "shell/dockstate.h"
 #include "shell/shutdownorder.h"
 
@@ -842,7 +843,7 @@ void MainWindow::stopAnimWidget()
 void MainWindow::setupProjectDB()
 {
     const QString path = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
+        AppPaths::dataRoot(), Constants::JAH_DATABASE
     );
 
     // Library lock (ASSET_PIPELINE preflight §6.2): held for the app's

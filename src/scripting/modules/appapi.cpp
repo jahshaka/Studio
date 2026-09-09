@@ -25,6 +25,9 @@ For more information see the LICENSE file
 #include "services/framepacing.h"
 #include "data/settingsmanager.h"
 #include "services/jahlog.h"
+#include "services/apppaths.h"
+#include "services/assetstorepaths.h"
+#include "data/constants.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -261,6 +264,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "installed in THIS session describes itself completely. Read it beside the api.contract "
           "test, which proves docs/SCRIPTING.md still matches the registry that produced it.",
           Needs::Document },
+        { "dataRoot", "app.dataRoot() -> {root, overridden, settingsFile, database, assetStore}",
+          "Where THIS run keeps its data (services/apppaths.h): the library database, the asset "
+          "store, the shader cache and the settings file. `overridden` is true when --data-root or "
+          "JAHSHAKA_DATA_ROOT chose the root, which is the only case in which the settings file "
+          "follows it — an ordinary run keeps jahsettings.ini in its historical place "
+          "(applicationDirPath in a Debug build). READ-ONLY on purpose: a setter would have to "
+          "move a live database and a live asset store while they are open.",
+          Needs::Document },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
           Needs::Window },
@@ -447,6 +458,22 @@ QVariantList AppApi::apiProblems()
     if (!host.registry) { fail("app.apiProblems: no script registry in this session"); return {}; }
     QVariantList out;
     for (const QString &problem : host.registry->validate()) out.append(problem);
+    return out;
+}
+
+QVariantMap AppApi::dataRoot()
+{
+    // READ-ONLY, and the reason is in the verb's doc: the database and the
+    // asset store are OPEN by the time a script can call this, so "set the data
+    // root" is a relocation of live state and not a setting. The override is a
+    // launch-time decision (--data-root / JAHSHAKA_DATA_ROOT).
+    QVariantMap out;
+    const QString root = AppPaths::dataRoot();
+    out["root"] = root;
+    out["overridden"] = AppPaths::isOverridden();
+    out["settingsFile"] = SettingsManager::getDefaultManager()->settings->fileName();
+    out["database"] = QDir(root).filePath(Constants::JAH_DATABASE);
+    out["assetStore"] = AssetStorePaths::root();
     return out;
 }
 

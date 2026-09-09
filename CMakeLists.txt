@@ -501,6 +501,7 @@ set(HEADERS
     src/services/assetgc.h
     src/services/assetmigration.h
     src/services/assetstore.h
+    src/services/apppaths.h
     src/services/assetstorepaths.h
     src/data/database/casschema.h
     src/services/audiopeaks.h

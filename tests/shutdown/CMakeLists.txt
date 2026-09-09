@@ -21,7 +21,7 @@ file(MAKE_DIRECTORY ${_order_home}/run)
 add_test(NAME app.shutdown_order COMMAND test_shutdown_order
          WORKING_DIRECTORY ${_order_home}/run)
 set_tests_properties(app.shutdown_order PROPERTIES
-    ENVIRONMENT "HOME=${_order_home}"
+    ENVIRONMENT "HOME=${_order_home};JAHSHAKA_DATA_ROOT=${_order_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "shutdown")
 
 # app.watchdog_stall — Lane 5: a 3 s UI-thread block produces exactly one
@@ -49,7 +49,7 @@ add_test(NAME app.watchdog_stall COMMAND test_watchdog_stall
 # contention-flake candidate on 2026-09-08 (JOURNAL) for exactly that reason.
 # N7, ENGINEERING_DEBT_SPEC re-audit.
 set_tests_properties(app.watchdog_stall PROPERTIES
-    ENVIRONMENT "HOME=${_watchdog_home}"
+    ENVIRONMENT "HOME=${_watchdog_home};JAHSHAKA_DATA_ROOT=${_watchdog_home}/.local/share/Jahshaka"
     RUN_SERIAL TRUE
     TIMEOUT 300 LABELS "shutdown")
 

@@ -57,7 +57,7 @@ add_test(NAME app.startup_quiet
                  "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
          WORKING_DIRECTORY ${_sq_home}/run)
 set_tests_properties(app.startup_quiet PROPERTIES
-    ENVIRONMENT "HOME=${_sq_home}"
+    ENVIRONMENT "HOME=${_sq_home};JAHSHAKA_DATA_ROOT=${_sq_home}/.local/share/Jahshaka"
     TIMEOUT 300
     LABELS "app")
 
@@ -86,7 +86,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8747
                  WORKING_DIRECTORY ${_pu_home}/run)
         set_tests_properties(app.pacing_undo PROPERTIES
-            ENVIRONMENT "HOME=${_pu_home}"
+            ENVIRONMENT "HOME=${_pu_home};JAHSHAKA_DATA_ROOT=${_pu_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
             TIMEOUT 400
             LABELS "app")
@@ -105,7 +105,7 @@ add_test(NAME app.scene_switch_after_play
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js
          WORKING_DIRECTORY ${_ssap_home}/run)
 set_tests_properties(app.scene_switch_after_play PROPERTIES
-    ENVIRONMENT "HOME=${_ssap_home}"
+    ENVIRONMENT "HOME=${_ssap_home};JAHSHAKA_DATA_ROOT=${_ssap_home}/.local/share/Jahshaka"
     LABELS "app"
     TIMEOUT 300)
 
@@ -118,6 +118,6 @@ add_test(NAME app.selection_outline
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_selection_outline.js
          WORKING_DIRECTORY ${_selo_home}/run)
 set_tests_properties(app.selection_outline PROPERTIES
-    ENVIRONMENT "HOME=${_selo_home}"
+    ENVIRONMENT "HOME=${_selo_home};JAHSHAKA_DATA_ROOT=${_selo_home}/.local/share/Jahshaka"
     LABELS "app"
     TIMEOUT 300)

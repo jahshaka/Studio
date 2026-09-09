@@ -306,7 +306,7 @@ add_test(NAME shadergraph.selection_verbs
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_graph_selection.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(shadergraph.selection_verbs PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "shadergraph"
     TIMEOUT 120)
 
@@ -320,7 +320,7 @@ add_test(NAME shadergraph.blend_verbs
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settings.js --headless
          WORKING_DIRECTORY ${_home_blend}/run)
 set_tests_properties(shadergraph.blend_verbs PROPERTIES
-    ENVIRONMENT "HOME=${_home_blend}"
+    ENVIRONMENT "HOME=${_home_blend};JAHSHAKA_DATA_ROOT=${_home_blend}/.local/share/Jahshaka"
     LABELS "shadergraph"
     TIMEOUT 120)
 

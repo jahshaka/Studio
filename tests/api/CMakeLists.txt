@@ -19,7 +19,7 @@ add_test(NAME api.contract
                  "${CMAKE_SOURCE_DIR}/docs/SCRIPTING.md"
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(api.contract PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     TIMEOUT 120
     LABELS "scripting")
 # `--dump-api-docs` boots the NULL render system (SPECS/SCENEGRAPH_SPEC.md §3b):

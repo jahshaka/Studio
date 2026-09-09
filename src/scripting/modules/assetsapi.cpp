@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "services/apppaths.h"
 #include "scripting/modules/assetsapi.h"
 
 #include <QDir>
@@ -925,7 +926,7 @@ namespace
 {
 QString liveDbPath()
 {
-    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+    return QDir(AppPaths::dataRoot())
         .filePath(Constants::JAH_DATABASE);
 }
 } // namespace

@@ -26,6 +26,8 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) o.mcpPort = quint16(QByteArray(argv[i] + 11).toUInt());
         else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) o.mcpPort = quint16(QByteArray(argv[++i]).toUInt());
         else if (qstrcmp(argv[i], "--clear-shader-cache") == 0) o.clearShaderCache = true;
+        else if (qstrncmp(argv[i], "--data-root=", 12) == 0) o.dataRoot = QString::fromLocal8Bit(argv[i] + 12);
+        else if (qstrcmp(argv[i], "--data-root") == 0 && i + 1 < argc) o.dataRoot = QString::fromLocal8Bit(argv[++i]);
         // The session log (SESSION_LOG_SPEC §3.5). --log-level is REPEATABLE
         // and comma-separated, because retuning three categories for one
         // debugging run should not need three different spellings.

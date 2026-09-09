@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QApplication>
 
+#include "services/apppaths.h"
+
 class SettingsManager
 {
     static SettingsManager* defaultSettings;
@@ -36,26 +38,25 @@ public:
 
     int recentlyOpenedFilesSize;
 
-    // TODO -- allow changing this location, portable or system
+    // WHERE THE SETTINGS FILE IS, in one place: AppPaths::settingsFilePath.
+    //
+    // The four #ifdef branches this replaced were two distinct answers written
+    // twice each (BUILD_AS_LIB chose between QApplication:: and
+    // QCoreApplication::applicationDirPath — the same function), and NONE of
+    // them could be overridden. Under QT_DEBUG the file lives beside the
+    // BINARY, so every run of a build tree — the owner's, and every suite that
+    // spawns the app — writes the SAME jahsettings.ini; a scratch HOME moves
+    // the library and the asset store but cannot move a path derived from the
+    // executable's location. That is how a gate run came to re-roll the
+    // owner's `[assets] storeId` (ENGINEERING_DEBT_SPEC ADDENDUM 6).
+    //
+    // With no override the location is bit-for-bit what it was. With
+    // `--data-root` / `JAHSHAKA_DATA_ROOT` the settings file moves WITH the
+    // library and the store, which is the whole point: one flag, one hermetic
+    // run (services/apppaths.h).
     SettingsManager(QString fileName = "jahsettings.ini") {
         recentlyOpenedFilesSize = 9;
-#ifdef QT_DEBUG
-
-#ifdef BUILD_AS_LIB 
-		loadSettings(QDir(QApplication::applicationDirPath()).filePath(fileName));
-#else
-		loadSettings(QDir(QCoreApplication::applicationDirPath()).filePath(fileName));
-#endif
-
-#else
-#ifdef BUILD_AS_LIB
-        loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
-			.filePath(fileName));
-#else
-        loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
-			.filePath(fileName));
-#endif
-#endif
+        loadSettings(AppPaths::settingsFilePath(fileName));
     }
 
     void loadSettings(QString path) {

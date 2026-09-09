@@ -79,6 +79,6 @@ add_test(NAME sockets.e2e
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js
          WORKING_DIRECTORY ${_sockets_home}/run)
 set_tests_properties(sockets.e2e PROPERTIES
-    ENVIRONMENT "HOME=${_sockets_home}"
+    ENVIRONMENT "HOME=${_sockets_home};JAHSHAKA_DATA_ROOT=${_sockets_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)

@@ -22,7 +22,7 @@ file(MAKE_DIRECTORY ${_open_home}/run)
 add_test(NAME open.responsive COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_home}/run)
 set_tests_properties(open.responsive PROPERTIES
-    ENVIRONMENT "HOME=${_open_home}"
+    ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
     TIMEOUT 480 LABELS "openasync")
 
 # The race lane (scripts/sanitize.sh tsan): a threaded open racing a main-thread

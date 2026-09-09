@@ -48,7 +48,7 @@ foreach(SAMPLE IN LISTS _samples)
     # reachable display like every other engine-up e2e (offscreen rendering
     # still connects to the X server at plugin load).
     set_tests_properties(samples.cleanstart.${_slug} PROPERTIES
-        ENVIRONMENT "HOME=${_home}"
+        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
         FIXTURES_REQUIRED samples_home_${_slug}
         LABELS "scripting"
         TIMEOUT 480)
