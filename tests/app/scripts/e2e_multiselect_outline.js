@@ -14,6 +14,14 @@
 // probe delta is pure highlight. The two cubes are placed left and right of
 // the origin and probed in their OWN half of the frame, so "the second cube is
 // outlined" cannot be satisfied by the first one's pixels.
+//
+// MEASURED (Xvfb 1920x1080, RTX 4080, 2026-09-09 — the numbers the thresholds
+// below are set from; no tuning was needed, the separation was clean first
+// run): one selected -> left 8, right 0 · both selected -> left 8, right 9 ·
+// nothing selected -> 0 / 0. The assertions ask for >= 1 on the positives and
+// exactly 0 on the negatives, so an eight-fold margin covers frame-to-frame
+// GI residue while a secondary that stopped drawing (right 9 -> 0) fails
+// outright.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);

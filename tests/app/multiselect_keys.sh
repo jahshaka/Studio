@@ -150,7 +150,17 @@ activate
 
 # ============================================================ PART 1 ==========
 # Delete on a SET, with real keys, and ONE Ctrl+Z that brings all of it back.
+#
+# NOTHING MAY RUN BETWEEN THE TWO KEYS. Every run_script — a QUERY included —
+# opens and closes an undo macro (scriptengine.cpp:182/202, unconditionally), so
+# an empty query run still lands an EMPTY entry on the stack and the next Ctrl+Z
+# spends itself undoing that instead of the delete. Measured here on 2026-09-09
+# and reported as a defect of the scripting host, not worked around anywhere but
+# in the shape of this suite: the delete-then-check pass and the
+# delete-then-undo pass use DIFFERENT objects, and the second one presses the
+# two keys back to back.
 
+# ---- 1a: the Delete KEY deletes the whole selection -------------------------
 IDS=$(js 'var a = scene.addPrimitive("cube"); var b = scene.addPrimitive("sphere");
           editor.select([a, b]); JSON.stringify({a:a, b:b, n:editor.selectionSet().length})') \
     || bad "could not build the two-object selection"
@@ -160,24 +170,38 @@ note "selection: $IDS"
 A=$(printf '%s' "$IDS" | jq -r '.a'); B=$(printf '%s' "$IDS" | jq -r '.b')
 
 key Delete
-GONE=$(js "JSON.stringify({a: !!node.info('$A'), b: !!node.info('$B'), sel: editor.selectionSet().length})" 2>/dev/null)
+# node.info() RAISES for a node that is gone, which would abort the whole run —
+# ask the scene for its node list instead.
+GONE=$(js "var ids = scene.nodes().map(function (n) { return n.id; });
+           JSON.stringify({a: ids.indexOf('$A') >= 0, b: ids.indexOf('$B') >= 0,
+                           sel: editor.selectionSet().length})")
 note "after Delete: $GONE"
 [ "$(printf '%s' "$GONE" | jq -r '.a')" = "false" ] && [ "$(printf '%s' "$GONE" | jq -r '.b')" = "false" ] \
     && ok "the Delete KEY deleted the whole selection (the registry entry reached the editor)" \
     || bad "Delete did not remove both objects"
+[ "$(printf '%s' "$GONE" | jq -r '.sel')" = "0" ] \
+    && ok "and left nothing selected" || bad "the selection survived its own delete"
 
-key ctrl+z
-BACK=$(js "JSON.stringify({a: !!scene.nodes().filter(function(n){return n.id==='$A';}).length,
-                           b: !!scene.nodes().filter(function(n){return n.id==='$B';}).length})")
-note "after Ctrl+Z: $BACK"
-[ "$(printf '%s' "$BACK" | jq -r '.a')" = "true" ] && [ "$(printf '%s' "$BACK" | jq -r '.b')" = "true" ] \
+# ---- 1b: ONE Ctrl+Z restores every member -----------------------------------
+IDS=$(js 'var c = scene.addPrimitive("cone"); var d = scene.addPrimitive("torus");
+          editor.select([c, d]); JSON.stringify({c:c, d:d})') \
+    || bad "could not build the second two-object selection"
+C=$(printf '%s' "$IDS" | jq -r '.c'); D=$(printf '%s' "$IDS" | jq -r '.d')
+key Delete
+key ctrl+z                     # BACK TO BACK — see the note above
+BACK=$(js "var ids = scene.nodes().map(function (n) { return n.id; });
+           JSON.stringify({c: ids.indexOf('$C') >= 0, d: ids.indexOf('$D') >= 0})")
+note "delete + one undo: $BACK"
+[ "$(printf '%s' "$BACK" | jq -r '.c')" = "true" ] && [ "$(printf '%s' "$BACK" | jq -r '.d')" = "true" ] \
     && ok "ONE Ctrl+Z restored BOTH objects — the multi-delete is one undo step" \
     || bad "one undo did not restore both objects"
 
 # ============================================================ PART 2 ==========
-# Ctrl+C / Ctrl+V and Ctrl+D on the editor selection, as real keys.
+# Ctrl+C / Ctrl+V and Ctrl+D on the editor selection, as real keys. These push
+# nothing between the key and its observation, so a query run in between is
+# harmless.
 
-js "editor.select(['$A','$B'])" > /dev/null
+js "editor.select(['$C','$D'])" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
 key ctrl+c
 CLIP=$(js 'editor.clipboard().length')
@@ -186,10 +210,11 @@ CLIP=$(js 'editor.clipboard().length')
 key ctrl+v
 AFTER=$(js 'scene.nodes().length')
 note "nodes: $BEFORE -> $AFTER"
-[ "$AFTER" -gt "$BEFORE" ] 2>/dev/null \
-    && ok "the Ctrl+V KEY pasted into the scene" || bad "Ctrl+V pasted nothing"
+[ "$((AFTER - BEFORE))" = "2" ] 2>/dev/null \
+    && ok "the Ctrl+V KEY pasted both clipboard entries into the scene" \
+    || bad "Ctrl+V did not paste the clipboard ($BEFORE -> $AFTER)"
 
-js "editor.select(['$A','$B'])" > /dev/null
+js "editor.select(['$C','$D'])" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
 key ctrl+d
 AFTER=$(js 'scene.nodes().length')
@@ -223,7 +248,7 @@ fi
 js 'app.space("editor")' > /dev/null
 sleep 0.5
 activate
-js "editor.select('$A')" > /dev/null
+js "editor.select('$C')" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
 # Ctrl+` opens the script console dock, whose input line is a text field; a
 # click lands the focus in it. NOTE-ONLY: the panel layout decides where that
