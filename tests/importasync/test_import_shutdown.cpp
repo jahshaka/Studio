@@ -15,6 +15,7 @@
 // The contract asserted is the hard one: the process is GONE within
 // kExitBudgetMs of app.quit(), exit code 0 (a logged forced exit also
 // returns the real code — better than a zombie, and still bounded).
+#include "../support/seedsettings.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -98,27 +99,7 @@ struct McpClient
 // that had nothing to do with import shutdown.
 static void seedSettings()
 {
-    QStringList inis;
-    inis << QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).dir().filePath("jahsettings.ini");
-
-#ifndef QT_DEBUG
-    // Evaluate AppDataLocation exactly as the app does — under ITS application
-    // name, not this test binary's. Only in non-Debug builds, so a Debug tree
-    // does not gain a stray settings file in the developer's data directory.
-    const QString testName = QCoreApplication::applicationName();
-    QCoreApplication::setApplicationName(QStringLiteral("Jahshaka"));
-    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QCoreApplication::setApplicationName(testName);
-    if (!appData.isEmpty() && QDir().mkpath(appData))
-        inis << QDir(appData).filePath("jahsettings.ini");
-#endif
-
-    for (const QString &ini : inis) {
-        QSettings settings(ini, QSettings::IniFormat);
-        settings.setValue("ddialog_seen", true);
-        settings.setValue("auto_save", true);
-        settings.sync();
-    }
+    testsupport::seedSettingsForSpawnedApp(QStringLiteral(JAHSHAKA_BINARY));
 }
 
 static bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut)

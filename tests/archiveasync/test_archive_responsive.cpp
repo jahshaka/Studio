@@ -23,6 +23,7 @@
 //
 // And correctness is not allowed to move: what comes back out of an archive
 // this wrote is the same world, and a cancelled import leaves no orphan.
+#include "../support/seedsettings.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QDirIterator>
@@ -116,22 +117,7 @@ struct McpClient
 /// HOME does not isolate.
 static void seedSettings(const QString &binary)
 {
-    QStringList inis;
-    inis << QFileInfo(binary).dir().filePath("jahsettings.ini");
-#ifndef QT_DEBUG
-    const QString testName = QCoreApplication::applicationName();
-    QCoreApplication::setApplicationName(QStringLiteral("Jahshaka"));
-    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QCoreApplication::setApplicationName(testName);
-    if (!appData.isEmpty() && QDir().mkpath(appData))
-        inis << QDir(appData).filePath("jahsettings.ini");
-#endif
-    for (const QString &ini : inis) {
-        QSettings settings(ini, QSettings::IniFormat);
-        settings.setValue("ddialog_seen", true);
-        settings.setValue("auto_save", true);
-        settings.sync();
-    }
+    testsupport::seedSettingsForSpawnedApp(binary);
 }
 
 static quint16 freePort()
@@ -201,7 +187,6 @@ static RunStats runArchive(McpClient &mcp, const QString &startScript, const cha
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
 
     // HERMETIC BY CONSTRUCTION. This suite's HOME lives in the build tree and
     // SURVIVES between runs, and a warm library quietly weakens what the run
@@ -220,6 +205,17 @@ int main(int argc, char **argv)
             std::printf("info: HOME is not the suite's scratch home (%s) — not resetting\n",
                         home.toUtf8().constData());
     }
+
+    // SEEDED AFTER THE WIPE, and the order is load-bearing (hygiene lane,
+    // 2026-09-09). The seed used to land in `<binary dir>/jahsettings.ini`,
+    // which is OUTSIDE this scratch home, so it survived the reset above by
+    // accident. It lands inside the data root now — which is the point, that
+    // is what stops this suite writing the developer's shared settings file —
+    // and the reset above would therefore delete it, leaving the app to meet
+    // the modal donate dialog at quit and hang until the exit budget ran out.
+    // (Measured: "process terminated within the exit budget with an archive in
+    // flight" failed for exactly this reason and nothing else.)
+    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
 
     // THE FIXTURE IS World Background (2026-09-07): it has to be a world with
     // MODEL assets, because the export half asserts that mesh bakes exist on

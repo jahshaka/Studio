@@ -28,6 +28,7 @@
 //      still opens the same world — unchanged behaviour, deliberately.
 //   3. Quitting with an open IN FLIGHT terminates the process, bounded and
 //      clean (the import.shutdown zombie, applied to the open runner).
+#include "../support/seedsettings.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -107,22 +108,7 @@ struct McpClient
 /// Same reason as import.shutdown: keep the close path prompt-free.
 static void seedSettings(const QString &binary)
 {
-    QStringList inis;
-    inis << QFileInfo(binary).dir().filePath("jahsettings.ini");
-#ifndef QT_DEBUG
-    const QString testName = QCoreApplication::applicationName();
-    QCoreApplication::setApplicationName(QStringLiteral("Jahshaka"));
-    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QCoreApplication::setApplicationName(testName);
-    if (!appData.isEmpty() && QDir().mkpath(appData))
-        inis << QDir(appData).filePath("jahsettings.ini");
-#endif
-    for (const QString &ini : inis) {
-        QSettings settings(ini, QSettings::IniFormat);
-        settings.setValue("ddialog_seen", true);
-        settings.setValue("auto_save", true);
-        settings.sync();
-    }
+    testsupport::seedSettingsForSpawnedApp(binary);
 }
 
 static quint16 freePort()
