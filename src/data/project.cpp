@@ -13,6 +13,14 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QDir>
 
+// ONE ENTRY PER ModelTypes VALUE, IN ORDER. It was thirteen entries against a
+// nineteen-value enum, and its one consumer indexes it with the enum
+// (SceneEditService::exportNodeTo writes the .jaf manifest) — so exporting an
+// IES profile, an avatar or an animation clip read PAST THE END of a
+// QStringList. Latent only because the export path is reached with Object and
+// Mesh; found while appending LiveTexture, fixed rather than carried.
+// The existing spellings are a FILE FORMAT (the .jaf manifest) and are
+// untouched, including "cubemap" for Sky.
 const QStringList Project::ModelTypesAsString = {
     "undefined",
     "material",
@@ -26,7 +34,11 @@ const QStringList Project::ModelTypesAsString = {
     "shader",
     "variant",
     "file",
-    "particle_system"
+    "particle_system",
+    "light_profile",
+    "avatar",
+    "animation",
+    "live_texture"
 };
 
 Project::Project()

@@ -1037,3 +1037,56 @@ set_tests_properties(scripting.e2e.detail_layers PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 240)
+
+# MATERIAL_GAPS_SPEC ADDENDUM A-1: LIVE TEXTURES — pixels a producer writes at
+# runtime, catalogued as a session-only asset kind so material.set can resolve
+# them by guid like any other texture. Document verbs only -> --headless. The
+# load-bearing assertion is the WRITER one: a saved scene must not carry a live
+# guid, because nothing could ever resolve it again.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-live_textures)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.live_textures
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_textures.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.live_textures PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+jah_no_display(scripting.e2e.live_textures)
+
+# The PIXEL half of A-1: a live texture bound as a base colour map is sampled
+# by the renderer, a write changes what is drawn with no re-bind, and a run of
+# writes creates no new engine texture. Engine UP (no --headless): the whole
+# point is what the renderer does with the generation counter.
+add_script_e2e(live_texture_pixels e2e_live_texture_pixels.js)
+
+# ASSET_MEDIA_SPEC §3 Option A + A-1: a VIDEO decoded into a live texture —
+# every decoded frame is a write, every write is a generation bump. Qt
+# Multimedia's ffmpeg backend decodes with no display (the same fact
+# scripting.e2e.video relies on) -> --headless. Fixture: tests/scripting/
+# fixtures/tiny.mp4 (64x64, 16 frames at 8 fps).
+configure_file(scripts/e2e_video_texture.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_texture.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-video_texture)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.video_texture
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_texture.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.video_texture PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
+# MATERIAL_GAPS_SPEC ADDENDUM A-5: the PER-MATERIAL REFLECTION CUBEMAP. Two
+# spheres, one override: the hero's reflection moves and the control's does
+# not. Engine UP — the row is only interesting because of what the renderer
+# binds, and the document cannot answer that.
+configure_file(scripts/e2e_reflection_map.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-reflection_map)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.reflection_map
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.reflection_map PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 240)

@@ -85,6 +85,9 @@ int typeFromName(const QString &name)
     if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
     if (n == "avatar") return static_cast<int>(ModelTypes::Avatar);
     if (n == "animation" || n == "clip") return static_cast<int>(ModelTypes::Animation);
+    // SESSION ONLY (MATERIAL_GAPS_SPEC A-1): no store or project listing can
+    // ever contain one, so this name is only ever useful with scope 'session'.
+    if (n == "livetexture" || n == "live") return static_cast<int>(ModelTypes::LiveTexture);
     return -1;
 }
 

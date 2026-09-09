@@ -1415,7 +1415,10 @@ void SceneEditService::exportNodeTo(const iris::SceneNodePtr &node, ModelTypes m
     QFile manifest(QDir(writePath).filePath(".manifest"));
     if (manifest.open(QIODevice::ReadWrite)) {
         QTextStream stream(&manifest);
-        stream << Project::ModelTypesAsString[static_cast<int>(modelType)];
+        const int typeIndex = static_cast<int>(modelType);
+        stream << (typeIndex >= 0 && typeIndex < Project::ModelTypesAsString.size()
+                       ? Project::ModelTypesAsString[typeIndex]
+                       : Project::ModelTypesAsString[0]);
     }
     manifest.close();
 

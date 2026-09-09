@@ -60,6 +60,7 @@ inline QString assetTypeName(int type)
     case ModelTypes::LightProfile: return QStringLiteral("lightprofile");
     case ModelTypes::Avatar: return QStringLiteral("avatar");
     case ModelTypes::Animation: return QStringLiteral("animation");
+    case ModelTypes::LiveTexture: return QStringLiteral("livetexture");
     default: return QStringLiteral("undefined");
     }
 }

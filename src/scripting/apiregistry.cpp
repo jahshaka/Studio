@@ -110,6 +110,22 @@ QStringList ApiRegistry::validate() const
                 problems << QStringLiteral("duplicate verb '%1'").arg(id);
             seenVerbs << v.name;
 
+            // NAMES THE JS WRAPPER OWNS. A module is installed as a QObject
+            // wrapper, and the engine puts its own members on that wrapper:
+            // `destroy` (the QML object-lifetime method) and `toString`
+            // SHADOW an invokable of the same name completely — the verb is
+            // registered, documented, callable, and silently never runs
+            // (found the hard way, 2026-09-10: texture.destroy returned
+            // undefined and destroyed nothing). There is no way to win that
+            // fight from this side, so the registry refuses the name.
+            static const QStringList kShadowed = { QStringLiteral("destroy"),
+                                                   QStringLiteral("toString"),
+                                                   QStringLiteral("objectName") };
+            if (kShadowed.contains(v.name))
+                problems << QStringLiteral("%1 is shadowed by the JS object wrapper's own "
+                                           "'%2' and can never be called — rename the verb")
+                                .arg(id, v.name);
+
             // The metadata must describe a method that actually exists on the
             // QObject — the registry is curated, but a typo'd name would make
             // help() advertise a verb scripts cannot call.

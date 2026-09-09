@@ -109,6 +109,24 @@ struct AssetNodeObject : public Asset
 	}
 };
 
+// A LIVE TEXTURE's session identity (MATERIAL_GAPS_SPEC A-1). Deliberately
+// payload-free: the pixels and the generation counter live on the document's
+// iris::Texture2D, which the material rows point at, and duplicating a handle
+// to them here would be a second owner of the one thing that must have exactly
+// one. `path` carries the "live://<guid>" reference for anything that wants to
+// show where a bound map came from. The catalog (services/livetextures.h) puts
+// these here and takes them away again.
+struct AssetLiveTexture : public Asset
+{
+    AssetLiveTexture() {
+        type = ModelTypes::LiveTexture;
+        deletable = true;
+    }
+
+    virtual QVariant getValue() override { return value; }
+    virtual void setValue(QVariant val) override { value = val; }
+};
+
 struct AssetMaterial : public Asset
 {
 	AssetMaterial() {

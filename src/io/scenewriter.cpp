@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFile>
 
+#include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/animation/locomotion.h"
@@ -913,6 +914,18 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
         }
 
         if (prop->type == iris::PropertyType::Texture) {
+			// A LIVE TEXTURE IS NEVER WRITTEN (MATERIAL_GAPS_SPEC A-1). Its
+			// guid names pixels this session owns — no file, no store object,
+			// no catalog row — so persisting it would put a reference into the
+			// file that can never resolve again in any session, including this
+			// one after a restart. The map is written as ABSENT, which is a
+			// state the reader already handles perfectly: the material comes
+			// back with no map and its base colour, which is exactly what a
+			// live texture that is gone should look like.
+			if (iris::LiveTextures::isLiveRef(prop->getValue().toString())) {
+				valuesObj[prop->name] = QString();
+				continue;
+			}
 			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
 			auto id = relative
 				? assetGuidForTexturePath(prop->getValue().toString())

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "export/walkers/materialtexturereader.h"
 
 #include "irisgl/document/materials/material.h"
+#include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/core/properties/property.h"
 
@@ -28,8 +29,14 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
         return false;
     };
 
+    // A LIVE TEXTURE IS NOT AN EXPORTABLE DEPENDENCY (MATERIAL_GAPS_SPEC A-1):
+    // its "source" is a session reference, not a file, so an archive or a glTF
+    // that named it would carry a path to nothing. Every walker that asks this
+    // question is asking WHICH FILES TRAVEL WITH THE PROJECT, and the honest
+    // answer for pixels that only exist while the app runs is "none".
     for (auto it = material->textures.constBegin(); it != material->textures.constEnd(); ++it) {
         if (!it.value() || it.value()->source.isEmpty()) continue;
+        if (iris::LiveTextures::isLiveRef(it.value()->source)) continue;
         found.append({ it.key(), it.value()->source });
     }
 
@@ -40,7 +47,7 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
     for (iris::Property *prop : material->properties) {
         if (!prop || prop->type != iris::PropertyType::Texture) continue;
         const QString path = prop->getValue().toString();
-        if (path.isEmpty() || seen(path)) continue;
+        if (path.isEmpty() || seen(path) || iris::LiveTextures::isLiveRef(path)) continue;
         found.append({ prop->name, path });
     }
     return found;
@@ -50,7 +57,9 @@ QString textureSlotSource(iris::Material *material, const char *slot)
 {
     if (!material) return QString();
     auto it = material->textures.constFind(slot);
-    if (it != material->textures.constEnd() && it.value()) return it.value()->source;
+    if (it != material->textures.constEnd() && it.value() &&
+        !iris::LiveTextures::isLiveRef(it.value()->source))
+        return it.value()->source;
     return QString();
 }
 
