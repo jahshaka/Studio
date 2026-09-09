@@ -833,6 +833,167 @@ void pip_survives_a_main_workspace_rebuild() {
 /// The stretch half is the one that matters, and it is measured, not asserted
 /// by inspection: a world-space SQUARE is rendered by a 2:1 camera into a
 /// square view. Constrained, its pixels must be as wide as they are tall.
+/// THE BARS ARE NOT PART OF THE PICTURE (riders lane R2, owner decision
+/// 2026-09-09 — "the Unreal way"): the post chain runs on the inner rectangle
+/// only. Before this, every full-frame quad — tonemap with its bloom
+/// composite, SMAA, every look — processed the bars along with the shot, so a
+/// bright shot bloomed INTO the bars and the looks stage graded them (Old
+/// Movie's vignette rings and scratches over black, Film Grade's tint lifting
+/// them off black). Now every such quad is scissored to the shot and clears
+/// its target black first (ChainHandles::scissorPasses).
+///
+/// Asserted with the worst case the owner reported: HDR + bloom + Old Movie
+/// + Film Grade over a bright emissive scene. Every bar pixel is EXACTLY
+/// (0,0,0); the shot itself is still graded (it differs from the plain
+/// render); and removing the letterbox returns the byte-identical frame it
+/// had before it (with time-independent looks: Old Movie is animated).
+///
+/// "The inner rect is byte-identical to the unrestricted render" is the other
+/// half of the decision and is NOT asserted here — there is no unrestricted
+/// path left to compare against in this binary. It is an A/B against the
+/// pre-change build of this same test (JAH_ENGINE_DUMP=1 writes the frames),
+/// recorded in the lane report.
+void letterbox_post_chain_runs_on_the_shot_only() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("letterbox-post", 128, 128, kBlue);   REQUIRE(v);
+    Scene *s = f.scene("letterbox-post-scene");            REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).wall);
+    // A BRIGHT emitter beside the wall, so bloom has something to bleed.
+    {
+        PbrParams p;
+        p.albedo = Colour(0.1f, 0.1f, 0.1f);
+        p.emissive = Colour(12.0f, 10.0f, 6.0f);
+        const NodeId n = s->createNode();
+        REQUIRE(n && s->attachMesh(n, s->createMesh(enginetest::unitCubeMesh()),
+                                   s->createPbrMaterial(p)));
+        enginetest::setNodeScale(s, n, Vec3(1.2f, 1.2f, 1.2f));
+        enginetest::setNodePosition(s, n, Vec3(0.0f, 0.9f, 0.5f));
+    }
+    pip::aimMain(v);
+
+    auto look = [](LookKind k, float p0, float p1 = 0.0f, float p2 = 0.0f, float p3 = 0.0f,
+                   float p4 = 0.0f, float p5 = 0.0f, float p6 = 0.0f) {
+        LookDesc d; d.kind = k; d.p[0] = p0; d.p[1] = p1; d.p[2] = p2; d.p[3] = p3;
+        d.p[4] = p4; d.p[5] = p5; d.p[6] = p6; return d;
+    };
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.hdr = true;
+    fx.tonemapFixed = true;      // determinism: no wall-clock exposure drift
+    fx.exposure = 0.0f;
+    fx.bloom = true;
+    fx.bloomThreshold = 1.0f;    // low, so the emitter blooms hard
+    fx.smaaPreset = 2;
+    // Old Movie (vignette, scratches, grain) + Film Grade (a warm tint with
+    // its own vignette): the two looks that visibly graded the bars.
+    // (Film Grade's p[4..6] is the TINT — a zero tint multiplies the frame to
+    // black, which is the one way to get this case's bars 'right' for free.)
+    fx.looks = { look(LookKind::OldMovie, 1.0f, 1.0f, 1.0f, 1.0f),
+                 look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f, 1.1f, 1.0f, 0.9f) };
+    v->setPostFx(fx);
+
+    CameraDesc cam;
+    cam.position = Vec3(0.0f, 0.0f, 5.0f);   // pip::aimMain's pose, as a desc
+    cam.constrainAspect = true;
+    cam.aspect = 2.0f;           // a 2:1 shot in a 1:1 view: 64 bar rows
+    v->setCamera(cam);
+    render(e, 4);
+    const std::string errBefore = e->lastError();
+    Image boxed; REQUIRE(v->readPixels(boxed));
+    if (std::getenv("JAH_ENGINE_DUMP")) {
+        FILE *fp = std::fopen("letterbox-post-graded.ppm", "wb");
+        if (fp) {
+            std::fprintf(fp, "P6\n%u %u\n255\n", boxed.width, boxed.height);
+            for (size_t i = 0; i < size_t(boxed.width) * boxed.height; ++i)
+                std::fwrite(&boxed.rgba[i * 4u], 1, 3, fp);
+            std::fclose(fp);
+        }
+    }
+
+    // THE BARS, BY GEOMETRY: a 2:1 shot in a 128x128 view is rows 32..95, so
+    // the bars are rows 0..31 and 96..127 (chain::letterboxRect). Every bar
+    // pixel must be exactly (0,0,0) — not "dark": Old Movie's vignette makes
+    // the shot's own edge rows near-black too, which is why the bars are not
+    // found by looking for black rows.
+    unsigned barRows = 0, worst = 0, litShot = 0;
+    for (unsigned y = 0; y < boxed.height; ++y) {
+        const bool bar = y < 32 || y >= 96;
+        bool exact = true;
+        for (unsigned x = 0; x < boxed.width; ++x) {
+            const Px p = px(boxed, x, y);
+            const int m = std::max(p.r, std::max(p.g, p.b));
+            if (bar) { if (m != 0) exact = false; worst = std::max(worst, unsigned(m)); }
+            else if (y >= 34 && y < 94 && m > 24) ++litShot;
+        }
+        if (bar && exact) ++barRows;
+    }
+    std::printf("    graded letterbox: %u of 64 bar rows exactly black, worst bar channel %u/255, "
+                "%u lit px in the shot\n", barRows, worst, litShot);
+    CHECK_MSG(litShot > 60u * boxed.width / 4u,
+              "the 2:1 shot is drawn inside the letterbox (%u lit px)", litShot);
+    CHECK_MSG(barRows == 64u,
+              "THE BARS ARE PURE BLACK through bloom + Old Movie + Film Grade: %u of 64 bar rows "
+              "exactly black, worst bar channel %u/255 (unrestricted chain: 80)", barRows, worst);
+
+    // ...and the shot is still graded: the same frame with no looks and no
+    // bloom differs inside the rectangle.
+    PostFxDesc plainFx = fx;
+    plainFx.looks.clear();
+    plainFx.bloom = false;
+    v->setPostFx(plainFx);
+    render(e, 4);
+    Image plain; REQUIRE(v->readPixels(plain));
+    unsigned inner = 0;
+    for (unsigned y = 34; y < 94; ++y)
+        for (unsigned x = 0; x < boxed.width; ++x) {
+            const Px a = px(boxed, x, y), b = px(plain, x, y);
+            if (std::abs(a.r - b.r) > 8 || std::abs(a.g - b.g) > 8 || std::abs(a.b - b.b) > 8) ++inner;
+        }
+    CHECK_MSG(inner > 60u * boxed.width / 4u,
+              "the SHOT is graded (the scissor confined the looks, it did not drop them): "
+              "%u of %u inner pixels differ from the ungraded frame", inner, 60u * boxed.width);
+
+    // No letterbox = the frame it always was. Time-independent looks for the
+    // round trip (Old Movie animates on Ogre's time_0_x).
+    PostFxDesc stillFx = fx;
+    stillFx.looks = { look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f, 1.1f, 1.0f, 0.9f),
+                      look(LookKind::Posterize, 0.6f, 6.0f, 1.0f) };
+    // (The A/B evidence frame first: the letterboxed STILL grade, dumped for
+    // the inner-rect comparison against the pre-change build — Old Movie
+    // animates, so the graded frame above cannot be compared byte for byte.)
+    v->setPostFx(stillFx);
+    render(e, 4);
+    if (std::getenv("JAH_ENGINE_DUMP")) {
+        Image still; REQUIRE(v->readPixels(still));
+        FILE *fp = std::fopen("letterbox-post-still.ppm", "wb");
+        if (fp) {
+            std::fprintf(fp, "P6\n%u %u\n255\n", still.width, still.height);
+            for (size_t i = 0; i < size_t(still.width) * still.height; ++i)
+                std::fwrite(&still.rgba[i * 4u], 1, 3, fp);
+            std::fclose(fp);
+        }
+    }
+    cam.constrainAspect = false;
+    v->setCamera(cam);
+    render(e, 4);
+    Image free0; REQUIRE(v->readPixels(free0));
+    cam.constrainAspect = true;
+    v->setCamera(cam);
+    render(e, 4);
+    cam.constrainAspect = false;
+    v->setCamera(cam);
+    render(e, 4);
+    Image free1; REQUIRE(v->readPixels(free1));
+    CHECK_MSG(pixelHash(free0) == pixelHash(free1),
+              "with no letterbox nothing changed: the frame after a letterbox round trip "
+              "is byte-identical to the one before it");
+    CHECK_MSG(e->lastError() == errBefore,
+              "no NEW engine error from the scissored post chain: %s", e->lastError().c_str());
+    v->setPostFx(PostFxDesc());
+    render(e, 2);
+}
+
 /// Unconstrained, the same camera in the same view renders it half as tall as
 /// it is wide — which is exactly the distortion the letterbox exists to
 /// prevent, and the control that proves the test can fail.
@@ -4293,6 +4454,7 @@ int main(int argc, char **argv) {
         { "pip_survives_a_main_workspace_rebuild",  pip_survives_a_main_workspace_rebuild },
         { "letterbox_fits_the_shot_and_bars_the_rest", letterbox_fits_the_shot_and_bars_the_rest },
         { "pip_and_letterbox_over_the_post_chain",   pip_and_letterbox_over_the_post_chain },
+        { "letterbox_post_chain_runs_on_the_shot_only", letterbox_post_chain_runs_on_the_shot_only },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

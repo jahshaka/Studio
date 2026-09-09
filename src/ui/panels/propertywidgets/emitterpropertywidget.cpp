@@ -188,6 +188,12 @@ EmitterPropertyWidget::EmitterPropertyWidget()
         "Alpha-blended particles only. Stochastic transparency, so unsorted smoke stops "
         "showing draw-order artefacts. Resolves cleanly with anti-aliasing on; without "
         "it the dither is visible."));
+    distortion = addCheckBox("Distortion", false);
+    distortion->setToolTip(QStringLiteral(
+        "The particles draw no colour: they WARP what is behind them — heat haze, shock "
+        "rings, exhaust. The particle image is read as the displacement map (a tangent-space "
+        "normal map is the right kind) and each particle's colour alpha is its strength. "
+        "Needs the world's Distortion post effect on to show at all."));
 
     // ---- wiring -----------------------------------------------------------
     // Every scalar row goes through setPropertyValue, which is the exact call
@@ -254,6 +260,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
     bindBool(dissipateInv,   "dissipateInv");
     bindBool(useAdditive,    "blendMode");
     bindBool(alphaHash,      "alphaHash");
+    bindBool(distortion,     "distortion");
 
     connect(colourRamp, &ParticleColourRampWidget::changed,
             this, &EmitterPropertyWidget::pushColourKeys);
@@ -359,6 +366,7 @@ void EmitterPropertyWidget::refresh()
     dissipateInv->setValue(ps->dissipateInv);
     useAdditive->setValue(ps->useAdditive);
     alphaHash->setValue(ps->alphaHash);
+    distortion->setValue(ps->distortion);
 
     QVector<ParticleRampStop> colourStops;
     for (const iris::ParticleColourKey &k : ps->colourKeys) colourStops.append(toStop(k));

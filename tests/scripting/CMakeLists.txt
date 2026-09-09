@@ -157,6 +157,19 @@ add_script_e2e(particles e2e_particles.js)
 # active one, tracks per property, keys (write/overwrite/read/remove), the
 # document evaluation (seek poses the node between the keys), looping, and the
 # save/close/open round trip. Every verb is a document verb -> --headless.
+# Riders lane R4: app.memoryStats / app.reclaimMemory / app.profiling. The
+# NULL render system has a VaoManager and scene managers, and the document's
+# nodes live in the engine's staging manager, so the verbs are real headless
+# (shape + counts; magnitudes are the box's, never pinned) -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-memory)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.memory
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_memory.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.memory PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    TIMEOUT 300)
+
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-anim)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.anim

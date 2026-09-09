@@ -397,6 +397,125 @@ int main()
         render(engine.get(), 2);
     }
 
+    // ---- 7. DISTORTION ON A BURST (POST_LOOKS_SPEC 4b, riders lane R3) -----
+    // The same field, written by PARTICLES. A distortion emitter is a PFX2 def
+    // in kDistortionParticleRenderQueue (221, PARTICLE_SYSTEM mode, inside the
+    // distortion pass's [220, 222) range) carrying kDistortionBit and the
+    // displacement datablock; an ordinary emitter is what it always was.
+    //
+    // What is asserted, in order: with the pass OFF a distortion burst draws
+    // NOTHING (byte-identical to the wall alone — it is invisible to every
+    // other pass); with the pass ON it warps the checker where the particles
+    // are and contributes no colour; the SAME emitter flipped back to ordinary
+    // draws its sprite as colour and is NOT in the field (its frame is
+    // byte-identical with and without the pass). The particles are frozen with
+    // the scene clock for every A/B, so two frames compare the same quads.
+    {
+        s->setNodeVisible(emitter, false);          // the quad is section 1-6's
+        // Headless frames are ~1 ms of wall clock; a fixed step spawns a cloud in
+        // 30 frames. (setParticleTimeScale CANCELS the fixed step — so the freeze
+        // below is a time scale of 0, and the step is re-armed after it.)
+        engine->setFixedFrameDelta(1.0f / 30.0f);
+
+        ParticleSystemDesc pd;
+        pd.quota = 512;
+        pd.texture = map;                            // the ramp IS the displacement map
+        pd.distortion = true;
+        pd.additive = true;                          // ignored by a distortion emitter, on purpose
+        ParticleEmitterDesc em;
+        em.shape = ParticleEmitterShape::Box;
+        // A 0.8 box of 0.5 quads: the cloud spans ~1.3 units, ~65 px of the
+        // 128 px frame at z = -1, so the locality box below has a far field
+        // to measure against (a 1.6 box of 0.8 quads covered the whole frame:
+        // measured 3063 px changed inside the box, 1895 outside).
+        em.extents = Vec3(0.8f, 0.8f, 0.05f);
+        em.rate = 400.0f;
+        em.velocityMin = em.velocityMax = 0.0f;      // a standing cloud, not a fountain
+        em.ttlMin = em.ttlMax = 30.0f;
+        em.sizeWidth = em.sizeHeight = 0.5f;
+        pd.emitters.push_back(em);
+
+        const NodeId burst = s->createNode();
+        REQUIRE(burst);
+        enginetest::setNodePosition(s, burst, Vec3(0.0f, 0.0f, -1.0f));
+        REQUIRE(s->setParticleSystem(burst, pd));
+
+        // Fill the box (30 frames at 400/s = a few hundred quads), then freeze.
+        view->setPostFx(base);
+        render(engine.get(), 30);
+        engine->setParticleTimeScale(0.0f);
+        render(engine.get(), 2);
+        Image offBurst;
+        REQUIRE(view->readPixels(offBurst));
+        CHECK_MSG(s->particleCount(burst) > 100u,
+                  "the burst is live (%u particles)", s->particleCount(burst));
+        CHECK_MSG(pixelDiff(wallOnly, offBurst) == 0,
+                  "a distortion BURST draws nothing without the pass: %u px differ from the wall",
+                  pixelDiff(wallOnly, offBurst));
+
+        PostFxDesc d = base;
+        d.distortion = true;
+        d.distortionStrength = 1.0f;
+        view->setPostFx(d);
+        render(engine.get(), 4);
+        Image warpedBurst;
+        REQUIRE(view->readPixels(warpedBurst));
+        writePpm(warpedBurst, "distortion-burst.ppm");
+        {
+            const unsigned moved = pixelDiff(wallOnly, warpedBurst);
+            CHECK_MSG(moved > (warpedBurst.width * warpedBurst.height) / 50,
+                      "distortion_on_a_burst: the particles WARP the checker behind them "
+                      "(%u of %u pixels moved)", moved, warpedBurst.width * warpedBurst.height);
+            unsigned inside = 0, outside = 0;
+            diffInsideOutside(wallOnly, warpedBurst, 20, 20, 108, 108, inside, outside);
+            CHECK_MSG(inside > outside * 4,
+                      "...and only where the cloud is: %u px changed inside its box, %u outside",
+                      inside, outside);
+            double wr, wg, wb, br, bg, bb;
+            meanColour(wallOnly, wr, wg, wb);
+            meanColour(warpedBurst, br, bg, bb);
+            CHECK_MSG(std::abs(bb - wb) < 0.02 && std::abs(br - wr) < 0.05 && std::abs(bg - wg) < 0.05,
+                      "the burst draws NO colour of its own (mean %.3f/%.3f/%.3f -> %.3f/%.3f/%.3f)",
+                      wr, wg, wb, br, bg, bb);
+        }
+
+        // THE ORDINARY EMITTER DOES NOT. Same node, same map, distortion off:
+        // the topology key changes ("|d"), the def is rebuilt as a plain
+        // alpha-blended sprite emitter at RQ 15, and the field never sees it.
+        pd.distortion = false;
+        pd.additive = false;
+        pd.alphaHash = false;
+        REQUIRE(s->setParticleSystem(burst, pd));
+        engine->setFixedFrameDelta(1.0f / 30.0f);
+        render(engine.get(), 30);
+        engine->setParticleTimeScale(0.0f);
+        render(engine.get(), 2);
+        Image ordinaryOn;
+        REQUIRE(view->readPixels(ordinaryOn));
+        view->setPostFx(base);
+        render(engine.get(), 4);
+        Image ordinaryOff;
+        REQUIRE(view->readPixels(ordinaryOff));
+        writePpm(ordinaryOff, "distortion-burst-ordinary.ppm");
+        {
+            double wr, wg, wb, orr, og, ob;
+            meanColour(wallOnly, wr, wg, wb);
+            meanColour(ordinaryOff, orr, og, ob);
+            CHECK_MSG(pixelDiff(wallOnly, ordinaryOff) > (ordinaryOff.width * ordinaryOff.height) / 50 &&
+                      ob > wb + 0.02,
+                      "an ORDINARY emitter draws its sprite as colour (mean blue %.3f -> %.3f)",
+                      wb, ob);
+            CHECK_MSG(pixelDiff(ordinaryOn, ordinaryOff) == 0,
+                      "...and is NOT in the field: byte-identical with and without the pass "
+                      "(%u px differ)", pixelDiff(ordinaryOn, ordinaryOff));
+        }
+        engine->setParticleTimeScale(1.0f);           // wall clock, scale 1, fixed step gone
+        CHECK(s->removeParticleSystem(burst), "the burst is removed");
+        s->removeNode(burst);
+        s->setNodeVisible(emitter, true);
+        render(engine.get(), 2);
+    }
+
     std::printf("%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
 }

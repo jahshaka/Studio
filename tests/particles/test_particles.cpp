@@ -155,6 +155,14 @@ int main(int argc, char **argv)
               "the document's +Y emission convention survives (no adapter node, unlike lights)");
         CHECK(d.quota == 700u, "maxParticles -> the definition quota (finally enforced)");
         CHECK(d.additive, "useAdditive -> additive blending");
+        CHECK(!d.distortion, "an ordinary emitter is not a distortion emitter");
+        {
+            // POST_LOOKS 4b: the flag crosses the boundary as a topology bit.
+            ps->distortion = true;
+            const ParticleSystemDesc dd = mapper.toParticleDesc(ps.data(), 0);
+            CHECK(dd.distortion, "distortion -> ParticleSystemDesc::distortion");
+            ps->distortion = false;
+        }
 
         // Gravity is the legacy constant, so a scene authored against the old
         // slider falls at the same rate.

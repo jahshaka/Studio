@@ -106,10 +106,15 @@ EngineHost::~EngineHost()
     shutdown();
 }
 
+namespace { bool sProfilingRequested = false; }
+
+void EngineHost::setProfilingRequested(bool on) { sProfilingRequested = on; }
+
 EngineConfig EngineHost::resolveConfig()
 {
     EngineConfig cfg;
     cfg.backend = Backend::Vulkan;
+    cfg.profile = sProfilingRequested;
 
     const QByteArray envPlugins = qgetenv("JAHSHAKA_OGRE_PLUGINS");
     const QByteArray envMedia   = qgetenv("JAHSHAKA_OGRE_MEDIA");

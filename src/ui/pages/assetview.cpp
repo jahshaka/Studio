@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/qtinterop.h"
+#include "bridge/enginehost.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
 #include "ui/pages/headlessassetviewer.h"
@@ -1652,6 +1653,10 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 		auto *runner = importRunner;
 		importRunner = nullptr;
 		if (runner) runner->deleteLater();
+		// R4: an import builds every model's node tree in the staging manager
+		// and tears the transient ones down again — shrink the pools to what
+		// survived (Engine::reclaimMemory logs the before/after).
+		if (auto eng = EngineHost::instance().engine()) eng->reclaimMemory();
 
 		if (cancelled) {
 			Toast *t = new Toast(this);

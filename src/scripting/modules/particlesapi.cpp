@@ -44,9 +44,13 @@ QVector<VerbInfo> ParticlesApi::verbs() const
           "bloom on in the view's post chain.",
           Needs::Document },
         { "describe", "particles.describe(id) -> {rate, velocity, lifetime, size, shape, "
-                      "orientation, quota, additive, colourKeys, scaleKeys, ...}",
+                      "orientation, quota, additive, distortion, colourKeys, scaleKeys, ...}",
           "The emitter's resolved authoring state, including the ramps that node.properties "
-          "cannot carry. Read-only.",
+          "cannot carry. Read-only. `distortion` is the DISTORTION EMITTER flag "
+          "(node.setProperty(id, 'distortion', true)): the particles draw no colour and warp "
+          "what is behind them through the world's distortion post effect (world.set "
+          "distortion on), reading the emitter's image as the displacement map and each "
+          "particle's colour alpha as its strength — heat haze, shock rings, exhaust.",
           Needs::Document },
         { "colourKeys", "particles.colourKeys(id) -> [{time, r, g, b, a}]",
           "The colour-over-life ramp, in ascending time. Empty means no ramp.",
@@ -159,6 +163,7 @@ QVariantMap ParticlesApi::describe(const QString &id)
     m["randomRotation"] = ps->randomRotation;
     m["additive"] = ps->useAdditive;
     m["alphaHash"] = ps->alphaHash;
+    m["distortion"] = ps->distortion;
     m["dissipate"] = ps->dissipate;
     m["dissipateInv"] = ps->dissipateInv;
     m["burstDuration"] = ps->burstDuration;

@@ -1454,6 +1454,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->burstRepeatDelay = (float) nodeObj["burstRepeatDelay"].toDouble(0.0);
     particleNode->startDelay       = (float) nodeObj["startDelay"].toDouble(0.0);
     particleNode->alphaHash        = nodeObj["alphaHash"].toBool(true);
+    particleNode->distortion       = nodeObj["distortion"].toBool(false);
     if (nodeObj.contains("extents"))
         particleNode->extents = readVector3(nodeObj["extents"].toObject());
     if (nodeObj.contains("innerExtents"))
