@@ -1000,7 +1000,7 @@ add_test(NAME scripting.e2e.ogre_samples
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_samples.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.ogre_samples PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 120)
 jah_no_display(scripting.e2e.ogre_samples)
@@ -1021,6 +1021,6 @@ add_test(NAME scripting.e2e.detail_layers
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.detail_layers PROPERTIES
-    ENVIRONMENT "HOME=${_home}"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 240)
