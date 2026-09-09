@@ -22,11 +22,15 @@
 //
 // THE FIX, and what this suite exists to prove about it: the field's DEPTH
 // atlas already stores, per probe and per octahedral direction, how far the
-// generation ray travelled; a ray that hit nothing left the march at its limit
-// and its stored distance is `1.414213562 * dot( abs( dir ), numProbes )`. One
-// extra depth tap per cage probe along the surface normal therefore recovers a
-// sky-visibility fraction, and ambient times that fraction is the term the cone
-// diffuse used to add (media/Hlms/Jahshaka/JahIfd_piece_ps.any). No Ogre patch.
+// generation rays travelled — as a cosine-lobe MEAN and MEAN-SQUARE over the
+// hemisphere (upstream's Integration/Depth job convolves it; the first build
+// of this fix believed a texel was one ray, and its single tap over-brightened
+// a wall foot by +17 points for exactly that reason). Rays that hit nothing
+// left the march at its limit, so the escape distance is known per direction,
+// and a Chebyshev test at that distance (the DDGI paper's own visibility test
+// shape) turns the moment pair into an escape fraction per cage probe, and
+// ambient times the cage-weighted fraction is the term the cone diffuse used
+// to add (media/Hlms/Jahshaka/JahIfd_piece_ps.any). No Ogre patch.
 //
 // THE TWO ASSERTIONS THAT MATTER, and they are a PAIR — either alone would pass
 // for a wrong fix:
@@ -39,9 +43,11 @@
 //     separates a visibility-weighted term from a blanket ambient — ungating
 //     PBS ambient would flood a sealed room with light that has no way in.
 //
-// Plus the honesty cases: the bounce must survive the fix (case 2) and the
-// single-tap proxy's known over-brightening in a corner is MEASURED and printed
-// rather than assumed away (case 4).
+// Plus: the bounce must survive the fix (case 3), and THE CORNER (case 4) —
+// a floor patch at the foot of a wall must be darkened by the proxy the way
+// the cone reference darkens it, within a measured tolerance: this is the
+// assertion the multi-tap build (rayon2 S1) exists for, and the one the
+// single-tap build could only print.
 //
 // Its own binary, like every GI suite here: the field and the voxel lighting
 // bind PROCESS-WIDE to HlmsPbs, so these scenes must not share a process with
@@ -269,27 +275,36 @@ int main()
         CHECK(recovery > 0.90f && recovery < 1.10f,
               "RECOVERY: the fix lands within 10% of the ambient DDGI replaced");
 
-        // ---- CASE 4: THE CORNER, measured and REPORTED rather than assumed
-        //      away. The proxy takes ONE direction per probe — the surface
-        //      normal — so a floor patch at the foot of a wall, whose normal
-        //      escapes to the sky while half its hemisphere is bricked up,
-        //      gets the SAME visibility as open floor. The cone reference
-        //      darkens it; the proxy does not. This prints the size of that.
+        // ---- CASE 4: THE CORNER — the multi-tap gate. A floor patch at the
+        //      foot of the wall has half its hemisphere bricked up. The cone
+        //      reference darkens it (measured above: refCorner / refOpen); the
+        //      proxy must darken it too, and by about as much. Both are stated
+        //      as the corner's fraction of open floor, technique by technique,
+        //      so the assertion compares SHAPES and not absolute brightness
+        //      (the recovery assertion above already pins that).
+        //
+        //      The tolerance is measured, not wished (build record, rayon2 S1):
+        //      the reference darkens this corner by 14 points, the shipped
+        //      proxy lands 3.5 points below the reference, the old binary
+        //      single tap sat 14 points ABOVE it, and an identical rebuild is
+        //      stable to 0/255 — so 8 points is more than twice the measured
+        //      error and still rejects the old behaviour.
+        const float refCornerFrac = lum(refCorner) / lum(refOpen);
+        const float fixCornerFrac = lum(fixCorner) / lum(fixOpen);
         const float cornerRecovery = lum(fixCorner) / lum(refCorner);
-        std::printf("   CORNER: %.1f%% of the reference against %.1f%% on open floor — "
-                    "the single-tap proxy over-brightens a half-blocked hemisphere by "
-                    "%+.1f points\n",
-                    cornerRecovery * 100.0f, recovery * 100.0f,
-                    (cornerRecovery - recovery) * 100.0f);
-        CHECK(cornerRecovery - recovery < 0.40f,
-              "the corner over-brighten stays under 40 points (the single-tap ceiling; "
-              "more taps per probe is the recorded follow-up)");
-        // The proxy CANNOT be darkening the corner today, and saying so out
-        // loud is the point: if a later change starts darkening it, this line
-        // is what tells us the follow-up landed.
-        CHECK(std::fabs(lum(fixCorner) - lum(fixOpen)) < 0.01f,
-              "FENCE: the single-tap proxy gives a wall corner the same sky visibility as "
-              "open floor (it looks along the normal only)");
+        std::printf("   CORNER: the reference lights the wall foot at %.1f%% of open floor, "
+                    "the proxy at %.1f%% (%+.1f points); corner recovery %.1f%% against "
+                    "%.1f%% on open floor\n",
+                    refCornerFrac * 100.0f, fixCornerFrac * 100.0f,
+                    (fixCornerFrac - refCornerFrac) * 100.0f,
+                    cornerRecovery * 100.0f, recovery * 100.0f);
+        const float kCornerTolerancePoints = 8.0f;
+        CHECK(fixCornerFrac < 0.95f,
+              "the proxy DARKENS the wall foot against open floor (the single-tap build "
+              "could not — it looked along the normal only)");
+        CHECK(std::fabs(fixCornerFrac - refCornerFrac) * 100.0f < kCornerTolerancePoints,
+              "CORNER: the proxy's wall-foot darkening lands within the measured tolerance "
+              "of the cone reference's");
 
         CHECK(lum(fixOpen) - lum(gapOpen) > 0.01f, "the dial moves the picture");
 
