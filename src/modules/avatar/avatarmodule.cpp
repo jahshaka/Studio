@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "services/assetservice.h"
 #include "services/projectassets.h"
+
+#include <QSet>
 #include "services/services.h"
 #include "scripting/scriptengine.h"
 
@@ -114,6 +116,14 @@ void AvatarModule::registerApi(ScriptEngine &engine)
         auto *api = mApi;
         host.services->assets->onPinChanged(
             [api](const QString &assetGuid) { api->onAssetPinChanged(assetGuid); });
+    }
+    // A SCENE CAN BE STALE THE MOMENT IT LOADS: an instance records the
+    // definition version it last resolved, and a scene saved before a module
+    // save comes back naming an older one. The pin signal above covers "the
+    // asset changed while the scene was open"; this covers the other end.
+    if (host.services) {
+        auto *api = mApi;
+        host.services->onSceneOpened([api]() { api->onSceneOpened(); });
     }
     engine.addModule(mApi);
 }

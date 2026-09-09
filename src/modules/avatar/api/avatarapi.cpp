@@ -58,36 +58,8 @@ AvatarApi::AvatarApi(ScriptHost &host, avatar::AvatarPreviewModel *model, QObjec
 QVector<VerbInfo> AvatarApi::verbs() const
 {
     return {
-        // RETIRED FROM THE UI (AVATAR_ASSET_SPEC §4 D7): the page's Load…
-        // became Import Avatar…, and the left column lists LIBRARY AND PROJECT
-        // AVATARS instead of a session file list. These three survive as the
-        // engine-free INSPECTION path the preview suite drives (a rig on
-        // screen with no library, no database and no project) and as what
-        // `avatar.open` calls underneath. They are not the way to get an
-        // avatar into Jahshaka — avatar.importAvatar is.
-        { "loadPreview", "avatar.loadPreview(path) -> {name, file, bones, meshes, vertices, influences, height, sourceHeight, normalized, normalizeFactor, roomScale, ceilingHeight, clips:[{name, rawName, length}]}",
-          "INSPECTION ONLY. Loads a rigged model file into the Avatar page's preview — no library "
-          "row, no project pin, no database write, no undo command. To bring a character INTO "
-          "the library use avatar.importAvatar (which imports through the one pipeline and mints "
-          "the avatar asset); to edit one already there use avatar.open. Embedded textures are "
-          "extracted to a per-session scratch dir. Replaces whatever was loaded. HEIGHT: the "
-          "world is metres, and an FBX file's own unit declaration is honoured at import — but a "
-          "package whose declaration is WRONG (the Dreyar download says centimetres and is "
-          "authored in millimetres: 17.25 m) is normalized here. A subject measuring outside "
-          "0.5..3.0 m is scaled to 1.75 m, its rig, mesh and clips together, and the readback "
-          "reports it. Anything inside the band is left EXACTLY as authored. "
-          "avatar.setCharacterHeight overrides.",
-          Needs::Document },
-        { "history", "avatar.history() -> [{file, name, loaded}]",
-          "INSPECTION ONLY: the files loadPreview opened this session. Session-local, never "
-          "persisted, and no longer what the page's left column shows — that is avatar.library.",
-          Needs::Document },
-        { "forget", "avatar.forget(path) -> bool",
-          "Drops a file from the loadPreview session list. Clears the preview when it is the "
-          "loaded one. Deletes nothing on disk and nothing in the library.",
-          Needs::Document },
         { "setCharacterHeight", "avatar.setCharacterHeight(metres) -> {height, sourceHeight, normalized, normalizeFactor, ...}",
-          "Scales the loaded preview subject so it measures `metres` tall, overriding the automatic normalization loadPreview applied. A value of 0 (or negative) RESETS to automatic — the rule is re-run against the height the FILE imported at, not against the size a previous override left, so resetting a 2.4 m override on a 17.25 m file really does return it to 1.75 m (and a file that was plausible to begin with returns to its authored size). This is the escape hatch for a character that really is 2.4 m of ogre, and for a package the automatic rule cannot judge. Scales the SUBJECT — the rig, the mesh and every clip that plays on it move together — never the room. Returns the same map avatar.preview does.",
+          "Scales the loaded preview subject so it measures `metres` tall, overriding the automatic normalization the load applied. A value of 0 (or negative) RESETS to automatic — the rule is re-run against the height the FILE imported at, not against the size a previous override left, so resetting a 2.4 m override on a 17.25 m file really does return it to 1.75 m (and a file that was plausible to begin with returns to its authored size). This is the escape hatch for a character that really is 2.4 m of ogre, and for a package the automatic rule cannot judge. Scales the SUBJECT — the rig, the mesh and every clip that plays on it move together — never the room. Returns the same map avatar.preview does.",
           Needs::Document },
         { "loadAnimation", "avatar.loadAnimation(pathOrAssetGuid, {name}) -> {file, name, added, clips:[...], match:{channels, boneChannels, matched}}",
           "Loads a SEPARATE animation file onto the character in the preview and appends its clips "
@@ -99,9 +71,13 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "is by scene-node name, so a foreign clip would load and move nothing): the message "
           "names the bones that do not exist on the loaded rig. "
           "WITH AN AVATAR OPEN (avatar.open) it also becomes an ASSET edit: the file is imported "
-          "through the ONE import pipeline, pinned into the project, and added to the open "
-          "definition's clip list — so it survives a reopen, rides an archive and reaches the "
-          "web export, which a loose file reference never does. `avatar.save` commits it.",
+          "through the ONE import pipeline, pinned into the project when there is one, and added "
+          "to the open definition's clip list — so it survives a reopen, rides an archive and "
+          "reaches the web export, which a loose file reference never does. `avatar.save` "
+          "commits it. Pass {asset: false} to LOOK without keeping: the clip is played in the "
+          "preview and nothing is imported. That is the route for a shape the import pipeline "
+          "cannot take — today an animation-only .glb (zero meshes; the same export as .dae or "
+          ".fbx imports fine) — and it is explicit so the difference is never a silent fallback.",
           Needs::Document },
         { "clearPreview", "avatar.clearPreview() -> bool",
           "Removes the previewed model and deletes its scratch extract dir.",
@@ -350,12 +326,14 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "avatar is made FROM a model, the model stays a model. NOT undoable — asset "
           "mutations never are (SCRIPTING_SPEC \u00a71.6.5).",
           Needs::Document },
-        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name}) -> {asset, avatar, name}",
-          "Imports a rigged model file through the ONE import pipeline and mints an avatar "
-          "asset from it, in one call — the module's 'Import Avatar…'. `asset` is the model "
-          "Object's guid, `avatar` the new avatar's. scope 'project' also pins it into the "
-          "open project. A file with no skeleton is imported (it is a perfectly good model) "
-          "and the AVATAR is refused, so nothing is lost either way. NOT undoable.",
+        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name}) -> {asset, avatar, name, open}",
+          "THE way a character enters Jahshaka (\u00a74 D7: every load is an import — "
+          "avatar.loadPreview is retired). Imports a rigged model file through the ONE import "
+          "pipeline, mints an avatar asset from it AND OPENS IT for editing, in one call — the "
+          "module's 'Import Avatar…'. `asset` is the model Object's guid, `avatar` the new "
+          "avatar's, `open` what avatar.asset would report. scope 'project' also pins it into "
+          "the open project. A file with no skeleton is imported (it is a perfectly good model) "
+          "and only the AVATAR is refused, so nothing is lost either way. NOT undoable.",
           Needs::Document },
         { "open", "avatar.open(guid, {scope}) -> {guid, scope, version, name, dirty, definition}",
           "Opens an avatar asset for editing at a SCOPE: 'library' reads the library's current "
@@ -472,19 +450,12 @@ QVariantMap AvatarApi::previewState() const
     return out;
 }
 
-QVariant AvatarApi::loadPreview(const QString &path)
-{
-    if (!mModel) { fail("avatar: not available in this session"); return QVariant(); }
-    if (path.trimmed().isEmpty()) { fail("avatar.loadPreview: a file path is required"); return QVariant(); }
-    QString error;
-    if (!mModel->load(path, &error)) { fail(QStringLiteral("avatar.loadPreview: %1").arg(error)); return QVariant(); }
-    notifySubjectChanged();
-    return previewState();
-}
-
 bool AvatarApi::record(const QString &message)
 {
     mLastError = message;
+    // A shell-driven call (a drawer menu row, a scene open) must not leave a
+    // pending JS exception behind for the next script to trip over.
+    if (mSilent) return false;
     return fail(message);
 }
 
@@ -508,13 +479,22 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
         record("avatar.loadAnimation: a file path or an asset guid is required");
         return QVariant();
     }
-    static const QStringList known = { "name" };
+    static const QStringList known = { "name", "asset" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
-            record(QStringLiteral("avatar.loadAnimation: unknown option '%1' (known: name)")
-                       .arg(it.key()));
+            record(QStringLiteral("avatar.loadAnimation: unknown option '%1' (known: %2)")
+                       .arg(it.key(), known.join(QStringLiteral(", "))));
             return QVariant();
         }
+    // `asset: false` = LOOK, do not keep. The default is to keep: a clip that
+    // is not an asset cannot survive a reopen, cannot ride an archive and
+    // cannot reach the web export, so "add this animation to my avatar" has to
+    // mean the library. But INSPECTING a file is a real thing to want — and it
+    // is the only route for a shape the import pipeline cannot take, which
+    // today is an animation-only .glb (zero meshes: `MeshImporter` refuses it,
+    // while the same export as .dae or .fbx imports fine). Explicit, so the
+    // difference is a decision in the caller rather than a silent fallback.
+    const bool asAsset = options.value(QStringLiteral("asset"), true).toBool();
 
     // WITH AN AVATAR OPEN this is an ASSET edit, so the clip becomes a real
     // project asset before it is previewed: a definition entry that named a
@@ -523,14 +503,22 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
     // reasons avatar.loadClip is an asset route and not a file reference).
     QString path = pathOrAssetGuid;
     QString clipAssetGuid;
-    if (mOpen.isOpen()) {
+    if (mOpen.isOpen() && asAsset) {
         clipAssetGuid = resolveClipAsset("avatar.loadAnimation", pathOrAssetGuid, &path);
         if (clipAssetGuid.isEmpty()) return QVariant();
     }
 
+    // Same rule: a clip resolved through the CAS is named after its sha256,
+    // so the clips it contributes take the CATALOG ROW's base name.
+    QString clipDisplayName;
+    if (!clipAssetGuid.isEmpty() && host.db) {
+        const QString rowName = host.db->fetchAsset(clipAssetGuid).name;
+        if (!rowName.isEmpty()) clipDisplayName = QFileInfo(rowName).completeBaseName();
+    }
+
     QString error;
     avatar::ClipLoadReport report;
-    if (!mModel->loadAnimation(path, &error, &report)) {
+    if (!mModel->loadAnimation(path, &error, &report, clipDisplayName)) {
         record(QStringLiteral("avatar.loadAnimation: %1").arg(error));
         return QVariant();
     }
@@ -568,27 +556,6 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
                                 { "boneChannels", report.boneChannels },
                                 { "matched", report.matched } };
     return out;
-}
-
-QVariantList AvatarApi::history()
-{
-    QVariantList out;
-    if (!mModel) { fail("avatar: not available in this session"); return out; }
-    const QString loaded = mModel->filePath();
-    for (const QString &file : mModel->history())
-        out.append(QVariantMap{ { "file", file },
-                                { "name", QFileInfo(file).fileName() },
-                                { "loaded", file == loaded } });
-    return out;
-}
-
-bool AvatarApi::forget(const QString &path)
-{
-    if (!mModel) return fail("avatar: not available in this session");
-    if (!mModel->forget(path))
-        return fail(QStringLiteral("avatar.forget: '%1' is not in the session list").arg(path));
-    notifySubjectChanged();
-    return true;
 }
 
 bool AvatarApi::setRootMotion(bool on)
@@ -1169,10 +1136,16 @@ QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAsset
                                     QString *absolutePathOut)
 {
     const QString v = QString::fromLatin1(verb);
-    if (!host.db || !host.services || !host.services->assets || !host.project) {
+    if (!host.db || !host.services || !host.services->assets) {
         record(QStringLiteral("%1: not available in this session").arg(v));
         return QString();
     }
+    // A PROJECT IS NOT REQUIRED. Importing a clip is a LIBRARY operation;
+    // pinning it is a project one, and with no project open there is simply
+    // nothing to pin. Requiring one here meant the Avatar module could not
+    // add a clip to a LIBRARY avatar — the exact edit the module exists for —
+    // until the user happened to have a project open.
+    const bool hasProject = host.project && !host.project->getProjectGuid().isEmpty();
     if (pathOrAssetGuid.trimmed().isEmpty()) {
         record(QStringLiteral("%1: a file path or an asset guid is required").arg(v));
         return QString();
@@ -1209,17 +1182,28 @@ QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAsset
         guid = imported.objectGuid;
     }
 
-    // THE PIN — the whole reason this verb imports at all. Idempotent.
-    const auto pinned = ProjectAssets::addToProject(guid, host.db, host.project,
-                                                    ProjectAssets::AddKind::Direct);
-    if (!pinned.ok()) {
-        record(QStringLiteral("%1: '%2' could not be pinned to the project: %3")
-                   .arg(v, guid, pinned.error));
-        return QString();
+    // THE PIN, when there is a project to pin into — the whole reason this
+    // verb imports at all: the scene file stores a clip as {source, name}, and
+    // a source that is a path on the author's disk resolves to nothing after
+    // the file moves, is not in an archive walk, and never reaches the web
+    // export. Idempotent.
+    if (hasProject) {
+        const auto pinned = ProjectAssets::addToProject(guid, host.db, host.project,
+                                                        ProjectAssets::AddKind::Direct);
+        if (!pinned.ok()) {
+            record(QStringLiteral("%1: '%2' could not be pinned to the project: %3")
+                       .arg(v, guid, pinned.error));
+            return QString();
+        }
     }
 
-    const QString path = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                                 host.project->getProjectGuid(), guid);
+    // Pin-first when there is a pin, library source otherwise — the same
+    // resolution order every other consumer of a stored asset uses.
+    const QString path =
+        hasProject ? AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                             host.project->getProjectGuid(), guid)
+                   : AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(),
+                                             guid);
     if (path.isEmpty() || !QFileInfo::exists(path)) {
         record(QStringLiteral("%1: the asset '%2' has no stored bytes to read").arg(v, guid));
         return QString();
@@ -2191,6 +2175,13 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     }
     out["avatar"] = avatarGuid;
     out["name"] = host.db->fetchAsset(avatarGuid).name;
+    // AND OPENS IT (§4 D7-A: "pipeline import -> Avatar asset -> open").
+    // Importing is how you START working on a character, so one call leaves
+    // the module editing it — the page's Import Avatar… is exactly this verb
+    // and nothing more.
+    const QVariantMap opened =
+        open(avatarGuid, { { QStringLiteral("scope"), AvatarAssets::scopeName(scope) } });
+    if (!opened.isEmpty()) out["open"] = opened;
     notifyChanged();
     return out;
 }
@@ -2247,7 +2238,12 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
                                           loaded.definition.modelAsset);
         if (!modelPath.isEmpty() && QFileInfo::exists(modelPath)) {
             QString loadError;
-            if (!mModel->load(modelPath, &loadError))
+            // THE ROW'S NAME, not the file's: a store object is named after
+            // its sha256, so the subject (and every junk-named clip in it)
+            // would otherwise be called "c826b4bf…".
+            if (!mModel->load(modelPath, &loadError,
+                              loaded.definition.name.isEmpty() ? loaded.name
+                                                               : loaded.definition.name))
                 record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
                                       "previewed: %2").arg(loaded.name, loadError));
         }
@@ -2577,5 +2573,26 @@ void AvatarApi::onAssetPinChanged(const QString &assetGuid)
     // Only avatar rows: the announcement is generic (every pin move fires it),
     // and re-resolving instances for a texture's pin would be pure work.
     if (!AvatarAssets::isAvatarRow(assetGuid, host.db)) return;
+    // No scene, no instances — and no reason to record a refusal for a pin
+    // move that happened on the Assets page with no world open.
+    if (!host.services || !host.services->sceneEdit || !host.services->sceneEdit->scene()) return;
+    SilentScope quiet(this);
     refreshInstances(assetGuid);
+}
+
+void AvatarApi::onSceneOpened()
+{
+    if (!host.services || !host.services->sceneEdit || !host.services->sceneEdit->scene()) return;
+    if (!host.project || host.project->getProjectGuid().isEmpty()) return;
+    SilentScope quiet(this);
+    // Only the instances that are actually BEHIND. Refreshing every avatar on
+    // every open would re-attach clips nothing asked for and cost a definition
+    // parse per instance for no reason.
+    QSet<QString> stale;
+    for (const QVariant &row : instances()) {
+        const QVariantMap instance = row.toMap();
+        if (instance.value(QStringLiteral("stale")).toBool())
+            stale.insert(instance.value(QStringLiteral("asset")).toString());
+    }
+    for (const QString &assetGuid : stale) refreshInstances(assetGuid);
 }

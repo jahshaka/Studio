@@ -339,7 +339,8 @@ QString AvatarPreviewModel::extractDir() const
     return mScratch ? mScratch->path() : QString();
 }
 
-bool AvatarPreviewModel::load(const QString &path, QString *error)
+bool AvatarPreviewModel::load(const QString &path, QString *error,
+                              const QString &displayName)
 {
     const auto fail = [error](const QString &why) {
         if (error) *error = why;
@@ -368,7 +369,7 @@ bool AvatarPreviewModel::load(const QString &path, QString *error)
         return fail(QStringLiteral("could not read %1 (unsupported or corrupt model)").arg(info.fileName()));
 
     mFilePath = info.absoluteFilePath();
-    mName = info.completeBaseName();
+    mName = displayName.isEmpty() ? info.completeBaseName() : displayName;
     // The fragment root keeps the name the file gave it: it may itself be a
     // bone (or a clip channel target), and renaming it would silently unhook
     // the pose lookup, which is name-matched end to end.
@@ -413,7 +414,6 @@ bool AvatarPreviewModel::load(const QString &path, QString *error)
     mActiveClip = mClips.isEmpty() ? -1 : 0;
     if (mActiveClip >= 0) mFragment->setAnimation(mClips[0].anim);
 
-    if (!mHistory.contains(mFilePath)) mHistory.append(mFilePath);
 
     mTime = 0.0f;
     mPlaying = false;
@@ -595,7 +595,8 @@ void AvatarPreviewModel::setRootMotion(bool on)
     rebuildClipAnimations();
 }
 
-bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, ClipLoadReport *report)
+bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, ClipLoadReport *report,
+                                       const QString &displayName)
 {
     const auto fail = [error](const QString &why) {
         if (error) *error = why;
@@ -662,7 +663,7 @@ bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, Clip
     QSet<QString> used;
     for (const auto &clip : mClips) used.insert(clip.display);
 
-    const QString sourceBase = info.completeBaseName();
+    const QString sourceBase = displayName.isEmpty() ? info.completeBaseName() : displayName;
     ClipLoadReport out = toReport(scored[best]);
     for (const auto &s : scored) {
         if (s.ratio < rig::kRigMatchThreshold) continue;   // a foreign clip in a mixed file
@@ -693,16 +694,6 @@ bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, Clip
     // caller (a double-click in the ANIMATIONS list, or avatar.setClip)
     // decides when to switch.
     if (report) *report = out;
-    return true;
-}
-
-bool AvatarPreviewModel::forget(const QString &path)
-{
-    const QString absolute = QFileInfo(path).absoluteFilePath();
-    int removed = mHistory.removeAll(path);
-    if (absolute != path) removed += mHistory.removeAll(absolute);
-    if (removed == 0) return false;
-    if (mFilePath == absolute || mFilePath == path) clear();
     return true;
 }
 

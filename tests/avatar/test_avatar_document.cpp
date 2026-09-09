@@ -590,21 +590,6 @@ int main(int argc, char **argv)
               "X7: toggling back restores the same pose (the clip is rebuilt, not consumed)");
     }
 
-    // ================= X8 — the session list the left column shows ========
-    {
-        avatar::AvatarPreviewModel hist;
-        CHECK(hist.history().isEmpty(), "X8: the session list starts empty");
-        hist.load(kRig);
-        CHECK(hist.history().size() == 1 && hist.history().first() == QFileInfo(kRig).absoluteFilePath(),
-              "X8: a load records the file");
-        hist.load(kRig);
-        CHECK(hist.history().size() == 1, "X8: re-loading the same file does not duplicate the row");
-        CHECK(!hist.forget(kProp), "X8: forgetting a file that is not listed fails");
-        CHECK(hist.forget(kRig), "X8: forget drops the row");
-        CHECK(hist.history().isEmpty() && !hist.isLoaded(),
-              "X8: ... and clears the preview when it was the loaded file");
-    }
-
     // ================= H — HEIGHT NORMALIZATION (the 2026-09-08 defect) ====
     //
     // "Dreyar is massively huge, head touches the ceiling" (owner). Two

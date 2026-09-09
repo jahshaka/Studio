@@ -155,7 +155,7 @@ void AvatarPage::openSelected(const QString &guid, const QString &scope)
     QVariantMap options;
     if (!scope.isEmpty()) options.insert(QStringLiteral("scope"), scope);
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const QVariantMap opened = mApi->open(guid, options);
+    const QVariantMap opened = mApi->quietly([&] { return mApi->open(guid, options); });
     QApplication::restoreOverrideCursor();
     if (opened.isEmpty() && !mApi->lastError().isEmpty())
         QMessageBox::warning(this, tr("Open Avatar"), mApi->lastError());
@@ -204,7 +204,7 @@ void AvatarPage::showLibraryMenu(const QPoint &pos)
         return;
     }
     if (publish && chosen == publish) {
-        const QVariantMap result = mApi->saveToLibrary(guid);
+        const QVariantMap result = mApi->quietly([&] { return mApi->saveToLibrary(guid); });
         if (result.isEmpty() && !mApi->lastError().isEmpty())
             QMessageBox::warning(this, tr("Save to Library"), mApi->lastError());
         refreshFromModel();
@@ -385,14 +385,19 @@ QWidget *AvatarPage::buildRightColumn()
 
         QAction *chosen = menu.exec(mAnimations->viewport()->mapToGlobal(pos));
         if (!chosen) return;
-        if (chosen == loop)
-            mApi->setClipOptions(name, { { QStringLiteral("looping"), !looping } });
-        else if (chosen == root)
-            mApi->setClipOptions(name, { { QStringLiteral("rootMotion"), !rootMotion } });
-        else if (chosen == makeDefault)
-            mApi->setDefaultClip(name);
-        else if (chosen == remove)
-            mApi->removeClip(name);
+        mApi->quietly([&] {
+            if (chosen == loop)
+                mApi->setClipOptions(name, { { QStringLiteral("looping"), !looping } });
+            else if (chosen == root)
+                mApi->setClipOptions(name, { { QStringLiteral("rootMotion"), !rootMotion } });
+            else if (chosen == makeDefault)
+                mApi->setDefaultClip(name);
+            else if (chosen == remove)
+                mApi->removeClip(name);
+            return true;
+        });
+        if (!mApi->lastError().isEmpty())
+            QMessageBox::warning(this, tr("Clip"), mApi->lastError());
         refreshFromModel();
     });
     layout->addWidget(mAnimations, 1);
@@ -433,7 +438,7 @@ void AvatarPage::onImportClicked(bool intoProject)
     QApplication::setOverrideCursor(Qt::WaitCursor);
     QVariantMap options;
     if (intoProject) options.insert(QStringLiteral("scope"), QStringLiteral("project"));
-    const QVariantMap result = mApi->importAvatar(path, options);
+    const QVariantMap result = mApi->quietly([&] { return mApi->importAvatar(path, options); });
     QApplication::restoreOverrideCursor();
 
     const QString avatarGuid = result.value(QStringLiteral("avatar")).toString();
@@ -445,15 +450,14 @@ void AvatarPage::onImportClicked(bool intoProject)
         refreshFromModel();
         return;
     }
-    // Straight into the editor: importing is how you START working on an
-    // avatar, so the new row is opened rather than merely listed.
-    openSelected(avatarGuid, intoProject ? QStringLiteral("project") : QStringLiteral("library"));
+    // The verb already opened it (D7-A) — the page just catches up.
+    refreshFromModel();
 }
 
 void AvatarPage::onSaveClicked()
 {
     if (!mApi) return;
-    const QVariantMap result = mApi->save();
+    const QVariantMap result = mApi->quietly([&] { return mApi->save(); });
     if (result.isEmpty() && !mApi->lastError().isEmpty())
         QMessageBox::warning(this, tr("Save Avatar"), mApi->lastError());
     refreshFromModel();
@@ -477,7 +481,7 @@ void AvatarPage::onLoadAnimationClicked()
     if (path.isEmpty()) return;
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const QVariant result = mApi->loadAnimation(path);
+    const QVariant result = mApi->quietly([&] { return mApi->loadAnimation(path); });
     QApplication::restoreOverrideCursor();
     // A rig mismatch is a REFUSAL, not a silent no-op: the verb throws, and
     // the message names the bones the loaded rig does not have.

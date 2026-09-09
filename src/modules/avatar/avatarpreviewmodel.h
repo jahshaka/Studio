@@ -162,7 +162,17 @@ public:
     // ---- load / clear -----------------------------------------------------
     /// Loads `path` (any model extension assimp reads) as the one preview
     /// subject, replacing whatever was loaded. False + `error` on failure.
-    bool load(const QString &path, QString *error = nullptr);
+    /// `displayName` names the SUBJECT and every junk-named clip in it. It is
+    /// not cosmetic: since the CAS, a stored object's file NAME IS ITS SHA256,
+    /// so a subject loaded from the store and named after its file is called
+    /// "c826b4bf…" and so is every Mixamo clip inside it (they are all
+    /// literally named "mixamo.com", and the display rule falls back to the
+    /// file's base name). Callers that load from the store pass the CATALOG
+    /// ROW's name — the same rule `attachClipsFromFile` follows for its
+    /// refusals. Empty = use the file's base name, which is right for a load
+    /// straight off disk.
+    bool load(const QString &path, QString *error = nullptr,
+              const QString &displayName = QString());
     /// Reads `path` for CLIPS ONLY and appends them to the clip list of the
     /// already-loaded character (the Mixamo workflow: one character file, then
     /// one file per animation). Accepts both shapes an exporter produces — a
@@ -171,8 +181,13 @@ public:
     /// join is by SCENE-NODE NAME, so a clip from a different rig is REFUSED
     /// (false + `error` naming the first unmatched bones) instead of silently
     /// loading a clip that moves nothing.
+    /// `displayName` names the clips this file contributes, for exactly the
+    /// reason `load`'s does: a clip file resolved through the CAS is named
+    /// after its sha256, and every Mixamo animation download is called
+    /// "mixamo.com", so the fallback would name them all after the hash.
     bool loadAnimation(const QString &path, QString *error = nullptr,
-                       ClipLoadReport *report = nullptr);
+                       ClipLoadReport *report = nullptr,
+                       const QString &displayName = QString());
     void clear();
     bool isLoaded() const { return !mFragment.isNull(); }
 
@@ -282,14 +297,6 @@ public:
     /// One segment per bone that has a bone ancestor: count == bones − roots.
     QVector<BoneSegment> boneSegments() const;
 
-    // ---- the session list the page's left column shows --------------------
-    /// Every character file loaded in this session, oldest first. Module-local
-    /// and deliberately not persisted: Part 1's library rows replace it.
-    QStringList history() const { return mHistory; }
-    /// Drops `path` from the session list (the left column's right-click
-    /// Delete). Clears the preview when the dropped file is the loaded one.
-    bool forget(const QString &path);
-
     /// The display name a clip gets: its own, unless it is empty or one of the
     /// exporter's junk names ("mixamo.com", "Take 001", …), in which case the
     /// source file's base name. Public because the docs and the suite pin it.
@@ -352,7 +359,6 @@ private:
 
     // The loaded file's own pose, so a clip switch starts from rest.
 
-    QStringList mHistory;
     bool mRootMotion = false;
 
     int mBoneCount = 0;

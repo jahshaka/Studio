@@ -1013,7 +1013,8 @@ void MainWindow::spawnAvatarAsset(const QString &guid, const iris::Vec3 &positio
         options.insert(QStringLiteral("position"),
                        QVariantMap{ { "x", position.x() }, { "y", position.y() },
                                     { "z", position.z() } });
-    if (api->spawn(guid, options).isEmpty() && !api->lastError().isEmpty())
+    if (api->quietly([&] { return api->spawn(guid, options); }).isEmpty()
+        && !api->lastError().isEmpty())
         QMessageBox::warning(this, tr("Add Avatar to Scene"), api->lastError());
 }
 
@@ -1025,7 +1026,7 @@ void MainWindow::openAssetInModule(const QString &guid, const QString &moduleId,
     if (auto *api = avatarModule->api()) {
         QVariantMap options;
         if (!scope.isEmpty()) options.insert(QStringLiteral("scope"), scope);
-        const QVariantMap opened = api->open(guid, options);
+        const QVariantMap opened = api->quietly([&] { return api->open(guid, options); });
         // A refusal is the module's own message (a definition that will not
         // parse, a project scope with nothing pinned) — shown here because a
         // menu click has no JS engine to throw into.
@@ -1361,6 +1362,11 @@ void MainWindow::openStageBind(bool playMode)
 		gridCheckAction->setChecked(editorData->showGrid);
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
 	}
+
+	// THE SCENE IS OPEN (AVATAR_ASSET_SPEC §4 D4, the load-time half). Fired
+	// HERE and not when the reader returned: a subscriber's job is to walk the
+	// scene that is now installed, and until setScene above it was not.
+	if (services) services->announceSceneOpened();
 }
 
 void MainWindow::openStageReadDocument(bool playMode, const iris::MeshPrewarmPtr &prewarm)

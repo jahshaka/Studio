@@ -38,6 +38,9 @@ class ThumbnailService;
 class AssetService;
 class PerfSampler;
 
+#include <functional>
+#include <vector>
+
 struct StudioServices
 {
     UndoService      *undo       = nullptr;
@@ -57,6 +60,38 @@ struct StudioServices
     /// UI event bus (sky-asset updates between panels). Owned by the shell;
     /// was the Globals::eventSubscriber static (Phase 4 injected it).
     Subscriber       *eventBus   = nullptr;
+
+    // ---- SCENE OPENED (AVATAR_ASSET_SPEC §4 D4, the load-time half) -------
+    //
+    // Fired once the freshly-read scene is INSTALLED (MainWindow::openStageBind,
+    // after setScene) — not when the reader returns, because a subscriber's
+    // whole job is to walk the scene that is now open.
+    //
+    // It exists because a document can be STALE the moment it is loaded: an
+    // avatar instance records the definition version it last resolved, and a
+    // scene saved before a module save comes back naming an older one. The pin
+    // signal covers "the asset changed while the scene was open"; this covers
+    // "the scene arrived after the asset changed", which is the same defect
+    // seen from the other end.
+    //
+    // A plain callback list rather than a Qt signal, exactly like
+    // AssetService::onPinChanged: this struct is a bundle of injected pointers
+    // with no QObject in it. Subscriptions live for the session.
+    using SceneOpenedFn = std::function<void()>;
+    void onSceneOpened(SceneOpenedFn callback)
+    {
+        if (callback) sceneOpenedSubscribers.push_back(std::move(callback));
+    }
+    void announceSceneOpened()
+    {
+        // Iterate a COPY: a subscriber that reacts by editing the scene must
+        // not invalidate the list mid-loop.
+        const auto subscribers = sceneOpenedSubscribers;
+        for (const auto &callback : subscribers) callback();
+    }
+
+private:
+    std::vector<SceneOpenedFn> sceneOpenedSubscribers;
 };
 
 #endif // SERVICES_H
