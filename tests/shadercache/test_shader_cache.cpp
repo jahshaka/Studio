@@ -25,7 +25,9 @@
 //
 // Built TWICE when JAHSHAKA_ASAN=ON: a corrupt-input parser that is merely
 // "did not crash" is not proven. The sanitised twin is what makes case 2-4's
-// "no ASan report" a real assertion.
+// "no ASan report" a real assertion — and since 2026-09-09 it runs
+// `--corruption-only`, i.e. cases 2-4 ALONE, because those are the only cases
+// instrumentation adds anything to (TEST_GATE_AUDIT.md §3).
 #include "jahshaka/engine/Engine.h"
 
 #include <cstdio>
@@ -130,6 +132,33 @@ void wipeDir() {
     for (const std::string &n : cacheFiles()) ::unlink((gCacheDir + "/" + n).c_str());
 }
 
+/// A BYTE SNAPSHOT OF A SEEDED CACHE, and the restore that puts it back.
+///
+/// Every corruption case has to attack ONE file against an otherwise-good
+/// cache, which used to mean running a fresh `reseed` ENGINE CYCLE before each
+/// attack: six files x three attacks = 18 of this suite's 56 cycles, and the
+/// single largest reason the sanitised twin ran for nine and a half minutes
+/// (TEST_GATE_AUDIT.md §3). A cycle is a deterministic function of the engine
+/// and the GPU, so the bytes it wrote ARE the starting state — copying them
+/// back is the same state for a hundredth of the cost, and it is strictly more
+/// exact than re-deriving it (two seeds could in principle differ; a copy
+/// cannot).
+using DirSnapshot = std::vector<std::pair<std::string, std::vector<char>>>;
+
+DirSnapshot snapshotDir() {
+    DirSnapshot snap;
+    for (const std::string &n : cacheFiles()) {
+        std::vector<char> bytes;
+        if (readFile(gCacheDir + "/" + n, bytes)) snap.emplace_back(n, std::move(bytes));
+    }
+    return snap;
+}
+
+void restoreDir(const DirSnapshot &snap) {
+    wipeDir();
+    for (const auto &f : snap) writeFile(gCacheDir + "/" + f.first, f.second);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -166,11 +195,13 @@ static void corruption(const char *label, void (*damage)(const std::string &)) {
     runCycle("seed");
     const std::vector<std::string> files = cacheFiles();
     CHECK(files.size() >= 2, "there is more than one file to attack");
+    const DirSnapshot pristine = snapshotDir();
 
     for (const std::string &name : files) {
-        // Re-seed so every file is attacked against an otherwise-good cache.
-        wipeDir();
-        runCycle("reseed");
+        // Every file is attacked against an otherwise-good cache — restored
+        // from the seed's own bytes rather than re-derived by another engine
+        // cycle (see snapshotDir above).
+        restoreDir(pristine);
         damage(gCacheDir + "/" + name);
 
         bool created = false;
@@ -450,17 +481,30 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    std::printf("[ RUN  ] cold_then_warm\n");        cold_then_warm();
+    // --corruption-only: CASES 2-4 AND NOTHING ELSE. That is the sanitised
+    // twin's whole stated reason for existing (see the header): "a corrupt file
+    // did not crash us" is a claim only an instrumented run can make, and the
+    // corrupt files are cases 2-4. Every other case here is a CONTRACT check —
+    // cold/warm counters, fingerprint invalidation, the F6/F7/F11 fixes — that
+    // an ASan build asserts no better than the plain one, and it was paying
+    // ASan's ~16x per engine cycle for them (TEST_GATE_AUDIT.md §3).
+    bool corruptionOnly = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--corruption-only") == 0) corruptionOnly = true;
+
     std::printf("[ RUN  ] truncate_files\n");        truncate_files();
     std::printf("[ RUN  ] bitflip_files\n");         bitflip_files();
     std::printf("[ RUN  ] zerolength_files\n");      zerolength_files();
-    std::printf("[ RUN  ] fingerprint_mismatch\n");  fingerprint_mismatch();
-    std::printf("[ RUN  ] manifest_missing\n");      manifest_missing();
-    std::printf("[ RUN  ] concurrent_processes\n");  concurrent_processes(argv[0]);
-    // The caching-audit fix wave (SHADER_CACHE_AUDIT.md F6/F7/F11).
-    std::printf("[ RUN  ] denominator_is_last_run\n");          denominator_is_last_run();
-    std::printf("[ RUN  ] pipeline_layer_reports_acceptance\n"); pipeline_layer_reports_acceptance();
-    std::printf("[ RUN  ] streams_are_named\n");                streams_are_named();
+    if (!corruptionOnly) {
+        std::printf("[ RUN  ] cold_then_warm\n");        cold_then_warm();
+        std::printf("[ RUN  ] fingerprint_mismatch\n");  fingerprint_mismatch();
+        std::printf("[ RUN  ] manifest_missing\n");      manifest_missing();
+        std::printf("[ RUN  ] concurrent_processes\n");  concurrent_processes(argv[0]);
+        // The caching-audit fix wave (SHADER_CACHE_AUDIT.md F6/F7/F11).
+        std::printf("[ RUN  ] denominator_is_last_run\n");          denominator_is_last_run();
+        std::printf("[ RUN  ] pipeline_layer_reports_acceptance\n"); pipeline_layer_reports_acceptance();
+        std::printf("[ RUN  ] streams_are_named\n");                streams_are_named();
+    }
 
     std::printf("%d check(s), %d failure(s)\n", gChecks, gFailures);
     return gFailures ? 1 : 0;
