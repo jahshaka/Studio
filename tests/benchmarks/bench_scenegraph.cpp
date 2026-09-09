@@ -714,6 +714,16 @@ int main(int argc, char **argv)
     std::vector<int> scales{1000, 10000, 50000};
     bool quick = false;
     bool assertMode = true;
+    // --smoke: the STRUCTURAL half of this benchmark, at the smallest scale,
+    // with no timing verdict of any kind (TEST_GATE_AUDIT.md §3). The full
+    // `--assert` run is five minutes and RUN_SERIAL, so a merge gate paid its
+    // whole wall time for it; what a merge gate actually needs from this binary
+    // is the answer to "did every document node reach the engine, did the
+    // static tags land, did a frame render" — which is three CHECKs that cost
+    // fifteen seconds and do not care how loaded the box is. The dispersion
+    // bounds and the baseline comparison stay where they belong: on a quiet box,
+    // nightly, under --assert.
+    bool smoke = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -722,13 +732,14 @@ int main(int argc, char **argv)
         else if (a == "--compare" && i + 1 < argc) comparePath = argv[++i];
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
         else if (a == "--quick") quick = true;
+        else if (a == "--smoke") { smoke = true; quick = true; assertMode = false; scales = {1000}; }
         else if (a == "--threads" && i + 1 < argc) gWorkerThreads = unsigned(std::stoi(argv[++i]));
         else if (a == "--scales" && i + 1 < argc) {
             scales.clear();
             std::string list = argv[++i], cur;
             for (char c : list + ",") { if (c == ',') { if (!cur.empty()) scales.push_back(std::stoi(cur)); cur.clear(); } else cur += c; }
         } else if (a == "--help") {
-            std::printf("bench_scenegraph [--assert] [--record <file>] [--compare <file>] "
+            std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] [--compare <file>] "
                         "[--scales 1000,10000,50000] [--quick] [--threads N] [--note <text>]\n");
             return 0;
         }
@@ -992,8 +1003,13 @@ int main(int argc, char **argv)
     }
 
     // ---- stability + "numbers exist" ------------------------------------
-    std::printf("\n== stability ==\n");
+    // DISPERSION IS A QUIET-BOX MEASUREMENT. --smoke runs 12 iterations at one
+    // scale on a box with three other suites on it; a cv bound over that is a
+    // coin flip, which is exactly the thing this mode exists to stop paying for.
+    if (smoke) std::printf("\n== stability == skipped (--smoke measures nothing)\n");
+    else std::printf("\n== stability ==\n");
     for (const Metric &m : gMetrics) {
+        if (smoke) break;
         if (m.single >= 0.0) {
             char buf[160];
             std::snprintf(buf, sizeof buf, "%s@%d produced a number", m.id.c_str(), m.scale);
