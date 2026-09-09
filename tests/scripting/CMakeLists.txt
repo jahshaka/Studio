@@ -50,6 +50,11 @@ function(add_script_e2e name scriptfile)
 endfunction()
 
 add_script_e2e(build_scene e2e_build_scene.js)
+# EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl
+# toggle with topmost promotion, the owner's Shift range, the World root rule)
+# and its EDITS (D5-reduced delete/duplicate/copy/paste, placement, fresh
+# guids). Document verbs only -> --headless: no engine, no display.
+
 add_script_e2e(undo_macro e2e_undo_macro.js)
 # SCENEGRAPH_SPEC §3 step 4: the v2 scene format's fragment pair
 # (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,
@@ -799,3 +804,20 @@ set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 400)
+
+# --- multi-selection (EDITOR_MULTISELECT_SPEC §5) ---------------------------
+# Both are document-only, so they run --headless (offscreen platform, NULL
+# render system, DISPLAY unset) — the selection set, its verbs and its edits
+# never touch a pixel.
+foreach(_ms multiselect multiselect_edit)
+    set(_ms_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${_ms})
+    file(MAKE_DIRECTORY ${_ms_home})
+    file(MAKE_DIRECTORY ${_ms_home}/run)
+    add_test(NAME scripting.e2e.${_ms}
+             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_${_ms}.js --headless
+             WORKING_DIRECTORY ${_ms_home}/run)
+    set_tests_properties(scripting.e2e.${_ms} PROPERTIES
+        ENVIRONMENT "HOME=${_ms_home};QT_QPA_PLATFORM=offscreen"
+        LABELS "scripting" TIMEOUT 300)
+    jah_no_display(scripting.e2e.${_ms})
+endforeach()

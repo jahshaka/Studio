@@ -528,3 +528,54 @@ add_test(NAME ui.project_tile COMMAND test_project_tile
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.project_tile PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
+
+# ui.tree_multiselect — THE OUTLINER'S MODIFIER SEMANTICS (EDITOR_MULTISELECT_SPEC
+# §2.2 / §5), on the real SceneHierarchyWidget with real QTest clicks.
+#
+# The subject is the press-time override of Qt's OWN Shift range: with
+# ExtendedSelection Qt applies its range inside mousePressEvent, and the owner's
+# rule (anchor = the topmost SELECTED row) has to pre-empt it. Nothing below the
+# widget can show that, so the widget is what is linked — with the same Sql/io
+# stub pattern the other panel suites use, plus stand-ins for the MainWindow
+# entry points the panel's menu rows call (the suite wires no MainWindow, so
+# none of them runs).
+find_package(Qt6 REQUIRED COMPONENTS Test)
+add_executable(test_tree_multiselect
+    test_tree_multiselect.cpp
+    test_tree_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/reparentscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/scenefoldercommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_tree_multiselect PROPERTIES
+    AUTOMOC ON AUTOUIC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_tree_multiselect PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_tree_multiselect PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_tree_multiselect
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)
+jah_document_graph(test_tree_multiselect)
+add_test(NAME ui.tree_multiselect COMMAND test_tree_multiselect
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.tree_multiselect PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+jah_no_display(ui.tree_multiselect)

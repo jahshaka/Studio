@@ -155,6 +155,25 @@ public:
     /// what drives the properties panel and the gizmo (§6b).
     QList<iris::SceneNodePtr> selectedNodes() const;
 
+    // ---- MULTI-SELECTION (EDITOR_MULTISELECT_SPEC §2.2) --------------------
+
+    /// The nodes of every VISIBLE row between `a` and `b` inclusive, in row
+    /// order. "Visible" is the widget's own answer: a collapsed subtree is not
+    /// in the range, folder rows carry no node and are skipped, and the World
+    /// root is never a member of a multi (D6). Empty when either node has no
+    /// row (a headless caller falls back to document pre-order).
+    QList<iris::SceneNodePtr> nodesInVisibleRange(const iris::SceneNodePtr &a,
+                                                  const iris::SceneNodePtr &b) const;
+
+    /// Selects a SET of rows (service -> tree), current row = the primary
+    /// (`nodes` first), scrolled into view, under the suppress guard.
+    void setSelectedSet(const QList<iris::SceneNodePtr> &nodes);
+
+    /// The visible rows, in draw order, node rows only (folder rows and the
+    /// rows under a collapsed parent are not in it). The order the owner's
+    /// "topmost selected" rule is measured in.
+    QList<iris::SceneNodePtr> visibleNodeRows() const;
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
@@ -229,6 +248,11 @@ private:
     bool suppressSelectionSignal = false;
     /// Folder rows that were collapsed, so a repopulate does not expand them all.
     QStringList collapsedFolders;
+    /// The last set this panel announced (node ids, primary first). The tree's
+    /// selectionChanged fires for reasons that are not selection changes
+    /// (setCurrentItem, a rebuild, a row edit); without this the panel
+    /// re-announced the same set and every consumer rebuilt for nothing.
+    QList<qint64> lastAnnouncedSet;
 
 	void hideItemAndChildren(QTreeWidgetItem* item);
 	void showItemAndChildren(QTreeWidgetItem* item);
@@ -258,8 +282,30 @@ private:
 	QIcon *pickableIcon;
 	QIcon *disabledIcon;
 
+    /// D1(b): the owner's Shift rule, applied on the PRESS. Selects everything
+    /// from the topmost currently-selected row to `clicked`, inclusive.
+    /// `additive` (Ctrl+Shift) keeps what was selected instead of replacing.
+    void applyShiftRange(const iris::SceneNodePtr &clicked, bool additive);
+
+private:
+    /// Emits the set (or the single node) if it differs from the last one
+    /// announced. THE panel's one exit toward the selection service.
+    void announceSet(const QList<iris::SceneNodePtr> &nodes);
+    /// The World row's node (D6: never a member of a multi). Asked of THIS
+    /// panel's scene rather than of the node — SceneNode::isRootNode() answers
+    /// through the node's scene back-pointer, which a detached or
+    /// test-constructed document need not carry.
+    bool isWorldRoot(const iris::SceneNodePtr &node) const;
+
+public:
+
 signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
+    /// The whole selected SET, primary FIRST (EDITOR_MULTISELECT_SPEC §2.2).
+    /// The shell hands it straight to SelectionService::select(list); the
+    /// single-node signal above stays for the one-row case so nothing that
+    /// listened to it had to change.
+    void sceneNodeSetSelected(const QList<iris::SceneNodePtr> &nodes);
 };
 
 #endif // SCENEHEIRARCHYWIDGET_H

@@ -123,8 +123,18 @@ NOT saved with the scene: the classification is re-derived on load from the same
 
 | verb | needs | description |
 |---|---|---|
-| `editor.select(id \| null) -> bool` | document | Selects a node everywhere (viewport, hierarchy, properties); null or no argument deselects. |
-| `editor.selection() -> id \| null` | document | The selected node's id, or null. |
+| `editor.select(id \| [id] \| null) -> bool` | document | Selects a node — or a SET of nodes — everywhere (viewport, hierarchy, properties); null, no argument or an empty array deselects. With an array the FIRST id becomes the primary: the node the properties panel shows, the gizmo pivots on and every single-target verb acts on (EDITOR_MULTISELECT_SPEC D2). |
+| `editor.selection() -> id \| null` | document | The PRIMARY selected node's id, or null. Unchanged by multi-selection: editor.selectionSet() is the whole set. |
+| `editor.selectionSet() -> [id]` | document | The whole selection: the primary first, then the rest in document pre-order (an ancestor before its descendants, siblings by index). Empty when nothing is selected. |
+| `editor.selectAdd(id \| [id]) -> bool` | document | Adds to the selection without replacing it (the viewport's Shift+click, the tree's Ctrl+click on an unselected row). The LAST id added becomes the primary. |
+| `editor.selectToggle(id) -> bool` | document | Adds the node if it is not selected, removes it if it is (Ctrl+click), and returns its membership AFTER the call. Removing the primary promotes the topmost remaining member. |
+| `editor.selectRange(fromId, toId) -> [id]` | document | Selects everything from one node to another INCLUSIVE, replacing the selection — the tree's Shift+click. In the app the range spans VISIBLE OUTLINER ROWS (collapsed subtrees and folder rows are not in it); with no window (--headless) it spans document pre-order instead, which is the same answer for a fully expanded tree. |
+| `editor.selectNone() -> bool` | document | Clears the selection (the same as editor.select(null)). |
+| `editor.deleteSelection() -> {deleted: [id], skipped: [id]}` | document | Deletes the selection as ONE undo step. A member whose ancestor is also selected is skipped (it goes with its ancestor), and the World root and non-removable nodes are reported in `skipped` rather than refusing the whole delete. |
+| `editor.duplicateSelection() -> [id]` | document | Duplicates the selection as ONE undo step — each copy lands right after its own original — and selects the copies. Returns the new ids, the primary's copy first. |
+| `editor.copy() -> n` | document | Copies the selection into the EDITOR clipboard (in-app, never the system clipboard) as scene fragments and returns how many. Not an undo entry. Copying nothing leaves the previous clipboard alone. |
+| `editor.paste() -> [id]` | document | Pastes the clipboard beside the primary — same parent, sibling index + 1, local transform kept — or at the scene root when nothing is selected. Fresh guids, one undo step, and the pasted nodes become the selection. |
+| `editor.clipboard() -> [{format, version, node, parent, index}]` | document | The editor clipboard's fragments, in the shape node.serialize returns. |
 | `editor.gizmoMode() -> "translate" \| "rotate" \| "scale"` | engine | The active transform gizmo mode (W/E/R in the viewport; Space cycles). |
 | `editor.setGizmoMode("translate"\|"rotate"\|"scale") -> bool` | engine | Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons. |
 | `editor.focusSelection() -> bool` | engine | Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. IN A ROTATION-LOCKED AXIS VIEW it CENTRES instead: the camera keeps its axis orientation, slides along the view axis until the node is centred, and the framing is done by the ortho zoom (backing off is invisible in an orthographic projection) — turning to face the node there would tilt a "top" view off the axis it is named after. |

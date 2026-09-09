@@ -180,54 +180,22 @@ void GraphicsView::mouseMoveEvent(QMouseEvent * event)
 
 void GraphicsView::addShortcuts()
 {
-	auto deleteShortcut = new QShortcut(this);
-	deleteShortcut->setKey(Qt::Key_Delete);
-	connect(deleteShortcut, &QShortcut::activated, [this]()
-	{
-		this->scene->deleteSelectedNodes();
-		this->repaint();
-	});
-
-	// NO undo/redo shortcuts here. There were two — QKeySequence::Undo and
-	// ::Redo, Qt::WindowShortcut like every bare QShortcut — and they were one
-	// of the TWO claimants that made Ctrl+Z do NOTHING on the Materials page
-	// (deep audit 2026-09, area 1): MainWindow's ShortcutRegistry "edit.undo"
-	// is the other, also WindowShortcut, so Qt found the chord ambiguous and
-	// QShortcut answers an ambiguous event by ignoring it. Measured on Xvfb
-	// with qt.gui.shortcutmap.debug: "The following shortcuts are about to be
-	// activated ambiguously", then QShortcutEvent("Ctrl+Z", ..., TRUE).
+	// NO Delete / Ctrl+D / Ctrl+C / Ctrl+V / undo / redo shortcuts here.
 	//
-	// The owner's decision is that on this page the GRAPH undo wins, so the
-	// chord now has exactly ONE claimant — the registry entry — and MainWindow
-	// forwards it to EffectsPage::graphUndo when the Materials space is active
-	// (the same entry point graph.undo/graph.redo call). Re-adding a QShortcut
-	// here would restore the ambiguity and kill the chord again; if the graph
-	// view ever needs its own binding, register it in ShortcutRegistry with a
-	// distinct sequence.
+	// Every one of those chords now has exactly ONE claimant — a ShortcutRegistry
+	// entry on MainWindow — and the shell routes it by ACTIVE SPACE: on the
+	// Materials page to EffectsPage::graph{Undo,Redo,DeleteSelected,
+	// DuplicateSelected,CopySelected,Paste}, everywhere else to the editor's
+	// selection set (EDITOR_MULTISELECT_SPEC §2.6).
 	//
-	// The rest below stay: none of their sequences is claimed anywhere else.
-
-	// copy / paste / duplicate
-	auto copyShortcut = new QShortcut(this);
-	copyShortcut->setKey(QKeySequence::Copy);
-	connect(copyShortcut, &QShortcut::activated, [this]()
-	{
-		scene->copySelectedToClipboard();
-	});
-
-	auto pasteShortcut = new QShortcut(this);
-	pasteShortcut->setKey(QKeySequence::Paste);
-	connect(pasteShortcut, &QShortcut::activated, [this]()
-	{
-		scene->pasteFromClipboard();
-	});
-
-	auto duplicateShortcut = new QShortcut(this);
-	duplicateShortcut->setKey(QKeySequence(Qt::CTRL | Qt::Key_D));
-	connect(duplicateShortcut, &QShortcut::activated, [this]()
-	{
-		scene->duplicateSelected();
-	});
+	// Why it has to be that way, measured: a bare QShortcut here is
+	// Qt::WindowShortcut, so is the registry's, and Qt answers an AMBIGUOUS
+	// shortcut event by ignoring it — the chord then does NOTHING on this page.
+	// That is exactly what happened to Ctrl+Z (deep audit 2026-09, area 1:
+	// "The following shortcuts are about to be activated ambiguously", then
+	// QShortcutEvent("Ctrl+Z", ..., TRUE)), and re-adding any of these would
+	// reproduce it. If the graph view ever needs its own binding, register it
+	// in ShortcutRegistry with a distinct sequence.
 
 	// F frames the selection (all nodes when nothing is selected)
 	auto fitShortcut = new QShortcut(this);

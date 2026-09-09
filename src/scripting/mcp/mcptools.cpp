@@ -452,6 +452,7 @@ QJsonObject McpTools::describeScene(const QJsonObject &args)
         QJsonDocument(nodeOptions).toJson(QJsonDocument::Compact));
     QString expr = QStringLiteral(
         "({ projectOpen: true, root: scene.root(), selection: editor.selection(),"
+        "   selectionSet: editor.selectionSet(),"
         "   depth: %1, nodes: scene.nodes(%2)")
         .arg(nodeOptions.value("depth").toInt()).arg(options);
     if (wantWorld) expr += QStringLiteral(", world: world.get()");

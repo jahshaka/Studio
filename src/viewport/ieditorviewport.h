@@ -15,6 +15,7 @@
 // can be found and retired.
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include <QList>
 #include <QObject>
 #include <QImage>
 #include <QSize>
@@ -108,6 +109,10 @@ public:
     virtual void setScene(iris::ScenePtr scene) = 0;
     virtual iris::ScenePtr getScene() = 0;
     virtual void setSelectedNode(iris::SceneNodePtr sceneNode) = 0;
+    /// The whole selection SET, primary first (EDITOR_MULTISELECT_SPEC §2.3) —
+    /// the outline, the gizmo group and the focus/orbit/floor union read it.
+    /// Optional: a headless stand-in viewport has neither outline nor gizmo.
+    virtual void setSelectedSet(const QList<iris::SceneNodePtr> &) {}
     virtual void clearSelectedNode() = 0;
     virtual void focusOnNode(iris::SceneNodePtr sceneNode) = 0;
     /// F: frames the current selection (no-op without one). Only the engine

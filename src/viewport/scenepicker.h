@@ -75,6 +75,13 @@ public:
     static iris::SceneNodePtr resolveRootSelection(iris::SceneNodePtr picked,
                                                    iris::SceneNodePtr lastSelected,
                                                    bool selectRootObject);
+    /// The same rule against a SELECTION SET (EDITOR_MULTISELECT_SPEC §3.5):
+    /// "already selected" has to mean MEMBERSHIP once there can be more than
+    /// one, or Ctrl+clicking a part of an already-selected asset would drill
+    /// down for one member and re-select the root for another.
+    static iris::SceneNodePtr resolveRootSelection(iris::SceneNodePtr picked,
+                                                   const QList<iris::SceneNodePtr> &selection,
+                                                   bool selectRootObject);
 
 private:
     /// Delegates to iris::picking::raycastMeshes — the ONE segment/mesh

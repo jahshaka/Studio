@@ -16,7 +16,10 @@ For more information see the LICENSE file
 // (SCRIPTING_SPEC §1.2). screenshot + frame are the verification primitives:
 // they work headless (offscreen View + readPixels, no window grab).
 
+#include <QList>
 #include <QVariantMap>
+
+#include "irisgl/irisglfwd.h"
 
 #include "scripting/apimodule.h"
 
@@ -31,6 +34,16 @@ public:
 
     Q_INVOKABLE bool select(const QVariant &id = QVariant());
     Q_INVOKABLE QVariant selection();
+    Q_INVOKABLE QVariantList selectionSet();
+    Q_INVOKABLE bool selectAdd(const QVariant &id = QVariant());
+    Q_INVOKABLE bool selectToggle(const QString &id);
+    Q_INVOKABLE QVariantList selectRange(const QString &fromId, const QString &toId);
+    Q_INVOKABLE bool selectNone();
+    Q_INVOKABLE QVariantMap deleteSelection();
+    Q_INVOKABLE QVariantList duplicateSelection();
+    Q_INVOKABLE int copy();
+    Q_INVOKABLE QVariantList paste();
+    Q_INVOKABLE QVariantList clipboard();
     Q_INVOKABLE QString gizmoMode();
     Q_INVOKABLE bool setGizmoMode(const QString &mode);
     Q_INVOKABLE bool focusSelection();
@@ -78,6 +91,16 @@ public:
     Q_INVOKABLE bool importAssets(const QVariant &paths);
 
 private:
+    /// id | [id] | null -> nodes, reporting an unknown id as a verb failure.
+    /// Shared by editor.select and editor.selectAdd.
+    bool resolveNodeArgument(const QVariant &id, const QString &verb,
+                             QList<iris::SceneNodePtr> &out);
+    /// The inclusive run from one node to another in VISIBLE OUTLINER ORDER
+    /// (the hierarchy panel answers when there is one), or document pre-order
+    /// with no window. Folder rows and the World root are never in it.
+    QList<iris::SceneNodePtr> rangeInVisibleOrder(const iris::SceneNodePtr &a,
+                                                  const iris::SceneNodePtr &b);
+
     int mBatchDepth = 0;
 };
 

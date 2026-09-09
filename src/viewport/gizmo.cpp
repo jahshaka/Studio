@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "commands/transformscenenodecommand.h"
+#include <QUndoStack>
 
 
 Gizmo::Gizmo()
@@ -126,14 +127,107 @@ void Gizmo::clearSelectedNode()
 	selectedNode.clear();
 }
 
+void Gizmo::setGroup(const QList<iris::SceneNodePtr> &nodes)
+{
+	group.clear();
+	for (const auto &n : nodes) if (n) group.append(n);
+	if (group.size() < 2) group.clear();      // a group of one is not a group
+}
+
 void Gizmo::setInitialTransform()
 {
 	oldPos = selectedNode->getLocalPos();
 	oldRot = selectedNode->getLocalRot();
 	oldScale = selectedNode->getLocalScale();
+	captureGroupStart();
 }
+
+void Gizmo::captureGroupStart()
+{
+	groupStart.clear();
+	if (group.isEmpty() || !selectedNode) return;
+	pivotStartPos   = selectedNode->getGlobalPosition();
+	pivotStartRot   = selectedNode->getGlobalRotation().normalized();
+	pivotStartScale = selectedNode->getLocalScale();
+	for (const auto &node : group) {
+		if (!node) continue;
+		MemberStart m;
+		m.node       = node;
+		m.globalPos  = node->getGlobalPosition();
+		m.globalRot  = node->getGlobalRotation().normalized();
+		m.localPos   = node->getLocalPos();
+		m.localRot   = node->getLocalRot();
+		m.localScale = node->getLocalScale();
+		groupStart.append(m);
+	}
+}
+
+void Gizmo::applyGroupDelta()
+{
+	if (groupStart.isEmpty() || !selectedNode) return;
+
+	// The delta the PRIMARY just took, in global terms.
+	const iris::Vec3 deltaPos = selectedNode->getGlobalPosition() - pivotStartPos;
+	const iris::Quat deltaRot =
+		(selectedNode->getGlobalRotation().normalized() * pivotStartRot.conjugated()).normalized();
+	// SCALE stays a LOCAL ratio: there is no setGlobalScale, and a member's
+	// parent scale is constant through the drag (D5 guarantees no ancestor of a
+	// member is in the group), so the local ratio IS the global one.
+	const iris::Vec3 s0 = pivotStartScale;
+	const iris::Vec3 scaleRatio(
+		qFuzzyIsNull(s0.x()) ? 1.0f : selectedNode->getLocalScale().x() / s0.x(),
+		qFuzzyIsNull(s0.y()) ? 1.0f : selectedNode->getLocalScale().y() / s0.y(),
+		qFuzzyIsNull(s0.z()) ? 1.0f : selectedNode->getLocalScale().z() / s0.z());
+
+	for (const MemberStart &m : groupStart) {
+		if (!m.node || m.node.data() == selectedNode.data()) continue;   // the subclass wrote the primary
+
+		// pos = pivot + ΔR · (s ∘ (start − pivot)) + Δpos
+		//   translate: ΔR = I, s = 1  -> start + Δpos
+		//   rotate:    Δpos = 0, s = 1 -> orbit around the primary's pivot
+		//   scale:     Δpos = 0, ΔR = I -> scale about the primary's pivot
+		iris::Vec3 offset = m.globalPos - pivotStartPos;
+		offset = iris::Vec3(offset.x() * scaleRatio.x(),
+		                    offset.y() * scaleRatio.y(),
+		                    offset.z() * scaleRatio.z());
+		offset = deltaRot.rotatedVector(offset);
+		m.node->setGlobalPos(pivotStartPos + offset + deltaPos);
+		m.node->setGlobalRot((deltaRot * m.globalRot).normalized());
+		m.node->setLocalScale(iris::Vec3(m.localScale.x() * scaleRatio.x(),
+		                                 m.localScale.y() * scaleRatio.y(),
+		                                 m.localScale.z() * scaleRatio.z()));
+	}
+}
+
 void Gizmo::createUndoAction()
 {
+	// ONE UNDO STEP for the whole group (EDITOR_MULTISELECT_SPEC §2.4): every
+	// member is put back to where the drag started and re-applied through its
+	// own TransformSceneNodeCommand, all inside one macro. N = 1 keeps today's
+	// stack shape exactly — a single command, no macro.
+	if (!groupStart.isEmpty()) {
+		QUndoStack *stack = (services && services->undo) ? services->undo->stack() : nullptr;
+		struct Applied { iris::SceneNodePtr node; iris::Vec3 pos, scale; iris::Quat rot; };
+		QVector<Applied> applied;
+		for (const MemberStart &m : groupStart) {
+			if (!m.node) continue;
+			applied.append({ m.node, m.node->getLocalPos(), m.node->getLocalScale(),
+			                 m.node->getLocalRot() });
+			m.node->setLocalPos(m.localPos);
+			m.node->setLocalRot(m.localRot);
+			m.node->setLocalScale(m.localScale);
+		}
+		if (services && services->undo) {
+			const bool macro = applied.size() > 1 && stack;
+			if (macro) stack->beginMacro(QObject::tr("Transform %1 objects").arg(applied.size()));
+			for (const Applied &a : applied)
+				services->undo->push(new TransformSceneNodeCommand(a.node, a.pos, a.rot, a.scale));
+			if (macro) stack->endMacro();
+		}
+		groupStart.clear();
+		return;
+	}
+
 	auto newPos = selectedNode->getLocalPos();
 	auto newRot = selectedNode->getLocalRot();
 	auto newScale = selectedNode->getLocalScale();

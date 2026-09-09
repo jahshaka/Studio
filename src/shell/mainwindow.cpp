@@ -859,6 +859,15 @@ void MainWindow::setupServices()
     selectionService = new SelectionService(this);
     connect(selectionService, &SelectionService::selectionChanged,
             this, &MainWindow::applySelectionToUi);
+    // The SET fan-out (EDITOR_MULTISELECT_SPEC §2.1). Deliberately a second
+    // connection and not a widened applySelectionToUi: the primary signal
+    // drives the single-node panels (properties, timeline) and fires only when
+    // the primary changes, while this one runs on every set change — a
+    // Ctrl+click storm must repaint the tree and the outline without rebuilding
+    // the properties panel N times (§3.3). Emitted AFTER selectionChanged, so
+    // the set is what the tree ends up showing.
+    connect(selectionService, &SelectionService::selectionSetChanged,
+            this, &MainWindow::applySelectionSetToUi);
 
     playbackService = new PlaybackService(this);
     playbackService->setViewport(sceneView);
@@ -906,6 +915,12 @@ void MainWindow::setupServices()
     connect(sceneEditService, &SceneEditService::nodeRemoved, this,
             [this](const iris::SceneNodePtr &node) {
         if (sceneHierarchyWidget) sceneHierarchyWidget->removeChild(node);
+        // A node that has left the document cannot stay in the selection SET
+        // (EDITOR_MULTISELECT_SPEC §2.1). The single selection was pruned by
+        // the delete command's select(null); a set member three rows down was
+        // not, and a stale member would keep an outline shell alive and feed a
+        // dead node to the next group transform.
+        if (selectionService) selectionService->remove(node);
     });
     connect(sceneEditService, &SceneEditService::transformRefreshRequested, this, [this]() {
         if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->refreshTransform();
@@ -1795,6 +1810,16 @@ void MainWindow::applySelectionToUi(iris::SceneNodePtr sceneNode)
     animationWidget->setSceneNode(sceneNode);
 }
 
+// The consumers that understand a SET: the outliner's selected rows and the
+// viewport (outline, gizmo group, focus/orbit/floor). The properties panel and
+// the timeline stay on the primary — multi-edit is out of scope for v1
+// (EDITOR_MULTISELECT_SPEC §4).
+void MainWindow::applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes)
+{
+    if (sceneView) sceneView->setSelectedSet(nodes);
+    if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes);
+}
+
 void MainWindow::updateAnim()
 {
 }
@@ -1983,8 +2008,14 @@ void MainWindow::repopulateSceneTree()
     this->sceneHierarchyWidget->repopulateTree();
 }
 
+// THE SELECTION, not the primary (EDITOR_MULTISELECT_SPEC §2.5). Both of these
+// are what the toolbar buttons, the outliner's context menu and the Del/Ctrl+D
+// shortcuts call, so all three act on the whole set and land as one undo step.
 void MainWindow::duplicateNode()
 {
+    if (!selectionService) return;
+    const auto set = selectionService->selectedSet();
+    if (set.size() > 1) { sceneEditService->duplicateNodes(set); return; }
     duplicateSceneNode(selectionService->selected());
 }
 
@@ -2025,6 +2056,9 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
 void MainWindow::deleteNode()
 {
+    if (!selectionService) return;
+    const auto set = selectionService->selectedSet();
+    if (set.size() > 1) { sceneEditService->deleteNodes(set); return; }
     deleteSceneNode(selectionService->selected());
 }
 
@@ -2143,6 +2177,12 @@ void MainWindow::setupDockWidgets()
 
     connect(sceneHierarchyWidget,   SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,                   SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+    // The outliner's SET (EDITOR_MULTISELECT_SPEC §2.2): straight into the
+    // service, primary first, the same way the single-node signal goes.
+    connect(sceneHierarchyWidget, &SceneHierarchyWidget::sceneNodeSetSelected,
+            this, [this](const QList<iris::SceneNodePtr> &nodes) {
+        if (selectionService) selectionService->select(nodes);
+    });
 
     // Scene Node Properties Dock
     // Since this widget can be longer than there is screen space, we need to add a QScrollArea
@@ -3237,6 +3277,26 @@ void MainWindow::setupShortcuts()
     reg.add("edit.redo", "Redo", "Editing", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z), this,
             [this]() { redoActiveSpace(); });
 
+    // Delete / Ctrl+D / Ctrl+C / Ctrl+V (EDITOR_MULTISELECT_SPEC §2.6). Same
+    // single-claimant rule as Ctrl+Z, for the same measured reason: the
+    // Materials graph used to own bare WindowShortcuts on exactly these four
+    // chords, and two WindowShortcut claimants make Qt drop the chord entirely.
+    // The registry is the one claimant and the ACTIVE SPACE decides what it
+    // means — the editor's selection SET here, the node graph there.
+    //
+    // A text field is safe: QLineEdit/QTextEdit accept the ShortcutOverride for
+    // their standard editing keys, so a WindowShortcut never fires while one
+    // has focus (the tree's inline rename editor is the case that matters, and
+    // app.multiselect_keys probes it on the rig).
+    reg.add("edit.delete", "Delete Selection", "Editing", QKeySequence(Qt::Key_Delete), this,
+            [this]() { deleteActiveSpace(); });
+    reg.add("edit.duplicate", "Duplicate Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_D), this,
+            [this]() { duplicateActiveSpace(); });
+    reg.add("edit.copy", "Copy Selection", "Editing", QKeySequence(Qt::CTRL | Qt::Key_C), this,
+            [this]() { copyActiveSpace(); });
+    reg.add("edit.paste", "Paste", "Editing", QKeySequence(Qt::CTRL | Qt::Key_V), this,
+            [this]() { pasteActiveSpace(); });
+
     // ---- file / windows ----
     reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
             [this]() { saveScene(); });
@@ -3562,6 +3622,55 @@ void MainWindow::redoActiveSpace()
     if (currentSpace == WindowSpaces::EFFECT && shaderGraph) { shaderGraph->graphRedo(); return; }
     redo();
     updateWindowTitle();
+}
+
+// The four edit chords, routed the same way and for the same reason
+// (EDITOR_MULTISELECT_SPEC §2.6). Deliberately NOT fallbacks: with the
+// Materials space active they act on the GRAPH and never quietly on a scene
+// selection the user cannot see, exactly as undoActiveSpace decided.
+void MainWindow::deleteActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->graphDeleteSelected();
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR) deleteNode();
+}
+
+void MainWindow::duplicateActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->graphDuplicateSelected();
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR) duplicateNode();
+}
+
+void MainWindow::copyActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->graphCopySelected();
+        return;
+    }
+    // Two clipboards in one app, by space (D9): the graph's is the SYSTEM
+    // clipboard (its nodes are text/plain JSON), the editor's is in-app,
+    // because a scene fragment is only meaningful against this database and
+    // would otherwise land in every text field the user pastes into.
+    if (currentSpace == WindowSpaces::EDITOR && services && services->sceneEdit &&
+        services->selection) {
+        const int n = services->sceneEdit->copyNodes(services->selection->selectedSet());
+        if (n > 0) showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(n));
+    }
+}
+
+void MainWindow::pasteActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->graphPaste();
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR && services && services->sceneEdit)
+        services->sceneEdit->paste();
 }
 
 // ---- Space routing (owner decision 2026-09-05) -----------------------------

@@ -28,6 +28,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include <QObject>
 #include <QString>
+#include <QStringList>
+#include <QList>
 
 #include "irisgl/irisglfwd.h"
 #include "data/project.h"   // ModelTypes
@@ -179,6 +181,52 @@ public:
     bool deleteNode(iris::SceneNodePtr node);
     iris::SceneNodePtr duplicateNode(iris::SceneNodePtr node);
 
+    // ---- the selection SET (EDITOR_MULTISELECT_SPEC §2.5) ------------------
+    //
+    // The set-shaped half of delete/duplicate/copy/paste. Every one of them
+    // reduces its input to the EFFECTIVE set first (D5) and wraps more than one
+    // command in a single undo macro, so "delete these five objects" is one
+    // undo step and never five.
+
+    /// D5: the members of `nodes` that have NO selected ancestor. Selecting a
+    /// parent AND its child and then moving, deleting or copying both is a
+    /// double operation on the child — every DCC drops the descendant, and so
+    /// do we. The SET keeps both; only the ACTIONS reduce.
+    static QList<iris::SceneNodePtr> effectiveSet(const QList<iris::SceneNodePtr> &nodes);
+
+    /// What deleteNodes() did, by guid — the verb reports both halves so a
+    /// script can see that the World root (or a non-removable node) was
+    /// skipped rather than silently losing it.
+    struct DeleteSetResult
+    {
+        QStringList deleted;
+        QStringList skipped;
+    };
+
+    /// Deletes the effective set as ONE undo step (macro "Delete N objects"
+    /// above one node). Members are removed in REVERSE document order so the
+    /// sibling indices each command captured for its own undo stay valid.
+    /// Ends with an empty selection.
+    DeleteSetResult deleteNodes(const QList<iris::SceneNodePtr> &nodes);
+
+    /// Duplicates the effective set as ONE undo step and selects the copies
+    /// (the primary's copy first). Processed in reverse document order so each
+    /// copy lands beside its own original rather than shifting the next one.
+    QList<iris::SceneNodePtr> duplicateNodes(const QList<iris::SceneNodePtr> &nodes);
+
+    /// Captures the effective set into the in-app clipboard (D9 (a)) as scene
+    /// fragments — the same shape node.serialize returns. NOT an undo entry.
+    /// Returns how many fragments were stored.
+    int copyNodes(const QList<iris::SceneNodePtr> &nodes);
+
+    /// Pastes the clipboard beside the PRIMARY (D7 (a)): same parent, sibling
+    /// index + 1, local transform kept; the scene root when nothing is
+    /// selected. One undo step; the pasted roots become the selection.
+    QList<iris::SceneNodePtr> paste();
+
+    /// The in-app clipboard's fragments, in the order they were copied.
+    const QList<SceneFragment> &clipboard() const { return mClipboard; }
+
     // ---- document fragments (SPECS/SCENEGRAPH_SPEC.md §3 step 4 / v1.5) -----
     //
     // A subtree, serialized through exactly the writer and reader the scene
@@ -265,6 +313,12 @@ private:
     SelectionService *selection;
     IEditorViewport *viewport;
     std::function<iris::ScenePtr()> sceneProvider;
+
+    /// The editor clipboard (D9 (a)): in-app, never the system clipboard — a
+    /// scene fragment on text/plain would land in every text field the user
+    /// Ctrl+Vs into, and a fragment is only meaningful against this database
+    /// (assets travel as guids).
+    QList<SceneFragment> mClipboard;
 };
 
 #endif // SCENEEDITSERVICE_H

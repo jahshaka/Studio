@@ -90,6 +90,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             RUN_SERIAL TRUE
             TIMEOUT 400
             LABELS "app")
+        # app.multiselect_keys — the four EDIT CHORDS as real keys, in both
+        # spaces (EDITOR_MULTISELECT_SPEC §2.6/§5). Same shape and the same
+        # reasons as app.pacing_undo: shortcut ambiguity only exists in a live
+        # window, and "N objects delete as ONE undo step" cannot be asserted
+        # from a script run (a run is itself one open macro). Its own Xvfb, its
+        # own port, RUN_SERIAL like every input-synthesis suite.
+        set(_ms_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-keys-home)
+        file(MAKE_DIRECTORY ${_ms_home}/run)
+        add_test(NAME app.multiselect_keys
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/multiselect_keys.sh"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8751
+                 WORKING_DIRECTORY ${_ms_home}/run)
+        set_tests_properties(app.multiselect_keys PROPERTIES
+            ENVIRONMENT "HOME=${_ms_home}"
+            RUN_SERIAL TRUE
+            TIMEOUT 500
+            LABELS "app")
     else()
         message(STATUS "app.pacing_undo skipped: needs xdotool, curl, jq and Xvfb")
     endif()

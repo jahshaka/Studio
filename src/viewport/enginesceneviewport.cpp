@@ -55,6 +55,7 @@
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
 #include "commands/transformscenenodecommand.h"
 #include <QUndoStack>
 #include "irisgl/mirror/scenemirror.h"
@@ -586,7 +587,10 @@ iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool select
     const auto hits = ScenePicker::pickAll(mScene, a, b, cam->getGlobalPosition(), forcePickable);
     const ScenePick best = ScenePicker::nearest(hits);
     if (hitPoint && best.node) *hitPoint = best.hitPoint;
-    return ScenePicker::resolveRootSelection(best.node, mSelectedNode, selectRootObject);
+    // MEMBERSHIP, not equality (EDITOR_MULTISELECT_SPEC §3.5): Ctrl+clicking a
+    // part of an asset that is already IN the set must behave like clicking a
+    // part of the selected asset, not like a fresh click on the asset root.
+    return ScenePicker::resolveRootSelection(best.node, mSelectedSet, selectRootObject);
 }
 
 iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
@@ -773,13 +777,22 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
             if ((e->modifiers() & Qt::AltModifier) && mServices && mServices->sceneEdit &&
                 mServices->undo && mServices->undo->stack() && mSelectedNode->isDuplicable()) {
                 mServices->undo->stack()->beginMacro(QStringLiteral("Duplicate + Move"));
-                iris::SceneNodePtr copy = mServices->sceneEdit->duplicateNode(mSelectedNode);
-                if (copy) {
-                    mAltDragMacroOpen = true;
-                    setSelectedNode(copy);              // re-points the gizmo too
-                    emit mEvents.sceneNodeSelected(copy);
+                if (mSelectedSet.size() > 1) {
+                    // THE WHOLE SET (EDITOR_MULTISELECT_SPEC §2.4): duplicate
+                    // it, select the copies — which re-points the gizmo and its
+                    // group through the service fan-out — and drag those.
+                    const auto copies = mServices->sceneEdit->duplicateNodes(mSelectedSet);
+                    if (!copies.isEmpty()) mAltDragMacroOpen = true;
+                    else mServices->undo->stack()->endMacro();
                 } else {
-                    mServices->undo->stack()->endMacro();
+                    iris::SceneNodePtr copy = mServices->sceneEdit->duplicateNode(mSelectedNode);
+                    if (copy) {
+                        mAltDragMacroOpen = true;
+                        setSelectedNode(copy);              // re-points the gizmo too
+                        emit mEvents.sceneNodeSelected(copy);
+                    } else {
+                        mServices->undo->stack()->endMacro();
+                    }
                 }
             }
             mGizmo->startDragging(rayPos, rayDir, viewDir);
@@ -791,8 +804,22 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
             if (mCamController) mCamController->setAltOrbit(true, orbitPivot());
         } else {
             iris::SceneNodePtr picked = pickAt(e->position(), true);
-            setSelectedNode(picked);
-            emit mEvents.sceneNodeSelected(picked);
+            // Ctrl TOGGLES, Shift ADDS (D3 b — Unreal's viewport rule). Both
+            // are free on a LMB press: Ctrl only ever mattered DURING a drag
+            // (snapping) and Shift only with RMB held (fly speed). A modified
+            // click on EMPTY SPACE keeps the set — clearing it would make a
+            // slightly-missed Ctrl+click undo the whole selection.
+            const bool ctrl  = e->modifiers() & Qt::ControlModifier;
+            const bool shift = e->modifiers() & Qt::ShiftModifier;
+            if ((ctrl || shift) && mServices && mServices->selection) {
+                if (!picked) { /* keep the set */ }
+                else if (picked->isRootNode()) mServices->selection->select(picked);  // D6
+                else if (ctrl) mServices->selection->toggle(picked);
+                else           mServices->selection->add(picked);
+            } else {
+                setSelectedNode(picked);
+                emit mEvents.sceneNodeSelected(picked);
+            }
         }
     }
     if (mCamController) mCamController->onMouseDown(e->button());
@@ -1063,7 +1090,53 @@ void EngineSceneViewport::stopPhysicsSimulation()
 void EngineSceneViewport::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
     mSelectedNode = sceneNode;
+    mSelectedSet.clear();
+    if (sceneNode) mSelectedSet.append(sceneNode);
     if (mGizmo) { if (sceneNode) mGizmo->setSelectedNode(sceneNode); else mGizmo->clearSelectedNode(); }
+    pushGizmoGroup();
+}
+
+// The SET (EDITOR_MULTISELECT_SPEC §2.3): the primary still drives the gizmo's
+// pivot and the pick rule; the rest of the set drives the outline, the group
+// transform and the focus/orbit/floor unions.
+void EngineSceneViewport::setSelectedSet(const QList<iris::SceneNodePtr> &nodes)
+{
+    mSelectedSet.clear();
+    for (const auto &n : nodes) if (n) mSelectedSet.append(n);
+    mSelectedNode = mSelectedSet.isEmpty() ? iris::SceneNodePtr() : mSelectedSet.first();
+    if (mGizmo) {
+        if (mSelectedNode) mGizmo->setSelectedNode(mSelectedNode);
+        else               mGizmo->clearSelectedNode();
+    }
+    pushGizmoGroup();
+}
+
+// The gizmo's group is the D5-REDUCED set: a member whose ancestor is also
+// selected already moves with that ancestor, and transforming both would move
+// it twice.
+void EngineSceneViewport::pushGizmoGroup()
+{
+    if (!mGizmo) return;
+    if (mSelectedSet.size() < 2) { mGizmo->setGroup(QList<iris::SceneNodePtr>()); return; }
+
+    const auto effective = SceneEditService::effectiveSet(mSelectedSet);
+    // The gizmo's subclasses write the PRIMARY and the base class applies that
+    // delta to the rest, so the primary MUST be a member of the group it is
+    // deriving the delta from. When the primary is a descendant of another
+    // selected node (D5 dropped it), the group's own ancestor takes the pivot —
+    // otherwise the primary would be moved twice, once by its ancestor and once
+    // by the gizmo.
+    bool primaryInGroup = false;
+    for (const auto &n : effective)
+        if (mSelectedNode && n.data() == mSelectedNode.data()) { primaryInGroup = true; break; }
+    if (!primaryInGroup && mSelectedNode) {
+        for (auto p = mSelectedNode->getParent(); !!p; p = p->getParent()) {
+            bool found = false;
+            for (const auto &n : effective) if (n.data() == p.data()) { found = true; break; }
+            if (found) { mGizmo->setSelectedNode(p); break; }
+        }
+    }
+    mGizmo->setGroup(effective);
 }
 
 void EngineSceneViewport::clearSelectedNode()
@@ -1077,8 +1150,7 @@ void EngineSceneViewport::clearSelectedNode()
 // never clip away (EDITOR_SHORTCUTS_SPEC §2).
 void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
 {
-    const iris::CameraNodePtr cam = viewCamera();   // F focuses whatever you fly
-    if (!sceneNode || !cam) return;
+    if (!sceneNode) return;
     sceneNode->update(0.0f);
 
     iris::Vec3 target = sceneNode->getGlobalPosition();
@@ -1088,6 +1160,18 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
         target = bounds.getCenter();
         radius = qMax(0.05f, bounds.getSize().length() * 0.5f);
     }
+    focusOnTarget(target, radius, sceneNode);
+}
+
+// F's framing, over a point and a radius. Split out of focusOnNode so the
+// SELECTION SET can be framed as one union without a node to hand the orbital
+// controller (EDITOR_MULTISELECT_SPEC §2.3) — `orbitNode` is null in that case
+// and the controller re-derives its pivot from the moved camera instead.
+void EngineSceneViewport::focusOnTarget(const iris::Vec3 &target, float radius,
+                                        const iris::SceneNodePtr &orbitNode)
+{
+    const iris::CameraNodePtr cam = viewCamera();   // F focuses whatever you fly
+    if (!cam) return;
     const float dist = qMax(1.0f, preview::framingDistance(radius, cam->angle));
 
     float nearClip, farClip;
@@ -1127,14 +1211,47 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
 
     // Resync the active controller with the moved camera (free cam re-derives
     // yaw/pitch; the orbital cam re-derives its pivot and orbit distance).
-    if (mCamController == mOrbitCam && mOrbitCam) mOrbitCam->focusOnNode(sceneNode);
+    if (mCamController == mOrbitCam && mOrbitCam && orbitNode) mOrbitCam->focusOnNode(orbitNode);
+    else if (mCamController == mOrbitCam && mOrbitCam) resyncCameraController(dist);
     else if (mCamController) mCamController->setCamera(cam);
 }
 
+// F frames the WHOLE SET (EDITOR_MULTISELECT_SPEC §2.3): one framing over the
+// union of every member's world bounds, so five selected objects all end up on
+// screen instead of the primary filling it.
 void EngineSceneViewport::focusOnSelection()
 {
-    if (mSelectedNode) focusOnNode(mSelectedNode);
-    if (mSelectedNode) mLastOrbitPivot = orbitPivot();   // F then Alt+drag orbits there
+    if (mSelectedSet.size() <= 1) {
+        if (mSelectedNode) focusOnNode(mSelectedNode);
+        if (mSelectedNode) mLastOrbitPivot = orbitPivot();
+        return;
+    }
+    iris::AABB unionBounds;
+    if (!selectionBounds(unionBounds)) return;
+    focusOnTarget(unionBounds.getCenter(),
+                  qMax(0.05f, unionBounds.getSize().length() * 0.5f),
+                  iris::SceneNodePtr());
+    mLastOrbitPivot = orbitPivot();
+}
+
+/// The union of the selection's world bounds. A member with no meshes
+/// contributes its ORIGIN (a light or an empty is a point, not nothing), so a
+/// set of lights still frames. False when the set is empty.
+bool EngineSceneViewport::selectionBounds(iris::AABB &out) const
+{
+    bool any = false;
+    for (const auto &node : mSelectedSet) {
+        if (!node) continue;
+        node->update(0.0f);
+        const iris::AABB b = preview::worldBoundingBox(node);
+        const bool hasBounds = b.getMin().x() <= b.getMax().x();
+        const iris::Vec3 lo = hasBounds ? b.getMin() : node->getGlobalPosition();
+        const iris::Vec3 hi = hasBounds ? b.getMax() : node->getGlobalPosition();
+        if (!any) { out = iris::AABB(); any = true; }
+        out.merge(lo);
+        out.merge(hi);
+    }
+    return any;
 }
 
 iris::Vec3 EngineSceneViewport::orbitPivot() const
@@ -1142,6 +1259,11 @@ iris::Vec3 EngineSceneViewport::orbitPivot() const
     // Alt+LMB orbits around the SELECTION's centre (its world bounding-box
     // centre when it has meshes, else its origin). With nothing selected we
     // fall back to the last focus point, and finally to the world origin.
+    if (mSelectedSet.size() > 1) {
+        iris::AABB unionBounds;
+        if (const_cast<EngineSceneViewport *>(this)->selectionBounds(unionBounds))
+            return unionBounds.getCenter();   // orbit the SET's centre
+    }
     if (mSelectedNode) {
         mSelectedNode->update(0.0f);
         const iris::AABB bounds = preview::worldBoundingBox(mSelectedNode);
@@ -1413,15 +1535,22 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         // primitive silently lost its outline while selection/gizmo/panel kept
         // working (2026-09-06 sighting; cost a day of misattributed reports).
         // The exclusion is the GROUND MESH specifically, nothing wider.
-        iris::SceneNodePtr highlight = helpers ? mSelectedNode : iris::SceneNodePtr();
-        if (highlight && mScene && highlight == mScene->getRootNode())
-            highlight.reset();
-        if (highlight && highlight->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            const auto mn = highlight.staticCast<iris::MeshNode>();
-            if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
-                highlight.reset();
+        // The SET, member by member (EDITOR_MULTISELECT_SPEC §2.3) — the two
+        // exclusions above apply per member, not to the selection as a whole.
+        QList<iris::SceneNodePtr> highlight;
+        if (helpers) {
+            for (const auto &node : mSelectedSet) {
+                if (!node) continue;
+                if (mScene && node == mScene->getRootNode()) continue;
+                if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                    const auto mn = node.staticCast<iris::MeshNode>();
+                    if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
+                        continue;
+                }
+                highlight.append(node);
+            }
         }
-        mMirror->setHighlightedNode(highlight);
+        mMirror->setHighlightedNodes(highlight);
         // Grid spacing = the translate snap size ([ and ] re-space it live).
         pushGridForView(helpers && !mPlaying);
         // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
@@ -2190,14 +2319,32 @@ void EngineSceneViewport::setServices(StudioServices *services)
 // End / editor.snapToFloor(): drop the selection straight down onto the first
 // scene surface BELOW its bounds; no hit means the y=0 ground plane (the
 // dropPositionAt convention). Undoable (EDITOR_SHORTCUTS_SPEC §4).
+// End: every MEMBER drops onto the surface under its OWN bounds, as one undo
+// step (EDITOR_MULTISELECT_SPEC §2.3). Per member and not "the set as one
+// rigid body": two objects on a staircase have to land on their own steps.
 bool EngineSceneViewport::snapSelectionToFloor()
 {
-    if (!mSelectedNode || !mScene) return false;
-    mSelectedNode->update(0.0f);
+    if (mSelectedSet.size() > 1) {
+        const auto targets = SceneEditService::effectiveSet(mSelectedSet);
+        if (targets.isEmpty()) return false;
+        QUndoStack *stack = (mServices && mServices->undo) ? mServices->undo->stack() : nullptr;
+        if (stack) stack->beginMacro(tr("Snap %1 objects to floor").arg(targets.size()));
+        bool any = false;
+        for (const auto &node : targets) any = snapNodeToFloor(node) || any;
+        if (stack) stack->endMacro();
+        return any;
+    }
+    return snapNodeToFloor(mSelectedNode);
+}
 
-    const iris::AABB bounds = preview::worldBoundingBox(mSelectedNode);
+bool EngineSceneViewport::snapNodeToFloor(const iris::SceneNodePtr &node)
+{
+    if (!node || !mScene) return false;
+    node->update(0.0f);
+
+    const iris::AABB bounds = preview::worldBoundingBox(node);
     const bool hasBounds = bounds.getMin().x() <= bounds.getMax().x();
-    const iris::Vec3 pos = mSelectedNode->getGlobalPosition();
+    const iris::Vec3 pos = node->getGlobalPosition();
     const float bottom = hasBounds ? bounds.getMin().y() : pos.y();
     const iris::Vec3 centre = hasBounds ? bounds.getCenter() : pos;
 
@@ -2215,7 +2362,7 @@ bool EngineSceneViewport::snapSelectionToFloor()
         if (!h.node) continue;
         bool own = false;                       // ignore the selection's own subtree
         for (auto n = h.node; n; n = n->getParent())
-            if (n.data() == mSelectedNode.data()) { own = true; break; }
+            if (n.data() == node.data()) { own = true; break; }
         if (own) continue;
         if (!found || h.hitPoint.y() > targetY) { targetY = h.hitPoint.y(); found = true; }
     }
@@ -2223,13 +2370,13 @@ bool EngineSceneViewport::snapSelectionToFloor()
     const float delta = targetY - bottom;
     if (std::abs(delta) < 1e-5f) return true;   // already on the floor
 
-    const iris::Vec3 oldLocalPos = mSelectedNode->getLocalPos();
-    const iris::Quat rot = mSelectedNode->getLocalRot();
-    const iris::Vec3 scale = mSelectedNode->getLocalScale();
-    mSelectedNode->setGlobalPos(pos + iris::Vec3(0.0f, delta, 0.0f));
-    const iris::Vec3 newLocalPos = mSelectedNode->getLocalPos();
+    const iris::Vec3 oldLocalPos = node->getLocalPos();
+    const iris::Quat rot = node->getLocalRot();
+    const iris::Vec3 scale = node->getLocalScale();
+    node->setGlobalPos(pos + iris::Vec3(0.0f, delta, 0.0f));
+    const iris::Vec3 newLocalPos = node->getLocalPos();
     if (mServices && mServices->undo) {
-        mServices->undo->push(new TransformSceneNodeCommand(mSelectedNode,
+        mServices->undo->push(new TransformSceneNodeCommand(node,
                                                             oldLocalPos, rot, scale,
                                                             newLocalPos, rot, scale));
     }

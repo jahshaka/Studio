@@ -41,3 +41,30 @@ add_test(NAME gizmo.screen_size COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_scree
 set_tests_properties(gizmo.screen_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 300 LABELS "document")
 jah_no_display(gizmo.screen_size)
+
+# gizmo.group_transform — the SELECTION SET's transform (EDITOR_MULTISELECT_SPEC
+# §2.4 / §5). Document-only, like gizmo.screen_size, but with a REAL undo stack
+# and the real TransformSceneNodeCommand: the one-undo-step-for-N-members claim
+# is the point, and it cannot be asserted from a --script run (a run is itself
+# one open macro, which QUndoStack refuses to undo into).
+add_executable(test_gizmo_group test_gizmo_group.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    test_group_stubs.cpp)
+set_target_properties(test_gizmo_group PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_gizmo_group PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_gizmo_group PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+jah_document_graph(test_gizmo_group)
+add_test(NAME gizmo.group_transform COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_group
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(gizmo.group_transform PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 300 LABELS "document")
+jah_no_display(gizmo.group_transform)
