@@ -104,7 +104,16 @@ var COL_HALF = (CEIL_BOTTOM - FLOOR_TOP) / 2;
 // ---- the exhibit: a metal roughness ladder ---------------------------------
 // Four chrome spheres from mirror to satin, the point of the whole room.
 var SPHERE_SCALE = 1.7;
-[[-7.5, 0.0], [-2.5, 0.08], [2.5, 0.25], [7.5, 0.5]].forEach(function (s) {
+// THE ONE COMPOSITION CONSEQUENCE of the scene-scale convention, recorded here
+// as the convention requires. The ladder used to stand 5 units apart (2.5 m
+// after S) and be photographed through a 75-degree lens; at the convention's 45
+// degrees the widest thing a camera standing against this room's wall can frame
+// is 8.5 m, and a 2.5 m-spaced row of 1.7 m spheres is 9.2 m wide — the outer
+// two fall out of the hero frame (measured, then seen). Spacing 4.2 units
+// (2.1 m) puts all four back in with ~8% margin at 16:9, which is the picture
+// the sample has always shipped. The spheres, their sizes, their materials and
+// their order are untouched.
+[[-6.3, 0.0], [-2.1, 0.08], [2.1, 0.25], [6.3, 0.5]].forEach(function (s) {
     var b = scene.addPrimitive("sphere", {
         position: sv({ x: s[0], y: FLOOR_TOP + SPHERE_SCALE, z: 0 }) });
     node.setProperty(b, "name", "Sphere_r" + s[1]);
@@ -167,8 +176,11 @@ console.log("giStatus: " + JSON.stringify(world.giStatus()));
 // without the 75-degree ultra-wide the 2x room needed. The eye is at 2.5 m —
 // standing height plus a little, inside a 3.25 m room — and the position is
 // the shipped one scaled, so the composition is the shipped composition.
-editor.setCamera({ position: sv({ x: 1.5, y: 5.0, z: -11.0 }),
-                   lookAt: sv({ x: 0.0, y: 1.6, z: 2.0 }), fov: 45 });
+// Centred and one unit deeper than the shipped pose (which sat slightly off
+// axis under a lens wide enough not to care): at 45 degrees the ladder needs
+// the room's full depth and the symmetry.
+editor.setCamera({ position: sv({ x: 0.0, y: 4.9, z: -11.5 }),
+                   lookAt: sv({ x: 0.0, y: 1.8, z: 2.4 }), fov: 45 });
 editor.select(null);
 editor.setOverlays({ lightWires: false });
 editor.frame(25);

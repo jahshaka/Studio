@@ -160,10 +160,18 @@ assert(node.setPlanarReflector(mirror, true), "the MirrorPanel is a live planar 
 console.log("planar: " + JSON.stringify(world.planarReflections()));
 
 // THE CONVENTION LENS (45 degrees vertical = 72.7 horizontal at 16:9, already a
-// 24 mm-equivalent wide angle): from this corner it covers the room's full
-// height at 8 m without the 70-degree ultra-wide's stretch.
-editor.setCamera({ position: sv({ x: 3.6, y: 2.4, z: 3.6 }),
-                   lookAt: sv({ x: -1.4, y: 1.3, z: -2.6 }), fov: 45 });
+// 24 mm-equivalent wide angle), from the corner — pushed as far back and as
+// high as a sealed 8.5 m room allows (0.25 m off two walls), because that is
+// the whole budget a human-scale room gives a camera.
+//
+// THE FRAMING IS TIGHTER THAN THE 1.75x ROOM'S, and that is arithmetic rather
+// than a mistake: the shipped shot stood 8 m from its subject inside a 14.9 m
+// room through a 70-degree lens, and 8 m does not exist in an 8.5 m room. A
+// wide lens is how a too-big room was made photographable; at the convention's
+// lens the picture is what the room actually looks like from inside it. Content,
+// materials, lights and the mirror behaviour are untouched.
+editor.setCamera({ position: sv({ x: 4.0, y: 2.7, z: 4.0 }),
+                   lookAt: sv({ x: -0.6, y: 1.1, z: -0.9 }), fov: 45 });
 editor.select(null);
 editor.setOverlays({ lightWires: false });
 editor.frame(20);
