@@ -1,0 +1,67 @@
+// samples.session — SEVEN ARCHIVES, ONE LIBRARY, ONE ENGINE PROCESS.
+//
+// The shape the cleanstart fold (TEST_GATE_AUDIT §2, 2026-09-10) lost: the old
+// scripting.e2e.samples imported five different archives into one home and
+// opened them back to back in one process. cleanstart is one virgin home per
+// sample, reopening the same sample. What only THIS shape exercises: cross-
+// archive CAS dedup (the Ground texture every sample shares), catalog growth
+// across archives, and switching one live process from a cubemap sky + glass
+// to particles to a skinned rig to a mirror room — the process-wide-state
+// class CLAUDE.md documents (HlmsPbs binding, PFX2 defs dying with the
+// SceneManager, sky texture swaps). No fidelity probes: cleanstart owns those.
+var SAMPLES = ["Matcaps", "Particles", "Skeletal Animation", "World Background", "Physics",
+               "Mirror Room", "Showroom"];
+var ZIPS = "@SOURCE_DIR@/scenes/";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+var TOLERATED = ["setClipStates: the node has no clips"];
+
+function errorsClean(tag) {
+    var e = app.engineErrors(false);
+    var bad = [];
+    for (var i = 0; i < e.entries.length; i++) {
+        var m = e.entries[i].message, ok = false;
+        for (var t = 0; t < TOLERATED.length; t++) if (m.indexOf(TOLERATED[t]) >= 0) ok = true;
+        if (!ok) bad.push(e.entries[i]);
+    }
+    assert(e.drains > 0, tag + ": the frame loop ran (drains " + e.drains + ")");
+    assert(bad.length === 0, tag + ": no unexpected engine errors " + J(bad));
+}
+
+var guids = [];
+var pinnedTotal = 0;
+for (var i = 0; i < SAMPLES.length; i++) {
+    var name = SAMPLES[i];
+    var imported = project.importArchive(ZIPS + name + ".zip");
+    assert(imported && imported.guid && imported.guid.length > 10, name + ": importArchive");
+    guids.push(imported.guid);
+    assert(project.open(imported.guid) === true, name + ": project.open (#" + (i + 1) + " in this process)");
+    editor.frame(60, 1 / 60);
+    var members = assets.list({ scope: "project" }).length;
+    assert(members > 0, name + ": the archive's assets are members of the project (" + members + ")");
+    pinnedTotal += members;
+    var st = world.giStatus();
+    console.log(name + ": members=" + members + " gi=" + st.mode + " pcc=" + st.pccBound + " ifd=" + st.ifdBound);
+    errorsClean(name + " after open");
+    assert(project.close() === true, name + ": project.close");
+    editor.frame(5, 1 / 60);
+    errorsClean(name + " after close");
+}
+// Seven archives' members in one catalog, and nothing leaked by the
+// sequence (the shared Ground texture dedups in the CAS; a sibling import
+// must not orphan another's objects).
+assert(pinnedTotal >= SAMPLES.length * 2, "seven archives filed their members (" + pinnedTotal + " rows)");
+var gc = assets.gc({ dryRun: true });
+assert(gc && (gc.unreferencedObjects ? gc.unreferencedObjects.count === 0 : true),
+       "no object leaked by the sequence (gc dry run)");
+// Reopen the FIRST sample last: the process has swapped sky, GI arms, particle
+// defs and a skinned rig since — the state it comes back to must be clean.
+assert(project.open(guids[0]) === true, "reopen the first archive after the whole sequence");
+editor.frame(60, 1 / 60);
+errorsClean("first archive reopened last");
+assert(project.close() === true, "final close");
+console.log("samples.session complete: " + SAMPLES.length + " archives in one process");

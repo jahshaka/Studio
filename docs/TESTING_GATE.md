@@ -11,8 +11,8 @@ carries the rules.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | `ctest -j4 --output-on-failure -LE "shadercache\|benchmark" -E "^gi\.ddgi_raster$"` — everything except the shader-cache attacks, the wall-clock benchmark and the raster probe build; ~7-8 min | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
-| **PUSH** (full) | `ctest -j4 --output-on-failure` (all suites) + the `--engine-selftest` sha256 | once per BATCH of merged lanes, before a push — **SUSPENDED (owner, 2026-09-09) until the suite cleanup lands**; pushes gate on MERGE meanwhile | gate-runner |
+| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$" -E "^gi\.ddgi_raster$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`) and the raster probe build; `--timeout 120` is the default for rows that set none. **Measured 494 s (8 min 14 s) at -j4 on 1920x1080 after the cleanup (2026-09-10)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **PUSH** (full) | `ctest -j4 --timeout 120 --output-on-failure` (all suites) + the `--engine-selftest` sha256 | once per BATCH of merged lanes, before a push — **SUSPENDED (owner, 2026-09-09) until the suite cleanup lands**; pushes gate on MERGE meanwhile | gate-runner |
 | **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, gi.ddgi_raster, the rigperf bench — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box | the lead |
 
 Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
@@ -86,7 +86,7 @@ prefix first.
 A failure is re-run SOLO on a quiet box up to 3×; 3/3 green = environmental, with the
 evidence string in the report (host-load timing, `VK_ERROR_OUT_OF_DEVICE_MEMORY`, the
 texture-worker SEGV class). Known contention-sensitive suites: open.responsive,
-app.engine_selftest_validation, app.pacing_undo, threading.newproject_stall,
+app.engine_selftest_validation, app.input_keys, threading.newproject_stall,
 scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
 sun_light, ui.media_lazy, gi.budget. Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is

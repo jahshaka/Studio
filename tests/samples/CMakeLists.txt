@@ -57,3 +57,26 @@ foreach(SAMPLE IN LISTS _samples)
         LABELS "scripting"
         TIMEOUT 480)
 endforeach()
+
+# THE MULTI-ARCHIVE SESSION (code review of the cleanup, 2026-09-10): seven
+# archives imported into ONE home and opened back to back in ONE process — the
+# shape the cleanstart fold lost (cross-archive dedup, catalog growth, live
+# scene switches across the process-wide-state class). ~35 s, no pixel probes.
+configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONLY)
+set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
+file(MAKE_DIRECTORY ${_shome}/run)
+add_test(NAME samples.freshhome.session
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_shome}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/freshhome.cmake)
+set_tests_properties(samples.freshhome.session PROPERTIES
+    FIXTURES_SETUP samples_home_session
+    LABELS "scripting")
+add_test(NAME samples.session
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
+         WORKING_DIRECTORY ${_shome}/run)
+set_tests_properties(samples.session PROPERTIES
+    ENVIRONMENT "HOME=${_shome};JAHSHAKA_DATA_ROOT=${_shome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED samples_home_session
+    LABELS "scripting"
+    TIMEOUT 300)

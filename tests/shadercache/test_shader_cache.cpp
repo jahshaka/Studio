@@ -196,6 +196,10 @@ static void corruption(const char *label, void (*damage)(const std::string &)) {
     const std::vector<std::string> files = cacheFiles();
     CHECK(files.size() >= 2, "there is more than one file to attack");
     const DirSnapshot pristine = snapshotDir();
+    // A file the snapshot could not read would be silently absent from every
+    // restore below, and the attacks would then run against a short cache
+    // (code review 2026-09-10).
+    CHECK(pristine.size() == files.size(), "the snapshot captured every seeded file");
 
     for (const std::string &name : files) {
         // Every file is attacked against an otherwise-good cache — restored

@@ -585,7 +585,11 @@ function meshesByName(name) {
 // lifetime, so the plume is full and steady.
 //
 // 960x540 is the size the probe boxes below were mapped at — do not change it
-// without re-mapping them.
+// without re-mapping them. And they are taken AFTER renderSanity("open")'s 120
+// fixed-step frames plus this function's 150: t = 4.5 s of simulation, not the
+// 2.5 s the old e2e_samples shot at. Fixed dt keeps that deterministic; change
+// renderSanity's frame count and every fidelity probe moves (code review
+// 2026-09-10).
 function shoot(name, probePoints) {
     editor.frame(150, 1.0 / 60.0);
     var shot = editor.screenshot("samples_" + name + ".png", 960, 540, probePoints);

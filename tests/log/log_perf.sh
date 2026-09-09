@@ -120,18 +120,19 @@ js 'app.space("editor")' > /dev/null || true
 
 # One second per sample, then wait THREE in real time with the loop turning.
 # (Was five. The two windows below were 8 s of the suite's 37 and both were
-# picked round rather than measured: a 1 s sampler nominally produces 3 lines
-# in 3 s, and the threshold below keeps the same 2-in-3 margin over nominal
-# that 3-in-5 had — TEST_GATE_AUDIT.md §3.)
+# picked round rather than measured — TEST_GATE_AUDIT.md §3.) FOUR seconds, not
+# three (code review 2026-09-10): a QTimer that misses intervals during a
+# main-thread stall fires once per event-loop pass, so a 3 s window with a
+# 2-line threshold had ONE tick of margin; 4 s keeps two, like 3-in-5 did.
 js 'JSON.stringify(log.perf(1))' > /dev/null || fail=1
 MARK=$(js 'log.mark("timer window")')
-sleep 3
+sleep 4
 COUNT=$(js 'log.since('"$MARK"', {}).filter(function(r){return /\]perf: /.test(r);}).length')
 
 if [ "${COUNT:-0}" -ge 2 ]; then
-    echo "log.perf: ok — the 1 s timer produced $COUNT lines in a 3 s window"
+    echo "log.perf: ok — the 1 s timer produced $COUNT lines in a 4 s window"
 else
-    echo "log.perf: FAIL — only ${COUNT:-0} perf lines in a 3 s window at a 1 s interval"
+    echo "log.perf: FAIL — only ${COUNT:-0} perf lines in a 4 s window at a 1 s interval"
     fail=1
 fi
 

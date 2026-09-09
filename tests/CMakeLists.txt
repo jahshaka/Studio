@@ -172,6 +172,11 @@ endfunction()
 # keys with fixed sleeps between them).
 #
 # A new row takes 6x its own measured seconds, or the floor, whichever is more.
+# ROWS THAT SET NO TIMEOUT (46 of them: the sub-second document suites, the
+# wipe fixtures) get ctest's DEFAULT, which every documented gate command sets
+# to `--timeout 120` (docs/TESTING_GATE.md) — never ctest's own 1500 s. The
+# contention class is per row (engine_selftest_validation 180, ui.media_lazy
+# 120, shadergraph.bake_output 120, claude.chat the default), not a flat 300.
 
 function(jah_no_display)
     foreach(_t IN LISTS ARGV)

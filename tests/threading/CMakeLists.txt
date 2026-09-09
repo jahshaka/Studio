@@ -160,7 +160,7 @@ add_test(NAME threading.import_soak
 set_tests_properties(threading.import_soak PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_soak};JAHSHAKA_DATA_ROOT=${_thr_home_soak}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_import_soak
-    LABELS "threading" TIMEOUT 120)
+    LABELS "threading" TIMEOUT 300)   # 20 iterations x a 30 s budget each: the timeout must not undercut the suite's own budget (code review 2026-09-10)
 
 add_test(NAME threading.freshhome.newproject_stall
          COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_stall}

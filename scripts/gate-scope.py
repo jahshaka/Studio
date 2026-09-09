@@ -105,7 +105,12 @@ AREA_RULES = [
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
 # contract of the scripting surface), ~15 s together.
 ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
-MERGE_TIER = 'ctest -j4 --output-on-failure -LE "shadercache|benchmark" -E "^gi\\.ddgi_raster$"'
+# Anchored: `benchmark` alone would also drop the `benchmark-smoke` rows and `shadercache`
+# would drop the product-contract cache suites (code review 2026-09-10). `--timeout 120` is
+# ctest's DEFAULT for the rows that set no TIMEOUT (46 of them) — a hang costs 2 min, not 25.
+NIGHTLY_LABELS = {"benchmark", "shadercache-attack"}
+MERGE_TIER = ('ctest -j4 --timeout 120 --output-on-failure '
+              '-LE "^(benchmark|shadercache-attack)$" -E "^gi\\.ddgi_raster$"')
 
 
 def sh(cmd, cwd=ROOT):
@@ -149,6 +154,7 @@ def load_inventory(build):
             "headless": "--headless" in cmd,
             "script": script,
             "serial": bool(props.get("RUN_SERIAL")),
+            "labels": set(props.get("LABELS", []) or []),
         }
     return inv
 
@@ -303,12 +309,16 @@ def main():
         rationale.append((p, "; ".join(hit) or "NO RULE → merge tier"))
     if code_moved: add(ALWAYS_ON_CODE, "code moved: smoke + contract")
 
+    # The nightly guards never ride a scoped gate (they are the PUSH/NIGHTLY tier's);
+    # gi.ddgi_raster likewise.
+    nightly = [n for n in selected if (inv[n]["labels"] & NIGHTLY_LABELS) or n == "gi.ddgi_raster"]
+    for n in nightly: selected.pop(n)
     names = sorted(selected)
     est = sum(costs.get(n, 10.0) for n in names)
     serial = sum(costs.get(n, 10.0) for n in names if inv[n]["serial"])
     wall = max(est / 4.0, serial) + 5
     regex = "^(" + "|".join(re.escape(n) for n in names) + ")$"
-    cmd = f"ctest -j4 --output-on-failure -R '{regex}'"
+    cmd = f"ctest -j4 --timeout 120 --output-on-failure -R '{regex}'"
 
     if a.json:
         print(json.dumps({"paths": paths, "suites": names, "fallback": fallback, "estimated_seconds": est,
@@ -324,6 +334,7 @@ def main():
         return
     if skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
+    if nightly: print(f"\n(nightly-tier suites left out: {sorted(nightly)})")
     print(f"\nSCOPED tier: {len(names)} suite(s), ~{est:.0f} suite-seconds, ~{wall/60:.1f} min wall at -j4 "
           f"(serial islands {serial:.0f} s); costs from scripts/gate-times.txt + the build dir's last run, 10 s assumed otherwise")
     for n in names: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
