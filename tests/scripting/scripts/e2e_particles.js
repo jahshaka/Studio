@@ -300,7 +300,17 @@ for (var p = 0; p < shot.probes.length; p++) {
         lit++;
         // The ramp is (3.0, 0.6, 0.1) fading to (1.5, 0.2, 0.02): red must
         // gain at least as much as blue anywhere the plume is not clipped.
-        if (dr >= db) warm++;
+        // ONE COUNT OF SLACK, for the block average's truncation. A probe is
+        // a 5x5 block averaged with integer division; where the plume is
+        // CLIPPED WHITE the true delta is (255 - ground) in every channel, and
+        // the truncated red lands one count below the truncated blue whenever
+        // the ground's grey sum sits on the wrong residue class mod 5 — which
+        // the VIEWPORT ASPECT decides (focusSelection frames from the rendered
+        // vfov, so a 1600x1000 rig display moved the camera 7.7% back and the
+        // ground one count down; diagnosed 2026-09-10, MASTER_QUEUE §23). The
+        // slack is exactly the truncation error and nothing more: a plume
+        // that is genuinely blue-biased gains blue by far more than one count.
+        if (dr + 1 >= db) warm++;
     }
 }
 console.log("plume probes brighter than the empty frame: " + lit + "/" + probes.length +
