@@ -872,8 +872,10 @@ void letterbox_post_chain_runs_on_the_shot_only() {
     }
     pip::aimMain(v);
 
-    auto look = [](LookKind k, float p0, float p1 = 0.0f, float p2 = 0.0f, float p3 = 0.0f) {
-        LookDesc d; d.kind = k; d.p[0] = p0; d.p[1] = p1; d.p[2] = p2; d.p[3] = p3; return d;
+    auto look = [](LookKind k, float p0, float p1 = 0.0f, float p2 = 0.0f, float p3 = 0.0f,
+                   float p4 = 0.0f, float p5 = 0.0f, float p6 = 0.0f) {
+        LookDesc d; d.kind = k; d.p[0] = p0; d.p[1] = p1; d.p[2] = p2; d.p[3] = p3;
+        d.p[4] = p4; d.p[5] = p5; d.p[6] = p6; return d;
     };
     PostFxDesc fx;
     fx.allowOffscreen = true;
@@ -885,8 +887,10 @@ void letterbox_post_chain_runs_on_the_shot_only() {
     fx.smaaPreset = 2;
     // Old Movie (vignette, scratches, grain) + Film Grade (a warm tint with
     // its own vignette): the two looks that visibly graded the bars.
+    // (Film Grade's p[4..6] is the TINT — a zero tint multiplies the frame to
+    // black, which is the one way to get this case's bars 'right' for free.)
     fx.looks = { look(LookKind::OldMovie, 1.0f, 1.0f, 1.0f, 1.0f),
-                 look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f) };
+                 look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f, 1.1f, 1.0f, 0.9f) };
     v->setPostFx(fx);
 
     CameraDesc cam;
@@ -907,29 +911,30 @@ void letterbox_post_chain_runs_on_the_shot_only() {
         }
     }
 
-    // The bars: every row whose EVERY pixel is exactly black. A 2:1 shot in a
-    // square view leaves 64 of 128 rows, 32 top and 32 bottom.
-    unsigned barRows = 0, nearBlackRows = 0, worst = 0;
+    // THE BARS, BY GEOMETRY: a 2:1 shot in a 128x128 view is rows 32..95, so
+    // the bars are rows 0..31 and 96..127 (chain::letterboxRect). Every bar
+    // pixel must be exactly (0,0,0) — not "dark": Old Movie's vignette makes
+    // the shot's own edge rows near-black too, which is why the bars are not
+    // found by looking for black rows.
+    unsigned barRows = 0, worst = 0, litShot = 0;
     for (unsigned y = 0; y < boxed.height; ++y) {
-        bool exact = true, close = true;
+        const bool bar = y < 32 || y >= 96;
+        bool exact = true;
         for (unsigned x = 0; x < boxed.width; ++x) {
             const Px p = px(boxed, x, y);
             const int m = std::max(p.r, std::max(p.g, p.b));
-            if (m != 0) exact = false;
-            if (m > 12) close = false;
-            if (y < 30 || y >= 98) worst = std::max(worst, unsigned(m));
+            if (bar) { if (m != 0) exact = false; worst = std::max(worst, unsigned(m)); }
+            else if (y >= 34 && y < 94 && m > 24) ++litShot;
         }
-        if (exact) ++barRows;
-        if (close) ++nearBlackRows;
+        if (bar && exact) ++barRows;
     }
-    std::printf("    graded letterbox: %u exactly-black rows, %u near-black rows of %u; "
-                "worst bar channel %u/255\n", barRows, nearBlackRows, boxed.height, worst);
-    CHECK_MSG(nearBlackRows >= 60 && nearBlackRows <= 68,
-              "the 2:1 shot is letterboxed at all: %u near-black rows of %u",
-              nearBlackRows, boxed.height);
-    CHECK_MSG(barRows >= 60,
-              "THE BARS ARE PURE BLACK through bloom + Old Movie + Film Grade: %u exactly "
-              "black rows (expected ~64), worst bar channel %u/255", barRows, worst);
+    std::printf("    graded letterbox: %u of 64 bar rows exactly black, worst bar channel %u/255, "
+                "%u lit px in the shot\n", barRows, worst, litShot);
+    CHECK_MSG(litShot > 60u * boxed.width / 4u,
+              "the 2:1 shot is drawn inside the letterbox (%u lit px)", litShot);
+    CHECK_MSG(barRows == 64u,
+              "THE BARS ARE PURE BLACK through bloom + Old Movie + Film Grade: %u of 64 bar rows "
+              "exactly black, worst bar channel %u/255 (unrestricted chain: 80)", barRows, worst);
 
     // ...and the shot is still graded: the same frame with no looks and no
     // bloom differs inside the rectangle.
@@ -952,11 +957,25 @@ void letterbox_post_chain_runs_on_the_shot_only() {
     // No letterbox = the frame it always was. Time-independent looks for the
     // round trip (Old Movie animates on Ogre's time_0_x).
     PostFxDesc stillFx = fx;
-    stillFx.looks = { look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f),
+    stillFx.looks = { look(LookKind::FilmGrade, 1.0f, 1.2f, 1.1f, 0.8f, 1.1f, 1.0f, 0.9f),
                       look(LookKind::Posterize, 0.6f, 6.0f, 1.0f) };
+    // (The A/B evidence frame first: the letterboxed STILL grade, dumped for
+    // the inner-rect comparison against the pre-change build — Old Movie
+    // animates, so the graded frame above cannot be compared byte for byte.)
+    v->setPostFx(stillFx);
+    render(e, 4);
+    if (std::getenv("JAH_ENGINE_DUMP")) {
+        Image still; REQUIRE(v->readPixels(still));
+        FILE *fp = std::fopen("letterbox-post-still.ppm", "wb");
+        if (fp) {
+            std::fprintf(fp, "P6\n%u %u\n255\n", still.width, still.height);
+            for (size_t i = 0; i < size_t(still.width) * still.height; ++i)
+                std::fwrite(&still.rgba[i * 4u], 1, 3, fp);
+            std::fclose(fp);
+        }
+    }
     cam.constrainAspect = false;
     v->setCamera(cam);
-    v->setPostFx(stillFx);
     render(e, 4);
     Image free0; REQUIRE(v->readPixels(free0));
     cam.constrainAspect = true;
