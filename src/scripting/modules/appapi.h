@@ -47,6 +47,9 @@ public:
     Q_INVOKABLE QVariantMap renderStats();
     Q_INVOKABLE QVariantMap engineObjects();
     Q_INVOKABLE QVariantMap threading();
+    Q_INVOKABLE QVariantMap memoryStats();
+    Q_INVOKABLE QVariantMap reclaimMemory();
+    Q_INVOKABLE bool profiling(const QVariant &on = QVariant());
     Q_INVOKABLE QVariantMap textureStreaming();
     Q_INVOKABLE QVariantMap waitForTextures();
     Q_INVOKABLE QVariantList ogreSamples();

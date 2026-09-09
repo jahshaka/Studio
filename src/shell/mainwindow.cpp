@@ -1709,6 +1709,12 @@ void MainWindow::closeProject()
     scene->cleanup();
     scene.clear();
 
+    // R4: the document's nodes are gone from the staging manager now, and
+    // the engine scene went with removeScene() — the one moment a SIMD-pool
+    // shrink has something to give back (Engine::reclaimMemory; the GPU pools
+    // free themselves a few frames after this).
+    if (auto eng = EngineHost::instance().engine()) eng->reclaimMemory();
+
 	undoService->resetSavedCount();
 
 	if (currentSpace == WindowSpaces::DESKTOP) {

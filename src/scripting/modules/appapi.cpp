@@ -202,6 +202,34 @@ QVector<VerbInfo> AppApi::verbs() const
           "baseline. That is exactly what the perf.epic_steady_state gate does with it. Cheap: "
           "container sizes plus one walk of the (tiny) view and scene vectors.",
           Needs::Engine },
+        { "memoryStats", "app.memoryStats() -> {gpuPoolCapacityBytes, gpuPoolFreeBytes, gpuPools, gpuPoolsIncludeTextures, sceneManagers, simdNodes, simdObjects, simdNodeDepths, residentBytes}",
+          "What the renderer's MEMORY POOLS hold (riders lane R4). The GPU rows are the "
+          "VaoManager's buffer pools — everything allocated from the driver (on Vulkan that "
+          "includes textures, `gpuPoolsIncludeTextures`) and how much of it is unused; a pool "
+          "that empties is returned to the driver by the engine on its own a few frames later, "
+          "so `gpuPoolCapacityBytes` falling after a project closes is the number to watch. "
+          "The SIMD rows are the scene managers' SoA node/object pools, which grow to the "
+          "high-water mark of nodes ever alive and shrink only on app.reclaimMemory(): the "
+          "backend exposes no byte count for them, so the rows are the counts that size them "
+          "plus the process's resident set (`residentBytes`, Linux), where a shrink shows. "
+          "Cheap — reads the pool tables, renders nothing.",
+          Needs::Engine },
+        { "reclaimMemory", "app.reclaimMemory() -> {before: {...}, after: {...}}",
+          "RECLAIM: shrinks every scene manager's SIMD pools to what is live (they never shrink "
+          "by themselves), and returns app.memoryStats() from before and after so the delta is "
+          "in the answer. The editor calls it after a project closes and after an import batch "
+          "finishes; it helps only after a large REMOVAL, never after growth. The GPU pools "
+          "need no call (see app.memoryStats). Safe between frames; no pixel changes.",
+          Needs::Engine },
+        { "profiling", "app.profiling([on]) -> bool",
+          "The engine's opt-in PASS PROFILER (`--profile` on the command line is the same "
+          "switch at boot). With no argument, reads it. On, every view logs one line per ~120 "
+          "frames to the ogre log: the CPU submission time of each compositor pass — avg and "
+          "max per frame, by the pass's profiling id, top entries first. That is what the "
+          "render thread spent recording the pass, including any wait it did inside it; it is "
+          "NOT GPU time (the backend pin has no timestamp-query surface). Off by default and "
+          "free when off: no listener exists.",
+          Needs::Engine },
         { "threading", "app.threading() -> {multithreadedShaderCompilation, shaderThreadingMode, sceneWorkerThreads, hlmsThreads}",
           "WHAT THE ENGINE IS THREADING (SPECS/THREADING_ADOPTION_SPEC.md P1). "
           "`multithreadedShaderCompilation` is the render system's OWN answer to "
@@ -739,6 +767,60 @@ QVariantMap AppApi::engineObjects()
     out.insert("textures", c.textures);
     out.insert("datablocks", c.datablocks);
     return out;
+}
+
+namespace {
+QVariantMap memoryStatsToMap(const jahshaka::engine::MemoryStats &m)
+{
+    QVariantMap out;
+    out.insert("gpuPoolCapacityBytes", QVariant::fromValue(qulonglong(m.gpuPoolCapacityBytes)));
+    out.insert("gpuPoolFreeBytes", QVariant::fromValue(qulonglong(m.gpuPoolFreeBytes)));
+    out.insert("gpuPools", m.gpuPools);
+    out.insert("gpuPoolsIncludeTextures", m.gpuPoolsIncludeTextures);
+    out.insert("sceneManagers", m.sceneManagers);
+    out.insert("simdNodes", m.simdNodes);
+    out.insert("simdObjects", m.simdObjects);
+    out.insert("simdNodeDepths", m.simdNodeDepths);
+    out.insert("residentBytes", QVariant::fromValue(qulonglong(m.residentBytes)));
+    return out;
+}
+}   // namespace
+
+QVariantMap AppApi::memoryStats()
+{
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.memoryStats: no engine in this session"); return out; }
+    jahshaka::engine::MemoryStats m;
+    if (!engine->memoryStats(m)) {
+        fail("app.memoryStats: the engine could not report its pools");
+        return out;
+    }
+    return memoryStatsToMap(m);
+}
+
+QVariantMap AppApi::reclaimMemory()
+{
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.reclaimMemory: no engine in this session"); return out; }
+    jahshaka::engine::MemoryStats before, after;
+    if (!engine->reclaimMemory(&before, &after)) {
+        fail("app.reclaimMemory: the engine refused: " +
+             QString::fromStdString(engine->lastError()));
+        return out;
+    }
+    out.insert("before", memoryStatsToMap(before));
+    out.insert("after", memoryStatsToMap(after));
+    return out;
+}
+
+bool AppApi::profiling(const QVariant &on)
+{
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.profiling: no engine in this session"); return false; }
+    if (on.isValid() && !on.isNull()) engine->setProfiling(on.toBool());
+    return engine->profiling();
 }
 
 QVariantMap AppApi::threading()
