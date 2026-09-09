@@ -241,6 +241,7 @@ set(SRCS
     src/services/engineerrorpump.cpp
     src/services/framepacing.cpp
     src/services/outlinesettings.cpp
+    src/services/nodenaming.cpp
     src/services/ogresamples.cpp
     src/services/jahlog.cpp
     src/services/sessionmarkers.cpp

@@ -160,4 +160,63 @@ var atRoot = editor.paste();
 assert(atRoot.length === 2, "paste with no selection still pastes");
 assert(rootChildren().indexOf(atRoot[0]) >= 0, "at the scene root");
 
+// ---- 5. THE COPY'S NAME (owner decision 2026-09-09, the Unreal rule) -------
+//
+// "Cube" -> "Cube2" -> "Cube3": a numeric suffix, NO space, never "Cube Copy",
+// unique among SIBLINGS — and ONE rule for Duplicate and for Paste, because a
+// copy is a copy however it was made. services.selection_set gates the rule
+// itself and its edges; this is the rule reaching a real document through the
+// two verbs a user actually presses.
+//
+// Everything happens under a FRESH container, because the sections above left
+// cubes and spheres at the root and the rule is about siblings.
+function nameOf(id) {
+    var info = node.info(id);
+    return info ? info.name : null;
+}
+
+editor.selectNone();
+var holder = scene.addEmpty();
+var box = scene.addPrimitive("cube");
+assert(node.reparent(box, holder), "the cube moved under the fresh container");
+assert(nameOf(box) === "Cube", "the original is the plain name (" + nameOf(box) + ")");
+
+editor.select(box);
+var c1 = editor.duplicateSelection();
+assert(c1.length === 1 && nameOf(c1[0]) === "Cube2",
+       "Duplicate: Cube -> Cube2, no space, no ' Copy' (" + nameOf(c1[0]) + ")");
+editor.select(c1[0]);
+var c2 = editor.duplicateSelection();
+assert(nameOf(c2[0]) === "Cube3",
+       "Duplicate again counts on from the COPY's number: Cube2 -> Cube3 (" +
+       nameOf(c2[0]) + ")");
+editor.select(box);
+var c3 = editor.duplicateSelection();
+assert(nameOf(c3[0]) === "Cube4",
+       "and duplicating the ORIGINAL again skips the taken numbers (" + nameOf(c3[0]) + ")");
+assert(nameOf(box) === "Cube", "the original is never renamed");
+assert(nameOf(c1[0]).indexOf(" ") === -1, "no space anywhere in a copy's name");
+
+// PASTE takes the same rule — one rule for both.
+editor.select(box);
+assert(editor.copy() === 1, "one fragment copied");
+var p1 = editor.paste();
+assert(p1.length === 1, "one node pasted");
+assert(node.info(p1[0]).parent === holder, "beside the primary, under the same parent");
+assert(nameOf(p1[0]) === "Cube5",
+       "Paste beside the original takes the next free suffix (" + nameOf(p1[0]) + ")");
+
+// ...but ONLY where it collides. Pasting into a parent that has no node of
+// that name keeps the name: the suffix disambiguates, it does not brand.
+editor.selectNone();
+var other = scene.addEmpty();
+var slot = scene.addPrimitive("sphere");
+assert(node.reparent(slot, other), "a sphere under the other container");
+editor.select(slot);                     // paste lands beside slot, under `other`
+var p2 = editor.paste();
+assert(p2.length === 1 && node.info(p2[0]).parent === other,
+       "the second paste landed under the other container");
+assert(nameOf(p2[0]) === "Cube",
+       "a free name under a DIFFERENT parent is kept verbatim (" + nameOf(p2[0]) + ")");
+
 console.log("scripting.e2e.multiselect_edit: ALL PASS");

@@ -13,7 +13,7 @@ Headless suites + `--headless` script runs only, EXPLICIT DISPLAY on every invoc
 ## Steps
 1. [x] Primary outline colour (Blender way) — irisgl Scene + SceneMirror, prefs row,
        editor.outline()/setOutline verbs, overlays() report, app.multiselect_outline extension.
-2. [ ] Unreal naming: Duplicate + Paste -> "Cube" -> "Cube2" -> "Cube3", unique among siblings.
+2. [x] Unreal naming: Duplicate + Paste -> "Cube" -> "Cube2" -> "Cube3", unique among siblings.
 3. [ ] Navigation: editor fly moves to arrows + PageUp/PageDown; W/A/S/D/Q/E freed.
        Player keeps BOTH. Docs + Preferences text.
 4. [ ] Ctrl+A `edit.selectAll` shortcut yielding to text fields.
@@ -23,3 +23,6 @@ Headless suites + `--headless` script runs only, EXPLICIT DISPLAY on every invoc
 - step 1 DONE: irisgl 7bb0b87 (lane-mselextras-irisgl) + Studio commit below.
   Verified: scripting.e2e.multiselect PASS (headless). app.multiselect_outline +
   mirror.* need the Vulkan gate (blocked until GO).
+- step 2 DONE: services/nodenaming.h|.cpp; duplicateNode + insertFragment rename.
+  Verified: services.selection_set PASS (12 naming cases), scripting.e2e.multiselect_edit PASS
+  (Cube -> Cube2 -> Cube3 -> Cube4, paste Cube5, free name under another parent kept).

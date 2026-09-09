@@ -31,7 +31,11 @@ set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
 # Real document nodes, so it boots the headless document graph like every other
 # document suite; no display, no GPU.
 add_executable(test_selection_set test_selection_set.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp)
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
+    # ...and the COPY NAMING rule (owner decision 2026-09-09), which is the
+    # other half of "what a set edit produces". Another leaf: QString plus
+    # SceneNode::children, no services, no engine.
+    ${CMAKE_SOURCE_DIR}/src/services/nodenaming.cpp)
 set_target_properties(test_selection_set PROPERTIES AUTOMOC ON
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
