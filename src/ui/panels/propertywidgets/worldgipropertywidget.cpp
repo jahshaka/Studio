@@ -304,6 +304,24 @@ void WorldGiPropertyWidget::rebuild()
                    "leaves it out, which is how this behaved before the fix. A sealed room "
                    "sees no difference either way: it has no sky to see."));
             connect(ddgiAmbient, SIGNAL(valueChanged(float)), SLOT(onDdgiAmbientChanged(float)));
+            // THE PROBE SOURCE (GI_UNIFIED_SPEC P3 "A2", rayon2 S3). Advanced
+            // only, by decree: no tier writes it, epic stays voxel-fed, so it
+            // carries no pin mark and no registry row.
+            ddgiSource = this->addComboBox(tr("Probe Source"));
+            ddgiSource->addItem(tr("Automatic (voxel)"));
+            ddgiSource->addItem(tr("Voxel cone tracing"));
+            ddgiSource->addItem(tr("Rasterised captures (sees animation)"));
+            ddgiSource->setCurrentIndex(qBound(0, scene->giDdgiSource + 1, 2));
+            ddgiSource->setToolTip(
+                tr("Where the field's probes get their light.\n\n"
+                   "Voxel cone tracing reads the voxel volume the field sits over: cheap, and "
+                   "blind to anything the voxelizer did not bake — a skinned character "
+                   "animates inside a static voxel of itself.\n\n"
+                   "Rasterised captures render six small faces per probe from the live scene "
+                   "instead and re-capture while rigs move, under the same GI Update Budget. "
+                   "The field is never born dark: it starts from the voxel answer."));
+            connect(ddgiSource, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
+                    this, &WorldGiPropertyWidget::onDdgiSourceChanged);
         }
 
         // P1a.3, adapted: the spec asked for "fit to SELECTION", but this panel
@@ -434,6 +452,11 @@ void WorldGiPropertyWidget::onDdgiIntensityChanged(float value)
 void WorldGiPropertyWidget::onDdgiAmbientChanged(float value)
 {
     if (!!scene) scene->giDdgiAmbient = qBound(0.0f, value, 8.0f);
+}
+
+void WorldGiPropertyWidget::onDdgiSourceChanged(int index)
+{
+    if (!!scene) scene->giDdgiSource = qBound(-1, index - 1, 1);
 }
 
 void WorldGiPropertyWidget::onFitBoundsClicked()

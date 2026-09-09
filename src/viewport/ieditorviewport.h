@@ -411,6 +411,9 @@ public:
         int  ifdProbes = 0;
         bool ifdConverged = false;
         int  ifdProbesPerFrame = 0;
+        /// What is feeding the probes: true = rasterised captures (world.gi's
+        /// ddgiSource resolved to raster and the engine took it), false = voxel.
+        bool ifdRaster = false;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 

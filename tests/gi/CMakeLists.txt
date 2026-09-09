@@ -301,3 +301,24 @@ add_dependencies(test_gi_ddgi_ambient JahshakaEngineMedia)
 add_test(NAME gi.ddgi_ambient COMMAND test_gi_ddgi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 900 LABELS "engine")
+
+# gi.ddgi_raster — THE RASTER-FED IRRADIANCE FIELD (GI_UNIFIED_SPEC.md P3 "A2",
+# rayon2 S3): probes fed by six 32x32 scene renders each, re-converging under
+# the update budget while a skinned rig poses. Its own binary (process-wide
+# HlmsPbs binding); needs JahshakaIfdRaster.compositor staged and patch 0023 in
+# the IrradianceFields media (the suite's case 1 says which is missing).
+add_executable(test_gi_ddgi_raster test_gi_ddgi_raster.cpp)
+set_target_properties(test_gi_ddgi_raster PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_ddgi_raster PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_ddgi_raster PRIVATE JahshakaEngine)
+add_dependencies(test_gi_ddgi_raster JahshakaEngineMedia)
+add_test(NAME gi.ddgi_raster COMMAND test_gi_ddgi_raster
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ddgi_raster PROPERTIES TIMEOUT 900 LABELS "engine")

@@ -61,6 +61,7 @@ protected slots:
     void onDdgiToggled(bool on);
     void onDdgiIntensityChanged(float value);
     void onDdgiAmbientChanged(float value);
+    void onDdgiSourceChanged(int index);
     void onFitBoundsClicked();
     void onResetAdvancedClicked();
 
@@ -81,6 +82,7 @@ private:
     CheckBoxWidget *ddgiToggle = nullptr;
     HFloatSliderWidget *ddgiIntensity = nullptr;
     HFloatSliderWidget *ddgiAmbient = nullptr;
+    ComboBoxWidget *ddgiSource = nullptr;
     QPushButton *fitBoundsButton = nullptr;
     QPushButton *advancedButton = nullptr;
     QPushButton *resetAdvancedButton = nullptr;
