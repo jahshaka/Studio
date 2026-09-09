@@ -153,9 +153,13 @@ flyhold() {   # $1 = key name, $2 = seconds
     xdotool mouseup 3; sleep 0.3
 }
 
-# |a - b| as a float, via jq (bc is not everywhere and jq already is).
+# Float maths via jq (bc is not everywhere and jq already is). NOTE THE -r ON
+# gt: jq prints a string RESULT quoted, so without it the answer is "yes" with
+# the quotes and every comparison below silently takes the failing branch —
+# which is exactly how this suite first reported four failures against a run
+# whose own trace showed the camera moving 7.8 units (2026-09-09).
 dist() { jq -n --argjson a "$1" --argjson b "$2" '(($a.x-$b.x)*($a.x-$b.x)+($a.y-$b.y)*($a.y-$b.y)+($a.z-$b.z)*($a.z-$b.z)) | sqrt'; }
-gt()   { jq -n --argjson a "$1" --argjson b "$2" 'if $a > $b then "yes" else "no" end'; }
+gt()   { jq -rn --argjson a "$1" --argjson b "$2" 'if $a > $b then "yes" else "no" end'; }
 
 activate
 js 'project.create("navigation_keys")' > /dev/null || { echo "navigation_keys: no project"; exit 1; }
