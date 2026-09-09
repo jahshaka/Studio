@@ -1,0 +1,40 @@
+{
+    "arm": "before (pieces nudged apart: one instance and one clip push per piece)",
+    "build_type": "Debug",
+    "characters": 4,
+    "commit": "171615c5",
+    "compiler": "GNU 15.2.0",
+    "counters": {
+        "r.clip_pushes_frame": 20,
+        "r.instances": 20,
+        "r.rigged_nodes": 20,
+        "r.shared": 0,
+        "r.streamed_bones": 56,
+        "render.draws": 1,
+        "render.frame_ms": 0.7406395178138236,
+        "render.triangles": 112,
+        "scene.characters": 4,
+        "scene.pieces": 20
+    },
+    "metrics": {
+        "t.sync_ms": {
+            "max_ms": 0.339556,
+            "mean_ms": 0.24132042083333324,
+            "median_ms": 0.21528,
+            "min_ms": 0.207194,
+            "n": 240,
+            "rcv": 0.047409041248606475
+        },
+        "t.tick_ms": {
+            "max_ms": 0.928249,
+            "mean_ms": 0.6603004249999997,
+            "median_ms": 0.6615655,
+            "min_ms": 0.574324,
+            "n": 240,
+            "rcv": 0.13696052424136387
+        }
+    },
+    "note": "BEFORE: pieces nudged 1 mm apart so the shipped rule refuses to share — one SkeletonInstance and one clip push PER PIECE. Back-to-back with the baseline, private Xvfb :91, Debug + ASan.",
+    "recorded": "2026-09-09T02:54:25Z",
+    "schema": 1
+}

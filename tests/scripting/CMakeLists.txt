@@ -766,3 +766,8 @@ set_tests_properties(scripting.e2e.glb_textures PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 180)
+
+# AVATAR_RIG_PERF_SPEC §3.5: the rig-cost read surface, in the real binary with
+# the ENGINE UP — `available` is half of what the suite checks, and a headless
+# session reports false by design.
+add_script_e2e(rig_stats e2e_rig_stats.js)

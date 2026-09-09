@@ -1594,6 +1594,22 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     return s;
 }
 
+IEditorViewport::RigStatsInfo EngineSceneViewport::rigStats() const
+{
+    RigStatsInfo s;
+    if (!mEngineScene) return s;   // available stays false: no engine, no counts
+    const jahshaka::engine::RigStats r = mEngineScene->rigStats();
+    s.available = true;
+    s.rigged = int(r.rigged);
+    s.instances = int(r.instances);
+    s.shared = int(r.shared);
+    s.streamedBones = int(r.streamedBones);
+    // The push counter is the MIRROR's: the engine cannot know how often it was
+    // told, only what it holds.
+    if (mMirror) s.clipPushes = mMirror->clipStatePushes();
+    return s;
+}
+
 QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
 {
     if (!mMirror || !mEngineScene || !mScene) return QString();
