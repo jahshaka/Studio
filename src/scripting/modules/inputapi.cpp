@@ -56,20 +56,25 @@ QVector<VerbInfo> InputApi::verbs() const
         { "bindings", "input.bindings() -> [{action, type, latched, mouse, keys, display}]",
           "The gameplay action map: Move and Look are axis2d, Jump and Sprint are buttons, and "
           "that set is CLOSED — there are no user-defined actions. `keys` lists the bound key "
-          "names (an axis row lists them in up/down/left/right order); `mouse` marks Look, whose "
+          "names in binding order (Move ships with EIGHT: W/S/A/D and the arrow cluster, both "
+          "spellings, because the editor's fly moved to the arrows and a hand arriving from there "
+          "must not have to change grip to walk); `mouse` marks Look, whose "
           "primary producer is the mouse delta, so an empty key list there is the default rather "
           "than 'unbound'. `latched` marks Jump: it fires once per press and a held key cannot "
           "re-fire it.",
           Needs::Document },
         { "bind", "input.bind(action, binding) -> bool",
           "Rebinds one action and persists it (jahsettings.ini 'input/<Action>'). An axis takes "
-          "{up, down, left, right} (any subset; the named slots keep their meaning), a button "
+          "{up, down, left, right} (any subset; the named slots keep their meaning) and REPLACES "
+          "the action's whole key list — rebinding Move to WASD alone is how a user drops the "
+          "shipped arrow keys — a button "
           "takes a key name or {key}. Key names are the portable spellings — 'W', 'Space', "
           "'Shift', 'Left'. Refused, changing nothing, when a key is already bound to a DIFFERENT "
           "action: the error names the action and the key. Pass null or {} to unbind.",
           Needs::Document },
         { "resetBindings", "input.resetBindings() -> bool",
-          "Back to the shipped defaults — W/S/A/D move, mouse looks, Space jumps, Shift sprints. "
+          "Back to the shipped defaults — W/S/A/D AND the arrow keys move, mouse looks, Space "
+          "jumps, Shift sprints. "
           "REMOVES the stored rows rather than writing the defaults into them, so a settings file "
           "that has been reset is byte-identical to one that was never rebound (the same contract "
           "the Shortcuts page's Reset All has).",

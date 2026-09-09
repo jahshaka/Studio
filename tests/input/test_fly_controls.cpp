@@ -12,13 +12,19 @@ For more information see the LICENSE file
 // input.fly_controls — the two FREE cameras' movement contract (owner requests
 // 2026-09-07, fix wave items 3 and 5).
 //
-//  ITEM 3, THE ARROW ALIASES. The editor's fly shipped with W/A/S/D only and
-//  the player's with the ARROW KEYS only, so moving between the two spaces
-//  meant changing hands — and the arrows were what the 2016 editor flew with,
-//  which is the muscle memory that outlived it. Both spellings now drive both
-//  controllers, and this suite asserts they produce the IDENTICAL motion, not
-//  merely "some" motion: two movement models that drift apart is the defect
-//  this replaces, not the fix.
+//  THE NAVIGATION SPLIT (owner decision 2026-09-09, replacing the 2026-09-07
+//  "both spellings everywhere" arrangement). The EDITOR flies on the ARROW
+//  CLUSTER ONLY — Up/Down forward and back, Left/Right strafe, PageUp/PageDown
+//  up and down — and W/A/S/D/Q/E are FREE there, because the letters are the
+//  scarce resource in an editor and every tool shortcut wants one. The PLAYER
+//  keeps BOTH spellings, because it is a game surface and a hand arriving from
+//  the editor's arrows must not have to change grip to walk.
+//
+//  So this suite asserts two different things about the two surfaces: in the
+//  editor, that the arrows fly and the letters do NOTHING AT ALL (a letter
+//  that still flew would silently keep swallowing the shortcut it was freed
+//  for); in the player, that both spellings produce the IDENTICAL motion, not
+//  merely "some" motion.
 //
 //  ITEM 5, THE SPEED MULTIPLIER. FlySpeedSettings is one persisted multiplier
 //  per surface on a fixed base (8 u/s editor, 25 u/s player), stepped by the
@@ -96,34 +102,38 @@ int main(int argc, char **argv)
     enginetest::DocumentGraph graph("fly-controls-ogre.log");
     FlySpeedSettings::reset();               // unbound: pure defaults
 
-    // ---- item 3: the arrows ARE W/A/S/D, in the editor -------------------
+    // ---- the EDITOR flies on the arrow cluster, and ONLY on it -----------
     {
-        const iris::Vec3 w = editorFly({ Qt::Key_W });
         const iris::Vec3 up = editorFly({ Qt::Key_Up });
-        std::printf("    editor W    -> (%.3f %.3f %.3f)\n", w.x(), w.y(), w.z());
+        const iris::Vec3 down = editorFly({ Qt::Key_Down });
+        const iris::Vec3 left = editorFly({ Qt::Key_Left });
+        const iris::Vec3 right = editorFly({ Qt::Key_Right });
+        const iris::Vec3 pgup = editorFly({ Qt::Key_PageUp });
+        const iris::Vec3 pgdn = editorFly({ Qt::Key_PageDown });
         std::printf("    editor Up   -> (%.3f %.3f %.3f)\n", up.x(), up.y(), up.z());
-        CHECK(w.z() < -1.0f, "W flies FORWARD (down the camera's -Z)");
-        CHECK(near(w.x(), up.x()) && near(w.y(), up.y()) && near(w.z(), up.z()),
-              "editor: Up is W, to the last float");
+        std::printf("    editor Left -> (%.3f %.3f %.3f)\n", left.x(), left.y(), left.z());
+        std::printf("    editor PgUp -> (%.3f %.3f %.3f)\n", pgup.x(), pgup.y(), pgup.z());
+        CHECK(up.z() < -1.0f, "Up flies FORWARD (down the camera's -Z)");
+        CHECK(down.z() > 1.0f, "Down flies backwards");
+        CHECK(left.x() < -1.0f, "Left strafes left");
+        CHECK(right.x() > 1.0f, "Right strafes right");
+        CHECK(pgup.y() > 1.0f, "PageUp rises on the world up axis");
+        CHECK(pgdn.y() < -1.0f, "PageDown descends");
+        // The four horizontal keys are one movement model: forward and back
+        // are the same distance in opposite directions, and so are the strafes.
+        CHECK(near(up.z(), -down.z()) && near(left.x(), -right.x()),
+              "editor: the opposite keys are exact mirrors of each other");
 
-        const iris::Vec3 s = editorFly({ Qt::Key_S }), down = editorFly({ Qt::Key_Down });
-        CHECK(near(s.z(), down.z()) && s.z() > 1.0f, "editor: Down is S (backwards)");
-        const iris::Vec3 a = editorFly({ Qt::Key_A }), left = editorFly({ Qt::Key_Left });
-        CHECK(near(a.x(), left.x()) && a.x() < -1.0f, "editor: Left is A (strafe left)");
-        const iris::Vec3 d = editorFly({ Qt::Key_D }), right = editorFly({ Qt::Key_Right });
-        CHECK(near(d.x(), right.x()) && d.x() > 1.0f, "editor: Right is D (strafe right)");
-
-        // Holding BOTH spellings of one direction must not move twice as far:
-        // they are aliases, not two inputs that sum.
-        const iris::Vec3 both = editorFly({ Qt::Key_W, Qt::Key_Up });
-        CHECK(near(both.z(), w.z()), "editor: W and Up held together move exactly as far as W");
-
-        // Q/E are unchanged and are NOT aliased to anything.
-        const iris::Vec3 e = editorFly({ Qt::Key_E });
-        CHECK(e.y() > 1.0f, "editor: E still rises on the world up axis");
+        // THE LETTERS ARE FREE. This is the point of the change, and the
+        // assertion that fails if the old branch is left behind anywhere.
+        for (Qt::Key k : { Qt::Key_W, Qt::Key_A, Qt::Key_S, Qt::Key_D,
+                           Qt::Key_Q, Qt::Key_E }) {
+            const iris::Vec3 p = editorFly({ k });
+            CHECK(p.isNull(), "editor: a letter key no longer flies the camera");
+        }
     }
 
-    // ---- item 3: and W/A/S/D ARE the arrows, in the player ----------------
+    // ---- the PLAYER still answers to BOTH spellings ----------------------
     {
         const iris::Vec3 up = playerFly({ Qt::Key_Up });
         const iris::Vec3 w  = playerFly({ Qt::Key_W });

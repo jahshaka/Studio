@@ -986,21 +986,23 @@ bool EngineSceneViewport::event(QEvent *e)
             e->accept();
             return true;
         }
-        // The Unreal rule: while the right mouse button is held in free-camera
-        // mode, W/A/S/D/Q/E belong to the fly camera — accept the
-        // ShortcutOverride so the window-wide W/E/R gizmo shortcuts don't fire
-        // and the raw key events reach keyPressEvent instead
-        // (EDITOR_SHORTCUTS_SPEC §2).
+        // While the right mouse button is held in free-camera mode, the ARROW
+        // CLUSTER belongs to the fly camera — accept the ShortcutOverride so
+        // the raw key events reach keyPressEvent instead of whatever
+        // WindowShortcut or focused list would otherwise eat them
+        // (EDITOR_SHORTCUTS_SPEC §2). Arrows are Qt::WindowShortcut material
+        // elsewhere in the app (list navigation, the hierarchy tree), so
+        // without this claim the fly would fight whatever widget last had
+        // focus.
+        //
+        // W/A/S/D/Q/E ARE NO LONGER CLAIMED (owner decision 2026-09-09): the
+        // editor's fly moved to the arrows and the six letters are free, which
+        // is the whole point of the move — a tool shortcut on W now works
+        // while the right button is down instead of being swallowed.
         if (mCamController == mFreeCam && mFreeCam && mFreeCam->isFlying()) {
             switch (key) {
-            case Qt::Key_W: case Qt::Key_A: case Qt::Key_S: case Qt::Key_D:
-            case Qt::Key_Q: case Qt::Key_E: case Qt::Key_Shift:
-            // The ARROW ALIASES (owner request 2026-09-07). Up/Down/Left/Right
-            // are W/S/A/D in the fly, so they need the same claim on the key:
-            // arrows are Qt::WindowShortcut material elsewhere in the app
-            // (list navigation, the hierarchy tree) and without this the fly
-            // would fight whatever widget last had focus.
             case Qt::Key_Up: case Qt::Key_Down: case Qt::Key_Left: case Qt::Key_Right:
+            case Qt::Key_PageUp: case Qt::Key_PageDown: case Qt::Key_Shift:
                 e->accept();
                 return true;
             default:
@@ -1550,7 +1552,13 @@ void EngineSceneViewport::syncFrame(float dtOverride)
                 highlight.append(node);
             }
         }
-        mMirror->setHighlightedNodes(highlight);
+        // The PRIMARY goes over EXPLICITLY (EDITOR_MULTISELECT_SPEC D4 b): the
+        // two exclusions above run per member, so the primary can be filtered
+        // out of `highlight` while secondaries survive — and then "the first
+        // entry" would hand the brighter outline to a node that is not the
+        // primary. The mirror re-checks membership and drops a primary that is
+        // not in the list.
+        mMirror->setHighlightedNodes(highlight, mSelectedNode);
         // Grid spacing = the translate snap size ([ and ] re-space it live).
         pushGridForView(helpers && !mPlaying);
         // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the

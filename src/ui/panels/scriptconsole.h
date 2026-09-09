@@ -35,6 +35,12 @@ public:
     /// copyable connect command).
     void announce(const QString &text);
 
+    /// Puts the keyboard into the INPUT line. The Ctrl+` shortcut calls this
+    /// when it shows the dock: a console opened from the keyboard that then
+    /// needs a mouse click before it will take a character is a console the
+    /// shortcut did not really open (found on the rig, 2026-09-09).
+    void focusInput();
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 

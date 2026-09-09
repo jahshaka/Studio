@@ -209,7 +209,13 @@ int main(int argc, char **argv)
         reg.addFixed("gameplay.jump", "Jump (play mode)", "Gameplay", "Space");
         CHECK(reg.setFixedText("gameplay.move", map.displayText(iris::InputAction::Move)),
               "a fixed row can be re-labelled from the live InputMap");
-        CHECK(reg.entries()[3].fixedText == "W / S / A / D",
+        // The expected string is the SHIPPED DEFAULT BINDING, re-pinned
+        // 2026-09-09: Move gained the arrow keys beside W/A/S/D when the
+        // editor's fly moved off the letters, and this row is generated from
+        // the map (InputMap::displayText), so the label follows.
+        //   before: "W / S / A / D"
+        //   after:  "W / S / A / D / Up / Down / Left / Right"
+        CHECK(reg.entries()[3].fixedText == "W / S / A / D / Up / Down / Left / Right",
               "the Gameplay row shows the bound keys");
         CHECK(!reg.setFixedText("tool.translate", "nope"),
               "a REMAPPABLE row's text is its QKeySequence — setFixedText refuses it");

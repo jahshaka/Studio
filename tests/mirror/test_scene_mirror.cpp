@@ -530,7 +530,7 @@ int main(int argc, char **argv)
     // A green cube under the strong white point light: nothing but the highlight can read as yellow.
     meshNode2->setMaterial(legacy);
     auto countYellow = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++n; } return n; };
-    mirror.setHighlightedNode(meshNode2);
+    mirror.setHighlightedNodes({ meshNode2 });
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     const int yellowOn = countYellow(img);
@@ -560,7 +560,7 @@ int main(int argc, char **argv)
     view->readPixels(img);
     CHECK(countYellow(img) > 10, "an unset preference falls back to the legacy yellow");
 
-    mirror.setHighlightedNode(nullptr);
+    mirror.setHighlightedNodes({});
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     CHECK(countYellow(img) == 0, "highlight cleared");
@@ -584,7 +584,7 @@ int main(int argc, char **argv)
         };
         makePart(-1.4f); makePart(1.4f);
         doc->getRootNode()->addChild(group);
-        mirror.setHighlightedNode(group);
+        mirror.setHighlightedNodes({ group });
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
         auto countYellowIn = [&](unsigned x0, unsigned x1) { int nn = 0; for (unsigned y = 0; y < img.height; ++y) for (unsigned x = x0; x < x1; ++x) { const Colour c = img.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++nn; } return nn; };
@@ -598,7 +598,7 @@ int main(int argc, char **argv)
         std::printf("    group wireframe: %d yellow left, %d yellow right\n", leftW, rightW);
         CHECK(leftW > 10 && rightW > 10, "the wireframe toggle covers the whole group");
         mirror.setHighlightWireframe(false);
-        mirror.setHighlightedNode(nullptr);
+        mirror.setHighlightedNodes({});
         doc->getRootNode()->removeChild(group);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
@@ -618,7 +618,7 @@ int main(int argc, char **argv)
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     CHECK(countMagenta(img) == 0, "unselected point light draws no rings (icon only)");
-    mirror.setHighlightedNode(point);
+    mirror.setHighlightedNodes({ point });
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     const int wiresOn = countMagenta(img);
@@ -638,13 +638,13 @@ int main(int argc, char **argv)
         auto magentaExtent = [&](const Image &im) { int minX = int(im.width), maxX = -1; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) { if (int(x) < minX) minX = int(x); if (int(x) > maxX) maxX = int(x); } } return maxX - minX; };
         // Icons are always-on with the helpers toggle, selected or not.
         mirror.setLightWires(true);
-        mirror.setHighlightedNode(nullptr);
+        mirror.setHighlightedNodes({});
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
         std::printf("    unselected: %d white icon px, %d magenta px\n", countWhite(img), countMagenta(img));
         CHECK(countWhite(img) > 5, "unselected point light still shows its icon");
         CHECK(countMagenta(img) == 0, "unselected point light shows no rings");
-        mirror.setHighlightedNode(point);
+        mirror.setHighlightedNodes({ point });
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
         const int iconOn = countWhite(img);
@@ -728,7 +728,7 @@ int main(int argc, char **argv)
         view->readPixels(img);
         CHECK(countMagenta(img) == 0 && countWhite(img) == 0, "light wires off removes the icon too");
         QFile::remove(iconPath);
-        mirror.setHighlightedNode(nullptr);
+        mirror.setHighlightedNodes({});
 
         // Point-light shadow controls (the panel unhides Type/Size in engine
         // mode): the Shadow Type combo drives castShadows through toLightDesc.

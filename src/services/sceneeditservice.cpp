@@ -63,6 +63,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root); }
 #include "irisgl/core/logger.h"
 #include "services/assetmetadata.h"
 #include "services/fitsize.h"
+#include "services/nodenaming.h"
 #include "services/imagematerial.h"
 #include "services/projectassets.h"
 #include "services/scenenodehelper.h"
@@ -779,6 +780,14 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
     if (!source || !source->isDuplicable()) return iris::SceneNodePtr();
 
     auto node = source->duplicate();
+    // THE COPY GETS ITS OWN NAME (owner decision 2026-09-09, the Unreal rule):
+    // "Cube" -> "Cube2" -> "Cube3", a numeric suffix and no space, unique among
+    // the siblings it is about to join. iris::SceneNode::duplicate keeps the
+    // name verbatim, which left a scene full of nodes called "Cube" that the
+    // outliner, node.find and every verb that names one could not tell apart.
+    // The rename happens BEFORE the add command so the command's own text
+    // ("Add Cube2") and the outliner row agree from the first frame.
+    node->setName(nodenaming::uniqueSiblingName(source->getParent(), source->getName()));
     // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
     // refreshes the hierarchy and selects it — the manual addChild+repopulate
     // this slot used to do, minus the missing undo entry.
@@ -874,6 +883,11 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     // must give back the guid the rest of the document still refers to.)
     regenerateGuids(node);
     if (!parent) parent = sc->getRootNode();
+    // ...and a fresh NAME when the one it carries is already taken under that
+    // parent — the same rule Duplicate uses, because a paste is a copy too
+    // (owner decision 2026-09-09). Pasting into a parent that has no node of
+    // this name keeps the name: the suffix disambiguates, it does not brand.
+    node->setName(nodenaming::uniqueSiblingName(parent, node->getName()));
     // The SAME add command every other add uses — one undo entry, the hierarchy
     // refresh, the selection, and the SCENE_STATIC pass on redo.
     auto *cmd = new AddSceneNodeCommand(parent, node, index);
@@ -948,6 +962,28 @@ SceneEditService::deleteNodes(const QList<iris::SceneNodePtr> &nodes)
     // set ends EMPTY, which is what deleting what you had selected means.
     if (selection) selection->clear();
     return result;
+}
+
+QList<iris::SceneNodePtr> SceneEditService::selectAll()
+{
+    QList<iris::SceneNodePtr> all;
+    auto sc = scene();
+    if (!sc || !selection) return all;
+    auto root = sc->getRootNode();
+    if (!root) return all;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        for (const auto &child : n->children()) {
+            if (!child) continue;
+            all.append(child);
+            walk(child);
+        }
+    };
+    walk(root);                       // the root itself never joins (D6)
+    if (all.isEmpty()) { selection->clear(); return all; }
+    // Document pre-order already: the walk IS the writer's walk. The first
+    // entry is therefore the topmost outliner row, which becomes the primary.
+    selection->select(all);
+    return selection->selectedSet();
 }
 
 QList<iris::SceneNodePtr>

@@ -95,6 +95,31 @@ editor.select(n[0]);
 assert(editor.selectToggle(rootId) === true, "ctrl-clicking the root is a plain click");
 assert(J(editor.selectionSet()) === J([rootId]), "which replaces the selection with the root");
 
+// ---- 4b. SELECT ALL (Ctrl+A, §8.7) ----------------------------------------
+// Every node except the World root, in document pre-order, topmost first — and
+// not an undo entry. The KEY half (a focused text field keeps the chord) is
+// app.multiselect_keys; this is the capability the key runs.
+var pushesSelAll = editor.undoState().pushes;
+var all = editor.selectAll();
+assert(all.length === scene.nodes().length - 1,
+       "selectAll takes every node but one (" + all.length + " of " +
+       scene.nodes().length + " document nodes)");
+assert(all.indexOf(scene.root()) === -1, "and the one left out is the World root (D6)");
+assert(J(editor.selectionSet()) === J(all), "the returned set IS the selection");
+assert(editor.selection() === all[0], "the topmost node is the primary");
+// ...and "topmost" is the document's own order, which is what the outliner
+// draws: scene.nodes() walks pre-order from the root, so dropping the root
+// leaves exactly the set selectAll returns, in exactly its order.
+var docOrder = scene.nodes().map(function (x) { return x.id; })
+                    .filter(function (id) { return id !== scene.root(); });
+assert(J(all) === J(docOrder),
+       "the set IS the document's pre-order, root removed: " + J(all) + " vs " + J(docOrder));
+assert(editor.undoState().pushes === pushesSelAll, "selectAll pushes no undo step (D10)");
+// It replaces rather than adds, and it is idempotent.
+editor.select(n[3]);
+var again = editor.selectAll();
+assert(J(again) === J(all), "selectAll from a different selection gives the same set");
+
 // ---- 5. selection is not undoable (D10) -----------------------------------
 var before = editor.undoState().pushes;
 editor.select([n[0], n[1]]);
@@ -106,4 +131,51 @@ assert(editor.undoState().pushes === before,
        "no selection verb pushes an undo step (" + before + " -> " +
        editor.undoState().pushes + ")");
 
+// ---- 6. the PRIMARY's outline colour (D4 b) --------------------------------
+// The VERB half of the primary-outline row: the persisted values, the clamps,
+// the derivation and the refusals. The PIXEL half — that the primary's band
+// actually takes this colour and the secondaries' do not — is
+// app.multiselect_outline, which needs a GPU; everything below runs headless.
+var o = editor.outline();
+assert(typeof o.width === "number" && o.width >= 1, "outline().width is a number: " + o.width);
+assert(o.color.length === 7 && o.color[0] === "#", "outline().color is a hex colour: " + o.color);
+assert(o.primaryColorStored === false,
+       "a fresh profile has no stored primary colour (" + o.primaryColorStored + ")");
+assert(o.primaryColor !== o.color,
+       "and the DERIVED primary differs from the outline colour: " +
+       o.color + " -> " + o.primaryColor);
+
+// The derivation FOLLOWS the outline colour: a user who never touches the
+// primary row still gets a primary that is lighter than THEIR colour.
+// ODD channel values on purpose: halving (255 + c) is exact only for odd c, so
+// the expected value below is a whole number and not a rounding coin-toss.
+var dark = editor.setOutline({ color: "#113355" });
+assert(dark.color === "#113355", "color round-trips: " + dark.color);
+assert(dark.primaryColorStored === false, "setting the base colour stores no primary");
+assert(dark.primaryColor !== "#113355" && dark.primaryColor !== o.primaryColor,
+       "the derived primary moved with it: " + dark.primaryColor);
+// Halfway to white, per channel: 0x11 -> 0x88, 0x33 -> 0x99, 0x55 -> 0xaa.
+assert(dark.primaryColor === "#8899aa",
+       "and it is the base lifted halfway to white (" + dark.primaryColor + ")");
+
+var chosen = editor.setOutline({ primaryColor: "#00ff00" });
+assert(chosen.primaryColor === "#00ff00" && chosen.primaryColorStored === true,
+       "an explicit primary colour is stored and wins: " + J(chosen));
+assert(chosen.color === "#113355", "and does not disturb the base colour");
+var cleared = editor.setOutline({ primaryColor: null });
+assert(cleared.primaryColorStored === false,
+       "null clears the stored choice back to derived: " + J(cleared));
+assert(cleared.primaryColor === dark.primaryColor,
+       "and the derived value comes back unchanged: " + cleared.primaryColor);
+
+var w = editor.setOutline({ width: 500 });
+assert(w.width === 30, "width is CLAMPED, not refused (500 -> " + w.width + ")");
+editor.setOutline({ width: 3, color: "#3498db", primaryColor: null });
+
+var threw = false;
+try { editor.setOutline({ color: "not-a-colour" }); } catch (e) { threw = true; }
+assert(threw, "an unparseable colour is REFUSED, not silently defaulted");
+threw = false;
+try { editor.setOutline({ nope: 1 }); } catch (e) { threw = true; }
+assert(threw, "an unknown key is refused");
 console.log("scripting.e2e.multiselect: ALL PASS");

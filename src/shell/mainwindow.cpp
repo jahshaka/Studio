@@ -80,6 +80,10 @@ For more information see the LICENSE file
 #include <QDesktopServices>
 #include <QShortcut>
 #include <QToolButton>
+#include <QLineEdit>
+#include <QTextEdit>
+#include <QPlainTextEdit>
+#include <QAbstractSpinBox>
 
 #include "ui/dialogs/loadmeshdialog.h"
 #include "ui/panels/timeline/nodekeyframeanimation.h"
@@ -176,6 +180,7 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
 #include "services/framepacing.h"
+#include "services/outlinesettings.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
 #include "services/sceneopenrunner.h"
@@ -3286,8 +3291,12 @@ void MainWindow::setupShortcuts()
             [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("front"); });
     reg.add("view.back", "Back View", "Camera", QKeySequence(Qt::SHIFT | Qt::Key_Z), this,
             [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("back"); });
+    // The ARROW CLUSTER, not W/A/S/D (owner decision 2026-09-09): the editor's
+    // fly moved off the letters so tool shortcuts can have them back. The
+    // PLAYER still answers to both spellings — its rows are the Gameplay
+    // section below, driven by the InputMap.
     reg.addFixed("camera.fly", "Fly Camera (free camera)", "Camera",
-                 "RMB (hold) + W/A/S/D + Q/E \xc2\xb7 Shift: 3x");
+                 "RMB (hold) + Arrow keys + PageUp/PageDown \xc2\xb7 Shift: 3x");
     reg.addFixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
     // Held-modifier input, like the fly keys: listed read-only, never a
     // QShortcut. Alt ON the gizmo keeps its duplicate-while-dragging meaning
@@ -3368,13 +3377,31 @@ void MainWindow::setupShortcuts()
             [this]() { copyActiveSpace(); });
     reg.add("edit.paste", "Paste", "Editing", QKeySequence(Qt::CTRL | Qt::Key_V), this,
             [this]() { pasteActiveSpace(); });
+    // Ctrl+A (EDITOR_MULTISELECT_SPEC §8.7, decided 2026-09-09). Same
+    // single-claimant routing as the four chords above — and the same TEXT
+    // FIELD rule, made explicit rather than left to Qt: selectAllActiveSpace
+    // hands the chord to a focused QLineEdit/QTextEdit/QPlainTextEdit/spin box
+    // instead of the scene, so Ctrl+A in the console input, an inline rename or
+    // a transform field selects THAT text. Qt's own ShortcutOverride usually
+    // gets there first (QWidgetLineControl accepts QKeySequence::SelectAll),
+    // but "usually" is not a contract to hang the scene selection on.
+    reg.add("edit.selectAll", "Select All", "Editing", QKeySequence(Qt::CTRL | Qt::Key_A), this,
+            [this]() { selectAllActiveSpace(); });
 
     // ---- file / windows ----
     reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
             [this]() { saveScene(); });
     reg.add("console.toggle", "Script Console", "Windows",
             QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this, [this]() {
-                if (scriptConsoleDock) scriptConsoleDock->setVisible(!scriptConsoleDock->isVisible());
+                if (!scriptConsoleDock) return;
+                const bool show = !scriptConsoleDock->isVisible();
+                scriptConsoleDock->setVisible(show);
+                // AND PUT THE KEYBOARD IN IT. Ctrl+` used to open a console
+                // that still needed a mouse click before it would take a
+                // character — which also meant the chord rules the console is
+                // the natural place to exercise (Ctrl+A belongs to a focused
+                // text field) could not be reached from the keyboard at all.
+                if (show && scriptConsole) scriptConsole->focusInput();
             });
     reg.add("claude.toggle", "Claude Assistant", "Windows",
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,
@@ -3645,10 +3672,11 @@ void MainWindow::exitApp()
 
 void MainWindow::updateSceneSettings()
 {
-	if (projectService->isSceneOpen() || !!scene) {
-		scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
-		scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
-	}
+	// All three outline values in one push, from the one place that owns them
+	// (services/outlinesettings.h). The page used to hand over two member
+	// variables it had parsed itself, so a value written by anything other than
+	// the page — a verb, a fresh install's default — was invisible here.
+	if (projectService->isSceneOpen() || !!scene) outlinesettings::apply(scene.data());
 
 	actionSaveScene->setVisible(!prefsDialog->worldSettings->autoSave);
 }
@@ -3733,6 +3761,34 @@ void MainWindow::copyActiveSpace()
         const int n = services->sceneEdit->copyNodes(services->selection->selectedSet());
         if (n > 0) showViewportToast(tr("Copy"), tr("%1 object(s) copied").arg(n));
     }
+}
+
+// Ctrl+A. Two rules in one place: a focused TEXT ENTRY owns the chord, and
+// otherwise the active space decides (EDITOR_MULTISELECT_SPEC §8.7).
+//
+// The text-entry branch does not merely decline — it performs the select-all on
+// the widget. Declining would leave Ctrl+A doing NOTHING in a field Qt did not
+// intercept for itself (a spin box is the case), which is a worse answer than
+// either alternative. Every one of the four classes exposes `selectAll()` as a
+// public slot, so one invokeMethod covers them all — and covers any future
+// widget that offers the same slot.
+void MainWindow::selectAllActiveSpace()
+{
+    if (QWidget *focus = QApplication::focusWidget()) {
+        if (qobject_cast<QLineEdit *>(focus) || qobject_cast<QTextEdit *>(focus) ||
+            qobject_cast<QPlainTextEdit *>(focus) || qobject_cast<QAbstractSpinBox *>(focus)) {
+            QMetaObject::invokeMethod(focus, "selectAll");
+            return;
+        }
+    }
+    if (currentSpace == WindowSpaces::EFFECT) {
+        // The node graph has no select-all of its own yet; deliberately NOT a
+        // fallback to the scene, for the reason undoActiveSpace records — a
+        // chord must never quietly act on a selection the user cannot see.
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR && services && services->sceneEdit)
+        services->sceneEdit->selectAll();
 }
 
 void MainWindow::pasteActiveSpace()

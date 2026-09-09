@@ -153,11 +153,11 @@ int main(int argc, char **argv)
 
     // ---- 4. selection recolours it ----------------------------------------
     Image unselected; frame(unselected);
-    mirror.setHighlightedNode(cam.staticCast<iris::SceneNode>());
+    mirror.setHighlightedNodes({ cam.staticCast<iris::SceneNode>() });
     Image selected; frame(selected);
     CHECK(diff(unselected, selected) > 100,
           "selecting the camera changes how its helpers look");
-    mirror.setHighlightedNode(iris::SceneNodePtr());
+    mirror.setHighlightedNodes({});
 
     // ---- 5. bodyVisible, and the helper toggle, are BYTE-EXACT off switches
     Image back; frame(back);

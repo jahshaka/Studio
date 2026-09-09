@@ -30,6 +30,7 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "services/nodenaming.h"
 #include "services/selectionservice.h"
 
 #include "../support/documentgraph.h"
@@ -143,6 +144,75 @@ void run()
     scene.reset();
 }
 
+// ---- the COPY NAMING rule (owner decision 2026-09-09) ----------------------
+//
+// "Cube" -> "Cube2" -> "Cube3": a numeric suffix, NO space, never "Cube Copy",
+// unique among SIBLINGS. The service-level halves (Duplicate and Paste both
+// going through it) are gated in scripting.e2e.multiselect_edit against a real
+// document; this is the rule itself, including the edges nobody exercises by
+// hand.
+void runNaming()
+{
+    auto scene = iris::Scene::create();
+    auto root = scene->getRootNode();
+    const auto add = [&](const iris::SceneNodePtr &parent, const QString &name) {
+        auto n = iris::SceneNode::create();
+        n->setName(name);
+        parent->addChild(n, false);
+        return n;
+    };
+
+    auto cube = add(root, QStringLiteral("Cube"));
+    CHECK(nodenaming::uniqueSiblingName(root, QStringLiteral("Cube")) == QStringLiteral("Cube2"),
+          "naming: a taken name gets the suffix 2, not 1 (the original IS the first)");
+    auto cube2 = add(root, QStringLiteral("Cube2"));
+    CHECK(nodenaming::uniqueSiblingName(root, QStringLiteral("Cube2")) == QStringLiteral("Cube3"),
+          "naming: duplicating the copy counts on from ITS number");
+    CHECK(nodenaming::uniqueSiblingName(root, QStringLiteral("Cube")) == QStringLiteral("Cube3"),
+          "naming: and duplicating the original again skips the taken Cube2");
+
+    // NOT taken = NOT renamed. This is what keeps a paste into an empty parent
+    // (and the World Background sample's own names) alone.
+    auto group = add(root, QStringLiteral("Group"));
+    CHECK(nodenaming::uniqueSiblingName(group, QStringLiteral("Cube")) == QStringLiteral("Cube"),
+          "naming: a free name under a DIFFERENT parent is kept verbatim");
+    CHECK(nodenaming::uniqueSiblingName(root, QStringLiteral("Sphere")) == QStringLiteral("Sphere"),
+          "naming: a free name is never branded with a suffix");
+    CHECK(nodenaming::uniqueSiblingName(iris::SceneNodePtr(), QStringLiteral("Cube"))
+              == QStringLiteral("Cube"),
+          "naming: with no parent there are no siblings to clash with");
+
+    // `except` is how a RENAME (as opposed to a copy) asks the question: the
+    // node holding the name must not block itself.
+    CHECK(nodenaming::uniqueSiblingName(root, QStringLiteral("Cube"), cube.data())
+              == QStringLiteral("Cube"),
+          "naming: a node does not collide with itself");
+
+    // No space, ever — the shape of the answer, asserted directly.
+    CHECK(!nodenaming::uniqueSiblingName(root, QStringLiteral("Cube")).contains(QLatin1Char(' ')),
+          "naming: the suffix never introduces a space");
+
+    // Edges.
+    QString stem; int number = 0;
+    nodenaming::splitNumericSuffix(QStringLiteral("Cube12"), stem, number);
+    CHECK(stem == QStringLiteral("Cube") && number == 12, "naming: the suffix splits off cleanly");
+    nodenaming::splitNumericSuffix(QStringLiteral("Cube"), stem, number);
+    CHECK(stem == QStringLiteral("Cube") && number == 0, "naming: no digits = number 0");
+    nodenaming::splitNumericSuffix(QStringLiteral("99999999999999999999"), stem, number);
+    CHECK(stem == QStringLiteral("99999999999999999999") && number == 0,
+          "naming: a digit run past int is part of the STEM, not a count to resume from");
+
+    // An existing space in the AUTHORED name is preserved — the rule is "the
+    // suffix adds no space", not "names lose their spaces".
+    add(root, QStringLiteral("Point Light"));
+    CHECK(nodenaming::uniqueSiblingName(root, QStringLiteral("Point Light"))
+              == QStringLiteral("Point Light2"),
+          "naming: an authored space survives; the suffix still adds none");
+
+    Q_UNUSED(cube2);
+    scene.reset();
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -150,6 +220,7 @@ int main(int argc, char *argv[])
     enginetest::DocumentGraph graph("selection-set-ogre.log");
     QGuiApplication app(argc, argv);
     run();
+    runNaming();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;
 }

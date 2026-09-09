@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE bool selectAdd(const QVariant &id = QVariant());
     Q_INVOKABLE bool selectToggle(const QString &id);
     Q_INVOKABLE QVariantList selectRange(const QString &fromId, const QString &toId);
+    Q_INVOKABLE QVariantList selectAll();
     Q_INVOKABLE bool selectNone();
     Q_INVOKABLE QVariantMap deleteSelection();
     Q_INVOKABLE QVariantList duplicateSelection();
@@ -51,6 +52,11 @@ public:
     Q_INVOKABLE bool isGameView();
     Q_INVOKABLE QVariantMap overlays();
     Q_INVOKABLE bool setOverlays(const QVariantMap &change = QVariantMap());
+    /// The selection outline's look (EDITOR_MULTISELECT_SPEC D4 b). Document
+    /// verbs: they write persisted preferences and push them onto the open
+    /// scene, both of which exist without an engine view.
+    Q_INVOKABLE QVariantMap outline();
+    Q_INVOKABLE QVariantMap setOutline(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE bool setView(const QString &view);
     Q_INVOKABLE QString view();
     Q_INVOKABLE QVariantMap camera();

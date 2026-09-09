@@ -250,20 +250,85 @@ sleep 0.5
 activate
 js "editor.select('$C')" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
-# Ctrl+` opens the script console dock, whose input line is a text field; a
-# click lands the focus in it. NOTE-ONLY: the panel layout decides where that
-# line sits, so a miss must not fail the suite — the finding is recorded and
-# the Qt contract (a QLineEdit accepts the ShortcutOverride for Ctrl+C/V) is
-# what is being probed, not something this lane implements.
+# Ctrl+` opens the script console dock AND puts the keyboard in its input line
+# (mainwindow.cpp, 2026-09-09 — it used to open a console you had to click
+# before it would take a character, which is also why this probe used to guess
+# at a pixel and miss). NOTE-ONLY still: the Qt contract being probed (a text
+# widget accepts the ShortcutOverride for Ctrl+C/V) is not something this suite
+# implements, so a miss is recorded rather than gated.
 key ctrl+grave
-sleep 0.5
-xdotool mousemove --window "$WIN" $((WIN_W*55/100)) $((WIN_H*95/100)) click 1 2>/dev/null
-sleep 0.4
+sleep 0.6
 key ctrl+v
 AFTER=$(js 'scene.nodes().length')
 [ "$AFTER" = "$BEFORE" ] \
     && ok "Ctrl+V with a text field focused did not paste into the scene" \
     || note "Ctrl+V pasted while a text field was focused ($BEFORE -> $AFTER) — recorded, not gated"
+
+# ============================================================ PART 5 ==========
+# CTRL+A (EDITOR_MULTISELECT_SPEC §8.7). Two claims, and the second one is the
+# whole reason the chord needed a decision:
+#
+#   5a  with the OUTLINER focused, Ctrl+A selects every node but the World root;
+#   5b  with the CONSOLE INPUT focused, Ctrl+A belongs to the text — it selects
+#       the text and leaves the scene selection exactly where it was.
+#
+# 5b is probed twice because the two halves are separable: a handler that
+# declined the chord in a text field would pass "the scene is untouched" while
+# leaving Ctrl+A doing nothing at all in the field. So the second probe types,
+# selects, and types over — and the scene is asked what actually happened.
+
+# ---- 5a: the outliner ------------------------------------------------------
+activate                      # clicks a hierarchy row: focus is in the tree
+DOC=$(js 'JSON.stringify({nodes: scene.nodes().length})')
+key ctrl+a
+SEL=$(js 'JSON.stringify({sel: editor.selectionSet().length,
+                          nodes: scene.nodes().length,
+                          hasRoot: editor.selectionSet().indexOf(scene.root()) >= 0})')
+note "Ctrl+A with the tree focused: $SEL (document was $DOC)"
+n_sel=$(printf '%s' "$SEL" | jq -r '.sel'); n_all=$(printf '%s' "$SEL" | jq -r '.nodes')
+[ "$n_sel" = "$((n_all - 1))" ]     && ok "the Ctrl+A KEY selected every node but one ($n_sel of $n_all)"     || bad "Ctrl+A did not select all ($n_sel selected of $n_all nodes)"
+[ "$(printf '%s' "$SEL" | jq -r '.hasRoot')" = "false" ]     && ok "…and the one left out is the World root (D6)"     || bad "Ctrl+A put the World root in the selection"
+
+# ---- 5b(i): a focused text field keeps the chord ---------------------------
+# PART 5a just clicked the outliner, so the focus is in the TREE. Toggle the
+# console dock off and on: showing it focuses its input line (see PART 4), so
+# the focus is in a QPlainTextEdit by construction rather than by pixel-guess.
+key ctrl+grave
+sleep 0.4
+key ctrl+grave
+sleep 0.6
+BEFORE=$(js 'JSON.stringify(editor.selectionSet())')
+key ctrl+a
+AFTER=$(js 'JSON.stringify(editor.selectionSet())')
+[ "$AFTER" = "$BEFORE" ]     && ok "Ctrl+A with the console input focused left the scene selection alone"     || bad "Ctrl+A changed the scene selection while a text field had focus"
+
+# ---- 5b(ii): …and it selected the TEXT -------------------------------------
+# Type one statement, Ctrl+A, type a DIFFERENT one, Enter. If the chord reached
+# the text the second statement REPLACED the first, so exactly one Empty is
+# added and no cube; if it did nothing the input holds both concatenated, which
+# is a syntax error and adds nothing at all. Either failure is visible in the
+# scene, which is the only thing this rig can read.
+BEFORE=$(js 'JSON.stringify({n: scene.nodes().length,
+                             empties: scene.nodes().filter(function (x) { return x.type === "empty"; }).length})')
+xdotool type --delay 30 'scene.addPrimitive("cube")'
+sleep 0.3
+key ctrl+a
+xdotool type --delay 30 'scene.addEmpty()'
+sleep 0.3
+xdotool key --clearmodifiers Return
+sleep 1.2
+AFTER=$(js 'JSON.stringify({n: scene.nodes().length,
+                            empties: scene.nodes().filter(function (x) { return x.type === "empty"; }).length})')
+note "console type/Ctrl+A/type-over: $BEFORE -> $AFTER"
+d_n=$(( $(printf '%s' "$AFTER" | jq -r '.n') - $(printf '%s' "$BEFORE" | jq -r '.n') ))
+d_e=$(( $(printf '%s' "$AFTER" | jq -r '.empties') - $(printf '%s' "$BEFORE" | jq -r '.empties') ))
+if [ "$d_n" = "1" ] && [ "$d_e" = "1" ]; then
+    ok "Ctrl+A selected the console text: the second statement REPLACED the first"
+elif [ "$d_n" = "0" ]; then
+    bad "Ctrl+A did nothing in the console input (the two statements concatenated)"
+else
+    bad "the console ran something unexpected (+$d_n nodes, +$d_e empties)"
+fi
 
 echo "multiselect_keys: done (fail=$fail)"
 exit "$fail"

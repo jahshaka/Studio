@@ -306,15 +306,24 @@ void EditorCameraController::updateCameraRot()
     camera->update(0);
 }
 
-// Unreal-style fly: while the right mouse button is held, W/A/S/D move along
-// the view direction and the camera's right vector, Q/E move down/up the world
-// axis, Shift boosts 3x. Frame-rate independent (dt) — the dead KeyboardState
-// arrow-key path this replaces was never fed (EDITOR_SHORTCUTS_SPEC §2).
+// The editor fly: while the right mouse button is held, the ARROW KEYS move
+// the camera — Up/Down along the view direction, Left/Right along the
+// horizontal right vector, PageUp/PageDown up and down the world axis — and
+// Shift boosts 3x. Frame-rate independent (dt).
 //
-// THE ARROW KEYS ARE ALIASES (owner request 2026-09-07): Up/Down/Left/Right
-// are W/S/A/D, not a second movement model. They were the ONLY fly keys in the
-// 2016 editor and the muscle memory outlived the KeyboardState path that fed
-// them; one lookup table means the two spellings can never drift apart.
+// THE ARROWS ARE THE FLY KEYS, AND W/A/S/D/Q/E ARE NOT (owner decision
+// 2026-09-09). The editor shipped with WASD (Unreal's spelling) and gained the
+// arrows as aliases in 2026-09-07; both spellings on one surface meant six
+// letter keys could never be anything else while the right button was down,
+// and the letters are the scarce resource in an editor — every tool shortcut
+// wants one. So the aliasing is INVERTED here: the arrows are the whole
+// editor fly and W/A/S/D/Q/E are FREE. The PLAYER still answers to both
+// (playermousecontroller.cpp), because a player is a game surface and WASD is
+// what a game player's hand expects.
+//
+// PageUp/PageDown replace Q/E for vertical movement: they are the only other
+// keys on the arrow cluster, so the whole fly stays under one hand without
+// crossing back to the letters.
 //
 // SPEED is FlySpeedSettings::speed(Editor) — linearSpeed is the base and the
 // user-chosen multiplier rides on it (toolbar dropdown / wheel while flying).
@@ -338,34 +347,33 @@ void EditorCameraController::update(float dt)
     iris::Vec3 right = iris::Vec3::crossProduct(forward, worldUp).normalized();
     if (right.isNull()) right = camRight;
 
-    const auto held = [this](int a, int b) {
-        return heldKeys.contains(a) || heldKeys.contains(b);
-    };
+    const auto held = [this](int key) { return heldKeys.contains(key); };
 
     iris::Vec3 move;
     if (rotationLocked) {
         // AXIS VIEW: the fly keys become a PAN of the view plane plus a dolly
         // along its normal, on the camera's own basis (AXIS_VIEW_LOCK, owner
-        // report 2026-09-08). W/S pan up and down the screen — "forward" on a
-        // map is up the map, and moving along the view normal is invisible in
-        // an orthographic view, so mapping W to it would read as a dead key.
-        // A/D strafe in-plane exactly as they do in perspective. Q/E become the
-        // dolly: E backs the camera out along the view normal (up, in a top
-        // view — the direction "up" still means to the person looking), Q
-        // pushes it in. Nothing here can change the camera's ROTATION.
-        if (held(Qt::Key_W, Qt::Key_Up))    move += camUp;
-        if (held(Qt::Key_S, Qt::Key_Down))  move -= camUp;
-        if (held(Qt::Key_D, Qt::Key_Right)) move += camRight;
-        if (held(Qt::Key_A, Qt::Key_Left))  move -= camRight;
-        if (heldKeys.contains(Qt::Key_E)) move -= forward;
-        if (heldKeys.contains(Qt::Key_Q)) move += forward;
+        // report 2026-09-08). Up/Down pan up and down the screen — "forward"
+        // on a map is up the map, and moving along the view normal is
+        // invisible in an orthographic view, so mapping Up to it would read as
+        // a dead key. Left/Right strafe in-plane exactly as they do in
+        // perspective. PageUp/PageDown become the dolly: PageUp backs the
+        // camera out along the view normal (up, in a top view — the direction
+        // "up" still means to the person looking), PageDown pushes it in.
+        // Nothing here can change the camera's ROTATION.
+        if (held(Qt::Key_Up))       move += camUp;
+        if (held(Qt::Key_Down))     move -= camUp;
+        if (held(Qt::Key_Right))    move += camRight;
+        if (held(Qt::Key_Left))     move -= camRight;
+        if (held(Qt::Key_PageUp))   move -= forward;
+        if (held(Qt::Key_PageDown)) move += forward;
     } else {
-        if (held(Qt::Key_W, Qt::Key_Up))    move += forward;
-        if (held(Qt::Key_S, Qt::Key_Down))  move -= forward;
-        if (held(Qt::Key_D, Qt::Key_Right)) move += right;
-        if (held(Qt::Key_A, Qt::Key_Left))  move -= right;
-        if (heldKeys.contains(Qt::Key_E)) move += worldUp;
-        if (heldKeys.contains(Qt::Key_Q)) move -= worldUp;
+        if (held(Qt::Key_Up))       move += forward;
+        if (held(Qt::Key_Down))     move -= forward;
+        if (held(Qt::Key_Right))    move += right;
+        if (held(Qt::Key_Left))     move -= right;
+        if (held(Qt::Key_PageUp))   move += worldUp;
+        if (held(Qt::Key_PageDown)) move -= worldUp;
     }
     if (move.isNull()) return;
 

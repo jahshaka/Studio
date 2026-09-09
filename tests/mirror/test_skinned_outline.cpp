@@ -252,7 +252,7 @@ int main(int argc, char **argv)
     CHECK(!isLit(bare), "the probe sits ABOVE the character: empty with no selection");
 
     // ---- 2. SELECT it: the silhouette reaches the probe --------------------
-    mirror.setHighlightedNode(body);
+    mirror.setHighlightedNodes({ body });
     mirror.sync();
     engine->renderOneFrame();
     CHECK(view->readPixels(img), "readPixels (selected, bind pose)");
@@ -320,7 +320,7 @@ int main(int argc, char **argv)
             jointRoot->addChild(jointTip);
         }
         group->addChild(second);
-        mirror.setHighlightedNode(group);            // the whole character
+        mirror.setHighlightedNodes({ group });            // the whole character
         doc->updateSceneAnimation(1.0f);
         mirror.sync();
         engine->renderOneFrame();
@@ -334,7 +334,7 @@ int main(int argc, char **argv)
               "the second piece left no bind-pose twin either");
         CHECK(yellowIn(img, 0, W / 2 - 10, H / 4, 3 * H / 4) > 20,
               "...and IS outlined where it actually bent");
-        mirror.setHighlightedNode(body);
+        mirror.setHighlightedNodes({ body });
         mirror.sync();
         engine->renderOneFrame();
     }
@@ -348,7 +348,7 @@ int main(int argc, char **argv)
     engine->renderOneFrame();
     CHECK(scene->itemCount(bodyNode) == 1, "...and exactly one when stopped again");
 
-    mirror.setHighlightedNode(iris::SceneNodePtr());
+    mirror.setHighlightedNodes({});
     mirror.sync();
     engine->renderOneFrame();
 
