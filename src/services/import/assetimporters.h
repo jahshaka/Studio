@@ -108,6 +108,36 @@ public:
                  QString *errorOut, const ImportProgressFn &progress) override;
 };
 
+/// ANIMATION CLIP FILES (ModelTypes::Animation): a model file that carries
+/// animation channels and NO geometry — a Mixamo download "without skin", a
+/// .bvh mocap capture. Before this importer existed the ONE pipeline had no
+/// route for one: MeshImporter sniffed the extension, the mesh loader refused
+/// the zero-mesh scene (meshnode.cpp:374) and the user was told their file
+/// "may be corrupt or use ... Draco mesh compression", which was false.
+///
+/// Registered BEFORE MeshImporter: the two share every extension and the
+/// question that separates them is about the file's CONTENTS, so the animation
+/// sniff (animfile::shapeOf — structural, no assimp parse) has to be asked
+/// first. A file with meshes AND animations stays an Object, unchanged: it is
+/// scenery that happens to move, and its clips ride it.
+///
+/// The row's `source` is the source file itself: content-addressed, portable,
+/// and re-read by the avatar module through the same CAS resolution every
+/// other typed row uses. No intermediate format is invented — a converted
+/// clip would be a second thing to keep in step with assimp.
+class AnimationImporter : public AssetImporterBase
+{
+public:
+    QString name() const override { return QStringLiteral("animation"); }
+    int version() const override { return 1; }
+    int modelType() const override;
+    bool sniff(const QString &path) const override;
+    bool validate(const QString &path, QString *errorOut) const override;
+    bool convert(const ImportRequest &request, const QString &stagingDir,
+                 Database *db, Project *project, StagedAsset &out,
+                 QString *errorOut, const ImportProgressFn &progress) override;
+};
+
 /// Whitelisted plain files (txt/frag/vert/…): one File row + session entry.
 class FileImporter : public AssetImporterBase
 {

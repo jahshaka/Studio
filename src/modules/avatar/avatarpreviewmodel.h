@@ -190,6 +190,11 @@ public:
                        const QString &displayName = QString());
     void clear();
     bool isLoaded() const { return !mFragment.isNull(); }
+    /// Every scene-node name under the loaded fragment — the set a clip's
+    /// channels are joined against (the clip -> bone join is by NAME). Read by
+    /// `avatar.animations`, which answers "does this library clip fit the
+    /// loaded character" with the same key `loadAnimation` refuses on.
+    const QSet<QString> &nodeNames() const { return mNodeNames; }
 
     /// Sets the loaded subject's height in metres, exactly (`metres` > 0), or
     /// re-runs the AUTO rule (`metres` <= 0). False when nothing is loaded or

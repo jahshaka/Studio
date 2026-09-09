@@ -80,8 +80,8 @@ public:
     /// The recorded determinism block for an asset ("import" in properties).
     QJsonObject importSettings(const QString &guid) const;
 
-    /// The registered importers, in sniff order (mesh, image, audio, video,
-    /// shader, material, jaf, file).
+    /// The registered importers, in sniff order (animation, mesh, image,
+    /// audio, video, shader, material, ies, jaf, file).
     const QVector<AssetImporterBase *> &importers() const { return mImporters; }
 
 private:

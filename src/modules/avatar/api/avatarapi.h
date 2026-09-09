@@ -83,6 +83,9 @@ public:
     Q_INVOKABLE bool setMeshVisible(bool on);
     Q_INVOKABLE bool setSkeletonVisible(bool on);
     Q_INVOKABLE QVariantList clips();
+    /// Every ModelTypes::Animation row in the library, with the rig question
+    /// answered against the loaded character (see the verb's help).
+    Q_INVOKABLE QVariantList animations();
     Q_INVOKABLE bool playClip(const QString &name = QString());
     Q_INVOKABLE bool pause();
     Q_INVOKABLE bool stop();

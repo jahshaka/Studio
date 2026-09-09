@@ -80,6 +80,7 @@ int typeFromName(const QString &name)
     if (n == "particles") return static_cast<int>(ModelTypes::ParticleSystem);
     if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
     if (n == "avatar") return static_cast<int>(ModelTypes::Avatar);
+    if (n == "animation" || n == "clip") return static_cast<int>(ModelTypes::Animation);
     return -1;
 }
 

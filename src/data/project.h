@@ -161,7 +161,19 @@ enum class ModelTypes
     // source file is the whole design: it pins per project, copies on write,
     // archives and garbage-collects through the pipeline unchanged.
     // APPENDED, never inserted: the value is persisted in every assets row.
-    Avatar			// Supported
+    Avatar,			// Supported
+    // ANIMATION CLIPS. A model file that carries a node hierarchy, animation
+    // channels and NO geometry — what Mixamo hands you for a download
+    // "without skin". It is its own library type and not an Object because it
+    // is not one: every mesh path in the product refuses a zero-mesh file
+    // (iris::MeshNode::loadAsSceneFragment returns null, and nine callers rely
+    // on that), it has no extent to fit or place, and what a user wants from
+    // it — "which of my rigs does this clip fit" — is a question no Object row
+    // can answer. The row's `source` is the SOURCE FILE itself (content
+    // addressed, portable, re-readable by the avatar module), never a
+    // converted intermediate.
+    // APPENDED, never inserted: the value is persisted in every assets row.
+    Animation		// Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113

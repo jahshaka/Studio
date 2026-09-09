@@ -256,6 +256,7 @@ set(SRCS
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
     src/services/rigsignature.cpp
+    src/services/animationfile.cpp
     src/services/avatarassets.cpp
     src/services/iesprofile.cpp
     src/services/lightbindings.cpp
@@ -505,6 +506,7 @@ set(HEADERS
     src/services/assetimporter.h
     src/services/assetmetadata.h
     src/services/rigsignature.h
+    src/services/animationfile.h
     src/services/avatarassets.h
     src/services/assetcas.h
     src/services/assetgc.h

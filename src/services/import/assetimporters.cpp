@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "io/builtinmaterials.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "io/scenewriter.h"
+#include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetmetadata.h"
@@ -138,11 +139,29 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // here so the user learns their model lost a map (deep audit 2026-09 F2).
     out.warnings += iris::MaterialHelper::takeContainmentWarnings();
     if (!node) {
-        if (errorOut)
-            *errorOut = QStringLiteral("\"%1\" could not be imported. The file may be "
-                                       "corrupt or use an unsupported feature (for example "
-                                       "Draco mesh compression in a .glb/.gltf).")
-                            .arg(sourceInfo.fileName());
+        // WHY, precisely. The old message guessed ("may be corrupt or use ...
+        // Draco compression") and was wrong for the most common case by far:
+        // an animation-only export, which parses perfectly and simply has no
+        // geometry. That guess is now a diagnosis — one cheap parse, on the
+        // failure path only, that separates "unreadable" from "readable, no
+        // geometry" and names the animation route when there is one.
+        if (errorOut) {
+            const animfile::Contents contents = animfile::read(request.sourcePath);
+            if (!contents.parsed) {
+                *errorOut = QStringLiteral("\"%1\" could not be read: %2. The file may be "
+                                           "corrupt or use an unsupported feature (for example "
+                                           "Draco mesh compression in a .glb/.gltf).")
+                                .arg(sourceInfo.fileName(), contents.error);
+            } else if (contents.animations > 0) {
+                *errorOut = QStringLiteral("\"%1\" carries animation but no geometry — it is a "
+                                           "clip, and it imports as an Animation asset.")
+                                .arg(sourceInfo.fileName());
+            } else {
+                *errorOut = QStringLiteral("\"%1\" contains no geometry and no animation — "
+                                           "there is nothing in it to import.")
+                                .arg(sourceInfo.fileName());
+            }
+        }
         return false;
     }
     out.metadata = modelStats;
@@ -527,6 +546,112 @@ bool IesImporter::convert(const ImportRequest &request, const QString &stagingDi
     row.thumbnail = pngBlobFromImage(profile.polarThumbnail(256));
     row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
+    return true;
+}
+
+// ========================== AnimationImporter =============================
+
+int AnimationImporter::modelType() const { return static_cast<int>(ModelTypes::Animation); }
+
+bool AnimationImporter::sniff(const QString &path) const
+{
+    // Structural, not a parse (animfile::shapeOf): this question is asked of
+    // every model file the user drops, and answering it with assimp would
+    // double the cost of every mesh import.
+    return animfile::isAnimationFile(path);
+}
+
+bool AnimationImporter::validate(const QString &path, QString *errorOut) const
+{
+    // The one parse, before anything is staged: a file whose channels drive
+    // nothing is a file the avatar module would refuse later, and a refusal at
+    // import time can name the reason.
+    const animfile::Contents contents = animfile::read(path);
+    if (!contents.parsed) {
+        if (errorOut)
+            *errorOut = QStringLiteral("\"%1\" could not be read (%2)")
+                            .arg(QFileInfo(path).fileName(), contents.error);
+        return false;
+    }
+    if (contents.animations == 0) {
+        if (errorOut)
+            *errorOut = QStringLiteral("\"%1\" contains no animation")
+                            .arg(QFileInfo(path).fileName());
+        return false;
+    }
+    if (contents.boneChannelNames.isEmpty()) {
+        if (errorOut)
+            *errorOut = QStringLiteral("\"%1\" has animation channels but no bones to drive "
+                                      "— nothing in it can be applied to a character")
+                            .arg(QFileInfo(path).fileName());
+        return false;
+    }
+    return true;
+}
+
+bool AnimationImporter::convert(const ImportRequest &request, const QString &stagingDir,
+                                Database *db, Project *project, StagedAsset &out,
+                                QString *errorOut, const ImportProgressFn &progress)
+{
+    Q_UNUSED(stagingDir); Q_UNUSED(db); Q_UNUSED(project);
+    const QFileInfo sourceInfo(request.sourcePath);
+
+    if (progress && !progress(QStringLiteral("convert"), 0, 0)) {
+        if (errorOut) *errorOut = QStringLiteral("cancelled");
+        return false;
+    }
+
+    // ONE parse for both the metadata block and the thumbnail — the pose strip
+    // is drawn from the same aiScene the clip table is read from.
+    QImage poseStrip;
+    const animfile::Contents contents = animfile::read(request.sourcePath, &poseStrip);
+    if (!contents.parsed) {
+        if (errorOut)
+            *errorOut = QStringLiteral("\"%1\" could not be read (%2)")
+                            .arg(sourceInfo.fileName(), contents.error);
+        return false;
+    }
+    if (contents.animations == 0) {
+        if (errorOut)
+            *errorOut = QStringLiteral("\"%1\" contains no animation").arg(sourceInfo.fileName());
+        return false;
+    }
+    // A file with geometry is an Object and belongs to MeshImporter; reaching
+    // here means the structural sniff and the parse disagree (an exotic
+    // container), and importing it as a clip would silently drop its meshes.
+    if (contents.meshes > 0) {
+        if (errorOut)
+            *errorOut = QStringLiteral("\"%1\" carries geometry — import it as a model")
+                            .arg(sourceInfo.fileName());
+        return false;
+    }
+
+    out.mainGuid = GUIDManager::generateGUID();
+    // THE SOURCE FILE IS THE ASSET (no converted intermediate): the avatar
+    // module re-reads it through the CAS with the same assimp flags it uses
+    // for a file on disk, so a stored clip and a dropped one take one code
+    // path.
+    out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,
+                       QStringLiteral("source"), sourceInfo.fileName() });
+    out.metadata = AssetMetadata::forAnimationFile(request.sourcePath);
+
+    StagedRow row;
+    row.guid = out.mainGuid;
+    // The BASE name, like the Object row and unlike the media rows: a clip is
+    // named for what it is ("Walking"), and that name is also what binds the
+    // walk role when the module matches clips (rig::displayNameFor).
+    row.name = sourceInfo.completeBaseName();
+    row.type = static_cast<int>(ModelTypes::Animation);
+    // Three projected poses across the clip. Two clip files are otherwise
+    // indistinguishable as tiles, which is the same reason a light profile
+    // gets a polar plot instead of a file icon.
+    row.thumbnail = pngBlobFromImage(poseStrip);
+    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
+    out.rows.append(row);
+
+    for (const auto &clip : contents.clips)
+        if (clip.boneChannels == 0)
+            out.warnings.append(QStringLiteral("clip \"%1\" drives no bones").arg(clip.name));
     return true;
 }
 

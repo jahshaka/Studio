@@ -42,6 +42,13 @@ inline PreviewPage pageFor(ModelTypes type)
         return PreviewPage::Viewer3D;
     case ModelTypes::Texture:
         return PreviewPage::Image;
+    // ANIMATION CLIPS: the placeholder, deliberately. A clip has no geometry
+    // of its own to show — playing one needs a rig to play it ON, which is
+    // the Avatar module's preview and not this page's shared 3D viewer. The
+    // tile's POSE STRIP thumbnail (the importer draws it) is what identifies
+    // the file here.
+    case ModelTypes::Animation:
+        return PreviewPage::Placeholder;
     case ModelTypes::Music:
     case ModelTypes::SoundEffect:
         return PreviewPage::Audio;

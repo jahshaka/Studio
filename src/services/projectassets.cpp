@@ -256,6 +256,14 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             AssetManager::addAsset(asset);
             break;
         }
+        case ModelTypes::Animation:
+            // NO SESSION SHAPE, deliberately (as for LightProfile and Avatar):
+            // nothing in a live session holds a clip file as an object. Every
+            // consumer — avatar.loadClip, the module's Load Animation… list —
+            // reads the row's bytes through the CAS resolver at the moment it
+            // applies the clip to a rig, so a session entry would be a second
+            // copy of the truth with no reader.
+            return false;
         default:
             return false;   // no session shape for this type (Mesh rows etc.)
         }

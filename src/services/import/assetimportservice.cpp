@@ -35,6 +35,10 @@ For more information see the LICENSE file
 AssetImportService::AssetImportService(Database *db, Project *project)
     : db(db), project(project)
 {
+    // BEFORE MeshImporter, deliberately: the two share every model extension
+    // and only the file's CONTENTS separate them (a clip file has no meshes),
+    // so the animation sniff — structural, no parse — has to be asked first.
+    mImporters.append(new AnimationImporter());
     mImporters.append(new MeshImporter());
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Texture)));
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Music)));
@@ -71,6 +75,7 @@ qint64 maxSourceBytes(int modelType)
     switch (static_cast<ModelTypes>(modelType)) {
     case ModelTypes::Mesh:
     case ModelTypes::Object:   // JafImporter — a .jaf archive carries content
+    case ModelTypes::Animation:   // a clip file is a model file without the meshes
     case ModelTypes::Texture:
     case ModelTypes::Music:
     case ModelTypes::Video:
@@ -99,8 +104,8 @@ AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request
     }
     if (error)
         *error = QStringLiteral("'%1' is not an importable library file "
-                                "(models, images, audio, video, shaders, materials, "
-                                ".ies light profiles or .jaf)")
+                                "(models, animation clips, images, audio, video, shaders, "
+                                "materials, .ies light profiles or .jaf)")
                      .arg(QFileInfo(request.sourcePath).fileName());
     return nullptr;
 }
