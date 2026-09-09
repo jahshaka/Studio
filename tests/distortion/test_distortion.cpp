@@ -424,11 +424,15 @@ int main()
         pd.additive = true;                          // ignored by a distortion emitter, on purpose
         ParticleEmitterDesc em;
         em.shape = ParticleEmitterShape::Box;
-        em.extents = Vec3(1.6f, 1.6f, 0.05f);
+        // A 0.8 box of 0.5 quads: the cloud spans ~1.3 units, ~65 px of the
+        // 128 px frame at z = -1, so the locality box below has a far field
+        // to measure against (a 1.6 box of 0.8 quads covered the whole frame:
+        // measured 3063 px changed inside the box, 1895 outside).
+        em.extents = Vec3(0.8f, 0.8f, 0.05f);
         em.rate = 400.0f;
         em.velocityMin = em.velocityMax = 0.0f;      // a standing cloud, not a fountain
         em.ttlMin = em.ttlMax = 30.0f;
-        em.sizeWidth = em.sizeHeight = 0.8f;
+        em.sizeWidth = em.sizeHeight = 0.5f;
         pd.emitters.push_back(em);
 
         const NodeId burst = s->createNode();
@@ -463,7 +467,7 @@ int main()
                       "distortion_on_a_burst: the particles WARP the checker behind them "
                       "(%u of %u pixels moved)", moved, warpedBurst.width * warpedBurst.height);
             unsigned inside = 0, outside = 0;
-            diffInsideOutside(wallOnly, warpedBurst, 16, 16, 112, 112, inside, outside);
+            diffInsideOutside(wallOnly, warpedBurst, 20, 20, 108, 108, inside, outside);
             CHECK_MSG(inside > outside * 4,
                       "...and only where the cloud is: %u px changed inside its box, %u outside",
                       inside, outside);
