@@ -52,7 +52,7 @@ QVector<VerbInfo> ClipboardApi::verbs() const
           Needs::Document },
         { "paste", "clipboard.paste({target, parent, index, allowMissing}) -> {pasted: [id], "
                    "imported: [guid], pinned: [guid], missing: [{guid, name, type, neededBy}], "
-                   "skipped: [{kind, reason}]}",
+                   "skipped: [{kind, reason}], error?}",
           "Pastes what the clipboard holds. `target` is the surface asking: \"tree\" (the default "
           "— objects land beside the primary, same parent, sibling index + 1, or at the scene root "
           "when nothing is selected) or \"assets\" (library tiles land in this library). "
@@ -62,7 +62,11 @@ QVector<VerbInfo> ClipboardApi::verbs() const
           "An asset this library does not have and cannot fetch is REPORTED in `missing` and the "
           "items needing it are refused — `allowMissing: true` pastes them anyway, with empty "
           "slots. An item kind this build has no paste for is listed in `skipped`, never a refusal "
-          "of the whole payload.",
+          "of the whole payload. NOTHING IS WRITTEN BY A REFUSAL: the resolution is planned "
+          "against the items that will actually land, so a paste that lands nothing imports "
+          "nothing and pins nothing. An asset that fails to IMPORT (a store write that failed) "
+          "sets `error`, joins `missing`, and refuses the items that needed it rather than "
+          "letting them paste over a guid that resolves to nothing.",
           Needs::Document },
         { "contents", "clipboard.contents() -> {format, version, app, source: {storeId, "
                       "sameLibrary}, items: [{kind, name}], assets: {total, inlined, referenced}}",
@@ -227,11 +231,14 @@ QVariantMap ClipboardApi::paste(const QVariantMap &options)
     pasteOptions.allowMissing = options.value(QStringLiteral("allowMissing"), false).toBool();
 
     const auto result = clipboard->paste(pasteOptions);
+    // A REFUSAL STILL REPORTS. The error is what the caller tests, but the rest
+    // of the report is how it finds out WHY — and when the failure came from
+    // an import the resolver could not complete, `imported` and `missing` are
+    // the only record that anything happened at all (asset writes sit outside
+    // undo by design, D7). Returning `{error}` alone hid that.
     if (!result.error.isEmpty()) {
         refuse(QStringLiteral("clipboard.paste: %1").arg(result.error));
-        out["pasted"] = QVariantList();
         out["error"] = result.error;
-        return out;
     }
     out["pasted"] = QVariant(result.pasted);
     out["imported"] = QVariant(result.imported);
@@ -313,5 +320,11 @@ QVariantMap ClipboardApi::resolve()
     out["importable"] = QVariant(report.importable);
     out["missing"] = missingToList(report.missing);
     out["sameLibrary"] = clipboard->sameLibrary(envelope);
+    // The dry run can fail as a whole (no library open) — say so rather than
+    // answering "nothing is missing" from a walk that never ran.
+    if (!report.error.isEmpty()) {
+        out["error"] = report.error;
+        refuse(QStringLiteral("clipboard.resolve: %1").arg(report.error));
+    }
     return out;
 }

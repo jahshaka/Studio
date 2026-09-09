@@ -182,7 +182,29 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
 
         QString error;
         if (!registerAsset(asset, located, &error)) {
-            report.error = error;
+            // A FAILED IMPORT IS A HOLE, and it has to be reported as one. It
+            // was neither `known` nor `missing` before, so a node that
+            // referenced this asset sailed through the missing-check and landed
+            // with a DANGLING guid — the exact outcome D5 exists to prevent
+            // (the scene reader resolves nothing and logs nothing; the user
+            // gets an invisible object). Both halves are recorded: the guid
+            // joins `missing` so the items needing it are refused, and the
+            // error is carried up so the verb itself refuses.
+            ClipboardMissing failed;
+            failed.guid = it.key();
+            failed.name = asset.name;
+            failed.type = asset.type;
+            failed.neededBy = QStringLiteral("import failed: %1").arg(
+                error.isEmpty() ? QStringLiteral("unknown error") : error);
+            report.missing.append(failed);
+            if (report.error.isEmpty())
+                report.error = QStringLiteral("could not import '%1': %2")
+                                   .arg(asset.name,
+                                        error.isEmpty() ? QStringLiteral("unknown error") : error);
+            // The guid map entry (a type collision that minted a fresh guid) is
+            // withdrawn too: nothing landed under it, so nothing may be
+            // rewritten to point at it.
+            report.guidMap.remove(it.key());
             continue;
         }
         report.imported.append(asset.guid);
