@@ -106,10 +106,15 @@ assert(dumpSpec.indexOf("\"metalness\"") < 0,
 var badName = false;
 try { material.set(ball, { workflow: "Shiny" }); } catch (e) { badName = true; }
 assert(badName, "an unknown workflow NAME is refused, not coerced to 0");
-var badIndex = false;
-try { material.set(ball, { workflow: 7 }); } catch (e) { badIndex = true; }
-assert(badIndex, "an out-of-range workflow ORDINAL is refused too");
-assert(material.get(ball).workflow === 1, "a refused set changed nothing");
+// An out-of-range ORDINAL is deliberately NOT refused: enum rows are ints on
+// disk and a document written by a newer build must still open, so the document
+// stores what it was told and the engine falls back to the safe value. That is
+// the rule scripting.e2e.pbs_knobs states for `brdf`, and it holds here too —
+// a bad NAME is refused because a label can only come from a human.
+assert(material.set(ball, { workflow: 7 }), "an out-of-range ORDINAL is stored verbatim");
+assert(material.get(ball).workflow === 7, "...and read back");
+assert(material.set(ball, { workflow: "Specular" }), "back to Specular");
+assert(material.get(ball).workflow === 1, "a refused NAME changed nothing earlier");
 
 // ---- 5. IOR vs an explicit F0, and the per-channel permutation ----
 assert(material.set(ball, { ior: 2.4 }), "material.set ior (diamond-ish)");

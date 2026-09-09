@@ -168,9 +168,11 @@ assert(material.detail(ball)[0].blend === 7, "...and stores the renderer's index
 var badBlend = false;
 try { material.setDetail(ball, 0, { blend: "Fancy" }); } catch (e) { badBlend = true; }
 assert(badBlend, "an unknown blend NAME is refused, not coerced to 0");
-var badIdx = false;
-try { material.setDetail(ball, 0, { blend: 99 }); } catch (e) { badIdx = true; }
-assert(badIdx, "an out-of-range blend index is refused too");
+// Same rule as every other enum row: an ORDINAL is stored verbatim (ints are
+// what is on disk, and a newer build's value must still open), a NAME is not.
+assert(material.setDetail(ball, 0, { blend: 99 }), "an out-of-range blend ORDINAL is stored");
+assert(material.detail(ball)[0].blend === 99, "...verbatim");
+assert(material.setDetail(ball, 0, { blend: "Overlay" }), "back to a real mode");
 var badLayer = false;
 try { material.setDetail(ball, 7, { map: marbleDetail }); } catch (e) { badLayer = true; }
 assert(badLayer, "a layer that does not exist is refused, by number");

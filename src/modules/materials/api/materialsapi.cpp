@@ -648,15 +648,19 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                                                    "— accepted: %3")
                                         .arg(label, key, list->labels.join(QStringLiteral(", "))));
                     newValue = index;
-                } else {
-                    // An out-of-range ordinal is the same silent-wrong class.
-                    const int index = newValue.toInt();
-                    if (!list->labels.isEmpty() && (index < 0 || index >= list->labels.size()))
-                        return fail(QStringLiteral("material.set: %1 is out of range for '%2' "
-                                                   "— accepted: %3")
-                                        .arg(QString::number(index), key,
-                                             list->labels.join(QStringLiteral(", "))));
                 }
+                // AN OUT-OF-RANGE ORDINAL IS DELIBERATELY STILL ACCEPTED, and
+                // that is not an oversight. Enum rows are ints ON DISK, and the
+                // documented rule is that a document written by a NEWER build
+                // must still open: the document stores what it was told and the
+                // engine boundary falls back to the safe value (brdfEngineName
+                // returns "Default" for any unknown index). scripting.e2e.
+                // pbs_knobs asserts exactly that, by name.
+                //
+                // A bad NAME is a different thing and is refused above: a label
+                // can only come from a human or a script, never from an older
+                // file, so there is no compatibility to preserve — only the
+                // silent coercion to 0 that used to happen.
             }
             break;
         }
