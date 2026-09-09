@@ -64,6 +64,8 @@ namespace Constants
     extern QList<QString> ANIMATION_EXTS;
     extern QList<QString> WHITELIST;
     extern QList<QString> LIGHT_PROFILE_EXTS;
+    /// The avatar definition (AVATAR_ASSET_SPEC §3.1): `.avatar` JSON.
+    extern QList<QString> AVATAR_EXTS;
 	extern QString SHADER_EXT;
     extern QList<QString> MATERIAL_EXTS;
 	extern QString ASSET_EXT;

@@ -38,12 +38,11 @@ namespace {
 
 QString sourceOidOf(QSqlDatabase conn, const QString &guid)
 {
-    QSqlQuery query(conn);
-    query.prepare("SELECT oid FROM asset_files WHERE asset_guid = ? "
-                  "ORDER BY CASE role WHEN 'source' THEN 0 ELSE 1 END, name");
-    query.addBindValue(guid);
-    if (query.exec() && query.next()) return query.value(0).toString();
-    return QString();
+    // ONE implementation (AssetCas::sourceOid): the library's current source
+    // oid is the "what version is this?" answer, and the avatar module asks it
+    // too. A second transcription of the same ORDER BY is a place for the two
+    // to disagree about which row is the source.
+    return AssetCas::sourceOid(conn, guid);
 }
 
 bool sessionHas(const QString &guid)

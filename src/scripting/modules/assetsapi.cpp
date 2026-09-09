@@ -78,6 +78,7 @@ int typeFromName(const QString &name)
     if (n == "file") return static_cast<int>(ModelTypes::File);
     if (n == "particles") return static_cast<int>(ModelTypes::ParticleSystem);
     if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
+    if (n == "avatar") return static_cast<int>(ModelTypes::Avatar);
     return -1;
 }
 
@@ -94,12 +95,12 @@ QString storeFileFor(const QString &guid)
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, limit}) -> [{guid, name, type, drawer}]",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, limit}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
-          "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag — and limit last, so a limited listing is the first N of the filtered set, not a sample of it.",
+          "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); rigged: true keeps only MODEL rows whose metadata says the file carries a skeleton (the candidates avatar.createAsset accepts — refused for scope 'session', which has no metadata); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag, then rigged — and limit last, so a limited listing is the first N of the filtered set, not a sample of it. rigged is the expensive one on a library that predates the rig metadata (it backfills the block once per row it reaches), which is why it is applied last.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
-          "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
+          "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset.",
           Needs::Document },
         { "rename", "assets.rename(guid, name) -> bool",
@@ -146,7 +147,21 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Files a store asset in a drawer (0 = Uncategorized).",
           Needs::Document },
         { "addToProject", "assets.addToProject(storeGuid) -> guid",
-          "Copies a store asset (files + DB rows + dependencies, fresh guids) into the open project; returns the project-side guid. NOT undoable.",
+          "Adds a library asset to the open project and returns its guid — THE SAME GUID: this is "
+          "reference-with-pin, not a copy. The project gets a `project_assets` row pinning the "
+          "asset (and its dependency closure) at the content it has RIGHT NOW, so the project "
+          "keeps rendering exactly those bytes even after the library asset is re-imported; a "
+          "project-side edit is copy-on-write (new content, this project's pin moves, the library "
+          "untouched) and `assets.updateFromLibrary` re-pins to the library's current version. "
+          "No files are copied and no rows are cloned. NOT undoable.",
+          Needs::Document },
+        { "updateFromLibrary", "assets.updateFromLibrary(guid) -> {guid, version}",
+          "Re-pins the open project's version of a library asset to the library's CURRENT content "
+          "— the other half of reference-with-pin. This DISCARDS the project's own edits to that "
+          "asset (they live in the pinned content, which the pin stops naming); the library, and "
+          "every other project, is unaffected either way. Returns the new pinned content id. "
+          "Refuses an asset the project has not added. NOT undoable — asset mutations never are "
+          "(SCRIPTING_SPEC \u00a71.6.5).",
           Needs::Document },
         { "addToScene", "assets.addToScene(guid, {position}) -> nodeId",
           "Instantiates a project object asset into the scene (undoable, like a drag from the asset browser).",
@@ -262,6 +277,20 @@ QVariantList AssetsApi::list(const QVariantMap &options)
             if (candidate.compare(tag, Qt::CaseInsensitive) == 0) return true;
         return false;
     };
+    // The RIGGED filter (AVATAR_ASSET_SPEC §5.1): "which library models could
+    // become an avatar". It reads the metadata block's `hasSkeleton`, through
+    // `ensure` so a row imported before the rig fields existed backfills once
+    // instead of being invisible forever. Applied AFTER the cheap filters for
+    // that reason — it can cost one assimp parse per row it actually reaches.
+    const bool riggedOnly = options.value("rigged", false).toBool();
+    const auto riggedMatches = [this, riggedOnly](const AssetRecord &record) {
+        if (!riggedOnly) return true;
+        if (record.type != static_cast<int>(ModelTypes::Object)
+            && record.type != static_cast<int>(ModelTypes::Mesh))
+            return false;
+        return AssetMetadata::ensure(host.db, record.guid)
+            .value(QStringLiteral("hasSkeleton")).toBool();
+    };
     const bool hasDrawer = options.contains("drawer");
     const int drawerFilter = options.value("drawer", -1).toInt();
     const int limit = options.value("limit", 0).toInt();
@@ -282,6 +311,11 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         if (hasDrawer) {
             fail("assets.list: scope 'session' carries no drawer — drop the drawer filter "
                  "or list scope 'store'/'project'");
+            return out;
+        }
+        if (riggedOnly) {
+            fail("assets.list: scope 'session' carries no metadata — a rigged filter has "
+                 "nothing to read there. List scope 'store'/'project'");
             return out;
         }
         // The live AssetManager registrations — what the viewport's drag-drop
@@ -327,6 +361,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
                 if (hasDrawer && record.collection != drawerFilter) continue;
                 if (!nameMatches(record.name)) continue;
                 if (!tagMatches(record.guid)) continue;
+                if (!riggedMatches(record)) continue;
                 if (full()) break;
                 out.append(QVariantMap{ { "guid", record.guid },
                                         { "name", record.name },
@@ -357,6 +392,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         if (hasDrawer && record.collection != drawerFilter) continue;
         if (!nameMatches(record.name)) continue;
         if (!tagMatches(record.guid)) continue;
+        if (!riggedMatches(record)) continue;
         if (full()) break;
         out.append(QVariantMap{ { "guid", record.guid },
                                 { "name", record.name },
@@ -572,6 +608,39 @@ QString AssetsApi::addToProject(const QString &guid)
         return QString();
     }
     return result.guid;
+}
+
+QVariantMap AssetsApi::updateFromLibrary(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    if (!requireProject()) return out;
+
+    const auto record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("assets.updateFromLibrary: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    QSqlDatabase conn = QSqlDatabase::database();
+    if (AssetCas::pinnedOid(conn, host.project->getProjectGuid(), guid).isEmpty()) {
+        fail(QStringLiteral("assets.updateFromLibrary: '%1' is not in this project — there is no "
+                            "pin to update (assets.addToProject adds it)").arg(record.name));
+        return out;
+    }
+    if (!ProjectAssets::updatePinToLatest(guid, host.db, host.project)) {
+        fail(QStringLiteral("assets.updateFromLibrary: the pin of '%1' could not be moved")
+                 .arg(record.name));
+        return out;
+    }
+    // The re-pin is the EVENT every linked instance follows (AVATAR_ASSET §4
+    // D4): announced through the assets service so the scene refreshes now
+    // rather than at the next open.
+    if (host.services && host.services->assets)
+        host.services->assets->announcePinChanged(guid);
+
+    out["guid"] = guid;
+    out["version"] = AssetCas::pinnedOid(conn, host.project->getProjectGuid(), guid);
+    return out;
 }
 
 QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)

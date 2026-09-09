@@ -69,6 +69,24 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
 // until `assets.gc` reclaims them, and resolveFile still READS them (below),
 // so nothing breaks on the way through.
 
+/// Move an asset's LIBRARY 'source' pointer to `oid` (the bytes must already
+/// be in the store — ingestFile first). This is the write a LIBRARY save
+/// needs and `copyOnWrite` deliberately does not do: the asset_files PK is
+/// (guid, role, name), so re-ingesting an edited file under its own name is
+/// an INSERT OR IGNORE that leaves the mapping on the old oid — correct for a
+/// project edit (only the pin moves, I3) and wrong for a library one, where
+/// the library's own pointer is the thing being published. `name` selects the
+/// row when an asset has several source-role files; empty means "the asset's
+/// only source row". Refcounts stay honest: the UPDATE fires the delete and
+/// insert triggers via a delete+insert pair rather than a bare UPDATE, which
+/// the triggers do not watch.
+bool moveSourcePointer(QSqlDatabase conn, const QString &guid, const QString &oid,
+                       const QString &name, QString *errorOut);
+
+/// The asset's current LIBRARY 'source' oid — the version the library points
+/// at right now, independent of any project's pin. Empty when it has none.
+QString sourceOid(QSqlDatabase conn, const QString &guid);
+
 /// Resolve an asset's PRIMARY ('source'-role) file to an absolute path;
 /// `nameOut` (optional) receives its display name. Falls back to the single
 /// file when no row carries the source role. Empty when the asset has no

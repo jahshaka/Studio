@@ -36,7 +36,13 @@ struct aiScene;
 //
 // Blocks by kind (every block: format = lowercase source extension,
 // fileSize = bytes of the primary file):
-//   model: vertices, triangles, meshes, materials, textures
+//   model: vertices, triangles, meshes, materials, textures, and the RIG
+//          block (AVATAR_ASSET_SPEC §5.1) — hasSkeleton, bones, boneNames,
+//          nodeNames, rigId (rigsignature.h: a stable hash of the sorted bone
+//          names) and animations:[{name, length (seconds), channels,
+//          boneChannels}]. Whether a model can be an avatar is a property of
+//          the FILE, so it is computed once by the import everyone already
+//          pays rather than by a second parse per module
 //   image: width, height
 //   audio: duration (ms), sampleRate, channels, bitsPerSample (wav only —
 //          other containers get format/fileSize)
@@ -65,6 +71,13 @@ public:
     /// `normalisationFactor` the mirror divides light intensity by so that
     /// binding a profile changes the falloff's SHAPE and not its brightness.
     static QJsonObject forLightProfileFile(const QString &filePath);
+
+    /// The avatar DEFINITION block (AVATAR_ASSET_SPEC §3.1): what the tile and
+    /// the module's library list show without opening the avatar — its name,
+    /// the model Object it instantiates, its rig id and bone count, and its
+    /// clip names. Read from the JSON itself, so it is exactly as current as
+    /// the version this row's `source` points at.
+    static QJsonObject forAvatarFile(const QString &filePath);
 
     // Dispatches on the asset row's ModelTypes over its store folder
     // (AssetStore/<guid>/). Returns an empty object when the folder holds

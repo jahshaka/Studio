@@ -72,6 +72,11 @@ namespace Contants
     // IES photometric profiles. NOT in WHITELIST: they get a real importer
     // (IesImporter) with validation, metadata and a thumbnail, not a File row.
     QList<QString> LIGHT_PROFILE_EXTS = { "ies" };
+
+    // The avatar DEFINITION (AVATAR_ASSET_SPEC §3.1) — the source file of a
+    // ModelTypes::Avatar row. One extension, its own list, so the store
+    // dispatch can find it exactly like every other typed row finds its file.
+    QList<QString> AVATAR_EXTS = { "avatar" };
 	QString SHADER_EXT		    = "shader";
     QList<QString> MATERIAL_EXTS= { "material"};
 	QString ASSET_EXT			= "jaf";

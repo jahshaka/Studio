@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "services/assethelper.h"
 
+#include <QSet>
+
 #include <QPixmap>
 #include <QBuffer>
 #include <QAtomicInt>
@@ -123,22 +125,36 @@ QByteArray AssetHelper::makeBlobFromPixmap(const QPixmap &thumbnail)
 
 QStringList AssetHelper::fetchAssetAndAllDependencies(const QString &guid, Database *db)
 {
-    QStringList topLevelAssets;
+    // RECURSIVE, with a visited set (AVATAR_ASSET_SPEC §4 D11). This used to
+    // be a hand-unrolled two levels with the comment "Dependency level is
+    // always max 2" — true when the deepest shape in the tree was
+    // Object -> {Mesh, Texture}. An Avatar row is Avatar -> Object ->
+    // {Mesh, Texture}, which sits EXACTLY at that ceiling, so the next edge
+    // anyone adds would silently drop files from pins and from archives
+    // (both walk this list) with nothing failing. A closure that is a closure
+    // cannot be one edge away from being wrong.
+    //
+    // The visited set is not defensive coding: a dependency table is a graph
+    // the user can cycle through (asset A's material references a texture
+    // whose material references A), and an unbounded walk of one would hang
+    // the import instead of refusing it.
     QStringList assetAndDependencies;
+    QSet<QString> seen;
+    QStringList frontier;
 
-    for (const auto &asset : db->fetchAssetGUIDAndDependencies(guid)) {
-        topLevelAssets.append(asset);
-        assetAndDependencies.append(asset);
+    const auto push = [&](const QString &candidate) {
+        if (candidate.isEmpty() || seen.contains(candidate)) return;
+        seen.insert(candidate);
+        assetAndDependencies.append(candidate);
+        frontier.append(candidate);
+    };
+
+    for (const auto &asset : db->fetchAssetGUIDAndDependencies(guid)) push(asset);
+
+    while (!frontier.isEmpty()) {
+        const QString asset = frontier.takeFirst();
+        for (const auto &dependency : db->fetchAssetGUIDAndDependencies(asset)) push(dependency);
     }
-
-    // Dependency level is always max 2
-    for (const auto &asset : topLevelAssets) {
-        for (const auto &guid : db->fetchAssetGUIDAndDependencies(asset)) {
-            assetAndDependencies.append(guid);
-        }
-    }
-
-    assetAndDependencies.removeDuplicates();
 
     return assetAndDependencies;
 }

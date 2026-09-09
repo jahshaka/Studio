@@ -20,6 +20,8 @@ For more information see the LICENSE file
 // (audit §3.3 "AssetService" row). Constructor-injected, QObject-free.
 
 #include <QString>
+#include <functional>
+#include <vector>
 
 #include "services/assetimporter.h"
 
@@ -49,9 +51,38 @@ public:
         return AssetImporter::importFile(filePath, db, project, drawerId, typeHint);
     }
 
+    // ---- THE PIN-CHANGE ANNOUNCEMENT (AVATAR_ASSET_SPEC §4 D4) ------------
+    //
+    // Every move of a project's pin — add to project, update from library, a
+    // copy-on-write save — changes WHICH BYTES this project's instances of
+    // that asset are made of. Linked avatar instances have to re-resolve, and
+    // they have to do it NOW rather than at the next scene open, or the module
+    // saves a clip and the character standing in the viewport ignores it.
+    //
+    // A plain callback list rather than a Qt signal: this service is
+    // deliberately QObject-free (it is constructed and injected, not parented),
+    // and the one consumer is a service, not a widget. Subscriptions live for
+    // the life of the service; nothing here unsubscribes, so a subscriber must
+    // outlive it or capture weakly.
+    using PinChangedFn = std::function<void(const QString &assetGuid)>;
+    void onPinChanged(PinChangedFn callback)
+    {
+        if (callback) pinSubscribers.push_back(std::move(callback));
+    }
+    void announcePinChanged(const QString &assetGuid)
+    {
+        if (assetGuid.isEmpty()) return;
+        // Iterate a COPY: a subscriber that reacts by adding another asset to
+        // the project (the closure walk does) would otherwise invalidate the
+        // vector mid-loop.
+        const auto subscribers = pinSubscribers;
+        for (const auto &callback : subscribers) callback(assetGuid);
+    }
+
 private:
     Database *db;
     Project *project;   // the live Project (Phase 4: was Globals::project)
+    std::vector<PinChangedFn> pinSubscribers;
 };
 
 #endif // ASSETSERVICE_H

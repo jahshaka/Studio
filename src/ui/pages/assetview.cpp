@@ -263,6 +263,7 @@ QString AssetView::getAssetType(int id)
 		case static_cast<int>(ModelTypes::File):			return "File";				break;
 		case static_cast<int>(ModelTypes::ParticleSystem):	return "Particle System";	break;
 		case static_cast<int>(ModelTypes::LightProfile):	return "Light Profile";		break;
+		case static_cast<int>(ModelTypes::Avatar):			return "Avatar";			break;
 		default: return "Undefined"; break;
 	}
 }

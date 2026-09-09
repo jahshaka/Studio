@@ -288,6 +288,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     assetFilterCombo->addItem("Audio", QVariant::fromValue(static_cast<int>(ModelTypes::Music)));
     assetFilterCombo->addItem("Video", QVariant::fromValue(static_cast<int>(ModelTypes::Video)));
     assetFilterCombo->addItem("Light Profiles", QVariant::fromValue(static_cast<int>(ModelTypes::LightProfile)));
+    assetFilterCombo->addItem("Avatars", QVariant::fromValue(static_cast<int>(ModelTypes::Avatar)));
     assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
 
 	// A persisted filter naming a class this build no longer offers must fall
