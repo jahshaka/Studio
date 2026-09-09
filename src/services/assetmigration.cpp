@@ -196,8 +196,8 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot)
         }
 
         QSqlQuery insertAsset(conn);
-        insertAsset.prepare("INSERT OR IGNORE INTO assets (guid, name, type, view_filter, collection, author, license, properties, tags) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        insertAsset.prepare("INSERT OR IGNORE INTO assets (guid, name, type, view_filter, collection, author, license, properties, tags, listed) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         insertAsset.addBindValue(guid);
         insertAsset.addBindValue(sidecar.value("name").toString());
         insertAsset.addBindValue(sidecar.value("type").toInt());
@@ -211,6 +211,9 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot)
         insertAsset.addBindValue(sidecar.contains("tags")
             ? QJsonDocument(sidecar.value("tags").toObject()).toJson(QJsonDocument::Compact)
             : QByteArray());
+        // Library visibility rides the sidecar; a sidecar written before the
+        // field existed rebuilds as a listed row, which is what it was.
+        insertAsset.addBindValue(sidecar.value("listed").toBool(true) ? 1 : 0);
         if (insertAsset.exec() && insertAsset.numRowsAffected() > 0) ++report.assets;
 
         for (const auto &value : sidecar.value("files").toArray()) {

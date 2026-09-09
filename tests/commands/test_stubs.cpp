@@ -83,4 +83,4 @@ void SelectionService::select(iris::SceneNodePtr) {}
 
 // ---- Database --------------------------------------------------------------
 
-bool Database::deleteAsset(const QString &) { return false; }
+bool Database::deleteAsset(const QString &, bool) { return false; }

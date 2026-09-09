@@ -130,7 +130,12 @@ Database::Database()
         "    asset             BLOB,"
         "    tags			   BLOB,"
         "    properties        BLOB,"
-		"    view_filter       INTEGER"
+		"    view_filter       INTEGER,"
+        // LIBRARY VISIBILITY (library delete keeps project pins): 1 = the row
+        // is a library tile; 0 = it was deleted from the library while
+        // projects still pinned it, so the content and every pin live on and
+        // the row still resolves BY GUID — it is only gone from listings.
+        "    listed            INTEGER NOT NULL DEFAULT 1"
         ")";
 
     dependenciesTableSchema =
@@ -395,6 +400,16 @@ void Database::migrateAssetsTable()
     );
     query.addBindValue(static_cast<int>(ModelTypes::Material));
     executeAndCheckQuery(query, "MigrateAssetsMaterialData");
+
+    // LIBRARY VISIBILITY: additive and guarded, exactly like the collections
+    // `parent` column. Not a data migration — every existing row reads back
+    // listed = 1, which is what every existing row IS; the column only has to
+    // exist before the listing queries name it.
+    if (!checkIfColumnExists("assets", "listed")) {
+        QSqlQuery addListed;
+        addListed.prepare("ALTER TABLE assets ADD COLUMN listed INTEGER NOT NULL DEFAULT 1");
+        executeAndCheckQuery(addListed, "MigrateAssetsAddListed");
+    }
 }
 
 QString Database::getVersion()
@@ -1059,12 +1074,35 @@ bool Database::deleteProject(const QString &guid)
     // longer exist). A pin outliving its project is not merely a dead row —
     // it is a reference that keeps its object alive against any future
     // refcount GC, i.e. store bytes that can never be reclaimed.
+    // An UNLISTED row exists ONLY to serve its pins (library delete keeps
+    // project pins): once this project's pins go, one that no other project
+    // pins has nothing left to serve — and, being invisible, nothing could
+    // ever delete it again while its asset_files rows kept its bytes
+    // unreclaimable. Collected BEFORE the pins go.
+    QStringList unlistedPins;
+    {
+        QSqlQuery uquery;
+        uquery.prepare("SELECT PA.asset_guid FROM project_assets PA "
+                       "JOIN assets A ON A.guid = PA.asset_guid "
+                       "WHERE PA.project_guid = ? AND A.listed = 0");
+        uquery.addBindValue(guid);
+        if (executeAndCheckQuery(uquery, "FetchUnlistedProjectPins"))
+            while (uquery.next()) unlistedPins << uquery.value(0).toString();
+    }
+
     QSqlQuery pquery;
     pquery.prepare("DELETE FROM project_assets WHERE project_guid = ?");
     pquery.addBindValue(guid);
     bool p = executeAndCheckQuery(pquery, "DeleteProjectPins");
 
     if (!(d && q && p)) return false;   // tx rolls back — no half-deleted project
+
+    // force: the row was already deleted from the library once; this is that
+    // delete finally landing. (Nested in the transaction above — the guard
+    // degrades to a no-op and this commit is the atom.)
+    for (const QString &orphan : unlistedPins)
+        if (countAssetPins(orphan) == 0) deleteAsset(orphan, /*force*/ true);
+
     return tx.commit();
 }
 
@@ -1150,7 +1188,69 @@ void Database::dropSidecar(const QString &guid)
     QFile::remove(AssetStorePaths::sidecarPathIn(root, guid));
 }
 
-bool Database::deleteAsset(const QString &guid)
+bool Database::setAssetListed(const QString &guid, bool listed)
+{
+    if (guid.isEmpty() || !db.isOpen()) return false;
+    QSqlQuery query;
+    query.prepare("UPDATE assets SET listed = ? WHERE guid = ?");
+    query.addBindValue(listed ? 1 : 0);
+    query.addBindValue(guid);
+    if (!executeAndCheckQuery(query, "SetAssetListed")) return false;
+    // An UPDATE that matched no row is not a success — the guid names nothing.
+    if (query.numRowsAffected() == 0) return false;
+    // The sidecar records library visibility too, so a rebuildCatalog does not
+    // resurrect an unlisted row as a library tile (invariant I2).
+    if (sidecarBelongsHere(guid)) refreshSidecar(guid);
+    return true;
+}
+
+bool Database::isAssetListed(const QString &guid)
+{
+    if (guid.isEmpty() || !db.isOpen()) return false;
+    QSqlQuery query;
+    query.prepare("SELECT listed FROM assets WHERE guid = ?");
+    query.addBindValue(guid);
+    if (!executeAndCheckQuery(query, "IsAssetListed") || !query.next()) return false;
+    return query.value(0).toInt() != 0;
+}
+
+QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
+{
+    QVector<AssetPinRecord> pins;
+    if (guid.isEmpty() || !db.isOpen()) return pins;
+    if (!checkIfTableExists("project_assets")) return pins;
+
+    QSqlQuery query;
+    // LEFT JOIN: a pin whose project row is gone must still be COUNTED (it is
+    // a real reference in the catalog); it just has no name to show.
+    query.prepare("SELECT PA.project_guid, P.name FROM project_assets PA "
+                  "LEFT JOIN projects P ON P.guid = PA.project_guid "
+                  "WHERE PA.asset_guid = ? ORDER BY P.name");
+    query.addBindValue(guid);
+    if (!executeAndCheckQuery(query, "FetchAssetPins")) return pins;
+
+    while (query.next()) {
+        AssetPinRecord pin;
+        pin.projectGuid = query.value(0).toString();
+        pin.projectName = query.value(1).toString();
+        if (pin.projectName.isEmpty()) pin.projectName = pin.projectGuid;
+        pins.push_back(pin);
+    }
+    return pins;
+}
+
+int Database::countAssetPins(const QString &guid)
+{
+    if (guid.isEmpty() || !db.isOpen()) return 0;
+    if (!checkIfTableExists("project_assets")) return 0;
+    QSqlQuery query;
+    query.prepare("SELECT COUNT(*) FROM project_assets WHERE asset_guid = ?");
+    query.addBindValue(guid);
+    if (!executeAndCheckQuery(query, "CountAssetPins") || !query.next()) return 0;
+    return query.value(0).toInt();
+}
+
+bool Database::deleteAsset(const QString &guid, bool force)
 {
     // A delete that cannot run must NOT report success and must NOT scrub the
     // in-memory catalog: doing both is how a no-op delete looked like a real
@@ -1169,6 +1269,14 @@ bool Database::deleteAsset(const QString &guid)
     // row whose refcount never drops, i.e. store bytes nothing can ever reap.
     // Nested inside deleteAssetAndDependencies / deleteFolderAndDependencies
     // the guard degrades to a no-op and the OUTER transaction is the atom.
+    // LIBRARY DELETE KEEPS PROJECT PINS (owner, 2026-09-09). A pinned asset
+    // is not the library's alone to destroy: every project that added it is
+    // still rendering those bytes. So the library delete UNLISTS the row and
+    // touches nothing else — no asset_files (which is what assets.gc reaps
+    // by), no project_assets, no sidecar, no content. `assets.remove(guid,
+    // {force: true})` / "Delete everywhere" is the way past it.
+    if (!force && countAssetPins(guid) > 0) return setAssetListed(guid, false);
+
     // Decided BEFORE the rows go: after the delete there is nothing left to
     // prove this store and this catalog belong together (sidecarBelongsHere).
     const bool ownsSidecar = sidecarBelongsHere(guid);
@@ -1425,7 +1533,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
     // read is what every "is this mine?" caller uses. It was omitted, so
     // `fetchAsset(guid).projectGuid` was the empty string for every row in the
     // catalog — silently answering "library" for project assets.
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid FROM assets WHERE guid = ? ");
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchAsset");
 
@@ -1449,6 +1557,9 @@ AssetRecord Database::fetchAsset(const QString &guid)
             // actually carry them.
             data.tags = query.value(9).toByteArray();
             data.projectGuid = query.value(10).toString();
+            // Library visibility: fetchAsset is the BY-GUID read, so it
+            // answers for unlisted rows too — it just reports which it is.
+            data.listed = query.value(11).toInt() != 0;
             return data;
         }
     }
@@ -1464,7 +1575,10 @@ QStringList Database::fetchLibraryAssetGuids()
     QSqlQuery query;
     // view_filter IN (2,3) — AssetsView AND Effects are both library rows
     // (ASSET_PIPELINE_SPEC preflight amendment 2).
-    query.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?)");
+    // LIBRARY LISTING: unlisted rows are excluded. This feeds the store's
+    // "missing content" count, which is a report about the LIBRARY the user
+    // can see; an unlisted row's content is the pinning project's business.
+    query.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?) AND listed = 1");
     query.addBindValue(static_cast<int>(AssetViewFilter::AssetsView));
     query.addBindValue(static_cast<int>(AssetViewFilter::Effects));
     executeAndCheckQuery(query, "FetchLibraryAssetGuids");
@@ -1521,6 +1635,11 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
         // (pre-drawers deleteCollection orphaned assets instead of reassigning)
         "LEFT JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.view_filter = :view_filter "
+        // LIBRARY LISTING (library delete keeps pins): an unlisted row still
+        // resolves by guid for the projects that pinned it, but it is no
+        // longer a library tile — this is THE grid query and the source of
+        // assets.list({scope: 'store'}).
+        "AND A.listed = 1 "
         "AND " + dependeeSubquery(QStringLiteral("A.guid")) + " "
         "ORDER BY A.name DESC"
     );
@@ -1697,7 +1816,9 @@ QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString 
 QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& filter)
 {
 	QSqlQuery query;
-	query.prepare("SELECT guid, type, name, thumbnail, asset FROM assets WHERE view_filter = ?");
+	// LIBRARY LISTING (the Effects page's shader library): unlisted rows out.
+	query.prepare("SELECT guid, type, name, thumbnail, asset FROM assets "
+	              "WHERE view_filter = ? AND listed = 1");
 	query.addBindValue(filter);
 	executeAndCheckQuery(query, "fetchAssetsByViewFilter");
 
@@ -1985,35 +2106,17 @@ bool Database::hasCachedThumbnail(const QString &name)
     return false;
 }
 
-QVector<AssetRecord> Database::fetchThumbnails()
-{
-	QSqlQuery query;
-	query.prepare("SELECT name, thumbnail, guid, type FROM assets WHERE type = 5");
-	executeAndCheckQuery(query, "fetchThumbnails");
-
-	QVector<AssetRecord> tileData;
-	while (query.next()) {
-        AssetRecord data;
-		QSqlRecord record = query.record();
-		for (int i = 0; i < record.count(); i++) {
-			data.name		= record.value(0).toString();
-			data.thumbnail	= record.value(1).toByteArray();
-			data.guid		= record.value(2).toString();
-			data.type		= record.value(3).toInt();
-		}
-
-		tileData.push_back(data);
-	}
-
-	return tileData;
-}
 
 QVector<AssetRecord> Database::fetchFavorites()
 {
     QSqlQuery query;
     query.prepare(
+        // LIBRARY LISTING: an unlisted asset is not a favourite tile either.
+        // `A.listed IS NULL` keeps the LEFT JOIN's tolerance of a favourite
+        // whose asset row is gone — that row was always shown, broken or not.
         "SELECT F.asset_guid, F.name, F.date_created, A.type, F.thumbnail FROM favorites F "
-        "LEFT JOIN assets A ON A.guid = F.asset_guid"
+        "LEFT JOIN assets A ON A.guid = F.asset_guid "
+        "WHERE A.listed IS NULL OR A.listed = 1"
     );
     executeAndCheckQuery(query, "fetchFavorites");
 
@@ -2109,7 +2212,11 @@ int Database::countAssetsInCollections(const QVector<int> &collectionIds)
     for (int i = 0; i < collectionIds.size(); ++i) placeholders << "?";
 
     QSqlQuery query;
-    query.prepare("SELECT COUNT(*) FROM assets WHERE collection IN (" + placeholders.join(", ") + ")");
+    // LIBRARY LISTING: the confirmation counts what the user can SEE in the
+    // drawer. (Unlisted rows move to Uncategorized with the rest — they are
+    // just not part of a count offered to a human.)
+    query.prepare("SELECT COUNT(*) FROM assets WHERE listed = 1 AND collection IN ("
+                  + placeholders.join(", ") + ")");
     for (const int id : collectionIds) query.addBindValue(id);
 
     if (query.exec()) {
@@ -3116,7 +3223,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	return files;
 }
 
-QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok)
+QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok, bool force)
 {
 	QStringList files;
 	bool allOk = true;
@@ -3125,11 +3232,20 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok)
 
 	// For every asset, find their dependencies
 	for (const auto &asset : fetchAssetGUIDAndDependencies(guid)) {
-		for (const auto &dep : fetchAssetAndDependencies(asset)) {
-			files.append(dep);
+		// A member a project still pins is UNLISTED, not deleted (see
+		// deleteAsset). Then NOTHING else about it may go: not its dependency
+		// EDGES (the pinned project resolves its textures through them) and
+		// not its FILES (the caller unlinks whatever this returns).
+		const bool unlisted = !force && countAssetPins(asset) > 0;
+
+		if (!unlisted) {
+			for (const auto &dep : fetchAssetAndDependencies(asset)) {
+				files.append(dep);
+			}
 		}
 
-		allOk = deleteAsset(asset) && allOk;
+		allOk = deleteAsset(asset, force) && allOk;
+		if (unlisted) continue;
 
         for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
             allOk = deleteDependency(asset, dep) && allOk;

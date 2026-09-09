@@ -85,6 +85,14 @@ public:
     const QVector<AssetImporterBase *> &importers() const { return mImporters; }
 
 private:
+    /// RE-LISTING (library delete keeps project pins): importing a file whose
+    /// bytes are ALREADY the source of an UNLISTED library row re-lists that
+    /// row and returns its guid instead of minting a duplicate — the asset the
+    /// user deleted comes back as the very row their projects still pin.
+    /// Empty when nothing matches, which is every import in a library that
+    /// has never had a pinned delete (the check costs one COUNT then).
+    QString relistUnlistedMatch(const QString &sourcePath) const;
+
     AssetImporterBase *pickImporter(const ImportRequest &request, QString *error) const;
     bool commitStagedAsset(const ImportRequest &request, StagedAsset &staged,
                            ImportResult &result, const ImportProgressFn &progress);

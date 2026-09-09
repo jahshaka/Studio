@@ -99,6 +99,19 @@ struct AssetRecord
 	QByteArray  tags;
 	QByteArray  properties;
 	int			view_filter = 0;
+	/// LIBRARY VISIBILITY (library-delete keeps pins): false = the row was
+	/// deleted from the library while projects still pinned it. It resolves
+	/// by guid exactly as before — it is only absent from library LISTINGS.
+	bool		listed = true;
+};
+
+/// One project's pin on an asset (a project_assets row), named for a human:
+/// what `assets.pins(guid)` answers and what the Assets page's delete
+/// confirmation counts.
+struct AssetPinRecord
+{
+    QString projectGuid;
+    QString projectName;
 };
 
 struct DependencyRecord

@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QSet>
 #include <QSqlDatabase>
+#include <algorithm>
 #include <functional>
 
 
@@ -2194,11 +2195,26 @@ QVariantList AvatarApi::library(const QVariantMap &options)
         };
     };
 
-    for (const auto &row : host.db->fetchAssetsForAssetView()) {
+    // The library listing PLUS the project's pinned rows. The union matters
+    // since a library delete UNLISTS an asset a project pins (owner law,
+    // 2026-09-09): the avatar is gone from the library grid and still in
+    // every project that used it, so the project scope has to read the pins
+    // rather than filter a library listing that no longer contains them.
+    QVector<AssetRecord> rows = host.db->fetchAssetsForAssetView();
+    if (hasProject) {
+        for (const auto &pinned : host.db->fetchProjectPinnedAssets(host.project->getProjectGuid())) {
+            if (std::any_of(rows.begin(), rows.end(),
+                            [&](const AssetRecord &r) { return r.guid == pinned.guid; }))
+                continue;
+            rows.append(pinned);
+        }
+    }
+
+    for (const auto &row : rows) {
         if (row.type != static_cast<int>(ModelTypes::Avatar)) continue;
         const bool pinned = hasProject
                             && !AvatarAssets::projectVersion(row.guid, host.project).isEmpty();
-        if (wantLibrary && row.projectGuid.isEmpty())
+        if (wantLibrary && row.listed && row.projectGuid.isEmpty())
             out.append(describe(row, AvatarAssets::Scope::Library));
         if (wantProject && pinned)
             out.append(describe(row, AvatarAssets::Scope::Project));

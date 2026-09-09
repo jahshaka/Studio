@@ -58,6 +58,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "services/assetdelete.h"
 
 using namespace scriptmod;
 
@@ -208,8 +209,18 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "guids works exactly as before, and assets.list still accepts type 'shader' for the "
           "graph-backed material assets that really are ModelTypes::Shader rows.",
           Needs::Document },
-        { "remove", "assets.remove(guid, {keepShared: true}) -> bool",
-          "Deletes a store asset: its catalog rows, its sidecar, whatever the retired per-guid folder left behind, and (keepShared false) its dependency assets too. The asset's CONTENT is not unlinked here — objects can be shared or pinned by a project, so reclaiming them is assets.gc's job. PERMANENT — no undo.",
+        { "remove", "assets.remove(guid, {keepShared: true, force: false}) -> bool",
+          "Removes a store asset from the LIBRARY. A LIBRARY DELETE NEVER TAKES AN ASSET OUT OF A PROJECT (owner law, 2026-09-09): "
+          "if any project pins this asset (assets.pins lists them) the row is UNLISTED instead of deleted — it disappears from the library listing (assets.list({scope: 'store'}), the Assets page grid) and NOTHING else changes: its content mapping, every project pin, its dependency edges, its sidecar and its stored bytes all stay, and every project that pinned it keeps opening, rendering, thumbnailing and exporting it exactly as before (everything resolves BY GUID; assets.metadata still answers, with listed: false). The call returns true and sets no error. "
+          "With NO pins it is the full delete: catalog rows, sidecar, whatever the retired per-guid folder left behind, and (keepShared false) its dependency assets too — each of those judged by its OWN pins. "
+          "{force: true} is the hard delete (\"delete everywhere\"): the pins are dropped and the rows go whether or not projects used it. "
+          "The asset's CONTENT is not unlinked in any of these cases — objects can be shared or pinned, so reclaiming them is assets.gc's job (an unlisted asset's bytes stay REFERENCED there; a force-deleted one's become reclaimable). PERMANENT — no undo.",
+          Needs::Document },
+        { "pins", "assets.pins(guid) -> [{project, name}]",
+          "Which PROJECTS pin this asset — the reference-with-pin rows that make a library delete an unlist. "
+          "`project` is the project's guid, `name` its display name (the guid again if the project row is gone). "
+          "An empty list means the asset is used by no project, i.e. assets.remove would really delete it. "
+          "Reads the catalog only — the project does not have to be open, and the asset does not have to be listed.",
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
           "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, materials and shader graphs render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
@@ -444,8 +455,28 @@ QVariantMap AssetsApi::metadata(const QString &guid)
     // nothing on the verb surface could see, so an asset browser built on
     // these verbs could not show what the Assets page shows.
     out["tags"] = QVariant(assettags::parse(record.tags));
+    // LIBRARY VISIBILITY + USE (library delete keeps project pins): `listed`
+    // false means a library delete unlisted this row because projects still
+    // pin it — it resolves by guid exactly as before, it is simply not a
+    // library tile. `pinCount` is how many projects pin it (assets.pins names
+    // them), and is what decides which of the two a delete would do.
+    out["listed"] = record.listed;
+    out["pinCount"] = host.db->countAssetPins(guid);
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
+    return out;
+}
+
+QVariantList AssetsApi::pins(const QString &guid)
+{
+    QVariantList out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("assets.pins: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    for (const AssetPinRecord &pin : assetdelete::pins(host.db, guid))
+        out.append(QVariantMap{ { "project", pin.projectGuid }, { "name", pin.projectName } });
     return out;
 }
 
@@ -849,35 +880,21 @@ QVariantList AssetsApi::builtins()
 bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
 {
     if (!host.db) return fail("assets: not available in this session");
-    const auto record = host.db->fetchAsset(guid);
-    if (record.guid.isEmpty())
-        return fail(QStringLiteral("assets.remove: no asset with guid '%1'").arg(guid));
 
-    // The result is reported honestly: a delete the database refused (closed
-    // connection, failed statement) used to return true here and leave the row
-    // in place — the caller had no way to know.
-    bool ok = true;
-    const bool keepShared = options.value("keepShared", true).toBool();
-    if (keepShared) {
-        // Conservative: only the asset row and its dependency links go;
-        // dependee assets (possibly shared) stay.
-        ok = host.db->deleteAsset(guid) && ok;
-        ok = host.db->deleteDependency(guid) && ok;
-        for (const auto &dep : host.db->fetchAssetGUIDAndDependencies(guid, false))
-            ok = host.db->deleteDependency(guid, dep) && ok;
-    } else {
-        host.db->deleteAssetAndDependencies(guid, &ok);
+    static const QStringList known = { "keepShared", "force" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("assets.remove: unknown option '%1' (known: %2)")
+                            .arg(it.key(), known.join(", ")));
     }
 
-    if (!ok)
-        return fail(QStringLiteral("assets.remove: the database refused the delete of '%1' — "
-                                   "the asset is still in the library").arg(guid));
-
-    // Whatever the retired legacy view left behind for this guid goes with
-    // the row; the CONTENT is reclaimed by assets.gc, which is the only thing
-    // that can tell a shared object from an exclusive one.
-    QDir storeDir(AssetStorePaths::legacyFolder(guid));
-    if (storeDir.exists()) storeDir.removeRecursively();
+    // THE one implementation, shared with the Assets page's Delete button
+    // (services/assetdelete.h): a library delete unlists a pinned asset and
+    // deletes an unpinned one, and {force: true} deletes either way.
+    const bool keepShared = normalizeJs(options.value("keepShared", true)).toBool();
+    const bool force = normalizeJs(options.value("force", false)).toBool();
+    const auto outcome = assetdelete::remove(host.db, guid, keepShared, force);
+    if (!outcome.ok) return fail(QStringLiteral("assets.remove: %1").arg(outcome.error));
     return true;
 }
 

@@ -113,7 +113,7 @@ public slots:
 
 	void addAssetItemToProject(AssetGridItem*);
 	void moveAssetToDrawer(AssetGridItem*, int drawerId);
-	void removeAssetFromProject(AssetGridItem*);
+	void deleteAssetFromLibrary(AssetGridItem*);
 
 public:
 	int gridCount;

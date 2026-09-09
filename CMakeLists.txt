@@ -263,6 +263,7 @@ set(SRCS
     src/services/iesprofile.cpp
     src/services/lightbindings.cpp
     src/services/assetcas.cpp
+    src/services/assetdelete.cpp
     src/services/assetgc.cpp
     src/services/assetmigration.cpp
     src/services/assetstore.cpp
@@ -511,6 +512,7 @@ set(HEADERS
     src/services/animationfile.h
     src/services/avatarassets.h
     src/services/assetcas.h
+    src/services/assetdelete.h
     src/services/assetgc.h
     src/services/assetmigration.h
     src/services/assetstore.h
