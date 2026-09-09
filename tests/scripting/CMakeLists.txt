@@ -756,6 +756,47 @@ set_tests_properties(scripting.e2e.avatar_verbs PROPERTIES
     LABELS "scripting"
     TIMEOUT 400)
 
+# ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that
+# used to be refused with a wrong message, the type-filtered listing, the
+# avatar consumers (loadClip by asset guid, avatar.animations) and the archive.
+#
+# TWO tests, because PROJECT PORTABILITY cannot be proved inside one library:
+# the first exports an archive into a shared directory, the second imports it
+# in a FRESH HOME whose library is empty and reads the clip table back out of
+# the transported bytes. ctest fixtures order them.
+#
+# Fixtures come from tests/avatar (which configures AFTER this dir, so the
+# paths are spelled out exactly as the mannequin suite's are).
+set(JAHSHAKA_MANNEQUIN_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_mannequin.dae")
+set(JAHSHAKA_BETA_WALK_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_walk.dae")
+set(JAHSHAKA_ANIMATION_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export/clips.zip")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export")
+configure_file(scripts/e2e_animation_assets.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-animation_assets)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.animation_assets
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.animation_assets PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_SETUP animation_assets_archive
+    LABELS "scripting"
+    TIMEOUT 400)
+
+configure_file(scripts/e2e_animation_assets_import.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets_import.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-animation_assets_import)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.animation_assets_import
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets_import.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.animation_assets_import PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED animation_assets_archive
+    LABELS "scripting"
+    TIMEOUT 400)
+
 # The PLAYER space's verbs (verb-coverage audit F1): player.play/stop/playing/
 # restart/state driving the real EnginePlayerView through PlayerService, and
 # player.screenshot rendering the player's OWN engine Scene through the

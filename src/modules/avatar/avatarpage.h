@@ -89,6 +89,11 @@ private:
     QWidget *buildRightColumn();
     void onImportClicked(bool intoProject);
     void onLoadAnimationClicked();
+    /// The Load Animation… chooser: the library's Animation rows
+    /// (avatar.animations) plus an Import File… escape. Returns an asset guid,
+    /// a file path, or an empty string on cancel — avatar.loadAnimation takes
+    /// either of the first two.
+    QString chooseAnimation();
     void onSaveClicked();
     void refreshLibrary();
     void refreshTransportReadout();

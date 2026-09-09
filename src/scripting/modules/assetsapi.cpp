@@ -124,11 +124,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "The asset's tags, [] when it has none (also in assets.metadata's read).",
           Needs::Document },
         { "import", "assets.import(path) -> guid",
-          "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable.",
+          "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable. "
+          "THE TYPE FOLLOWS THE FILE, not the extension: a model file that carries animation and NO geometry — a Mixamo download 'without skin', a .bvh capture — is stored as an ANIMATION asset (its own library type; every mesh path refuses a zero-mesh file), while a file with meshes stays an object even when it also carries clips. "
+          "Read the type back with assets.metadata(guid).kind or assets.list({type: 'animation'}).",
           Needs::Document },
         { "importFile", "assets.importFile(path, drawerId?, {typeHint}) -> guid",
-          "Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
-          "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list.",
+          "Imports any library-supported file (models, animation clips, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
+          "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, animation, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list.",
           Needs::Document },
         { "drawers", "assets.drawers() -> [{id, name, parent}]",
           "The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0.",

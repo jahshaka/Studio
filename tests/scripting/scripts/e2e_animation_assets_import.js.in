@@ -1,0 +1,50 @@
+// scripting.e2e.animation_assets_import — PROJECT PORTABILITY for the
+// Animation type. A FRESH HOME, therefore an EMPTY library: the archive
+// scripting.e2e.animation_assets exported has to arrive complete here, or the
+// clip file was never really an asset.
+//
+// This is the half a single library cannot prove about itself, which is why it
+// is its own test (ctest FIXTURES_REQUIRED on the exporting run).
+//
+// --headless: every verb here is Needs::Document.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var ARCHIVE = "@JAHSHAKA_ANIMATION_ARCHIVE@";
+
+// The library really is empty — otherwise the assertions below prove nothing.
+assert(assets.list({ type: "animation" }).length === 0,
+       "this library starts with no animation assets at all");
+
+var imported = project.importArchive(ARCHIVE);
+console.log("project.importArchive: " + JSON.stringify(imported));
+assert(imported.guid && imported.guid.length > 10,
+       "the archive imported as a new project (" + imported.name + ")");
+
+var animations = assets.list({ type: "animation" });
+assert(animations.length === 1, "the ANIMATION asset came across");
+var clip = animations[0].guid;
+
+var meta = assets.metadata(clip);
+console.log("imported clip metadata: " + JSON.stringify({ kind: meta.kind, clips: meta.clips,
+                                                          duration: meta.duration,
+                                                          bones: meta.bones,
+                                                          fileSize: meta.fileSize }));
+assert(meta.kind === "animation", "...as an animation row");
+// fileSize and the clip table are read from the STORED BYTES, so a row that
+// arrived without its content cannot answer these.
+assert(meta.fileSize > 0, "...with its content: the stored file is " + meta.fileSize + " bytes");
+assert(meta.clips && meta.clips.length >= 1 && meta.clips[0].name === "Walking",
+       "...and the clip table reads Walking out of those bytes");
+assert(meta.bones > 40 && meta.rigId.length > 0,
+       "...bones and rig id intact (" + meta.bones + " bones)");
+
+// The character came too, and the clip still plays on it — the pair is what a
+// user actually exported.
+var objects = assets.list({ type: "object" });
+assert(objects.length >= 1, "the character object came across as well");
+
+console.log("PASS e2e_animation_assets_import");

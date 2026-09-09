@@ -1211,11 +1211,12 @@ QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAsset
                        .arg(v, pathOrAssetGuid));
             return QString();
         }
-        // THE ONE PIPELINE. .bvh is deliberately not special-cased: it is in
-        // Constants::ANIMATION_EXTS for the Avatar page's file dialog but has
-        // no importer at all (FileImporter sniffs only Constants::WHITELIST),
-        // so it cannot become an asset and cannot ride a reopen or an archive.
-        // Saying so is better than half-supporting it.
+        // THE ONE PIPELINE — which now has a route for every shape the Avatar
+        // page offers. An animation-only file (a Mixamo download "without
+        // skin") and a .bvh capture both import as ModelTypes::Animation
+        // assets (AnimationImporter); a file with meshes imports as an Object,
+        // as it always did. Nothing here is special-cased: whichever row the
+        // pipeline mints, the clip is read back out of it through the CAS.
         const auto imported = host.services->assets->importFile(info.absoluteFilePath());
         if (!imported.ok()) {
             record(QStringLiteral("%1: importing '%2' failed: %3")
