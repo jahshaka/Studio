@@ -114,6 +114,7 @@ private:
     CheckBoxWidget *dissipateInv = nullptr;
     CheckBoxWidget *useAdditive = nullptr;
     CheckBoxWidget *alphaHash = nullptr;
+    CheckBoxWidget *distortion = nullptr;
 
     Database *db = nullptr;
 };

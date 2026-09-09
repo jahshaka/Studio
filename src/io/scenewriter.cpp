@@ -800,6 +800,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["burstRepeatDelay"] = node->burstRepeatDelay;
     sceneNodeObject["startDelay"]       = node->startDelay;
     sceneNodeObject["alphaHash"]        = node->alphaHash;
+    sceneNodeObject["distortion"]       = node->distortion;
     sceneNodeObject["extents"]          = jsonVector3(node->extents);
     sceneNodeObject["innerExtents"]     = jsonVector3(node->innerExtents);
     sceneNodeObject["wind"]             = jsonVector3(node->wind);

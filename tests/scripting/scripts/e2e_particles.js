@@ -161,6 +161,19 @@ assert(particles.setColourKeys(fire, [
     { time: 0.55, r: 0.9, g: 0.18, b: 0.03, a: 0.8 },
     { time: 1.0, r: 0.05, g: 0.02, b: 0.02, a: 0.0 }
 ]), "re-arm the fire ramp before saving");
+// POST_LOOKS 4b: the DISTORTION EMITTER flag is a rendering mode like the
+// blend mode — set through the one scalar surface, reported by describe, left
+// alone by a preset (a recipe replaces the recipe, not the emitter's kind).
+assert(particles.describe(fire).distortion === false, "an emitter is not a distortion emitter by default");
+assert(node.setProperty(fire, "distortion", true), "node.setProperty(fire, 'distortion', true)");
+assert(particles.describe(fire).distortion === true, "describe reports the distortion flag");
+assert(particles.preset(fire, "fire"), "re-stamp the fire recipe");
+assert(particles.describe(fire).distortion === true, "a preset leaves the distortion flag alone");
+assert(particles.setColourKeys(fire, [
+    { time: 0.0, r: 4.0, g: 1.6, b: 0.35, a: 1.0 },
+    { time: 0.55, r: 0.9, g: 0.18, b: 0.03, a: 0.8 },
+    { time: 1.0, r: 0.05, g: 0.02, b: 0.02, a: 0.0 }
+]), "the ramp again (the preset replaced it)");
 var beforeSave = particles.describe(fire);
 
 assert(project.save(), "project.save");
@@ -189,6 +202,8 @@ assert(near(after.colourKeys[0].r, 4.0),
        "including its HDR channel (" + after.colourKeys[0].r + ")");
 assert(after.scaleKeys.length === 3, "the scale ramp survived");
 assert(near(particles.timeScale(), 1.0), "the scene clock survived");
+assert(after.distortion === true, "the distortion flag survived the save (it is written, not just read)");
+assert(node.setProperty(reopened, "distortion", false), "and clears again for the pixel phase");
 
 // ---- phase G: it actually renders ----------------------------------------
 // The document could be perfect and the engine draw nothing. Point a camera at
