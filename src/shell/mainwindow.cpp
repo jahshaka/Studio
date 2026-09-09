@@ -314,7 +314,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 	updateTopMenuStates(currentSpace);
 
-	restoreGeometry(settings->getValue("geometry", "").toByteArray());
+	// A FRESH PROFILE MUST STILL FIT ON THE SCREEN (hygiene lane, 2026-09-09).
+	//
+	// restoreGeometry() returns false when there is nothing stored — a first
+	// run, and every hermetic JAHSHAKA_DATA_ROOT session — and the window then
+	// keeps the size authored in mainwindow.ui: 1612x1530, TALLER THAN A 1080p
+	// DESKTOP. Under a window manager that is merely rude; under none (the Xvfb
+	// rig) nothing ever clamps it, so everything along the bottom edge — the
+	// Materials palette lives there — is off the screen and unreachable, which
+	// is what mis-aimed app.pacing_undo's palette drag.
+	//
+	// The .ui size stays the PREFERRED one: only the screen shrinks it.
+	if (!restoreGeometry(settings->getValue("geometry", "").toByteArray()))
+		fitToScreen();
 	restoreState(settings->getValue("windowState", "").toByteArray());
 
 	// Every exit path funnels through aboutToQuit (window close,
@@ -4335,6 +4347,27 @@ void MainWindow::setViewsButtonLabel(const QString &view)
 void MainWindow::changeProjection(bool val)
 {
 	applyCameraView(val ? QStringLiteral("perspective") : lastOrthographicView);
+}
+
+// The first-run size clamp (see the restoreGeometry call site). Before the
+// first show() there is no QWindow yet, so screen() answers with the primary
+// screen — which is the one a first window lands on anyway. availableGeometry()
+// is the right rectangle: it excludes panels and docks, so "fits" means fits
+// where the user can actually reach it.
+void MainWindow::fitToScreen()
+{
+    QScreen *s = screen();
+    if (!s) return;                       // no GUI screen at all (offscreen boots can have one)
+    const QRect avail = s->availableGeometry();
+    if (avail.isEmpty()) return;
+
+    const QSize want = size();
+    const QSize fit(qMin(want.width(), avail.width()), qMin(want.height(), avail.height()));
+    if (fit != want) resize(fit);
+    // ...and it has to START inside the screen too: with no window manager
+    // nobody moves it for us, and a clamped size at an off-screen position is
+    // still an unreachable window.
+    if (!avail.contains(QRect(pos(), fit))) move(avail.topLeft());
 }
 
 void MainWindow::syncProjectionButton(bool perspective)

@@ -51,6 +51,7 @@ public:
     Q_INVOKABLE QVariantMap waitForTextures();
     Q_INVOKABLE QVariantList apiProblems();
     Q_INVOKABLE QVariantMap dataRoot();
+    Q_INVOKABLE QVariantMap window();
 };
 
 #endif // SCRIPTING_APPAPI_H

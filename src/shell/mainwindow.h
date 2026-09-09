@@ -603,6 +603,12 @@ private slots:
 	/// itself without that report turning into a command.
 	void syncProjectionButton(bool perspective);
 
+	/// Shrinks the window to the screen it is about to appear on, keeping the
+	/// authored .ui size as the preferred one. Called ONLY when there is no
+	/// stored geometry to restore — a first run — so a saved size the user
+	/// chose is never second-guessed.
+	void fitToScreen();
+
 private:
     void setupServices();
 

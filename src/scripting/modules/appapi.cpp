@@ -30,6 +30,8 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include <QDir>
 #include <QFileInfo>
+#include <QScreen>
+#include <QRect>
 
 QVector<VerbInfo> AppApi::verbs() const
 {
@@ -272,6 +274,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "(applicationDirPath in a Debug build). READ-ONLY on purpose: a setter would have to "
           "move a live database and a live asset store while they are open.",
           Needs::Document },
+        { "window", "app.window() -> {x, y, width, height, minWidth, minHeight, visible, fullScreen, fits, screen:{name, width, height, availWidth, availHeight}}",
+          "The main window's geometry and the screen it is on, in pixels — the coordinates a rig "
+          "synthesising mouse input works in. `fits` is width/height against the screen's AVAILABLE "
+          "rectangle (panels excluded): false means part of the window cannot be reached. Empty map "
+          "in a session with no window. `minWidth`/`minHeight` are the layout's floor — Qt will not "
+          "resize a window below them, so a window can be bigger than its screen without anything "
+          "being wrong with the geometry code.",
+          Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
           Needs::Window },
@@ -474,6 +484,52 @@ QVariantMap AppApi::dataRoot()
     out["settingsFile"] = SettingsManager::getDefaultManager()->settings->fileName();
     out["database"] = QDir(root).filePath(Constants::JAH_DATABASE);
     out["assetStore"] = AssetStorePaths::root();
+    return out;
+}
+
+// THE WINDOW ITSELF (hygiene lane, 2026-09-09). Everything in this map is
+// pixels the user has to reach with a mouse, which is exactly what a rig
+// driving xdotool needs and what no other verb reports: the window's size and
+// position, and the screen rectangle it is supposed to fit inside.
+//
+// It exists because the fresh-profile size is a real defect class: mainwindow.ui
+// authors 1612x1530 and nothing clamped it before MainWindow::fitToScreen, so on
+// a 1080p desktop — or a WM-less Xvfb, where nothing resizes anything ever — the
+// bottom of the window simply was not on the screen.
+QVariantMap AppApi::window()
+{
+    QVariantMap out;
+    QWidget *w = host.mainWindow;
+    if (!w) return out;                 // no window in this session: an empty map, not a throw
+    const QRect g = w->frameGeometry().isValid() ? w->frameGeometry() : w->geometry();
+    out.insert("x", g.x());
+    out.insert("y", g.y());
+    out.insert("width", w->width());
+    out.insert("height", w->height());
+    out.insert("visible", w->isVisible());
+    out.insert("fullScreen", w->isFullScreen());
+    // The floor Qt will not go below. A widget cannot be resized under its
+    // layout's minimum size hint, so a caller asking "why is this window wider
+    // than the screen" needs this number to tell a clamp that failed from a
+    // window that simply cannot be that small.
+    const QSize minimum = w->minimumSizeHint().expandedTo(w->minimumSize());
+    out.insert("minWidth", minimum.width());
+    out.insert("minHeight", minimum.height());
+    if (QScreen *s = w->screen()) {
+        const QRect avail = s->availableGeometry();
+        const QRect full = s->geometry();
+        QVariantMap screen;
+        screen.insert("name", s->name());
+        screen.insert("width", full.width());
+        screen.insert("height", full.height());
+        screen.insert("availWidth", avail.width());
+        screen.insert("availHeight", avail.height());
+        out.insert("screen", screen);
+        // The one derived answer worth having, because it is the assertion
+        // every caller would otherwise write itself (and get wrong on a
+        // multi-monitor desktop, where a window may legitimately overhang).
+        out.insert("fits", w->width() <= avail.width() && w->height() <= avail.height());
+    }
     return out;
 }
 
