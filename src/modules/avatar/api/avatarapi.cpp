@@ -58,14 +58,50 @@ AvatarApi::AvatarApi(ScriptHost &host, avatar::AvatarPreviewModel *model, QObjec
 QVector<VerbInfo> AvatarApi::verbs() const
 {
     return {
+        // RETIRED FROM THE UI (AVATAR_ASSET_SPEC §4 D7): the page's Load…
+        // became Import Avatar…, and the left column lists LIBRARY AND PROJECT
+        // AVATARS instead of a session file list. These three survive as the
+        // engine-free INSPECTION path the preview suite drives (a rig on
+        // screen with no library, no database and no project) and as what
+        // `avatar.open` calls underneath. They are not the way to get an
+        // avatar into Jahshaka — avatar.importAvatar is.
         { "loadPreview", "avatar.loadPreview(path) -> {name, file, bones, meshes, vertices, influences, height, sourceHeight, normalized, normalizeFactor, roomScale, ceilingHeight, clips:[{name, rawName, length}]}",
-          "Loads a rigged model file (fbx/glb/obj/...) into the Avatar page's own preview — no library row, no project pin, no database write, no undo command. Embedded textures are extracted to a per-session scratch dir. Replaces whatever was loaded (one subject at a time). HEIGHT: the world is metres, and an FBX file's own unit declaration is honoured at import — but a package whose declaration is WRONG (the Dreyar download says centimetres and is authored in millimetres: 17.25 m) is normalized here. A subject measuring outside 0.5..3.0 m is scaled to 1.75 m, its rig, mesh and clips together, and the readback reports it (`normalized`, `normalizeFactor`, `sourceHeight` = what the file imported as, `height` = what it is now). Anything inside the band is left EXACTLY as authored. avatar.setCharacterHeight overrides.",
+          "INSPECTION ONLY. Loads a rigged model file into the Avatar page's preview — no library "
+          "row, no project pin, no database write, no undo command. To bring a character INTO "
+          "the library use avatar.importAvatar (which imports through the one pipeline and mints "
+          "the avatar asset); to edit one already there use avatar.open. Embedded textures are "
+          "extracted to a per-session scratch dir. Replaces whatever was loaded. HEIGHT: the "
+          "world is metres, and an FBX file's own unit declaration is honoured at import — but a "
+          "package whose declaration is WRONG (the Dreyar download says centimetres and is "
+          "authored in millimetres: 17.25 m) is normalized here. A subject measuring outside "
+          "0.5..3.0 m is scaled to 1.75 m, its rig, mesh and clips together, and the readback "
+          "reports it. Anything inside the band is left EXACTLY as authored. "
+          "avatar.setCharacterHeight overrides.",
+          Needs::Document },
+        { "history", "avatar.history() -> [{file, name, loaded}]",
+          "INSPECTION ONLY: the files loadPreview opened this session. Session-local, never "
+          "persisted, and no longer what the page's left column shows — that is avatar.library.",
+          Needs::Document },
+        { "forget", "avatar.forget(path) -> bool",
+          "Drops a file from the loadPreview session list. Clears the preview when it is the "
+          "loaded one. Deletes nothing on disk and nothing in the library.",
           Needs::Document },
         { "setCharacterHeight", "avatar.setCharacterHeight(metres) -> {height, sourceHeight, normalized, normalizeFactor, ...}",
           "Scales the loaded preview subject so it measures `metres` tall, overriding the automatic normalization loadPreview applied. A value of 0 (or negative) RESETS to automatic — the rule is re-run against the height the FILE imported at, not against the size a previous override left, so resetting a 2.4 m override on a 17.25 m file really does return it to 1.75 m (and a file that was plausible to begin with returns to its authored size). This is the escape hatch for a character that really is 2.4 m of ogre, and for a package the automatic rule cannot judge. Scales the SUBJECT — the rig, the mesh and every clip that plays on it move together — never the room. Returns the same map avatar.preview does.",
           Needs::Document },
-        { "loadAnimation", "avatar.loadAnimation(path) -> {file, name, added, clips:[...], match:{channels, boneChannels, matched}}",
-          "Loads a SEPARATE animation file onto the character already in the preview and appends its clips to the list — the Mixamo workflow (one character download, then one file per animation). Accepts both export shapes: a with-skin animation file (its mesh is ignored) and an animation-only file (zero meshes, which the mesh loaders reject outright). Clips accumulate; nothing is switched — call avatar.setClip to play one. Clip names come from the ANIMATION file's base name when the file uses a junk name, which every Mixamo export does. THROWS when the file animates a different rig (the clip->bone join is by scene-node name, so a foreign clip would load and move nothing): the message names the bones that do not exist on the loaded rig.",
+        { "loadAnimation", "avatar.loadAnimation(pathOrAssetGuid, {name}) -> {file, name, added, clips:[...], match:{channels, boneChannels, matched}}",
+          "Loads a SEPARATE animation file onto the character in the preview and appends its clips "
+          "— the Mixamo workflow (one character download, then one file per animation). Accepts "
+          "both export shapes: a with-skin animation file (its mesh is ignored) and an "
+          "animation-only file (zero meshes, which the mesh loaders reject outright). Clip names "
+          "come from the ANIMATION file's base name when the file uses a junk name, which every "
+          "Mixamo export does. THROWS when the file animates a different rig (the clip->bone join "
+          "is by scene-node name, so a foreign clip would load and move nothing): the message "
+          "names the bones that do not exist on the loaded rig. "
+          "WITH AN AVATAR OPEN (avatar.open) it also becomes an ASSET edit: the file is imported "
+          "through the ONE import pipeline, pinned into the project, and added to the open "
+          "definition's clip list — so it survives a reopen, rides an archive and reaches the "
+          "web export, which a loose file reference never does. `avatar.save` commits it.",
           Needs::Document },
         { "clearPreview", "avatar.clearPreview() -> bool",
           "Removes the previewed model and deletes its scratch extract dir.",
@@ -81,12 +117,6 @@ QVector<VerbInfo> AvatarApi::verbs() const
           Needs::Document },
         { "clips", "avatar.clips() -> [{name, rawName, length, looping, active, source, external}]",
           "Every clip the preview knows about: the ones the character file carried, plus every one avatar.loadAnimation has added since (`external`, with `source` naming the file it came from). `name` is the display name: every Mixamo clip is literally called 'mixamo.com', so junk names fall back to the source file's base name (`rawName` keeps what the file said).",
-          Needs::Document },
-        { "history", "avatar.history() -> [{file, name, loaded}]",
-          "The character files loaded in this session — what the page's left column lists. Session-local and not persisted (the avatar library is Part 1's).",
-          Needs::Document },
-        { "forget", "avatar.forget(path) -> bool",
-          "Drops a file from the session list (the left column's right-click Delete). Clears the preview when it is the loaded one. Deletes nothing on disk.",
           Needs::Document },
         { "setRootMotion", "avatar.setRootMotion(on) -> bool",
           "Root motion for the preview. Off (the default) plays locomotion clips IN PLACE — the horizontal translation of the clip's root-most animated bone is pinned to its first key, so a walk cycle walks on the spot instead of leaving the frame. On plays the clip exactly as authored. Vertical motion is never stripped, so a jump still leaves the ground.",
@@ -470,22 +500,68 @@ QVariant AvatarApi::setCharacterHeight(double metres)
     return previewState();
 }
 
-QVariant AvatarApi::loadAnimation(const QString &path)
+QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariantMap &options)
 {
     mLastError.clear();
     if (!mModel) { record("avatar: not available in this session"); return QVariant(); }
-    if (path.trimmed().isEmpty()) { record("avatar.loadAnimation: a file path is required"); return QVariant(); }
+    if (pathOrAssetGuid.trimmed().isEmpty()) {
+        record("avatar.loadAnimation: a file path or an asset guid is required");
+        return QVariant();
+    }
+    static const QStringList known = { "name" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.loadAnimation: unknown option '%1' (known: name)")
+                       .arg(it.key()));
+            return QVariant();
+        }
+
+    // WITH AN AVATAR OPEN this is an ASSET edit, so the clip becomes a real
+    // project asset before it is previewed: a definition entry that named a
+    // path on the author's disk would resolve to nothing on reopen, would not
+    // ride an archive, and would not reach the web export (the same three
+    // reasons avatar.loadClip is an asset route and not a file reference).
+    QString path = pathOrAssetGuid;
+    QString clipAssetGuid;
+    if (mOpen.isOpen()) {
+        clipAssetGuid = resolveClipAsset("avatar.loadAnimation", pathOrAssetGuid, &path);
+        if (clipAssetGuid.isEmpty()) return QVariant();
+    }
+
     QString error;
     avatar::ClipLoadReport report;
     if (!mModel->loadAnimation(path, &error, &report)) {
         record(QStringLiteral("avatar.loadAnimation: %1").arg(error));
         return QVariant();
     }
+
+    if (!clipAssetGuid.isEmpty()) {
+        // The clips the preview just accepted, into the definition. The
+        // preview's own naming rule already ran (one matcher, rigsignature.h),
+        // so the definition and the page agree on every name.
+        const QString nameOverride = options.value(QStringLiteral("name")).toString();
+        for (const auto &clip : mModel->clips()) {
+            if (clip.source != QFileInfo(path).absoluteFilePath()) continue;
+            const QString display = nameOverride.isEmpty() ? clip.name : nameOverride;
+            if (mOpen.definition.findClip(display)) continue;
+            iris::AvatarClipEntry entry;
+            entry.asset = clipAssetGuid;
+            entry.rawName = clip.rawName;
+            entry.name = display;
+            mOpen.definition.clips.append(entry);
+            mOpen.dirty = true;
+        }
+        if (mOpen.definition.defaultClip.isEmpty() && !mOpen.definition.clips.isEmpty()) {
+            mOpen.definition.defaultClip = mOpen.definition.clips.first().name;
+            mOpen.dirty = true;
+        }
+    }
     // The clip list changed but the subject did not: no re-framing (the
     // camera must not jump when a user adds a second walk cycle).
     notifyChanged();
     QVariantMap out = previewState();
     out["file"] = QFileInfo(path).absoluteFilePath();
+    if (!clipAssetGuid.isEmpty()) out["asset"] = clipAssetGuid;
     out["added"] = report.added;
     out["clip"] = report.firstClip;
     out["match"] = QVariantMap{ { "channels", report.channels },

@@ -70,7 +70,8 @@ public:
     /// Explicit height override for the preview subject (metres); <= 0 re-runs
     /// the automatic rule. Returns the same map `preview()` does.
     Q_INVOKABLE QVariant setCharacterHeight(double metres);
-    Q_INVOKABLE QVariant loadAnimation(const QString &path);
+    Q_INVOKABLE QVariant loadAnimation(const QString &pathOrAssetGuid,
+                                       const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool clearPreview();
     Q_INVOKABLE QVariantList history();
     Q_INVOKABLE bool forget(const QString &path);

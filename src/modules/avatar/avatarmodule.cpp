@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "modules/avatar/avatarspace.h"
 #include "data/settingsmanager.h"
 #include "services/assetservice.h"
+#include "services/projectassets.h"
 #include "services/services.h"
 #include "scripting/scriptengine.h"
 
@@ -63,6 +64,29 @@ void AvatarModule::registerApi(ScriptEngine &engine)
     }
     if (mPage) {
         auto *page = mPage;
+        // The page's project actions, routed through the services the module
+        // WAS given (ModuleHost) — the page never reaches for them itself.
+        auto host_ = host;
+        auto *api = mApi;
+        QObject::connect(page, &avatar::AvatarPage::addAvatarToProject, page,
+                         [host_, page](const QString &guid) {
+            if (!host_.db || !host_.project) return;
+            ProjectAssets::addToProject(guid, host_.db, host_.project,
+                                        ProjectAssets::AddKind::Direct);
+            page->refreshFromModel();
+        });
+        QObject::connect(page, &avatar::AvatarPage::updateAvatarFromLibrary, page,
+                         [host_, page](const QString &guid) {
+            if (!host_.db || !host_.project) return;
+            if (!ProjectAssets::updatePinToLatest(guid, host_.db, host_.project)) return;
+            if (host_.services && host_.services->assets)
+                host_.services->assets->announcePinChanged(guid);
+            page->refreshFromModel();
+        });
+        QObject::connect(page, &avatar::AvatarPage::addAvatarToScene, page,
+                         [api](const QString &guid) {
+            if (api) api->spawn(guid);
+        });
         // The page is a VIEW over the verbs: whoever calls one — a button, the
         // console, an MCP session — the widgets re-read the model afterwards.
         mApi->setChangedDelegate([page]() { page->refreshFromModel(); });
