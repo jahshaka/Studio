@@ -1142,6 +1142,11 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         if (source.startsWith(":")) {
             meshNode->setMesh(source);
 			meshNode->meshPath = source;
+            // A ":"-prefixed source IS a built-in primitive (addBuiltinPrimitive's
+            // meshes). The flag was only ever set at creation and lost on reopen,
+            // so the ground's outline exclusion (enginesceneviewport.cpp) silently
+            // stopped after a save/load (samplescale lane finding, 2026-09-09).
+            meshNode->isBuiltIn = true;
         } else {
             meshNode->setMesh(mesh);
 			meshNode->meshPath = nodeObj["mesh"].toString();
