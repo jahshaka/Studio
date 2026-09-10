@@ -124,10 +124,6 @@ int main(int argc, char **argv)
     std::printf("run 0:\n%s", runs[0].toUtf8().constData());
     // Did they pile? Every body ended below its drop height and near the origin.
     bool piled = true;
-    for (size_t i = 0; i < bodies.size(); ++i) {
-        // rest positions are back now; read the recorded run instead
-        Q_UNUSED(i);
-    }
     {
         const QStringList lines = runs[0].split('\n', Qt::SkipEmptyParts);
         for (int i = 0; i < lines.size(); ++i) {

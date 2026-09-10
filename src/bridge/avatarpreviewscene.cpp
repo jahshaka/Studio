@@ -204,6 +204,7 @@ void AvatarPreviewScene::step(float dt, int width, int height)
 
     // ORDER (§0.5.1): pose -> mirror (refreshes global transforms) -> overlay.
     mModel->advance(dt);
+    if (auto e = engine()) e->setFixedFrameDelta(jahshaka::engine::Engine::kDefaultFrameDelta);   // A4.2 S3
     applyGrid();     // cheap (two floats); tracks load/clear without a signal
     pushFrame(mModel->camera(), width, height);
     if (mOverlay) {

@@ -150,7 +150,7 @@ bool PlayerApi::frame(int count, double dt)
         return fail(QStringLiteral("player.frame: dt %1 s is above the clock's per-frame bound of "
                                    "%2 s (%3 steps of 1/%4); step more frames instead")
                         .arg(dt).arg(iris::SimulationClock::kMaxAdvanceSeconds)
-                        .arg(iris::SimulationClock::kMaxStepsPerAdvance)
+                        .arg(iris::SimulationClock::kMaxStepsPerAdvance - 1)
                         .arg(iris::SimulationClock::kStepHz));
     if (!service->stepFrames(qBound(1, count, 4096), float(dt)))
         return fail("player.frame: the player has no view to render into yet — its on-screen "

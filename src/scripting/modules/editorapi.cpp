@@ -370,7 +370,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Starts/stops the in-place physics simulation without entering play mode.",
           Needs::Document },
         { "frame", "editor.frame(n=1, dt=-1) -> bool",
-          "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 each frame hands the document's ONE simulation clock exactly that many seconds instead of the wall time the frame took; the clock turns it into whole 1/60 s grid steps (a carried remainder, never a partial step), physics, avatars and animation take those steps, and the engine's particle simulation is told to advance by the same amount. The same seconds always produce the same steps, so frame(120, 1/60), frame(60, 1/30) and frame(240, 1/120) leave the document bit-identical (scripting.e2e.fixed_clock). REFUSES a dt above scene.clock().maxAdvance (8 steps = 0.1333 s): the clock bounds catch-up to that many steps per frame so a stall can never snowball, and a script wanting more simulated time steps more frames.",
+          "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 each frame hands the document's ONE simulation clock exactly that many seconds instead of the wall time the frame took; the clock turns it into whole 1/60 s grid steps (a carried remainder, never a partial step), physics, avatars and animation take those steps, and the engine's particle simulation is told to advance by the same amount. The same seconds always produce the same steps, so frame(120, 1/60), frame(60, 1/30) and frame(240, 1/120) leave the document bit-identical (scripting.e2e.fixed_clock). REFUSES a dt above scene.clock().maxAdvance (7 steps = 0.1167 s, one under the clock's 8-step catch-up bound so a carried fraction can never be dropped): a script wanting more simulated time steps more frames.",
           Needs::Engine },
         { "warmUpShaders", "editor.warmUpShaders() -> {built, compiledThisRun, loadedThisRun, ms}",
           "Compiles every shader the OPEN world needs, now, instead of on the first frames the user "
@@ -1531,7 +1531,7 @@ bool EditorApi::frame(int n, double dt)
         return fail(QStringLiteral("editor.frame: dt %1 s is above the clock's per-frame bound of "
                                    "%2 s (%3 steps of 1/%4); step more frames instead")
                         .arg(dt).arg(iris::SimulationClock::kMaxAdvanceSeconds)
-                        .arg(iris::SimulationClock::kMaxStepsPerAdvance)
+                        .arg(iris::SimulationClock::kMaxStepsPerAdvance - 1)
                         .arg(iris::SimulationClock::kStepHz));
     host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
     return true;

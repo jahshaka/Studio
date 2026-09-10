@@ -355,6 +355,10 @@ void EngineAssetScene::step(float dt, int width, int height)
     mOrbit.apply(mCamera);
 
     mDocument->advance(dt);
+    // A preview is a host of the engine's ONE frame delta too (A4.2): the
+    // editor stops pushing when its page is hidden (a paused play leaves 0 in
+    // force), so a preview re-arms the grid step or its particles stay frozen.
+    if (auto e = engine()) e->setFixedFrameDelta(jahshaka::engine::Engine::kDefaultFrameDelta);
     pushFrame(mCamera, width, height);
 }
 

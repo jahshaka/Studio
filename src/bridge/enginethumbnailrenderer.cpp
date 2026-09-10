@@ -219,6 +219,10 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     if (!engine || !ensureResources(size)) return QImage();
 
     document->refresh();
+    // Reproducible warm-up: the engine-side simulation (particles, shader
+    // time) steps on the default grid for a thumbnail regardless of what the
+    // last host left in force (A4.2 review S3).
+    engine->setFixedFrameDelta(jahshaka::engine::Engine::kDefaultFrameDelta);
     mirror()->setSource(document);
     mirror()->sync();
     // Background from the document's sky (buildPreviewScene's 25,25,25 for asset

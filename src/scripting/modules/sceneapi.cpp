@@ -200,8 +200,9 @@ QVector<VerbInfo> SceneApi::verbs() const
           "editor.frame's dt) and the clock converts them into whole steps plus a carried "
           "remainder — `time` is `steps` x `stepSeconds` exactly, `frameSteps`/`frameSeconds` "
           "are what the last frame bought, `alpha` the fraction of a step still carried. "
-          "`maxStepsPerFrame`/`maxAdvance` are the catch-up bound: a longer frame runs that "
-          "many steps and drops the rest (no spiral), and editor.frame refuses a dt above it. "
+          "`maxStepsPerFrame` is the catch-up bound: a longer frame runs that many steps and "
+          "drops the rest (no spiral); `maxAdvance` (one step under it, so a carried fraction is "
+          "never dropped) is the most a scripted editor.frame/player.frame dt may ask for. "
           "Reset to 0 by editor.play, editor.stop and editor.simulate.",
           Needs::Document },
         { "folders", "scene.folders() -> [path]",

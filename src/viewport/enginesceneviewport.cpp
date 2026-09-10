@@ -1086,7 +1086,16 @@ void EngineSceneViewport::restartPhysicsSimulation()
 void EngineSceneViewport::stopPhysicsSimulation()
 {
     if (!mScene) return;
-    mScene->getPhysicsEnvironment()->stopPhysics();
+    // Stop = the restart shape, not a bare stopPhysics(): stopPhysics() leaves
+    // `simulationStarted` true, so Scene::advance kept taking the simulating
+    // branch every frame and the body->node copy overwrote every node's
+    // transform for the rest of the session (A4.2 code review N1, pre-existing).
+    // Tearing the world down, restoring the pre-simulate transforms and
+    // resetting the clock is what "Simulate off" means — and what the
+    // editor.simulate doc promises ("reset by editor.simulate").
+    mScene->getPhysicsEnvironment()->restartPhysics();
+    mScene->getPhysicsEnvironment()->restoreNodeTransformations(mScene->getRootNode());
+    mScene->simulationClock().reset();
 }
 
 // The setter does NOT emit: MainWindow calls it in response to sceneNodeSelected,
@@ -1505,7 +1514,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
             simulated = mScene->advance(dt);
     }
     // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5). The arm is COMPUTED in
-    // the document (Scene::update, right after the movement step, so it never
+    // the document (Scene::advance, right after the movement step, so it never
     // lags the character by a frame); what the document cannot know is which
     // camera this viewport DRAWS with — `Scene::camera` and `viewCamera()` are
     // not always the same node in this tree (measured; reported upward). So the
