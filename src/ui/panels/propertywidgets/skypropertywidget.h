@@ -140,9 +140,13 @@ private:
 	/// Pushes the two angle sliders into the sun vector and the serialized blob
 	/// (they are one and the same three floats).
 	void writeSunAngles();
-    /// Wires one sky row so a gesture becomes ONE undo step over the whole sky
-    /// block (Scene binding only — see the file header for why Asset is not).
-    void wireSkyRow(QWidget *row, const QString &text, const std::function<void()> &write);
+    /// Wires one sky row: `write` is the ONLY path from the control to the
+    /// document (a second, direct connect would write before the gesture could
+    /// snapshot), and a gesture becomes ONE undo step over the whole sky block
+    /// — in a SCENE binding; an asset's rows write and record nothing (see the
+    /// file header for why).
+    void wireSkyRow(QWidget *row, const QString &text,
+                    const std::function<void(const QVariant &)> &write);
     /// Records the sky edit `write` just made, as one step.
     void commitSky(const QVariant &before, const QString &text);
 

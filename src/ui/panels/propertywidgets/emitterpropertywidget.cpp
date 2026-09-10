@@ -34,7 +34,7 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include <algorithm>
 
-#include "io/scenewriter.h"
+#include "services/sceneeditservice.h"
 #include "ui/panels/propertywidgets/panelundo.h"
 #include "ui/panels/propertywidgets/rowundo.h"
 
@@ -66,6 +66,70 @@ iris::ParticleColourKey fromStop(const ParticleRampStop &s)
     k.b = float(s.colour.blueF()) * s.intensity;
     k.a = float(s.colour.alphaF());
     return k;
+}
+
+/// EVERYTHING A PANEL ROW CAN WRITE on one emitter, as one value — and the way
+/// back. FREE functions over the NODE, deliberately: an undo step must restore
+/// the emitter it was recorded for, not "whatever the panel is showing now"
+/// (code review: select A, stamp a preset, select B, Ctrl+Z used to give B the
+/// recipe A had). The panel only decides whether it has to repaint afterwards.
+const char *const kEmitterKeys[] = {
+    "preset", "shape", "orientation", "particlesPerSecond", "lifeLength", "speed",
+    "particleScale", "coneAngle", "maxParticles", "lifeError", "speedError", "scaleError",
+    "extents", "innerExtents", "wind", "burstDuration", "burstRepeatDelay", "startDelay",
+    "gravityComplement", "turbulence", "rotationSpeedMin", "rotationSpeedMax",
+    "randomRotation", "dissipate", "dissipateInv", "blendMode", "alphaHash", "distortion",
+};
+
+QVariantMap snapshotOf(const iris::ParticleSystemNodePtr &ps)
+{
+    QVariantMap state;
+    if (!ps) return state;
+    for (const char *k : kEmitterKeys)
+        state.insert(QLatin1String(k), ps->getPropertyValue(QLatin1String(k)));
+
+    QVariantList colour;
+    for (const iris::ParticleColourKey &k : ps->colourKeys)
+        colour.append(QVariantList{ k.time, k.r, k.g, k.b, k.a });
+    state.insert(QStringLiteral("colourKeys"), colour);
+    QVariantList scale;
+    for (const iris::ParticleScaleKey &k : ps->scaleKeys)
+        scale.append(QVariantList{ k.time, k.scale });
+    state.insert(QStringLiteral("scaleKeys"), scale);
+    return state;
+}
+
+void restoreOnto(const iris::ParticleSystemNodePtr &ps, const QVariantMap &state)
+{
+    if (!ps || state.isEmpty()) return;
+    // `preset` FIRST and on its own: applying it stamps the recipe, and every
+    // key after it puts back what the user actually had.
+    ps->setPropertyValue(QStringLiteral("preset"), state.value(QStringLiteral("preset")));
+    for (auto it = state.constBegin(); it != state.constEnd(); ++it) {
+        if (it.key() == QLatin1String("preset") || it.key() == QLatin1String("colourKeys") ||
+            it.key() == QLatin1String("scaleKeys"))
+            continue;
+        ps->setPropertyValue(it.key(), it.value());
+    }
+    QVector<iris::ParticleColourKey> colour;
+    for (const QVariant &v : state.value(QStringLiteral("colourKeys")).toList()) {
+        const QVariantList f = v.toList();
+        if (f.size() != 5) continue;
+        iris::ParticleColourKey k;
+        k.time = f[0].toFloat(); k.r = f[1].toFloat(); k.g = f[2].toFloat();
+        k.b = f[3].toFloat();    k.a = f[4].toFloat();
+        colour.append(k);
+    }
+    ps->colourKeys = colour;
+    QVector<iris::ParticleScaleKey> scale;
+    for (const QVariant &v : state.value(QStringLiteral("scaleKeys")).toList()) {
+        const QVariantList f = v.toList();
+        if (f.size() != 2) continue;
+        iris::ParticleScaleKey k;
+        k.time = f[0].toFloat(); k.scale = f[1].toFloat();
+        scale.append(k);
+    }
+    ps->scaleKeys = scale;
 }
 
 QString prettyPreset(const QString &id)
@@ -207,7 +271,11 @@ EmitterPropertyWidget::EmitterPropertyWidget()
     // Every scalar row goes through setPropertyValue, which is the exact call
     // node.setProperty makes. One code path, two front ends.
     connect(preset, SIGNAL(currentIndexChanged(QString)), SLOT(onPresetChanged(QString)));
-    connect(billboardImage, SIGNAL(valueChanged(QString)), SLOT(onBillboardImageChanged(QString)));
+    // valuesChanged, not valueChanged: the row's ASSET GUID is what the binding
+    // needs (the decal panel's three map rows take the same signal for the same
+    // reason) — a path alone cannot be pinned to the project.
+    connect(billboardImage, &TexturePickerWidget::valuesChanged, this,
+            &EmitterPropertyWidget::onBillboardImageChanged);
 
     // ONE UNDO STEP PER GESTURE (debt L6): rowundo brackets each drag and each
     // typed value, and the write is still ParticleSystemNode::setPropertyValue
@@ -323,65 +391,28 @@ rowundo::Binding EmitterPropertyWidget::row(const char *key,
     return rows(QString::fromLatin1(key), std::move(toDocument));
 }
 
-// EVERYTHING THIS BLADE CAN WRITE, as one value. Used by the preset row, which
-// stamps a whole recipe over every one of these in a single click.
 QVariantMap EmitterPropertyWidget::snapshot() const
 {
-    QVariantMap state;
-    if (!ps) return state;
-    static const char *keys[] = {
-        "preset", "shape", "orientation", "particlesPerSecond", "lifeLength", "speed",
-        "particleScale", "coneAngle", "maxParticles", "lifeError", "speedError", "scaleError",
-        "extents", "innerExtents", "wind", "burstDuration", "burstRepeatDelay", "startDelay",
-        "gravityComplement", "turbulence", "rotationSpeedMin", "rotationSpeedMax",
-        "randomRotation", "dissipate", "dissipateInv", "blendMode", "alphaHash", "distortion",
-    };
-    for (const char *k : keys)
-        state.insert(QLatin1String(k), ps->getPropertyValue(QLatin1String(k)));
-
-    QVariantList colour;
-    for (const iris::ParticleColourKey &k : ps->colourKeys)
-        colour.append(QVariantList{ k.time, k.r, k.g, k.b, k.a });
-    state.insert(QStringLiteral("colourKeys"), colour);
-    QVariantList scale;
-    for (const iris::ParticleScaleKey &k : ps->scaleKeys)
-        scale.append(QVariantList{ k.time, k.scale });
-    state.insert(QStringLiteral("scaleKeys"), scale);
-    return state;
+    return snapshotOf(ps);
 }
 
-void EmitterPropertyWidget::restore(const QVariantMap &state)
+// Records the wide edit `apply` just made on `node` as ONE step. The step is
+// bound to the NODE; the panel only repaints when it happens to be showing it.
+void EmitterPropertyWidget::pushWideEdit(const iris::ParticleSystemNodePtr &node,
+                                         const QString &text, const QVariantMap &before,
+                                         const QVariantMap &after)
 {
-    if (!ps || state.isEmpty()) return;
-    // `preset` FIRST and on its own: applying it stamps the recipe, and every
-    // key after it puts back what the user actually had.
-    ps->setPropertyValue(QStringLiteral("preset"), state.value(QStringLiteral("preset")));
-    for (auto it = state.constBegin(); it != state.constEnd(); ++it) {
-        if (it.key() == QLatin1String("preset") || it.key() == QLatin1String("colourKeys") ||
-            it.key() == QLatin1String("scaleKeys"))
-            continue;
-        ps->setPropertyValue(it.key(), it.value());
-    }
-    QVector<iris::ParticleColourKey> colour;
-    for (const QVariant &v : state.value(QStringLiteral("colourKeys")).toList()) {
-        const QVariantList f = v.toList();
-        if (f.size() != 5) continue;
-        iris::ParticleColourKey k;
-        k.time = f[0].toFloat(); k.r = f[1].toFloat(); k.g = f[2].toFloat();
-        k.b = f[3].toFloat();    k.a = f[4].toFloat();
-        colour.append(k);
-    }
-    ps->colourKeys = colour;
-    QVector<iris::ParticleScaleKey> scale;
-    for (const QVariant &v : state.value(QStringLiteral("scaleKeys")).toList()) {
-        const QVariantList f = v.toList();
-        if (f.size() != 2) continue;
-        iris::ParticleScaleKey k;
-        k.time = f[0].toFloat(); k.scale = f[1].toFloat();
-        scale.append(k);
-    }
-    ps->scaleKeys = scale;
-    refresh();
+    if (!node || before == after) return;
+    QPointer<EmitterPropertyWidget> self(this);
+    auto apply = [self, node](const QVariantMap &state) {
+        restoreOnto(node, state);
+        // Only when this panel is still showing that emitter — an undo must
+        // not repaint another node's rows with these numbers.
+        if (self && self->ps == node) self->refresh();
+    };
+    panelundo::pushEdit(services, text,
+                        [apply, after]() { apply(after); },
+                        [apply, before]() { apply(before); });
 }
 
 void EmitterPropertyWidget::onPresetChanged(const QString &name)
@@ -392,21 +423,18 @@ void EmitterPropertyWidget::onPresetChanged(const QString &name)
     // recipe just overwrote almost all of them. ONE undo step for the lot: the
     // panel's whole editable state, before and after (a "previous preset" name
     // would put back that recipe's numbers, not the ones the user had tuned).
-    const QVariantMap before = snapshot();
-    ps->applyPreset(iris::ParticleSystemNode::presetFromName(preset->getCurrentItemData()));
+    const iris::ParticleSystemNodePtr node = ps;
+    const QVariantMap before = snapshotOf(node);
+    node->applyPreset(iris::ParticleSystemNode::presetFromName(preset->getCurrentItemData()));
     refresh();
-    const QVariantMap after = snapshot();
-    if (before == after) return;
-    QPointer<EmitterPropertyWidget> self(this);
-    panelundo::pushEdit(services, tr("Emitter Preset"),
-                        [self, after]() { if (self) self->restore(after); },
-                        [self, before]() { if (self) self->restore(before); });
+    pushWideEdit(node, tr("Emitter Preset"), before, snapshotOf(node));
 }
 
 void EmitterPropertyWidget::pushColourKeys()
 {
     if (mLoading || !ps) return;
-    const QVariantMap before = snapshot();
+    const iris::ParticleSystemNodePtr node = ps;
+    const QVariantMap before = snapshotOf(node);
     QVector<ParticleRampStop> stops = colourRamp->stops();
     std::stable_sort(stops.begin(), stops.end(),
                      [](const ParticleRampStop &a, const ParticleRampStop &b) {
@@ -414,22 +442,18 @@ void EmitterPropertyWidget::pushColourKeys()
                      });
     QVector<iris::ParticleColourKey> keys;
     for (const ParticleRampStop &s : stops) keys.append(fromStop(s));
-    ps->colourKeys = keys;
+    node->colourKeys = keys;
     // The ramp is not a reflected key (it is a list, and the renderer reads it
-    // whole), so the step carries the panel's state — the same restore the
-    // preset row uses.
-    const QVariantMap after = snapshot();
-    if (before == after) return;
-    QPointer<EmitterPropertyWidget> self(this);
-    panelundo::pushEdit(services, tr("Particle Colour Ramp"),
-                        [self, after]() { if (self) self->restore(after); },
-                        [self, before]() { if (self) self->restore(before); });
+    // whole), so the step carries the emitter's whole editable state — the same
+    // restore the preset row uses.
+    pushWideEdit(node, tr("Particle Colour Ramp"), before, snapshotOf(node));
 }
 
 void EmitterPropertyWidget::pushScaleKeys()
 {
     if (mLoading || !ps) return;
-    const QVariantMap before = snapshot();
+    const iris::ParticleSystemNodePtr node = ps;
+    const QVariantMap before = snapshotOf(node);
     QVector<ParticleScaleStop> stops = scaleRamp->stops();
     std::stable_sort(stops.begin(), stops.end(),
                      [](const ParticleScaleStop &a, const ParticleScaleStop &b) {
@@ -440,13 +464,8 @@ void EmitterPropertyWidget::pushScaleKeys()
         iris::ParticleScaleKey k; k.time = s.time; k.scale = s.scale;
         keys.append(k);
     }
-    ps->scaleKeys = keys;
-    const QVariantMap after = snapshot();
-    if (before == after) return;
-    QPointer<EmitterPropertyWidget> self(this);
-    panelundo::pushEdit(services, tr("Particle Scale Ramp"),
-                        [self, after]() { if (self) self->restore(after); },
-                        [self, before]() { if (self) self->restore(before); });
+    node->scaleKeys = keys;
+    pushWideEdit(node, tr("Particle Scale Ramp"), before, snapshotOf(node));
 }
 
 void EmitterPropertyWidget::updateShapeRows()
@@ -528,25 +547,34 @@ void EmitterPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNo
     }
 }
 
-void EmitterPropertyWidget::onBillboardImageChanged(QString image)
+// THE IMAGE ROW IS AN ASSET BINDING, and the binding belongs to the service:
+// SceneEditService::setParticleTexture pins the project membership, rewrites
+// the dependency row and resolves the bytes through the CAS — which is exactly
+// what node.setParticleTexture calls, so the row and the verb are one path
+// (they were two: this slot used to load a raw PATH and write the db rows by
+// hand, which pinned nothing and could not be undone). One undo step, replaying
+// the same call, bound to the NODE like every other wide edit here.
+void EmitterPropertyWidget::onBillboardImageChanged(const QString &path, const QString &guid)
 {
-    if (mLoading || !ps || image.isEmpty()) return;
-    ps->texture = iris::Texture2D::load(image);
-
-    QJsonObject particleDef;
-    SceneWriter::writeParticleData(particleDef, ps);
-
-    auto textureGuid = particleDef.value("texture").toString();
-    if (!textureGuid.isEmpty()) {
-        particleDef["texture"] = textureGuid;
-
-        db->updateAssetAsset(ps->getGUID(), QJsonDocument(particleDef).toJson());
-        db->removeDependenciesByType(ps->getGUID(), ModelTypes::Texture);
-        db->createDependency(
-            static_cast<int>(ModelTypes::ParticleSystem),
-            static_cast<int>(ModelTypes::Texture),
-            ps->getGUID(), textureGuid,
-            project->getProjectGuid()
-        );
+    Q_UNUSED(path)
+    if (mLoading || !ps) return;
+    const iris::ParticleSystemNodePtr node = ps;
+    if (!services || !services->sceneEdit) {
+        // No service (headless hosts, the panel suites): keep the node's own
+        // texture in step, exactly as this row always did.
+        if (!path.isEmpty()) node->setTexture(iris::Texture2D::load(path));
+        return;
     }
+    const QString before = node->texture ? node->texture->getSource() : QString();
+    SceneEditService *edit = services->sceneEdit;
+    if (!edit->setParticleTexture(node, guid)) return;
+    panelundo::pushEdit(services, tr("Particle Image"),
+                        [edit, node, guid]() { edit->setParticleTexture(node, guid); },
+                        [edit, node, before]() {
+                            // The old binding is a PATH the picker resolved; an
+                            // empty one clears the image, which is what the row
+                            // showed before anything was bound.
+                            if (before.isEmpty()) { node->texture.clear(); return; }
+                            node->setTexture(iris::Texture2D::load(before));
+                        });
 }

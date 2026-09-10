@@ -500,13 +500,24 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
 void SceneNodePropertiesWidget::setDatabase(Database *db)
 {
     this->db = db;
-    // Forward, do not just store: the child panels are built in the CONSTRUCTOR,
-    // which runs before this setter, so the ctor's `setDatabase(db)` calls hand
-    // them a null. (The other panels' ctor-time injection has the same shape;
-    // only the light panel is re-pushed here because it is the only one this
-    // lane made depend on the library at paint time — flagged, not fixed
-    // wholesale, so the change stays inside this lane.)
+    // FORWARD, DO NOT JUST STORE. Every panel here is built in the CONSTRUCTOR,
+    // which runs before this setter — so the ctor's `setDatabase(db)` calls
+    // hand them the member while it is still NULL, and a panel that only got
+    // it there never has a library at all. That was silent damage, not a
+    // theoretical one (code review F-P1): the sky section's equirect pick and
+    // its cubemap slots returned early on `!db`, the Sky Presets apply did
+    // nothing, a sky ASSET could not be edited, and the emitter's image row and
+    // the shader panel dereferenced the null outright.
+    //
+    // The rule for this panel from here on: a child that needs the library is
+    // re-pushed HERE, and the ctor's call stays only as the "born with
+    // whatever we have" case.
     if (lightPropView) lightPropView->setDatabase(db);
+    if (skyPropView) skyPropView->setDatabase(db);
+    if (emitterPropView) emitterPropView->setDatabase(db);
+    if (shaderPropView) shaderPropView->setDatabase(db);
+    if (decalPropView) decalPropView->setDatabase(db);
+    if (materialPropView) materialPropView->setDatabase(db);
 }
 
 void SceneNodePropertiesWidget::setProject(Project *project)

@@ -17,13 +17,9 @@ For more information see the LICENSE file
 // The sky panel and the verb both carry the "drive a directional light"
 // toggle, so the three lines of policy live here instead of in either of them:
 // which light a toggle would pick, and how the toggle is applied so it lands as
-// one undo step on the same command `world.sunLight` uses. (It was written when
-// there were TWO sky panels, which is exactly why it was written; the panels are
-// one implementation since debt L6, and this is still the right home for the
-// policy — the verb is the other caller.)
-//
-// (F6 — the dedup of the two panels themselves — is recorded debt, deliberately
-// NOT done in this lane.)
+// one undo step on the same command `world.sunLight` uses. (It was written for
+// TWO sky panels; they are one implementation since debt L6, and this is still
+// the right home for the policy — the verb is the other caller.)
 
 #include <QString>
 

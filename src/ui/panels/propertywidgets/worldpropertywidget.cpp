@@ -31,6 +31,8 @@ For more information see the LICENSE file
 #include <QJsonObject>
 
 #include "io/scenereader.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "ui/panels/propertywidgets/rowundo.h"
 
 // Every row on this blade writes ONE world property and is undoable through
@@ -186,11 +188,17 @@ void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
 	const QString before = scene->ambientMusicGuid;
 	const QString after = ambientMusicSelector->getCurrentItemData();
 	if (before == after) return;
-	applyAmbientMusic(after);
 	// The clip is a document field with a SIDE EFFECT (playback), so it does
 	// not go through the generic sceneprops write — the undo step replays the
 	// same call the row just made, which is what stops the two drifting apart.
-	panelundo::pushEdit(services, tr("Background Ambience"),
-	                    [this, after]() { applyAmbientMusic(after); },
+	//
+	// THE PUSH DOES THE APPLY. NodeEditCommand has no first-redo skip (unlike
+	// the value commands), so QUndoStack::push replays redo() immediately — and
+	// applying twice here RESTARTS the clip from the top, audibly (code review).
+	// With no undo stack (headless hosts, the panel suites) nothing would run
+	// at all, so that case applies by hand.
+	auto redo = [this, after]() { applyAmbientMusic(after); };
+	if (!services || !services->undo) { redo(); return; }
+	panelundo::pushEdit(services, tr("Background Ambience"), redo,
 	                    [this, before]() { applyAmbientMusic(before); refreshRows(); });
 }

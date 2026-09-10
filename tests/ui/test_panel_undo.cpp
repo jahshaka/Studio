@@ -49,6 +49,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
+#include "data/database/database.h"
+#include "data/project.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/worldmodes.h"
@@ -65,6 +67,8 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/worldpostfxpropertywidget.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
+#include "ui/panels/scenenodepropertieswidget.h"
+#include "ui/controls/texturepickerwidget.h"
 #include "ui_hfloatsliderwidget.h"
 
 #include "../support/documentgraph.h"
@@ -129,6 +133,14 @@ static bool noStrandedRows(QWidget *sample)
         if (child->isVisibleTo(pane)) return false;
     }
     return true;
+}
+
+static TexturePickerWidget *pickerWith(QWidget *w, const QString &label)
+{
+    for (TexturePickerWidget *p : w->findChildren<TexturePickerWidget *>())
+        for (QLabel *l : p->findChildren<QLabel *>())
+            if (l->text().startsWith(label)) return p;
+    return nullptr;
 }
 
 static DragFloatWidget *dragWith(QWidget *w, const QString &label)
@@ -352,6 +364,29 @@ int main(int argc, char **argv)
         pump();
         CHECK(qAbs(scene->skyRealistic.sunAzimuth() - was) < 0.5f,
               "sky: undo restored the sun (the whole sky block travels together)");
+        // AN UNBRACKETED TICK IS ITS OWN STEP. A keyboard arrow or a typed
+        // value arrives as a bare valueChanged, and the row's write must run
+        // INSIDE the binding — when the panel also connected the writing slot
+        // directly, the document was already written by the time the gesture
+        // snapshotted it, so after == before and the edit vanished from the
+        // history (code review).
+        // The undo above REPAINTED the section (the rows are the sky), so the
+        // slider from before it is gone — ask for the row again, which is also
+        // the cheapest proof that the repaint happened.
+        HFloatSliderWidget *azimuth2 = sliderWith(&panel, QStringLiteral("Sun Azimuth"));
+        CHECK(azimuth2 != nullptr && azimuth2 != azimuth,
+              "sky: an undo rebuilt the section's rows");
+        if (azimuth2) {
+            const int steps = stack.index();
+            azimuth2->setValue(60.0f);
+            pump();
+            CHECK(qAbs(scene->skyRealistic.sunAzimuth() - 60.0f) < 0.5f,
+                  "sky: an unbracketed tick writes through");
+            CHECK(stack.index() == steps + 1, "sky: and is its own one-step edit");
+            stack.undo();
+            pump();
+        }
+
         // The blob the scene SAVES is the same three floats: an undo that put
         // back the live field and not the blob would reappear on the next open.
         const QJsonObject stored = scene->skyData.value(QStringLiteral("Realistic"));
@@ -445,6 +480,107 @@ int main(int argc, char **argv)
         stack.undo();
         CHECK(qFuzzyCompare(emitter->particlesPerSecond, 123.0f),
               "emitter: and the undo restored the HAND-TUNED value, not a preset's");
+    }
+
+    // ---- 9. THE PANEL HOST FORWARDS THE LIBRARY ----------------------------
+    //
+    // Every child panel is built in the host's CONSTRUCTOR, before anything has
+    // handed it a Database — so a panel that only got the pointer there has
+    // none, forever. That was not theoretical: the sky section's equirect pick
+    // and cubemap slots returned early on `!db`, a sky ASSET could not be
+    // edited at all, and the emitter's image row dereferenced the null. Every
+    // panel suite passed `setDatabase(nullptr)`, which is why the gate never
+    // saw it. This drives the row a user drives, through the HOST, with a
+    // library present.
+    {
+        Database db;
+        Project project;
+        SceneNodePropertiesWidget host;
+        host.setDatabase(&db);          // exactly the order MainWindow uses
+        host.setProject(&project);
+        host.setServices(&services);
+
+        SkyPropertyWidget *sky = host.findChild<SkyPropertyWidget *>();
+        CHECK(sky != nullptr, "host: the sky section is one of the host's blades");
+        scene->skyType = iris::SkyType::EQUIRECTANGULAR;
+        scene->skyData.remove(QStringLiteral("Equirectangular"));
+        host.setScene(scene);
+        pump();
+
+        TexturePickerWidget *equi = sky ? pickerWith(sky, QStringLiteral("Equi Map")) : nullptr;
+        CHECK(equi != nullptr, "host: and it built the equirect row");
+        if (equi) {
+            const int before = stack.index();
+            // What the picker emits when a user drops or chooses an image.
+            emit equi->valueChanged(QStringLiteral("stub-asset.png"));
+            pump();
+            const QJsonObject stored = scene->skyData.value(QStringLiteral("Equirectangular"));
+            CHECK(stored.value(QStringLiteral("equiSkyGuid")).toString()
+                      == QStringLiteral("stub-guid"),
+                  "host: the equirect pick RESOLVED through the library and reached the "
+                  "document (it returned on a null db before)");
+            CHECK(stack.index() == before + 1, "host: as one undo step");
+            stack.undo();
+            pump();
+        }
+
+        // The emitter's image row: it used to LOAD A PATH and write the library
+        // rows by hand — dereferencing the null db as it went (the SEGV the
+        // review found). It binds through SceneEditService::setParticleTexture
+        // now, the same door node.setParticleTexture uses, so the row cannot
+        // touch the library at all. This suite has no service (the class is not
+        // in this slice), so what it pins is the half it can see: the row runs,
+        // touches no database, and — with nobody to bind through — records
+        // nothing rather than half-binding. The service half rides on the verb's
+        // own coverage, because it is now literally the same call.
+        auto emitter = iris::ParticleSystemNode::create();
+        EmitterPropertyWidget *emitterPanel = host.findChild<EmitterPropertyWidget *>();
+        CHECK(emitterPanel != nullptr, "host: the emitter section is one of the host's blades");
+        if (emitterPanel) {
+            emitterPanel->setSceneNode(emitter);
+            TexturePickerWidget *image =
+                pickerWith(emitterPanel, QStringLiteral("Particle Image"));
+            CHECK(image != nullptr, "host: and it built the particle image row");
+            if (image) {
+                const int before = stack.index();
+                emit image->valuesChanged(QStringLiteral("stub-asset.png"),
+                                          QStringLiteral("stub-guid"));
+                CHECK(stack.index() == before,
+                      "host: the image row records nothing without a scene-edit service "
+                      "(and reaches no database on the way — it used to SEGV here)");
+            }
+        }
+    }
+
+    // ---- 10. A WIDE EDIT BELONGS TO ITS NODE, not to the panel -------------
+    //
+    // The emitter's preset and its two ramps rewrite everything at once, so
+    // their undo step carries the panel's whole editable state — and it must
+    // carry it for the emitter it was RECORDED for. Selecting another emitter
+    // and pressing Ctrl+Z used to stamp the first one's recipe onto the second.
+    {
+        auto a = iris::ParticleSystemNode::create();
+        auto b = iris::ParticleSystemNode::create();
+        a->particlesPerSecond = 11.0f;
+        b->particlesPerSecond = 77.0f;
+
+        EmitterPropertyWidget panel;
+        panel.setServices(&services);
+        panel.setSceneNode(a);
+        ComboBoxWidget *preset = comboWith(&panel, QStringLiteral("Preset"));
+        CHECK(preset != nullptr, "identity: the preset row is on the blade");
+        const int before = stack.index();
+        if (preset && preset->getWidget()) preset->getWidget()->setCurrentIndex(1);   // fire
+        CHECK(stack.index() == before + 1, "identity: the preset stamped one step on A");
+        CHECK(!qFuzzyCompare(a->particlesPerSecond, 11.0f), "identity: and rewrote A");
+
+        // The user moves on to another emitter, then undoes.
+        panel.setSceneNode(b);
+        stack.undo();
+        CHECK(qFuzzyCompare(a->particlesPerSecond, 11.0f),
+              "identity: undo restored the emitter the step was recorded for");
+        CHECK(qFuzzyCompare(b->particlesPerSecond, 77.0f),
+              "identity: and left the SELECTED emitter alone");
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

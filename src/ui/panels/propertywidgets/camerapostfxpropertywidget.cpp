@@ -117,11 +117,12 @@ QString CameraPostFxPropertyWidget::inheritedText(const QString &key) const
 
 void CameraPostFxPropertyWidget::rebuild()
 {
-    clearPanel(this->layout());
-    if (!camera) return;
-    // The rows below are populated as they are built, and the controls emit
-    // from their setters: nothing built here is a user edit.
+    // The guard goes up FIRST: clearPanel retires the old rows, and a control
+    // being destroyed can emit on the way out (the sky panel sets its guard
+    // before clearing for the same reason).
     loading = true;
+    clearPanel(this->layout());
+    if (!camera) { loading = false; return; }
 
     // ---- §4, the exposure block -------------------------------------------
     // Three stops-based numbers and a mode. NOT the same unit as the World

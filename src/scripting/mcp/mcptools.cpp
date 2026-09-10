@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "scripting/scriptengine.h"
 #include "services/engineerrorpump.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "viewport/ieditorviewport.h"
 
 namespace {
@@ -758,14 +760,21 @@ QJsonObject McpTools::undoRedo(const QJsonObject &args)
     if (!stack)
         return textResult(QStringLiteral("undo_redo: no undo stack in this session"), true);
 
+    // THROUGH THE SERVICE when there is one (debt L6): UndoService::undo/redo
+    // is what raises the panel repaint — every properties row is undoable now,
+    // and a stack moved behind the service's back leaves the panel showing the
+    // values the undo just discarded. The raw stack stays the fallback for a
+    // host with no services (the scripting core is Studio-free by design).
+    UndoService *undo = mEngine->scriptHost().services ? mEngine->scriptHost().services->undo
+                                                       : nullptr;
     const QString action = args.value(QLatin1String("action")).toString();
     bool applied = false;
     if (action == QLatin1String("undo")) {
         applied = stack->canUndo();
-        if (applied) stack->undo();
+        if (applied) { if (undo) undo->undo(); else stack->undo(); }
     } else if (action == QLatin1String("redo")) {
         applied = stack->canRedo();
-        if (applied) stack->redo();
+        if (applied) { if (undo) undo->redo(); else stack->redo(); }
     } else {
         return textResult(QStringLiteral("undo_redo: action must be 'undo' or 'redo'"), true);
     }

@@ -227,10 +227,12 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     int type = physicsTypeSelector->getItemData(index).toInt();
 
     edit(tr("Physics Type"), [this, type]() {
-    float mass = 0.0;
-
-    iris::PhysicsProperty physicsProperties;
-
+    // FIELD-WISE, never a whole-struct assign (CRUD, code review): this used to
+    // build a DEFAULT PhysicsProperty from four widget values and assign it
+    // over the node's, wiping the collision shape, the friction, the damping,
+    // the centre of mass and the pivot point — none of which this row edits and
+    // none of which the undo step can bring back, because edit() records the
+    // fields it knows about. The row writes exactly what the row means.
     if (type == static_cast<int>(iris::PhysicsType::None)) {
         this->sceneNode->isPhysicsBody = false;
         this->sceneNode->physicsProperty.type = PhysicsType::None;
@@ -238,33 +240,22 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     }
 
     if (type == static_cast<int>(iris::PhysicsType::Static)) {
-        mass = .0f;
-        massValue->setValue(mass);
-        physicsProperties.objectMass = massValue->getValue();
+        // A static body has mass 0 in Bullet — the same rule node.physics
+        // enforces, which is why the slider follows the choice.
+        massValue->setValue(0.0f);
         this->sceneNode->physicsProperty.type = PhysicsType::Static;
+        this->sceneNode->physicsProperty.objectMass = 0.0f;
     }
 
     if (type == static_cast<int>(iris::PhysicsType::RigidBody)) {
-        mass = massValue->getValue();
-        massValue->setValue(mass);
-        physicsProperties.objectMass = mass;
         this->sceneNode->physicsProperty.type = PhysicsType::RigidBody;
+        this->sceneNode->physicsProperty.objectMass = massValue->getValue();
     }
 
-    physicsProperties.isStatic = (massValue->getValue() == 0) ? true : false;
-    physicsProperties.objectCollisionMargin = marginValue->getValue();
-    physicsProperties.objectRestitution = bouncinessValue->getValue();
-    physicsProperties.type = static_cast<iris::PhysicsType>(type);
-
+    this->sceneNode->physicsProperty.isStatic =
+        this->sceneNode->physicsProperty.type == PhysicsType::Static ||
+        this->sceneNode->physicsProperty.objectMass == 0.0f;
     this->sceneNode->isPhysicsBody = true;
-
-    this->sceneNode->physicsProperty = physicsProperties;
-
-    //btRigidBody *body = iris::PhysicsHelper::createPhysicsBody(sceneNode, physicsProperties);
-    //if (!body) {
-    //    qWarning("Failed to create a rigid body from object");
-    //    return;
-    //};
     });
 }
 

@@ -62,7 +62,7 @@ public:
 
 protected slots:
     void onPresetChanged(const QString &name);
-    void onBillboardImageChanged(QString);
+    void onBillboardImageChanged(const QString &path, const QString &guid);
 
 private:
     /// Pushes one reflected field onto the node — the same call the scripting
@@ -73,12 +73,16 @@ private:
     void refresh();
     void pushColourKeys();
     void pushScaleKeys();
-    /// Everything this blade can write, as one value: every reflected key it
-    /// binds plus the two ramps. The preset row stamps a WHOLE recipe over all
-    /// of it, so its undo step carries all of it (a "previous preset" name
-    /// would restore that recipe's numbers, not the ones the user had).
+    /// Everything this blade can write on the shown emitter, as one value:
+    /// every reflected key it binds plus the two ramps. The preset row stamps a
+    /// WHOLE recipe over all of it, so its undo step carries all of it (a
+    /// "previous preset" name would restore that recipe's numbers, not the ones
+    /// the user had).
     QVariantMap snapshot() const;
-    void restore(const QVariantMap &state);
+    /// Records a wide edit on ONE emitter — bound to the node, never to
+    /// "whatever the panel is showing when the undo arrives".
+    void pushWideEdit(const iris::ParticleSystemNodePtr &node, const QString &text,
+                      const QVariantMap &before, const QVariantMap &after);
     /// A row bound to one reflected emitter key.
     rowundo::Binding row(const char *key,
                          std::function<QVariant(const QVariant &)> toDocument = {});

@@ -199,7 +199,6 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	switch (type) {
 		case iris::SkyType::SINGLE_COLOR: {
 			singleColor = this->addColorPicker("Sky Color");
-			connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onSingleSkyColorChanged(QColor)));
 
 			QColor skyColor = skyDefinition.contains("skyColor")
 			                      ? SceneReader::readColor(skyDefinition.value("skyColor").toObject())
@@ -208,9 +207,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(skyColor));
 			if (auto live = liveScene()) live->skyColor = skyColor;
 			updateAssetAndKeys();
-			wireSkyRow(singleColor->getPicker(), tr("Sky Colour"), [this]() {
-				onSingleSkyColorChanged(singleColor->getPicker()->getColor());
-			});
+			wireSkyRow(singleColor->getPicker(), tr("Sky Colour"),
+			           [this](const QVariant &v) { onSingleSkyColorChanged(v.value<QColor>()); });
 
 			break;
 		}
@@ -279,21 +277,22 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			mieDirectionalG->setValue(loaded.mieDirectionalG);
 			luminance->setValue(loaded.luminance);
 
-			connect(luminance, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
-			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);
-			connect(mieCoefficient, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieCoeffGChanged);
-			connect(mieDirectionalG, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieDireChanged);
-			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onTurbidityChanged);
-			connect(sunAzimuth, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunAzimuthChanged);
-			connect(sunElevation, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunElevationChanged);
-			// ...and each of those drags is ONE undo step (Scene binding).
-			wireSkyRow(luminance, tr("Sky Exposure"), {});
-			wireSkyRow(reileigh, tr("Rayleigh Scattering"), {});
-			wireSkyRow(mieCoefficient, tr("Mie Coefficient"), {});
-			wireSkyRow(mieDirectionalG, tr("Mie Directional G"), {});
-			wireSkyRow(turbidity, tr("Turbidity"), {});
-			wireSkyRow(sunAzimuth, tr("Sun Azimuth"), {});
-			wireSkyRow(sunElevation, tr("Sun Elevation"), {});
+			// Each dial writes THROUGH its binding (never a second, direct
+			// connect) and each drag is ONE undo step in a scene.
+			wireSkyRow(luminance, tr("Sky Exposure"),
+			           [this](const QVariant &v) { onLuminanceChanged(v.toFloat()); });
+			wireSkyRow(reileigh, tr("Rayleigh Scattering"),
+			           [this](const QVariant &v) { onReileighChanged(v.toFloat()); });
+			wireSkyRow(mieCoefficient, tr("Mie Coefficient"),
+			           [this](const QVariant &v) { onMieCoeffGChanged(v.toFloat()); });
+			wireSkyRow(mieDirectionalG, tr("Mie Directional G"),
+			           [this](const QVariant &v) { onMieDireChanged(v.toFloat()); });
+			wireSkyRow(turbidity, tr("Turbidity"),
+			           [this](const QVariant &v) { onTurbidityChanged(v.toFloat()); });
+			wireSkyRow(sunAzimuth, tr("Sun Azimuth"),
+			           [this](const QVariant &v) { onSunAzimuthChanged(v.toFloat()); });
+			wireSkyRow(sunElevation, tr("Sun Elevation"),
+			           [this](const QVariant &v) { onSunElevationChanged(v.toFloat()); });
 
 			// The stored blob is still sunPos*: azimuth/elevation are a view of it.
 			realisticDefinition.insert("luminance", double(loaded.luminance));
@@ -360,11 +359,6 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			colorBot = this->addColorPicker("Bottom Color");
 			offset = this->addFloatValueSlider("Offset", 0.01, .9f, .73f);
 
-			connect(colorTop->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientTopColorChanged(QColor)));
-			connect(colorMid->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientMidColorChanged(QColor)));
-			connect(colorBot->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientBotColorChanged(QColor)));
-			connect(offset, SIGNAL(valueChanged(float)), SLOT(onGradientOffsetChanged(float)));
-
 			const bool fresh = skyDefinition.isEmpty();
 			const QColor top = fresh ? QColor(255, 146, 138)
 			                         : SceneReader::readColor(skyDefinition.value("gradientTop").toObject());
@@ -392,12 +386,13 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			updateAssetAndKeys();
 
 			wireSkyRow(colorTop->getPicker(), tr("Sky Gradient"),
-			           [this]() { onGradientTopColorChanged(colorTop->getPicker()->getColor()); });
+			           [this](const QVariant &v) { onGradientTopColorChanged(v.value<QColor>()); });
 			wireSkyRow(colorMid->getPicker(), tr("Sky Gradient"),
-			           [this]() { onGradientMidColorChanged(colorMid->getPicker()->getColor()); });
+			           [this](const QVariant &v) { onGradientMidColorChanged(v.value<QColor>()); });
 			wireSkyRow(colorBot->getPicker(), tr("Sky Gradient"),
-			           [this]() { onGradientBotColorChanged(colorBot->getPicker()->getColor()); });
-			wireSkyRow(offset, tr("Sky Gradient Offset"), {});
+			           [this](const QVariant &v) { onGradientBotColorChanged(v.value<QColor>()); });
+			wireSkyRow(offset, tr("Sky Gradient Offset"),
+			           [this](const QVariant &v) { onGradientOffsetChanged(v.toFloat()); });
 
 			break;
 		}
@@ -411,18 +406,25 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 // the per-type blobs and the live colour / gradient / analytic fields — because
 // a row here writes the blob AND the live field, and an undo that put back only
 // one of them would leave the panel showing a sky the renderer is not drawing.
-// `write` is used only where the row's own slot is not already connected (the
-// colour pickers, whose live stream this replays); the sliders write through
-// their existing slots and this just brackets the gesture.
+//
+// THE ROW'S WRITE GOES THROUGH HERE, and nowhere else: a row that ALSO had its
+// slot connected to the control directly wrote the document BEFORE rowundo
+// could snapshot it, so an unbracketed tick (a keyboard arrow, a typed value)
+// compared equal to itself and was dropped from the undo history (code review).
+// Both bindings write; only a SCENE binding commits — library asset content has
+// no undo history to commit to.
 void SkyPropertyWidget::wireSkyRow(QWidget *row, const QString &text,
-                                   const std::function<void()> &write)
+                                   const std::function<void(const QVariant &)> &write)
 {
-    if (!row || binding != Binding::Scene) return;   // asset content has no undo history
+    if (!row || !write) return;
     rowundo::Binding b;
-    b.guard = [this]() { return !loading && !!liveScene(); };
+    b.guard = [this]() { return !loading; };
     b.read = [this]() { return sceneprops::get(liveScene(), QStringLiteral("sky")); };
-    b.write = [write](const QVariant &) { if (write) write(); };
-    b.commit = [this, text](const QVariant &before, const QVariant &) { commitSky(before, text); };
+    b.write = write;
+    if (binding == Binding::Scene)
+        b.commit = [this, text](const QVariant &before, const QVariant &) {
+            commitSky(before, text);
+        };
     if (auto *slider = qobject_cast<HFloatSliderWidget *>(row))      rowundo::bind(slider, b);
     else if (auto *picker = qobject_cast<ColorPickerWidget *>(row))  rowundo::bind(picker, b);
 }
