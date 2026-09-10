@@ -112,6 +112,12 @@ struct AssetPinRecord
 {
     QString projectGuid;
     QString projectName;
+    /// False when the pin names a project row that no longer exists — a DEAD
+    /// pin (32 of 129 on the owner's measured store). It is still a real
+    /// catalog row holding content alive, so it is still reported; it is NOT
+    /// counted as a project using the asset (countAssetPins), and
+    /// `assets.gc`'s deadPins class is what reaps it.
+    bool    live = true;
 };
 
 struct DependencyRecord

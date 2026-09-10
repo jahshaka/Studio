@@ -2322,11 +2322,19 @@ void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 		// decides whether Delete removes this asset or merely unlists it, so
 		// the user gets to see it BEFORE pressing the button.
 		{
-			const auto pins = assetdelete::pins(db, widget->metadata["guid"].toString());
-			rows.append({ tr("Used by"),
-			              pins.isEmpty() ? tr("no projects")
-			                             : tr("%n project(s): %1", "", pins.size())
-			                                   .arg(pinnedProjectNames(pins)) });
+			// LIVE pins are the ones that decide (code review 2026-09-10 —
+			// the row used to count pins from projects that no longer exist,
+			// and show their raw guids). Dead ones are still worth saying:
+			// they are catalog rows assets.gc can reap.
+			const QString assetGuid = widget->metadata["guid"].toString();
+			const auto all = assetdelete::pins(db, assetGuid);
+			const auto live = assetdelete::livePins(db, assetGuid);
+			const int dead = all.size() - live.size();
+			QString used = live.isEmpty() ? tr("no projects")
+			                              : tr("%n project(s): %1", "", live.size())
+			                                    .arg(pinnedProjectNames(live));
+			if (dead > 0) used += tr(" (+%n pin(s) from deleted projects)", "", dead);
+			rows.append({ tr("Used by"), used });
 		}
 		rows.append({ tr("Public"), widget->metadata["is_public"].toBool() ? tr("true") : tr("false") });
 		rows.append({ tr("Author"), widget->metadata["author"].toString() });
@@ -2895,7 +2903,9 @@ void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 	if (!item || item->metadata.isEmpty()) return;
 	const QString guid = item->metadata["guid"].toString();
 	const QString name = item->metadata["name"].toString();
-	const QVector<AssetPinRecord> pins = assetdelete::pins(db, guid);
+	// LIVE pins only: they are what the delete will actually weigh
+	// (Database::countAssetPins ignores pins from deleted projects).
+	const QVector<AssetPinRecord> pins = assetdelete::livePins(db, guid);
 
 	bool force = false;
 	if (pins.isEmpty()) {

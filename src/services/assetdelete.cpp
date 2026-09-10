@@ -26,6 +26,14 @@ QVector<AssetPinRecord> pins(Database *db, const QString &guid)
     return db->fetchAssetPins(guid);
 }
 
+QVector<AssetPinRecord> livePins(Database *db, const QString &guid)
+{
+    QVector<AssetPinRecord> live;
+    for (const AssetPinRecord &pin : pins(db, guid))
+        if (pin.live) live.push_back(pin);
+    return live;
+}
+
 Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
 {
     Outcome out;

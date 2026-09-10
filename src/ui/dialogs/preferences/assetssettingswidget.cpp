@@ -205,6 +205,7 @@ void AssetsSettingsWidget::cleanUpStorage()
         + line("sidecars with no asset", preview.straySidecars)
         + line("old per-asset folders", preview.legacyFolders)
         + line("duplicate copies of stored files", preview.redundantLegacyFiles)
+        + line("pins from deleted projects", preview.deadPins)
         + QStringLiteral("\n\nDelete them? Assets in the library, project pins and "
                         "copy-on-write edits are never touched.");
 

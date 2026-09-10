@@ -54,26 +54,26 @@ int Report::totalCount() const
 {
     return unreferencedObjects.items.size() + strayObjects.items.size()
          + straySidecars.items.size() + legacyFolders.items.size()
-         + redundantLegacyFiles.items.size();
+         + redundantLegacyFiles.items.size() + deadPins.items.size();
 }
 
 qint64 Report::totalBytes() const
 {
     return unreferencedObjects.bytes + strayObjects.bytes + straySidecars.bytes
-         + legacyFolders.bytes + redundantLegacyFiles.bytes;
+         + legacyFolders.bytes + redundantLegacyFiles.bytes + deadPins.bytes;
 }
 
 int Report::removedCount() const
 {
     return unreferencedObjects.removed + strayObjects.removed + straySidecars.removed
-         + legacyFolders.removed + redundantLegacyFiles.removed;
+         + legacyFolders.removed + redundantLegacyFiles.removed + deadPins.removed;
 }
 
 qint64 Report::removedBytes() const
 {
     return unreferencedObjects.removedBytes + strayObjects.removedBytes
          + straySidecars.removedBytes + legacyFolders.removedBytes
-         + redundantLegacyFiles.removedBytes;
+         + redundantLegacyFiles.removedBytes + deadPins.removedBytes;
 }
 
 QVariantMap Report::toMap() const
@@ -84,6 +84,7 @@ QVariantMap Report::toMap() const
     classes["straySidecars"] = straySidecars.toMap();
     classes["legacyFolders"] = legacyFolders.toMap();
     classes["redundantLegacyFiles"] = redundantLegacyFiles.toMap();
+    classes["deadPins"] = deadPins.toMap();
 
     QVariantMap map;
     map["ok"] = ok;
@@ -338,6 +339,29 @@ Report collect(QSqlDatabase conn, const QString &root, bool force)
         }
     }
 
+    // --- (f) pins naming a project that no longer exists -------------------
+    //
+    // Rows, not files. A dead pin is a reference the catalog still honours:
+    // it keeps its object out of (a) above, it used to VETO a plain library
+    // delete (countAssetPins now ignores it), and nothing in the app can ever
+    // reach it again — the project it belongs to is gone. The one input that
+    // could make a LIVE pin look dead is a catalog whose projects table is
+    // missing, so that case reports nothing at all.
+    if (tableExists(conn, "project_assets") && tableExists(conn, "projects")) {
+        QSqlQuery q(conn);
+        q.prepare("SELECT PA.project_guid, PA.asset_guid FROM project_assets PA "
+                  "LEFT JOIN projects P ON P.guid = PA.project_guid "
+                  "WHERE P.guid IS NULL");
+        if (q.exec()) {
+            while (q.next()) {
+                const QString project = q.value(0).toString();
+                const QString asset = q.value(1).toString();
+                add(report.deadPins, project + QLatin1Char('/') + asset, QString(), 0,
+                    QStringLiteral("project '%1' no longer exists").arg(project));
+            }
+        }
+    }
+
     report.ok = true;
     report.elapsedMs = timer.elapsed();
     return report;
@@ -384,6 +408,37 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
         if (rowsOk) unlinkFiles(report.unreferencedObjects);
         else report.failures << QStringLiteral(
             "the files rows could not be dropped — their objects were left in place");
+    }
+
+    // Dead pins go as ROWS, in their own transaction: nothing on disk moves,
+    // and a failure here must not stop the file classes below from being
+    // reclaimed. The `id` is "<projectGuid>/<assetGuid>" — split once.
+    if (!report.deadPins.items.isEmpty()) {
+        const bool inTransaction = conn.transaction();
+        bool rowsOk = true;
+        for (const Item &item : report.deadPins.items) {
+            const int slash = item.id.indexOf(QLatin1Char('/'));
+            if (slash <= 0) { rowsOk = false; continue; }
+            QSqlQuery del(conn);
+            del.prepare("DELETE FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+            del.addBindValue(item.id.left(slash));
+            del.addBindValue(item.id.mid(slash + 1));
+            if (!del.exec()) {
+                rowsOk = false;
+                report.failures << QStringLiteral("could not drop the dead pin %1: %2")
+                                       .arg(item.id, del.lastError().text());
+            }
+        }
+        if (inTransaction) {
+            if (rowsOk) rowsOk = conn.commit();
+            else conn.rollback();
+        }
+        if (rowsOk) {
+            report.deadPins.removed = report.deadPins.items.size();
+        } else {
+            report.failures << QStringLiteral(
+                "the dead project pins could not be dropped — they were left in place");
+        }
     }
 
     unlinkFiles(report.strayObjects);

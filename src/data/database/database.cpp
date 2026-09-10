@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QSqlRecord>
 #include <QDateTime>
 #include <QMessageBox>
+#include <QObject>
 #include <QUuid>
 
 namespace
@@ -1234,9 +1235,13 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
     if (!checkIfTableExists("project_assets")) return pins;
 
     QSqlQuery query;
-    // LEFT JOIN: a pin whose project row is gone must still be COUNTED (it is
-    // a real reference in the catalog); it just has no name to show.
-    query.prepare("SELECT PA.project_guid, P.name FROM project_assets PA "
+    // LEFT JOIN: a pin whose project row is gone is still a real row in the
+    // catalog — it keeps its object alive against the GC — so it is still
+    // REPORTED here, flagged dead and named for a human instead of showing a
+    // raw guid on the Assets page's "Used by" row (code review 2026-09-10).
+    // What it is NOT is a project using the asset: countAssetPins ignores it,
+    // so it cannot veto a delete, and assets.gc reaps it.
+    query.prepare("SELECT PA.project_guid, P.name, P.guid IS NOT NULL FROM project_assets PA "
                   "LEFT JOIN projects P ON P.guid = PA.project_guid "
                   "WHERE PA.asset_guid = ? ORDER BY P.name");
     query.addBindValue(guid);
@@ -1246,7 +1251,9 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
         AssetPinRecord pin;
         pin.projectGuid = query.value(0).toString();
         pin.projectName = query.value(1).toString();
-        if (pin.projectName.isEmpty()) pin.projectName = pin.projectGuid;
+        pin.live = query.value(2).toBool();
+        if (!pin.live) pin.projectName = QObject::tr("(deleted project)");
+        else if (pin.projectName.isEmpty()) pin.projectName = pin.projectGuid;
         pins.push_back(pin);
     }
     return pins;
@@ -1267,7 +1274,17 @@ int Database::countAssetPins(const QString &guid)
     if (guid.isEmpty() || !db.isOpen()) return 0;
     if (!checkIfTableExists("project_assets")) return 0;
     QSqlQuery query;
-    query.prepare("SELECT COUNT(*) FROM project_assets WHERE asset_guid = ?");
+    // LIVE projects only (code review 2026-09-10). This number is the VETO:
+    // it decides whether a library delete deletes or merely unlists, whether
+    // the project panel removes a pin, and what the confirmation dialog says.
+    // A pin whose project row is gone represents nobody — 32 of the owner's
+    // 129 pins were already dead — and counting it made an asset no living
+    // project used undeletable through the normal path, forever. The dead row
+    // itself is not silently dropped: fetchAssetPins still reports it and
+    // assets.gc's deadPins class reaps it.
+    query.prepare("SELECT COUNT(*) FROM project_assets PA "
+                  "JOIN projects P ON P.guid = PA.project_guid "
+                  "WHERE PA.asset_guid = ?");
     query.addBindValue(guid);
     if (!executeAndCheckQuery(query, "CountAssetPins") || !query.next()) return 0;
     return query.value(0).toInt();

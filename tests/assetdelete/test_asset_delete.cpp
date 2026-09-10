@@ -35,6 +35,10 @@
 //      reaping of an unlisted row whose last pinning project is deleted.
 //
 // Plus the library-delete CODE REVIEW follow-ups (MASTER_QUEUE §26, item 5b):
+//  11. DEAD PINS: a project_assets row whose project no longer exists counts
+//      for nothing (countAssetPins JOINs projects, so it cannot veto a plain
+//      delete) but is still reported by fetchAssetPins, flagged dead and
+//      named "(deleted project)" instead of showing a raw guid.
 //  12. deleteFolderAndDependencies obeys the pin law like its asset twin: a
 //      pinned member is unlisted, its files are NOT handed back for unlink
 //      and its dependency edges stay.
@@ -115,6 +119,11 @@ int main(int argc, char **argv)
     db.createAllTables();
 
     const QString projectGuid = "proj-delete-test";
+    // The fixture project has to be a REAL row: since the code review of
+    // 2026-09-10 a pin whose project does not exist is a DEAD pin and counts
+    // for nothing (case 11 asserts exactly that), so a fixture without it
+    // would be testing the dead-pin path everywhere by accident.
+    CHECK(db.createProject(projectGuid, "Delete Test"), "fixture project row created");
 
     // --- Two assets, one SHARED content object, plus a private one ----------
     const QString sharedSrc = writeTempFile(scratchDir, "shared.png", QByteArray("shared-bytes"));
@@ -497,6 +506,63 @@ int main(int argc, char **argv)
         CHECK(countWhere("asset_files", "asset_guid", shared) == 0,
               "... with its content mapping, so assets.gc can reclaim the bytes");
         CHECK(!db.setAssetListed(shared, true), "setAssetListed on an unknown guid is FALSE");
+    }
+
+    // --- 11. DEAD PINS: a pin whose project is gone counts for nothing ------
+    //
+    // 32 of the 129 pins on the owner's measured store named projects that no
+    // longer existed. Counted as pins they made an asset NO LIVING PROJECT
+    // used undeletable through the normal path (the delete unlisted it and the
+    // grid lost it), and the Assets page showed a raw guid as the "project"
+    // using it. So: countAssetPins weighs LIVE pins only; fetchAssetPins still
+    // reports the dead row (it is a real reference — assets.gc reaps it) and
+    // names it for a human.
+    {
+        conn = QSqlDatabase::database();
+        const QString ghost = "proj-that-never-existed";
+        const QString hauntedGuid = db.createAssetEntry(
+            "guid-haunted", "haunted.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString hauntedOid, he;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, hauntedGuid, "source", "haunted.png",
+                                   &hauntedOid, &he), "the haunted asset has content");
+        CHECK(AssetCas::writePin(conn, ghost, hauntedGuid, hauntedOid),
+              "a pin written for a project that does not exist");
+        CHECK(countWhere("project_assets", "asset_guid", hauntedGuid) == 1,
+              "the dead pin row is really there");
+
+        CHECK(db.countAssetPins(hauntedGuid) == 0,
+              "countAssetPins ignores a pin whose project is gone");
+        const auto ghostPins = db.fetchAssetPins(hauntedGuid);
+        CHECK(ghostPins.size() == 1, "fetchAssetPins still REPORTS the dead pin");
+        CHECK(!ghostPins.first().live, "... flagged dead");
+        CHECK(ghostPins.first().projectName != ghost && !ghostPins.first().projectName.isEmpty(),
+              qPrintable(QStringLiteral("... and named for a human, not by its guid: %1")
+                             .arg(ghostPins.first().projectName)));
+
+        // The point of the fix: a plain library delete really deletes now.
+        CHECK(db.deleteAsset(hauntedGuid), "the plain library delete succeeds");
+        CHECK(countWhere("assets", "guid", hauntedGuid) == 0,
+              "... and the asset row is GONE (a dead pin cannot veto a delete)");
+        CHECK(countWhere("project_assets", "asset_guid", hauntedGuid) == 0,
+              "... the dead pin went with it");
+
+        // A LIVE pin still vetoes, in the same session, on the same shape.
+        const QString livingGuid = db.createAssetEntry(
+            "guid-living", "living.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString livingOid;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, livingGuid, "source", "living.png",
+                                   &livingOid, &he), "the living asset has content");
+        CHECK(AssetCas::writePin(conn, projectGuid, livingGuid, livingOid),
+              "pinned by the (existing) fixture project");
+        CHECK(db.countAssetPins(livingGuid) == 1, "a LIVE pin counts");
+        CHECK(db.fetchAssetPins(livingGuid).first().live, "... and reads back live");
+        CHECK(db.deleteAsset(livingGuid) && !db.isAssetListed(livingGuid),
+              "... so the library delete is still an UNLIST");
+        CHECK(db.deleteAsset(livingGuid, /*force*/ true), "cleaned up with force");
     }
 
     // --- 12. deleteFolderAndDependencies obeys the pin law ------------------
