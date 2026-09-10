@@ -181,7 +181,10 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
     insertFile.addBindValue(oid);
     insertFile.addBindValue(info.size());
     insertFile.addBindValue(ext);
-    insertFile.exec();
+    if (!insertFile.exec()) {
+        if (errorOut) *errorOut = QStringLiteral("files row refused: %1").arg(insertFile.lastError().text());
+        return false;
+    }
 
     QSqlQuery insertLink(conn);
     insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
@@ -189,7 +192,10 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
     insertLink.addBindValue(role);
     insertLink.addBindValue(oid);
     insertLink.addBindValue(name.isEmpty() ? info.fileName() : name);
-    insertLink.exec();
+    if (!insertLink.exec()) {
+        if (errorOut) *errorOut = QStringLiteral("asset_files row refused: %1").arg(insertLink.lastError().text());
+        return false;
+    }
     return true;
 }
 

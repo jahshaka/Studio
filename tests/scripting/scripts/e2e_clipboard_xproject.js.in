@@ -303,6 +303,27 @@ refuses(function (e) { e.files[0].oid = "NOTAHASH"; }, "a file whose oid is not 
 refuses(function (e) { e.files[0].ext = "../x"; }, "a file whose extension is a path");
 refuses(function (e) { e.parent = "not-a-guid"; }, "an entry whose parent id is not a guid");
 
+// ---- a reference OUTSIDE the closure is a hole, not a dangling guid --------
+// (verifier, 2026-09-10): a payload whose item names a texture the assets
+// block does not carry — a hand-edited envelope, a producer that dropped its
+// closure — used to land with the material slot pointing at nothing, and the
+// resolver never even looked the guid up. It is MISSING now, like any other
+// content this library cannot find.
+(function () {
+    var payload = JSON.parse(JSON.stringify(hostile));
+    payload.assets = {};
+    var orphan = runGuid("f");
+    payload.items[0].node.material.values.baseColorMap = orphan;
+    assert(clipboard.setText(JSON.stringify(payload)).valid, "a payload with a reference outside its closure is accepted as text");
+    var plan = clipboard.resolve();
+    assert(plan.missing.length === 1 && plan.missing[0].guid === orphan,
+           "the outside reference is reported MISSING: " + J(plan.missing));
+    var before = scene.nodes ? scene.nodes().length : -1;
+    var refusedPaste = clipboard.paste();
+    assert(refusedPaste.pasted.length === 0 && refusedPaste.skipped.length === 1,
+           "and the paste lands nothing without allowMissing (" + J(refusedPaste.skipped) + ")");
+})();
+
 // ---- a node paste aimed at the Assets page pins nothing -------------------
 //
 // Same rule from the other side: the items cannot land there, so the closure

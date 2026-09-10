@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/clipboardresolver.h"
+#include "io/clipboardformat.h"
 
 #include <QDir>
 #include <QFile>
@@ -31,6 +32,7 @@ For more information see the LICENSE file
 using clipboardformat::ClipAsset;
 using clipboardformat::ClipFile;
 using clipboardformat::Envelope;
+using clipboardformat::ClipItem;
 
 ClipboardResolver::ClipboardResolver(Database *database, Project *proj)
     : db(database), project(proj)
@@ -358,6 +360,55 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
         }
     }
 
+    // ---- references OUTSIDE the closure ----------------------------------
+    // An item may name a guid the envelope carries no closure entry for (a
+    // hand-edited payload, a producer that dropped its assets block). Nothing
+    // above visited it, so it is neither known nor missing — and it would land
+    // as a dangling guid, the exact D5 hole (verifier, 2026-09-10). Every
+    // needed guid the loop never saw is looked up here: in the catalog it is
+    // known; otherwise it is MISSING like any other unfindable content.
+    // Without a caller's restriction (clipboard.resolve describes the whole
+    // payload) the needed set is every guid the items reference, walked the
+    // same way the paste walks it.
+    QSet<QString> referenced;
+    if (!limitTo) {
+        for (const ClipItem &item : envelope.items) {
+            QStringList direct;
+            if (item.kind == QLatin1String(clipboardformat::kind::node()))
+                direct = assetrefs::collectAssetGuids(item.nodeObject());
+            else if (item.kind == QLatin1String(clipboardformat::kind::asset()))
+                direct << item.data.value(QStringLiteral("guid")).toString();
+            QStringList frontier = direct;
+            while (!frontier.isEmpty()) {
+                const QString g = frontier.takeFirst();
+                if (g.isEmpty() || referenced.contains(g)) continue;
+                referenced.insert(g);
+                const auto entry = envelope.assets.constFind(g);
+                if (entry != envelope.assets.constEnd()) frontier << entry->dependencies;
+            }
+        }
+    }
+    const QSet<QString> &needed = limitTo ? *limitTo : referenced;
+    {
+        for (const QString &needed : needed) {
+            if (envelope.assets.contains(needed)) continue;              // visited above
+            if (needed.isEmpty() || assetrefs::isReservedGuid(needed)) continue;
+            if (report.known.contains(needed) || report.imported.contains(needed)) continue;
+            bool alreadyMissing = false;
+            for (const auto &m : report.missing) if (m.guid == needed) { alreadyMissing = true; break; }
+            if (alreadyMissing) continue;
+            if (assetrefs::isGuidValue(needed) && !db->fetchAsset(needed).guid.isEmpty()) {
+                report.known.append(needed);
+                toPin.append(needed);
+                continue;
+            }
+            ClipboardMissing hole;
+            hole.guid = needed;
+            hole.neededBy = QStringLiteral("referenced by an item but absent from the payload's assets");
+            report.missing.append(hole);
+        }
+    }
+
     // ---- pins (outside undo, idempotent) -----------------------------------
     if (commit && project && !project->getProjectGuid().isEmpty()) {
         for (const QString &guid : toPin) {
@@ -391,11 +442,19 @@ bool ClipboardResolver::registerAsset(const ClipAsset &asset,
     // import, and a row with no project guid is a row the Assets page files
     // differently from every other imported asset.
     const QString projectGuid = project ? project->getProjectGuid() : QString();
-    db->createAssetEntry(asset.guid, safeFileName(asset.name), asset.typeId, asset.parent,
-                         projectGuid, QString(), QString(), QByteArray(),
-                         asset.properties, QByteArray(), asset.blob,
-                         asset.viewFilter >= 0 ? static_cast<AssetViewFilter>(asset.viewFilter)
-                                               : AssetViewFilter::AssetsView);
+    // The row's INSERT can fail (SQLITE_BUSY from another connection, SQLITE_FULL)
+    // while the object store and the commit still succeed — the dangling-guid
+    // class the review named; a refused row is a failed import, nothing else.
+    const QString row = db->createAssetEntry(
+        asset.guid, safeFileName(asset.name), asset.typeId, asset.parent,
+        projectGuid, QString(), QString(), QByteArray(),
+        asset.properties, QByteArray(), asset.blob,
+        asset.viewFilter >= 0 ? static_cast<AssetViewFilter>(asset.viewFilter)
+                              : AssetViewFilter::AssetsView);
+    if (row.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("the library refused the asset row");
+        return false;   // the transaction rolls back with tx
+    }
 
     for (const auto &pair : files) {
         QString oid;
