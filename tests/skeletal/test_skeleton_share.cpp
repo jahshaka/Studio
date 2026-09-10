@@ -19,6 +19,10 @@
 //      weight arrays and an index into its animation list, so replacing a node's
 //      instance — in EITHER direction — dangles every clip record it has. The
 //      engine drops a node's clips on both transitions.
+//   4. ...and on the THIRD transition, which the share cases did not cover and
+//      which crashed the owner's smoke run (SMOKE_FIX_SPEC_2026_09_11 §1.1): a
+//      node's OWN Item re-created under it by a material or mesh swap. Same
+//      dangling records, and the mirror's next act is the call that walks them.
 //
 // LINKS THE ENGINE ONLY, no document and no Qt, so it can also be built against
 // the sanitised backend (skeletal.share_asan): the traps above are
@@ -32,6 +36,7 @@
 
 #include "jahshaka/engine/Engine.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -219,6 +224,63 @@ int main()
         CHECK(scene->setClipStates(hair, &st, 1), "...and plays them");
         CHECK(scene->boneMatrices(hair, std::vector<float>(3 * 12).data(), 3),
               "...and still reads back a pose");
+    }
+
+    // ---- TRAP 3: a node's OWN Item is re-created while it holds clips ------
+    //
+    // THE 2026-09-11 SMOKE CRASH (SMOKE_FIX_SPEC §1.1). A material or mesh swap
+    // on a rigged node is an everyday editor event and it goes detachItem ->
+    // destroyItem -> createItem: the SkeletonInstance dies with the Item, and
+    // every ClipRec the node holds caches a raw float* into that instance's
+    // per-animation weight arrays plus an INDEX into its animation list. The
+    // mirror's very next act after a re-attach is
+    // `setClipStates(node, nullptr, 0)` — "disable everything before
+    // re-attaching" (scenemirror.cpp) — which used to write 0 through every one
+    // of those dangling pointers and then index animation N of a list with none
+    // in it: a use-after-free write and a std::vector assert, from a second
+    // rigged copy of a Mixamo character. Neither the follower erasures nor
+    // releaseNode covered this direction.
+    {
+        const NodeId solo = scene->createNode();
+        const MeshId soloMesh = scene->createMesh(quad(3));
+        CHECK(scene->attachSkinnedMesh(solo, soloMesh, mat, rig), "a lone rigged node");
+        const ClipDesc c = oneClip("share/soloclip", 1);
+        CHECK(scene->attachClips(solo, &c, 1), "...with a clip");
+        ClipState st; st.name = "share/soloclip"; st.enabled = true; st.weight = 1.0f;
+        CHECK(scene->setClipStates(solo, &st, 1), "...playing");
+
+        CHECK(scene->attachSkinnedMesh(solo, soloMesh, mat, rig),
+              "its renderable is re-created (a material swap on a PLAYING rig)");
+        CHECK(scene->clipNames(solo).empty(),
+              "S16: the clips went with the instance their records pointed into");
+        // THE CALL THAT ABORTED. Nothing to disable is not an error.
+        CHECK(scene->setClipStates(solo, nullptr, 0),
+              "S16: the mirror's precautionary disable-everything is a silent no-op");
+        CHECK(!scene->setClipStates(solo, &st, 1),
+              "...and a state naming a clip that is no longer attached is refused, not indexed");
+
+        // ...and the host re-attaches, which is exactly what the mirror does
+        // next (its idempotency set is empty again, so the clips really come
+        // back rather than being skipped).
+        CHECK(scene->attachClips(solo, &c, 1), "the clips re-attach onto the NEW instance");
+        CHECK(scene->clipNames(solo).size() == 1, "...and the node has them again");
+        CHECK(scene->setClipStates(solo, &st, 1), "...and drives them");
+        const auto w = scene->clipBoneWeights(solo, "share/soloclip");
+        CHECK(w.size() == 3 && std::fabs(w[1] - 1.0f) < 1e-5f,
+              "...at full weight on the bone it animates — the pose is driven again");
+
+        // A manual-bone OVERRIDE is host intent, not instance state: it must
+        // survive the swap (the clips do not).
+        CHECK(scene->setBoneManual(solo, "mid", true),
+              "a manual-bone override on the very bone the clip animates");
+        CHECK(scene->attachSkinnedMesh(solo, soloMesh, mat, rig), "...and another swap");
+        CHECK(scene->attachClips(solo, &c, 1), "clips again");
+        CHECK(scene->setClipStates(solo, &st, 1), "...driven again");
+        const auto w2 = scene->clipBoneWeights(solo, "share/soloclip");
+        CHECK(w2.size() == 3 && std::fabs(w2[1]) < 1e-5f,
+              "the manual-bone override survived the re-attach (the bone is still the host's)");
+        CHECK(scene->setBoneManual(solo, "mid", false), "...and can be released");
+        scene->removeNode(solo);
     }
 
     // ---- the master goes away entirely ------------------------------------

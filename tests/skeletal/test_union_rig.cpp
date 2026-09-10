@@ -347,6 +347,55 @@ int main(int argc, char **argv)
             CHECK(ms->rigStats().instances == 1, "one instance again");
         }
 
+        // ---- a piece LEAVES the character (S16, the 2026-09-11 smoke crash)
+        //
+        // The union is derived from the pieces that are THERE, so a piece
+        // joining or leaving can change the rig id — and when it does, the
+        // epoch moves and every surviving piece re-attaches (scenemirror.cpp's
+        // `rigStale`). That is a new Item and a NEW SkeletonInstance under a
+        // node whose clips are attached and playing, and the mirror's next act
+        // is a state push. The owner met it as a SIGABRT inside
+        // std::vector<SkeletonAnimation>::operator[] after adding a second
+        // rigged copy of a Mixamo character and removing one of them
+        // (SMOKE_FIX_SPEC_2026_09_11 §1.1): the engine was walking clip records
+        // that pointed into the instance the re-attach had just destroyed.
+        //
+        // eyeRMesh is the piece to remove: it is the only carrier of `eyeR`, so
+        // the union really does change (drop `hair` instead and the union is
+        // identical, the epoch never moves, and nothing re-attaches).
+        {
+            const iris::MeshNodePtr leaving = hero.pieces[3];
+            CHECK(leaving->getName() == QLatin1String("eyeRMesh"),
+                  "the piece about to leave is the sole carrier of a union bone");
+            leaving->removeFromParent();
+            hero.pieces.removeAt(3);
+
+            doc->updateSceneAnimation(0.6f);
+            mirror.sync();          // the union changed -> every piece re-attaches
+            doc->updateSceneAnimation(0.7f);
+            mirror.sync();          // ...and the clips land on the NEW instances
+
+            size_t riggedNow = 0, withClips = 0;
+            for (const iris::MeshNodePtr &piece : hero.pieces) {
+                const NodeId n = mirror.engineNode(piece.data());
+                if (!n || !ms->hasSkeleton(n)) continue;
+                ++riggedNow;
+                if (!ms->clipNames(n).empty()) ++withClips;
+            }
+            CHECK(riggedNow == size_t(hero.pieces.size()),
+                  "S16: the character survived the piece leaving, every piece still rigged");
+            CHECK(withClips >= 1,
+                  "S16: its clips are attached to the LIVE instances, not the destroyed one");
+            CHECK(ms->boneNames(mirror.engineNode(hero.pieces[0].data())).size()
+                      == multipiece::bones().size() - 1,
+                  "...on the NEW union rig (one bone fewer), which is what forced the re-attach");
+            const quint64 before3 = mirror.clipStatePushes();
+            doc->updateSceneAnimation(0.8f);
+            mirror.sync();
+            CHECK(mirror.clipStatePushes() - before3 >= 1,
+                  "...and the character is still being driven frame by frame");
+        }
+
         mirror.setSource(nullptr);
         dg.engine()->destroyScene(ms);
     }
