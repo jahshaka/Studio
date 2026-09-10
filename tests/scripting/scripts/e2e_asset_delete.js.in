@@ -191,11 +191,6 @@ assert(assets.remove(dr, { force: true }) === true, "cleaned up");
 // never see. It must get its own, visible row instead — sharing the same CAS
 // object, so it costs no bytes.
 var GLB = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
-// The suite's library survives between ctest runs: take any earlier run's
-// rows for this content out for good first, so the assertions below are about
-// this run.
-assert(assets.remove(assets.importFile(GLB), { keepShared: false, force: true }) === true,
-       "any earlier run's model rows removed");
 var model = assets.importFile(GLB);
 assert(model.length > 10, "the textured model imported -> " + model);
 var textures = assets.dependencies(model).filter(function (g) {
@@ -226,6 +221,14 @@ assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === s
        "... and it really IS a library tile the user can see");
 assert(assets.metadata(member).listed === false, "... while the member stays unlisted");
 assert(assets.remove(standalone, { force: true }) === true, "cleaned up");
+// AND THE MODEL GOES TOO. This suite's library HOME survives between ctest
+// runs, so anything left pinned accumulates a set of rows per run — and an
+// unlisted member is a row nothing lists and nothing else would ever clean up.
+// force + keepShared:false takes the model, its members and their pins.
+assert(assets.remove(model, { keepShared: false, force: true }) === true,
+       "the model and its members are removed for good (this home is reused)");
+assert(assets.list({ scope: "project" }).filter(function (a) { return a.guid === model; }).length === 0,
+       "... and the project no longer pins it");
 
 // ---- removeFromProject takes the AUTO-MINTED COMPANION with the image ------
 //
