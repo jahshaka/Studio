@@ -89,7 +89,7 @@ public:
     /// hands them over.
     /// `prewarm` (optional) carries the model files a worker thread already
     /// parsed (irisgl/import/meshprewarm.h) — the reader then builds meshes
-    /// out of ready aiScenes instead of running assimp on this thread.
+    /// out of ready iris::SceneSource parses instead of running the importer on this thread.
     iris::ScenePtr readProjectScene(EditorData **editorData,
                                     iris::PostProcessManagerPtr &postMan,
                                     const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());

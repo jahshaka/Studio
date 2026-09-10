@@ -30,7 +30,6 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
 #include "services/scenefolders.h"
-#include "io/assetmanager.h"
 #include "data/guidmanager.h"
 
 #include "data/constants.h"

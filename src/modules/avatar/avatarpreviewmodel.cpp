@@ -608,7 +608,7 @@ bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, Clip
         return fail(QStringLiteral("no such file: %1").arg(path));
 
     // NOT AssetHelper/loadAsSceneFragment: those need a mesh and would build a
-    // second character. An animation file is parsed for its aiScene and read
+    // second character. An animation file is parsed (iris::ClipFileInfo) and read
     // for clips only — which is also the only way an ANIMATION-ONLY export
     // (zero meshes) can be read at all, since every mesh loader rejects those.
     //

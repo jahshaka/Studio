@@ -11,7 +11,7 @@
 // disk was, and just as silently.
 //
 // This suite drives the overload the way those callers do: parse the file into
-// an Assimp::Importer that OUTLIVES the call (an AssimpObject holds its scene),
+// an Assimp::Importer that OUTLIVES the call (iris::SceneSource holds its scene the same way),
 // then hand over the aiScene. Document-only — no engine, no window.
 #include <QGuiApplication>
 #include <QTemporaryDir>
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
     // ---- the rig, through the aiScene overload ----------------------------
     {
         // The importer must outlive the call: the aiScene is borrowed, exactly
-        // as AssimpObject lends its own.
+        // as iris::SceneSource lends its own.
         Assimp::Importer importer;
         const aiScene *scene = importer.ReadFile(kRig.toStdString().c_str(),
                                                  iris::ImportFlags::Canonical);
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
         CHECK(scene->mNumMeshes == 1 && scene->mMeshes[0]->mNumBones > 0,
               "it really is a SKINNED SINGLE-MESH file (the case that was broken)");
 
-        // AssetWidget passes an EMPTY path — the aiScene already carries
+        // The pipeline passes an EMPTY path — the aiScene already carries
         // everything — so that is what is exercised here.
         auto node = iris::MeshNode::loadAsSceneFragment(QString(), scene, makeMat, extract.path());
         CHECK(!node.isNull(), "the fragment loads");
