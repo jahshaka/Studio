@@ -1,0 +1,94 @@
+// scripting.e2e.clipboard_assets — LIBRARY TILES ON THE CLIPBOARD
+// (CLIPBOARD_SPEC P1, §2.2 `asset` items + §3.4 step 2).
+//
+// The thing Unreal's clipboard cannot do: a copied reference can carry its
+// BYTES. Copying a library tile puts the catalog row (name, type, placement,
+// its stored JSON) plus the file contents in one line of text; pasting it into
+// a library that has never seen that guid REGISTERS IT UNDER THE SAME GUID,
+// because an asset guid is identity (ASSET_PIPELINE invariant I1) — the same
+// texture pasted into five libraries is one asset, not five.
+//
+// The "library that has never seen it" is built the only way one process can:
+// the row is DELETED from the catalog and then pasted back. What that exercises
+// is exactly the unknown-guid path — the resolver looks the guid up, does not
+// find it, and registers it from the payload's own bytes.
+//
+// Document verbs only -> --headless. Throwing exits non-zero.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function storeGuids() {
+    return assets.list({ scope: "store" }).map(function (a) { return a.guid; });
+}
+
+var projectGuid = project.create("Clipboard Assets " + Date.now());
+assert(projectGuid.length > 10, "project created");
+
+var tex = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(typeof tex === "string" && tex.length > 10, "tiny.png imported");
+var before = assets.metadata(tex);
+assert(before.type === "texture", "it is a texture row");
+
+// ---- copy the tile --------------------------------------------------------
+var copied = clipboard.copyAssets([tex]);
+console.log("copyAssets -> " + J(copied));
+assert(copied.items === 1, "one tile copied");
+assert(copied.assets >= 1, "with its closure");
+assert(copied.inlined >= 1, "and its bytes inline");
+
+var payload = JSON.parse(clipboard.text());
+assert(payload.items[0].kind === "asset", "the item is an `asset` item");
+assert(payload.items[0].guid === tex, "naming the guid");
+assert(payload.assets[tex].files[0].inline.length > 0, "and the closure carries the bytes");
+assert(payload.assets[tex].viewFilter >= 0,
+       "with the row's VIEW FILTER — a paste must not turn a member row into a library tile");
+
+var described = clipboard.contents();
+assert(described.items[0].kind === "asset" && described.items[0].name === "tiny.png",
+       "contents() describes the tile: " + J(described.items));
+
+// ---- a library that has never seen this guid ------------------------------
+assert(assets.remove(tex), "the row is deleted from the library");
+assert(storeGuids().indexOf(tex) < 0, "and it is gone: " + J(storeGuids()));
+
+var plan = clipboard.resolve();
+assert(plan.known.indexOf(tex) < 0, "resolve(): the guid is no longer known here");
+assert(plan.importable.indexOf(tex) >= 0, "but it IS importable — the payload has the bytes");
+assert(plan.missing.length === 0, "so nothing is missing");
+
+// NO SIDE EFFECTS FROM A REFUSED PASTE (spec §3.1). Pasting a library tile
+// into the EDITOR is a refusal — and a refusal must not import the asset on the
+// way to saying no, which is exactly what it did before the plan/apply split.
+var wrongFirst = clipboard.paste();          // target defaults to the tree
+assert(wrongFirst.pasted.length === 0, "pasting a tile into the editor creates no objects");
+assert(wrongFirst.imported.length === 0 && wrongFirst.pinned.length === 0,
+       "and imports NOTHING: " + J(wrongFirst));
+assert(storeGuids().indexOf(tex) < 0,
+       "the library is untouched by the refusal: " + J(storeGuids()));
+assert(wrongFirst.skipped.length === 1 && wrongFirst.skipped[0].kind === "asset",
+       "and it says where tiles paste: " + J(wrongFirst.skipped));
+
+var pasted = clipboard.paste({ target: "assets" });
+console.log("paste into the library -> " + J(pasted));
+assert(pasted.imported.indexOf(tex) >= 0, "the asset was imported UNDER ITS ORIGINAL GUID");
+assert(pasted.pasted.length === 0, "a tile paste creates no scene objects");
+var after = assets.metadata(tex);
+assert(after.type === "texture", "the row is back, with its type");
+assert(after.name === before.name, "and its name: " + after.name);
+assert(storeGuids().indexOf(tex) >= 0, "and it lists in the library again");
+
+// The bytes really came back: a scene material can bind the guid and resolve it.
+var cube = scene.addPrimitive("cube");
+assert(material.set(cube, { baseColorMap: tex }), "the re-imported texture binds to a material");
+assert(("" + material.get(cube).baseColorMap).length > 0, "and resolves to real bytes");
+
+// ---- idempotence: pasting the same tile twice is one asset ---------------
+var twice = clipboard.paste({ target: "assets" });
+assert(twice.imported.length === 0, "a second paste imports nothing — the guid is known now");
+assert(storeGuids().filter(function (g) { return g === tex; }).length === 1,
+       "and the library still holds exactly one row for it");
+
+console.log("scripting.e2e.clipboard_assets: OK");

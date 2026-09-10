@@ -1089,3 +1089,41 @@ set_tests_properties(scripting.e2e.reflection_map PROPERTIES
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(scripting.e2e.video_texture scripting.e2e.animation_assets scripting.e2e.animation_assets_import scripting.e2e.avatar_assets scripting.e2e.glb_textures scripting.e2e.memory scripting.e2e.scene_bounds scripting.engine)
+# --- THE DEEP CLIPBOARD (SPECS/CLIPBOARD_SPEC.md P0 + P1) --------------------
+#
+# clipboard        the payload and the paste: one self-identifying TEXT envelope
+#                  on the system clipboard, fresh guids + the Cube->Cube2 rule,
+#                  cut, the editor.* aliases onto the same clipboard, and the
+#                  tolerance rules (an unknown item kind is skipped with a
+#                  reason; junk is refused without clobbering the payload).
+# clipboard_xproject  the CLOSURE and its RESOLUTION: a textured cube copied in
+#                  project A and pasted into project B pins the texture as a
+#                  binding; a payload rewritten in JavaScript to carry only the
+#                  content id still resolves out of this machine's store
+#                  (§3.4 step 3); an unfindable oid is MISSING, the item that
+#                  needs it is refused, and allowMissing opts into Unreal's
+#                  paste-with-holes.
+# clipboard_assets library TILES: the row + its bytes travel, and pasting into a
+#                  library that does not know the guid registers it UNDER THAT
+#                  GUID (identity, invariant I1) — idempotently.
+#
+# All three are document verbs only -> --headless, no display, no GPU.
+foreach(_clip clipboard_xproject clipboard_assets)
+    configure_file(scripts/e2e_${_clip}.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js @ONLY)
+endforeach()
+foreach(_clip clipboard clipboard_xproject clipboard_assets)
+    set(_clip_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${_clip})
+    file(MAKE_DIRECTORY ${_clip_home}/run)
+    if(_clip STREQUAL "clipboard")
+        set(_clip_script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard.js)
+    else()
+        set(_clip_script ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js)
+    endif()
+    add_test(NAME scripting.e2e.${_clip}
+             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${_clip_script} --headless
+             WORKING_DIRECTORY ${_clip_home}/run)
+    set_tests_properties(scripting.e2e.${_clip} PROPERTIES
+        ENVIRONMENT "HOME=${_clip_home};JAHSHAKA_DATA_ROOT=${_clip_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
+        LABELS "scripting" TIMEOUT 300)
+    jah_no_display(scripting.e2e.${_clip})
+endforeach()

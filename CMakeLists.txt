@@ -200,6 +200,7 @@ set(SRCS
     src/scripting/modules/logapi.cpp
     src/scripting/modules/textureapi.cpp
     src/scripting/modules/videoapi.cpp
+    src/scripting/modules/clipboardapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishapi.cpp
@@ -277,6 +278,12 @@ set(SRCS
     src/services/assetservice.h
     src/services/projectservice.cpp
     src/services/sceneeditservice.cpp
+    src/services/clipboardservice.cpp
+    src/services/clipboardbackend.cpp
+    src/services/clipboardresolver.cpp
+    src/services/assetclosure.cpp
+    src/io/assetrefs.cpp
+    src/io/clipboardformat.cpp
     src/services/thumbnailservice.cpp
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
@@ -466,6 +473,7 @@ set(HEADERS
     src/scripting/modules/sceneapi.h
     src/scripting/modules/nodeapi.h
     src/scripting/modules/editorapi.h
+    src/scripting/modules/clipboardapi.h
     src/scripting/modules/appapi.h
     src/scripting/modules/desktopapi.h
     src/scripting/modules/worldapi.h
@@ -532,6 +540,12 @@ set(HEADERS
     src/services/projectservice.h
     src/services/imagematerial.h
     src/services/sceneeditservice.h
+    src/services/clipboardservice.h
+    src/services/clipboardbackend.h
+    src/services/clipboardresolver.h
+    src/services/assetclosure.h
+    src/io/assetrefs.h
+    src/io/clipboardformat.h
     src/services/thumbnailservice.h
     src/services/undoservice.h
     src/services/selectionservice.h

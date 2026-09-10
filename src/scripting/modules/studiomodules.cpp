@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include "scripting/scriptengine.h"
 #include "scripting/modules/animapi.h"
+#include "scripting/modules/clipboardapi.h"
 #include "scripting/modules/appapi.h"
 #include "scripting/modules/assetsapi.h"
 #include "scripting/modules/cameraapi.h"
@@ -58,6 +59,10 @@ void registerStudioModules(ScriptEngine &engine)
     // unchanged.
     engine.addModule(new TextureApi(host));
     engine.addModule(new VideoApi(host));
+    // The deep clipboard (CLIPBOARD_SPEC §5). Appended for the same reason
+    // CameraApi, InputApi and LogApi were: the registry order every generated
+    // doc and tool schema already has stays unchanged.
+    engine.addModule(new ClipboardApi(host));
     // The materials/material/graph verbs are the materials module's — the
     // shell's module loop calls MaterialsModule::registerApi right after this
     // (audit §6.3.4), keeping the registry order unchanged.

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <algorithm>
 
 #include "services/assetcas.h"
+#include "services/assetclosure.h"
 #include "services/assetstorepaths.h"
 
 #include <QBuffer>
@@ -40,7 +41,8 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/environment.h"
 
-namespace { void regenerateGuids(const iris::SceneNodePtr &root); }
+namespace { void regenerateGuids(const iris::SceneNodePtr &root,
+                                 QHash<QString, QString> *guidMapOut = nullptr); }
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -837,13 +839,14 @@ namespace {
 /// defect for years, from an add path that reused an asset's guid as a node's,
 /// and it had to be re-authored to fix it.
 ///
-/// Same rule and same remap as iris::SceneNode::duplicate: an owner INSIDE the
-/// copied subtree becomes the copy's own, an owner outside it keeps its guid
-/// (the "second camera on the same character" case). Physics constraints and a
-/// camera's focus target also name nodes by guid and are NOT remapped here —
-/// duplicate() does not remap them either, and fixing that is one change for
-/// both paths rather than a divergence introduced by this one.
-void regenerateGuids(const iris::SceneNodePtr &root)
+/// Same rule and THE SAME REMAP as iris::SceneNode::duplicate — literally the
+/// same function since CLIPBOARD_SPEC §3.2: a reference INSIDE the copied
+/// subtree becomes the copy's own, a reference outside it keeps its guid (the
+/// "second camera on the same character" case). It covers socket owners,
+/// physics constraint endpoints and a camera's focus target; the last two were
+/// the recorded gap, open on BOTH paths, and closing it in the document meant
+/// Duplicate and Paste could not drift apart afterwards.
+void regenerateGuids(const iris::SceneNodePtr &root, QHash<QString, QString> *guidMapOut)
 {
     QHash<QString, QString> guidMap;
     std::function<void(const iris::SceneNodePtr &)> assign = [&](const iris::SceneNodePtr &n) {
@@ -855,24 +858,16 @@ void regenerateGuids(const iris::SceneNodePtr &root)
             if (iris::SceneNode *c = n->childAt(i)) assign(c->sharedFromThis());
     };
     assign(root);
-
-    std::function<void(const iris::SceneNodePtr &)> remap = [&](const iris::SceneNodePtr &n) {
-        if (!n->socketOwnerGuid.isEmpty()) {
-            const auto it = guidMap.constFind(n->socketOwnerGuid);
-            if (it != guidMap.constEnd()) n->socketOwnerGuid = it.value();
-        }
-        const int kids = n->childCount();
-        for (int i = 0; i < kids; ++i)
-            if (iris::SceneNode *c = n->childAt(i)) remap(c->sharedFromThis());
-    };
-    remap(root);
+    root->remapNodeReferences(guidMap);
+    if (guidMapOut) guidMapOut->insert(guidMap);
 }
 
 } // namespace
 
 iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragment,
                                                    iris::SceneNodePtr parent,
-                                                   int index)
+                                                   int index,
+                                                   QHash<QString, QString> *guidMapOut)
 {
     auto sc = scene();
     if (!sc) return iris::SceneNodePtr();
@@ -881,7 +876,7 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     // A PASTE, not a restore: fresh identity. (Undo does not come through here
     // — it calls rebuildFragment directly, because restoring a deleted node
     // must give back the guid the rest of the document still refers to.)
-    regenerateGuids(node);
+    regenerateGuids(node, guidMapOut);
     if (!parent) parent = sc->getRootNode();
     // ...and a fresh NAME when the one it carries is already taken under that
     // parent — the same rule Duplicate uses, because a paste is a copy too
@@ -1031,61 +1026,6 @@ SceneEditService::duplicateNodes(const QList<iris::SceneNodePtr> &nodes)
     copies.append(SelectionService::sortDocumentOrder(rest));
     if (selection && !copies.isEmpty()) selection->select(copies);
     return copies;
-}
-
-int SceneEditService::copyNodes(const QList<iris::SceneNodePtr> &nodes)
-{
-    // The World root is not a copyable thing (D6) — copying it would put a
-    // second scene inside the scene — and it has to leave BEFORE the reduction
-    // or it would take every other member with it.
-    QList<iris::SceneNodePtr> input;
-    for (const auto &node : nodes) if (!!node && !node->isRootNode()) input.append(node);
-
-    QList<SceneFragment> fragments;
-    for (const auto &node : effectiveSet(input)) {
-        SceneFragment fragment = captureFragment(node);
-        if (!fragment.isNull()) fragments.append(fragment);
-    }
-    // An empty copy leaves the previous clipboard alone: Ctrl+C with nothing
-    // selected must not throw away what you copied a moment ago.
-    if (fragments.isEmpty()) return 0;
-    mClipboard = fragments;
-    return mClipboard.size();
-}
-
-QList<iris::SceneNodePtr> SceneEditService::paste()
-{
-    QList<iris::SceneNodePtr> pasted;
-    auto sc = scene();
-    if (!sc || mClipboard.isEmpty()) return pasted;
-
-    // D7 (a): beside the primary — its parent, its sibling index + 1 — exactly
-    // where Duplicate puts a copy. Root when there is no selection (or when the
-    // primary IS the root: a paste "beside the world" is a paste into it).
-    iris::SceneNodePtr parent = sc->getRootNode();
-    int index = -1;
-    if (selection) {
-        if (auto primary = selection->selected()) {
-            if (!primary->isRootNode() && !!primary->getParent()) {
-                parent = primary->getParent();
-                const int after = primary->siblingIndex();
-                index = after >= 0 ? after + 1 : -1;
-            }
-        }
-    }
-
-    const bool macro = mClipboard.size() > 1 && undo && undo->stack();
-    if (macro) undo->stack()->beginMacro(QObject::tr("Paste %1 objects").arg(mClipboard.size()));
-    for (const SceneFragment &fragment : mClipboard) {
-        auto node = insertFragment(fragment, parent, index);
-        if (!node) continue;
-        pasted.append(node);
-        if (index >= 0) ++index;      // keep the clipboard's order in the tree
-    }
-    if (macro) undo->stack()->endMacro();
-
-    if (selection && !pasted.isEmpty()) selection->select(pasted);
-    return pasted;
 }
 
 namespace {
@@ -1422,8 +1362,24 @@ void SceneEditService::exportNodeTo(const iris::SceneNodePtr &node, ModelTypes m
     }
     manifest.close();
 
-    // Collect all assets that will be exported and copy these to the temporary directory
+    // Collect all assets that will be exported and copy these to the temporary directory.
+    //
+    // TWO WALKS, ON PURPOSE (CLIPBOARD_SPEC §6.6). getChildGuids reads the
+    // subtree's NODE guids AS asset guids — an identity that holds for a node
+    // added straight from the library and that a PASTE or a DUPLICATE breaks by
+    // design (regenerateGuids mints fresh node guids). So a pasted model used to
+    // export with NO dependencies at all: a .jaf with a scene blob and an empty
+    // assets/ dir, which imports as an invisible node. The key-aware closure
+    // (io/assetrefs.h — the same table the clipboard uses) reads the REFERENCES
+    // out of the node object instead, which is what a dependency actually is.
+    // The legacy walk stays because it is still right for library-added nodes,
+    // where the row itself is the asset; the union is what has to travel.
     QStringList assetGuids = AssetHelper::getChildGuids(node);
+    const SceneFragment exportFragment = captureFragment(node);
+    if (!exportFragment.isNull()) {
+        for (const QString &guid : assetclosure::forNodes({ exportFragment.node }, db))
+            if (!assetGuids.contains(guid)) assetGuids.append(guid);
+    }
 
     for (const auto &guid : assetGuids) {
         for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {

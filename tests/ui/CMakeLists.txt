@@ -569,6 +569,10 @@ add_executable(test_tree_multiselect
     test_tree_multiselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # The outliner's clipboard rows ask the envelope codec what the payload
+    # holds before offering a Paste row (CLIPBOARD_SPEC §3.1). A leaf: QJson
+    # plus QString, no database, no service.
+    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/reparentscenenodecommand.cpp

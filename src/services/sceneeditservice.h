@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QHash>
 #include <QList>
 
 #include "irisgl/irisglfwd.h"
@@ -248,18 +249,17 @@ public:
     /// copy lands beside its own original rather than shifting the next one.
     QList<iris::SceneNodePtr> duplicateNodes(const QList<iris::SceneNodePtr> &nodes);
 
-    /// Captures the effective set into the in-app clipboard (D9 (a)) as scene
-    /// fragments — the same shape node.serialize returns. NOT an undo entry.
-    /// Returns how many fragments were stored.
-    int copyNodes(const QList<iris::SceneNodePtr> &nodes);
-
-    /// Pastes the clipboard beside the PRIMARY (D7 (a)): same parent, sibling
-    /// index + 1, local transform kept; the scene root when nothing is
-    /// selected. One undo step; the pasted roots become the selection.
-    QList<iris::SceneNodePtr> paste();
-
-    /// The in-app clipboard's fragments, in the order they were copied.
-    const QList<SceneFragment> &clipboard() const { return mClipboard; }
+    // COPY / PASTE LIVE IN ClipboardService NOW (CLIPBOARD_SPEC D3 b).
+    //
+    // What used to be here — copyNodes(set), paste(), clipboard(), and the
+    // QList<SceneFragment> behind them — was an IN-APP clipboard, invisible to
+    // a second instance and to every other space in the app. It is deleted,
+    // not wrapped: the system clipboard is the one truth now, and the shell,
+    // the verbs and the tree menu all call services/clipboardservice.h. What
+    // stays here is the NODE DOMAIN's implementation, which the clipboard uses
+    // and does not own: captureFragment / rebuildFragment / insertFragment,
+    // the D7 placement inside insertFragment, and the fresh-guid + naming
+    // rules a paste applies.
 
     // ---- document fragments (SPECS/SCENEGRAPH_SPEC.md §3 step 4 / v1.5) -----
     //
@@ -283,9 +283,18 @@ public:
     /// Rebuilds a fragment and attaches it — undoable, as one "Paste" entry,
     /// through the same AddSceneNodeCommand every other add uses. `parent` null
     /// means the scene root; `index` -1 appends. Returns the new subtree's root.
+    ///
+    /// `guidMapOut`, when given, receives this fragment's OLD guid -> NEW guid
+    /// map. A caller pasting SEVERAL fragments needs it: each fragment is
+    /// re-pointed against its own subtree only (a reference outside the copy
+    /// keeps its guid, which is the "second camera on the same character"
+    /// rule), so a camera in one fragment that tracks a node in ANOTHER
+    /// fragment of the same copy still names the original until the caller
+    /// re-points the whole set with the combined map.
     iris::SceneNodePtr insertFragment(const SceneFragment &fragment,
                                       iris::SceneNodePtr parent,
-                                      int index = -1);
+                                      int index = -1,
+                                      QHash<QString, QString> *guidMapOut = nullptr);
 
     /// Applies a material preset to the selection. The selection may be a
     /// single mesh OR a container (an imported model roots at an Empty — the
@@ -348,11 +357,6 @@ private:
     IEditorViewport *viewport;
     std::function<iris::ScenePtr()> sceneProvider;
 
-    /// The editor clipboard (D9 (a)): in-app, never the system clipboard — a
-    /// scene fragment on text/plain would land in every text field the user
-    /// Ctrl+Vs into, and a fragment is only meaningful against this database
-    /// (assets travel as guids).
-    QList<SceneFragment> mClipboard;
 };
 
 #endif // SCENEEDITSERVICE_H

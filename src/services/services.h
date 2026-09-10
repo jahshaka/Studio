@@ -34,6 +34,7 @@ class PlaybackService;
 class PlayerService;
 class ProjectService;
 class SceneEditService;
+class ClipboardService;
 class ThumbnailService;
 class AssetService;
 class PerfSampler;
@@ -51,6 +52,9 @@ struct StudioServices
     PlayerService    *player     = nullptr;
     ProjectService   *project    = nullptr;
     SceneEditService *sceneEdit  = nullptr;
+    /// THE clipboard (CLIPBOARD_SPEC D3 b) — one component for every space,
+    /// over the system clipboard. Null in hosts with no library.
+    ClipboardService *clipboard  = nullptr;
     ThumbnailService *thumbnails = nullptr;
     AssetService     *assets     = nullptr;
     /// The session log's periodic performance sampler (SESSION_LOG_SPEC §8-R3).
