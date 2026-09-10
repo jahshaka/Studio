@@ -223,7 +223,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "companion PBR material that ADDING IT MINTED — recognised by the stamp the mint writes, "
           "never by its shape, so a material you authored on the same image is never touched — as "
           "long as this project pins it, nothing else depends on it (an object it is applied to keeps "
-          "it) and it has not since been given a second map. The library row stays. "
+          "it) and it has not since been given a second map. "
           "The library row, its content and "
           "every other project's pin are untouched. A row that was already removed from the "
           "library (assets.remove on a pinned asset) and has just lost its LAST pin is deleted "
