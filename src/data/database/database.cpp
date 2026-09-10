@@ -3210,18 +3210,33 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
 		// For every folder, fetch assets inside
 		for (const auto &asset : fetchChildFolderAssets(folder)) {
+			// THE PIN LAW, member by member (code review 2026-09-10 — this
+			// path never learned it): an asset a project still pins is
+			// UNLISTED by deleteAsset, not deleted, and then NOTHING else
+			// about it may go — not its FILES (the caller unlinks whatever
+			// this returns, and the pinned project still renders them) and
+			// not its dependency EDGES (that project resolves its textures
+			// through them). Identical to deleteAssetAndDependencies.
+			const bool unlisted = countAssetPins(asset) > 0;
+
 			// For every asset, find their dependencies
-			for (const auto &dep : fetchAssetAndDependencies(asset)) {
-				files.append(dep);
+			if (!unlisted) {
+				for (const auto &dep : fetchAssetAndDependencies(asset)) {
+					files.append(dep);
+				}
 			}
 
 			allOk = deleteAsset(asset) && allOk;
+			if (unlisted) continue;
 
             for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
                 allOk = deleteDependency(asset, dep) && allOk;
             }
 		}
 
+		// The FOLDER goes either way: it is a library organisation row, and a
+		// pinned member survives as an unlisted row that resolves by guid —
+		// nothing about a project's use of it lives in the folder tree.
 		allOk = deleteFolder(folder) && allOk;
 	}
 

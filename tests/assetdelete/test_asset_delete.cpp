@@ -35,6 +35,9 @@
 //      reaping of an unlisted row whose last pinning project is deleted.
 //
 // Plus the library-delete CODE REVIEW follow-ups (MASTER_QUEUE §26, item 5b):
+//  12. deleteFolderAndDependencies obeys the pin law like its asset twin: a
+//      pinned member is unlisted, its files are NOT handed back for unlink
+//      and its dependency edges stay.
 //  13. deleteProject ROLLS BACK when an orphan reap fails (it used to drop
 //      the result and commit, leaving the project gone and an invisible,
 //      unpinned, undeletable row behind).
@@ -494,6 +497,55 @@ int main(int argc, char **argv)
         CHECK(countWhere("asset_files", "asset_guid", shared) == 0,
               "... with its content mapping, so assets.gc can reclaim the bytes");
         CHECK(!db.setAssetListed(shared, true), "setAssetListed on an unknown guid is FALSE");
+    }
+
+    // --- 12. deleteFolderAndDependencies obeys the pin law ------------------
+    //
+    // The folder delete never learned it (code review 2026-09-10): it deleted
+    // a pinned member's dependency edges and handed its file names back to the
+    // caller to UNLINK, so removing a library folder took the bytes out from
+    // under every project that pinned what was in it.
+    {
+        conn = QSqlDatabase::database();
+        const QString folderGuid = "folder-pin-law";
+        CHECK(db.createFolder("Pinned Folder", QString(), folderGuid, QString()),
+              "library folder created");
+
+        const QString inFolder = db.createAssetEntry(
+            "guid-in-folder", "infolder.png", static_cast<int>(ModelTypes::Texture),
+            folderGuid, QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        const QString folderDep = db.createAssetEntry(
+            "guid-folder-dep", "folderdep.png", static_cast<int>(ModelTypes::Texture),
+            folderGuid, QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString inFolderOid, fe;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, inFolder, "source", "infolder.png",
+                                   &inFolderOid, &fe), "the folder member has content");
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Texture),
+                                  static_cast<int>(ModelTypes::Texture),
+                                  inFolder, folderDep, QString()),
+              "the folder member has a dependency edge");
+        CHECK(AssetCas::writePin(conn, projectGuid, inFolder, inFolderOid),
+              "a project pins the folder member");
+
+        bool folderOk = false;
+        const QStringList unlinkList = db.deleteFolderAndDependencies(folderGuid, &folderOk);
+        CHECK(folderOk, "deleteFolderAndDependencies reports success");
+        CHECK(countWhere("assets", "guid", inFolder) == 1,
+              "the PINNED folder member survives as a row");
+        CHECK(!db.isAssetListed(inFolder), "... unlisted");
+        CHECK(countWhere("asset_files", "asset_guid", inFolder) == 1,
+              "... its content mapping is intact");
+        CHECK(countWhere("project_assets", "asset_guid", inFolder) == 1, "... so is its pin");
+        CHECK(countWhere("dependencies", "depender", inFolder) == 1,
+              "... and its dependency EDGE stays (the project resolves through it)");
+        CHECK(!unlinkList.contains("infolder.png"),
+              "... and its file is NOT handed back for unlinking");
+        CHECK(refcountOf(inFolderOid) == 1, "... the object is still referenced");
+        // The UNPINNED sibling went, folder and all — the law is per member.
+        CHECK(countWhere("assets", "guid", folderDep) == 0, "the unpinned member was deleted");
+        CHECK(countWhere("folders", "guid", folderGuid) == 0, "the folder row went");
     }
 
     // --- 13. deleteProject rolls back over a FAILED orphan reap -------------
