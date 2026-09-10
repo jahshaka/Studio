@@ -154,7 +154,7 @@ int main(int argc, char **argv)
     mirror.applyCamera(cam, view);
 
     const auto frame = [&]() {
-        doc->update(0.016f);
+        doc->refresh();
         mirror.sync();
         mirror.applyEnvironment(view, engine.get());
         engine->renderOneFrame();

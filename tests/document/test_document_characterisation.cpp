@@ -149,7 +149,7 @@ int main(int argc, char **argv)
         env->simulatePhysics();
         CHECK(env->isSimulating(), "simulate: environment reports simulating without play mode");
         const float y0 = body->getLocalPos().y();
-        for (int i = 0; i < 60; ++i) physScene->update(1.0f / 60.0f);  // syncFrame's editor-mode stepper
+        for (int i = 0; i < 60; ++i) physScene->advance(1.0f / 60.0f);  // syncFrame's editor-mode stepper
         CHECK(body->getLocalPos().y() < y0 - 0.5f, "simulate: dynamic body fell under gravity via scene->update");
         env->restartPhysics();
         env->restoreNodeTransformations(physScene->getRootNode());
@@ -231,7 +231,7 @@ int main(int argc, char **argv)
         // sphere falls.
         env->simulatePhysics();
         const float y0 = sphereLight->getLocalPos().y();
-        for (int i = 0; i < 60; ++i) physScene->update(1.0f / 60.0f);
+        for (int i = 0; i < 60; ++i) physScene->advance(1.0f / 60.0f);
         CHECK(sphereLight->getLocalPos().y() < y0 - 0.5f,
               "A1.4: the world still steps with degraded bodies in it");
         env->stopPhysics();
@@ -441,7 +441,7 @@ int main(int argc, char **argv)
 
         mid->setLocalPos(iris::Vec3(10, 0, 0));
         leaf->setLocalPos(iris::Vec3(0, 5, 0));
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(10, 5, 0)),
               "invalidation: a fresh hierarchy composes on the first update");
 
@@ -449,7 +449,7 @@ int main(int argc, char **argv)
         // moves and its DESCENDANTS' world transforms must follow. The dirty
         // flag propagates upward; only update() can push it down.
         mid->setLocalPos(iris::Vec3(-4, 0, 0));
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
               "invalidation: moving a parent refreshes the whole subtree below it");
 
@@ -457,7 +457,7 @@ int main(int argc, char **argv)
         // a COPY — writing to it cannot corrupt anything (the old
         // getGlobalTransform() handed out a reference to a member cache and
         // wrote it from a read; audit F2).
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
               "propagation: an idle update changes nothing");
         leaf->getGlobalTransform().translate(iris::Vec3(100, 100, 100));
@@ -467,19 +467,19 @@ int main(int argc, char **argv)
         // Every remaining mutator, each asserted through the cache.
         leaf->setLocalRot(iris::Quat::fromEulerAngles(0, 90, 0));
         leaf->setLocalPos(iris::Vec3(0, 0, 3));
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(-4, 0, 3)),
               "invalidation: setLocalPos/setLocalRot");
 
         leaf->rotate(iris::Quat::fromEulerAngles(0, 90, 0));
         mid->setLocalScale(iris::Vec3(2, 2, 2));
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(-4, 0, 6)),
               "invalidation: rotate() and setLocalScale()");
 
         iris::Mat4 lt; lt.setToIdentity(); lt.translate(iris::Vec3(1, 1, 1));
         leaf->setLocalTransform(lt);
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(-2, 2, 2)),
               "invalidation: setLocalTransform()");
 
@@ -517,7 +517,7 @@ int main(int argc, char **argv)
             stat->setStaticHint(false);
             stat->setLocalPos(iris::Vec3(1, 0, 0));
             stat->setStaticHint(true);
-            tScene->update(0.0f);
+            tScene->refresh();
             CHECK(approx(worldPos(stat), iris::Vec3(6, 0, 0)),
                   "static: a static subtree resolves against its parent");
 
@@ -528,7 +528,7 @@ int main(int argc, char **argv)
             stat->setLocalPos(iris::Vec3(2, 0, 0));
             CHECK(!stat->isStaticInGraph() && !stat->staticHint(),
                   "static: a transform write demotes the node and clears the hint (rule 4)");
-            tScene->update(0.0f);
+            tScene->refresh();
             CHECK(approx(worldPos(stat), iris::Vec3(7, 0, 0)),
                   "static: ...and the moved node lands where it was put");
 
@@ -589,18 +589,18 @@ int main(int argc, char **argv)
         // setGlobalPos/setGlobalRot on a node WITH a parent, and on one
         // without (the root).
         leaf->setGlobalPos(iris::Vec3(7, 7, 7));
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(7, 7, 7)), "invalidation: setGlobalPos() under a parent");
 
         tRoot->setGlobalPos(iris::Vec3(0, 1, 0));
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(tRoot), iris::Vec3(0, 1, 0)),
               "invalidation: setGlobalPos() on a parentless node (the early-return path)");
         CHECK(approx(worldPos(leaf), iris::Vec3(7, 8, 7)),
               "...and it carried the subtree with it");
 
         tRoot->setGlobalRot(iris::Quat::fromEulerAngles(0, 180, 0));
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), iris::Vec3(-7, 8, -7)),
               "invalidation: setGlobalRot() on a parentless node");
         tRoot->setLocalRot(iris::Quat());
@@ -612,14 +612,14 @@ int main(int argc, char **argv)
         auto other = iris::SceneNode::create();
         other->setLocalPos(iris::Vec3(0, 0, 20));
         tRoot->addChild(other);
-        tScene->update(0.0f);
+        tScene->refresh();
         const iris::Vec3 before = worldPos(leaf);
         other->addChild(leaf, true);                     // keepTransform
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(leaf), before),
               "invalidation: a keepTransform reparent leaves the node where it was");
         other->addChild(mid, false);                     // no keepTransform
-        tScene->update(0.0f);
+        tScene->refresh();
         CHECK(approx(worldPos(mid), iris::Vec3(0, 0, 20) + mid->getLocalPos()),
               "invalidation: a plain reparent recomposes against the new parent");
 
@@ -643,9 +643,9 @@ int main(int argc, char **argv)
             anim->addPropertyAnim(pa);
             anim->setLooping(false);          // sample at t=1 == the last key
             animated->setAnimation(anim);
-            tScene->update(0.0f);
+            tScene->refresh();
             tScene->updateSceneAnimation(1.0f);
-            tScene->update(0.0f);
+            tScene->refresh();
             CHECK(approx(worldPos(animated), iris::Vec3(9, 0, 0)),
                   "invalidation: the property-animation path marks the node dirty");
         }

@@ -88,7 +88,7 @@ void EngineMaterialPreviewScene::buildDocument()
     mDocument->fogEnabled = false;
 
     mCamera->update(0);
-    mDocument->update(0);
+    mDocument->refresh();
 
     // Orbit around the ORIGIN from where the camera stands (not PreviewOrbit::
     // adopt, which would put the pivot one radius ahead of the camera).
@@ -215,6 +215,6 @@ void EngineMaterialPreviewScene::step(float dt, int width, int height)
     mOrbit.advance();
     mOrbit.apply(mCamera);
 
-    mDocument->update(dt);
+    mDocument->advance(dt);
     pushFrame(mCamera, width, height);
 }

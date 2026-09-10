@@ -320,7 +320,7 @@ int main(int argc, char **argv)
     CHECK(movedPct > 5, "5. the flame moves — it is a simulation, not a frozen sprite");
 
     // ---- 6. it STOPS ------------------------------------------------------
-    engine->setParticleTimeScale(0.0f);
+    engine->setFixedFrameDelta(0.0f);
     engine->renderOneFrame();
     Image f1, f2;
     view->readPixels(f1);

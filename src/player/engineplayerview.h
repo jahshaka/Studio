@@ -9,7 +9,6 @@
 // PlayerView forwards it. Syncs on EngineRenderDriver::beforeFrame and renders
 // only while the page is shown (View::setEnabled). Never includes Ogre or GL.
 #include <memory>
-#include <QElapsedTimer>
 #include "player/iplayerhost.h"
 #include "viewport/engineviewwidget.h"
 #include "irisgl/irisglfwd.h"
@@ -82,7 +81,6 @@ private:
     std::unique_ptr<EnginePlayerScene> mScene;
     IEditorViewport *mEditorViewport = nullptr;
     iris::ScenePtr mDocument;
-    QElapsedTimer mFrameTimer;
     bool mActive = false;
 };
 

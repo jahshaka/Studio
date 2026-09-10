@@ -127,7 +127,7 @@ static void startPlay(Rig &r)
 
 static void frames(Rig &r, int n, float dt = 1.0f / 60.0f)
 {
-    for (int i = 0; i < n; ++i) r.scene->update(dt);
+    for (int i = 0; i < n; ++i) r.scene->advance(dt);
 }
 
 static float planarDistance(const iris::Vec3 &a, const iris::Vec3 &b)

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QImage>
 
 #include "scripting/modules/moduleshared.h"
+#include "irisgl/document/scenegraph/simulationclock.h"
 #include "services/playbackservice.h"
 #include "services/playerservice.h"
 #include "viewport/ieditorviewport.h"
@@ -65,9 +66,12 @@ QVector<VerbInfo> PlayerApi::verbs() const
           Needs::Document },
         { "frame", "player.frame(count = 1, dt = -1) -> bool",
           "Steps and renders exactly `count` PLAYER frames synchronously — editor.frame for the "
-          "other space. With `dt` >= 0 the player's clock advances by exactly that many seconds "
-          "per frame instead of by the wall clock, which is what makes a scripted player "
-          "assertion deterministic. REFUSES when the Player page has never been shown — the "
+          "other space, on the SAME document simulation clock: with `dt` >= 0 each frame hands "
+          "the clock exactly that many seconds instead of the wall time since the previous "
+          "step, the clock turns them into whole 1/60 s grid steps for physics, avatars and "
+          "animation, and the engine's particles are told to advance by the same amount. "
+          "REFUSES a dt above scene.clock().maxAdvance (step more frames instead) and "
+          "REFUSES when the Player page has never been shown — the "
           "player's on-screen view is created by its show event, and answering true while "
           "drawing nothing would be the worse answer. player.screenshot needs no view.",
           Needs::Engine },
@@ -142,6 +146,12 @@ bool PlayerApi::frame(int count, double dt)
     auto *service = serviceOrFail("player.frame");
     if (!service) return false;
     if (!requireEngine()) return false;
+    if (dt > iris::SimulationClock::kMaxAdvanceSeconds + 1e-9)
+        return fail(QStringLiteral("player.frame: dt %1 s is above the clock's per-frame bound of "
+                                   "%2 s (%3 steps of 1/%4); step more frames instead")
+                        .arg(dt).arg(iris::SimulationClock::kMaxAdvanceSeconds)
+                        .arg(iris::SimulationClock::kMaxStepsPerAdvance)
+                        .arg(iris::SimulationClock::kStepHz));
     if (!service->stepFrames(qBound(1, count, 4096), float(dt)))
         return fail("player.frame: the player has no view to render into yet — its on-screen "
                     "view is created when the Player page is first shown (player.screenshot "

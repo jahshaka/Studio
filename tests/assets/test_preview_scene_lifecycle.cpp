@@ -73,7 +73,7 @@ public:
         mCamera->lookAt(iris::Vec3(0, 0, 0));
         mCamera->update(0);
         mDocument->setCamera(mCamera);
-        mDocument->update(0);
+        mDocument->refresh();
     }
     ~ProbeScene() override { release(); }   // the rule: the subclass tears itself down
 
@@ -134,7 +134,7 @@ protected:
     {
         ++prepares;
         if (view() != v) { std::printf("FAIL: prepareOffscreen: the shot is not the current view\n"); ++failures; }
-        mDocument->update(0);
+        mDocument->refresh();
         pushFrame(mCamera, w, h);
     }
 

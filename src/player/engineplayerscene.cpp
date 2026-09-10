@@ -24,6 +24,7 @@ EnginePlayerScene::EnginePlayerScene(const std::shared_ptr<Engine> &engine)
 {
     mPlayback = new PlayBack();
     mPlayback->init();               // the GL-free path: no renderer, no VR hands
+    mFrameTimer.start();
 }
 
 EnginePlayerScene::~EnginePlayerScene()
@@ -110,6 +111,9 @@ void EnginePlayerScene::begin()
     if (!cam) return;
     mSavedCameraMatrix = cam->getLocalTransform();
     mHaveSavedCamera = true;
+    // The first frame after the page comes up must not be charged the whole
+    // time the editor was showing.
+    mFrameTimer.restart();
     // force camera update to prevent jumping when switching from the editor
     // to the player (PlayerView::start)
     mPlayback->getMouseController()->captureYawPitchRollFromCamera();
@@ -129,11 +133,19 @@ void EnginePlayerScene::step(float dt, int width, int height)
     auto cam = camera();
     if (!cam) return;
 
+    // Restarted whether or not the wall was used, for the same reason the
+    // editor viewport does it: a scripted step must not be charged to the next
+    // free-running frame.
+    const float wall = float(double(mFrameTimer.nsecsElapsed()) * 1e-9);
+    mFrameTimer.restart();
     iris::Viewport vp;
     vp.width = width;
     vp.height = height;
     vp.pixelRatioScale = 1.0f;
-    mPlayback->update(vp, dt);
+    // THE ONE CLOCK (ENGINEERING_DEBT_SPEC A4.2), the player half: the seconds
+    // the document's SimulationClock turned into grid steps this frame are
+    // what the engine is told to simulate below.
+    const float simulated = mPlayback->update(vp, dt >= 0.0f ? dt : wall);
     // The spring-arm follow camera, same call the editor viewport makes and for
     // the same reason: the document computes the arm, the HOST knows which
     // camera it renders (AVATAR_LOCOMOTION_SPEC §8.5).
@@ -161,6 +173,8 @@ void EnginePlayerScene::step(float dt, int width, int height)
         // through its own camera keeps that camera's lens exactly).
         mMirror->applyCamera(cam, mView, freecam::kFreeCameraFramingAspect);
     }
+    if (auto engine = mEngine.lock())
+        engine->setFixedFrameDelta(simulated * mDocument->particleTimeScale);
 }
 
 bool EnginePlayerScene::isPlaying() const { return mPlayback->isScenePlaying(); }
@@ -181,7 +195,7 @@ void EnginePlayerScene::stepFrames(int n, float dt, int width, int height)
     auto engine = mEngine.lock();
     if (!engine || !mView || !mScene) return;
     for (int i = 0; i < n; ++i) {
-        step(dt >= 0.0f ? dt : 0.016f, width, height);
+        step(dt, width, height);
         engine->renderOneFrame();
     }
 }

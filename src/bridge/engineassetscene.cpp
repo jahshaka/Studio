@@ -110,7 +110,7 @@ void EngineAssetScene::buildDocument()
     mDocument->shadowEnabled = true;
 
     mCamera->update(0);
-    mDocument->update(0);
+    mDocument->refresh();
 
     // Adopt the camera at the legacy orbit radius, then move the pivot to the
     // origin at the preview distance (AssetViewer did exactly this).
@@ -354,14 +354,14 @@ void EngineAssetScene::step(float dt, int width, int height)
     mOrbit.advance();
     mOrbit.apply(mCamera);
 
-    mDocument->update(dt);
+    mDocument->advance(dt);
     pushFrame(mCamera, width, height);
 }
 
 void EngineAssetScene::prepareOffscreen(View *shot, int width, int height)
 {
     (void)shot;   // the base has already made it the current view
-    mDocument->update(0);
+    mDocument->refresh();
     pushFrame(mCamera, width, height);
 }
 

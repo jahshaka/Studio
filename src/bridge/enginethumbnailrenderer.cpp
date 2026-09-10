@@ -218,7 +218,7 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     auto engine = this->engine();
     if (!engine || !ensureResources(size)) return QImage();
 
-    document->update(0);
+    document->refresh();
     mirror()->setSource(document);
     mirror()->sync();
     // Background from the document's sky (buildPreviewScene's 25,25,25 for asset

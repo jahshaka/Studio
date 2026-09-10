@@ -129,7 +129,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(eye);
         cam->lookAt(target);
         cam->update(0.0f);
-        doc->update(0.016f);
+        doc->refresh();
         mirror.sync();
         // applySky as well as applyEnvironment: without it the view renders the
         // engine's default sky, which is bright, and every probe below would
@@ -227,7 +227,7 @@ int main(int argc, char **argv)
     CHECK(toggledOff < 0.02f, "turning the overlay off hides it");
 
     doc->giMode = iris::GiMode::OFF;
-    doc->update(0.016f);
+    doc->refresh();
     mirror.sync();
     mirror.applyEnvironment(view, engine.get());
     mirror.setSource(iris::ScenePtr());

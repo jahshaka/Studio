@@ -27,7 +27,6 @@ PlayBack::PlayBack()
 
 void PlayBack::init()
 {
-	animTime = 0;
 }
 
 void PlayBack::setScene(iris::ScenePtr scene)
@@ -72,7 +71,7 @@ void PlayBack::setRestoreCameraTransform(bool shouldRestore)
 	this->mouseController->setRestoreCameraTransform(shouldRestore);
 }
 
-void PlayBack::update(iris::Viewport& viewport, float dt)
+float PlayBack::update(iris::Viewport& viewport, float dt)
 {
     // must update the mouse controller's viewport
     // needed for picking
@@ -127,14 +126,13 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 	}
 
 	// A paused scene is frozen: the clock does not advance and the document is
-	// left exactly as the pause found it.
-	if (!_isPaused) {
-		animTime += dt;
-		scene->updateSceneAnimation(animTime);
-		scene->update(dt);
-	}
+	// left exactly as the pause found it — and the 0 returned here freezes the
+	// engine-side simulation (particles) with it.
+	float simulated = 0.0f;
+	if (!_isPaused && scene) simulated = scene->advance(dt);
 
 	camController->postUpdate(dt);
+	return simulated;
 }
 
 void PlayBack::saveNodeTransforms()
@@ -233,7 +231,8 @@ void PlayBack::playScene()
 		camController->start();
 	}
 
-	animTime = 0;
+	// t = 0: the clip clock and the physics grid start together.
+	scene->simulationClock().reset();
 }
 
 void PlayBack::pause()
@@ -272,7 +271,7 @@ void PlayBack::stopScene()
 	// (crash-1788594910.log). Every deref below is against a scene that may
 	// be half-dead; guard each, keep the flag resets above unconditional.
 	if (mouseController) mouseController->setPlayState(_isPlaying);
-	if (!scene) { animTime = 0; return; }
+	if (!scene) return;
 	scene->setPlaying(false);   // back to the explorer (CAMERAS_SPEC D6)
 	if (auto env = scene->getPhysicsEnvironment()) {
 		env->restartPhysics();
@@ -281,7 +280,7 @@ void PlayBack::stopScene()
 	if (scene->getRootNode())
 		restoreNodeTransforms();// it's important that this is here after physics restore
 
-	animTime = 0;
+	scene->simulationClock().reset();
 }
 
 PlayerMouseController * PlayBack::getMouseController() const

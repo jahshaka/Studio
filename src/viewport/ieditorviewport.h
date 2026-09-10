@@ -536,9 +536,10 @@ public:
     /// pattern of the headless suites. Only the engine viewport implements it;
     /// the legacy viewport repaints on its own schedule.
     virtual void renderFrames(int n) { Q_UNUSED(n); }
-    /// Steps `n` frames advancing the document's clock by exactly `dt` seconds
-    /// each, instead of by however long the wall clock says. A negative `dt`
-    /// means "use the wall clock" and is identical to renderFrames(n).
+    /// Steps `n` frames handing the document's simulation clock exactly `dt`
+    /// seconds each, instead of however long the wall clock says (the clock
+    /// turns either into whole grid steps — iris::SimulationClock). A negative
+    /// `dt` means "use the wall clock" and is identical to renderFrames(n).
     virtual void renderFrames(int n, float dt) { Q_UNUSED(n); Q_UNUSED(dt); }
 
     // ---- the "nothing is presenting" cover ----

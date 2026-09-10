@@ -1,0 +1,253 @@
+// scripting.e2e.fixed_clock — ENGINEERING_DEBT_SPEC A4.2, the determinism proof.
+//
+// ONE fixed-step clock (iris::SimulationClock, 60 Hz grid) drives physics
+// (Bullet), the avatar components, keyframe animation, the skeletal clips the
+// engine evaluates at the document's time, and the engine's own particle
+// simulation. A frame hands the clock its seconds; the clock turns them into
+// whole grid steps. So the SAME simulated seconds must produce the SAME
+// document state — bit for bit — however many frames delivered them.
+//
+// The scene: a static ground, six rigid bodies dropped from tumbling poses
+// (the chaotic case the bullet-bump lane found settles differently across
+// bullet VERSIONS — within one binary it must be exact), a property-animated
+// node (a 2 s position track), and the rig2.glb skinned character whose 1 s
+// clip plays in play mode (its pose is the engine's; the document state it
+// depends on is the animation time, which is asserted).
+//
+// Runs, each from a fresh editor.play():
+//   A  120 frames of 1/60 s          the reference
+//   B  the same again                run-to-run
+//   C   60 frames of 1/30 s          half the frame rate, same seconds
+//   D  240 frames of 1/120 s         double the frame rate (0/1 steps alternate)
+//   E   60 + pause(30 frames) + 60   a pause holds the clock and the document
+//   F  the SIMULATE path (physics without play), 120 x 1/60: the rigid bodies
+//      land exactly where run A put them — play-in-place and Simulate share
+//      the stepper.
+// A == B == C == D == E as JSON text of every node's transform (JS numbers
+// print their shortest round-trip form, so two floats print alike only when
+// they ARE alike), the clock reads 120 steps / 2.0 s every time, and the
+// refusal of an over-bound dt is loud. The wall-clock control (frame(120)
+// with no dt) is logged, never asserted: it is the one path that MAY differ.
+//
+// ENGINE UP (no --headless): physics steps in the engine viewport's syncFrame
+// and the headless stand-in viewport's startPlayingScene is an empty override.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function caught(fn) {
+    try { fn(); } catch (e) { return "" + e; }
+    return null;
+}
+function fnv1a(str) {   // a stable 32-bit digest of the snapshot, for cross-process comparison by eye
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; ++i) {
+        h ^= str.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return ("0000000" + h.toString(16)).slice(-8);
+}
+
+var proj = project.create("Fixed Clock " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+// ---- the scene --------------------------------------------------------------
+var ground = scene.addPrimitive("ground", { position: { x: 0, y: 0, z: 0 } });
+assert(node.physics(ground, { type: "static", shape: "plane" }) === true ||
+       node.physics(ground, { type: "static", shape: "trianglemesh" }) === true,
+       "the ground is a static collider");
+
+var bodies = [];
+var seeds = [
+    { p: "cube",   x: -3, y: 6,  z: 0,  rx: 30, ry: 15, rz: 40 },
+    { p: "cube",   x:  0, y: 7,  z: 1,  rx: 45, ry: 45, rz: 10 },
+    { p: "sphere", x:  3, y: 5,  z: -1, rx: 0,  ry: 0,  rz: 0  },
+    { p: "cube",   x: -1, y: 9,  z: -2, rx: 70, ry: 20, rz: 65 },
+    { p: "sphere", x:  1, y: 11, z: 2,  rx: 0,  ry: 0,  rz: 0  },
+    { p: "cube",   x:  2, y: 8,  z: 3,  rx: 10, ry: 80, rz: 25 }
+];
+for (var i = 0; i < seeds.length; ++i) {
+    var s = seeds[i];
+    var id = scene.addPrimitive(s.p, { position: { x: s.x, y: s.y, z: s.z },
+                                       rotation: { x: s.rx, y: s.ry, z: s.rz } });
+    assert(id.length > 10, "body " + i + " (" + s.p + ") -> " + id);
+    assert(node.physics(id, { type: "rigidbody", shape: s.p === "sphere" ? "sphere" : "convexhull",
+                              mass: 1 + i * 0.5, restitution: 0.3, friction: 0.5 }) === true,
+           "body " + i + " is a rigid body");
+    bodies.push(id);
+}
+
+// A property animation: a 2 s straight line, keyed at t = 0 (where the node
+// stands) and t = 2.
+var mover = scene.addPrimitive("cylinder", { position: { x: -6, y: 1, z: 0 } });
+assert(anim.create(mover, "slide").length > 0, "anim.create on the mover");
+assert(anim.keyframe(mover, "position", 0, { x: -6, y: 1, z: 0 }) === true, "key at t=0");
+assert(anim.keyframe(mover, "position", 2, { x: 6, y: 3, z: -4 }) === true, "key at t=2");
+assert(anim.keyframe(mover, "rotation", 0, { x: 0, y: 0, z: 0 }) === true, "rotation key at t=0");
+assert(anim.keyframe(mover, "rotation", 2, { x: 0, y: 270, z: 0 }) === true, "rotation key at t=2");
+// NOT looping: a looping 2 s track sampled at exactly t = 2.0 wraps to t = 0
+// and the mover would read as never having moved (which it did — round trip).
+assert(anim.setLooping(mover, false) === true, "the track holds its last key past the end");
+
+// The skinned character: its clip runs on the engine at the document's time.
+var rig = assets.import("@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb");
+assert(rig.length > 10, "assets.import rig2.glb -> " + rig);
+assert(assets.addToProject(rig) === rig, "assets.addToProject");
+var rigRoot = assets.addToScene(rig, { position: { x: 5, y: 0, z: 5 } });
+assert(rigRoot && rigRoot.length > 10, "assets.addToScene -> " + rigRoot);
+
+editor.frame(2, 1 / 60);   // the scene is up; nothing moves before play
+
+// ---- snapshots -----------------------------------------------------------
+function snapshot() {
+    var all = scene.nodes();
+    var rows = [];
+    for (var i = 0; i < all.length; ++i) {
+        var n = all[i];
+        rows.push({ id: n.id, name: n.name, position: n.position, rotation: n.rotation, scale: n.scale });
+    }
+    return { animTime: anim.seek(), clock: scene.clock(), nodes: rows };
+}
+function text(snap) {
+    // Everything but the per-frame bookkeeping (frameSteps/frameSeconds/alpha
+    // legitimately differ between a 1/30 and a 1/120 last frame) and the node
+    // ids (fresh per process — dropping them makes the digest comparable
+    // ACROSS runs of this suite, which is the cross-process half of the proof).
+    var rows = [];
+    for (var i = 0; i < snap.nodes.length; ++i) {
+        var n = snap.nodes[i];
+        rows.push({ name: n.name, position: n.position, rotation: n.rotation, scale: n.scale });
+    }
+    return JSON.stringify({ animTime: snap.animTime, time: snap.clock.time, steps: snap.clock.steps, nodes: rows });
+}
+function bodiesOnly(snap) {
+    var rows = [];
+    for (var i = 0; i < snap.nodes.length; ++i)
+        if (bodies.indexOf(snap.nodes[i].id) >= 0) rows.push(snap.nodes[i]);
+    return JSON.stringify(rows);
+}
+function diff(label, a, b) {   // which nodes differ, and by how much — the failure's evidence
+    var n = 0;
+    for (var i = 0; i < a.nodes.length; ++i) {
+        var p = a.nodes[i], q = b.nodes[i];
+        var ja = JSON.stringify([p.position, p.rotation, p.scale]);
+        var jb = JSON.stringify([q.position, q.rotation, q.scale]);
+        if (ja !== jb) {
+            ++n;
+            console.log("    " + label + " differs on " + p.name + " (" + p.id.slice(0, 8) + "):\n      " + ja + "\n      " + jb);
+        }
+    }
+    if (a.animTime !== b.animTime || a.clock.steps !== b.clock.steps)
+        console.log("    " + label + " clock differs: " + a.animTime + "/" + a.clock.steps + " vs " + b.animTime + "/" + b.clock.steps);
+    return n;
+}
+function moved(a, b) {
+    var n = 0;
+    for (var i = 0; i < a.nodes.length; ++i) {
+        var p = a.nodes[i].position, q = b.nodes[i].position;
+        if (p.x !== q.x || p.y !== q.y || p.z !== q.z) ++n;
+    }
+    return n;
+}
+
+var rest = snapshot();
+
+function playRun(name, frames, dt) {
+    assert(editor.play() === true, name + ": editor.play");
+    var c0 = scene.clock();
+    assert(c0.steps === 0 && c0.time === 0, name + ": play resets the clock to 0");
+    assert(editor.frame(frames, dt) === true, name + ": editor.frame(" + frames + ", " + dt + ")");
+    var snap = snapshot();
+    assert(editor.stop() === true, name + ": editor.stop");
+    return snap;
+}
+
+var A = playRun("A", 120, 1 / 60);
+console.log("    A: clock " + JSON.stringify(A.clock) + " animTime " + A.animTime);
+assert(A.clock.steps === 120, "A: 120 frames of 1/60 s bought exactly 120 steps");
+assert(Math.abs(A.clock.time - 2.0) < 1e-12, "A: the clock reads 2.0 s exactly");
+assert(Math.abs(A.animTime - 2.0) < 1e-6, "A: the animation time is the clock's time");
+var movedA = moved(rest, A);
+console.log("    A: " + movedA + " nodes moved from rest");
+assert(movedA >= bodies.length + 1, "A: every rigid body and the mover moved (" + movedA + ")");
+for (var b = 0; b < bodies.length; ++b) {
+    var y0 = seeds[b].y, y1 = null;
+    for (var k = 0; k < A.nodes.length; ++k) if (A.nodes[k].id === bodies[b]) y1 = A.nodes[k].position.y;
+    assert(y1 !== null && y1 < y0 - 1.0, "A: body " + b + " fell (" + y0 + " -> " + y1 + ")");
+}
+
+// The stop restored the pre-play state exactly — the precondition for every
+// later run starting from the same place.
+var restAgain = snapshot();
+assert(JSON.stringify(rest.nodes) === JSON.stringify(restAgain.nodes),
+       "stop restores every node's transform bit-exactly (the runs share a start)");
+assert(restAgain.clock.steps === 0, "stop resets the clock");
+
+var B = playRun("B", 120, 1 / 60);
+var C = playRun("C", 60, 1 / 30);
+var D = playRun("D", 240, 1 / 120);
+
+var tA = text(A), tB = text(B), tC = text(C), tD = text(D);
+console.log("    snapshot bytes " + tA.length + "  digest A " + fnv1a(tA) + "  B " + fnv1a(tB) +
+            "  C " + fnv1a(tC) + "  D " + fnv1a(tD));
+if (tA !== tB) diff("A/B", A, B);
+if (tA !== tC) diff("A/C", A, C);
+if (tA !== tD) diff("A/D", A, D);
+assert(tA === tB, "A == B: two identical runs produce byte-identical document state");
+assert(C.clock.steps === 120 && D.clock.steps === 120,
+       "C and D bought 120 steps too (" + C.clock.steps + ", " + D.clock.steps + ")");
+assert(tA === tC, "A == C: 60 frames of 1/30 s land on the same state as 120 of 1/60 s");
+assert(tA === tD, "A == D: 240 frames of 1/120 s (zero- and one-step frames) land on the same state");
+
+// ---- E: pause holds everything ---------------------------------------------
+assert(editor.play() === true, "E: editor.play");
+assert(editor.frame(60, 1 / 60) === true, "E: 60 frames");
+var half = snapshot();
+assert(half.clock.steps === 60, "E: 60 steps at the pause");
+assert(editor.pause() === true, "E: editor.pause");
+assert(editor.frame(30, 1 / 60) === true, "E: 30 frames while paused");
+var paused = snapshot();
+assert(paused.clock.steps === 60 && text(paused) === text(half),
+       "E: a paused scene neither steps the clock nor moves a node");
+assert(editor.play() === true, "E: editor.play resumes");
+assert(editor.frame(60, 1 / 60) === true, "E: 60 more frames");
+var E = snapshot();
+assert(editor.stop() === true, "E: editor.stop");
+assert(text(E) === tA, "A == E: 60 + pause + 60 frames equal 120 straight frames");
+
+// ---- F: the Simulate path shares the stepper --------------------------------
+assert(editor.simulate(true) === true, "F: editor.simulate(true)");
+assert(scene.clock().steps === 0, "F: simulate resets the clock");
+assert(editor.frame(120, 1 / 60) === true, "F: 120 frames");
+var F = snapshot();
+assert(editor.simulate(false) === true, "F: editor.simulate(false)");
+assert(F.clock.steps === 120, "F: 120 steps");
+assert(bodiesOnly(F) === bodiesOnly(A),
+       "A == F on the rigid bodies: Simulate and play-in-place run the same physics steps");
+// Simulate is not play: put the bodies back where the file has them.
+for (var r = 0; r < rest.nodes.length; ++r)
+    if (bodies.indexOf(rest.nodes[r].id) >= 0)
+        node.transform(rest.nodes[r].id, { position: rest.nodes[r].position, rotation: rest.nodes[r].rotation });
+assert(editor.frame(1, 1 / 60) === true, "F: one frame to settle the restore");
+
+// ---- the wall-clock control (logged, not asserted) --------------------------
+assert(editor.play() === true, "W: editor.play");
+var w0 = Date.now();
+editor.frame(120);
+var w1 = Date.now();
+var W = snapshot();
+editor.stop();
+console.log("    wall control: 120 wall-clock frames took " + (w1 - w0) + " ms and bought " +
+            W.clock.steps + " steps (" + W.clock.time.toFixed(4) + " s simulated); alpha " +
+            W.clock.alpha.toFixed(3));
+
+// ---- the refusal ------------------------------------------------------------
+var bound = scene.clock().maxAdvance;
+assert(Math.abs(bound - 8 / 60) < 1e-9, "the per-frame bound is 8 steps = " + bound + " s");
+assert(editor.frame(1, bound) === true, "a frame of exactly the bound is accepted");
+var over = caught(function () { if (!editor.frame(1, 0.5)) throw new Error(app.lastError()); });
+assert(over !== null && over.indexOf("bound") >= 0,
+       "editor.frame(1, 0.5) is REFUSED with the bound named: " + over);
+
+console.log("scripting.e2e.fixed_clock PASSED  digest " + fnv1a(tA));

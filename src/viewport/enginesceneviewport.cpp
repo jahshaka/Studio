@@ -1072,6 +1072,7 @@ void EngineSceneViewport::startPhysicsSimulation()
     if (!mScene) return;
     mScene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(mScene->getRootNode());
     mScene->getPhysicsEnvironment()->simulatePhysics();
+    mScene->simulationClock().reset();
 }
 
 void EngineSceneViewport::restartPhysicsSimulation()
@@ -1079,6 +1080,7 @@ void EngineSceneViewport::restartPhysicsSimulation()
     if (!mScene) return;
     mScene->getPhysicsEnvironment()->restartPhysics();
     mScene->getPhysicsEnvironment()->restoreNodeTransformations(mScene->getRootNode());
+    mScene->simulationClock().reset();
 }
 
 void EngineSceneViewport::stopPhysicsSimulation()
@@ -1475,14 +1477,32 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     if (!ensureEngineScene()) return;
     // The wall clock, unless a caller supplied a step. mFrameTimer is restarted
     // either way: after a fixed-dt frame the NEXT free-running frame must not
-    // charge the document for the time the scripted one took.
-    const float wall = float(mFrameTimer.restart()) / 1000.0f;
+    // charge the document for the time the scripted one took. Nanoseconds,
+    // not the old integer milliseconds: the simulation clock accumulates what
+    // it is handed, and a 60 Hz panel's 16.67 ms frames rounded to 16 and 17
+    // would drift the grid against the wall.
+    const float wall = float(double(mFrameTimer.nsecsElapsed()) * 1e-9);
+    mFrameTimer.restart();
     const float dt = dtOverride >= 0.0f ? dtOverride : wall;
+    // THE ONE CLOCK (ENGINEERING_DEBT_SPEC A4.2): `dt` goes to the document's
+    // SimulationClock through exactly one of these two calls, and the seconds
+    // it converts into grid steps come back as `simulated` — physics and
+    // animation moved by that much, and the engine's own simulation (particles,
+    // shader time) is told to move by the same amount below. In the editor
+    // (not playing, not simulating) the document ignores the steps and only
+    // the engine-side delta is produced.
+    float simulated = 0.0f;
     if (mPlaying && mPlayback) {
         iris::Viewport vp; vp.width = width(); vp.height = height(); vp.pixelRatioScale = 1.0f;
-        mPlayback->update(vp, dt);        // physics, animation, play controllers move the document
-    } else if (mCamController) {
-        mCamController->update(dt);
+        simulated = mPlayback->update(vp, dt);   // physics, animation, play controllers move the document
+    } else {
+        if (mCamController) mCamController->update(dt);
+        // A PAUSED play-in-place (PlayBack still playing, this flag down so the
+        // editor camera answers the mouse) holds the document AND the engine's
+        // simulation: no clock step, a 0 delta below. Otherwise the editor's
+        // clock ticks — for the Simulate physics and the engine's particles.
+        if (mScene && !(mPlayback && mPlayback->isScenePaused()))
+            simulated = mScene->advance(dt);
     }
     // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5). The arm is COMPUTED in
     // the document (Scene::update, right after the movement step, so it never
@@ -1505,10 +1525,9 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // document owned a CPU particle simulator. It does not any more
     // (PARTICLES_FX2_SPEC): the engine simulates every particle inside
     // renderOneFrame, in the editor and in play mode alike, and the document
-    // only says WHAT to emit and how fast the clock runs. The physics branch
-    // stays — that really is a document-side simulation.
-    if (!mPlaying && mScene && mScene->getPhysicsEnvironment()->isSimulating())
-        mScene->update(dt);
+    // only says WHAT to emit and how fast the clock runs. The editor's
+    // Simulate (physics without play) rides the same Scene::advance above —
+    // the document steps its world only while the environment is simulating.
     // The VIEW camera's aspect follows the viewport — except a camera that
     // CONSTRAINS its aspect while being piloted: that number is authored, the
     // engine letterboxes to it, and overwriting it here would silently rewrite
@@ -1577,19 +1596,15 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     if (mMirror && viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
     syncPip();
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
-    // particles too. They are simulated inside the engine now, from the
-    // backend's own frame-time source, so a dt this viewport applies to the
-    // document would otherwise leave the flame running on the wall clock — and
-    // an offscreen frame takes about a millisecond, so 15 scripted frames would
-    // buy 15 ms of fire and photograph an empty scene. Pushed AFTER
-    // applyEnvironment, which owns the scene's normal time scale (the two
-    // settings cancel each other inside the backend, so exactly one of them may
-    // be live at a time).
-    if (mEngine) {
-        if (dtOverride >= 0.0f) mEngine->setFixedFrameDelta(dtOverride);
-        else if (mEngine->fixedFrameDelta() > 0.0f)
-            mEngine->setParticleTimeScale(mScene ? mScene->particleTimeScale : 1.0f);
-    }
+    // particles too. They are simulated inside the engine, which has NO clock
+    // of its own (Engine.h "Simulation clock"): every frame is told how many
+    // seconds to simulate, and that is the document clock's answer for this
+    // frame — the same grid steps physics and animation just took — times the
+    // scene's particle time scale. A frame that bought no step (a 144 Hz
+    // panel's odd frames, a paused scene) freezes the flame for that frame,
+    // exactly as it freezes the falling crate.
+    if (mEngine)
+        mEngine->setFixedFrameDelta(simulated * (mScene ? mScene->particleTimeScale : 1.0f));
 }
 
 QImage EngineSceneViewport::takeScreenshot(QSize dimension)
