@@ -1290,6 +1290,17 @@ int Database::countAssetPins(const QString &guid)
     return query.value(0).toInt();
 }
 
+bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid)
+{
+    if (projectGuid.isEmpty() || assetGuid.isEmpty() || !db.isOpen()) return false;
+    if (!checkIfTableExists("project_assets")) return false;
+    QSqlQuery query;
+    query.prepare("SELECT 1 FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+    query.addBindValue(projectGuid);
+    query.addBindValue(assetGuid);
+    return executeAndCheckQuery(query, "IsAssetPinnedBy") && query.next();
+}
+
 bool Database::deleteAsset(const QString &guid, bool force)
 {
     // A delete that cannot run must NOT report success and must NOT scrub the

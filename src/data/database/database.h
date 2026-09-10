@@ -260,6 +260,10 @@ public:
     QVector<AssetPinRecord> fetchAssetPins(const QString &guid);
     /// How many projects pin this asset — the count without the names.
     int countAssetPins(const QString &guid);
+    /// Does THIS project pin THIS asset? The row's existence, not its content:
+    /// a DB-only asset (a material with no stored bytes) is pinned with an
+    /// EMPTY oid, so AssetCas::pinnedOid cannot answer this question.
+    bool isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid);
     /// Drop ONE project's pin on an asset (project_assets row). True when the row
     /// went or was never there; false on a database error.
     bool unpinAsset(const QString &projectGuid, const QString &assetGuid);

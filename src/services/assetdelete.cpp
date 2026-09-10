@@ -129,7 +129,10 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         const QByteArray scene = db->getSceneBlobGlobal(projectGuid);
         for (const QString &companion : ImageMaterial::companionMaterials(guid)) {
             if (toUnpin.contains(companion)) continue;
-            if (db->countAssetPins(companion) == 0) continue;      // not in any project
+            // THIS project's pin row, not any project's count: a companion is a
+            // DB-only asset, so its pin carries an empty oid and only the row's
+            // existence can answer "is it in this project?".
+            if (!db->isAssetPinnedBy(projectGuid, companion)) continue;
             if (!db->hasMultipleDependers(companion).isEmpty()) continue;  // something rides it
             if (!scene.isEmpty() && scene.contains(companion.toUtf8())) continue;
             toUnpin.append(companion);
