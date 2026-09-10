@@ -200,7 +200,7 @@ int main(int argc, char **argv)
         // addNodeToScene puts it there before anything measures it.
         imported.scene = iris::Scene::create();
         imported.scene->rootNode->addChild(imported.node);
-        imported.scene->update(0);
+        imported.scene->refresh();
         const fitsize::Extent placed = fitsize::measureNode(imported.node);
         CHECK(approx(placed.height(), rig.placed, 1e-2),
               QString("%1: the PLACED node measures %2 m tall (got %3)")

@@ -38,3 +38,36 @@ jah_no_display(document.characterisation)
 # the suite's own (test_document_characterisation.cpp:386 news a Vector3DPropertyAnim
 # it never deletes). Move to jah_lsan_lane once L2/L5 are fixed.
 jah_lsan_blocked(document.characterisation)
+
+# ENGINEERING_DEBT_SPEC A4.2: the ONE fixed-step simulation clock
+# (irisgl/document/scenegraph/simulationclock.h). Header-only arithmetic —
+# no engine, no Qt event loop, no display — asserting exactly the properties
+# scripting.e2e.fixed_clock's byte-identical-across-frame-rates proof rests on:
+# whole grid steps, time from an integer step count, rate independence, the
+# catch-up bound.
+add_executable(test_simulation_clock test_simulation_clock.cpp)
+set_target_properties(test_simulation_clock PROPERTIES AUTOMOC OFF)
+target_include_directories(test_simulation_clock PRIVATE ${CMAKE_SOURCE_DIR})
+add_test(NAME document.simulation_clock COMMAND test_simulation_clock
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.simulation_clock PROPERTIES LABELS "document" TIMEOUT 60)
+jah_no_display(document.simulation_clock)
+
+# ENGINEERING_DEBT_SPEC A4.2, the restart half: six piled rigid bodies stepped
+# on the clock grid, the world torn down and rebuilt as PlayBack does it, four
+# times — every cycle lands every body on the same bits. Headless document
+# graph, no display.
+add_executable(test_physics_restart test_physics_restart.cpp)
+set_target_properties(test_physics_restart PROPERTIES AUTOMOC OFF)
+target_include_directories(test_physics_restart PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_physics_restart PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_physics_restart)
+add_test(NAME document.physics_restart COMMAND test_physics_restart
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.physics_restart PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120)
+jah_no_display(document.physics_restart)

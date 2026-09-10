@@ -19,6 +19,7 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/physics/avatarmovement.h"
+#include "irisgl/document/scenegraph/simulationclock.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/physics/physicsproperties.h"
 #include "irisgl/document/assets/mesh.h"
@@ -110,7 +111,7 @@ static void startPlay(Rig &r)
 /// One FRAME of play, exactly as PlayBack::update drives it.
 static void frames(Rig &r, int n, float dt = 1.0f / 60.0f)
 {
-    for (int i = 0; i < n; ++i) r.scene->update(dt);
+    for (int i = 0; i < n; ++i) r.scene->advance(dt);
 }
 
 static float planarDistance(const iris::Vec3 &a, const iris::Vec3 &b)
@@ -192,10 +193,12 @@ static void gateM1()
               "M1: half the frame rate, same second, same distance to within 0.05 u");
     }
 
-    // And the sub-step ceiling: a 10 fps frame runs 8 x 0.05 s and DROPS the
-    // rest rather than integrating 0.1 s at once.
-    CHECK(iris::AvatarMovement::kMaxSubStep == 0.05f && iris::AvatarMovement::kMaxSubSteps == 8,
-          "M1: the sub-step pair is 0.05 s x 8 (§6.1)");
+    // The catch-up ceiling moved out of the component and into the document's
+    // one clock (ENGINEERING_DEBT_SPEC A4.2): a 10 fps frame is 6 grid steps
+    // of 1/60 s, and a stalled frame runs at most 8 and DROPS the rest rather
+    // than integrating the whole stall at once — for every consumer at once.
+    CHECK(iris::SimulationClock::kMaxStepsPerAdvance == 8 && iris::SimulationClock::kStepHz == 60,
+          "M1: the catch-up bound is 8 steps of 1/60 s (SimulationClock)");
 }
 
 // ===========================================================================
@@ -254,7 +257,7 @@ static void gateM3()
         m->requestJump();
         float apex = base;
         for (int i = 0; i < 180; ++i) {
-            r.scene->update(1.0f / 60.0f);
+            r.scene->advance(1.0f / 60.0f);
             apex = std::max(apex, avatar->getGlobalPosition().y());
         }
         const float reached = apex - base;
@@ -284,18 +287,18 @@ static void gateM3()
         m->setMoveInput(iris::Vec3(1, 0, 0));
         int framesUntilAirborne = 0;
         for (int i = 0; i < 240 && m->state().grounded; ++i) {
-            r.scene->update(1.0f / 60.0f);
+            r.scene->advance(1.0f / 60.0f);
             ++framesUntilAirborne;
         }
         CHECK(!m->state().grounded, "M3: it walked off the ledge and is airborne");
         // 3 frames = 0.05 s, comfortably inside the 0.12 s coyote window.
         m->setMoveInput(iris::Vec3());
-        r.scene->update(1.0f / 60.0f);
-        r.scene->update(1.0f / 60.0f);
+        r.scene->advance(1.0f / 60.0f);
+        r.scene->advance(1.0f / 60.0f);
         const float yBefore = avatar->getGlobalPosition().y();
         const float vyBefore = m->state().verticalVelocity;
         m->requestJump();
-        r.scene->update(1.0f / 60.0f);
+        r.scene->advance(1.0f / 60.0f);
         const float vyAfter = m->state().verticalVelocity;
         printf("      airborne %d frames, vy %.4f -> %.4f after the coyote jump (y %.4f)\n",
                framesUntilAirborne, double(vyBefore), double(vyAfter), double(yBefore));
@@ -312,13 +315,13 @@ static void gateM3()
         frames(r, 60);
         auto *m = avatar->avatar();
         m->setMoveInput(iris::Vec3(1, 0, 0));
-        for (int i = 0; i < 240 && m->state().grounded; ++i) r.scene->update(1.0f / 60.0f);
+        for (int i = 0; i < 240 && m->state().grounded; ++i) r.scene->advance(1.0f / 60.0f);
         m->setMoveInput(iris::Vec3());
         // 0.25 s > coyoteTime 0.12 s
-        for (int i = 0; i < 15; ++i) r.scene->update(1.0f / 60.0f);
+        for (int i = 0; i < 15; ++i) r.scene->advance(1.0f / 60.0f);
         const float vyBefore = m->state().verticalVelocity;
         m->requestJump();
-        r.scene->update(1.0f / 60.0f);
+        r.scene->advance(1.0f / 60.0f);
         const float vyAfter = m->state().verticalVelocity;
         printf("      0.25 s after the edge: vy %.4f -> %.4f\n", double(vyBefore), double(vyAfter));
         CHECK(vyAfter < vyBefore, "M3: a jump OUTSIDE coyoteTime does not fire");
@@ -342,7 +345,7 @@ static void gateM3()
         float apex = base;
         for (int i = 0; i < 180; ++i) {
             m->requestJump();   // HELD, every single frame
-            r.scene->update(1.0f / 60.0f);
+            r.scene->advance(1.0f / 60.0f);
             const float vy = m->state().verticalVelocity;
             if (vy > prevVy + 1.0f) ++launches;
             prevVy = vy;
@@ -369,11 +372,11 @@ static void gateM3()
         auto *m = avatar->avatar();
         const float base = avatar->getGlobalPosition().y();
         m->requestJump();
-        for (int i = 0; i < 20; ++i) r.scene->update(1.0f / 60.0f);
+        for (int i = 0; i < 20; ++i) r.scene->advance(1.0f / 60.0f);
         m->requestJump();   // the second, in the air
         float apex = base;
         for (int i = 0; i < 200; ++i) {
-            r.scene->update(1.0f / 60.0f);
+            r.scene->advance(1.0f / 60.0f);
             apex = std::max(apex, avatar->getGlobalPosition().y());
         }
         const float g = -float(r.env->getWorld()->getGravity().y());
@@ -654,7 +657,7 @@ static void gateStepDown()
     bool everAirborne = false;
     float minY = 10.0f;
     for (int i = 0; i < 240; ++i) {
-        r.scene->update(1.0f / 60.0f);
+        r.scene->advance(1.0f / 60.0f);
         if (!m->state().grounded) everAirborne = true;
         minY = std::min(minY, avatar->getGlobalPosition().y());
     }

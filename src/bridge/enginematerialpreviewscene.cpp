@@ -91,7 +91,7 @@ void EngineMaterialPreviewScene::buildDocument()
     mDocument->fogEnabled = false;
 
     mCamera->update(0);
-    mDocument->update(0);
+    mDocument->refresh();
 
     // Orbit around the origin from where the camera stands.
     mPivot = iris::Vec3(0, 0, 0);
@@ -268,7 +268,7 @@ void EngineMaterialPreviewScene::step(float dt, int width, int height)
     mPitch = lerp(mPitch, mTargetPitch, 0.8f);
     updateCameraRot();
 
-    mDocument->update(dt);
+    mDocument->advance(dt);
     mCamera->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror && mView) {
         mMirror->sync();

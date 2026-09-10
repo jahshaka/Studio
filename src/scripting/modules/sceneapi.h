@@ -59,6 +59,9 @@ public:
     /// optimisation is visible through — a shared character and an unshared one
     /// render identically.
     Q_INVOKABLE QVariantMap rigStats();
+    /// The document's ONE simulation clock (ENGINEERING_DEBT_SPEC A4.2):
+    /// its grid and where it stands.
+    Q_INVOKABLE QVariantMap clock();
     /// How big the scene (or a named part of it) actually is, in world units.
     /// The measurement the 1 unit = 1 metre scene-scale convention is checked
     /// against (samples.cleanstart).

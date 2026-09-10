@@ -1682,13 +1682,11 @@ void MainWindow::closeProject()
         scene->getPhysicsEnvironment()->stopPhysics();
         scene->getPhysicsEnvironment()->stopSimulation();
 
-        if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty()) {
-            for (const auto &node : scene->getRootNode()->children()) {
-                if (node->isPhysicsBody) {
-                    node->setGlobalTransform(scene->getPhysicsEnvironment()->nodeTransforms.value(node->getGUID()));
-                }
-            }
-        }
+        // Put every body and avatar back where Play found it before the
+        // autosave below — the Environment's own restore (recursive, exact),
+        // not the top-level-only matrix copy this used to be.
+        if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty())
+            scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 
         if (projectService->isSceneOpen()) {
             if (settings->getValue("auto_save", true).toBool()) saveScene();

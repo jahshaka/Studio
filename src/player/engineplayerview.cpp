@@ -25,7 +25,6 @@ EnginePlayerView::EnginePlayerView(const std::shared_ptr<Engine> &engine,
     mScene.reset(new EnginePlayerScene(engine));
     setMouseTracking(true);                 // PlayerView: needed for mouse events
     setFocusPolicy(Qt::ClickFocus);         // PlayerView: needed for key events
-    mFrameTimer.start();
     if (mDriver)
         connect(mDriver, &EngineRenderDriver::beforeFrame, this, &EnginePlayerView::syncFrame);
 }
@@ -75,7 +74,6 @@ void EnginePlayerView::start()
     // The editor camera may have been replaced since setScene (EditorData load).
     if (mDocument) mScene->setDocument(mDocument, editorCamera());
     mScene->begin();
-    mFrameTimer.restart();
     if (view()) view()->setEnabled(true);
 }
 
@@ -113,8 +111,7 @@ void EnginePlayerView::syncFrame()
 {
     if (!mActive || !view()) return;
     if (!mScene->attach(view())) return;
-    const float dt = std::max(0.001f, float(mFrameTimer.restart()) / 1000.0f);
-    mScene->step(dt, width(), height());
+    mScene->step(-1.0f, width(), height());     // the wall clock, in the scene's timer
 }
 
 void EnginePlayerView::resizeEvent(QResizeEvent *e)

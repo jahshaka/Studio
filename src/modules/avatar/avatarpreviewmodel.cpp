@@ -187,7 +187,7 @@ void AvatarPreviewModel::buildDocument()
     mDocument->fogEnabled = false;
 
     mCamera->update(0);
-    mDocument->update(0);
+    mDocument->refresh();
 }
 
 bool AvatarPreviewModel::setSpaceMode(avatar::SpaceMode mode)
@@ -210,7 +210,7 @@ bool AvatarPreviewModel::setSpaceMode(avatar::SpaceMode mode)
         }
         rescaleSpace();                        // a subject may already be loaded
     }
-    mDocument->update(0);
+    mDocument->refresh();
     return true;
 }
 

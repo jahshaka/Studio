@@ -583,6 +583,23 @@ set_tests_properties(scripting.e2e.skinning PROPERTIES
     LABELS "scripting"
     TIMEOUT 240)
 
+# ENGINEERING_DEBT_SPEC A4.2 — the ONE fixed-step clock's determinism proof: a
+# 120-frame physics drop (six tumbling rigid bodies), a keyframe track and a
+# skinned clip, run as 120 x 1/60, 60 x 1/30, 240 x 1/120 and 60+pause+60
+# frames, must leave the document byte-identical; the Simulate path lands the
+# bodies where play did; a pause holds the clock; an over-bound dt is refused.
+# Renders (physics steps in the engine viewport's syncFrame) -> needs a display.
+configure_file(scripts/e2e_fixed_clock.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-fixed_clock)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.fixed_clock
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.fixed_clock PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 240)
+
 # World Modes (POST_CHAIN_SPEC.md §9): the scalability registry, tier
 # write-through, pins that survive mode switches, and the save/open round-trip.
 # Every verb is a document verb -> --headless.

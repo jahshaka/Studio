@@ -192,6 +192,18 @@ QVector<VerbInfo> SceneApi::verbs() const
           "verb. `available` is false when this session's viewport has no engine (the "
           "document-only stand-ins) and every other field is then meaningless rather than zero.",
           Needs::Document },
+        { "clock", "scene.clock() -> {stepHz, stepSeconds, maxStepsPerFrame, maxAdvance, time, steps, frameSteps, frameSeconds, alpha}",
+          "The document's ONE simulation clock — the fixed grid physics (Bullet), avatars, "
+          "possession, keyframe and skeletal animation and the engine's particle simulation all "
+          "advance on (ENGINEERING_DEBT_SPEC A4.2). `stepHz`/`stepSeconds` are the grid (60, "
+          "1/60); every frame hands the clock its seconds (the wall time it took, or "
+          "editor.frame's dt) and the clock converts them into whole steps plus a carried "
+          "remainder — `time` is `steps` x `stepSeconds` exactly, `frameSteps`/`frameSeconds` "
+          "are what the last frame bought, `alpha` the fraction of a step still carried. "
+          "`maxStepsPerFrame`/`maxAdvance` are the catch-up bound: a longer frame runs that "
+          "many steps and drops the rest (no spiral), and editor.frame refuses a dt above it. "
+          "Reset to 0 by editor.play, editor.stop and editor.simulate.",
+          Needs::Document },
         { "folders", "scene.folders() -> [path]",
           "Every OUTLINER FOLDER in the scene, sorted, ancestors included "
           "(\"Props\" is listed beside \"Props/Kitchen\"). Folders are EDITOR "
@@ -831,6 +843,24 @@ QVariantMap SceneApi::bounds(const QVariant &options)
     out["center"] = vecToJs(iris::Vec3((mn.x() + mx.x()) * 0.5f, (mn.y() + mx.y()) * 0.5f,
                                        (mn.z() + mx.z()) * 0.5f));
     out["nodes"] = counted;
+    return out;
+}
+
+QVariantMap SceneApi::clock()
+{
+    QVariantMap out;
+    auto scene = sceneOrFail();
+    if (!scene) return out;
+    const iris::SimulationClock &c = scene->simulationClock();
+    out["stepHz"] = iris::SimulationClock::kStepHz;
+    out["stepSeconds"] = iris::SimulationClock::kStepSeconds;
+    out["maxStepsPerFrame"] = iris::SimulationClock::kMaxStepsPerAdvance;
+    out["maxAdvance"] = iris::SimulationClock::kMaxAdvanceSeconds;
+    out["time"] = c.time();
+    out["steps"] = double(c.steps());
+    out["frameSteps"] = c.frameSteps();
+    out["frameSeconds"] = c.frameSeconds();
+    out["alpha"] = c.alpha();
     return out;
 }
 

@@ -59,9 +59,6 @@ class PlayBack
 
 	iris::ScenePtr scene;
 
-	QTimer* updateTimer;
-	QElapsedTimer* fpsTimer;
-	float animTime;
 	QPointF prevMousePos;
 
 	// The camera-controller mismatch latch (SESSION_LOG_SPEC §8-R2). Raw
@@ -92,9 +89,13 @@ public:
 
 	void setRestoreCameraTransform(bool shouldRestore);
 
-	/// Simulation step without drawing: controller selection and update, keyframe
-	/// animation, physics, character controller.
-	void update(iris::Viewport& viewport, float dt);
+	/// One frame without drawing: controller selection and update, then the
+	/// document's simulation clock (iris::Scene::advance — keyframe and
+	/// skeletal animation, physics, avatars, possession) fed `dt` seconds.
+	/// Returns the simulated seconds the clock actually advanced this frame
+	/// (0 while paused, or on a frame that bought no grid step) — the host
+	/// hands exactly that to the engine as its frame delta.
+	float update(iris::Viewport& viewport, float dt);
 
 	void saveNodeTransforms();
 	void restoreNodeTransforms();

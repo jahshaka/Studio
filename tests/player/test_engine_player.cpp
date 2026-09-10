@@ -208,7 +208,7 @@ static void testPlayPauseResumeStop()
     auto camera = iris::CameraNode::create();
     camera->setLocalPos(iris::Vec3(0, 2, 10));
     scene->setCamera(camera);
-    scene->update(0);
+    scene->refresh();
 
     PlayBack playback;
     playback.init();
@@ -358,7 +358,7 @@ int main(int argc, char **argv)
     camera->angle = 45.0f;
     camera->nearClip = 0.1f;
     camera->farClip = 100.0f;
-    doc->update(0);
+    doc->refresh();
 
     {
         EnginePlayerScene player(engine);

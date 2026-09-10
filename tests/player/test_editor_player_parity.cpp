@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     camera->angle = 45.0f;
     camera->nearClip = 0.1f;
     camera->farClip = 100.0f;
-    doc->update(0);
+    doc->refresh();
 
     // ---- the two halves, each on its own view + engine scene ----------------
     View *editorView = engine->createOffscreenView("parity-editor", W, H, kBackground);

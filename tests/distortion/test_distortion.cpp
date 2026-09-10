@@ -412,9 +412,9 @@ int main()
     // the scene clock for every A/B, so two frames compare the same quads.
     {
         s->setNodeVisible(emitter, false);          // the quad is section 1-6's
-        // Headless frames are ~1 ms of wall clock; a fixed step spawns a cloud in
-        // 30 frames. (setParticleTimeScale CANCELS the fixed step — so the freeze
-        // below is a time scale of 0, and the step is re-armed after it.)
+        // A 1/30 step spawns a cloud in 30 frames; the freeze below is a frame
+        // delta of 0 (the engine has no wall clock — Engine.h "Simulation
+        // clock"), and the step is re-armed after it.
         engine->setFixedFrameDelta(1.0f / 30.0f);
 
         ParticleSystemDesc pd;
@@ -443,7 +443,7 @@ int main()
         // Fill the box (30 frames at 400/s = a few hundred quads), then freeze.
         view->setPostFx(base);
         render(engine.get(), 30);
-        engine->setParticleTimeScale(0.0f);
+        engine->setFixedFrameDelta(0.0f);
         render(engine.get(), 2);
         Image offBurst;
         REQUIRE(view->readPixels(offBurst));
@@ -488,7 +488,7 @@ int main()
         REQUIRE(s->setParticleSystem(burst, pd));
         engine->setFixedFrameDelta(1.0f / 30.0f);
         render(engine.get(), 30);
-        engine->setParticleTimeScale(0.0f);
+        engine->setFixedFrameDelta(0.0f);
         render(engine.get(), 2);
         Image ordinaryOn;
         REQUIRE(view->readPixels(ordinaryOn));
@@ -509,7 +509,7 @@ int main()
                       "...and is NOT in the field: byte-identical with and without the pass "
                       "(%u px differ)", pixelDiff(ordinaryOn, ordinaryOff));
         }
-        engine->setParticleTimeScale(1.0f);           // wall clock, scale 1, fixed step gone
+        engine->setFixedFrameDelta(Engine::kDefaultFrameDelta);   // back to the grid default
         CHECK(s->removeParticleSystem(burst), "the burst is removed");
         s->removeNode(burst);
         s->setNodeVisible(emitter, true);

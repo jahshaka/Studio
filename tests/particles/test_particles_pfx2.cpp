@@ -140,6 +140,13 @@ int main(int argc, char **argv)
     // so 60 frames buy 0.06 s of simulated time, a 200/s emitter produces 12
     // particles, and nothing ever visibly rises. Every count and every band
     // ratio below is written against 1/60 s per frame.
+    // ...and since ENGINEERING_DEBT_SPEC A4.2 the engine has no wall clock at
+    // all: it BOOTS on that grid step, so a host that never pushes a delta
+    // (thumbnails, previews, this suite before the line below) simulates one
+    // deterministic 1/60 s per frame.
+    CHECK(std::fabs(engine->fixedFrameDelta() - Engine::kDefaultFrameDelta) < 1e-6f &&
+          std::fabs(Engine::kDefaultFrameDelta - 1.0f / 60.0f) < 1e-6f,
+          "the engine boots on the 1/60 s grid step (no wall clock)");
     engine->setFixedFrameDelta(1.0f / 60.0f);
     CHECK(std::fabs(engine->fixedFrameDelta() - 1.0f / 60.0f) < 1e-6f,
           "setFixedFrameDelta takes effect");
@@ -260,12 +267,12 @@ int main(int argc, char **argv)
     }
 
     // ---- 3b. The clock: freeze and resume -----------------------------------
-    // setParticleTimeScale(0) must stop the simulation dead — two captures 30
+    // setFixedFrameDelta(0) must stop the simulation dead — two captures 30
     // frames apart become IDENTICAL, which is also the "it stops" half of the
     // fire gate in phase 3. It is process-wide (one frame-time source in the
-    // backend), and it cancels the fixed frame delta, so both are restored after.
+    // backend), so the grid step is restored after.
     {
-        engine->setParticleTimeScale(0.0f);
+        engine->setFixedFrameDelta(0.0f);
         warm(engine.get(), 2);
         Image frozenA, frozenB;
         view->readPixels(frozenA);
@@ -280,9 +287,9 @@ int main(int argc, char **argv)
             }
         std::printf("    frozen: %d pixels changed over 30 frames\n", moved);
         CHECK(countBright(frozenA) > 50, "the frozen plume is still on screen");
-        CHECK(moved == 0, "setParticleTimeScale(0) freezes the simulation exactly");
+        CHECK(moved == 0, "setFixedFrameDelta(0) freezes the simulation exactly");
 
-        engine->setFixedFrameDelta(1.0f / 60.0f);   // resumes AND restores the fixed step
+        engine->setFixedFrameDelta(1.0f / 60.0f);   // resumes on the grid step
         warm(engine.get(), 30);
         view->readPixels(img);
         int movedAgain = 0;

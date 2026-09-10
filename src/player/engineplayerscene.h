@@ -13,6 +13,7 @@
 // wraps it.
 #include "irisgl/core/math/mat4.h"
 #include <memory>
+#include <QElapsedTimer>
 #include <QImage>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
@@ -56,9 +57,13 @@ public:
     /// Page hidden: restores the camera transform (PlayerView::end).
     void end();
 
-    /// One frame: PlayBack::update (controllers, animation, physics), then
-    /// document -> engine, sky -> view, scene camera -> view. `width`/`height`
-    /// are the view's pixel size (controller picking + aspect ratio).
+    /// One frame: PlayBack::update (controllers, then the document's
+    /// simulation clock — animation, physics, avatars), then document ->
+    /// engine, sky -> view, scene camera -> view, and the clock's simulated
+    /// seconds -> the engine's frame delta. `dt` < 0 charges the wall clock
+    /// (the time since the previous step); a fixed dt is what makes a scripted
+    /// assertion deterministic. `width`/`height` are the view's pixel size
+    /// (controller picking + aspect ratio).
     void step(float dt, int width, int height);
 
     PlayBack *playback() const { return mPlayback; }
@@ -82,9 +87,8 @@ public:
     QImage takeScreenshot(int width, int height, int grade);
 
     /// Steps and renders exactly n frames synchronously (editor.frame's
-    /// pattern for the player): PlayBack + mirror + renderOneFrame. `dt` < 0
-    /// charges wall clock; a fixed dt is what makes a scripted assertion
-    /// deterministic. Does nothing without a bound view.
+    /// pattern for the player): PlayBack + mirror + renderOneFrame, `dt` as
+    /// for step(). Does nothing without a bound view.
     void stepFrames(int n, float dt, int width, int height);
 
 private:
@@ -96,6 +100,8 @@ private:
     PlayBack *mPlayback = nullptr;
     iris::Mat4 mSavedCameraMatrix;
     bool mHaveSavedCamera = false;
+    /// The wall clock behind a `dt` < 0 step: time since the previous step.
+    QElapsedTimer mFrameTimer;
 };
 
 #endif // ENGINEPLAYERSCENE_H

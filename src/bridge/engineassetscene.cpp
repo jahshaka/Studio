@@ -116,7 +116,7 @@ void EngineAssetScene::buildDocument()
     mDocument->shadowEnabled = true;
 
     mCamera->update(0);
-    mDocument->update(0);
+    mDocument->refresh();
 
     // OrbitalCameraController: setCamera (pivot from the camera), then the
     // preview pivot/distance, rotation speed .5.
@@ -419,7 +419,7 @@ void EngineAssetScene::step(float dt, int width, int height)
     mPitch = lerp(mPitch, mTargetPitch, 0.8f);
     updateCameraRot();
 
-    mDocument->update(dt);
+    mDocument->advance(dt);
     mCamera->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror && mView) {
         mMirror->sync();
@@ -454,7 +454,7 @@ QImage EngineAssetScene::renderImage(int width, int height)
     if (temporary && !attach(shot)) { engine->destroyView(shot); return QImage(); }
     shot->setScene(mScene);
     shot->setShadows(mShadows);
-    mDocument->update(0);
+    mDocument->refresh();
     mCamera->setAspectRatio(float(width) / float(height));
     if (mMirror) {
         mMirror->sync();
