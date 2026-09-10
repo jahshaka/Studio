@@ -59,6 +59,10 @@ export PATH="$HOME/Qt/Tools/CMake/CMake.app/Contents/bin:$HOME/Qt/Tools/Ninja:$P
 OGRE_PREFIX=<where-you-want-the-engine-install> ./irisgl/scripts/build-ogre.sh
 ```
 
+(The other vendored patch stack, `irisgl/thirdparty/assimp-patches/`, needs no step: the
+app configure in §4 applies it to the assimp submodule itself — see
+`docs/BUILDING_LINUX.md` "Vendored-source patches".)
+
 The script is platform-aware: on macOS it builds the pinned Ogre-Next submodule with
 Jahshaka's patches, Vulkan-only (no X11, no GL3Plus, no FreeImage — the bundled STBI
 codec handles images), as plain dylibs with baked rpaths (so nothing depends on
