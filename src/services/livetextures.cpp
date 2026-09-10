@@ -23,18 +23,6 @@ QVector<LiveTextureCatalog::Record> &LiveTextureCatalog::rows()
     return table;
 }
 
-void LiveTextureCatalog::ensureRegistered()
-{
-    for (const Record &r : rows()) {
-        if (AssetManager::getAssedByGuid(r.guid)) continue;
-        auto *asset = new AssetLiveTexture;
-        asset->assetGuid = r.guid;
-        asset->fileName  = r.name;
-        asset->path      = refFor(r.guid);
-        AssetManager::addAsset(asset);
-    }
-}
-
 QString LiveTextureCatalog::create(const QString &name, int width, int height, bool mipmaps,
                                    QString *error)
 {
@@ -61,7 +49,6 @@ QString LiveTextureCatalog::create(const QString &name, int width, int height, b
     r.height = height;
     r.mipmaps = mipmaps;
     rows().append(r);
-    ensureRegistered();
     return guid;
 }
 
@@ -122,7 +109,6 @@ bool LiveTextureCatalog::destroy(const QString &guid)
 
 QVector<LiveTextureCatalog::Record> LiveTextureCatalog::list()
 {
-    ensureRegistered();
     return rows();
 }
 

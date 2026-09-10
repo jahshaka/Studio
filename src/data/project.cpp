@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QDir>
 
 // ONE ENTRY PER ModelTypes VALUE, IN ORDER. It was thirteen entries against a
-// nineteen-value enum, and its one consumer indexes it with the enum
+// seventeen-value enum, and its one consumer indexes it with the enum
 // (SceneEditService::exportNodeTo writes the .jaf manifest) — so exporting an
 // IES profile, an avatar or an animation clip read PAST THE END of a
 // QStringList. Latent only because the export path is reached with Object and

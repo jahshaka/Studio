@@ -37,7 +37,7 @@ QImage imageFromJs(const QVariant &value, int w, int h, QString *error)
     if (v.typeId() == QMetaType::QString) {
         const QString s = v.toString();
         // A COLOUR, not a payload: anything QColor recognises ("#ff0000",
-        // "#ff000080", "red"). A base64 RGBA payload is never a colour name —
+        // "#80ff0000", "red"). A base64 RGBA payload is never a colour name —
         // the shortest legal one is 4 characters of a 1x1 texture, and no
         // colour name is valid base64 of the right length for a real image.
         const QColor colour(s);
@@ -108,7 +108,7 @@ QVector<VerbInfo> TextureApi::verbs() const
           "numbers rather than silently stretched — a live texture cannot resize (the renderer's "
           "texture cannot), so a new size is texture.remove + createLive. `pixels` is one of three "
           "things: an ARRAY of width*height*4 bytes (r, g, b, a per texel, row 0 at the top), a "
-          "BASE64 string of the same bytes, or a COLOUR ('#ff0000', '#ff000080', 'red') to fill "
+          "BASE64 string of the same bytes, or a COLOUR ('#ff0000', '#80ff0000' = #AARRGGBB, 'red') to fill "
           "the whole texture with. Each accepted write moves the generation the renderer watches, "
           "so a write is all it takes to change what is on screen — no re-binding, no material "
           "edit, no undo entry (pixels are not a document edit).",

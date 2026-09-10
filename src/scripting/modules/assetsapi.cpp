@@ -59,6 +59,7 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "services/assetdelete.h"
+#include "services/livetextures.h"
 
 using namespace scriptmod;
 
@@ -366,16 +367,31 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         }
         // The live AssetManager registrations — what the viewport's drag-drop
         // lookups and the panels actually see. Makes session hydration
-        // observable to scripts and tests (IMAGE_PLANE_SPEC §6 gate).
-        if (!requireProject()) return out;
-        for (Asset *asset : AssetManager::getAssets()) {
-            if (!asset) continue;
-            if (typeFilter >= 0 && static_cast<int>(asset->type) != typeFilter) continue;
-            if (!nameMatches(asset->fileName)) continue;
-            if (full()) break;
-            out.append(QVariantMap{ { "guid", asset->assetGuid },
-                                    { "name", asset->fileName },
-                                    { "type", typeName(static_cast<int>(asset->type)) } });
+        // observable to scripts and tests (IMAGE_PLANE_SPEC §6 gate). They
+        // belong to the OPEN project; with none open there are none.
+        if (host.project && !host.project->getProjectGuid().isEmpty()) {
+            for (Asset *asset : AssetManager::getAssets()) {
+                if (!asset) continue;
+                if (typeFilter >= 0 && static_cast<int>(asset->type) != typeFilter) continue;
+                if (!nameMatches(asset->fileName)) continue;
+                if (full()) break;
+                out.append(QVariantMap{ { "guid", asset->assetGuid },
+                                        { "name", asset->fileName },
+                                        { "type", typeName(static_cast<int>(asset->type)) } });
+            }
+        }
+        // LIVE TEXTURES are session objects that outlive every project, so they
+        // are listed straight from their catalog — never mirrored into
+        // AssetManager, whose list dies at every project.open (code review
+        // 2026-09-10: the mirror went stale and needed a project to be seen).
+        const int liveType = static_cast<int>(ModelTypes::LiveTexture);
+        if (typeFilter < 0 || typeFilter == liveType) {
+            for (const auto &r : LiveTextureCatalog::list()) {
+                if (!nameMatches(r.name)) continue;
+                if (full()) break;
+                out.append(QVariantMap{ { "guid", r.guid }, { "name", r.name },
+                                        { "type", typeName(liveType) } });
+            }
         }
         return out;
     }

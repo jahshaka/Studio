@@ -35,7 +35,7 @@ For more information see the LICENSE file
 // catalog is a property of the process, like AssetManager's list, not of any
 // service that can be absent in a headless run.
 //
-// The rows are ALSO mirrored into AssetManager as ModelTypes::LiveTexture
+// The rows are ALSO listed by assets.list({scope:'session'}) straight from this catalog as ModelTypes::LiveTexture
 // entries, so `assets.list({scope: 'session'})` and every AssetManager lookup
 // sees them. That mirror is re-asserted lazily rather than maintained: opening
 // a project calls AssetManager::clearAssetList(), which would otherwise delete
@@ -85,8 +85,6 @@ public:
 
 private:
     static QVector<Record> &rows();
-    /// Re-adds any row missing from AssetManager (see the header note).
-    static void ensureRegistered();
 };
 
 #endif // STUDIO_LIVETEXTURES_H
