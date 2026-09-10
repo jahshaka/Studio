@@ -172,7 +172,10 @@ protected:
 
 private:
     const char *mNamePrefix;
-    int  mWorkerThreads;
+    /// UNSIGNED, because Tier::MainThread answers with kSceneMainThreadOnly
+    /// (~0u) — a MODE, not a count (bridge/sceneworkerthreads.h). Round-tripping
+    /// that through int is a narrowing conversion of the one value that matters.
+    unsigned mWorkerThreads;
     bool mOwnsView = false;
     unsigned mShotSerial = 0;
 };

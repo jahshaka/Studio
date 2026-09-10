@@ -24,7 +24,7 @@ EnginePreviewScene::EnginePreviewScene(const std::shared_ptr<Engine> &engine,
                                        const char *namePrefix, sceneworkers::Tier tier)
     : mEngine(engine)
     , mNamePrefix(namePrefix)
-    , mWorkerThreads(int(sceneworkers::count(tier)))
+    , mWorkerThreads(sceneworkers::count(tier))
 {
 }
 
@@ -53,7 +53,7 @@ bool EnginePreviewScene::attach(View *view)
         if (mView) mView->setScene(nullptr);
     } else if (!mScene) {
         // ORDER: the View above already exists, so the Scene can be created.
-        mScene = engine->createScene(uniqueName(mNamePrefix, this), unsigned(mWorkerThreads));
+        mScene = engine->createScene(uniqueName(mNamePrefix, this), mWorkerThreads);
         if (!mScene) return false;
         configureScene(mScene);
         mMirror.reset(new SceneMirror(mScene));
