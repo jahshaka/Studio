@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef WORLDPOSTFXPROPERTYWIDGET_H
 #define WORLDPOSTFXPROPERTYWIDGET_H
 
+#include <QJsonArray>
 #include <QVector>
 #include <QWidget>
 
@@ -19,6 +20,11 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 class IEditorViewport;
+class CheckBoxWidget;
+class ComboBoxWidget;
+class DragFloatWidget;
+class LabelWidget;
+struct StudioServices;
 
 /**
  * World-panel "Post Process" section (owner request 2026-09-07, fix wave item
@@ -57,6 +63,10 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
     /// The live viewport, so an edit is visible immediately. Nullable.
     void setSceneView(IEditorViewport *sceneView);
+    /// The undo stack (debt L6): an on/off row is one WorldModeCommand (value
+    /// + pin), a parameter scrub is one ScenePropertyCommand, and a looks
+    /// gesture is one ScenePropertyCommand over the whole stack. Nullable.
+    void setServices(StudioServices *s) { services = s; }
 
 signals:
     /// An on/off row wrote through to a backing field the World Mode section
@@ -64,14 +74,47 @@ signals:
     void worldSettingsChanged();
 
 private:
-    void rebuild();
+    /// The effect rows and their parameters, built ONCE from the registry
+    /// (debt L6: an edit refreshes them, it does not rebuild the blade — the
+    /// control the user just touched must survive its own signal).
+    void build();
+    /// Re-reads every row, its pin mark and its enabled state, in place.
+    void refreshRows();
     /// The ordered LOOKS stack (POST_LOOKS_SPEC.md §4.1) — the one part of this
-    /// section that is not a flat list of rows, because a stack is not one.
-    void buildLooks();
-    void applied(bool rebuildPanel);
+    /// section that is not a flat list of rows, because a stack is not one, so
+    /// it lives in a sub-section of its own and IS rebuilt when it changes
+    /// shape. Scrubbing a look's parameter does not rebuild it.
+    void rebuildLooks();
+    void applied();
+    /// Writes the looks stack as ONE undo step named for the gesture.
+    void commitLooks(const QJsonArray &before, const QString &text);
+
+    struct EffectRow
+    {
+        QString id;
+        CheckBoxWidget *box = nullptr;
+        ComboBoxWidget *combo = nullptr;
+        LabelWidget *unavailable = nullptr;
+    };
+    struct ParamField
+    {
+        QString id;
+        QString ownerRowId;
+        DragFloatWidget *field = nullptr;
+    };
 
     QSharedPointer<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
+    StudioServices *services = nullptr;
+    bool loading = false;
+    QVector<EffectRow> effectRows;
+    QVector<ParamField> paramFields;
+    AccordianBladeWidget *looksSection = nullptr;
+    LabelWidget *looksHeading = nullptr;
+    /// The stack as it was when the current scrub began (looks parameters have
+    /// no start signal of their own — the editor reports the end of one).
+    QJsonArray looksBefore;
+    bool looksScrubbing = false;
 };
 
 #endif // WORLDPOSTFXPROPERTYWIDGET_H

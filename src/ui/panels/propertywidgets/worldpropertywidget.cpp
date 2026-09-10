@@ -31,8 +31,20 @@ For more information see the LICENSE file
 #include <QJsonObject>
 
 #include "io/scenereader.h"
+#include "services/services.h"
+#include "services/undoservice.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 
+// Every row on this blade writes ONE world property and is undoable through
+// ScenePropertyCommand (debt L6 / N5): ambient and gravity as one step per
+// gesture, the play mode and the background clip as one step per choice. The
+// keys are the sceneprops table's — the same fields world.ambient,
+// world.gravity and scene.playMode write, so no verb was needed for any of them.
+// The Ground Grid row is deliberately NOT here: it is a face of the View
+// Options action and the per-scene EditorData flag, not a document property.
 WorldPropertyWidget::WorldPropertyWidget()
+    : rows([this]() { return scene; }, [this]() { return services; },
+           [this]() { refreshRows(); }, [this]() { return !loading; })
 {
     this->setPanelTitle("World Settings");
 
@@ -69,8 +81,14 @@ WorldPropertyWidget::WorldPropertyWidget()
         "in the scene and puts the camera over its shoulder; a scene with no character falls "
         "back to Explorer and says so in the log. Scene Camera renders through the scene's "
         "active camera. Saved with the scene."));
-    connect(playModeSelector, SIGNAL(currentIndexChanged(int)),
-            this,             SLOT(onPlayModeChanged(int)));
+    // Combo rows carry the mode NAME as item data; the row index means nothing
+    // to the document (the enum's ints must stay free to be reordered).
+    rowundo::bind(playModeSelector, rows(QStringLiteral("playMode"), tr("Play Mode"),
+                                         [this](const QVariant &row) {
+        iris::ScenePlayMode mode = iris::ScenePlayMode::Explorer;
+        iris::playModeFromName(playModeSelector->getItemData(row.toInt()).toString(), mode);
+        return QVariant(int(mode));
+    }));
 
 	ambientMusicSelector = this->addComboBox("Background Ambience");
 	ambientMusicVolume = this->addFloatValueSlider("Volume", 1, 100, 50);
@@ -78,14 +96,9 @@ WorldPropertyWidget::WorldPropertyWidget()
 	connect(ambientMusicSelector,		SIGNAL(currentIndexChanged(int)),
 			this,						SLOT(onBackgroundAmbienceChanged(int)));
 
-	connect(ambientMusicVolume,			SIGNAL(valueChanged(float)),
-			this,						SLOT(onAmbientMusicVolumeChanged(float)));
-
-	connect(worldGravity,				SIGNAL(valueChanged(float)),
-			this,						SLOT(onGravityChanged(float)));
-
-    connect(ambientColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
-            this,                       SLOT(onAmbientColorChanged(QColor)));
+	rowundo::bind(ambientMusicVolume, rows(QStringLiteral("ambientMusicVolume"), tr("Ambience Volume")));
+	rowundo::bind(worldGravity, rows(QStringLiteral("gravity"), tr("Gravity")));
+	rowundo::bind(ambientColor->getPicker(), rows(QStringLiteral("ambientColor"), tr("Ambient Colour")));
 }
 
 void WorldPropertyWidget::setDatabase(Database *db)
@@ -115,79 +128,77 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
-
-        ambientColor->setColorValue(scene->ambientColor);
-		worldGravity->setValue(scene->gravity);
-
-        // Show, never write: blocked signals, or building the panel for a
-        // third-person scene would immediately "change" it back to explorer.
-        playModeSelector->getWidget()->blockSignals(true);
-        playModeSelector->setCurrentItemData(
-            QString::fromLatin1(iris::playModeName(scene->getPlayMode())));
-        playModeSelector->getWidget()->blockSignals(false);
-
-		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music), project->getProjectGuid());
-
-		if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
-		else ambientMusicSelector->show();
-
-		ambientMusicSelector->getWidget()->blockSignals(true);	// don't register initial signals
-		ambientMusicSelector->clear();
-		ambientMusicSelector->addItem("None", "");
-		for (const auto music : musicFilesAvailableFromDatabase) ambientMusicSelector->addItem(music.name, music.guid);
-		// If we have a current audio clip set that as the current item
-		ambientMusicSelector->setCurrentItemData(scene->ambientMusicGuid);
-		ambientMusicSelector->getWidget()->blockSignals(false);
-		// If we only have one audio clip, we need to trigger the update function
-		// Maybe this is not needed depending on how we want to trigger audio playback
-		//if (musicFilesAvailableFromDatabase.count() == 1) onBackgroundAmbienceChanged(0);
+        refreshRows();
     }
 	else {
         this->scene.clear();
     }
 }
 
-void WorldPropertyWidget::onPlayModeChanged(int index)
+void WorldPropertyWidget::refreshRows()
 {
-    Q_UNUSED(index);
-    if (!scene || !playModeSelector) return;
-    iris::ScenePlayMode mode = iris::ScenePlayMode::Explorer;
-    if (iris::playModeFromName(playModeSelector->getCurrentItemData(), mode))
-        scene->setPlayMode(mode);
+    if (!scene) return;
+    // In place, never a rebuild: these rows outlive every selection, so an undo
+    // repaints numbers instead of destroying and re-wiring the blade.
+    loading = true;
+    ambientColor->setColorValue(scene->ambientColor);
+    worldGravity->setValue(scene->gravity);
+    ambientMusicVolume->setValue(scene->ambientMusicVolume);
+    playModeSelector->setCurrentItemData(
+        QString::fromLatin1(iris::playModeName(scene->getPlayMode())));
+
+    QVector<AssetRecord> musicFilesAvailableFromDatabase;
+    if (db && project)
+        musicFilesAvailableFromDatabase =
+            db->fetchAssetsByType(static_cast<int>(ModelTypes::Music), project->getProjectGuid());
+
+    if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
+    else ambientMusicSelector->show();
+
+    ambientMusicSelector->clear();
+    ambientMusicSelector->addItem("None", "");
+    for (const auto &music : musicFilesAvailableFromDatabase)
+        ambientMusicSelector->addItem(music.name, music.guid);
+    ambientMusicSelector->setCurrentItemData(scene->ambientMusicGuid);
+    loading = false;
 }
 
-void WorldPropertyWidget::onGravityChanged(float value)
+void WorldPropertyWidget::applyAmbientMusic(const QString &guid)
 {
-	scene->setWorldGravity(value);
-}
-
-void WorldPropertyWidget::onAmbientColorChanged(QColor color)
-{
-    scene->setAmbientColor(color);
-}
-
-void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
-{
-	if (index == 0) {
-		scene->ambientMusicGuid = "";
+	if (!scene) return;
+	if (guid.isEmpty() || !project) {
+		scene->ambientMusicGuid.clear();
 		scene->stopPlayingAmbientMusic();
 		return;
 	}
-
-	auto currentGuid = ambientMusicSelector->getCurrentItemData();
 	// Pin-world resolution: project pin -> library source (phase 4).
 	QString fullPathToAudio = AssetCas::resolvePinned(
 		QSqlDatabase::database(), AssetStorePaths::root(),
-		project->getProjectGuid(), currentGuid);
+		project->getProjectGuid(), guid);
 
-	// Start playing here
-	scene->ambientMusicGuid = currentGuid;
+	scene->ambientMusicGuid = guid;
 	scene->setAmbientMusic(fullPathToAudio);
 	scene->startPlayingAmbientMusic();
 }
 
-void WorldPropertyWidget::onAmbientMusicVolumeChanged(float volume)
+void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
 {
-	scene->setAmbientMusicVolume(volume);
+	Q_UNUSED(index)
+	if (loading || !scene) return;
+	const QString before = scene->ambientMusicGuid;
+	const QString after = ambientMusicSelector->getCurrentItemData();
+	if (before == after) return;
+	// The clip is a document field with a SIDE EFFECT (playback), so it does
+	// not go through the generic sceneprops write — the undo step replays the
+	// same call the row just made, which is what stops the two drifting apart.
+	//
+	// THE PUSH DOES THE APPLY. NodeEditCommand has no first-redo skip (unlike
+	// the value commands), so QUndoStack::push replays redo() immediately — and
+	// applying twice here RESTARTS the clip from the top, audibly (code review).
+	// With no undo stack (headless hosts, the panel suites) nothing would run
+	// at all, so that case applies by hand.
+	auto redo = [this, after]() { applyAmbientMusic(after); };
+	if (!services || !services->undo) { redo(); return; }
+	panelundo::pushEdit(services, tr("Background Ambience"), redo,
+	                    [this, before]() { applyAmbientMusic(before); refreshRows(); });
 }
-

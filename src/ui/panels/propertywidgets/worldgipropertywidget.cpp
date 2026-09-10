@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QVector3D>
 
 namespace {
 // Combo rows in display order -> document modes (rows are NOT the enum values).
@@ -173,7 +174,10 @@ void WorldGiPropertyWidget::rebuild()
         // promises — but there is nothing to budget then, so it greys out the
         // same way the tier does.
         updateBudget->setEnabled(on);
-        connect(updateBudget, SIGNAL(valueChanged(float)), SLOT(onUpdateBudgetChanged(float)));
+        // The slider tops out at 8 because a row is a row; the VERB takes 0..512
+        // for scripts that want a whole grid live for a capture.
+        wirePlainRow(updateBudget, QStringLiteral("giUpdateBudget"), tr("Rayon Update Budget"),
+                     [](const QVariant &v) { return QVariant(qBound(0, qRound(v.toFloat()), 8)); });
     }
 
     // ---- THE ADVANCED DISCLOSURE -------------------------------------------
@@ -232,8 +236,15 @@ void WorldGiPropertyWidget::rebuild()
                 current = row;
         }
         lightSelector->setCurrentIndex(current);
-        connect(lightSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
-                this, &WorldGiPropertyWidget::onLightChanged);
+        // "Bounce From" carries the light's GUID as item data (the row index is
+        // meaningless to the document), so the row maps its own value.
+        {
+            ComboBoxWidget *picker = lightSelector;
+            wirePlainRow(lightSelector, QStringLiteral("giLightGuid"), tr("Rayon Bounce Light"),
+                         [picker](const QVariant &row) {
+                             return QVariant(picker->getItemData(row.toInt()).toString());
+                         });
+        }
 
         bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
                                             1.0f, 4.0f, float(scene->giNumBounces));
@@ -275,15 +286,22 @@ void WorldGiPropertyWidget::rebuild()
         this->addLabel(tr("Bounds"), tr("Corners of the lit area; zeros = fit the scene"));
         boundsMin = this->addDragVector3(tr("Min"), scene->giBoundsMin);
         boundsMax = this->addDragVector3(tr("Max"), scene->giBoundsMax);
-        connect(boundsMin, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onBoundsMinChanged);
-        connect(boundsMax, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onBoundsMaxChanged);
+        wirePlainRow(boundsMin, QStringLiteral("giBoundsMin"), tr("Rayon Bounds"));
+        wirePlainRow(boundsMax, QStringLiteral("giBoundsMax"), tr("Rayon Bounds"));
 
         if (scene->giMode == iris::GiMode::VCT_PCC_HYBRID) {
             this->addLabel(tr("Reflection Probes"), tr("Probe counts along each axis of the bounds"));
             // Counts, not lengths: whole numbers, a coarse scrub, and a range
             // that cannot ask for a probe grid nobody could afford.
             pccGrid = this->addDragVector3(tr("Grid"), scene->giPccGrid, 1.0, 16.0, 0.05, 0);
-            connect(pccGrid, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onPccGridChanged);
+            // Counts: whole numbers in 1..8, clamped on the way to the document.
+            wirePlainRow(pccGrid, QStringLiteral("giPccGrid"), tr("Rayon Probe Grid"),
+                         [](const QVariant &v) {
+                             const QVector3D g = v.value<QVector3D>();
+                             return QVariant::fromValue(QVector3D(qBound(1, qRound(g.x()), 8),
+                                                                  qBound(1, qRound(g.y()), 8),
+                                                                  qBound(1, qRound(g.z()), 8)));
+                         });
             // DYNAMIC PROBES (Epic's other column). A Rayon tier row; pins.
             dynamicProbes = this->addFloatValueSlider(
                 tr("Dynamic Probes") + pinMark(scene, "giDynamicProbes"), 0.0f, 8.0f,
@@ -321,7 +339,8 @@ void WorldGiPropertyWidget::rebuild()
                    "and the calibrated default (measured at 86% of the cone-traced diffuse it "
                    "replaces). Raise it to trim a room brighter; 0 leaves the field bound and "
                    "contributing nothing."));
-            connect(ddgiIntensity, SIGNAL(valueChanged(float)), SLOT(onDdgiIntensityChanged(float)));
+            wirePlainRow(ddgiIntensity, QStringLiteral("giDdgiIntensity"), tr("Field Intensity"),
+                         [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 64.0f)); });
             ddgiAmbient = this->addFloatValueSlider(tr("Ambient Fill"), 0.0f, 4.0f,
                                                     qBound(0.0f, scene->giDdgiAmbient, 4.0f));
             ddgiAmbient->setToolTip(
@@ -333,7 +352,8 @@ void WorldGiPropertyWidget::rebuild()
                    "1.0 rebuilds it from the field's own depth probes and is the default; 0 "
                    "leaves it out, which is how this behaved before the fix. A sealed room "
                    "sees no difference either way: it has no sky to see."));
-            connect(ddgiAmbient, SIGNAL(valueChanged(float)), SLOT(onDdgiAmbientChanged(float)));
+            wirePlainRow(ddgiAmbient, QStringLiteral("giDdgiAmbient"), tr("Ambient Fill"),
+                         [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 8.0f)); });
             // THE PROBE SOURCE (GI_UNIFIED_SPEC P3 "A2", rayon2 S3). Advanced
             // only, by decree: no tier writes it, epic stays voxel-fed, so it
             // carries no pin mark and no registry row.
@@ -350,8 +370,9 @@ void WorldGiPropertyWidget::rebuild()
                    "Rasterised captures render six small faces per probe from the live scene "
                    "instead and re-capture while rigs move, under the same GI Update Budget. "
                    "The field is never born dark: it starts from the voxel answer."));
-            connect(ddgiSource, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
-                    this, &WorldGiPropertyWidget::onDdgiSourceChanged);
+            // Row 0 is "Automatic" = -1 on the document.
+            wirePlainRow(ddgiSource, QStringLiteral("giDdgiSource"), tr("Probe Source"),
+                         [](const QVariant &row) { return QVariant(qBound(-1, row.toInt() - 1, 1)); });
         }
 
         // P1a.3, adapted: the spec asked for "fit to SELECTION", but this panel
@@ -485,13 +506,43 @@ void WorldGiPropertyWidget::editRayonRow(const QString &id, int value, const QSt
     if (atomic) endRayonEdit(text);
 }
 
+// A REGISTRY edit: through worldmodes (the write AND the pin), as ONE
+// WorldModeCommand, and then a rebuild — every row here decides which OTHER
+// rows exist, so the panel's shape follows the document.
+void WorldGiPropertyWidget::editRegistry(const QString &text, const std::function<void()> &edit)
+{
+    if (!scene) return;
+    QPointer<WorldGiPropertyWidget> self(this);
+    panelundo::runWorldModeEdit(services, scene, text, edit, [self]() {
+        if (!self) return;
+        self->rebuild();
+        // The sibling sections (World Mode above all, which lists every one of
+        // these rows with its pin mark) display what was just written.
+        emit self->worldSettingsChanged();
+    });
+}
+
+void WorldGiPropertyWidget::wirePlainRow(QWidget *row, const QString &key, const QString &text,
+                                         std::function<QVariant(const QVariant &)> toDocument)
+{
+    if (!row) return;
+    QPointer<WorldGiPropertyWidget> self(this);
+    panelundo::SceneRows rows([this]() { return scene; }, [this]() { return services; },
+                              [self]() { if (self) self->rebuild(); });
+    const rowundo::Binding binding = rows(key, text, std::move(toDocument));
+    if (auto *slider = qobject_cast<HFloatSliderWidget *>(row))      rowundo::bind(slider, binding);
+    else if (auto *vec = qobject_cast<DragVector3Widget *>(row))     rowundo::bind(vec, binding);
+    else if (auto *combo = qobject_cast<ComboBoxWidget *>(row))      rowundo::bind(combo, binding);
+}
+
 void WorldGiPropertyWidget::onRayonToggled(bool on)
 {
     if (!scene) return;
-    worldmodes::setRayon(scene, on, worldmodes::rayonTier(scene));
     // The switch changed which rows exist (the budget row, the whole Advanced
-    // block), so the panel has to be rebuilt rather than merely refreshed.
-    rebuild();
+    // block), so editRegistry's rebuild is not optional here.
+    editRegistry(on ? tr("Rayon On") : tr("Rayon Off"), [this, on]() {
+        worldmodes::setRayon(scene, on, worldmodes::rayonTier(scene));
+    });
 }
 
 void WorldGiPropertyWidget::onTierChanged(int row)
@@ -502,12 +553,15 @@ void WorldGiPropertyWidget::onTierChanged(int row)
     bool ok = false;
     const worldmodes::RayonTier t = worldmodes::rayonTierFromName(names[row], &ok);
     if (!ok) return;
-    worldmodes::setRayon(scene, worldmodes::rayonEnabled(scene), t);
-    rebuild();
+    editRegistry(tr("Rayon Quality: %1").arg(names[row]), [this, t]() {
+        worldmodes::setRayon(scene, worldmodes::rayonEnabled(scene), t);
+    });
 }
 
 void WorldGiPropertyWidget::onAdvancedToggled(bool on)
 {
+    // A disclosure is not a document edit: nothing to record, everything to
+    // rebuild.
     advancedOpen = on;
     rebuild();
 }
@@ -515,25 +569,28 @@ void WorldGiPropertyWidget::onAdvancedToggled(bool on)
 void WorldGiPropertyWidget::modeChanged(int row)
 {
     if (!scene || row < 0 || row >= kGiRowCount) return;
-    scene->giMode = kGiRows[row];
+    const iris::GiMode mode = kGiRows[row];
     // A direct edit of a backing field is a PIN (POST_CHAIN_SPEC §9.1) — here
     // it is the Rayon technique pin: it survives tier switches until reset.
-    worldmodes::pinRowValue(scene, QStringLiteral("giMode"), int(scene->giMode));
-    rebuild();
+    editRegistry(tr("Rayon Technique"), [this, mode]() {
+        scene->giMode = mode;
+        worldmodes::pinRowValue(scene, QStringLiteral("giMode"), int(scene->giMode));
+    });
 }
 
 void WorldGiPropertyWidget::onQualityChanged(int row)
 {
     if (!scene) return;
-    scene->giQuality = static_cast<iris::GiQuality>(qBound(0, row, 2));
-    worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
-    rebuild();
+    const int quality = qBound(0, row, 2);
+    editRegistry(tr("Rayon Quality Detail"), [this, quality]() {
+        scene->giQuality = static_cast<iris::GiQuality>(quality);
+        worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
+    });
 }
 
 void WorldGiPropertyWidget::onLightChanged(int row)
 {
-    if (!scene || !lightSelector) return;
-    scene->giLightGuid = lightSelector->getItemData(row).toString();
+    Q_UNUSED(row)   // the row is wired through wirePlainRow (giLightGuid)
 }
 
 void WorldGiPropertyWidget::onBouncesChanged(float value)
@@ -547,52 +604,18 @@ void WorldGiPropertyWidget::onDynamicProbesChanged(float value)
                  tr("Rayon Dynamic Probes"));
 }
 
-void WorldGiPropertyWidget::onBoundsMinChanged(iris::Vec3 value)
-{
-    if (!!scene) scene->giBoundsMin = value;
-}
-
-void WorldGiPropertyWidget::onBoundsMaxChanged(iris::Vec3 value)
-{
-    if (!!scene) scene->giBoundsMax = value;
-}
-
-void WorldGiPropertyWidget::onPccGridChanged(iris::Vec3 value)
-{
-    if (!!scene)
-        scene->giPccGrid = iris::Vec3(qBound(1, qRound(value.x()), 8),
-                                     qBound(1, qRound(value.y()), 8),
-                                     qBound(1, qRound(value.z()), 8));
-}
-
-void WorldGiPropertyWidget::onUpdateBudgetChanged(float value)
-{
-    // The slider tops out at 8 because a row is a row; the VERB takes 0..512 for
-    // scripts that want a whole grid live for a capture.
-    if (!!scene) scene->giUpdateBudget = qBound(0, qRound(value), 8);
-}
-
 void WorldGiPropertyWidget::onDdgiToggled(bool on)
 {
     if (!scene) return;
-    scene->giDdgi = on ? 1 : 0;
-    worldmodes::pinRowValue(scene, QStringLiteral("giDdgi"), scene->giDdgi);
-    rebuild();   // the intensity row only exists while the field is on
-}
-
-void WorldGiPropertyWidget::onDdgiIntensityChanged(float value)
-{
-    if (!!scene) scene->giDdgiIntensity = qBound(0.0f, value, 64.0f);
-}
-
-void WorldGiPropertyWidget::onDdgiAmbientChanged(float value)
-{
-    if (!!scene) scene->giDdgiAmbient = qBound(0.0f, value, 8.0f);
+    editRegistry(on ? tr("Irradiance Field On") : tr("Irradiance Field Off"), [this, on]() {
+        scene->giDdgi = on ? 1 : 0;
+        worldmodes::pinRowValue(scene, QStringLiteral("giDdgi"), scene->giDdgi);
+    });   // the intensity rows only exist while the field is on
 }
 
 void WorldGiPropertyWidget::onDdgiSourceChanged(int index)
 {
-    if (!!scene) scene->giDdgiSource = qBound(-1, index - 1, 1);
+    Q_UNUSED(index)   // wired through wirePlainRow (giDdgiSource)
 }
 
 void WorldGiPropertyWidget::onFitBoundsClicked()
@@ -600,8 +623,24 @@ void WorldGiPropertyWidget::onFitBoundsClicked()
     if (!scene || scene->getRootNode().isNull()) return;
     iris::Vec3 mn, mx;
     if (!gibounds::fit(scene->getRootNode()->children(), 0.0f, mn, mx)) return;
-    scene->giBoundsMin = mn;
-    scene->giBoundsMax = mx;
+    // TWO fields, one gesture: the pair is the volume, and an undo that put
+    // back one corner would leave a box nobody asked for. Recorded as one step
+    // whose apply half is the same assignment the button just made.
+    const iris::Vec3 oldMin = scene->giBoundsMin;
+    const iris::Vec3 oldMax = scene->giBoundsMax;
+    auto apply = [this](const iris::Vec3 &lo, const iris::Vec3 &hi) {
+        if (!scene) return;
+        scene->giBoundsMin = lo;
+        scene->giBoundsMax = hi;
+    };
+    apply(mn, mx);
+    QPointer<WorldGiPropertyWidget> self(this);
+    panelundo::pushEdit(services, tr("Fit Rayon Bounds"),
+                        [apply, mn, mx]() { apply(mn, mx); },
+                        [self, apply, oldMin, oldMax]() {
+                            apply(oldMin, oldMax);
+                            if (self) self->rebuild();
+                        });
     // The rows are spin boxes holding the OLD numbers; rebuild so the panel
     // shows what it just wrote.
     rebuild();
@@ -610,6 +649,8 @@ void WorldGiPropertyWidget::onFitBoundsClicked()
 void WorldGiPropertyWidget::onResetAdvancedClicked()
 {
     if (!scene) return;
-    worldmodes::clearRayonOverrides(scene);
-    rebuild();
+    // Dropping every Rayon pin is the widest edit this section makes — and the
+    // one most worth being able to take back.
+    editRegistry(tr("Reset Rayon Advanced Settings"),
+                 [this]() { worldmodes::clearRayonOverrides(scene); });
 }

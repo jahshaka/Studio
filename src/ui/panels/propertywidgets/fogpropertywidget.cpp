@@ -18,8 +18,17 @@ For more information see the LICENSE file
 #include "ui/controls/hfloatsliderwidget.h"
 
 #include "ui/controls/checkboxwidget.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 
+// Every row here writes ONE world property and is undoable through
+// ScenePropertyCommand — a slider drag is one step (rowundo brackets it), a
+// checkbox is one step, and populating the rows for a newly selected scene is
+// none (the `loading` guard). The keys are the sceneprops table's, which is
+// also what world.fog / world.shadows write, so the panel and the verbs stay
+// one model (API-first: no new verb was needed for any row on this blade).
 FogPropertyWidget::FogPropertyWidget()
+    : rows([this]() { return scene; }, [this]() { return services; },
+           [this]() { refreshRows(); }, [this]() { return !loading; })
 {
     fogEnabled      = this->addCheckBox("Fog Enabled", false);
     fogColor        = this->addColorPicker("Fog Color");
@@ -74,96 +83,45 @@ FogPropertyWidget::FogPropertyWidget()
 
     shadowEnabled   = this->addCheckBox("Enable Shadows", true);
 
-    connect(fogColor->getPicker(),  SIGNAL(onColorChanged(QColor)), SLOT(onFogColorChanged(QColor)));
-    connect(fogDensity,             SIGNAL(valueChanged(float)),    SLOT(onFogDensityChanged(float)));
-    connect(fogHeightDensity,       SIGNAL(valueChanged(float)),    SLOT(onFogHeightDensityChanged(float)));
-    connect(fogHeightFalloff,       SIGNAL(valueChanged(float)),    SLOT(onFogHeightFalloffChanged(float)));
-    connect(fogHeightLevel,         SIGNAL(valueChanged(float)),    SLOT(onFogHeightLevelChanged(float)));
-    connect(fogBreakBrightness,     SIGNAL(valueChanged(float)),    SLOT(onFogBreakBrightnessChanged(float)));
-    connect(fogBreakFalloff,        SIGNAL(valueChanged(float)),    SLOT(onFogBreakFalloffChanged(float)));
-    connect(fogEnabled,             SIGNAL(valueChanged(bool)),     SLOT(onFogEnabledChanged(bool)));
-    connect(shadowEnabled,          SIGNAL(valueChanged(bool)),     SLOT(onShadowEnabledChanged(bool)));
+    // The rows, bound to their world properties. A row's LIVE write and its
+    // undo step come from the same key, so the two can never disagree.
+    rowundo::bind(fogColor->getPicker(), rows(QStringLiteral("fogColor"), tr("Fog Colour")));
+    rowundo::bind(fogDensity,        rows(QStringLiteral("fogDensity"), tr("Fog Density")));
+    rowundo::bind(fogHeightDensity,  rows(QStringLiteral("fogHeightDensity"), tr("Height Fog Density")));
+    rowundo::bind(fogHeightFalloff,  rows(QStringLiteral("fogHeightFalloff"), tr("Height Falloff")));
+    rowundo::bind(fogHeightLevel,    rows(QStringLiteral("fogHeightLevel"), tr("Height Level")));
+    rowundo::bind(fogBreakBrightness,rows(QStringLiteral("fogBreakMinBrightness"), tr("Breakthrough Brightness")));
+    rowundo::bind(fogBreakFalloff,   rows(QStringLiteral("fogBreakFalloff"), tr("Breakthrough Falloff")));
+    rowundo::bind(fogEnabled,        rows(QStringLiteral("fogEnabled"), tr("Fog Enabled")));
+    rowundo::bind(shadowEnabled,     rows(QStringLiteral("shadowEnabled"), tr("Enable Shadows")));
 }
 
 void FogPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
-
-        fogColor->setColorValue(scene->fogColor);
-        fogDensity->setValue(scene->fogDensity);
-        fogStart->setValue(scene->fogStart);
-        fogHeightDensity->setValue(scene->fogHeightDensity);
-        fogHeightFalloff->setValue(scene->fogHeightFalloff);
-        fogHeightLevel->setValue(scene->fogHeightLevel);
-        fogBreakBrightness->setValue(scene->fogBreakMinBrightness);
-        fogBreakFalloff->setValue(scene->fogBreakFalloff);
-        fogEnabled->setValue(scene->fogEnabled);
-        shadowEnabled->setValue(scene->shadowEnabled);
+        refreshRows();
     } else {
         this->scene.clear();
     }
 }
 
-void FogPropertyWidget::onFogColorChanged(QColor color)
+void FogPropertyWidget::refreshRows()
 {
-    if (!!scene) {
-        scene->fogColor = color;
-    }
-}
-
-void FogPropertyWidget::onFogDensityChanged(float val)
-{
-    if (!!scene) {
-        scene->fogDensity = val;
-    }
-}
-
-void FogPropertyWidget::onFogHeightDensityChanged(float val)
-{
-    if (!!scene) {
-        scene->fogHeightDensity = val;
-    }
-}
-
-void FogPropertyWidget::onFogHeightFalloffChanged(float val)
-{
-    if (!!scene) {
-        scene->fogHeightFalloff = val;
-    }
-}
-
-void FogPropertyWidget::onFogHeightLevelChanged(float val)
-{
-    if (!!scene) {
-        scene->fogHeightLevel = val;
-    }
-}
-
-void FogPropertyWidget::onFogBreakBrightnessChanged(float val)
-{
-    if (!!scene) {
-        scene->fogBreakMinBrightness = val;
-    }
-}
-
-void FogPropertyWidget::onFogBreakFalloffChanged(float val)
-{
-    if (!!scene) {
-        scene->fogBreakFalloff = val;
-    }
-}
-
-void FogPropertyWidget::onFogEnabledChanged(bool val)
-{
-    if (!!scene) {
-        scene->fogEnabled = val;
-    }
-}
-
-void FogPropertyWidget::onShadowEnabledChanged(bool val)
-{
-    if (!!scene) {
-        scene->shadowEnabled = val;
-    }
+    if (!scene) return;
+    // IN PLACE, never a rebuild: the rows are the same widgets from the panel's
+    // construction to the window's close, so an undo repaints numbers rather
+    // than destroying and re-wiring nine controls (debt L6's clearLayout half).
+    loading = true;
+    fogColor->setColorValue(scene->fogColor);
+    fogDensity->setValue(scene->fogDensity);
+    fogStart->setValue(scene->fogStart);
+    fogHeightDensity->setValue(scene->fogHeightDensity);
+    fogHeightFalloff->setValue(scene->fogHeightFalloff);
+    fogHeightLevel->setValue(scene->fogHeightLevel);
+    fogBreakBrightness->setValue(scene->fogBreakMinBrightness);
+    fogBreakFalloff->setValue(scene->fogBreakFalloff);
+    fogEnabled->setValue(scene->fogEnabled);
+    shadowEnabled->setValue(scene->shadowEnabled);
+    loading = false;
 }

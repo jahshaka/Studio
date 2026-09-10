@@ -46,8 +46,14 @@ namespace lookstack
 /// saying whether the panel has to be rebuilt: false while a parameter is being
 /// scrubbed — rebuilding under the cursor would destroy the widget being
 /// dragged — and true for anything that changes which rows exist.
+/// `gestureEnd` (optional) fires when a parameter SCRUB finishes — the drag's
+/// mouse-up or the typed commit. A caller that records undo steps needs it:
+/// `write` streams a value per scrubbed pixel, and one undo step per pixel is
+/// not an undo history (debt L6). Nothing else in the editor is a gesture: every
+/// other change is structural and arrives once.
 void build(AccordianBladeWidget *blade, const QJsonArray &stack,
-           const std::function<void(const QJsonArray &, bool)> &write);
+           const std::function<void(const QJsonArray &, bool)> &write,
+           const std::function<void()> &gestureEnd = {});
 
 }   // namespace lookstack
 

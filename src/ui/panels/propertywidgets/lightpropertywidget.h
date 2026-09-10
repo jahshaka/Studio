@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 
 class ColorValueWidget;
 class ColorPickerWidget;
@@ -51,38 +52,15 @@ public:
      */
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
 
+    /// The undo stack (debt L6). Every row on this blade writes a REFLECTED
+    /// light property, so each becomes one SetNodePropertyCommand — the same
+    /// command node.setProperty pushes. Nullable.
+    void setServices(StudioServices *s) { services = s; }
+
 protected slots:
 
-    /**
-     * Sets the light's color
-     * @param color
-     */
-    void lightColorChanged(QColor color);
-
-    /**
-     * Sets the light's intensity
-     * @param intensity
-     */
-    void lightIntensityChanged(float intensity);
-
-    /**
-     * Sets the light's distance
-     * @param distance
-     */
-    void lightDistanceChanged(float distance);
-
-    /**
-     * Sets the light's spot cutoff angle. Only valid for spotlights.
-     * @param spotCutOff
-     */
-    void lightSpotCutoffChanged(float spotCutOff);
-
-    void lightSpotCutoffSoftnessChanged(float spotCutOffSoftness);
-    void lightSpotFalloffChanged(float spotFalloff);
-
-    void lightRectWidthChanged(float width);
-    void lightRectHeightChanged(float height);
-    void lightDoubleSidedChanged(bool doubleSided);
+    /// The one row with a consequence beyond its own value: an accurate (LTC)
+    /// area light ignores its mask, and the panel says so.
     void lightAccurateChanged(bool accurate);
 
     /// Binds/clears the IES photometric profile and the area-light mask. Both
@@ -93,18 +71,17 @@ protected slots:
     void pickMask();
     void clearMask();
 
-    void shadowTypeChanged(QString name);
-    void shadowStaticChanged(bool on);
-    void shadowSizeChanged(QString size);
-	void shadowBiasChanged(float bias);
-
-	void shadowColorChanged(QColor color);
-	void shadowAlphaChanged(float bias);
-
     /// Lighting channels, light side: which channels this light illuminates.
     void lightChannelsChanged(quint32 mask);
 
 private:
+    /// Binds every row to its reflected property. Called once, from the ctor.
+    void wireRows();
+    /// Binds (or clears) the IES profile / the area mask through LightBindings
+    /// and records ONE undo step. The pick and clear buttons are two front ends
+    /// on each of these.
+    void bindProfile(const QString &guid);
+    void bindMask(const QString &guid);
     /// Repaints the two binding rows from the node, INCLUDING the honesty
     /// annotations: a profile does nothing on a shadow-casting point light (the
     /// renderer has no profile term there) and a mask does nothing on an
@@ -118,6 +95,11 @@ private:
 private:
 
     QSharedPointer<iris::LightNode> lightNode;
+    StudioServices *services = nullptr;
+    /// Populating the rows for a newly selected light is not a user edit (the
+    /// sliders emit from setValue) — see rowundo::Binding::guard.
+    bool loading = false;
+    panelundo::NodeRows rows;
 
 	ColorValueWidget* lightColor;
 	HFloatSliderWidget* distance;

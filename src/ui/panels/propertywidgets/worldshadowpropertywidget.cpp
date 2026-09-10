@@ -19,6 +19,9 @@ For more information see the LICENSE file
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
 #include "services/worldmodes.h"
+#include "ui/panels/propertywidgets/panelundo.h"
+
+#include <QSignalBlocker>
 
 namespace {
 // Combo rows in display order -> scene->shadowResolution values. 0 = Auto.
@@ -50,7 +53,8 @@ void WorldShadowPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
-        rebuild();
+        build();
+        refreshRows();
     } else {
         this->scene.clear();
     }
@@ -75,51 +79,74 @@ int WorldShadowPropertyWidget::derivedFromLights() const
     return best;
 }
 
-void WorldShadowPropertyWidget::rebuild()
+void WorldShadowPropertyWidget::build()
 {
-    clearPanel(this->layout());
-    if (!scene) return;
+    if (qualitySelector) return;   // built once, refilled from here on
 
     qualitySelector = this->addComboBox("Shadow Quality");
     qualitySelector->addItem("Auto (from lights)");
     qualitySelector->addItem("1024");
     qualitySelector->addItem("2048");
     qualitySelector->addItem("4096");
-    qualitySelector->setCurrentIndex(shadowRowFor(scene->shadowResolution));
     qualitySelector->setToolTip(
         QStringLiteral("One shadow atlas serves every light in the scene. Auto sizes it from the "
                        "largest per-light Shadow Size; an explicit choice overrides that."));
     connect(qualitySelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldShadowPropertyWidget::onQualityChanged);
 
-    // What is actually in use, and what it costs. Auto has to say what it
-    // derived or the row is a mystery; the VRAM figure is the guard-rail.
+    autoRow = this->addLabel("Auto Resolves To", QString());
+    memoryRow = this->addLabel("Atlas Memory", QString());
+    mapsRow = this->addLabel("Shadow Maps", QString());
+    for (LabelWidget *row : { autoRow, memoryRow, mapsRow })
+        if (row) row->hide();
+}
+
+// The READ-BACK rows, re-read in place. Nothing here is created or destroyed:
+// a row with nothing to say hides, which is what lets an edit refresh the
+// blade without deleting the combo whose signal is still on the stack.
+void WorldShadowPropertyWidget::refreshRows()
+{
+    if (!scene || !qualitySelector) return;
+    loading = true;
+    {
+        const QSignalBlocker quiet(qualitySelector);
+        qualitySelector->setCurrentIndex(shadowRowFor(scene->shadowResolution));
+    }
+
     const int derived = derivedFromLights();
     int effective = scene->shadowResolution > 0 ? scene->shadowResolution : derived;
     if (sceneView && sceneView->isInitialized()) {
         const int live = sceneView->shadowResolution();
         if (live > 0) effective = live;
     }
-    if (scene->shadowResolution == 0) {
-        this->addLabel("Auto Resolves To",
-                       derived > 0 ? QStringLiteral("%1 (largest light request)").arg(effective)
-                                   : QStringLiteral("no shadow-casting light yet"));
+    if (autoRow) {
+        // Auto has to say what it derived or the row is a mystery.
+        autoRow->setVisible(scene->shadowResolution == 0);
+        autoRow->setText(derived > 0
+                             ? QStringLiteral("%1 (largest light request)").arg(effective)
+                             : QStringLiteral("no shadow-casting light yet"));
     }
+
     // THE ATLAS, AS THE RENDERER BUILT IT (SHADOW_TOOLING_SPEC.md §4.2). The
     // layout is packed into columns now, not a fixed R x 3.5R strip, so the
     // live figures are read back rather than computed whenever an engine is
     // there to ask; atlasMegabytes() stays the offline estimate.
     IEditorViewport::ShadowStatusInfo st;
     if (sceneView && sceneView->isInitialized()) st = sceneView->shadowStatus();
-    if (st.available && st.atlasWidth > 0) {
-        this->addLabel("Atlas Memory",
-                       QStringLiteral("~%1 MB VRAM (%2 x %3, %4 point/spot maps)")
-                           .arg(int(st.atlasBytes / (1024 * 1024)))
-                           .arg(st.atlasWidth).arg(st.atlasHeight).arg(st.focusedMaps));
-    } else if (effective > 0) {
-        this->addLabel("Atlas Memory", QStringLiteral("~%1 MB VRAM (%2 x %3)")
-                                           .arg(atlasMegabytes(effective))
-                                           .arg(effective).arg(qRound(effective * 3.5)));
+    if (memoryRow) {
+        if (st.available && st.atlasWidth > 0) {
+            memoryRow->setText(QStringLiteral("~%1 MB VRAM (%2 x %3, %4 point/spot maps)")
+                                   .arg(int(st.atlasBytes / (1024 * 1024)))
+                                   .arg(st.atlasWidth).arg(st.atlasHeight).arg(st.focusedMaps));
+            memoryRow->show();
+        } else if (effective > 0) {
+            memoryRow->setText(QStringLiteral("~%1 MB VRAM (%2 x %3)")
+                                   .arg(atlasMegabytes(effective))
+                                   .arg(effective).arg(qRound(effective * 3.5)));
+            memoryRow->show();
+        } else {
+            memoryRow->hide();
+        }
     }
 
     // THE EXCEEDED CASE, said out loud (owner decision D5: panel + status +
@@ -127,31 +154,38 @@ void WorldShadowPropertyWidget::rebuild()
     // the atlas has maps simply showed fewer shadows than it had lights, and
     // WHICH lamp went dark changed as the camera moved.
     const int unmapped = st.available ? int(st.unmapped.size()) : 0;
-    if (unmapped > 0) {
-        this->addLabel("Shadow Maps",
-                       QStringLiteral("%1 of %2 shadow-casting lights have a map — %3 cast no "
-                                      "shadow. Raise Shadow Map Budget in World Modes, or turn "
-                                      "off Cast Shadows on distant lights.")
-                           .arg(st.casters - unmapped).arg(st.casters).arg(unmapped));
-    } else if (st.available && st.casters > 0) {
-        this->addLabel("Shadow Maps", QStringLiteral("%1 of %1 shadow-casting lights have a map")
-                                          .arg(st.casters));
+    if (mapsRow) {
+        if (unmapped > 0) {
+            mapsRow->setText(QStringLiteral("%1 of %2 shadow-casting lights have a map — %3 cast "
+                                            "no shadow. Raise Shadow Map Budget in World Modes, "
+                                            "or turn off Cast Shadows on distant lights.")
+                                 .arg(st.casters - unmapped).arg(st.casters).arg(unmapped));
+            mapsRow->show();
+        } else if (st.available && st.casters > 0) {
+            mapsRow->setText(QStringLiteral("%1 of %1 shadow-casting lights have a map")
+                                 .arg(st.casters));
+            mapsRow->show();
+        } else {
+            mapsRow->hide();
+        }
     }
+    loading = false;
 }
 
 void WorldShadowPropertyWidget::onQualityChanged(int row)
 {
-    if (!scene || row < 0 || row >= kShadowRowCount) return;
-    // The document field is the API (same path as world.setShadowResolution):
-    // SceneMirror pushes it to the engine at the next sync. The engine rebuilds
-    // its shadow node and every workspace on change, so this is deliberately a
-    // combo and not a slider.
-    scene->shadowResolution = kShadowRows[row];
-    // A direct edit of a backing field is a World Mode PIN (POST_CHAIN_SPEC
-    // §9.1): the World Modes section must show it as overridden, and the next
-    // mode switch must leave it alone.
-    worldmodes::pinRowValue(scene, QStringLiteral("shadowResolution"), scene->shadowResolution);
-    if (sceneView && sceneView->isInitialized())
-        sceneView->renderFrames(2);   // apply now so the readback below is the truth
-    rebuild();
+    if (loading || !scene || row < 0 || row >= kShadowRowCount) return;
+    const int resolution = kShadowRows[row];
+    // The registry write pins the row (POST_CHAIN_SPEC §9.1) and the command
+    // carries both halves, so an undo hands the row back to the tier as well
+    // as restoring the number. The engine rebuilds its shadow node on change,
+    // which is why this is a combo and not a slider.
+    panelundo::runWorldModeEdit(services, scene, tr("Shadow Quality"),
+        [this, resolution]() {
+            worldmodes::setRowValue(scene, QStringLiteral("shadowResolution"), resolution);
+        },
+        [this]() {
+            if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
+            refreshRows();
+        });
 }

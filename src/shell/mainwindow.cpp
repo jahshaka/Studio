@@ -1016,6 +1016,12 @@ void MainWindow::setupServices()
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
     undoService->setServices(services);
+    // AN UNDO REPAINTS THE PANEL (debt L6): every properties row is undoable
+    // now, and the rows are the document's state on screen. One hook, deferred
+    // by the panel itself, rather than a refresh callback on every command.
+    undoService->setStackMovedHook([this]() {
+        if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->refreshFromDocument();
+    });
     if (sceneView) { sceneView->setServices(services); sceneView->setProject(project); }
     if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
     ThumbnailGenerator::getSingleton()->setProject(project);

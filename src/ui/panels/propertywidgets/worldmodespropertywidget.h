@@ -60,7 +60,13 @@ protected slots:
     void onRowChanged(int rowIndex);
 
 private:
-    void rebuild();
+    /// The rows, built ONCE from the registry (which never changes at run
+    /// time). Debt L6: an edit refreshes them in place — a rebuild per edit
+    /// deleted the very control that raised it, and repainted a whole blade
+    /// for a value change.
+    void build();
+    /// Re-reads every row's value, its pin mark and the tier from the document.
+    void refreshRows();
     void applied();
     /// Runs `edit` as ONE undo step over the whole World Mode state. Picking a
     /// tier rewrites thirteen backing fields; a per-row inverse would be
@@ -71,6 +77,10 @@ private:
     IEditorViewport *sceneView = nullptr;
     StudioServices *services = nullptr;
     ComboBoxWidget *modeSelector = nullptr;
+    /// Offered only while something is pinned; present from the start, hidden
+    /// when there is nothing to reset.
+    CheckBoxWidget *resetRow = nullptr;
+    bool loading = false;
     /// Parallel to the registry order: the control for each row, or null when
     /// the row was rendered as a plain label (unavailable rows).
     QVector<QWidget *> rowControls;

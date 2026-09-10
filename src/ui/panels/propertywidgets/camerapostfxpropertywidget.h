@@ -45,10 +45,12 @@ For more information see the LICENSE file
 // clearPostOverride and the exposure fields), so this panel is a second
 // CONSUMER of the API layer and never a parallel implementation.
 
+#include <QJsonArray>
 #include <QWidget>
 
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 
 class IEditorViewport;
 
@@ -61,16 +63,35 @@ public:
     void setSceneNode(QSharedPointer<iris::SceneNode> node);
     /// The live viewport, so an edit is visible immediately. Nullable.
     void setSceneView(IEditorViewport *sceneView);
+    /// The undo stack (debt L6). Every row here is a reflected camera property
+    /// — the exposure fields, and "postFx.<key>" for the tri-state overrides
+    /// (a null value CLEARS one) — so each gesture is one
+    /// SetNodePropertyCommand, the same one camera.settings / camera.postFx
+    /// push. Nullable.
+    void setServices(StudioServices *s) { services = s; }
 
 private:
     void rebuild();
     void applied(bool rebuildPanel);
+    /// A row bound to one reflected camera key.
+    rowundo::Binding row(const QString &key,
+                         std::function<QVariant(const QVariant &)> toDocument = {});
+    /// One undo step for a whole-stack looks gesture on this camera.
+    void pushLooks(const QString &key, const QJsonArray &before);
     /// The world value this camera inherits for a row, already formatted for a
     /// label ("on", "off", "1.50", "not available").
     QString inheritedText(const QString &key) const;
 
     QSharedPointer<iris::CameraNode> camera;
     IEditorViewport *sceneView = nullptr;
+    StudioServices *services = nullptr;
+    /// Populating the rows (the panel rebuilds itself, and the controls emit
+    /// from their setters) — see rowundo::Binding::guard.
+    bool loading = false;
+    /// The camera's whole-stack looks override, as it was when the current
+    /// scrub started (the stack editor reports the end of a gesture).
+    QJsonArray looksBefore;
+    bool looksScrubbing = false;
 };
 
 #endif // CAMERAPOSTFXPROPERTYWIDGET_H

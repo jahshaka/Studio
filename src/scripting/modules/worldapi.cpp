@@ -1220,7 +1220,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
 
     const QString t = type.trimmed().toLower();
 
-    // Contract per WorldSkyPropertyWidget: set the live fields AND rebuild
+    // Contract per SkyPropertyWidget: set the live fields AND rebuild
     // scene->skyData[<key>] (SceneWriter serializes only skyData), then
     // switchSkyTexture + queueSkyCapture for the legacy renderer. SceneMirror
     // polls the fields, so the engine picks everything up next frame.

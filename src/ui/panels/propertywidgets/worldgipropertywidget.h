@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include <QWidget>
 #include "commands/worldmodecommand.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
 
@@ -55,6 +56,16 @@ class WorldGiPropertyWidget : public AccordianBladeWidget
 {
     Q_OBJECT
 
+signals:
+    /// This section wrote a field the SIBLING World sections display — the
+    /// technique, the quality, the irradiance field and the tier are World Mode
+    /// registry rows, and the World Mode section shows every one of them with
+    /// its pin mark. The gap this closes (debt L6 item 4, found by the Rayon
+    /// lane): the World Mode panel raises this signal when IT writes through,
+    /// the GI panel did not, so a Rayon edit left the World Mode rows showing
+    /// the pre-edit values until the user reselected the world.
+    void worldSettingsChanged();
+
 public:
     WorldGiPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
@@ -72,19 +83,17 @@ protected slots:
     void onLightChanged(int row);
     void onBouncesChanged(float value);
     void onDynamicProbesChanged(float value);
-    void onBoundsMinChanged(iris::Vec3 value);
-    void onBoundsMaxChanged(iris::Vec3 value);
-    void onPccGridChanged(iris::Vec3 value);
-    void onUpdateBudgetChanged(float value);
     void onDdgiToggled(bool on);
-    void onDdgiIntensityChanged(float value);
-    void onDdgiAmbientChanged(float value);
     void onDdgiSourceChanged(int index);
     void onFitBoundsClicked();
     void onResetAdvancedClicked();
 
 private:
     void rebuild();
+    /// One quality-registry edit (technique, quality, the field, the tier, the
+    /// switch): applied through the registry, recorded as ONE WorldModeCommand,
+    /// and followed by a rebuild — these rows change which OTHER rows exist.
+    void editRegistry(const QString &text, const std::function<void()> &edit);
 
     /// One Rayon-tiered Int row edit: write-through + pin, in-place refresh,
     /// and — when no drag/typing session brackets it — its own undo step.
@@ -94,6 +103,11 @@ private:
     /// Wires a rayonTiered slider: start/tick/end -> snapshot/write/push.
     void wireRayonSlider(HFloatSliderWidget *slider,
                          void (WorldGiPropertyWidget::*tick)(float), const QString &text);
+    /// Wires one of the rows the TIER DOES NOT OWN (the volume, the probe grid,
+    /// the update budget, the field's intensity and source): a plain world
+    /// property, one ScenePropertyCommand per gesture, no pin.
+    void wirePlainRow(QWidget *row, const QString &key, const QString &text,
+                      std::function<QVariant(const QVariant &)> toDocument = {});
     /// Re-reads the pin marks, the tier row's "Custom" entry and the reset
     /// button from the document WITHOUT rebuilding the rows.
     void refreshPins();

@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 
 namespace iris {
     class Scene;
@@ -37,6 +38,9 @@ public:
 
     void setScene(QSharedPointer<iris::Scene> scene);
 	void setDatabase(Database*);
+    /// The undo stack, for the rows (debt L6). Nullable — the rows still write
+    /// the document without it.
+    void setServices(StudioServices *s) { services = s; }
 
     // Two-way binding to the View Options "Ground Grid" action — the action
     // (and the per-scene EditorData flag behind it) stays the single source
@@ -44,17 +48,21 @@ public:
     void setGridAction(QAction *action);
 
 public slots:
-    void onGravityChanged(float value);
-    void onAmbientColorChanged(QColor color);
-    /// The AVATAR_LOCOMOTION_SPEC §8.5 world setting. Writes through
-    /// Scene::setPlayMode — the SAME call `scene.playMode(mode)` makes, never a
-    /// parallel implementation of it (the API-first rule).
-    void onPlayModeChanged(int index);
     void onBackgroundAmbienceChanged(int index);
-	void onAmbientMusicVolumeChanged(float volume);
 
 private:
+    /// Re-reads every row from the document in place (selection, and undo).
+    void refreshRows();
+    /// Binds the scene's ambient music to `guid` and starts (or stops) it. The
+    /// one place that resolves the clip — both the row and its undo step call
+    /// it, so they cannot diverge.
+    void applyAmbientMusic(const QString &guid);
+
     QSharedPointer<iris::Scene> scene;
+    StudioServices *services = nullptr;
+    /// Populating the rows, not showing an edit (see rowundo::Binding::guard).
+    bool loading = false;
+    panelundo::SceneRows rows;
     CheckBoxWidget *flipView;
     CheckBoxWidget *showGridToggle = nullptr;
     QAction *gridAction = nullptr;

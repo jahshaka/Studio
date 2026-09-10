@@ -84,7 +84,19 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
     if (ui->contentpane->layout() == nullptr) return;
 
     while (auto item = ui->contentpane->layout()->takeAt(0)) {
-        if (auto widget = item->widget()) widget->deleteLater();
+        if (auto widget = item->widget()) {
+            // HIDE, THEN retire. deleteLater() defers the destruction to the
+            // next event-loop turn, and a widget that has left the layout is
+            // still a VISIBLE child sitting at its old geometry — so between an
+            // edit that rebuilds a blade and that turn, the retired rows paint
+            // ON TOP OF the new ones. That is the "garbled Properties rows"
+            // shape (debt A5b): it needs a repaint inside the window, which a
+            // page switch or a dock resize provides. SceneNodePropertiesWidget::
+            // clearLayout has hidden its blades for the same reason since the
+            // selection-cost fix; this is the row-level twin of it.
+            widget->hide();
+            widget->deleteLater();
+        }
 
         if (auto childLayout = item->layout()) {
             this->clearPanel(childLayout);

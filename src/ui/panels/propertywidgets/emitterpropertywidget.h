@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 
 namespace iris {
     class SceneNode;
@@ -54,10 +55,14 @@ public:
 
     void setDatabase(Database *db) { this->db = db; }
     void setSceneNode(iris::SceneNodePtr sceneNode);
+    /// The undo stack (debt L6). Every scalar row is one reflected property, so
+    /// each gesture is one SetNodePropertyCommand; the ramps and the preset —
+    /// which rewrite a whole recipe — record what this panel can edit, whole.
+    void setServices(StudioServices *s) { services = s; }
 
 protected slots:
     void onPresetChanged(const QString &name);
-    void onBillboardImageChanged(QString);
+    void onBillboardImageChanged(const QString &path, const QString &guid);
 
 private:
     /// Pushes one reflected field onto the node — the same call the scripting
@@ -68,10 +73,25 @@ private:
     void refresh();
     void pushColourKeys();
     void pushScaleKeys();
+    /// Everything this blade can write on the shown emitter, as one value:
+    /// every reflected key it binds plus the two ramps. The preset row stamps a
+    /// WHOLE recipe over all of it, so its undo step carries all of it (a
+    /// "previous preset" name would restore that recipe's numbers, not the ones
+    /// the user had).
+    QVariantMap snapshot() const;
+    /// Records a wide edit on ONE emitter — bound to the node, never to
+    /// "whatever the panel is showing when the undo arrives".
+    void pushWideEdit(const iris::ParticleSystemNodePtr &node, const QString &text,
+                      const QVariantMap &before, const QVariantMap &after);
+    /// A row bound to one reflected emitter key.
+    rowundo::Binding row(const char *key,
+                         std::function<QVariant(const QVariant &)> toDocument = {});
+
     /// Shows only the rows the current emitter shape actually uses.
     void updateShapeRows();
 
     iris::ParticleSystemNodePtr ps;
+    StudioServices *services = nullptr;
     bool mLoading = false;
 
     ComboBoxWidget      *preset = nullptr;

@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 
 class ColorValueWidget;
 class ColorPickerWidget;
@@ -41,20 +42,23 @@ class FogPropertyWidget: public AccordianBladeWidget
 public:
     FogPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
-
-protected slots:
-    void onFogColorChanged(QColor color);
-    void onFogDensityChanged(float val);
-    void onFogHeightDensityChanged(float val);
-    void onFogHeightFalloffChanged(float val);
-    void onFogHeightLevelChanged(float val);
-    void onFogBreakBrightnessChanged(float val);
-    void onFogBreakFalloffChanged(float val);
-    void onFogEnabledChanged(bool val);
-    void onShadowEnabledChanged(bool val);
+    /// The undo stack, for the rows (debt L6). Nullable: without it every row
+    /// still writes the document, it just records no step — which is what
+    /// headless hosts and the panel suites do.
+    void setServices(StudioServices *s) { services = s; }
 
 private:
+    /// Re-reads every row from the document IN PLACE (no rebuild, no rewiring):
+    /// what selecting a scene does, and what an undo of one of these rows does.
+    void refreshRows();
+
     QSharedPointer<iris::Scene> scene;
+    StudioServices *services = nullptr;
+    /// Guards the population above: HFloatSliderWidget::setValue EMITS
+    /// valueChanged, so filling the rows would otherwise write every value
+    /// back into the document (and, now, push undo steps for edits nobody made).
+    bool loading = false;
+    panelundo::SceneRows rows;
 
     CheckBoxWidget* fogEnabled;
     CheckBoxWidget* shadowEnabled;

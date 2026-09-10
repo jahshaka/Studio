@@ -43,7 +43,6 @@ class Project;
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class ShaderPropertyWidget;
 class SkyPropertyWidget;
-class WorldSkyPropertyWidget;
 class WorldGiPropertyWidget;
 class WorldAaPropertyWidget;
 class WorldModesPropertyWidget;
@@ -76,6 +75,17 @@ public:
 
 	void refreshTransform();
 
+    /// Re-reads the WHOLE selection's rows from the document.
+    ///
+    /// Every properties row is undoable now (debt L6), and an undo that changed
+    /// the document while the panel kept showing the old numbers would be worse
+    /// than no undo at all. MainWindow calls this after an undo or a redo; it is
+    /// DEFERRED by one event-loop turn, because a panel that rebuilds its rows
+    /// inside the signal that reached it destroys the control still on the
+    /// stack (the Qt 6.10 + qlementine combo hazard CLAUDE.md records, and the
+    /// reason the sky panel defers its own rebuild).
+    void refreshFromDocument();
+
     void setDatabase(Database*);
 
     /// Forwards the one live Project to every property panel that reads it
@@ -83,7 +93,6 @@ public:
     /// (materialPropView) get it at construction.
     void setProject(Project*);
 
-	WorldSkyPropertyWidget *worldSkyPropView;
 	WorldGiPropertyWidget *worldGiPropView;
 	class WorldPostFxPropertyWidget *worldPostFxPropView = nullptr;
 	WorldAaPropertyWidget *worldAaPropView;
@@ -141,6 +150,9 @@ private:
     DecalPropertyWidget* decalPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
+	/// ONE sky panel (debt L6 / N3: the twins are one implementation now). It
+	/// serves both bindings — the world's sky while the world is selected, a
+	/// library sky asset while one is — because a selection is exclusive.
 	SkyPropertyWidget *skyPropView;
 	MeshPropertyWidget* meshPropView;
     PhysicsPropertyWidget *physicsPropView;
