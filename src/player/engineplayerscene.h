@@ -38,6 +38,13 @@ public:
     /// Destroys the engine Scene and mirror while the Engine is still alive. The
     /// View is the caller's. Safe to call repeatedly; the destructor calls it.
     void release();
+    /// The widget's View is about to be destroyed (native window recreated):
+    /// drop the pointer with NO engine call, so the attach() that follows the
+    /// recreation takes the fresh-bind path instead of unbinding freed memory
+    /// (the L2 lane's finding, applied here 2026-09-10 — Ogre hands the
+    /// replacement View the freed one's address, so the stale unbind landed on
+    /// the NEW View: a silently blank player).
+    void forgetView() { mView = nullptr; }
     jahshaka::engine::Scene *engineScene() const { return mScene; }
     jahshaka::engine::View *view() const { return mView; }
 

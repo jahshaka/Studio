@@ -42,6 +42,13 @@ public:
 
     EnginePlayerScene *playerScene() const { return mScene.get(); }
 
+protected:
+    /// EngineViewWidget: the View dies one line after this — the scene must
+    /// forget it while the pointer is still valid (same fix as the previews).
+    void viewAboutToBeDestroyed() override;
+
+public:
+
     /// The editor viewport, when one exists (the play camera is the editor
     /// camera and PlayBack falls back to the shared document through it).
     /// Wired by the shell; null in headless runs. Was UiManager::sceneViewWidget.

@@ -16,6 +16,11 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/input/inputmap.h"
 
+void EnginePlayerView::viewAboutToBeDestroyed()
+{
+    if (mScene) mScene->forgetView();
+}
+
 using namespace jahshaka::engine;
 
 EnginePlayerView::EnginePlayerView(const std::shared_ptr<Engine> &engine,
