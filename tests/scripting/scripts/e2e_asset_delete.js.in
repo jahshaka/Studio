@@ -163,4 +163,68 @@ assert(assets.removeFromProject(pr) === true, "then removed from its last projec
 mustThrow(function () { assets.metadata(pr); }, "the orphaned unlisted row was reaped");
 mustThrow(function () { assets.removeFromProject("no-such-guid"); }, "unknown guid refused");
 
+// ==========================================================================
+// THE CODE-REVIEW FOLLOW-UPS (MASTER_QUEUE §26 item 5b)
+// ==========================================================================
+
+// ---- re-listing files a DRAWER, and never resurrects a hidden DEPENDEE -----
+//
+// (1) A re-list is this import's answer, so it must land where the import
+// asked: a drop into a drawer that happened to match an unlisted row used to
+// file nothing at all.
+var drawerId = assets.createDrawer("Relist Target " + Date.now());
+assert(drawerId > 0, "a drawer to re-list into -> " + drawerId);
+var dr = freshImport("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+assert(assets.addToProject(dr) === dr, "pinned, so the library delete unlists it");
+assert(assets.remove(dr) === true && assets.metadata(dr).listed === false,
+       "removed from the library (unlisted, pinned)");
+var relisted = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav", drawerId);
+assert(relisted === dr, "the re-import re-listed the SAME row");
+assert(assets.metadata(dr).listed === true, "... and it is a library tile again");
+assert(assets.list({ scope: "store", drawer: drawerId })
+             .filter(function (a) { return a.guid === dr; }).length === 1,
+       "... FILED IN THE DRAWER the import named");
+assert(assets.remove(dr, { force: true }) === true, "cleaned up");
+
+// (2) A MEMBER row (a model's texture) is hidden from every listing as a
+// dependee, so re-listing it would answer the import with a row the user can
+// never see. It must get its own, visible row instead — sharing the same CAS
+// object, so it costs no bytes.
+var GLB = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+// The suite's library survives between ctest runs: take any earlier run's
+// rows for this content out for good first, so the assertions below are about
+// this run.
+assert(assets.remove(assets.importFile(GLB), { keepShared: false, force: true }) === true,
+       "any earlier run's model rows removed");
+var model = assets.importFile(GLB);
+assert(model.length > 10, "the textured model imported -> " + model);
+var textures = assets.dependencies(model).filter(function (g) {
+    return g !== model && assets.metadata(g).type === "texture";
+});
+assert(textures.length >= 1, "it carries texture MEMBER rows: " + textures.length);
+var member = textures[0];
+var memberName = assets.metadata(member).name;
+assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === member; }).length === 0,
+       "a member row is hidden from the library listing (a dependee)");
+
+var raw = assets.exportRaw(model, "libdel-relist-raw");
+assert(raw.files.indexOf(memberName) >= 0,
+       "the member's bytes are on disk under their own name: " + memberName);
+assert(assets.addToProject(model) === model, "the model is pinned into the project with its closure");
+// The member is pinned now (add-to-project pins the whole closure), so a
+// library delete of the member row UNLISTS it — the exact state the fix
+// guards: an unlisted row that no listing shows, holding this content id.
+assert(assets.remove(member) === true, "the library delete of the pinned member reports success");
+assert(assets.metadata(member).listed === false, "the texture MEMBER is UNLISTED");
+
+var standalone = assets.importFile(raw.dir + "/" + memberName);
+assert(standalone.length > 10, "the same texture imported standalone -> " + standalone);
+assert(standalone !== member,
+       "THE FIX: the hidden dependee was NOT resurrected as the answer");
+assert(assets.metadata(standalone).listed === true, "the new row is listed");
+assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === standalone; }).length === 1,
+       "... and it really IS a library tile the user can see");
+assert(assets.metadata(member).listed === false, "... while the member stays unlisted");
+assert(assets.remove(standalone, { force: true }) === true, "cleaned up");
+
 console.log("asset delete e2e passed");

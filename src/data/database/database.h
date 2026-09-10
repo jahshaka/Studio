@@ -240,6 +240,12 @@ public:
     /// forgets filter 3 silently skips most of a real library).
     QStringList fetchLibraryAssetGuids();
     QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1, bool showDependencies = true);
+    /// The "hide dependees" rule as a SQL fragment, in ONE place: `column NOT
+    /// IN (the dependees of a non-avatar edge)`. Every listing that shows
+    /// top-level assets ANDs it in, and so does the import's re-listing check
+    /// (a member row must never be re-listed into a listing that hides it).
+    /// Definition + rationale: database.cpp.
+    static QString dependeeSubquery(const QString &column);
     /// Reference-with-pin membership (ASSET_PIPELINE_SPEC §3.1.5): the LIBRARY
     /// assets this project pinned (project_assets rows), as full catalog
     /// records. `includeDependencies` false drops rows that exist only as a

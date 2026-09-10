@@ -1623,7 +1623,7 @@ QMap<QString, qint64> Database::fetchAssetFileSizes()
 // So the rule is "hide rows that are a MEMBER of something", and membership is
 // what an import's own edges mean — not what a REFERENCE means. Avatar edges
 // are references, and are excluded here rather than at each call site.
-inline QString dependeeSubquery(const QString &column)
+QString Database::dependeeSubquery(const QString &column)
 {
     return QStringLiteral("%1 NOT IN (SELECT dependee FROM dependencies "
                           "WHERE depender_type != %2)")

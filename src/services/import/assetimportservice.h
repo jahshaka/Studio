@@ -91,7 +91,13 @@ private:
     /// user deleted comes back as the very row their projects still pin.
     /// Empty when nothing matches, which is every import in a library that
     /// has never had a pinned delete (the check costs one COUNT then).
-    QString relistUnlistedMatch(const QString &sourcePath) const;
+    /// Only a TOP-LEVEL row may come back this way (code review 2026-09-10):
+    /// a MEMBER row — an unlisted model's texture — is hidden from every
+    /// listing as a dependee, so re-listing it would answer the import with a
+    /// row the user can never see. The source oid comes from the staged
+    /// import record (prepare already hashed the file on the worker thread);
+    /// hashing here is the fallback for a plan that carries none.
+    QString relistUnlistedMatch(const ImportRequest &request, const StagedAsset &staged);
 
     AssetImporterBase *pickImporter(const ImportRequest &request, QString *error) const;
     bool commitStagedAsset(const ImportRequest &request, StagedAsset &staged,

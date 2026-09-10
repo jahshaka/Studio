@@ -95,7 +95,8 @@ QString humanSize(qint64 bytes)
 
 }  // namespace
 
-QString AssetImportService::relistUnlistedMatch(const QString &sourcePath) const
+QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
+                                                const StagedAsset &staged)
 {
     if (!db) return QString();
     QSqlDatabase conn = QSqlDatabase::database();
@@ -103,22 +104,44 @@ QString AssetImportService::relistUnlistedMatch(const QString &sourcePath) const
 
     // The common case pays exactly this: an unlisted row only exists after a
     // library delete that projects vetoed, so most libraries answer 0 here and
-    // the source file is never hashed twice.
+    // nothing else in this function runs.
     QSqlQuery any(conn);
     if (!any.exec("SELECT COUNT(*) FROM assets WHERE listed = 0") || !any.next()
         || any.value(0).toInt() == 0)
         return QString();
 
-    const QString oid = AssetCas::hashFile(sourcePath);
+    // The source oid is ALREADY known: prepare() stamped it into the
+    // determinism record on the worker thread (from the importer's own hash
+    // when it had one). Re-hashing here would read the whole file a second
+    // time on the DB/UI thread — a multi-second freeze on a big model for an
+    // answer we are holding (code review 2026-09-10). The hash stays as the
+    // fallback for a plan that carries no record (a .jaf import, whose rows
+    // come from the archive's catalog).
+    QString oid = staged.importRecord.value(QStringLiteral("sourceOid")).toString();
+    if (oid.isEmpty()) oid = staged.sourceOid;
+    if (oid.isEmpty()) oid = AssetCas::hashFile(request.sourcePath);
     if (oid.isEmpty()) return QString();
 
     // Same BYTES as an unlisted row's source = the same asset. The type is
     // derived from the content, so identical bytes cannot mean a different
     // kind of asset — no sniff needed (and no second sniff paid).
+    //
+    // TOP-LEVEL ROWS ONLY (code review 2026-09-10). An unlisted MODEL's
+    // texture member is hidden from every listing as a dependee, so re-listing
+    // it would answer "imported" with a row that appears nowhere: the user
+    // imports the texture standalone and gets nothing. Such a member falls
+    // through to the normal import and gets its own, visible, listed row —
+    // sharing the same CAS object, which costs no bytes.
+    //
+    // Newest first: two unlisted rows can share one source oid (the same file
+    // imported twice, then both deleted while pinned), and the one the user
+    // deleted last is the one they are most likely bringing back.
     QSqlQuery match(conn);
     match.prepare("SELECT AF.asset_guid FROM asset_files AF "
                   "JOIN assets A ON A.guid = AF.asset_guid "
-                  "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 LIMIT 1");
+                  "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 "
+                  "AND " + Database::dependeeSubquery(QStringLiteral("A.guid")) + " "
+                  "ORDER BY A.date_created DESC LIMIT 1");
     match.addBindValue(oid);
     if (!match.exec() || !match.next()) return QString();
 
@@ -266,10 +289,25 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     // may touch the database (prepare runs on a worker), so this is where the
     // check that stops a duplicate row lives — once, for both entry points.
     // The staged convert is thrown away; correctness beats the wasted work.
-    if (const QString relisted = relistUnlistedMatch(request.sourcePath); !relisted.isEmpty()) {
+    if (const QString relisted = relistUnlistedMatch(request, staged); !relisted.isEmpty()) {
         ImportResult back;
         back.assetGuid = relisted;
         back.warnings = result.warnings;
+        // The re-listed row IS this import's answer, so it must land where the
+        // import asked (code review 2026-09-10) — a drop into a drawer that
+        // happened to match an unlisted row used to file nothing at all.
+        // Only an EXPLICIT project guid is stamped: the ambient open project
+        // is what commitStagedAsset falls back to for a NEW row, and stamping
+        // it here would re-home a library row the user only re-imported.
+        if (!request.projectGuid.isEmpty())
+            db->updateAssetProject(relisted, request.projectGuid);
+        if (request.drawerId > 0) {
+            if (db->fetchCollectionSubtree(request.drawerId).isEmpty())
+                back.error = QStringLiteral("imported, but drawer %1 does not exist")
+                                 .arg(request.drawerId);
+            else
+                db->switchAssetCollection(request.drawerId, relisted);
+        }
         JAH_LOG(JahLog::assets, Display,
                 QStringLiteral("import: '%1' is the content of UNLISTED asset %2 — re-listed it "
                                "in the library instead of creating a duplicate row")
