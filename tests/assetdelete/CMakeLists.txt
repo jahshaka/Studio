@@ -7,6 +7,9 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_asset_delete test_asset_delete.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    # the project-side remove and the image material it knows about (case 15)
+    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
     # database.cpp's link closure (Project, guids, asset helpers)
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp

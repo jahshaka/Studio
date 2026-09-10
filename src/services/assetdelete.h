@@ -41,9 +41,15 @@ class Database;
 namespace assetdelete
 {
 
-/// Which projects pin this asset (guid + display name). Empty for an asset
-/// no project uses — and that is exactly the case a delete deletes.
+/// Which projects pin this asset (guid + display name), INCLUDING dead pins
+/// (`live == false`: a project_assets row whose project no longer exists —
+/// still a catalog reference, still holding content alive, but nobody's).
 QVector<AssetPinRecord> pins(Database *db, const QString &guid);
+
+/// The pins that represent a living project — what the delete law actually
+/// weighs (it agrees with Database::countAssetPins by construction). Empty
+/// means a delete really deletes, however many dead rows survive.
+QVector<AssetPinRecord> livePins(Database *db, const QString &guid);
 
 struct Outcome
 {
@@ -68,6 +74,11 @@ Outcome remove(Database *db, const QString &guid, bool keepShared = true, bool f
 /// and has just lost its last pin (otherwise it would be invisible, unpinned
 /// and undeletable). `pinCount` reports the pins dropped; `unlisted` reports a
 /// reap. A listed row is never deleted here — it is still a library asset.
+/// Removing an IMAGE also drops the pin on the companion PBR material the add
+/// minted for it (2026-09-10) — identified by the MINT'S STAMP, never by its
+/// shape — when this project pins it and nothing depends on it (an object it
+/// has been applied to keeps it). The add created it, so the remove takes it
+/// back out; a material the user authored on the same image is never touched.
 Outcome removeFromProject(Database *db, const QString &guid, const QString &projectGuid);
 
 } // namespace assetdelete

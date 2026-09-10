@@ -55,6 +55,15 @@ For more information see the LICENSE file
 //   redundantLegacyFiles <root>/<guid>/<name> whose bytes are proven present
 //                        in the CAS (same size, object exists) — the view
 //                        materializeLegacyView used to build
+//   deadPins             project_assets rows naming a project that no longer
+//                        exists (code review 2026-09-10; 32 of 129 on the
+//                        owner's store). ROWS, not files: they free no bytes
+//                        directly, they stop keeping objects alive — the
+//                        object a dead pin was the last reference to becomes
+//                        an unreferencedObjects item on the NEXT sweep, never
+//                        this one, because reachability was read before the
+//                        rows went. Deliberate: the sweep never reasons about
+//                        bytes it did not measure.
 
 #include <QString>
 #include <QStringList>
@@ -101,6 +110,7 @@ struct Report
     ClassReport straySidecars;
     ClassReport legacyFolders;
     ClassReport redundantLegacyFiles;
+    ClassReport deadPins;
 
     /// Informational only, never acted on: files rows whose refcount does not
     /// match the asset_files rows that name them. A non-zero count means the

@@ -163,4 +163,118 @@ assert(assets.removeFromProject(pr) === true, "then removed from its last projec
 mustThrow(function () { assets.metadata(pr); }, "the orphaned unlisted row was reaped");
 mustThrow(function () { assets.removeFromProject("no-such-guid"); }, "unknown guid refused");
 
+// ==========================================================================
+// THE CODE-REVIEW FOLLOW-UPS (MASTER_QUEUE §26 item 5b)
+// ==========================================================================
+
+// ---- re-listing files a DRAWER, and never resurrects a hidden DEPENDEE -----
+//
+// (1) A re-list is this import's answer, so it must land where the import
+// asked: a drop into a drawer that happened to match an unlisted row used to
+// file nothing at all.
+var drawerId = assets.createDrawer("Relist Target " + Date.now());
+assert(drawerId > 0, "a drawer to re-list into -> " + drawerId);
+var dr = freshImport("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+assert(assets.addToProject(dr) === dr, "pinned, so the library delete unlists it");
+assert(assets.remove(dr) === true && assets.metadata(dr).listed === false,
+       "removed from the library (unlisted, pinned)");
+var relisted = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav", drawerId);
+assert(relisted === dr, "the re-import re-listed the SAME row");
+assert(assets.metadata(dr).listed === true, "... and it is a library tile again");
+assert(assets.list({ scope: "store", drawer: drawerId })
+             .filter(function (a) { return a.guid === dr; }).length === 1,
+       "... FILED IN THE DRAWER the import named");
+assert(assets.remove(dr, { force: true }) === true, "cleaned up");
+
+// (2) A MEMBER row (a model's texture) is hidden from every listing as a
+// dependee, so re-listing it would answer the import with a row the user can
+// never see. It must get its own, visible row instead — sharing the same CAS
+// object, so it costs no bytes.
+var GLB = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+var model = assets.importFile(GLB);
+assert(model.length > 10, "the textured model imported -> " + model);
+var textures = assets.dependencies(model).filter(function (g) {
+    return g !== model && assets.metadata(g).type === "texture";
+});
+assert(textures.length >= 1, "it carries texture MEMBER rows: " + textures.length);
+var member = textures[0];
+var memberName = assets.metadata(member).name;
+assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === member; }).length === 0,
+       "a member row is hidden from the library listing (a dependee)");
+
+var raw = assets.exportRaw(model, "libdel-relist-raw");
+assert(raw.files.indexOf(memberName) >= 0,
+       "the member's bytes are on disk under their own name: " + memberName);
+assert(assets.addToProject(model) === model, "the model is pinned into the project with its closure");
+// The member is pinned now (add-to-project pins the whole closure), so a
+// library delete of the member row UNLISTS it — the exact state the fix
+// guards: an unlisted row that no listing shows, holding this content id.
+assert(assets.remove(member) === true, "the library delete of the pinned member reports success");
+assert(assets.metadata(member).listed === false, "the texture MEMBER is UNLISTED");
+
+var standalone = assets.importFile(raw.dir + "/" + memberName);
+assert(standalone.length > 10, "the same texture imported standalone -> " + standalone);
+assert(standalone !== member,
+       "THE FIX: the hidden dependee was NOT resurrected as the answer");
+assert(assets.metadata(standalone).listed === true, "the new row is listed");
+assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === standalone; }).length === 1,
+       "... and it really IS a library tile the user can see");
+assert(assets.metadata(member).listed === false, "... while the member stays unlisted");
+assert(assets.remove(standalone, { force: true }) === true, "cleaned up");
+// AND THE MODEL GOES TOO. This suite's library HOME survives between ctest
+// runs, so anything left pinned accumulates a set of rows per run — and an
+// unlisted member is a row nothing lists and nothing else would ever clean up.
+// force + keepShared:false takes the model, its members and their pins.
+assert(assets.remove(model, { keepShared: false, force: true }) === true,
+       "the model and its members are removed for good (this home is reused)");
+assert(assets.list({ scope: "project" }).filter(function (a) { return a.guid === model; }).length === 0,
+       "... and the project no longer pins it");
+
+// ---- removeFromProject takes the AUTO-MINTED COMPANION with the image ------
+//
+// Adding an IMAGE to a project mints a companion PBR material for it and pins
+// that too (IMAGE_PLANE_SPEC §8.1). Removing the image while leaving the
+// material left a material tile in the bin for a picture no longer in the
+// project. The add created it; the remove takes it back out. The LIBRARY row
+// is never touched.
+function companionsOf(textureGuid) {
+    return assets.list({ scope: "store", type: "material" }).filter(function (m) {
+        var deps = assets.dependencies(m.guid);   // the asset plus its closure
+        return deps.length === 2 && deps.indexOf(textureGuid) >= 0;
+    }).map(function (m) { return m.guid; });
+}
+var PNG = "@SOURCE_DIR@/tests/scripting/fixtures/implane_wide.png";
+{
+    // Scrub whatever an earlier run left: a companion that already exists
+    // stops a fresh one from being minted (the idempotence guard).
+    var stale = assets.importFile(PNG);
+    companionsOf(stale).forEach(function (c) { assets.remove(c, { force: true }); });
+    assets.remove(stale, { force: true });
+}
+assert(project.create("libdel_companion_" + Date.now()).length > 10, "a project for the image");
+var image = assets.importFile(PNG);
+assert(image.length > 10, "the image imported -> " + image);
+assert(companionsOf(image).length === 0, "no companion material exists yet");
+assert(assets.addToProject(image) === image, "the image is added to the project");
+var companions = companionsOf(image);
+assert(companions.length === 1, "the add minted exactly one companion material");
+var companion = companions[0];
+assert(assets.pins(companion).length === 1, "the companion is pinned into the project");
+assert(assets.list({ scope: "project", type: "material" })
+             .filter(function (m) { return m.guid === companion; }).length === 1,
+       "... and shows in the project's materials");
+
+assert(assets.removeFromProject(image) === true, "assets.removeFromProject(image)");
+assert(assets.pins(image).length === 0, "the image's pin is gone");
+assert(assets.pins(companion).length === 0,
+       "THE DECISION: the auto-minted companion left the project with it");
+assert(assets.list({ scope: "project", type: "material" })
+             .filter(function (m) { return m.guid === companion; }).length === 0,
+       "... so the project's materials no longer show it");
+assert(assets.metadata(companion).listed === true,
+       "... while its LIBRARY row is untouched (this is a project-side remove)");
+assert(assets.metadata(image).listed === true, "... and so is the image's");
+assets.remove(companion, { force: true });
+assert(assets.remove(image, { force: true }) === true, "cleaned up");
+
 console.log("asset delete e2e passed");

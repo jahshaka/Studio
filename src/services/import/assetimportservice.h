@@ -89,9 +89,16 @@ private:
     /// bytes are ALREADY the source of an UNLISTED library row re-lists that
     /// row and returns its guid instead of minting a duplicate — the asset the
     /// user deleted comes back as the very row their projects still pin.
+    /// Newest import first, and only ever a row prepare() gave us an oid for.
     /// Empty when nothing matches, which is every import in a library that
     /// has never had a pinned delete (the check costs one COUNT then).
-    QString relistUnlistedMatch(const QString &sourcePath) const;
+    /// Only a TOP-LEVEL row may come back this way (code review 2026-09-10):
+    /// a MEMBER row — an unlisted model's texture — is hidden from every
+    /// listing as a dependee, so re-listing it would answer the import with a
+    /// row the user can never see. The source oid comes from the staged
+    /// import record — prepare() stamps one for every import, on the worker
+    /// thread, so this never reads the source file again.
+    QString relistUnlistedMatch(const StagedAsset &staged);
 
     AssetImporterBase *pickImporter(const ImportRequest &request, QString *error) const;
     bool commitStagedAsset(const ImportRequest &request, StagedAsset &staged,

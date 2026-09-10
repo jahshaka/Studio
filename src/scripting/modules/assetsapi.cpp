@@ -223,17 +223,23 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "removeFromProject", "assets.removeFromProject(guid) -> bool",
           "Takes an asset OUT OF THE OPEN PROJECT and leaves the library alone: the project's "
           "pin on the asset goes, and the pins on the dependency members only this asset uses "
-          "(a texture two pinned models share keeps its pin). The library row, its content and "
+          "(a texture two pinned models share keeps its pin). Removing an IMAGE also removes the "
+          "companion PBR material that ADDING IT MINTED — recognised by the stamp the mint writes, "
+          "never by its shape, so a material you authored on the same image is never touched — as "
+          "long as this project pins it, nothing else depends on it (an object it is applied to keeps "
+          "it) and it has not since been given a second map. "
+          "The library row, its content and "
           "every other project's pin are untouched. A row that was already removed from the "
           "library (assets.remove on a pinned asset) and has just lost its LAST pin is deleted "
           "for good, because nothing can reach it any more. This is what the project panel's "
           "Delete does; assets.remove is the library's delete. False with app.lastError when "
           "no project is open or the guid is unknown.",
           Needs::Document },
-        { "pins", "assets.pins(guid) -> [{project, name}]",
+        { "pins", "assets.pins(guid) -> [{project, name, live}]",
           "Which PROJECTS pin this asset — the reference-with-pin rows that make a library delete an unlist. "
-          "`project` is the project's guid, `name` its display name (the guid again if the project row is gone). "
-          "An empty list means the asset is used by no project, i.e. assets.remove would really delete it. "
+          "`project` is the project's guid, `name` its display name. "
+          "`live` is false for a DEAD pin: the project row is gone, so the row names nobody ('(deleted project)') — it is reported because it is still a real catalog reference holding content alive, but it does NOT make a delete an unlist (assets.metadata's pinCount counts live pins only) and assets.gc's deadPins class reaps it. "
+          "No LIVE entries means the asset is used by no project, i.e. assets.remove would really delete it. "
           "Reads the catalog only — the project does not have to be open, and the asset does not have to be listed.",
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
@@ -272,12 +278,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied); existing guids are left untouched; thumbnails are regenerable, not recovered. Sidecars whose recorded objects are ALL absent are skipped as tombstones (reported as `skipped`) — an old store's leftover sidecars must not resurrect deleted assets.",
           Needs::Document },
         { "gc", "assets.gc({dryRun: true, root, force}) -> report",
-          "Store garbage collection. Finds — and, with {dryRun: false}, removes — five classes of leaked artifact: "
+          "Store garbage collection. Finds — and, with {dryRun: false}, removes — six classes of leaked artifact: "
           "unreferencedObjects (a files row no asset_files row and no project pin names, with its object), "
           "strayObjects (files under objects/ the catalog never recorded, plus staging temps abandoned for over an hour), "
           "straySidecars (sidecar/<guid>.json naming no asset), "
-          "legacyFolders (a <root>/<guid>/ folder from the retired per-guid view naming no asset) and "
-          "redundantLegacyFiles (entries in a LIVE asset's legacy folder whose bytes are byte-for-byte present in objects/). "
+          "legacyFolders (a <root>/<guid>/ folder from the retired per-guid view naming no asset), "
+          "redundantLegacyFiles (entries in a LIVE asset's legacy folder whose bytes are byte-for-byte present in objects/) and "
+          "deadPins (project_assets rows naming a project that no longer exists — catalog rows rather than files, so they free no bytes here; an object a dead pin was the last reference to becomes an unreferencedObjects item on the NEXT sweep). "
           "DRY RUN BY DEFAULT: the report lists exactly what a real run would delete, per class, with paths and byte totals. "
           "Live content is never collected — reachability is read from the asset_files rows and the project_assets pins, not from the refcount cache (a copy-on-write edit's object is referenced ONLY by its project's pin), and the sweep refuses a store this catalog does not recognize unless {force: true}. "
           "{root} sweeps an explicit store root instead of the active one.",
@@ -505,7 +512,9 @@ QVariantList AssetsApi::pins(const QString &guid)
         return out;
     }
     for (const AssetPinRecord &pin : assetdelete::pins(host.db, guid))
-        out.append(QVariantMap{ { "project", pin.projectGuid }, { "name", pin.projectName } });
+        out.append(QVariantMap{ { "project", pin.projectGuid },
+                                { "name", pin.projectName },
+                                { "live", pin.live } });
     return out;
 }
 
