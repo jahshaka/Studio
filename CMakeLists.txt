@@ -393,6 +393,7 @@ set(SRCS
     src/ui/controls/sliderlayoutmodel.cpp
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
+    src/bridge/enginepreviewscene.cpp
     src/bridge/enginethumbnailrenderer.cpp 
     src/ui/dialogs/donatedialog.cpp
     src/ui/pages/assetview.cpp
@@ -569,6 +570,7 @@ set(HEADERS
     src/ui/panels/scenehierarchywidget.h 
     src/ui/panels/scenetreewidget.h
     src/viewport/orbitalcameracontroller.h 
+    src/viewport/previeworbit.h
     src/viewport/cameracontrollerbase.h 
     src/ui/panels/presets/skypresets.h 
     src/ui/panels/propertywidgets/transformpropertywidget.h 
@@ -664,6 +666,7 @@ set(HEADERS
     src/ui/pages/previewrouter.h
     src/ui/pages/iassetviewer.h
     src/ui/pages/headlessassetviewer.h
+    src/bridge/enginepreviewscene.h
     src/bridge/engineassetscene.h
     src/ui/pages/engineassetviewer.h
     src/bridge/enginematerialpreviewscene.h

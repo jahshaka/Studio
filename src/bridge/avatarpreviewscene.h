@@ -4,20 +4,20 @@
 // AvatarPreviewScene — the Avatar page's centre view on the engine, minus the
 // widget (AVATAR_MODULE_SPEC §0.6 D0.2 A).
 //
-// Owns its own engine Scene ("avatarpreview"), a SceneMirror pushing the
-// module's preview DOCUMENT into it, an orbit camera framed through
-// previewframing.h, and the BoneOverlay. The document, the clips, the
-// transport and the toggles all live in avatar::AvatarPreviewModel, which has
-// no engine in it — this class is the engine half and nothing else.
+// An EnginePreviewScene (Scene + mirror + View lifecycle and the offscreen
+// capture live there) whose mirror pushes the module's preview DOCUMENT, plus
+// the shared PreviewOrbit camera framed through previewframing.h and the
+// BoneOverlay. The document, the clips, the transport and the toggles all live
+// in avatar::AvatarPreviewModel, which has no engine in it — this class is the
+// engine half and nothing else.
 //
 // ORDER IS LOAD-BEARING (§0.5.1): updateSceneAnimation(t) -> mirror.sync()
 // (which refreshes the document's global transforms) -> overlay reads those
 // globals -> render. Reading the overlay before the sync draws last frame's pose.
 //
-// RECORDED DEBT: this is the FOURTH copy of the preview-scene pattern
-// (EngineAssetScene, EngineMaterialPreviewScene, EnginePlayerScene) — spec
-// §0.12 R0.15 / ENGINEERING_DEBT_SPEC. Consolidation is deliberately NOT
-// attempted here.
+// (The recorded debt this class opened — "the FOURTH copy of the preview-scene
+// pattern", spec §0.12 R0.15 / ENGINEERING_DEBT_SPEC item 6 — is PAID: the
+// pattern is EnginePreviewScene now.)
 //
 // NEVER enables GI: HlmsPbs's VCT/PCC binding is process-wide, so a preview
 // scene that turned it on would take it from the editor scene (R0.5).
@@ -27,28 +27,20 @@
 #include <QImage>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
-#include "jahshaka/engine/Engine.h"
+#include "bridge/enginepreviewscene.h"   // brings jahshaka/engine/Engine.h
+#include "viewport/previeworbit.h"
 
 class SceneMirror;
 class BoneOverlay;
 namespace avatar { class AvatarPreviewModel; }
 
-class AvatarPreviewScene
+class AvatarPreviewScene : public EnginePreviewScene
 {
 public:
     /// Holds the engine weakly (the preview-scene contract): never keeps it
     /// alive, every call checks it is still there.
     explicit AvatarPreviewScene(const std::shared_ptr<jahshaka::engine::Engine> &engine);
-    ~AvatarPreviewScene();
-
-    /// Creates the engine Scene, its mirror and the overlay and binds them to
-    /// `view` (the View must already exist: Engine.h, ORDER MATTERS).
-    bool attach(jahshaka::engine::View *view);
-    /// Destroys the engine Scene, mirror and overlay while the Engine is alive.
-    void release();
-
-    jahshaka::engine::Scene *engineScene() const { return mScene; }
-    jahshaka::engine::View  *view() const { return mView; }
+    ~AvatarPreviewScene() override;
 
     /// The subject: the module's preview model (its document is what gets
     /// mirrored). Null detaches. The model outlives this class.
@@ -60,7 +52,7 @@ public:
     /// previewframing.h computes, or it sits past its own far plane (R0.7).
     void frameSubject();
 
-    // ---- orbit (EngineMaterialPreviewScene's maths) ----
+    // ---- orbit (the shared PreviewOrbit, viewport/previeworbit.h) ----
     void mouseDown(Qt::MouseButton b);
     void mouseUp(Qt::MouseButton b);
     void mouseMove(int dx, int dy);
@@ -85,32 +77,29 @@ public:
     int overlayStubs() const;
     int overlayJoints() const;
 
+protected:
+    void configureScene(jahshaka::engine::Scene *scene) override;
+    void configureMirror(SceneMirror *mirror) override;
+    void configureView(jahshaka::engine::View *view) override;
+    void releaseSubject(bool sceneAlive) override;
+    void prepareOffscreen(jahshaka::engine::View *shot, int width, int height) override;
+
 private:
     void updateCameraRot();
     void applyClipPlanes();
     /// Ground grid spacing/extent for the current subject size.
     void applyGrid();
-    static QImage toQImage(const jahshaka::engine::Image &img);
-
-    std::weak_ptr<jahshaka::engine::Engine> mEngine;
-    jahshaka::engine::View  *mView  = nullptr;
-    jahshaka::engine::Scene *mScene = nullptr;
     /// Points the mirror at the model's document AND installs the pose source
     /// that reads the engine's evaluated bones back for the overlay.
     void bindModel(avatar::AvatarPreviewModel *model);
 
-    std::unique_ptr<SceneMirror> mMirror;
     std::unique_ptr<BoneOverlay> mOverlay;
     avatar::AvatarPreviewModel *mModel = nullptr;
-    unsigned mShotSerial = 0;
 
-    // Orbit state
-    float mYaw = 0, mPitch = 0, mTargetYaw = 0, mTargetPitch = 0;
-    float mRotationSpeed = 0.5f;
-    iris::Vec3 mPivot;
-    float mDistFromPivot = 4.0f;
+    /// The shared arcball; zoom and pan step scale with the subject (a Mixamo
+    /// character is ~170 units tall), which is why those stay here.
+    PreviewOrbit mOrbit;
     float mSubjectRadius = 1.0f;
-    bool mLeftDown = false, mRightDown = false, mMiddleDown = false;
 };
 
 #endif // AVATARPREVIEWSCENE_H

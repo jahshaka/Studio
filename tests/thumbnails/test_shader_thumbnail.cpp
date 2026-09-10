@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <memory>
 
+#include "../support/previewdump.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/materials/defaultmaterial.h"
@@ -45,6 +46,7 @@ static bool isBackground(QColor c)
 static QColor centre(const QImage &img) { return img.pixelColor(img.width() / 2, img.height() / 2); }
 static void show(const char *tag, const QImage &img)
 {
+    previewdump::save(tag, img);
     const QColor c = img.isNull() ? QColor() : centre(img), k = img.isNull() ? QColor() : img.pixelColor(2, 2);
     std::printf("    %-26s %dx%d centre %3d %3d %3d   corner %3d %3d %3d\n", tag, img.width(), img.height(),
                 c.red(), c.green(), c.blue(), k.red(), k.green(), k.blue());

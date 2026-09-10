@@ -49,6 +49,14 @@ void AvatarPreview::resolvePose()
     mScene->resolvePose();
 }
 
+void AvatarPreview::viewAboutToBeDestroyed()
+{
+    // The View this widget is holding dies one line from now: the Scene has to
+    // drop its copy while the pointer is still valid, or the attach() that
+    // follows viewRecreated() unbinds freed memory.
+    if (mScene) mScene->forgetView();
+}
+
 void AvatarPreview::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);

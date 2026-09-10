@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <string>
 
+#include "../support/previewdump.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -46,6 +47,7 @@ static bool isGreen(const Colour &c) { return c.g > 0.12f && c.g > c.r * 1.5f &&
 static bool isBlue(const Colour &c)  { return c.b > 0.12f && c.b > c.r * 1.5f && c.b > c.g * 1.5f; }
 static void show(const char *tag, const Image &i, int x, int y)
 {
+    previewdump::save(tag, i);
     const Colour c = i.at(unsigned(x), unsigned(y)), k = i.at(2, 2);
     std::printf("    %-40s (%d,%d) %3.0f %3.0f %3.0f   corner %3.0f %3.0f %3.0f\n", tag, x, y,
                 c.r*255, c.g*255, c.b*255, k.r*255, k.g*255, k.b*255);

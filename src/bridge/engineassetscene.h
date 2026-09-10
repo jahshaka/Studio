@@ -3,15 +3,14 @@
 
 // EngineAssetScene — the Assets page preview on the engine, minus the widget.
 //
-// Owns a small iris::Scene document built exactly like AssetViewer's
-// (key + rim light, the tiled floor at y = -5, sky (25,25,25)), a third engine
-// Scene ("assets") and a SceneMirror that pushes the document into it, and the
-// orbit camera (the OrbitalCameraController maths in preview mode, kept local
-// so this class links without the editor). One asset is previewed at a time:
-// a node (mesh hierarchy) placed on the floor and framed by its bounds, or a
-// material on the preview sphere. No GL, no Ogre, no QWidget, no database —
-// testable headless with an offscreen View (tests/assets). EngineAssetViewer
-// wraps it and does the database/JSON side.
+// An EnginePreviewScene (Scene + mirror + View lifecycle and the offscreen
+// capture live there) whose document is built exactly like AssetViewer's:
+// key + rim light, the tiled floor at y = -5, sky (25,25,25). One asset is
+// previewed at a time: a node (mesh hierarchy) placed on the floor and framed
+// by its bounds, or a material on the preview sphere. The camera is a
+// PreviewOrbit (viewport/previeworbit.h — the shared arcball). No GL, no Ogre,
+// no QWidget, no database — testable headless with an offscreen View
+// (tests/assets). EngineAssetViewer wraps it and does the database/JSON side.
 #include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QImage>
@@ -19,27 +18,18 @@
 #include <QString>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
-#include "jahshaka/engine/Engine.h"
+#include "bridge/enginepreviewscene.h"   // brings jahshaka/engine/Engine.h
+#include "viewport/previeworbit.h"
 
 class SceneMirror;
 
-class EngineAssetScene
+class EngineAssetScene : public EnginePreviewScene
 {
 public:
-    /// Holds the engine weakly, like EnginePlayerScene: never keeps it alive,
-    /// every call checks it is still there.
+    /// Holds the engine weakly, like every preview scene: never keeps it
+    /// alive, every call checks it is still there.
     explicit EngineAssetScene(const std::shared_ptr<jahshaka::engine::Engine> &engine);
-    ~EngineAssetScene();
-
-    /// Creates the assets Scene and its mirror and binds them to `view` (the View
-    /// must already exist: Engine.h, ORDER MATTERS). Idempotent; false if the
-    /// engine is gone or the scene could not be created.
-    bool attach(jahshaka::engine::View *view);
-    /// Destroys the engine Scene and mirror while the Engine is alive. The View
-    /// is the caller's. Safe to call repeatedly; the destructor calls it.
-    void release();
-    jahshaka::engine::Scene *engineScene() const { return mScene; }
-    jahshaka::engine::View *view() const { return mView; }
+    ~EngineAssetScene() override;
 
     /// The preview document and its camera.
     iris::ScenePtr document() const { return mDocument; }
@@ -89,20 +79,18 @@ public:
     /// Mesh of the preview sphere, loaded once (resource, then app/content/primitives).
     iris::MeshPtr previewSphere();
 
+protected:
+    void configureScene(jahshaka::engine::Scene *scene) override;
+    void configureMirror(SceneMirror *mirror) override;
+    void configureView(jahshaka::engine::View *view) override;
+    void prepareOffscreen(jahshaka::engine::View *shot, int width, int height) override;
+
 private:
     void buildDocument();
-    void updateCameraRot();
     void orbitFromCamera();
     /// Fits nearClip/farClip to the orbit distance and the subject's radius
     /// (a preview camera must see the framed model regardless of its scale).
     void applyClipPlanes();
-    static QImage toQImage(const jahshaka::engine::Image &img);
-
-    std::weak_ptr<jahshaka::engine::Engine> mEngine;
-    jahshaka::engine::View  *mView  = nullptr;
-    jahshaka::engine::Scene *mScene = nullptr;
-    std::unique_ptr<SceneMirror> mMirror;
-    unsigned mShotSerial = 0;
 
     iris::ScenePtr      mDocument;
     iris::CameraNodePtr mCamera;
@@ -110,12 +98,9 @@ private:
     iris::MeshPtr       mSphere;
     bool mShadows = true;
 
-    // Orbit state (OrbitalCameraController, previewMode, rotationSpeed .5)
-    float mYaw = 0, mPitch = 0, mTargetYaw = 0, mTargetPitch = 0;
-    float mRotationSpeed = 0.5f;
-    iris::Vec3 mPivot;
-    float mDistFromPivot = 5.0f;
-    bool mLeftDown = false, mRightDown = false, mMiddleDown = false;
+    /// The shared arcball (preview mode: left or right drag orbits, rotation
+    /// speed .5, the 0.8 lerp in step()).
+    PreviewOrbit mOrbit;
 
     // Framing (AssetViewer::localPos / localRot / lookAt / distanceFromPivot)
     iris::Vec3 mLocalPos, mLocalRot, mLookAt;

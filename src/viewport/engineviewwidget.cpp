@@ -117,6 +117,9 @@ void EngineViewWidget::recreateViewForNewWindow()
 
     const QString name = mViewName;
     const jahshaka::engine::Colour background = mBackground;
+    // Let go of every subclass-side copy of this View while it is still valid
+    // (see viewAboutToBeDestroyed) — destroyView() is one line away.
+    viewAboutToBeDestroyed();
     destroyView();
     createView(engine, name, background);
     if (mView) mView->setEnabled(isVisible());

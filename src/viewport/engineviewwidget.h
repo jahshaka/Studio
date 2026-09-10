@@ -59,6 +59,20 @@ protected:
     /// QEvent::WinIdChange only — see recreateViewForNewWindow().
     bool event(QEvent *) override;
 
+    /// Called right BEFORE the current View is destroyed on the way to a new
+    /// native window — i.e. while the pointer a subclass is holding is still
+    /// valid, which is the whole point. A subclass that stored the View
+    /// anywhere must drop that copy here; otherwise the next thing it does with
+    /// it dereferences freed memory.
+    ///
+    /// WHY THIS EXISTS AND NOT JUST viewRecreated(). viewRecreated() runs AFTER
+    /// destroyView(), so a subclass whose Scene still remembers the old View has
+    /// already lost: EnginePreviewScene::attach() sees a DIFFERENT View, takes
+    /// its re-bind branch, and unbinds a dangling one. The preview widgets
+    /// (Materials Display dock, asset viewer, avatar page) all hit this the
+    /// moment a floatable dock is torn off. Default: nothing.
+    virtual void viewAboutToBeDestroyed() {}
+
     /// Called right after the View has been rebuilt on a NEW native window.
     /// The base class can only restore what it created (size, enabled state);
     /// anything a subclass attached — the Scene above all — is gone with the old

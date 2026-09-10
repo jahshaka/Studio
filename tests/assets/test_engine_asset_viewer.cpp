@@ -5,6 +5,7 @@
 // background; orbiting 180 degrees must change the picture but keep the cube
 // at the centre; a second material colour must show; the RTT preview must
 // match the view; release() must detach cleanly.
+#include "../support/previewdump.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -42,6 +43,7 @@ static bool isGreen(const Colour &c) { return c.g > 0.12f && c.g > c.r * 1.5f &&
 static Colour at(const Image &i, int x, int y) { return i.at(unsigned(x), unsigned(y)); }
 static void show(const char *tag, const Image &i, int x, int y)
 {
+    previewdump::save(tag, i);
     const Colour c = at(i, x, y), k = at(i, 2, 2);
     std::printf("    %-34s (%d,%d) %3.0f %3.0f %3.0f   corner %3.0f %3.0f %3.0f\n", tag, x, y,
                 c.r*255, c.g*255, c.b*255, k.r*255, k.g*255, k.b*255);

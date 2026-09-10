@@ -3,6 +3,7 @@
 # app/content/primitives/sphere.obj (relative to the executable) resolves.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_thumbnails test_thumbnails.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     # previewMaterialForMeshData is BuiltinMaterials::fromMeshData now — the one
     # mesh-data conversion, instead of a third copy that ignored every PBR field.
@@ -32,6 +33,7 @@ set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 # database and the ogre log never land in the shared bin/.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia Concurrent)
 add_executable(test_shader_thumbnail test_shader_thumbnail.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/io/materialreader.cpp
