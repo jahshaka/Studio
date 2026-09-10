@@ -141,7 +141,7 @@ def load_inventory(build):
             n = nodes[n["parent"]]
         cm = files[n["file"]]
         d = os.path.relpath(os.path.dirname(cm), ROOT)          # tests/<dir>
-        cmd = t["command"]
+        cmd = t.get("command", [])   # absent for a not-yet-built executable (partial build dir)
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
         script = None
         m = re.search(r"--script\s+(\S+)", " ".join(cmd))
