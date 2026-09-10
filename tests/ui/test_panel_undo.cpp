@@ -446,6 +446,27 @@ int main(int argc, char **argv)
         CHECK(stack.index() == before + 1, "physics: ONE step for the drag");
         stack.undo();
         CHECK(qFuzzyCompare(node->physicsProperty.objectMass, was), "physics: undone");
+
+        // THE TYPE ROW WRITES WHAT IT MEANS. It used to build a default
+        // PhysicsProperty from four widget values and assign it whole, wiping
+        // the collision shape (and friction, damping, centre of mass, pivot) —
+        // fields this row does not edit and the undo step cannot restore.
+        node->physicsProperty.shape = iris::PhysicsCollisionShape::Sphere;
+        node->physicsProperty.objectFriction = 0.75f;
+        ComboBoxWidget *type = comboWith(&panel, QStringLiteral("Physics Type"));
+        CHECK(type != nullptr, "physics: the type row is on the blade");
+        const int steps = stack.index();
+        if (type && type->getWidget()) type->getWidget()->setCurrentIndex(2);   // Rigid Body
+        CHECK(node->physicsProperty.type == iris::PhysicsType::RigidBody,
+              "physics: picking a type wrote it through");
+        CHECK(node->physicsProperty.shape == iris::PhysicsCollisionShape::Sphere &&
+                  qFuzzyCompare(node->physicsProperty.objectFriction, 0.75f),
+              "physics: and left the shape and the friction it does not edit ALONE");
+        CHECK(stack.index() == steps + 1, "physics: as one step");
+        stack.undo();
+        CHECK(node->physicsProperty.type != iris::PhysicsType::RigidBody &&
+                  node->physicsProperty.shape == iris::PhysicsCollisionShape::Sphere,
+              "physics: undone, shape still intact");
     }
 
     // ---- 8. THE EMITTER SECTION --------------------------------------------
