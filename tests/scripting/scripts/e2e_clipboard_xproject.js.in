@@ -30,6 +30,16 @@ function assert(cond, msg) {
     console.log("ok: " + msg);
 }
 function J(x) { return JSON.stringify(x); }
+// GUIDS THAT ARE FRESH EVERY RUN. The suite injects guids of its own into
+// rewritten payloads, and the ctest scratch HOME PERSISTS between invocations —
+// so a fixed id is "unknown to this library" on the first run and "known here"
+// on the second, which is a different code path and a red suite. (It reds on
+// the SECOND run, which is the worst kind of flake: green when written.)
+var runTag = (Date.now().toString(16) + "000000000000").substring(0, 11);
+function runGuid(hexDigit) {
+    return "beef0000-0000-4000-8000-" + runTag + hexDigit;
+}
+
 function pinnedGuids() {
     return assets.list({ scope: "project" }).map(function (a) { return a.guid; });
 }
@@ -53,13 +63,30 @@ assert(copied.assets >= 1, "and its asset closure travelled: " + copied.assets +
 assert(copied.inlined >= 1, "with bytes inline (tiny.png is far under the 4 MB budget)");
 
 var payload = JSON.parse(clipboard.text());
-assert(!!payload.assets[tex], "the payload's closure is keyed by asset guid");
-assert(payload.assets[tex].name === "tiny.png", "with the catalog row's name");
-assert(payload.assets[tex].type === "texture", "and its type");
-assert(payload.assets[tex].files.length >= 1, "and its files");
-assert(payload.assets[tex].files[0].oid.length === 64,
+// THE TEXTURE THE CLOSURE CARRIES, taken FROM THE PAYLOAD rather than assumed
+// to be the guid this run imported. Content is deduplicated by oid, so in a
+// scratch library that has already run this suite the same bytes are backed by
+// more than one Texture row, and the writer's documented tie-break (pinned
+// first) may resolve the material's map to the OTHER row. Which row it picks is
+// not this suite's subject; that the closure carries the row the material
+// actually resolves to IS.
+function closureGuidNamed(name) {
+    var current = JSON.parse(clipboard.text());
+    var keys = Object.keys(current.assets);
+    for (var i = 0; i < keys.length; ++i)
+        if (current.assets[keys[i]].name === name) return keys[i];
+    return null;
+}
+var closureOfCube = Object.keys(payload.assets);
+assert(closureOfCube.length >= 1, "the payload carries a closure");
+var texInPayload = closureGuidNamed("tiny.png");
+assert(!!texInPayload, "the payload's closure is keyed by asset guid and holds the texture: " +
+                       J(closureOfCube));
+assert(payload.assets[texInPayload].type === "texture", "with its type");
+assert(payload.assets[texInPayload].files.length >= 1, "and its files");
+assert(payload.assets[texInPayload].files[0].oid.length === 64,
        "each file carries its sha256 content id — the join key in every store");
-assert(payload.assets[tex].files[0].inline.length > 0, "and its bytes, base64");
+assert(payload.assets[texInPayload].files[0].inline.length > 0, "and its bytes, base64");
 assert(payload.source.storeRoot.length > 0,
        "the payload records the source store root as a same-machine fetch hint");
 
@@ -115,27 +142,36 @@ for (var t = 0; t < sweepTargets.length; ++t) {
     }
 }
 assert(swept >= 4, "the sweep actually looked at guids (" + swept + " of them)");
-assert(closureGuids.indexOf(tex) >= 0 && closureGuids.indexOf(ies) >= 0,
-       "and the closure carries both bound assets: " + J(closureGuids));
+var closureNames = closureGuids.map(function (g) { return sweepPayload.assets[g].name; });
+console.log("sweep closure -> " + J(closureNames) + " " + J(closureGuids) +
+            " (tex " + texInPayload + ", ies " + ies + ")");
+assert(closureNames.indexOf("tiny.png") >= 0 && closureNames.indexOf("ring_profile.ies") >= 0,
+       "and the closure carries both bound assets: " + J(closureNames));
 
-// Back to the single textured cube for the rest of the suite.
+// Back to the single textured cube for the rest of the suite. The texture guid
+// is re-read from the NEW payload: which of the rows backed by these bytes the
+// writer resolves to is its tie-break's business, not this suite's.
 editor.select(cube);
 clipboard.copy();
+texInPayload = closureGuidNamed("tiny.png");
+assert(!!texInPayload, "the re-copied payload carries the texture");
 var resolveA = clipboard.resolve();
-assert(resolveA.known.indexOf(tex) >= 0, "resolve(): this library already has the texture");
+assert(resolveA.known.indexOf(texInPayload) >= 0, "resolve(): this library already has the texture");
 assert(resolveA.missing.length === 0, "and nothing is missing");
 
 // ---- project B: same library, second project ------------------------------
 var projectB = project.create("Clipboard B " + Date.now());
 assert(projectB.length > 10 && projectB !== projectA, "project B created");
-assert(pinnedGuids().indexOf(tex) < 0, "B does not pin the texture yet");
+assert(pinnedGuids().indexOf(texInPayload) < 0, "B does not pin the texture yet");
 
 var pastedB = clipboard.paste();
 console.log("paste into B -> " + J(pastedB));
 assert(pastedB.pasted.length === 1, "the object pasted into B");
 assert(pastedB.missing.length === 0, "with nothing missing");
-assert(pastedB.pinned.indexOf(tex) >= 0, "and the texture was PINNED into B: " + J(pastedB.pinned));
-assert(pinnedGuids().indexOf(tex) >= 0, "which assets.list({scope:'project'}) confirms");
+assert(pastedB.pinned.indexOf(texInPayload) >= 0,
+       "and the texture was PINNED into B: " + J(pastedB.pinned));
+assert(pinnedGuids().indexOf(texInPayload) >= 0,
+       "which assets.list({scope:'project'}) confirms");
 assert(("" + material.get(pastedB.pasted[0]).baseColorMap).length > 0,
        "the pasted material still resolves its map in the new project");
 
@@ -143,10 +179,10 @@ assert(("" + material.get(pastedB.pasted[0]).baseColorMap).length > 0,
 var oidOnly = JSON.parse(clipboard.text());
 // A fresh guid for the SAME bytes: unknown to this catalog, so the resolver
 // cannot take step 1 — but the oid is real and the object is right here.
-var newGuid = "beef0000-0000-4000-8000-000000000001";
-var texEntry = oidOnly.assets[tex];
+var newGuid = runGuid("1");
+var texEntry = oidOnly.assets[texInPayload];
 delete texEntry.files[0].inline;                 // no bytes: the oid is the whole reference
-delete oidOnly.assets[tex];
+delete oidOnly.assets[texInPayload];
 oidOnly.assets[newGuid] = texEntry;
 oidOnly.items[0].node.material.values.baseColorMap = newGuid;
 assert(clipboard.setText(JSON.stringify(oidOnly)).valid, "the rewritten payload is accepted");
@@ -163,7 +199,7 @@ assert(pastedOid.pasted.length === 1, "and the object landed");
 
 // ---- step 5: unknown guid, unfindable oid -> MISSING ----------------------
 var broken = JSON.parse(clipboard.text());
-var lostGuid = "beef0000-0000-4000-8000-000000000002";
+var lostGuid = runGuid("2");
 var lostEntry = broken.assets[newGuid];
 delete broken.assets[newGuid];
 lostEntry.files[0].oid = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -207,7 +243,7 @@ assert(anyway.missing.length === 1, "and still reports the gap");
 // The file named here is this test's own script — readable, certainly present,
 // and outside the store, which is the whole point.
 var hostile = JSON.parse(clipboard.text());
-var evilGuid = "beef0000-0000-4000-8000-00000000000e";
+var evilGuid = runGuid("e");
 var evilEntry = {
     name: "../../../../etc/passwd", type: "texture", typeId: 2, viewFilter: 2,
     dependencies: [],
@@ -249,7 +285,7 @@ assert(assets.list({ scope: "store" }).every(function (a) { return a.guid !== ev
 function refuses(mutate, what) {
     var payload = JSON.parse(JSON.stringify(hostile));
     payload.assets = {};
-    var guid = "beef0000-0000-4000-8000-00000000001" + (refuses.n = (refuses.n || 0) + 1);
+    var guid = runGuid("0123456789abcdef".charAt(refuses.n = (refuses.n || 0) + 1));
     var entry = { name: "x.png", type: "texture", typeId: 2, viewFilter: 2, dependencies: [],
                   files: [{ role: "source", name: "x.png", ext: "png",
                             size: 1, oid: "0000000000000000000000000000000000000000000000000000000000000000" }] };
