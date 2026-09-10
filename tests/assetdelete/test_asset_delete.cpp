@@ -34,6 +34,11 @@
 //      split (an unlisted row resolves by guid but is not a tile) and the
 //      reaping of an unlisted row whose last pinning project is deleted.
 //
+// Plus the library-delete CODE REVIEW follow-ups (MASTER_QUEUE §26, item 5b):
+//  13. deleteProject ROLLS BACK when an orphan reap fails (it used to drop
+//      the result and commit, leaving the project gone and an invisible,
+//      unpinned, undeletable row behind).
+//
 // Framework-free; non-zero exit on failure. Runs under QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
 #include <QDir>
@@ -489,6 +494,44 @@ int main(int argc, char **argv)
         CHECK(countWhere("asset_files", "asset_guid", shared) == 0,
               "... with its content mapping, so assets.gc can reclaim the bytes");
         CHECK(!db.setAssetListed(shared, true), "setAssetListed on an unknown guid is FALSE");
+    }
+
+    // --- 13. deleteProject rolls back over a FAILED orphan reap -------------
+    //
+    // The reap's result was dropped and the transaction committed anyway: the
+    // project went, the orphan stayed — invisible (unlisted), unpinned and,
+    // because nothing lists it, undeletable forever. Forced here by removing
+    // the table the reap's own delete needs.
+    {
+        conn = QSqlDatabase::database();
+        const QString fragile = "proj-fragile";
+        CHECK(db.createProject(fragile, "Fragile"), "fragile project created");
+        const QString orphanGuid = db.createAssetEntry(
+            "guid-orphan-reap", "orphan.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString orphanOid, oe;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, orphanGuid, "source", "orphan.png",
+                                   &orphanOid, &oe), "the future orphan has content");
+        CHECK(AssetCas::writePin(conn, fragile, orphanGuid, orphanOid), "pinned by the project");
+        CHECK(db.deleteAsset(orphanGuid) && !db.isAssetListed(orphanGuid),
+              "removed from the library while pinned (so it is unlisted)");
+
+        QSqlQuery dropFiles;
+        CHECK(dropFiles.exec("DROP TABLE asset_files"),
+              "asset_files dropped to make the reap's own delete fail");
+        CHECK(!db.deleteProject(fragile), "deleteProject reports FAILURE");
+        CHECK(countWhere("projects", "guid", fragile) == 1,
+              "... and the PROJECT row survived (the whole delete rolled back)");
+        CHECK(countWhere("project_assets", "asset_guid", orphanGuid) == 1,
+              "... the pin survived too");
+
+        db.createCasTables();
+        CHECK(db.checkIfTableExists("asset_files"), "asset_files restored");
+        CHECK(db.deleteProject(fragile), "the same delete succeeds once the table is back");
+        CHECK(countWhere("projects", "guid", fragile) == 0, "project deleted");
+        CHECK(countWhere("assets", "guid", orphanGuid) == 0,
+              "and the orphaned unlisted row was reaped this time");
     }
 
     // --- 7. wipeDatabase clears the CAS catalog too (DESTRUCTIVE — last) ----

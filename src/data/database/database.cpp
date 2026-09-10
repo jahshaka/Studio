@@ -1100,8 +1100,21 @@ bool Database::deleteProject(const QString &guid)
     // force: the row was already deleted from the library once; this is that
     // delete finally landing. (Nested in the transaction above — the guard
     // degrades to a no-op and this commit is the atom.)
+    //
+    // The result is COLLECTED (code review 2026-09-10): this ran inside the
+    // project delete's transaction and its verdict was dropped, so a reap that
+    // failed — a closed connection, a locked table — was committed over as a
+    // success, leaving the project gone and an invisible, unpinned, undeletable
+    // row behind it. A failed reap now rolls the whole project delete back:
+    // the user can try again, which is the only state from which they can.
+    bool reaped = true;
     for (const QString &orphan : unlistedPins)
-        if (countAssetPins(orphan) == 0) deleteAsset(orphan, /*force*/ true);
+        if (countAssetPins(orphan) == 0) reaped = deleteAsset(orphan, /*force*/ true) && reaped;
+    if (!reaped) {
+        irisLog(QString("deleteProject('%1'): an orphaned unlisted asset could not be reaped — "
+                        "the whole project delete was rolled back.").arg(guid));
+        return false;   // ~DbTransaction rolls back
+    }
 
     return tx.commit();
 }
