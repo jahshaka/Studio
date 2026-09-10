@@ -39,6 +39,40 @@ int planarBudgetOf(const iris::ScenePtr &s)
     return (m >= 0 && m <= 3) ? kPlanarTier[m] : 0;
 }
 
+/// THE RAYON TIER TABLE (worldmodes.h's comment is the readable form). Per
+/// tier: technique (GiMode ordinal), quality (GiQuality ordinal), ddgi (0/1),
+/// bounces (total, 1..4), dynamicProbes (0..8). Owner option (b), 2026-09-09.
+///
+/// ONE SOURCE. The five `rayonTiered` rows buildRows() declares take their
+/// `tier[]` columns FROM this table (rayonColumns below) and the public
+/// per-column readers (rayonTechnique .. rayonDynamicProbes) read it too, so
+/// there is no second copy to drift — gi.tiers asserts the rows against the
+/// readers cell by cell (the review found 13 of the 20 cells were untested
+/// while they were hand-copied).
+struct RayonRow { int technique, quality, ddgi, bounces, dynamicProbes; };
+const RayonRow kRayonTable[4] = {
+    /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
+    /* Medium */ { 2, 1, 1, 1, 0 },   // VCT 64^3, DDGI-fed (voxel source)
+    /* High   */ { 3, 2, 1, 1, 0 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
+    /* Epic   */ { 3, 2, 1, 3, 2 },   // ... plus 3 bounces and 2 dynamic probes a frame
+};
+/// The five rayonTiered row ids, in kRayonTable column order.
+const int kRayonRowCount = 5;
+int rayonColumn(const RayonRow &r, int i) {
+    switch (i) {
+    case 0: return r.technique;
+    case 1: return r.quality;
+    case 2: return r.ddgi;
+    case 3: return r.bounces;
+    default: return r.dynamicProbes;
+    }
+}
+/// Fills a rayonTiered row's four tier cells from the table's column `column`.
+void rayonColumns(Row &r, int column)
+{
+    for (int t = 0; t < 4; ++t) r.tier[t] = rayonColumn(kRayonTable[t], column);
+}
+
 /// The four tier columns, in order: Low, Medium, High, Epic.
 /// Values and reasons come from POST_CHAIN_SPEC.md §9.3, with two documented
 /// departures: hardware MSAA is 1x in every tier (it cannot be combined with the
@@ -353,8 +387,8 @@ QVector<Row> buildRows()
     // ONE row is the dial the World Mode drives; the five below it are the
     // machinery that dial consumes, and they are `rayonTiered` — resolved by
     // the RAYON tier, not by the World Mode, because two dials must never own
-    // one backing field. THE TABLE ITSELF is kRayonTable further down; the
-    // tier[] columns here must agree with it (gi.tiers pins both).
+    // one backing field. THE TABLE ITSELF is kRayonTable above; each row's
+    // tier[] columns are READ from it (rayonColumns), never copied.
     {
         Row r;
         r.id = QStringLiteral("rayon");
@@ -410,11 +444,11 @@ QVector<Row> buildRows()
                       { QStringLiteral("instant_radiosity"), QStringLiteral("Instant Radiosity"), 1 },
                       { QStringLiteral("vct"),              QStringLiteral("VCT"),               2 },
                       { QStringLiteral("vct_pcc_hybrid"),   QStringLiteral("VCT + Probes"),      3 } };
-        // RAYON columns (Low, Medium, High, Epic) — not world-mode ones.
-        // Low keeps Instant Radiosity (spec §9 D1: "low is really low"); the
-        // top two tiers are the hybrid and differ in the giBounces and
-        // giDynamicProbes rows below, not here.
-        r.tier[0] = 1; r.tier[1] = 2; r.tier[2] = 3; r.tier[3] = 3;
+        // RAYON columns (Low, Medium, High, Epic) — not world-mode ones —
+        // read from kRayonTable. Low keeps Instant Radiosity (spec §9 D1: "low
+        // is really low"); the top two tiers are the hybrid and differ in the
+        // giBounces and giDynamicProbes rows below, not here.
+        rayonColumns(r, 0);
         r.cost = QStringLiteral("Which technique Rayon uses. Instant Radiosity re-traces on light "
                                 "moves and sees only the driving light; VCT re-voxelizes on "
                                 "geometry edits (editing latency, not frame time) and lights from "
@@ -436,7 +470,7 @@ QVector<Row> buildRows()
         r.options = { { QStringLiteral("low"),    QStringLiteral("Low"),    0 },
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 1 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   2 } };
-        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 2; r.tier[3] = 2;
+        rayonColumns(r, 1);
         r.cost = QStringLiteral("Ray/voxel budget: 32/64/128 voxels per axis and 128/256/512 pixel "
                                 "probe faces. In VCT + Probes it ALSO turns on HDR and shadowed "
                                 "probe captures at High (world.gi's probeHdr/probeShadows pin "
@@ -458,7 +492,7 @@ QVector<Row> buildRows()
         // Owner option (b), 2026-09-09: every voxel tier feeds the field — it
         // is the one diffuse arm that is right in both open and sealed scenes
         // (rayon2 S1-S3). Low has no voxel volume to feed it from.
-        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
+        rayonColumns(r, 2);
         r.cost = QStringLiteral("The irradiance field: a grid of probes over the lit volume storing "
                                 "the bounced light arriving from every direction, plus a depth map "
                                 "that decides what each probe can actually see. It is the LEAK FIX "
@@ -488,7 +522,7 @@ QVector<Row> buildRows()
         r.type = RowType::Int;
         r.rayonTiered = true;
         r.minValue = 1; r.maxValue = 4;
-        r.tier[0] = 1; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 3;
+        rayonColumns(r, 3);
         r.cost = QStringLiteral("Total light bounces, 1-4. Each bounce past the first is another "
                                 "light-propagation pass over the whole voxel volume on every "
                                 "re-solve (128^3 at High/Epic), and the irradiance field is fed "
@@ -507,7 +541,7 @@ QVector<Row> buildRows()
         r.type = RowType::Int;
         r.rayonTiered = true;
         r.minValue = 0; r.maxValue = 8;
-        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 0; r.tier[3] = 2;
+        rayonColumns(r, 4);
         r.cost = QStringLiteral("Extra reflection-probe re-captures per frame, on top of the GI "
                                 "Update Budget, reserved for the probes covering whatever MOVED "
                                 "this frame — so a moving object's reflection follows it frame by "
@@ -777,32 +811,10 @@ const QStringList &postFxRowIds()
 // pins (setMode's rule, and the bug the panel's `*` marker made visible), and
 // the `rayon` row's own set() runs from inside the registry — reaching back
 // into rows() from there is a re-entrancy nobody should have to reason about.
-// The tier table lives here, once, in a form both this file and the migration
-// read.
+// The tier table itself lives ABOVE buildRows (the rows derive their columns
+// from it); what follows is the bookkeeping that reads it.
 
 namespace {
-
-/// THE RAYON TIER TABLE (worldmodes.h's comment is the readable form). Per
-/// tier: technique (GiMode ordinal), quality (GiQuality ordinal), ddgi (0/1),
-/// bounces (total, 1..4), dynamicProbes (0..8). Owner option (b), 2026-09-09.
-struct RayonRow { int technique, quality, ddgi, bounces, dynamicProbes; };
-const RayonRow kRayonTable[4] = {
-    /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
-    /* Medium */ { 2, 1, 1, 1, 0 },   // VCT 64^3, DDGI-fed (voxel source)
-    /* High   */ { 3, 2, 1, 1, 0 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
-    /* Epic   */ { 3, 2, 1, 3, 2 },   // ... plus 3 bounces and 2 dynamic probes a frame
-};
-/// The five rayonTiered row ids, in kRayonTable column order.
-const int kRayonRowCount = 5;
-int rayonColumn(const RayonRow &r, int i) {
-    switch (i) {
-    case 0: return r.technique;
-    case 1: return r.quality;
-    case 2: return r.ddgi;
-    case 3: return r.bounces;
-    default: return r.dynamicProbes;
-    }
-}
 
 int tierIndex(RayonTier t) { return qBound(0, int(t), 3); }
 

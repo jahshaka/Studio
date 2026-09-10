@@ -22,9 +22,14 @@ For more information see the LICENSE file
 #include "ui/controls/labelwidget.h"
 #include "ui/controls/dragvaluewidgets.h"
 #include "services/gibounds.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "ui_hfloatsliderwidget.h"
 
+#include <QPointer>
 #include <QPushButton>
+#include <QSignalBlocker>
 
 namespace {
 // Combo rows in display order -> document modes (rows are NOT the enum values).
@@ -70,6 +75,15 @@ void WorldGiPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 void WorldGiPropertyWidget::rebuild()
 {
     clearPanel(this->layout());
+    // The rows just retired (deleteLater) — every pointer below is to one of
+    // them, and refreshPins() dereferences whichever this build leaves set.
+    rayonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;
+    quality = nullptr; lightSelector = nullptr; bounces = nullptr;
+    dynamicProbes = nullptr; boundsMin = nullptr; boundsMax = nullptr;
+    pccGrid = nullptr; updateBudget = nullptr; ddgiToggle = nullptr;
+    ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
+    fitBoundsButton = nullptr; advancedButton = nullptr; resetAdvancedButton = nullptr;
+    editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
     if (!scene) return;
 
     const bool on = worldmodes::rayonEnabled(scene);
@@ -223,7 +237,7 @@ void WorldGiPropertyWidget::rebuild()
 
         bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
                                             1.0f, 4.0f, float(scene->giNumBounces));
-        connect(bounces, SIGNAL(valueChanged(float)), SLOT(onBouncesChanged(float)));
+        wireRayonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Rayon Light Bounces"));
         break;
     }
 
@@ -249,7 +263,7 @@ void WorldGiPropertyWidget::rebuild()
                                "light-propagation pass over the whole voxel volume on every "
                                "re-solve, and the irradiance field is fed from that volume so it "
                                "sees them too. Epic sets 3; the other tiers 1."));
-        connect(bounces, SIGNAL(valueChanged(float)), SLOT(onBouncesChanged(float)));
+        wireRayonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Rayon Light Bounces"));
 
         // COMPACT, SCRUBBABLE ROWS (owner report 2026-09-07). These were
         // addVector3Widget — three full-width QDoubleSpinBoxes and NO label at
@@ -280,7 +294,8 @@ void WorldGiPropertyWidget::rebuild()
                    "moving object's reflection follows it frame by frame instead of waiting "
                    "its turn in the budget's sweep. Costs nothing while the scene is still. "
                    "Epic sets 2; the other tiers 0 (the sweep alone)."));
-            connect(dynamicProbes, SIGNAL(valueChanged(float)), SLOT(onDynamicProbesChanged(float)));
+            wireRayonSlider(dynamicProbes, &WorldGiPropertyWidget::onDynamicProbesChanged,
+                            tr("Rayon Dynamic Probes"));
         }
 
         // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). On at every voxel tier
@@ -359,17 +374,115 @@ void WorldGiPropertyWidget::rebuild()
 
     // Only worth offering when there is something to hand back — the same rule
     // the World Mode panel's "Reset All Pinned Rows" follows.
-    bool anyPin = !deviations.isEmpty();
+    if (advancedResettable()) addResetAdvancedButton();
+}
+
+bool WorldGiPropertyWidget::advancedResettable() const
+{
+    if (!scene) return false;
+    bool anyPin = !worldmodes::rayonDeviations(scene).isEmpty();
     for (const QString &id : worldmodes::rayonRowIds())
         anyPin = anyPin || scene->worldOverrides.contains(id);
-    if (anyPin) {
-        resetAdvancedButton = new QPushButton(tr("Reset Advanced Settings"));
-        resetAdvancedButton->setToolTip(tr("Drops the settings you pinned here (*) and lets the "
-                                           "quality tier decide them again."));
-        connect(resetAdvancedButton, &QPushButton::clicked,
-                this, &WorldGiPropertyWidget::onResetAdvancedClicked);
-        this->addWidgetToContent(resetAdvancedButton);
+    return anyPin;
+}
+
+void WorldGiPropertyWidget::addResetAdvancedButton()
+{
+    if (resetAdvancedButton) return;
+    resetAdvancedButton = new QPushButton(tr("Reset Advanced Settings"));
+    resetAdvancedButton->setToolTip(tr("Drops the settings you pinned here (*) and lets the "
+                                       "quality tier decide them again."));
+    connect(resetAdvancedButton, &QPushButton::clicked,
+            this, &WorldGiPropertyWidget::onResetAdvancedClicked);
+    // The button is the LAST thing rebuild() adds, so appending it later lands
+    // it in the same place.
+    this->addWidgetToContent(resetAdvancedButton);
+}
+
+// What a slider tick may change besides its own backing field: the row's pin
+// mark, whether the reset button is offered, and whether the tier row reads
+// "Custom". All three are re-read from the document here, in place — rebuild()
+// would deleteLater the slider that is emitting.
+void WorldGiPropertyWidget::refreshPins()
+{
+    if (!scene) return;
+    if (bounces)
+        bounces->ui->label->setText(tr("Light Bounces") + pinMark(scene, "giBounces"));
+    if (dynamicProbes)
+        dynamicProbes->ui->label->setText(tr("Dynamic Probes") + pinMark(scene, "giDynamicProbes"));
+
+    if (tierSelector && tierSelector->getWidget()) {
+        QComboBox *combo = tierSelector->getWidget();
+        const int tiers = worldmodes::rayonTierNames().size();
+        const bool custom = !worldmodes::rayonDeviations(scene).isEmpty();
+        const QSignalBlocker quiet(combo);   // a display change, not a pick
+        if (custom) {
+            if (combo->count() == tiers) combo->addItem(QStringLiteral("Custom"));
+            combo->setCurrentIndex(tiers);
+        } else {
+            if (combo->count() > tiers) combo->removeItem(tiers);
+            combo->setCurrentIndex(int(worldmodes::rayonTier(scene)));
+        }
     }
+
+    const bool want = advancedResettable();
+    if (want && !resetAdvancedButton) {
+        addResetAdvancedButton();
+    } else if (!want && resetAdvancedButton) {
+        delete resetAdvancedButton;      // a live delete: the layout drops it itself
+        resetAdvancedButton = nullptr;
+    }
+}
+
+void WorldGiPropertyWidget::wireRayonSlider(HFloatSliderWidget *slider,
+                                            void (WorldGiPropertyWidget::*tick)(float),
+                                            const QString &text)
+{
+    if (!slider) return;
+    connect(slider, &HFloatSliderWidget::valueChangeStart, this,
+            [this](float) { beginRayonEdit(); });
+    connect(slider, &HFloatSliderWidget::valueChanged, this, tick);
+    connect(slider, &HFloatSliderWidget::valueChangeEnd, this,
+            [this, text](float) { endRayonEdit(text); });
+}
+
+void WorldGiPropertyWidget::beginRayonEdit()
+{
+    if (!scene || editing) return;
+    editing = true;
+    editBefore = WorldModeCommand::capture(scene);
+}
+
+void WorldGiPropertyWidget::endRayonEdit(const QString &text)
+{
+    if (!editing) return;
+    editing = false;
+    if (!scene || !services || !services->undo) return;
+    const WorldModeCommand::Snapshot after = WorldModeCommand::capture(scene);
+    // A press-and-release that moved nothing is not an edit.
+    if (after.rowValues == editBefore.rowValues && after.overrides == editBefore.overrides &&
+        after.worldMode == editBefore.worldMode && after.rayonTier == editBefore.rayonTier)
+        return;
+    auto *cmd = new WorldModeCommand(text, scene, editBefore);
+    // An undo repaints the panel it came from (the rows ARE the state); by then
+    // no slider of ours is mid-gesture, so a full rebuild is the right refresh.
+    QPointer<WorldGiPropertyWidget> self(this);
+    cmd->setRefresh([self]() { if (self) self->rebuild(); });
+    services->undo->push(cmd);
+}
+
+void WorldGiPropertyWidget::editRayonRow(const QString &id, int value, const QString &text)
+{
+    if (!scene) return;
+    // A tick outside a start/end bracket (nothing in this panel emits one, but
+    // the slider's contract does not forbid it) is its own one-step edit.
+    const bool atomic = !editing;
+    if (atomic) beginRayonEdit();
+    // Through the registry: the write AND the pin, so a later tier switch
+    // does not silently undo the edit (worldmodes.h's one invariant).
+    worldmodes::setRowValue(scene, id, value);
+    refreshPins();
+    if (atomic) endRayonEdit(text);
 }
 
 void WorldGiPropertyWidget::onRayonToggled(bool on)
@@ -425,14 +538,13 @@ void WorldGiPropertyWidget::onLightChanged(int row)
 
 void WorldGiPropertyWidget::onBouncesChanged(float value)
 {
-    // Through the registry: the write AND the pin, so a later tier switch
-    // does not silently undo the edit (worldmodes.h's one invariant).
-    if (!!scene) worldmodes::setRowValue(scene, QStringLiteral("giBounces"), qBound(1, qRound(value), 4));
+    editRayonRow(QStringLiteral("giBounces"), qBound(1, qRound(value), 4), tr("Rayon Light Bounces"));
 }
 
 void WorldGiPropertyWidget::onDynamicProbesChanged(float value)
 {
-    if (!!scene) worldmodes::setRowValue(scene, QStringLiteral("giDynamicProbes"), qBound(0, qRound(value), 8));
+    editRayonRow(QStringLiteral("giDynamicProbes"), qBound(0, qRound(value), 8),
+                 tr("Rayon Dynamic Probes"));
 }
 
 void WorldGiPropertyWidget::onBoundsMinChanged(iris::Vec3 value)

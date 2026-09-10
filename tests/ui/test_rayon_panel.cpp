@@ -31,17 +31,23 @@ For more information see the LICENSE file
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QLabel>
 #include <QPushButton>
+#include <QSlider>
+#include <QUndoStack>
 
 #include <cstdio>
 
 #include "irisgl/document/scenegraph/scene.h"
 
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "services/worldmodes.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "ui_hfloatsliderwidget.h"
 
 #include "../support/documentgraph.h"
 
@@ -68,6 +74,15 @@ static QPushButton *buttonWith(QWidget *w, const QString &text)
 {
     for (QPushButton *b : w->findChildren<QPushButton *>())
         if (b->text().contains(text, Qt::CaseInsensitive)) return b;
+    return nullptr;
+}
+
+/// A slider row by its label (the row's QLabel is the slider's own child).
+static HFloatSliderWidget *sliderWith(QWidget *w, const QString &label)
+{
+    for (HFloatSliderWidget *s : w->findChildren<HFloatSliderWidget *>())
+        for (QLabel *l : s->findChildren<QLabel *>())
+            if (l->text().startsWith(label)) return s;
     return nullptr;
 }
 
@@ -184,6 +199,108 @@ int main(int argc, char **argv)
               "and it hands the technique back to the tier (Low = Instant Radiosity)");
         CHECK(buttonWith(&panel, QStringLiteral("Reset Advanced")) == nullptr,
               "after which the reset is not offered any more");
+    }
+
+    // ---- 5. THE EPIC-COLUMN SLIDERS: live, in place, and ONE undo step -----
+    // (rayontiers review follow-up.) A drag is bracketed by the slider's
+    // valueChangeStart/End; every tick writes through, the pin mark / reset
+    // button / "Custom" entry follow IN PLACE (the slider survives the drag),
+    // and release pushes exactly one WorldModeCommand.
+    {
+        QUndoStack stack;
+        UndoService undo(&stack);
+        StudioServices services;
+        services.undo = &undo;
+        panel.setServices(&services);
+
+        worldmodes::setRayon(scene, true, worldmodes::RayonTier::Epic);
+        panel.setScene(scene);   // rebuild at Epic (Advanced is still open)
+        pump();
+        CHECK(scene->giNumBounces == 3 && !scene->worldOverrides.contains(QStringLiteral("giBounces")),
+              "Epic again: three bounces, nothing pinned");
+        HFloatSliderWidget *bounces = sliderWith(&panel, QStringLiteral("Light Bounces"));
+        CHECK(bounces != nullptr, "the Light Bounces slider is on the Advanced surface");
+        if (bounces) {
+            QSlider *bar = bounces->ui->slider;
+            const int before = stack.count();
+            emit bar->sliderPressed();          // valueChangeStart
+            bounces->setValue(2.0f);            // two ticks of the drag
+            bounces->setValue(1.0f);
+            pump();
+            CHECK(scene->giNumBounces == 1, "each tick wrote through live (the viewport follows the drag)");
+            CHECK(scene->worldOverrides.contains(QStringLiteral("giBounces")), "and pinned the row");
+            CHECK(stack.count() == before, "but NO undo step landed mid-drag");
+            CHECK(sliderWith(&panel, QStringLiteral("Light Bounces")) == bounces,
+                  "the slider being dragged was NOT rebuilt away");
+            CHECK(bounces->ui->label->text().endsWith(QStringLiteral(" *")),
+                  "its pin mark appeared in place");
+            CHECK(buttonWith(&panel, QStringLiteral("Reset Advanced")) != nullptr,
+                  "the reset button was offered in place");
+            auto *tierCombo = panel.findChildren<ComboBoxWidget *>().value(0)->getWidget();
+            CHECK(tierCombo && tierCombo->count() == 5 && tierCombo->currentIndex() == 4,
+                  "and the tier row reads Custom in place");
+            emit bar->sliderReleased();         // valueChangeEnd
+            CHECK(stack.count() == before + 1, "release pushed exactly ONE undo step");
+            CHECK(stack.count() > 0 && stack.text(stack.count() - 1) == QStringLiteral("Rayon Light Bounces"),
+                  "named for the row");
+
+            // A press-and-release that moved nothing is not an edit.
+            emit bar->sliderPressed();
+            emit bar->sliderReleased();
+            CHECK(stack.count() == before + 1, "a click that moved nothing pushes nothing");
+
+            stack.undo();
+            pump();
+            CHECK(scene->giNumBounces == 3 && !scene->worldOverrides.contains(QStringLiteral("giBounces")),
+                  "undo restores the tier's three bounces AND drops the pin");
+            CHECK(buttonWith(&panel, QStringLiteral("Reset Advanced")) == nullptr,
+                  "the panel repainted: no reset offered");
+            auto *tierCombo2 = panel.findChildren<ComboBoxWidget *>().value(0)->getWidget();
+            CHECK(tierCombo2 && tierCombo2->count() == 4 && tierCombo2->currentIndex() == 3,
+                  "and the tier row reads Epic again");
+            stack.redo();
+            pump();
+            CHECK(scene->giNumBounces == 1 && scene->worldOverrides.contains(QStringLiteral("giBounces")),
+                  "redo puts the pinned edit back");
+            stack.undo();
+            pump();
+        }
+
+        // Dynamic Probes is wired the same way (Epic = hybrid, so its row exists).
+        HFloatSliderWidget *dyn = sliderWith(&panel, QStringLiteral("Dynamic Probes"));
+        CHECK(dyn != nullptr, "the Dynamic Probes slider is on the Advanced surface at Epic");
+        if (dyn) {
+            // index(), not count(): the undone bounces step above is still ON
+            // the stack until this push discards it.
+            const int before = stack.index();
+            emit dyn->ui->slider->sliderPressed();
+            dyn->setValue(5.0f);
+            emit dyn->ui->slider->sliderReleased();
+            pump();
+            CHECK(scene->giDynamicProbes == 5 && scene->worldOverrides.contains(QStringLiteral("giDynamicProbes")),
+                  "a dynamic-probes drag writes through and pins");
+            CHECK(stack.index() == before + 1 &&
+                      stack.text(stack.index() - 1) == QStringLiteral("Rayon Dynamic Probes"),
+                  "as one named undo step");
+            stack.undo();
+            pump();
+            CHECK(scene->giDynamicProbes == 2, "undone to Epic's two");
+        }
+
+        // A tick with no bracket (the slider's contract allows one) is its own
+        // one-step edit — nothing can write through without an undo step.
+        HFloatSliderWidget *bounces2 = sliderWith(&panel, QStringLiteral("Light Bounces"));
+        if (bounces2) {
+            const int before = stack.index();
+            bounces2->setValue(4.0f);
+            pump();
+            CHECK(scene->giNumBounces == 4 && stack.index() == before + 1,
+                  "an un-bracketed tick is an atomic undo step");
+            stack.undo();
+            pump();
+            CHECK(scene->giNumBounces == 3, "and undoes");
+        }
+        panel.setServices(nullptr);
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);
