@@ -223,7 +223,7 @@ static void testTextureRow()
 
     PanelRig rig;
     auto textures = rig.panel.findChildren<TexturePickerWidget *>();
-    // RE-PINNED, MATERIAL_GAPS_SPEC GAP 2: the panel's map rows are now the five
+    // RE-PINNED, MATERIAL_GAPS_SPEC GAP 2: the panel's map rows are the five
     // base maps plus, per detail layer, a diffuse and a normal map, plus the one
     // detail WEIGHT mask. Counted from the document's own constant so raising
     // kDetailLayers does not break this again.
@@ -231,9 +231,29 @@ static void testTextureRow()
     // Still FIVE base maps, not six: HLMS_ADOPTION P2 removed the Occlusion Map
     // row along with the rest of the AO ghost (the renderer has no AO input to
     // bind it to), and that is what the second assertion below fences.
-    const int kExpectedMaps = 5 + iris::PbrMaterial::kDetailLayers * 2 + 1;
+    //
+    // +1 since MATERIAL_GAPS_SPEC ADDENDUM A-5: the per-material REFLECTION
+    // CUBEMAP is a texture row like any other, which is the whole reason the
+    // panel, the writer, the reader and material.set all got it for free. It is
+    // deliberately NOT in PbrMaterial::mapRowNames() (that list generates the
+    // per-map ADDRESS rows, and a cube is sampled by direction), so it cannot
+    // be counted from there — it is one row, named.
+    const int kExpectedMaps = 5 + iris::PbrMaterial::kDetailLayers * 2 + 1 + 1;
     CHECK(textures.size() == kExpectedMaps,
-          "texture: five base map rows + two per detail layer + the weight mask");
+          "texture: five base map rows + two per detail layer + the weight mask "
+          "+ the reflection cubemap");
+    {
+        // The A-5 row is DECLARED, and empty by default — the "this feature
+        // moves no existing pixel" claim as an assertion.
+        iris::Property *reflection = nullptr;
+        for (auto *prop : rig.pbr->properties)
+            if (prop && prop->name == QStringLiteral("reflectionMap")) reflection = prop;
+        CHECK(reflection != nullptr, "texture: the reflectionMap row is declared");
+        CHECK(reflection && reflection->type == iris::PropertyType::Texture,
+              "texture: reflectionMap is a texture row");
+        CHECK(reflection && reflection->getValue().toString().isEmpty(),
+              "texture: reflectionMap is empty by default (the scene's global cube)");
+    }
     {
         // The Occlusion row must stay GONE, whatever the detail count is.
         bool occlusion = false;

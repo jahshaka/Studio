@@ -198,6 +198,8 @@ set(SRCS
     src/scripting/modules/cameraapi.cpp
     src/scripting/modules/inputapi.cpp
     src/scripting/modules/logapi.cpp
+    src/scripting/modules/textureapi.cpp
+    src/scripting/modules/videoapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishapi.cpp
@@ -270,6 +272,8 @@ set(SRCS
     src/services/assetstorepaths.cpp
     src/services/audiopeaks.cpp
     src/services/videoutils.cpp
+    src/services/livetextures.cpp
+    src/services/livevideo.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
     src/services/sceneeditservice.cpp
@@ -469,6 +473,8 @@ set(HEADERS
     src/scripting/modules/animapi.h
     src/scripting/modules/cameraapi.h
     src/scripting/modules/assetsapi.h
+    src/scripting/modules/textureapi.h
+    src/scripting/modules/videoapi.h
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h
     src/modules/publish/publishapi.h
@@ -521,6 +527,8 @@ set(HEADERS
     src/data/database/casschema.h
     src/services/audiopeaks.h
     src/services/videoutils.h
+    src/services/livetextures.h
+    src/services/livevideo.h
     src/services/projectservice.h
     src/services/imagematerial.h
     src/services/sceneeditservice.h

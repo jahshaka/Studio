@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
+#include "services/livetextures.h"
 #include "services/projectassets.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
@@ -90,7 +91,12 @@ const QStringList kColorKeys = { "baseColor", "emissiveColor",
 QStringList makePbrMapKeys()
 {
     QStringList keys = { "baseColorMap", "metallicMap", "roughnessMap",
-                         "normalMap", "emissiveMap" };
+                         "normalMap", "emissiveMap",
+                         // ADDENDUM A-5: the per-material reflection cubemap
+                         // override. In the SAME list because it resolves the
+                         // same way — a file path or an asset guid — even
+                         // though the renderer binds it as a cube.
+                         "reflectionMap" };
     // MATERIAL_GAPS_SPEC GAP 2: the detail maps take file paths and asset guids
     // exactly like the base ones, so they belong in the SAME list — that is
     // what makes material.set resolve a guid through the CAS for them, and what
@@ -504,9 +510,10 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "in panel order, with 'min'/'max' present only where a range is declared — the PBR "
           "material declares real ones (metallic and roughness are 0..1, emissiveIntensity 0..10), "
           "so this is where a scale actually means something. 'writableKeys' is the exact set "
-          "material.set accepts — the row names plus, on a PbrMaterial, its five texture slots "
-          "(baseColorMap, metallicMap, roughnessMap, normalMap, emissiveMap), "
-          "which take a file path or an image asset guid. Read 'writableKeys' rather than "
+          "material.set accepts — the row names plus, on a PbrMaterial, its texture slots "
+          "(baseColorMap, metallicMap, roughnessMap, normalMap, emissiveMap, the detail-layer maps "
+          "and reflectionMap), "
+          "which take a file path, an image asset guid or a live texture guid. Read 'writableKeys' rather than "
           "deriving keys from 'rows': the two agree today but the slot list is what material.set "
           "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
           "NOT writable on a PBR material and are refused by name.",
@@ -671,7 +678,23 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
             // flat projectFolder/name join pointed at an unpopulated folder),
             // empty clears
             const QString ref = newValue.toString();
-            if (!ref.isEmpty() && !QFileInfo::exists(ref)) {
+            // A LIVE TEXTURE (MATERIAL_GAPS_SPEC A-1) resolves before anything
+            // touches the database: it has no file, no store object and no
+            // catalog row, and its whole purpose is that a script can bind
+            // pixels it just made — including with NO PROJECT OPEN, which is
+            // where the db branch below would refuse. The stored value is the
+            // reference string ("live://<guid>"), which is what the document's
+            // resolver looks up and what tells the scene writer to skip the row.
+            if (!ref.isEmpty() && LiveTextureCatalog::exists(ref)) {
+                if (key == QLatin1String("reflectionMap"))
+                    return fail(QStringLiteral(
+                        "material.set: 'reflectionMap' takes an equirect IMAGE, not a live "
+                        "texture — a reflection cubemap is built once by projecting the image "
+                        "onto six faces, so a live texture bound here would freeze at its first "
+                        "frame instead of following its generation"));
+                newValue = LiveTextureCatalog::refFor(ref);
+            }
+            else if (!ref.isEmpty() && !QFileInfo::exists(ref)) {
                 if (!host.db || !host.isProjectOpen())
                     return fail(QStringLiteral("material.set: '%1' is not a file and no project is open to resolve it as an asset").arg(ref));
                 const auto record = host.db->fetchAsset(ref);

@@ -24,6 +24,8 @@ For more information see the LICENSE file
 #include "scripting/modules/particlesapi.h"
 #include "scripting/modules/projectapi.h"
 #include "scripting/modules/sceneapi.h"
+#include "scripting/modules/textureapi.h"
+#include "scripting/modules/videoapi.h"
 #include "scripting/modules/worldapi.h"
 
 void registerStudioModules(ScriptEngine &engine)
@@ -50,6 +52,12 @@ void registerStudioModules(ScriptEngine &engine)
     // CameraApi and InputApi were: the registry order every generated doc and
     // tool schema already has stays unchanged.
     engine.addModule(new LogApi(host));
+    // Live textures and the video that drives them (MATERIAL_GAPS_SPEC A-1).
+    // Appended for the same reason CameraApi, InputApi and LogApi were: the
+    // registry order every generated doc and tool schema already has stays
+    // unchanged.
+    engine.addModule(new TextureApi(host));
+    engine.addModule(new VideoApi(host));
     // The materials/material/graph verbs are the materials module's — the
     // shell's module loop calls MaterialsModule::registerApi right after this
     // (audit §6.3.4), keeping the registry order unchanged.

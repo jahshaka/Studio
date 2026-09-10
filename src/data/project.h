@@ -186,7 +186,15 @@ enum class ModelTypes
     // addressed, portable, re-readable by the avatar module), never a
     // converted intermediate.
     // APPENDED, never inserted: the value is persisted in every assets row.
-    Animation		// Supported
+    Animation,		// Supported
+    // LIVE TEXTURES (MATERIAL_GAPS_SPEC A-1, owner decision 2026-09-09). The
+    // ONE kind that is never persisted: a live texture is pixels a producer
+    // writes at runtime, catalogued only so a material row can name it by guid
+    // like any other texture. No database row ever carries this value — it
+    // exists in the session catalog (services/livetextures.h) and in the
+    // AssetManager mirror of it, and the scene writer skips references to it.
+    // APPENDED like the rest, so nothing already stored moves.
+    LiveTexture		// Session only
 };
 
 #define	MODEL_GUID_ROLE		0x0113

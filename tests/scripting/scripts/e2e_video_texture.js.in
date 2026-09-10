@@ -1,0 +1,100 @@
+// scripting.e2e.video_texture — a VIDEO decoded into a LIVE TEXTURE
+// (ASSET_MEDIA_SPEC §3 Option A, MATERIAL_GAPS_SPEC ADDENDUM A-1).
+//
+// The claim under test is narrow and mechanical: every frame the decoder
+// produces becomes a write into the bound live texture, and therefore a
+// GENERATION BUMP — which is the one thing the renderer watches. Assert that
+// and the whole "a clip playing on a surface" feature is proven end to end
+// without a single pixel readback; assert screenshots instead and you have a
+// timing-dependent suite that proves less.
+//
+// Qt Multimedia's ffmpeg backend decodes with no display (the same fact the
+// video thumbnail grabber and scripting.e2e.video rely on), so this runs
+// --headless. The fixture is tests/scripting/fixtures/tiny.mp4: 64x64,
+// 16 frames at 8 fps.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+var clip = "@SOURCE_DIR@/tests/scripting/fixtures/tiny.mp4";
+var guid = project.create("Video Texture " + Date.now());
+assert(guid.length > 10, "project.create");
+
+// ---- bind by LIBRARY GUID (the real path) -------------------------------
+var vid = assets.importFile(clip);
+assert(typeof vid === "string" && vid.length > 0, "the clip imports as a video row");
+
+var screen = texture.createLive("screen", 32, 32);
+assert(texture.info(screen).generation === 1, "the live texture starts at generation 1");
+
+mustThrow(function () { video.bind(vid, "not-a-texture"); },
+          "binding to a texture that does not exist is refused");
+assert(video.bind(vid, screen) === true, "video.bind(videoGuid, textureGuid)");
+
+var state = video.state(vid);
+assert(state.texture === screen, "state names the bound texture");
+assert(state.frames === 0, "binding decodes nothing on its own");
+assert(state.playing === false, "and starts nothing");
+
+// ---- one frame, synchronously ------------------------------------------
+assert(video.step(vid) === true, "video.step delivers a frame");
+assert(video.state(vid).frames === 1, "the binding counted exactly one frame");
+assert(texture.info(screen).generation === 2,
+       "and the texture's generation moved by exactly one — a frame IS a write");
+assert(video.state(vid).playing === false,
+       "step left the player as it found it (paused)");
+
+// ---- playing advances it, frame after frame ----------------------------
+assert(video.play(vid) === true, "video.play");
+assert(video.step(vid) === true, "a frame arrives while playing");
+assert(video.step(vid) === true, "and another");
+assert(video.state(vid).playing === true, "step left it PLAYING this time");
+var frames = video.state(vid).frames;
+assert(frames >= 3, "at least three frames have been written (" + frames + ")");
+assert(texture.info(screen).generation === frames + 1,
+       "generation == frames + 1 (the birth frame), got " +
+       texture.info(screen).generation + " for " + frames + " frames");
+assert(video.pause(vid) === true, "video.pause");
+
+// ---- transport: seek and loop are verbs, not hopes ----------------------
+assert(video.seek(vid, 500) === true, "video.seek(500)");
+assert(video.step(vid) === true, "a frame arrives after a seek");
+mustThrow(function () { video.seek(vid, -1); }, "a negative position is refused");
+assert(video.loop(vid, true) === true, "video.loop(true)");
+assert(video.state(vid).loop === true, "the binding reports it is looping");
+assert(video.loop(vid, false) === true, "video.loop(false)");
+assert(video.stop(vid) === true, "video.stop");
+
+// ---- the texture is a texture: bind it to a material --------------------
+var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+assert(material.set(cube, { baseColorMap: screen }) === true,
+       "the video's live texture binds as a base colour map");
+assert(material.get(cube).baseColorMap === "live://" + screen,
+       "the material row holds the session reference");
+
+// ---- bind by PATH, for a fixture with no library row --------------------
+var scratch = texture.createLive("scratch", 16, 16);
+assert(video.bind(clip, scratch) === true, "a video file path binds too");
+assert(video.step(clip) === true, "and decodes");
+assert(video.list().length === 2, "two bindings are live");
+
+// ---- unbind, and the refusals ------------------------------------------
+assert(video.unbind(clip) === true, "video.unbind");
+assert(video.unbind(clip) === false, "unbinding twice answers false");
+assert(video.state(clip) === null, "state on an unbound video is null");
+assert(video.play("nope") === false, "play on an unbound video answers false");
+assert(video.step("nope") === false, "step on an unbound video answers false");
+
+// destroying the TEXTURE takes its video binding with it — a decoder writing
+// into pixels that no longer exist is a leak with a heartbeat.
+assert(texture.remove(screen) === true, "texture.remove on a bound texture");
+assert(video.state(vid) === null, "the video binding went with it");
+
+console.log("e2e video texture: all assertions passed");

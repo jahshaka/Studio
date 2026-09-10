@@ -1,0 +1,144 @@
+// scripting.e2e.reflection_map — the PER-MATERIAL REFLECTION CUBEMAP
+// (MATERIAL_GAPS_SPEC ADDENDUM A-5).
+//
+// The scene's reflection is global: one cube bound to every PBS material at
+// once. This row overrides it for ONE material. So the test is a two-sphere
+// one, as the spec describes it — bind the override on the hero, leave the
+// control alone, and assert the hero's pixel MOVED while the control's did
+// not. Absolute colours are deliberately not asserted (the image is a
+// photograph of a sky); "this material stopped sampling the global cube and
+// started sampling mine" is the whole claim.
+//
+// AND THE FENCE, which is the reason A-5 is one function and not two: while
+// automatic PCC is bound (the VCT+Probes hybrid — the DEFAULT of a new
+// project), the renderer's single environment slot holds a cube ARRAY and a
+// manual cubemap makes the generated shader uncompilable. The override must go
+// DARK with the global one, silently and without a shader failure. That is
+// asserted here by switching the hybrid on with the override bound.
+//
+// Engine UP (no --headless): a document assertion cannot tell whether the
+// renderer bound anything.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+function show(tag, c) { return tag + " (" + c.r + "," + c.g + "," + c.b + ")"; }
+function dist(a, b) {
+    return Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+}
+
+var equirect = "@SOURCE_DIR@/app/content/skies/vp_sky_v3_047.jpg";
+var guid = project.create("Reflection Map " + Date.now());
+assert(guid.length > 10, "project.create");
+
+// GI OFF FIRST. A new project is on the VCT+Probes hybrid, where NO manual
+// cubemap can be bound at all — the global one included. The fence at the end
+// of this file turns it back on and asserts exactly that.
+assert(world.gi({ mode: "off" }) === true, "GI off (a manual cubemap needs the probe slot free)");
+assert(world.giStatus().pccBound === false, "and PCC is not bound");
+
+// Two spheres, each with its OWN material instance (a primitive gets a fresh
+// one), mirror-smooth metal so what they draw IS the reflection.
+var hero    = scene.addPrimitive("sphere", { position: { x: -1.5, y: 1, z: 0 } });
+var control = scene.addPrimitive("sphere", { position: { x:  1.5, y: 1, z: 0 } });
+var both = [hero, control];
+for (var i = 0; i < both.length; ++i)
+    assert(material.set(both[i], { metallic: 1, roughness: 0.05 }) === true,
+           "a mirror-smooth metal sphere");
+
+// ---- the row exists and is writable ------------------------------------
+assert(material.properties(hero).writableKeys.indexOf("reflectionMap") >= 0,
+       "reflectionMap is a writable key");
+var row = null;
+var rows = material.properties(hero).rows;
+for (var r = 0; r < rows.length; ++r) if (rows[r].name === "reflectionMap") row = rows[r];
+assert(row !== null && row.type === "texture",
+       "the panel gets a texture row for it, like every other map");
+assert(material.get(hero).reflectionMap === "",
+       "and it is EMPTY by default (the material samples the scene's global cube)");
+
+// ONE SPHERE PER SHOT, each framed the same way, so the probe lands on the
+// same part of the same shape every time and the two are directly comparable.
+// y = 0.35 is the sphere's upper half — where a sky reflection lives; the
+// centre pixel reflects the ground and is black in either case.
+function probeOf(node, name) {
+    editor.select(null);
+    editor.frameNode(node, { yaw: 0, pitch: 10, distance: 3 });
+    editor.frame(4);
+    return editor.screenshot(name, 256, 256, [{ x: 0.5, y: 0.35 }]).probes[0];
+}
+
+var h0 = probeOf(hero, "reflection_hero_before.png");
+var c0 = probeOf(control, "reflection_control_before.png");
+console.log("    " + show("HERO before", h0) + " " + show("CONTROL before", c0));
+assert(dist(h0, c0) <= 6, "the two spheres start identical (" + dist(h0, c0) + ")");
+
+// ---- bind the override --------------------------------------------------
+assert(material.set(hero, { reflectionMap: equirect }) === true,
+       "material.set({reflectionMap: <equirect image>})");
+assert(material.get(hero).reflectionMap === equirect, "the row holds the image");
+
+var h1 = probeOf(hero, "reflection_hero_after.png");
+var c1 = probeOf(control, "reflection_control_after.png");
+console.log("    " + show("HERO after", h1) + " " + show("CONTROL after", c1));
+assert(dist(h0, h1) > 12,
+       "the HERO sphere's reflection changed (" + dist(h0, h1) + ")");
+assert(dist(c0, c1) <= 6,
+       "the CONTROL sphere is untouched — the override is PER MATERIAL (" +
+       dist(c0, c1) + ")");
+
+// ---- clearing it goes back to the global cube ---------------------------
+assert(material.set(hero, { reflectionMap: "" }) === true, "clear the override");
+var h2 = probeOf(hero, "reflection_hero_cleared.png");
+console.log("    " + show("HERO cleared", h2));
+assert(dist(h2, h0) <= 6, "clearing it puts the global reflection back (" + dist(h2, h0) + ")");
+
+// ---- refusals -----------------------------------------------------------
+mustThrow(function () { material.set(hero, { reflectionMap: "/no/such/image.jpg" }); },
+          "a path that is not a file and not an asset is refused");
+
+// ---- THE PCC FENCE ------------------------------------------------------
+assert(material.set(hero, { reflectionMap: equirect }) === true, "bind it again");
+var lit = probeOf(hero, "reflection_hero_rebound.png");
+assert(dist(lit, h0) > 12, "and it is on screen again");
+
+app.engineErrors(true);   // reset the pump: what follows must add nothing
+assert(world.gi({ mode: "vct_pcc_hybrid" }) === true, "switch the VCT+Probes hybrid ON");
+// The hybrid binds over several frames (voxelize, solve, capture the probes),
+// so this waits for the BINDING rather than assuming it landed in one.
+for (var w = 0; w < 12 && world.giStatus().pccBound !== true; ++w) editor.frame(5);
+assert(world.giStatus().pccBound === true, "PCC is bound");
+var h3 = probeOf(hero, "reflection_hero_pcc.png");
+var c3 = probeOf(control, "reflection_control_pcc.png");
+console.log("    " + show("HERO pcc", h3) + " " + show("CONTROL pcc", c3));
+// THE HUE, not the brightness: two probe-lit spheres at different positions
+// sample different probes and are legitimately a few levels apart, but the
+// override is a blue SKY and its signature is a blue cast. With the override
+// suppressed the hero must be as neutral as the control is.
+var heroCast = h3.b - h3.r, controlCast = c3.b - c3.r;
+console.log("    casts hero=" + heroCast + " control=" + controlCast +
+            " (with the override live it was " + (h1.b - h1.r) + ")");
+assert(h1.b - h1.r > 20, "the override's signature IS a blue cast (sanity)");
+assert(Math.abs(heroCast - controlCast) <= 8,
+       "under the hybrid the override went DARK with the global cube — the hero carries no " +
+       "more of the sky than the control does (" + heroCast + " vs " + controlCast + ")");
+assert(app.engineErrors().recorded === 0,
+       "and nothing failed: no shader error, no engine complaint");
+assert(material.get(hero).reflectionMap === equirect,
+       "the DOCUMENT still holds the override — it is suppressed, not thrown away");
+
+// ---- save / close / open ------------------------------------------------
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(guid) === true, "project.open");
+editor.frame(3);
+assert(material.get(hero).reflectionMap !== "",
+       "the reflection cubemap survived the round trip");
+
+console.log("e2e reflection map: all assertions passed");
