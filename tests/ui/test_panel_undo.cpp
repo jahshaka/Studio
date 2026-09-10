@@ -107,6 +107,30 @@ static ComboBoxWidget *comboWith(QWidget *w, const QString &label)
     return nullptr;
 }
 
+/// Every RETIRED row is hidden.
+///
+/// A blade that rebuilds itself hands its rows to clearPanel(), which
+/// deleteLater()s them — and a widget that has left the layout but is still
+/// visible keeps painting at its old geometry until the next event-loop turn.
+/// One repaint in that window (a page switch, a dock resize) and the old rows
+/// are drawn ON TOP of the new ones: the "garbled Properties rows" shape.
+/// So: nothing that is a child of the content pane and NOT in its layout may
+/// still be able to paint. `sample` is any row the blade currently holds — its
+/// parent IS the content pane.
+static bool noStrandedRows(QWidget *sample)
+{
+    QWidget *pane = sample ? sample->parentWidget() : nullptr;
+    if (!pane || !pane->layout()) return false;   // no rows at all: say so loudly
+    for (QWidget *child : pane->findChildren<QWidget *>(Qt::FindDirectChildrenOnly)) {
+        if (pane->layout()->indexOf(child) >= 0) continue;
+        // isVisibleTo(), not isVisible(): nothing in this suite is ever SHOWN,
+        // so the question is "would this paint when the pane does" — which is
+        // exactly the condition a stranded row satisfies.
+        if (child->isVisibleTo(pane)) return false;
+    }
+    return true;
+}
+
 static DragFloatWidget *dragWith(QWidget *w, const QString &label)
 {
     for (DragFloatWidget *d : w->findChildren<DragFloatWidget *>())
@@ -303,6 +327,19 @@ int main(int argc, char **argv)
         panel.setScene(scene);
         pump();
         CHECK(stack.index() == before, "sky: binding records nothing");
+
+        // A REBUILT blade leaves nothing stranded (debt L6 / A5b): the sky
+        // section is one of the two that genuinely rebuilds (its rows change
+        // with the sky type), so it is where the rule is checked.
+        CHECK(noStrandedRows(comboWith(&panel, QStringLiteral("Sky Type"))),
+              "sky: a freshly built blade has no stranded rows");
+        scene->skyType = iris::SkyType::GRADIENT;
+        panel.setScene(scene);          // rebuild: the previous rows are retired
+        CHECK(noStrandedRows(comboWith(&panel, QStringLiteral("Sky Type"))),
+              "sky: and after a rebuild every retired row is HIDDEN, not left painting");
+        scene->skyType = iris::SkyType::REALISTIC;
+        panel.setScene(scene);
+        pump();
 
         HFloatSliderWidget *azimuth = sliderWith(&panel, QStringLiteral("Sun Azimuth"));
         CHECK(azimuth != nullptr, "sky: the realistic sky's sun rows are on the blade");
