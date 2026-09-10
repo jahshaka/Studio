@@ -244,7 +244,7 @@ console.log("    wall control: 120 wall-clock frames took " + (w1 - w0) + " ms a
 
 // ---- the refusal ------------------------------------------------------------
 var bound = scene.clock().maxAdvance;
-assert(Math.abs(bound - 8 / 60) < 1e-9, "the per-frame bound is 8 steps = " + bound + " s");
+assert(Math.abs(bound - 7 / 60) < 1e-9, "the scripted per-frame bound is 7 steps (one under the 8-step catch-up) = " + bound + " s");
 assert(editor.frame(1, bound) === true, "a frame of exactly the bound is accepted");
 var over = caught(function () { if (!editor.frame(1, 0.5)) throw new Error(app.lastError()); });
 assert(over !== null && over.indexOf("bound") >= 0,

@@ -190,14 +190,20 @@ var anchorY0 = nodeById(anchor).position.y;
 
 assert(editor.simulate(true) === true, "editor.simulate(true)");
 editor.frame(120, 1.0 / 60.0);   // 2 deterministic seconds of gravity
-assert(editor.simulate(false) === true, "editor.simulate(false)");
 
+// Read WHILE simulating: Simulate OFF restores every body to its pre-simulate
+// transform (A4.2 — the same contract as Stop after Play), so the fallen
+// position is only observable before the switch is turned off.
 var fallerY1 = nodeById(faller).position.y;
 var anchorY1 = nodeById(anchor).position.y;
 console.log("    faller y: " + fallerY0 + " -> " + fallerY1);
 console.log("    anchor y: " + anchorY0 + " -> " + anchorY1);
 assert(fallerY1 < fallerY0 - 5.0,
        "THE DYNAMIC BODY FELL under gravity (" + fallerY0 + " -> " + fallerY1 + ")");
+assert(editor.simulate(false) === true, "editor.simulate(false)");
+var fallerY2 = nodeById(faller).position.y;
+assert(Math.abs(fallerY2 - fallerY0) < 1e-4,
+       "Simulate OFF restored the body to where it started (" + fallerY0 + " -> " + fallerY2 + ")");
 assert(near(anchorY1, anchorY0, 1e-2),
        "and the static one did not move at all (" + anchorY0 + " -> " + anchorY1 + ")");
 

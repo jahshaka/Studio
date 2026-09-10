@@ -110,12 +110,24 @@ int main()
               "a 1 s stall buys the bound (8 steps), not 60");
         CHECK(c.alpha() == 0.0, "…and the rest is dropped, not carried into the next frame");
         CHECK(c.advance(1.0f / 60.0f) == 1, "the frame after a stall is an ordinary frame");
-        CHECK(std::fabs(SimulationClock::kMaxAdvanceSeconds - 8.0 / 60.0) < 1e-12,
-              "kMaxAdvanceSeconds is the bound in seconds (what the verbs refuse above)");
-        // Exactly the bound is not a stall.
+        // The SCRIPTED bound sits one step UNDER the catch-up bound (A4.2 review
+        // S2): the drop is on the accumulator, so a dt at the full bound plus a
+        // carried fraction would silently lose the fraction.
+        CHECK(std::fabs(SimulationClock::kMaxAdvanceSeconds - 7.0 / 60.0) < 1e-12,
+              "kMaxAdvanceSeconds is 7 steps (what the verbs refuse above)");
+        // Exactly the scripted bound is not a stall.
         SimulationClock d;
-        CHECK(d.advance(SimulationClock::kMaxAdvanceSeconds) == 8 && d.alpha() == 0.0,
-              "a frame of exactly the bound buys 8 steps cleanly");
+        CHECK(d.advance(SimulationClock::kMaxAdvanceSeconds) == 7 && d.alpha() == 0.0,
+              "a frame of exactly the scripted bound buys 7 steps cleanly");
+        // …and with a carried half step it buys 7 and KEEPS the carry — nothing
+        // a scripted frame under the bound asks for is ever dropped.
+        SimulationClock e;
+        CHECK(e.advance(0.5 / 60.0) == 0 && e.alpha() > 0.49 && e.alpha() < 0.51,
+              "half a step is carried");
+        CHECK(e.advance(SimulationClock::kMaxAdvanceSeconds) == 7 && e.alpha() > 0.49 && e.alpha() < 0.51,
+              "the scripted bound on top of a carried half step buys 7 and keeps the half (no drop)");
+        CHECK(e.advance(0.5 / 60.0) == 1 && e.alpha() < 1e-6,
+              "the carried half plus another half is exactly the 8th step");
     }
 
     // ---- 5. reset ---------------------------------------------------------------
