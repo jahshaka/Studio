@@ -2909,9 +2909,12 @@ void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 
 	bool force = false;
 	if (pins.isEmpty()) {
+		// Cancel is the DEFAULT (code review 2026-09-10): this branch is a
+		// real, permanent delete, and Return on a focused dialog must not be
+		// the thing that performs it.
 		if (QMessageBox::question(this, tr("Delete Asset"),
 		        tr("Delete \u201c%1\u201d from the library? No project uses it.").arg(name),
-		        QMessageBox::Yes | QMessageBox::Cancel) != QMessageBox::Yes)
+		        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
 			return;
 	}
 	else {
@@ -2952,7 +2955,10 @@ void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 		return;
 	}
 
-	fastGrid->deleteTile(item);
+	// The TILE GOES LAST (code review 2026-09-10): everything below still
+	// reads `item` — fetchMetadata dereferences it — and deleteTile hands the
+	// widget to deleteLater. That is safe only because the delete is deferred
+	// to the event loop; ordering it here makes it safe by construction.
 	item->metadata = QJsonObject();
 	renameWidget->setVisible(false);
 	tagWidget->setVisible(false);
@@ -2964,6 +2970,7 @@ void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 
 	fetchMetadata(item);
 	clearViewer();
+	fastGrid->deleteTile(item);
 
 	if (outcome.unlisted) {
 		// The user must know the asset did NOT vanish from their projects.
