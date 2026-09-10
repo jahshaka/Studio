@@ -114,12 +114,21 @@ MERGE_TIER = ('ctest -j4 --timeout 120 --output-on-failure '
 
 
 def sh(cmd, cwd=ROOT):
-    return subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True).stdout
+    # A failing git/ctest call must not read as "nothing touched" / "no suites": that was
+    # a silently green empty gate (platform audit H4.2, 2026-09-10).
+    r = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.stderr.write(f"gate-scope: command failed ({r.returncode}): {cmd}\n{r.stderr}")
+        sys.exit(2)
+    return r.stdout
 
 
 def touched_paths(rng):
     """Files changed in the Studio range, plus the irisgl submodule's own diff (prefixed)."""
     files = [l for l in sh(f"git diff --name-only {rng}").splitlines() if l]
+    if not files:
+        sys.stderr.write(f"gate-scope: range {rng} touches no file — refusing to scope an empty change\n")
+        sys.exit(2)
     out = [f for f in files if f != "irisgl"]
     if "irisgl" in files:
         base, tip = rng.split("..", 1)
@@ -283,9 +292,12 @@ def main():
             if p in script_suites: add(script_suites[p], f"{p}: script"); hit.append("script")
             elif base in script_base: add(script_base[base], f"{p}: script"); hit.append("script")
             elif d in by_dir: add(by_dir[d], f"{p}: tests/{d}"); hit.append(f"tests/{d}")
-            elif d == "": fallback.append(f"{p}: top-level tests file")
-            else: add(by_dir.get(d, []), f"{p}: tests/{d}"); hit.append(f"tests/{d}")
-            rationale.append((p, ", ".join(hit) or "no suite in that dir"))
+            else:
+                # tests/CMakeLists.txt, tests/support/*.h (included by ~40 test sources), a
+                # dir with no registered suite: nothing precise owns it → merge tier, loudly
+                # (platform audit H4.1: this used to select ZERO suites and continue).
+                fallback.append(f"{p}: no suite owns this tests/ path")
+            rationale.append((p, ", ".join(hit) or "no suite in that dir → fallback"))
             continue
         if p.startswith(("src/", "irisgl/")) and not p.startswith("irisgl/thirdparty/ogre-next"):
             code_moved = True
@@ -318,7 +330,7 @@ def main():
     serial = sum(costs.get(n, 10.0) for n in names if inv[n]["serial"])
     wall = max(est / 4.0, serial) + 5
     regex = "^(" + "|".join(re.escape(n) for n in names) + ")$"
-    cmd = f"ctest -j4 --timeout 120 --output-on-failure -R '{regex}'"
+    cmd = f"ctest -j4 --timeout 120 --output-on-failure --no-tests=error -R '{regex}'"
 
     if a.json:
         print(json.dumps({"paths": paths, "suites": names, "fallback": fallback, "estimated_seconds": est,
@@ -335,6 +347,10 @@ def main():
     if skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
     if nightly: print(f"\n(nightly-tier suites left out: {sorted(nightly)})")
+    if not names:
+        print("\nSCOPED tier: NOTHING to gate — every touched path is docs/scripts/data with no owning suite "
+              "(a code path always adds app.startup_quiet + api.contract)")
+        return
     print(f"\nSCOPED tier: {len(names)} suite(s), ~{est:.0f} suite-seconds, ~{wall/60:.1f} min wall at -j4 "
           f"(serial islands {serial:.0f} s); costs from scripts/gate-times.txt + the build dir's last run, 10 s assumed otherwise")
     for n in names: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
