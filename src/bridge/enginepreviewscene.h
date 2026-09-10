@@ -80,11 +80,30 @@ public:
     EnginePreviewScene &operator=(const EnginePreviewScene &) = delete;
 
     /// Creates the engine Scene and its mirror (once) and binds them to `view`
-    /// — which must ALREADY EXIST (see the order note above). Idempotent, and
-    /// re-binding to a different View (a widget whose native window was
-    /// recreated) moves the Scene rather than rebuilding it. False if the
-    /// Engine is gone or the Scene could not be created.
+    /// — which must ALREADY EXIST (see the order note above). Idempotent. False
+    /// if the Engine is gone or the Scene could not be created.
+    ///
+    /// RE-BINDING, AND THE ONLY WAY IT REALLY HAPPENS. Called with a View other
+    /// than the bound one, attach() moves the Scene rather than rebuilding it,
+    /// and unbinds the old View first. That is correct only while the old View
+    /// is ALIVE — and production never delivers it that way: the one caller
+    /// that re-binds is EngineViewWidget::recreateViewForNewWindow() (a
+    /// floatable dock torn off, QEvent::WinIdChange), which destroys the old
+    /// View before making the new one. So the host must call forgetView()
+    /// first, from viewAboutToBeDestroyed(); attach() then takes the plain
+    /// "no View bound" path and never touches the freed pointer. Passing a live
+    /// second View still works and is what preview.lifecycle covers, but no
+    /// widget does it.
     bool attach(jahshaka::engine::View *view);
+
+    /// Drops this object's pointer to the currently bound View WITHOUT touching
+    /// the engine, because the caller is about to destroy that View itself
+    /// (EngineViewWidget::viewAboutToBeDestroyed). The Scene and the mirror
+    /// stay: the next attach() re-binds them to the replacement View.
+    ///
+    /// A View this object OWNS is not forgotten — nobody else may destroy it,
+    /// so the request cannot be honest and is ignored.
+    void forgetView();
 
     /// Destroys the mirror and the engine Scene — and the View too, if this
     /// object created it — while the Engine is still alive. Safe to call

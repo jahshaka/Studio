@@ -215,6 +215,63 @@ int main(int argc, char **argv)
     }
     std::printf("    (probe destroyed)\n");
 
+    // ---- 4b. THE RE-BIND PRODUCTION ACTUALLY PERFORMS ----
+    //
+    // Case 1 re-binds while BOTH views are alive, which no widget ever does.
+    // EngineViewWidget::recreateViewForNewWindow() DESTROYS the old View and
+    // then makes the new one (a Vulkan surface cannot be re-pointed), so the
+    // Scene's pointer to it is dangling before attach() is ever called again —
+    // and attach()'s re-bind branch would unbind freed memory. forgetView(),
+    // called from viewAboutToBeDestroyed(), is what makes that path safe, and
+    // this is the shape of a Materials Display dock being torn off.
+    //
+    // MEASURED, with the forgetView() call below removed: the engine hands the
+    // replacement View the freed one's address, so the stale setScene(nullptr)
+    // lands on the NEW View and "the new View carries the Scene" fails — i.e.
+    // the real symptom is a preview that goes BLANK after a re-dock, not a
+    // crash. Under ASan it is a use-after-free as well.
+    {
+        ProbeScene probe(engine);
+        View *torn = engine->createOffscreenView("probe-torn", 96, 96, Colour(0, 0, 0.5f, 1));
+        CHECK(torn != nullptr, "a View to tear away");
+        CHECK(probe.attach(torn), "the preview attaches to its widget's View");
+        Scene *const kept = probe.engineScene();
+
+        // The widget's WinIdChange: tell the Scene first, THEN destroy.
+        probe.forgetView();
+        CHECK(probe.view() == nullptr, "forgetView drops the View");
+        CHECK(probe.engineScene() == kept, "...and keeps the Scene and its mirror");
+        engine->destroyView(torn);
+
+        View *rebuilt = engine->createOffscreenView("probe-rebuilt", 96, 96, Colour(0, 0.5f, 0, 1));
+        CHECK(rebuilt != nullptr, "the widget's new View exists");
+        CHECK(probe.attach(rebuilt), "the preview re-attaches to the new View");
+        CHECK(probe.engineScene() == kept, "...the same Scene, never rebuilt");
+        CHECK(probe.scenes == 1 && probe.mirrors == 1,
+              "...and no Scene or mirror hook re-ran across the window swap");
+        CHECK(rebuilt->scene() == kept, "...the new View carries the Scene");
+        engine->renderOneFrame();
+        Image img;
+        CHECK(rebuilt->readPixels(img) && img.width == 96,
+              "...and it renders, so the swap really completed");
+        probe.release();
+        engine->destroyView(rebuilt);
+    }
+
+    // ---- 4c. forgetView refuses to disown a View this object OWNS ----
+    //
+    // Nobody else may destroy an adopted View, so "forget it" cannot be
+    // honoured: release() is still the only way out, and it must still work.
+    {
+        ProbeScene probe(engine);
+        CHECK(probe.makeOwnView(64, 64), "a probe that owns its View attaches");
+        View *const own = probe.view();
+        probe.forgetView();
+        CHECK(probe.view() == own, "forgetView leaves an OWNED View bound");
+        probe.release();
+        CHECK(probe.view() == nullptr, "release still destroys the owned View");
+    }
+
     // ---- 5. the destructor tears down through the hooks ----
     {
         ProbeScene *probe = new ProbeScene(engine);

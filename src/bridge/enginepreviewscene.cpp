@@ -72,6 +72,14 @@ bool EnginePreviewScene::attach(View *view)
     return true;
 }
 
+void EnginePreviewScene::forgetView()
+{
+    // NO ENGINE CALL, deliberately: the caller is destroying this View, and on
+    // the WinIdChange path it may already have. An owned View is nobody else's
+    // to destroy, so that request is refused rather than half-honoured.
+    if (!mOwnsView) mView = nullptr;
+}
+
 void EnginePreviewScene::release()
 {
     auto engine = mEngine.lock();

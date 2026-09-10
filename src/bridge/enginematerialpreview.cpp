@@ -62,6 +62,14 @@ void EngineMaterialPreview::setPreviewBackground(const QColor &colour)
     mScene->setBackground(colour);
 }
 
+void EngineMaterialPreview::viewAboutToBeDestroyed()
+{
+    // The View this widget is holding dies one line from now: the Scene has to
+    // drop its copy while the pointer is still valid, or the attach() that
+    // follows viewRecreated() unbinds freed memory.
+    if (mScene) mScene->forgetView();
+}
+
 void EngineMaterialPreview::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);

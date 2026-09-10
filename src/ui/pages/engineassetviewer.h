@@ -59,6 +59,12 @@ public:
     void syncFrame();
 
 protected:
+    /// The View is about to be destroyed for a new native window: the Scene
+    /// must let go of it FIRST (the Assets page preview —
+    /// EngineViewWidget::viewAboutToBeDestroyed). Without this the Scene keeps
+    /// the freed pointer and the next attach() unbinds a dangling View.
+    void viewAboutToBeDestroyed() override;
+
     void showEvent(QShowEvent *) override;
     void hideEvent(QHideEvent *) override;
     void mousePressEvent(QMouseEvent *) override;
