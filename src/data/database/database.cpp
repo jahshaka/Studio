@@ -1108,16 +1108,25 @@ bool Database::deleteProject(const QString &guid)
     // success, leaving the project gone and an invisible, unpinned, undeletable
     // row behind it. A failed reap now rolls the whole project delete back:
     // the user can try again, which is the only state from which they can.
+    // The reap runs INSIDE this transaction, so its sidecar/registry scrubs
+    // are deferred to the commit below (code review 2026-09-10): on the
+    // rollback path an orphan reaped before the failing one has its rows
+    // restored, and a sidecar dropped for it would have taken the asset out of
+    // any future rebuildCatalog while the row lived on.
+    QVector<PendingAssetScrub> scrubs;
     bool reaped = true;
     for (const QString &orphan : unlistedPins)
-        if (countAssetPins(orphan) == 0) reaped = deleteAsset(orphan, /*force*/ true) && reaped;
+        if (countAssetPins(orphan) == 0)
+            reaped = deleteAssetRow(orphan, /*force*/ true, &scrubs) && reaped;
     if (!reaped) {
         irisLog(QString("deleteProject('%1'): an orphaned unlisted asset could not be reaped — "
                         "the whole project delete was rolled back.").arg(guid));
-        return false;   // ~DbTransaction rolls back
+        return false;   // ~DbTransaction rolls back; nothing was scrubbed
     }
 
-    return tx.commit();
+    if (!tx.commit()) return false;
+    applyAssetScrubs(scrubs);
+    return true;
 }
 
 bool Database::destroyTable(const QString &table)
@@ -1303,6 +1312,36 @@ bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetG
 
 bool Database::deleteAsset(const QString &guid, bool force)
 {
+    // The un-nested case: this call owns its transaction, so it also owns the
+    // scrub (deleteAssetRow does it inline).
+    return deleteAssetRow(guid, force, nullptr);
+}
+
+void Database::applyAssetScrubs(const QVector<PendingAssetScrub> &pending)
+{
+    for (const PendingAssetScrub &item : pending) {
+        // The registry OWNS its Assets (io/assetmanager.h, since the memory
+        // lane): dropping the pointer without deleting it leaks the Asset AND,
+        // for the payload-carrying subclasses, pins a whole SceneNodePtr mesh
+        // subtree for the life of the process. Backwards, because removing at
+        // i and then advancing skips the next element.
+        auto &assets = AssetManager::getAssets();
+        for (int i = assets.count() - 1; i >= 0; --i) {
+            if (assets[i]->assetGuid != item.guid) continue;
+            delete assets[i];
+            assets.remove(i);
+        }
+        // Invariant I2: the sidecar is the rebuild record, so it must not
+        // outlive its asset — 41 of the owner's 86 sidecars named deleted
+        // assets, and rebuildCatalog would have resurrected every one of them
+        // (deep audit 2026-09, area 6).
+        if (item.sidecar) dropSidecar(item.guid);
+    }
+}
+
+bool Database::deleteAssetRow(const QString &guid, bool force,
+                              QVector<PendingAssetScrub> *deferred)
+{
     // A delete that cannot run must NOT report success and must NOT scrub the
     // in-memory catalog: doing both is how a no-op delete looked like a real
     // one until the next restart brought the asset back.
@@ -1333,6 +1372,10 @@ bool Database::deleteAsset(const QString &guid, bool force)
     const bool ownsSidecar = sidecarBelongsHere(guid);
 
     DbTransaction tx(db);
+    // Whether the rows this call deletes become DURABLE at its own commit, or
+    // only when an outer transaction commits (the guard degrades to a no-op
+    // when the connection is already in one).
+    const bool ownsTransaction = tx.isActive();
 
     QSqlQuery query;
     query.prepare("DELETE FROM assets WHERE guid = ?");
@@ -1358,30 +1401,17 @@ bool Database::deleteAsset(const QString &guid, bool force)
     if (ok) ok = tx.commit();
 
     // Only once the rows are actually gone: the cache and the catalog must not
-    // disagree (a scrubbed cache over a surviving row is the silent failure).
+    // disagree (a scrubbed cache over a surviving row is the silent failure),
+    // and neither may the STORE — the sidecar is the rebuild record, so
+    // dropping it over rows that come back is how an asset disappears from a
+    // recovery for good. Nested, "actually gone" is the OUTER commit's word,
+    // not ours: hand the work up (code review 2026-09-10). A nested caller
+    // that passes no sink keeps the old behaviour rather than silently
+    // skipping the scrub.
     if (ok) {
-        // Backwards: removing at i and then advancing skips the next element
-        // (the same index-skipping shape the dependency filters had).
-        //
-        // And the registry OWNS its Assets (io/assetmanager.h, since the
-        // memory lane): dropping the pointer without deleting it leaks the
-        // Asset AND, for the payload-carrying subclasses, pins a whole
-        // SceneNodePtr mesh subtree for the life of the process. The virtual
-        // destructor that makes this delete correct arrived with the same
-        // lane; before it, this was the leak the audit measured at ~80 per
-        // Showroom open.
-        auto &assets = AssetManager::getAssets();
-        for (int i = assets.count() - 1; i >= 0; --i) {
-            if (assets[i]->assetGuid != guid) continue;
-            delete assets[i];
-            assets.remove(i);
-        }
-
-        // Invariant I2: the sidecar is the rebuild record, so it must not
-        // outlive its asset — 41 of the owner's 86 sidecars named deleted
-        // assets, and rebuildCatalog would have resurrected every one of them
-        // (deep audit 2026-09, area 6).
-        if (ownsSidecar) dropSidecar(guid);
+        const PendingAssetScrub scrub{ guid, ownsSidecar };
+        if (!ownsTransaction && deferred) deferred->append(scrub);
+        else applyAssetScrubs({ scrub });
     }
     else {
         iris::Logger::getSingleton()->warn(
@@ -3243,6 +3273,10 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 {
 	QStringList files;
 	bool allOk = true;
+	// Deferred to the commit below: a delete nested in this transaction is not
+	// real until it commits, and its sidecar is the record a rebuild would
+	// need if it does not (code review 2026-09-10).
+	QVector<PendingAssetScrub> scrubs;
 
 	// One transaction over the whole subtree (deep audit 2026-09, area 6) —
 	// matching deleteAssetAndDependencies. Without it a failure partway through
@@ -3270,7 +3304,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 				}
 			}
 
-			allOk = deleteAsset(asset) && allOk;
+			allOk = deleteAssetRow(asset, /*force*/ false, &scrubs) && allOk;
 			if (unlisted) continue;
 
             for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
@@ -3284,7 +3318,9 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 		allOk = deleteFolder(folder) && allOk;
 	}
 
-	allOk = tx.commit() && allOk;
+	const bool committed = tx.commit();
+	allOk = committed && allOk;
+	if (committed) applyAssetScrubs(scrubs);
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(
@@ -3309,6 +3345,9 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 {
 	QStringList files;
 	bool allOk = true;
+	// See deleteFolderAndDependencies: the nested deletes' sidecar and session
+	// scrubs wait for this transaction's commit.
+	QVector<PendingAssetScrub> scrubs;
 
 	DbTransaction tx(db);
 
@@ -3326,7 +3365,7 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 			}
 		}
 
-		allOk = deleteAsset(asset, force) && allOk;
+		allOk = deleteAssetRow(asset, force, &scrubs) && allOk;
 		if (unlisted) continue;
 
         for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
@@ -3334,7 +3373,9 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
         }
 	}
 
-	allOk = tx.commit() && allOk;
+	const bool committed = tx.commit();
+	allOk = committed && allOk;
+	if (committed) applyAssetScrubs(scrubs);
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(

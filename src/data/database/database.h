@@ -174,6 +174,23 @@ public:
     /// Reports whether the write actually ran; an unlist that succeeded is
     /// true, like a delete that succeeded.
     bool deleteAsset(const QString &guid, bool force = false);
+
+    /// A delete whose rows are NOT DURABLE YET (code review 2026-09-10).
+    /// deleteAsset drops the asset's sidecar and its session registration the
+    /// moment its own statements succeed — correct when it owns the
+    /// transaction, wrong when it is NESTED inside one: an outer rollback
+    /// brings the rows back without the sidecar (rebuildCatalog then loses the
+    /// asset for good) and without the registration. So a nested delete
+    /// COLLECTS what it would have scrubbed and the outer function applies it
+    /// after ITS commit — the only moment the delete is real.
+    struct PendingAssetScrub
+    {
+        QString guid;
+        bool    sidecar = false;   ///< this store owned the asset's sidecar
+    };
+    /// Drop the session registrations and sidecars of deletes that have now
+    /// committed. Safe to call with an empty list.
+    void applyAssetScrubs(const QVector<PendingAssetScrub> &pending);
     /// Library visibility, written directly (the unlist half of the above and
     /// the re-list an import performs). False on an unknown guid.
     bool setAssetListed(const QString &guid, bool listed);
@@ -386,6 +403,12 @@ public:
 
 private:
     bool checkIfVersionSupported(const QString& pathToDb, const QString& table_name);
+
+    /// deleteAsset's body. `deferred` non-null + a NESTED transaction = the
+    /// caller owns the scrub (see PendingAssetScrub); otherwise this scrubs
+    /// inline, exactly as before.
+    bool deleteAssetRow(const QString &guid, bool force,
+                        QVector<PendingAssetScrub> *deferred);
 
     /// SIDECAR LIFECYCLE (invariant I2 — deep audit 2026-09, area 6).
     ///

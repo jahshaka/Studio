@@ -44,7 +44,9 @@
 //      and its dependency edges stay.
 //  13. deleteProject ROLLS BACK when an orphan reap fails (it used to drop
 //      the result and commit, leaving the project gone and an invisible,
-//      unpinned, undeletable row behind).
+//      unpinned, undeletable row behind), and (13b) a rolled-back reap leaves
+//      the sidecar and the session registration alone — a nested delete's
+//      scrubs wait for the OUTER commit.
 //  14. .jaf archives carry `listed`: an export of an UNLISTED asset imports
 //      unlisted, and an archive written before the column existed imports
 //      listed.
@@ -64,6 +66,7 @@
 #include "data/constants.h"
 #include "io/assetmanager.h"
 #include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -653,6 +656,99 @@ int main(int argc, char **argv)
         CHECK(countWhere("projects", "guid", fragile) == 0, "project deleted");
         CHECK(countWhere("assets", "guid", orphanGuid) == 0,
               "and the orphaned unlisted row was reaped this time");
+    }
+
+    // --- 13b. a ROLLED-BACK reap leaves the sidecar and the registry alone --
+    //
+    // The other half of the same defect (code review 2026-09-10). deleteAsset
+    // scrubs the asset's sidecar and its session registration as soon as its
+    // own statements succeed — but nested inside deleteProject's transaction
+    // "succeeded" is not "durable". With two orphans, the first reaped and the
+    // second failing, the rollback brought the first one's ROWS back while its
+    // sidecar was already deleted: rebuildCatalog would then have lost that
+    // asset for good, and the session had dropped it too. The scrubs are now
+    // deferred to the outer commit.
+    {
+        conn = QSqlDatabase::database();
+        // THE STORE ROOT HAS TO BE THIS ONE for the sidecar half to mean
+        // anything: sidecarBelongsHere/dropSidecar read the process-global
+        // AssetStorePaths::root(), so without the override they answer about
+        // the developer's real library and every sidecar assertion below would
+        // pass vacuously. Scoped to this case — the rest of the suite is
+        // deliberately root-agnostic.
+        AssetStorePaths::setRootOverride(storeRoot);
+        const QString shaky = "proj-shaky";
+        CHECK(db.createProject(shaky, "Shaky"), "shaky project created");
+
+        const QString firstGuid = db.createAssetEntry(
+            "guid-reap-first", "first.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        const QString secondGuid = db.createAssetEntry(
+            "guid-reap-second", "second.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString firstOid, secondOid, re;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, sharedSrc, firstGuid, "source", "first.png",
+                                   &firstOid, &re), "the first orphan has content");
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, secondGuid, "source", "second.png",
+                                   &secondOid, &re), "the second orphan has content");
+        CHECK(AssetCas::writeSidecar(conn, storeRoot, firstGuid, &re),
+              "the first orphan has a sidecar (the rebuild record)");
+        CHECK(AssetCas::writePin(conn, shaky, firstGuid, firstOid), "first pinned by the project");
+        CHECK(AssetCas::writePin(conn, shaky, secondGuid, secondOid), "second pinned too");
+        CHECK(db.deleteAsset(firstGuid) && !db.isAssetListed(firstGuid), "first unlisted");
+        CHECK(db.deleteAsset(secondGuid) && !db.isAssetListed(secondGuid), "second unlisted");
+
+        const QString sidecarPath = AssetStorePaths::sidecarPathIn(storeRoot, firstGuid);
+        CHECK(QFileInfo::exists(sidecarPath), "the sidecar file is on disk before the delete");
+
+        // The session registration of the first orphan — the other thing the
+        // scrub used to take before the rows were durable.
+        {
+            auto *asset = new AssetVariant;
+            asset->assetGuid = firstGuid;
+            asset->type = ModelTypes::Texture;
+            AssetManager::addAsset(asset);
+        }
+
+        // The SECOND reap fails, the first has already succeeded: a trigger
+        // that aborts exactly one row's delete, which is the shape a locked
+        // table or a constraint would take in the wild.
+        QSqlQuery trigger;
+        CHECK(trigger.exec("CREATE TRIGGER block_second BEFORE DELETE ON assets "
+                           "WHEN OLD.guid = 'guid-reap-second' "
+                           "BEGIN SELECT RAISE(ABORT, 'refused'); END"),
+              "a trigger that refuses the second reap");
+
+        CHECK(!db.deleteProject(shaky), "deleteProject reports FAILURE");
+        CHECK(countWhere("projects", "guid", shaky) == 1, "... the project row came back");
+        CHECK(countWhere("assets", "guid", firstGuid) == 1,
+              "... AND the first orphan's row came back");
+        CHECK(QFileInfo::exists(sidecarPath),
+              "THE FIX: its sidecar came back with it — the rebuild record still names it");
+        {
+            bool registered = false;
+            for (auto *asset : AssetManager::getAssets())
+                if (asset && asset->assetGuid == firstGuid) registered = true;
+            CHECK(registered, "... and the session registration was never dropped");
+        }
+
+        QSqlQuery dropTrigger;
+        CHECK(dropTrigger.exec("DROP TRIGGER block_second"), "the trigger is removed");
+        CHECK(db.deleteProject(shaky), "the same delete succeeds once it can run");
+        CHECK(countWhere("assets", "guid", firstGuid) == 0, "both orphans reaped this time");
+        CHECK(countWhere("assets", "guid", secondGuid) == 0, "... the second too");
+        CHECK(!QFileInfo::exists(sidecarPath),
+              "... and NOW the sidecar goes, because the delete is real");
+        {
+            bool registered = false;
+            for (auto *asset : AssetManager::getAssets())
+                if (asset && asset->assetGuid == firstGuid) registered = true;
+            CHECK(!registered, "... and the session registration goes with it");
+        }
+        AssetManager::clearAssetList();
+        AssetStorePaths::setRootOverride(QString());
     }
 
     // --- 14. .jaf archives carry library visibility -------------------------
