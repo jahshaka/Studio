@@ -436,7 +436,8 @@ void SkyPropertyWidget::commitSky(const QVariant &before, const QString &text)
                              sceneprops::get(live, QStringLiteral("sky")), [self]() {
                                  // The rows ARE the sky: repaint them from the
                                  // document the undo just restored.
-                                 if (self) self->skyTypeChanged(int(self->scene->skyType));
+                                 if (self && !self->scene.isNull())
+                                     self->skyTypeChanged(int(self->scene->skyType));
                              });
 }
 

@@ -357,7 +357,6 @@ set(SRCS
     src/ui/panels/propertywidgets/meshpropertywidget.cpp
     src/ui/panels/propertywidgets/shaderpropertywidget.cpp 
     src/ui/panels/propertywidget.cpp 
-    src/ui/panels/propertywidgets/scenepropertywidget.cpp
     src/ui/dialogs/newprojectdialog.cpp 
     src/ui/panels/assetwidget.cpp 
     src/io/assetmanager.cpp 
@@ -593,7 +592,6 @@ set(HEADERS
     src/io/scenewriter.h 
     src/io/scenereader.h 
     src/io/skyassetdefinition.h
-    src/ui/panels/propertywidgets/scenepropertywidget.h 
     src/services/thumbnailmanager.h 
     src/ui/panels/propertywidgets/fogpropertywidget.h 
     src/io/assetiobase.h 
