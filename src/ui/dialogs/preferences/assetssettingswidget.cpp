@@ -206,8 +206,8 @@ void AssetsSettingsWidget::cleanUpStorage()
         + line("old per-asset folders", preview.legacyFolders)
         + line("duplicate copies of stored files", preview.redundantLegacyFiles)
         + line("pins from deleted projects", preview.deadPins)
-        + QStringLiteral("\n\nDelete them? Assets in the library, project pins and "
-                        "copy-on-write edits are never touched.");
+        + QStringLiteral("\n\nDelete them? Assets in the library, the pins of projects that "
+                        "still exist and copy-on-write edits are never touched.");
 
     if (QMessageBox::question(this, "Clean up Storage", detail,
                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
