@@ -227,4 +227,51 @@ assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === s
 assert(assets.metadata(member).listed === false, "... while the member stays unlisted");
 assert(assets.remove(standalone, { force: true }) === true, "cleaned up");
 
+// ---- removeFromProject takes the AUTO-MINTED COMPANION with the image ------
+//
+// Adding an IMAGE to a project mints a companion PBR material for it and pins
+// that too (IMAGE_PLANE_SPEC §8.1). Removing the image while leaving the
+// material left a material tile in the bin for a picture no longer in the
+// project. The add created it; the remove takes it back out. The LIBRARY row
+// is never touched.
+function companionsOf(textureGuid) {
+    return assets.list({ scope: "store", type: "material" }).filter(function (m) {
+        var deps = assets.dependencies(m.guid);   // the asset plus its closure
+        return deps.length === 2 && deps.indexOf(textureGuid) >= 0;
+    }).map(function (m) { return m.guid; });
+}
+var PNG = "@SOURCE_DIR@/tests/scripting/fixtures/implane_wide.png";
+{
+    // Scrub whatever an earlier run left: a companion that already exists
+    // stops a fresh one from being minted (the idempotence guard).
+    var stale = assets.importFile(PNG);
+    companionsOf(stale).forEach(function (c) { assets.remove(c, { force: true }); });
+    assets.remove(stale, { force: true });
+}
+assert(project.create("libdel_companion_" + Date.now()).length > 10, "a project for the image");
+var image = assets.importFile(PNG);
+assert(image.length > 10, "the image imported -> " + image);
+assert(companionsOf(image).length === 0, "no companion material exists yet");
+assert(assets.addToProject(image) === image, "the image is added to the project");
+var companions = companionsOf(image);
+assert(companions.length === 1, "the add minted exactly one companion material");
+var companion = companions[0];
+assert(assets.pins(companion).length === 1, "the companion is pinned into the project");
+assert(assets.list({ scope: "project", type: "material" })
+             .filter(function (m) { return m.guid === companion; }).length === 1,
+       "... and shows in the project's materials");
+
+assert(assets.removeFromProject(image) === true, "assets.removeFromProject(image)");
+assert(assets.pins(image).length === 0, "the image's pin is gone");
+assert(assets.pins(companion).length === 0,
+       "THE DECISION: the auto-minted companion left the project with it");
+assert(assets.list({ scope: "project", type: "material" })
+             .filter(function (m) { return m.guid === companion; }).length === 0,
+       "... so the project's materials no longer show it");
+assert(assets.metadata(companion).listed === true,
+       "... while its LIBRARY row is untouched (this is a project-side remove)");
+assert(assets.metadata(image).listed === true, "... and so is the image's");
+assets.remove(companion, { force: true });
+assert(assets.remove(image, { force: true }) === true, "cleaned up");
+
 console.log("asset delete e2e passed");

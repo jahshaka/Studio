@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetstorepaths.h"
 #include "io/assetmanager.h"
+#include "services/imagematerial.h"
 
 namespace assetdelete
 {
@@ -104,6 +105,35 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
     for (const QString &member : members) {
         if (member != guid && db->hasMultipleDependers(member).count() > 1) continue;
         toUnpin.append(member);
+    }
+
+    // THE AUTO-MINTED COMPANION goes with the image (owner's open question,
+    // MASTER_QUEUE §26; lead call 2026-09-10: YES). Adding an IMAGE to a
+    // project mints a companion PBR material for it and pins that too
+    // (ProjectAssets::addToProject — IMAGE_PLANE_SPEC §8.1), so removing the
+    // image while leaving the material leaves the user a material tile in the
+    // bin for a picture that is no longer in the project — a leftover they
+    // never asked for and cannot explain. It is symmetry: the add created it,
+    // the remove takes it back out.
+    //
+    // Only ever the automatic one, and only when nothing in the project can
+    // still be using it:
+    //   * its ONLY dependency is this texture (ImageMaterial::
+    //     companionMaterials — a material the user built on top of the image
+    //     has more, and is theirs),
+    //   * nothing depends on the companion itself (no asset rides it), and
+    //   * the project's saved scene does not name it.
+    // The LIBRARY row is never touched — this is a project-side remove — so
+    // the worst case of a wrong guess is a pin the user re-adds with one drag.
+    if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture) {
+        const QByteArray scene = db->getSceneBlobGlobal(projectGuid);
+        for (const QString &companion : ImageMaterial::companionMaterials(guid)) {
+            if (toUnpin.contains(companion)) continue;
+            if (db->countAssetPins(companion) == 0) continue;      // not in any project
+            if (!db->hasMultipleDependers(companion).isEmpty()) continue;  // something rides it
+            if (!scene.isEmpty() && scene.contains(companion.toUtf8())) continue;
+            toUnpin.append(companion);
+        }
     }
     bool ok = true;
     for (const QString &member : toUnpin) {

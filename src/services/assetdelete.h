@@ -74,6 +74,10 @@ Outcome remove(Database *db, const QString &guid, bool keepShared = true, bool f
 /// and has just lost its last pin (otherwise it would be invisible, unpinned
 /// and undeletable). `pinCount` reports the pins dropped; `unlisted` reports a
 /// reap. A listed row is never deleted here — it is still a library asset.
+/// Removing an IMAGE also drops the pin on the companion PBR material the add
+/// minted for it (2026-09-10), when that material's only dependency is this
+/// image, nothing depends on it and the project's scene does not name it —
+/// the add created it, so the remove takes it back out.
 Outcome removeFromProject(Database *db, const QString &guid, const QString &projectGuid);
 
 } // namespace assetdelete

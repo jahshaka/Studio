@@ -23,6 +23,7 @@ For more information see the LICENSE file
 // cutout stays a manual option in the panel).
 
 #include <QString>
+#include <QStringList>
 
 #include "irisgl/irisglfwd.h"
 
@@ -56,6 +57,14 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
 /// idempotence guard for the automatic companion material (a re-add of the
 /// same image must not mint a second material).
 bool hasCompanionMaterial(const QString &textureGuid);
+
+/// The AUTO-MINTED companions of a texture: Material rows whose ONLY
+/// dependency is this texture — the exact shape createMaterialAsset builds.
+/// A material the user authored on top of this image (a second texture, a
+/// normal map) has more dependencies and is NOT one of these, so it is never
+/// swept along with the image. Used by assetdelete::removeFromProject to take
+/// the companion out of a project with the image it was minted for.
+QStringList companionMaterials(const QString &textureGuid);
 
 } // namespace ImageMaterial
 

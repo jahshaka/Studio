@@ -219,7 +219,10 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "removeFromProject", "assets.removeFromProject(guid) -> bool",
           "Takes an asset OUT OF THE OPEN PROJECT and leaves the library alone: the project's "
           "pin on the asset goes, and the pins on the dependency members only this asset uses "
-          "(a texture two pinned models share keeps its pin). The library row, its content and "
+          "(a texture two pinned models share keeps its pin). Removing an IMAGE also removes the "
+          "companion PBR material that adding it minted, when that material depends on nothing but "
+          "this image, no asset depends on it and the project's scene does not name it. "
+          "The library row, its content and "
           "every other project's pin are untouched. A row that was already removed from the "
           "library (assets.remove on a pinned asset) and has just lost its LAST pin is deleted "
           "for good, because nothing can reach it any more. This is what the project panel's "

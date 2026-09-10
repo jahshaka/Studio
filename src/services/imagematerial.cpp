@@ -138,4 +138,37 @@ bool hasCompanionMaterial(const QString &textureGuid)
     return query.exec() && query.next();
 }
 
+QStringList companionMaterials(const QString &textureGuid)
+{
+    QStringList companions;
+    if (textureGuid.isEmpty()) return companions;
+    QSqlDatabase conn = QSqlDatabase::database();
+    if (!conn.isOpen()) return companions;
+
+    // A companion is minted with exactly ONE outgoing edge: Material -> this
+    // texture. Anything else the material depends on means a human touched it
+    // (or it was never a companion), and it stops being ours to move.
+    QSqlQuery query(conn);
+    query.prepare("SELECT depender FROM dependencies WHERE dependee = ? AND depender_type = ?");
+    query.addBindValue(textureGuid);
+    query.addBindValue(static_cast<int>(ModelTypes::Material));
+    if (!query.exec()) return companions;
+
+    QStringList candidates;
+    while (query.next()) candidates << query.value(0).toString();
+
+    for (const QString &candidate : candidates) {
+        QSqlQuery deps(conn);
+        deps.prepare("SELECT dependee FROM dependencies WHERE depender = ?");
+        deps.addBindValue(candidate);
+        if (!deps.exec()) continue;
+        QStringList dependees;
+        while (deps.next()) dependees << deps.value(0).toString();
+        dependees.removeDuplicates();
+        if (dependees.size() == 1 && dependees.first() == textureGuid)
+            companions << candidate;
+    }
+    return companions;
+}
+
 } // namespace ImageMaterial
