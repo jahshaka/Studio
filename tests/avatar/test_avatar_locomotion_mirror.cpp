@@ -97,6 +97,31 @@ static iris::AnimationPtr makeClip(const char *name, bool includeRoot, float len
     return a;
 }
 
+/// A MIXAMO ONE-FRAME CLIP: one key per bone at t = 0 and a length of 0. Real
+/// files like this exist (the owner's Dreyar pack has one) and the engine pads
+/// the length rather than dividing by it (OgreClips.cpp kMinClipLength) — the
+/// "clip 'mixamo.com' has length 0.000000; padded to 0.001000s" line is the
+/// last thing the 2026-09-11 smoke log printed before the abort. It is in the
+/// S16 section below because that is the shape the crash arrived in.
+static iris::AnimationPtr makeZeroLengthClip(const char *name)
+{
+    auto skelAnim = iris::SkeletalAnimation::create();
+    const auto addBone = [&](const char *bone, const iris::Vec3 &pos) {
+        auto boneAnim = new iris::BoneAnimation();
+        boneAnim->posKeys->addKey(pos, 0.0);
+        boneAnim->rotKeys->addKey(iris::Quat::fromAxisAndAngle(0, 0, 1, 12.0f), 0.0);
+        boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), 0.0);
+        skelAnim->addBoneAnimation(bone, boneAnim);
+    };
+    addBone("jointRoot", iris::Vec3(0, 0, 0));
+    addBone("jointTip", iris::Vec3(0, 1, 0));
+
+    auto a = iris::Animation::create(QLatin1String(name));
+    a->setSkeletalAnimation(skelAnim);
+    a->setLength(0.0f);
+    return a;
+}
+
 /// The avatar shape the mirror sees: a wrapper carrying the locomotion
 /// component, with the rigged mesh (and its clips) as a child. `clipHostOf`
 /// walks UP from the mesh and finds the mesh itself; `collectAvatarClips` walks
@@ -460,6 +485,56 @@ int main(int argc, char **argv)
                       && std::fabs(w[1] - 1.0f) < 1e-4f,
                   "one authored clip at weight 1 on every bone it animates — unchanged");
         }
+    }
+
+    // =======================================================================
+    section("S16: a MATERIAL SWAP on a playing rig (the 2026-09-11 smoke crash)");
+
+    // The editor swaps a material pointer constantly — the properties panel, a
+    // preset, the Avatar module re-skinning a piece — and so does a second
+    // rigged copy of a character, through the union-rig epoch. The mirror
+    // answers with a full re-attach (attachSkinnedMesh: a new Item and a NEW
+    // SkeletonInstance) and clears `clipSignature` so the clips re-attach; its
+    // first act on that path is `setClipStates(node, nullptr, 0)`. Every clip
+    // record the engine held pointed into the instance that had just died, so
+    // that call wrote through freed weight pointers and then indexed an
+    // animation list with nothing in it — SIGABRT in the owner's run
+    // (SMOKE_FIX_SPEC §1.1). The engine drops a node's clips with its Item now;
+    // this is the seam-level proof that the mirror puts them back.
+    {
+        auto swapper = armrig::buildArmNode(meshAsset, QStringLiteral("swapper"));
+        swapper->setLocalPos(iris::Vec3(-2.5f, 0, 0));
+        auto padded = makeZeroLengthClip("Padded");
+        swapper->addAnimation(padded);
+        swapper->setAnimation(padded);
+        doc->getRootNode()->addChild(swapper);
+
+        doc->updateSceneAnimation(0.1f);
+        editorMirror.sync();
+        engine->renderOneFrame();
+        const NodeId swapNode = editorMirror.engineNode(swapper.data());
+        CHECK(swapNode != 0, "the rigged node reached the engine");
+        const std::string firstName = engineNameFor(editorScene, swapNode, "Padded");
+        CHECK(!firstName.empty(), "...and its ZERO-LENGTH clip attached (padded, not refused)");
+
+        auto swapped = iris::DefaultMaterial::create();
+        swapped->setDiffuseColor(QColor(0, 255, 0));
+        swapper->setMaterial(swapped);
+
+        doc->updateSceneAnimation(0.1f);
+        editorMirror.sync();              // the re-attach + the clip re-attach
+        engine->renderOneFrame();
+        doc->updateSceneAnimation(0.1f);
+        editorMirror.sync();              // and a second sync on the new instance
+        engine->renderOneFrame();
+
+        const NodeId afterNode = editorMirror.engineNode(swapper.data());
+        CHECK(afterNode != 0, "the node survived the material swap");
+        const std::string name = engineNameFor(editorScene, afterNode, "Padded");
+        CHECK(!name.empty(), "the clip is attached to the NEW skeleton instance");
+        const auto w = editorScene->clipBoneWeights(afterNode, name);
+        CHECK(w.size() == 2 && std::fabs(w[1] - 1.0f) < 1e-4f,
+              "...and still drives the bone it animates — the character is posed, not frozen");
     }
 
     // =======================================================================
