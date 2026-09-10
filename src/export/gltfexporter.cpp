@@ -1303,8 +1303,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         QJsonArray skinRoots;
         for (const auto &bone : skel->bones) {
             const int bIdx = boneNode.value(bone->name);
-            if (bone->parentBone) {
-                const int pIdx = boneNode.value(bone->parentBone->name, -1);
+            if (auto parent = bone->parent()) {
+                const int pIdx = boneNode.value(parent->name, -1);
                 if (pIdx >= 0) {
                     QJsonObject parent = c.nodes.at(pIdx).toObject();
                     QJsonArray kids = parent["children"].toArray();

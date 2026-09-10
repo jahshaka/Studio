@@ -365,7 +365,7 @@ int main(int argc, char **argv)
         bool bindWritten = true;
         for (const auto &b : bones) {
             const iris::Mat4 expect = !b->parentBone.isNull()
-                ? b->parentBone->inverseMeshSpacePoseMatrix * b->meshSpacePoseMatrix
+                ? b->parent()->inverseMeshSpacePoseMatrix * b->meshSpacePoseMatrix
                 : b->meshSpacePoseMatrix;
             iris::Vec3 p, s; iris::Quat r;
             iris::decomposeTRS(expect, p, r, s);
@@ -405,7 +405,7 @@ int main(int argc, char **argv)
         // jointRoot even though five scene nodes sit in between.
         const auto tip = f.mesh->getSkeleton()->getBone(QStringLiteral("jointTip"));
         CHECK(!tip.isNull() && !tip->parentBone.isNull() &&
-                  tip->parentBone->name == QStringLiteral("jointRoot"),
+                  tip->parent()->name == QStringLiteral("jointRoot"),
               "the bone hierarchy links through the pivot chain (nearest bone ancestor)");
 
         int walkClips = 0, zeroLengthClips = 0;

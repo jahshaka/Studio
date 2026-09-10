@@ -110,7 +110,7 @@ int main(int argc, char **argv)
         const iris::BonePtr bone = rig->getBone(QString::fromLatin1(b.name));
         if (bone.isNull()) { parents = false; break; }
         const QString want = b.parent ? QString::fromLatin1(b.parent) : QString();
-        const QString got = bone->parentBone.isNull() ? QString() : bone->parentBone->name;
+        const QString got = bone->parentBone.isNull() ? QString() : bone->parent()->name;
         if (want != got) { parents = false; std::printf("    %s: parent '%s', wanted '%s'\n",
                                                         b.name, qUtf8Printable(got),
                                                         qUtf8Printable(want)); break; }

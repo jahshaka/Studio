@@ -40,6 +40,7 @@
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/defaultmaterial.h"
@@ -695,6 +696,42 @@ int main(int argc, char **argv)
               "format: an unknown type is not 'retired' (it still reads as empty)");
         CHECK(!sceneformat::isRetiredNodeType(QString()),
               "format: an absent type string is not 'retired'");
+    }
+
+    // --- Platform deep audit 2026-09-10, document-layer defects (B5.1, B5.2, B8.1, B11.1)
+    {
+        // B8.1: a skeleton is no longer a strong-pointer cycle — dropping the
+        // last reference frees every bone.
+        QWeakPointer<iris::Bone> observed;
+        {
+            auto skel = iris::Skeleton::create();
+            auto root = iris::Bone::create("root");
+            auto tip  = iris::Bone::create("tip");
+            root->addChild(tip);
+            skel->addBone(root); skel->addBone(tip);
+            observed = root;
+            CHECK(tip->parent() == root, "bone: parent() reads the weak back-link");
+        }
+        CHECK(observed.isNull(), "bone: the skeleton is freed when its last reference drops (no parent/child cycle)");
+
+        // B5.1: a MeshNode is born with meshIndex 0, not whatever the stack held.
+        auto fresh = iris::MeshNode::create();
+        CHECK(fresh->meshIndex == 0, "meshnode: meshIndex initialised to 0 at birth");
+
+        // B5.2: duplicating a physics body keeps its physics.
+        auto body = iris::MeshNode::create();
+        body->isPhysicsBody = true;
+        body->physicsProperty.objectMass = 3.5f;
+        body->physicsProperty.type = iris::PhysicsType::RigidBody;
+        auto copy = body->duplicate();
+        CHECK(copy && copy->isPhysicsBody && std::fabs(copy->physicsProperty.objectMass - 3.5f) < 1e-6f
+                  && copy->physicsProperty.type == iris::PhysicsType::RigidBody,
+              "duplicate: a rigid body's copy is a rigid body with the same mass and type");
+
+        // B11.1: a fresh Environment is not simulating (the flag used to be an
+        // uninitialised read).
+        iris::Environment env;
+        CHECK(!env.isSimulating(), "environment: isSimulating() is false at birth");
     }
 
     // --- Teardown with no GL must not crash either

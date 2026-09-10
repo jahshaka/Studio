@@ -59,7 +59,7 @@ int main(int argc, char **argv)
           "neither node aliases the mesh asset's rig template");
     CHECK(a->getSkeleton()->bones.size() == 2 && a->getSkeleton()->boneMap.contains("jointTip"),
           "the clone kept the bone list, names and indices");
-    CHECK(a->getSkeleton()->getBone("jointTip")->parentBone
+    CHECK(a->getSkeleton()->getBone("jointTip")->parent()
               == a->getSkeleton()->getBone("jointRoot"),
           "the clone kept the bone hierarchy, re-pointed at its own bones");
 
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
         CHECK(dupMesh->getSkeleton()->bones.size() == orig->getSkeleton()->bones.size() &&
                   dupMesh->getSkeleton()->boneMap == orig->getSkeleton()->boneMap,
               "the duplicate's rig has the same bones, names and INDEX ORDER");
-        CHECK(dupMesh->getSkeleton()->getBone("jointTip")->parentBone.data() ==
+        CHECK(dupMesh->getSkeleton()->getBone("jointTip")->parent().data() ==
                   dupMesh->getSkeleton()->getBone("jointRoot").data(),
               "and its hierarchy points at its OWN bones, not the original's");
         for (int i = 0; i < orig->getSkeleton()->bones.size(); ++i)

@@ -167,7 +167,7 @@ static void compareMesh(const iris::MeshPtr &parsed, const iris::MeshPtr &baked,
                    && x->bindingPos == y->bindingPos && x->bindingRot == y->bindingRot
                    && x->bindingScale == y->bindingScale
                    && x->parentBone.isNull() == y->parentBone.isNull()
-                   && (x->parentBone.isNull() || x->parentBone->name == y->parentBone->name)
+                   && (x->parentBone.isNull() || x->parent()->name == y->parent()->name)
                    && x->childBones.size() == y->childBones.size();
         }
         CHECK(same, qUtf8Printable(label + ": every bone identical (names, bind, hierarchy)"));
