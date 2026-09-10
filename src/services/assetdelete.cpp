@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetstorepaths.h"
 #include "io/assetmanager.h"
+#include "services/imagematerial.h"
 
 namespace assetdelete
 {
@@ -24,6 +25,14 @@ QVector<AssetPinRecord> pins(Database *db, const QString &guid)
 {
     if (!db) return {};
     return db->fetchAssetPins(guid);
+}
+
+QVector<AssetPinRecord> livePins(Database *db, const QString &guid)
+{
+    QVector<AssetPinRecord> live;
+    for (const AssetPinRecord &pin : pins(db, guid))
+        if (pin.live) live.push_back(pin);
+    return live;
 }
 
 Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
@@ -96,6 +105,43 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
     for (const QString &member : members) {
         if (member != guid && db->hasMultipleDependers(member).count() > 1) continue;
         toUnpin.append(member);
+    }
+
+    // THE AUTO-MINTED COMPANION goes with the image (owner's open question,
+    // MASTER_QUEUE §26; lead call 2026-09-10: YES). Adding an IMAGE to a
+    // project mints a companion PBR material for it and pins that too
+    // (ProjectAssets::addToProject — IMAGE_PLANE_SPEC §8.1), so removing the
+    // image while leaving the material leaves the user a material tile in the
+    // bin for a picture that is no longer in the project — a leftover they
+    // never asked for and cannot explain. It is symmetry: the add created it,
+    // the remove takes it back out.
+    //
+    // Only ever the one WE minted, and only while nothing in the project can
+    // still be using it:
+    //   * it carries the mint's stamp (ImageMaterial::companionMaterials —
+    //     `companionOf: <this texture>`, written only by createMaterialAsset).
+    //     Identity, not shape: the old shape test ("a Material whose only
+    //     dependee is this texture") matched a material the USER authored on
+    //     the same image just as well — and since addToProject mints nothing
+    //     when any material already depends on the texture, theirs is exactly
+    //     what stands in the companion's place (code review 2026-09-10);
+    //   * THIS project pins it — the row's existence, since a companion is a
+    //     DB-only asset whose pin carries an empty oid, so AssetCas::pinnedOid
+    //     cannot tell "no pin" from "no bytes";
+    //   * nothing DEPENDS on it: a companion applied to an object in this
+    //     project is named by an Object -> Material edge, and that edge is what
+    //     keeps it. (The scene blob cannot answer this — writeSceneNodeMaterial
+    //     inlines a material's VALUES into the node and never names the asset
+    //     guid, so the guard that read it never fired.)
+    // The LIBRARY row is never touched — this is a project-side remove — so
+    // the worst case of a wrong guess is a pin the user re-adds with one drag.
+    if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture) {
+        for (const QString &companion : ImageMaterial::companionMaterials(guid)) {
+            if (toUnpin.contains(companion)) continue;
+            if (!db->isAssetPinnedBy(projectGuid, companion)) continue;
+            if (!db->hasMultipleDependers(companion).isEmpty()) continue;  // something rides it
+            toUnpin.append(companion);
+        }
     }
     bool ok = true;
     for (const QString &member : toUnpin) {

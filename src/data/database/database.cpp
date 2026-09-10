@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QSqlRecord>
 #include <QDateTime>
 #include <QMessageBox>
+#include <QObject>
 #include <QUuid>
 
 namespace
@@ -1100,10 +1101,32 @@ bool Database::deleteProject(const QString &guid)
     // force: the row was already deleted from the library once; this is that
     // delete finally landing. (Nested in the transaction above — the guard
     // degrades to a no-op and this commit is the atom.)
+    //
+    // The result is COLLECTED (code review 2026-09-10): this ran inside the
+    // project delete's transaction and its verdict was dropped, so a reap that
+    // failed — a closed connection, a locked table — was committed over as a
+    // success, leaving the project gone and an invisible, unpinned, undeletable
+    // row behind it. A failed reap now rolls the whole project delete back:
+    // the user can try again, which is the only state from which they can.
+    // The reap runs INSIDE this transaction, so its sidecar/registry scrubs
+    // are deferred to the commit below (code review 2026-09-10): on the
+    // rollback path an orphan reaped before the failing one has its rows
+    // restored, and a sidecar dropped for it would have taken the asset out of
+    // any future rebuildCatalog while the row lived on.
+    QVector<PendingAssetScrub> scrubs;
+    bool reaped = true;
     for (const QString &orphan : unlistedPins)
-        if (countAssetPins(orphan) == 0) deleteAsset(orphan, /*force*/ true);
+        if (countAssetPins(orphan) == 0)
+            reaped = deleteAssetRow(orphan, /*force*/ true, &scrubs) && reaped;
+    if (!reaped) {
+        irisLog(QString("deleteProject('%1'): an orphaned unlisted asset could not be reaped — "
+                        "the whole project delete was rolled back.").arg(guid));
+        return false;   // ~DbTransaction rolls back; nothing was scrubbed
+    }
 
-    return tx.commit();
+    if (!tx.commit()) return false;
+    applyAssetScrubs(scrubs);
+    return true;
 }
 
 bool Database::destroyTable(const QString &table)
@@ -1221,9 +1244,13 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
     if (!checkIfTableExists("project_assets")) return pins;
 
     QSqlQuery query;
-    // LEFT JOIN: a pin whose project row is gone must still be COUNTED (it is
-    // a real reference in the catalog); it just has no name to show.
-    query.prepare("SELECT PA.project_guid, P.name FROM project_assets PA "
+    // LEFT JOIN: a pin whose project row is gone is still a real row in the
+    // catalog — it keeps its object alive against the GC — so it is still
+    // REPORTED here, flagged dead and named for a human instead of showing a
+    // raw guid on the Assets page's "Used by" row (code review 2026-09-10).
+    // What it is NOT is a project using the asset: countAssetPins ignores it,
+    // so it cannot veto a delete, and assets.gc reaps it.
+    query.prepare("SELECT PA.project_guid, P.name, P.guid IS NOT NULL FROM project_assets PA "
                   "LEFT JOIN projects P ON P.guid = PA.project_guid "
                   "WHERE PA.asset_guid = ? ORDER BY P.name");
     query.addBindValue(guid);
@@ -1233,7 +1260,9 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
         AssetPinRecord pin;
         pin.projectGuid = query.value(0).toString();
         pin.projectName = query.value(1).toString();
-        if (pin.projectName.isEmpty()) pin.projectName = pin.projectGuid;
+        pin.live = query.value(2).toBool();
+        if (!pin.live) pin.projectName = QObject::tr("(deleted project)");
+        else if (pin.projectName.isEmpty()) pin.projectName = pin.projectGuid;
         pins.push_back(pin);
     }
     return pins;
@@ -1254,13 +1283,64 @@ int Database::countAssetPins(const QString &guid)
     if (guid.isEmpty() || !db.isOpen()) return 0;
     if (!checkIfTableExists("project_assets")) return 0;
     QSqlQuery query;
-    query.prepare("SELECT COUNT(*) FROM project_assets WHERE asset_guid = ?");
+    // LIVE projects only (code review 2026-09-10). This number is the VETO:
+    // it decides whether a library delete deletes or merely unlists, whether
+    // the project panel removes a pin, and what the confirmation dialog says.
+    // A pin whose project row is gone represents nobody — 32 of the owner's
+    // 129 pins were already dead — and counting it made an asset no living
+    // project used undeletable through the normal path, forever. The dead row
+    // itself is not silently dropped: fetchAssetPins still reports it and
+    // assets.gc's deadPins class reaps it.
+    query.prepare("SELECT COUNT(*) FROM project_assets PA "
+                  "JOIN projects P ON P.guid = PA.project_guid "
+                  "WHERE PA.asset_guid = ?");
     query.addBindValue(guid);
     if (!executeAndCheckQuery(query, "CountAssetPins") || !query.next()) return 0;
     return query.value(0).toInt();
 }
 
+bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid)
+{
+    if (projectGuid.isEmpty() || assetGuid.isEmpty() || !db.isOpen()) return false;
+    if (!checkIfTableExists("project_assets")) return false;
+    QSqlQuery query;
+    query.prepare("SELECT 1 FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+    query.addBindValue(projectGuid);
+    query.addBindValue(assetGuid);
+    return executeAndCheckQuery(query, "IsAssetPinnedBy") && query.next();
+}
+
 bool Database::deleteAsset(const QString &guid, bool force)
+{
+    // The un-nested case: this call owns its transaction, so it also owns the
+    // scrub (deleteAssetRow does it inline).
+    return deleteAssetRow(guid, force, nullptr);
+}
+
+void Database::applyAssetScrubs(const QVector<PendingAssetScrub> &pending)
+{
+    for (const PendingAssetScrub &item : pending) {
+        // The registry OWNS its Assets (io/assetmanager.h, since the memory
+        // lane): dropping the pointer without deleting it leaks the Asset AND,
+        // for the payload-carrying subclasses, pins a whole SceneNodePtr mesh
+        // subtree for the life of the process. Backwards, because removing at
+        // i and then advancing skips the next element.
+        auto &assets = AssetManager::getAssets();
+        for (int i = assets.count() - 1; i >= 0; --i) {
+            if (assets[i]->assetGuid != item.guid) continue;
+            delete assets[i];
+            assets.remove(i);
+        }
+        // Invariant I2: the sidecar is the rebuild record, so it must not
+        // outlive its asset — 41 of the owner's 86 sidecars named deleted
+        // assets, and rebuildCatalog would have resurrected every one of them
+        // (deep audit 2026-09, area 6).
+        if (item.sidecar) dropSidecar(item.guid);
+    }
+}
+
+bool Database::deleteAssetRow(const QString &guid, bool force,
+                              QVector<PendingAssetScrub> *deferred)
 {
     // A delete that cannot run must NOT report success and must NOT scrub the
     // in-memory catalog: doing both is how a no-op delete looked like a real
@@ -1292,6 +1372,10 @@ bool Database::deleteAsset(const QString &guid, bool force)
     const bool ownsSidecar = sidecarBelongsHere(guid);
 
     DbTransaction tx(db);
+    // Whether the rows this call deletes become DURABLE at its own commit, or
+    // only when an outer transaction commits (the guard degrades to a no-op
+    // when the connection is already in one).
+    const bool ownsTransaction = tx.isActive();
 
     QSqlQuery query;
     query.prepare("DELETE FROM assets WHERE guid = ?");
@@ -1317,30 +1401,17 @@ bool Database::deleteAsset(const QString &guid, bool force)
     if (ok) ok = tx.commit();
 
     // Only once the rows are actually gone: the cache and the catalog must not
-    // disagree (a scrubbed cache over a surviving row is the silent failure).
+    // disagree (a scrubbed cache over a surviving row is the silent failure),
+    // and neither may the STORE — the sidecar is the rebuild record, so
+    // dropping it over rows that come back is how an asset disappears from a
+    // recovery for good. Nested, "actually gone" is the OUTER commit's word,
+    // not ours: hand the work up (code review 2026-09-10). A nested caller
+    // that passes no sink keeps the old behaviour rather than silently
+    // skipping the scrub.
     if (ok) {
-        // Backwards: removing at i and then advancing skips the next element
-        // (the same index-skipping shape the dependency filters had).
-        //
-        // And the registry OWNS its Assets (io/assetmanager.h, since the
-        // memory lane): dropping the pointer without deleting it leaks the
-        // Asset AND, for the payload-carrying subclasses, pins a whole
-        // SceneNodePtr mesh subtree for the life of the process. The virtual
-        // destructor that makes this delete correct arrived with the same
-        // lane; before it, this was the leak the audit measured at ~80 per
-        // Showroom open.
-        auto &assets = AssetManager::getAssets();
-        for (int i = assets.count() - 1; i >= 0; --i) {
-            if (assets[i]->assetGuid != guid) continue;
-            delete assets[i];
-            assets.remove(i);
-        }
-
-        // Invariant I2: the sidecar is the rebuild record, so it must not
-        // outlive its asset — 41 of the owner's 86 sidecars named deleted
-        // assets, and rebuildCatalog would have resurrected every one of them
-        // (deep audit 2026-09, area 6).
-        if (ownsSidecar) dropSidecar(guid);
+        const PendingAssetScrub scrub{ guid, ownsSidecar };
+        if (!ownsTransaction && deferred) deferred->append(scrub);
+        else applyAssetScrubs({ scrub });
     }
     else {
         iris::Logger::getSingleton()->warn(
@@ -1623,7 +1694,7 @@ QMap<QString, qint64> Database::fetchAssetFileSizes()
 // So the rule is "hide rows that are a MEMBER of something", and membership is
 // what an import's own edges mean — not what a REFERENCE means. Avatar edges
 // are references, and are excluded here rather than at each call site.
-inline QString dependeeSubquery(const QString &column)
+QString Database::dependeeSubquery(const QString &column)
 {
     return QStringLiteral("%1 NOT IN (SELECT dependee FROM dependencies "
                           "WHERE depender_type != %2)")
@@ -1887,7 +1958,8 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
+            "FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -1912,6 +1984,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
                 data.asset = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail = selectAssetQuery.value(16).toByteArray();
                 data.view_filter = selectAssetQuery.value(17).toInt();
+                data.listed = selectAssetQuery.value(18).toBool();
                 assetList.push_back(data);
             }
         }
@@ -1925,9 +1998,9 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -1958,6 +2031,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -2362,7 +2436,8 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
+            "FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -2387,6 +2462,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
                 data.asset          = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail      = selectAssetQuery.value(16).toByteArray();
                 data.view_filter	= selectAssetQuery.value(17).toInt();
+                data.listed         = selectAssetQuery.value(18).toBool();
                 assetList.push_back(data);
             }
         }
@@ -2400,9 +2476,9 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -2435,6 +2511,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -2532,7 +2609,8 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
+            "FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -2557,6 +2635,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
                 data.asset = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail = selectAssetQuery.value(16).toByteArray();
                 data.view_filter = selectAssetQuery.value(17).toInt();
+                data.listed = selectAssetQuery.value(18).toBool();
                 assetList.push_back(data);
             }
         }
@@ -2570,9 +2649,9 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -2594,6 +2673,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -2725,6 +2805,13 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
 
     executeAndCheckQuery(query3, "insertSceneGlobal");
 
+    // NO `listed` COLUMN HERE, deliberately (lead call 2026-09-10). This is
+    // the PROJECT archive: importProject re-homes every row it carries into
+    // the newly created project (project_guid = the new scene guid,
+    // view_filter = Editor), so the rows are project members and never
+    // library tiles — there is no library visibility for them to carry. The
+    // ASSET archives (createExportBundle / createBlobFromNode /
+    // createBlobFromAsset, on assetsTableSchema) do carry it.
     QString createAssetsTableSchema =
         "CREATE TABLE IF NOT EXISTS assets ("
         "    guid              VARCHAR(32),"
@@ -3186,6 +3273,10 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 {
 	QStringList files;
 	bool allOk = true;
+	// Deferred to the commit below: a delete nested in this transaction is not
+	// real until it commits, and its sidecar is the record a rebuild would
+	// need if it does not (code review 2026-09-10).
+	QVector<PendingAssetScrub> scrubs;
 
 	// One transaction over the whole subtree (deep audit 2026-09, area 6) —
 	// matching deleteAssetAndDependencies. Without it a failure partway through
@@ -3197,22 +3288,39 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
 		// For every folder, fetch assets inside
 		for (const auto &asset : fetchChildFolderAssets(folder)) {
+			// THE PIN LAW, member by member (code review 2026-09-10 — this
+			// path never learned it): an asset a project still pins is
+			// UNLISTED by deleteAsset, not deleted, and then NOTHING else
+			// about it may go — not its FILES (the caller unlinks whatever
+			// this returns, and the pinned project still renders them) and
+			// not its dependency EDGES (that project resolves its textures
+			// through them). Identical to deleteAssetAndDependencies.
+			const bool unlisted = countAssetPins(asset) > 0;
+
 			// For every asset, find their dependencies
-			for (const auto &dep : fetchAssetAndDependencies(asset)) {
-				files.append(dep);
+			if (!unlisted) {
+				for (const auto &dep : fetchAssetAndDependencies(asset)) {
+					files.append(dep);
+				}
 			}
 
-			allOk = deleteAsset(asset) && allOk;
+			allOk = deleteAssetRow(asset, /*force*/ false, &scrubs) && allOk;
+			if (unlisted) continue;
 
             for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
                 allOk = deleteDependency(asset, dep) && allOk;
             }
 		}
 
+		// The FOLDER goes either way: it is a library organisation row, and a
+		// pinned member survives as an unlisted row that resolves by guid —
+		// nothing about a project's use of it lives in the folder tree.
 		allOk = deleteFolder(folder) && allOk;
 	}
 
-	allOk = tx.commit() && allOk;
+	const bool committed = tx.commit();
+	allOk = committed && allOk;
+	if (committed) applyAssetScrubs(scrubs);
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(
@@ -3237,6 +3345,9 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 {
 	QStringList files;
 	bool allOk = true;
+	// See deleteFolderAndDependencies: the nested deletes' sidecar and session
+	// scrubs wait for this transaction's commit.
+	QVector<PendingAssetScrub> scrubs;
 
 	DbTransaction tx(db);
 
@@ -3254,7 +3365,7 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 			}
 		}
 
-		allOk = deleteAsset(asset, force) && allOk;
+		allOk = deleteAssetRow(asset, force, &scrubs) && allOk;
 		if (unlisted) continue;
 
         for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
@@ -3262,7 +3373,9 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
         }
 	}
 
-	allOk = tx.commit() && allOk;
+	const bool committed = tx.commit();
+	allOk = committed && allOk;
+	if (committed) applyAssetScrubs(scrubs);
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(
@@ -3634,6 +3747,20 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     return tx.commit();
 }
 
+// Does a table in THIS connection carry the column? (Database::
+// checkIfColumnExists asks the main library; a .jaf archive is a different
+// connection.) An archive written before a column existed must still import.
+static bool connectionHasColumn(const QSqlDatabase &conn, const QString &table,
+                                const QString &column)
+{
+    QSqlQuery query(conn);
+    // PRAGMA takes no bound parameters; the table names here are literals.
+    if (!query.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table))) return false;
+    while (query.next())
+        if (query.value(1).toString().compare(column, Qt::CaseInsensitive) == 0) return true;
+    return false;
+}
+
 QString Database::importAsset(
 	const ModelTypes &jafType,
 	const QString & pathToDb,
@@ -3660,11 +3787,18 @@ QString Database::importAsset(
 	// Whole .jaf import lands in one transaction on the main library (phase 0).
 	DbTransaction tx(db);
 
+	// LIBRARY VISIBILITY TRAVELS WITH THE ARCHIVE (lead call 2026-09-10): an
+	// export of an UNLISTED asset lands unlisted where it arrives — the row a
+	// user deleted from their library does not come back as a library tile on
+	// someone else's box just because it rode along in a .jaf. Archives
+	// written before the column existed have no opinion and import listed.
+	const bool archiveHasListed = connectionHasColumn(importConnection, "assets", "listed");
+
 	QSqlQuery selectAssetQuery(importConnection);
 	selectAssetQuery.prepare(
-		"SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-		"author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
-	);
+		QStringLiteral("SELECT guid, type, name, collection, times_used, project_guid, date_created, "
+		               "last_updated, author, license, hash, version, parent, tags, properties, asset, "
+		               "thumbnail%1 FROM assets").arg(archiveHasListed ? ", listed" : ""));
 	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
 	QMap<QString, QString> assetGuids; /* old x new guid */
@@ -3721,6 +3855,7 @@ QString Database::importAsset(
 			data.asset = record.value(15).toByteArray();
 			data.thumbnail = record.value(16).toByteArray();
 			data.view_filter = view_filter_to;
+			data.listed = archiveHasListed ? record.value(17).toBool() : true;
 		}
 
 		assetsToImport.push_back(data);
@@ -3774,9 +3909,9 @@ QString Database::importAsset(
 		insertAssetQuery.prepare(
 			"INSERT INTO assets"
 			" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-			" license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+			" license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
 			" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
 		);
 
         if (jafType == ModelTypes::Texture) {
@@ -3801,6 +3936,7 @@ QString Database::importAsset(
 		insertAssetQuery.bindValue(":asset", asset.asset);
 		insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
 		insertAssetQuery.bindValue(":view_filter", asset.view_filter);
+		insertAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
 		executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
 	}
@@ -3846,11 +3982,15 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     // Whole bundle import lands in one transaction on the main library (phase 0).
     DbTransaction tx(db);
 
+    // See importAsset: library visibility travels with the archive, and an
+    // archive that predates the column imports listed.
+    const bool archiveHasListed = connectionHasColumn(importConnection, "assets", "listed");
+
     QSqlQuery selectAssetQuery(importConnection);
     selectAssetQuery.prepare(
-        "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-        "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets"
-    );
+        QStringLiteral("SELECT guid, type, name, collection, times_used, project_guid, date_created, "
+                       "last_updated, author, license, hash, version, parent, tags, properties, asset, "
+                       "thumbnail, view_filter%1 FROM assets").arg(archiveHasListed ? ", listed" : ""));
     executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
     QMap<QString, QString> assetGuids; /* old x new guid */
@@ -3907,6 +4047,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             data.asset = record.value(15).toByteArray();
             data.thumbnail = record.value(16).toByteArray();
             data.view_filter = record.value(17).toInt();
+            data.listed = archiveHasListed ? record.value(18).toBool() : true;
         }
 
         assetsToImport.push_back(data);
@@ -3958,9 +4099,9 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         insertAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         //if (jafType == ModelTypes::Texture) {
@@ -3985,6 +4126,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         insertAssetQuery.bindValue(":asset", asset.asset);
         insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
     }

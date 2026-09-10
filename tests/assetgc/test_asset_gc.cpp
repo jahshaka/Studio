@@ -138,6 +138,13 @@ int main(int argc, char **argv)
     db.createAllTables();
     QSqlDatabase conn = QSqlDatabase::database();
 
+    // The project every pin below belongs to has to be a REAL row: since
+    // 2026-09-10 a pin naming no project is a DEAD PIN and a class of garbage
+    // in its own right (the deadPins section at the end of this suite), so a
+    // fixture without it would be seeding garbage where it means to seed a
+    // live look-alike.
+    CHECK(db.createProject("projP", "GC Fixture Project"), "the fixture project row exists");
+
     // ================= the LIVE half =================
     insertAsset("guidShared", 1, "shared.bin");
     insertAsset("guidOther",  1, "shared.bin");   // same content, second asset
@@ -309,6 +316,9 @@ int main(int argc, char **argv)
           "THE LAW: a live asset's folder is not collected");
     CHECK(!reports(dry.legacyFolders, root + "/guidShared"),
           "THE LAW: a live asset's folder is not collected even when its content IS in the CAS");
+
+    CHECK(dry.deadPins.items.isEmpty(),
+          "THE LAW: a pin of a LIVING project is never a dead pin");
 
     CHECK(dry.redundantLegacyFiles.items.size() == 1, "dry run: exactly 1 redundant legacy copy");
     CHECK(reports(dry.redundantLegacyFiles, root + "/guidShared/shared.bin"),
@@ -513,6 +523,67 @@ int main(int argc, char **argv)
         check = QSqlDatabase();
         QSqlDatabase::removeDatabase("GcRebuildCheck");
         QFile::remove(rebuiltDb);
+    }
+
+    // ================= DEAD PROJECT PINS =================
+    //
+    // A project_assets row naming a project that no longer exists (32 of 129
+    // on the owner's measured store). It is not merely untidy: it kept its
+    // object out of the unreferenced class forever, and until 2026-09-10 it
+    // VETOED the library delete of an asset no living project used. So it is
+    // a class of garbage — rows, not files — and the object it was the last
+    // reference to becomes reclaimable on the NEXT sweep, never this one
+    // (reachability is read before the rows go, by design).
+    {
+        CHECK(db.initializeDatabase(dbPath), "database reopened for the dead-pin checks");
+        QSqlDatabase live = QSqlDatabase::database();
+
+        const QByteArray bytesHaunted = QByteArray("HAUNTED-").repeated(40);
+        writeFile(srcDir + "/haunted.bin", bytesHaunted);
+        insertAsset("guidHaunted", 1, "haunted.bin");
+        QString oidHaunted, hErr;
+        CHECK(AssetCas::ingestFile(live, root, srcDir + "/haunted.bin", "guidHaunted", "source",
+                                   "haunted.bin", &oidHaunted, &hErr),
+              "the haunted asset's content is ingested");
+        // A pin from a project that never existed, plus a LIVE pin on the same
+        // asset from the fixture project — the sweep must tell them apart.
+        CHECK(AssetCas::writePin(live, "projGhost", "guidHaunted", oidHaunted),
+              "a pin written for a project that does not exist");
+        CHECK(AssetCas::writePin(live, "projP", "guidHaunted", oidHaunted),
+              "and a pin from the LIVING fixture project");
+
+        const auto dryPins = AssetGc::sweep(live, root, /*dryRun*/ true);
+        CHECK(dryPins.ok, "the dead-pin dry run succeeded");
+        CHECK(dryPins.deadPins.items.size() == 1, "dry run: exactly 1 dead pin");
+        CHECK(dryPins.deadPins.items.first().id == QStringLiteral("projGhost/guidHaunted"),
+              qPrintable(QStringLiteral("... named <project>/<asset>: %1")
+                             .arg(dryPins.deadPins.items.first().id)));
+        CHECK(dryPins.deadPins.bytes == 0, "... freeing no bytes (it is a row)");
+        CHECK(dryPins.deadPins.removed == 0, "... and a dry run removes nothing");
+        CHECK(scalar(live, "SELECT COUNT(*) FROM project_assets WHERE project_guid = 'projGhost'") == 1,
+              "... the row is still there after the dry run");
+
+        const auto runPins = AssetGc::sweep(live, root, /*dryRun*/ false);
+        CHECK(runPins.ok && runPins.failures.isEmpty(), "the dead-pin sweep succeeded");
+        CHECK(runPins.deadPins.removed == 1, "the dead pin was removed");
+        CHECK(scalar(live, "SELECT COUNT(*) FROM project_assets WHERE project_guid = 'projGhost'") == 0,
+              "... the row is gone");
+        CHECK(scalar(live, "SELECT COUNT(*) FROM project_assets WHERE project_guid = 'projP'") == 1,
+              "THE LAW: the LIVING project's pin on the same asset is untouched");
+        CHECK(readFile(AssetStorePaths::objectPathIn(root, oidHaunted, "bin")) == bytesHaunted,
+              "LIVE: the asset's content is byte-for-byte intact (its row still names it)");
+
+        // The delayed reclaim: only once the asset row is really gone does the
+        // object become garbage, and the pin no longer keeps it alive.
+        CHECK(db.deleteAsset("guidHaunted", /*force*/ true), "the haunted asset is hard-deleted");
+        const auto afterPins = AssetGc::sweep(live, root, /*dryRun*/ true);
+        CHECK(afterPins.ok && reportsId(afterPins.unreferencedObjects, oidHaunted),
+              "the object the dead pin used to hold alive is now reclaimable");
+        const auto reapPins = AssetGc::sweep(live, root, /*dryRun*/ false);
+        CHECK(reapPins.ok, "the reclaiming sweep succeeded");
+        CHECK(!QFileInfo::exists(AssetStorePaths::objectPathIn(root, oidHaunted, "bin")),
+              "... and the bytes are back");
+        db.closeDatabase();
     }
 
     // ================= the offline root =================

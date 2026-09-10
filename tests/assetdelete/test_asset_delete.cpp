@@ -34,10 +34,33 @@
 //      split (an unlisted row resolves by guid but is not a tile) and the
 //      reaping of an unlisted row whose last pinning project is deleted.
 //
+// Plus the library-delete CODE REVIEW follow-ups (MASTER_QUEUE §26, item 5b):
+//  11. DEAD PINS: a project_assets row whose project no longer exists counts
+//      for nothing (countAssetPins JOINs projects, so it cannot veto a plain
+//      delete) but is still reported by fetchAssetPins, flagged dead and
+//      named "(deleted project)" instead of showing a raw guid.
+//  12. deleteFolderAndDependencies obeys the pin law like its asset twin: a
+//      pinned member is unlisted, its files are NOT handed back for unlink
+//      and its dependency edges stay.
+//  13. deleteProject ROLLS BACK when an orphan reap fails (it used to drop
+//      the result and commit, leaving the project gone and an invisible,
+//      unpinned, undeletable row behind), and (13b) a rolled-back reap leaves
+//      the sidecar and the session registration alone — a nested delete's
+//      scrubs wait for the OUTER commit.
+//  14. .jaf archives carry `listed`: an export of an UNLISTED asset imports
+//      unlisted, and an archive written before the column existed imports
+//      listed.
+//  15. assetdelete::removeFromProject takes the AUTO-MINTED companion image
+//      material out of the project with the image — identified by the mint's
+//      STAMP, so a material the USER authored on the same image (identical
+//      shape) keeps its pin, and so does a companion something depends on.
+//
 // Framework-free; non-zero exit on failure. Runs under QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
+#include <QColor>
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -49,6 +72,9 @@
 #include "data/constants.h"
 #include "io/assetmanager.h"
 #include "services/assetcas.h"
+#include "services/assetdelete.h"
+#include "services/assetstorepaths.h"
+#include "services/imagematerial.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -107,6 +133,11 @@ int main(int argc, char **argv)
     db.createAllTables();
 
     const QString projectGuid = "proj-delete-test";
+    // The fixture project has to be a REAL row: since the code review of
+    // 2026-09-10 a pin whose project does not exist is a DEAD pin and counts
+    // for nothing (case 11 asserts exactly that), so a fixture without it
+    // would be testing the dead-pin path everywhere by accident.
+    CHECK(db.createProject(projectGuid, "Delete Test"), "fixture project row created");
 
     // --- Two assets, one SHARED content object, plus a private one ----------
     const QString sharedSrc = writeTempFile(scratchDir, "shared.png", QByteArray("shared-bytes"));
@@ -489,6 +520,393 @@ int main(int argc, char **argv)
         CHECK(countWhere("asset_files", "asset_guid", shared) == 0,
               "... with its content mapping, so assets.gc can reclaim the bytes");
         CHECK(!db.setAssetListed(shared, true), "setAssetListed on an unknown guid is FALSE");
+    }
+
+    // --- 11. DEAD PINS: a pin whose project is gone counts for nothing ------
+    //
+    // 32 of the 129 pins on the owner's measured store named projects that no
+    // longer existed. Counted as pins they made an asset NO LIVING PROJECT
+    // used undeletable through the normal path (the delete unlisted it and the
+    // grid lost it), and the Assets page showed a raw guid as the "project"
+    // using it. So: countAssetPins weighs LIVE pins only; fetchAssetPins still
+    // reports the dead row (it is a real reference — assets.gc reaps it) and
+    // names it for a human.
+    {
+        conn = QSqlDatabase::database();
+        const QString ghost = "proj-that-never-existed";
+        const QString hauntedGuid = db.createAssetEntry(
+            "guid-haunted", "haunted.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString hauntedOid, he;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, hauntedGuid, "source", "haunted.png",
+                                   &hauntedOid, &he), "the haunted asset has content");
+        CHECK(AssetCas::writePin(conn, ghost, hauntedGuid, hauntedOid),
+              "a pin written for a project that does not exist");
+        CHECK(countWhere("project_assets", "asset_guid", hauntedGuid) == 1,
+              "the dead pin row is really there");
+
+        CHECK(db.countAssetPins(hauntedGuid) == 0,
+              "countAssetPins ignores a pin whose project is gone");
+        const auto ghostPins = db.fetchAssetPins(hauntedGuid);
+        CHECK(ghostPins.size() == 1, "fetchAssetPins still REPORTS the dead pin");
+        CHECK(!ghostPins.first().live, "... flagged dead");
+        CHECK(ghostPins.first().projectName != ghost && !ghostPins.first().projectName.isEmpty(),
+              qPrintable(QStringLiteral("... and named for a human, not by its guid: %1")
+                             .arg(ghostPins.first().projectName)));
+
+        // The point of the fix: a plain library delete really deletes now.
+        CHECK(db.deleteAsset(hauntedGuid), "the plain library delete succeeds");
+        CHECK(countWhere("assets", "guid", hauntedGuid) == 0,
+              "... and the asset row is GONE (a dead pin cannot veto a delete)");
+        CHECK(countWhere("project_assets", "asset_guid", hauntedGuid) == 0,
+              "... the dead pin went with it");
+
+        // A LIVE pin still vetoes, in the same session, on the same shape.
+        const QString livingGuid = db.createAssetEntry(
+            "guid-living", "living.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString livingOid;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, livingGuid, "source", "living.png",
+                                   &livingOid, &he), "the living asset has content");
+        CHECK(AssetCas::writePin(conn, projectGuid, livingGuid, livingOid),
+              "pinned by the (existing) fixture project");
+        CHECK(db.countAssetPins(livingGuid) == 1, "a LIVE pin counts");
+        CHECK(db.fetchAssetPins(livingGuid).first().live, "... and reads back live");
+        CHECK(db.deleteAsset(livingGuid) && !db.isAssetListed(livingGuid),
+              "... so the library delete is still an UNLIST");
+        CHECK(db.deleteAsset(livingGuid, /*force*/ true), "cleaned up with force");
+    }
+
+    // --- 12. deleteFolderAndDependencies obeys the pin law ------------------
+    //
+    // The folder delete never learned it (code review 2026-09-10): it deleted
+    // a pinned member's dependency edges and handed its file names back to the
+    // caller to UNLINK, so removing a library folder took the bytes out from
+    // under every project that pinned what was in it.
+    {
+        conn = QSqlDatabase::database();
+        const QString folderGuid = "folder-pin-law";
+        CHECK(db.createFolder("Pinned Folder", QString(), folderGuid, QString()),
+              "library folder created");
+
+        const QString inFolder = db.createAssetEntry(
+            "guid-in-folder", "infolder.png", static_cast<int>(ModelTypes::Texture),
+            folderGuid, QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        const QString folderDep = db.createAssetEntry(
+            "guid-folder-dep", "folderdep.png", static_cast<int>(ModelTypes::Texture),
+            folderGuid, QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString inFolderOid, fe;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, inFolder, "source", "infolder.png",
+                                   &inFolderOid, &fe), "the folder member has content");
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Texture),
+                                  static_cast<int>(ModelTypes::Texture),
+                                  inFolder, folderDep, QString()),
+              "the folder member has a dependency edge");
+        CHECK(AssetCas::writePin(conn, projectGuid, inFolder, inFolderOid),
+              "a project pins the folder member");
+
+        bool folderOk = false;
+        const QStringList unlinkList = db.deleteFolderAndDependencies(folderGuid, &folderOk);
+        CHECK(folderOk, "deleteFolderAndDependencies reports success");
+        CHECK(countWhere("assets", "guid", inFolder) == 1,
+              "the PINNED folder member survives as a row");
+        CHECK(!db.isAssetListed(inFolder), "... unlisted");
+        CHECK(countWhere("asset_files", "asset_guid", inFolder) == 1,
+              "... its content mapping is intact");
+        CHECK(countWhere("project_assets", "asset_guid", inFolder) == 1, "... so is its pin");
+        CHECK(countWhere("dependencies", "depender", inFolder) == 1,
+              "... and its dependency EDGE stays (the project resolves through it)");
+        CHECK(!unlinkList.contains("infolder.png"),
+              "... and its file is NOT handed back for unlinking");
+        CHECK(refcountOf(inFolderOid) == 1, "... the object is still referenced");
+        // The UNPINNED sibling went, folder and all — the law is per member.
+        CHECK(countWhere("assets", "guid", folderDep) == 0, "the unpinned member was deleted");
+        CHECK(countWhere("folders", "guid", folderGuid) == 0, "the folder row went");
+    }
+
+    // --- 13. deleteProject rolls back over a FAILED orphan reap -------------
+    //
+    // The reap's result was dropped and the transaction committed anyway: the
+    // project went, the orphan stayed — invisible (unlisted), unpinned and,
+    // because nothing lists it, undeletable forever. Forced here by removing
+    // the table the reap's own delete needs.
+    {
+        conn = QSqlDatabase::database();
+        const QString fragile = "proj-fragile";
+        CHECK(db.createProject(fragile, "Fragile"), "fragile project created");
+        const QString orphanGuid = db.createAssetEntry(
+            "guid-orphan-reap", "orphan.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString orphanOid, oe;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, orphanGuid, "source", "orphan.png",
+                                   &orphanOid, &oe), "the future orphan has content");
+        CHECK(AssetCas::writePin(conn, fragile, orphanGuid, orphanOid), "pinned by the project");
+        CHECK(db.deleteAsset(orphanGuid) && !db.isAssetListed(orphanGuid),
+              "removed from the library while pinned (so it is unlisted)");
+
+        QSqlQuery dropFiles;
+        CHECK(dropFiles.exec("DROP TABLE asset_files"),
+              "asset_files dropped to make the reap's own delete fail");
+        CHECK(!db.deleteProject(fragile), "deleteProject reports FAILURE");
+        CHECK(countWhere("projects", "guid", fragile) == 1,
+              "... and the PROJECT row survived (the whole delete rolled back)");
+        CHECK(countWhere("project_assets", "asset_guid", orphanGuid) == 1,
+              "... the pin survived too");
+
+        db.createCasTables();
+        CHECK(db.checkIfTableExists("asset_files"), "asset_files restored");
+        CHECK(db.deleteProject(fragile), "the same delete succeeds once the table is back");
+        CHECK(countWhere("projects", "guid", fragile) == 0, "project deleted");
+        CHECK(countWhere("assets", "guid", orphanGuid) == 0,
+              "and the orphaned unlisted row was reaped this time");
+    }
+
+    // --- 13b. a ROLLED-BACK reap leaves the sidecar and the registry alone --
+    //
+    // The other half of the same defect (code review 2026-09-10). deleteAsset
+    // scrubs the asset's sidecar and its session registration as soon as its
+    // own statements succeed — but nested inside deleteProject's transaction
+    // "succeeded" is not "durable". With two orphans, the first reaped and the
+    // second failing, the rollback brought the first one's ROWS back while its
+    // sidecar was already deleted: rebuildCatalog would then have lost that
+    // asset for good, and the session had dropped it too. The scrubs are now
+    // deferred to the outer commit.
+    {
+        conn = QSqlDatabase::database();
+        // THE STORE ROOT HAS TO BE THIS ONE for the sidecar half to mean
+        // anything: sidecarBelongsHere/dropSidecar read the process-global
+        // AssetStorePaths::root(), so without the override they answer about
+        // the developer's real library and every sidecar assertion below would
+        // pass vacuously. Scoped to this case — the rest of the suite is
+        // deliberately root-agnostic.
+        AssetStorePaths::setRootOverride(storeRoot);
+        const QString shaky = "proj-shaky";
+        CHECK(db.createProject(shaky, "Shaky"), "shaky project created");
+
+        const QString firstGuid = db.createAssetEntry(
+            "guid-reap-first", "first.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        const QString secondGuid = db.createAssetEntry(
+            "guid-reap-second", "second.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString firstOid, secondOid, re;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, sharedSrc, firstGuid, "source", "first.png",
+                                   &firstOid, &re), "the first orphan has content");
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, secondGuid, "source", "second.png",
+                                   &secondOid, &re), "the second orphan has content");
+        CHECK(AssetCas::writeSidecar(conn, storeRoot, firstGuid, &re),
+              "the first orphan has a sidecar (the rebuild record)");
+        CHECK(AssetCas::writePin(conn, shaky, firstGuid, firstOid), "first pinned by the project");
+        CHECK(AssetCas::writePin(conn, shaky, secondGuid, secondOid), "second pinned too");
+        CHECK(db.deleteAsset(firstGuid) && !db.isAssetListed(firstGuid), "first unlisted");
+        CHECK(db.deleteAsset(secondGuid) && !db.isAssetListed(secondGuid), "second unlisted");
+
+        const QString sidecarPath = AssetStorePaths::sidecarPathIn(storeRoot, firstGuid);
+        CHECK(QFileInfo::exists(sidecarPath), "the sidecar file is on disk before the delete");
+
+        // The session registration of the first orphan — the other thing the
+        // scrub used to take before the rows were durable.
+        {
+            auto *asset = new AssetVariant;
+            asset->assetGuid = firstGuid;
+            asset->type = ModelTypes::Texture;
+            AssetManager::addAsset(asset);
+        }
+
+        // The SECOND reap fails, the first has already succeeded: a trigger
+        // that aborts exactly one row's delete, which is the shape a locked
+        // table or a constraint would take in the wild.
+        QSqlQuery trigger;
+        CHECK(trigger.exec("CREATE TRIGGER block_second BEFORE DELETE ON assets "
+                           "WHEN OLD.guid = 'guid-reap-second' "
+                           "BEGIN SELECT RAISE(ABORT, 'refused'); END"),
+              "a trigger that refuses the second reap");
+
+        CHECK(!db.deleteProject(shaky), "deleteProject reports FAILURE");
+        CHECK(countWhere("projects", "guid", shaky) == 1, "... the project row came back");
+        CHECK(countWhere("assets", "guid", firstGuid) == 1,
+              "... AND the first orphan's row came back");
+        CHECK(QFileInfo::exists(sidecarPath),
+              "THE FIX: its sidecar came back with it — the rebuild record still names it");
+        {
+            bool registered = false;
+            for (auto *asset : AssetManager::getAssets())
+                if (asset && asset->assetGuid == firstGuid) registered = true;
+            CHECK(registered, "... and the session registration was never dropped");
+        }
+
+        QSqlQuery dropTrigger;
+        CHECK(dropTrigger.exec("DROP TRIGGER block_second"), "the trigger is removed");
+        CHECK(db.deleteProject(shaky), "the same delete succeeds once it can run");
+        CHECK(countWhere("assets", "guid", firstGuid) == 0, "both orphans reaped this time");
+        CHECK(countWhere("assets", "guid", secondGuid) == 0, "... the second too");
+        CHECK(!QFileInfo::exists(sidecarPath),
+              "... and NOW the sidecar goes, because the delete is real");
+        {
+            bool registered = false;
+            for (auto *asset : AssetManager::getAssets())
+                if (asset && asset->assetGuid == firstGuid) registered = true;
+            CHECK(!registered, "... and the session registration goes with it");
+        }
+        AssetManager::clearAssetList();
+        AssetStorePaths::setRootOverride(QString());
+    }
+
+    // --- 14. .jaf archives carry library visibility -------------------------
+    //
+    // An archive of an UNLISTED asset must land unlisted where it arrives: the
+    // row the exporter had deleted from their library does not come back as a
+    // library tile on someone else's box. Written by the ASSET export writers
+    // (assetsTableSchema), read tolerantly — an archive from before the column
+    // existed has no opinion and imports listed.
+    {
+        conn = QSqlDatabase::database();
+        const QString travellerGuid = db.createAssetEntry(
+            "guid-traveller", "traveller.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString travellerOid, te;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, travellerGuid, "source",
+                                   "traveller.png", &travellerOid, &te),
+              "the travelling asset has content");
+        CHECK(AssetCas::writePin(conn, projectGuid, travellerGuid, travellerOid),
+              "pinned, so the library delete unlists it");
+        CHECK(db.deleteAsset(travellerGuid) && !db.isAssetListed(travellerGuid),
+              "the exported asset is UNLISTED");
+
+        const QString archive = scratchDir.filePath("traveller-asset.db");
+        CHECK(db.createBlobFromAsset(travellerGuid, archive), "asset archive written");
+
+        QMap<QString, QString> guidMap;
+        QVector<AssetRecord> imported;
+        const QString landedGuid = db.importAsset(ModelTypes::Texture, archive,
+                                                  QMap<QString, QString>(), guidMap, imported,
+                                                  AssetViewFilter::AssetsView, QString());
+        CHECK(!landedGuid.isEmpty(),
+              qPrintable(QStringLiteral("the archive imported -> %1").arg(landedGuid)));
+        CHECK(countWhere("assets", "guid", landedGuid) == 1, "... as a new row");
+        CHECK(!db.isAssetListed(landedGuid),
+              "... UNLISTED, exactly as it was when it was exported");
+
+        // And an archive from before the column: same file, column removed.
+        const QString oldArchive = scratchDir.filePath("traveller-old.db");
+        CHECK(QFile::copy(archive, oldArchive), "a second copy of the archive");
+        {
+            QSqlDatabase legacy = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "LegacyJaf");
+            legacy.setDatabaseName(oldArchive);
+            CHECK(legacy.open(), "the copy opened for surgery");
+            QSqlQuery drop(legacy);
+            CHECK(drop.exec("ALTER TABLE assets DROP COLUMN listed"),
+                  "the `listed` column removed (a pre-2026-09-10 archive)");
+            legacy.close();
+        }
+        QSqlDatabase::removeDatabase("LegacyJaf");
+
+        QMap<QString, QString> oldMap;
+        QVector<AssetRecord> oldImported;
+        const QString oldLanded = db.importAsset(ModelTypes::Texture, oldArchive,
+                                                 QMap<QString, QString>(), oldMap, oldImported,
+                                                 AssetViewFilter::AssetsView, QString());
+        CHECK(!oldLanded.isEmpty(),
+              qPrintable(QStringLiteral("the legacy archive imported -> %1").arg(oldLanded)));
+        CHECK(db.isAssetListed(oldLanded),
+              "... LISTED: an archive with no opinion about visibility has one made for it");
+    }
+
+    // --- 15. the project-side remove and the companion image material -------
+    //
+    // Adding an IMAGE to a project mints a companion PBR material for it and
+    // pins that too, so removing the image takes the companion with it (owner
+    // question, MASTER_QUEUE §26). The rule is IDENTITY, not shape: the first
+    // version of it matched "a Material whose only dependee is this texture",
+    // which is also exactly what a material the USER authored on that image
+    // looks like — and since the mint is skipped when any material already
+    // depends on the texture, theirs is precisely what would have been in the
+    // companion's place. Asserted here on all three shapes at once.
+    {
+        conn = QSqlDatabase::database();
+        AssetStorePaths::setRootOverride(storeRoot);
+        const QString imgProject = "proj-companion";
+        CHECK(db.createProject(imgProject, "Companion"), "companion project created");
+
+        // A REAL image: the material builder reads the pixels.
+        const QString pngPath = scratchDir.filePath("companion.png");
+        {
+            QImage image(8, 8, QImage::Format_RGB32);
+            image.fill(QColor(20, 120, 200));
+            CHECK(image.save(pngPath, "PNG"), "a real 8x8 PNG for the material builder");
+        }
+        const QString texGuid = db.createAssetEntry(
+            "guid-companion-tex", "companion.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString texOid, ce;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, pngPath, texGuid, "source", "companion.png",
+                                   &texOid, &ce), "the image is in the store");
+
+        // (1) the companion the app would mint
+        QString mintError;
+        const QString companion =
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, &mintError);
+        CHECK(!companion.isEmpty(),
+              qPrintable(QStringLiteral("the companion material was minted -> %1 %2")
+                             .arg(companion, mintError)));
+        CHECK(ImageMaterial::companionMaterials(texGuid) == QStringList{ companion },
+              "companionMaterials names exactly it (the mint's stamp)");
+
+        // (2) a material the USER authored on the same image: same type, same
+        // single dependency, no stamp.
+        const QString theirs = db.createAssetEntry(
+            "guid-user-material", "Their Material", static_cast<int>(ModelTypes::Material),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"),
+            AssetViewFilter::AssetsView);
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Material),
+                                  static_cast<int>(ModelTypes::Texture), theirs, texGuid,
+                                  QString()),
+              "their material depends on the same image");
+        CHECK(!ImageMaterial::companionMaterials(texGuid).contains(theirs),
+              "THE FIX: an unstamped material of the SAME SHAPE is not a companion");
+
+        // (3) a second stamped companion that an OBJECT depends on — applied
+        // to something in the project, so the project keeps it.
+        const QString applied =
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, nullptr);
+        CHECK(!applied.isEmpty() && applied != companion, "a second stamped material exists");
+        const QString userObject = db.createAssetEntry(
+            "guid-companion-object", "thing.obj", static_cast<int>(ModelTypes::Object),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Object),
+                                  static_cast<int>(ModelTypes::Material), userObject, applied,
+                                  QString()),
+              "an object in the project uses that one");
+
+        for (const QString &member : { texGuid, companion, theirs, applied })
+            CHECK(AssetCas::writePin(conn, imgProject, member, QString()),
+                  "pinned into the project");
+
+        const auto outcome = assetdelete::removeFromProject(&db, texGuid, imgProject);
+        CHECK(outcome.ok, qPrintable(QStringLiteral("removeFromProject ran: %1").arg(outcome.error)));
+        CHECK(!db.isAssetPinnedBy(imgProject, texGuid), "the image left the project");
+        CHECK(!db.isAssetPinnedBy(imgProject, companion),
+              "... and its auto-minted companion went with it");
+        CHECK(db.isAssetPinnedBy(imgProject, theirs),
+              "THE FIX: the user's own material KEPT its pin");
+        CHECK(db.isAssetPinnedBy(imgProject, applied),
+              "... and so did the companion an object depends on");
+        CHECK(db.isAssetListed(companion) && !db.fetchAsset(companion).guid.isEmpty(),
+              "the companion's LIBRARY row is untouched — this is a project-side remove");
+        CHECK(!db.fetchAsset(texGuid).guid.isEmpty() && db.isAssetListed(texGuid),
+              "... and so is the image's");
+        AssetStorePaths::setRootOverride(QString());
     }
 
     // --- 7. wipeDatabase clears the CAS catalog too (DESTRUCTIVE — last) ----

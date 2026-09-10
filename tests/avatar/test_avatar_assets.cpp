@@ -108,10 +108,18 @@ int main(int argc, char **argv)
 
     // Two projects: the second exists only to prove the isolation claims —
     // "other projects are unaffected" is the whole point of the model.
+    // Both need a REAL projects row: since 2026-09-10 a pin whose project does
+    // not exist is a DEAD pin that counts for nothing (Database::
+    // countAssetPins JOINs projects), so a project that is only a guid in a
+    // Project object would make R6's library delete a real delete.
     Project projectA;
     projectA.setProjectGuid(GUIDManager::generateGUID());
+    CHECK(db.createProject(projectA.getProjectGuid(), "Avatar Fixture A"),
+          "fixture project A row created");
     Project projectB;
     projectB.setProjectGuid(GUIDManager::generateGUID());
+    CHECK(db.createProject(projectB.getProjectGuid(), "Avatar Fixture B"),
+          "fixture project B row created");
 
     // ---- T3: create from a rigged Object ---------------------------------
     QString avatarGuid;
