@@ -109,7 +109,20 @@ protected:
         if (!engineScene()) { std::printf("FAIL: configureMirror ran with no Scene\n"); ++failures; }
         m->setSource(mDocument);
     }
-    void configureView(View *v) override { ++views; v->setShadows(false); }
+    void configureView(View *v) override
+    {
+        ++views;
+        // THE ORDER INSIDE attach(): the Scene is bound to the View BEFORE this
+        // hook runs, which is what makes "shadows, mostly" a legal thing to set
+        // here. A reorder that called configureView first would leave every
+        // subclass configuring a View with no Scene on it, and nothing else in
+        // this suite would notice.
+        if (v->scene() != engineScene()) {
+            std::printf("FAIL: configureView ran BEFORE the Scene was bound to the View\n");
+            ++failures;
+        }
+        v->setShadows(false);
+    }
     void releaseSubject(bool sceneAlive) override
     {
         ++releases;
