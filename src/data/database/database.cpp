@@ -1917,7 +1917,8 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
+            "FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -1942,6 +1943,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
                 data.asset = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail = selectAssetQuery.value(16).toByteArray();
                 data.view_filter = selectAssetQuery.value(17).toInt();
+                data.listed = selectAssetQuery.value(18).toBool();
                 assetList.push_back(data);
             }
         }
@@ -1955,9 +1957,9 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -1988,6 +1990,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -2392,7 +2395,8 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
+            "FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -2417,6 +2421,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
                 data.asset          = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail      = selectAssetQuery.value(16).toByteArray();
                 data.view_filter	= selectAssetQuery.value(17).toInt();
+                data.listed         = selectAssetQuery.value(18).toBool();
                 assetList.push_back(data);
             }
         }
@@ -2430,9 +2435,9 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -2465,6 +2470,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -2562,7 +2568,8 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed "
+            "FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -2587,6 +2594,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
                 data.asset = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail = selectAssetQuery.value(16).toByteArray();
                 data.view_filter = selectAssetQuery.value(17).toInt();
+                data.listed = selectAssetQuery.value(18).toBool();
                 assetList.push_back(data);
             }
         }
@@ -2600,9 +2608,9 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -2624,6 +2632,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertExportAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -2755,6 +2764,13 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
 
     executeAndCheckQuery(query3, "insertSceneGlobal");
 
+    // NO `listed` COLUMN HERE, deliberately (lead call 2026-09-10). This is
+    // the PROJECT archive: importProject re-homes every row it carries into
+    // the newly created project (project_guid = the new scene guid,
+    // view_filter = Editor), so the rows are project members and never
+    // library tiles — there is no library visibility for them to carry. The
+    // ASSET archives (createExportBundle / createBlobFromNode /
+    // createBlobFromAsset, on assetsTableSchema) do carry it.
     QString createAssetsTableSchema =
         "CREATE TABLE IF NOT EXISTS assets ("
         "    guid              VARCHAR(32),"
@@ -3679,6 +3695,20 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     return tx.commit();
 }
 
+// Does a table in THIS connection carry the column? (Database::
+// checkIfColumnExists asks the main library; a .jaf archive is a different
+// connection.) An archive written before a column existed must still import.
+static bool connectionHasColumn(const QSqlDatabase &conn, const QString &table,
+                                const QString &column)
+{
+    QSqlQuery query(conn);
+    // PRAGMA takes no bound parameters; the table names here are literals.
+    if (!query.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table))) return false;
+    while (query.next())
+        if (query.value(1).toString().compare(column, Qt::CaseInsensitive) == 0) return true;
+    return false;
+}
+
 QString Database::importAsset(
 	const ModelTypes &jafType,
 	const QString & pathToDb,
@@ -3705,11 +3735,18 @@ QString Database::importAsset(
 	// Whole .jaf import lands in one transaction on the main library (phase 0).
 	DbTransaction tx(db);
 
+	// LIBRARY VISIBILITY TRAVELS WITH THE ARCHIVE (lead call 2026-09-10): an
+	// export of an UNLISTED asset lands unlisted where it arrives — the row a
+	// user deleted from their library does not come back as a library tile on
+	// someone else's box just because it rode along in a .jaf. Archives
+	// written before the column existed have no opinion and import listed.
+	const bool archiveHasListed = connectionHasColumn(importConnection, "assets", "listed");
+
 	QSqlQuery selectAssetQuery(importConnection);
 	selectAssetQuery.prepare(
-		"SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-		"author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
-	);
+		QStringLiteral("SELECT guid, type, name, collection, times_used, project_guid, date_created, "
+		               "last_updated, author, license, hash, version, parent, tags, properties, asset, "
+		               "thumbnail%1 FROM assets").arg(archiveHasListed ? ", listed" : ""));
 	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
 	QMap<QString, QString> assetGuids; /* old x new guid */
@@ -3766,6 +3803,7 @@ QString Database::importAsset(
 			data.asset = record.value(15).toByteArray();
 			data.thumbnail = record.value(16).toByteArray();
 			data.view_filter = view_filter_to;
+			data.listed = archiveHasListed ? record.value(17).toBool() : true;
 		}
 
 		assetsToImport.push_back(data);
@@ -3819,9 +3857,9 @@ QString Database::importAsset(
 		insertAssetQuery.prepare(
 			"INSERT INTO assets"
 			" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-			" license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+			" license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
 			" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
 		);
 
         if (jafType == ModelTypes::Texture) {
@@ -3846,6 +3884,7 @@ QString Database::importAsset(
 		insertAssetQuery.bindValue(":asset", asset.asset);
 		insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
 		insertAssetQuery.bindValue(":view_filter", asset.view_filter);
+		insertAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
 		executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
 	}
@@ -3891,11 +3930,15 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     // Whole bundle import lands in one transaction on the main library (phase 0).
     DbTransaction tx(db);
 
+    // See importAsset: library visibility travels with the archive, and an
+    // archive that predates the column imports listed.
+    const bool archiveHasListed = connectionHasColumn(importConnection, "assets", "listed");
+
     QSqlQuery selectAssetQuery(importConnection);
     selectAssetQuery.prepare(
-        "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-        "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets"
-    );
+        QStringLiteral("SELECT guid, type, name, collection, times_used, project_guid, date_created, "
+                       "last_updated, author, license, hash, version, parent, tags, properties, asset, "
+                       "thumbnail, view_filter%1 FROM assets").arg(archiveHasListed ? ", listed" : ""));
     executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
     QMap<QString, QString> assetGuids; /* old x new guid */
@@ -3952,6 +3995,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             data.asset = record.value(15).toByteArray();
             data.thumbnail = record.value(16).toByteArray();
             data.view_filter = record.value(17).toInt();
+            data.listed = archiveHasListed ? record.value(18).toBool() : true;
         }
 
         assetsToImport.push_back(data);
@@ -4003,9 +4047,9 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         insertAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, listed)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
 
         //if (jafType == ModelTypes::Texture) {
@@ -4030,6 +4074,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         insertAssetQuery.bindValue(":asset", asset.asset);
         insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertAssetQuery.bindValue(":view_filter", asset.view_filter);
+        insertAssetQuery.bindValue(":listed", asset.listed ? 1 : 0);
 
         executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
     }

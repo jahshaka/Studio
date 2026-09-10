@@ -45,6 +45,9 @@
 //  13. deleteProject ROLLS BACK when an orphan reap fails (it used to drop
 //      the result and commit, leaving the project gone and an invisible,
 //      unpinned, undeletable row behind).
+//  14. .jaf archives carry `listed`: an export of an UNLISTED asset imports
+//      unlisted, and an archive written before the column existed imports
+//      listed.
 //
 // Framework-free; non-zero exit on failure. Runs under QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
@@ -650,6 +653,67 @@ int main(int argc, char **argv)
         CHECK(countWhere("projects", "guid", fragile) == 0, "project deleted");
         CHECK(countWhere("assets", "guid", orphanGuid) == 0,
               "and the orphaned unlisted row was reaped this time");
+    }
+
+    // --- 14. .jaf archives carry library visibility -------------------------
+    //
+    // An archive of an UNLISTED asset must land unlisted where it arrives: the
+    // row the exporter had deleted from their library does not come back as a
+    // library tile on someone else's box. Written by the ASSET export writers
+    // (assetsTableSchema), read tolerantly — an archive from before the column
+    // existed has no opinion and imports listed.
+    {
+        conn = QSqlDatabase::database();
+        const QString travellerGuid = db.createAssetEntry(
+            "guid-traveller", "traveller.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString travellerOid, te;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, travellerGuid, "source",
+                                   "traveller.png", &travellerOid, &te),
+              "the travelling asset has content");
+        CHECK(AssetCas::writePin(conn, projectGuid, travellerGuid, travellerOid),
+              "pinned, so the library delete unlists it");
+        CHECK(db.deleteAsset(travellerGuid) && !db.isAssetListed(travellerGuid),
+              "the exported asset is UNLISTED");
+
+        const QString archive = scratchDir.filePath("traveller-asset.db");
+        CHECK(db.createBlobFromAsset(travellerGuid, archive), "asset archive written");
+
+        QMap<QString, QString> guidMap;
+        QVector<AssetRecord> imported;
+        const QString landedGuid = db.importAsset(ModelTypes::Texture, archive,
+                                                  QMap<QString, QString>(), guidMap, imported,
+                                                  AssetViewFilter::AssetsView, QString());
+        CHECK(!landedGuid.isEmpty(),
+              qPrintable(QStringLiteral("the archive imported -> %1").arg(landedGuid)));
+        CHECK(countWhere("assets", "guid", landedGuid) == 1, "... as a new row");
+        CHECK(!db.isAssetListed(landedGuid),
+              "... UNLISTED, exactly as it was when it was exported");
+
+        // And an archive from before the column: same file, column removed.
+        const QString oldArchive = scratchDir.filePath("traveller-old.db");
+        CHECK(QFile::copy(archive, oldArchive), "a second copy of the archive");
+        {
+            QSqlDatabase legacy = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "LegacyJaf");
+            legacy.setDatabaseName(oldArchive);
+            CHECK(legacy.open(), "the copy opened for surgery");
+            QSqlQuery drop(legacy);
+            CHECK(drop.exec("ALTER TABLE assets DROP COLUMN listed"),
+                  "the `listed` column removed (a pre-2026-09-10 archive)");
+            legacy.close();
+        }
+        QSqlDatabase::removeDatabase("LegacyJaf");
+
+        QMap<QString, QString> oldMap;
+        QVector<AssetRecord> oldImported;
+        const QString oldLanded = db.importAsset(ModelTypes::Texture, oldArchive,
+                                                 QMap<QString, QString>(), oldMap, oldImported,
+                                                 AssetViewFilter::AssetsView, QString());
+        CHECK(!oldLanded.isEmpty(),
+              qPrintable(QStringLiteral("the legacy archive imported -> %1").arg(oldLanded)));
+        CHECK(db.isAssetListed(oldLanded),
+              "... LISTED: an archive with no opinion about visibility has one made for it");
     }
 
     // --- 7. wipeDatabase clears the CAS catalog too (DESTRUCTIVE — last) ----
