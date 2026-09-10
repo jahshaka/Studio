@@ -5,7 +5,6 @@ set_target_properties(test_scene_picker PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTOR
 target_include_directories(test_scene_picker PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_scene_picker PRIVATE JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_scene_picker PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
@@ -31,7 +30,6 @@ set_target_properties(test_pick_fov_cap PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTOR
 target_include_directories(test_pick_fov_cap PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_pick_fov_cap PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")

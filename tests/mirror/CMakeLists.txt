@@ -14,7 +14,6 @@ set_target_properties(test_scene_mirror PROPERTIES
 target_include_directories(test_scene_mirror PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_scene_mirror PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
@@ -37,7 +36,6 @@ set_target_properties(test_skinned_outline PROPERTIES
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_skinned_outline PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_skinned_outline PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"

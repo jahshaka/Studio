@@ -16,7 +16,6 @@ set_target_properties(test_web_export PROPERTIES AUTOMOC OFF AUTORCC ON)
 target_include_directories(test_web_export PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_web_export PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_web_export PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
@@ -73,7 +72,6 @@ set_target_properties(test_export_walkers PROPERTIES AUTOMOC OFF)
 target_include_directories(test_export_walkers PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_export_walkers PRIVATE IrisGL Qt6::Gui)
 # This suite builds a DOCUMENT, and a document node is an engine node now

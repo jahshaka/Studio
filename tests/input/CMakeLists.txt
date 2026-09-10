@@ -44,8 +44,6 @@ target_include_directories(test_fly_controls PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_fly_controls PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
 # A camera node is an engine node (SCENEGRAPH_SPEC D2), so this boots the
@@ -79,8 +77,6 @@ target_include_directories(test_axis_view_lock PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_axis_view_lock PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
 jah_document_graph(test_axis_view_lock)

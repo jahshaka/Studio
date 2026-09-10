@@ -73,8 +73,8 @@ public:
     /// the two sessions hydrate identically.
     /// `prewarm` (optional) carries model files already parsed on another
     /// thread (irisgl/import/meshprewarm.h): an Object whose path is in there
-    /// builds its scene fragment from the ready aiScene instead of running
-    /// assimp on the calling thread. Null = the synchronous behaviour.
+    /// builds its scene fragment from the ready parse instead of parsing on
+    /// the calling thread. Null = the synchronous behaviour.
     static bool registerSessionAsset(const QString &guid, Database *db, Project *project,
                                      const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
 

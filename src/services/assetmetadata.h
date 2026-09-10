@@ -16,17 +16,17 @@ For more information see the LICENSE file
 #include <QString>
 
 class Database;
-struct aiScene;
+namespace iris { struct ModelSceneInfo; }
 
 // Rich per-type asset metadata (ASSET_DRAWERS_SPEC.md addendum).
 //
 // Lives inside the assets table's `properties` JSON under the "metadata" key
 // (beside the viewer's "camera" object for models). Computed at import time
-// from data the import already has (the assimp scene, the image header, the
-// wav header) and lazily backfilled for pre-existing library rows the first
+// from data the import already has (the parsed model scene, the image header,
+// the wav header) and lazily backfilled for pre-existing library rows the first
 // time they are inspected — assets.metadata(guid) or selecting the tile.
 //
-// Everything here is pure file/aiScene inspection: no GPU, no engine, no Qt
+// Everything here is pure file/scene inspection: no GPU, no engine, no Qt
 // widgets — safe to run on a QtConcurrent worker thread. Only ensure() talks
 // to the Database (call it from the thread that owns the connection).
 // EXCEPTION — video (ASSET_MEDIA_SPEC §1): the rich fields come from
@@ -58,12 +58,13 @@ struct aiScene;
 class AssetMetadata
 {
 public:
-    // Model stats from an assimp scene an import already loaded (iris loads
-    // triangulated, so aiMesh faces are triangles).
-    static QJsonObject forModelScene(const aiScene *scene, const QString &sourceFile);
+    // Model stats from the facts of a scene an import already parsed
+    // (iris::ModelSceneInfo::fromSource — the canonical parse triangulates,
+    // so its face count is the triangle count).
+    static QJsonObject forModelScene(const iris::ModelSceneInfo &scene, const QString &sourceFile);
 
-    // Backfill path: loads the model with a private Assimp importer
-    // (triangulate only — assimp-light, no GPU, no iris document).
+    // Backfill path: one canonical parse of the file (iris::ModelSceneInfo::read
+    // — no GPU, no iris document).
     static QJsonObject forModelFile(const QString &filePath);
 
     static QJsonObject forImageFile(const QString &filePath);   // header-only decode
@@ -80,7 +81,7 @@ public:
     /// names the channels DRIVE and the `rigId` hashed over them — the same
     /// hash the model side computes over its bone names, so "does this clip
     /// fit that rig" is a string compare between two rows. Read by
-    /// animfile::read (one assimp parse, ClipNamesOnly).
+    /// animfile::read (one parse, names and numbers only).
     static QJsonObject forAnimationFile(const QString &filePath);
 
     /// The avatar DEFINITION block (AVATAR_ASSET_SPEC §3.1): what the tile and

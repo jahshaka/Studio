@@ -56,8 +56,6 @@ target_include_directories(test_material_panel PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_material_panel PRIVATE IrisGL Qt6::Widgets Qt6::Test Qt6::Sql)
 add_test(NAME ui.material_panel COMMAND test_material_panel
@@ -81,8 +79,6 @@ target_include_directories(test_property_anim PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_property_anim PRIVATE IrisGL Qt6::Test)
 add_test(NAME ui.property_anim COMMAND test_property_anim
@@ -116,8 +112,6 @@ target_include_directories(test_media_lazy PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_media_lazy
     PRIVATE IrisGL Qt6::Widgets Qt6::Multimedia Qt6::Test)
@@ -267,8 +261,6 @@ target_include_directories(test_rayon_panel PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_rayon_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 # A document node is an engine node (SCENEGRAPH_SPEC D2): the headless graph.
@@ -378,8 +370,6 @@ target_include_directories(test_selection_cost PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_selection_cost
     PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
@@ -491,8 +481,6 @@ target_include_directories(test_properties_width PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_properties_width
     PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
@@ -597,8 +585,6 @@ target_include_directories(test_tree_multiselect PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_tree_multiselect
     PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)

@@ -33,7 +33,6 @@ For more information see the LICENSE file
 #include "irisgl/import/meshprewarm.h"
 
 class EditorData;
-class aiScene;
 
 class Database;	// this is a temp way to get this working, remove later
 
@@ -62,8 +61,8 @@ public:
 	}
 
 	/// Model files already parsed on another thread (irisgl/import/meshprewarm.h).
-	/// When a mesh source is in here the reader consumes the prewarmed aiScene
-	/// instead of calling assimp — the whole point of the threaded open. Null
+	/// When a mesh source is in here the reader consumes the prewarmed parse
+	/// instead of parsing again — the whole point of the threaded open. Null
 	/// (the default) keeps the synchronous behaviour exactly.
 	void setPrewarm(const iris::MeshPrewarmPtr &prewarm) { this->prewarm = prewarm; }
 

@@ -53,8 +53,6 @@ set_target_properties(bench_scenegraph PROPERTIES
 target_include_directories(bench_scenegraph PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(bench_scenegraph PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -104,8 +102,6 @@ set_target_properties(bench_rigperf PROPERTIES
 target_include_directories(bench_rigperf PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(bench_rigperf PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"

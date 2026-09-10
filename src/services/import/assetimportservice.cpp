@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
-#include "assimp/version.h"
+#include "irisgl/import/modelsceneinfo.h"
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -249,7 +249,7 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
     result.warnings = staged.warnings;
 
     // The determinism record (spec §3.2.2): content + settings + importer
-    // version + assimp version. Recorded on the row; assets.importSettings
+    // version + the import library's version. Recorded on the row; assets.importSettings
     // reads it back and assets.checkConsistency re-derives the object set.
     staged.importRecord = QJsonObject{
         // An importer that already hashed the source (MeshImporter, which keys
@@ -259,8 +259,7 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
                                                   : staged.sourceOid },
         { "importer", importer->name() },
         { "importerVersion", importer->version() },
-        { "assimp", QStringLiteral("%1.%2.%3").arg(aiGetVersionMajor())
-                        .arg(aiGetVersionMinor()).arg(aiGetVersionRevision()) },
+        { "assimp", iris::ModelSceneInfo::importerVersion() },
         { "settings", request.settings },
     };
 

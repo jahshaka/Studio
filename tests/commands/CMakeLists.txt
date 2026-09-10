@@ -29,9 +29,7 @@ target_include_directories(test_structural_undo PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    # iris headers expose assimp and bullet types; these are IrisGL's own include paths
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    # iris headers expose bullet types; this is IrisGL's own include path
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_structural_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql)
 # A document node IS an engine node (SCENEGRAPH_SPEC D2), so even this suite

@@ -39,7 +39,6 @@ target_include_directories(test_importer_glb PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_importer_glb PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -47,6 +46,7 @@ target_compile_definitions(test_importer_glb PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_importer_glb PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
+jah_links_assimp(test_importer_glb)
 # This suite builds a DOCUMENT, and a document node is an engine node now
 # (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
 # system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
@@ -61,8 +61,12 @@ jah_no_display(importer.glb)
 
 # FBX importer regression suite (assimp-patches/0001): a skin cluster that
 # references a control point no polygon uses must not abort the importer.
-# Pure assimp + the canonical preset — no Qt, no display, no engine.
-add_executable(test_importer_fbx test_importer_fbx.cpp)
+# Pure assimp + the canonical preset — no Qt, no display, no engine. The
+# preset's VALUES live in irisgl/import/importflags.cpp (IrisGL-private; the
+# public header is opaque ints), compiled in here so the suite stays free of
+# libIrisGL and still asserts the one definition.
+add_executable(test_importer_fbx test_importer_fbx.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/import/importflags.cpp)
 set_target_properties(test_importer_fbx PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_importer_fbx PRIVATE
@@ -123,7 +127,6 @@ target_include_directories(test_importer_meshformats PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_importer_meshformats PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -131,6 +134,7 @@ target_compile_definitions(test_importer_meshformats PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_importer_meshformats PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
+jah_links_assimp(test_importer_meshformats)
 add_dependencies(test_importer_meshformats JahshakaEngineMedia)
 add_test(NAME importer.meshformats COMMAND test_importer_meshformats
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -177,7 +181,6 @@ target_include_directories(test_importer_security PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_importer_security PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -235,7 +238,6 @@ target_include_directories(test_importer_animation PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_importer_animation PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -295,7 +297,6 @@ target_include_directories(test_importer_materials PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_importer_materials PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -350,7 +351,6 @@ target_include_directories(test_importer_texture_guids PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_importer_texture_guids PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -408,7 +408,6 @@ target_include_directories(test_importer_fitsize PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_importer_fitsize PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

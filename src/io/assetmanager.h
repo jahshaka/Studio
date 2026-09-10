@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include <QPixmap>
 
 #include "irisgl/irisglfwd.h"
-#include "irisgl/import/graphicshelper.h"   // AssimpObject
 
 #include "data/project.h"
 
@@ -25,10 +24,6 @@ For more information see the LICENSE file
 // asset. PBR materials only exist behind the Material base (PbrMaterial is not
 // a CustomMaterial), so the variant payload is the base pointer.
 Q_DECLARE_METATYPE(iris::MaterialPtr)
-
-// (No `class aiScene;` here: nothing in this header names the type — the model
-// payload is AssimpObject, declared by graphicshelper.h above, which carries
-// its own forward declaration. ENGINEERING_DEBT_SPEC item 5, shape 3.)
 
 struct Asset {
     ModelTypes          type;
@@ -65,32 +60,6 @@ struct AssetVariant : public Asset
 
     virtual void setValue(QVariant val) {
         Q_UNUSED(val);
-    }
-};
-
-// note that this class is not able to be used for queued signal-slot connections
-// not needed at the moment nor should it be in the foreseeable future
-struct AssetObject : public Asset
-{
-    // this is a metatype so we can use aiScene's in variants
-    AssimpObject *ao;
-
-    AssetObject(AssimpObject *a, QString p, QString f) : ao(a) {
-        type = ModelTypes::Object;
-        path = p;
-        fileName = f;
-        deletable = true;
-    }
-
-    virtual QVariant getValue() override {
-        QVariant v;
-        v.setValue(ao);
-        return v;
-    }
-
-    virtual void setValue(QVariant value) {
-        // look into getting rid of the ptr
-        // ao = value.value<AssimpObject*>();
     }
 };
 

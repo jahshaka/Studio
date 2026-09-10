@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/assetmetadata.h"
+#include "irisgl/import/modelsceneinfo.h"
 #include <QSqlDatabase>
 
 // Thanks to Qt not allowing updating its json values and instead returning temp objects
@@ -216,7 +217,7 @@ ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
     return ModelTypes::Undefined;
 }
 
-// One full assimp parse per call — the import suites assert the completion
+// One full parse per call — the import suites assert the completion
 // tail never adds a second one on top of the pipeline's convert.
 static QAtomicInt sMeshParseCount;
 
@@ -235,9 +236,9 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     iris::SceneSource *keepScene)
 {
     sMeshParseCount.fetchAndAddRelaxed(1);
-    // Owns the assimp importer (and with it the aiScene) for the duration of
+    // Owns the parse (the importer and with it the scene) for the duration of
     // this function only — it used to be `new` with no delete, leaking the
-    // entire parsed scene per import. A caller that needs the aiScene AFTER
+    // entire parsed scene per import. A caller that needs the parse AFTER
     // the call (the mesh bake) passes its own SceneSource instead.
     QScopedPointer<iris::SceneSource> localSource;
     iris::SceneSource *ssource = keepScene;
@@ -274,7 +275,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         // No pbrMetallicRoughness in the source: the legacy Blinn fields go
         // through the shared conversion (io/builtinmaterials.h) instead of the
         // Default.shader CustomMaterial this used to build. An embedded diffuse
-        // texture still neutralises the colour — assimp reports a tint AND the
+        // texture still neutralises the colour — the importer reports a tint AND the
         // baked texture, and multiplying them darkened every embedded-texture
         // import.
         if (data.hasEmbeddedDiffTexture && !data.diffuseTexture.isEmpty()) {
@@ -284,12 +285,11 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
     }, ssource, nullptr, extractDir);
 
-    const aiScene *scene = ssource->importer.GetScene();
-
     // Import-time metadata (ASSET_DRAWERS_SPEC addendum): count from the
-    // scene assimp just loaded — no second parse of the file, ever.
-    if (modelStats && scene)
-        *modelStats = AssetMetadata::forModelScene(scene, filePath);
+    // scene just parsed — no second parse of the file, ever.
+    if (modelStats && ssource->hasScene())
+        *modelStats = AssetMetadata::forModelScene(iris::ModelSceneInfo::fromSource(*ssource),
+                                                   filePath);
 
     QStringList texturesToCopy;
 
@@ -327,7 +327,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         }
     };
 
-    // assimp may have failed (e.g. a Draco-compressed glb — Draco is not
+    // The parse may have failed (e.g. a Draco-compressed glb — Draco is not
     // compiled in): return the null node and let the caller surface the error.
     if (node) getUsedTexture(node);
 

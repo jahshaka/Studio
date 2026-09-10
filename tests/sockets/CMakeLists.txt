@@ -27,7 +27,6 @@ set_target_properties(test_sockets_document PROPERTIES AUTOMOC OFF AUTOUIC OFF A
 target_include_directories(test_sockets_document PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_sockets_document PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
 # This suite builds a DOCUMENT, and a document node is an engine node now
@@ -51,7 +50,6 @@ set_target_properties(test_socket_render PROPERTIES
 target_include_directories(test_socket_render PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_socket_render PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -97,7 +95,6 @@ set_target_properties(test_socket_tags PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORC
 target_include_directories(test_socket_tags PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_socket_tags PRIVATE IrisGL Qt6::Gui)
 jah_document_graph(test_socket_tags)

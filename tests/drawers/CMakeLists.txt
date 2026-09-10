@@ -28,7 +28,6 @@ target_include_directories(test_drawers_db PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_drawers_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 add_test(NAME drawers.db COMMAND test_drawers_db

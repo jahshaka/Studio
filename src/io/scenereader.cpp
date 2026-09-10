@@ -1736,12 +1736,12 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
 
         // The threaded open parses these on a worker BEFORE the reader runs
         // (irisgl/import/meshprewarm.h): consume that and this whole stage is
-        // a copy out of an aiScene instead of an assimp parse.
+        // a copy out of a parsed scene instead of a parse.
         if (prewarm) {
-            if (const aiScene *ready = prewarm->scene(filePath)) {
+            if (const iris::SceneSource *ready = prewarm->source(filePath)) {
                 LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sceneReaderHit"));
-                meshList = iris::GraphicsHelper::loadAllMeshesFromAssimpScene(ready);
-                animationss = iris::Mesh::extractAnimations(ready, filePath);
+                iris::GraphicsHelper::loadAllMeshesAndAnimationsFromSource(*ready, filePath,
+                                                                          meshList, animationss);
                 meshes.insert(filePath, meshList);
                 assimpScenes.insert(filePath);
                 animations.insert(filePath, animationss);
@@ -1749,20 +1749,15 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
             }
         }
 
-        // ONE assimp parse per distinct file per open — and it IS a parse:
-        // the pipeline removed the up-front preloader, and nothing caches a
-        // baked form, so every open re-parses every model from the store
-        // (the recorded import-time-bake debt; measured by this counter).
+        // ONE parse per distinct file per open — and it IS a parse: no bake
+        // and no prewarm served this file, so it is read from the store
+        // (measured by this counter; the ledger key keeps its historical
+        // name). The session store used to be searched for an already
+        // parsed scene first, but nothing has registered one there since the
+        // asset pipeline — every Object entry is a built fragment — so the
+        // search always fell through to this read.
         LoadTimeline::Accumulate parse(QStringLiteral("assimp:sceneReader"));
-        if (useAlternativeLocation) {
-		    iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
-        }
-        else {
-            iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::getAssets(),
-                filePath,
-                meshList,
-                animationss);
-        }
+        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
 
         meshes.insert(filePath, meshList);
         assimpScenes.insert(filePath);

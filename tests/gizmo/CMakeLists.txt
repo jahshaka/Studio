@@ -10,7 +10,6 @@ set_target_properties(test_gizmo_overlay PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTO
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_gizmo_overlay PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_gizmo_overlay PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
@@ -32,7 +31,6 @@ set_target_properties(test_gizmo_screen_size PROPERTIES AUTOMOC OFF AUTOUIC OFF 
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_screen_size PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_gizmo_screen_size PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
 jah_document_graph(test_gizmo_screen_size)
@@ -59,7 +57,6 @@ set_target_properties(test_gizmo_group PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORC
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_gizmo_group PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_gizmo_group PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
 jah_document_graph(test_gizmo_group)

@@ -29,7 +29,6 @@ target_include_directories(test_pbr_evaluator PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_pbr_evaluator PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME shadergraph.pbr_evaluator COMMAND test_pbr_evaluator WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -70,7 +69,6 @@ target_include_directories(test_node_regressions PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_node_regressions PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME shadergraph.node_regressions COMMAND test_node_regressions WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -111,7 +109,6 @@ target_include_directories(test_ao_removed PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_ao_removed PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME shadergraph.ao_removed COMMAND test_ao_removed WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -150,7 +147,6 @@ target_include_directories(test_baker_parity PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_baker_parity PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME shadergraph.baker_parity COMMAND test_baker_parity WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -189,7 +185,6 @@ target_include_directories(test_bake_output PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_bake_output PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME shadergraph.bake_output COMMAND test_bake_output WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -240,7 +235,6 @@ target_include_directories(test_panel_migration PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_panel_migration PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 add_test(NAME shadergraph.panel_migration COMMAND test_panel_migration WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -290,7 +284,6 @@ target_include_directories(test_selection PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_selection PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 add_test(NAME shadergraph.selection COMMAND test_selection WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -357,7 +350,6 @@ target_include_directories(resave_presets PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(resave_presets PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 

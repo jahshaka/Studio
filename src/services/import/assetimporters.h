@@ -117,7 +117,7 @@ public:
 ///
 /// Registered BEFORE MeshImporter: the two share every extension and the
 /// question that separates them is about the file's CONTENTS, so the animation
-/// sniff (animfile::shapeOf — structural, no assimp parse) has to be asked
+/// sniff (animfile::shapeOf — structural, no parse) has to be asked
 /// first. A file with meshes AND animations stays an Object, unchanged: it is
 /// scenery that happens to move, and its clips ride it.
 ///
