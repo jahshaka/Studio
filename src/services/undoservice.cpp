@@ -56,12 +56,16 @@ bool UndoService::endScriptMacro()
 
 void UndoService::undo()
 {
-    if (mStack->canUndo()) mStack->undo();
+    if (!mStack->canUndo()) return;
+    mStack->undo();
+    if (mStackMoved) mStackMoved();
 }
 
 void UndoService::redo()
 {
-    if (mStack->canRedo()) mStack->redo();
+    if (!mStack->canRedo()) return;
+    mStack->redo();
+    if (mStackMoved) mStackMoved();
 }
 
 void UndoService::clear()

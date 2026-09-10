@@ -17,6 +17,7 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 
 class IEditorViewport;
 class LightChannelsWidget;
@@ -34,6 +35,9 @@ public:
     /// can say whether a mesh is flat enough to BE a reflection plane, so the
     /// row has to be able to ask (and put itself back when the answer is no).
     void setSceneView(IEditorViewport *view) { sceneView = view; }
+    /// The undo stack (debt L6): the cull mode and the lighting channels are
+    /// reflected node properties, the reflector flag is a service call.
+    void setServices(StudioServices *s) { services = s; }
 
 protected slots:
     void onMeshPathChanged(const QString&);
@@ -43,6 +47,10 @@ protected slots:
 
 private:
     QSharedPointer<iris::MeshNode> meshNode;
+    StudioServices *services = nullptr;
+    /// Populating the rows for a newly selected mesh (see rowundo's guard).
+    bool loading = false;
+    panelundo::NodeRows rows;
     /// The Mesh Path row, never constructed — see the ctor for why the row is
     /// still off after the mirror learned to swap meshes. Initialised because
     /// an uninitialised member pointer is a crash waiting for the first reader.

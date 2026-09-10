@@ -16,10 +16,21 @@ For more information see the LICENSE file
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/lightchannelswidget.h"
 #include "services/planarreflectors.h"
+#include "commands/setnodepropertycommand.h"
+#include "services/services.h"
+#include "services/undoservice.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 
 #include <QMessageBox>
 
+// The three rows here are all node properties (debt L6): the cull mode and the
+// lighting channels are REFLECTED keys — `faceCullingMode` and `lightMask`, the
+// same keys node.setProperty / node.setLightMask write — and the reflector flag
+// goes through the planarreflectors service, which is what
+// node.setPlanarReflector calls. Each gesture is one undo step.
 MeshPropertyWidget::MeshPropertyWidget()
+    : rows([this]() { return iris::SceneNodePtr(meshNode); }, [this]() { return services; },
+           [this]() { return !loading; })
 {
     // MESH PATH ROW — deliberately still absent (deep audit 2026-09, area 5).
     //
@@ -46,7 +57,14 @@ MeshPropertyWidget::MeshPropertyWidget()
 	faceCullMode->addItem("Back");
 	faceCullMode->addItem("None");
 	faceCullMode->addItem("DefinedInMaterial");
-	connect(faceCullMode, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(onCullModeChanged(const QString&)));
+	// The combo row carries a NAME; the mapping onto the enum lives here.
+	rowundo::bind(faceCullMode, rows(QStringLiteral("faceCullingMode"), [this](const QVariant &row) {
+		const QString mode = faceCullMode->getWidget()->itemText(row.toInt());
+		if (mode == "Front") return QVariant(int(iris::FaceCullingMode::Front));
+		if (mode == "Back")  return QVariant(int(iris::FaceCullingMode::Back));
+		if (mode == "None")  return QVariant(int(iris::FaceCullingMode::None));
+		return QVariant(int(iris::FaceCullingMode::DefinedInMaterial));
+	}));
 
     // A TOP-LEVEL row, not a buried "Reflections" section: marking a flat
     // surface is the ONLY way a user gets a mirror, and an author cannot be
@@ -83,21 +101,25 @@ void MeshPropertyWidget::onMeshPathChanged(const QString &path)
 
 void MeshPropertyWidget::onCullModeChanged(const QString& cullMode)
 {
-	if (cullMode == "Front")
-		meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
-	else if (cullMode == "Back")
-		meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
-	else if (cullMode == "None")
-		meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
-	else
-		meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
+	Q_UNUSED(cullMode)   // the row is wired through rowundo (faceCullingMode)
 }
 
 void MeshPropertyWidget::onPlanarReflectorChanged(bool enabled)
 {
-    if (meshNode.isNull()) return;
+    if (loading || meshNode.isNull()) return;
     QString error;
-    if (!planarreflectors::set(meshNode, enabled, sceneView, &error)) {
+    if (planarreflectors::set(meshNode, enabled, sceneView, &error)) {
+        // Applied and accepted: record it. The undo replays the same service
+        // call (NodeEditCommand's contract) — the flag alone would skip the
+        // renderer-side registration the service performs.
+        auto node = meshNode;
+        IEditorViewport *view = sceneView;
+        panelundo::pushEdit(services, tr("Planar Reflector"),
+                            [node, enabled, view]() { planarreflectors::set(node, enabled, view); },
+                            [node, enabled, view]() { planarreflectors::set(node, !enabled, view); });
+        return;
+    }
+    {
         // The service already put the document flag back; the checkbox has to
         // follow, without re-entering this slot.
         planarReflector->blockSignals(true);
@@ -109,16 +131,23 @@ void MeshPropertyWidget::onPlanarReflectorChanged(bool enabled)
 
 void MeshPropertyWidget::onLightChannelsChanged(quint32 mask)
 {
-    if (meshNode.isNull()) return;
+    if (loading || meshNode.isNull()) return;
     // Straight to the document: the mirror pushes the mask onto the node's Item
-    // on the next sync, change-guarded like every other flag.
+    // on the next sync, change-guarded like every other flag. `lightMask` is a
+    // reflected key, so the step is the one node.setLightMask records.
+    const QVariant before = meshNode->getPropertyValue(QStringLiteral("lightMask"));
     meshNode->setLightMask(mask);
+    const QVariant after = meshNode->getPropertyValue(QStringLiteral("lightMask"));
+    if (before == after || !services || !services->undo) return;
+    services->undo->push(new SetNodePropertyCommand(meshNode, QStringLiteral("lightMask"),
+                                                    before, after));
 }
 
 void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+        loading = true;
         planarReflector->blockSignals(true);
         planarReflector->setValue(meshNode->getPlanarReflector());
         planarReflector->blockSignals(false);
@@ -142,6 +171,7 @@ void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 			faceCullMode->setCurrentItem("DefinedInMaterial");
 			break;
 		}
+		loading = false;
     } else {
         this->meshNode.clear();
     }

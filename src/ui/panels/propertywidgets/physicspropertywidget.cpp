@@ -26,6 +26,8 @@ For more information see the LICENSE file
 #include "BulletCollision/CollisionShapes/btShapeHull.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "ui/panels/propertywidgets/panelundo.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 
 using namespace iris;
 
@@ -62,11 +64,31 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     marginValue = this->addFloatValueSlider("Collision Margin", .01f, 1.f, .1f);
     bouncinessValue = this->addFloatValueSlider("Bounciness", 0.f, 1.f, .1f);
 
+    // isVisible is DELIBERATELY not undoable and not a document property: it is
+    // never serialized (node.physics refuses the key for the same reason), so
+    // an undo step for it would restore a value the next save drops anyway.
     connect(isVisible, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onVisibilityChanged);
-    connect(massValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMassChanged);
-    connect(marginValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMarginChanged);
-    connect(frictionValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onFrictionChanged);
-    connect(bouncinessValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onBouncinessChanged);
+
+    // The four body scalars: one undo step per drag, replaying the same struct
+    // write node.physics performs (debt L6 — these rows had no undo at all).
+    rowundo::bind(massValue, bodyRow(tr("Object Mass"),
+        [this]() { return sceneNode->physicsProperty.objectMass; },
+        [this](float v) {
+            sceneNode->physicsProperty.objectMass = v;
+            // A static body has mass 0 in Bullet, and mass 0 IS static — the
+            // derived flag the panel and the verb both keep true.
+            sceneNode->physicsProperty.isStatic =
+                sceneNode->physicsProperty.type == PhysicsType::Static || v == 0.0f;
+        }));
+    rowundo::bind(marginValue, bodyRow(tr("Collision Margin"),
+        [this]() { return sceneNode->physicsProperty.objectCollisionMargin; },
+        [this](float v) { sceneNode->physicsProperty.objectCollisionMargin = v; }));
+    rowundo::bind(frictionValue, bodyRow(tr("Object Friction"),
+        [this]() { return sceneNode->physicsProperty.objectFriction; },
+        [this](float v) { sceneNode->physicsProperty.objectFriction = v; }));
+    rowundo::bind(bouncinessValue, bodyRow(tr("Bounciness"),
+        [this]() { return sceneNode->physicsProperty.objectRestitution; },
+        [this](float v) { sceneNode->physicsProperty.objectRestitution = v; }));
     connect(physicsShapeSelector, static_cast<void (ComboBoxWidget::*)(int)>(&ComboBoxWidget::currentIndexChanged),
         this, &PhysicsPropertyWidget::onPhysicsShapeChanged);
     connect(physicsTypeSelector, static_cast<void (ComboBoxWidget::*)(int)>(&ComboBoxWidget::currentIndexChanged),
@@ -78,10 +100,65 @@ PhysicsPropertyWidget::~PhysicsPropertyWidget()
 
 }
 
+// A physics row writes a FIELD OF A STRUCT, not a reflected property, so the
+// undo step is the shape node.physics uses: capture the whole settings struct
+// (plus the isPhysicsBody flag, which the type row moves), apply, and replay.
+// Field-wise on the way back, never a struct assign — constraints, centre of
+// mass and pivot are outside these rows' scope and a whole-struct copy would
+// silently carry or drop them, exactly as nodeapi records.
+void PhysicsPropertyWidget::edit(const QString &text, const std::function<void()> &apply)
+{
+    if (!sceneNode || !apply) return;
+    auto node = sceneNode;
+    const iris::PhysicsProperty before = node->physicsProperty;
+    const bool wasBody = node->isPhysicsBody;
+    // The type row pushes the mass slider (a static body has mass 0), and a
+    // slider's setValue EMITS: without this the nested row would record a step
+    // of its own inside this one.
+    const bool wasLoading = loading;
+    loading = true;
+    apply();
+    loading = wasLoading;
+    const iris::PhysicsProperty after = node->physicsProperty;
+    const bool isBody = node->isPhysicsBody;
+    auto write = [](const iris::SceneNodePtr &n, const iris::PhysicsProperty &p, bool body) {
+        n->physicsProperty.type = p.type;
+        n->physicsProperty.shape = p.shape;
+        n->physicsProperty.objectMass = p.objectMass;
+        n->physicsProperty.objectRestitution = p.objectRestitution;
+        n->physicsProperty.objectFriction = p.objectFriction;
+        n->physicsProperty.objectDamping = p.objectDamping;
+        n->physicsProperty.objectCollisionMargin = p.objectCollisionMargin;
+        n->physicsProperty.isStatic = p.isStatic;
+        n->isPhysicsBody = body;
+    };
+    panelundo::pushEdit(services, text,
+                        [node, after, isBody, write]() { write(node, after, isBody); },
+                        [node, before, wasBody, write]() { write(node, before, wasBody); });
+}
+
+rowundo::Binding PhysicsPropertyWidget::bodyRow(const QString &text, std::function<float()> get,
+                                                std::function<void(float)> set)
+{
+    rowundo::Binding b;
+    b.guard = [this]() { return !loading && !!sceneNode; };
+    b.read = [this, get]() { return sceneNode ? QVariant(get()) : QVariant(); };
+    b.write = [this, set](const QVariant &v) { if (sceneNode) set(v.toFloat()); };
+    b.commit = [this, text, get, set](const QVariant &before, const QVariant &after) {
+        if (!sceneNode) return;
+        // The row has already written `after`; edit() re-applies it so the
+        // command carries both halves of the struct.
+        set(before.toFloat());
+        edit(text, [set, after]() { set(after.toFloat()); });
+    };
+    return b;
+}
+
 void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!!sceneNode) {
         this->sceneNode = sceneNode;
+        loading = true;
 
         auto disabledItems = QVector<int>();
         QStandardItemModel *model = qobject_cast<QStandardItemModel*>(physicsShapeSelector->getWidget()->model());
@@ -106,7 +183,7 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         
         physicsShapeSelector->setCurrentText(physicsShapes.value(static_cast<int>(sceneNode->physicsProperty.shape)));
         physicsTypeSelector->setCurrentText(physicsTypes.value(static_cast<int>(sceneNode->physicsProperty.type)));
-
+        loading = false;
     } else {
         this->sceneNode.clear();
     }
@@ -119,18 +196,13 @@ void PhysicsPropertyWidget::setSceneView(IEditorViewport *sceneView)
 
 void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
 {
-    currentBody = sceneView->getScene()->getPhysicsEnvironment()->hashBodies.value(sceneNode->getGUID());
+    if (loading || !sceneNode) return;
+    if (sceneView && sceneView->getScene())
+        currentBody = sceneView->getScene()->getPhysicsEnvironment()->hashBodies.value(sceneNode->getGUID());
 
     int shape = physicsShapeSelector->getItemData(index).toInt();
 
-    iris::PhysicsProperty physicsProperties;
-    physicsProperties.isStatic = (massValue->getValue() == 0) ? true : false;
-    physicsProperties.objectCollisionMargin = marginValue->getValue();
-    physicsProperties.objectMass = massValue->getValue();
-    physicsProperties.objectFriction = frictionValue->getValue();
-    physicsProperties.objectRestitution = bouncinessValue->getValue();
-    physicsProperties.shape = static_cast<iris::PhysicsCollisionShape>(shape);
-
+    edit(tr("Collision Shape"), [this, shape]() {
     this->sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(shape);
 
     // Can I change shape of a rigid body after it created in Bullet3D?
@@ -146,12 +218,15 @@ void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
     //}
 
     this->sceneNode->isPhysicsBody = true;
+    });
 }
 
 void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
 {
+    if (loading || !sceneNode) return;
     int type = physicsTypeSelector->getItemData(index).toInt();
 
+    edit(tr("Physics Type"), [this, type]() {
     float mass = 0.0;
 
     iris::PhysicsProperty physicsProperties;
@@ -190,30 +265,11 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     //    qWarning("Failed to create a rigid body from object");
     //    return;
     //};
-
+    });
 }
 
 void PhysicsPropertyWidget::onVisibilityChanged(bool value)
 {
-    if (sceneNode) isVisible->setValue(sceneNode->physicsProperty.isVisible = value);
-}
-
-void PhysicsPropertyWidget::onMassChanged(float value)
-{
-    if (sceneNode) massValue->setValue(sceneNode->physicsProperty.objectMass = value);
-}
-
-void PhysicsPropertyWidget::onMarginChanged(float value)
-{
-    if (sceneNode) marginValue->setValue(sceneNode->physicsProperty.objectCollisionMargin = value);
-}
-
-void PhysicsPropertyWidget::onFrictionChanged(float value)
-{
-	if (sceneNode) frictionValue->setValue(sceneNode->physicsProperty.objectFriction = value);
-}
-
-void PhysicsPropertyWidget::onBouncinessChanged(float value)
-{
-    if (sceneNode) bouncinessValue->setValue(sceneNode->physicsProperty.objectRestitution = value);
+    // Not serialized, so not undoable — see the note where this is connected.
+    if (sceneNode) sceneNode->physicsProperty.isVisible = value;
 }

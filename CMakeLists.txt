@@ -321,8 +321,9 @@ set(SRCS
     src/ui/panels/propertywidgets/decalpropertywidget.cpp 
     src/ui/panels/propertywidgets/materialpropertywidget.cpp 
     src/ui/panels/propertywidgets/skypropertywidget.cpp 
-    src/ui/panels/propertywidgets/worldskypropertywidget.cpp
     src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    src/ui/panels/propertywidgets/rowundo.cpp
+    src/ui/panels/propertywidgets/panelundo.cpp
     src/ui/panels/propertywidgets/lookstackeditor.cpp
     src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
     src/ui/panels/propertywidgets/camerapostfxpropertywidget.cpp
@@ -342,7 +343,6 @@ set(SRCS
     src/io/scenereader.cpp 
     src/io/skyassetdefinition.cpp
     src/ui/panels/propertywidgets/emitterpropertywidget.cpp 
-    src/ui/panels/propertywidgets/nodepropertywidget.cpp
     src/ui/controls/labelwidget.cpp
     src/ui/controls/checkboxwidget.cpp 
     src/ui/controls/lightchannelswidget.cpp
@@ -381,6 +381,7 @@ set(SRCS
     src/commands/scenelookscommand.cpp
     src/commands/worldmodecommand.cpp
     src/commands/setnodepropertycommand.cpp
+    src/commands/scenepropertycommand.cpp
     src/commands/nodeeditcommand.cpp
     src/commands/animationcommands.cpp
     src/commands/structuralundo.cpp
@@ -575,8 +576,9 @@ set(HEADERS
     src/ui/panels/propertywidgets/lightpropertywidget.h 
     src/ui/panels/propertywidgets/decalpropertywidget.h 
     src/ui/panels/propertywidgets/materialpropertywidget.h 
-    src/ui/panels/propertywidgets/worldskypropertywidget.h
     src/ui/panels/propertywidgets/worldgipropertywidget.h 
+    src/ui/panels/propertywidgets/rowundo.h
+    src/ui/panels/propertywidgets/panelundo.h
     src/ui/panels/propertywidgets/lookstackeditor.h
     src/ui/panels/propertywidgets/worldpostfxpropertywidget.h
     src/ui/panels/propertywidgets/camerapostfxpropertywidget.h 
@@ -607,7 +609,6 @@ set(HEADERS
     src/viewport/keyboardstate.h 
     src/viewport/editordata.h 
     src/ui/panels/propertywidgets/emitterpropertywidget.h 
-    src/ui/panels/propertywidgets/nodepropertywidget.h
     src/ui/controls/labelwidget.h
     src/ui/controls/checkboxwidget.h 
     src/ui/controls/lightchannelswidget.h
@@ -646,6 +647,7 @@ set(HEADERS
     src/commands/sunlightlinkcommand.h
     src/commands/worldmodecommand.h
     src/commands/setnodepropertycommand.h
+    src/commands/scenepropertycommand.h
     src/commands/nodeeditcommand.h
     src/commands/structuralundo.h
     src/commands/staticstate.h

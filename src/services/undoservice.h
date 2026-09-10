@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include <QtGlobal>
 #include <QString>
 
+#include <functional>
+
 // UndoService — the undo spine (APP_ARCHITECTURE_AUDIT §3.3).
 //
 // Owns the app's QUndoStack policy: pushing commands, the script-macro guard
@@ -44,6 +46,16 @@ public:
     /// Undoes the last completed step if there is one (MainWindow::undo's guard).
     void undo();
     void redo();
+
+    /// Called after an undo or a redo actually moved the stack.
+    ///
+    /// Every properties row is undoable now (debt L6 / N5), and the rows ARE
+    /// the document's state on screen — so an undo has to repaint whatever is
+    /// selected. The panels cannot subscribe themselves (this service is
+    /// deliberately QObject-free and headless-safe), so the shell installs one
+    /// hook here rather than every command carrying a refresh of its own. Null
+    /// in headless hosts and tests, where nothing is on screen to repaint.
+    void setStackMovedHook(std::function<void()> hook) { mStackMoved = std::move(hook); }
     /// Clears the stack — unless a script run's macro is open (the guard that
     /// used to be UiManager::scriptMacroOpen + clearUndoStack).
     void clear();
@@ -122,6 +134,7 @@ private:
     quint64 mPushCount = 0;
     int  mSavedCount = 0;
     bool mContentRepaired = false;
+    std::function<void()> mStackMoved;
 };
 
 #endif // UNDOSERVICE_H

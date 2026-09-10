@@ -27,7 +27,8 @@ namespace lookstack
 {
 
 void build(AccordianBladeWidget *blade, const QJsonArray &raw,
-           const std::function<void(const QJsonArray &, bool)> &write)
+           const std::function<void(const QJsonArray &, bool)> &write,
+           const std::function<void()> &gestureEnd)
 {
     if (!blade || !write) return;
     const QJsonArray stack = iris::normalizeLookStack(raw);
@@ -123,6 +124,11 @@ void build(AccordianBladeWidget *blade, const QJsonArray &raw,
                                  // cursor. normalizeLookStack clamps it anyway.
                                  write(next, false);
                              });
+            // The end of the drag (or of a typed value): the caller turns the
+            // whole gesture into ONE undo step here.
+            if (gestureEnd)
+                QObject::connect(field, &DragFloatWidget::editingDone, blade,
+                                 [gestureEnd]() { gestureEnd(); });
         }
     }
 

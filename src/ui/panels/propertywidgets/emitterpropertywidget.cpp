@@ -25,10 +25,18 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 
 #include <QJsonObject>
+#include <QPointer>
 #include <QVariant>
+#include <QVector3D>
+
+#include "commands/setnodepropertycommand.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include <algorithm>
 
 #include "io/scenewriter.h"
+#include "ui/panels/propertywidgets/panelundo.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 
 namespace {
 
@@ -200,67 +208,97 @@ EmitterPropertyWidget::EmitterPropertyWidget()
     // node.setProperty makes. One code path, two front ends.
     connect(preset, SIGNAL(currentIndexChanged(QString)), SLOT(onPresetChanged(QString)));
     connect(billboardImage, SIGNAL(valueChanged(QString)), SLOT(onBillboardImageChanged(QString)));
-    // currentIndexChanged is OVERLOADED on ComboBoxWidget (int and QString), so
-    // the pointer-to-member form is ambiguous — qOverload picks the int one.
-    connect(shape, qOverload<int>(&ComboBoxWidget::currentIndexChanged), this, [this](int) {
-        set("shape", shape->getCurrentItemData());
-        updateShapeRows();
-    });
-    connect(orientation, qOverload<int>(&ComboBoxWidget::currentIndexChanged), this,
-            [this](int) { set("orientation", orientation->getCurrentItemData()); });
 
-    auto bindFloat = [this](HFloatSliderWidget *w, const char *field) {
-        connect(w, &HFloatSliderWidget::valueChanged, this,
-                [this, field](float v) { set(field, v); });
-    };
-    bindFloat(emissionRate,  "particlesPerSecond");
-    bindFloat(particleLife,  "lifeLength");
-    bindFloat(velocityFactor,"speed");
-    bindFloat(particleScale, "particleScale");
-    bindFloat(coneAngle,     "coneAngle");
-    bindFloat(gravityFactor, "gravityComplement");
-    bindFloat(turbulence,    "turbulence");
-    bindFloat(spinMin,       "rotationSpeedMin");
-    bindFloat(spinMax,       "rotationSpeedMax");
-    bindFloat(burstDuration, "burstDuration");
-    bindFloat(burstRepeat,   "burstRepeatDelay");
-    bindFloat(startDelay,    "startDelay");
-    // The three "Random ..." sliders are FRACTIONS of the mean; the node holds
-    // the absolute spread, and its setters do the conversion.
-    connect(lifeFactor, &HFloatSliderWidget::valueChanged, this, [this](float v) {
-        if (!mLoading && ps) ps->setLifeError(v);
-    });
-    connect(speedFactor, &HFloatSliderWidget::valueChanged, this, [this](float v) {
-        if (!mLoading && ps) ps->setSpeedError(v);
-    });
-    connect(quota, &HFloatSliderWidget::valueChanged, this,
-            [this](float v) { set("maxParticles", int(v)); });
+    // ONE UNDO STEP PER GESTURE (debt L6): rowundo brackets each drag and each
+    // typed value, and the write is still ParticleSystemNode::setPropertyValue
+    // — the exact call node.setProperty makes.
+    rowundo::bind(shape, row("shape", [this](const QVariant &r) {
+        return shape->getItemData(r.toInt());
+    }));
+    connect(shape, qOverload<int>(&ComboBoxWidget::currentIndexChanged), this,
+            [this](int) { updateShapeRows(); });   // the value is written above
+    rowundo::bind(orientation, row("orientation", [this](const QVariant &r) {
+        return orientation->getItemData(r.toInt());
+    }));
 
+    rowundo::bind(emissionRate,  row("particlesPerSecond"));
+    rowundo::bind(particleLife,  row("lifeLength"));
+    rowundo::bind(velocityFactor,row("speed"));
+    rowundo::bind(particleScale, row("particleScale"));
+    rowundo::bind(coneAngle,     row("coneAngle"));
+    rowundo::bind(gravityFactor, row("gravityComplement"));
+    rowundo::bind(turbulence,    row("turbulence"));
+    rowundo::bind(spinMin,       row("rotationSpeedMin"));
+    rowundo::bind(spinMax,       row("rotationSpeedMax"));
+    rowundo::bind(burstDuration, row("burstDuration"));
+    rowundo::bind(burstRepeat,   row("burstRepeatDelay"));
+    rowundo::bind(startDelay,    row("startDelay"));
+    rowundo::bind(quota,         row("maxParticles",
+                                     [](const QVariant &v) { return QVariant(int(v.toFloat())); }));
+
+    // The two "Random ..." rows are FRACTIONS of the mean; the node holds the
+    // absolute spread, and the reflected keys speak absolutes — the conversion
+    // is the setters' (setLifeError / setSpeedError), so the rows carry it.
+    {
+        rowundo::Binding b = row("lifeError");
+        b.read = [this]() { return ps ? QVariant(ps->lifeErrorFraction()) : QVariant(); };
+        b.write = [this](const QVariant &v) { if (ps) ps->setLifeError(v.toFloat()); };
+        b.commit = [this](const QVariant &before, const QVariant &after) {
+            if (!ps) return;
+            // Absolute, not the fraction: the command replays through the
+            // reflected key, which is what the verb writes.
+            const float wasAbsolute = ps->lifeError;
+            ps->setLifeError(before.toFloat());
+            const QVariant beforeAbsolute(ps->lifeError);
+            ps->setLifeError(after.toFloat());
+            Q_UNUSED(wasAbsolute)
+            if (services && services->undo)
+                services->undo->push(new SetNodePropertyCommand(
+                    ps, QStringLiteral("lifeError"), beforeAbsolute, QVariant(ps->lifeError)));
+        };
+        rowundo::bind(lifeFactor, b);
+    }
+    {
+        rowundo::Binding b = row("speedError");
+        b.read = [this]() { return ps ? QVariant(ps->speedErrorFraction()) : QVariant(); };
+        b.write = [this](const QVariant &v) { if (ps) ps->setSpeedError(v.toFloat()); };
+        b.commit = [this](const QVariant &before, const QVariant &after) {
+            if (!ps) return;
+            ps->setSpeedError(before.toFloat());
+            const QVariant beforeAbsolute(ps->speedError);
+            ps->setSpeedError(after.toFloat());
+            if (services && services->undo)
+                services->undo->push(new SetNodePropertyCommand(
+                    ps, QStringLiteral("speedError"), beforeAbsolute, QVariant(ps->speedError)));
+        };
+        rowundo::bind(speedFactor, b);
+    }
+
+    // The three vector rows are three sliders over ONE reflected key, so the
+    // gesture is per slider and the value is read off all three.
     auto bindVec = [this](HFloatSliderWidget *x, HFloatSliderWidget *y,
                           HFloatSliderWidget *z, const char *field) {
-        auto push = [this, x, y, z, field]() {
-            if (mLoading || !ps) return;
-            set(field, QVariant::fromValue(QVector3D(x->getValue(), y->getValue(),
-                                                     z ? z->getValue() : 0.0f)));
-        };
-        connect(x, &HFloatSliderWidget::valueChanged, this, [push](float) { push(); });
-        connect(y, &HFloatSliderWidget::valueChanged, this, [push](float) { push(); });
-        if (z) connect(z, &HFloatSliderWidget::valueChanged, this, [push](float) { push(); });
+        for (HFloatSliderWidget *w : { x, y, z }) {
+            if (!w) continue;
+            rowundo::Binding b = row(field);
+            b.write = [this, x, y, z, field](const QVariant &) {
+                if (!ps) return;
+                set(field, QVariant::fromValue(QVector3D(x->getValue(), y->getValue(),
+                                                         z ? z->getValue() : 0.0f)));
+            };
+            rowundo::bind(w, b);
+        }
     };
     bindVec(extentX, extentY, extentZ, "extents");
     bindVec(innerX, innerY, nullptr, "innerExtents");
     bindVec(windX, windY, windZ, "wind");
 
-    auto bindBool = [this](CheckBoxWidget *w, const char *field) {
-        connect(w, &CheckBoxWidget::valueChanged, this,
-                [this, field](bool v) { set(field, v); });
-    };
-    bindBool(randomRotation, "randomRotation");
-    bindBool(dissipate,      "dissipate");
-    bindBool(dissipateInv,   "dissipateInv");
-    bindBool(useAdditive,    "blendMode");
-    bindBool(alphaHash,      "alphaHash");
-    bindBool(distortion,     "distortion");
+    rowundo::bind(randomRotation, row("randomRotation"));
+    rowundo::bind(dissipate,      row("dissipate"));
+    rowundo::bind(dissipateInv,   row("dissipateInv"));
+    rowundo::bind(useAdditive,    row("blendMode"));
+    rowundo::bind(alphaHash,      row("alphaHash"));
+    rowundo::bind(distortion,     row("distortion"));
 
     connect(colourRamp, &ParticleColourRampWidget::changed,
             this, &EmitterPropertyWidget::pushColourKeys);
@@ -276,18 +314,99 @@ void EmitterPropertyWidget::set(const char *field, const QVariant &value)
     ps->setPropertyValue(QString::fromLatin1(field), value);
 }
 
+rowundo::Binding EmitterPropertyWidget::row(const char *key,
+                                            std::function<QVariant(const QVariant &)> toDocument)
+{
+    panelundo::NodeRows rows([this]() { return iris::SceneNodePtr(ps); },
+                             [this]() { return services; },
+                             [this]() { return !mLoading && !!ps; });
+    return rows(QString::fromLatin1(key), std::move(toDocument));
+}
+
+// EVERYTHING THIS BLADE CAN WRITE, as one value. Used by the preset row, which
+// stamps a whole recipe over every one of these in a single click.
+QVariantMap EmitterPropertyWidget::snapshot() const
+{
+    QVariantMap state;
+    if (!ps) return state;
+    static const char *keys[] = {
+        "preset", "shape", "orientation", "particlesPerSecond", "lifeLength", "speed",
+        "particleScale", "coneAngle", "maxParticles", "lifeError", "speedError", "scaleError",
+        "extents", "innerExtents", "wind", "burstDuration", "burstRepeatDelay", "startDelay",
+        "gravityComplement", "turbulence", "rotationSpeedMin", "rotationSpeedMax",
+        "randomRotation", "dissipate", "dissipateInv", "blendMode", "alphaHash", "distortion",
+    };
+    for (const char *k : keys)
+        state.insert(QLatin1String(k), ps->getPropertyValue(QLatin1String(k)));
+
+    QVariantList colour;
+    for (const iris::ParticleColourKey &k : ps->colourKeys)
+        colour.append(QVariantList{ k.time, k.r, k.g, k.b, k.a });
+    state.insert(QStringLiteral("colourKeys"), colour);
+    QVariantList scale;
+    for (const iris::ParticleScaleKey &k : ps->scaleKeys)
+        scale.append(QVariantList{ k.time, k.scale });
+    state.insert(QStringLiteral("scaleKeys"), scale);
+    return state;
+}
+
+void EmitterPropertyWidget::restore(const QVariantMap &state)
+{
+    if (!ps || state.isEmpty()) return;
+    // `preset` FIRST and on its own: applying it stamps the recipe, and every
+    // key after it puts back what the user actually had.
+    ps->setPropertyValue(QStringLiteral("preset"), state.value(QStringLiteral("preset")));
+    for (auto it = state.constBegin(); it != state.constEnd(); ++it) {
+        if (it.key() == QLatin1String("preset") || it.key() == QLatin1String("colourKeys") ||
+            it.key() == QLatin1String("scaleKeys"))
+            continue;
+        ps->setPropertyValue(it.key(), it.value());
+    }
+    QVector<iris::ParticleColourKey> colour;
+    for (const QVariant &v : state.value(QStringLiteral("colourKeys")).toList()) {
+        const QVariantList f = v.toList();
+        if (f.size() != 5) continue;
+        iris::ParticleColourKey k;
+        k.time = f[0].toFloat(); k.r = f[1].toFloat(); k.g = f[2].toFloat();
+        k.b = f[3].toFloat();    k.a = f[4].toFloat();
+        colour.append(k);
+    }
+    ps->colourKeys = colour;
+    QVector<iris::ParticleScaleKey> scale;
+    for (const QVariant &v : state.value(QStringLiteral("scaleKeys")).toList()) {
+        const QVariantList f = v.toList();
+        if (f.size() != 2) continue;
+        iris::ParticleScaleKey k;
+        k.time = f[0].toFloat(); k.scale = f[1].toFloat();
+        scale.append(k);
+    }
+    ps->scaleKeys = scale;
+    refresh();
+}
+
 void EmitterPropertyWidget::onPresetChanged(const QString &name)
 {
+    Q_UNUSED(name)
     if (mLoading || !ps) return;
     // A whole recipe, in one step — then re-read every control, because the
-    // recipe just overwrote almost all of them.
+    // recipe just overwrote almost all of them. ONE undo step for the lot: the
+    // panel's whole editable state, before and after (a "previous preset" name
+    // would put back that recipe's numbers, not the ones the user had tuned).
+    const QVariantMap before = snapshot();
     ps->applyPreset(iris::ParticleSystemNode::presetFromName(preset->getCurrentItemData()));
     refresh();
+    const QVariantMap after = snapshot();
+    if (before == after) return;
+    QPointer<EmitterPropertyWidget> self(this);
+    panelundo::pushEdit(services, tr("Emitter Preset"),
+                        [self, after]() { if (self) self->restore(after); },
+                        [self, before]() { if (self) self->restore(before); });
 }
 
 void EmitterPropertyWidget::pushColourKeys()
 {
     if (mLoading || !ps) return;
+    const QVariantMap before = snapshot();
     QVector<ParticleRampStop> stops = colourRamp->stops();
     std::stable_sort(stops.begin(), stops.end(),
                      [](const ParticleRampStop &a, const ParticleRampStop &b) {
@@ -296,11 +415,21 @@ void EmitterPropertyWidget::pushColourKeys()
     QVector<iris::ParticleColourKey> keys;
     for (const ParticleRampStop &s : stops) keys.append(fromStop(s));
     ps->colourKeys = keys;
+    // The ramp is not a reflected key (it is a list, and the renderer reads it
+    // whole), so the step carries the panel's state — the same restore the
+    // preset row uses.
+    const QVariantMap after = snapshot();
+    if (before == after) return;
+    QPointer<EmitterPropertyWidget> self(this);
+    panelundo::pushEdit(services, tr("Particle Colour Ramp"),
+                        [self, after]() { if (self) self->restore(after); },
+                        [self, before]() { if (self) self->restore(before); });
 }
 
 void EmitterPropertyWidget::pushScaleKeys()
 {
     if (mLoading || !ps) return;
+    const QVariantMap before = snapshot();
     QVector<ParticleScaleStop> stops = scaleRamp->stops();
     std::stable_sort(stops.begin(), stops.end(),
                      [](const ParticleScaleStop &a, const ParticleScaleStop &b) {
@@ -312,6 +441,12 @@ void EmitterPropertyWidget::pushScaleKeys()
         keys.append(k);
     }
     ps->scaleKeys = keys;
+    const QVariantMap after = snapshot();
+    if (before == after) return;
+    QPointer<EmitterPropertyWidget> self(this);
+    panelundo::pushEdit(services, tr("Particle Scale Ramp"),
+                        [self, after]() { if (self) self->restore(after); },
+                        [self, before]() { if (self) self->restore(before); });
 }
 
 void EmitterPropertyWidget::updateShapeRows()

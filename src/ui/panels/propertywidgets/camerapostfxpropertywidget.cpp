@@ -22,6 +22,13 @@ For more information see the LICENSE file
 #include "ui/controls/dragvaluewidgets.h"
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
+#include "commands/setnodepropertycommand.h"
+#include "services/services.h"
+#include "services/undoservice.h"
+#include "ui/panels/propertywidgets/rowundo.h"
+
+#include <QPointer>
+#include <QTimer>
 
 namespace {
 
@@ -72,6 +79,21 @@ void CameraPostFxPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> no
     rebuild();
 }
 
+// Every row is one reflected camera key (debt L6): the exposure block writes
+// `exposureMode` / `exposure` / `exposureMin` / `exposureMax`, and a tri-state
+// override writes "postFx.<key>" — where an INVALID value clears the override,
+// which is how "inherit" travels through the same door that sets. That is the
+// exact door camera.settings and camera.postFx use, so a panel edit and a
+// scripted one produce the identical undo step.
+rowundo::Binding CameraPostFxPropertyWidget::row(const QString &key,
+                                                 std::function<QVariant(const QVariant &)> toDocument)
+{
+    panelundo::NodeRows rows([this]() { return iris::SceneNodePtr(camera); },
+                             [this]() { return services; },
+                             [this]() { return !loading && !!camera; });
+    return rows(key, std::move(toDocument));
+}
+
 void CameraPostFxPropertyWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
@@ -97,6 +119,9 @@ void CameraPostFxPropertyWidget::rebuild()
 {
     clearPanel(this->layout());
     if (!camera) return;
+    // The rows below are populated as they are built, and the controls emit
+    // from their setters: nothing built here is a user edit.
+    loading = true;
 
     // ---- §4, the exposure block -------------------------------------------
     // Three stops-based numbers and a mode. NOT the same unit as the World
@@ -115,13 +140,18 @@ void CameraPostFxPropertyWidget::rebuild()
             "Inherit leaves the world's exposure exactly as it is. Auto gives the camera its "
             "own adaptation midpoint and window; Manual pins the grade so it measures nothing. "
             "Never applies to thumbnails, previews or renders that asked for a neutral readback."));
-        connect(mode, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this,
-                [this, mode](int row) {
-                    if (!camera || row < 0) return;
-                    camera->setPropertyValue(QStringLiteral("exposureMode"),
-                                             mode->getItemData(row).toInt());
-                    applied(true);   // the window rows below become (ir)relevant
-                });
+        rowundo::Binding modeBinding = row(QStringLiteral("exposureMode"),
+                                          [mode](const QVariant &r) {
+                                              return QVariant(mode->getItemData(r.toInt()).toInt());
+                                          });
+        {
+            auto write = modeBinding.write;
+            modeBinding.write = [this, write](const QVariant &v) {
+                write(v);
+                applied(true);   // the window rows below become (ir)relevant
+            };
+        }
+        rowundo::bind(mode, modeBinding);
 
         const bool own = camera->exposureMode != iris::CameraExposureMode::Inherit;
         auto *stops = this->addDragFloat(QStringLiteral("Exposure (stops)"),
@@ -131,11 +161,16 @@ void CameraPostFxPropertyWidget::rebuild()
             "The camera's exposure in STOPS: 0 is the default world grade and +1 is one "
             "doubling. This is not the World panel's Exposure number, which is the post "
             "chain's own natural-log value — one stop is ln 2 of it, converted for you."));
-        connect(stops, &DragFloatWidget::valueChanged, this, [this](double v) {
-            if (!camera) return;
-            camera->setPropertyValue(QStringLiteral("exposure"), float(v));
-            applied(false);   // no rebuild: this fires on every scrubbed pixel
-        });
+        {
+            rowundo::Binding b = row(QStringLiteral("exposure"),
+                                     [](const QVariant &v) { return QVariant(v.toFloat()); });
+            auto write = b.write;
+            b.write = [this, write](const QVariant &v) {
+                write(v);
+                applied(false);   // no rebuild: this fires on every scrubbed pixel
+            };
+            rowundo::bind(stops, b);
+        }
 
         const bool autoMode = camera->exposureMode == iris::CameraExposureMode::Auto;
         for (const char *which : { "exposureMin", "exposureMax" }) {
@@ -149,11 +184,12 @@ void CameraPostFxPropertyWidget::rebuild()
             field->setToolTip(QStringLiteral(
                 "The window automatic exposure may adapt within, in stops. Ignored in Manual "
                 "mode, which pins the grade outright."));
-            connect(field, &DragFloatWidget::valueChanged, this, [this, key](double v) {
-                if (!camera) return;
-                camera->setPropertyValue(key, float(v));
-                applied(false);
-            });
+            {
+                rowundo::Binding b = row(key, [](const QVariant &v) { return QVariant(v.toFloat()); });
+                auto write = b.write;
+                b.write = [this, write](const QVariant &v) { write(v); applied(false); };
+                rowundo::bind(field, b);
+            }
         }
     }
 
@@ -204,29 +240,53 @@ void CameraPostFxPropertyWidget::rebuild()
                 "one you are looking through. A camera's stack REPLACES the world's rather "
                 "than adding to it — an override over an ordered list is only well defined "
                 "as a replacement."));
-            connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this,
-                    [this, key, combo, worldStack](int row) {
-                        if (!camera || row < 0) return;
-                        const QString choice = combo->getItemData(row).toString();
-                        if (choice == QLatin1String("inherit")) {
-                            camera->clearPostOverride(key);
-                        } else if (choice == QLatin1String("none")) {
-                            camera->setPostOverride(key, QJsonArray().toVariantList());
-                        } else if (!camera->hasPostOverride(key) ||
-                                   camera->postOverrideStack(key).isEmpty()) {
-                            // Seed from the world, so switching to "own" is a
-                            // starting point rather than a blank page.
-                            camera->setPostOverride(key, worldStack.toVariantList());
-                        }
-                        applied(true);
-                    });
+            {
+                rowundo::Binding b = row(QStringLiteral("postFx.") + key,
+                                         [this, key, combo, worldStack](const QVariant &r) -> QVariant {
+                                             const QString choice =
+                                                 combo->getItemData(r.toInt()).toString();
+                                             if (choice == QLatin1String("inherit")) return QVariant();
+                                             if (choice == QLatin1String("none"))
+                                                 return QVariant(QJsonArray().toVariantList());
+                                             if (camera && camera->hasPostOverride(key) &&
+                                                 !camera->postOverrideStack(key).isEmpty())
+                                                 return QVariant(
+                                                     camera->postOverrideStack(key).toVariantList());
+                                             // Seed from the world, so switching to
+                                             // "own" is a starting point rather than
+                                             // a blank page.
+                                             return QVariant(worldStack.toVariantList());
+                                         });
+                auto write = b.write;
+                b.write = [this, write](const QVariant &v) { write(v); applied(true); };
+                rowundo::bind(combo, b);
+            }
 
             if (overridden && !own.isEmpty()) {
-                lookstack::build(this, own, [this, key](const QJsonArray &next, bool rebuildPanel) {
-                    if (!camera) return;
-                    camera->setPostOverride(key, next.toVariantList());
-                    applied(rebuildPanel);
-                });
+                lookstack::build(
+                    this, own,
+                    [this, key](const QJsonArray &next, bool rebuildPanel) {
+                        if (!camera) return;
+                        if (!rebuildPanel && !looksScrubbing) {
+                            looksScrubbing = true;
+                            looksBefore = camera->postOverrideStack(key);
+                        }
+                        const QJsonArray before =
+                            looksScrubbing ? looksBefore : camera->postOverrideStack(key);
+                        camera->setPostOverride(key, next.toVariantList());
+                        if (rebuildPanel) {
+                            // Structural: one step, then the rows follow.
+                            looksScrubbing = false;
+                            pushLooks(key, before);
+                        }
+                        applied(rebuildPanel);
+                    },
+                    [this, key]() {
+                        // The end of a parameter scrub: one step for the drag.
+                        if (!looksScrubbing) return;
+                        looksScrubbing = false;
+                        pushLooks(key, looksBefore);
+                    });
             }
             continue;
         }
@@ -239,20 +299,24 @@ void CameraPostFxPropertyWidget::rebuild()
                                           own.isValid());
             box->setValue(own.isValid());
             box->setToolTip(tooltipFor(key));
-            connect(box, &CheckBoxWidget::valueChanged, this, [this, key](bool on) {
-                if (!camera) return;
-                if (on) {
-                    // Start from what it was already inheriting: turning an
-                    // override on must not change the picture by itself.
-                    const worldmodes::ParamRow *p = worldmodes::postFxParam(key);
-                    const iris::ScenePtr scene = sceneOf(camera);
-                    const double seed = (p && p->get && scene) ? p->get(scene) : 0.0;
-                    camera->setPostOverride(key, seed);
-                } else {
-                    camera->clearPostOverride(key);
-                }
-                applied(true);
-            });
+            {
+                // The tri-state, through the reflected door: an INVALID value
+                // clears the override, a number pins it. Turning an override on
+                // seeds it from what it was already inheriting, so the picture
+                // does not change by itself.
+                rowundo::Binding b = row(QStringLiteral("postFx.") + key,
+                                         [this, key](const QVariant &on) -> QVariant {
+                                             if (!on.toBool()) return QVariant();
+                                             const worldmodes::ParamRow *p =
+                                                 worldmodes::postFxParam(key);
+                                             const iris::ScenePtr scene = sceneOf(camera);
+                                             return QVariant((p && p->get && scene) ? p->get(scene)
+                                                                                    : 0.0);
+                                         });
+                auto write = b.write;
+                b.write = [this, write](const QVariant &v) { write(v); applied(true); };
+                rowundo::bind(box, b);
+            }
 
             const worldmodes::ParamRow *p = worldmodes::postFxParam(key);
             const double minV = p ? p->minValue : 0.0, maxV = p ? p->maxValue : 1.0;
@@ -304,15 +368,16 @@ void CameraPostFxPropertyWidget::rebuild()
             combo->setCurrentIndex(current);
         }
         if (combo->toolTip().isEmpty()) combo->setToolTip(tooltipFor(key));
-        connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this,
-                [this, key, combo](int row) {
-                    if (!camera || row < 0) return;
-                    const QVariant data = combo->getItemData(row);
-                    if (!data.isValid() || data.isNull()) camera->clearPostOverride(key);
-                    else                                  camera->setPostOverride(key, data);
-                    applied(true);
-                });
+        {
+            rowundo::Binding b = row(QStringLiteral("postFx.") + key,
+                                     [combo](const QVariant &r) { return combo->getItemData(r.toInt()); });
+            auto write = b.write;
+            b.write = [this, write](const QVariant &v) { write(v); applied(true); };
+            rowundo::bind(combo, b);
+        }
     }
+
+    loading = false;
 
     // THE HINT THAT USED TO LIVE HERE IS GONE, and its absence is the feature:
     // "Preview inset — shows the world's look" was honest while the inset had no
@@ -323,11 +388,29 @@ void CameraPostFxPropertyWidget::rebuild()
     // honesty note is worse than none.
 }
 
+// One undo step for a whole-stack looks gesture on THIS camera.
+void CameraPostFxPropertyWidget::pushLooks(const QString &key, const QJsonArray &before)
+{
+    if (!camera || !services || !services->undo) return;
+    const QVariant after(camera->postOverrideStack(key).toVariantList());
+    const QVariant was(before.toVariantList());
+    if (was == after) return;
+    services->undo->push(new SetNodePropertyCommand(camera, QStringLiteral("postFx.") + key,
+                                                    was, after));
+}
+
 void CameraPostFxPropertyWidget::applied(bool rebuildPanel)
 {
     // Two frames, like every sibling section: an enable-flag change is a
     // workspace rebuild applied by SceneMirror at the next sync, and a single
     // frame can be the one that rebuilds rather than the one that draws with it.
     if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
-    if (rebuildPanel) rebuild();
+    if (!rebuildPanel) return;
+    // DEFERRED by one event-loop turn (debt L6): a rebuild destroys the very
+    // combo whose currentIndexChanged is still on the stack — the Qt 6.10 +
+    // qlementine combo-container hazard the sky panel's queued rebuild exists
+    // to avoid. Everything this panel rebuilds for is a shape change, so one
+    // turn later is soon enough.
+    QPointer<CameraPostFxPropertyWidget> self(this);
+    QTimer::singleShot(0, this, [self]() { if (self) self->rebuild(); });
 }

@@ -17,6 +17,8 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertywidgets/panelundo.h"
+#include "services/sceneeditservice.h"   // DecalMapKind
 
 namespace iris {
     class SceneNode;
@@ -63,6 +65,9 @@ protected slots:
     void onIgnoreAlphaChanged(bool v);
 
 private:
+    /// One map rebind (image, normal, emissive) through SceneEditService, as
+    /// one undo step. The three picker slots are front ends on this.
+    void bindKind(DecalMapKind kind, const QString &guid, const QString &text);
     /// Re-resolves a guid to CAS bytes and pins it as a project BINDING
     /// (ProjectAssets::AddKind::Binding — never a direct add, so no companion
     /// material is minted for a decal image). Shared by the three pickers.
@@ -73,6 +78,7 @@ private:
     Project *project = nullptr;
     StudioServices *services = nullptr;
     bool loading = false;
+    panelundo::NodeRows rows;
 
     TexturePickerWidget *image = nullptr;
     TexturePickerWidget *normalImage = nullptr;

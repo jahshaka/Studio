@@ -26,6 +26,10 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/lightnode.h"
 
 #include "bridge/enginehost.h"
+#include "commands/setnodepropertycommand.h"
+#include "services/services.h"
+#include "services/undoservice.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 #include "ui/controls/libraryassetpicker.h"
 #include "services/lightbindings.h"
 #include "data/database/database.h"
@@ -99,8 +103,17 @@ void setBindingLabel(QLabel *label, const QString &guid, const QString &path, Da
 }  // namespace
 
 
+// EVERY ROW HERE IS ONE REFLECTED LIGHT PROPERTY (debt L6 / N5): the rows write
+// through LightNode::setPropertyValue — the exact call node.setProperty makes —
+// and each gesture becomes one SetNodePropertyCommand. No new verb was needed:
+// intensity, colour, distance, the spot cone, the area rectangle, the shadow
+// type/size/static flag and the shadow tint are all reflected keys already, and
+// the two asset-binding rows go through LightBindings, which is what
+// node.setLightProfile / node.setLightTexture call.
 LightPropertyWidget::LightPropertyWidget(QWidget* parent):
-    AccordianBladeWidget(parent)
+    AccordianBladeWidget(parent),
+    rows([this]() { return iris::SceneNodePtr(lightNode); }, [this]() { return services; },
+         [this]() { return !loading; })
 {
     lightColor = this->addColorPicker("Color");
     intensity = this->addFloatValueSlider("Intensity", 0, 10.f);
@@ -196,28 +209,40 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 	// in engine mode Shadow Type and Size stay available for point lights too.
 	mPointShadowsSupported = true;
 
-    connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
-    connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));
+    wireRows();
+}
 
-    connect(intensity,SIGNAL(valueChanged(float)),this,SLOT(lightIntensityChanged(float)));
-    connect(distance,SIGNAL(valueChanged(float)),this,SLOT(lightDistanceChanged(float)));
-    connect(spotCutOff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffChanged(float)));
-    connect(spotCutOffSoftness,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffSoftnessChanged(float)));
-    connect(spotFalloff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotFalloffChanged(float)));
+// The reflected key each row writes. The two combo rows carry a NAME, so they
+// map their row index onto the enum here — the panel is the only place that
+// knows the order the names are offered in.
+void LightPropertyWidget::wireRows()
+{
+    rowundo::bind(lightColor->getPicker(), rows(QStringLiteral("lightColor")));
+    rowundo::bind(intensity, rows(QStringLiteral("intensity")));
+    rowundo::bind(distance, rows(QStringLiteral("distance")));
+    rowundo::bind(spotCutOff, rows(QStringLiteral("spotCutOff")));
+    rowundo::bind(spotCutOffSoftness, rows(QStringLiteral("spotCutOffSoftness")));
+    rowundo::bind(spotFalloff, rows(QStringLiteral("spotFalloff")));
+    rowundo::bind(rectWidth, rows(QStringLiteral("rectWidth")));
+    rowundo::bind(rectHeight, rows(QStringLiteral("rectHeight")));
+    rowundo::bind(doubleSided, rows(QStringLiteral("doubleSided")));
+    rowundo::bind(accurate, rows(QStringLiteral("accurate")));
+    rowundo::bind(shadowAlpha, rows(QStringLiteral("shadowAlpha")));
+    rowundo::bind(shadowColor->getPicker(), rows(QStringLiteral("shadowColor")));
+    rowundo::bind(shadowStatic, rows(QStringLiteral("shadowStatic")));
+    rowundo::bind(shadowType, rows(QStringLiteral("shadowMapType"), [this](const QVariant &row) {
+        return QVariant(int(evalShadowMapType(shadowType->getWidget()->itemText(row.toInt()))));
+    }));
+    rowundo::bind(shadowSize, rows(QStringLiteral("shadowMapResolution"), [this](const QVariant &row) {
+        return QVariant(shadowSize->getWidget()->itemText(row.toInt()).toInt());
+    }));
 
-    connect(rectWidth,SIGNAL(valueChanged(float)),this,SLOT(lightRectWidthChanged(float)));
-    connect(rectHeight,SIGNAL(valueChanged(float)),this,SLOT(lightRectHeightChanged(float)));
-    connect(doubleSided,SIGNAL(valueChanged(bool)),this,SLOT(lightDoubleSidedChanged(bool)));
-    connect(accurate,SIGNAL(valueChanged(bool)),this,SLOT(lightAccurateChanged(bool)));
-
-	connect(shadowAlpha, SIGNAL(valueChanged(float)), this, SLOT(shadowAlphaChanged(float)));
-	connect(shadowColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(shadowColorChanged(QColor)));
-	connect(shadowColor->getPicker(), SIGNAL(onSetColor(QColor)), this, SLOT(shadowColorChanged(QColor)));
-
-    connect(shadowStatic, SIGNAL(valueChanged(bool)), this, SLOT(shadowStaticChanged(bool)));
-    connect(shadowType, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowTypeChanged(QString)));
-    connect(shadowSize, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowSizeChanged(QString)));
-    //connect(shadowBias, SIGNAL(valueChanged(float)), this, SLOT(shadowBiasChanged(float)));
+    // Accurate (LTC) area lights ignore the mask entirely — say so the moment
+    // the user flips the switch, not the next time the panel is rebuilt. (The
+    // value itself is written by the binding above; this is its consequence.)
+    connect(accurate, SIGNAL(valueChanged(bool)), this, SLOT(lightAccurateChanged(bool)));
+    connect(lightChannels, &LightChannelsWidget::maskChanged,
+            this, &LightPropertyWidget::lightChannelsChanged);
 }
 
 void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
@@ -226,6 +251,11 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
     if(!!sceneNode && sceneNode->getSceneNodeType()==iris::SceneNodeType::Light)
     {
         lightNode = sceneNode.staticCast<iris::LightNode>();
+
+        // Populating, not editing: the sliders and the pickers emit from their
+        // setters, and without this the first click on a light would write its
+        // own values back into it — and record undo steps for doing so.
+        loading = true;
 
         //apply properties to ui
         lightColor->setColorValue(lightNode->color);
@@ -314,6 +344,7 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 			}
             //shadowBias->show();
         }
+        loading = false;
     }
     else
     {
@@ -322,75 +353,25 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
     }
 }
 
-void LightPropertyWidget::lightColorChanged(QColor color)
-{
-    if(!!lightNode)
-        lightNode->color = color;
-}
-
-void LightPropertyWidget::lightIntensityChanged(float intensity)
-{
-    if(!!lightNode)
-        lightNode->intensity = intensity;
-}
-
-void LightPropertyWidget::lightDistanceChanged(float distance)
-{
-    if(!!lightNode)
-        lightNode->distance = distance;
-}
-
-void LightPropertyWidget::lightSpotCutoffChanged(float spotCutOff)
-{
-    if(!!lightNode)
-        lightNode->spotCutOff = spotCutOff;
-}
-
-void LightPropertyWidget::lightSpotCutoffSoftnessChanged(float spotCutOffSoftness)
-{
-    if(!!lightNode)
-        lightNode->spotCutOffSoftness = spotCutOffSoftness;
-}
-
-void LightPropertyWidget::lightSpotFalloffChanged(float spotFalloff)
-{
-    if(!!lightNode)
-        lightNode->spotFalloff = spotFalloff;
-}
-
-void LightPropertyWidget::lightRectWidthChanged(float width)
-{
-    if(!!lightNode)
-        lightNode->rectWidth = width;
-}
-
-void LightPropertyWidget::lightRectHeightChanged(float height)
-{
-    if(!!lightNode)
-        lightNode->rectHeight = height;
-}
-
-void LightPropertyWidget::lightDoubleSidedChanged(bool doubleSided)
-{
-    if(!!lightNode)
-        lightNode->doubleSided = doubleSided;
-}
-
 void LightPropertyWidget::lightAccurateChanged(bool accurate)
 {
-    if(!!lightNode)
-        lightNode->accurate = accurate;
-    // Accurate (LTC) area lights ignore the mask entirely — say so the moment
-    // the user flips the switch, not the next time the panel is rebuilt.
+    Q_UNUSED(accurate)
     refreshBindingRows();
 }
 
 void LightPropertyWidget::lightChannelsChanged(quint32 mask)
 {
-    if (!lightNode) return;
+    if (loading || !lightNode) return;
     // Document only: the mirror sees the changed LightDesc on the next sync
-    // (sameLight compares the mask) and pushes it.
+    // (sameLight compares the mask) and pushes it. `lightMask` is a reflected
+    // key (SceneNode::setPropertyValue takes both spellings of the 32 bits), so
+    // this records the same command node.setLightMask pushes.
+    const QVariant before = lightNode->getPropertyValue(QStringLiteral("lightMask"));
     lightNode->setLightMask(mask);
+    const QVariant after = lightNode->getPropertyValue(QStringLiteral("lightMask"));
+    if (before == after || !services || !services->undo) return;
+    services->undo->push(new SetNodePropertyCommand(lightNode, QStringLiteral("lightMask"),
+                                                    before, after));
 }
 
 // --- Asset bindings -------------------------------------------------------
@@ -445,23 +426,71 @@ void LightPropertyWidget::refreshBindingRows()
     }
 }
 
+// THE TWO ASSET ROWS. The binding is a SERVICE CALL (resolution, the project
+// pin and the photometric re-calibration all live in LightBindings, which is
+// also what the verbs call), so the undo step replays that call rather than a
+// field write — NodeEditCommand's contract, the same one node.setLightProfile
+// uses. Applied and verified FIRST: a refused binding records nothing.
+void LightPropertyWidget::bindProfile(const QString &guid)
+{
+    if (!lightNode) return;
+    const QString before = lightNode->iesProfileGuid;
+    if (before == guid) return;
+    QString error;
+    if (!LightBindings::bindProfile(lightNode, guid, db, project, &error)) {
+        if (profileNote) { profileNote->setText(error); profileNote->show(); }
+        refreshBindingRows();
+        return;
+    }
+    auto node = lightNode;
+    Database *database = db;
+    Project *proj = project;
+    panelundo::pushEdit(services, tr("IES Profile"),
+                        [node, guid, database, proj]() {
+                            LightBindings::bindProfile(node, guid, database, proj);
+                        },
+                        [node, before, database, proj]() {
+                            LightBindings::bindProfile(node, before, database, proj);
+                        });
+    refreshBindingRows();
+}
+
+void LightPropertyWidget::bindMask(const QString &guid)
+{
+    if (!lightNode) return;
+    const QString before = lightNode->lightTextureGuid;
+    if (before == guid) return;
+    QString error;
+    if (!LightBindings::bindTexture(lightNode, guid, db, project, &error)) {
+        if (maskNote) { maskNote->setText(error); maskNote->show(); }
+        refreshBindingRows();
+        return;
+    }
+    auto node = lightNode;
+    Database *database = db;
+    Project *proj = project;
+    panelundo::pushEdit(services, tr("Light Mask"),
+                        [node, guid, database, proj]() {
+                            LightBindings::bindTexture(node, guid, database, proj);
+                        },
+                        [node, before, database, proj]() {
+                            LightBindings::bindTexture(node, before, database, proj);
+                        });
+    refreshBindingRows();
+}
+
 void LightPropertyWidget::pickProfile()
 {
     if (!lightNode || !db) return;
     const QString guid = LibraryAssetPicker::pick(ModelTypes::LightProfile, db,
                                                   tr("Choose an IES light profile"), this);
     if (guid.isEmpty()) return;
-    QString error;
-    if (!LightBindings::bindProfile(lightNode, guid, db, project, &error))
-        profileNote->setText(error), profileNote->show();
-    refreshBindingRows();
+    bindProfile(guid);
 }
 
 void LightPropertyWidget::clearProfile()
 {
-    if (!lightNode) return;
-    LightBindings::bindProfile(lightNode, QString(), db, project);
-    refreshBindingRows();
+    bindProfile(QString());
 }
 
 void LightPropertyWidget::pickMask()
@@ -470,55 +499,12 @@ void LightPropertyWidget::pickMask()
     const QString guid = LibraryAssetPicker::pick(ModelTypes::Texture, db,
                                                   tr("Choose an area light mask"), this);
     if (guid.isEmpty()) return;
-    QString error;
-    if (!LightBindings::bindTexture(lightNode, guid, db, project, &error))
-        maskNote->setText(error), maskNote->show();
-    refreshBindingRows();
+    bindMask(guid);
 }
 
 void LightPropertyWidget::clearMask()
 {
-    if (!lightNode) return;
-    LightBindings::bindTexture(lightNode, QString(), db, project);
-    refreshBindingRows();
-}
-
-void LightPropertyWidget::shadowTypeChanged(QString name)
-{
-    auto shadowType = evalShadowMapType(name);
-    lightNode->shadowMap->shadowType = shadowType;
-}
-
-void LightPropertyWidget::shadowStaticChanged(bool on)
-{
-    if (!lightNode) return;
-    // THE DOCUMENT FIELD IS THE API, exactly as the rows above: SceneMirror
-    // pushes it inside LightDesc at the next sync, which is the same path
-    // node.setProperty(guid, "shadowStatic", ...) takes.
-    lightNode->shadowMap->staticMap = on;
-}
-
-void LightPropertyWidget::shadowSizeChanged(QString size)
-{
-    int res = size.toInt();
-    lightNode->shadowMap->setResolution(res);
-}
-
-void LightPropertyWidget::shadowBiasChanged(float bias)
-{
-    lightNode->shadowMap->bias = bias;
-}
-
-void LightPropertyWidget::shadowColorChanged(QColor color)
-{
-	if (!!lightNode)
-		lightNode->shadowColor = color;
-}
-
-void LightPropertyWidget::shadowAlphaChanged(float alpha)
-{
-	if (!!lightNode)
-		lightNode->shadowAlpha = alpha;
+    bindMask(QString());
 }
 
 QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)

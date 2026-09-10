@@ -13,26 +13,34 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "irisgl/core/irisutils.h"
 
-
 #include "ui/controls/colorvaluewidget.h"
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/controls/texturepickerwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/checkboxwidget.h"
-#include "ui/panels/propertywidgets/cubemapwidget.h"
 
+#include "ui/panels/propertywidgets/cubemapwidget.h"
+#include "ui/panels/propertywidgets/rowundo.h"
+
+#include "commands/scenepropertycommand.h"
 #include "data/database/database.h"
 #include "services/subscriber.h"
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 #include "io/assetmanager.h"
+
+#include "viewport/ieditorviewport.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/worldmodes.h"
 #include "services/services.h"
 #include "services/selectionservice.h"
 #include "services/sunlink.h"
+#include <QPointer>
+#include <QSignalBlocker>
 #include <QSqlDatabase>
+#include <QTimer>
 
 namespace {
 // Sky texture references are asset guids: resolve them through the CAS
@@ -40,54 +48,125 @@ namespace {
 // to the legacy projectFolder/name join (pre-pipeline projects).
 QString resolveSkyAssetFile(Project *project, Database *db, const QString &guid)
 {
-    if (guid.isEmpty()) return QString();
+    if (guid.isEmpty() || !project) return QString();
     QSqlDatabase conn = QSqlDatabase::database();
     QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
                                            project->getProjectGuid(), guid);
     if (path.isEmpty()) path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
-    if (path.isEmpty()) path = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(guid).name);
+    if (path.isEmpty() && db)
+        path = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(guid).name);
     return path;
 }
-} // namespace
 
-namespace {
-// The "Material" sky is gone from the UI (it was broken even in the legacy
-// renderer — its panel section was commented out and marked BROKEN!); old sky
-// assets that reference it fall back to a single-colour sky. Combo rows map to
-// sky types through this table.
+// The "Material" sky was broken even in the legacy renderer (its handlers were
+// commented out and marked BROKEN!), so it is gone from the UI. Old scenes and
+// old sky assets that still reference it fall back to a single-colour sky
+// (SceneReader does the same). The combo row -> iris::SkyType mapping is this
+// table — the enum values are NOT the row indices any more.
 const iris::SkyType kSkyRows[] = {
-	iris::SkyType::SINGLE_COLOR, iris::SkyType::CUBEMAP, iris::SkyType::EQUIRECTANGULAR,
-	iris::SkyType::GRADIENT,     iris::SkyType::REALISTIC,
+    iris::SkyType::SINGLE_COLOR, iris::SkyType::CUBEMAP, iris::SkyType::EQUIRECTANGULAR,
+    iris::SkyType::GRADIENT,     iris::SkyType::REALISTIC,
 };
 const int kSkyRowCount = int(sizeof(kSkyRows) / sizeof(kSkyRows[0]));
 int skyRowFor(iris::SkyType t) {
-	for (int i = 0; i < kSkyRowCount; ++i)
-		if (kSkyRows[i] == t) return i;
-	return 0;
+    for (int i = 0; i < kSkyRowCount; ++i)
+        if (kSkyRows[i] == t) return i;
+    return 0;
 }
+
+/// The key each sky type's block is stored under, in a scene and in an asset.
+QString skyDataKey(iris::SkyType type)
+{
+    switch (type) {
+    case iris::SkyType::SINGLE_COLOR:    return QStringLiteral("SingleColor");
+    case iris::SkyType::REALISTIC:       return QStringLiteral("Realistic");
+    case iris::SkyType::GRADIENT:        return QStringLiteral("Gradient");
+    case iris::SkyType::EQUIRECTANGULAR: return QStringLiteral("Equirectangular");
+    case iris::SkyType::CUBEMAP:         return QStringLiteral("Cubemap");
+    case iris::SkyType::MATERIAL:        break;
+    }
+    return QStringLiteral("SingleColor");
 }
+}   // namespace
 
 SkyPropertyWidget::SkyPropertyWidget()
 {
 	setMouseTracking(true);
 }
 
+void SkyPropertyWidget::wireViewportEvents(IEditorViewport *viewport)
+{
+	// (Phase 4: was a Globals::sceneViewWidget reach — the panel chain
+	// injects the viewport instead.)
+	if (!viewport || !viewport->events()) return;
+	connect(viewport->events(), &EditorViewportEvents::changeSkyFromAssetWidget, this, [this](int index) {
+		skyTypeChanged(index);
+	});
+}
+
+void SkyPropertyWidget::setDatabase(Database *db)
+{
+    this->db = db;
+}
+
+void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+{
+    if (!!scene) {
+        this->scene = scene;
+        binding = Binding::Scene;
+        skyGuid = scene->skyGuid;
+        currentSky = scene->skyType;
+        skyTypeChanged(static_cast<int>(scene->skyType));
+    } else {
+        this->scene.clear();
+    }
+}
+
+void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType)
+{
+    binding = Binding::Asset;
+    skyGuid = guid;
+    currentSky = skyType;
+    skyTypeChanged(static_cast<int>(skyType));
+}
+
+// The scene whose LIVE fields this panel may write. In Scene binding that is
+// the open scene; in Asset binding it is the open scene ONLY while the asset
+// being edited is the sky that scene is using — a sky sitting in the library
+// renders nothing and must not touch the viewport.
+iris::ScenePtr SkyPropertyWidget::liveScene() const
+{
+    if (!scene) return iris::ScenePtr();
+    if (binding == Binding::Scene) return scene;
+    return scene->skyGuid == skyGuid ? scene : iris::ScenePtr();
+}
+
+QJsonObject SkyPropertyWidget::storedDefinition(iris::SkyType type) const
+{
+    if (binding == Binding::Scene)
+        return scene ? scene->skyData.value(skyDataKey(type)) : QJsonObject();
+    // The asset's stored blob is only the definition for the type it was SAVED
+    // as: switching an asset to a different sky type starts from that type's
+    // defaults, exactly as the asset panel always did.
+    if (!db || skyGuid.isEmpty() || currentSky != type) return QJsonObject();
+    return QJsonDocument::fromJson(db->fetchAssetData(skyGuid)).object();
+}
+
 void SkyPropertyWidget::skyTypeChanged(int index)
 {
-	if (skyGuid.isEmpty()) return;
+	// MATERIAL is no longer offered; documents saved with it get a single colour.
 	if (static_cast<iris::SkyType>(index) == iris::SkyType::MATERIAL)
 		index = static_cast<int>(iris::SkyType::SINGLE_COLOR);
+	if (binding == Binding::Asset && skyGuid.isEmpty()) return;
 
-	// The current sky gets set when the asset is selected to be the type it was saved as
-	// This function can be called after it has been initialized so if the starting type
-	// and the index differ it is a new sky. Wipe the properties and start over.
-	// If it's the same, do nothing but if it's new, reset to defaults
-	const QJsonObject skyDefinition = currentSky == static_cast<iris::SkyType>(index)
-                                        ? QJsonDocument::fromJson(db->fetchAssetData(skyGuid)).object()
-										: QJsonObject();
-	currentSky = static_cast<iris::SkyType>(index);
+	const iris::SkyType type = static_cast<iris::SkyType>(index);
+	const QJsonObject skyDefinition = storedDefinition(type);
+	currentSky = type;
+	if (binding == Binding::Scene && !!scene) scene->skyType = type;
 
+	loading = true;
 	clearPanel(this->layout());
+	setMouseTracking(true);
 
 	skySelector = this->addComboBox("Sky Type");
 	skySelector->addItem("Single Color");
@@ -95,44 +174,110 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	skySelector->addItem("Equirectangular");
 	skySelector->addItem("Gradient");
 	skySelector->addItem("Realistic");
-	skySelector->setCurrentIndex(skyRowFor(static_cast<iris::SkyType>(index)));
+	skySelector->setCurrentIndex(skyRowFor(type));
 
 	// Combo rows are NOT SkyType values (MATERIAL is gone): translate via the table.
+	// The rebuild is DEFERRED by one event-loop turn on purpose: skyTypeChanged
+	// clearPanel()s, which deletes the very combo whose currentIndexChanged is
+	// running (and its popup container, mid-teardown) and then builds fresh
+	// widgets in its place. Doing that synchronously crashed the renderer
+	// reproducibly (3/3) once the rebuilt panel contained a second QComboBox —
+	// the Qt 6.10 + qlementine combo-container hazard CLAUDE.md records, hit
+	// from the other end. One queued turn lets the popup finish dying first.
 	connect(skySelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this, [this](int row) {
-		if (row >= 0 && row < kSkyRowCount)
-			skyTypeChanged(static_cast<int>(kSkyRows[row]));
+		if (loading || row < 0 || row >= kSkyRowCount) return;
+		const iris::SkyType picked = kSkyRows[row];
+		// The TYPE is a sky edit like any other: one undo step over the whole
+		// sky block (Scene binding), then the panel follows the document.
+		const QVariant before = sceneprops::get(liveScene(), QStringLiteral("sky"));
+		QTimer::singleShot(0, this, [this, picked, before]() {
+			skyTypeChanged(static_cast<int>(picked));
+			if (binding == Binding::Scene) commitSky(before, tr("Sky Type"));
+		});
 	});
 
-	switch (static_cast<iris::SkyType>(index)) {
+	switch (type) {
 		case iris::SkyType::SINGLE_COLOR: {
 			singleColor = this->addColorPicker("Sky Color");
 			connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onSingleSkyColorChanged(QColor)));
 
-			// This should be revisited, some differences between scene color and our default
-			if (skyDefinition.isEmpty()) {
-				singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(QColor(72, 72, 72)));
-				singleColor->setColorValue(QColor(72, 72, 72));
-			}
-			else {
-				singleColor->setColorValue(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
-				onSingleSkyColorChanged(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
-			}
+			QColor skyColor = skyDefinition.contains("skyColor")
+			                      ? SceneReader::readColor(skyDefinition.value("skyColor").toObject())
+			                      : QColor(72, 72, 72);
+			singleColor->setColorValue(skyColor);
+			singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(skyColor));
+			if (auto live = liveScene()) live->skyColor = skyColor;
+			updateAssetAndKeys();
+			wireSkyRow(singleColor->getPicker(), tr("Sky Colour"), [this]() {
+				onSingleSkyColorChanged(singleColor->getPicker()->getColor());
+			});
 
 			break;
 		}
 
 		case iris::SkyType::REALISTIC: {
-			// Same re-range as the World panel (VISUAL_PARITY_SPEC item 1) —
-			// these two panels have always been copies of each other, and a sky
-			// ASSET has to place its sun with the same dials a scene does.
-			const iris::SkyRealistic skyDefaults = iris::SkyRealistic::defaults();
-			sunAzimuth = addFloatValueSlider("Sun Azimuth", 0.f, 360.f, skyDefaults.sunAzimuth());
-			sunElevation = addFloatValueSlider("Sun Elevation", -10.f, 90.f, skyDefaults.sunElevation());
-			turbidity = addFloatValueSlider("Turbidity", 1.f, 20.f, skyDefaults.turbidity);
-			reileigh = addFloatValueSlider("Rayleigh Scattering", 0.f, 4.f, skyDefaults.reileigh);
-			mieCoefficient = addFloatValueSlider("Mie Coefficient", 0.f, .1f, skyDefaults.mieCoefficient);
-			mieDirectionalG = addFloatValueSlider("Mie Directional G", 0.f, .99f, skyDefaults.mieDirectionalG);
-			luminance = addFloatValueSlider("Exposure", .01f, 2.f, skyDefaults.luminance);
+			// Ranges are the MODEL's, not the legacy panel's (VISUAL_PARITY_SPEC
+			// item 1). The old rows — Sun Height -0.99..10, Strafe X/Z 0..1,
+			// Turbidity 0..1 — sat in a corner where the analytic sky cannot
+			// react: its sunfade divides sunPosY by 450000 and Preetham's
+			// turbidity band is 1..20. The sun is a polar control now (the three
+			// stored sunPos floats remain the truth, at the model's radius), and
+			// every scattering dial spans the range the bake actually uses.
+			const iris::SkyRealistic defaults = iris::SkyRealistic::defaults();
+			iris::SkyRealistic loaded = defaults;
+			if (!skyDefinition.isEmpty()) {
+				loaded.luminance       = skyDefinition.value("luminance").toDouble(defaults.luminance);
+				loaded.reileigh        = skyDefinition.value("reileigh").toDouble(defaults.reileigh);
+				loaded.mieCoefficient  = skyDefinition.value("mieCoefficient").toDouble(defaults.mieCoefficient);
+				loaded.mieDirectionalG = skyDefinition.value("mieDirectionalG").toDouble(defaults.mieDirectionalG);
+				loaded.turbidity       = skyDefinition.value("turbidity").toDouble(defaults.turbidity);
+				loaded.sunPosX         = skyDefinition.value("sunPosX").toDouble(defaults.sunPosX);
+				loaded.sunPosY         = skyDefinition.value("sunPosY").toDouble(defaults.sunPosY);
+				loaded.sunPosZ         = skyDefinition.value("sunPosZ").toDouble(defaults.sunPosZ);
+			}
+			// Legacy documents hold values outside the model's ranges (turbidity
+			// .32 against Preetham's 1..20 was the panel default for years). The
+			// sliders would clamp the DISPLAY and silently disagree with the
+			// document, so clamp the document instead: an old scene migrates to
+			// the nearest value its dials can actually express. (The ASSET panel
+			// never did this — one of the divergences the dedup closes.)
+			loaded.turbidity       = qBound(1.0f,  loaded.turbidity,       20.0f);
+			loaded.reileigh        = qBound(0.0f,  loaded.reileigh,         4.0f);
+			loaded.mieCoefficient  = qBound(0.0f,  loaded.mieCoefficient,   0.1f);
+			loaded.mieDirectionalG = qBound(0.0f,  loaded.mieDirectionalG, 0.99f);
+			loaded.luminance       = qBound(0.01f, loaded.luminance,        2.0f);
+			loaded.setSunAngles(loaded.sunAzimuth(), qBound(-10.0f, loaded.sunElevation(), 90.0f));
+			if (auto live = liveScene()) live->skyRealistic = loaded;
+
+			sunAzimuth = addFloatValueSlider("Sun Azimuth", 0.f, 360.f, defaults.sunAzimuth());
+			sunElevation = addFloatValueSlider("Sun Elevation", -10.f, 90.f, defaults.sunElevation());
+			turbidity = addFloatValueSlider("Turbidity", 1.f, 20.f, defaults.turbidity);
+			reileigh = addFloatValueSlider("Rayleigh Scattering", 0.f, 4.f, defaults.reileigh);
+			mieCoefficient = addFloatValueSlider("Mie Coefficient", 0.f, .1f, defaults.mieCoefficient);
+			mieDirectionalG = addFloatValueSlider("Mie Directional G", 0.f, .99f, defaults.mieDirectionalG);
+			luminance = addFloatValueSlider("Exposure", .01f, 2.f, defaults.luminance);
+			if (binding == Binding::Scene) {
+				skyDetail = this->addComboBox("Sky Detail");
+				skyDetail->addItem("Normal (256)");
+				skyDetail->addItem("High (512)");
+				skyDetail->addItem("Ultra (1024)");
+				skyDetail->setToolTip(QStringLiteral(
+					"Width of the equirectangular image the sky is baked into. Higher is a sharper "
+					"sun disc on a big display, at the cost of a longer bake on every change."));
+				skyDetail->setCurrentIndex(scene->skyBakeResolution >= 1024 ? 2
+										 : scene->skyBakeResolution >= 512  ? 1 : 0);
+				connect(skyDetail, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
+						this, &SkyPropertyWidget::onSkyDetailChanged);
+			}
+			addSunLinkRow();
+
+			sunAzimuth->setValue(loaded.sunAzimuth());
+			sunElevation->setValue(loaded.sunElevation());
+			turbidity->setValue(loaded.turbidity);
+			reileigh->setValue(loaded.reileigh);
+			mieCoefficient->setValue(loaded.mieCoefficient);
+			mieDirectionalG->setValue(loaded.mieDirectionalG);
+			luminance->setValue(loaded.luminance);
 
 			connect(luminance, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
 			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);
@@ -141,47 +286,25 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onTurbidityChanged);
 			connect(sunAzimuth, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunAzimuthChanged);
 			connect(sunElevation, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunElevationChanged);
-			addSunLinkRow();
+			// ...and each of those drags is ONE undo step (Scene binding).
+			wireSkyRow(luminance, tr("Sky Exposure"), {});
+			wireSkyRow(reileigh, tr("Rayleigh Scattering"), {});
+			wireSkyRow(mieCoefficient, tr("Mie Coefficient"), {});
+			wireSkyRow(mieDirectionalG, tr("Mie Directional G"), {});
+			wireSkyRow(turbidity, tr("Turbidity"), {});
+			wireSkyRow(sunAzimuth, tr("Sun Azimuth"), {});
+			wireSkyRow(sunElevation, tr("Sun Elevation"), {});
 
-			if (skyDefinition.isEmpty()) {
-				realisticDefinition.insert("luminance", luminance->getValue());
-				realisticDefinition.insert("reileigh", reileigh->getValue());
-				realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
-				realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
-				realisticDefinition.insert("turbidity", turbidity->getValue());
-				realisticDefinition.insert("sunPosX", double(skyDefaults.sunPosX));
-				realisticDefinition.insert("sunPosY", double(skyDefaults.sunPosY));
-				realisticDefinition.insert("sunPosZ", double(skyDefaults.sunPosZ));
-			}
-			else {
-				iris::SkyRealistic loaded = skyDefaults;
-				loaded.luminance       = skyDefinition.value("luminance").toDouble(skyDefaults.luminance);
-				loaded.reileigh        = skyDefinition.value("reileigh").toDouble(skyDefaults.reileigh);
-				loaded.mieCoefficient  = skyDefinition.value("mieCoefficient").toDouble(skyDefaults.mieCoefficient);
-				loaded.mieDirectionalG = skyDefinition.value("mieDirectionalG").toDouble(skyDefaults.mieDirectionalG);
-				loaded.turbidity       = skyDefinition.value("turbidity").toDouble(skyDefaults.turbidity);
-				loaded.sunPosX         = skyDefinition.value("sunPosX").toDouble(skyDefaults.sunPosX);
-				loaded.sunPosY         = skyDefinition.value("sunPosY").toDouble(skyDefaults.sunPosY);
-				loaded.sunPosZ         = skyDefinition.value("sunPosZ").toDouble(skyDefaults.sunPosZ);
-				// Legacy documents hold values outside the model's ranges (turbidity
-				// .32 against Preetham's 1..20 was the panel default for years). The
-				// sliders would clamp the DISPLAY and silently disagree with the
-				// document, so clamp the document instead: an old scene migrates to
-				// the nearest value its dials can actually express.
-				loaded.turbidity       = qBound(1.0f,  loaded.turbidity,       20.0f);
-				loaded.reileigh        = qBound(0.0f,  loaded.reileigh,         4.0f);
-				loaded.mieCoefficient  = qBound(0.0f,  loaded.mieCoefficient,   0.1f);
-				loaded.mieDirectionalG = qBound(0.0f,  loaded.mieDirectionalG, 0.99f);
-				loaded.luminance       = qBound(0.01f, loaded.luminance,        2.0f);
-				loaded.setSunAngles(loaded.sunAzimuth(), qBound(-10.0f, loaded.sunElevation(), 90.0f));
-				reileigh->setValue(loaded.reileigh);
-				luminance->setValue(loaded.luminance);
-				mieCoefficient->setValue(loaded.mieCoefficient);
-				mieDirectionalG->setValue(loaded.mieDirectionalG);
-				turbidity->setValue(loaded.turbidity);
-				sunAzimuth->setValue(loaded.sunAzimuth());
-				sunElevation->setValue(loaded.sunElevation());
-			}
+			// The stored blob is still sunPos*: azimuth/elevation are a view of it.
+			realisticDefinition.insert("luminance", double(loaded.luminance));
+			realisticDefinition.insert("reileigh", double(loaded.reileigh));
+			realisticDefinition.insert("mieCoefficient", double(loaded.mieCoefficient));
+			realisticDefinition.insert("mieDirectionalG", double(loaded.mieDirectionalG));
+			realisticDefinition.insert("turbidity", double(loaded.turbidity));
+			realisticDefinition.insert("sunPosX", double(loaded.sunPosX));
+			realisticDefinition.insert("sunPosY", double(loaded.sunPosY));
+			realisticDefinition.insert("sunPosZ", double(loaded.sunPosZ));
+			updateAssetAndKeys();
 
 			break;
 		}
@@ -193,18 +316,21 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			setEquiMap(skyDefinition.value("equiSkyGuid").toString());
 
 			connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
+				if (loading || !db || !project) return;
 				// Remember that asset names are unique (auto incremented) so this is fine
 				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), project->getProjectGuid());
+				const QVariant before = sceneprops::get(liveScene(), QStringLiteral("sky"));
 				db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
 				if (!assetGuid.isEmpty()) {
 					db->createDependency(
-						static_cast<int>(ModelTypes::Sky),
+						static_cast<int>(ModelTypes::Sky),		// Not really but who cares
 						static_cast<int>(ModelTypes::Texture),
 						skyGuid, assetGuid,
 						project->getProjectGuid()
 					);
 
 					onEquiTextureChanged(assetGuid);
+					if (binding == Binding::Scene) commitSky(before, tr("Sky Image"));
 				}
 			});
 
@@ -212,9 +338,10 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::CUBEMAP: {
-			skyMapWidget = this->addCubeMapWidget();
+			cubeMapWidget = this->addCubeMapWidget();
 
-			connect(skyMapWidget, &CubeMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
+			connect(cubeMapWidget, &CubeMapWidget::valuesChanged, this,
+			        [this](QString value, QString guid, CubeMapPosition pos) {
 				onSlotChanged(value, guid, static_cast<int>(pos));
 			});
 
@@ -238,45 +365,117 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			connect(colorBot->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientBotColorChanged(QColor)));
 			connect(offset, SIGNAL(valueChanged(float)), SLOT(onGradientOffsetChanged(float)));
 
-			if (skyDefinition.isEmpty()) {
-				gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(QColor(255, 146, 138)));
-				gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(QColor("white")));
-				gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(QColor(64, 128, 255)));
-				gradientDefinition.insert("gradientOffset", .73f);
+			const bool fresh = skyDefinition.isEmpty();
+			const QColor top = fresh ? QColor(255, 146, 138)
+			                         : SceneReader::readColor(skyDefinition.value("gradientTop").toObject());
+			const QColor mid = fresh ? QColor("white")
+			                         : SceneReader::readColor(skyDefinition.value("gradientMid").toObject());
+			const QColor bot = fresh ? QColor(64, 128, 255)
+			                         : SceneReader::readColor(skyDefinition.value("gradientBot").toObject());
+			const float off = fresh ? .73f : float(skyDefinition.value("gradientOffset").toDouble());
+			colorTop->setColorValue(top);
+			colorMid->setColorValue(mid);
+			colorBot->setColorValue(bot);
+			offset->setValue(off);
 
-				colorTop->setColorValue(QColor(255, 146, 138));
-				colorMid->setColorValue(QColor("white"));
-				colorBot->setColorValue(QColor(64, 128, 255));
+			gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(top));
+			gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(mid));
+			gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(bot));
+			gradientDefinition.insert("gradientOffset", off);
+
+			if (auto live = liveScene()) {
+				live->gradientTop = top;
+				live->gradientMid = mid;
+				live->gradientBot = bot;
+				live->gradientOffset = off;
 			}
-			else {
-				colorTop->setColorValue(SceneReader::readColor(skyDefinition.value("gradientTop").toObject()));
-				colorMid->setColorValue(SceneReader::readColor(skyDefinition.value("gradientMid").toObject()));
-				colorBot->setColorValue(SceneReader::readColor(skyDefinition.value("gradientBot").toObject()));
-				offset->setValue(skyDefinition.value("gradientOffset").toDouble());
-			}
+			updateAssetAndKeys();
+
+			wireSkyRow(colorTop->getPicker(), tr("Sky Gradient"),
+			           [this]() { onGradientTopColorChanged(colorTop->getPicker()->getColor()); });
+			wireSkyRow(colorMid->getPicker(), tr("Sky Gradient"),
+			           [this]() { onGradientMidColorChanged(colorMid->getPicker()->getColor()); });
+			wireSkyRow(colorBot->getPicker(), tr("Sky Gradient"),
+			           [this]() { onGradientBotColorChanged(colorBot->getPicker()->getColor()); });
+			wireSkyRow(offset, tr("Sky Gradient Offset"), {});
 
 			break;
 		}
 	}
 
-	if (skyDefinition.isEmpty()) {
-		updateAssetAndKeys();
-	}
+	addAmbientFromSkyRow();
+	loading = false;
+}
 
+// ONE UNDO STEP PER SKY GESTURE (debt L6). The sky is recorded WHOLE — type,
+// the per-type blobs and the live colour / gradient / analytic fields — because
+// a row here writes the blob AND the live field, and an undo that put back only
+// one of them would leave the panel showing a sky the renderer is not drawing.
+// `write` is used only where the row's own slot is not already connected (the
+// colour pickers, whose live stream this replays); the sliders write through
+// their existing slots and this just brackets the gesture.
+void SkyPropertyWidget::wireSkyRow(QWidget *row, const QString &text,
+                                   const std::function<void()> &write)
+{
+    if (!row || binding != Binding::Scene) return;   // asset content has no undo history
+    rowundo::Binding b;
+    b.guard = [this]() { return !loading && !!liveScene(); };
+    b.read = [this]() { return sceneprops::get(liveScene(), QStringLiteral("sky")); };
+    b.write = [write](const QVariant &) { if (write) write(); };
+    b.commit = [this, text](const QVariant &before, const QVariant &) { commitSky(before, text); };
+    if (auto *slider = qobject_cast<HFloatSliderWidget *>(row))      rowundo::bind(slider, b);
+    else if (auto *picker = qobject_cast<ColorPickerWidget *>(row))  rowundo::bind(picker, b);
+}
+
+void SkyPropertyWidget::commitSky(const QVariant &before, const QString &text)
+{
+    auto live = liveScene();
+    if (!live || binding != Binding::Scene) return;
+    QPointer<SkyPropertyWidget> self(this);
+    panelundo::pushSceneEdit(services, live, QStringLiteral("sky"), text, before,
+                             sceneprops::get(live, QStringLiteral("sky")), [self]() {
+                                 // The rows ARE the sky: repaint them from the
+                                 // document the undo just restored.
+                                 if (self) self->skyTypeChanged(int(self->scene->skyType));
+                             });
+}
+
+void SkyPropertyWidget::addAmbientFromSkyRow()
+{
+	// VISUAL_PARITY_SPEC item 3b. Only offered where there is a sky to
+	// integrate: a single-colour sky has no hemispheres, so it always falls back
+	// to the flat World > Ambient Color. Scene binding only — it is a world
+	// setting, not a property of a sky in the library.
+	if (binding != Binding::Scene || !scene || scene->skyType == iris::SkyType::SINGLE_COLOR) {
+		ambientFromSky = nullptr;
+		return;
+	}
+	ambientFromSky = this->addCheckBox("Ambient From Sky", scene->ambientFromSky);
+	// DEFECT (pre-existing, accordionbladewidget.cpp:216): addCheckBox drops its
+	// `value` argument on the floor — every caller has to set it afterwards.
+	ambientFromSky->setValue(scene->ambientFromSky);
+	ambientFromSky->setToolTip(QStringLiteral(
+		"Light the scene's ambient with the sky itself: the upper and lower hemisphere colours "
+		"are integrated from the sky image, so a red sky reddens what it lights. World > Ambient "
+		"Color then sets the strength and tint of that instead of being the ambient itself."));
+	connect(ambientFromSky, &CheckBoxWidget::valueChanged,
+			this, &SkyPropertyWidget::onAmbientFromSkyChanged);
 }
 
 void SkyPropertyWidget::addSunLinkRow()
 {
-	// Sun coupling (re-audit F5), the same row the World panel's sky section
-	// carries — these two panels are near-duplicates by history (F6 records the
-	// dedup as debt). Offered only when this asset is the OPEN SCENE's sky: a
-	// library sky has no scene and therefore no light to drive.
+	// Sun coupling (re-audit F5). Realistic sky only: it is the one sky that
+	// HAS a sun, so the row is built inside that case and nowhere else — and,
+	// in Asset binding, only while the asset IS the open scene's sky (a library
+	// sky has no scene and therefore no light to drive).
 	sunDrivesLight = nullptr;
-	if (!scene || scene->skyGuid != skyGuid) return;
+	auto live = liveScene();
+	if (!live) return;
 	sunDrivesLight = this->addCheckBox("Drive Selected Directional Light",
-									   !scene->sunLightGuid.isEmpty());
-	// addCheckBox drops its `value` argument (accordionbladewidget.cpp:216).
-	sunDrivesLight->setValue(!scene->sunLightGuid.isEmpty());
+									   !live->sunLightGuid.isEmpty());
+	// addCheckBox drops its `value` argument (accordionbladewidget.cpp:216) —
+	// the same pre-existing defect the Ambient From Sky row works around.
+	sunDrivesLight->setValue(!live->sunLightGuid.isEmpty());
 	sunDrivesLight->setToolTip(QStringLiteral(
 		"Point a directional light down the sky's sun: the Sun Azimuth and Sun Elevation dials "
 		"then drive its rotation, so the shadows and the lighting follow the sky. Uses the "
@@ -288,18 +487,58 @@ void SkyPropertyWidget::addSunLinkRow()
 
 void SkyPropertyWidget::onSunDrivesLightChanged(bool on)
 {
-	if (!scene) return;
+	auto live = liveScene();
+	if (loading || !live) return;
 	const iris::SceneNodePtr selected =
 		(services && services->selection) ? services->selection->selected() : iris::SceneNodePtr();
-	const QString linked = sunlink::setDriven(scene, services, on, selected);
+	// sunlink::setDriven records its OWN undo step (SunLightLinkCommand) — the
+	// same one world.sunLight pushes.
+	const QString linked = sunlink::setDriven(live, services, on, selected);
+	// A scene with no directional light cannot honour the request: put the box
+	// back rather than leaving it showing a coupling that does not exist.
 	if (on && linked.isEmpty() && sunDrivesLight) {
 		QSignalBlocker block(sunDrivesLight);
 		sunDrivesLight->setValue(false);
 	}
 }
 
+void SkyPropertyWidget::onAmbientFromSkyChanged(bool on)
+{
+	if (loading || !scene || binding != Binding::Scene) return;
+	// A direct edit of a backing field is a World Mode PIN (POST_CHAIN_SPEC
+	// §9.1), so this row is a registry edit: value AND pin, one command.
+	panelundo::runWorldModeEdit(services, scene, tr("Ambient From Sky"), [this, on]() {
+		worldmodes::setRowValue(scene, QStringLiteral("ambientFromSky"), on ? 1 : 0);
+	}, [this]() {
+		if (ambientFromSky && scene) {
+			QSignalBlocker quiet(ambientFromSky);
+			ambientFromSky->setValue(scene->ambientFromSky);
+		}
+	});
+}
+
+void SkyPropertyWidget::onSkyDetailChanged(int row)
+{
+	if (loading || !scene || binding != Binding::Scene) return;
+	// Not a sky *parameter* (it never enters skyData): a scene render setting,
+	// serialized beside antiAliasing, and a World Mode registry row — so the
+	// edit carries the value and the pin. SceneMirror re-bakes when it changes.
+	const int resolution = row >= 2 ? 1024 : row >= 1 ? 512 : 256;
+	panelundo::runWorldModeEdit(services, scene, tr("Sky Detail"), [this, resolution]() {
+		worldmodes::setRowValue(scene, QStringLiteral("skyBakeResolution"), resolution);
+	}, [this]() {
+		if (skyDetail && scene) {
+			QSignalBlocker quiet(skyDetail->getWidget());
+			skyDetail->setCurrentIndex(scene->skyBakeResolution >= 1024 ? 2
+									 : scene->skyBakeResolution >= 512  ? 1 : 0);
+		}
+	});
+}
+
 void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 {
+	if (!db || !project) return;
+	const QVariant before = sceneprops::get(liveScene(), QStringLiteral("sky"));
 	// Normally there'd be a check for if value is empty here but in that case we can clear the guid
 	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), project->getProjectGuid());
 	db->deleteDependency(skyGuid, guid);
@@ -324,107 +563,62 @@ void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 		default: break;
 	}
 
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) setSkyMap(cubeMapDefinition);
-	}
+	setSkyMap(cubeMapDefinition);
+	if (binding == Binding::Scene && !loading) commitSky(before, tr("Sky Cubemap"));
 }
 
-void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
-{
-    if (!!scene) {
-        this->scene = scene;
-    } else {
-        this->scene.clear();
-    }
-}
-
-void SkyPropertyWidget::setDatabase(Database *db)
-{
-    this->db = db;
-}
-
-void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType)
-{
-	skyGuid = guid;
-	currentSky = skyType;
-	skyTypeChanged(static_cast<int>(skyType));
-}
-
-// Let's repurpose this event and use it to update the asset in the db (iKlsR)
-void SkyPropertyWidget::hideEvent(QHideEvent *event)
-{
-	Q_UNUSED(event)
-	updateAssetAndKeys();
-}
-
+// Flushes the per-type definition back to wherever it came from: the scene's
+// skyData block, or the library row (which is written when the panel is hidden
+// — "let's repurpose this event and use it to update the asset in the db",
+// iKlsR, and it is still the only moment an asset edit is durable).
 void SkyPropertyWidget::updateAssetAndKeys()
 {
+	QJsonObject skyProperties;
+	const QJsonObject *source = nullptr;
+	switch (currentSky) {
+	case iris::SkyType::SINGLE_COLOR:    source = &singleColorDefinition; break;
+	case iris::SkyType::REALISTIC:       source = &realisticDefinition; break;
+	case iris::SkyType::EQUIRECTANGULAR: source = &equiSkyDefinition; break;
+	case iris::SkyType::CUBEMAP:         source = &cubeMapDefinition; break;
+	case iris::SkyType::GRADIENT:        source = &gradientDefinition; break;
+	case iris::SkyType::MATERIAL:        break;
+	}
+	if (!source) return;
+	for (const QString &key : source->keys()) skyProperties.insert(key, source->value(key));
+
+	if (binding == Binding::Scene) {
+		if (scene) scene->skyData.insert(skyDataKey(currentSky), skyProperties);
+		return;
+	}
+
+	if (!db || skyGuid.isEmpty()) return;
 	QJsonObject properties;
 	QJsonObject skyProps;
 	skyProps.insert("type", static_cast<int>(currentSky));
 	properties.insert("sky", skyProps);
-
-	skyProperties = QJsonObject();
 	skyProperties.insert("guid", skyGuid);
-
-	switch (currentSky) {
-	case iris::SkyType::SINGLE_COLOR: {
-		for (const QString& key : singleColorDefinition.keys()) {
-			skyProperties.insert(key, singleColorDefinition.value(key));
-		}
-		break;
-	}
-
-	case iris::SkyType::REALISTIC: {
-		for (const QString& key : realisticDefinition.keys()) {
-			skyProperties.insert(key, realisticDefinition.value(key));
-		}
-		break;
-	}
-
-	case iris::SkyType::EQUIRECTANGULAR: {
-		for (const QString& key : equiSkyDefinition.keys()) {
-			skyProperties.insert(key, equiSkyDefinition.value(key));
-		}
-		break;
-	}
-
-	case iris::SkyType::CUBEMAP: {
-		for (const QString& key : cubeMapDefinition.keys()) {
-			skyProperties.insert(key, cubeMapDefinition.value(key));
-		}
-		break;
-	}
-
-	case iris::SkyType::MATERIAL: {
-		for (const QString& key : materialDefinition.keys()) {
-			skyProperties.insert(key, materialDefinition.value(key));
-		}
-		break;
-	}
-
-	case iris::SkyType::GRADIENT: {
-		for (const QString& key : gradientDefinition.keys()) {
-			skyProperties.insert(key, gradientDefinition.value(key));
-		}
-		break;
-	}
-	}
-
-    db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toJson());
-    db->updateAssetProperties(skyGuid, QJsonDocument(properties).toJson());
+	db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toJson());
+	db->updateAssetProperties(skyGuid, QJsonDocument(properties).toJson());
 	// Not really used but keep around for now, the intent is clear (iKlsR)
 	if (eventBus) emit eventBus->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
 }
 
+void SkyPropertyWidget::hideEvent(QHideEvent *event)
+{
+	Q_UNUSED(event)
+	// The ASSET's edits become durable here; a scene's are already on the
+	// document (and saved with it).
+	if (binding == Binding::Asset) updateAssetAndKeys();
+}
+
 void SkyPropertyWidget::setEquiMap(const QString &guid)
 {
-    if (!guid.isEmpty()) {
-		equiSkyDefinition.insert("equiSkyGuid", guid);
-        auto image = resolveSkyAssetFile(project, db, guid);
-        equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
-        scene->setSkyTexture(iris::Texture2D::load(image, false));
-    }
+    if (guid.isEmpty()) return;
+	equiSkyDefinition.insert("equiSkyGuid", guid);
+    auto image = resolveSkyAssetFile(project, db, guid);
+    if (equiTexture) equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
+    if (auto live = liveScene()) live->setSkyTexture(iris::Texture2D::load(image, false));
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
@@ -443,13 +637,13 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 	cubeMapDefinition.insert("top", skyDataDefinition["top"].toString());
 	cubeMapDefinition.insert("bottom", skyDataDefinition["bottom"].toString());
 
-	skyMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
+	if (cubeMapWidget) cubeMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
 
 	// We need at least one valid image to get some metadata from
-	QImage *info;
+	QImage *info = nullptr;
 	bool useTex = false;
 	QVector<QString> sides = { front, back, left, right, top, bottom };
-	for (const auto image : sides) {
+	for (const auto &image : sides) {
 		if (!image.isEmpty() && QFileInfo(image).isFile()) {
 			info = new QImage(image);
 			useTex = true;
@@ -457,126 +651,76 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 		}
 	}
 
-
-	//if (useTex) {
-	//	scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
-	//}
-}
-
-void SkyPropertyWidget::setSkyFromMaterialDefinition(const QJsonObject& definition)
-{
-	auto vert = materialDefinition.value("vertexShader").toString();
-	auto frag = materialDefinition.value("fragmentShader").toString();
-
-	auto vPath = resolveSkyAssetFile(project, db, vert);
-	auto fPath = resolveSkyAssetFile(project, db, frag);
-
+	if (useTex) {
+		if (auto live = liveScene())
+			live->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
+		updateAssetAndKeys();
+	}
+	delete info;
 }
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
 {
 	singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(color));
-
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyColor = color;
-		}
-	}
-}
-
-void SkyPropertyWidget::onMaterialChanged(int index)
-{
-	Q_UNUSED(index)
-
-    QJsonDocument shaderData = QJsonDocument::fromJson(db->fetchAssetData(shaderSelector->getCurrentItemData()));
-	QJsonObject shaderDataDefinition = shaderData.object();
-
-	auto vert = shaderDataDefinition.value("vertex_shader").toString();
-	auto frag = shaderDataDefinition.value("fragment_shader").toString();
-
-	materialDefinition.insert("materialGuid", shaderSelector->getCurrentItemData());
-	materialDefinition.insert("vertexShader", vert);
-	materialDefinition.insert("fragmentShader", frag);
-
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) setSkyFromMaterialDefinition(materialDefinition);
-	}
+	if (auto live = liveScene()) live->skyColor = color;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onEquiTextureChanged(QString guid)
 {
 	equiSkyDefinition.insert("equiSkyGuid", guid);
-
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) setEquiMap(guid);
-	}
+	setEquiMap(guid);
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onReileighChanged(float val)
 {
 	realisticDefinition.insert("reileigh", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.reileigh = val;
-		}
-	}
+	if (auto live = liveScene()) live->skyRealistic.reileigh = val;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onLuminanceChanged(float val)
 {
 	realisticDefinition.insert("luminance", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.luminance = val;
-		}
-	}
+	if (auto live = liveScene()) live->skyRealistic.luminance = val;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onTurbidityChanged(float val)
 {
 	realisticDefinition.insert("turbidity", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.turbidity = val;
-		}
-	}
+	if (auto live = liveScene()) live->skyRealistic.turbidity = val;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onMieCoeffGChanged(float val)
 {
 	realisticDefinition.insert("mieCoefficient", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.mieCoefficient = val;
-		}
-	}
+	if (auto live = liveScene()) live->skyRealistic.mieCoefficient = val;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onMieDireChanged(float val)
 {
 	realisticDefinition.insert("mieDirectionalG", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.mieDirectionalG = val;
-		}
-	}
+	if (auto live = liveScene()) live->skyRealistic.mieDirectionalG = val;
+	updateAssetAndKeys();
 }
 
 // Azimuth/elevation are a lossless view of the three stored sunPos floats — the
-// panel edits the angles, the asset blob keeps the vector.
+// panel edits the angles, the document (and the saved blob) keeps the vector.
 void SkyPropertyWidget::writeSunAngles()
 {
 	if (!sunAzimuth || !sunElevation) return;
-	iris::SkyRealistic s;
-	s.setSunAngles(sunAzimuth->getValue(), sunElevation->getValue());
-	realisticDefinition.insert("sunPosX", double(s.sunPosX));
-	realisticDefinition.insert("sunPosY", double(s.sunPosY));
-	realisticDefinition.insert("sunPosZ", double(s.sunPosZ));
-	if (!!scene && scene->skyGuid == skyGuid) {
-		scene->skyRealistic.sunPosX = s.sunPosX;
-		scene->skyRealistic.sunPosY = s.sunPosY;
-		scene->skyRealistic.sunPosZ = s.sunPosZ;
-	}
+	iris::SkyRealistic sun;
+	if (auto live = liveScene()) sun = live->skyRealistic;
+	sun.setSunAngles(sunAzimuth->getValue(), sunElevation->getValue());
+	realisticDefinition.insert("sunPosX", double(sun.sunPosX));
+	realisticDefinition.insert("sunPosY", double(sun.sunPosY));
+	realisticDefinition.insert("sunPosZ", double(sun.sunPosZ));
+	if (auto live = liveScene()) live->skyRealistic = sun;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onSunAzimuthChanged(float)   { writeSunAngles(); }
@@ -585,44 +729,27 @@ void SkyPropertyWidget::onSunElevationChanged(float) { writeSunAngles(); }
 void SkyPropertyWidget::onGradientTopColorChanged(QColor color)
 {
 	gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(color));
-
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->gradientTop = color;
-		}
-	}
+	if (auto live = liveScene()) live->gradientTop = color;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onGradientMidColorChanged(QColor color)
 {
 	gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(color));
-
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->gradientMid = color;
-		}
-	}
+	if (auto live = liveScene()) live->gradientMid = color;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onGradientBotColorChanged(QColor color)
 {
 	gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(color));
-
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->gradientBot = color;
-		}
-	}
+	if (auto live = liveScene()) live->gradientBot = color;
+	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onGradientOffsetChanged(float offset)
 {
 	gradientDefinition.insert("gradientOffset", offset);
-
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->gradientOffset = offset;
-		}
-	}
+	if (auto live = liveScene()) live->gradientOffset = offset;
+	updateAssetAndKeys();
 }
-

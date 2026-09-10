@@ -17,7 +17,9 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 class ComboBoxWidget;
+class LabelWidget;
 class IEditorViewport;
+struct StudioServices;
 
 /**
  * World-panel "Shadows" section (VISUAL_PARITY_SPEC item 2, option A).
@@ -52,19 +54,32 @@ public:
     /// allocates R wide x 3.5R tall at 32-bit depth. Static so the verb docs and
     /// the tests can quote the same number.
     static int atlasMegabytes(int resolution);
+    /// The undo stack: shadow resolution is a quality-registry row, so an edit
+    /// is one WorldModeCommand (value + pin). Nullable.
+    void setServices(StudioServices *s) { services = s; }
 
 protected slots:
     void onQualityChanged(int row);
 
 private:
-    void rebuild();
+    /// Built ONCE; selection and undo refresh the same rows in place (debt L6).
+    void build();
+    void refreshRows();
     /// What Auto would derive right now: the largest Shadow Size among the
     /// scene's shadow-casting lights (the mirror's own policy), or 0 if none.
     int derivedFromLights() const;
 
     QSharedPointer<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
+    StudioServices *services = nullptr;
+    bool loading = false;
     ComboBoxWidget *qualitySelector = nullptr;
+    /// The three read-back rows: what Auto resolved to, what the atlas costs,
+    /// and how many casters actually got a map. Present from the start, hidden
+    /// when they have nothing to say.
+    LabelWidget *autoRow = nullptr;
+    LabelWidget *memoryRow = nullptr;
+    LabelWidget *mapsRow = nullptr;
 };
 
 #endif // WORLDSHADOWPROPERTYWIDGET_H

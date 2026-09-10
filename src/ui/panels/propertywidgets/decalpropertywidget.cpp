@@ -27,9 +27,18 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 
+// The five scalar rows write REFLECTED decal properties (`width`, `height`,
+// `depth`, `metalness`, `roughness`, `ignoreAlphaDiffuse` — the same keys
+// node.setProperty writes), so each gesture is one SetNodePropertyCommand
+// (debt L6). The three image rows go through SceneEditService, which owns the
+// dependency row, so they record the service call instead — the shape
+// node.setDecalMaps uses.
 DecalPropertyWidget::DecalPropertyWidget(QWidget *parent)
-    : AccordianBladeWidget(parent)
+    : AccordianBladeWidget(parent),
+      rows([this]() { return iris::SceneNodePtr(decalNode); }, [this]() { return services; },
+           [this]() { return !loading; })
 {
     image = this->addTexturePicker("Decal Image");
     width  = this->addFloatValueSlider("Width",  0.05f, 20.0f);
@@ -66,12 +75,12 @@ DecalPropertyWidget::DecalPropertyWidget(QWidget *parent)
     connect(image, &TexturePickerWidget::valuesChanged, this, &DecalPropertyWidget::onImageChanged);
     connect(normalImage, &TexturePickerWidget::valuesChanged, this, &DecalPropertyWidget::onNormalChanged);
     connect(emissiveImage, &TexturePickerWidget::valuesChanged, this, &DecalPropertyWidget::onEmissiveChanged);
-    connect(width,  SIGNAL(valueChanged(float)), this, SLOT(onWidthChanged(float)));
-    connect(height, SIGNAL(valueChanged(float)), this, SLOT(onHeightChanged(float)));
-    connect(depth,  SIGNAL(valueChanged(float)), this, SLOT(onDepthChanged(float)));
-    connect(metalness, SIGNAL(valueChanged(float)), this, SLOT(onMetalnessChanged(float)));
-    connect(roughness, SIGNAL(valueChanged(float)), this, SLOT(onRoughnessChanged(float)));
-    connect(ignoreAlpha, SIGNAL(valueChanged(bool)), this, SLOT(onIgnoreAlphaChanged(bool)));
+    rowundo::bind(width,  rows(QStringLiteral("width")));
+    rowundo::bind(height, rows(QStringLiteral("height")));
+    rowundo::bind(depth,  rows(QStringLiteral("depth")));
+    rowundo::bind(metalness, rows(QStringLiteral("metalness")));
+    rowundo::bind(roughness, rows(QStringLiteral("roughness")));
+    rowundo::bind(ignoreAlpha, rows(QStringLiteral("ignoreAlphaDiffuse")));
 }
 
 void DecalPropertyWidget::setProject(Project *proj)
@@ -122,77 +131,63 @@ void DecalPropertyWidget::bindMap(const QString &guid, QString &guidField, QStri
                                         project->getProjectGuid(), guid);
 }
 
+// One map rebind, undoable. The service owns the dependency ROW (it knows the
+// node's asset guid); this panel only has to keep the node and the CAS path in
+// step, and — since the write is a service call and not a field — the undo step
+// replays the call (NodeEditCommand's contract, as node.setDecalMaps does).
+void DecalPropertyWidget::bindKind(DecalMapKind kind, const QString &guid, const QString &text)
+{
+    if (loading || !decalNode) return;
+    QString *guidField = kind == DecalMapKind::Normal     ? &decalNode->normalGuid
+                       : kind == DecalMapKind::Emissive   ? &decalNode->emissiveGuid
+                                                          : &decalNode->textureGuid;
+    const QString before = *guidField;
+    if (before == guid) return;
+
+    if (!services || !services->sceneEdit) {
+        // No service (headless hosts, the panel suites): keep the node and the
+        // resolved path in step by hand, exactly as this row always did.
+        QString *pathField = kind == DecalMapKind::Normal   ? &decalNode->resolvedNormalPath
+                           : kind == DecalMapKind::Emissive ? &decalNode->resolvedEmissivePath
+                                                            : &decalNode->resolvedTexturePath;
+        bindMap(guid, *guidField, *pathField);
+        return;
+    }
+    auto node = decalNode;
+    SceneEditService *edit = services->sceneEdit;
+    edit->setDecalMap(node, kind, guid);
+    panelundo::pushEdit(services, text,
+                        [edit, node, kind, guid]() { edit->setDecalMap(node, kind, guid); },
+                        [edit, node, kind, before]() { edit->setDecalMap(node, kind, before); });
+}
+
 void DecalPropertyWidget::onImageChanged(const QString &path, const QString &guid)
 {
     Q_UNUSED(path);
-    if (loading || !decalNode) return;
-    // The service owns the dependency ROW (it knows the node's asset guid); this
-    // panel only has to keep the node and the CAS path in step.
-    if (services && services->sceneEdit) {
-        services->sceneEdit->setDecalTexture(decalNode, guid);
-        return;
-    }
-    bindMap(guid, decalNode->textureGuid, decalNode->resolvedTexturePath);
+    bindKind(DecalMapKind::Diffuse, guid, tr("Decal Image"));
 }
 
 void DecalPropertyWidget::onNormalChanged(const QString &path, const QString &guid)
 {
     Q_UNUSED(path);
-    if (loading || !decalNode) return;
     // MATERIAL_GAPS_SPEC §4 item 3: these two rows used to call bindMap
     // directly, which pinned the asset but wrote NO dependency row and removed
-    // none when the guid changed or was cleared. They now go through the same
+    // none when the guid changed or was cleared. They go through the same
     // service the image row does.
-    if (services && services->sceneEdit) {
-        services->sceneEdit->setDecalMap(decalNode, DecalMapKind::Normal, guid);
-        return;
-    }
-    bindMap(guid, decalNode->normalGuid, decalNode->resolvedNormalPath);
+    bindKind(DecalMapKind::Normal, guid, tr("Decal Normal Map"));
 }
 
 void DecalPropertyWidget::onEmissiveChanged(const QString &path, const QString &guid)
 {
     Q_UNUSED(path);
-    if (loading || !decalNode) return;
-    if (services && services->sceneEdit) {
-        services->sceneEdit->setDecalMap(decalNode, DecalMapKind::Emissive, guid);
-        return;
-    }
-    bindMap(guid, decalNode->emissiveGuid, decalNode->resolvedEmissivePath);
+    bindKind(DecalMapKind::Emissive, guid, tr("Decal Emissive Map"));
 }
 
-void DecalPropertyWidget::onWidthChanged(float v)
-{
-    if (loading || !decalNode) return;
-    decalNode->setPropertyValue(QStringLiteral("width"), v);
-}
-
-void DecalPropertyWidget::onHeightChanged(float v)
-{
-    if (loading || !decalNode) return;
-    decalNode->setPropertyValue(QStringLiteral("height"), v);
-}
-
-void DecalPropertyWidget::onDepthChanged(float v)
-{
-    if (loading || !decalNode) return;
-    decalNode->setPropertyValue(QStringLiteral("depth"), v);
-}
-
-void DecalPropertyWidget::onMetalnessChanged(float v)
-{
-    if (loading || !decalNode) return;
-    decalNode->setPropertyValue(QStringLiteral("metalness"), v);
-}
-
-void DecalPropertyWidget::onRoughnessChanged(float v)
-{
-    if (loading || !decalNode) return;
-    decalNode->setPropertyValue(QStringLiteral("roughness"), v);
-}
-
-void DecalPropertyWidget::onIgnoreAlphaChanged(bool v)
-{
-    if (loading || !decalNode) return;
-    decalNode->setPropertyValue(QStringLiteral("ignoreAlphaDiffuse"), v);
-}
+// The scalar rows are wired through rowundo (the reflected keys above); these
+// slots stay only because the .ui-era connections named them.
+void DecalPropertyWidget::onWidthChanged(float v) { Q_UNUSED(v) }
+void DecalPropertyWidget::onHeightChanged(float v) { Q_UNUSED(v) }
+void DecalPropertyWidget::onDepthChanged(float v) { Q_UNUSED(v) }
+void DecalPropertyWidget::onMetalnessChanged(float v) { Q_UNUSED(v) }
+void DecalPropertyWidget::onRoughnessChanged(float v) { Q_UNUSED(v) }
+void DecalPropertyWidget::onIgnoreAlphaChanged(bool v) { Q_UNUSED(v) }

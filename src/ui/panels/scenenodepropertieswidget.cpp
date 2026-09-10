@@ -11,8 +11,10 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QLayout>
+#include <QPointer>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QTimer>
 
 #include "irisgl/document/scenegraph/scenenode.h"
 
@@ -31,12 +33,10 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/decalpropertywidget.h"
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
-#include "ui/panels/propertywidgets/nodepropertywidget.h"
 #include "ui/panels/propertywidgets/shaderpropertywidget.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 #include "ui/panels/propertywidgets/physicspropertywidget.h"
 #include "ui/panels/propertywidgets/skypropertywidget.h"
-#include "ui/panels/propertywidgets/worldskypropertywidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 #include "ui/panels/propertywidgets/worldpostfxpropertywidget.h"
 #include "ui/panels/propertywidgets/camerapostfxpropertywidget.h"
@@ -73,11 +73,6 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	skyPropView->setDatabase(db);
 	skyPropView->expand();
 
-	worldSkyPropView = new WorldSkyPropertyWidget();
-	worldSkyPropView->setPanelTitle("Sky");
-	worldSkyPropView->setDatabase(db);
-	worldSkyPropView->expand();
-
 	// World Modes (POST_CHAIN_SPEC §9.6) sits FIRST among the quality sections:
 	// it is the tier every one of them resolves through.
 	worldModesPropView = new WorldModesPropertyWidget();
@@ -106,10 +101,22 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 		if (worldShadowPropView) worldShadowPropView->setScene(sc);
 		if (worldGiPropView)     worldGiPropView->setScene(sc);
 		if (worldPostFxPropView) worldPostFxPropView->setScene(sc);
-		if (worldSkyPropView)    worldSkyPropView->setScene(sc);
+		if (skyPropView)         skyPropView->setScene(sc);
 	});
 
 	worldGiPropView = new WorldGiPropertyWidget();
+	// THE OTHER DIRECTION of the same rule (debt L6 item 4, found by the Rayon
+	// lane): the Rayon section writes World Mode registry rows — the technique,
+	// the quality, the irradiance field, the tier — and the World Mode section
+	// lists every one of them with its pin mark. Without this, a Rayon edit left
+	// those rows showing the pre-edit values until the world was reselected.
+	connect(worldGiPropView, &WorldGiPropertyWidget::worldSettingsChanged, this, [this]() {
+		auto sc = scene;
+		if (!sc && !!sceneNode) sc = sceneNode->getScene();
+		if (!sc) return;
+		if (worldModesPropView) worldModesPropView->setScene(sc);
+		if (worldPostFxPropView) worldPostFxPropView->setScene(sc);
+	});
 	// RAYON is the product name for realtime global illumination
 	// (GI_UNIFIED_SPEC.md; the naming rule is that it is ALWAYS subtitled, so
 	// nobody reads it as hardware ray tracing). The section is one switch, one
@@ -202,7 +209,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
 {
     return {
-        fogPropView, worldPropView, skyPropView, worldSkyPropView,
+        fogPropView, worldPropView, skyPropView,
         worldModesPropView, worldGiPropView, worldPostFxPropView,
         worldAaPropView, worldShadowPropView, transformPropView,
         physicsPropView, meshPropView, lightPropView, decalPropView,
@@ -236,7 +243,6 @@ void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
     if (!!scene) {
         this->scene = scene;
         skyPropView->setScene(this->scene);
-		worldSkyPropView->setScene(this->scene);
     }
 }
 
@@ -265,7 +271,11 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldShadowPropView->setSceneView(sceneView);
             worldShadowPropView->setScene(sceneNode->getScene());
             mount(worldPropView);
-            mount(worldSkyPropView);
+            // The world's sky: re-bind, because the same panel may have been
+            // showing a LIBRARY sky asset since the last time the world was
+            // selected (one implementation, two bindings).
+            skyPropView->setScene(sceneNode->getScene());
+            mount(skyPropView);
             mount(worldModesPropView);
             mount(worldGiPropView);
             mount(worldPostFxPropView);
@@ -434,6 +444,19 @@ void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
     }
 }
 
+void SceneNodePropertiesWidget::refreshFromDocument()
+{
+    // Deferred: an undo can arrive from inside a control's own signal (a
+    // shortcut handled while a combo popup is closing), and rebuilding a blade
+    // there is the crash the sky panel's queued rebuild exists to avoid.
+    QPointer<SceneNodePropertiesWidget> self(this);
+    QTimer::singleShot(0, this, [self]() {
+        if (!self) return;
+        if (!!self->sceneNode) self->setSceneNode(self->sceneNode);
+        else if (!!self->scene) self->setScene(self->scene);
+    });
+}
+
 void SceneNodePropertiesWidget::refreshTransform()
 {
 	if (transformWidget) {
@@ -444,7 +467,7 @@ void SceneNodePropertiesWidget::refreshTransform()
 void SceneNodePropertiesWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
-    if (worldSkyPropView) worldSkyPropView->wireViewportEvents(sceneView);
+    if (skyPropView) skyPropView->wireViewportEvents(sceneView);
 }
 
 void SceneNodePropertiesWidget::setServices(StudioServices *services)
@@ -455,13 +478,23 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     // undo stack, and like every other panel here it is built in the CONSTRUCTOR,
     // which runs before this setter.
     if (worldModesPropView) worldModesPropView->setServices(services);
-    // The Rayon section's Epic-column sliders push WorldModeCommand too.
+    // EVERY properties row is undoable (debt L6 / N5), so every panel that owns
+    // rows needs the stack — not just the two that had it.
     if (worldGiPropView) worldGiPropView->setServices(services);
+    if (worldPropView) worldPropView->setServices(services);
+    if (fogPropView) fogPropView->setServices(services);
+    if (worldAaPropView) worldAaPropView->setServices(services);
+    if (worldShadowPropView) worldShadowPropView->setServices(services);
+    if (worldPostFxPropView) worldPostFxPropView->setServices(services);
+    if (lightPropView) lightPropView->setServices(services);
+    if (meshPropView) meshPropView->setServices(services);
+    if (physicsPropView) physicsPropView->setServices(services);
+    if (emitterPropView) emitterPropView->setServices(services);
+    if (cameraPostFxPropView) cameraPostFxPropView->setServices(services);
     if (skyPropView) skyPropView->eventBus = services ? services->eventBus : nullptr;
     // Sun coupling (re-audit F5): both sky panels carry the "drive a
     // directional light" row, which needs the selection and the undo stack.
     if (skyPropView) skyPropView->setServices(services);
-    if (worldSkyPropView) worldSkyPropView->setServices(services);
 }
 
 void SceneNodePropertiesWidget::setDatabase(Database *db)
@@ -484,7 +517,6 @@ void SceneNodePropertiesWidget::setProject(Project *project)
     this->project = project;
     if (worldPropView)    worldPropView->setProject(project);
     if (skyPropView)      skyPropView->setProject(project);
-    if (worldSkyPropView) worldSkyPropView->setProject(project);
     if (emitterPropView)  emitterPropView->setProject(project);
     if (shaderPropView)   shaderPropView->setProject(project);
     if (lightPropView)    lightPropView->setProject(project);
@@ -502,9 +534,9 @@ void SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets(QStringList 
 
 	db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
 
-	worldSkyPropView->skyTypeChanged(static_cast<int>(iris::SkyType::CUBEMAP));
+	skyPropView->skyTypeChanged(static_cast<int>(iris::SkyType::CUBEMAP));
 	for (int i = 0; i < 6; i++) {
-		worldSkyPropView->onSlotChanged(fileNames[i], guids[i], i);
+		skyPropView->onSlotChanged(fileNames[i], guids[i], i);
 	}
 }
 
