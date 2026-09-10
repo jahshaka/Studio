@@ -102,6 +102,14 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     const QString matName = QFileInfo(record.name).completeBaseName();
     blob[QStringLiteral("name")] = matName;
 
+    // THE STAMP (code review 2026-09-10). What makes this row "the image's own
+    // material" is that WE minted it for that image — not its shape. The shape
+    // test that stood in for it ("a Material whose only dependee is this
+    // texture") matched a material the USER built on the same image just as
+    // well, and would have taken theirs out of a project with the image. The
+    // stamp is written once, here, at the only place that mints one.
+    blob[QStringLiteral("companionOf")] = textureGuid;
+
     // Thumbnail straight from the image — headless-safe, no engine render.
     QByteArray thumbnail;
     {
@@ -145,9 +153,15 @@ QStringList companionMaterials(const QString &textureGuid)
     QSqlDatabase conn = QSqlDatabase::database();
     if (!conn.isOpen()) return companions;
 
-    // A companion is minted with exactly ONE outgoing edge: Material -> this
-    // texture. Anything else the material depends on means a human touched it
-    // (or it was never a companion), and it stops being ours to move.
+    // THE STAMP IS THE TEST: `companionOf` names the texture this material was
+    // minted for (createMaterialAsset above). A material the user authored on
+    // the same image carries no stamp and is never one of these, whatever its
+    // shape. Rows minted before the stamp existed answer no — nothing is owed
+    // to old data (CRUD law), and the cost of answering no is a leftover pin
+    // the user removes by hand.
+    //
+    // The candidate set still comes from the dependency edges, so this costs
+    // one query plus one blob read per material that names this texture.
     QSqlQuery query(conn);
     query.prepare("SELECT depender FROM dependencies WHERE dependee = ? AND depender_type = ?");
     query.addBindValue(textureGuid);
@@ -158,6 +172,17 @@ QStringList companionMaterials(const QString &textureGuid)
     while (query.next()) candidates << query.value(0).toString();
 
     for (const QString &candidate : candidates) {
+        QSqlQuery blob(conn);
+        blob.prepare("SELECT asset FROM assets WHERE guid = ?");
+        blob.addBindValue(candidate);
+        if (!blob.exec() || !blob.next()) continue;
+        const QJsonObject definition =
+            QJsonDocument::fromJson(blob.value(0).toByteArray()).object();
+        if (definition.value(QStringLiteral("companionOf")).toString() != textureGuid) continue;
+
+        // Still UNEDITED: a companion the user has since given a second map is
+        // theirs now, and a project keeps it. (The stamp says where the row
+        // came from; this says it has not become something else.)
         QSqlQuery deps(conn);
         deps.prepare("SELECT dependee FROM dependencies WHERE depender = ?");
         deps.addBindValue(candidate);

@@ -50,11 +50,17 @@
 //  14. .jaf archives carry `listed`: an export of an UNLISTED asset imports
 //      unlisted, and an archive written before the column existed imports
 //      listed.
+//  15. assetdelete::removeFromProject takes the AUTO-MINTED companion image
+//      material out of the project with the image — identified by the mint's
+//      STAMP, so a material the USER authored on the same image (identical
+//      shape) keeps its pin, and so does a companion something depends on.
 //
 // Framework-free; non-zero exit on failure. Runs under QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
+#include <QColor>
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -66,7 +72,9 @@
 #include "data/constants.h"
 #include "io/assetmanager.h"
 #include "services/assetcas.h"
+#include "services/assetdelete.h"
 #include "services/assetstorepaths.h"
+#include "services/imagematerial.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -810,6 +818,95 @@ int main(int argc, char **argv)
               qPrintable(QStringLiteral("the legacy archive imported -> %1").arg(oldLanded)));
         CHECK(db.isAssetListed(oldLanded),
               "... LISTED: an archive with no opinion about visibility has one made for it");
+    }
+
+    // --- 15. the project-side remove and the companion image material -------
+    //
+    // Adding an IMAGE to a project mints a companion PBR material for it and
+    // pins that too, so removing the image takes the companion with it (owner
+    // question, MASTER_QUEUE §26). The rule is IDENTITY, not shape: the first
+    // version of it matched "a Material whose only dependee is this texture",
+    // which is also exactly what a material the USER authored on that image
+    // looks like — and since the mint is skipped when any material already
+    // depends on the texture, theirs is precisely what would have been in the
+    // companion's place. Asserted here on all three shapes at once.
+    {
+        conn = QSqlDatabase::database();
+        AssetStorePaths::setRootOverride(storeRoot);
+        const QString imgProject = "proj-companion";
+        CHECK(db.createProject(imgProject, "Companion"), "companion project created");
+
+        // A REAL image: the material builder reads the pixels.
+        const QString pngPath = scratchDir.filePath("companion.png");
+        {
+            QImage image(8, 8, QImage::Format_RGB32);
+            image.fill(QColor(20, 120, 200));
+            CHECK(image.save(pngPath, "PNG"), "a real 8x8 PNG for the material builder");
+        }
+        const QString texGuid = db.createAssetEntry(
+            "guid-companion-tex", "companion.png", static_cast<int>(ModelTypes::Texture),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString texOid, ce;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, pngPath, texGuid, "source", "companion.png",
+                                   &texOid, &ce), "the image is in the store");
+
+        // (1) the companion the app would mint
+        QString mintError;
+        const QString companion =
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, &mintError);
+        CHECK(!companion.isEmpty(),
+              qPrintable(QStringLiteral("the companion material was minted -> %1 %2")
+                             .arg(companion, mintError)));
+        CHECK(ImageMaterial::companionMaterials(texGuid) == QStringList{ companion },
+              "companionMaterials names exactly it (the mint's stamp)");
+
+        // (2) a material the USER authored on the same image: same type, same
+        // single dependency, no stamp.
+        const QString theirs = db.createAssetEntry(
+            "guid-user-material", "Their Material", static_cast<int>(ModelTypes::Material),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"),
+            AssetViewFilter::AssetsView);
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Material),
+                                  static_cast<int>(ModelTypes::Texture), theirs, texGuid,
+                                  QString()),
+              "their material depends on the same image");
+        CHECK(!ImageMaterial::companionMaterials(texGuid).contains(theirs),
+              "THE FIX: an unstamped material of the SAME SHAPE is not a companion");
+
+        // (3) a second stamped companion that an OBJECT depends on — applied
+        // to something in the project, so the project keeps it.
+        const QString applied =
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, nullptr);
+        CHECK(!applied.isEmpty() && applied != companion, "a second stamped material exists");
+        const QString userObject = db.createAssetEntry(
+            "guid-companion-object", "thing.obj", static_cast<int>(ModelTypes::Object),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Object),
+                                  static_cast<int>(ModelTypes::Material), userObject, applied,
+                                  QString()),
+              "an object in the project uses that one");
+
+        for (const QString &member : { texGuid, companion, theirs, applied })
+            CHECK(AssetCas::writePin(conn, imgProject, member, QString()),
+                  "pinned into the project");
+
+        const auto outcome = assetdelete::removeFromProject(&db, texGuid, imgProject);
+        CHECK(outcome.ok, qPrintable(QStringLiteral("removeFromProject ran: %1").arg(outcome.error)));
+        CHECK(!db.isAssetPinnedBy(imgProject, texGuid), "the image left the project");
+        CHECK(!db.isAssetPinnedBy(imgProject, companion),
+              "... and its auto-minted companion went with it");
+        CHECK(db.isAssetPinnedBy(imgProject, theirs),
+              "THE FIX: the user's own material KEPT its pin");
+        CHECK(db.isAssetPinnedBy(imgProject, applied),
+              "... and so did the companion an object depends on");
+        CHECK(db.isAssetListed(companion) && !db.fetchAsset(companion).guid.isEmpty(),
+              "the companion's LIBRARY row is untouched — this is a project-side remove");
+        CHECK(!db.fetchAsset(texGuid).guid.isEmpty() && db.isAssetListed(texGuid),
+              "... and so is the image's");
+        AssetStorePaths::setRootOverride(QString());
     }
 
     // --- 7. wipeDatabase clears the CAS catalog too (DESTRUCTIVE — last) ----

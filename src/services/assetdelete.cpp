@@ -116,25 +116,30 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
     // never asked for and cannot explain. It is symmetry: the add created it,
     // the remove takes it back out.
     //
-    // Only ever the automatic one, and only when nothing in the project can
+    // Only ever the one WE minted, and only while nothing in the project can
     // still be using it:
-    //   * its ONLY dependency is this texture (ImageMaterial::
-    //     companionMaterials — a material the user built on top of the image
-    //     has more, and is theirs),
-    //   * nothing depends on the companion itself (no asset rides it), and
-    //   * the project's saved scene does not name it.
+    //   * it carries the mint's stamp (ImageMaterial::companionMaterials —
+    //     `companionOf: <this texture>`, written only by createMaterialAsset).
+    //     Identity, not shape: the old shape test ("a Material whose only
+    //     dependee is this texture") matched a material the USER authored on
+    //     the same image just as well — and since addToProject mints nothing
+    //     when any material already depends on the texture, theirs is exactly
+    //     what stands in the companion's place (code review 2026-09-10);
+    //   * THIS project pins it — the row's existence, since a companion is a
+    //     DB-only asset whose pin carries an empty oid, so AssetCas::pinnedOid
+    //     cannot tell "no pin" from "no bytes";
+    //   * nothing DEPENDS on it: a companion applied to an object in this
+    //     project is named by an Object -> Material edge, and that edge is what
+    //     keeps it. (The scene blob cannot answer this — writeSceneNodeMaterial
+    //     inlines a material's VALUES into the node and never names the asset
+    //     guid, so the guard that read it never fired.)
     // The LIBRARY row is never touched — this is a project-side remove — so
     // the worst case of a wrong guess is a pin the user re-adds with one drag.
     if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture) {
-        const QByteArray scene = db->getSceneBlobGlobal(projectGuid);
         for (const QString &companion : ImageMaterial::companionMaterials(guid)) {
             if (toUnpin.contains(companion)) continue;
-            // THIS project's pin row, not any project's count: a companion is a
-            // DB-only asset, so its pin carries an empty oid and only the row's
-            // existence can answer "is it in this project?".
             if (!db->isAssetPinnedBy(projectGuid, companion)) continue;
             if (!db->hasMultipleDependers(companion).isEmpty()) continue;  // something rides it
-            if (!scene.isEmpty() && scene.contains(companion.toUtf8())) continue;
             toUnpin.append(companion);
         }
     }

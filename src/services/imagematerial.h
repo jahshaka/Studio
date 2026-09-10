@@ -58,12 +58,15 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
 /// same image must not mint a second material).
 bool hasCompanionMaterial(const QString &textureGuid);
 
-/// The AUTO-MINTED companions of a texture: Material rows whose ONLY
-/// dependency is this texture — the exact shape createMaterialAsset builds.
-/// A material the user authored on top of this image (a second texture, a
-/// normal map) has more dependencies and is NOT one of these, so it is never
-/// swept along with the image. Used by assetdelete::removeFromProject to take
-/// the companion out of a project with the image it was minted for.
+/// The AUTO-MINTED companions of a texture: Material rows STAMPED
+/// `companionOf: <textureGuid>` by createMaterialAsset — the stamp is the
+/// identity, so a material the USER authored on the same image is never one
+/// of these (its shape can be identical). A stamped row the user has since
+/// given a second map is theirs too and drops out (the stamp says where the
+/// row came from; the single-dependency test says it has not become something
+/// else). Rows minted before the stamp existed answer no. Used by
+/// assetdelete::removeFromProject to take the companion out of a project with
+/// the image it was minted for.
 QStringList companionMaterials(const QString &textureGuid);
 
 } // namespace ImageMaterial
