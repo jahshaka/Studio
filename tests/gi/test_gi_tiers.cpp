@@ -104,6 +104,27 @@ static void testTierTable()
         }
     }
     CHECK(worldmodes::rayonRowIds().size() == 5, "the tier writes exactly five rows through");
+    // 5 x 4: EVERY cell of every rayonTiered row is the table's cell. The rows
+    // derive their tier[] from kRayonTable (worldmodes.cpp rayonColumns) and
+    // the public readers read the same table one column at a time, so a cell
+    // that disagrees here is a second copy of the table — which is exactly what
+    // the rayontiers review found (13 of 20 cells untested while hand-copied).
+    {
+        using Reader = int (*)(RayonTier);
+        const Reader readers[5] = { worldmodes::rayonTechnique, worldmodes::rayonQuality,
+                                    worldmodes::rayonDdgi, worldmodes::rayonBounces,
+                                    worldmodes::rayonDynamicProbes };
+        const QStringList ids = worldmodes::rayonRowIds();
+        for (int c = 0; c < 5 && c < ids.size(); ++c) {
+            const worldmodes::Row *r = worldmodes::row(ids[c]);
+            for (int t = 0; t < 4; ++t) {
+                const int want = readers[c](RayonTier(t));
+                CHECK(r && r->tier[t] == want,
+                      qPrintable(QStringLiteral("%1.tier[%2] == kRayonTable[%2] column %3 (%4)")
+                                     .arg(ids[c]).arg(t).arg(c).arg(want)));
+            }
+        }
+    }
     // High and Epic differ in TWO rows and nowhere else — the whole point of
     // Epic's column (before option (b) they differed only in the field, and
     // once High is DDGI-fed that would have collapsed them onto one row).
