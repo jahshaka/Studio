@@ -98,6 +98,7 @@ jah_no_display(avatar.document)
 
 add_executable(test_avatar_preview test_avatar_preview.cpp ${AVATAR_LOAD_SOURCES}
     ${CMAKE_SOURCE_DIR}/src/bridge/avatarpreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/boneoverlay.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_avatar_preview PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17

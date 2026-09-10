@@ -2,6 +2,7 @@
 // DefaultMaterial colour renders to a QImage of the requested size whose centre is
 // the material, not the background; a second colour differs; a third request
 // identical to the first reproduces it (nothing leaks between requests).
+#include "../support/previewdump.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -33,6 +34,7 @@ static bool isBackground(QColor c)
 static QColor centre(const QImage &img) { return img.pixelColor(img.width() / 2, img.height() / 2); }
 static void show(const char *tag, const QImage &img)
 {
+    previewdump::save(tag, img);
     const QColor c = img.isNull() ? QColor() : centre(img), k = img.isNull() ? QColor() : img.pixelColor(2, 2);
     std::printf("    %-24s %dx%d centre %3d %3d %3d   corner %3d %3d %3d\n", tag, img.width(), img.height(),
                 c.red(), c.green(), c.blue(), k.red(), k.green(), k.blue());

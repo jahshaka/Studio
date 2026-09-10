@@ -8,7 +8,13 @@
 // a worker thread) in engine mode: the engine has one thread affinity, so
 // thumbnails are drawn synchronously, one per tick, by ThumbnailGenerator's
 // queue. The document for a preview is an ordinary iris::Scene (GL-free) that
-// SceneMirror pushes into the "thumbs" engine Scene, exactly like the viewport.
+// SceneMirror pushes into the thumbs engine Scene, exactly like the viewport.
+//
+// An EnginePreviewScene, with one difference from the on-screen previews: it
+// OWNS its View. Nothing shows a thumbnail renderer, so there is no widget to
+// hand it a native window — it makes a small offscreen one, keeps it disabled
+// between requests, resizes it when a request asks for another size, and the
+// base destroys it in release().
 //
 // Studio-side code: includes iris (Qt) and the engine abstraction. Never Ogre.
 #include <memory>
@@ -16,17 +22,18 @@
 #include <QSize>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
+#include "bridge/enginepreviewscene.h"
 
 class SceneMirror;
 namespace iris { struct MeshMaterialData; }
 
-class EngineThumbnailRenderer
+class EngineThumbnailRenderer : public EnginePreviewScene
 {
 public:
     /// Holds the engine weakly: the renderer never keeps the Engine alive, and
     /// every call checks it is still there.
     explicit EngineThumbnailRenderer(const std::shared_ptr<jahshaka::engine::Engine> &engine);
-    ~EngineThumbnailRenderer();
+    ~EngineThumbnailRenderer() override;
 
     /// Renders `subject` (a mesh node or a hierarchy of them) framed by its bounding
     /// spheres, with the preview lights. Null image if the engine is gone or the
@@ -34,10 +41,6 @@ public:
     QImage renderNode(iris::SceneNodePtr subject, QSize size);
     /// Renders `material` on the preview sphere (app/content/primitives/sphere.obj).
     QImage renderMaterial(iris::MaterialPtr material, QSize size);
-
-    /// Destroys the offscreen View, the thumbs Scene and the mirror while the
-    /// Engine is still alive. Safe to call repeatedly; the destructor calls it.
-    void release();
 
     /// Background the offscreen view is cleared to (what "not the background" means).
     static jahshaka::engine::Colour backgroundColour();
@@ -47,16 +50,19 @@ public:
     /// viewer shows. (Thumbnails used to drop the textures and render grey.)
     static iris::MaterialPtr previewMaterialForMeshData(const iris::MeshMaterialData &data);
 
+protected:
+    void configureScene(jahshaka::engine::Scene *scene) override;
+    /// Nothing: the mirror's source is a THROWAWAY document, set per request
+    /// and cleared again so nothing leaks between thumbnails.
+    void configureMirror(SceneMirror *mirror) override { (void)mirror; }
+    void releaseSubject(bool sceneAlive) override;
+
 private:
     bool ensureResources(QSize size);
     QImage render(iris::ScenePtr document, iris::CameraNodePtr camera, QSize size);
     /// The preview scene every thumbnail shares: ambient, key light, rim light, camera.
     static iris::ScenePtr buildPreviewScene(iris::CameraNodePtr &cameraOut);
 
-    std::weak_ptr<jahshaka::engine::Engine> mEngine;
-    jahshaka::engine::View  *mView  = nullptr;
-    jahshaka::engine::Scene *mScene = nullptr;
-    std::unique_ptr<SceneMirror> mMirror;
     iris::MeshPtr mSphere;   // preview sphere, loaded once
 };
 

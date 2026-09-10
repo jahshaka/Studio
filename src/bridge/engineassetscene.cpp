@@ -2,18 +2,13 @@
 #include "irisgl/core/math/vec.h"
 #include "bridge/engineassetscene.h"
 
-#include <cstdint>
-#include <cstring>
-#include <string>
 #include <QColor>
 #include <QFileInfo>
 #include <QtMath>
 
 #include "irisgl/mirror/scenemirror.h"
-#include "bridge/sceneworkerthreads.h"
-#include "bridge/offscreenrenderscope.h"
-#include "bridge/stableoffscreenrender.h"
 #include "viewport/previewframing.h"
+#include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/geometry/boundingsphere.h"
@@ -40,18 +35,17 @@ iris::AABB nodeBoundingBox(iris::SceneNodePtr node)
     return preview::worldBoundingBox(node);
 }
 
-float lerp(float a, float b, float t) { return a * (1 - t) + b * t; }
-
 } // namespace
 
 EngineAssetScene::EngineAssetScene(const std::shared_ptr<Engine> &engine)
-    : mEngine(engine)
+    : EnginePreviewScene(engine, "assets", sceneworkers::Tier::Preview)
 {
     buildDocument();
 }
 
 EngineAssetScene::~EngineAssetScene()
 {
+    // The base destructor cannot run the hooks (see enginepreviewscene.h).
     release();
 }
 
@@ -118,50 +112,28 @@ void EngineAssetScene::buildDocument()
     mCamera->update(0);
     mDocument->update(0);
 
-    // OrbitalCameraController: setCamera (pivot from the camera), then the
-    // preview pivot/distance, rotation speed .5.
-    mDistFromPivot = 15;
+    // Adopt the camera at the legacy orbit radius, then move the pivot to the
+    // origin at the preview distance (AssetViewer did exactly this).
+    mOrbit.distFromPivot = 15;
     orbitFromCamera();
-    mPivot = iris::Vec3(0, 0, 0);
-    mDistFromPivot = 5;
-    mRotationSpeed = 0.5f;
+    mOrbit.pivot = iris::Vec3(0, 0, 0);
+    mOrbit.distFromPivot = 5;
+    mOrbit.rotationSpeed = 0.5f;
 }
 
-bool EngineAssetScene::attach(View *view)
+void EngineAssetScene::configureScene(Scene *scene)
 {
-    auto engine = mEngine.lock();
-    if (!engine || !view) return false;
-    if (mScene && mView == view) return true;
-    if (mScene && mView != view) {
-        if (mView) mView->setScene(nullptr);
-    } else if (!mScene) {
-        mScene = engine->createScene("assets-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
-                                     sceneworkers::count(sceneworkers::Tier::Preview));
-        if (!mScene) return false;
-        mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
-        mMirror.reset(new SceneMirror(mScene));
-        mMirror->setLightWires(false);          // a preview never shows editor wires
-        mMirror->setSource(mDocument);
-    }
-    mView = view;
-    mView->setScene(mScene);
-    mView->setShadows(mShadows);
-    return true;
+    scene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
 }
 
-void EngineAssetScene::release()
+void EngineAssetScene::configureMirror(SceneMirror *mirror)
 {
-    auto engine = mEngine.lock();
-    if (mMirror) {
-        if (engine && mScene) mMirror->setSource(nullptr);
-        mMirror.reset();
-    }
-    if (engine && mScene) {
-        if (mView && mView->scene() == mScene) mView->setScene(nullptr);
-        engine->destroyScene(mScene);
-    }
-    mScene = nullptr;
-    mView = nullptr;
+    mirror->setSource(mDocument);
+}
+
+void EngineAssetScene::configureView(View *view)
+{
+    view->setShadows(mShadows);
 }
 
 iris::MeshPtr EngineAssetScene::previewSphere()
@@ -276,30 +248,15 @@ void EngineAssetScene::setBackdrop(unsigned int id)
     default:
         return;
     }
-    if (mView) mView->setShadows(mShadows);
+    if (view()) view()->setShadows(mShadows);
 }
 
-// ---- orbit camera: OrbitalCameraController in preview mode ----
+// ---- orbit camera: the shared PreviewOrbit (viewport/previeworbit.h) ----
 
 void EngineAssetScene::orbitFromCamera()
 {
-    // OrbitalCameraController::setCamera: pivot ahead of the camera, yaw/pitch from it.
-    auto viewVec = mCamera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
-    mPivot = mCamera->getLocalPos() + viewVec * mDistFromPivot;
-    float roll;
-    mCamera->getLocalRot().getEulerAngles(&mPitch, &mYaw, &roll);
-    mTargetYaw = mYaw;
-    mTargetPitch = mPitch;
-    updateCameraRot();
-}
-
-void EngineAssetScene::updateCameraRot()
-{
-    auto rot = iris::Quat::fromEulerAngles(mPitch, mYaw, 0);
-    auto localPos = rot.rotatedVector(iris::Vec3(0, 0, 1));
-    mCamera->setLocalPos(mPivot + localPos * mDistFromPivot);
-    mCamera->setLocalRot(rot);
-    mCamera->update(0);
+    mOrbit.adopt(mCamera);
+    mOrbit.apply(mCamera);
 }
 
 void EngineAssetScene::applyClipPlanes()
@@ -307,7 +264,7 @@ void EngineAssetScene::applyClipPlanes()
     // mDistanceFromPivot may come from stored scene properties (orientCamera),
     // not only from setSubject's framing: re-derive planes that contain both
     // the orbit distance and the subject.
-    const float dist = qMax(mDistanceFromPivot, mDistFromPivot);
+    const float dist = qMax(mDistanceFromPivot, mOrbit.distFromPivot);
     preview::clipPlanesForFraming(dist, qMax(mSubjectRadius, 1.0f),
                                   mCamera->nearClip, mCamera->farClip);
 }
@@ -321,11 +278,11 @@ void EngineAssetScene::resetCamera()
     mCamera->update(0);
 
     orbitFromCamera();
-    mPivot = mLookAt;
-    mDistFromPivot = mDistanceFromPivot;
-    mRotationSpeed = 0.5f;
+    mOrbit.pivot = mLookAt;
+    mOrbit.distFromPivot = mDistanceFromPivot;
+    mOrbit.rotationSpeed = 0.5f;
     applyClipPlanes();
-    updateCameraRot();
+    mOrbit.apply(mCamera);
 }
 
 void EngineAssetScene::resetCameraAfter()
@@ -335,9 +292,9 @@ void EngineAssetScene::resetCameraAfter()
     mCamera->setLocalRot(iris::Quat::fromEulerAngles(mLocalRot));
     mCamera->update(0);
 
-    mDistFromPivot = mDistanceFromPivot;
+    mOrbit.distFromPivot = mDistanceFromPivot;
     orbitFromCamera();
-    mRotationSpeed = 0.5f;
+    mOrbit.rotationSpeed = 0.5f;
     applyClipPlanes();
 }
 
@@ -356,122 +313,62 @@ QJsonObject EngineAssetScene::sceneProperties() const
     };
     QJsonObject cameraObj;
     cameraObj["pos"] = vec3(mCamera->getLocalPos());
-    cameraObj["distFromPivot"] = mDistFromPivot;
+    cameraObj["distFromPivot"] = mOrbit.distFromPivot;
     cameraObj["rot"] = vec3(mCamera->getLocalRot().toEulerAngles());
     QJsonObject properties;
     properties["camera"] = cameraObj;
     return properties;
 }
 
-void EngineAssetScene::mouseDown(Qt::MouseButton b)
-{
-    if (b == Qt::LeftButton) mLeftDown = true;
-    if (b == Qt::RightButton) mRightDown = true;
-    if (b == Qt::MiddleButton) mMiddleDown = true;
-}
+void EngineAssetScene::mouseDown(Qt::MouseButton b) { mOrbit.mouseDown(b); }
 
-void EngineAssetScene::mouseUp(Qt::MouseButton b)
-{
-    if (b == Qt::LeftButton) mLeftDown = false;
-    if (b == Qt::RightButton) mRightDown = false;
-    if (b == Qt::MiddleButton) mMiddleDown = false;
-}
+void EngineAssetScene::mouseUp(Qt::MouseButton b) { mOrbit.mouseUp(b); }
 
 void EngineAssetScene::mouseMove(int dx, int dy)
 {
-    // OrbitalCameraController::onMouseMove, previewMode: left or right drag orbits.
-    if (mLeftDown || mRightDown) orbit(dx * mRotationSpeed, dy * mRotationSpeed);
-    if (mMiddleDown) {
-        const float dragSpeed = 0.01f;
-        auto dir = mCamera->getLocalRot().rotatedVector(iris::Vec3(dx * dragSpeed, -dy * dragSpeed, 0));
-        mPivot += dir;
-    }
-    updateCameraRot();
+    mOrbit.drag(mCamera, dx, dy, 0.01f);
+    mOrbit.apply(mCamera);
 }
 
 void EngineAssetScene::orbit(float yawDegrees, float pitchDegrees)
 {
-    mYaw = mTargetYaw;
-    mPitch = mTargetPitch;
-    mYaw += yawDegrees;
-    mPitch += pitchDegrees;
-    mTargetYaw = mYaw;
-    mTargetPitch = mPitch;
-    updateCameraRot();
+    mOrbit.orbit(yawDegrees, pitchDegrees);
+    mOrbit.apply(mCamera);
 }
 
 void EngineAssetScene::wheel(int delta)
 {
+    // The zoom POLICY is the asset viewer's own (previeworbit.h): stop at the
+    // pivot, and never let zooming out push the subject past the far plane.
     const float zoomSpeed = 0.01f;
-    mDistFromPivot += -delta * zoomSpeed;
-    if (mDistFromPivot < 0) mDistFromPivot = 0;
-    // Zooming out must never push the subject past the far plane.
-    if (mDistFromPivot + 2.0f * mSubjectRadius > mCamera->farClip)
-        preview::clipPlanesForFraming(mDistFromPivot, qMax(mSubjectRadius, 1.0f),
+    mOrbit.distFromPivot += -delta * zoomSpeed;
+    if (mOrbit.distFromPivot < 0) mOrbit.distFromPivot = 0;
+    if (mOrbit.distFromPivot + 2.0f * mSubjectRadius > mCamera->farClip)
+        preview::clipPlanesForFraming(mOrbit.distFromPivot, qMax(mSubjectRadius, 1.0f),
                                       mCamera->nearClip, mCamera->farClip);
-    updateCameraRot();
+    mOrbit.apply(mCamera);
 }
 
 void EngineAssetScene::step(float dt, int width, int height)
 {
-    // OrbitalCameraController::update
-    mYaw = lerp(mYaw, mTargetYaw, 0.8f);
-    mPitch = lerp(mPitch, mTargetPitch, 0.8f);
-    updateCameraRot();
+    mOrbit.advance();
+    mOrbit.apply(mCamera);
 
     mDocument->update(dt);
-    mCamera->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
-    if (mMirror && mView) {
-        mMirror->sync();
-        mMirror->applySky(mView);
-        mMirror->applyCamera(mCamera, mView);
-    }
+    pushFrame(mCamera, width, height);
 }
 
-QImage EngineAssetScene::toQImage(const Image &img)
+void EngineAssetScene::prepareOffscreen(View *shot, int width, int height)
 {
-    QImage result;
-    if (img.width && img.height) {
-        result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
-        for (unsigned y = 0; y < img.height; ++y)
-            std::memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
-    }
-    return result;
+    (void)shot;   // the base has already made it the current view
+    mDocument->update(0);
+    pushFrame(mCamera, width, height);
 }
 
 QImage EngineAssetScene::renderImage(int width, int height)
 {
-    auto engine = mEngine.lock();
-    if (!engine || width <= 0 || height <= 0) return QImage();
+    if (!mDocument) return QImage();
     const QColor c = mDocument->skyColor;
-    View *shot = engine->createOffscreenView(
-        "assets-shot-" + std::to_string(reinterpret_cast<uintptr_t>(this)) + "-" + std::to_string(++mShotSerial),
-        unsigned(width), unsigned(height), Colour(c.redF(), c.greenF(), c.blueF(), 1.0f));
-    if (!shot) return QImage();
-    // Not attached anywhere yet (the widget was never shown): the shot view is
-    // the first view, which lets the scene be created (ORDER MATTERS).
-    const bool temporary = !mScene;
-    if (temporary && !attach(shot)) { engine->destroyView(shot); return QImage(); }
-    shot->setScene(mScene);
-    shot->setShadows(mShadows);
-    mDocument->update(0);
-    mCamera->setAspectRatio(float(width) / float(height));
-    if (mMirror) {
-        mMirror->sync();
-        mMirror->applySky(shot);
-        mMirror->applyCamera(mCamera, shot);
-    }
-    // The editor does not pay for an asset snapshot (fps audit F5) — see
-    // bridge/offscreenrenderscope.h.
-    OffscreenRenderScope quiet(engine.get());
-    // Two frames, plus whatever the texture load-request counter still owes
-    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
-    renderStableFrames(engine.get());
-    Image img;
-    QImage result;
-    if (shot->readPixels(img)) result = toQImage(img);
-    shot->setScene(nullptr);
-    if (mView == shot) mView = nullptr;
-    engine->destroyView(shot);
-    return result;
+    return renderOffscreen("assets-shot", width, height,
+                           Colour(c.redF(), c.greenF(), c.blueF(), 1.0f), mShadows);
 }

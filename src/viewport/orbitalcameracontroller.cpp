@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/cameracontrollerbase.h"
 #include "viewport/orbitalcameracontroller.h"
+#include "viewport/previeworbit.h"
 
 #include "data/settingsmanager.h"
 #include "viewport/gizmo.h"
@@ -27,7 +28,7 @@ For more information see the LICENSE file
 
 float lerp(float a, float b, float t)
 {
-	return a * (1 - t) + b * t;
+	return orbitmath::lerp(a, b, t);
 }
 
 OrbitalCameraController::OrbitalCameraController(IEditorViewport* sceneWidget)
@@ -60,12 +61,9 @@ void OrbitalCameraController::setCamera(iris::CameraNodePtr  cam)
 {
     this->camera = cam;
 
-    //calculate the location of the pivot
-    auto viewVec = cam->getLocalRot().rotatedVector(iris::Vec3(0,0,-1));//default forward is -z
-    pivot = cam->getLocalPos() + (viewVec*distFromPivot);
-
-    float roll;
-    cam->getLocalRot().getEulerAngles(&pitch,&yaw,&roll);
+    // The pivot and the (yaw, pitch) the arcball steers with — the SHARED
+    // decomposition every preview surface uses too (viewport/previeworbit.h).
+    orbitmath::decompose(cam, distFromPivot, pivot, pitch, yaw);
 	targetYaw = yaw;
 	targetPitch = pitch;
 	navPending = false;
@@ -131,9 +129,7 @@ void OrbitalCameraController::onMouseMove(int x,int y)
     if (middleMouseDown ||
 		canLeftMouseDrag()) {
         //translate camera
-        float dragSpeed = 0.01f;
-        auto dir = camera->getLocalRot().rotatedVector(iris::Vec3(x*dragSpeed,-y*dragSpeed,0));
-        pivot += dir;
+        pivot += orbitmath::panDelta(camera, x, y, 0.01f);
         navigated = true;   // the pivot moved: the camera has to follow it
     }
 
@@ -268,12 +264,6 @@ void OrbitalCameraController::focusOnNode(iris::SceneNodePtr sceneNode)
 
 void OrbitalCameraController::updateCameraRot()
 {
-    auto rot = iris::Quat::fromEulerAngles(pitch,yaw,0);
-    auto localPos = rot.rotatedVector(iris::Vec3(0,0,1));
-
-    camera->setLocalPos(pivot+(localPos*distFromPivot));
-    camera->setLocalRot(rot);
-    camera->update(0);
-
-
+    // The arcball pose, in the one place it is written (previeworbit.h).
+    orbitmath::applyPose(camera, pivot, pitch, yaw, distFromPivot);
 }

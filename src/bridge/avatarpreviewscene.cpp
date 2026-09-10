@@ -3,113 +3,84 @@
 #include "irisgl/core/math/vec.h"
 #include "bridge/avatarpreviewscene.h"
 
-#include <cstdint>
-#include <cstring>
-#include <string>
-
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "modules/avatar/avatarpreviewmodel.h"
-#include "bridge/sceneworkerthreads.h"
-#include "bridge/offscreenrenderscope.h"
-#include "bridge/stableoffscreenrender.h"
 #include "viewport/boneoverlay.h"
 #include "viewport/previewframing.h"
+#include "viewport/previeworbit.h"
 
 using namespace jahshaka::engine;
 
-namespace {
-float lerp(float a, float b, float t) { return a * (1 - t) + b * t; }
-}
-
 AvatarPreviewScene::AvatarPreviewScene(const std::shared_ptr<Engine> &engine)
-    : mEngine(engine)
+    : EnginePreviewScene(engine, "avatarpreview", sceneworkers::Tier::Preview)
 {
 }
 
 AvatarPreviewScene::~AvatarPreviewScene()
 {
+    // The base destructor cannot run the hooks (see enginepreviewscene.h).
     release();
 }
 
-bool AvatarPreviewScene::attach(View *view)
+void AvatarPreviewScene::configureScene(Scene *scene)
 {
-    auto engine = mEngine.lock();
-    if (!engine || !view) return false;
-    if (mScene && mView == view) return true;
-    if (mScene && mView != view) {
-        if (mView) mView->setScene(nullptr);
-    } else if (!mScene) {
-        mScene = engine->createScene("avatarpreview-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
-                                     sceneworkers::count(sceneworkers::Tier::Preview));
-        if (!mScene) return false;
-        mScene->setAmbient(Colour(0.35f, 0.36f, 0.40f), Colour(0.22f, 0.22f, 0.26f));
-        // One planar-reflection slot for the Modern room's floor plate
-        // (AVATAR_SPACE_SPEC). Set ONCE at scene creation — changing the
-        // budget recompiles PBS shaders, and pushing the same value is free.
-        // With no reflector armed (Grid mode, headless) an empty budget slot
-        // costs a render target's memory and nothing per-frame.
-        {
-            PlanarReflectionParams pr;
-            pr.budget = 1;
-            pr.resolution = 512;
-            mScene->setPlanarReflections(pr);
-        }
-        mMirror.reset(new SceneMirror(mScene));
-        mMirror->setLightWires(false);          // a preview never shows editor wires
-        // A PLAIN WHITE ground grid, so the character stands on something
-        // instead of floating in space. Colours and extent are the preview's,
-        // not the editor's (the editor keeps its blue-grey ±100 floor); the
-        // spacing follows the subject, because a Mixamo character imports
-        // ~170 units tall and a 1-unit grid under it is a white sheet.
-        mMirror->setGridColours(Colour(1.0f, 1.0f, 1.0f, 0.16f),
-                                Colour(1.0f, 1.0f, 1.0f, 0.38f));
-        applyGrid();
-        mOverlay.reset(new BoneOverlay(mScene));
-        if (mModel) bindModel(mModel);
-    }
-    mView = view;
-    mView->setScene(mScene);
-    mView->setShadows(false);
-    return true;
+    scene->setAmbient(Colour(0.35f, 0.36f, 0.40f), Colour(0.22f, 0.22f, 0.26f));
+    // One planar-reflection slot for the Modern room's floor plate
+    // (AVATAR_SPACE_SPEC). Set ONCE at scene creation — changing the
+    // budget recompiles PBS shaders, and pushing the same value is free.
+    // With no reflector armed (Grid mode, headless) an empty budget slot
+    // costs a render target's memory and nothing per-frame.
+    PlanarReflectionParams pr;
+    pr.budget = 1;
+    pr.resolution = 512;
+    scene->setPlanarReflections(pr);
 }
 
-void AvatarPreviewScene::release()
+void AvatarPreviewScene::configureMirror(SceneMirror *mirror)
 {
-    auto engine = mEngine.lock();
+    // A PLAIN WHITE ground grid, so the character stands on something
+    // instead of floating in space. Colours and extent are the preview's,
+    // not the editor's (the editor keeps its blue-grey ±100 floor); the
+    // spacing follows the subject, because a Mixamo character imports
+    // ~170 units tall and a 1-unit grid under it is a white sheet.
+    mirror->setGridColours(Colour(1.0f, 1.0f, 1.0f, 0.16f),
+                           Colour(1.0f, 1.0f, 1.0f, 0.38f));
+    applyGrid();
+    mOverlay.reset(new BoneOverlay(mScene));
+    if (mModel) bindModel(mModel);
+}
+
+void AvatarPreviewScene::configureView(View *view)
+{
+    view->setShadows(false);
+}
+
+void AvatarPreviewScene::releaseSubject(bool sceneAlive)
+{
     // The pose source captures this scene's mirror; it must not outlive it.
     if (mModel) mModel->setPoseSource(nullptr);
     if (mOverlay) {
-        if (engine && mScene) mOverlay->clear();
+        if (sceneAlive) mOverlay->clear();
         mOverlay.reset();
     }
-    if (mMirror) {
-        if (engine && mScene) mMirror->setSource(nullptr);
-        mMirror.reset();
-    }
-    if (engine && mScene) {
-        if (mView && mView->scene() == mScene) mView->setScene(nullptr);
-        engine->destroyScene(mScene);
-    }
-    mScene = nullptr;
-    mView = nullptr;
 }
 
 void AvatarPreviewScene::bindModel(avatar::AvatarPreviewModel *model)
 {
-    if (!mMirror) return;
-    mMirror->setSource(model ? model->document() : iris::ScenePtr());
+    if (!mirror()) return;
+    mirror()->setSource(model ? model->document() : iris::ScenePtr());
     if (!model) return;
     // WHERE THE POSE COMES FROM, since the document stopped computing one.
     // The bone scene nodes still describe the rig's shape and its REST
     // transforms; the pose lives in the engine's SkeletonInstance, and this is
     // the wire that brings it back for the overlay and for avatar.bones().
-    SceneMirror *mirror = mMirror.get();
-    model->setPoseSource([mirror](QHash<QString, iris::Mat4> &out) {
-        return mirror->boneWorldTransforms(out);
+    SceneMirror *const source = mirror();
+    model->setPoseSource([source](QHash<QString, iris::Mat4> &out) {
+        return source->boneWorldTransforms(out);
     });
 }
 
@@ -151,34 +122,33 @@ void AvatarPreviewScene::frameSubject()
     if (bound.radius <= 0.0f) { bound.pos = iris::Vec3(0, 0, 0); bound.radius = 1.0f; }
 
     mSubjectRadius = bound.radius;
-    mPivot = bound.pos;
-    mDistFromPivot = preview::framingDistance(bound.radius, camera->effectiveFovDegrees());
+    mOrbit.pivot = bound.pos;
+    mOrbit.distFromPivot = preview::framingDistance(bound.radius, camera->effectiveFovDegrees());
     applyGrid();                                  // the grid follows the subject's scale
     // A Mixamo character imports 138-179 units tall; iris's default farClip is
     // 500 and the framing distance is ~2.9 radii, so without this the subject
     // sits entirely beyond its own far plane and the view renders NOTHING.
     applyClipPlanes();
 
-    mYaw = mTargetYaw = 0.0f;
-    mPitch = mTargetPitch = -5.0f;
+    mOrbit.set(0.0f, -5.0f);
     updateCameraRot();
 }
 
 void AvatarPreviewScene::applyGrid()
 {
-    if (!mMirror) return;
+    if (!mirror()) return;
     // ~8 cells across the subject, and a floor four subjects wide. Both are
     // derived, so a 2-unit test rig and a 179-unit character get the same
     // picture at different scales. No subject, no floor: an empty page would
     // otherwise show a grid framed for a 1-unit subject, edge-on.
     const float spacing = qMax(mSubjectRadius, 0.25f) * 0.25f;
-    mMirror->setGridExtent(spacing * 20.0f);
+    mirror()->setGridExtent(spacing * 20.0f);
     // The wireframe grid belongs to GRID mode only: in the Modern room it
     // draws at y=0 and shows through the floor's line gaps as a ghost ground
     // (owner sighting, 2026-09-05). sync() re-applies this every frame, so a
     // spaceMode change needs no extra signal.
     const bool modern = mModel && mModel->spaceMode() == avatar::SpaceMode::Modern;
-    mMirror->setGrid(mModel && mModel->isLoaded() && !modern, spacing);
+    mirror()->setGrid(mModel && mModel->isLoaded() && !modern, spacing);
 }
 
 void AvatarPreviewScene::applyClipPlanes()
@@ -186,54 +156,32 @@ void AvatarPreviewScene::applyClipPlanes()
     if (!mModel) return;
     auto camera = mModel->camera();
     if (!camera) return;
-    preview::clipPlanesForFraming(mDistFromPivot, qMax(mSubjectRadius, 1.0f),
+    preview::clipPlanesForFraming(mOrbit.distFromPivot, qMax(mSubjectRadius, 1.0f),
                                   camera->nearClip, camera->farClip);
 }
 
 void AvatarPreviewScene::updateCameraRot()
 {
     if (!mModel) return;
-    auto camera = mModel->camera();
-    if (!camera) return;
-    const auto rot = iris::Quat::fromEulerAngles(mPitch, mYaw, 0);
-    const auto localPos = rot.rotatedVector(iris::Vec3(0, 0, 1));
-    camera->setLocalPos(mPivot + localPos * mDistFromPivot);
-    camera->setLocalRot(rot);
-    camera->update(0);
+    mOrbit.apply(mModel->camera());
 }
 
-void AvatarPreviewScene::mouseDown(Qt::MouseButton b)
-{
-    if (b == Qt::LeftButton) mLeftDown = true;
-    if (b == Qt::RightButton) mRightDown = true;
-    if (b == Qt::MiddleButton) mMiddleDown = true;
-}
+void AvatarPreviewScene::mouseDown(Qt::MouseButton b) { mOrbit.mouseDown(b); }
 
-void AvatarPreviewScene::mouseUp(Qt::MouseButton b)
-{
-    if (b == Qt::LeftButton) mLeftDown = false;
-    if (b == Qt::RightButton) mRightDown = false;
-    if (b == Qt::MiddleButton) mMiddleDown = false;
-}
+void AvatarPreviewScene::mouseUp(Qt::MouseButton b) { mOrbit.mouseUp(b); }
 
 void AvatarPreviewScene::mouseMove(int dx, int dy)
 {
-    if (mLeftDown || mRightDown) orbit(dx * mRotationSpeed, dy * mRotationSpeed);
-    if (mMiddleDown && mModel && mModel->camera()) {
-        const float dragSpeed = 0.002f * qMax(mSubjectRadius, 1.0f);
-        auto dir = mModel->camera()->getLocalRot().rotatedVector(
-            iris::Vec3(dx * dragSpeed, -dy * dragSpeed, 0));
-        mPivot += dir;
-    }
+    // The PAN step scales with the subject (previeworbit.h keeps the policy at
+    // the call site): a 179-unit character needs a bigger drag than a 2-unit rig.
+    mOrbit.drag(mModel ? mModel->camera() : iris::CameraNodePtr(), dx, dy,
+                0.002f * qMax(mSubjectRadius, 1.0f));
     updateCameraRot();
 }
 
 void AvatarPreviewScene::orbit(float yawDegrees, float pitchDegrees)
 {
-    mYaw = mTargetYaw + yawDegrees;
-    mPitch = mTargetPitch + pitchDegrees;
-    mTargetYaw = mYaw;
-    mTargetPitch = mPitch;
+    mOrbit.orbit(yawDegrees, pitchDegrees);
     updateCameraRot();
 }
 
@@ -241,9 +189,9 @@ void AvatarPreviewScene::wheel(int delta)
 {
     // Zoom in units of the subject, so a 2-unit rig and a 179-unit character
     // both take the same number of notches to cross the frame.
-    mDistFromPivot += -delta * 0.002f * qMax(mSubjectRadius, 0.5f);
+    mOrbit.distFromPivot += -delta * 0.002f * qMax(mSubjectRadius, 0.5f);
     const float minDist = qMax(0.1f, mSubjectRadius * 0.2f);
-    if (mDistFromPivot < minDist) mDistFromPivot = minDist;
+    if (mOrbit.distFromPivot < minDist) mOrbit.distFromPivot = minDist;
     applyClipPlanes();
     updateCameraRot();
 }
@@ -251,20 +199,13 @@ void AvatarPreviewScene::wheel(int delta)
 void AvatarPreviewScene::step(float dt, int width, int height)
 {
     if (!mModel) return;
-    mYaw = lerp(mYaw, mTargetYaw, 0.8f);
-    mPitch = lerp(mPitch, mTargetPitch, 0.8f);
+    mOrbit.advance();
     updateCameraRot();
 
     // ORDER (§0.5.1): pose -> mirror (refreshes global transforms) -> overlay.
     mModel->advance(dt);
     applyGrid();     // cheap (two floats); tracks load/clear without a signal
-    auto camera = mModel->camera();
-    if (camera) camera->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
-    if (mMirror && mView) {
-        mMirror->sync();
-        mMirror->applySky(mView);
-        if (camera) mMirror->applyCamera(camera, mView);
-    }
+    pushFrame(mModel->camera(), width, height);
     if (mOverlay) {
         QVector<BoneOverlaySegment> segments;
         if (mModel->skeletonVisible()) {
@@ -284,8 +225,8 @@ void AvatarPreviewScene::resolvePose()
     // bone gets the previous frame's answer, which reads as "the clip does
     // nothing". Cheap: one sync and one frame of an already-live view.
     auto engine = mEngine.lock();
-    if (!engine || !mScene || !mView || !mMirror || !mModel) return;
-    mMirror->sync();
+    if (!engine || !mScene || !mView || !mirror() || !mModel) return;
+    mirror()->sync();
     // NO FRAME AT ALL — just this scene's graph update (THREADING_ADOPTION_SPEC
     // P3). This used to render one frame with every on-screen view disabled,
     // which resolved the pose only because Root::renderOneFrame updated EVERY
@@ -299,60 +240,28 @@ void AvatarPreviewScene::resolvePose()
     engine->updateScene(mScene);
 }
 
-QImage AvatarPreviewScene::toQImage(const Image &img)
+void AvatarPreviewScene::prepareOffscreen(View *shot, int width, int height)
 {
-    QImage result;
-    if (img.width && img.height && img.rgba.size() >= size_t(img.width) * img.height * 4u) {
-        result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
-        for (unsigned y = 0; y < img.height; ++y)
-            std::memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
+    // The base has already made `shot` the current view, which is what step()
+    // needs: it only mirrors when it has one. Without that, the SECOND and
+    // every later snapshot of a page that is not on screen would render
+    // whatever pose was current at the FIRST one — the document advances, the
+    // engine never hears about it. (Found by rendering two clips through
+    // avatar.snapshot: the second image came back byte-identical to the first.)
+    step(0.0f, width, height);
+    if (!mirror()) return;
+    mirror()->applySky(shot);
+    if (mModel && mModel->camera()) {
+        mModel->camera()->setAspectRatio(float(width) / float(height));
+        mModel->camera()->update(0);
+        mirror()->applyCamera(mModel->camera(), shot);
     }
-    return result;
 }
 
 QImage AvatarPreviewScene::renderImage(int width, int height)
 {
-    auto engine = mEngine.lock();
-    if (!engine || !mModel || width <= 0 || height <= 0) return QImage();
+    if (!mModel || !mModel->document()) return QImage();
     const QColor c = mModel->document()->skyColor;
-    View *shot = engine->createOffscreenView(
-        "avatar-shot-" + std::to_string(reinterpret_cast<uintptr_t>(this)) + "-" + std::to_string(++mShotSerial),
-        unsigned(width), unsigned(height), Colour(float(c.redF()), float(c.greenF()), float(c.blueF()), 1.0f));
-    if (!shot) return QImage();
-    // Not attached anywhere yet (the widget was never shown): the shot view is
-    // the first view, which is what lets the scene be created at all (ORDER).
-    const bool temporary = !mScene;
-    if (temporary && !attach(shot)) { engine->destroyView(shot); return QImage(); }
-    shot->setScene(mScene);
-    shot->setShadows(false);
-    // step() only mirrors when it has a view (`mMirror && mView`), and this
-    // function clears mView when it is done with a shot view. Without making
-    // the shot the current view for the duration, the SECOND and every later
-    // snapshot of a page that is not on screen renders whatever pose was
-    // current at the FIRST one — the document advances, the engine never hears
-    // about it. (Found by rendering two clips through avatar.snapshot: the
-    // second image came back byte-identical to the first.)
-    View *const previousView = mView;
-    mView = shot;
-    step(0.0f, width, height);
-    if (mMirror) {
-        mMirror->applySky(shot);
-        if (mModel->camera()) {
-            mModel->camera()->setAspectRatio(float(width) / float(height));
-            mModel->camera()->update(0);
-            mMirror->applyCamera(mModel->camera(), shot);
-        }
-    }
-    // The editor does not pay for an avatar snapshot (fps audit F5).
-    OffscreenRenderScope quiet(engine.get());
-    // Plus whatever the texture load-request counter still owes
-    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
-    renderStableFrames(engine.get());
-    Image img;
-    QImage result;
-    if (shot->readPixels(img)) result = toQImage(img);
-    shot->setScene(nullptr);
-    mView = previousView == shot ? nullptr : previousView;
-    engine->destroyView(shot);
-    return result;
+    return renderOffscreen("avatar-shot", width, height,
+                           Colour(float(c.redF()), float(c.greenF()), float(c.blueF()), 1.0f), false);
 }

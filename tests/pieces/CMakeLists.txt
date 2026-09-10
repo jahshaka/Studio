@@ -121,6 +121,7 @@ set_tests_properties(shadergraph.emitter_pieces PROPERTIES
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Concurrent Multimedia)
 add_executable(test_piece_mirror test_piece_mirror.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginematerialpreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp

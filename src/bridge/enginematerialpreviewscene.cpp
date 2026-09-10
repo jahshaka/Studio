@@ -1,13 +1,11 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
-#include "bridge/sceneworkerthreads.h"
 #include "bridge/enginematerialpreviewscene.h"
 
-#include <cstdint>
-#include <string>
 #include <QFileInfo>
 
 #include "irisgl/mirror/scenemirror.h"
+#include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/defaultmaterial.h"
@@ -22,8 +20,6 @@ using namespace jahshaka::engine;
 namespace {
 
 const char *kSubjectName = "matpreview-primitive";
-
-float lerp(float a, float b, float t) { return a * (1 - t) + b * t; }
 
 // The legacy SceneWidget's primitives (MaterialHelper::assetPath ->
 // app/shadergraph/<file>); app/content/primitives is the fallback.
@@ -43,13 +39,14 @@ const char *meshFile(PreviewMesh mesh)
 } // namespace
 
 EngineMaterialPreviewScene::EngineMaterialPreviewScene(const std::shared_ptr<Engine> &engine)
-    : mEngine(engine)
+    : EnginePreviewScene(engine, "matpreview", sceneworkers::Tier::Preview)
 {
     buildDocument();
 }
 
 EngineMaterialPreviewScene::~EngineMaterialPreviewScene()
 {
+    // The base destructor cannot run the hooks (see enginepreviewscene.h).
     release();
 }
 
@@ -93,54 +90,32 @@ void EngineMaterialPreviewScene::buildDocument()
     mCamera->update(0);
     mDocument->update(0);
 
-    // Orbit around the origin from where the camera stands.
-    mPivot = iris::Vec3(0, 0, 0);
-    mDistFromPivot = mCamera->getLocalPos().length();
-    float roll;
-    mCamera->getLocalRot().getEulerAngles(&mPitch, &mYaw, &roll);
-    mTargetYaw = mYaw;
-    mTargetPitch = mPitch;
-    updateCameraRot();
+    // Orbit around the ORIGIN from where the camera stands (not PreviewOrbit::
+    // adopt, which would put the pivot one radius ahead of the camera).
+    mOrbit.pivot = iris::Vec3(0, 0, 0);
+    mOrbit.distFromPivot = mCamera->getLocalPos().length();
+    float pitch, yaw, roll;
+    mCamera->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+    mOrbit.set(yaw, pitch);
+    mOrbit.apply(mCamera);
 
     mMaterial = iris::DefaultMaterial::create();
     setPreviewMesh(PreviewMesh::Sphere);
 }
 
-bool EngineMaterialPreviewScene::attach(View *view)
+void EngineMaterialPreviewScene::configureScene(Scene *scene)
 {
-    auto engine = mEngine.lock();
-    if (!engine || !view) return false;
-    if (mScene && mView == view) return true;
-    if (mScene && mView != view) {
-        if (mView) mView->setScene(nullptr);
-    } else if (!mScene) {
-        mScene = engine->createScene("matpreview-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
-                                     sceneworkers::count(sceneworkers::Tier::Preview));
-        if (!mScene) return false;
-        mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
-        mMirror.reset(new SceneMirror(mScene));
-        mMirror->setLightWires(false);          // a preview never shows editor wires
-        mMirror->setSource(mDocument);
-    }
-    mView = view;
-    mView->setScene(mScene);
-    mView->setShadows(false);
-    return true;
+    scene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
 }
 
-void EngineMaterialPreviewScene::release()
+void EngineMaterialPreviewScene::configureMirror(SceneMirror *mirror)
 {
-    auto engine = mEngine.lock();
-    if (mMirror) {
-        if (engine && mScene) mMirror->setSource(nullptr);
-        mMirror.reset();
-    }
-    if (engine && mScene) {
-        if (mView && mView->scene() == mScene) mView->setScene(nullptr);
-        engine->destroyScene(mScene);
-    }
-    mScene = nullptr;
-    mView = nullptr;
+    mirror->setSource(mDocument);
+}
+
+void EngineMaterialPreviewScene::configureView(View *view)
+{
+    view->setShadows(false);
 }
 
 iris::MeshPtr EngineMaterialPreviewScene::meshFor(PreviewMesh mesh)
@@ -207,72 +182,39 @@ void EngineMaterialPreviewScene::setBackground(const QColor &colour)
     mDocument->setSkyColor(colour);
 }
 
-// ---- orbit camera: EngineAssetScene's maths ----
+// ---- orbit camera: the shared PreviewOrbit (viewport/previeworbit.h) ----
 
-void EngineMaterialPreviewScene::updateCameraRot()
-{
-    auto rot = iris::Quat::fromEulerAngles(mPitch, mYaw, 0);
-    auto localPos = rot.rotatedVector(iris::Vec3(0, 0, 1));
-    mCamera->setLocalPos(mPivot + localPos * mDistFromPivot);
-    mCamera->setLocalRot(rot);
-    mCamera->update(0);
-}
+void EngineMaterialPreviewScene::mouseDown(Qt::MouseButton b) { mOrbit.mouseDown(b); }
 
-void EngineMaterialPreviewScene::mouseDown(Qt::MouseButton b)
-{
-    if (b == Qt::LeftButton) mLeftDown = true;
-    if (b == Qt::RightButton) mRightDown = true;
-    if (b == Qt::MiddleButton) mMiddleDown = true;
-}
-
-void EngineMaterialPreviewScene::mouseUp(Qt::MouseButton b)
-{
-    if (b == Qt::LeftButton) mLeftDown = false;
-    if (b == Qt::RightButton) mRightDown = false;
-    if (b == Qt::MiddleButton) mMiddleDown = false;
-}
+void EngineMaterialPreviewScene::mouseUp(Qt::MouseButton b) { mOrbit.mouseUp(b); }
 
 void EngineMaterialPreviewScene::mouseMove(int dx, int dy)
 {
-    if (mLeftDown || mRightDown) orbit(dx * mRotationSpeed, dy * mRotationSpeed);
-    if (mMiddleDown) {
-        const float dragSpeed = 0.01f;
-        auto dir = mCamera->getLocalRot().rotatedVector(iris::Vec3(dx * dragSpeed, -dy * dragSpeed, 0));
-        mPivot += dir;
-    }
-    updateCameraRot();
+    mOrbit.drag(mCamera, dx, dy, 0.01f);
+    mOrbit.apply(mCamera);
 }
 
 void EngineMaterialPreviewScene::orbit(float yawDegrees, float pitchDegrees)
 {
-    mYaw = mTargetYaw;
-    mPitch = mTargetPitch;
-    mYaw += yawDegrees;
-    mPitch += pitchDegrees;
-    mTargetYaw = mYaw;
-    mTargetPitch = mPitch;
-    updateCameraRot();
+    mOrbit.orbit(yawDegrees, pitchDegrees);
+    mOrbit.apply(mCamera);
 }
 
 void EngineMaterialPreviewScene::wheel(int delta)
 {
+    // The zoom POLICY is this dock's own (previeworbit.h): a primitive filling
+    // the frame stops half a unit out, never at the pivot.
     const float zoomSpeed = 0.01f;
-    mDistFromPivot += -delta * zoomSpeed;
-    if (mDistFromPivot < 0.5f) mDistFromPivot = 0.5f;
-    updateCameraRot();
+    mOrbit.distFromPivot += -delta * zoomSpeed;
+    if (mOrbit.distFromPivot < 0.5f) mOrbit.distFromPivot = 0.5f;
+    mOrbit.apply(mCamera);
 }
 
 void EngineMaterialPreviewScene::step(float dt, int width, int height)
 {
-    mYaw = lerp(mYaw, mTargetYaw, 0.8f);
-    mPitch = lerp(mPitch, mTargetPitch, 0.8f);
-    updateCameraRot();
+    mOrbit.advance();
+    mOrbit.apply(mCamera);
 
     mDocument->update(dt);
-    mCamera->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
-    if (mMirror && mView) {
-        mMirror->sync();
-        mMirror->applySky(mView);
-        mMirror->applyCamera(mCamera, mView);
-    }
+    pushFrame(mCamera, width, height);
 }

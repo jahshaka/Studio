@@ -30,6 +30,7 @@
 // plane and the bone octahedron straddles it, so the front half still shows
 // with the mesh on — on a real character the skeleton is inside the mesh and
 // is hidden, which is the accepted behaviour until an X-ray mode exists.
+#include "../support/previewdump.h"
 #include "irisgl/core/math/vec.h"
 #include <QApplication>
 #include <QColor>
@@ -125,6 +126,7 @@ static Image render(AvatarPreviewScene &scene, Engine &engine, View *view, int f
 
 static void show(const char *tag, const Image &img)
 {
+    previewdump::save(tag, img);
     const Colour c = img.at(img.width / 2, img.height / 2);
     std::printf("    %-38s centre %3.0f %3.0f %3.0f   mesh px %4d   overlay px %4d   widest run %2d"
                 "   cross-section .35/.5/.65 %2d %2d %2d\n",
@@ -237,6 +239,7 @@ int main(int argc, char **argv)
     model.setClip("Idle");
     model.setTime(0.0f);
     const QImage shot = scene.renderImage(96, 96);
+    previewdump::save("snapshot 1", shot);
     CHECK(!shot.isNull() && shot.width() == 96 && shot.height() == 96,
           "snapshot: an offscreen render of the preview scene comes back at the asked size");
 
@@ -249,11 +252,13 @@ int main(int argc, char **argv)
     // MCP-driven case.
     model.setTime(0.5f);
     const QImage moved = scene.renderImage(96, 96);
+    previewdump::save("snapshot 2 moved", moved);
     CHECK(!moved.isNull() && moved != shot,
           "S9: a second snapshot at a different time renders a DIFFERENT pose");
     model.setClip("rig2");           // the fixture's second clip, junk-named
     model.setTime(0.25f);
     const QImage switched = scene.renderImage(96, 96);
+    previewdump::save("snapshot 3 clip switch", switched);
     CHECK(!switched.isNull() && switched != moved && switched != shot,
           "S9: a snapshot after a CLIP SWITCH renders the new clip's pose");
 

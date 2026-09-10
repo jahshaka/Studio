@@ -4,20 +4,22 @@
 // EngineMaterialPreviewScene — the Effects/Materials Display preview on the
 // engine, minus the widget.
 //
-// Owns a small iris::Scene document (one primitive at the origin, a key
-// directional light and a fill point light, the legacy grey sky), its own
-// engine Scene ("matpreview") and a SceneMirror pushing document -> engine,
-// plus the same orbit-camera maths as EngineAssetScene. What the legacy GL
-// SceneWidget showed — the graph's material on a chosen primitive over a
-// flat background — this shows engine-rendered. No GL, no Ogre, no QWidget:
-// testable headless with an offscreen View (tests/materialpreview).
-// EngineMaterialPreview wraps it into the Display dock.
+// An EnginePreviewScene (Scene + mirror + View lifecycle live there) over a
+// small iris::Scene document: one primitive at the origin, a key directional
+// light and a fill point light, the legacy grey sky. The camera is the shared
+// PreviewOrbit (viewport/previeworbit.h). What the legacy GL SceneWidget
+// showed — the graph's material on a chosen primitive over a flat background —
+// this shows engine-rendered. No GL, no Ogre, no QWidget: testable headless
+// with an offscreen View (tests/materialpreview). EngineMaterialPreview wraps
+// it into the Display dock.
 #include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QColor>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
+#include "bridge/enginepreviewscene.h"
+#include "viewport/previeworbit.h"
 
 class SceneMirror;
 
@@ -33,23 +35,14 @@ enum class PreviewMesh
     Torus
 };
 
-class EngineMaterialPreviewScene
+class EngineMaterialPreviewScene : public EnginePreviewScene
 {
 public:
-    /// Holds the engine weakly (EngineAssetScene's contract): never keeps it
+    /// Holds the engine weakly (the preview-scene contract): never keeps it
     /// alive, every call checks it is still there.
     explicit EngineMaterialPreviewScene(const std::shared_ptr<jahshaka::engine::Engine> &engine);
-    ~EngineMaterialPreviewScene();
+    ~EngineMaterialPreviewScene() override;
 
-    /// Creates the matpreview Scene and its mirror and binds them to `view`
-    /// (the View must already exist: Engine.h, ORDER MATTERS). Idempotent;
-    /// false if the engine is gone or the scene could not be created.
-    bool attach(jahshaka::engine::View *view);
-    /// Destroys the engine Scene and mirror while the Engine is alive. The
-    /// View is the caller's. Safe to call repeatedly; the destructor calls it.
-    void release();
-    jahshaka::engine::Scene *engineScene() const { return mScene; }
-    jahshaka::engine::View *view() const { return mView; }
     iris::ScenePtr document() const { return mDocument; }
     iris::CameraNodePtr camera() const { return mCamera; }
 
@@ -77,16 +70,15 @@ public:
     /// camera -> view. `width`/`height` are the view's pixel size.
     void step(float dt, int width, int height);
 
+protected:
+    void configureScene(jahshaka::engine::Scene *scene) override;
+    void configureMirror(SceneMirror *mirror) override;
+    void configureView(jahshaka::engine::View *view) override;
+
 private:
     void buildDocument();
     void rebuildSubject();
-    void updateCameraRot();
     iris::MeshPtr meshFor(PreviewMesh mesh);
-
-    std::weak_ptr<jahshaka::engine::Engine> mEngine;
-    jahshaka::engine::View  *mView  = nullptr;
-    jahshaka::engine::Scene *mScene = nullptr;
-    std::unique_ptr<SceneMirror> mMirror;
 
     iris::ScenePtr      mDocument;
     iris::CameraNodePtr mCamera;
@@ -95,12 +87,8 @@ private:
     iris::MeshPtr       mMeshes[6];
     PreviewMesh mMesh = PreviewMesh::Sphere;
 
-    // Orbit state (OrbitalCameraController in preview mode, rotation speed .5)
-    float mYaw = 0, mPitch = 0, mTargetYaw = 0, mTargetPitch = 0;
-    float mRotationSpeed = 0.5f;
-    iris::Vec3 mPivot;
-    float mDistFromPivot = 4.0f;
-    bool mLeftDown = false, mRightDown = false, mMiddleDown = false;
+    /// The shared arcball (left or right drag orbits, rotation speed .5).
+    PreviewOrbit mOrbit;
 };
 
 #endif // ENGINEMATERIALPREVIEWSCENE_H

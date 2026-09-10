@@ -7,6 +7,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Concurrent)
 add_executable(test_engine_material_preview test_engine_material_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginematerialpreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp

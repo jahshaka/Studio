@@ -20,7 +20,6 @@
 #include <QFileInfo>
 #include "io/builtinmaterials.h"
 #include "irisgl/mirror/scenemirror.h"
-#include "bridge/sceneworkerthreads.h"
 #include "bridge/offscreenrenderscope.h"
 #include "bridge/stableoffscreenrender.h"
 #include "viewport/previewframing.h"
@@ -28,12 +27,22 @@
 using namespace jahshaka::engine;
 
 EngineThumbnailRenderer::EngineThumbnailRenderer(const std::shared_ptr<Engine> &engine)
-    : mEngine(engine)
+    // One frame into a small texture, then emptied again: a worker pool would
+    // be pure barrier cost (fps audit F3).
+    //
+    // NO POOL, not a pool of one (THREADING_ADOPTION_SPEC.md P5). This asked
+    // for Tier::Utility until the hygiene phase, and 1 does not avoid the
+    // barrier — Ogre spawns a thread and pays two syncs per parallel pass to
+    // do the same serial work. Tier::MainThread reaches the backend as a
+    // genuine 0, where mForceMainThread runs every pass inline
+    // (OgreSceneManager.cpp:171, :4705-4717).
+    : EnginePreviewScene(engine, "thumbs", sceneworkers::Tier::MainThread)
 {
 }
 
 EngineThumbnailRenderer::~EngineThumbnailRenderer()
 {
+    // The base destructor cannot run the hooks (see enginepreviewscene.h).
     release();
 }
 
@@ -43,53 +52,34 @@ Colour EngineThumbnailRenderer::backgroundColour()
     return Colour(25 / 255.0f, 25 / 255.0f, 25 / 255.0f, 1.0f);
 }
 
-void EngineThumbnailRenderer::release()
+void EngineThumbnailRenderer::configureScene(Scene *scene)
 {
-    auto engine = mEngine.lock();
-    if (mMirror) {
-        if (engine && mScene) mMirror->setSource(nullptr);
-        mMirror.reset();
-    }
-    if (engine) {
-        if (mView)  { mView->setScene(nullptr); engine->destroyView(mView); }
-        if (mScene) engine->destroyScene(mScene);
-    }
-    mView = nullptr;
-    mScene = nullptr;
+    scene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
+}
+
+void EngineThumbnailRenderer::releaseSubject(bool)
+{
     mSphere.reset();
 }
 
 bool EngineThumbnailRenderer::ensureResources(QSize size)
 {
-    auto engine = mEngine.lock();
+    auto engine = this->engine();
     if (!engine || size.width() <= 0 || size.height() <= 0) return false;
 
-    if (!mView) {
-        // The View must exist before the Scene (Engine.h: ORDER MATTERS).
-        mView = engine->createOffscreenView("thumbs", unsigned(size.width()), unsigned(size.height()),
-                                            backgroundColour());
-        if (!mView) return false;
-        mView->setEnabled(false);
+    if (!view()) {
+        // The View must exist before the Scene (Engine.h: ORDER MATTERS), and
+        // nothing else is going to make one for a thumbnail renderer: it owns
+        // this one, and the base destroys it in release().
+        View *own = engine->createOffscreenView("thumbs", unsigned(size.width()), unsigned(size.height()),
+                                                backgroundColour());
+        if (!own) return false;
+        own->setEnabled(false);
+        adoptView(own);
     }
-    if (!mScene) {
-        // One frame into a small texture, then emptied again: a worker pool
-        // would be pure barrier cost (fps audit F3).
-        //
-        // NO POOL, not a pool of one (THREADING_ADOPTION_SPEC.md P5). This asked
-        // for Tier::Utility until the hygiene phase, and 1 does not avoid the
-        // barrier — Ogre spawns a thread and pays two syncs per parallel pass to
-        // do the same serial work. Tier::MainThread reaches the backend as a
-        // genuine 0, where mForceMainThread runs every pass inline
-        // (OgreSceneManager.cpp:171, :4705-4717).
-        mScene = engine->createScene("thumbs", sceneworkers::count(sceneworkers::Tier::MainThread));
-        if (!mScene) return false;
-        mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
-        mView->setScene(mScene);
-        mMirror.reset(new SceneMirror(mScene));
-        mMirror->setLightWires(false);   // a thumbnail never shows editor light helpers
-    }
-    if (mView->width() != unsigned(size.width()) || mView->height() != unsigned(size.height()))
-        mView->resize(unsigned(size.width()), unsigned(size.height()));
+    if (!engineScene() && !attach(view())) return false;
+    if (view()->width() != unsigned(size.width()) || view()->height() != unsigned(size.height()))
+        view()->resize(unsigned(size.width()), unsigned(size.height()));
     return true;
 }
 
@@ -225,25 +215,25 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
 
 QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNodePtr camera, QSize size)
 {
-    auto engine = mEngine.lock();
+    auto engine = this->engine();
     if (!engine || !ensureResources(size)) return QImage();
 
     document->update(0);
-    mMirror->setSource(document);
-    mMirror->sync();
+    mirror()->setSource(document);
+    mirror()->sync();
     // Background from the document's sky (buildPreviewScene's 25,25,25 for asset
     // previews; a real scene's sky colour matches the viewport). Ambient stays the
     // renderer's own studio lighting — deliberately not applyEnvironment.
-    mMirror->applySky(mView);
-    mMirror->applyCamera(camera, mView);
+    mirror()->applySky(view());
+    mirror()->applyCamera(camera, view());
     // THE SECONDARY-SURFACE TONEMAP (bridge/secondarysurfacetonemap.h). A
     // thumbnail is a photograph of a world the viewport grades filmically; raw
     // linear radiance clipped to 8 bits made every brightly-lit asset a white
     // card. Deterministic (fixed exposure), so a thumbnail is still a
     // reproducible picture of its content.
-    secondaryfx::apply(mView, true);
+    secondaryfx::apply(view(), true);
 
-    mView->setEnabled(true);
+    view()->setEnabled(true);
     // The editor does not pay for a thumbnail (fps audit F5): renderOneFrame
     // draws every enabled view, so without this each thumbnail also redrew the
     // whole editor twice and blocked twice on the display's vsync — which is
@@ -256,17 +246,11 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // stableoffscreenrender.h for upstream's recipe and why the minimum stays 2.
     renderStableFrames(engine.get());
     Image img;
-    const bool ok = mView->readPixels(img);
-    mView->setEnabled(false);
+    const bool ok = view()->readPixels(img);
+    view()->setEnabled(false);
 
     // Nothing leaks across requests: drop every mirrored node, mesh and material.
-    mMirror->setSource(nullptr);
+    mirror()->setSource(nullptr);
 
-    QImage result;
-    if (ok && img.width && img.height) {
-        result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
-        for (unsigned y = 0; y < img.height; ++y)
-            std::memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
-    }
-    return result;
+    return ok ? toQImage(img) : QImage();
 }
