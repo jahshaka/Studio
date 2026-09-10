@@ -455,6 +455,8 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     // undo stack, and like every other panel here it is built in the CONSTRUCTOR,
     // which runs before this setter.
     if (worldModesPropView) worldModesPropView->setServices(services);
+    // The Rayon section's Epic-column sliders push WorldModeCommand too.
+    if (worldGiPropView) worldGiPropView->setServices(services);
     if (skyPropView) skyPropView->eventBus = services ? services->eventBus : nullptr;
     // Sun coupling (re-audit F5): both sky panels carry the "drive a
     // directional light" row, which needs the selection and the undo stack.

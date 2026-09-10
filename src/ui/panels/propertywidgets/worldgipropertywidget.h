@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/vec.h"
 #include <QWidget>
+#include "commands/worldmodecommand.h"
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
 
@@ -22,6 +23,7 @@ class HFloatSliderWidget;
 class CheckBoxWidget;
 class DragVector3Widget;
 class QPushButton;
+struct StudioServices;
 
 /**
  * World-panel "Global Illumination" section — RAYON (GI_UNIFIED_SPEC.md §2).
@@ -37,6 +39,17 @@ class QPushButton;
  * Nothing was deleted to get here. The tier is a registry row like every other
  * quality row, so this panel writes through worldmodes and the same state is
  * reachable from world.rayon, world.gi, world.settings and world.override.
+ *
+ * UNDO (rayontiers review follow-up, 2026-09-10): the two Epic-column sliders
+ * (Light Bounces, Dynamic Probes) are undoable through WorldModeCommand, ONE
+ * step per gesture — the snapshot is taken on the slider's valueChangeStart
+ * (press, or the first typed step), every tick writes through live so the
+ * viewport follows the drag, and the command is pushed on valueChangeEnd
+ * (release / editingFinished). Those ticks refresh the pin mark, the reset
+ * button and the tier row's "Custom" entry IN PLACE (refreshPins) rather than
+ * rebuilding the panel, which would destroy the slider mid-drag. The rest of
+ * this panel's slots are the older shape (write, then rebuild, no undo step);
+ * converting them is debt L6's job, not this widget's.
  */
 class WorldGiPropertyWidget : public AccordianBladeWidget
 {
@@ -45,6 +58,10 @@ class WorldGiPropertyWidget : public AccordianBladeWidget
 public:
     WorldGiPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
+    /// The services aggregate, for the undo stack. Nullable (headless hosts,
+    /// the panel suite without a stack): the edits still apply, just without
+    /// an undo step.
+    void setServices(StudioServices *services) { this->services = services; }
 
 protected slots:
     void onRayonToggled(bool on);
@@ -69,7 +86,24 @@ protected slots:
 private:
     void rebuild();
 
+    /// One Rayon-tiered Int row edit: write-through + pin, in-place refresh,
+    /// and — when no drag/typing session brackets it — its own undo step.
+    void editRayonRow(const QString &id, int value, const QString &text);
+    void beginRayonEdit();
+    void endRayonEdit(const QString &text);
+    /// Wires a rayonTiered slider: start/tick/end -> snapshot/write/push.
+    void wireRayonSlider(HFloatSliderWidget *slider,
+                         void (WorldGiPropertyWidget::*tick)(float), const QString &text);
+    /// Re-reads the pin marks, the tier row's "Custom" entry and the reset
+    /// button from the document WITHOUT rebuilding the rows.
+    void refreshPins();
+    bool advancedResettable() const;
+    void addResetAdvancedButton();
+
     QSharedPointer<iris::Scene> scene;
+    StudioServices *services = nullptr;
+    WorldModeCommand::Snapshot editBefore;
+    bool editing = false;
     CheckBoxWidget *rayonSwitch = nullptr;
     ComboBoxWidget *tierSelector = nullptr;
     ComboBoxWidget *modeSelector = nullptr;
