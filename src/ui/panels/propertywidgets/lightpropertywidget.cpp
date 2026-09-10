@@ -389,7 +389,7 @@ void LightPropertyWidget::lightChannelsChanged(quint32 mask)
 {
     if (!lightNode) return;
     // Document only: the mirror sees the changed LightDesc on the next sync
-    // (sameLight compares the mask) and pushes it.
+    // (LightDesc::operator== compares the mask) and pushes it.
     lightNode->setLightMask(mask);
 }
 
