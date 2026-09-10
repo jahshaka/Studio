@@ -677,11 +677,13 @@ int main()
     // red wall. A PBS shader that does not compile does not draw, so a
     // red-dominant mirror pixel IS the proof that the permutation built. RED-
     // FIRST VERIFIED: with the fix reverted this case reads r=0.000 g=0.000.
-    // setSkyReflection, not setSky, is the verb that matters: the SKY alone does
-    // not touch datablocks, while the IBL reflection cubemap is bound to every
-    // PBR datablock as PBSM_REFLECTION (OgreSky.cpp applyReflectionToAll). A
-    // first attempt using setSky(Equirectangular) passed WITHOUT the patch and
-    // proved nothing — the defect needs the manual reflection texture.
+    // The REFLECTION half of SkyDesc is what matters, not the sky half: a sky
+    // alone does not touch datablocks, while the IBL reflection cubemap is
+    // bound to every PBR datablock as PBSM_REFLECTION (OgreSky.cpp
+    // applyReflectionToAll). A first attempt using a plain equirect sky passed
+    // WITHOUT the patch and proved nothing — the defect needs the manual
+    // reflection texture. (Hence a description whose mode stays NoSky and whose
+    // `reflections` half carries the six faces.)
     {
         std::string facePaths[6];
         TextureId faces[6] = {};
@@ -698,7 +700,10 @@ int main()
             if (!faces[f]) facesOk = false;
         }
         CHECK(facesOk, "sky+hybrid: the six IBL face textures load");
-        CHECK(s->setSkyReflection(faces),
+        SkyDesc iblOnly;
+        iblOnly.reflections = true;
+        for (int f = 0; f < 6; ++f) iblOnly.reflectionFaces[f] = faces[f];
+        CHECK(s->setSky(iblOnly),
               "sky+hybrid: the IBL reflection cubemap arms (PBSM_REFLECTION on every "
               "PBR datablock — the manual-probe half of the broken combination)");
         CHECK(s->setGlobalIllumination(hybrid), "sky+hybrid: the hybrid rebuilds under the IBL");
@@ -711,8 +716,9 @@ int main()
               "auto-PCC combination renders (the env-probe slot is not fought over)");
         CHECK(engine->lastError().empty(),
               "sky+hybrid: ...and the engine reported no error doing it");
-        const TextureId none[6] = {};
-        CHECK(s->setSkyReflection(none), "sky+hybrid: the IBL reflection is cleared");
+        SkyDesc noIbl;
+        noIbl.reflections = true;      // stated, and six zeros = clear
+        CHECK(s->setSky(noIbl), "sky+hybrid: the IBL reflection is cleared");
         for (int f = 0; f < 6; ++f) std::remove(facePaths[f].c_str());
     }
 

@@ -741,8 +741,9 @@ int main(int argc, char **argv)
         // contributions, as units.
         //
         // 1. The flag reaches the engine at all. A field missing from
-        //    toLightDesc is invisible; a field missing from sameLight reaches
-        //    the engine ONCE and then never again, which is the more expensive
+        //    toLightDesc is invisible; a field missing from LightDesc::operator==
+        //    (the mirror's push-on-change guard, beside the struct) reaches the
+        //    engine ONCE and then never again, which is the more expensive
         //    mistake and the reason both are asserted here.
         point->shadowMap->shadowType = iris::ShadowMapType::Soft;
         point->shadowMap->staticMap = true;
@@ -750,9 +751,9 @@ int main(int argc, char **argv)
         CHECK(statik.shadowStatic, "shadowStatic flows through toLightDesc");
         LightDesc dynamic_ = statik;
         dynamic_.shadowStatic = false;
-        CHECK(!SceneMirror::sameLight(statik, dynamic_),
-              "sameLight NOTICES shadowStatic — without this the flag would reach "
-              "the engine once and never change again");
+        CHECK(statik != dynamic_,
+              "LightDesc::operator== NOTICES shadowStatic — without this the flag "
+              "would reach the engine once and never change again");
         point->shadowMap->staticMap = false;
         CHECK(!SceneMirror::toLightDesc(point.data()).shadowStatic, "...and back off again");
 
@@ -1317,6 +1318,83 @@ int main(int argc, char **argv)
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
+    // ---- pushing an UNCHANGED sky (and world) does nothing at all ----------
+    //
+    // ENGINEERING_DEBT_SPEC item 4's idempotency half, and the reason the whole
+    // sky is one value now: the host builds a description, the boundary decides
+    // whether anything has to happen. Two ways this could go wrong, and both
+    // are visible from here:
+    //
+    //   * the MIRROR re-bakes — a fresh Preetham/gradient strip, a fresh
+    //     equirect->cubemap resample, six new textures. The description is made
+    //     of texture ids and ids are monotonic, so a re-bake cannot produce an
+    //     equal one.
+    //   * the ENGINE re-applies an equal description — which is not free and
+    //     not invisible: rebuilding the reflection cubemap leaves the
+    //     convolution PENDING for a frame (applyPendingIbl runs on the NEXT
+    //     renderOneFrame), so the mirror-metal cube below would blink. Hence
+    //     the pixel comparison is byte-exact and taken on the very next frame.
+    //
+    // The world push rides along: a shadow-atlas rebuild (the other half of the
+    // item — three hand-written read-before-write guards became one
+    // Scene::setShadowSettings) drops and re-adds every workspace, which
+    // workspaceGeneration counts.
+    {
+        doc->skyType = iris::SkyType::GRADIENT;
+        doc->gradientTop = QColor(30, 60, 220);
+        doc->gradientMid = QColor(120, 160, 255);
+        doc->gradientBot = QColor(230, 120, 40);
+        doc->gradientOffset = 0.0f;
+        // A chrome cube in near-darkness: everything it shows is the reflection
+        // cubemap, so a re-convolution shows up as a changed pixel.
+        target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
+        auto chrome = iris::PbrMaterial::create();
+        chrome->setValue("baseColor", QColor(255, 255, 255));
+        chrome->setValue("metallic", 1.0f);
+        chrome->setValue("roughness", 0.1f);
+        meshNode->setMaterial(chrome);
+        doc->getRootNode()->addChild(meshNode);
+        mirror.applySky(view);
+        mirror.sync();
+        mirror.applyEnvironment(view, engine.get());
+        for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+        Image before; CHECK(view->readPixels(before), "idempotency: the settled frame reads back");
+        show("gradient sky + chrome cube (settled)", before);
+        const SkyDesc settled = target->sky();
+        const unsigned ws0 = view->workspaceGeneration();
+        std::printf("    sky desc: mode=%d equirect=%u reflections=%d faces[0]=%u  ws gen %u\n",
+                    int(settled.mode), settled.equirect, settled.reflections ? 1 : 0,
+                    settled.reflectionFaces[0], ws0);
+        CHECK(settled.mode == SkyMode::Equirectangular && settled.equirect != 0,
+              "a gradient sky bakes to an equirect image the engine holds");
+        CHECK(settled.reflections && settled.reflectionFaces[0] != 0,
+              "...and to six reflection faces (the IBL a cubemap sky gets for free)");
+        for (int i = 0; i < 5; ++i) {
+            mirror.applySky(view);
+            mirror.applyEnvironment(view, engine.get());
+            mirror.sync();
+            engine->renderOneFrame();
+        }
+        Image after; CHECK(view->readPixels(after), "idempotency: the frame after five re-pushes reads back");
+        show("gradient sky + chrome cube (after 5 identical pushes)", after);
+        CHECK(target->sky() == settled,
+              "five more pushes of an unchanged sky re-bake nothing (the description, "
+              "texture ids and all, is the one the engine already had)");
+        CHECK(view->workspaceGeneration() == ws0,
+              "...and rebuild no workspace (no shadow-atlas churn from the world push)");
+        CHECK(after.rgba == before.rgba,
+              "...and the pixels are byte-identical (no reflection re-convolution blink)");
+        // Restore for what follows.
+        doc->skyType = iris::SkyType::SINGLE_COLOR;
+        doc->skyColor = QColor(0, 0, 255);
+        doc->setSkyTexture(iris::Texture2DPtr());
+        meshNode->setMaterial(legacyOrange);
+        doc->getRootNode()->removeChild(meshNode);
+        target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+        mirror.applySky(view);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    }
+
     // ---- editor ground grid (EDITOR_SHORTCUTS_SPEC §3) ----
     // Empty scene, flat blue sky: every non-blue pixel is the grid. Looking
     // straight down from y=10 the ±100-unit grid fills the frame.
@@ -1744,8 +1822,8 @@ int main(int argc, char **argv)
         lmirror.sync();
         CHECK(target->nodeLightMask(cubeNode) == 0x4u, "channels: an idle sync changes nothing");
 
-        // The LIGHT half rides the LightDesc, whose compare had to grow the
-        // field — a sameLight() that ignores the mask would drop this edit.
+        // The LIGHT half rides the LightDesc, whose operator== had to grow the
+        // field — a comparison that ignores the mask would drop this edit.
         lamp->setLightMask(0x8u);
         lmirror.sync();
         CHECK(lamp->getLightMask() == 0x8u, "channels: the light carries its own mask");

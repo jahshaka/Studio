@@ -1465,6 +1465,18 @@ void ambient_sh_lights_world_axes() {
     }
 }
 
+// SkyDesc shorthands. The boundary takes the whole sky as one value now
+// (ENGINEERING_DEBT_SPEC item 4), so a test that only wants "an equirect sky"
+// says exactly that rather than picking one of three verbs.
+static SkyDesc equirectSkyDesc(TextureId tex) {
+    SkyDesc d; d.mode = SkyMode::Equirectangular; d.equirect = tex; return d;
+}
+static SkyDesc cubemapSkyDesc(const TextureId faces[6]) {
+    SkyDesc d; d.mode = SkyMode::Cubemap;
+    for (int i = 0; i < 6; ++i) d.faces[i] = faces[i];
+    return d;
+}
+
 void equirect_sky_fills_the_background() {
     Fixture fx;
     View *v = fx.view("sky-view", 48, 48, kBlue); REQUIRE(v);
@@ -1479,7 +1491,7 @@ void equirect_sky_fills_the_background() {
     if (!skyTex) { std::remove(path.c_str()); return; }
     render(fx.e); Image img; REQUIRE(v->readPixels(img));
     CHECK(near(corner(img), kBlue));
-    CHECK(s->setSky(SkyMode::Equirectangular, skyTex));
+    CHECK(s->setSky(equirectSkyDesc(skyTex)));
     render(fx.e, 3); REQUIRE(v->readPixels(img));
     const Px k = corner(img);
     std::printf("    equirect sky corner: %d %d %d\n", k.r, k.g, k.b);
@@ -1497,14 +1509,14 @@ void equirect_sky_fills_the_background() {
     TextureId skyTex2 = s->loadTexture(path2, true);
     CHECK_MSG(skyTex2 != 0, "%s", fx.e->lastError().c_str());
     if (skyTex2) {
-        CHECK(s->setSky(SkyMode::Equirectangular, skyTex2));
+        CHECK(s->setSky(equirectSkyDesc(skyTex2)));
         render(fx.e, 3); REQUIRE(v->readPixels(img));
         const Px k2 = corner(img);
         std::printf("    second equirect sky corner: %d %d %d\n", k2.r, k2.g, k2.b);
         CHECK_MSG(k2.g > 150 && k2.b > 150 && k2.r < 80,
                   "the SECOND sky in the pool must show, not the first: %d %d %d", k2.r, k2.g, k2.b);
     }
-    CHECK(s->setSky(SkyMode::NoSky, 0));
+    CHECK(s->setSky(SkyDesc()));
     render(fx.e, 2); REQUIRE(v->readPixels(img));
     CHECK(near(corner(img), kBlue));
     std::remove(path.c_str());
@@ -1537,7 +1549,7 @@ void rough_metal_reflects_across_cube_faces() {
         faces[i] = s->createTexture(16, 16, px.data(), true);
         CHECK_MSG(faces[i] != 0, "%s", fx.e->lastError().c_str());
     }
-    CHECK_MSG(s->setSkyCubemap(faces), "%s", fx.e->lastError().c_str());
+    CHECK_MSG(s->setSky(cubemapSkyDesc(faces)), "%s", fx.e->lastError().c_str());
     // Straight down at the top face (nudged off +Y so the look-at basis is sane).
     enginetest::testCameraLookAt(v, Vec3(0.3f, 4.0f, 0.3f), Vec3(0, 0, 0));
     render(fx.e, 4);
@@ -1547,7 +1559,7 @@ void rough_metal_reflects_across_cube_faces() {
     CHECK_MSG(k.r > 12,
               "a GGX-prefiltered cube must carry the +X face's light into +Y (box mips cannot): %d %d %d",
               k.r, k.g, k.b);
-    CHECK(s->setSky(SkyMode::NoSky, 0));
+    CHECK(s->setSky(SkyDesc()));
 }
 
 void cubemap_sky_faces_match_directions() {
@@ -1564,7 +1576,7 @@ void cubemap_sky_faces_match_directions() {
         faces[i] = s->createTexture(8, 8, px.data(), true);
         CHECK_MSG(faces[i] != 0, "%s", fx.e->lastError().c_str());
     }
-    CHECK(s->setSkyCubemap(faces));
+    CHECK(s->setSky(cubemapSkyDesc(faces)));
     // Look down each axis with a narrow FOV; the centre pixel must be that face's colour.
     struct Look { Quat q; int face; const char *name; } looks[] = {
         { Quat(0, -0.7071068f, 0, 0.7071068f), 0, "+X" },   // yaw -90: camera -Z -> +X
@@ -1583,7 +1595,7 @@ void cubemap_sky_faces_match_directions() {
         std::printf("    looking %s: centre %d %d %d\n", l.name, k.r, k.g, k.b);
         CHECK_MSG(near(k, want, 40), "face %s should show its colour", l.name);
     }
-    CHECK(s->setSky(SkyMode::NoSky, 0));
+    CHECK(s->setSky(SkyDesc()));
     render(fx.e, 2); Image img; REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kBlue));
 }
@@ -2775,7 +2787,10 @@ void per_material_reflection_cubemap_overrides_the_sky() {
     TextureId heroFaces[6]; solidFaces(255, 40, 40, heroFaces);   // a RED world
     for (int i = 0; i < 6; ++i) { REQUIRE(skyFaces[i] != 0); REQUIRE(heroFaces[i] != 0); }
 
-    CHECK_MSG(s->setSkyReflection(skyFaces), "setSkyReflection: %s", fx.e->lastError().c_str());
+    // The reflection half of a SkyDesc alone: no sky, six IBL faces.
+    SkyDesc skyIbl; skyIbl.reflections = true;
+    for (int i = 0; i < 6; ++i) skyIbl.reflectionFaces[i] = skyFaces[i];
+    CHECK_MSG(s->setSky(skyIbl), "setSky (reflections only): %s", fx.e->lastError().c_str());
     const TextureId heroCube = s->createCubemap(heroFaces);
     CHECK_MSG(heroCube != 0, "createCubemap: %s", fx.e->lastError().c_str());
 
@@ -4292,7 +4307,7 @@ void sky_stays_smooth_under_the_post_chain() {
     TextureId skyTex = s->loadTexture(path, true);
     CHECK_MSG(skyTex != 0, "%s", fx.e->lastError().c_str());
     if (!skyTex) { std::remove(path.c_str()); return; }
-    CHECK(s->setSky(SkyMode::Equirectangular, skyTex));
+    CHECK(s->setSky(equirectSkyDesc(skyTex)));
 
     // The sky band: the top third, which the camera framing keeps free of
     // geometry (the horizon sits at about 60% of the frame height).
@@ -4365,7 +4380,7 @@ void sky_stays_smooth_under_the_post_chain() {
         faces[i] = s->loadTexture(faceFiles[i], true);
         if (!faces[i]) haveFaces = false;
     }
-    if (haveFaces && s->setSkyCubemap(faces)) {
+    if (haveFaces && s->setSky(cubemapSkyDesc(faces))) {
         check("cubemap epic", shape(true, true, true, 1), true);
     } else {
         std::printf("    cubemap sky unavailable: %s\n", fx.e->lastError().c_str());

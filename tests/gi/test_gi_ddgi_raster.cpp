@@ -440,7 +440,8 @@ int main()
     const unsigned char bluePx[4] = { 20, 60, 255, 255 };
     const TextureId skyTex = s->createTexture(1, 1, bluePx, true);
     CHECK(skyTex != 0, "a 1x1 blue sky texture");
-    CHECK(s->setSky(SkyMode::Equirectangular, skyTex), "the blue equirect sky binds");
+    SkyDesc blueSky; blueSky.mode = SkyMode::Equirectangular; blueSky.equirect = skyTex;
+    CHECK(s->setSky(blueSky), "the blue equirect sky binds");
     // Ambient ON now: with a sky bound the proxy must be inert (the probes
     // carry the sky), so ddgiAmbient 1 and 0 must render identically.
     s->setAmbient(Colour(0.4f, 0.4f, 0.44f), Colour(0.1f, 0.1f, 0.12f));
