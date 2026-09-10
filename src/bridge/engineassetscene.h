@@ -18,8 +18,7 @@
 #include <QString>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
-#include "jahshaka/engine/Engine.h"
-#include "bridge/enginepreviewscene.h"
+#include "bridge/enginepreviewscene.h"   // brings jahshaka/engine/Engine.h
 #include "viewport/previeworbit.h"
 
 class SceneMirror;

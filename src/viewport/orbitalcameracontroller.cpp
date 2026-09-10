@@ -26,11 +26,6 @@ For more information see the LICENSE file
 #include "viewport/gizmo.h"
 #include "viewport/ieditorviewport.h"
 
-float lerp(float a, float b, float t)
-{
-	return orbitmath::lerp(a, b, t);
-}
-
 OrbitalCameraController::OrbitalCameraController(IEditorViewport* sceneWidget)
 {
     distFromPivot = 15;
@@ -215,8 +210,8 @@ void OrbitalCameraController::update(float dt)
 {
 	if (!navPending || !camera) return;
 
-	yaw = lerp(yaw, targetYaw, 0.8);
-	pitch = lerp(pitch, targetPitch, 0.8);
+	yaw = orbitmath::lerp(yaw, targetYaw, 0.8f);
+	pitch = orbitmath::lerp(pitch, targetPitch, 0.8f);
 	// The 0.8 lerp only ever approaches its target, so the run needs an end:
 	// within a thousandth of a degree, land exactly on it and stop. (Before,
 	// "stopping" simply meant re-writing the same pose forever.)

@@ -21,8 +21,7 @@
 #include <QImage>
 #include <QSize>
 #include "irisgl/irisglfwd.h"
-#include "jahshaka/engine/Engine.h"
-#include "bridge/enginepreviewscene.h"
+#include "bridge/enginepreviewscene.h"   // brings jahshaka/engine/Engine.h
 
 class SceneMirror;
 namespace iris { struct MeshMaterialData; }
