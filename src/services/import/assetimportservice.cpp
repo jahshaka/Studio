@@ -95,8 +95,7 @@ QString humanSize(qint64 bytes)
 
 }  // namespace
 
-QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
-                                                const StagedAsset &staged)
+QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
 {
     if (!db) return QString();
     QSqlDatabase conn = QSqlDatabase::database();
@@ -110,16 +109,16 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
         || any.value(0).toInt() == 0)
         return QString();
 
-    // The source oid is ALREADY known: prepare() stamped it into the
-    // determinism record on the worker thread (from the importer's own hash
-    // when it had one). Re-hashing here would read the whole file a second
-    // time on the DB/UI thread — a multi-second freeze on a big model for an
-    // answer we are holding (code review 2026-09-10). The hash stays as the
-    // fallback for a plan that carries no record (a .jaf import, whose rows
-    // come from the archive's catalog).
-    QString oid = staged.importRecord.value(QStringLiteral("sourceOid")).toString();
-    if (oid.isEmpty()) oid = staged.sourceOid;
-    if (oid.isEmpty()) oid = AssetCas::hashFile(request.sourcePath);
+    // The source oid is ALREADY known: prepare() stamps it into the
+    // determinism record for EVERY import — from the importer's own hash when
+    // it had one (MeshImporter keys its bake on it), from a read of the source
+    // otherwise — and .jaf plans get one too. Re-hashing here would read the
+    // whole file a second time on the DB/UI thread, a multi-second freeze on a
+    // big model for an answer we are holding (code review 2026-09-10). So
+    // there is no fallback to write: an empty oid means this plan never went
+    // through prepare(), and the honest answer to "is this an unlisted row's
+    // content?" is then "we do not know" — no re-list, a normal import.
+    const QString oid = staged.importRecord.value(QStringLiteral("sourceOid")).toString();
     if (oid.isEmpty()) return QString();
 
     // Same BYTES as an unlisted row's source = the same asset. The type is
@@ -134,14 +133,17 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
     // sharing the same CAS object, which costs no bytes.
     //
     // Newest first: two unlisted rows can share one source oid (the same file
-    // imported twice, then both deleted while pinned), and the one the user
-    // deleted last is the one they are most likely bringing back.
+    // imported twice, then both deleted while pinned), and the more recently
+    // IMPORTED row is the one whose name, tags and drawer are most likely to
+    // be what the user wants back (the catalog records no deletion time, so
+    // creation recency is what there is). rowid breaks the ties date_created
+    // cannot: it is second-resolution, and two rows of one import share it.
     QSqlQuery match(conn);
     match.prepare("SELECT AF.asset_guid FROM asset_files AF "
                   "JOIN assets A ON A.guid = AF.asset_guid "
                   "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 "
                   "AND " + Database::dependeeSubquery(QStringLiteral("A.guid")) + " "
-                  "ORDER BY A.date_created DESC LIMIT 1");
+                  "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1");
     match.addBindValue(oid);
     if (!match.exec() || !match.next()) return QString();
 
@@ -289,7 +291,7 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     // may touch the database (prepare runs on a worker), so this is where the
     // check that stops a duplicate row lives — once, for both entry points.
     // The staged convert is thrown away; correctness beats the wasted work.
-    if (const QString relisted = relistUnlistedMatch(request, staged); !relisted.isEmpty()) {
+    if (const QString relisted = relistUnlistedMatch(staged); !relisted.isEmpty()) {
         ImportResult back;
         back.assetGuid = relisted;
         back.warnings = result.warnings;
