@@ -178,6 +178,20 @@ endfunction()
 # contention class is per row (engine_selftest_validation 180, ui.media_lazy
 # 120, shadergraph.bake_output 120, claude.chat the default), not a flat 300.
 
+# WHITE-BOX IMPORTER SUITES. assimp is IrisGL's PRIVATE dependency (ENGINEERING
+# DEBT L4, 2026-09-10): nothing that links libIrisGL sees its headers or its
+# symbols. The handful of suites that deliberately drive the vendored importer
+# itself — asserting what assimp hands over (a patch regression, a raw-vs-preset
+# comparison, the tps a clip file reports) before asserting what IrisGL makes of
+# it — declare that here, explicitly, one line per target. A suite that only
+# needs "a parsed model" goes through iris::SceneSource and needs nothing.
+function(jah_links_assimp _t)
+    target_include_directories(${_t} PRIVATE
+        ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+        ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include)
+    target_link_libraries(${_t} PRIVATE assimp)
+endfunction()
+
 function(jah_no_display)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION

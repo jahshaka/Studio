@@ -42,12 +42,12 @@ target_include_directories(test_mesh_bake PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_mesh_bake PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_mesh_bake PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+jah_links_assimp(test_mesh_bake)
 
 set(_bake_home ${CMAKE_CURRENT_BINARY_DIR}/bake-home)
 file(MAKE_DIRECTORY ${_bake_home})

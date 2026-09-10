@@ -112,8 +112,6 @@ set_target_properties(test_gi_coalesce PROPERTIES
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_gi_coalesce PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_gi_coalesce PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -139,8 +137,6 @@ set_target_properties(test_gi_overlay PROPERTIES
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_gi_overlay PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_gi_overlay PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -189,8 +185,6 @@ set_target_properties(test_gi_budget PROPERTIES
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_gi_budget PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_gi_budget PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -266,8 +260,7 @@ set_target_properties(test_gi_tiers PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_gi_tiers PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    # iris headers expose assimp and bullet types; these are IrisGL's own include paths
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    # iris headers expose bullet types; this is IrisGL's own include path
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_gi_tiers PRIVATE IrisGL Qt6::Gui)
 # A document node is an engine node (SCENEGRAPH_SPEC D2), so even this suite

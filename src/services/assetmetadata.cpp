@@ -21,15 +21,8 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QtEndian>
 #include <algorithm>
-#include <functional>
-#include <limits>
-#include <vector>
 
-#include "assimp/Importer.hpp"
-#include "assimp/material.h"
-#include "assimp/postprocess.h"
-#include "irisgl/import/importflags.h"
-#include "assimp/scene.h"
+#include "irisgl/import/modelsceneinfo.h"
 
 #include "data/constants.h"
 #include "services/animationfile.h"
@@ -110,119 +103,17 @@ QString findByExtension(const QString &folder, const QStringList &exts)
     return QString();
 }
 
-/// The model's axis-aligned WORLD size, in metres — measured on the parsed
-/// aiScene, which iris::ImportFlags::Canonical has already unit-converted
-/// (aiProcess_GlobalScale). Mesh-local AABBs pushed through each instancing
-/// node's accumulated transform: the same shape as the document-side walk in
-/// fitsize::measureNode, so the number recorded at import and the number a
-/// placed node measures agree.
-fitsize::Extent measureSceneExtent(const aiScene *scene)
-{
-    fitsize::Extent out;
-    if (!scene || scene->mNumMeshes == 0 || !scene->mRootNode) return out;
-
-    // Per-mesh local AABB, computed once even when several nodes instance it.
-    struct Box { aiVector3D mn, mx; bool any = false; };
-    std::vector<Box> boxes(scene->mNumMeshes);
-    for (unsigned i = 0; i < scene->mNumMeshes; ++i) {
-        const aiMesh *mesh = scene->mMeshes[i];
-        if (!mesh || mesh->mNumVertices == 0) continue;
-        Box &box = boxes[i];
-        for (unsigned v = 0; v < mesh->mNumVertices; ++v) {
-            const aiVector3D &p = mesh->mVertices[v];
-            if (!box.any) { box.mn = box.mx = p; box.any = true; continue; }
-            box.mn.x = std::min(box.mn.x, p.x); box.mx.x = std::max(box.mx.x, p.x);
-            box.mn.y = std::min(box.mn.y, p.y); box.mx.y = std::max(box.mx.y, p.y);
-            box.mn.z = std::min(box.mn.z, p.z); box.mx.z = std::max(box.mx.z, p.z);
-        }
-    }
-
-    double lo[3] = { std::numeric_limits<double>::max(), std::numeric_limits<double>::max(),
-                     std::numeric_limits<double>::max() };
-    double hi[3] = { -std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(),
-                     -std::numeric_limits<double>::max() };
-    bool any = false;
-
-    std::function<void(const aiNode *, const aiMatrix4x4 &)> walk =
-        [&](const aiNode *node, const aiMatrix4x4 &parent) {
-            if (!node) return;
-            const aiMatrix4x4 world = parent * node->mTransformation;
-            for (unsigned m = 0; m < node->mNumMeshes; ++m) {
-                const unsigned index = node->mMeshes[m];
-                if (index >= boxes.size() || !boxes[index].any) continue;
-                const Box &box = boxes[index];
-                for (int c = 0; c < 8; ++c) {
-                    aiVector3D corner((c & 1) ? box.mx.x : box.mn.x,
-                                      (c & 2) ? box.mx.y : box.mn.y,
-                                      (c & 4) ? box.mx.z : box.mn.z);
-                    corner *= world;
-                    const double p[3] = { corner.x, corner.y, corner.z };
-                    for (int a = 0; a < 3; ++a) {
-                        lo[a] = std::min(lo[a], p[a]);
-                        hi[a] = std::max(hi[a], p[a]);
-                    }
-                    any = true;
-                }
-            }
-            for (unsigned c = 0; c < node->mNumChildren; ++c) walk(node->mChildren[c], world);
-        };
-    walk(scene->mRootNode, aiMatrix4x4());
-
-    if (!any) return out;
-    out.x = hi[0] - lo[0];
-    out.y = hi[1] - lo[1];
-    out.z = hi[2] - lo[2];
-    out.valid = out.x > 0.0 || out.y > 0.0 || out.z > 0.0;
-    return out;
-}
-
-/// Metres per source unit AS THE FILE DECLARED IT. FBX is the only format in
-/// the set that declares one (GlobalSettings::UnitScaleFactor, documented as
-/// CENTIMETRES per unit — a Mixamo download says 1.0); glTF fixes the metre by
-/// spec and .obj/.ply/.stl declare nothing, so they read 1. Recorded for the
-/// user, never used by the policy: aiProcess_GlobalScale has already applied
-/// it to the geometry this measures.
-double declaredUnitScale(const aiScene *scene)
-{
-    if (!scene || !scene->mMetaData) return 1.0;
-    double factor = 0.0;
-    if (scene->mMetaData->Get("UnitScaleFactor", factor) && factor > 0.0)
-        return factor / 100.0;
-    float ffactor = 0.0f;
-    if (scene->mMetaData->Get("UnitScaleFactor", ffactor) && ffactor > 0.0f)
-        return double(ffactor) / 100.0;
-    return 1.0;
-}
-
 } // namespace
 
-QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &sourceFile)
+QJsonObject AssetMetadata::forModelScene(const iris::ModelSceneInfo &scene, const QString &sourceFile)
 {
-    if (!scene) return QJsonObject();
-
-    qint64 vertices = 0, triangles = 0;
-    for (unsigned i = 0; i < scene->mNumMeshes; ++i) {
-        vertices += scene->mMeshes[i]->mNumVertices;
-        triangles += scene->mMeshes[i]->mNumFaces;   // iris triangulates on load
-    }
+    if (!scene.parsed) return QJsonObject();
 
     // Distinct texture references across every material and slot type;
     // embedded textures ("*0" paths) are references too, so a purely
     // embedded model still counts them.
-    QSet<QString> texturePaths;
-    for (unsigned m = 0; m < scene->mNumMaterials; ++m) {
-        for (int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN; ++t) {
-            const auto type = static_cast<aiTextureType>(t);
-            const unsigned count = scene->mMaterials[m]->GetTextureCount(type);
-            for (unsigned s = 0; s < count; ++s) {
-                aiString path;
-                if (scene->mMaterials[m]->GetTexture(type, s, &path) == AI_SUCCESS)
-                    texturePaths.insert(QString::fromUtf8(path.C_Str()));
-            }
-        }
-    }
-    int textures = texturePaths.size();
-    if (textures == 0) textures = static_cast<int>(scene->mNumTextures);
+    int textures = scene.textureReferences.size();
+    if (textures == 0) textures = scene.embeddedTextures;
 
     // ---- THE RIG BLOCK (AVATAR_ASSET_SPEC §5.1) ---------------------------
     //
@@ -233,51 +124,25 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
     // definition's `rig` block is copied from.
     //
     // BONE names come from the meshes' bone lists; NODE names from the scene
-    // hierarchy. Both matter: the clip <-> rig join is by SCENE-NODE name
-    // (rigsignature.h), and an FBX carries bones assimp never gives a mesh.
-    QStringList boneNames;
-    QSet<QString> boneSeen;
-    for (unsigned i = 0; i < scene->mNumMeshes; ++i) {
-        const aiMesh *mesh = scene->mMeshes[i];
-        for (unsigned b = 0; b < mesh->mNumBones; ++b) {
-            const QString name = QString::fromUtf8(mesh->mBones[b]->mName.C_Str());
-            if (name.isEmpty() || boneSeen.contains(name)) continue;
-            boneSeen.insert(name);
-            boneNames.append(name);
-        }
-    }
-
-    QStringList nodeNames;
-    QSet<QString> nodeSeen;
-    std::function<void(const aiNode *)> walk = [&](const aiNode *node) {
-        if (!node) return;
-        const QString name = QString::fromUtf8(node->mName.C_Str());
-        if (!name.isEmpty() && !nodeSeen.contains(name)) {
-            nodeSeen.insert(name);
-            nodeNames.append(name);
-        }
-        for (unsigned i = 0; i < node->mNumChildren; ++i) walk(node->mChildren[i]);
-    };
-    walk(scene->mRootNode);
+    // hierarchy (both read by IrisGL, in first-seen order). Both matter: the
+    // clip <-> rig join is by SCENE-NODE name (rigsignature.h), and an FBX
+    // carries bones the importer never gives a mesh.
+    const QStringList &boneNames = scene.boneNames;
+    const QStringList &nodeNames = scene.nodeNames;
 
     // Clips: name, LENGTH IN SECONDS (a file's ticks are meaningless to a
-    // reader, and ticksPerSecond is 0 in more exports than not — the same
-    // fallback iris::Mesh::extractAnimations uses), and how much of the clip
-    // is bone work rather than assimp pivot bookkeeping.
+    // reader; the 25 fps fallback for a file that states none is applied at
+    // the source, the same rule iris::Mesh::extractAnimations keys with), and
+    // how much of the clip is bone work rather than importer pivot bookkeeping.
     QJsonArray animations;
-    for (unsigned i = 0; i < scene->mNumAnimations; ++i) {
-        const aiAnimation *anim = scene->mAnimations[i];
-        if (!anim) continue;
-        const double tps = anim->mTicksPerSecond > 0.0 ? anim->mTicksPerSecond : 25.0;
+    for (const auto &anim : scene.animations) {
         int boneChannels = 0;
-        for (unsigned c = 0; c < anim->mNumChannels; ++c) {
-            const QString channel = QString::fromUtf8(anim->mChannels[c]->mNodeName.C_Str());
+        for (const QString &channel : anim.channelNames)
             if (!rig::isPivotChannel(channel)) ++boneChannels;
-        }
         QJsonObject clip;
-        clip["name"] = QString::fromUtf8(anim->mName.C_Str());
-        clip["length"] = anim->mDuration / tps;
-        clip["channels"] = static_cast<int>(anim->mNumChannels);
+        clip["name"] = anim.name;
+        clip["length"] = anim.lengthSeconds;
+        clip["channels"] = anim.channelNames.size();
         clip["boneChannels"] = boneChannels;
         animations.append(clip);
     }
@@ -286,10 +151,10 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
     meta["kind"] = "model";
     meta["format"] = formatOf(sourceFile);
     meta["fileSize"] = sizeOf(sourceFile);
-    meta["vertices"] = vertices;
-    meta["triangles"] = triangles;
-    meta["meshes"] = static_cast<int>(scene->mNumMeshes);
-    meta["materials"] = static_cast<int>(scene->mNumMaterials);
+    meta["vertices"] = scene.vertices;
+    meta["triangles"] = scene.triangles;
+    meta["meshes"] = scene.meshes;
+    meta["materials"] = scene.materials;
     meta["textures"] = textures;
     meta["hasSkeleton"] = !boneNames.isEmpty();
     meta["bones"] = boneNames.size();
@@ -303,9 +168,15 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
     // The model's measured size in metres and the fit the size policy infers
     // from it. Computed HERE — the one import-time model-description site —
     // so it also comes for free on the lazy backfill (forModelFile) and needs
-    // no migration for rows imported before the feature landed.
-    const fitsize::Extent extent = measureSceneExtent(scene);
-    fitsize::writeBlock(meta, extent, declaredUnitScale(scene), !boneNames.isEmpty());
+    // no migration for rows imported before the feature landed. The extent
+    // is IrisGL's measurement of the canonical (unit-converted) parse; the
+    // declared unit is recorded for the user, never used by the policy.
+    fitsize::Extent extent;
+    extent.x = scene.extentX;
+    extent.y = scene.extentY;
+    extent.z = scene.extentZ;
+    extent.valid = scene.extentValid;
+    fitsize::writeBlock(meta, extent, scene.declaredUnitScale, !boneNames.isEmpty());
     if (meta.contains("fitReason"))
         irisLog(QStringLiteral("import: '%1' %2")
                     .arg(QFileInfo(sourceFile).fileName(),
@@ -315,12 +186,11 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
 
 QJsonObject AssetMetadata::forModelFile(const QString &filePath)
 {
-    Assimp::Importer importer;
-    // THE canonical preset (ASSET_PIPELINE_SPEC §3.2.2): metadata counts must
-    // match the geometry import and every load produce — a third flag set here
-    // used to yield vertex/index counts matching neither.
-    const aiScene *scene = importer.ReadFile(filePath.toStdString(), iris::ImportFlags::Canonical);
-    if (!scene) return forGenericFile(filePath);   // still format/size, never nothing
+    // THE canonical preset (ASSET_PIPELINE_SPEC §3.2.2), inside IrisGL:
+    // metadata counts must match the geometry import and every load produce —
+    // a third flag set here used to yield vertex/index counts matching neither.
+    const iris::ModelSceneInfo scene = iris::ModelSceneInfo::read(filePath);
+    if (!scene.parsed) return forGenericFile(filePath);   // still format/size, never nothing
     return forModelScene(scene, filePath);
 }
 

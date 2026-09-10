@@ -139,11 +139,11 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
     switch (static_cast<ModelTypes>(memberRecord.type)) {
         case ModelTypes::Object: {
             if (path.isEmpty()) break;
-            // The SECOND assimp parse of the same model on an open: the
-            // session entry for a pinned Object is a parsed scene fragment.
-            // The threaded open hands us the aiScene already parsed on a
-            // worker (irisgl/import/meshprewarm.h) — then this is a build,
-            // not a parse.
+            // The SECOND parse of the same model on an open: the session
+            // entry for a pinned Object is a parsed scene fragment. The
+            // threaded open hands us the scene already parsed on a worker
+            // (irisgl/import/meshprewarm.h) — then this is a build, not a
+            // parse.
             const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
                 return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
             };
@@ -151,7 +151,7 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             // model the scene reader used this open — one file read served
             // both consumers, where the old path parsed the file twice.
             // The counter spans the resolve, the read AND the fragment build —
-            // the whole of what the assimp branch below costs, so the two are
+            // the whole of what the parse branch below costs, so the two are
             // directly comparable in the ledger.
             LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sessionAsset"));
             iris::BakedModelPtr baked = prewarm ? prewarm->baked(path) : iris::BakedModelPtr();
@@ -171,10 +171,10 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
                 break;
             }
 
-            const aiScene *ready = prewarm ? prewarm->scene(path) : nullptr;
+            const iris::SceneSource *ready = prewarm ? prewarm->source(path) : nullptr;
             if (ready) {
                 LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sessionAssetHit"));
-                auto node = iris::MeshNode::loadAsSceneFragment(path, ready, makeMaterial);
+                auto node = iris::MeshNode::loadAsSceneFragment(path, *ready, makeMaterial);
                 if (!node) break;
                 const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
                 AssetHelper::updateNodeMaterial(node, definition, db);

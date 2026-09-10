@@ -36,13 +36,13 @@ public:
     static QStringList getChildGuids(const iris::SceneNodePtr &node);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
     /// modelStats (optional): filled with AssetMetadata::forModelScene counts
-    /// from the aiScene this load already produced — the import-time source
+    /// from the parse this load already produced — the import-time source
     /// of the per-asset "metadata" properties block.
     /// `extractDir`: where embedded textures / derived maps are written
     /// (import staging). Empty = beside the source — wrong for read-only
     /// sources; the import pipeline always passes a staging dir.
-    /// `keepScene`: pass a caller-owned SceneSource to keep the aiScene alive
-    /// after the call (`keepScene->importer.GetScene()`). The mesh importer
+    /// `keepScene`: pass a caller-owned SceneSource to keep the parse alive
+    /// after the call (hand it to MeshBake::buildFromScene). The mesh importer
     /// uses it to write the mesh BAKE from the SAME parse — one parse per
     /// import, still, which is what meshParseCount() guards.
     static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,

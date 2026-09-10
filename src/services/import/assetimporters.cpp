@@ -118,7 +118,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         return false;
     }
 
-    // ONE assimp parse: node graph, texture discovery, metadata counts.
+    // ONE parse: node graph, texture discovery, metadata counts.
     // Extraction from the SOURCE path (sibling .mtl/textures only exist
     // there); embedded textures and split MR maps land in stagingDir.
     QStringList textureNames, texturePaths;
@@ -127,9 +127,9 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // Drop anything a previous parse on this thread left behind, so the
     // warnings taken below belong to THIS model.
     iris::MaterialHelper::takeContainmentWarnings();
-    // OUR SceneSource, so the aiScene survives the call and the mesh BAKE
+    // OUR SceneSource, so the parse survives the call and the mesh BAKE
     // (MESH_BAKE_SPEC phase 1) is written from the SAME parse — the import
-    // still pays exactly one assimp parse, which import.async asserts.
+    // still pays exactly one parse, which import.async asserts.
     iris::SceneSource modelScene;
     auto node = AssetHelper::extractTexturesAndMaterialFromMesh(
         request.sourcePath, textureNames, texturePaths, hasEmbedded, &modelStats, stagingDir,
@@ -180,7 +180,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // ---- THE BAKE (MESH_BAKE_SPEC phase 1) --------------------------------
     //
     // The parse we just paid, frozen: opening a world that uses this model is
-    // then a file read instead of ~0.9 s of assimp per open, forever. Derived
+    // then a file read instead of ~0.9 s of parse per open, forever. Derived
     // data — the source above stays the truth and is never deleted; a bake
     // whose fingerprint no longer matches this build is ignored and rebuilt.
     //
@@ -193,7 +193,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         const QString bakeName = iris::MeshBake::fileNameFor(out.sourceOid);
         const QString bakePath = QDir(stagingDir).filePath(bakeName);
         iris::MeshBake::Model baked = iris::MeshBake::buildFromScene(
-            modelScene.importer.GetScene(), request.sourcePath,
+            modelScene, request.sourcePath,
             iris::MeshBake::fingerprintFor(out.sourceOid), stagingDir);
         QString bakeError;
         if (baked.valid && iris::MeshBake::write(bakePath, baked, &bakeError)) {
@@ -556,7 +556,7 @@ int AnimationImporter::modelType() const { return static_cast<int>(ModelTypes::A
 bool AnimationImporter::sniff(const QString &path) const
 {
     // Structural, not a parse (animfile::shapeOf): this question is asked of
-    // every model file the user drops, and answering it with assimp would
+    // every model file the user drops, and answering it with a parse would
     // double the cost of every mesh import.
     return animfile::isAnimationFile(path);
 }
@@ -602,7 +602,7 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
     }
 
     // ONE parse for both the metadata block and the thumbnail — the pose strip
-    // is drawn from the same aiScene the clip table is read from.
+    // is drawn from the same parse the clip table is read from.
     QImage poseStrip;
     const animfile::Contents contents = animfile::read(request.sourcePath, &poseStrip);
     if (!contents.parsed) {
@@ -620,7 +620,7 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
     // here means the structural sniff and the parse disagree (an exotic
     // container), and importing it as a clip would silently drop its meshes.
     //
-    // EXCEPT when the mesh is not IN the file: assimp SYNTHESISES a stick
+    // EXCEPT when the mesh is not IN the file: the importer SYNTHESISES a stick
     // figure for a .bvh (SkeletonMeshBuilder), so the parse reports geometry
     // for a format that has none by definition. The structural answer is the
     // authority there, which is exactly what shapeOf() is.
@@ -634,7 +634,7 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
 
     out.mainGuid = GUIDManager::generateGUID();
     // THE SOURCE FILE IS THE ASSET (no converted intermediate): the avatar
-    // module re-reads it through the CAS with the same assimp flags it uses
+    // module re-reads it through the CAS with the same import flags it uses
     // for a file on disk, so a stored clip and a dropped one take one code
     // path.
     out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,

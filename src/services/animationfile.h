@@ -31,7 +31,7 @@ For more information see the LICENSE file
 ///
 /// Two entry points, deliberately separate:
 ///
-///   shapeOf()  — STRUCTURE ONLY, no assimp: does this file carry geometry?
+///   shapeOf()  — STRUCTURE ONLY, no parse: does this file carry geometry?
 ///                It is what the import pipeline's sniff asks, once per
 ///                import, about every model file the user drops. Answering it
 ///                with a parse would double the cost of every mesh import, so
@@ -42,12 +42,12 @@ For more information see the LICENSE file
 ///                anything not understood answers Unknown — the caller pays
 ///                the parse only then.
 ///
-///   read()     — the one full parse (assimp, `ImportFlags::ClipNamesOnly` —
-///                no geometry post-processing, which is all the canonical
-///                preset does, but keeping the file's unit factor because a
-///                clip's translation keys are in the file's units). Produces
-///                the clip table, the rig signature the row advertises, and
-///                optionally the POSE STRIP thumbnail.
+///   read()     — the one full parse (iris::ClipFileInfo, IrisGL's clip
+///                reader: no geometry post-processing, which is all the
+///                canonical preset does, but keeping the file's unit factor
+///                because a clip's translation keys are in the file's
+///                units). Produces the clip table, the rig signature the row
+///                advertises, and optionally the POSE STRIP thumbnail.
 ///
 /// Pure file inspection: no database, no engine, no widgets — safe on the
 /// import worker thread (QImage/QPainter are, QPixmap would not be).
@@ -66,7 +66,7 @@ struct ClipInfo
 /// What `read()` found.
 struct Contents
 {
-    bool parsed = false;            ///< assimp read the file at all
+    bool parsed = false;            ///< the importer read the file at all
     QString error;                  ///< why not, when it did not
     int meshes = 0;
     int animations = 0;
@@ -95,7 +95,7 @@ Shape shapeOf(const QString &path);
 /// Structural where that is certain, one parse where it is not.
 bool isAnimationFile(const QString &path);
 
-/// ONE assimp parse. `poseStripOut`, when given, receives the thumbnail: three
+/// ONE parse. `poseStripOut`, when given, receives the thumbnail: three
 /// projected skeleton poses sampled across the first clip — the only way to
 /// tell two clip files apart at tile size.
 Contents read(const QString &path, QImage *poseStripOut = nullptr,

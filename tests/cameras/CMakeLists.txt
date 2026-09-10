@@ -28,7 +28,6 @@ set_target_properties(test_camera_document PROPERTIES AUTOMOC OFF AUTOUIC OFF AU
 target_include_directories(test_camera_document PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_camera_document PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
 # This suite builds a DOCUMENT, and a document node is an engine node now
@@ -54,7 +53,6 @@ set_target_properties(test_camera_lens PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORC
 target_include_directories(test_camera_lens PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_camera_lens PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
 # A document node is an engine node (SPECS/SCENEGRAPH_SPEC.md D2), so even this
@@ -76,7 +74,6 @@ set_target_properties(test_camera_play_routing PROPERTIES
 target_include_directories(test_camera_play_routing PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_camera_play_routing PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -101,7 +98,6 @@ set_target_properties(test_camera_body PROPERTIES
 target_include_directories(test_camera_body PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_camera_body PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -129,7 +125,6 @@ set_target_properties(test_camera_pip PROPERTIES
 target_include_directories(test_camera_pip PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_camera_pip PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -159,7 +154,6 @@ set_target_properties(test_camera_exposure PROPERTIES
 target_include_directories(test_camera_exposure PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_camera_exposure PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"

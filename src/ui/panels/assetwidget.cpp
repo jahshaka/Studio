@@ -367,70 +367,11 @@ void AssetWidget::trigger()
 		LoadTimeline::Accumulate tree(QStringLiteral("panel:populateAssetTree"));
 		populateAssetTree(true);
 	}
-	LoadTimeline::Accumulate fragments(QStringLiteral("panel:objectFragments"));
-
-	for (auto &asset : AssetManager::getAssets()) {
-		if (asset->type == ModelTypes::Object) {
-			// Not every Object asset holds an AssimpObject: add-to-project registers
-			// an AssetNodeObject (value = SceneNodePtr) under the same type, and
-			// value<AssimpObject*>() then returns null — dereferencing unchecked was
-			// a latent crash (ASSET_ADD_AUDIT D3). Those assets are already in their
-			// final form; skip them.
-			AssimpObject *assimpObject = asset->getValue().value<AssimpObject*>();
-			if (!assimpObject || !assimpObject->getSceneData()) {
-				qDebug() << "AssetWidget::trigger: Object asset" << asset->assetGuid
-						 << "carries no assimp scene (already a node asset) — skipped";
-				continue;
-			}
-
-			auto material = db->fetchAssetData(asset->assetGuid);
-            auto materialObj = QJsonDocument::fromJson(material);
-
-			auto node = iris::MeshNode::loadAsSceneFragment(QString(), assimpObject->getSceneData(),
-				[&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-			{
-				return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
-			});
-
-			AssetHelper::updateNodeMaterial(node, materialObj.object(), db);
-
-			//QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
-
-			//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-			//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			//		auto n = node.staticCast<iris::MeshNode>();
-			//		n->meshPath = meshGuid;
-			//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-			//		for (auto prop : mat->properties) {
-			//			if (prop->type == iris::PropertyType::Texture) {
-			//				if (!prop->getValue().toString().isEmpty()) {
-			//					mat->setValue(prop->name,
-			//						IrisUtils::join(project->getProjectFolder(), "Textures",
-			//							db->fetchAsset(prop->getValue().toString()).name));
-			//				}
-			//			}
-			//		}
-			//	}
-
-			//	if (node->hasChildren()) {
-			//		for (auto &child : node->children()) {
-			//			updateNodeValues(child);
-			//		}
-			//	}
-			//};
-
-			//updateNodeValues(node);
-
-			QVariant variant = QVariant::fromValue(node);
-			auto nodeAsset = new AssetNodeObject;
-			nodeAsset->fileName = asset->fileName;
-			nodeAsset->assetGuid = asset->assetGuid;
-			nodeAsset->setValue(variant);
-
-			// Replace the raw aiScene with a SceneNode
-			asset = nodeAsset;
-		}
-	}
+	// (The loop that used to follow — turning every Object asset that still
+	// held a raw parsed scene into a built fragment — is gone with the parsed-
+	// scene asset payload it served: since the asset pipeline every Object
+	// entry is registered as a built AssetNodeObject, so the loop skipped
+	// every asset it visited. ENGINEERING_DEBT L4 part 3.)
 }
 
 void AssetWidget::refresh()

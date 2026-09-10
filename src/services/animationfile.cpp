@@ -24,14 +24,9 @@ For more information see the LICENSE file
 #include <QtEndian>
 
 #include <algorithm>
-#include <functional>
-
-#include "assimp/Importer.hpp"
-#include "assimp/anim.h"
-#include "assimp/scene.h"
 
 #include "data/constants.h"
-#include "irisgl/import/importflags.h"
+#include "irisgl/import/clipfileinfo.h"
 #include "services/rigsignature.h"
 
 namespace animfile {
@@ -173,41 +168,11 @@ Shape shapeOfCollada(const QString &path)
 }
 
 // ------------------------------------------------------------------ pose strip
-
-/// Interpolated local transform of one animated node at `tick`.
-aiMatrix4x4 sampleChannel(const aiNodeAnim *channel, double tick)
-{
-    auto lerpKey = [&](auto *keys, unsigned count, auto fallback) {
-        using KeyType = decltype(fallback);
-        if (count == 0) return fallback;
-        if (count == 1 || tick <= keys[0].mTime) return KeyType(keys[0].mValue);
-        for (unsigned i = 1; i < count; ++i) {
-            if (tick > keys[i].mTime) continue;
-            const double span = keys[i].mTime - keys[i - 1].mTime;
-            const float f = span > 0.0 ? float((tick - keys[i - 1].mTime) / span) : 0.0f;
-            KeyType a(keys[i - 1].mValue), b(keys[i].mValue);
-            if constexpr (std::is_same_v<KeyType, aiQuaternion>) {
-                aiQuaternion out;
-                aiQuaternion::Interpolate(out, a, b, f);
-                out.Normalize();
-                return out;
-            } else {
-                return KeyType(a + (b - a) * f);
-            }
-        }
-        return KeyType(keys[count - 1].mValue);
-    };
-
-    const aiVector3D position = lerpKey(channel->mPositionKeys, channel->mNumPositionKeys,
-                                        aiVector3D(0, 0, 0));
-    const aiQuaternion rotation = lerpKey(channel->mRotationKeys, channel->mNumRotationKeys,
-                                          aiQuaternion(1, 0, 0, 0));
-    const aiVector3D scale = lerpKey(channel->mScalingKeys, channel->mNumScalingKeys,
-                                     aiVector3D(1, 1, 1));
-
-    aiMatrix4x4 out(scale, rotation, position);
-    return out;
-}
+//
+// The poses are the importer's own evaluation (iris::ClipFileInfo samples the
+// first clip at the requested fractions, in FILE space — x right, y up, the
+// projection every DCC front view uses); what happens here is the projection
+// and the drawing, and nothing else.
 
 struct Segment
 {
@@ -232,59 +197,39 @@ struct Bounds
     double centreX() const { return 0.5 * (minX + maxX); }
 };
 
-/// Joint positions of one pose, as parent→child segments in FILE space
-/// (x right, y up — the projection every DCC front view uses).
-QVector<Segment> posePlanar(const aiScene *scene, const aiAnimation *anim, double tick,
+/// Joint positions of one pose, as parent→child segments in the file's
+/// front-view plane.
+QVector<Segment> posePlanar(const iris::ClipFileInfo &info, const iris::ClipFileInfo::Pose &pose,
                             Bounds *boundsInOut)
 {
-    QMap<QString, const aiNodeAnim *> channels;
-    for (unsigned i = 0; i < anim->mNumChannels; ++i)
-        channels.insert(QString::fromUtf8(anim->mChannels[i]->mNodeName.C_Str()),
-                        anim->mChannels[i]);
-
     QVector<Segment> segments;
-    std::function<void(const aiNode *, const aiMatrix4x4 &, bool)> walk =
-        [&](const aiNode *node, const aiMatrix4x4 &parentXform, bool parentPlaced) {
-            if (!node) return;
-            const QString name = QString::fromUtf8(node->mName.C_Str());
-            const auto channel = channels.constFind(name);
-            const aiMatrix4x4 local = channel != channels.constEnd()
-                                          ? sampleChannel(*channel, tick)
-                                          : node->mTransformation;
-            const aiMatrix4x4 global = parentXform * local;
-            const aiVector3D p(global.a4, global.b4, global.c4);
-            const aiVector3D parentPos(parentXform.a4, parentXform.b4, parentXform.c4);
-
-            const QPointF here(p.x, p.y);
-            if (parentPlaced) {
-                const QPointF from(parentPos.x, parentPos.y);
-                segments.append({ from, here });
-                boundsInOut->add(here);
-                boundsInOut->add(from);
-            }
-            for (unsigned i = 0; i < node->mNumChildren; ++i)
-                walk(node->mChildren[i], global, true);
-        };
-    walk(scene->mRootNode, aiMatrix4x4(), false);
+    const int count = std::min(pose.positions.size(), info.nodeParents.size());
+    for (int i = 0; i < count; ++i) {
+        const int parent = info.nodeParents[i];
+        if (parent < 0) continue;                        // the root has nothing to hang from
+        const QPointF here(pose.positions[i].x(), pose.positions[i].y());
+        const QPointF from(pose.positions[parent].x(), pose.positions[parent].y());
+        segments.append({ from, here });
+        boundsInOut->add(here);
+        boundsInOut->add(from);
+    }
     return segments;
 }
 
-QImage drawPoseStrip(const aiScene *scene, int width, int height)
+/// The fractions of the first clip the strip samples: three poses — enough
+/// to read a walk from a stride, and enough to tell two clip files apart at
+/// tile size.
+const QVector<double> kStripFractions = { 0.1, 0.5, 0.9 };
+
+QImage drawPoseStrip(const iris::ClipFileInfo &info, int width, int height)
 {
     QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
     image.fill(QColor(24, 24, 28));
-    if (!scene || scene->mNumAnimations == 0 || !scene->mRootNode) return image;
+    if (info.poses.size() != kStripFractions.size()) return image;   // nothing to sample
 
-    const aiAnimation *anim = scene->mAnimations[0];
-    if (!anim || anim->mNumChannels == 0 || anim->mDuration <= 0.0) return image;
-
-    // Three poses across the clip — enough to read a walk from a stride, and
-    // enough to tell two clip files apart at tile size.
-    const double samples[3] = { anim->mDuration * 0.1, anim->mDuration * 0.5,
-                                anim->mDuration * 0.9 };
     Bounds bounds;
     QVector<Segment> poses[3];
-    for (int i = 0; i < 3; ++i) poses[i] = posePlanar(scene, anim, samples[i], &bounds);
+    for (int i = 0; i < 3; ++i) poses[i] = posePlanar(info, info.poses[i], &bounds);
     if (bounds.empty || bounds.height() <= 0.0) return image;
 
     // ONE transform for all three poses (so root motion reads as motion), and
@@ -356,38 +301,31 @@ bool isAnimationFile(const QString &path)
 Contents read(const QString &path, QImage *poseStripOut, int stripWidth, int stripHeight)
 {
     Contents out;
-    Assimp::Importer importer;
     // ClipNamesOnly, not the canonical preset: every step of that preset is
     // geometry work this file has no geometry for, while the file's UNIT
     // factor still has to apply — a clip's translation keys are in the file's
-    // units (the FBX unit-scale fix, avatarpreviewmodel.cpp).
-    const aiScene *scene = importer.ReadFile(path.toStdString().c_str(),
-                                             iris::ImportFlags::ClipNamesOnly);
-    if (!scene) {
-        out.error = QString::fromUtf8(importer.GetErrorString());
-        if (out.error.isEmpty()) out.error = QStringLiteral("the file could not be read");
+    // units (the FBX unit-scale fix, avatarpreviewmodel.cpp). The parse is
+    // IrisGL's (assimp is its private dependency); the poses for the strip
+    // come out of the same parse.
+    const iris::ClipFileInfo info =
+        iris::ClipFileInfo::read(path, poseStripOut ? kStripFractions : QVector<double>());
+    if (!info.parsed) {
+        out.error = info.error;
         return out;
     }
     out.parsed = true;
-    out.meshes = int(scene->mNumMeshes);
-    out.animations = int(scene->mNumAnimations);
+    out.meshes = info.meshes;
+    out.animations = info.animations;
 
     const QString baseName = QFileInfo(path).completeBaseName();
     QSet<QString> boneSeen;
-    for (unsigned i = 0; i < scene->mNumAnimations; ++i) {
-        const aiAnimation *anim = scene->mAnimations[i];
-        if (!anim) continue;
-        // ticksPerSecond is 0 in more exports than not — the same fallback
-        // iris::Mesh::extractAnimations uses.
-        const double tps = anim->mTicksPerSecond > 0.0 ? anim->mTicksPerSecond : 25.0;
-
+    for (const auto &source : info.clips) {
         ClipInfo clip;
-        clip.rawName = QString::fromUtf8(anim->mName.C_Str());
+        clip.rawName = source.name;
         clip.name = rig::displayNameFor(clip.rawName, baseName);
-        clip.length = anim->mDuration / tps;
-        clip.channels = int(anim->mNumChannels);
-        for (unsigned c = 0; c < anim->mNumChannels; ++c) {
-            const QString channel = QString::fromUtf8(anim->mChannels[c]->mNodeName.C_Str());
+        clip.length = source.lengthSeconds;
+        clip.channels = source.channelNames.size();
+        for (const QString &channel : source.channelNames) {
             if (rig::isPivotChannel(channel)) continue;
             ++clip.boneChannels;
             boneSeen.insert(channel);
@@ -405,7 +343,7 @@ Contents read(const QString &path, QImage *poseStripOut, int stripWidth, int str
     out.boneChannelNames.sort();
     out.rigId = rig::rigId(out.boneChannelNames);
 
-    if (poseStripOut) *poseStripOut = drawPoseStrip(scene, stripWidth, stripHeight);
+    if (poseStripOut) *poseStripOut = drawPoseStrip(info, stripWidth, stripHeight);
     return out;
 }
 

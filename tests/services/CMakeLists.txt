@@ -20,8 +20,6 @@ target_include_directories(test_services PRIVATE
 target_link_libraries(test_services PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
 target_include_directories(test_services PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 add_test(NAME services.core COMMAND test_services
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -43,8 +41,6 @@ target_include_directories(test_selection_set PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_selection_set PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
 jah_document_graph(test_selection_set)
@@ -111,7 +107,6 @@ set_target_properties(test_memory_ownership PROPERTIES AUTOMOC OFF AUTOUIC OFF A
 target_include_directories(test_memory_ownership PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
     # iris headers expose assimp and bullet types; these are IrisGL's own include paths
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_memory_ownership PRIVATE IrisGL Qt6::Gui)
 # This suite builds a DOCUMENT, and a document node is an engine node now
@@ -139,7 +134,6 @@ set_target_properties(test_animation_undo PROPERTIES AUTOMOC OFF AUTOUIC OFF AUT
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_animation_undo PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_animation_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
 jah_document_graph(test_animation_undo)
@@ -209,8 +203,6 @@ set_target_properties(test_clipboard PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC 
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_clipboard PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_clipboard PRIVATE IrisGL Qt6::Gui)
 add_test(NAME services.clipboard COMMAND test_clipboard

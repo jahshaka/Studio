@@ -66,7 +66,6 @@ target_compile_definitions(test_emitter_parity PRIVATE EFFECT_BUILD_AS_LIB
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_include_directories(test_emitter_parity PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_emitter_parity PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Concurrent)
@@ -107,7 +106,6 @@ set_target_properties(test_emitter_pieces PROPERTIES
 target_compile_definitions(test_emitter_pieces PRIVATE EFFECT_BUILD_AS_LIB)
 target_include_directories(test_emitter_pieces PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_emitter_pieces PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_test(NAME shadergraph.emitter_pieces COMMAND test_emitter_pieces
@@ -155,7 +153,6 @@ target_compile_definitions(test_piece_mirror PRIVATE EFFECT_BUILD_AS_LIB
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_include_directories(test_piece_mirror PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_piece_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
     Qt6::Widgets Qt6::Sql Qt6::Concurrent Qt6::Multimedia)

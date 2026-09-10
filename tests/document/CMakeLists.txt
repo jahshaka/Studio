@@ -16,8 +16,7 @@ set_target_properties(test_document_characterisation PROPERTIES AUTOMOC OFF)
 target_include_directories(test_document_characterisation PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
-    # iris headers expose assimp and bullet types; these are IrisGL's own include paths
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    # iris headers expose bullet types; this is IrisGL's own include path
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_document_characterisation PRIVATE IrisGL Qt6::Gui)
 # This suite builds a DOCUMENT, and a document node is an engine node now
