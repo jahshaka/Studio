@@ -55,6 +55,18 @@ constexpr int presetsPanelWidth = rightColumnWidth;
 constexpr int leftColumnWidth = 280;
 constexpr int leftColumnMinWidth = 220;
 
+// THE WINDOW FITS A LAPTOP (plan item 15, lane L11): every page's docks sum to
+// the main window's minimum size, and Qt refuses to make the window smaller
+// than that — so a floor here is a floor for the whole app. The budget is a
+// 1366x768 screen with a 48 px taskbar and a 40 px title bar: the WINDOW must
+// fit in `laptopWindowMinWidth` x `laptopWindowMinHeight` in every space
+// (app.window_minimum asserts it). `trayListMinHeight` is the one number the
+// bottom tray's list views and the console's log are allowed to insist on:
+// enough for a row and a scrollbar, the rest is the user's to drag.
+constexpr int laptopWindowMinWidth = 1366;
+constexpr int laptopWindowMinHeight = 640;
+constexpr int trayListMinHeight = 40;
+
 }   // namespace PanelMetrics
 
 #endif // PANELMETRICS_H

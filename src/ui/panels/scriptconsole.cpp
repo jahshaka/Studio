@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QFile>
 #include <QFileDialog>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPlainTextEdit>
@@ -21,6 +22,7 @@ For more information see the LICENSE file
 #include <QVBoxLayout>
 
 #include "scripting/scriptengine.h"
+#include "ui/style/panelmetrics.h"
 
 ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
     : QWidget(parent), mEngine(engine)
@@ -31,6 +33,8 @@ ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
     mLog->setReadOnly(true);
     mLog->setMaximumBlockCount(5000);
     mLog->setFrameStyle(QFrame::NoFrame);
+    // A floor, not a size: the log takes every pixel the tray gives it.
+    mLog->setMinimumHeight(PanelMetrics::trayListMinHeight);
 
     mInput = new QPlainTextEdit(this);
     mInput->setPlaceholderText(QStringLiteral("JavaScript — Enter runs, Shift+Enter for a newline, Up/Down for history, help() lists verbs"));
@@ -43,14 +47,20 @@ ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
     auto *clearBtn = new QPushButton(QStringLiteral("Clear"), this);
     auto *helpBtn = new QPushButton(QStringLiteral("Help"), this);
 
-    auto *buttons = new QVBoxLayout;
+    // A 2x2 BLOCK, not a column of four (plan item 15, the 1366x768 laptop).
+    // Stacked, the four buttons stood ~124 px tall beside a 64 px input, and
+    // that column — not the text — was the console's minimum height; since the
+    // console became a tab of the bottom tray (smoke S1) its minimum is the
+    // TRAY's, and the tray's is the editor window's. Two rows of two sit level
+    // with the input line.
+    auto *buttons = new QGridLayout;
     buttons->setContentsMargins(0, 0, 0, 0);
-    buttons->setSpacing(4);
-    buttons->addWidget(runBtn);
-    buttons->addWidget(fileBtn);
-    buttons->addWidget(clearBtn);
-    buttons->addWidget(helpBtn);
-    buttons->addStretch(1);
+    buttons->setHorizontalSpacing(4);
+    buttons->setVerticalSpacing(4);
+    buttons->addWidget(runBtn, 0, 0);
+    buttons->addWidget(fileBtn, 0, 1);
+    buttons->addWidget(clearBtn, 1, 0);
+    buttons->addWidget(helpBtn, 1, 1);
 
     auto *inputRow = new QHBoxLayout;
     inputRow->setContentsMargins(0, 0, 0, 0);

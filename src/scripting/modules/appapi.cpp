@@ -368,6 +368,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "resize a window below them, so a window can be bigger than its screen without anything "
           "being wrong with the geometry code.",
           Needs::Window },
+        { "resizeWindow", "app.resizeWindow(width, height) -> {x, y, width, height, minWidth, minHeight, visible, fullScreen, fits, screen}",
+          "Resizes the main window to `width` x `height` pixels and answers app.window() — so the "
+          "size the window ACTUALLY took is in the reply: Qt will not go below the layout's floor "
+          "(`minWidth`/`minHeight`), and asking for less leaves the window at the floor rather than "
+          "failing. For layout checks at a size the rig's screen is not (a 1366x768 laptop on a "
+          "1920x1080 display — ui.window_minimum). Remembered exactly like a user's drag would be "
+          "(the geometry is saved on quit). Leaves full screen or maximized first. A layout settles on the "
+          "event loop, so measure columns in a LATER request than the resize.",
+          Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
           Needs::Window },
@@ -724,6 +733,22 @@ QVariantMap AppApi::window()
         out.insert("fits", w->width() <= avail.width() && w->height() <= avail.height());
     }
     return out;
+}
+
+QVariantMap AppApi::resizeWindow(int width, int height)
+{
+    QWidget *w = host.mainWindow;
+    if (!w) {
+        fail("app.resizeWindow: this session has no main window");
+        return {};
+    }
+    if (width <= 0 || height <= 0) {
+        fail(QStringLiteral("app.resizeWindow: %1 x %2 is not a window size").arg(width).arg(height));
+        return {};
+    }
+    if (w->isFullScreen() || w->isMaximized()) w->showNormal();
+    w->resize(width, height);
+    return window();
 }
 
 QVariantMap AppApi::frameStats()
