@@ -69,6 +69,13 @@ var EXPECTED = {
     // default floor (the Ground), and the slab it used to lay over it is gone.
     "Showroom": { nodes: 22, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot"],
                   types: { mesh: 16, light: 5 } },
+    // SHOWROOM 2 (lane L14, owner 2026-09-12): the same generator at twice the
+    // size. 20 nodes — the Showroom's 22 without the new-scene template's
+    // Directional Light and Point Light, which a sealed room cannot use (the
+    // generator removes them). Its three lights are ALL the room has.
+    "Showroom 2": { nodes: 20, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0"],
+                    types: { mesh: 16, light: 3 }, lightsExactly: 3,
+                    absent: ["Directional Light", "Point Light"] },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
     // 14 since a799312a removed the two stray default-scene lights the resize
     // pass had left behind (the expectation lagged the re-stage — three lanes
@@ -375,6 +382,24 @@ var SCALE = {
         extent: { x: 11.31, y: 12.0, z: 21.0 }, cameraHeight: 16.11, fov: 45,
         objects: { "ball": { y: 2.48 }, "pipe": { y: 2.0 } }
     },
+    "Showroom 2": {
+        // THE ONE SAMPLE OFF THE HUMAN-SCALE RULE, BY THE OWNER'S DECISION
+        // (2026-09-12: "scale the entire Grand Showroom 2x, it's too small to
+        // fly around in ... it should look the same, just larger"). It is the
+        // Showroom's generator at S = 1 — the hall's original 23.5 m design
+        // size under a 6.75 m ceiling with 3.4 m spheres — on the convention's
+        // 45-degree lens, its saved camera scaled with the room. So every pin
+        // below is the Showroom's times two, and `envelope` widens exactly the
+        // two limits a fly-around hall breaks: the 48 m ceiling slab overhangs
+        // the 40 m sample extent, and the 6.75 m interior is above the 4.5 m
+        // human-height ceiling. The checker grows with the room (textureScale
+        // 2 = 4 m cells), so the floor reads as the Showroom's does.
+        extent: { x: 48.0, y: 7.75, z: 48.0 }, cameraHeight: 4.9, fov: 45,
+        room: { width: 23.5, depth: 23.5, height: 6.75 },
+        objects: { "Sphere_r0": { y: 3.4 }, "GreenTeapot": { x: 3.86 } },
+        envelope: { extentMax: 50.0, roomHeightMax: 7.0 },
+        floorTextureScale: 2
+    },
     "Showroom": {
         // Re-staged 2026-09-09: 2x -> 1x (an 11.75 m gallery under a 3.25 m
         // ceiling, with 1.7 m display spheres), lens 75 -> 45 degrees.
@@ -435,13 +460,17 @@ function checkScale() {
     console.log("bounds: " + J(b));
     assert(b.nodes > 0, "scene.bounds measured geometry (" + b.nodes + " nodes)");
 
-    // THE ENVELOPE, then the pins.
+    // THE ENVELOPE, then the pins. A sample the owner deliberately authored
+    // off the convention (Showroom 2) names the limit it widens, and why, in
+    // its own SCALE block — never here.
+    var env = want.envelope || {};
+    var extentMax = env.extentMax || ENVELOPE.extentMax;
     var axes = ["x", "y", "z"];
     for (i = 0; i < axes.length; i++) {
         var a = axes[i];
-        assert(b.size[a] <= ENVELOPE.extentMax,
+        assert(b.size[a] <= extentMax,
                "extent." + a + " " + b.size[a].toFixed(2) + " m is inside the envelope (<= " +
-               ENVELOPE.extentMax + " m)");
+               extentMax + " m)");
     }
     var biggest = Math.max(b.size.x, b.size.y, b.size.z);
     assert(biggest >= ENVELOPE.extentMin,
@@ -472,13 +501,15 @@ function checkScale() {
         var floor = scene.bounds({ nodes: [defaultFloor] });
         var ceiling = scene.bounds({ nodes: [scene.find("Ceiling")] });
         var height = ceiling.min.y - floor.max.y;
+        var heightMax = env.roomHeightMax || 4.5;
         console.log("  interior height: " + height.toFixed(2) + " m");
-        assert(height >= 2.4 && height <= 4.5,
-               "the ceiling is at a human height (" + height.toFixed(2) + " m, envelope 2.4-4.5)");
+        assert(height >= 2.4 && height <= heightMax,
+               "the ceiling is at a " + (env.roomHeightMax ? "fly-around" : "human") + " height (" +
+               height.toFixed(2) + " m, envelope 2.4-" + heightMax + ")");
         near(height, want.room.height, SCALE_TOL, "room height");
 
-        var wallNames = SAMPLE === "Showroom" ? ["WallW", "WallE", "WallS", "WallN"]
-                                              : ["WallW", "WallE", "BlueWall", "RedWall"];
+        var wallNames = SAMPLE.indexOf("Showroom") === 0 ? ["WallW", "WallE", "WallS", "WallN"]
+                                                         : ["WallW", "WallE", "BlueWall", "RedWall"];
         var w = scene.bounds({ nodes: [scene.find(wallNames[0])] });
         var e = scene.bounds({ nodes: [scene.find(wallNames[1])] });
         var s = scene.bounds({ nodes: [scene.find(wallNames[2])] });
@@ -808,6 +839,12 @@ for (var i = 0; i < want.names.length; i++)
 for (var t in want.types)
     assert((s.byType[t] || 0) >= want.types[t],
            "at least " + want.types[t] + " " + t + " nodes (" + (s.byType[t] || 0) + ")");
+if (want.lightsExactly !== undefined)
+    assert((s.byType.light || 0) === want.lightsExactly,
+           "exactly " + want.lightsExactly + " lights (" + (s.byType.light || 0) + ")");
+(want.absent || []).forEach(function (n) {
+    assert(s.names[n] !== true, "no '" + n + "' node (the new-scene template's, stripped by the generator)");
+});
 
 // 2b. THE SCENE-SCALE CONVENTION. Document verbs only, so it costs nothing on
 //     top of the open that just happened.
@@ -890,8 +927,11 @@ function checkDefaultFloor() {
     var floor = floors[0].id;
     var fm = material.get(floor);
     assert(("" + fm.baseColorMap).length > 0, "the default floor wears a texture");
+    // Showroom 2's checker grows with its room (its SCALE block says why).
+    var checker = (SCALE[SAMPLE] && SCALE[SAMPLE].floorTextureScale) || 4;
     if (SAMPLE !== "World Background")
-        assert(Math.abs(fm.textureScale - 4) < 1e-4, "... the checker at textureScale 4 (" + fm.textureScale + ")");
+        assert(Math.abs(fm.textureScale - checker) < 1e-4,
+               "... the checker at textureScale " + checker + " (" + fm.textureScale + ")");
 
     var root = scene.root();
     scene.nodes({ depth: 1 }).forEach(function (r) {

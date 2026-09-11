@@ -1,12 +1,18 @@
-// Builds scenes/Showroom.zip — the GRAND SHOWROOM sample — from nothing, and
-// re-shoots scenes/preview/showroom.png.
+// Builds a GRAND SHOWROOM sample archive — scenes/Showroom.zip or
+// scenes/"Showroom 2.zip" — from nothing, and shoots its preview.
 //
-// Run it, do not hand-edit the archive:
+// ONE ROOM, TWO SIZES (owner, 2026-09-12: "scale the entire Grand Showroom 2x,
+// it's too small to fly around in ... keep the layout of everything but make
+// everything 2x larger; make Showroom 2 and keep the old one for reference").
+// The room is authored ONCE, in its original numbers times the scale S; which
+// sample a run builds is the one @SAMPLE@ substitution below, and the VARIANTS
+// table is the only place the two differ. One run per archive:
 //
 //   TREE=<absolute path to the source tree>
-//   sed "s|@TREE@|$TREE|" $TREE/scenes/tools/make_grand_showroom.js > /tmp/grand.js
+//   sed -e "s|@TREE@|$TREE|" -e "s|@SAMPLE@|Showroom 2|" \
+//       $TREE/scenes/tools/make_grand_showroom.js > /tmp/grand.js
 //   cd <a scratch dir>
-//   HOME=<a scratch home> DISPLAY=<your Xvfb> \
+//   HOME=<a scratch home> JAHSHAKA_DATA_ROOT=<a scratch data root> DISPLAY=<your Xvfb> \
 //       <build>/bin/Jahshaka --script /tmp/grand.js
 //
 // (@TREE@ is substituted rather than derived: a --script run has no argv and no
@@ -34,8 +40,8 @@
 // (the sphere is a unit sphere, the torus has radius 1.4, the cylinder is 2
 // units tall), and the review build placed the spheres, the torus and the
 // columns by eye — half of each one was under the floor slab, which shows as
-// hemispheres and as a sunken arch. The floor's TOP surface is y = 0.25 * S
-// (centre -0.25 * S, half-height 0.5 * S), so a scaled sphere rests on it.
+// hemispheres and as a sunken arch. Since lane L13 the floor is the scene's
+// default Ground at y = 0, so a scaled sphere of radius r rests at y = r.
 //
 // SCENE-SCALE CONVENTION (owner 2026-09-08, applied by lane-samplescale
 // 2026-09-09). 1 unit = 1 METRE, and every shipped sample is authored to it:
@@ -43,29 +49,96 @@
 // saved camera, so one fly speed feels the same in every sample. The hall was
 // authored at twice life size — a 23.5 m x 23.5 m floor under a 6.75 m
 // ceiling, with 3.4 m display spheres and a 3.9 m teapot — and photographed
-// through a 75-degree lens to fit it in frame. Halving it (S below) and
-// dropping to the convention lens very nearly cancel: the same camera distance
-// frames a half-size room the same way, because tan(37.5) / tan(22.5) = 1.85
-// against a 2x shrink. The result is a 11.75 m gallery under a 3.25 m ceiling
-// with 1.7 m spheres — the SAME picture at a size a person fits in.
+// through a 75-degree lens to fit it in frame. Halving it (S = 0.5, the
+// "Showroom" variant) and dropping to the convention lens very nearly cancel:
+// the same camera distance frames a half-size room the same way, because
+// tan(37.5) / tan(22.5) = 1.85 against a 2x shrink. The result is a 11.75 m
+// gallery under a 3.375 m ceiling with 1.7 m spheres — the SAME picture at a
+// size a person fits in.
+//
+// SHOWROOM 2 DEPARTS FROM THAT RULE, BY THE OWNER'S DECISION (2026-09-12: "it's
+// too small to fly around in"). It is the same room at S = 1.0 — the hall's
+// original 23.5 m design size, a 6.75 m ceiling, 3.4 m spheres — kept on the
+// convention's 45-degree lens, with the saved camera scaled with the room so
+// the composition is the Showroom's composition, twice as far away. It is the
+// one shipped sample that is not human-scale; samples.cleanstart pins it as
+// such (tests/samples/scripts/cleanstart.js.in, its own SCALE block).
+//
+// WHAT RIDES S — ALL OF IT (lane L14 audited every number below): positions
+// and half-extents (sv), the teapot's scale, the point lights' RANGE (not their
+// intensity — see the light section), the GI bounds, the saved camera, and the
+// three per-metre settings the new-scene template hands the room (GROW below):
+// the floor's checker tiling, the fog density and the ambient-occlusion
+// radius. What does NOT ride S, on purpose: the PCC probe COUNT (4 x 2 x 4 — a
+// fixed count over bounds that scale IS a spacing that scales), the lens, the
+// materials, the light intensities and the Epic tier. The voxel volume and the
+// irradiance field are resolution-relative (128^3 voxels and 8192 field probes
+// over the bounds at either size), so they scale by themselves.
+//
+// MEASURED, NOT ASSUMED (lane L14, region means over a 4 x 3 grid of the saved
+// camera's frame and of a matched interior view; evidence in
+// ~/Developer/spikes/showroom2/): the S = 1 room against the S = 0.5 room built
+// by this same script differs by at most 3.3 of 255 in any region. Leaving the
+// template's AO radius unscaled put Showroom 2 up to 18 levels BRIGHTER in the
+// graded frame; unscaled fog, 1-3 levels darker. A 2x-denser probe grid
+// (8 x 4 x 8) moved no region closer to the S = 0.5 picture (it stayed within
+// 4.4 levels) at 8x the probes — the 4 x 2 x 4 grid stays.
 
 var TREE = "@TREE@";
-var ARCHIVE = TREE + "/scenes/Showroom.zip";
-var PREVIEW = TREE + "/scenes/preview/showroom.png";
+var SAMPLE = "@SAMPLE@";
+
+// THE ONLY TWO LINES THE VARIANTS DIFFER BY. `S` is the room scale (see the
+// header); the rest is where the run writes and what the project is called.
+//
+// THE SHIPPED Showroom.zip PREDATES LANE L14 and is deliberately NOT rebuilt:
+// it still carries the new-scene template's two lights and the GI top inside
+// the ceiling slab, and it is the owner's reference for Showroom 2 until the owner
+// calls its removal (2026-09-12). Re-running the "Showroom" variant CHANGES it
+// — mostly a darker floor, which the template Point Light lit through the roof.
+var VARIANTS = {
+    "Showroom":   { S: 0.5, archive: "Showroom.zip",   preview: "showroom.png",  project: "Grand Showroom" },
+    "Showroom 2": { S: 1.0, archive: "Showroom 2.zip", preview: "showroom2.png", project: "Grand Showroom 2" }
+};
+var V = VARIANTS[SAMPLE];
+if (!V) throw new Error("make_grand_showroom: unknown @SAMPLE@ '" + SAMPLE + "' (one of " +
+                        Object.keys(VARIANTS).join(", ") + ")");
+var ARCHIVE = TREE + "/scenes/" + V.archive;
+var PREVIEW = TREE + "/scenes/preview/" + V.preview;
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
 
-assert(project.create("Grand Showroom").length > 0, "created the project");
+assert(project.create(V.project).length > 0, "created the project '" + V.project + "'");
+
+// The new-scene template ships two lights this SEALED room must not inherit
+// (lane L14, 2026-09-12; the Mirror Room has stripped them since 2026-09-07):
+// the default Directional Light cannot reach inside a closed box — it only
+// costs its three PSSM passes in every shadow-node execution — and the default
+// Point Light at (-4, 4, 0) is a fixed-position, unscaled template light: at
+// S = 0.5 it hung 12.5 cm above the roof (the white hotspot on it, lighting the
+// interior THROUGH the roof because it casts no shadow); at S = 1 it would hang
+// inside the hall. The room is lit by its own Light0-2 below and nothing else.
+["Directional Light", "Point Light"].forEach(function (n) {
+    var stray = scene.find(n);
+    if (stray) assert(node.remove(stray), "removed the new-scene template's '" + n + "'");
+});
 
 // ROOM SCALE. Every dimension below is authored in the ORIGINAL (2x life size)
 // numbers and multiplied by S — the same shape as make_mirror_room.js, so the
 // diff against the reviewed build is one constant rather than sixty edited
-// literals. S = 0.5 is the scene-scale convention (see the header).
-var S = 0.5;
+// literals. S comes from the VARIANTS table at the top.
+var S = V.S;
 function sv(v) { return { x: v.x * S, y: v.y * S, z: v.z * S }; }
+
+// GROW: how much bigger this room is than the Showroom that shipped at S = 0.5.
+// The three settings the new-scene TEMPLATE hands this room (the floor's
+// checker tiling, the fog, the ambient-occlusion reach) are all per-metre
+// numbers tuned for, and shipped with, the S = 0.5 room; the ones that shape
+// the picture scale by GROW so a larger room reads the same (1 at S = 0.5,
+// which leaves the Showroom exactly as the template made it).
+var GROW = S / 0.5;
 
 // ---- the room --------------------------------------------------------------
 // slab(): a cube whose `scale` is its HALF extent on each axis.
@@ -93,9 +166,14 @@ var WALL_HALF = (CEIL_BOTTOM - 0.0) / 2;   // walls span the floor line to the c
 // floor itself reflects. The slab's polish is the default floor's OWN material
 // in this room — roughness 0.32, metallic 0.05 on the checker — and "Reset to
 // Default Floor" (material.reset) returns it to the plain default.
+// The CHECKER scales with the room: textureScale is a repeat count over the
+// fixed 100 m ground, so a checker cell twice as big is half the repeats (the
+// default 4 = 2 m cells in the S = 0.5 room, 2 = 4 m cells at S = 1).
 var ground = scene.find("Ground");
 assert(ground && node.property(ground, "defaultFloor") === true, "the room stands on the default floor");
-assert(material.set(ground, { roughness: 0.32, metallic: 0.05 }), "the floor's polish");
+var CHECKER = material.get(ground).textureScale / GROW;
+assert(material.set(ground, { roughness: 0.32, metallic: 0.05, textureScale: CHECKER }),
+       "the floor's polish, checker at textureScale " + CHECKER);
 slab("Ceiling", { x: 0, y: 7.25, z: 0 },      { x: 24, y: 0.5, z: 24 }, "#b5b5b5");
 slab("WallN",   { x: 0, y: WALL_HALF, z: 12.25 },  { x: 24, y: WALL_HALF, z: 0.5 }, "#c8452a", 0.7);  // warm
 slab("WallS",   { x: 0, y: WALL_HALF, z: -12.25 }, { x: 24, y: WALL_HALF, z: 0.5 }, "#2a56c8", 0.7);  // cold
@@ -143,8 +221,9 @@ material.set(t, { baseColor: "#d9a520", roughness: 0.2, metallic: 1.0 });
 // Deep centre, in the gap between the two middle spheres: from the saved
 // camera anything at x +-4 hides behind a sphere.
 // The teapot PRIMITIVE is 3.86 x 1.89 x 2.4 units as authored, so it needs the
-// room's scale like everything else — unscaled it would be a 3.9 m teapot in a
-// 3.25 m room, which is exactly the "things go weird" the convention is about.
+// room's scale like everything else — unscaled it would be a 3.9 m teapot in
+// the S = 0.5 room's 3.375 m hall, which is exactly the "things go weird" the
+// convention is about.
 var tp = scene.addPrimitive("teapot", { position: sv({ x: 0.5, y: FLOOR_TOP, z: 9 }) });
 node.setProperty(tp, "name", "GreenTeapot");
 node.transform(tp, { scale: { x: S, y: S, z: S } });
@@ -177,10 +256,35 @@ var LIGHT_RANGE = 40 * S;
 // moment the Epic row moved. Epic IS the hybrid at high quality with the
 // field, three bounces and two dynamic probes; bounds and the probe grid are
 // not tier rows and stay explicit.
+//
+// THE BOUNDS TOP CLEARS THE CEILING SLAB (lane L14, 2026-09-12). The slab
+// spans y 6.75 .. 7.75 (original units); the top used to be 7.6, INSIDE it, so
+// the voxel volume and the irradiance field ended mid-slab and the field's
+// last probe layer sat in solid ceiling — one of the two ingredients of the
+// interior colour bleeding out onto the roof (the other, the field's cage never
+// clamping at the volume edge, is an engine fix: ENGINE_CACHE_POLICY_SPEC P9).
+// 8.0 puts the whole slab inside the volume with a quarter-unit margin.
+//
+// THE PROBE GRID IS A COUNT, NOT A SPACING: 4 x 2 x 4 over bounds that ride S
+// is a spacing that rides S, so both variants place their 32 probes at the
+// same RELATIVE positions. Lane L14 measured a 2x-denser grid (8 x 4 x 8) in
+// the S = 1 room against this one — see its report for the numbers.
 assert(world.rayon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Rayon Epic");
 assert(world.gi({ boundsMin: sv({ x: -12, y: -0.6, z: -12 }),
-                  boundsMax: sv({ x: 12, y: 7.6, z: 12 }),
+                  boundsMax: sv({ x: 12, y: 8.0, z: 12 }),
                   pccGrid: { x: 4, y: 2, z: 4 } }), "GI: room bounds + probe grid");
+
+// The template's per-metre WORLD settings, scaled with the room (GROW, above).
+// FOG is exponential per world unit, so a room twice as deep is twice as foggy
+// at its far wall unless the density halves. AMBIENT OCCLUSION looks a fixed
+// number of metres around each pixel, so the same reach in a room twice as big
+// darkens half as much of every crease.
+var fog0 = world.get().fog;
+assert(world.fog({ density: fog0.density / GROW }), "fog density " + fog0.density + " / " + GROW);
+var fx0 = world.postFx();
+world.postFx({ ssaoRadius: fx0.ssaoRadius * GROW });
+assert(Math.abs(world.postFx().ssaoRadius - fx0.ssaoRadius * GROW) < 1e-4,
+       "AO radius " + fx0.ssaoRadius + " x " + GROW);
 editor.frame(12);
 console.log("giStatus: " + JSON.stringify(world.giStatus()));
 
@@ -188,9 +292,10 @@ console.log("giStatus: " + JSON.stringify(world.giStatus()));
 // THE CONVENTION LENS, from the cold wall. 45 degrees vertical is the default
 // explorer lens and is already wide (72.7 degrees horizontal at 16:9, a 24 mm
 // equivalent), which is what makes a human-scale interior photographable
-// without the 75-degree ultra-wide the 2x room needed. The eye is at 2.5 m —
-// standing height plus a little, inside a 3.25 m room — and the position is
-// the shipped one scaled, so the composition is the shipped composition.
+// without the 75-degree ultra-wide the 2x room needed. At S = 0.5 the eye is at
+// 2.45 m — standing height plus a little, inside a 3.375 m room (4.9 m in
+// Showroom 2's 6.75 m hall) — and the position rides S with everything else,
+// so both variants photograph the same composition.
 // Centred and one unit deeper than the shipped pose (which sat slightly off
 // axis under a lens wide enough not to care): at 45 degrees the ladder needs
 // the room's full depth and the symmetry.
