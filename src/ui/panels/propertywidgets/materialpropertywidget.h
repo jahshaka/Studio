@@ -32,6 +32,10 @@ struct StudioServices;
 /**
  *  Displays properties for materials
  */
+#include <QPointer>
+#include <QPushButton>
+
+
 class MaterialPropertyWidget : public AccordianBladeWidget, iris::PropertyListener
 {
     Q_OBJECT
@@ -52,6 +56,9 @@ public:
 
     void setSceneNode(iris::SceneNodePtr sceneNode);
     void forceShaderRefresh(const QString&);
+    /// "Reset to <provider>": present only while the shown node has a default
+    /// material of its own (services/materialdefaults.h); null otherwise.
+    QPushButton *resetMaterialButton() const { return resetButton.data(); }
     void setWidgetProperties();
 
     void setServices(StudioServices *s) { services = s; }
@@ -72,6 +79,9 @@ protected slots:
     void materialChanged(const QString&);
 
 private:
+    void addResetRow();
+    /// Guarded: clearPanel() deletes the row with every other row.
+    QPointer<QPushButton> resetButton;
     QSharedPointer<iris::MeshNode> meshNode;
     ComboBoxWidget* materialSelector;
     PropertyWidget* materialPropWidget;

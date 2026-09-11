@@ -56,6 +56,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
+#include "commands/resetmaterialcommand.h"
 #include "commands/deletescenenodecommand.h"
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
@@ -68,6 +69,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/fitsize.h"
 #include "services/nodenaming.h"
 #include "services/imagematerial.h"
+#include "services/materialdefaults.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
 #include "services/scenenodehelper.h"
@@ -1273,7 +1275,15 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     }
     undo->stack()->endMacro();
 
+    // APPLYING IS A USE (lane L13): the project carries what its scene uses,
+    // so a library material applied by guid is pinned in as a BINDING (a
+    // tray/verb drop of a project member is already pinned — idempotent), and
+    // the node -> material edge says who uses it.
+    if (project && !project->getProjectGuid().isEmpty()
+        && db->fetchAsset(assetGuid).projectGuid != project->getProjectGuid())
+        ProjectAssets::addToProject(assetGuid, db, project, ProjectAssets::AddKind::Binding);
     for (const auto &meshNode : meshes) {
+        db->deleteDependency(meshNode->getGUID(), assetGuid);
         db->createDependency(
             static_cast<int>(ModelTypes::Object),
             static_cast<int>(ModelTypes::Material),
@@ -1286,6 +1296,19 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     emit materialApplied(matObject["materialType"].toString() == "pbr"
                              ? QStringLiteral("PBR")
                              : QStringLiteral("custom"));
+    return true;
+}
+
+bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
+{
+    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
+    if (!materialdefaults::hasDefault(node)) return false;
+    QStringList defaultTextures;
+    auto material = materialdefaults::create(node, db, project, &defaultTextures);
+    if (!material) return false;
+    undo->push(new ResetMaterialCommand(db, project, node.staticCast<iris::MeshNode>(),
+                                        material, defaultTextures));
+    emit materialApplied(QStringLiteral("PBR"));
     return true;
 }
 

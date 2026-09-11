@@ -727,6 +727,10 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
         default: break;
     }
 
+    // THE DEFAULT FLOOR (services/defaultfloor.h) — written only on the floor,
+    // so an absent key means "an ordinary mesh" for every scene ever written.
+    if (meshNode->defaultFloor) sceneNodeObject["defaultFloor"] = true;
+
     // Sockets (CAMERAS_SPEC §5): named attach points on this node's BONES.
     // Written only when there are any — the vast majority of meshes are not
     // rigged and can never have one. The offset is TRS, matching the way every

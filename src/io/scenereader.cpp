@@ -1201,6 +1201,10 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
     }
 
+    // THE DEFAULT FLOOR (services/defaultfloor.h): a written flag, never a
+    // guess from the name or the mesh path.
+    meshNode->defaultFloor = nodeObj["defaultFloor"].toBool(false);
+
     // Sockets (CAMERAS_SPEC §5). Read with setSockets rather than addSocket:
     // addSocket VALIDATES against the rig, and a file must not silently drop a
     // socket because the mesh failed to load or because a re-import renamed a

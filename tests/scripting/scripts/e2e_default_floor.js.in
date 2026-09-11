@@ -1,0 +1,125 @@
+// scripting.e2e.default_floor — THE DEFAULT FLOOR AND material.reset (owner,
+// 2026-09-12: "the floor is a unique asset; it should have a unique material
+// only it has; since users can add a material to it, it needs a reset that
+// clears the user-added material").
+//
+//   1. a new scene stands on THE default floor — found by its document flag
+//      (node.property(id, "defaultFloor")), never by its name — wearing its
+//      OWN material: the checker (the shipped tile, pinned), textureScale 4,
+//      roughness 1, metallic 0; the tile is a tray tile, the floor is not;
+//   2. a user's edits to that material are undone by material.reset — ONE
+//      undo step;
+//   3. a LIBRARY material applied to the floor (material.apply) joins the
+//      project as a use (the tray lists it); the reset clears it: the floor's
+//      own default is back, the library row is untouched and back in the
+//      library grid, and — nothing else using it — it leaves the project, so
+//      the tray stops listing it; while a second node still uses it, it stays;
+//   4. a node with no default of its own answers false and changes nothing;
+//      a duplicate of the floor is an ordinary mesh;
+//   5. the flag survives save + reopen, and the reset still works after it.
+//
+// Document verbs only -> --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function near(a, b) { return Math.abs(a - b) < 1e-4; }
+function trayGuids() {
+    return assets.list({ scope: "project", tray: true }).map(function (r) { return r.guid; });
+}
+function storeGuids() {
+    return assets.list({ scope: "store" }).map(function (r) { return r.guid; });
+}
+function theFloors() {
+    return scene.nodes().filter(function (r) {
+        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    }).map(function (r) { return r.id; });
+}
+function isFloorDefault(id, tag) {
+    var m = material.get(id);
+    assert(("" + m.baseColorMap).length > 0 && near(m.textureScale, 4) && near(m.roughness, 1)
+           && near(m.metallic, 0),
+           tag + ": the floor wears its own default — the checker, textureScale 4, roughness 1, "
+           + "metallic 0 (" + J({ map: ("" + m.baseColorMap).length > 0, textureScale: m.textureScale,
+                                   roughness: m.roughness, metallic: m.metallic }) + ")");
+    return m;
+}
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+
+// A LIBRARY material, imported before any project exists (nothing pins it).
+var redMat = assets.importFile(fixtures + "/pinned_red.material");
+assert(redMat && redMat.length > 10, "a library material: pinned_red.material");
+
+var proj = project.create("Default Floor " + Date.now());
+assert(proj.length > 10, "project.create");
+
+// ---- 1. the default floor ---------------------------------------------------
+var floors = theFloors();
+assert(floors.length === 1, "a new scene has exactly ONE default floor (" + floors.length + ")");
+var floor = floors[0];
+assert(scene.find("Ground") === floor, "... and it is the Ground the outliner shows");
+var base = isFloorDefault(floor, "a new scene");
+var tile = assets.list({ scope: "project", type: "texture", query: "Tile.png" });
+assert(tile.length === 1 && trayGuids().indexOf(tile[0].guid) >= 0,
+       "the floor's checker is a tray tile (the scene uses it)");
+assert(trayGuids().indexOf(floor) < 0, "... and the floor itself is not (a node, not a library asset)");
+
+// ---- 2. the user's edits, reset ---------------------------------------------
+assert(material.set(floor, { roughness: 0.25, metallic: 0.6, textureScale: 1, baseColor: "#ff2020" }),
+       "the user customises the floor's own material");
+assert(near(material.get(floor).roughness, 0.25), "... roughness 0.25 took");
+var pushes = editor.undoState().pushes;
+assert(material.reset(floor) === true, "material.reset(the floor)");
+assert(editor.undoState().pushes === pushes + 1,
+       "the reset recorded exactly ONE undo step (" + pushes + " -> " + editor.undoState().pushes + ")");
+var back = isFloorDefault(floor, "after the reset");
+assert(back.baseColor === base.baseColor, "... and its base colour is the default again (" + back.baseColor + ")");
+
+// ---- 3. a library material, applied then cleared ----------------------------
+assert(material.apply(floor, redMat) === true, "material.apply(the floor, the library material)");
+assert(trayGuids().indexOf(redMat) >= 0, "applying a library material is a USE: it joins the project (tray)");
+assert(!near(material.get(floor).textureScale, 4) || ("" + material.get(floor).baseColorMap).length === 0,
+       "the floor wears the applied material now");
+assert(material.reset(floor) === true, "material.reset clears the applied material");
+isFloorDefault(floor, "after clearing the applied material");
+assert(trayGuids().indexOf(redMat) < 0,
+       "nothing else uses it, so it left the project — the tray no longer lists it");
+var meta = assets.metadata(redMat);
+assert(meta && meta.guid === redMat && meta.listed === true, "the LIBRARY row is untouched");
+assert(storeGuids().indexOf(redMat) >= 0, "... and it is in the library grid");
+
+// ...but a material something else still uses stays in the project.
+var cube = scene.addPrimitive("cube", { position: { x: 3, y: 1, z: 0 } });
+assert(material.apply(cube, redMat) === true && material.apply(floor, redMat) === true,
+       "the same library material on a cube AND the floor");
+assert(material.reset(floor) === true, "reset the floor");
+assert(trayGuids().indexOf(redMat) >= 0, "the cube still uses it: it stays in the project");
+isFloorDefault(floor, "the floor alone was reset");
+
+// ---- 4. no default, no reset ------------------------------------------------
+var cubeBefore = J(material.get(cube));
+assert(material.reset(cube) === false, "a node with no default of its own: material.reset answers false");
+assert(("" + app.lastError()).indexOf("no default material") >= 0, "... and says why: " + app.lastError());
+assert(J(material.get(cube)) === cubeBefore, "... and changed nothing");
+var copy = node.duplicate(floor);
+assert(copy && copy !== floor, "node.duplicate(the floor)");
+assert(node.property(copy, "defaultFloor") === false, "a copy of the floor is an ordinary mesh");
+assert(material.reset(copy) === false, "... with no reset");
+assert(theFloors().length === 1, "still ONE default floor");
+node.remove(copy);
+
+// ---- 5. save + reopen -------------------------------------------------------
+assert(material.set(floor, { roughness: 0.4 }), "customise once more");
+assert(project.save() === true, "save");
+assert(project.close() === true, "close");
+assert(project.open(proj) === true, "reopen");
+var after = theFloors();
+assert(after.length === 1 && after[0] === floor, "the flag survived the round trip (same node)");
+assert(near(material.get(floor).roughness, 0.4), "... and so did the customisation");
+assert(material.reset(floor) === true, "material.reset after the reopen");
+isFloorDefault(floor, "after reopen + reset");
+
+console.log("e2e_default_floor: all sections passed");

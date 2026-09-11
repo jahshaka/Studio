@@ -197,7 +197,7 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/clipboardservice.h"
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
-#include "services/shippedassets.h"
+#include "services/defaultfloor.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include "ui/style/themeroles.h"
@@ -435,95 +435,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // the tier table stays the single place any of them is written.
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
-    // second node
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/models/ground.obj");
-    node->setLocalPos(iris::Vec3(0, 1e-4, 0)); // prevent z-fighting with the default plane reset (iKlsR)
-    node->setName("Ground");
-    node->setPickable(false);
-	node->setFaceCullingMode(iris::FaceCullingMode::None);
-    node->setShadowCastingEnabled(false);
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
-
-    {
-        // Make the default plane a static physics object
-        iris::PhysicsProperty physicsProperties;
-        physicsProperties.objectMass = .0f;
-        physicsProperties.isStatic = true;
-        physicsProperties.objectCollisionMargin = .1f;
-        physicsProperties.objectRestitution = .01f;
-        physicsProperties.type = iris::PhysicsType::Static;
-        physicsProperties.shape = iris::PhysicsCollisionShape::Plane;
-
-        node->isPhysicsBody = true;
-        node->physicsProperty = physicsProperties;
-    }
-
-    // THE GROUND'S TILE IS A LIBRARY TEXTURE (plan item 15c, audit D35). In a
-    // real project it goes through the one import pipeline the first time any
-    // project needs it (identified by its bytes, so every later project reuses
-    // the same row) and is PINNED here: the material holds the pinned store
-    // object, the writer saves its guid through the CAS and both readers
-    // resolve it pin-first — the same round trip as any texture a user
-    // imports, and a project export carries it. It used to be a QFile::copy
-    // into the project folder plus a bare "Tile.png" row with no stored bytes,
-    // which only the by-name fallbacks in the writer and the readers could
-    // find again; those are deleted with it.
-    //
-    // The STARTUP PLACEHOLDER project (Project::createNew: no guid, no folder)
-    // gets neither the tile row nor the Ground's own Object row: it never
-    // saves, so it renders the shipped file directly and writes nothing to the
-    // library (it used to insert a "Ground" row with an EMPTY project guid on
-    // every selftest and scripted boot).
-    const QString shippedTile = IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
-    QString tilePath = shippedTile;
-    if (project && !project->getProjectGuid().isEmpty()) {
-        QJsonObject props;
-        props.insert("type", "builtin");
-        db->createAssetEntry(
-            nodeGuid, node->getName(),
-            static_cast<int>(ModelTypes::Object),
-            project->getProjectGuid(),
-            project->getProjectGuid(),
-            QString(),
-            QString(),
-            QByteArray(),
-            QJsonDocument(props).toJson(),
-            QByteArray(),
-            QByteArray()
-        );
-
-        const ShippedAssets::Pinned tile =
-            ShippedAssets::pinTexture(shippedTile, QStringLiteral("Tile.png"), db, project);
-        if (tile.ok() && !tile.guid.isEmpty()) {
-            db->createDependency(
-                static_cast<int>(ModelTypes::Object),
-                static_cast<int>(ModelTypes::Texture),
-                nodeGuid, tile.guid,
-                project->getProjectGuid()
-            );
-            tilePath = tile.path;
-        } else {
-            // The floor still renders (the shipped file); what is lost is the
-            // guid on save, so say why instead of saving a scene that reopens
-            // untextured with nothing in the log.
-            irisLog("createDefaultScene: the ground tile could not be pinned into the project - "
-                    + tile.error);
-        }
-    }
-
-    // The default scene's ground, as a PbrMaterial (HLMS_ADOPTION P4b). The
-    // roughness is what the legacy Default shader's shininess 0 already meant
-    // through the mirror's remap, so the floor renders exactly as it did.
-    auto m = iris::PbrMaterial::create();
-    m->setValue("baseColorMap", tilePath);
-    m->setValue("textureScale", 4.f);
-    m->setValue("roughness", 1.0f);
-    m->setValue("metallic", 0.0f);
-    node->setMaterial(m);
-
+    // THE DEFAULT FLOOR (services/defaultfloor.h): the ONE factory, shared
+    // with material.reset's default provider, so what a new scene stands on
+    // and what a reset restores cannot drift apart.
+    auto node = defaultfloor::createNode(db, project);
     scene->rootNode->addChild(node);
 
     auto dlight = iris::LightNode::create();

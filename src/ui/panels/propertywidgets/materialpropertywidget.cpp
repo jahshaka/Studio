@@ -14,6 +14,8 @@ For more information see the LICENSE file
 
 #include <QJsonObject>
 #include <QDirIterator>
+#include <QHBoxLayout>
+#include <QPushButton>
 
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
@@ -36,6 +38,8 @@ For more information see the LICENSE file
 
 #include "services/services.h"
 #include "services/undoservice.h"
+#include "services/sceneeditservice.h"
+#include "services/materialdefaults.h"
 #include "commands/changematerialpropertycommand.h"
 
 #include "io/scenewriter.h"
@@ -91,7 +95,35 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     if (!material) return;
 
     setupShaderSelector();
+    addResetRow();
     setWidgetProperties();
+}
+
+void MaterialPropertyWidget::addResetRow()
+{
+    // THE NODE'S OWN DEFAULT (services/materialdefaults.h): only a node that
+    // HAS one gets the action — the scene's default floor today. The button is
+    // material.reset's panel face: it calls the same SceneEditService function
+    // (one undo step), and the panel repaints from the undo stack's hook.
+    const QString provider = materialdefaults::providerName(meshNode);
+    resetButton = nullptr;
+    if (provider.isEmpty()) return;
+    auto *row = new QWidget;
+    row->setObjectName(QStringLiteral("MaterialResetRow"));
+    auto *line = new QHBoxLayout(row);
+    line->setContentsMargins(0, 0, 0, 0);
+    line->addStretch();
+    resetButton = new QPushButton(tr("Reset to %1").arg(provider), row);
+    resetButton->setObjectName(QStringLiteral("MaterialResetButton"));
+    resetButton->setToolTip(tr("Clears the material applied to this %1 and restores its own "
+                               "default (the checker). One undo step.")
+                                .arg(provider.toLower()));
+    line->addWidget(resetButton);
+    connect(resetButton, &QPushButton::clicked, this, [this]() {
+        if (meshNode && services && services->sceneEdit)
+            services->sceneEdit->resetMaterial(meshNode);
+    });
+    this->addWidgetToContent(row);
 }
 
 void MaterialPropertyWidget::forceShaderRefresh(const QString &materialName)

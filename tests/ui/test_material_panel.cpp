@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include <QTest>
 #include <QTemporaryDir>
 #include <QImage>
+#include <QPushButton>
 
 #include <cstring>
 #include <functional>
@@ -623,6 +624,32 @@ static void testTextureSnapshotDoesNotAccumulate()
           "snapshot: a mesh with no material leaves an empty snapshot");
 }
 
+// THE NODE'S OWN DEFAULT (owner, 2026-09-12; services/materialdefaults.h): the
+// "Reset to Default Floor" action is on the default floor's material panel and
+// on NO other mesh's. (What the click does is material.reset's — proven end to
+// end by scripting.e2e.default_floor; here the link stub answers.)
+static void testResetActionOnlyOnTheDefaultFloor()
+{
+    PanelRig rig;
+    CHECK(rig.panel.resetMaterialButton() == nullptr,
+          "reset: an ordinary mesh's panel has no reset action");
+
+    auto floor = iris::MeshNode::create();
+    floor->defaultFloor = true;
+    floor->setMaterial(iris::PbrMaterial::create());
+    rig.panel.setSceneNode(floor);
+    QPushButton *reset = rig.panel.resetMaterialButton();
+    CHECK(reset != nullptr, "reset: the default floor's panel carries the reset action");
+    CHECK(reset && reset->text() == QStringLiteral("Reset to Default Floor"),
+          "reset: it names what it resets to");
+
+    // Back to an ordinary mesh: the action goes with the floor.
+    rig.panel.clearPanel(rig.panel.layout());
+    rig.panel.setSceneNode(rig.node);
+    CHECK(rig.panel.resetMaterialButton() == nullptr,
+          "reset: selecting an ordinary mesh again drops the action");
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -639,6 +666,7 @@ int main(int argc, char *argv[])
     testBrdfRowAndClearCoatConstraint();
     testShadingModelRowConstraints();
     testTextureSnapshotDoesNotAccumulate();
+    testResetActionOnlyOnTheDefaultFloor();
 
     printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;

@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "services/imagematerial.h"
 #include "services/livetextures.h"
 #include "services/projectassets.h"
+#include "services/materialdefaults.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "viewport/ieditorviewport.h"
@@ -521,6 +522,20 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
           "NOT writable on a PBR material and are refused by name.",
           Needs::Document },
+        { "reset", "material.reset(nodeId) -> bool",
+          "RESETS the node's material to the node's OWN DEFAULT — the material panel's reset, as a "
+          "verb (owner, 2026-09-12). A node has a default only when something provides one; the "
+          "scene's DEFAULT FLOOR (node.properties(id).defaultFloor, the Ground every new scene and "
+          "every shipped demo stands on) is the first and only provider today, and its default is "
+          "the floor's own checker material (the shipped tile, textureScale 4, roughness 1, "
+          "metallic 0) — never a shared library row. The reset CLEARS what the user applied: the "
+          "node stops using an applied material asset (material.apply) and the textures its slots "
+          "were bound to, and an applied material nothing else in the project uses any more is "
+          "released from the project, so the editor's tray stops listing it — the LIBRARY row is "
+          "never touched. ONE undo step (undo puts the user's material, edges and pins back). A "
+          "node with no default of its own answers false, changes nothing and records why "
+          "(app.lastError).",
+          Needs::Document },
         { "setDetail", "material.setDetail(nodeId, layer, {map, normalMap, blend, offset:{x,y}, scale:{x,y}, weight, normalWeight}) -> bool",
           "One DETAIL LAYER, ergonomically. A detail layer is a second diffuse map blended into "
           "the base colour by one of thirteen modes, optionally with its own normal map, its own "
@@ -798,6 +813,24 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                                         ProjectAssets::AddKind::Binding);
     }
     return true;
+}
+
+bool MaterialApi::reset(const QString &nodeId)
+{
+    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.reset"));
+    if (!meshNode) return false;
+    if (!host.services || !host.services->sceneEdit)
+        return fail("material.reset: not available in this session");
+    // THE PROVIDER QUESTION (services/materialdefaults.h): a node with no
+    // default of its own is a plain "no", not a misuse.
+    if (!materialdefaults::hasDefault(meshNode))
+        return refuse(QStringLiteral("material.reset: '%1' has no default material of its own — "
+                                     "only the scene's default floor provides one "
+                                     "(material.apply puts a different material on any mesh)")
+                          .arg(meshNode->getName()));
+    return host.services->sceneEdit->resetMaterial(meshNode)
+           || refuse(QStringLiteral("material.reset: the default material of '%1' could not be built")
+                         .arg(meshNode->getName()));
 }
 
 // ONE LAYER, THROUGH THE SAME ROWS material.set writes (MATERIAL_GAPS_SPEC
