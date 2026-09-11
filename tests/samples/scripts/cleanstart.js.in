@@ -65,14 +65,17 @@ var EXPECTED = {
     // roughness ladder, a torus and a teapot — under VCT + probes. 23 nodes,
     // and it is REGENERABLE (scenes/tools/make_grand_showroom.js), which the
     // world it replaced was not.
-    "Showroom": { nodes: 23, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot"],
-                  types: { mesh: 17, light: 5 } },
+    // ONE FLOOR since lane L13 (owner, 2026-09-12): the gallery stands on the
+    // default floor (the Ground), and the slab it used to lay over it is gone.
+    "Showroom": { nodes: 22, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot"],
+                  types: { mesh: 16, light: 5 } },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
     // 14 since a799312a removed the two stray default-scene lights the resize
     // pass had left behind (the expectation lagged the re-stage — three lanes
     // independently flagged it).
-    "Mirror Room": { nodes: 14, names: ["RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
-                     types: { mesh: 11, light: 2 } },
+    // 13 since lane L13: one floor, the default one (the Floor slab is gone).
+    "Mirror Room": { nodes: 13, names: ["Ground", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
+                     types: { mesh: 10, light: 2 } },
     "Skeletal Animation": { nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
                             types: { mesh: 4, light: 2 } },
     // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
@@ -352,10 +355,14 @@ var SCALE = {
     },
     "Mirror Room": {
         // Re-staged 2026-09-09: 1.75x -> 1x (an 8.5 m room, not 14.9 m).
-        // The floor and ceiling slabs are 18 m squares that overhang the walls
-        // — that is what makes the aggregate extent bigger than the room.
-        extent: { x: 18.0, y: 5.5, z: 18.0 }, cameraHeight: 2.4, fov: 45,
-        room: { width: 8.5, depth: 8.5, height: 3.5 },
+        // The ceiling slab is an 18 m square that overhangs the walls — that
+        // is what makes the aggregate extent bigger than the room.
+        // Re-staged 2026-09-12 (lane L13, one floor per scene): the room
+        // stands on the default floor, its floor slab (-0.75..0.25) is gone —
+        // extent.y 5.5 -> 4.75 (0..4.75), interior height 3.5 -> 3.75 (the
+        // ceiling did not move; the floor dropped 0.25 m to y = 0).
+        extent: { x: 18.0, y: 4.75, z: 18.0 }, cameraHeight: 2.4, fov: 45,
+        room: { width: 8.5, depth: 8.5, height: 3.75 },
         objects: { "MirrorSphere": { y: 3.0 }, "GreenTeapot": { x: 2.12 } }
     },
     "Particles": {
@@ -371,8 +378,12 @@ var SCALE = {
     "Showroom": {
         // Re-staged 2026-09-09: 2x -> 1x (an 11.75 m gallery under a 3.25 m
         // ceiling, with 1.7 m display spheres), lens 75 -> 45 degrees.
-        extent: { x: 24.0, y: 4.25, z: 24.0 }, cameraHeight: 2.45, fov: 45,
-        room: { width: 11.75, depth: 11.75, height: 3.25 },
+        // Re-staged 2026-09-12 (lane L13, one floor per scene): the gallery
+        // stands on the default floor, its floor slab (-0.375..0.125) is gone
+        // — extent.y 4.25 -> 3.875 (0..3.875), interior height 3.25 -> 3.375
+        // (the ceiling did not move; the floor dropped 0.125 m to y = 0).
+        extent: { x: 24.0, y: 3.875, z: 24.0 }, cameraHeight: 2.45, fov: 45,
+        room: { width: 11.75, depth: 11.75, height: 3.375 },
         objects: { "Sphere_r0": { y: 1.7 }, "GreenTeapot": { x: 1.93 } }
     },
     "Skeletal Animation": {
@@ -403,19 +414,21 @@ function checkScale() {
     assert(!!want, "the suite knows what scale " + SAMPLE + " is authored at");
 
     // ---- the geometry ------------------------------------------------------
-    // The ground plane is excluded by NAME here rather than by the built-in
-    // mesh path the C++ side uses (services/sceneextents.h), because a script
-    // has no window into meshPath — and every shipped sample calls it "Ground".
-    // It is a 100 m backdrop present in every scene: left in, it is the only
-    // number any measurement would ever report.
+    // The DEFAULT FLOOR is excluded — by its document flag (lane L13), no
+    // longer by the name "Ground". It is a 100 m backdrop present in every
+    // scene: left in, it is the only number any measurement would ever report.
     var rootId = scene.root();
     var roots = scene.nodes({ depth: 1 });   // the root itself plus its children
-    var ids = [], i;
+    var ids = [], i, defaultFloor = null;
     for (i = 0; i < roots.length; i++) {
         if (roots[i].id === rootId) continue;          // measuring it measures everything
-        if (roots[i].name === "Ground") continue;
+        if (roots[i].type === "mesh" && node.property(roots[i].id, "defaultFloor") === true) {
+            defaultFloor = roots[i].id;
+            continue;
+        }
         ids.push(roots[i].id);
     }
+    assert(!!defaultFloor, "the scene stands on its default floor");
     assert(ids.length > 0, "the scene has something to measure (" + ids.length + " root nodes)");
 
     var b = scene.bounds({ nodes: ids });
@@ -448,13 +461,15 @@ function checkScale() {
     }
 
     // ---- the room (the samples built from primitives) ----------------------
-    // Interior, not outline: the floor and ceiling slabs overhang the walls, so
-    // the only honest reading of "how big is this room" is wall face to wall
-    // face and floor top to ceiling bottom. A room is human-scale when a person
-    // fits in it — 2.4 m is a domestic ceiling, 4.5 m is a gallery, and
-    // anything above that is the drift this gate exists to stop.
+    // Interior, not outline: the ceiling slab overhangs the walls, so the only
+    // honest reading of "how big is this room" is wall face to wall face and
+    // floor top to ceiling bottom. The floor is the scene's DEFAULT floor (one
+    // floor per scene since lane L13 — the rooms' own floor slabs are gone). A
+    // room is human-scale when a person fits in it — 2.4 m is a domestic
+    // ceiling, 4.5 m is a gallery, and anything above that is the drift this
+    // gate exists to stop.
     if (want.room) {
-        var floor = scene.bounds({ nodes: [scene.find("Floor")] });
+        var floor = scene.bounds({ nodes: [defaultFloor] });
         var ceiling = scene.bounds({ nodes: [scene.find("Ceiling")] });
         var height = ceiling.min.y - floor.max.y;
         console.log("  interior height: " + height.toFixed(2) + " m");
@@ -855,5 +870,55 @@ d = diffs(s1, snapshot());
 assert(d.length === 0, "the baked open produced the same document: " + J(d));
 renderSanity("baked");
 errorsClean("after baked reopen");
+
+// 7. THE DEFAULT FLOOR (owner, 2026-09-12: "the demo scenes don't have the
+//    checker default floor, just a grey nothing — ALL the demo scenes should
+//    have that default floor"). Every demo stands on ONE default floor — the
+//    document flag, not the name (services/defaultfloor.h) — which wears the
+//    checker (World Background's floor is its own metal deck, by design) and
+//    RENDERS a texture: a top-down look at the floor, with everything but the
+//    floor and the lights hidden (so no object or shadow is in the shot), must
+//    show the two tones' edges across a probe grid. A flat untextured floor
+//    under the same lights changes by a level or two between neighbouring
+//    probes; the checker's cells (2 m at textureScale 4) change by a step.
+//    Last on purpose: it hides nodes, and nothing after it looks.
+function checkDefaultFloor() {
+    var floors = scene.nodes().filter(function (r) {
+        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    });
+    assert(floors.length === 1, "the demo stands on ONE default floor (" + floors.length + ")");
+    var floor = floors[0].id;
+    var fm = material.get(floor);
+    assert(("" + fm.baseColorMap).length > 0, "the default floor wears a texture");
+    if (SAMPLE !== "World Background")
+        assert(Math.abs(fm.textureScale - 4) < 1e-4, "... the checker at textureScale 4 (" + fm.textureScale + ")");
+
+    var root = scene.root();
+    scene.nodes({ depth: 1 }).forEach(function (r) {
+        if (r.id === root || r.id === floor || r.type === "light") return;
+        node.setProperty(r.id, "visible", false);
+    });
+    editor.select(null);
+    editor.gameView(true);   // no editor grid lines drawn over the floor
+    editor.setCamera({ position: { x: 0, y: 4, z: 0 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 60 });
+    editor.frame(30, 1.0 / 60.0);
+    var COLS = 16, ROWS = 9, pts = [];
+    for (var y = 0; y < ROWS; y++) for (var x = 0; x < COLS; x++)
+        pts.push({ x: 0.05 + x * (0.9 / (COLS - 1)), y: 0.05 + y * (0.9 / (ROWS - 1)) });
+    var shot = editor.screenshot("cleanstart_floor_" + SAMPLE.replace(/ /g, "_") + ".png", 640, 360, pts);
+    var lum = shot.probes.map(function (p) { return (p.r + p.g + p.b) / 3; });
+    var lo = 255, hi = 0, edges = 0;
+    for (var i = 0; i < lum.length; i++) { lo = Math.min(lo, lum[i]); hi = Math.max(hi, lum[i]); }
+    for (y = 0; y < ROWS; y++) for (x = 0; x < COLS; x++) {
+        var here = lum[y * COLS + x];
+        if (x + 1 < COLS && Math.abs(lum[y * COLS + x + 1] - here) >= 6) edges++;
+        if (y + 1 < ROWS && Math.abs(lum[(y + 1) * COLS + x] - here) >= 6) edges++;
+    }
+    console.log("floor probe: luminance " + Math.round(lo) + ".." + Math.round(hi) + ", " + edges + " tone edges");
+    assert(hi - lo >= 8 && edges >= 10,
+           "the default floor RENDERS its texture — two tones (range " + Math.round(hi - lo) +
+           ", " + edges + " tone edges across a " + COLS + "x" + ROWS + " grid)");
+}
+checkDefaultFloor();
 
 console.log("samples.cleanstart[" + SAMPLE + "]: ALL OK");
