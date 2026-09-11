@@ -26,6 +26,7 @@
 #include <QImage>
 #include <QSet>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QVariant>
 #include <cstdio>
 #include <cstdlib>
@@ -871,6 +872,104 @@ int main(int argc, char **argv)
         CHECK(std::fabs(row("textureScale") - 2.0f) < 1e-6f &&
               std::fabs(row("textureScaleV") - 3.0f) < 1e-6f,
               "uv rows: setTextureScale(u, v) writes both rows too");
+    }
+
+    // --- RENDER_PIPELINE_AUDIT 3.2 (lane L12): A DUPLICATE KEEPS ITS MATERIAL.
+    //
+    // Material::duplicate() returned a BLANK base Material and PbrMaterial did
+    // not override it, so MeshNode::createDuplicate — the one funnel behind
+    // Ctrl+D, Alt+drag, node.duplicate and the outliner menu — handed every
+    // copy an empty material the mirror renders as neutral grey. The copy must
+    // carry EVERY value (fields, maps, rows) and must be its OWN material: the
+    // panel edits a node's material in place, so a shared pointer would make an
+    // edit to the copy repaint the original.
+    {
+        QTemporaryDir texDir;
+        const QString texPath = texDir.path() + QStringLiteral("/dup_base.png");
+        QImage px(4, 4, QImage::Format_RGBA8888);
+        px.fill(QColor(200, 30, 20));
+        CHECK(px.save(texPath), "dup: fixture texture written");
+
+        auto source = iris::MeshNode::create();
+        source->setMesh(":assets/models/cube.obj");
+        source->faceCullingMode = iris::FaceCullingMode::None;
+        auto pbr = iris::PbrMaterial::create();
+        pbr->setName(QStringLiteral("Red Paint"));
+        pbr->setGuid(QStringLiteral("11111111-2222-3333-4444-555555555555"));
+        pbr->setValue(QStringLiteral("baseColor"), QColor(200, 20, 20));
+        pbr->setValue(QStringLiteral("metallic"), 0.25f);
+        pbr->setValue(QStringLiteral("roughness"), 0.7f);
+        pbr->setValue(QStringLiteral("emissiveColor"), QColor(10, 0, 0));
+        pbr->setValue(QStringLiteral("emissiveIntensity"), 0.5f);
+        pbr->setValue(QStringLiteral("alphaMode"), 2);
+        pbr->setValue(QStringLiteral("alpha"), 0.8f);
+        pbr->setValue(QStringLiteral("textureScale"), 3.0f);
+        pbr->setValue(QStringLiteral("textureScaleV"), 2.0f);
+        pbr->setValue(QStringLiteral("baseColorMap"), texPath);
+        pbr->setValue(QStringLiteral("detail0Blend"), 4);
+        pbr->setValue(QStringLiteral("normalMapAddress"), 1);
+        CHECK(pbr->useBaseColorMap, "dup: the original carries a base colour map");
+        source->setMaterial(pbr);
+
+        auto dupNode = source->duplicate().dynamicCast<iris::MeshNode>();
+        CHECK(!!dupNode, "dup: a mesh node duplicates to a mesh node");
+        auto dupMat = dupNode ? dupNode->getMaterial().dynamicCast<iris::PbrMaterial>()
+                              : iris::PbrMaterialPtr();
+        CHECK(!!dupMat, "dup: the copy's material is a PbrMaterial (was a blank base Material)");
+        if (dupMat) {
+            CHECK(dupMat.data() != pbr.data(), "dup: the copy has its OWN material, not the same pointer");
+            CHECK(dupMat->baseColor == pbr->baseColor &&
+                  std::fabs(dupMat->metallicFactor - 0.25f) < 1e-6f &&
+                  std::fabs(dupMat->roughnessFactor - 0.7f) < 1e-6f &&
+                  dupMat->emissiveColor == pbr->emissiveColor &&
+                  std::fabs(dupMat->emissiveIntensity - 0.5f) < 1e-6f,
+                  "dup: colour, metallic, roughness and emission are the original's");
+            CHECK(dupMat->alphaMode == 2 && std::fabs(dupMat->alpha - 0.8f) < 1e-6f &&
+                  std::fabs(dupMat->textureScale - 3.0f) < 1e-6f &&
+                  std::fabs(dupMat->textureScaleV - 2.0f) < 1e-6f &&
+                  dupMat->detail[0].blend == 4 && dupMat->addressFor(QStringLiteral("normalMap")) == 1,
+                  "dup: opacity, UV tiling, detail blend and address modes are the original's");
+            CHECK(dupMat->getName() == pbr->getName() && dupMat->getGuid() == pbr->getGuid() &&
+                  dupMat->renderLayer == pbr->renderLayer,
+                  "dup: the name, the source guid and the render layer travel");
+            CHECK(dupMat->useBaseColorMap && dupMat->textures.contains(QStringLiteral("u_baseColorMap")) &&
+                  dupMat->textures.value(QStringLiteral("u_baseColorMap"))->source == texPath,
+                  "dup: the base colour map travels (the same file)");
+            // THE ROWS: what the panel shows and what SceneWriter saves. Equal
+            // in name, order and value — and distinct objects.
+            bool rowsEqual = dupMat->properties.size() == pbr->properties.size();
+            bool rowsShared = false;
+            for (int i = 0; rowsEqual && i < pbr->properties.size(); ++i) {
+                iris::Property *a = pbr->properties[i], *b = dupMat->properties[i];
+                if (a == b) rowsShared = true;
+                if (a->name != b->name || a->getValue() != b->getValue()) {
+                    printf("    row %s: %s vs %s %s\n", qPrintable(a->name),
+                           qPrintable(a->getValue().toString()), qPrintable(b->name),
+                           qPrintable(b->getValue().toString()));
+                    rowsEqual = false;
+                }
+            }
+            CHECK(rowsEqual, "dup: every property row is the original's, in the same order");
+            CHECK(!rowsShared, "dup: no property row is shared between the two materials");
+
+            // Independence, both ways round: an edit to the copy (fields AND the
+            // saved rows) leaves the original alone.
+            dupMat->setValue(QStringLiteral("baseColor"), QColor(20, 20, 200));
+            dupMat->setValue(QStringLiteral("roughness"), 0.1f);
+            QVariant origRow;
+            for (auto prop : pbr->properties)
+                if (prop->name == QLatin1String("baseColor")) origRow = prop->getValue();
+            CHECK(pbr->baseColor == QColor(200, 20, 20) && std::fabs(pbr->roughnessFactor - 0.7f) < 1e-6f &&
+                  origRow.value<QColor>() == QColor(200, 20, 20),
+                  "dup: editing the copy leaves the original's fields and rows untouched");
+        }
+        CHECK(dupNode && dupNode->faceCullingMode == iris::FaceCullingMode::None,
+              "dup: the face-culling mode (saved and exported per node) travels");
+
+        // A material-less mesh node still duplicates (the Stage 2 crash guard).
+        auto bare = iris::MeshNode::create();
+        auto bareCopy = bare->duplicate().dynamicCast<iris::MeshNode>();
+        CHECK(bareCopy && !bareCopy->getMaterial(), "dup: a mesh node with no material duplicates to one with none");
     }
 
     // --- Teardown with no GL must not crash either

@@ -140,6 +140,76 @@ int main(int argc, char **argv)
     view->readPixels(img); show("shown", img);
     CHECK(isMaterial(centre(img)), "shown again");
 
+    // ---- EFFECTIVE visibility through the hierarchy (RENDER_PIPELINE_AUDIT 1.1/1.2) ----
+    // A node is on screen iff it AND every ancestor are visible; each node's
+    // own flag is the user's and is never rewritten by an ancestor's change.
+    // The mirror pushes that effective state per node — the old push of the
+    // node's own flag leaned on Ogre's setVisible cascade, which re-drew a
+    // child the user had hidden the moment its parent was shown again, and
+    // could not see a re-parent at all.
+    {
+        const iris::Vec3 eye(2.2f, 1.8f, 2.6f);
+        const iris::Vec3 through = eye + (iris::Vec3(0, 0, 0) - eye) * 3.0f;
+        auto picksCube = [&]() {
+            for (const auto &hit : iris::picking::raycastMeshes(doc.data(), eye, through, 0, false))
+                if (hit.node.data() == meshNode.data()) return true;
+            return false;
+        };
+        auto step = [&](const char *tag) {
+            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            view->readPixels(img); show(tag, img);
+        };
+
+        // (a) the parent hides its child, on screen AND to picking.
+        parent->visible = false;
+        step("parent hidden");
+        CHECK(isBlue(centre(img)), "hiding the PARENT hides its child");
+        CHECK(meshNode->isVisible() && !meshNode->isVisibleInScene(),
+              "the child's own flag is untouched; it is not visible IN THE SCENE");
+        CHECK(!picksCube(), "a child hidden by its parent is not pickable");
+        CHECK(iris::picking::lastUsedEngineBroadPhase(), "...through the engine broad phase");
+        parent->visible = true;
+        step("parent shown");
+        CHECK(isMaterial(centre(img)), "showing the parent shows the child again");
+        CHECK(picksCube(), "...and makes it pickable again");
+
+        // (b) a child the user hid ITSELF survives its parent's hide/show.
+        meshNode->visible = false;
+        step("child hidden itself");
+        parent->visible = false;
+        step("...then parent hidden");
+        parent->visible = true;
+        step("...then parent shown");
+        CHECK(isBlue(centre(img)),
+              "a child the user hid itself STAYS hidden when its parent is shown again");
+        CHECK(!meshNode->isVisible(), "...its own flag still says hidden");
+        CHECK(!picksCube(), "...and it is still not pickable");
+        meshNode->visible = true;
+        step("child shown itself");
+        CHECK(isMaterial(centre(img)), "showing the child itself brings it back");
+
+        // (c) a RE-PARENT is a visibility change too: under a hidden group the
+        // child is hidden without any flag of its own moving, and back out it
+        // shows. (Ogre's cascade never saw this; the effective push does.)
+        auto hiddenGroup = iris::SceneNode::create();
+        hiddenGroup->setName("hidden-group");
+        hiddenGroup->visible = false;
+        doc->getRootNode()->addChild(hiddenGroup);
+        parent->removeChild(meshNode);
+        hiddenGroup->addChild(meshNode, false);
+        step("moved under a hidden group");
+        CHECK(isBlue(centre(img)), "moving a visible node under a HIDDEN group hides it");
+        CHECK(!picksCube(), "...and it is not pickable there");
+        hiddenGroup->removeChild(meshNode);
+        parent->addChild(meshNode, false);
+        step("moved back");
+        CHECK(isMaterial(centre(img)), "moving it back out shows it again");
+        doc->getRootNode()->removeChild(hiddenGroup);
+        hiddenGroup.reset();
+        step("hidden group removed");
+        CHECK(isMaterial(centre(img)), "the cube is back where the rest of this suite expects it");
+    }
+
     // ---- re-parent in the document: cube moves under a second, offset node ----
     auto other = iris::SceneNode::create();
     other->setLocalPos(iris::Vec3(0.0f, 10.0f, 0.0f));

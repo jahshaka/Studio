@@ -295,6 +295,41 @@ int main(int argc, char **argv) {
               "ortho: centre click (no cube at origin) misses");
     }
 
+    // ---- EFFECTIVE visibility (RENDER_PIPELINE_AUDIT 1.1/1.2, lane L12): a
+    // mesh under a HIDDEN PARENT is as unpickable as a hidden mesh — the
+    // renderer draws neither — and a child the user hid itself stays
+    // unpickable after its parent is hidden and shown again. The document
+    // broad phase used to test the mesh's OWN flag only, so a click went
+    // straight through a hidden model's root and selected an invisible part.
+    {
+        auto vdoc = iris::Scene::create();
+        auto group = iris::SceneNode::create();
+        group->setName("group");
+        vdoc->getRootNode()->addChild(group);
+        auto inside = cubeAt(vdoc, iris::Vec3(0, 0, 0), "inside", group);
+        auto userHidden = cubeAt(vdoc, iris::Vec3(0, 3, 0), "user-hidden", group);
+        userHidden->setVisible(false);
+        const iris::Vec3 eye(0, 0, 6);
+        auto hits = [&](const iris::Vec3 &target, const iris::MeshNodePtr &want) {
+            const iris::Vec3 end = eye + (target - eye) * 3.0f;
+            for (const auto &p : ScenePicker::pickAll(vdoc, eye, end, eye))
+                if (p.node == want) return true;
+            return false;
+        };
+        CHECK(hits(iris::Vec3(0, 0, 0), inside), "visibility: a visible child is picked");
+        CHECK(!hits(iris::Vec3(0, 3, 0), userHidden), "visibility: a child hidden itself is not");
+        group->setVisible(false);
+        CHECK(!hits(iris::Vec3(0, 0, 0), inside),
+              "visibility: a child under a HIDDEN parent is not picked (its own flag is on)");
+        CHECK(inside->isVisible() && !inside->isVisibleInScene(),
+              "visibility: its own flag is untouched, isVisibleInScene says why");
+        group->setVisible(true);
+        CHECK(hits(iris::Vec3(0, 0, 0), inside), "visibility: showing the parent makes it pickable again");
+        CHECK(!hits(iris::Vec3(0, 3, 0), userHidden) && !userHidden->isVisibleInScene(),
+              "visibility: the child hidden itself stays unpickable after the parent's hide/show");
+        CHECK(!iris::picking::lastUsedEngineBroadPhase(), "visibility: (the document broad phase)");
+    }
+
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return failures ? 1 : 0;
 }
