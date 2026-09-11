@@ -43,19 +43,30 @@ For more information see the LICENSE file
 #include <QTimer>
 
 namespace {
-// Sky texture references are asset guids: resolve them through the CAS
-// (pinned bytes in project context, then library source) before falling back
-// to the legacy projectFolder/name join (pre-pipeline projects).
-QString resolveSkyAssetFile(Project *project, Database *db, const QString &guid)
+// Sky texture references are asset guids: resolve them through the CAS (the
+// pinned bytes in project context, else the library source). The legacy
+// projectFolder + row-name join that followed is gone (plan item 15c).
+QString resolveSkyAssetFile(Project *project, const QString &guid)
 {
     if (guid.isEmpty() || !project) return QString();
-    QSqlDatabase conn = QSqlDatabase::database();
-    QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
-                                           project->getProjectGuid(), guid);
-    if (path.isEmpty()) path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
-    if (path.isEmpty() && db)
-        path = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(guid).name);
-    return path;
+    return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                   project->getProjectGuid(), guid);
+}
+
+// The asset a picked sky image IS. The picker carries the guid of the row the
+// user chose or dropped; a path with no guid (only reachable programmatically)
+// is recovered through the store object's oid, the way the scene writer does
+// it. Never by the file's NAME (plan item 15c): this used to ask the catalog
+// for a row CALLED like the picked file, and a store object is called
+// <sha256>.<ext>, so a pick resolved only when a preset had copied a file into
+// the project folder under the same name as a bare row.
+QString skyTextureGuid(Project *project, const QString &path, const QString &carriedGuid)
+{
+    if (!carriedGuid.isEmpty()) return carriedGuid;
+    if (path.isEmpty() || !project || project->getProjectGuid().isEmpty()) return QString();
+    return AssetCas::guidForStorePath(QSqlDatabase::database(), AssetStorePaths::root(), path,
+                                      project->getProjectGuid(),
+                                      AssetCas::GuidPreference::Texture);
 }
 
 // The "Material" sky was broken even in the legacy renderer (its handlers were
@@ -314,10 +325,10 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			// There are no default values, this definition gets set whenever we change the texture
 			setEquiMap(skyDefinition.value("equiSkyGuid").toString());
 
-			connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
+			connect(equiTexture, &TexturePickerWidget::valuesChanged, this,
+			        [this](QString value, QString carriedGuid) {
 				if (loading || !db || !project) return;
-				// Remember that asset names are unique (auto incremented) so this is fine
-				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), project->getProjectGuid());
+				const QString assetGuid = skyTextureGuid(project, value, carriedGuid);
 				const QVariant before = sceneprops::get(liveScene(), QStringLiteral("sky"));
 				db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
 				if (!assetGuid.isEmpty()) {
@@ -542,10 +553,18 @@ void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 {
 	if (!db || !project) return;
 	const QVariant before = sceneprops::get(liveScene(), QStringLiteral("sky"));
-	// Normally there'd be a check for if value is empty here but in that case we can clear the guid
-	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), project->getProjectGuid());
-	db->deleteDependency(skyGuid, guid);
-	// Remember that asset names are unique (auto incremented) so this is fine
+	// The face's asset is the guid the slot CARRIES (a drop, a pick, the sky
+	// presets' pinned faces), else the store object behind the path — never a
+	// row found by the file's name (plan item 15c). An empty value clears the
+	// face.
+	static const char *const kFaces[] = { "front", "back", "left", "right", "top", "bottom" };
+	const QString face = (index >= 0 && index < 6) ? QLatin1String(kFaces[index]) : QString();
+	const QString assetGuid = value.isEmpty() ? QString() : skyTextureGuid(project, value, guid);
+	// The dependency the face HAD goes (it used to delete the edge to the NEW
+	// guid, just before re-creating it, and leave the replaced face's edge
+	// behind forever).
+	const QString previous = face.isEmpty() ? QString() : cubeMapDefinition.value(face).toString();
+	if (!previous.isEmpty() && previous != assetGuid) db->deleteDependency(skyGuid, previous);
 	if (!assetGuid.isEmpty()) {
 		db->createDependency(
 			static_cast<int>(ModelTypes::Sky),
@@ -618,7 +637,7 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 {
     if (guid.isEmpty()) return;
 	equiSkyDefinition.insert("equiSkyGuid", guid);
-    auto image = resolveSkyAssetFile(project, db, guid);
+    auto image = resolveSkyAssetFile(project, guid);
     if (equiTexture) equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
     if (auto live = liveScene()) live->setSkyTexture(iris::Texture2D::load(image, false));
 	updateAssetAndKeys();
@@ -626,12 +645,12 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 
 void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 {
-	auto front = resolveSkyAssetFile(project, db, skyDataDefinition["front"].toString());
-	auto back = resolveSkyAssetFile(project, db, skyDataDefinition["back"].toString());
-	auto left = resolveSkyAssetFile(project, db, skyDataDefinition["left"].toString());
-	auto right = resolveSkyAssetFile(project, db, skyDataDefinition["right"].toString());
-	auto top = resolveSkyAssetFile(project, db, skyDataDefinition["top"].toString());
-	auto bottom = resolveSkyAssetFile(project, db, skyDataDefinition["bottom"].toString());
+	auto front = resolveSkyAssetFile(project, skyDataDefinition["front"].toString());
+	auto back = resolveSkyAssetFile(project, skyDataDefinition["back"].toString());
+	auto left = resolveSkyAssetFile(project, skyDataDefinition["left"].toString());
+	auto right = resolveSkyAssetFile(project, skyDataDefinition["right"].toString());
+	auto top = resolveSkyAssetFile(project, skyDataDefinition["top"].toString());
+	auto bottom = resolveSkyAssetFile(project, skyDataDefinition["bottom"].toString());
 
 	cubeMapDefinition.insert("front", skyDataDefinition["front"].toString());
 	cubeMapDefinition.insert("back", skyDataDefinition["back"].toString());

@@ -60,6 +60,12 @@ public:
     Q_INVOKABLE QVariantMap planarReflections();
     Q_INVOKABLE QVariantMap setPlanarReflections(const QVariantMap &params);
     Q_INVOKABLE bool sky(const QString &type, const QVariantMap &params = QVariantMap());
+    /// The shipped cube skies (the Presets panel's Skyboxes tab), by name.
+    Q_INVOKABLE QStringList skyPresets();
+    /// One shipped cube sky: its six faces pinned into the project as library
+    /// textures (services/shippedassets.h, plan item 15c), then world.sky
+    /// cubemap with their guids. Returns the face guids by slot.
+    Q_INVOKABLE QVariantMap skyPreset(const QString &name);
     Q_INVOKABLE QString sunLight(const QVariant &light = QVariant());
     Q_INVOKABLE QVariantMap get();
 
@@ -114,8 +120,9 @@ public:
 
 private:
     iris::ScenePtr sceneOrFail(const QString &verb);
-    /// Resolves a texture reference (asset guid, or a file name/path matched by
-    /// name in the project DB) to {guid, absolute path}; empty on failure.
+    /// Resolves a texture ASSET GUID to {guid, pinned absolute path}; false
+    /// when the guid names no row or no stored bytes. (It also matched file
+    /// NAMES in the project DB until plan item 15c.)
     bool resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut);
     /// One World Mode row, in the shape world.settings() reports.
     static QVariantMap rowState(const iris::ScenePtr &scene, const worldmodes::Row &r);

@@ -526,6 +526,26 @@ set_tests_properties(scripting.e2e.pinned_reopen PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# Plan item 15c: SHIPPED ASSETS THROUGH THE CAS. The default ground's tile, the
+# default particle image, a material preset's maps and a sky preset's faces are
+# pinned library textures saved by guid (one row per library), and nothing
+# copies a shipped file into a project folder or the working directory. The
+# wrapper runs the document half (--headless), the rigged-model arm (a placed
+# rig keeps its clips after its source file is gone — the one real consumer the
+# deleted by-name lookup had) and then sweeps the disk.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shipped_assets)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.shipped_assets
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/shipped_assets.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shipped_assets.js
+                 ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.shipped_assets PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # Post-release fix (2026-08-31): an imported textured GLB RENDERS — texture
 # properties resolve to store files (no raw guid reaches Texture2D::load),
 # the Mesh member carries the model bytes (scene placement has geometry),
@@ -939,6 +959,7 @@ jah_no_display(
     scripting.e2e.image_material
     scripting.e2e.uv_tiling
     scripting.e2e.pinned_reopen
+    scripting.e2e.shipped_assets
     scripting.e2e.world_modes
     scripting.e2e.looks
     scripting.e2e.rayon

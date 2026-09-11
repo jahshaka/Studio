@@ -48,17 +48,8 @@ AssetRecord Database::fetchAsset(const QString &)
     return AssetRecord();
 }
 
-QString Database::fetchAssetGUIDByName(const QString &name, const QString &)
-{
-    // ONE resolvable name, so a panel suite can drive an asset row end to end
-    // (the sky section's equirect pick, and anything else that turns a picked
-    // file into a library guid). Everything else is unknown, as before — the
-    // rows that must cope with "not in the library" still get that answer.
-    return name == QLatin1String("stub-asset.png") ? QStringLiteral("stub-guid") : QString();
-}
-
-MaterialReader::MaterialReader(TextureSource texSrc, QString globalSourceFolder)
-    : textureSource(texSrc), globalSourceFolder(globalSourceFolder)
+MaterialReader::MaterialReader(TextureSource texSrc)
+    : textureSource(texSrc)
 {
 }
 

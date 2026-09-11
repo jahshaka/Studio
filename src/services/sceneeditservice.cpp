@@ -20,7 +20,6 @@ For more information see the LICENSE file
 #include "services/assetclosure.h"
 #include "services/assetstorepaths.h"
 
-#include <QBuffer>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
@@ -70,6 +69,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/nodenaming.h"
 #include "services/imagematerial.h"
 #include "services/projectassets.h"
+#include "services/shippedassets.h"
 #include "services/scenenodehelper.h"
 #include "services/thumbnailmanager.h"
 #include "viewport/ieditorviewport.h"
@@ -285,54 +285,23 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
         QByteArray()
     );
 
-    // The default particle image. ONE per project, not one per emitter: this
-    // used to copy the file and mint a fresh Texture row on every single add, so
-    // a scene with five emitters shipped five byte-identical "Glowing
-    // Particle.jpg" assets (the Particles sample grew four of them the first
-    // time it was re-authored from a script, which is how this was noticed).
-    // Reuse the row if the project already has one.
-    const QString defaultImagePath = QDir(project->getProjectFolder()).filePath("Glowing Particle.jpg");
-    QString assetGuid = Database::fetchAssetGUIDByName("Glowing Particle.jpg",
-                                                       project->getProjectGuid());
-    if (assetGuid.isEmpty()) {
-        // if we reached this far, the project dir has already been created
-        // we can copy some default assets to each project here
-        QFile::copy(IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
-                    defaultImagePath);
-
-        auto thumb = ThumbnailManager::createThumbnail(
-            IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"), 72, 72);
-
-        QByteArray thumbnailBytes;
-        QBuffer buffer(&thumbnailBytes);
-        buffer.open(QIODevice::WriteOnly);
-        QPixmap::fromImage(thumb->thumb).save(&buffer, "PNG");
-
-        const QString tileGuid = GUIDManager::generateGUID();
-        assetGuid = db->createAssetEntry(tileGuid,
-            "Glowing Particle.jpg",
-            static_cast<int>(ModelTypes::Texture),
-            project->getProjectGuid(),
-            project->getProjectGuid(),
-            QString(),
-            QString(),
-            thumbnailBytes);
-    }
-
-    db->createDependency(
-        static_cast<int>(ModelTypes::ParticleSystem),
-        static_cast<int>(ModelTypes::Texture),
-        nodeGuid, assetGuid,
-        project->getProjectGuid()
-    );
-
-    node->setTexture(iris::Texture2D::load(defaultImagePath));
-
-    auto assetTexture = new AssetTexture;
-    assetTexture->fileName = "Glowing Particle.jpg";
-    assetTexture->assetGuid = assetGuid;
-    assetTexture->path = defaultImagePath;
-    AssetManager::addAsset(assetTexture);
+    // The default particle image — a LIBRARY TEXTURE pinned into the project
+    // (plan item 15c), bound through setParticleTexture, the same door the
+    // emitter panel's image row and node.setParticleTexture use: pin, the
+    // ParticleSystem->Texture dependency, the pinned bytes. ONE row per
+    // library, not per emitter or per project — the shipped file is identified
+    // by its content, so the fifth emitter and the next project reuse the row
+    // the first one imported. (It used to be a QFile::copy into the project
+    // folder plus a bare "Glowing Particle.jpg" row found again BY NAME, and
+    // before that a fresh row per add.) With no project open there is nothing
+    // to pin into: the emitter renders the shipped file and nothing is saved.
+    const ShippedAssets::Pinned image = ShippedAssets::pinTexture(
+        IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
+        QStringLiteral("Glowing Particle.jpg"), db, project);
+    if (!image.guid.isEmpty()) setParticleTexture(node, image.guid);
+    else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path));
+    if (!image.error.isEmpty())
+        irisLog("addParticleSystem: the default particle image was not bound - " + image.error);
 
     addNodeToScene(node);
     return node;
@@ -375,7 +344,7 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     auto reader = new SceneReader;
     reader->setDatabaseHandle(db);
     reader->setProject(project);
-    reader->setBaseDirectory(project->getProjectFolder());
+    reader->setLibrarySource();
     iris::SceneNodePtr node = reader->readSceneNode(document);
     delete reader;
     // The reader returns null for a blob whose root is a node type this build
@@ -702,17 +671,15 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
     particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
     {
         // The stored value is an asset guid: resolve it through the CAS (the
-        // pinned bytes in project context) — the flat projectFolder/name join
-        // pointed at a folder the pipeline no longer populates.
+        // pinned bytes in project context, else the library source). The flat
+        // projectFolder/name join that followed is gone (plan item 15c):
+        // nothing writes asset files into a project folder any more.
         auto textureGuid = pDefs["texture"].toString();
         if (!textureGuid.isEmpty()) {
-            QSqlDatabase conn = QSqlDatabase::database();
-            QString texPath = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
-                                                      project->getProjectGuid(), textureGuid);
-            if (texPath.isEmpty())
-                texPath = IrisUtils::join(project->getProjectFolder(),
-                                          db->fetchAsset(textureGuid).name);
-            particleNode->setTexture(iris::Texture2D::load(texPath));
+            const QString texPath = AssetCas::resolvePinned(
+                QSqlDatabase::database(), AssetStorePaths::root(),
+                project->getProjectGuid(), textureGuid);
+            if (!texPath.isEmpty()) particleNode->setTexture(iris::Texture2D::load(texPath));
         }
     }
     particleNode->setVisible(pDefs["visible"].toBool(true));
@@ -913,7 +880,7 @@ iris::SceneNodePtr SceneEditService::rebuildFragment(const SceneFragment &fragme
     SceneReader reader;
     reader.setDatabaseHandle(db);
     reader.setProject(project);
-    if (project) reader.setBaseDirectory(project->getProjectFolder());
+    reader.setLibrarySource();
     return reader.readFragment(fragment);
 }
 
@@ -1151,11 +1118,45 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
     applyMaterialPreset(preset, selection->selected());
 }
 
-void SceneEditService::applyMaterialPreset(const MaterialPreset &preset, iris::SceneNodePtr target)
+void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, iris::SceneNodePtr target)
 {
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return;
+
+    // THE PRESET'S MAPS ARE LIBRARY TEXTURES (plan item 15c). A preset names
+    // files the app ships (app/content/materials/presets/...). Each one goes
+    // through the ONE import pipeline the first time any project uses it —
+    // identified by its bytes, so a second apply, a second project or the
+    // user importing the same image all land on the same row — and is pinned
+    // into this project; the material then holds the PINNED STORE OBJECT,
+    // which is what the scene writer's CAS lookup turns back into the guid on
+    // save. Resolved BEFORE the materials are built, so every per-mesh
+    // instance and the registered material asset agree.
+    //
+    // It used to register a bare row per file NAME, found again on the next
+    // apply by Database::fetchAssetGUIDByName, while the material itself kept
+    // pointing at the shipped file — so the writer could only recover the
+    // guid through its by-name fallback (deleted with this). With no project
+    // open the shipped files are used as they are.
+    MaterialPreset preset = shippedPreset;
+    QStringList textureGuids;
+    for (QString *slot : { &preset.diffuseTexture, &preset.normalTexture,
+                           &preset.baseColorMap, &preset.metallicMap, &preset.roughnessMap,
+                           &preset.pbrNormalMap, &preset.emissiveMap }) {
+        // A preset naming a missing file keeps the name: setValue clears the
+        // slot for it exactly as it always did.
+        if (slot->isEmpty() || !QFileInfo(*slot).isFile()) continue;
+        const ShippedAssets::Pinned pinned =
+            ShippedAssets::pinTexture(*slot, QString(), db, project);
+        if (!pinned.error.isEmpty()) {
+            irisLog("applyMaterialPreset: '" + *slot + "' was not pinned - " + pinned.error);
+            continue;
+        }
+        *slot = pinned.path;
+        if (!pinned.guid.isEmpty() && !textureGuids.contains(pinned.guid))
+            textureGuids.append(pinned.guid);
+    }
 
     // Each mesh gets its OWN instance: sharing one material across nodes makes
     // a later per-node edit bleed across the whole model. One undo entry
@@ -1169,55 +1170,22 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset, iris::S
     }
     undo->stack()->endMacro();
 
-    // The registration tail below (texture copies, matgen.material, asset
-    // entry, thumbnail) is per-APPLY, not per-mesh; only the Object->Material
-    // dependency rows are per-mesh.
+    // The registration tail below (matgen.material, asset entry, thumbnail) is
+    // per-APPLY, not per-mesh; only the Object->Material dependency rows are
+    // per-mesh. It is PROJECT state: with no project open (the startup
+    // placeholder, a script that never created one) the material is applied
+    // and nothing is registered — this used to insert a "Presets" folder and a
+    // Material row with an EMPTY project guid into the library, and write
+    // matgen.material into the working directory (Project::createNew's folder
+    // was the CWD until plan item 15c).
+    if (!project || project->getProjectGuid().isEmpty()) {
+        emit materialApplied(preset.type);
+        return;
+    }
 
     auto fguid = GUIDManager::generateGUID();
     if (!db->checkIfRecordExists("name", "Presets", "folders", false, project->getProjectGuid())) {
         if (!db->createFolder("Presets", project->getProjectGuid(), fguid, project->getProjectGuid(), false)) return;
-    }
-
-    // Copy the preset's textures into the project and register them FIRST:
-    // writeSceneNodeMaterial stores textures as asset guids resolved by file
-    // name, so serializing before these rows existed left the saved material
-    // asset with stale texture references (the reapplied texture vanished).
-    QStringList textureGuids;
-    for (const auto &prop : mat->properties) {
-        if (prop->type == iris::PropertyType::Texture) {
-            auto file = prop->getValue().toString();
-            if (file.isEmpty()) continue;
-            const QString fileName = QFileInfo(file).fileName();
-
-            // One row per file: reapplying a preset must not duplicate it.
-            QString fileGuid = db->fetchAssetGUIDByName(fileName, project->getProjectGuid());
-            if (fileGuid.isEmpty()) {
-                fileGuid = db->createAssetEntry(
-                    GUIDManager::generateGUID(),
-                    fileName,
-                    static_cast<int>(ModelTypes::Texture),
-                    fguid,
-                    project->getProjectGuid(),
-                    QString(),
-                    QString(),
-                    QByteArray(),
-                    QByteArray(),
-                    QByteArray()
-                );
-            }
-            // Pin world (phase 4): the texture's bytes go into the CAS under
-            // the row's guid and the project pins them — no flat project-
-            // folder copy, and the readers resolve pin-first.
-            {
-                QSqlDatabase conn = QSqlDatabase::database();
-                const QString root = AssetStorePaths::root();
-                QString oid, casError;
-                if (AssetCas::ingestFile(conn, root, file, fileGuid,
-                                         QStringLiteral("source"), fileName, &oid, &casError))
-                    AssetCas::writePin(conn, project->getProjectGuid(), fileGuid, oid);
-            }
-            textureGuids.append(fileGuid);
-        }
     }
 
     QJsonObject material;

@@ -36,20 +36,21 @@ enum class TextureSource
 class MaterialReader : public AssetIOBase
 {
 	TextureSource textureSource;
-	QString globalSourceFolder;
 
 	// The live Project, injected by every construction site (Phase 4: was the
 	// Globals::project static). Only read when textureSource == Project.
 	Project *project = nullptr;
 public:
-    MaterialReader(TextureSource texSrc = TextureSource::Project, QString globalSourceFolder = "");
-	void setSource(TextureSource texSrc, QString globalSrcFolder);
+    explicit MaterialReader(TextureSource texSrc = TextureSource::Project);
+	void setSource(TextureSource texSrc);
 	void setProject(Project *p) { project = p; }
 
 	/// Pin-world texture resolution (phase 4): guid → project pin → library
-	/// source → the explicit global folder by recorded name (preview loads).
-	/// The flat join(projectFolder, name) resolution is GONE.
-	QString resolveTextureGuid(const QString &guid, Database *db);
+	/// source (GlobalAssets: the library source alone). Nothing else — both
+	/// folder-by-recorded-NAME fallbacks (the project folder's and the
+	/// "global source folder"'s) are gone with the files they looked for
+	/// (plan item 15c: no asset file is ever copied into a folder by name).
+	QString resolveTextureGuid(const QString &guid);
 
 	/// A stored texture reference that names the OBJECT a texture was imported
 	/// inside, repaired to the member texture the SLOT must have meant — the

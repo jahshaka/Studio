@@ -14,15 +14,14 @@
 //   2. a saved project material asset applied by guid -> real PbrMaterial
 //      (FAILED before the fix: nothing persistent was applied);
 //   3. every PBR property — scalars, colors, alpha/glass mode, textureScale,
-//      texture maps — survives save/close/open byte-for-byte (paths retarget
-//      into the project folder).
+//      texture maps — survives save/close/open byte-for-byte (maps are pinned
+//      library textures saved by guid — plan item 15c).
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
 function near(a, b) { return Math.abs(a - b) < 1e-3; }
-function basename(p) { return ("" + p).split("/").pop(); }
 
 var guid = project.create("PBR Materials " + Date.now());
 assert(guid.length > 10, "project.create");
@@ -40,7 +39,20 @@ var matA = material.get(cubeA);
 var matB = material.get(cubeB);
 assert(near(matA.roughnessLowerBound, 0.92), "child A got the preset (roughnessLowerBound)");
 assert(near(matB.roughnessLowerBound, 0.92), "child B got the preset");
-assert(basename(matA.baseColorMap) === "Brick_Ground_01_UV_H_CM_1_COLOR.png", "child A got the preset's baseColorMap");
+// The preset's map is a PINNED LIBRARY TEXTURE (plan item 15c): the document
+// renders the store object (named by its sha256, so the rendered path's file
+// name says nothing), and the scene saves the texture's GUID. So the map is
+// identified the way the document identifies it — the saved guid is a texture
+// this project holds, and that texture is the preset's image.
+var savedA = node.serialize(cubeA).node.material.values.baseColorMap;
+var brick = assets.list({ scope: "project", type: "texture" }).filter(function (a) {
+    return a.guid === savedA;
+})[0];
+assert(brick && brick.name === "Brick_Ground_01_UV_H_CM_1_COLOR.png",
+       "child A got the preset's baseColorMap (saved as the guid of the project's '" +
+       (brick ? brick.name : "?") + "' texture)");
+assert(/\.png$/.test(matA.baseColorMap) && matA.baseColorMap.indexOf("/objects/") > 0,
+       "and renders it from the store: " + matA.baseColorMap);
 
 // per-mesh instances: editing A must not bleed into B
 assert(material.set(cubeA, { baseColor: "#ff2200", roughness: 0.111 }), "material.set on child A");

@@ -3395,27 +3395,6 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
     return files;
 }
 
-QString Database::fetchAssetGUIDByName(const QString & name, const QString &projectGuid)
-{
-	QSqlQuery query;
-	query.prepare("SELECT guid FROM assets WHERE name = ? AND project_guid = ?");
-	query.addBindValue(name);
-	query.addBindValue(projectGuid);
-
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toString();
-		}
-	}
-	else {
-		irisLog(
-			"There was an error fetching a guid for an asset (" + name + ")" + query.lastError().text()
-		);
-	}
-
-	return QString();
-}
-
 QString Database::fetchObjectMesh(const QString &guid, const int ertype, const int eetype)
 {
 	QSqlQuery query;

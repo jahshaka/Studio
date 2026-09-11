@@ -45,6 +45,7 @@ For more information see the LICENSE file
 #include "commands/scenepropertycommand.h"
 #include "commands/sunlightlinkcommand.h"
 #include "services/jahlog.h"
+#include "services/shippedassets.h"
 
 using namespace scriptmod;
 
@@ -318,7 +319,13 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
-          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024). One call is one undo step (the sky block, a pinned detail, the texture it bound); a refused call changes nothing.",
+          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024). One call is one undo step (the sky block, a pinned detail, the texture it bound); a refused call changes nothing.",
+          Needs::Document },
+        { "skyPresets", "world.skyPresets() -> [name]",
+          "The shipped cube skies — the Presets panel's Skyboxes tab — by name, in the panel's order (Cove, Hamarikyu, Bay, Field, Creek, Space). Needs no project.",
+          Needs::Document },
+        { "skyPreset", "world.skyPreset(name) -> {front, back, left, right, top, bottom}",
+          "Applies one shipped cube sky (name from world.skyPresets, case-insensitive) — exactly what clicking it in the Presets panel does. Its six face images become LIBRARY TEXTURES through the one import pipeline the first time any project uses them (identified by their bytes, so the next project reuses the same rows) and are pinned into this project; the sky is then set through world.sky cubemap with their guids, so it saves, reopens and exports like any other textured sky. Returns the six face guids by slot. One undo step for the sky (the pins and catalog rows are library state and stay). Needs an open project; an unknown name is refused with the list.",
           Needs::Document },
         { "sunLight", "world.sunLight([id|null]) -> id",
           "Sun coupling: the DIRECTIONAL light the realistic sky's sun drives, by node id. Called with no argument it reads the current link (empty string = none). Given a node id it links that light — its rotation follows the sky's sun angles from then on, in the editor and in the player. Given null or an empty string it unlinks and the light goes back to manual control with the rotation it had before it was linked. One undo step either way; only the realistic sky has a sun, so the link is inert (but remembered) under any other sky type.",
@@ -1366,29 +1373,24 @@ QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
 bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut)
 {
     if (!host.db || !host.project) return false;
-    const QString value = ref.toString();
-    if (value.isEmpty()) return false;
-
-    // guid first (assets are guid-keyed), then by file name like the sky panel
-    QString guid;
-    if (!host.db->fetchAsset(value).guid.isEmpty()) guid = value;
-    else guid = host.db->fetchAssetGUIDByName(QFileInfo(value).fileName(), host.project->getProjectGuid());
+    const QString guid = ref.toString();
     if (guid.isEmpty()) return false;
 
-    // Pin-first through the CAS (the flat projectFolder copy died with the
-    // asset pipeline — joining it resolved NOTHING for pinned textures, which
-    // silently broke world.sky's equirect/cubemap for every imported image;
-    // found building the Showroom sample, 2026-09-03). Same ladder as
-    // materialpropertywidget.cpp.
-    QSqlDatabase conn = QSqlDatabase::database();
-    QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
-                                           host.project->getProjectGuid(), guid);
-    if (path.isEmpty())
-        path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
-    if (path.isEmpty())
-        path = QDir(host.project->getProjectFolder())
-                   .filePath(host.db->fetchAsset(guid).name);
-    if (!QFileInfo::exists(path)) return false;
+    // AN ASSET GUID, and nothing else (plan item 15c). This also accepted a
+    // FILE NAME "like the sky panel", looked up with a by-name catalog query
+    // scoped to the open project — the lookup that existed to find the sky
+    // presets' copies in the project folder. The presets are pinned library
+    // textures now (world.skyPreset), a store object's file is called
+    // <sha256>.<ext>, and a name was never an identity; every caller in the
+    // tree already passes guids.
+    if (host.db->fetchAsset(guid).guid.isEmpty()) return false;
+
+    // Pin-first through the CAS (resolvePinned falls back to the library
+    // source itself). The flat projectFolder + row-name join that followed is
+    // gone with the copies it looked for.
+    const QString path = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                                 host.project->getProjectGuid(), guid);
+    if (path.isEmpty() || !QFileInfo::exists(path)) return false;
     guidOut = guid;
     pathOut = path;
     return true;
@@ -1490,10 +1492,11 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         // rotation the moment this call returns.
         scene->applySunCoupling();
     } else if (t == "equirectangular" || t == "equirect") {
-        if (!requireProject()) return false;   // texture resolution needs the project folder
+        if (!requireProject()) return false;   // texture resolution needs the project's pins
         QString guid, path;
         if (!resolveTexture(params.value("texture"), guid, path))
-            return fail("world.sky: 'texture' must be a texture asset guid or file name in the project");
+            return fail("world.sky: 'texture' must be a texture asset guid with stored bytes "
+                        "(assets.list({type:\"texture\"}) lists them)");
         scene->setSkyTexture(iris::Texture2D::load(path, false));
         QJsonObject def;
         def.insert("equiSkyGuid", guid);
@@ -1517,7 +1520,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
             if (!resolveTexture(params.value(face), guid, path))
                 return fail(QStringLiteral(
                                 "world.sky: cubemap face '%1' — '%2' is not a texture asset "
-                                "guid or a file name in the project (assets.list({type:\"texture\"}) "
+                                "guid with stored bytes (assets.list({type:\"texture\"}) "
                                 "lists them)")
                                 .arg(QString::fromLatin1(face),
                                      params.value(face).toString()));
@@ -1547,6 +1550,35 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
 
     edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Sky"));
     return true;
+}
+
+QStringList WorldApi::skyPresets()
+{
+    QStringList names;
+    for (const ShippedAssets::SkyPreset &preset : ShippedAssets::skyPresets()) names << preset.name;
+    return names;
+}
+
+QVariantMap WorldApi::skyPreset(const QString &name)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.skyPreset"));
+    if (!scene) return QVariantMap();
+    if (!requireProject()) return QVariantMap();
+
+    // The SAME door the Presets panel uses (services/shippedassets.h): the
+    // faces are pinned library textures, never files copied into the project
+    // folder under bare rows that only a by-name lookup could find again.
+    QString error;
+    const QStringList guids = ShippedAssets::pinSkyPreset(name, host.db, host.project, &error);
+    if (guids.size() != 6) {
+        fail(QStringLiteral("world.skyPreset: %1").arg(error));
+        return QVariantMap();
+    }
+    static const char *const faces[] = { "front", "back", "left", "right", "top", "bottom" };
+    QVariantMap byFace;
+    for (int i = 0; i < 6; ++i) byFace.insert(QLatin1String(faces[i]), guids[i]);
+    if (!sky(QStringLiteral("cubemap"), byFace)) return QVariantMap();
+    return byFace;
 }
 
 QVariantMap WorldApi::get()

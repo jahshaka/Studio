@@ -700,14 +700,11 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 const auto record = host.db->fetchAsset(ref);
                 if (record.guid.isEmpty())
                     return fail(QStringLiteral("material.set: no texture file or asset '%1'").arg(ref));
-                QSqlDatabase conn = QSqlDatabase::database();
-                QString resolved = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
-                                                           host.project->getProjectGuid(), ref);
-                if (resolved.isEmpty())
-                    resolved = AssetCas::resolveSource(conn, AssetStorePaths::root(), ref);
-                if (resolved.isEmpty())
-                    resolved = QDir(host.project->getProjectFolder()).filePath(record.name);
-                newValue = resolved;
+                // The pinned bytes, else the library source (resolvePinned
+                // falls back itself). No projectFolder + row-name join after
+                // it (plan item 15c): nothing puts asset files there.
+                newValue = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                                   host.project->getProjectGuid(), ref);
             }
         }
 

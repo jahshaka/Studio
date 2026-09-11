@@ -43,10 +43,9 @@ class SceneWriter : public AssetIOBase
 	// item 7). It was DEAD: `setDatabaseHandle` had no caller on a writer (all
 	// seven were SceneReader / asset-panel objects with a setter of the same
 	// name), so it stayed null for the process's whole life while two writer
-	// paths dereferenced it — UB that only ever "worked" because
-	// Database::fetchAssetGUIDByName touches no member. Those two sites call
-	// it on the CLASS now (scenewriter.cpp), which is what they always meant,
-	// and the member is gone.
+	// paths dereferenced it — UB that only ever "worked" because the by-name
+	// lookup they called touched no member. The member went first; the by-name
+	// lookup itself went with plan item 15c (shipped assets through the CAS).
 	static Project *projectHandle;
 
 	/// The base directory the STATIC writers relativize against.
@@ -112,12 +111,12 @@ public:
 
     /// The asset guid behind a RESOLVED file path, for the writers that
     /// persist references as guids (particle emitters, material texture
-    /// properties, skeletal-clip sources). Goes through the CAS oid first —
-    /// since the store landed an object's file name is its sha256, so the old
-    /// match-by-display-name found nothing and the reference was written as ""
-    /// — then falls back to the legacy by-name lookup for files that still
-    /// live in a project folder. Empty means "not a catalogued asset";
-    /// callers decide what to write then.
+    /// properties, skeletal-clip sources). Goes through the CAS oid — since
+    /// the store landed an object's file name is its sha256, so a
+    /// match-by-display-name finds nothing — and nothing else: the by-name
+    /// fallback for files copied into a project folder is gone with its last
+    /// producers (plan item 15c). Empty means "not a store object of this
+    /// project's library"; callers decide what to write then.
     ///
     /// `prefer` says what the reference MEANS, because one stored object can
     /// back several assets: a texture map must ask for the Texture asset or it

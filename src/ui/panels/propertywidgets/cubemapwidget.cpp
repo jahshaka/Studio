@@ -12,6 +12,9 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 #include "irisgl/core/irisutils.h"
 #include "data/project.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "ui/style/stylesheet.h"
@@ -267,7 +270,12 @@ void CubeMapButton::dropEvent(QDropEvent* event)
 	// extend getting guid to filepicker dialog...
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
 		textureGuid = roleDataMap.value(3).toString();
-		setImage(IrisUtils::join(parent->project->getProjectFolder(), roleDataMap.value(1).toString()));
+		// The dropped row's bytes through the store, not the project folder +
+		// its display name (a file nothing puts there — plan item 15c).
+		setImage(AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+		                                 parent->project ? parent->project->getProjectGuid()
+		                                                 : QString(),
+		                                 textureGuid));
 	}
 
 	event->acceptProposedAction();
@@ -335,6 +343,10 @@ void CubeMapButton::selectImage()
 {
 	auto widget = new AssetPickerWidget(ModelTypes::Texture);
 	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
+		// The picked row's guid travels with its path, exactly as a drop's does:
+		// the slot used to keep whatever guid the last DROP left behind, so a
+		// pick after a drop reported the dropped asset.
+		textureGuid = item->data(MODEL_GUID_ROLE).toString();
 		setImage(item->data(Qt::UserRole).toString());
 	}); 
 }

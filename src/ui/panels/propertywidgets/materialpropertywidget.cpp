@@ -198,16 +198,12 @@ void MaterialPropertyWidget::materialChanged(int index)
         auto guidValue = prop->getValue().toString();
         if (guidValue.isEmpty() || QFile::exists(guidValue)) continue;
         // guid-valued texture reference: resolve through the CAS (pinned in
-        // project context); the flat projectFolder join stays as a last-resort
-        // fallback for pre-pipeline projects.
-        QSqlDatabase conn = QSqlDatabase::database();
-        QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
-                                               project->getProjectGuid(), guidValue);
-        if (path.isEmpty())
-            path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guidValue);
-        if (path.isEmpty())
-            path = QDir(project->getProjectFolder()).filePath(db->fetchAsset(guidValue).name);
-        if (QFile::exists(path))
+        // project context, else the library source). The flat projectFolder
+        // + row-name join that followed is gone (plan item 15c).
+        const QString path = AssetCas::resolvePinned(QSqlDatabase::database(),
+                                                     AssetStorePaths::root(),
+                                                     project->getProjectGuid(), guidValue);
+        if (!path.isEmpty() && QFile::exists(path))
             material->setValue(prop->name, path);
     }
 
@@ -259,13 +255,23 @@ void MaterialPropertyWidget::updateTextureDependency(iris::Property *prop)
 {
     if (!db || !project) return;
 
+    // The texture row holds a RESOLVED PATH; the asset behind it is found the
+    // way the scene writer finds it — through the store object's oid, never by
+    // the file's NAME (plan item 15c: a pinned texture's file is called
+    // <sha256>.<ext>, so the by-name lookup that was here matched nothing for
+    // any image a user imported, and both dependency writes below were dead).
+    auto textureGuidFor = [this](const QString &path) {
+        if (path.isEmpty() || project->getProjectGuid().isEmpty()) return QString();
+        return AssetCas::guidForStorePath(QSqlDatabase::database(), AssetStorePaths::root(),
+                                          path, project->getProjectGuid(),
+                                          AssetCas::GuidPreference::Texture);
+    };
+
     // HANDLE CASE where the widget isn't deselected
-    QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), project->getProjectGuid());
+    const QString assetGuid = textureGuidFor(prop->getValue().toString());
     if (assetGuid.isEmpty()) {
-        db->deleteDependency(
-            meshNodeGuid,
-            db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName(), project->getProjectGuid())
-        );
+        const QString previous = textureGuidFor(existingTextures.value(prop->name));
+        if (!previous.isEmpty()) db->deleteDependency(meshNodeGuid, previous);
     }
     else {
         db->createDependency(

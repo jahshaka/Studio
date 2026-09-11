@@ -6,14 +6,18 @@
 // reopen it, change nothing — and the same ground renders 255,255,255. It was
 // never a lighting bug: the scene's environment (ambient, exposure, world
 // mode, sky, every light) round-tripped perfectly. What was lost was the
-// ground's DIFFUSE TEXTURE. MainWindow::createDefaultScene copies Tile.png
-// into the project folder and registers a bare catalog row, so the asset has
+// ground's DIFFUSE TEXTURE. MainWindow::createDefaultScene copied Tile.png
+// into the project folder and registered a bare catalog row, so the asset had
 // no store object and no pin; SceneWriter::assetGuidForTexturePath still
-// recovered its guid through the by-name catalog lookup, but the reader's
+// recovered its guid through a by-name catalog lookup, but the reader's
 // matching branch had been deleted when the pin world landed — so the saved
 // guid resolved to an empty path and the floor reopened as bare white diffuse.
-// Fix: MaterialReader::resolveTextureGuid grew the reader's half of that same
-// legacy fallback.
+// First fix (2026-09-04): the reader grew its half of that legacy fallback.
+// Real fix (plan item 15c): the tile is a pinned library texture imported
+// through the one pipeline, the writer and both readers resolve it through
+// the CAS like any texture, and every by-name fallback is deleted — so this
+// gate now proves the round trip with no name-matching left anywhere
+// (scripting.e2e.shipped_assets asserts the identity half: guid, pin, store).
 //
 // Three more round-trip defects fell out of the field diff and are gated here
 // too: the Shadow Caster flag was never serialized at all (the Ground is
