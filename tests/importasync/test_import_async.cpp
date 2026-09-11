@@ -9,11 +9,11 @@
 //   3. Cancel mid-import: cancelling at the store stage rolls the
 //      transaction back — no rows, no files rows, no orphan CAS objects.
 //   4. The synchronous facade (assets.importFile's path) is unchanged.
-//   5. The completion tail (the UI-freeze-on-finish fix): the threaded mesh
-//      import carries the worker-parsed fragment (ImportResult::node);
-//      ImportMeshTail feeds it to the viewer with NO second assimp parse
-//      (AssetHelper::meshParseCount) as a deep duplicate (the session node
-//      stays pristine); ImportTailQueue pumps one item per event-loop turn
+//   5. The completion tail (the UI-freeze-on-finish fix): ImportMeshTail
+//      previews the COMMITTED asset by guid (smoke S6 — the import-time
+//      fragment ImportResult used to carry is deleted) with NO second assimp
+//      parse of its own (AssetHelper::meshParseCount); ImportTailQueue pumps
+//      one item per event-loop turn
 //      in order, progress + finished observed — completion signals precede
 //      every tail item, and the viewer/tile update hook fires per item.
 #include <QApplication>
@@ -428,8 +428,10 @@ int main(int argc, char **argv)
         CHECK(results.size() == 1 && results[0].ok(), "tail-section mesh import ok");
         CHECK(sequence == QStringList({ "fileFinished", "batchFinished" }),
               "completion order: fileFinished precedes finished, tail not yet run");
-        CHECK(!results[0].node.isNull(),
-              "the threaded mesh import carries the worker-parsed fragment (tail input)");
+        // (No "the import carries the worker-parsed fragment" check any more:
+        // the tail stopped taking that fragment in smoke S6 and the field that
+        // carried it, ImportResult::node, is deleted — lane L11. What the tail
+        // takes instead, the committed asset by guid, is asserted below.)
         CHECK(AssetHelper::meshParseCount() == parsesBefore + 1,
               "the pipeline parsed the model exactly once (convert)");
 

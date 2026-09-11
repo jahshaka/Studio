@@ -39,6 +39,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
@@ -317,8 +319,14 @@ int main(int argc, char **argv)
                   QString("4: %1 gets a Mesh member row").arg(f).toUtf8().constData());
             CHECK(!AssetCas::resolveSource(conn, root, result.assetGuid).isEmpty(),
                   QString("4: %1's source blob is in the CAS").arg(f).toUtf8().constData());
-            CHECK(!result.node.isNull(),
-                  QString("4: %1 hands back the parsed fragment (the completion tail's node)")
+            // The object's stored BLOB is what every consumer instantiates from
+            // now — the Assets page's completion tail included (smoke S6); the
+            // parsed fragment the pipeline used to hand back beside it
+            // (ImportResult::node) is deleted.
+            const QJsonObject blob = QJsonDocument::fromJson(db.fetchAssetData(result.assetGuid))
+                                         .object();
+            CHECK(!blob.isEmpty() && blob.contains("type"),
+                  QString("4: %1 commits a readable scene blob (what the tail instantiates)")
                       .arg(f).toUtf8().constData());
         }
         AssetStorePaths::setRootOverride(QString());

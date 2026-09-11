@@ -1519,9 +1519,10 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
 
 // The mesh tail, one item per event-loop turn (see scheduleViewerTails). The
 // pipeline half already ran on the batch runner's worker; ImportMeshTail
-// consumes ITS parsed fragment (ImportResult::node) — engine upload +
-// offscreen render only, no second assimp parse — and the tile that appeared
-// mid-batch takes the rendered thumbnail.
+// previews the COMMITTED asset by guid (the library blob — smoke S6; the
+// import-time fragment it used to take is gone, and so is the ImportResult
+// field that carried it) and the tile that appeared mid-batch takes the
+// stored thumbnail.
 void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fileName)
 {
     // The grid tile and metadata pane read the `filename` member, which only
