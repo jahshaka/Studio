@@ -29,6 +29,7 @@ class Subscriber;
 #include <QLineEdit>
 #include <QHBoxLayout>
 #include <QComboBox>
+#include <QVariantList>
 
 #include "io/assetmanager.h"
 #include "ui/dialogs/progressdialog.h"
@@ -237,8 +238,9 @@ public:
 
 	AssetItem assetItem;
 
-	bool showDependencies;
 	int activeFilter = -1;
+	/// A pin change for the open project queued a repopulate (coalesced).
+	bool membershipRefreshPending = false;
 
     void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
 
@@ -260,9 +262,17 @@ public:
 	void addItem(const FolderRecord &folderData);
 	void addItem(const AssetRecord &assetData);
 	void addCrumbs(const QVector<FolderRecord> &folderData);
-    /// The avatar rows the tray collapse resolves closures against (S9).
-    QVector<AssetRecord> trayAvatarRows() const;
-    void updateAssetView(const QString &path, int filter = 0, bool showDependencies = false);
+    /// Lists `path` (a folder guid; the project guid = the root) through the
+    /// tray rule (services/assettray.h) — the same listing assets.list({tray:
+    /// true}) answers with.
+    void updateAssetView(const QString &path, int filter = 0);
+    /// What the tray is SHOWING, in order: [{guid, name, folder}] (`name` is
+    /// the catalog name for an asset, the label for a folder) — the
+    /// editor.trayAssets verb, which is how a suite proves the panel and the
+    /// verb agree. A repopulate queued by a pin change is applied first.
+    QVariantList shownTiles();
+    /// Applies a repopulate a pin change queued (no-op when none is pending).
+    void flushPendingRefresh();
     void updateAssetContentsView(const QString &guid);
     void trigger();
     void refresh();

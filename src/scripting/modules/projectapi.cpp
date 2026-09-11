@@ -393,7 +393,7 @@ QVariantMap ProjectApi::exportManifest(const QString &dir)
     // Reference-with-pin (phase 4): pinned LIBRARY assets are members too.
     QStringList guids;
     for (const auto &record :
-         host.db->fetchChildAssets(projectGuid, projectGuid, -1, true))
+         host.db->fetchChildAssets(projectGuid, projectGuid, -1))
         if (!record.guid.isEmpty() && !guids.contains(record.guid)) guids.append(record.guid);
     {
         QSqlQuery pins(QSqlDatabase::database());

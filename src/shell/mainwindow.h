@@ -274,6 +274,9 @@ public:
     /// host). The `assets.select`/`preview`/`fly` verbs drive it — the shell
     /// owns the widget, the verbs own the capability (SCRIPTING_SPEC §2.3).
     AssetView *assetsPage() const { return _assetView; }
+    /// The editor's ASSET TRAY panel (the Assets tab of the bottom tray), or
+    /// null before the editor is built. editor.trayAssets reads it.
+    AssetWidget *assetTray() const { return assetWidget; }
 
     // ---- the editor's BOTTOM TRAY (smoke S1, owner 2026-09-11) -------------
     // One widget along the bottom of the editor with TABS at its top: "Assets"

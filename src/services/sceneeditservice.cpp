@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
 
+#include <functional>
+
 #include <algorithm>
 
 #include "services/assetcas.h"
@@ -56,6 +58,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
+#include "commands/resetmaterialcommand.h"
 #include "commands/deletescenenodecommand.h"
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
@@ -68,6 +71,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/fitsize.h"
 #include "services/nodenaming.h"
 #include "services/imagematerial.h"
+#include "services/materialdefaults.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
 #include "services/scenenodehelper.h"
@@ -941,6 +945,17 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     // — it calls rebuildFragment directly, because restoring a deleted node
     // must give back the guid the rest of the document still refers to.)
     regenerateGuids(node, guidMapOut);
+    // A pasted floor is a copy, and a scene has ONE default floor
+    // (services/defaultfloor.h): the copy — and anything under it — is an
+    // ordinary mesh, as Duplicate makes it. (Here and not in rebuildFragment:
+    // an undo of a delete must give the floor back AS the floor.)
+    std::function<void(const iris::SceneNodePtr &)> clearFloor =
+        [&clearFloor](const iris::SceneNodePtr &n) {
+            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh)
+                n.staticCast<iris::MeshNode>()->defaultFloor = false;
+            for (const auto &child : n->children()) clearFloor(child);
+        };
+    clearFloor(node);
     if (!parent) parent = sc->getRootNode();
     // ...and a fresh NAME when the one it carries is already taken under that
     // parent — the same rule Duplicate uses, because a paste is a copy too
@@ -1273,7 +1288,24 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     }
     undo->stack()->endMacro();
 
+    // APPLYING IS A USE (lane L13): the project carries what its scene uses,
+    // so a library material applied by guid is pinned in as a BINDING (a
+    // tray/verb drop of a project member is already pinned — idempotent), and
+    // the node -> material edge says who uses it.
+    // Only a LIBRARY row (a project's own rows are members already — the
+    // view filter tells them apart; the row's project_guid does not, an import
+    // made with a project open records it) that the project does not pin yet:
+    // addToProject re-pins to the library's CURRENT version, which would
+    // silently upgrade an older pin.
+    if (project && !project->getProjectGuid().isEmpty()) {
+        const AssetRecord row = db->fetchAsset(assetGuid);
+        const bool libraryRow = row.view_filter == AssetViewFilter::AssetsView
+                                || row.view_filter == AssetViewFilter::Effects;
+        if (libraryRow && !db->isAssetPinnedBy(project->getProjectGuid(), assetGuid))
+            ProjectAssets::addToProject(assetGuid, db, project, ProjectAssets::AddKind::Binding);
+    }
     for (const auto &meshNode : meshes) {
+        db->deleteDependency(meshNode->getGUID(), assetGuid);
         db->createDependency(
             static_cast<int>(ModelTypes::Object),
             static_cast<int>(ModelTypes::Material),
@@ -1286,6 +1318,19 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     emit materialApplied(matObject["materialType"].toString() == "pbr"
                              ? QStringLiteral("PBR")
                              : QStringLiteral("custom"));
+    return true;
+}
+
+bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
+{
+    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
+    if (!materialdefaults::hasDefault(node)) return false;
+    QStringList defaultTextures, newlyPinned;
+    auto material = materialdefaults::create(node, db, project, &defaultTextures, &newlyPinned);
+    if (!material) return false;
+    undo->push(new ResetMaterialCommand(db, project, node.staticCast<iris::MeshNode>(),
+                                        material, defaultTextures, newlyPinned));
+    emit materialApplied(QStringLiteral("PBR"));
     return true;
 }
 

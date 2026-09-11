@@ -73,3 +73,10 @@ void SceneWriter::writeSceneNode(QJsonObject &, iris::SceneNodePtr, bool)
 void SceneEditService::notifyTransformChanged()
 {
 }
+
+// The material panel's "Reset to Default Floor" (services/materialdefaults.h)
+// calls this; the reset itself is proven by scripting.e2e.default_floor.
+bool SceneEditService::resetMaterial(iris::SceneNodePtr)
+{
+    return false;
+}

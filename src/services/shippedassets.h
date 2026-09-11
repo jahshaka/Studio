@@ -57,6 +57,9 @@ struct Pinned
     QString path;
     /// Non-empty on failure (a missing source file, an import refusal).
     QString error;
+    /// True when THIS call created the project's pin (the project did not pin
+    /// the row before) — what an undo of the call has to take back.
+    bool newlyPinned = false;
     bool ok() const { return error.isEmpty() && !path.isEmpty(); }
 };
 

@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "services/imagematerial.h"
 #include "services/livetextures.h"
 #include "services/projectassets.h"
+#include "services/materialdefaults.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "viewport/ieditorviewport.h"
@@ -487,6 +488,9 @@ QVector<VerbInfo> MaterialApi::verbs() const
           Needs::Document },
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
+          "A texture ASSET guid on a map key pins that image into the open project as a binding "
+          "(the scene uses it; no companion material is minted) — so it is a tile in the editor's "
+          "asset tray (assets.list({scope: 'project', tray: true})) and a project export carries it. "
           "THE UV TRANSFORM takes two spellings: `textureScale` and `textureOffset` accept a "
           "two-element array [u, v] for per-axis tiling/offset, or a plain number meaning both "
           "axes (which is what every script written before per-axis tiling says, and it keeps "
@@ -517,6 +521,20 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "deriving keys from 'rows': the two agree today but the slot list is what material.set "
           "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
           "NOT writable on a PBR material and are refused by name.",
+          Needs::Document },
+        { "reset", "material.reset(nodeId) -> bool",
+          "RESETS the node's material to the node's OWN DEFAULT — the material panel's reset, as a "
+          "verb (owner, 2026-09-12). A node has a default only when something provides one; the "
+          "scene's DEFAULT FLOOR (node.properties(id).defaultFloor, the Ground every new scene and "
+          "every shipped demo stands on) is the first and only provider today, and its default is "
+          "the floor's own checker material (the shipped tile, textureScale 4, roughness 1, "
+          "metallic 0) — never a shared library row. The reset CLEARS what the user applied from "
+          "the NODE: it stops using an applied material asset (material.apply) and the textures "
+          "its slots were bound to. Project membership is not touched: the applied material stays "
+          "in the project (and the tray), exactly as when the material on any other mesh is "
+          "replaced — assets.removeFromProject takes it out. ONE undo step (undo puts the user's "
+          "material and its use back). A node with no default of its own answers false, changes "
+          "nothing and records why (app.lastError).",
           Needs::Document },
         { "setDetail", "material.setDetail(nodeId, layer, {map, normalMap, blend, offset:{x,y}, scale:{x,y}, weight, normalWeight}) -> bool",
           "One DETAIL LAYER, ergonomically. A detail layer is a second diffuse map blended into "
@@ -631,6 +649,10 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     const QVariantMap expanded = expandUvPairKeys(values, &pairError);
     if (!pairError.isEmpty()) return fail(pairError);
 
+    // Texture ASSETS this call binds to a slot (by guid) — pinned into the
+    // project once every key has been accepted (below).
+    QStringList boundTextures;
+
     for (auto it = expanded.constBegin(); it != expanded.constEnd(); ++it) {
         const QString &key = it.key();
         QVariant newValue = normalizeJs(it.value());
@@ -705,6 +727,8 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 // it (plan item 15c): nothing puts asset files there.
                 newValue = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
                                                    host.project->getProjectGuid(), ref);
+                if (record.type == static_cast<int>(ModelTypes::Texture) && !boundTextures.contains(ref))
+                    boundTextures << ref;
             }
         }
 
@@ -769,7 +793,56 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
 
         host.services->undo->push(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));
     }
+
+    // A MATERIAL SLOT BOUND BY GUID PINS THE IMAGE (lane L13): a scene now
+    // uses it, so the project must carry it — as a BINDING, like the decal,
+    // particle and light-profile bindings (it is referenced, not added: no
+    // companion material is minted). It is then a tile in the editor's tray
+    // and a project export carries it; before, the slot rendered the library
+    // bytes and the project never knew it used them.
+    //
+    // (No node -> texture dependency edge, unlike the material panel's texture
+    // row: the Assets page's LIBRARY grid still hides every dependee —
+    // Database::dependeeSubquery treats a USE edge like an import's membership
+    // edge — so the edge would take the image out of the library. Recorded for
+    // the lead: narrow that filter to library-asset dependers, then give this
+    // verb the panel's edge.)
+    // Only a LIBRARY image (a project's own rows are members already — the view
+    // filter tells them apart; project_guid does not, an import made with a
+    // project open records it) that the project does not pin yet: addToProject
+    // re-pins to the library's CURRENT version, which would silently upgrade an
+    // older pin.
+    if (!boundTextures.isEmpty() && host.db && host.isProjectOpen()) {
+        const QString projectGuid = host.project->getProjectGuid();
+        for (const QString &textureGuid : boundTextures) {
+            if (host.db->isAssetPinnedBy(projectGuid, textureGuid)) continue;
+            const AssetRecord row = host.db->fetchAsset(textureGuid);
+            if (row.view_filter != AssetViewFilter::AssetsView
+                && row.view_filter != AssetViewFilter::Effects)
+                continue;
+            ProjectAssets::addToProject(textureGuid, host.db, host.project,
+                                        ProjectAssets::AddKind::Binding);
+        }
+    }
     return true;
+}
+
+bool MaterialApi::reset(const QString &nodeId)
+{
+    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.reset"));
+    if (!meshNode) return false;
+    if (!host.services || !host.services->sceneEdit)
+        return fail("material.reset: not available in this session");
+    // THE PROVIDER QUESTION (services/materialdefaults.h): a node with no
+    // default of its own is a plain "no", not a misuse.
+    if (!materialdefaults::hasDefault(meshNode))
+        return refuse(QStringLiteral("material.reset: '%1' has no default material of its own — "
+                                     "only the scene's default floor provides one "
+                                     "(material.apply puts a different material on any mesh)")
+                          .arg(meshNode->getName()));
+    return host.services->sceneEdit->resetMaterial(meshNode)
+           || refuse(QStringLiteral("material.reset: the default material of '%1' could not be built")
+                         .arg(meshNode->getName()));
 }
 
 // ONE LAYER, THROUGH THE SAME ROWS material.set writes (MATERIAL_GAPS_SPEC

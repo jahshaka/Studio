@@ -133,6 +133,7 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
     // A BINDING: the scene refers to the image (a material slot, an emitter,
     // a sky face), exactly like a decal's map or a light's IES profile — so
     // the pin and the session entry, and never a companion material.
+    out.newlyPinned = !db->isAssetPinnedBy(projectGuid, guid);
     const ProjectAssets::Result pinned =
         ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
     if (!pinned.ok()) {

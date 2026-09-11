@@ -253,6 +253,9 @@ set(SRCS
     src/services/import/assetimporters.cpp
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
+    src/services/projectmembership.cpp
+    src/services/defaultfloor.cpp
+    src/services/materialdefaults.cpp
     src/services/shippedassets.cpp
     src/services/engineerrorpump.cpp
     src/services/framepacing.cpp
@@ -388,6 +391,7 @@ set(SRCS
     src/commands/transformscenenodecommand.cpp 
     src/commands/changematerialpropertycommand.cpp
     src/commands/changematerialcommand.cpp
+    src/commands/resetmaterialcommand.cpp
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
     src/commands/reparentscenenodecommand.cpp

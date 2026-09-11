@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/projectassets.h"
+#include "services/projectmembership.h"
 
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -108,6 +109,7 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     }
 
     result.guid = guid;
+    ProjectMembership::instance()->announce(projectGuid);
     return result;
 }
 

@@ -255,6 +255,7 @@ set_tests_properties(avatar.locomotion_mirror PROPERTIES ENVIRONMENT "QT_QPA_PLA
 add_executable(test_avatar_assets test_avatar_assets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/avatarassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp

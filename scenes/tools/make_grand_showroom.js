@@ -79,13 +79,23 @@ function slab(name, pos, scale, color, rough, metal) {
     return id;
 }
 
-var FLOOR_TOP = 0.25;    // floor slab: centre y -0.25, half-height 0.5
+// ONE FLOOR (owner, 2026-09-12: "we have two floors in the Showroom — a floor
+// under the items and a large floor under everything"). The gallery stands on
+// the scene's DEFAULT FLOOR — the Ground every new scene is born with (its
+// checker, services/defaultfloor.h) — so the floor slab this room used to lay
+// on top of it is gone, and everything that stood on the slab's top now
+// stands on y = 0.
+var FLOOR_TOP = 0.0;
 var CEIL_BOTTOM = 6.75;  // ceiling slab: centre y 7.25, half-height 0.5
 var WALL_HALF = (CEIL_BOTTOM - 0.0) / 2;   // walls span the floor line to the ceiling
 
-// A polished floor: the roughness ladder above it is only legible because the
-// floor itself reflects.
-slab("Floor",   { x: 0, y: -0.25, z: 0 },     { x: 24, y: 0.5, z: 24 }, "#5c6166", 0.32, 0.05);
+// A POLISHED floor: the roughness ladder above it is only legible because the
+// floor itself reflects. The slab's polish is the default floor's OWN material
+// in this room — roughness 0.32, metallic 0.05 on the checker — and "Reset to
+// Default Floor" (material.reset) returns it to the plain default.
+var ground = scene.find("Ground");
+assert(ground && node.property(ground, "defaultFloor") === true, "the room stands on the default floor");
+assert(material.set(ground, { roughness: 0.32, metallic: 0.05 }), "the floor's polish");
 slab("Ceiling", { x: 0, y: 7.25, z: 0 },      { x: 24, y: 0.5, z: 24 }, "#b5b5b5");
 slab("WallN",   { x: 0, y: WALL_HALF, z: 12.25 },  { x: 24, y: WALL_HALF, z: 0.5 }, "#c8452a", 0.7);  // warm
 slab("WallS",   { x: 0, y: WALL_HALF, z: -12.25 }, { x: 24, y: WALL_HALF, z: 0.5 }, "#2a56c8", 0.7);  // cold

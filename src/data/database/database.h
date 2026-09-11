@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QCryptographicHash>
 
+#include <functional>
+
 #include "data/project.h"
 
 #include "irisgl/irisglfwd.h"
@@ -140,6 +142,17 @@ public:
 							 const QByteArray &properties = QByteArray(),
 							 const AssetViewFilter view_filter = AssetViewFilter::Editor);
 
+    /// A LISTENER FOR DEPENDENCY-EDGE CHANGES. The editor's asset tray reads
+    /// USE from these edges (services/assettray.h — a directly-added image
+    /// stops folding into its companion material the moment a node uses it),
+    /// so a write here has to reach the tray the way a pin change does. Called
+    /// with the edge's project guid, or empty when the mutation cannot name
+    /// one (a delete by depender/dependee). One process-wide listener,
+    /// installed by services/projectmembership.cpp; none in a test that only
+    /// compiles this file.
+    using DependencyListener = std::function<void(const QString &projectGuid)>;
+    static void setDependencyListener(DependencyListener listener);
+
     bool createDependency(const int &dependerType,
                           const int &dependeeType,
                           const QString &depender,
@@ -256,20 +269,32 @@ public:
     /// (preflight §1.6 — Effects rows ARE library tiles; any store scan that
     /// forgets filter 3 silently skips most of a real library).
     QStringList fetchLibraryAssetGuids();
-    QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1, bool showDependencies = true);
-    /// The "hide dependees" rule as a SQL fragment, in ONE place: `column NOT
-    /// IN (the dependees of a non-avatar edge)`. Every listing that shows
-    /// top-level assets ANDs it in, and so does the import's re-listing check
-    /// (a member row must never be re-listed into a listing that hides it).
-    /// Definition + rationale: database.cpp.
+    /// Every row of `projectGuid` filed directly under `parent` (a folder, or
+    /// the project guid for the root), optionally one ModelTypes value. No
+    /// row is filtered out: the editor tray's rule is services/assettray.h,
+    /// which is where "what is a tile" is decided (the dependee filter that
+    /// used to ride here hid every asset a scene USED — lane L13).
+    QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1);
+    /// The LIBRARY grid's "hide dependees" rule as a SQL fragment: `column NOT
+    /// IN (the dependees of a non-avatar edge)`. The Assets page grid and the
+    /// import's re-listing check AND it in (a member row must never be
+    /// re-listed into a listing that hides it). NOT the editor tray's rule —
+    /// that one is services/assettray.h. Definition + rationale: database.cpp.
     static QString dependeeSubquery(const QString &column);
     /// Reference-with-pin membership (ASSET_PIPELINE_SPEC §3.1.5): the LIBRARY
     /// assets this project pinned (project_assets rows), as full catalog
-    /// records. `includeDependencies` false drops rows that exist only as a
-    /// dependency of another asset (matching fetchChildAssets' semantics).
-    /// This is THE source assets.list({scope:'project'}) and the editor's
-    /// project panel share.
-    QVector<AssetRecord> fetchProjectPinnedAssets(const QString &projectGuid, bool includeDependencies = true);
+    /// records. This is THE source assets.list({scope:'project'}) and the
+    /// editor's asset tray share.
+    QVector<AssetRecord> fetchProjectPinnedAssets(const QString &projectGuid);
+    /// The DEPENDERS of `dependee` among the dependency edges recorded for
+    /// `projectGuid` — who in this project uses the asset (a node's material
+    /// slot, the ground, a decal, an emitter, a material). Duplicates removed.
+    QStringList fetchDependers(const QString &dependee, const QString &projectGuid);
+    /// Every dependency edge `depender` has, recorded for `projectGuid` — what
+    /// a scene node USES, as the catalog records it (material.reset's
+    /// ResetMaterialCommand drops and restores a subset of these).
+    QVector<DependencyRecord> fetchNodeDependencies(const QString &depender,
+                                                    const QString &projectGuid);
     /// The other direction: which PROJECTS pin this asset (guid + name, named
     /// by the projects table; a pin whose project row is gone reports the guid
     /// as its name). This is what `assets.pins` answers and what the Assets

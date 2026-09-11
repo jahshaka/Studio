@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include <QProgressDialog>
 #include <QProcess>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QComboBox>
 
 #include <algorithm>
@@ -58,6 +59,7 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "services/assetdelete.h"
 #include "services/assettray.h"
+#include "services/projectmembership.h"
 #include "services/avatarassets.h"
 #include "services/assetmetadata.h"
 #include "services/assetservice.h"
@@ -168,14 +170,9 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	singledrag::disarmViewDrag(ui->assetView);
 
 	activeFilter = SettingsManager::getDefaultManager()->getValue("active_filter", 0).toInt();
-	showDependencies = SettingsManager::getDefaultManager()->getValue("show_dependencies", false).toBool();
-	ui->showDeps->setChecked(showDependencies);
-
-	connect(ui->showDeps, &QCheckBox::toggled, [this](bool state) {
-		showDependencies = state;
-		SettingsManager::getDefaultManager()->setValue("show_dependencies", state);
-		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
-	});
+	// (The "Show dependencies" checkbox is gone, lane L13: it switched off the
+	// dependee filter that hid every asset a scene used, and the tray has one
+	// rule now — services/assettray.h — with nothing left to switch.)
 
     ui->assetView->setItemDelegate(new ListViewDelegate());
     ui->assetView->setTextElideMode(Qt::ElideRight);
@@ -255,7 +252,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     ui->dirControls->setObjectName("DirControl");
 
     connect(goUpOneControl, &QPushButton::pressed, [this]() {
-        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, activeFilter, showDependencies);
+        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, activeFilter);
     });
 
 	setMouseTracking(true);
@@ -272,7 +269,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		currentSize = iconSize;
 		ui->assetView->setIconSize(currentSize);
 		ui->assetView->setItemDelegate(new ListViewDelegate());
-		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+		updateAssetView(assetItem.selectedGuid, activeFilter);
 	});
 
 	connect(displayListAction, &QAction::triggered, this, [this]() {
@@ -282,7 +279,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		currentSize = listSize;
 		ui->assetView->setIconSize(currentSize);
 		ui->assetView->setItemDelegate(new QStyledItemDelegate());
-		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+		updateAssetView(assetItem.selectedGuid, activeFilter);
 	});
 
 	connect(displayButton, &QPushButton::pressed, this, [this]() {
@@ -314,11 +311,10 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     // both are first-class library types with their own importer, metadata
     // block and thumbnail, and neither could be filtered for. "Music" is
     // relabelled "Audio" to match the type name the rest of the app shows.
-    // Mesh is deliberately NOT here: a mesh row is a DEPENDENCY of its Object
-    // row (Database::fetchChildAssets hides dependencies unless "Show
-    // dependencies" is on), so a Meshes filter would read as empty in the
-    // default view. Undefined / Variant / SoundEffect are enum values nothing
-    // ever writes.
+    // Mesh is deliberately NOT here: a mesh is the inside of its model and
+    // never a tray tile (services/assettray.h, rule 2), so a Meshes filter
+    // would always read as empty. Undefined / Variant / SoundEffect are enum
+    // values nothing ever writes.
     assetFilterCombo = new QComboBox(this);
     assetFilterCombo->addItem("All Assets", QVariant::fromValue(0));
     assetFilterCombo->addItem("Objects", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
@@ -347,7 +343,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     connect<void(QComboBox::*)(int)>(assetFilterCombo, &QComboBox::currentIndexChanged, this, [&](int index) {
 		activeFilter = assetFilterCombo->itemData(index).toInt();
 		SettingsManager::getDefaultManager()->setValue("active_filter", activeFilter);
-        updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+        updateAssetView(assetItem.selectedGuid, activeFilter);
     });
 
     ui->filterWidget->setStyleSheet(StyleSheet::AssetWidgetFilterPane());
@@ -362,6 +358,29 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	progressDialog->setLabelText("Importing assets...");
 
 	setStyleSheet(StyleSheet::AssetWidgetPanel());
+
+	// THE TRAY FOLLOWS THE PROJECT'S PINS (lane L13). Every pin change for the
+	// open project — a verb's add, a binding, a paste, a remove — is announced
+	// by the one function that makes it (services/projectmembership.h), and
+	// the tray repopulates on the next event-loop turn: coalesced, because a
+	// paste or a closure can pin a dozen assets in one gesture. It used to be
+	// stale until the user clicked a folder.
+	connect(ProjectMembership::instance(), &ProjectMembership::changed, this,
+	        [this](const QString &projectGuid) {
+		// Empty = "some project" (an edge delete that cannot name one).
+		if (!project || project->getProjectGuid().isEmpty()) return;
+		if (!projectGuid.isEmpty() && project->getProjectGuid() != projectGuid) return;
+		if (membershipRefreshPending) return;
+		membershipRefreshPending = true;
+		QTimer::singleShot(0, this, [this]() { flushPendingRefresh(); });
+	});
+}
+
+void AssetWidget::flushPendingRefresh()
+{
+	if (!membershipRefreshPending) return;
+	membershipRefreshPending = false;
+	if (project && !project->getProjectGuid().isEmpty()) refresh();
 }
 
 void AssetWidget::trigger()
@@ -413,7 +432,7 @@ void AssetWidget::trigger()
 
 void AssetWidget::refresh()
 {
-	updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+	updateAssetView(assetItem.selectedGuid, activeFilter);
 	populateAssetTree(false);
 }
 
@@ -515,7 +534,7 @@ void AssetWidget::populateAssetTree(bool initialRun)
 	ui->assetTree->expandItem(rootTreeItem);
 
 	if (initialRun) {
-		updateAssetView(project->getProjectGuid(), activeFilter, showDependencies);
+		updateAssetView(project->getProjectGuid(), activeFilter);
 		rootTreeItem->setSelected(true);
 		assetItem.item = rootTreeItem;
 		assetItem.selectedGuid = project->getProjectGuid();
@@ -571,11 +590,10 @@ void AssetWidget::addItem(const FolderRecord &folderData)
 
 void AssetWidget::addItem(const AssetRecord &assetData)
 {
-    auto prop = QJsonDocument::fromJson(assetData.properties).object();
-    if (!prop["type"].toString().isEmpty()) {
-        // No need to check further, this is a builtin asset
-        return;
-    }
+    // (The built-in skip that returned here moved INTO the tray rule —
+    // services/assettray.h, rule 4 — so the panel and assets.list({tray:true})
+    // run the same one. Rows arrive here already decided.)
+    const auto prop = QJsonDocument::fromJson(assetData.properties).object();
 
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setData(Qt::DisplayRole, QFileInfo(assetData.name).baseName());
@@ -642,31 +660,7 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 	item->setTextAlignment(Qt::AlignCenter);
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 
-	// (The old "Hide meshes for now" note above an unconditional add is gone:
-	// hiding an import's members is a real rule now, applied where the listing
-	// is built — services/assettray.h — rather than wished for here.)
 	ui->assetView->addItem(item);
-}
-
-/// The AVATAR rows this project can see — the claim source for the tray
-/// collapse (an avatar swallows its model and its clips). Resolved from the
-/// project rather than from the listing so a type-filtered tray answers the
-/// same question the full one does.
-QVector<AssetRecord> AssetWidget::trayAvatarRows() const
-{
-    QVector<AssetRecord> avatars;
-    if (!db || !project) return avatars;
-    const QString projectGuid = project->getProjectGuid();
-    avatars = db->fetchFilteredAssets(projectGuid, static_cast<int>(ModelTypes::Avatar));
-    for (auto &record : avatars) record.type = static_cast<int>(ModelTypes::Avatar);
-    for (const auto &record : db->fetchProjectPinnedAssets(projectGuid)) {
-        if (record.type != static_cast<int>(ModelTypes::Avatar)) continue;
-        if (std::any_of(avatars.begin(), avatars.end(),
-                        [&](const AssetRecord &r) { return r.guid == record.guid; }))
-            continue;
-        avatars.append(record);
-    }
-    return avatars;
 }
 
 void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
@@ -688,54 +682,49 @@ void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
 		}
 		connect(crumb, &QPushButton::pressed, [folder, crumb, this]() {
 			assetItem.selectedGuid = folder.guid;
-			updateAssetView(folder.guid, activeFilter, showDependencies);
+			updateAssetView(folder.guid, activeFilter);
 			syncTreeAndView(folder.guid);
 		});
 		breadCrumbLayout->addWidget(crumb);
 	}
 }
 
-void AssetWidget::updateAssetView(const QString &path, int filter, bool showDependencies)
+void AssetWidget::updateAssetView(const QString &path, int filter)
 {
 	ui->assetView->clear();
 
-    // ONE TILE PER ASSET (owner rule, 2026-09-11): the editor tray shows asset
-    // CLOSURES, not catalog rows — the same collapse `assets.list({tray:true})`
-    // answers with, from the same function, so the panel and the verb can
-    // never drift (services/assettray.h). The Assets PAGE is untouched: that
-    // is where a user browses the members.
-    const auto tray = [this](const QVector<AssetRecord> &records) {
-        return assettray::collapse(db, records, trayAvatarRows());
-    };
-
-    if (filter > 0) {
-        for (const auto &asset : tray(db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies))) addItem(asset);
-    }
-    else {
+    // THE TRAY LISTING (services/assettray.h): every asset a scene uses, once
+    // — the folder's rows and, at the root, the project's pinned members,
+    // under the one rule `assets.list({tray: true})` answers with, from the
+    // same function, so the panel and the verb cannot drift. The Assets PAGE
+    // is untouched: that is where a user browses the members.
+    if (filter <= 0) {
         for (const auto &folder : db->fetchChildFolders(path, project->getProjectGuid())) addItem(folder);
-        for (const auto &asset : tray(db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies))) addItem(asset);  /* TODO : irk this out */
         addCrumbs(db->fetchCrumbTrail(path, project->getProjectGuid()));
     }
-
-    // Reference-with-pin (phase 4): project membership is a project_assets
-    // ROW pinning a LIBRARY asset — there is no project-guid clone row for
-    // fetchChildAssets to find, so the panel populated from the pre-pin
-    // shape showed NOTHING for pinned assets ("Add to Project shows the
-    // toast but nothing appears"). Pinned members list at the project ROOT,
-    // from the same source as assets.list({scope:'project'}).
-    if (path == project->getProjectGuid()) {
-        QSet<QString> listed;
-        for (int i = 0; i < ui->assetView->count(); ++i)
-            listed.insert(ui->assetView->item(i)->data(MODEL_GUID_ROLE).toString());
-        for (const auto &pinned :
-             tray(db->fetchProjectPinnedAssets(project->getProjectGuid(), showDependencies))) {
-            if (listed.contains(pinned.guid)) continue;
-            if (filter > 0 && pinned.type != filter) continue;
-            addItem(pinned);
-        }
-    }
+    for (const auto &asset : assettray::list(db, project->getProjectGuid(), path, filter))
+        addItem(asset);
 
     goUpOneControl->setEnabled(false);
+}
+
+QVariantList AssetWidget::shownTiles()
+{
+    // What the user sees once the event loop turns: a repopulate a pin change
+    // queued lands first (a --script run holds the loop for its whole run).
+    flushPendingRefresh();
+    QVariantList out;
+    for (int i = 0; i < ui->assetView->count(); ++i) {
+        const QListWidgetItem *item = ui->assetView->item(i);
+        const bool folder = item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER;
+        out.append(QVariantMap{
+            { QStringLiteral("guid"), item->data(MODEL_GUID_ROLE).toString() },
+            { QStringLiteral("name"), folder ? item->data(Qt::DisplayRole).toString()
+                                             : item->data(Qt::UserRole).toString() },
+            { QStringLiteral("folder"), folder },
+        });
+    }
+    return out;
 }
 
 void AssetWidget::updateAssetContentsView(const QString &guid)
@@ -852,7 +841,7 @@ void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 {
 	assetItem.item = item;
 	assetItem.selectedGuid = item->data(0, MODEL_GUID_ROLE).toString();
-	updateAssetView(item->data(0, MODEL_GUID_ROLE).toString(), activeFilter, showDependencies);
+	updateAssetView(item->data(0, MODEL_GUID_ROLE).toString(), activeFilter);
 }
 
 void AssetWidget::treeItemChanged(QTreeWidgetItem *item, int column)
@@ -1162,7 +1151,7 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
     } else if (item->data(MODEL_ITEM_TYPE) == MODEL_FOLDER) {
         const QString guid = item->data(MODEL_GUID_ROLE).toString();
         assetItem.selectedGuid = guid;
-        updateAssetView(guid, activeFilter, showDependencies);
+        updateAssetView(guid, activeFilter);
         syncTreeAndView(guid);
     }
 }
@@ -1568,7 +1557,7 @@ void AssetWidget::searchAssets(QString searchString)
 	// the plain folder view.
 	const QString needle = searchString.trimmed();
 	if (needle.isEmpty()) {
-		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+		updateAssetView(assetItem.selectedGuid, activeFilter);
 		return;
 	}
 
@@ -1578,8 +1567,11 @@ void AssetWidget::searchAssets(QString searchString)
 			if (folder.name.contains(needle, Qt::CaseInsensitive)) addItem(folder);
 			addMatches(folder.guid);
 		}
-		for (const auto &asset : db->fetchChildAssets(folderGuid, project->getProjectGuid(),
-		                                              activeFilter, showDependencies)) {
+		// The TRAY listing of each folder (services/assettray.h), so a search
+		// finds exactly the tiles the folders show — the root's pinned members
+		// included, which a raw folder query never returned.
+		for (const auto &asset : assettray::list(db, project->getProjectGuid(), folderGuid,
+		                                         activeFilter)) {
 			if (asset.name.contains(needle, Qt::CaseInsensitive)) addItem(asset);
 		}
 	};
@@ -1662,7 +1654,7 @@ void AssetWidget::deleteItem()
 		const auto outcome = assetdelete::removeFromProject(
 			db, item->data(MODEL_GUID_ROLE).toString(), project->getProjectGuid());
 		if (!outcome.ok) qWarning("project panel: %s", qPrintable(outcome.error));
-		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+		updateAssetView(assetItem.selectedGuid, activeFilter);
 		populateAssetTree(false);
 		return;
 	}
@@ -1699,7 +1691,7 @@ void AssetWidget::deleteItem()
                 if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
             }
 
-            updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+            updateAssetView(assetItem.selectedGuid, activeFilter);
             populateAssetTree(false);
             return;
         }
@@ -1787,7 +1779,7 @@ void AssetWidget::deleteItem()
                 }
 
                 //delete ui->assetView->takeItem(ui->assetView->row(item));
-                updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+                updateAssetView(assetItem.selectedGuid, activeFilter);
                 populateAssetTree(false);
             });
         }
@@ -1809,7 +1801,7 @@ void AssetWidget::deleteItem()
                 }
 
                 //delete ui->assetView->takeItem(ui->assetView->row(item));
-                updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+                updateAssetView(assetItem.selectedGuid, activeFilter);
                 populateAssetTree(false);
             });
         }
@@ -1980,7 +1972,7 @@ void AssetWidget::createFolder()
 
 	populateAssetTree(false);
 	// We could just addItem but this is by choice and also so we can order folders first
-	updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+	updateAssetView(assetItem.selectedGuid, activeFilter);
 	//syncTreeAndView(assetItem.selectedGuid);
 }
 
@@ -2098,7 +2090,7 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 			importErrors.clear();
 		}
 		populateAssetTree(false);
-		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+		updateAssetView(assetItem.selectedGuid, activeFilter);
 	});
 
 	importRunner->start();
@@ -2123,7 +2115,7 @@ void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
         for (int i = 0; i < ui->assetView->count(); i++) {
             QListWidgetItem* item = ui->assetView->item(i);
             if (item->data(MODEL_GUID_ROLE).toString() == result.id) {
-                updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+                updateAssetView(assetItem.selectedGuid, activeFilter);
             }
         }
     }

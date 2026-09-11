@@ -79,6 +79,7 @@ public:
     /// The editor's bottom TRAY and its tabs (smoke S1). Window verbs: the tray
     /// is a widget, so a --script/--headless run has none.
     Q_INVOKABLE QVariantMap trayState();
+    Q_INVOKABLE QVariantList trayAssets();
     Q_INVOKABLE QVariantMap tray(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantMap snapSize();
     Q_INVOKABLE QVariantMap setSnapSize(const QVariant &size);

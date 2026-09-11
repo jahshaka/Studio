@@ -857,6 +857,23 @@ bool Database::updateMetadataVersion(const QString& version)
 	return executeAndCheckQuery(query, "updateMetadataVersion");
 }
 
+namespace {
+Database::DependencyListener &dependencyListener()
+{
+    static Database::DependencyListener listener;
+    return listener;
+}
+void notifyDependencies(bool changed, const QString &projectGuid)
+{
+    if (changed && dependencyListener()) dependencyListener()(projectGuid);
+}
+}   // namespace
+
+void Database::setDependencyListener(DependencyListener listener)
+{
+    dependencyListener() = std::move(listener);
+}
+
 bool Database::createDependency(
     const int &dependerType,
     const int &dependeeType,
@@ -877,7 +894,9 @@ bool Database::createDependency(
     query.bindValue(":dependee", dependee);
     query.bindValue(":id", guid);
 
-    return executeAndCheckQuery(query, "insertGlobalDependency");
+    const bool ok = executeAndCheckQuery(query, "insertGlobalDependency");
+    notifyDependencies(ok, projectGuid);
+    return ok;
 }
 
 bool Database::addFavorite(const QString &guid)
@@ -1463,7 +1482,9 @@ bool Database::deleteDependency(const QString &dependee)
     QSqlQuery query;
     query.prepare("DELETE FROM dependencies WHERE dependee = ?");
     query.addBindValue(dependee);
-    return executeAndCheckQuery(query, "deleteDependency");
+    const bool ok = executeAndCheckQuery(query, "deleteDependency");
+    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    return ok;
 }
 
 bool Database::deleteDependency(const QString &depender, const QString &dependee)
@@ -1472,7 +1493,9 @@ bool Database::deleteDependency(const QString &depender, const QString &dependee
     query.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee = ?");
     query.addBindValue(depender);
     query.addBindValue(dependee);
-    return executeAndCheckQuery(query, "deleteDependency");
+    const bool ok = executeAndCheckQuery(query, "deleteDependency");
+    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    return ok;
 }
 
 bool Database::removeDependenciesByType(const QString &depender, const ModelTypes &type)
@@ -1482,7 +1505,9 @@ bool Database::removeDependenciesByType(const QString &depender, const ModelType
     query.addBindValue(depender);
     query.addBindValue(static_cast<int>(type));
 
-    return executeAndCheckQuery(query, "RemoveDependenciesByType");
+    const bool ok = executeAndCheckQuery(query, "RemoveDependenciesByType");
+    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    return ok;
 }
 
 bool Database::deleteRecord(const QString &table, const QString &row, const QVariant &value)
@@ -1684,12 +1709,17 @@ QMap<QString, qint64> Database::fetchAssetFileSizes()
 }
 
 // The "hide dependees" rule, in ONE place (AVATAR_ASSET_SPEC, found while
-// building it). Three listings hide assets that appear as a `dependee`, and
-// the rule exists to hide MEMBER rows an import created — the Mesh and Texture
-// rows that ride an Object. An AVATAR row depends on the rigged Object it
-// instantiates, which under the naive rule made "Create Avatar" DELETE the
-// model from the Assets grid: the user's own imported character silently
-// vanished from the library the moment they made an avatar of it.
+// building it). The Assets page's LIBRARY grid (and the import's re-listing
+// check) hide assets that appear as a `dependee`, and the rule exists to hide
+// MEMBER rows an import created — the Mesh and Texture rows that ride an
+// Object. (The editor's asset TRAY used it too until lane L13: the editor
+// records USE as a dependency, so there it hid every asset a scene used. The
+// tray's rule is services/assettray.h.)
+//
+// An AVATAR row depends on the rigged Object it instantiates, which under
+// the naive rule made "Create Avatar" DELETE the model from the Assets grid:
+// the user's own imported character silently vanished from the library the
+// moment they made an avatar of it.
 //
 // So the rule is "hide rows that are a MEMBER of something", and membership is
 // what an import's own edges mean — not what a REFERENCE means. Avatar edges
@@ -1752,30 +1782,17 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
     return tileData;
 }
 
-QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QString &projectGuid, int filter, bool showDependencies)
+QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QString &projectGuid, int filter)
 {
-    QString dependentQuery =
+    // No dependee filter (lane L13): it hid every asset something DEPENDED on,
+    // and the editor records USE as a dependency, so an applied texture left
+    // the editor's tray the moment it was applied. What is a tray tile is
+    // decided in ONE place now — services/assettray.h.
+    QString assetsQuery =
         "SELECT name, thumbnail, guid, parent, type, properties "
         "FROM assets A WHERE parent = ? AND project_guid = ? ";
-
-    QString nonDependentQuery =
-        "SELECT name, thumbnail, guid, parent, type, properties "
-        "FROM assets A WHERE parent = ? AND project_guid = ? "
-        "AND " + dependeeSubquery(QStringLiteral("A.guid")) + " ";
-
-    QString orderQuery = "ORDER BY A.name DESC";
-
-    QString assetsQuery;
-    if (showDependencies) {
-        assetsQuery.append(dependentQuery);
-        if (filter > 0) assetsQuery.append("AND type = ? ");
-    }
-    else {
-        assetsQuery.append(nonDependentQuery);
-        if (filter > 0) assetsQuery.append("AND type = ? ");
-    }
-
-    assetsQuery.append(orderQuery);
+    if (filter > 0) assetsQuery.append("AND type = ? ");
+    assetsQuery.append("ORDER BY A.name DESC");
 
     QSqlQuery query;
     query.prepare(assetsQuery);
@@ -1787,33 +1804,26 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QSt
     QVector<AssetRecord> tileData;
     while (query.next()) {
         AssetRecord data;
-        QSqlRecord record = query.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.name = record.value(0).toString();
-            data.thumbnail = record.value(1).toByteArray();
-            data.guid = record.value(2).toString();
-            data.parent = record.value(3).toString();
-            data.type = record.value(4).toInt();
-            data.properties = record.value(5).toByteArray();
-        }
-
+        data.name = query.value(0).toString();
+        data.thumbnail = query.value(1).toByteArray();
+        data.guid = query.value(2).toString();
+        data.parent = query.value(3).toString();
+        data.type = query.value(4).toInt();
+        data.properties = query.value(5).toByteArray();
+        data.projectGuid = projectGuid;
         tileData.push_back(data);
     }
 
     return tileData;
 }
 
-QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGuid, bool includeDependencies)
+QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGuid)
 {
     QVector<AssetRecord> records;
     if (projectGuid.isEmpty()) return records;
 
-    QString sql = "SELECT asset_guid FROM project_assets WHERE project_guid = ?";
-    if (!includeDependencies)
-        sql += " AND " + dependeeSubquery(QStringLiteral("asset_guid"));
-
     QSqlQuery query;
-    query.prepare(sql);
+    query.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
     query.addBindValue(projectGuid);
     executeAndCheckQuery(query, "fetchProjectPinnedAssets");
 
@@ -1822,6 +1832,43 @@ QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGu
         if (!record.guid.isEmpty()) records.push_back(record);
     }
     return records;
+}
+
+QStringList Database::fetchDependers(const QString &dependee, const QString &projectGuid)
+{
+    QStringList out;
+    if (dependee.isEmpty() || projectGuid.isEmpty()) return out;
+    QSqlQuery query;
+    query.prepare("SELECT DISTINCT depender FROM dependencies WHERE dependee = ? AND project_guid = ?");
+    query.addBindValue(dependee);
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchDependers");
+    while (query.next()) out << query.value(0).toString();
+    return out;
+}
+
+QVector<DependencyRecord> Database::fetchNodeDependencies(const QString &depender,
+                                                         const QString &projectGuid)
+{
+    QVector<DependencyRecord> out;
+    if (depender.isEmpty() || projectGuid.isEmpty()) return out;
+    QSqlQuery query;
+    query.prepare("SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
+                  "FROM dependencies WHERE depender = ? AND project_guid = ?");
+    query.addBindValue(depender);
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchNodeDependencies");
+    while (query.next()) {
+        DependencyRecord record;
+        record.dependerType = query.value(0).toInt();
+        record.dependeeType = query.value(1).toInt();
+        record.projectGuid = query.value(2).toString();
+        record.depender = query.value(3).toString();
+        record.dependee = query.value(4).toString();
+        record.id = query.value(5).toString();
+        out.append(record);
+    }
+    return out;
 }
 
 QVector<AssetRecord> Database::fetchAssetsFromParent(const QString & guid)
@@ -3522,6 +3569,35 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
     QMap<QString, QString> assetGuids; /* old x new guid */
 
+    // THE FOLDERS' old -> new map, minted BEFORE any row is written: an asset
+    // filed in a folder names the folder's guid in its `parent` column, and a
+    // folder names its parent folder's, so both need the map (below).
+    QMap<QString, QString> folderGuids; /* old x new guid */
+    {
+        QSqlQuery folderIds(dbe);
+        folderIds.prepare("SELECT guid FROM folders");
+        executeAndCheckQuery(folderIds, "selectFolderIds");
+        while (folderIds.next())
+            folderGuids.insert(folderIds.value(0).toString(), GUIDManager::generateGUID());
+    }
+
+    // EVERY PARENT IS REMAPPED (lane L13). The `parent` column holds the
+    // project (a root-level row), a FOLDER (a filed row) or another ASSET (an
+    // import member — the Mesh row, the member textures, whose parent is
+    // their Object). Only the project case used to be remapped, so an
+    // imported project's member rows named their Object by its OLD guid —
+    // a row that does not exist here — and the editor tray, which knows a
+    // member by "my parent is an asset", showed them as tiles of their own;
+    // folders were re-guided with nothing following them (a filed row lost its
+    // folder, and a root-level folder was re-parented to ITSELF). A parent in
+    // none of the three maps is kept as written.
+    const auto remapParent = [&](const QString &parent) -> QString {
+        if (parent == oldSceneGuid) return newSceneGuid;
+        if (assetGuids.contains(parent)) return assetGuids.value(parent);
+        if (folderGuids.contains(parent)) return folderGuids.value(parent);
+        return parent;
+    };
+
     while (selectAssetQuery.next()) {
         QSqlRecord record = query.record();
         AssetRecord data;
@@ -3605,12 +3681,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         insertImportAssetQuery.bindValue(":license", asset.license);
         insertImportAssetQuery.bindValue(":hash", asset.hash);
         insertImportAssetQuery.bindValue(":version", asset.version);
-        if (asset.parent == oldSceneGuid) {
-            insertImportAssetQuery.bindValue(":parent", newSceneGuid);
-        }
-        else {
-            insertImportAssetQuery.bindValue(":parent", asset.parent);
-        }
+        insertImportAssetQuery.bindValue(":parent", remapParent(asset.parent));
         insertImportAssetQuery.bindValue(":tags", asset.tags);
         insertImportAssetQuery.bindValue(":properties", asset.properties);
 
@@ -3692,8 +3763,12 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         record.count = selectFolder.value(3).toInt();
         record.projectGuid = selectFolder.value(4).toString();
         record.dateCreated = selectFolder.value(5).toDateTime();
-        record.lastUpdated = selectFolder.value(5).toDateTime();
-        record.visible = selectFolder.value(6).toBool();
+        // Columns 6 and 7 (the SELECT above). `visible` used to read column 6
+        // — last_updated, a timestamp, i.e. true — so every hidden folder the
+        // editor keeps for its own rows (Systems, Presets) came back VISIBLE
+        // in an imported project, next to the user's own.
+        record.lastUpdated = selectFolder.value(6).toDateTime();
+        record.visible = selectFolder.value(7).toBool();
         foldersToImport.append(record);
     }
 
@@ -3704,15 +3779,9 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
             "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
         );
 
-        auto newFolderGuid = GUIDManager::generateGUID();
-        importFolder.bindValue(":guid", newFolderGuid);
+        importFolder.bindValue(":guid", folderGuids.value(folder.guid, GUIDManager::generateGUID()));
         importFolder.bindValue(":name", folder.name);
-        if (folder.parent == oldSceneGuid) {
-            importFolder.bindValue(":parent", newFolderGuid);
-        }
-        else {
-            importFolder.bindValue(":parent", folder.parent);
-        }
+        importFolder.bindValue(":parent", remapParent(folder.parent));
         importFolder.bindValue(":count", folder.count);
         importFolder.bindValue(":project_guid", newSceneGuid);
         importFolder.bindValue(":date_created", folder.dateCreated);

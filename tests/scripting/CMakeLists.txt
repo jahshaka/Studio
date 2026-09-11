@@ -841,6 +841,45 @@ set_tests_properties(scripting.e2e.one_asset PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.default_floor — THE DEFAULT FLOOR (owner 2026-09-12, lane
+# L13): a new scene stands on the flagged floor wearing its own checker
+# material; material.reset restores it in one undo step and clears a
+# user-applied library material (released from the project when nothing else
+# uses it); a node with no default answers false; the flag survives reopen.
+# Document verbs only -> --headless.
+configure_file(scripts/e2e_default_floor.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-default_floor)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.default_floor
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.default_floor PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 120)
+
+# scripting.e2e.tray_panel — the asset tray shows EVERY ASSET A SCENE USES,
+# once (owner 2026-09-12, lane L13): the tray PANEL (editor.trayAssets reads
+# the widget) against assets.list({tray:true}) after verb pins and uses, and
+# each shipped sample's tray against the scene's asset closure read off the
+# document. Engine-up — the tray is a widget — so it needs the rig's display.
+# A FRESH home per run: it asserts exact tile sets.
+configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
+add_test(NAME scripting.e2e.tray_panel.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.tray_panel.fresh_home PROPERTIES
+    FIXTURES_SETUP tray_panel_home LABELS "scripting" TIMEOUT 60)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.tray_panel
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.tray_panel PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED tray_panel_home
+    LABELS "scripting"
+    TIMEOUT 300)
+
 # ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that
 # used to be refused with a wrong message, the type-filtered listing, the
 # avatar consumers (loadClip by asset guid, avatar.animations) and the archive.

@@ -1,0 +1,176 @@
+// scripting.e2e.tray_panel — THE ASSET TRAY SHOWS EVERY ASSET A SCENE USES,
+// ONCE, and the tray PANEL and assets.list({tray: true}) are one listing
+// (owner, 2026-09-12: "the demo scenes — shouldn't all the assets in the scene
+// be in the asset drawer? For all the scenes? None of them are in the asset
+// drawer." Lane L13; the rule is services/assettray.h).
+//
+// What was wrong, and what each section pins down:
+//   * the tray hid every asset something DEPENDED on, and the editor records
+//     USE as a dependency — an applied material, a texture on a node's slot —
+//     so a used asset left the tray the moment it was used (section 2);
+//   * the panel skipped the built-in primitives' rows, which in the samples
+//     held the closure, so Showroom and Mirror Room trays were empty; and the
+//     panel and the verb ran different rules (every section compares them:
+//     editor.trayAssets() reads the WIDGET);
+//   * a pin made through a verb left the panel stale until a click (section 1);
+//   * the samples shipped junk rows the old filter happened to hide, and two
+//     shipped Tile.png rows with no bytes (section 3 — the sample CRUD).
+//
+// SECTION 3 IS THE OWNER'S QUESTION, per shipped sample: import it the way the
+// sample dialog does, open it, and the tray must be EXACTLY the scene's asset
+// closure — computed here from the DOCUMENT (node.serialize of every top-level
+// node + world.get), not from the catalog edges the tray itself reads: every
+// model, texture and material a node uses, once; a mesh counts as the model
+// that owns it; a built-in primitive's, an emitter's or a decal's own row is
+// the node itself, never an asset.
+//
+// Engine-up (the tray is a widget): needs the rig's display.
+
+var SCENES = "@SOURCE_DIR@/scenes";
+var FIXTURES = "@SOURCE_DIR@/tests/scripting/fixtures";
+var SAMPLES = ["Matcaps", "Mirror Room", "Particles", "Physics", "Showroom",
+               "Skeletal Animation", "World Background"];
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function guidsOf(rows) { return rows.map(function (r) { return r.guid; }); }
+function verbRows() { return assets.list({ scope: "project", tray: true }); }
+function panelRows() { return editor.trayAssets().filter(function (t) { return !t.folder; }); }
+function sorted(a) { return a.slice().sort(); }
+function sameSet(a, b) { return J(sorted(a)) === J(sorted(b)); }
+function minus(a, b) { return a.filter(function (x) { return b.indexOf(x) < 0; }); }
+
+// THE PANEL IS THE VERB: the widget's asset tiles and the verb's rows are the
+// same set, and every tile appears ONCE.
+function agree(tag) {
+    var panel = guidsOf(panelRows());
+    var verb = guidsOf(verbRows());
+    assert(sameSet(panel, verb),
+           tag + ": the tray panel shows exactly assets.list({tray:true}) (" + panel.length +
+           " tiles; panel-only " + J(minus(panel, verb)) + ", verb-only " + J(minus(verb, panel)) + ")");
+    var seen = {}, twice = [];
+    panel.forEach(function (g) { if (seen[g]) twice.push(g); seen[g] = true; });
+    assert(twice.length === 0, tag + ": every tile appears once");
+}
+
+function companionOf(textureGuid) {
+    var mats = assets.list({ scope: "project", type: "material" });
+    for (var m = 0; m < mats.length; ++m)
+        if (assets.dependencies(mats[m].guid).indexOf(textureGuid) >= 0) return mats[m].guid;
+    return "";
+}
+
+// The asset closure of the OPEN scene, read off the document.
+function sceneClosure() {
+    var rows = assets.list({ scope: "project" });
+    var byGuid = {};
+    rows.forEach(function (r) { byGuid[r.guid] = r; });
+    var meshOwner = {};
+    rows.forEach(function (r) {
+        if (r.type !== "object") return;
+        assets.dependencies(r.guid).forEach(function (d) {
+            if (byGuid[d] && byGuid[d].type === "mesh") meshOwner[d] = r.guid;
+        });
+    });
+    var root = scene.root();
+    var tops = scene.nodes({ depth: 1 }).filter(function (r) { return r.id !== root; });
+    var trees = tops.map(function (t) { return node.serialize(t.id).node; });
+
+    // Pass 1: the nodes whose own row is the NODE (not an asset).
+    var nodeOnly = {};
+    function mark(n) {
+        var builtinMesh = n.type === "mesh" && typeof n.mesh === "string" && n.mesh.charAt(0) === ":";
+        if (n.type !== "mesh" || builtinMesh) nodeOnly[n.guid] = true;
+        (n.children || []).forEach(mark);
+    }
+    trees.forEach(mark);
+
+    // Pass 2: every row guid a node (or the world) names.
+    var used = {};
+    function use(guid) {
+        var row = byGuid[guid];
+        if (!row || nodeOnly[guid]) return;
+        if (row.type === "mesh") { if (meshOwner[guid]) used[meshOwner[guid]] = true; return; }
+        used[guid] = true;
+    }
+    function sweep(value) {
+        if (typeof value === "string") { use(value); return; }
+        if (value && typeof value === "object")
+            for (var k in value) if (k !== "children") sweep(value[k]);
+    }
+    function walk(n) {
+        sweep(n);                                   // its own guid, mesh, maps, images, targets
+        (n.children || []).forEach(walk);
+    }
+    trees.forEach(walk);
+    sweep(world.get());                             // the sky's images, the ambient music
+    return Object.keys(used).map(function (g) {
+        return { guid: g, name: byGuid[g].name, type: byGuid[g].type };
+    });
+}
+
+// ---- 1. a verb's pin reaches the panel with no click -----------------------
+
+project.create("tray panel");
+agree("a fresh project");
+var tileRow = assets.list({ scope: "project", type: "texture", query: "Tile.png" })[0];
+assert(tileRow && guidsOf(panelRows()).indexOf(tileRow.guid) >= 0,
+       "the default ground's Tile.png is a tile in the panel");
+assert(guidsOf(panelRows()).indexOf(scene.find("Ground")) < 0,
+       "... the Ground itself is not");
+
+var tinyTex = assets.importFile(FIXTURES + "/tiny.png");
+assert(assets.addToProject(tinyTex) === tinyTex, "assets.addToProject(tiny.png) — a VERB's pin");
+var tinyMat = companionOf(tinyTex);
+assert(guidsOf(panelRows()).indexOf(tinyMat) >= 0,
+       "the panel shows the image's material tile without a click (it repopulates on pin changes)");
+agree("after a verb's add");
+
+// ---- 2. a USE never hides anything -----------------------------------------
+
+var cube = scene.addPrimitive("cube", { position: { x: 4, y: 0, z: 4 } });
+assert(material.apply(cube, tinyMat) === true, "material.apply(cube, its material)");
+assert(guidsOf(panelRows()).indexOf(tinyMat) >= 0,
+       "an APPLIED material stays in the panel (the old dependee filter hid it here)");
+var plane = scene.addImagePlane(tinyTex, { position: { x: -4, y: 1, z: 4 } });
+assert(plane && plane.length > 10, "scene.addImagePlane(tiny.png)");
+assert(guidsOf(panelRows()).indexOf(tinyTex) >= 0,
+       "an image a node USES is a tile in the panel (the old filter hid it — the plane depends on it)");
+assert(guidsOf(panelRows()).indexOf(plane) < 0, "... the image plane's own row is not");
+agree("after the uses");
+assert(project.close(), "closed");
+
+// ---- 3. every shipped sample: the tray is the scene's asset closure --------
+
+for (var i = 0; i < SAMPLES.length; ++i) {
+    var name = SAMPLES[i];
+    var imported = project.importArchive(SCENES + "/" + name + ".zip");
+    assert(imported && imported.guid, name + ": imported (" + imported.assets + " rows, " +
+           imported.objects + " stored objects)");
+    assert(project.open(imported.guid) === true, name + ": opened");
+
+    var closure = sceneClosure();
+    var tray = verbRows();
+    console.log(name + " closure: " + J(closure.map(function (r) { return r.type + ":" + r.name; }).sort()));
+    console.log(name + " tray:    " + J(tray.map(function (r) { return r.type + ":" + r.name; }).sort()));
+    var want = guidsOf(closure), got = guidsOf(tray);
+    var nameOf = {};
+    closure.concat(tray).forEach(function (r) { nameOf[r.guid] = r.type + ":" + r.name; });
+    assert(sameSet(got, want),
+           name + ": THE TRAY IS THE SCENE'S ASSET CLOSURE (" + got.length + " tiles; missing " +
+           J(minus(want, got).map(function (g) { return nameOf[g]; })) + ", junk " +
+           J(minus(got, want).map(function (g) { return nameOf[g]; })) + ")");
+    assert(tray.filter(function (r) { return r.type === "mesh"; }).length === 0,
+           name + ": no mesh row is a tile");
+    assert(want.length > 0, name + ": the scene uses at least one asset (its ground's tile)");
+    agree(name);
+    var folders = editor.trayAssets().filter(function (t) { return t.folder; });
+    assert(folders.length === 0,
+           name + ": none of the editor's own hidden folders is a tile " + J(folders));
+    assert(project.close(), name + ": closed");
+}
+
+console.log("e2e_tray_panel: all sections passed");

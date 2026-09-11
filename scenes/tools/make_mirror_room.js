@@ -87,12 +87,21 @@ function slab(name, pos, scale, color, rough, metal) {
     return id;
 }
 
-var FLOOR_TOP = 0.25;      // floor slab: centre -0.25, half-height 0.5
+// ONE FLOOR (owner, 2026-09-12): the room stands on the scene's DEFAULT FLOOR
+// — the Ground every new scene is born with (its checker,
+// services/defaultfloor.h) — not on a slab laid over it. Everything that stood
+// on the slab's top now stands on y = 0.
+var FLOOR_TOP = 0.0;
 var CEIL_BOTTOM = 3.75;    // ceiling slab: centre 4.25, half-height 0.5
 var WALL_HALF = CEIL_BOTTOM / 2;
 
-// ---- the room: 8.5 x 3.5 x 8.5 of interior, sealed -------------------------
-slab("Floor",    { x: 0, y: -0.25, z: 0 },          { x: 9, y: 0.5, z: 9 },          "#b9b9b9", 0.55);
+// ---- the room: 8.5 x 3.75 x 8.5 of interior, sealed ------------------------
+// The slab's satin finish is the default floor's OWN material in this room
+// (roughness 0.55 on the checker); "Reset to Default Floor" (material.reset)
+// returns it to the plain default.
+var ground = scene.find("Ground");
+assert(ground && node.property(ground, "defaultFloor") === true, "the room stands on the default floor");
+assert(material.set(ground, { roughness: 0.55 }), "the floor's satin finish");
 slab("Ceiling",  { x: 0, y: 4.25, z: 0 },           { x: 9, y: 0.5, z: 9 },          "#cccccc");
 slab("RedWall",  { x: 0, y: WALL_HALF, z: 4.75 },   { x: 9, y: WALL_HALF, z: 0.5 },  "#e01010", 0.8);  // THE wall
 slab("BlueWall", { x: 0, y: WALL_HALF, z: -4.75 },  { x: 9, y: WALL_HALF, z: 0.5 },  "#1040d8", 0.8);
