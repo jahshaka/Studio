@@ -143,6 +143,11 @@ protected slots:
 
 
     void openSampleBrowser();
+public:
+    /// Builds the Sample Scenes dialog's content and returns it UNSHOWN —
+    /// openSampleBrowser() runs it modally; app.dialog('sampleBrowser') shows
+    /// it (MainWindow::openDialog).
+    QDialog *prepareSampleBrowser();
 
 private:
     /// The sample browser's tile list, extracted from openSampleBrowser so the

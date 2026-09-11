@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include <QMenu>
+#include <QHash>
 #include <QPointer>
 #include <memory>
 #include "irisgl/irisglfwd.h"
@@ -316,6 +317,17 @@ public:
         int rightMin = 0;
     };
     ColumnMetrics activeColumns() const;
+
+    /// THE APP'S DIALOGS, BY NAME (theme sweep, lane 16 — shell/mainwindowdialogs.cpp):
+    /// what app.dialogs / app.dialog open for a script. The theme walk
+    /// (app.styleSheets) only sees widgets that exist, and a dialog built on
+    /// demand exists only while it is open. Every entry opens NON-modally (a
+    /// verb cannot sit in exec()); openDialog returns nullptr for an unknown
+    /// name, closeDialog false when that dialog was not open.
+    QStringList dialogNames() const;
+    QWidget *openDialog(const QString &name);
+    bool closeDialog(const QString &name);
+    bool isDialogOpen(const QString &name) const;
 
     /// Orderly teardown of every background worker the window owns (import
     /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
@@ -931,6 +943,10 @@ private:
     class McpServer *mcpServer = nullptr;
     class ClaudeChatHost *claudeChatHost = nullptr;
     class ClaudeChatWindow *claudeChatWindow = nullptr;
+
+    // dialogs opened by name (openDialog); QPointer: owned entries delete
+    // themselves on close
+    QHash<QString, QPointer<QWidget>> scriptDialogs;
 };
 
 #endif // MAINWINDOW_H

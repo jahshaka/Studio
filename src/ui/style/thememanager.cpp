@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QMenu>
 #include <QMetaObject>
 #include <QPushButton>
+#include <QSet>
 #include <QWidgetAction>
 
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -31,6 +32,23 @@ For more information see the LICENSE file
 static bool s_classicActive = false;
 
 namespace {
+
+// Every sheet ThemeManager hands out, remembered by value. The live theme walk
+// (app.styleSheets, the theme.sheets suite) asks isThemeSheet() of every
+// non-empty widget sheet it finds: a sheet that came from here is the theme's
+// own chrome; anything else under Qlementine is a raw sheet that interposes
+// QStyleSheetStyle over the style — the regression the walk exists to catch.
+QSet<QString> &themeSheetRegistry()
+{
+    static QSet<QString> sheets;
+    return sheets;
+}
+
+QString themeSheet(const QString &css)
+{
+    if (!css.isEmpty()) themeSheetRegistry().insert(css);
+    return css;
+}
 
 // (The Qt 6.10 + Qlementine combo-popup stack overflow used to be worked around
 // here, by deferring the popup item view's polish one event-loop tick. It is
@@ -207,24 +225,24 @@ void ThemeManager::applyAtStartup(QApplication &app)
 QString ThemeManager::chromeButtonSheet()
 {
     if (s_classicActive) return QString();
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
         "QPushButton, QToolButton { background: #444; color: #eee;"
         " padding: 8px 12px; border-radius: 4px; }"
         "QPushButton:hover, QToolButton:hover { background: #555; }"
         "QPushButton:pressed, QToolButton:pressed { background: #3a3a3a; }"
         "QPushButton:checked, QToolButton:checked { background: #2980b9; }"
-        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
+        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }"));
 }
 
 QString ThemeManager::chromeAccentButtonSheet()
 {
     if (s_classicActive) return QString();
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
         "QPushButton { background: #3498db; color: white; padding: 8px 12px;"
         " border-radius: 4px; }"
         "QPushButton:hover { background: #4ba3e0; }"
         "QPushButton:pressed { background: #2884c4; }"
-        "QPushButton:disabled { background: #24384a; color: #7d8fa3; }");
+        "QPushButton:disabled { background: #24384a; color: #7d8fa3; }"));
 }
 
 QString ThemeManager::chromeCompactButtonSheet()
@@ -232,13 +250,13 @@ QString ThemeManager::chromeCompactButtonSheet()
     if (s_classicActive) return QString();
     // chromeButtonSheet at reduced height: identical palette, radius and
     // 12px side gutters — only the vertical padding shrinks.
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
         "QPushButton, QToolButton { background: #444; color: #eee;"
         " padding: 3px 12px; border-radius: 4px; }"
         "QPushButton:hover, QToolButton:hover { background: #555; }"
         "QPushButton:pressed, QToolButton:pressed { background: #3a3a3a; }"
         "QPushButton:checked, QToolButton:checked { background: #2980b9; }"
-        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
+        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }"));
 }
 
 QColor ThemeManager::tileCaptionBarColor(bool openProject)
@@ -260,13 +278,13 @@ QString ThemeManager::tileCaptionBarSheet(int fontSize, int cornerRadius, bool o
 {
     // Geometry identical for both states (owner-tuned: the top of the bar hugs
     // the text, the bottom gets two extra pixels) — only the background moves.
-    return QStringLiteral("background-color: %1; color: white; font-size: %2px;"
+    return themeSheet(QStringLiteral("background-color: %1; color: white; font-size: %2px;"
                           " padding-bottom: 2px;"
                           " border-bottom-left-radius: %3px;"
                           " border-bottom-right-radius: %3px;")
         .arg(tileCaptionBarColor(openProject).name(),
              QString::number(fontSize),
-             QString::number(cornerRadius));
+             QString::number(cornerRadius)));
 }
 
 QString ThemeManager::headerGlyphButtonSheet(const QFont &iconFont)
@@ -284,14 +302,14 @@ QString ThemeManager::headerGlyphButtonSheet(const QFont &iconFont)
     // whose sheet is re-applied after construction (updateTopMenuStates),
     // ended up rendering at the inherited 17px beside two 28px siblings. A
     // sheet-declared font wins every repolish, so all three stay identical.
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
                "QPushButton { background: transparent; border: none; padding: 0;"
                " font-family: \"%1\"; font-size: %2px;"
                " color: rgba(255,255,255,0.9); }"
                "QPushButton:hover { color: rgba(255,255,255,1.0); }"
                "QPushButton:pressed { color: rgba(255,255,255,0.7); }")
         .arg(iconFont.family())
-        .arg(iconFont.pixelSize() > 0 ? iconFont.pixelSize() : 28);
+        .arg(iconFont.pixelSize() > 0 ? iconFont.pixelSize() : 28));
 }
 
 void ThemeManager::applyHeaderGlyphButton(QPushButton *button, const QFont &iconFont)
@@ -344,4 +362,9 @@ void ThemeManager::clearClassicSheets(QWidget *root)
     const auto children = root->findChildren<QWidget *>();
     for (auto *w : children)
         if (!w->styleSheet().isEmpty()) w->setStyleSheet(QString());
+}
+
+bool ThemeManager::isThemeSheet(const QString &sheet)
+{
+    return !sheet.isEmpty() && themeSheetRegistry().contains(sheet);
 }

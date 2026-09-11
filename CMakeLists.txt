@@ -157,6 +157,7 @@ set(SRCS
     src/app/cli/scriptrunner.cpp
     src/app/cli/selftestrunner.cpp
     src/shell/mainwindow.cpp 
+    src/shell/mainwindowdialogs.cpp
     src/ui/controls/colorvaluewidget.cpp 
     src/ui/controls/colorpickerwidget.cpp 
     src/ui/dialogs/preferencesdialog.cpp 

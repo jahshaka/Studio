@@ -777,6 +777,11 @@ QListWidget *ProjectManager::buildSampleList(const QMap<QString, QString> &entri
 
 void ProjectManager::openSampleBrowser()
 {
+    prepareSampleBrowser()->exec();
+}
+
+QDialog *ProjectManager::prepareSampleBrowser()
+{
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
     sampleDialog.setWindowTitle("Sample Scenes");
     sampleDialog.setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -951,7 +956,7 @@ void ProjectManager::openSampleBrowser()
     sampleDialog.setLayout(layout);
     sampleDialog.setFixedSize(sampleDialog.sizeHint());
     refreshButtons();
-    sampleDialog.exec();
+    return &sampleDialog;
 }
 
 void ProjectManager::loadProjectAssets()

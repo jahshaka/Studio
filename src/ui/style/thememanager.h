@@ -114,6 +114,12 @@ public:
     // code toggling the action programmatically keeps working. No-op under
     // Classic. Call once, after the menu's actions are all added.
     static void switchifyMenuToggles(class QMenu *menu);
+
+    // True when `sheet` is exactly a sheet this class handed out (every
+    // getter above records what it returns). The live theme walk
+    // (app.styleSheets) classifies each widget sheet with this: under
+    // Qlementine a non-empty sheet that is NOT the theme's own is raw crud.
+    static bool isThemeSheet(const QString &sheet);
 };
 
 #endif // JAH_THEMEMANAGER_H
