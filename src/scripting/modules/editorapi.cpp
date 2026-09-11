@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "viewport/flyspeedsettings.h"
 #include "scripting/modules/flyspeedverb.h"
 #include "shell/mainwindow.h"
+#include "ui/panels/assetwidget.h"
 #include "ui/panels/scenehierarchywidget.h"
 #include "io/sceneformat.h"
 #include "services/services.h"
@@ -350,6 +351,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "you still have to click does not deliver, `visible` whether the tray widget "
           "itself is on screen, and `title` the tray DOCK's own title — what the bottom tab bar "
           "shows beside \"Timeline\" when the two docks share the bottom area (\"Tray\").",
+          Needs::Window },
+        { "trayAssets", "editor.trayAssets() -> [{guid, name, folder}]",
+          "WHAT THE ASSET TRAY IS SHOWING, read off the panel itself: its tiles in order — "
+          "`guid` and the catalog `name` for an asset, the label for a folder (`folder: true`). "
+          "The tray lists through the same function as assets.list({scope: 'project', tray: "
+          "true}) (services/assettray.h — every asset the project's scene uses, once), so at "
+          "the root the asset tiles and that verb's rows are the same set; this is how a suite "
+          "proves it. The tray repopulates on the next event-loop turn after any pin change "
+          "(an add, a binding, a remove); a repopulate still queued when this is called is "
+          "applied first, so the answer is what the user sees.",
           Needs::Window },
         { "tray", "editor.tray({tab, console}) -> (the trayState map)",
           "DRIVES THAT TRAY. `tab: \"console\"` shows the Console tab, raises the tray and "
@@ -1527,6 +1538,17 @@ QVariantMap EditorApi::trayState()
         out["areaBottom"] = area->height() - 1;
     }
     return out;
+}
+
+QVariantList EditorApi::trayAssets()
+{
+    if (!host.mainWindow || !host.mainWindow->assetTray()) {
+        fail("editor.trayAssets: this verb needs the editor window (a --script/--headless run "
+             "has no tray) — assets.list({scope: 'project', tray: true}) is the same listing "
+             "as data");
+        return QVariantList();
+    }
+    return host.mainWindow->assetTray()->shownTiles();
 }
 
 QVariantMap EditorApi::tray(const QVariantMap &change)

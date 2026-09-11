@@ -159,4 +159,104 @@ var trayAfter = guidsOf(assets.list({ scope: "project", tray: true }));
 console.log("tray after clips: " + JSON.stringify(trayAfter));
 assert(trayAfter.indexOf(avatarGuid) >= 0, "the avatar is still the character's tile");
 
+// ---- 6. EVERY ASSET THE SCENE USES IS A TILE, ONCE (owner, 2026-09-12) ----
+//
+// Lane L13. The tray hid every asset something DEPENDED on, and the editor
+// records USE as a dependency (a material slot, the ground's tile, an applied
+// material), so a used asset vanished; it skipped the built-in primitives'
+// rows in the panel but not in this verb; and it had no notion of an image's
+// companion material. The rule now (services/assettray.h): a use never hides
+// anything; a scene node's OWN row (a primitive, the Ground, an emitter) is
+// not a tile; a directly-added image is folded into the companion material
+// minted for it until a node uses the image itself.
+var FIXTURES = "@SOURCE_DIR@/tests/scripting/fixtures";
+function currentTray() { return guidsOf(assets.list({ scope: "project", tray: true })); }
+function companionOf(textureGuid) {
+    var mats = assets.list({ scope: "project", type: "material" });
+    for (var m = 0; m < mats.length; ++m)
+        if (assets.dependencies(mats[m].guid).indexOf(textureGuid) >= 0) return mats[m].guid;
+    return "";
+}
+
+// The default scene: the Ground is a built-in's own row, its tile is an asset
+// the scene uses.
+var groundId = scene.find("Ground");
+var tileRows = assets.list({ scope: "project", type: "texture", query: "Tile.png" });
+assert(groundId && tileRows.length === 1, "the default scene's Ground and its Tile.png row");
+assert(currentTray().indexOf(tileRows[0].guid) >= 0,
+       "THE RULE: the ground's Tile.png is a tile — the scene uses it");
+assert(currentTray().indexOf(groundId) < 0,
+       "... and the Ground's own row is not (a built-in primitive is not a library asset)");
+
+// A directly-added image: its tile is the companion material minted for it.
+var tinyTex = assets.importFile(FIXTURES + "/tiny.png");
+assert(assets.addToProject(tinyTex) === tinyTex, "tiny.png added to the project directly");
+var tinyMat = companionOf(tinyTex);
+assert(tinyMat.length > 10, "... which minted its companion material " + tinyMat);
+assert(currentTray().indexOf(tinyMat) >= 0, "the companion material is the image's tile");
+assert(currentTray().indexOf(tinyTex) < 0,
+       "... and the image is folded into it — ONE tile for one add (owner default)");
+
+// APPLYING the material is a use: it stays (the old filter hid it here).
+var cube = scene.addPrimitive("cube", { position: { x: 6, y: 0, z: 6 } });
+assert(material.apply(cube, tinyMat) === true, "material.apply(cube, the companion)");
+assert(currentTray().indexOf(tinyMat) >= 0, "an APPLIED material is still a tile — a use never hides");
+assert(currentTray().indexOf(cube) < 0, "the cube's own row is not a tile");
+
+// Binding the IMAGE itself to a node's slot is a use of the image: now it is a
+// tile of its own (the companion is no longer the only thing using it).
+assert(material.set(cube, { baseColorMap: tinyTex }) === true, "material.set(cube, {baseColorMap: tiny.png})");
+assert(currentTray().indexOf(tinyTex) >= 0,
+       "an image a scene node USES is a tile (material.set records the use like the panel does)");
+assert(currentTray().indexOf(tinyMat) >= 0, "... and its material stays one too");
+
+// A LIBRARY image bound by guid without ever being added: the binding pins it
+// (no companion material is minted for a binding) and it is a tile.
+var wideTex = assets.importFile(FIXTURES + "/implane_wide.png");
+var cube2 = scene.addPrimitive("cube", { position: { x: -6, y: 0, z: 6 } });
+assert(material.set(cube2, { baseColorMap: wideTex }) === true, "material.set(cube2, {baseColorMap: <library image>})");
+assert(currentTray().indexOf(wideTex) >= 0, "a library image bound to a slot joins the project as a tile");
+assert(companionOf(wideTex) === "", "... as a BINDING: no companion material was minted for it");
+
+// An emitter: its image is a tile, the emitter's own row is not.
+var emitter = scene.addParticles("fire", { position: { x: 0, y: 1, z: -6 } });
+assert(emitter && emitter.length > 10, "scene.addParticles('fire')");
+assert(currentTray().indexOf(emitter) < 0, "the emitter's own row is not a tile");
+var glow = assets.list({ scope: "project", type: "texture", query: "Glowing Particle" });
+assert(glow.length === 1 && currentTray().indexOf(glow[0].guid) >= 0,
+       "the emitter's particle image is a tile — the scene uses it");
+
+// ---- 7. THE TRAY SURVIVES AN ARCHIVE ROUND TRIP ----------------------------
+//
+// importProject re-guids every row but used to remap a row's `parent` only when
+// it was the project: an import MEMBER (a model's embedded texture, whose parent
+// is its Object) came back naming its Object by the OLD guid, a row that does
+// not exist in the new project, and "my parent is an asset" — the member test —
+// stopped seeing it. A textured GLB carries exactly such members.
+var quad = assets.import("@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb");
+assert(assets.addToProject(quad) === quad, "textured_pbr_quad.glb added to the project");
+var quadMembers = assets.list({ scope: "project", type: "texture" }).filter(function (r) {
+    return assets.dependencies(quad).indexOf(r.guid) >= 0;
+});
+assert(quadMembers.length > 0, "the GLB brought " + quadMembers.length + " member texture row(s)");
+quadMembers.forEach(function (m) {
+    assert(currentTray().indexOf(m.guid) < 0, "import member '" + m.name + "' is not a tile");
+});
+function trayNames() {
+    return assets.list({ scope: "project", tray: true })
+        .map(function (r) { return r.type + ":" + r.name; }).sort();
+}
+var namesBefore = trayNames();
+console.log("tray before the round trip: " + JSON.stringify(namesBefore));
+assert(project.save(), "saved");
+var archivePath = app.dataRoot().root + "/one_asset_roundtrip.zip";
+assert(project.exportArchive(archivePath).path, "exported " + archivePath);
+var imported = project.importArchive(archivePath);
+assert(imported && imported.guid, "imported it back as a new project " + imported.guid);
+assert(project.open(imported.guid) === true, "opened the imported project");
+var namesAfter = trayNames();
+console.log("tray after the round trip: " + JSON.stringify(namesAfter));
+assert(JSON.stringify(namesAfter) === JSON.stringify(namesBefore),
+       "the imported project's tray is the same set of tiles — no member row became a tile");
+
 console.log("e2e_one_asset: all sections passed");

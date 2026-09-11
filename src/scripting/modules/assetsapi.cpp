@@ -114,7 +114,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, limit}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
           "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); rigged: true keeps only MODEL rows whose metadata says the file carries a skeleton (the candidates avatar.createAsset accepts — refused for scope 'session', which has no metadata); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag, then rigged — and limit last, so a limited listing is the first N of the filtered set, not a sample of it. rigged is the expensive one on a library that predates the rig metadata (it backfills the block once per row it reaches), which is why it is applied last. "
-          "tray: true is THE EDITOR TRAY's listing — one row per asset CLOSURE, which is what an asset is to the person using the editor (owner rule, 2026-09-11). An import's members (its Mesh row, its Texture rows) are dropped, and a model or an animation clip an AVATAR row in the same scope is built from is shown as that avatar instead of on its own, so one character is ONE tile however many catalog rows it took to make. Nothing is deleted and every guid still resolves — the Assets page still browses the members. Refused for scope 'session', which has no catalog rows to collapse.",
+          "tray: true is THE EDITOR TRAY's listing, from the same function the tray panel calls (services/assettray.h) — EVERY ASSET THE PROJECT'S SCENE USES, ONCE (owner rules, 2026-09-11 and 2026-09-12): the root folder's rows plus the project's pinned members, where a row is dropped only when it is an import's MEMBER (its parent is another asset), a MESH row, a model or clip an AVATAR in this project is built from (the avatar is that character's tile), a scene node's OWN row (the built-in primitives, the Ground, image planes, decals, particle emitters — a node is not a library asset; what it uses is), or an image added directly whose companion material is the only thing in the project using it (the material is that image's tile). A dependency never hides anything: a texture on a material slot, the ground, a decal or a particle, a material applied to a node, all stay. With type, the same listing keeps one type. Nothing is deleted and every guid still resolves — the Assets page still browses the members. Refused for scopes 'store' and 'session': the tray is a project's listing.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
@@ -364,32 +364,11 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         return AssetMetadata::ensure(host.db, record.guid)
             .value(QStringLiteral("hasSkeleton")).toBool();
     };
-    // THE TRAY LISTING (S9): one row per asset closure. Resolved against the
-    // AVATAR rows of the same scope rather than of the filtered listing, so
-    // `{type:'object', tray:true}` answers the same question a full listing
-    // does instead of showing a character's model because the avatar row was
-    // filtered out from under it.
+    // THE TRAY LISTING (S9, L13): the editor tray's own listing, from the one
+    // function the panel calls (services/assettray.h) — every asset the
+    // project's scene uses, once. A PROJECT's listing: refused for the other
+    // scopes.
     const bool trayOnly = options.value("tray", false).toBool();
-    const auto trayClaimants = [this, &scope]() {
-        QVector<AssetRecord> avatars;
-        if (scope == QLatin1String("project") && host.project) {
-            const QString projectGuid = host.project->getProjectGuid();
-            avatars = host.db->fetchFilteredAssets(projectGuid,
-                                                   static_cast<int>(ModelTypes::Avatar));
-            for (auto &record : avatars) record.type = static_cast<int>(ModelTypes::Avatar);
-            for (const auto &record : host.db->fetchProjectPinnedAssets(projectGuid)) {
-                if (record.type != static_cast<int>(ModelTypes::Avatar)) continue;
-                if (std::any_of(avatars.begin(), avatars.end(),
-                                [&](const AssetRecord &r) { return r.guid == record.guid; }))
-                    continue;
-                avatars.append(record);
-            }
-        } else {
-            for (const auto &record : host.db->fetchAssetsForAssetView())
-                if (record.type == static_cast<int>(ModelTypes::Avatar)) avatars.append(record);
-        }
-        return avatars;
-    };
     const bool hasDrawer = options.contains("drawer");
     const int drawerFilter = options.value("drawer", -1).toInt();
     const int limit = options.value("limit", 0).toInt();
@@ -453,10 +432,21 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         return out;
     }
     if (scope == "store") {
+        if (trayOnly) {
+            fail("assets.list: the tray listing is a PROJECT's — the editor tray shows what the "
+                 "open project uses. List scope 'project' with tray: true");
+            return out;
+        }
         records = host.db->fetchAssetsForAssetView();
     } else if (scope == "project") {
         if (!requireProject()) return out;
-        if (typeFilter >= 0) {
+        if (trayOnly) {
+            // The root of the tray, exactly as the panel lists it (a type
+            // filter keeps one type of the same listing, as the panel's filter
+            // combo does — it does not sweep the editor's hidden folders).
+            const QString projectGuid = host.project->getProjectGuid();
+            records = assettray::list(host.db, projectGuid, projectGuid, typeFilter);
+        } else if (typeFilter >= 0) {
             // Folder-independent: a type-filtered project listing must see
             // assets registered in subfolders too (a preset apply files its
             // material asset under Presets/, which a root-children sweep
@@ -476,7 +466,6 @@ QVariantList AssetsApi::list(const QVariantMap &options)
                     continue;
                 records.append(record);
             }
-            if (trayOnly) records = assettray::collapse(host.db, records, trayClaimants());
             for (const auto &record : records) {
                 if (hasDrawer && record.collection != drawerFilter) continue;
                 if (!nameMatches(record.name)) continue;
@@ -489,25 +478,26 @@ QVariantList AssetsApi::list(const QVariantMap &options)
                                         { "drawer", record.collection } });
             }
             return out;
-        }
-        records = host.db->fetchChildAssets(host.project->getProjectGuid(), host.project->getProjectGuid(), -1, true);
-        // Reference-with-pin (phase 4): pinned LIBRARY assets are project
-        // members too — a project "use" is a project_assets row, not a
-        // cloned Editor row. fetchProjectPinnedAssets is the shared source
-        // (the editor's project panel reads the same rows).
-        for (const auto &record :
-             host.db->fetchProjectPinnedAssets(host.project->getProjectGuid())) {
-            if (std::any_of(records.begin(), records.end(),
-                            [&](const AssetRecord &r) { return r.guid == record.guid; }))
-                continue;
-            records.append(record);
+        } else {
+            records = host.db->fetchChildAssets(host.project->getProjectGuid(),
+                                                host.project->getProjectGuid(), -1);
+            // Reference-with-pin (phase 4): pinned LIBRARY assets are project
+            // members too — a project "use" is a project_assets row, not a
+            // cloned Editor row. fetchProjectPinnedAssets is the shared source
+            // (the editor's asset tray reads the same rows).
+            for (const auto &record :
+                 host.db->fetchProjectPinnedAssets(host.project->getProjectGuid())) {
+                if (std::any_of(records.begin(), records.end(),
+                                [&](const AssetRecord &r) { return r.guid == record.guid; }))
+                    continue;
+                records.append(record);
+            }
         }
     } else {
         fail("assets.list: scope must be 'store', 'project' or 'session'");
         return out;
     }
 
-    if (trayOnly) records = assettray::collapse(host.db, records, trayClaimants());
     for (const auto &record : records) {
         if (typeFilter >= 0 && record.type != typeFilter) continue;
         if (hasDrawer && record.collection != drawerFilter) continue;

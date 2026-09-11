@@ -253,6 +253,7 @@ set(SRCS
     src/services/import/assetimporters.cpp
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
+    src/services/projectmembership.cpp
     src/services/shippedassets.cpp
     src/services/engineerrorpump.cpp
     src/services/framepacing.cpp

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "io/assetmanager.h"
 #include "services/imagematerial.h"
+#include "services/projectmembership.h"
 
 namespace assetdelete
 {
@@ -165,6 +166,7 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
     }
     out.ok = ok;
     if (!ok) out.error = QStringLiteral("the database refused to drop a pin on '%1'").arg(guid);
+    if (!toUnpin.isEmpty()) ProjectMembership::instance()->announce(projectGuid);
     return out;
 }
 
