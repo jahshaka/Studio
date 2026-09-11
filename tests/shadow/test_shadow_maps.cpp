@@ -109,6 +109,23 @@ static int probe(const Image &img, float x, float z)
     return sum / 9;
 }
 
+/// The mean luminance of a WORLD-SPACE floor rectangle (x0,z0)-(x1,z1), the
+/// reading for "half of this shadow is gone" — a single probe cannot say that
+/// about a shadow that grew holes.
+static double meanRect(const Image &img, float x0, float z0, float x1, float z1)
+{
+    const auto px = [&](float x) { return int(((x / kHalfExtent) * 0.5f + 0.5f) * float(img.width)); };
+    const auto py = [&](float z) { return int(((z / kHalfExtent) * 0.5f + 0.5f) * float(img.height)); };
+    const int ax = std::max(0, px(x0)), bx = std::min(int(img.width) - 1, px(x1));
+    const int ay = std::max(0, py(z0)), by = std::min(int(img.height) - 1, py(z1));
+    if (ax > bx || ay > by) return -1.0;
+    double sum = 0.0;
+    int n = 0;
+    for (int y = ay; y <= by; ++y)
+        for (int x = ax; x <= bx; ++x) { sum += lum(img, unsigned(x), unsigned(y)); ++n; }
+    return n ? sum / double(n) : -1.0;
+}
+
 /// shadowed/lit for lamp `i`: the pillar's cast shadow covers the floor between
 /// r = 4.6 and r = 7.6 along that quadrant's diagonal, so r = 6.1 is inside it
 /// and the same point three units sideways is not, at nearly the same distance
@@ -271,6 +288,18 @@ static void t4_over_budget(Engine *e, View *v)
     // ...and the mapped list accounts for every map the atlas has.
     CHECK(st.mapped.size() == st.lightSlots && st.lightSlots == 1u + st.focusedMaps,
           "the status describes every light slot (%zu of %u)", st.mapped.size(), st.lightSlots);
+    // OVER BUDGET, THE CACHE STANDS DOWN (ENGINE_CACHE_POLICY_SPEC P2, the v1
+    // rule): with more lamps than maps the view goes back to Ogre's
+    // closest-first choice, re-renders every frame and SAYS SO — and the
+    // picture is the one T1 asserts at budget 2, two lamps shadowed.
+    std::printf("    viewCached %d, cached instances %u, uncached %u\n", int(st.viewCached),
+                st.cachedInstances, st.uncachedInstances);
+    CHECK(!st.viewCached && st.uncachedInstances >= 1u,
+          "an over-budget view is NOT cached and is counted (%u uncached)", st.uncachedInstances);
+    Image img;
+    CHECK(v->readPixels(img), "the over-budget view renders");
+    const int shadowed = countShadowed(img, 4);
+    CHECK(shadowed == 2, "and the two lamps that hold a map still shade the room (%d)", shadowed);
     e->destroyScene(room.scene);
 }
 
@@ -702,6 +731,583 @@ static void t3_cache_view(Engine *e, View *v)
     e->destroyScene(r.scene);
 }
 
+// ---------------------------------------------------------------------------
+// T3n/T3q/T3t/T3v — THE INPUTS THE FIRST ROUND MISSED (lead review of E2,
+// MASTER_QUEUE §96): a caster's SHAPE (a mesh or material swap rebuilds the
+// Item at the same address with the same bounds), a cutout's UV transform, a
+// POSE pushed by weights alone, a PARENT moving its child, SPOT lamps, the
+// slot assignment when a lamp is added or hidden, and the atlas rebuild.
+
+/// One box appended to `d`, centred at (cx,cy,cz) with half-extents (hx,hy,hz).
+static void appendBox(MeshData &d, float cx, float cy, float cz, float hx, float hy, float hz)
+{
+    const float fn[6][3] = {{0,0,1},{0,0,-1},{1,0,0},{-1,0,0},{0,1,0},{0,-1,0}};
+    const float sx[6][4] = {{-1,1,1,-1},{1,-1,-1,1},{1,1,1,1},{-1,-1,-1,-1},{-1,1,1,-1},{-1,1,1,-1}};
+    const float sy[6][4] = {{-1,-1,1,1},{-1,-1,1,1},{-1,-1,1,1},{-1,-1,1,1},{1,1,1,1},{-1,-1,-1,-1}};
+    const float sz[6][4] = {{1,1,1,1},{-1,-1,-1,-1},{1,-1,-1,1},{-1,1,1,-1},{1,1,-1,-1},{-1,-1,1,1}};
+    for (int f = 0; f < 6; ++f) {
+        const unsigned b = unsigned(d.positions.size() / 3);
+        for (int v = 0; v < 4; ++v) {
+            d.positions.insert(d.positions.end(),
+                               { cx + sx[f][v] * hx, cy + sy[f][v] * hy, cz + sz[f][v] * hz });
+            d.normals.insert(d.normals.end(), { fn[f][0], fn[f][1], fn[f][2] });
+        }
+        d.indices.insert(d.indices.end(), { b, b + 1, b + 2, b, b + 2, b + 3 });
+    }
+}
+
+/// A MESH WITH THE UNIT CUBE'S BOUNDS AND ALMOST NONE OF ITS SHADOW: a plate
+/// lying on the cube's floor plus a 4 cm needle reaching its ceiling. The AABB
+/// is exactly the unit cube's, which is the whole point — the caster scan's
+/// box test, its channel test and (since the Item is recreated at the freed
+/// one's address) its identity test all say "nothing happened".
+static MeshData plateAndNeedleMesh()
+{
+    MeshData d;
+    appendBox(d, 0.0f, -0.475f, 0.0f, 0.5f,  0.025f, 0.5f);    // the plate: full bounds in x/z
+    appendBox(d, 0.0f,  0.025f, 0.0f, 0.02f, 0.475f, 0.02f);   // the needle: full bounds in y
+    return d;
+}
+
+/// The unit cube with UVs: a Cutout material's mask has to have something to
+/// be sampled by, or the alpha test reads one texel for the whole face and
+/// punches no holes at all (enginetest::unitCubeMesh carries no UVs).
+static MeshData uvCubeMesh()
+{
+    MeshData d = enginetest::unitCubeMesh();
+    d.uvs.clear();
+    for (size_t f = 0; f < d.vertexCount() / 4; ++f)
+        d.uvs.insert(d.uvs.end(), { 0.0f, 0.0f,  1.0f, 0.0f,  1.0f, 1.0f,  0.0f, 1.0f });
+    return d;
+}
+
+/// A 2x2 albedo texture with two transparent texels — an alpha mask a Cutout
+/// material punches holes with, and whose holes MOVE with the UV transform.
+static TextureId holeTexture(Scene *s)
+{
+    const unsigned char rgba[16] = { 255,255,255,255,  255,255,255,  0,
+                                     255,255,255,  0,  255,255,255,255 };
+    return s->createTexture(2, 2, rgba, true, false);
+}
+
+/// The slot `lamp` holds in the counted view, or -1.
+static int lampSlot(const ShadowStatus &st, NodeId lamp)
+{
+    for (const ShadowMapInfo &m : st.mapped) if (m.node == lamp) return int(m.slot);
+    return -1;
+}
+
+static std::vector<int> lampPassesOf(const ShadowStatus &st, const std::vector<NodeId> &lamps)
+{
+    std::vector<int> out;
+    out.reserve(lamps.size());
+    for (NodeId l : lamps) out.push_back(lampPasses(st, l));
+    return out;
+}
+
+static ShadowStatus frameN(Engine *e, const std::vector<NodeId> &lamps, std::vector<int> &out)
+{
+    e->renderOneFrame();
+    const ShadowStatus st = e->shadowStatus();
+    out = lampPassesOf(st, lamps);
+    return st;
+}
+
+static std::string passList(const std::vector<int> &p)
+{
+    std::string s;
+    for (size_t i = 0; i < p.size(); ++i) { if (i) s += "/"; s += std::to_string(p[i]); }
+    return s;
+}
+
+/// "Exactly lamp `which` re-rendered its map this frame, nobody else."
+/// `expect` is that map's pass cost: 8 for a point (its clear quad, six cube
+/// faces and the DPSM copy), 2 for a spot (a clear quad and one 2D map).
+static bool onlyLamp(const std::vector<int> &p, size_t which, int expect)
+{
+    for (size_t i = 0; i < p.size(); ++i)
+        if ((i == which) ? p[i] != expect : p[i] != 0) return false;
+    return true;
+}
+static const int kPointMapPasses = 8, kSpotMapPasses = 2;
+
+/// A few quiet frames, so the next one measures one edit and nothing else.
+static void settle(Engine *e, int frames = 3)
+{
+    for (int i = 0; i < frames; ++i) { e->renderOneFrame(); e->shadowStatus(); }
+}
+
+/// The atlas must hold `n` focused maps BEFORE a case that adds an n-th lamp,
+/// or the added lamp GROWS the atlas and every map legitimately re-renders.
+/// The count only ever grows, and only from a drawn scene's light list.
+static void ensureRoomForLamps(Engine *e, View *v, unsigned n)
+{
+    e->setShadowMapBudget(8u);
+    if (e->shadowStatus().focusedMaps >= n) return;
+    Scene *s = e->createScene("warmlamps");
+    v->setScene(s);
+    for (unsigned i = 0; i < n; ++i) {
+        const NodeId lamp = s->createNode();
+        s->setLight(lamp, cacheLamp(6.0f));
+        const float a = float(i) * 1.2f;
+        s->setNodeTransform(lamp, Vec3(9.0f * std::cos(a), 3.0f, 9.0f * std::sin(a)), Quat(), Vec3(1, 1, 1));
+    }
+    for (int i = 0; i < 16 && e->shadowStatus().focusedMaps < n; ++i) e->renderOneFrame();
+    e->destroyScene(s);
+}
+
+// T3n — A CASTER'S SHAPE: the swap, the cutout's UVs, and a parent's move.
+static void t3n_cache_shape(Engine *e, View *v)
+{
+    std::printf("-- T3n: a caster's SHAPE is a shadow input (mesh swap, cutout UVs, a parent's move)\n");
+    ensureRoomForThreeLamps(e, v);
+    CacheRoom r = buildCacheRoom(e, v, "t3n");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    e->shadowStatus();
+    int p[3];
+    for (int i = 0; i < 4; ++i) frame(e, p, r);
+
+    // (a) THE SAME-BOUNDS MESH SWAP (review item 1, HIGH). attachMesh destroys
+    //     and recreates the Item in one call, the allocator hands back the same
+    //     address, and the bounds and channels are equal — so before the fix
+    //     NOTHING told the cache that the mover is now a needle, and Light0's
+    //     map kept the solid cube's shadow for ever.
+    Image before;
+    v->readPixels(before);
+    const int litRef = probe(before, -4.25f, -11.75f);        // no occluder, same distance
+    const int solid  = probe(before, -4.25f, -4.25f);         // the cube's cast shadow
+    const MeshId needle = r.scene->createMesh(plateAndNeedleMesh());
+    CHECK(r.scene->attachMesh(r.mover, needle, r.mat), "the mover takes a same-bounds mesh");
+    ShadowStatus st = frame(e, p, r);
+    Image after;
+    v->readPixels(after);
+    const int swapped = probe(after, -4.25f, -4.25f);
+    std::printf("    mesh swap: lamp passes %d/%d/%d; the floor behind the mover %d -> %d (lit %d)\n",
+                p[0], p[1], p[2], solid, swapped, litRef);
+    CHECK(p[0] == 8 && p[1] == 0 && p[2] == 0,
+          "a same-bounds mesh swap re-renders that lamp's map THAT frame, and only it (%d/%d/%d)",
+          p[0], p[1], p[2]);
+    CHECK(litRef > 20 && solid < litRef / 2, "the cube shadowed the floor before the swap (%d vs %d)",
+          solid, litRef);
+    CHECK(swapped > (litRef * 3) / 4,
+          "and the swapped shape's shadow is in the pixels of that same frame (%d, lit %d)",
+          swapped, litRef);
+    frame(e, p, r);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0, "the frame after is quiet again (%d/%d/%d)",
+          p[0], p[1], p[2]);
+
+    // (a2) THE CUTOUT-MATERIAL DROP — the same case with the bounds IDENTICAL
+    //      by construction (the same mesh, a different material): the caster
+    //      scan has nothing but the Item's identity to go on, and the Item is
+    //      recreated at the freed one's address. The mover's shadow grows holes
+    //      in the frame the material lands.
+    PbrParams cp;
+    cp.albedo = Colour(0.85f, 0.85f, 0.85f);
+    cp.roughness = 0.9f;
+    cp.alphaMode = PbrAlphaMode::Cutout;
+    cp.alphaCutoff = 0.5f;
+    const MaterialId cutMat = r.scene->createPbrMaterial(cp);
+    CHECK(r.scene->setPbrTexture(cutMat, PbrTextureSlot::Albedo, holeTexture(r.scene)),
+          "the cutout material binds its alpha mask");
+    const MeshId uvCube = r.scene->createMesh(uvCubeMesh());
+    CHECK(r.scene->attachMesh(r.mover, uvCube, r.mat), "the mover takes a solid cube back");
+    settle(e, 4);
+    frame(e, p, r);
+    Image solidImg;
+    v->readPixels(solidImg);
+    const double solidMean = meanRect(solidImg, -5.2f, -5.2f, -3.4f, -3.4f);
+    CHECK(r.scene->attachMesh(r.mover, uvCube, cutMat),
+          "a cutout material drops on the mover — the SAME mesh, so the bounds cannot differ");
+    st = frame(e, p, r);
+    Image cutImg;
+    v->readPixels(cutImg);
+    const double cutMean = meanRect(cutImg, -5.2f, -5.2f, -3.4f, -3.4f);
+    std::printf("    cutout dropped: lamp passes %d/%d/%d; the shadow's mean %.1f -> %.1f\n",
+                p[0], p[1], p[2], solidMean, cutMean);
+    CHECK(p[0] == 8 && p[1] == 0 && p[2] == 0,
+          "dropping a CUTOUT material re-renders that lamp's map that frame, and only it (%d/%d/%d)",
+          p[0], p[1], p[2]);
+    CHECK(cutMean > solidMean * 1.15 + 1.0,
+          "and the mask's holes are in that frame's shadow (mean %.1f -> %.1f)", solidMean, cutMean);
+
+    // (b) A CUTOUT'S UV TRANSFORM (review item 2). The caster pass alpha-tests
+    //     the albedo map through our tiling piece, so tiling the mask moves the
+    //     holes in the shadow — while the same edit on an OPAQUE material moves
+    //     nothing at all.
+    // ITS OWN cutout material: the mover near Light0 wears the first one now,
+    // and an edit to a material two lamps can see would dirty both of them —
+    // correctly, but the case is about ONE lamp.
+    const MaterialId cutMat2 = r.scene->createPbrMaterial(cp);
+    CHECK(r.scene->setPbrTexture(cutMat2, PbrTextureSlot::Albedo, holeTexture(r.scene)),
+          "the second cutout material binds its mask");
+    const NodeId cut = r.scene->createNode();
+    r.scene->attachMesh(cut, uvCube, cutMat2);
+    r.scene->setNodeTransform(cut, Vec3(5.5f, 0.5f, -5.5f), Quat(), Vec3(1, 1, 1));   // Light1's reach
+    settle(e, 4);
+    frame(e, p, r);
+    Image uvBefore;
+    v->readPixels(uvBefore);
+    cp.uvScale[0] = 3.0f; cp.uvScale[1] = 3.0f;
+    CHECK(r.scene->setPbrMaterial(cutMat2, cp), "the cutout's UV scale changes");
+    st = frame(e, p, r);
+    Image uvAfter;
+    v->readPixels(uvAfter);
+    unsigned moved = 0, total = 0;
+    for (float z = -5.2f; z <= -3.4f; z += 0.1f)
+        for (float x = 3.4f; x <= 5.2f; x += 0.1f) {
+            const int a2 = probe(uvAfter, x, z), b2 = probe(uvBefore, x, z);
+            if (a2 < 0 || b2 < 0) continue;
+            ++total;
+            if (std::abs(a2 - b2) > 6) ++moved;
+        }
+    std::printf("    cutout uvScale: lamp passes %d/%d/%d; %u of %u shadow samples moved\n",
+                p[0], p[1], p[2], moved, total);
+    CHECK(p[0] == 0 && p[1] == 8 && p[2] == 0,
+          "a CUTOUT's uvScale edit re-renders the lamp its holes are in, that frame (%d/%d/%d)",
+          p[0], p[1], p[2]);
+    CHECK(total > 0 && moved * 5u > total,
+          "and the holes MOVED in that frame's shadow (%u of %u samples)", moved, total);
+    // The negative: the floor's opaque material tiles under every lamp.
+    PbrParams op;
+    op.albedo = Colour(0.85f, 0.85f, 0.85f);
+    op.roughness = 0.9f;
+    op.uvScale[0] = 4.0f; op.uvScale[1] = 4.0f;
+    CHECK(r.scene->setPbrMaterial(r.mat, op), "the opaque material's UV scale changes");
+    st = frame(e, p, r);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0,
+          "the same edit on an OPAQUE material re-renders nothing (%d/%d/%d)", p[0], p[1], p[2]);
+
+    // (c) A PARENT MOVES ITS CHILD (review item 6). The child's own transform
+    //     never changes; only the world AABB the scan reads does.
+    const NodeId parent = r.scene->createNode();
+    const NodeId child = r.scene->createNode();
+    r.scene->attachMesh(child, r.mesh, r.mat);
+    CHECK(r.scene->setNodeParent(child, parent), "the child parents");
+    r.scene->setNodeTransform(parent, Vec3(0, 0, 0), Quat(), Vec3(1, 1, 1));
+    r.scene->setNodeTransform(child, Vec3(-5.5f, 0.5f, 5.5f), Quat(), Vec3(1, 1, 1));   // Light2's reach
+    settle(e, 4);
+    frame(e, p, r);
+    r.scene->setNodeTransform(parent, Vec3(0.0f, 0.0f, 0.6f), Quat(), Vec3(1, 1, 1));
+    st = frame(e, p, r);
+    std::printf("    parent moved: lamp passes %d/%d/%d\n", p[0], p[1], p[2]);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 8,
+          "a PARENT moving its child re-renders the child's lamp, that frame (%d/%d/%d)",
+          p[0], p[1], p[2]);
+    e->destroyScene(r.scene);
+}
+
+// T3q — A POSE IS A SHADOW INPUT EVEN WHEN NO CLIP TIME MOVES (review item 3):
+// a paused blend-weight scrub, a clip switched off, and a bone taken manual.
+static void t3q_cache_pose(Engine *e, View *v)
+{
+    std::printf("-- T3q: a paused pose change re-renders the lamp it stands in\n");
+    ensureRoomForThreeLamps(e, v);
+    CacheRoom r = buildCacheRoom(e, v, "t3q");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+
+    // A two-bone rig in a cube: the upper half follows bone 1.
+    MeshData md = enginetest::unitCubeMesh();
+    const size_t vtx = md.vertexCount();
+    md.blendIndices.assign(vtx * 4, 0);
+    md.blendWeights.assign(vtx * 4, 0.0f);
+    for (size_t i = 0; i < vtx; ++i) {
+        md.blendIndices[i * 4] = (unsigned char)(md.positions[i * 3 + 1] > 0.0f ? 1 : 0);
+        md.blendWeights[i * 4] = 1.0f;
+    }
+    const MeshId skinned = r.scene->createMesh(md);
+    SkeletonDesc rig;
+    rig.id = "t3q-two-bone";
+    rig.bones.resize(2);
+    rig.bones[0].name = "root";  rig.bones[0].parent = -1; rig.bones[0].bindPosition = Vec3(0, -0.5f, 0);
+    rig.bones[1].name = "upper"; rig.bones[1].parent = 0;  rig.bones[1].bindPosition = Vec3(0, 0.5f, 0);
+    const NodeId actor = r.scene->createNode();
+    CHECK(r.scene->attachSkinnedMesh(actor, skinned, r.mat, rig), "the skinned caster attaches");
+    r.scene->setNodeTransform(actor, Vec3(-6.5f, 0.5f, -7.0f), Quat(), Vec3(1, 1, 1));   // Light0's reach
+
+    const auto lean = [](float deg) {
+        const float a = deg * 3.14159265f / 360.0f;
+        return Quat(std::cos(a), 0.0f, 0.0f, std::sin(a));   // (w,x,y,z) — about z
+    };
+    ClipDesc a, b;
+    a.id = "t3q-left";  a.name = "Left";  a.length = 1.0f;
+    b.id = "t3q-right"; b.name = "Right"; b.length = 1.0f;
+    BoneTrack ta; ta.bone = 1;
+    ta.keys.push_back(BoneKey{ 0.0f, Vec3(0, 0.5f, 0), lean(40.0f), Vec3(1, 1, 1) });
+    ta.keys.push_back(BoneKey{ 1.0f, Vec3(0, 0.5f, 0), lean(40.0f), Vec3(1, 1, 1) });
+    BoneTrack tb; tb.bone = 1;
+    tb.keys.push_back(BoneKey{ 0.0f, Vec3(0, 0.5f, 0), lean(-40.0f), Vec3(1, 1, 1) });
+    tb.keys.push_back(BoneKey{ 1.0f, Vec3(0, 0.5f, 0), lean(-40.0f), Vec3(1, 1, 1) });
+    a.tracks.push_back(ta);
+    b.tracks.push_back(tb);
+    const ClipDesc clips[2] = { a, b };
+    CHECK(r.scene->attachClips(actor, clips, 2), "both clips attach");
+
+    ClipState st2[2];
+    st2[0].name = "Left";  st2[0].time = 0.25f; st2[0].weight = 0.5f;
+    st2[1].name = "Right"; st2[1].time = 0.25f; st2[1].weight = 0.5f;
+    CHECK(r.scene->setClipStates(actor, st2, 2), "the blend is pushed");
+    e->shadowStatus();
+    settle(e, 5);
+    int p[3];
+    frame(e, p, r);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0, "a paused blend at rest re-renders nothing (%d/%d/%d)",
+          p[0], p[1], p[2]);
+
+    // (a) THE SCRUB: the same times, different weights — the pose moves and
+    //     nothing else does.
+    st2[0].weight = 0.95f; st2[1].weight = 0.05f;
+    CHECK(r.scene->setClipStates(actor, st2, 2), "the scrubbed blend is pushed");
+    frame(e, p, r);
+    std::printf("    weight scrub: lamp passes %d/%d/%d\n", p[0], p[1], p[2]);
+    CHECK(p[0] == 8 && p[1] == 0 && p[2] == 0,
+          "a paused blend-weight scrub re-renders that lamp, that frame (%d/%d/%d)", p[0], p[1], p[2]);
+    // ...and pushing the SAME state again is not a change.
+    CHECK(r.scene->setClipStates(actor, st2, 2), "the identical state is pushed again");
+    frame(e, p, r);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0,
+          "pushing an identical clip state re-renders nothing (%d/%d/%d)", p[0], p[1], p[2]);
+
+    // (b) A CLIP SWITCHED OFF drops its contribution: also a pose change.
+    ClipState solo;
+    solo.name = "Left"; solo.time = 0.25f; solo.weight = 1.0f;
+    CHECK(r.scene->setClipStates(actor, &solo, 1), "the other clip is switched off");
+    frame(e, p, r);
+    std::printf("    clip disabled: lamp passes %d/%d/%d\n", p[0], p[1], p[2]);
+    CHECK(p[0] == 8 && p[1] == 0 && p[2] == 0,
+          "disabling a clip re-renders that lamp, that frame (%d/%d/%d)", p[0], p[1], p[2]);
+
+    // (c) A BONE TAKEN MANUAL leaves the clips' control: the next evaluation
+    //     poses it differently, so the shadow must follow.
+    CHECK(r.scene->setBoneManual(actor, "upper", true), "the bone goes manual");
+    frame(e, p, r);
+    std::printf("    setBoneManual: lamp passes %d/%d/%d\n", p[0], p[1], p[2]);
+    CHECK(p[0] == 8 && p[1] == 0 && p[2] == 0,
+          "setBoneManual re-renders that lamp, that frame (%d/%d/%d)", p[0], p[1], p[2]);
+    CHECK(r.scene->setBoneManual(actor, "upper", true), "the same manual flag is pushed again");
+    frame(e, p, r);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0,
+          "and pushing the same flag again re-renders nothing (%d/%d/%d)", p[0], p[1], p[2]);
+    e->destroyScene(r.scene);
+}
+
+// T3t — SPOT LAMPS, AND THE SLOT ASSIGNMENT (review items 5 and 6). A spot's
+// map depends on its ORIENTATION (a point's does not — its six faces are
+// world-aligned), every point sits before every spot in the slot order
+// (HlmsPbs's type order), and adding or hiding one lamp must not re-fix the
+// others: a re-fixed lamp is a re-rendered map, which is the hitch.
+struct SpotRoom {
+    Scene *scene = nullptr;
+    std::vector<NodeId> lamps;      // P0, P1, S0, S1
+    std::vector<NodeId> casters;
+    MeshId mesh = 0;
+    MaterialId mat = 0;
+};
+
+static SpotRoom buildSpotRoom(Engine *e, View *v, const char *name)
+{
+    SpotRoom r;
+    r.scene = e->createScene(name);
+    Scene *s = r.scene;
+    v->setScene(s);
+    s->setAmbient(Colour(0.02f, 0.02f, 0.025f), Colour(0.01f, 0.01f, 0.015f));
+    r.mesh = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams white; white.albedo = Colour(0.85f, 0.85f, 0.85f); white.roughness = 0.9f;
+    r.mat = s->createPbrMaterial(white);
+    const NodeId floor = s->createNode();
+    s->attachMesh(floor, r.mesh, r.mat);
+    s->setNodeTransform(floor, Vec3(0, -0.1f, 0), Quat(), Vec3(40.0f, 0.2f, 40.0f));
+    const Vec3 at[4] = { Vec3(-8, 3, -8), Vec3(8, 3, -8), Vec3(-8, 5, 8), Vec3(8, 5, 8) };
+    for (int i = 0; i < 4; ++i) {
+        const NodeId lamp = s->createNode();
+        LightDesc d;
+        d.type = i < 2 ? LightType::Point : LightType::Spot;
+        d.colour = Colour(1, 1, 1);
+        d.intensity = 1.5f;
+        d.range = 9.0f;
+        d.spotAngleDegrees = 60.0f;
+        d.castShadows = true;
+        s->setLight(lamp, d);
+        s->setNodeTransform(lamp, at[i], Quat(), Vec3(1, 1, 1));   // identity = straight down
+        r.lamps.push_back(lamp);
+        const NodeId c = s->createNode();
+        s->attachMesh(c, r.mesh, r.mat);
+        const float dx = at[i].x < 0 ? 1.2f : -1.2f, dz = at[i].z < 0 ? 1.2f : -1.2f;
+        s->setNodeTransform(c, Vec3(at[i].x + dx, 0.5f, at[i].z + dz), Quat(), Vec3(1, 1, 1));
+        r.casters.push_back(c);
+    }
+    CameraDesc c;
+    c.position = Vec3(0.0f, kCamHeight, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);
+    c.fovDegrees = 60.0f;
+    v->setCamera(c);
+    v->setShadows(true);
+    return r;
+}
+
+static void t3t_cache_spots_and_slots(Engine *e, View *v)
+{
+    std::printf("-- T3t: spot lamps, the slot order, and adding or hiding one lamp\n");
+    ensureRoomForLamps(e, v, 5u);
+    SpotRoom r = buildSpotRoom(e, v, "t3t");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    e->shadowStatus();
+    std::vector<int> p;
+    ShadowStatus st = frameN(e, r.lamps, p);
+    settle(e, 3);
+    st = frameN(e, r.lamps, p);
+    std::printf("    at rest: lamp passes %s; slots %d/%d/%d/%d of %u maps\n", passList(p).c_str(),
+                lampSlot(st, r.lamps[0]), lampSlot(st, r.lamps[1]), lampSlot(st, r.lamps[2]),
+                lampSlot(st, r.lamps[3]), st.focusedMaps);
+    CHECK(st.unmapped.empty() && st.viewCached, "all four lamps hold a cached map");
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 0,
+          "two points and two spots are all quiet at rest (%s)", passList(p).c_str());
+    const int pointMax = std::max(lampSlot(st, r.lamps[0]), lampSlot(st, r.lamps[1]));
+    const int spotMin  = std::min(lampSlot(st, r.lamps[2]), lampSlot(st, r.lamps[3]));
+    CHECK(pointMax > 0 && spotMin > 0 && pointMax < spotMin,
+          "every POINT sits before every SPOT in the slot order (points <= %d, spots >= %d)",
+          pointMax, spotMin);
+
+    // (a) A SPOT'S ORIENTATION IS A SHADOW INPUT; A POINT'S IS NOT.
+    const float ang = 12.0f * 3.14159265f / 360.0f;
+    r.scene->setNodeTransform(r.lamps[2], Vec3(-8, 5, 8),
+                              Quat(std::cos(ang), std::sin(ang), 0.0f, 0.0f), Vec3(1, 1, 1));
+    st = frameN(e, r.lamps, p);
+    std::printf("    spot rotated: %s\n", passList(p).c_str());
+    CHECK(onlyLamp(p, 2, kSpotMapPasses), "rotating a SPOT re-renders its map only, that frame (%s)",
+          passList(p).c_str());
+    r.scene->setNodeTransform(r.lamps[0], Vec3(-8, 3, -8),
+                              Quat(std::cos(ang), std::sin(ang), 0.0f, 0.0f), Vec3(1, 1, 1));
+    st = frameN(e, r.lamps, p);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 0,
+          "rotating a POINT re-renders nothing — its six faces are world-aligned (%s)",
+          passList(p).c_str());
+
+    // (b) A CASTER INSIDE A SPOT'S REACH: that spot only.
+    r.scene->setNodeTransform(r.casters[3], Vec3(8.0f - 1.2f, 0.5f, 8.0f - 1.9f), Quat(), Vec3(1, 1, 1));
+    st = frameN(e, r.lamps, p);
+    std::printf("    caster moved under spot S1: %s\n", passList(p).c_str());
+    CHECK(onlyLamp(p, 3, kSpotMapPasses), "a caster moving inside a spot's reach re-renders that spot only (%s)",
+          passList(p).c_str());
+
+    // (c) ADDING A LAMP WITHIN BUDGET re-fixes nobody else (review item 5): the
+    //     fixed range is aligned at the START of the slots and a lamp keeps the
+    //     slot it holds, so a new spot appends inside its own type's region.
+    settle(e, 3);
+    const NodeId added = r.scene->createNode();
+    LightDesc d;
+    d.type = LightType::Spot;
+    d.intensity = 1.5f;
+    d.range = 9.0f;
+    d.spotAngleDegrees = 60.0f;
+    d.castShadows = true;
+    r.scene->setLight(added, d);
+    r.scene->setNodeTransform(added, Vec3(0, 5, 0), Quat(), Vec3(1, 1, 1));
+    // NO CASTER FOR IT: every other lamp's REACH BOX reaches the middle of this
+    // room (a spot's box is its apex plus its far cap clipped to the range
+    // sphere — wide cones degenerate to the sphere's box), so a caster placed
+    // for the new lamp would legitimately dirty its neighbours and the case
+    // would stop being about the slot assignment.
+    std::vector<NodeId> five = r.lamps;
+    five.push_back(added);
+    const unsigned mapsBefore = st.focusedMaps;
+    st = frameN(e, five, p);
+    std::printf("    fifth lamp added (%u maps): %s\n", st.focusedMaps, passList(p).c_str());
+    CHECK(st.focusedMaps == mapsBefore, "the atlas did not have to grow (%u maps)", st.focusedMaps);
+    CHECK(onlyLamp(p, 4, kSpotMapPasses), "adding a lamp within budget renders ITS map alone (%s)",
+          passList(p).c_str());
+    const int slotsNow[4] = { lampSlot(st, r.lamps[0]), lampSlot(st, r.lamps[1]),
+                              lampSlot(st, r.lamps[2]), lampSlot(st, r.lamps[3]) };
+    CHECK(slotsNow[0] == 1 && slotsNow[1] == 2 && slotsNow[2] == 3 && slotsNow[3] == 4,
+          "and the four lamps that were already cached kept their slots (%d/%d/%d/%d)",
+          slotsNow[0], slotsNow[1], slotsNow[2], slotsNow[3]);
+
+    // (c2) ADDING A POINT when the points' region is full moves ONE spot out of
+    //      the way (HlmsPbs reads the slots as cumulative type ranges, so a
+    //      point can never sit after a spot) — one re-rendered map, not every
+    //      spot's.
+    settle(e, 3);
+    const NodeId addedPoint = r.scene->createNode();
+    LightDesc pd;
+    pd.type = LightType::Point;
+    pd.intensity = 1.5f;
+    pd.range = 9.0f;
+    pd.castShadows = true;
+    r.scene->setLight(addedPoint, pd);
+    r.scene->setNodeTransform(addedPoint, Vec3(0, 14, 0), Quat(), Vec3(1, 1, 1));   // above the room
+    std::vector<NodeId> six = five;
+    six.push_back(addedPoint);
+    st = frameN(e, six, p);
+    std::printf("    point added to a full point region: %s\n", passList(p).c_str());
+    int movedSpots = 0, movedPoints = 0;
+    for (size_t i = 0; i < 5; ++i) {
+        if (p[i] == 0) continue;
+        (p[i] == kSpotMapPasses ? movedSpots : movedPoints)++;
+    }
+    CHECK(p[5] == kPointMapPasses, "the added point's own map renders (%s)", passList(p).c_str());
+    CHECK(movedPoints == 0 && movedSpots == 1,
+          "exactly ONE spot was moved out of the points' region, and no point was (%s)",
+          passList(p).c_str());
+    settle(e, 2);
+    st = frameN(e, six, p);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 0 && p[4] == 0 && p[5] == 0,
+          "and the frame after the move is quiet (%s)", passList(p).c_str());
+
+    // (d) HIDING A LAMP re-fixes nobody: the survivors keep their slots.
+    settle(e, 2);
+    r.scene->setNodeVisible(r.lamps[1], false);
+    st = frameN(e, six, p);
+    std::printf("    lamp 1 hidden: %s\n", passList(p).c_str());
+    CHECK(p[1] == -1, "the hidden lamp holds no slot at all (%s)", passList(p).c_str());
+    CHECK(p[0] == 0 && p[2] == 0 && p[3] == 0 && p[4] == 0 && p[5] == 0,
+          "hiding a lamp re-renders no other lamp's map (%s)", passList(p).c_str());
+    st = frameN(e, six, p);
+    CHECK(p[0] == 0 && p[2] == 0 && p[3] == 0 && p[4] == 0 && p[5] == 0,
+          "and the frame after is quiet too (%s)", passList(p).c_str());
+    e->destroyScene(r.scene);
+}
+
+// T3v — THE ATLAS REBUILD: a resolution change re-renders every cached map
+// (the maps are new textures), and the picture is still right afterwards.
+static void t3v_atlas_rebuild(Engine *e, View *v)
+{
+    std::printf("-- T3v: an atlas rebuild re-renders every cached map, and the picture survives\n");
+    ensureRoomForThreeLamps(e, v);
+    CacheRoom r = buildCacheRoom(e, v, "t3v");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    e->shadowStatus();
+    settle(e, 6);
+    int p[3];
+    frame(e, p, r);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0, "quiet before the rebuild (%d/%d/%d)", p[0], p[1], p[2]);
+    const unsigned mapsBefore = e->shadowStatus().focusedMaps;
+    e->setShadowResolution(1024u);
+    int total[3] = { 0, 0, 0 };
+    for (int i = 0; i < 6; ++i) {
+        frame(e, p, r);
+        for (int k = 0; k < 3; ++k) if (p[k] > 0) total[k] += p[k];
+    }
+    const ShadowStatus st = e->shadowStatus();
+    std::printf("    after the 1024 rebuild: passes %d/%d/%d over six frames, %u maps at %u\n",
+                total[0], total[1], total[2], st.focusedMaps, st.resolution);
+    CHECK(st.resolution == 1024u && st.focusedMaps == mapsBefore,
+          "the atlas came back at 1024 with its map count (%u maps)", st.focusedMaps);
+    CHECK(total[0] == 8 && total[1] == 8 && total[2] == 8,
+          "every cached map re-rendered EXACTLY once into the new atlas (%d/%d/%d)",
+          total[0], total[1], total[2]);
+    frame(e, p, r);
+    CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0, "and then it is quiet again (%d/%d/%d)", p[0], p[1], p[2]);
+    Image img;
+    v->readPixels(img);
+    const int shadowed = probe(img, -4.25f, -4.25f);
+    const int lit = probe(img, -4.25f, -11.75f);
+    const double ratio = lit > 0 ? double(shadowed) / double(lit) : 1.0;
+    std::printf("    after the rebuild: the mover's shadow %d vs lit %d (ratio %.2f)\n", shadowed, lit, ratio);
+    CHECK(ratio < 0.35, "the picture is still right after the rebuild (ratio %.2f < 0.35)", ratio);
+    e->setShadowResolution(2048u);
+    settle(e, 4);
+    e->destroyScene(r.scene);
+}
+
 // T3r — THE PLANAR MIRROR REUSES THE LAMP MAPS (P5; D3 = A: the reflect node's
 // focused count follows the main node's, so the mirror caches every lamp).
 static void t3_cache_reflect(Engine *e, View *v)
@@ -946,10 +1552,16 @@ int main(int argc, char **argv)
     // The cache cases after T1: three lamps want four maps, and the atlas never
     // shrinks — they must not run before the cases that assert a small one.
     if (only.empty() || only == "t3")  t3_cache_view(engine.get(), v);
+    if (only.empty() || only == "t3n") t3n_cache_shape(engine.get(), v);
+    if (only.empty() || only == "t3q") t3q_cache_pose(engine.get(), v);
+    if (only.empty() || only == "t3v") t3v_atlas_rebuild(engine.get(), v);
     if (only.empty() || only == "t3r") t3_cache_reflect(engine.get(), v);
     if (only.empty() || only == "t3p") t3_cache_probe(engine.get(), v);
     if (only.empty() || only == "t3s") t3_counters(engine.get(), v);
     if (only.empty() || only == "t3u") t3_undrawn_gi_rebuild(engine.get(), v);
+    // T3t LAST of the cache cases: its five-lamp warm-up takes the atlas to
+    // eight maps, and T3u needs an atlas that can still GROW.
+    if (only.empty() || only == "t3t") t3t_cache_spots_and_slots(engine.get(), v);
     if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
     if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);
     if (only.empty() || only == "t6")  t6_atlas_overlay(engine.get(), v);
