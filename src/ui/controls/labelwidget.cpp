@@ -34,9 +34,6 @@ LabelWidget::LabelWidget(QWidget* parent) : QWidget(parent), ui(new Ui::LabelWid
     ui->display->setMinimumWidth(0);
     ui->label->setMinimumWidth(0);
 
-    // for some reason the palette cannot be set and stylesheet changes
-    // don't apply after the main app is run, set any styles here... !
-    //ui->lineEdit->setStyleSheet("background-color: red; padding: 8px; margin: 0");
 }
 
 LabelWidget::~LabelWidget()

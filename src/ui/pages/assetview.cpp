@@ -1300,7 +1300,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	l->addWidget(updateAsset);
 
 	metadata->setLayout(l);
-	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
 	auto header = new QLabel("Asset Metadata");
 	header->setAlignment(Qt::AlignCenter);
 	header->setStyleSheet(StyleSheet::AssetViewMetadataHeader());
