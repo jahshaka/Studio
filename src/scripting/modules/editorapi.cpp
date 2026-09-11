@@ -367,8 +367,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "puts the keyboard in the console input — exactly what the Ctrl+` chord does, "
           "through the same function; `tab: \"assets\"` brings the asset browser forward "
           "without closing the console tab. `console: true|false` adds or removes the Console "
-          "tab itself (false returns the tray to Assets). `height: px` resizes the tray (at least "
-          "40), and the right column's Presets panel follows so its top stays on the tray's top "
+          "tab itself (false returns the tray to Assets). `height: px` resizes the tray (at least 40; a request below the tray's own "
+          "minimum content height — ~230 px at 1080 — lands AT that minimum, read the result from "
+          "trayTop), and the right column's Presets panel follows so its top stays on the tray's top "
           "line. Called with no argument it reads, "
           "like editor.trayState().",
           Needs::Window },

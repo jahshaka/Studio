@@ -151,15 +151,26 @@ int main(int argc, char **argv)
               qAbs(tray.value("presetsTop").toInt() - tray.value("trayTop").toInt()) <= 2,
           "the Presets panel's top is on the Tray's top line");
     {
-        const QJsonObject tall = readObject(mcp, QStringLiteral("editor.tray({height: 160})"));
+        // TWO resizes in a known order, so the claim does not depend on the
+        // height the app RESTORED (the layout is saved at exit, so a persistent
+        // home opens with whatever the last run left — the push #14 gate went
+        // red from its second run in one home). Both heights sit above the
+        // tray's own minimum (~230 px at 1080; Qt clamps a smaller request to it).
+        const QJsonObject tall = readObject(mcp, QStringLiteral("editor.tray({height: 420})"));
+        settle(mcp);
+        const QJsonObject atTall = readObject(mcp, QStringLiteral("editor.trayState()"));
+        const QJsonObject shorter = readObject(mcp, QStringLiteral("editor.tray({height: 300})"));
         settle(mcp);
         const QJsonObject after = readObject(mcp, QStringLiteral("editor.trayState()"));
-        std::printf("    presets line after a 160 px tray: trayTop=%d presetsTop=%d\n",
+        std::printf("    presets line: 420 px tray trayTop=%d presetsTop=%d; 300 px tray trayTop=%d presetsTop=%d\n",
+                    atTall.value("trayTop").toInt(), atTall.value("presetsTop").toInt(),
                     after.value("trayTop").toInt(), after.value("presetsTop").toInt());
-        CHECK(!tall.isEmpty() && after.value("trayTop").toInt() > tray.value("trayTop").toInt(),
+        CHECK(!tall.isEmpty() && !shorter.isEmpty()
+                  && after.value("trayTop").toInt() > atTall.value("trayTop").toInt() + 60,
               "editor.tray({height}) resizes the Tray (a shorter Tray starts lower)");
-        CHECK(qAbs(after.value("presetsTop").toInt() - after.value("trayTop").toInt()) <= 2,
-              "…and the Presets panel follows it onto the same line");
+        CHECK(qAbs(atTall.value("presetsTop").toInt() - atTall.value("trayTop").toInt()) <= 2
+                  && qAbs(after.value("presetsTop").toInt() - after.value("trayTop").toInt()) <= 2,
+              "…and the Presets panel follows it onto the same line at both heights");
     }
     tray = readObject(mcp, QStringLiteral("editor.trayState()"));
     // ONE TAB BAR PER CONCEPT (smoke L10 item 6). The tray's dock sits tabbed
