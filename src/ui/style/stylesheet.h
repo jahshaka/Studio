@@ -350,7 +350,6 @@ public:
 
 	// materials shader assets (shaderassetwidget.cpp)
 	static const QString ShaderAssetConfirmDialog();
-//@@CLASSIC-DECLS@@
 };
 
 #endif // JAH_STYLESHEET_H

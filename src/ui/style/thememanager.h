@@ -50,12 +50,13 @@ public:
     // is constructed and before ANY widget (the Upgrader dialog is the first).
     static void applyAtStartup(QApplication &app);
 
-    // Crud sweeper for Qlementine mode: recursively clears every stylesheet on
-    // root and its child widgets so the QStyle owns the whole subtree. Reaches
-    // what the StyleSheet:: kill switch cannot — .ui-embedded sheets and raw
-    // setStyleSheet crud applied earlier in a constructor. No-op under Classic.
-    // Call at the END of a constructor, after setupUi and sheet-pushing code.
-    static void clearClassicSheets(QWidget *root);
+    // (clearClassicSheets — a recursive "wipe every sheet under this widget"
+    // for Qlementine mode — was deleted by the theme sweep, platform audit
+    // F-S1: it never had a caller, and after the sweep there is nothing left
+    // for it to clear. Classic CSS lives only in StyleSheet:: getters that
+    // return "" under Qlementine, and the few sheets Qlementine does carry are
+    // this class's own chrome — exactly what a blanket sweeper would have
+    // wiped. app.styleSheets / theme.sheets is the guard instead.)
 
     // THE chrome button spec (owner direction, one definition for all page
     // chrome): grey rounded button matching the blue accent buttons'

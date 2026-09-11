@@ -22,8 +22,16 @@
 // and then elided it to "T…" at paint. JahQlementineStyle (thememanager.cpp)
 // recomputes the position from the bar; this checks it with a forged stale
 // option.
+//
+// 3. An icon-over-caption item (an IconMode list: the Materials presets, the
+// node palette) is laid out icon ABOVE text. Qlementine ignores
+// decorationPosition, sizing and painting every item icon-left/text-right, so
+// those lists lost their captions; JahQlementineStyle routes such items to
+// QCommonStyle's layout.
 #include <QApplication>
 #include <QStyleOptionTab>
+#include <QListWidget>
+#include <QStyleOptionViewItem>
 #include <QTabBar>
 #include <QPointer>
 #include <QStyle>
@@ -96,6 +104,31 @@ int main(int argc, char **argv)
         CHECK(s->sizeFromContents(QStyle::CT_TabBarTab, &dragged, QSize(), &bar)
                   != s->sizeFromContents(QStyle::CT_TabBarTab, &first, QSize(), &bar),
               "tabs: a dragged tab's pixmap keeps its lone-tab metrics");
+    }
+
+    // ---- 3. icon-over-caption items --------------------------------------------
+    {
+        QListWidget list;
+        list.setViewMode(QListView::IconMode);
+        list.setIconSize(QSize(48, 48));
+        QPixmap px(48, 48);
+        px.fill(Qt::gray);
+        auto *item = new QListWidgetItem(QIcon(px), QStringLiteral("Local Normal"), &list);
+        list.show();
+        QApplication::processEvents();
+        QStyleOptionViewItem opt;
+        opt.initFrom(&list);
+        opt.features = QStyleOptionViewItem::HasDecoration | QStyleOptionViewItem::HasDisplay;
+        opt.icon = item->icon();
+        opt.text = item->text();
+        opt.decorationSize = QSize(48, 48);
+        opt.decorationPosition = QStyleOptionViewItem::Top;
+        opt.displayAlignment = Qt::AlignHCenter | Qt::AlignBottom;
+        const QSize sz = QApplication::style()->sizeFromContents(QStyle::CT_ItemViewItem, &opt, QSize(), &list);
+        CHECK(sz.height() >= 48 + opt.fontMetrics.height(),
+              "items: an icon-over-caption item is tall enough for the icon AND its caption");
+        CHECK(sz.width() < 48 + opt.fontMetrics.horizontalAdvance(opt.text),
+              "items: ...and not as wide as icon-beside-text");
     }
 
     // ---- 1. proxy ownership ---------------------------------------------------

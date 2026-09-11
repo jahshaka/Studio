@@ -446,16 +446,6 @@ void ThemeManager::switchifyMenuToggles(QMenu *menu)
     }
 }
 
-void ThemeManager::clearClassicSheets(QWidget *root)
-{
-    if (s_classicActive || !root) return;
-
-    if (!root->styleSheet().isEmpty()) root->setStyleSheet(QString());
-    const auto children = root->findChildren<QWidget *>();
-    for (auto *w : children)
-        if (!w->styleSheet().isEmpty()) w->setStyleSheet(QString());
-}
-
 QString ThemeManager::topMenuButtonSheet(TopMenuState state)
 {
     if (s_classicActive) return QString();
