@@ -75,18 +75,33 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     floorLines->setEmissiveColor(QColor(126, 130, 140));
     floorLines->setEmissiveIntensity(0.22f);          // legible from every angle
 
-    auto wallTile = iris::PbrMaterial::create();      // truly WHITE wall tiles
-    wallTile->setBaseColor(QColor(240, 242, 246));
+    // WALL TILES: a MID GREY that is LIT, not a white sheet that emits (owner
+    // smoke S10, 2026-09-11: "the Avatar Arena is far too bright, the bottom
+    // half of the walls blows out white"). The old tile was base (240,242,246)
+    // PLUS emissive white 0.30 "because verticals get no key light". They do
+    // get it — unevenly: the room's light is a 7.5 m ceiling AREA panel, whose
+    // downward cosine leaves a wall dim under the ceiling and brightest at the
+    // skirt. The page renders LDR with no tonemapper (pinWorkspaceGrade), so
+    // albedo 0.94 under the skirt's light already sat at 1.0 and the +0.30
+    // constant — added to lift the dim top — clamped the whole lower half to
+    // 255/255/255 (tests/avatar S12 measures exactly that strip). Emissive on
+    // a large surface is the one thing an LDR chain cannot roll off; the
+    // key light itself is set in AvatarPreviewModel::buildDocument.
+    auto wallTile = iris::PbrMaterial::create();
+    wallTile->setBaseColor(QColor(150, 152, 158));
     wallTile->setMetallicFactor(0.0f);
-    wallTile->setRoughnessFactor(0.6f);
-    wallTile->setEmissiveColor(QColor(255, 255, 255));
-    wallTile->setEmissiveIntensity(0.30f);            // verticals get no key light
+    wallTile->setRoughnessFactor(0.6f);               // lit by the ceiling panel, never self-lit
 
-    auto wallGlow = iris::PbrMaterial::create();      // the seam light, a clean line
-    wallGlow->setBaseColor(QColor(255, 255, 255));
-    wallGlow->setEmissiveColor(QColor(228, 236, 255));
-    wallGlow->setEmissiveIntensity(1.6f);
-    wallGlow->setRoughnessFactor(1.0f);
+    auto wallSeam = iris::PbrMaterial::create();      // the seam light, a clean line
+    wallSeam->setBaseColor(QColor(255, 255, 255));
+    wallSeam->setEmissiveColor(QColor(228, 236, 255));
+    // 0.55, not 1.6: the seam is the brightest thing in the room and has to
+    // read as a light, but a 1.6 emitter is 60% of the way past white before
+    // any lighting is added — it clamped to 255/255/255, and so did its image
+    // in the floor's planar reflection. 0.55 plus the light the strip catches
+    // lands just under white, so the line is a LIGHT rather than a hole.
+    wallSeam->setEmissiveIntensity(0.55f);
+    wallSeam->setRoughnessFactor(1.0f);
 
     auto ceiling = iris::PbrMaterial::create();       // soft light panel
     ceiling->setBaseColor(QColor(246, 248, 251));
@@ -139,25 +154,53 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
         }
     }
 
-    // Walls: a thin glowing slab just OUTSIDE each wall line, then 10x4 white
-    // tiles standing 3cm proud of it; the glow shows only in the 3cm gaps.
-    struct Wall { iris::Vec3 glowPos, glowHalf, axisRight, axisUp; iris::Vec3 tileNormalOffset; iris::Vec3 tileHalf; };
+    // Walls: glowing SEAM STRIPS in the plane just OUTSIDE each wall line, then
+    // 10x4 tiles standing 3cm proud of them; the glow shows in the 3cm gaps.
+    //
+    // The strips replace v2's single emissive slab spanning the WHOLE wall
+    // (10 x 4 m of emitter per wall, 97% of it hidden behind tiles). Same
+    // picture — every ray through a gap lands inside the gap's own footprint on
+    // the strip plane, and the strip is 1 cm wider than that on each side — with
+    // 90% less emitting surface. Hidden emitters are not free: a voxel GI
+    // solver injects every emissive surface whether or not a camera sees it, so
+    // the slab was 160 m² of light waiting for anyone who enabled GI on this
+    // document (pinWorkspaceGrade keeps it off). The emitter that remains is
+    // exactly the line the design asks to see (owner smoke S10).
+    struct Wall {
+        iris::Vec3 origin, axisRight, axisUp;         // the seam plane and its frame
+        iris::Vec3 seamVertHalf, seamHorizHalf;       // strip half-extents, world axes
+        iris::Vec3 tileNormalOffset, tileHalf;
+    };
     const float tw = kTile * kFaceWall * 0.5f;        // tile half-size on the wall
     const float t  = 0.015f;                          // tile thickness (half)
+    // The visible gap is 3cm (1 - kFaceWall); the strip is a centimetre wider
+    // on each side so a grazing view never catches a dark slit at its edge.
+    const float sw = kTile * (1.0f - kFaceWall) * 0.5f + 0.01f;
     const Wall walls[4] = {
-        { {0, mid, -half - 0.01f}, {half, mid, 0.01f}, {1,0,0}, {0,1,0}, {0, 0,  t}, {tw, tw, t} },   // north
-        { {0, mid,  half + 0.01f}, {half, mid, 0.01f}, {1,0,0}, {0,1,0}, {0, 0, -t}, {tw, tw, t} },   // south
-        { { half + 0.01f, mid, 0}, {0.01f, mid, half}, {0,0,1}, {0,1,0}, {-t, 0, 0}, {t, tw, tw} },   // east
-        { {-half - 0.01f, mid, 0}, {0.01f, mid, half}, {0,0,1}, {0,1,0}, { t, 0, 0}, {t, tw, tw} },   // west
+        { {0, mid, -half - 0.01f}, {1,0,0}, {0,1,0},
+          {sw, mid, 0.01f}, {half, sw, 0.01f}, {0, 0,  t}, {tw, tw, t} },   // north
+        { {0, mid,  half + 0.01f}, {1,0,0}, {0,1,0},
+          {sw, mid, 0.01f}, {half, sw, 0.01f}, {0, 0, -t}, {tw, tw, t} },   // south
+        { { half + 0.01f, mid, 0}, {0,0,1}, {0,1,0},
+          {0.01f, mid, sw}, {0.01f, sw, half}, {-t, 0, 0}, {t, tw, tw} },   // east
+        { {-half - 0.01f, mid, 0}, {0,0,1}, {0,1,0},
+          {0.01f, mid, sw}, {0.01f, sw, half}, { t, 0, 0}, {t, tw, tw} },   // west
     };
     for (const Wall &w : walls) {
-        slab(wallGlow, "avatar-wall-glow", w.glowPos, w.glowHalf);
+        // One strip per seam: the 11 tile columns' edges, the 5 row edges
+        // (the lowest is the skirt at the floor, the highest the ceiling line).
+        for (int c = 0; c <= kFloorTiles; ++c)
+            slab(wallSeam, "avatar-wall-seam",
+                 w.origin + w.axisRight * ((c - kFloorTiles * 0.5f) * kTile), w.seamVertHalf);
+        for (int r = 0; r <= kWallRows; ++r)
+            slab(wallSeam, "avatar-wall-seam",
+                 w.origin + w.axisUp * ((r - kWallRows * 0.5f) * kTile), w.seamHorizHalf);
         for (int r = 0; r < kWallRows; ++r)
             for (int c = 0; c < kFloorTiles; ++c) {
                 const float u = (c - (kFloorTiles - 1) * 0.5f) * kTile;
                 const float v = (r - (kWallRows - 1) * 0.5f) * kTile;
                 slab(wallTile, "avatar-wall-tile",
-                     w.glowPos + w.axisRight * u + w.axisUp * v + w.tileNormalOffset,
+                     w.origin + w.axisRight * u + w.axisUp * v + w.tileNormalOffset,
                      w.tileHalf);
             }
     }
@@ -170,6 +213,31 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
 
     scene->rootNode->addChild(group);
     return group;
+}
+
+void pinWorkspaceGrade(const iris::ScenePtr &scene)
+{
+    if (!scene) return;
+    // Custom: no World Mode tier resolves rows through this document, ever.
+    scene->worldMode = -1;
+    // GI off, and the tier it would come back at is Medium rather than the
+    // document default's Epic — a workspace room is never the place to pay for
+    // three bounces, and the binding is process-wide (R0.5).
+    scene->giMode = iris::GiMode::OFF;
+    scene->giTier = 1;
+    // No tonemapper, no bloom: the room is authored in the numbers it renders
+    // with. (Both are iris::Scene defaults; stated here so a change to those
+    // defaults cannot silently re-grade the page.)
+    scene->hdrEnabled  = false;
+    scene->bloomEnabled = false;
+    // If HDR is ever switched on for this surface, the exposure is PINNED
+    // (min == max) — a workspace that breathed with auto-exposure would make
+    // every avatar screenshot a different picture.
+    scene->exposureMin = scene->exposure;
+    scene->exposureMax = scene->exposure;
+    scene->ssaoEnabled = false;
+    scene->smaaPreset  = -1;
+    scene->ssrMode     = 0;
 }
 
 const char *modeName(SpaceMode mode)

@@ -32,8 +32,10 @@
 // is hidden, which is the accepted behaviour until an X-ray mode exists.
 #include "../support/previewdump.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include <QApplication>
 #include <QColor>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -393,6 +395,163 @@ int main(int argc, char **argv)
             CHECK(model.rigPoints().isEmpty() && scene.overlayMarkers() == 0,
                   "S11: a rig with no recognizable joints draws nothing and does not fail");
             model.setRigVisible(false);
+        }
+    }
+
+    // ---- S12 (smoke S10): the ARENA is a LIT room, not a blown-out one ----
+    //
+    // The owner's smoke report: "the Avatar Arena is far too bright: the bottom
+    // half of the walls blows out white". The page renders LDR with no
+    // tonemapper (space::pinWorkspaceGrade states that in one place), so a wall
+    // that is nearly white AND emissive has nowhere to go: every channel clamps
+    // at 255 and the tile grid dissolves into a sheet. What this pins:
+    //   * the far wall is NOT clipped — no channel at 255 anywhere on a
+    //     5-point vertical strip down its middle;
+    //   * the wall reads DARKER than the seam light beside it (the design is
+    //     lit-from-within architecture: the seam has to be the bright thing);
+    //   * the far wall as an AREA is white only along its seam lines (pre-fix
+    //     70% of it was white);
+    //   * the Grid space (the page's other look) blows out nothing;
+    //   * the workspace grade the room is authored against (no HDR, no bloom,
+    //     no GI, pinned exposure) is on the document, not an accident of
+    //     iris::Scene's defaults.
+    // Its own 512x384 view and its own model with the mannequin standing in the
+    // room, seen through AvatarPreviewScene's own framing.
+    {
+        const int AW = 512, AH = 384;
+        View *arenaView = engine->createOffscreenView("arena", unsigned(AW), unsigned(AH),
+                                                      Colour(28/255.f, 30/255.f, 36/255.f));
+        CHECK(arenaView != nullptr, "S12: the arena view");
+        if (arenaView) {
+            avatar::AvatarPreviewModel room;
+            // The MANNEQUIN stands in it, because that is the picture the page
+            // shows and the framing it uses: a 1.75 m subject, the room at its
+            // authored 1 u = 1 m, the camera where AvatarPreviewScene puts it.
+            CHECK(room.load(QString::fromUtf8(kMannequin)), "S12: the mannequin loads into the room");
+            AvatarPreviewScene arena(engine);
+            CHECK(arena.attach(arenaView), "S12: the arena scene attaches");
+            arena.setModel(&room);
+            const bool built = room.setSpaceMode(avatar::SpaceMode::Modern);
+            CHECK(built, "S12: the Modern room builds (models.qrc is linked here)");
+            // Tilted a little from the subject framing so the far wall fills
+            // the top half of the frame: the owner's complaint is about the
+            // WALLS, so the shot has to hold them.
+            arena.orbit(0.0f, -6.0f);
+
+            const auto doc = room.document();
+            CHECK(doc && !doc->hdrEnabled && !doc->bloomEnabled,
+                  "S12: the workspace grade has no tonemapper and no bloom");
+            CHECK(doc && doc->giMode == iris::GiMode::OFF && doc->worldMode == -1,
+                  "S12: ... GI off, World Mode Custom (the binding is process-wide)");
+            CHECK(doc && doc->exposureMin == doc->exposureMax,
+                  "S12: ... and a PINNED exposure, so the page never breathes");
+
+            if (built) {
+                Image img = render(arena, *engine, arenaView, 4);
+                previewdump::save("S12 arena", img);
+
+                // Where the far wall is: profiles down two columns, printed
+                // so a re-baseline is a reading rather than a guess.
+                std::printf("    arena profiles (row: left column | centre column)\n");
+                for (int y = 0; y < AH; y += 12) {
+                    const Colour l = img.at(unsigned(AW / 5), unsigned(y));
+                    const Colour c = img.at(unsigned(AW / 2), unsigned(y));
+                    std::printf("      %3d: %3.0f %3.0f %3.0f | %3.0f %3.0f %3.0f\n", y,
+                                l.r * 255, l.g * 255, l.b * 255, c.r * 255, c.g * 255, c.b * 255);
+                }
+
+                // Two different questions, two predicates. `isClipped` — ANY
+                // channel at 255 — is the strict one the wall probe asks, and
+                // the subject's own light-blue skin trips it, so it is only ever
+                // asked of pixels the subject cannot reach. `isWhite` — all
+                // three at 255 — is "blown out", the owner's actual report, and
+                // is safe to ask of a whole picture.
+                const auto isClipped = [](const Colour &c) {
+                    return c.r >= 0.999f || c.g >= 0.999f || c.b >= 0.999f;
+                };
+                const auto isWhite = [](const Colour &c) {
+                    return c.r >= 0.999f && c.g >= 0.999f && c.b >= 0.999f;
+                };
+                int blown = 0;
+                for (unsigned y = 0; y < img.height; ++y)
+                    for (unsigned x = 0; x < img.width; ++x)
+                        if (isWhite(img.at(x, y))) ++blown;
+                std::printf("    arena pixels blown to 255/255/255: %d of %d (the seam and floor "
+                            "lines are LIGHTS: they may)\n", blown, AW * AH);
+
+                // THE PROBE. Column AW/5 is the far wall's left half: off the
+                // character, off the centre seam, clear of the side wall. Rows
+                // 0..180 are wall at this framing (the profile above; the floor
+                // edge is at ~190), and the five points run from mid-height down
+                // to the skirt — the half the owner saw blow out. Measured
+                // 2026-09-11 (NVIDIA): pre-fix all five read 255/255/255 (1.25
+                // key on a 240-grey tile plus 0.30 of white emissive) and 70% of
+                // the band below was white; post-fix 109..170, band 4%.
+                const unsigned px = unsigned(AW / 5);
+                const unsigned rows[5] = { 84, 108, 132, 156, 180 };
+                bool unclipped = true;
+                float wallMax = 0.0f;
+                std::printf("    wall strip x=%u:", px);
+                for (unsigned r : rows) {
+                    const Colour c = img.at(px, r);
+                    std::printf(" (%3.0f %3.0f %3.0f)", c.r * 255, c.g * 255, c.b * 255);
+                    if (isClipped(c)) unclipped = false;
+                    wallMax = std::max(wallMax, std::max(c.r, std::max(c.g, c.b)));
+                }
+                std::printf("\n");
+                CHECK(unclipped, "S12: THE CLAIM — no channel at 255 anywhere on a 5-point strip "
+                                 "down the lower half of the far wall");
+
+                // The wall band as an AREA, not just five points: the left
+                // two-fifths of the far wall. Seam lines cross it (and may clip —
+                // they are the lights; ~4% of the band), tiles are everything
+                // else; pre-fix the lower tiles were a solid white sheet (70%).
+                // 15% sits well clear of both, so a GPU that rasterizes the thin
+                // seams a pixel wider cannot flip the verdict.
+                int bandBlown = 0, band = 0;
+                for (unsigned y = 0; y <= 180; ++y)
+                    for (unsigned x = 0; x < unsigned(2 * AW / 5); ++x, ++band)
+                        if (isWhite(img.at(x, y))) ++bandBlown;
+                std::printf("    far-wall band: %d of %d pixels blown to white\n", bandBlown, band);
+                CHECK(bandBlown * 100 < band * 15,
+                      "S12: under 15% of the far-wall band is white (the seam lines, not the tiles)");
+
+                // Lit-from-within: the brightest pixel in the band (a seam) is
+                // brighter than every tile probe — the seam is the light.
+                float bandMax = 0.0f;
+                for (unsigned y = 0; y <= 180; ++y)
+                    for (unsigned x = 0; x < unsigned(2 * AW / 5); ++x) {
+                        const Colour c = img.at(x, y);
+                        bandMax = std::max(bandMax, std::max(c.r, std::max(c.g, c.b)));
+                    }
+                CHECK(bandMax > wallMax + 0.08f,
+                      "S12: the seam light is brighter than the tiles it borders");
+                // And the floor under the wall is darker than the wall: the black
+                // mirror plate, 20 rows below the skirt at the same column.
+                const Colour floorPx = img.at(px, 212);
+                const Colour wallPx  = img.at(px, 132);
+                std::printf("    floor (%u,212) %3.0f  vs  wall (%u,132) %3.0f\n",
+                            px, floorPx.g * 255, px, wallPx.g * 255);
+                CHECK(floorPx.g < wallPx.g, "S12: the floor plate reads darker than the wall");
+
+                // The OTHER space: Grid mode has no room at all, so nothing in it
+                // may blow out but a highlight or two on the subject — and the
+                // grade pin does not depend on the mode.
+                CHECK(room.setSpaceMode(avatar::SpaceMode::Grid), "S12: back to the Grid space");
+                Image grid = render(arena, *engine, arenaView, 3);
+                previewdump::save("S12 grid", grid);
+                int gridBlown = 0;
+                for (unsigned y = 0; y < grid.height; ++y)
+                    for (unsigned x = 0; x < grid.width; ++x)
+                        if (isWhite(grid.at(x, y))) ++gridBlown;
+                std::printf("    grid space: %d pixels blown to 255/255/255\n", gridBlown);
+                CHECK(gridBlown * 200 < AW * AH,
+                      "S12: the Grid space blows out under 0.5% of the picture");
+                CHECK(!room.document()->hdrEnabled && room.document()->giMode == iris::GiMode::OFF,
+                      "S12: the grade pin survives a space switch");
+            }
+            arena.release();
+            engine->destroyView(arenaView);
         }
     }
 
