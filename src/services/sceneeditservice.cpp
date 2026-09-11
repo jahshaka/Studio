@@ -1292,12 +1292,18 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     // so a library material applied by guid is pinned in as a BINDING (a
     // tray/verb drop of a project member is already pinned — idempotent), and
     // the node -> material edge says who uses it.
-    // Only when the project does not pin it yet: addToProject re-pins to the
-    // library's CURRENT version, which would silently upgrade an older pin.
-    if (project && !project->getProjectGuid().isEmpty()
-        && db->fetchAsset(assetGuid).projectGuid != project->getProjectGuid()
-        && !db->isAssetPinnedBy(project->getProjectGuid(), assetGuid))
-        ProjectAssets::addToProject(assetGuid, db, project, ProjectAssets::AddKind::Binding);
+    // Only a LIBRARY row (a project's own rows are members already — the
+    // view filter tells them apart; the row's project_guid does not, an import
+    // made with a project open records it) that the project does not pin yet:
+    // addToProject re-pins to the library's CURRENT version, which would
+    // silently upgrade an older pin.
+    if (project && !project->getProjectGuid().isEmpty()) {
+        const AssetRecord row = db->fetchAsset(assetGuid);
+        const bool libraryRow = row.view_filter == AssetViewFilter::AssetsView
+                                || row.view_filter == AssetViewFilter::Effects;
+        if (libraryRow && !db->isAssetPinnedBy(project->getProjectGuid(), assetGuid))
+            ProjectAssets::addToProject(assetGuid, db, project, ProjectAssets::AddKind::Binding);
+    }
     for (const auto &meshNode : meshes) {
         db->deleteDependency(meshNode->getGUID(), assetGuid);
         db->createDependency(

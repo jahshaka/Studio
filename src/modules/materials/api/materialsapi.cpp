@@ -807,13 +807,19 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     // edge — so the edge would take the image out of the library. Recorded for
     // the lead: narrow that filter to library-asset dependers, then give this
     // verb the panel's edge.)
-    // Only an image the project does not pin yet: addToProject re-pins to the
-    // library's CURRENT version, which would silently upgrade an older pin.
+    // Only a LIBRARY image (a project's own rows are members already — the view
+    // filter tells them apart; project_guid does not, an import made with a
+    // project open records it) that the project does not pin yet: addToProject
+    // re-pins to the library's CURRENT version, which would silently upgrade an
+    // older pin.
     if (!boundTextures.isEmpty() && host.db && host.isProjectOpen()) {
         const QString projectGuid = host.project->getProjectGuid();
         for (const QString &textureGuid : boundTextures) {
             if (host.db->isAssetPinnedBy(projectGuid, textureGuid)) continue;
-            if (host.db->fetchAsset(textureGuid).projectGuid == projectGuid) continue;
+            const AssetRecord row = host.db->fetchAsset(textureGuid);
+            if (row.view_filter != AssetViewFilter::AssetsView
+                && row.view_filter != AssetViewFilter::Effects)
+                continue;
             ProjectAssets::addToProject(textureGuid, host.db, host.project,
                                         ProjectAssets::AddKind::Binding);
         }
