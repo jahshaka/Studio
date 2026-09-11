@@ -1666,6 +1666,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     const auto q = [](const jahshaka::engine::Vec3 &v) { return QVector3D(v.x, v.y, v.z); };
     out.boundsMin      = q(st.boundsMin);
     out.boundsMax      = q(st.boundsMax);
+    out.voxelMetres = st.voxelMetres;
     out.probeRegionMin = q(st.probeRegionMin);
     out.probeRegionMax = q(st.probeRegionMax);
     out.probeHdr       = st.probeHdr;

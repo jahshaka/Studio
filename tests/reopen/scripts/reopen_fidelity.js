@@ -92,6 +92,13 @@ assert(guid.length > 10, "project.create -> the default scene");
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 0, z: 0 } });
 assert(cube.length > 10, "scene.addPrimitive(cube)");
 
+// A DELIBERATELY NON-UNIFORM tiling on the cube (SMOKE_FIX S11's other half):
+// the fix must not turn "tile 4x across and 1x down" into uniform tiling on the
+// way through the file. The ground's uniform (4, 4) and this (4, 1) are the two
+// sides of the same round trip.
+assert(material.set(cube, { textureScale: [4, 1] }) === true,
+       "material.set(cube, textureScale [4, 1])");
+
 var p0 = probe("fresh");
 var s0 = snapshot();
 
@@ -107,6 +114,25 @@ assert(g0 !== null, "the default Ground node is in the scene");
 assert(g0.mat.baseColorMap && g0.mat.baseColorMap.length > 0,
        "fresh: Ground carries a resolved baseColorMap path");
 assert(g0.castShadow === false, "fresh: Ground has Shadow Caster OFF (createDefaultScene)");
+
+// SMOKE_FIX S11 — THE ROWS ARE WHAT GETS SAVED. createDefaultScene builds the
+// ground with setValue("textureScale", 4), which is UNIFORM tiling: both fields
+// 4, and therefore both rows 4. It used to sync only the row it was named with,
+// so the file said textureScale 4, textureScaleV 1 while the live material
+// tiled 4x4 — and the floor's checkers came back squashed along V on reopen.
+// The whole-document diff below could not see it: BOTH sessions reported the
+// same stale rows, and only the pixels disagreed.
+assert(g0.mat.textureScale === 4 && g0.mat.textureScaleV === 4,
+       "fresh: Ground's UV tiling is uniform (4, 4) in the rows that get saved");
+function cubeUv(snap) {
+    var s = JSON.parse(snap);
+    for (var i = 0; i < s.nodes.length; i++)
+        if (s.nodes[i].id === cube) return s.nodes[i].mat;
+    return null;
+}
+var c0 = cubeUv(s0);
+assert(c0 !== null && c0.textureScale === 4 && c0.textureScaleV === 1,
+       "fresh: the cube's deliberate (4, 1) tiling is what the rows say");
 assert(p0.r < 200, "fresh: the ground is the mid-grey tile, not blown out (" + p0.r + ")");
 
 for (var cycle = 1; cycle <= 3; cycle++) {
@@ -123,6 +149,11 @@ for (var cycle = 1; cycle <= 3; cycle++) {
            "cycle " + cycle + ": Ground's baseColorMap survived the round trip");
     assert(g.castShadow === false,
            "cycle " + cycle + ": Ground's Shadow Caster flag survived the round trip");
+    assert(g.mat.textureScale === 4 && g.mat.textureScaleV === 4,
+           "cycle " + cycle + ": Ground reopens with uniform (4, 4) tiling, not squashed");
+    var c = cubeUv(s);
+    assert(c.textureScale === 4 && c.textureScaleV === 1,
+           "cycle " + cycle + ": the cube's explicit (4, 1) tiling survived the round trip");
 
     // The field diff. Not "close enough" — identical, including the World
     // root's guid, every light's power and colour, every transform, the whole

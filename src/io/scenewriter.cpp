@@ -247,6 +247,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giProbeHdr"] = scene->giProbeHdr;
     sceneObj["giProbeShadows"] = scene->giProbeShadows;
     sceneObj["giProbeOverlap"] = scene->giProbeOverlap;
+    sceneObj["giAutoBoundsMax"] = scene->giAutoBoundsMax;
     sceneObj["giProbeSnapDeviation"] = scene->giProbeSnapDeviation;
     sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
     sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;

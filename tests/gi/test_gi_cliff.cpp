@@ -172,8 +172,21 @@ static void liveTable(Engine *engine, View *view)
     enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
     Box prev = solve(s);
     show("live", 0, prev);
-    CHECK(span(prev, 0) > 100.0f,
-          "a scene that is ONLY a ground plane keeps the whole ground (nothing to be an outlier against)");
+    // RE-PINNED BY SMOKE_FIX S14, and the re-pin is the owner's decision rather
+    // than a tolerance slip. This used to read `span > 100` — "a scene that is
+    // ONLY a ground plane keeps the whole ground, because there is no
+    // population for an outlier to be an outlier against". That is still true
+    // of the TRIM (the geometric mean of one extent is that extent, so the ramp
+    // cannot fire), and it is exactly the hole the owner's smoke test found: a
+    // new project, born Epic on a ground plane, voxelised a square kilometre at
+    // 8.1 m per voxel. `GiParams::autoBoundsMax` now caps an AUTOMATIC fit at
+    // 64 m centred on the content, so a 200 m ground resolves to the ceiling
+    // plus its one-voxel margin. What this case still asserts — and it is the
+    // property that mattered — is that the ground-only scene does NOT collapse
+    // onto nothing: the volume is the ceiling, not a speck, and the table below
+    // still starts from it.
+    CHECK(span(prev, 0) > 60.0f && span(prev, 0) < 80.0f,
+          "a scene that is ONLY a ground plane is lit out to the automatic ceiling (64 m + margin)");
     // From the FIRST CONTENT OBJECT onwards (see the header): n = 1 is where a
     // scene stops being scenery, and the comparison starts there.
     for (int n = 1; n <= 5; ++n) {

@@ -338,7 +338,7 @@ var ENVELOPE = {
 
 // PER-SAMPLE PINS. Measured on the shipped archives (lane-samplescale,
 // 2026-09-09) and re-measured after the re-stage. `extent` is the world AABB of
-// the sample's geometry WITHOUT the built-in 1024 m ground plane; `objects`
+// the sample's geometry WITHOUT the built-in 100 m ground plane; `objects`
 // pins the size of each sample's signature object, which is where "human
 // scale" is actually visible; `room` (the two built-from-primitives samples)
 // pins the INTERIOR — wall to wall, floor top to ceiling bottom.
@@ -406,7 +406,7 @@ function checkScale() {
     // The ground plane is excluded by NAME here rather than by the built-in
     // mesh path the C++ side uses (services/sceneextents.h), because a script
     // has no window into meshPath — and every shipped sample calls it "Ground".
-    // It is a 1024 m backdrop present in every scene: left in, it is the only
+    // It is a 100 m backdrop present in every scene: left in, it is the only
     // number any measurement would ever report.
     var rootId = scene.root();
     var roots = scene.nodes({ depth: 1 });   // the root itself plus its children

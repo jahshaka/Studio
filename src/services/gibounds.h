@@ -8,10 +8,14 @@
 // decided through `world.giStatus()`. This is the other half: PINNING a volume
 // the user chose, which switches the automatic fit off for that scene.
 //
-// The document model carries a bounding SPHERE per mesh node rather than an
-// AABB, so the box is the union of those spheres' boxes — deliberately generous
-// rather than deliberately wrong: a pinned volume that clipped its own subject
-// would be the worse failure.
+// The box is the union of each mesh's own AABB pushed through its node's world
+// transform, and it SKIPS HIDDEN SUBTREES — the two things that make the Fit
+// button agree with what the renderer actually lights (LIGHTING_PIPELINE_AUDIT
+// L4.5, SMOKE_FIX S12). It used to union bounding SPHERES, whose radius is half
+// the model's diagonal: fitting the default ground — a flat plane with no
+// thickness — pinned a 1448 m CUBE, i.e. 1448 m of empty air on the vertical
+// axis, at 11 m per voxel. Eight transformed corners are still an over-estimate
+// for a rotated box, but a bounded one.
 #include <QList>
 
 #include "irisgl/core/math/vec.h"
