@@ -58,6 +58,11 @@ public:
     Q_INVOKABLE QVariantList pins(const QString &guid);
     Q_INVOKABLE bool removeFromProject(const QString &guid);
     Q_INVOKABLE bool refreshThumbnail(const QString &guid);
+    // ---- the Assets PAGE (Needs::Window) ----
+    Q_INVOKABLE bool select(const QString &guid);
+    Q_INVOKABLE QString selected();
+    Q_INVOKABLE QVariantMap preview(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE bool fly(const QVariantMap &move);
     Q_INVOKABLE QVariantMap thumbnail(const QString &guid);
     Q_INVOKABLE QVariantList dependencies(const QString &guid);
     Q_INVOKABLE QVariantMap exportRaw(const QString &guid, const QString &dir,
@@ -71,6 +76,10 @@ public:
     Q_INVOKABLE QVariantMap rebuildCatalog(const QString &dbPath, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap gc(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap bakeAll(const QVariantMap &options = QVariantMap());
+
+private:
+    /// The Assets page, or null with the refusal already thrown.
+    class AssetView *assetsPage(const QString &verb);
 };
 
 #endif // SCRIPTING_ASSETSAPI_H

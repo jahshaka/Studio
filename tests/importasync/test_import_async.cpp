@@ -364,7 +364,16 @@ int main(int argc, char **argv)
         CHECK(result.ok(), "synchronous dialog-free import (assets.importFile path) works");
     }
 
-    // ---- 5. the completion tail: prepared node, no second parse, queued ---
+    // ---- 5. the completion tail: THE COMMITTED ASSET, queued per turn ------
+    //
+    // The tail used to preview (and PERSIST as the thumbnail) the import's own
+    // fragment, `ImportResult::node->duplicate()`. That node's material paths
+    // point into the staging directory the commit has already deleted, so the
+    // Assets page showed — and stored forever — a white, untextured model
+    // while `assets.refreshThumbnail` (which rebuilds from the stored blob)
+    // was textured: the owner's smoke S6, 2026-09-11. The tail now asks the
+    // viewer to load the asset THE LIBRARY STORED, by guid, which is the path
+    // a tile double-click takes.
     {
         // Probe viewer: records how the tail feeds it (the "tile update"
         // seam AssetView hangs its overlay/pixmap refresh on).
@@ -374,6 +383,7 @@ int main(int argc, char **argv)
             int addNodeCalls = 0;
             int loadModelCalls = 0;
             iris::SceneNodePtr lastAdded;
+            QString lastLoadedPath, lastLoadedGuid;
             void addNodeToScene(iris::SceneNodePtr sceneNode, QString guid, bool viewed,
                                 bool cache, bool isOnGround) override
             {
@@ -385,6 +395,8 @@ int main(int argc, char **argv)
                            bool firstLoad) override
             {
                 ++loadModelCalls;
+                lastLoadedPath = path;
+                lastLoadedGuid = guid;
                 HeadlessAssetViewer::loadModel(path, guid, firstAdd, cache, firstLoad);
             }
         };
@@ -422,6 +434,7 @@ int main(int argc, char **argv)
               "the pipeline parsed the model exactly once (convert)");
 
         // The tail through the queue: one item per event-loop turn.
+        const QByteArray thumbBeforeTail = db.fetchAsset(results[0].assetGuid).thumbnail;
         ProbeViewer probe;
         ImportTailQueue queue;
         ImportMeshTail::Outcome outcome;
@@ -454,16 +467,21 @@ int main(int argc, char **argv)
         CHECK(progressTicks == 2, "tail queue reported per-item progress");
         CHECK(order == QVector<int>({ 0, 200, 1 }),
               "tail items run one per event-loop turn (the loop breathes between items)");
-        CHECK(outcome.usedPreparedNode,
-              "the tail consumed the prepared fragment (no reader load)");
-        CHECK(probe.addNodeCalls == 1 && probe.loadModelCalls == 0,
-              "viewer got the node directly; the re-parsing loadModel path never ran");
+        CHECK(outcome.previewed, "the tail previewed the committed asset");
+        CHECK(probe.loadModelCalls == 1 && probe.addNodeCalls == 0,
+              "THE LIBRARY LOAD ran and the import fragment was NOT handed to the viewer "
+              "(smoke S6: that fragment's textures live in the deleted staging dir)");
+        CHECK(probe.lastLoadedGuid == meshResult.assetGuid,
+              "the tail previewed the asset by its library guid");
+        if (probe.lastLoadedPath.isEmpty() || !QFileInfo(probe.lastLoadedPath).isFile())
+            std::printf("    previewed path: %s\n", probe.lastLoadedPath.toUtf8().constData());
+        CHECK(!probe.lastLoadedPath.isEmpty() && QFileInfo(probe.lastLoadedPath).isFile(),
+              "the previewed file EXISTS in the store (the staging dir is gone by now)");
         CHECK(AssetHelper::meshParseCount() == parsesBefore + 1,
-              "the tail added NO second assimp parse");
-        CHECK(!probe.lastAdded.isNull() && probe.lastAdded != meshResult.node,
-              "the viewer got a deep duplicate — the session-registered node stays pristine");
-        CHECK(probe.cachedAsset(meshResult.assetGuid) == probe.lastAdded,
-              "the tail cached the preview node under the asset guid (tile reselects hit it)");
+              "the pipeline's single parse is still the only one the tail itself does");
+        CHECK(db.fetchAsset(meshResult.assetGuid).thumbnail == thumbBeforeTail,
+              "the tail writes NO thumbnail of its own — assetthumb::storeObject does, on the "
+              "page, from the stored blob (the old tail persisted the white fragment render)");
 
         // The row survived the tail's property merge with its determinism
         // record intact (no clobber of the "import"/"metadata" blocks).

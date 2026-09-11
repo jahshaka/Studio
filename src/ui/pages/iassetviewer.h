@@ -48,6 +48,11 @@ public:
                                 bool cache = false, bool isOnGround = true) = 0;
     virtual void cacheCurrentModel(QString guid) = 0;
 
+    /// Frames the previewed subject the way the editor's F does — what a
+    /// preview with NO saved camera gets instead of the default origin pose.
+    /// Defaulted to a no-op for viewers that do not render (headless).
+    virtual void frameSubject() {}
+
     /// Restores a saved orbit (see getSceneProperties()).
     virtual void orientCamera(iris::Vec3 pos, iris::Vec3 localRot, int distanceFromPivot) = 0;
     virtual QJsonObject getSceneProperties() = 0;

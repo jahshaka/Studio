@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/editorcameracontroller.h"
 #include "viewport/flyspeedsettings.h"
+#include "viewport/flystep.h"
 #include "viewport/keyboardstate.h"
 #include "player/playermousecontroller.h"
 
@@ -223,6 +224,75 @@ int main(int argc, char **argv)
         c.update(1.0f);
         CHECK(near(cam->getLocalPos().z(), 0.0f),
               "an arrow key alone does NOT fly — the Unreal rule is unchanged by the aliases");
+    }
+
+    // ---- THE ASSETS PREVIEW'S FLY (smoke S7, 2026-09-11) ------------------
+    //
+    // "WASD and the arrow keys do not fly in the Assets module." They do now,
+    // and they fly through the EDITOR'S OWN step (viewport/flystep.h) rather
+    // than a second copy of it — which is what this section pins: the same
+    // direction, for both spellings, from the same camera pose.
+    {
+        auto cam = freshCamera();
+        cam->setLocalRot(iris::Quat::fromEulerAngles(-20, 35, 0));   // an arbitrary pose
+        cam->update(0);
+        const iris::Quat rot = cam->getLocalRot();
+
+        flystep::HeldKeys keys;
+        CHECK(keys.press(Qt::Key_W), "W is a fly key in the Assets preview");
+        const iris::Vec3 wDir = flystep::direction(rot, keys.state());
+        keys.release(Qt::Key_W);
+        CHECK(keys.press(Qt::Key_Up), "so is Up");
+        const iris::Vec3 upDir = flystep::direction(rot, keys.state());
+        keys.release(Qt::Key_Up);
+        CHECK(near(wDir.x(), upDir.x()) && near(wDir.y(), upDir.y()) && near(wDir.z(), upDir.z()),
+              "W and Up are the SAME motion in the Assets preview (both spellings, one step)");
+
+        // ...and that motion is the camera's forward, which is what the editor
+        // controller does with the same key.
+        const iris::Vec3 forward = rot.rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+        CHECK(near(wDir.x(), forward.x()) && near(wDir.y(), forward.y()) && near(wDir.z(), forward.z()),
+              "forward flight is the camera's own forward (camera-relative, S7's ask)");
+
+        // Strafe stays horizontal; Q/E are the vertical pair the editor spells
+        // PageDown/PageUp.
+        keys.press(Qt::Key_D);
+        const iris::Vec3 strafe = flystep::direction(rot, keys.state());
+        keys.release(Qt::Key_D);
+        CHECK(near(strafe.y(), 0.0f), "strafe stays horizontal");
+        keys.press(Qt::Key_E);
+        const iris::Vec3 upMove = flystep::direction(rot, keys.state());
+        keys.release(Qt::Key_E);
+        CHECK(near(upMove.y(), 1.0f), "E rises along the WORLD up");
+        keys.press(Qt::Key_PageUp);
+        const iris::Vec3 pgUp = flystep::direction(rot, keys.state());
+        keys.release(Qt::Key_PageUp);
+        CHECK(near(pgUp.y(), 1.0f), "PageUp is the same rise (the editor's spelling)");
+
+        // A key that is not a fly key is not consumed — the preview must not
+        // swallow the rest of the keyboard.
+        CHECK(!keys.press(Qt::Key_F), "F is not a fly key (the preview does not eat it)");
+
+        // Shift is the editor's boost, exactly.
+        keys.press(Qt::Key_W);
+        const iris::Vec3 plain = flystep::delta(rot, keys.state(), 4.0f, 0.5f);
+        keys.setBoost(true);
+        const iris::Vec3 boosted = flystep::delta(rot, keys.state(), 4.0f, 0.5f);
+        CHECK(near(boosted.length(), plain.length() * flystep::kBoost, 1e-3f),
+              "Shift multiplies the step by the editor's boost");
+        keys.setBoost(false);
+
+        // Nothing held is no movement (a preview that drifts is a bug).
+        keys.clear();
+        CHECK(flystep::direction(rot, keys.state()).isNull(), "no key, no motion");
+
+        // The pole case the editor's fallback exists for: looking straight
+        // down, the horizontal strafe is degenerate and must still be defined.
+        cam->setLocalRot(iris::Quat::fromEulerAngles(-90, 0, 0));
+        cam->update(0);
+        keys.press(Qt::Key_A);
+        const iris::Vec3 poleStrafe = flystep::direction(cam->getLocalRot(), keys.state());
+        CHECK(!poleStrafe.isNull(), "A still moves with the camera looking straight down");
     }
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);

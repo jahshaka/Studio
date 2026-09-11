@@ -16,6 +16,7 @@
 #include <QMap>
 #include <QPointF>
 #include "viewport/engineviewwidget.h"
+#include "viewport/flystep.h"
 #include "ui/pages/iassetviewer.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -43,6 +44,7 @@ public:
     void addNodeToScene(iris::SceneNodePtr sceneNode, QString guid = "", bool viewed = false,
                         bool cache = false, bool isOnGround = true) override;
     void cacheCurrentModel(QString guid) override;
+    void frameSubject() override;
     void orientCamera(iris::Vec3 pos, iris::Vec3 localRot, int distanceFromPivot) override;
     QJsonObject getSceneProperties() override;
     void loadJafModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
@@ -71,6 +73,12 @@ protected:
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
     void wheelEvent(QWheelEvent *) override;
+    /// FLY (smoke S7: "WASD and the arrow keys do not fly in the Assets
+    /// module"). Arrows + WASD + Q/E, camera-relative, through the editor's
+    /// own step (viewport/flystep.h).
+    void keyPressEvent(QKeyEvent *) override;
+    void keyReleaseEvent(QKeyEvent *) override;
+    void focusOutEvent(QFocusEvent *) override;
 
 private:
     /// Database -> document, the AssetViewer::addJaf* readers.
@@ -96,6 +104,7 @@ private:
     std::function<void()> mLoadFinished;   // fires in hideProgress (end of every load*)
     QMap<QString, iris::SceneNodePtr> mCachedAssets;
     QPointF mPrevMousePos;
+    flystep::HeldKeys mFlyKeys;
     QElapsedTimer mFrameTimer;
     bool mActive = false;
 };

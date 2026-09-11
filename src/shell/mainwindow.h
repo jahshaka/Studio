@@ -269,6 +269,11 @@ public:
     /// files. Returns false when no import UI exists or a batch is running.
     bool startInteractiveImport(const QStringList &files);
 
+    /// The ASSETS PAGE, or null in a session without one (headless, a page-less
+    /// host). The `assets.select`/`preview`/`fly` verbs drive it — the shell
+    /// owns the widget, the verbs own the capability (SCRIPTING_SPEC §2.3).
+    AssetView *assetsPage() const { return _assetView; }
+
     /// Orderly teardown of every background worker the window owns (import
     /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
     /// at most once; called from closeEvent and wired to aboutToQuit so the

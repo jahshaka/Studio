@@ -165,6 +165,19 @@ public:
 	void createAvatarFromModelTile(AssetGridItem *item);
 	void showEvent(QShowEvent *event) override;
 
+	/// SELECT AN ASSET BY GUID — the tile gesture, as a call (smoke S4: an
+	/// import left the new tile unselected and the user had to hunt for it).
+	/// Selects the tile, scrolls it into view and loads its preview, exactly
+	/// as a double-click does. False when no tile shows that guid.
+	/// `assets.select` is this; the import tail calls it too.
+	bool selectAsset(const QString &guid);
+	/// The guid of the current tile, empty when nothing is selected
+	/// (`assets.selected`).
+	QString selectedAssetGuid() const;
+	/// The page's preview viewer — `assets.preview`/`assets.fly` read and
+	/// steer it (null in a page with no viewer).
+	IAssetViewer *previewViewer() const { return viewer; }
+
 	/// THE import dispatch (ASSET_DRAWERS_SPEC §3): every path (drop pad,
 	/// browse dialog) lands here. Builds one ImportRequest per file and runs
 	/// them through ImportBatchRunner — the heavy pipeline half on a worker,
@@ -184,8 +197,9 @@ private:
 	/// tailQueue so the app stays responsive; tiles update live as renders
 	/// land (the busy state shows on the tile overlay + the status strip).
 	void scheduleViewerTails();
-	/// One mesh tail item: consumes the pipeline's parsed fragment
-	/// (ImportMeshTail — no second assimp parse), updates the tile.
+	/// One mesh tail item: previews the COMMITTED asset (ImportMeshTail) and
+	/// stores its thumbnail through the one thumbnail routine
+	/// (assetthumb::storeObject — what `assets.refreshThumbnail` runs).
 	void finishMeshTailItem(const ImportResult &result, const QString &fileName);
 	/// The old importJahModel tail: per-kind viewer page + library tile.
 	void finishJafImport(const ImportResult &result, const QString &fileName);
@@ -194,6 +208,9 @@ private:
 	/// The drawer new imports are filed in: the selected drawer, else
 	/// Uncategorized (§3).
 	int selectedDrawerId() const;
+	/// The page's ONE toast (bottom-centre of the app window), made on first
+	/// use and reused — every message used to leak a top-level window.
+	class Toast *libraryToast();
 	/// Stops BOTH media players (audio + video). Every selection change and
 	/// page switch lands here (ASSET_MEDIA_SPEC §2: viewers stop/clear).
 	void stopMediaPreviews();
@@ -230,6 +247,10 @@ private:
 
 	Database *db;
 	Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)
+	class Toast *mToast = nullptr;
+	/// The last asset an import batch committed — what the batch selects when
+	/// it finishes (smoke S4; a mesh selects from its own tail).
+	QString lastImportedGuid;
 	StudioServices *services = nullptr;
 	QSplitter *_splitter;
 	QWidget *_filterBar;

@@ -11,6 +11,7 @@
 #include <QSqlDatabase>
 #include <QShowEvent>
 #include <QStandardPaths>
+#include <QKeyEvent>
 #include <QWheelEvent>
 
 #include "bridge/engineassetscene.h"
@@ -23,6 +24,7 @@
 #include "data/project.h"
 #include "data/database/database.h"
 #include "io/scenereader.h"
+#include "services/libraryassetnode.h"
 #include "io/skyassetdefinition.h"
 #include "io/materialreader.h"
 #include "ui/dialogs/progressdialog.h"
@@ -96,6 +98,7 @@ void EngineAssetViewer::syncFrame()
     if (!mActive || !view() || !isVisible()) return;
     if (!mScene->attach(view())) return;
     const float dt = std::max(0.001f, float(mFrameTimer.restart()) / 1000.0f);
+    mScene->flyStep(mFlyKeys.state(), dt);
     mScene->step(dt, width(), height());
 }
 
@@ -126,6 +129,36 @@ void EngineAssetViewer::mouseReleaseEvent(QMouseEvent *e)
 void EngineAssetViewer::wheelEvent(QWheelEvent *e)
 {
     mScene->wheel(e->angleDelta().y());
+}
+
+// ---- fly: arrows + WASD + Q/E (smoke S7) ----
+//
+// The Assets preview had a wheel and a drag and nothing else — the owner's
+// hands do what they do in the editor and the model sat still. The keys are
+// held-state (the flight runs per FRAME in syncFrame, like the editor's), the
+// direction is flystep's, and the camera is moved by the orbit's pivot so the
+// arcball the user set up survives.
+
+void EngineAssetViewer::keyPressEvent(QKeyEvent *e)
+{
+    mFlyKeys.setBoost(e->modifiers().testFlag(Qt::ShiftModifier));
+    if (!e->isAutoRepeat() && mFlyKeys.press(e->key())) { e->accept(); return; }
+    EngineViewWidget::keyPressEvent(e);
+}
+
+void EngineAssetViewer::keyReleaseEvent(QKeyEvent *e)
+{
+    mFlyKeys.setBoost(e->modifiers().testFlag(Qt::ShiftModifier));
+    if (!e->isAutoRepeat() && mFlyKeys.release(e->key())) { e->accept(); return; }
+    EngineViewWidget::keyReleaseEvent(e);
+}
+
+void EngineAssetViewer::focusOutEvent(QFocusEvent *e)
+{
+    // A key released while another widget has the focus never arrives here —
+    // without this the preview flies on forever (the classic held-key leak).
+    mFlyKeys.clear();
+    EngineViewWidget::focusOutEvent(e);
 }
 
 // ---- IAssetViewer ----
@@ -160,6 +193,11 @@ void EngineAssetViewer::cacheCurrentModel(QString guid)
     }
 }
 
+void EngineAssetViewer::frameSubject()
+{
+    mScene->frameSubject();
+}
+
 void EngineAssetViewer::orientCamera(iris::Vec3 pos, iris::Vec3 localRot, int distanceFromPivot)
 {
     mScene->orientCamera(pos, localRot, float(distanceFromPivot));
@@ -191,7 +229,11 @@ void EngineAssetViewer::loadJafModel(QString path, QString guid, bool firstAdd, 
     showProgress();
     auto node = readJafModel(path, guid);
     if (node) {
-        addNodeToScene(node, QFileInfo(path).baseName(), false, true);   // legacy: always cached
+        // Cached UNDER THE GUID. It was cached under the file's base name —
+        // which in the CAS is a sha256 — while every lookup (AssetView's tile
+        // re-select, ImportMeshTail's test) asks by guid, so the cache never
+        // hit once and every re-selection re-read the blob.
+        addNodeToScene(node, guid, false, true);   // legacy: always cached
         if (firstLoad) mScene->resetCamera();
         else mScene->resetCameraAfter();
     }
@@ -246,18 +288,16 @@ QImage EngineAssetViewer::takeScreenshot(int width, int height)
 iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QString &guid)
 {
     if (!mDb) return iris::SceneNodePtr();
-    QJsonObject objectHierarchy = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
 
-    SceneReader reader;
-    reader.setDatabaseHandle(mDb);   // resolves mesh and texture GUIDs to store files
-    reader.setProject(mProject);
-    // LIBRARY resolution, not the open project's pins: a preview shows the
-    // store asset itself. This used to be setBaseDirectory(<root>/<guid>/) —
-    // the retired legacy view (deep audit 2026-09, area 6); the flag was the
-    // load-bearing half, the directory was a pre-CAS fallback that resolved
-    // one asset's textures against ANOTHER asset's folder.
-    reader.setLibrarySource();
-    iris::SceneNodePtr node = reader.readSceneNode(objectHierarchy);
+    // THE library node: the stored blob (every texture resolved through the
+    // store) WITH the asset's fit-to-size factor — services/libraryassetnode.h,
+    // the same function the thumbnail routine and the import tail use, and the
+    // same fit SceneEditService::addMaterialMesh applies when the asset is
+    // dropped into the editor. Previewing the authored size instead is the
+    // owner's "massive in Assets, tiny in the editor" (smoke S5): the Dreyar
+    // download is 17.2 m authored and 1.75 m placed, and the preview camera
+    // ended up inside the model.
+    iris::SceneNodePtr node = libraryasset::fromLibrary(mDb, mProject, guid);
     if (!node) return node;
 
     // rename animation sources to relative paths
