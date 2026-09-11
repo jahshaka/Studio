@@ -496,6 +496,7 @@ public:
         QStringList unmapped;    ///< guids of casters with no map — the silent failures
         int shadowPassesLastFrame = 0;
         int cachedMapRendersLastFrame = 0;
+        int shaderLightMismatches = 0;   ///< the cache's self-check; 0 is the only healthy value
         int reflectPassesLastFrame = 0;
         int probePassesLastFrame = 0;
         int reflectLampPassesLastFrame = 0;

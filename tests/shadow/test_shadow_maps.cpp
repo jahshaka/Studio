@@ -1466,6 +1466,19 @@ static void t3_counters(Engine *e, View *v)
 // hashed for "one directional caster, zero lights" cannot compile ('lights' :
 // no such field in 'passBuf'); the app then crashed saving the shader cache.
 // The test reads its own Ogre log: not one shader may fail to compile.
+/// How many shaders have failed to compile so far, in the engine's own log.
+static long compileFailures(const char *path)
+{
+    FILE *f = std::fopen(path, "r");
+    if (!f) return 0;
+    char line[4096];
+    long n = 0;
+    while (std::fgets(line, sizeof line, f))
+        if (std::strstr(line, "failed to compile")) ++n;
+    std::fclose(f);
+    return n;
+}
+
 static bool logHasCompileFailure(const char *path)
 {
     FILE *f = std::fopen(path, "r");
@@ -1476,6 +1489,79 @@ static bool logHasCompileFailure(const char *path)
         if (std::strstr(line, "failed to compile")) { bad = true; break; }
     std::fclose(f);
     return bad;
+}
+
+// T3w — A LAMP THAT ARRIVES WHILE THE PROBES ARE ALREADY CAPTURING
+// (ENGINE_CACHE_POLICY_SPEC P4; ogre-patch 0025).
+//
+// THE DEFECT IT PINS, measured 2026-09-12: Ogre rebuilds a shadow node's light
+// list at most once per camera per COMPOSITOR FRAME
+// (CompositorShadowNode::buildClosestLightList's mLastCamera/mLastFrame
+// early-out), and that build is the only place mNumActiveShadowMapCastingLights
+// is computed — while setLightFixedToShadowMap writes the slot array without
+// it. HlmsPbs declares hlms_num_shadow_map_lights from the COUNT and counts the
+// pass's shadow-casting lights from the ARRAY, so a lamp fixed after a node has
+// already built for this frame makes a PBS shader that references
+// hlms_shadowmap<N> beyond what it declared: "undeclared identifier", a pixel
+// shader that cannot compile, and — on a cold shader cache — a SIGSEGV in
+// HlmsDiskCache over the entry the failure leaves behind.
+//
+// A probe capture is where it bites: the probe grid captures from the frame's
+// UPDATE half, before the lamp-map cache's per-frame work. So: let the probes
+// capture for a while with no cacheable lamp, then add one, then keep
+// capturing. Nothing may fail to compile.
+static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
+{
+    std::printf("-- T3w: a lamp arriving while the probes capture may not make an uncompilable shader\n");
+    const long before = compileFailures("test-shadow-maps-ogre.log");
+    CacheRoom r = buildCacheRoom(e, v, "t3w");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    // No cacheable lamp yet: this room's three point lamps go, a sun stays.
+    for (int i = 0; i < 3; ++i) r.scene->removeLight(r.lamps[i]);
+    const NodeId sun = r.scene->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 0.5f; d.castShadows = true;
+    r.scene->setLight(sun, d);
+    r.scene->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    gi.quality = GiQuality::Low;
+    gi.probeShadows = GiToggle::On;
+    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    gi.updateBudget = 4;
+    gi.dynamicProbes = 0;
+    r.scene->setGlobalIllumination(gi);
+    // The probes capture with the sun alone: every probe node builds its light
+    // list in these frames, and none of them holds a cached lamp.
+    for (int i = 0; i < 24; ++i) e->renderOneFrame();
+    const int probes = r.scene->giStatus().probeCount;
+    // NOW the lamp arrives. The cache fixes it into every instance — the view's
+    // and every probe's — and the probes keep capturing.
+    const NodeId lamp = r.scene->createNode();
+    LightDesc s2;
+    s2.type = LightType::Spot;
+    s2.intensity = 2.0f;
+    s2.range = 9.0f;
+    s2.spotAngleDegrees = 60.0f;
+    s2.castShadows = true;
+    r.scene->setLight(lamp, s2);
+    r.scene->setNodeTransform(lamp, Vec3(-5.0f, 5.0f, -5.0f), Quat(), Vec3(1, 1, 1));
+    r.scene->refreshGlobalIllumination();
+    for (int i = 0; i < 24; ++i) e->renderOneFrame();
+    const ShadowStatus st = e->shadowStatus();
+    const long after = compileFailures("test-shadow-maps-ogre.log");
+    std::printf("    %d probes; lamp cached %d; shader compile failures %ld -> %ld\n",
+                probes, int(lampCached(st, lamp)), before, after);
+    CHECK(probes > 0, "the probe grid exists (%d probes)", probes);
+    CHECK(after == before,
+          "not one shader failed to compile while a lamp arrived under the probes (%ld new)",
+          after - before);
+    CHECK(st.shaderLightMismatches == 0u,
+          "and the cache's self-check counted no pass hashed against a broken light count (%u)",
+          st.shaderLightMismatches);
+    Image img;
+    CHECK(v->readPixels(img) && meanLum(img) > 1.0, "and the scene still renders (%.1f mean)",
+          meanLum(img));
+    e->destroyScene(r.scene);
 }
 
 static void t3_undrawn_gi_rebuild(Engine *e, View *v)
@@ -1561,6 +1647,7 @@ int main(int argc, char **argv)
     if (only.empty() || only == "t3u") t3_undrawn_gi_rebuild(engine.get(), v);
     // T3t LAST of the cache cases: its five-lamp warm-up takes the atlas to
     // eight maps, and T3u needs an atlas that can still GROW.
+    if (only.empty() || only == "t3w") t3w_lamp_arrives_under_probes(engine.get(), v);
     if (only.empty() || only == "t3t") t3t_cache_spots_and_slots(engine.get(), v);
     if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
     if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);

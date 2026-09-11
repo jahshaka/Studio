@@ -1833,6 +1833,7 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     out.probeAtlasBytes = qint64(st.probeAtlasBytes);
     out.shadowPassesLastFrame = int(st.shadowPassesLastFrame);
     out.cachedMapRendersLastFrame = int(st.cachedMapRendersLastFrame);
+    out.shaderLightMismatches = int(st.shaderLightMismatches);
     out.reflectPassesLastFrame = int(st.reflectPassesLastFrame);
     out.probePassesLastFrame = int(st.probePassesLastFrame);
     out.reflectLampPassesLastFrame = int(st.reflectLampPassesLastFrame);
