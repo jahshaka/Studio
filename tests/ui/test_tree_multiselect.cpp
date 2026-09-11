@@ -101,10 +101,12 @@ void run()
     QList<iris::SceneNodePtr> announced;
     QObject::connect(&panel, &SceneHierarchyWidget::sceneNodeSetSelected,
                      [&announced](const QList<iris::SceneNodePtr> &set) { announced = set; });
+    int emptyAnnouncements = 0;
     QObject::connect(&panel, &SceneHierarchyWidget::sceneNodeSelected,
-                     [&announced](iris::SceneNodePtr node) {
+                     [&announced, &emptyAnnouncements](iris::SceneNodePtr node) {
         announced.clear();
         if (node) announced.append(node);
+        else      ++emptyAnnouncements;
     });
 
     QTreeWidgetItem *r2 = rowFor(tree, "row2");
@@ -174,6 +176,57 @@ void run()
           QStringLiteral("tree_multiselect: the selection SURVIVES a repopulate (%1 rows before, "
                          "%2 after)").arg(before).arg(tree->selectedItems().size())
               .toUtf8().constData());
+
+    // ---- S3: A CLICK ON EMPTY SPACE DESELECTS, AND SAYS SO ---------------
+    //
+    // Owner smoke, 2026-09-11: "selecting an asset in the left column, then
+    // clicking the empty space under the list, deselects in the list but the
+    // node stays selected in the viewport." An empty selection was never
+    // ANNOUNCED — treeSelectionChanged returns on a null current item, and with
+    // a current item it substituted that node for the empty set — so
+    // SelectionService (and with it the outline, the gizmo and the properties
+    // panel) kept the node the user had just deselected. The panel's ONE path
+    // out is sceneNodeSelected(null), which is what editor.select(null) does.
+    {
+        // The rows are re-resolved: the repopulate above clear()ed the tree, so
+        // every QTreeWidgetItem* taken before it is dangling.
+        QTreeWidgetItem *row4 = rowFor(tree, "row4");
+        QTreeWidgetItem *row2 = rowFor(tree, "row2");
+        clickRow(tree, row4, Qt::NoModifier);
+        QApplication::processEvents();
+        CHECK(announced.size() == 1, "empty_click: a row is selected to begin with");
+
+        const int before = emptyAnnouncements;
+        // Below the last row: real empty space inside the viewport.
+        QTreeWidgetItem *last = rowFor(tree, "row6");
+        const QRect r = tree->visualItemRect(last);
+        const QPoint empty(r.center().x(), r.bottom() + 80);
+        CHECK(tree->itemAt(empty) == nullptr, "empty_click: the probe point really is empty");
+        QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier, empty);
+        QApplication::processEvents();
+
+        CHECK(emptyAnnouncements == before + 1,
+              "empty_click: the EMPTY selection is announced (sceneNodeSelected(null))");
+        CHECK(announced.isEmpty(), "empty_click: ...and the announced set is empty");
+        CHECK(tree->selectedItems().isEmpty(), "empty_click: the tree shows nothing selected");
+        CHECK(tree->currentItem() == nullptr, "empty_click: and no row is left current");
+
+        // A row still selects afterwards (the clear did not break the panel).
+        clickRow(tree, row2, Qt::NoModifier);
+        QApplication::processEvents();
+        CHECK(announced.size() == 1 && announced.first()->getName() == QStringLiteral("row2"),
+              "empty_click: a normal click still works after a clear");
+
+        // The OTHER half of the defect: Ctrl+clicking the last selected row
+        // leaves an empty set with a current item — which used to be replaced
+        // by that very node, so the selection could never be emptied from the
+        // keyboard hand either.
+        const int before2 = emptyAnnouncements;
+        clickRow(tree, row2, Qt::ControlModifier);
+        QApplication::processEvents();
+        CHECK(emptyAnnouncements == before2 + 1,
+              "empty_click: Ctrl+clicking the only selected row announces the empty set too");
+    }
 
     // ---- S9: AN ASSET IS ONE ROW, on the real widget ---------------------
     //
