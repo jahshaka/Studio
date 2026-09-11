@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QShortcut>
 
 #include "modules/materials/dialogs/searchdialog.h"
+#include "ui/style/stylesheet.h"
 
 
 
@@ -145,7 +146,7 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 QMenu *GraphNodeScene::createContextMenu(float x, float y)
 {
 	auto menu = new QMenu();
-	menu->setStyleSheet(NodeStyle::menuStyleSheet);
+	menu->setStyleSheet(StyleSheet::MaterialsContextMenu());
 
 	/*
 	for(auto key : nodeGraph->modelFactories.keys()) {
@@ -176,7 +177,7 @@ QMenu *GraphNodeScene::createContextMenu(float x, float y)
 QMenu * GraphNodeScene::removeConnectionContextMenu(float x, float y)
 {
 	auto menu = new QMenu();
-	menu->setStyleSheet(NodeStyle::menuStyleSheet);
+	menu->setStyleSheet(StyleSheet::MaterialsContextMenu());
 	auto sock = getSocketAt(x, y);
 
 	auto getAppropriateText = [&](SocketConnection *conn, int i) {

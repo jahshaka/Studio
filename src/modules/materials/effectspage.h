@@ -220,7 +220,6 @@ private:
 	bool eventFilter(QObject *watched, QEvent *event);
 
 	void configureStyleSheet();
-	void configureProjectDock();
 	void configureAssetsDock();
 	void createShader(NodeGraphPreset preset, bool loadNewGraph = true);
 	void loadGraphFromTemplate(NodeGraphPreset preset);

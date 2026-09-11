@@ -143,7 +143,6 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	newNodeGraph();
 	generateTileNode();
 	configureStyleSheet();
-	configureProjectDock();
 	configureAssetsDock();
     configureConnections();
 	setMinimumSize(300, 400);
@@ -657,98 +656,24 @@ bool EffectsPage::deleteShader(QString guid)
 
 void EffectsPage::configureStyleSheet()
 {
-	setStyleSheet(
-		"QMainWindow::separator {width: 10px;h eight: 0px; margin: -3.5px; padding: 0px; border: 0px solid black; background: rgba(19, 19, 19, 1);}"
-		"QWidget{background:rgba(32,32,32,1); color:rgba(240,240,240,1); border: 0px solid rgba(0,0,0,0);}"
-		"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9); border-radius : 2px; }"
-		"QMenu::item{padding: 4px 5px 4px 10px;	}"
-		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
-		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
+	setStyleSheet(StyleSheet::EffectsPageRoot());
 
-		"QTabWidget::pane{border: 1px solid rgba(0,0,0,.1);	border - top: 0px solid rgba(0,0,0,0);	}"
-		"QTabWidget::tab - bar{	left: 1px; background: rgba(26,26,26,.9);	}"
-		"QDockWidget::tab{	background:rgba(32,32,32,1);}"
+	nodePropertiesPanel->setStyleSheet(StyleSheet::EffectsNodePropertiesPanel());
 
-		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 24px; padding: 4px;}"
-		"QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 8px; width: 14px; }"
-		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
-		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
-		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-	);
+	nodeContainer->setStyleSheet(StyleSheet::EffectsNodeTiles());
 
-	nodePropertiesPanel->setStyleSheet(
-		"QWidget{background:rgba(32,32,32,1);}"
-	);
+	nodeContainer->verticalScrollBar()->setStyleSheet(StyleSheet::EffectsNodeTilesScrollBar());
 
-	nodeContainer->setStyleSheet(
-		"QListView::item{ border-radius: 2px; border: 1px solid rgba(0,0,0,.31); background: rgba(51,51,51,1); margin: 3px;  }"
-		"QListView::item:selected{ background: rgba(155,155,155,1); border: 1px solid rgba(50,150,250,.1); }"
-		"QListView::item:hover{ background: rgba(95,95,95,1); border: .1px solid rgba(50,150,250,.1); }"
-		"QListView::text{ top : -6; }"
+	nodeTray->setStyleSheet(StyleSheet::EffectsDock());
 
-	);
-
-	nodeContainer->verticalScrollBar()->setStyleSheet(
-		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 10px; }"
-		"QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 5px;  left: 8px; }"
-		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
-		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
-		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-	);
-
-	nodeTray->setStyleSheet(
-		"QDockWidget{color: rgba(250,250,250,.9); background: rgba(32,32,32,1);}"
-		"QDockWidget::title{ padding: 8px; background: rgba(22,22,22,1);	border: 1px solid rgba(20,20,20, .8);	text-align: center;}"
-		"QDockWidget::close-button{ background: rgba(0,0,0,0); color: rgba(200,200,200,0); icon-size: 0px; padding: 23px; }"
-		"QDockWidget::float-button{ background: rgba(0,0,0,0); color: rgba(200,200,200,0); icon-size: 0px; padding: 22px; }"
-		//"QDockWidget::close-button, QDockWidget::float-button{	background: rgba(10,10,10,1); color: white;padding: 0px;}"
-		//"QDockWidget::close-button:hover, QDockWidget::float-button:hover{background: rgba(0,220,0,0);padding: 0px;}"
-		"QComboBox::drop-down {	width: 15px;  border: none; subcontrol-position: center right;}"
-		"QComboBox::down-arrow{image : url(:/images/drop-down-24.png); }"
-	);
-
-	displayWidget->setStyleSheet(nodeTray->styleSheet());
-	propertyWidget->setStyleSheet(nodeTray->styleSheet());
-	materialSettingsWidget->setStyleSheet(nodeTray->styleSheet());
-	materialSettingsDock->setStyleSheet(nodeTray->styleSheet());
-	tabbedWidget->setStyleSheet(nodeTray->styleSheet() + 
-	"QTabWidget::pane{	border: 1px solid rgba(0, 0, 0, .5); border - top: 0px solid rgba(0, 0, 0, 0);}"
-	"QTabBar::tab{	background: rgba(21, 21, 21, .7); color: rgba(250, 250, 250, .9); font - weight: 400; font - size: 13em; padding: 5px 22px 5px 22px; }"
-		"QTabBar::tab:selected{ color: rgba(255, 255, 255, .99); border-top: 2px solid rgba(50,150,250,.8); }"
-		"QTabBar::tab:!selected{ background: rgba(55, 55, 55, .99); border : 1px solid rgba(21,21,21,.4); color: rgba(200,200,200,.5); }"
-	);
+	displayWidget->setStyleSheet(StyleSheet::EffectsDock());
+	propertyWidget->setStyleSheet(StyleSheet::EffectsDock());
+	materialSettingsWidget->setStyleSheet(StyleSheet::EffectsDock());
+	materialSettingsDock->setStyleSheet(StyleSheet::EffectsDock());
+	tabbedWidget->setStyleSheet(StyleSheet::EffectsTabbedWidget());
 	for (int i = 0; i < tabbedWidget->count(); i++) {
-		tabbedWidget->widget(i)->setStyleSheet(nodeContainer->styleSheet());
+		tabbedWidget->widget(i)->setStyleSheet(StyleSheet::EffectsNodeTiles());
 	}
-}
-
-
-void EffectsPage::configureProjectDock()
-{
-#if(EFFECT_BUILD_AS_LIB)
-	auto widget = new QWidget;
-	auto layout = new QVBoxLayout;
-	widget->setLayout(layout);
-	layout->setContentsMargins(0, 0, 0, 0);
-	//projectDock->setWidget(widget);
-	//projectDock->setStyleSheet(nodeTray->styleSheet());
-
-	auto searchContainer = new QWidget;
-	auto searchLayout = new QHBoxLayout;
-	auto searchBar = new QLineEdit;
-
-	searchContainer->setLayout(searchLayout);
-	searchLayout->addWidget(searchBar);
-	searchLayout->addSpacing(12);
-
-	searchBar->setPlaceholderText("search");
-	searchBar->setAlignment(Qt::AlignLeft);
-	searchBar->setFont(font);
-	searchBar->setTextMargins(8, 0, 0, 0);
-	searchBar->setStyleSheet("QLineEdit{ background:rgba(41,41,41,1); border: 1px solid rgba(150,150,150,.2); border-radius: 1px; color: rgba(250,250,250,.95); }");
-
-	//layout->addWidget(assetWidget);
-#endif
 }
 
 
@@ -773,35 +698,8 @@ void EffectsPage::configureAssetsDock()
 	auto scrollViewPreset = new QScrollArea;
 	auto scrollViewFx = new QScrollArea;
 	auto scrollViewAsset = new QScrollArea;
-	auto contentHolder = new QWidget;
-	auto contentLayout = new QVBoxLayout;
-	/*contentHolder->setLayout(contentLayout);
-	scrollView->setWidget(contentHolder);
-	scrollView->setWidgetResizable(true);
-	scrollView->setContentsMargins(0, 0, 0, 0);
-	scrollView->setStyleSheet(
-		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 10px; }"
-		"QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 3px;  left: 8px; }"
-		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
-		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
-		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-	);*/
 
-	//auto presetsLabel = new QLabel("Presets");
-	//auto effectsLabel = new QLabel("My Fx");
-
-	//presetsLabel->setStyleSheet("QLabel{ background: rgba(20,20,20,1); padding: 3px; padding-left: 8px; color: rgba(200,200,200,1); }");
-	//effectsLabel->setStyleSheet(presetsLabel->styleSheet());
-
-	//contentLayout->addWidget(presetsLabel);
-	//contentLayout->addWidget(presets);
-	//contentLayout->addWidget(effectsLabel);
-	//contentLayout->addWidget(effects);
-	//contentLayout->setContentsMargins(0, 0, 0, 0);
-
-	presets->setStyleSheet(presets->styleSheet() +
-		"border: 1px solid black;"
-	);
+	presets->setStyleSheet(StyleSheet::EffectsPresetsList());
 
 	CreateNewDialog::getAdditionalPresetList();
 
@@ -862,72 +760,11 @@ void EffectsPage::configureAssetsDock()
 	scrollViewFx->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	scrollViewPreset->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-	/*scrollView->adjustSize();
-	
-	auto buttonBar = new QWidget;
-	auto buttonLayout = new QHBoxLayout;
-	auto exportBtn = new QPushButton("help");
-	auto importBtn = new QPushButton("help");
-	auto addBtn = new QPushButton("+");
-	{
-		int fontSize = 12;
-
-		buttonBar->setLayout(buttonLayout);
-		buttonLayout->addWidget(exportBtn);
-		buttonLayout->addWidget(importBtn);
-		buttonLayout->addWidget(addBtn);
-		buttonLayout->setContentsMargins(2, 2, 2, 2);
-		buttonLayout->setSpacing(1);
-
-
-		exportBtn->setText(QChar(fa::upload));
-		exportBtn->setFont(fontIcons->font(fontSize));
-		exportBtn->setToolTip("Export shader");
-		importBtn->setText(QChar(fa::download));
-		importBtn->setFont(fontIcons->font(fontSize));
-		importBtn->setToolTip("Import shader");
-		addBtn->setText(QChar(fa::plus));
-		addBtn->setFont(fontIcons->font(fontSize));
-		addBtn->setToolTip("Create new shader");
-
-		exportBtn->setCursor(Qt::PointingHandCursor);
-		importBtn->setCursor(Qt::PointingHandCursor);
-		addBtn->setCursor(Qt::PointingHandCursor);
-
-		exportBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		importBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		addBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		buttonBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-		presetsLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-		effectsLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-
-		exportBtn->setStyleSheet(
-			"QPushButton{background: rgba(51,51,51,1); color:rgba(230,230,230,1); border: 1px solid rgba(50,50,50,.1); padding: 5px 10px; }"
-			"QPushButton:hover{background: rgba(100,100,100,.3); color:rgba(230,230,230,1);}"
-		);
-		importBtn->setStyleSheet(exportBtn->styleSheet());
-		addBtn->setStyleSheet(exportBtn->styleSheet());
-
-		buttonBar->setStyleSheet(
-			"background: rgba(21,21,21,1); padding :0px;"
-		);
-		buttonBar->setContentsMargins(0, 0, 0, 0);
-
-		connect(exportBtn, &QPushButton::clicked, [=]() {
-			exportGraph();
-		});
-		connect(importBtn, &QPushButton::clicked, [=]() {
-			importGraph();
-		});
-		connect(addBtn, &QPushButton::clicked, [=]() {
-			createNewGraph();
-		});
-	}*/
 
 	//layout->addWidget(scrollView);
 	//layout->addWidget(buttonBar);
 	assetsDock->setWidget(tabWidget);
-	assetsDock->setStyleSheet(nodeTray->styleSheet());
+	assetsDock->setStyleSheet(StyleSheet::EffectsDock());
 
 	updateAssetDock();
 }
@@ -1171,10 +1008,7 @@ void EffectsPage::configureToolbar()
 	projectName->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Expanding);
 	projectName->setMinimumWidth(250);
 	projectName->setText("Untitled Shader");
-	projectName->setStyleSheet(
-		"QLineEdit{background: rgba(0,0,0,0); border-radius: 3px; padding-left: 5px; color: rgba(255,255,255,.8); }"
-		"QLineEdit:hover{ background : rgba(21,21,21,1); color: rgba(255,255,255,1);}"
-	);
+	projectName->setStyleSheet(StyleSheet::EffectsProjectName());
 
 	connect(projectName, &QLineEdit::textEdited, [=](const QString text) {
 		currentProjectShader->setData(Qt::DisplayRole, text);
@@ -1232,11 +1066,7 @@ void EffectsPage::configureToolbar()
 
 	QPushButton* downloadBtn = new QPushButton("Download Materials");
 	//downloadBtn->setStyleSheet(StyleSheet::QPushButtonGreyscale());
-	downloadBtn->setStyleSheet( QString(
-		"QPushButton{ background-color: rgba(33,33,33, 1); color: #DEDEDE; border : 0; padding: 10px 16px; margin-right:6px; margin-left:6px; border-radius: 2px; }"
-		"QPushButton:hover{ background-color: #555; }"
-		"QPushButton:pressed{ background-color: #444; }"
-	));
+	downloadBtn->setStyleSheet(StyleSheet::EffectsDownloadButton());
 	connect(downloadBtn, &QPushButton::pressed, []() {
 		QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/get/materials/"));
 	});
@@ -1250,21 +1080,9 @@ void EffectsPage::configureToolbar()
 		createNewGraph(true);
 	});
 
-	toolBar->setStyleSheet(""
-		//"QToolBar{background: rgba(48,48,48, 1); border: .5px solid rgba(20,20,20, .8); border-bottom: 1px solid rgba(20,20,20, .8); padding: 0px;}"
-		"QToolBar{ background: rgba(48,48,48,1); border-bottom: 1px solid rgba(20,20,20, .8);}"
-		"QToolBar::handle:horizontal { image: url(:/icons/thandleh.png); width: 24px; }"
-		//"QToolBar::handle:vertical { image: url(:/icons/thandlev.png); height: 22px;}"
-		"QToolBar::separator { background: rgba(0,0,0,.2); width: 1px; height : 20px;}"
-		"QToolBar::separator:horizontal { background: #272727; width: 1px; margin-left: 6px; margin-right: 6px;} "
-		"QToolButton { border-radius: 2px; background: rgba(33,33,33, 1); color: rgba(250,250,250, 1); border : 1px solid rgba(10,10,10, .4); font: 18px; padding: 8px; } "
-		"QToolButton:hover{ background: rgba(48,48,48, 1); } "
-		"QToolButton#actionDownload{width:40px;}"
-	);
+	toolBar->setStyleSheet(StyleSheet::EffectsToolBar());
 
-	empty->setStyleSheet(
-		"background : rgba(0,0,0,0);"
-	);
+	empty->setStyleSheet(StyleSheet::EffectsEmptySpacer());
 }
 
 void EffectsPage::generateTileNode()
@@ -2108,14 +1926,8 @@ void EffectsPage::addMenuToSceneWidget()
 {
 	QMenu *modelMenu = new QMenu("Model");
 	QMenu *backgroundMenu = new QMenu("Background");
-	modelMenu->setStyleSheet(
-		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu:hover { background-color: #3498db; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 16px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; }"
-		"QMenu::item : disabled { color: #555; }"
-	);
-	backgroundMenu->setStyleSheet(modelMenu->styleSheet());
+	modelMenu->setStyleSheet(StyleSheet::EffectsPreviewMenu());
+	backgroundMenu->setStyleSheet(StyleSheet::EffectsPreviewMenu());
 
 	QMainWindow *window = new QMainWindow;
 	QToolBar *bar = new QToolBar;

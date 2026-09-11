@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QGraphicsEffect>
 #include <QPainterPath>
 #include <QEnterEvent>
+#include "ui/style/stylesheet.h"
 
 
 BasePropertyWidget::BasePropertyWidget(QWidget * parent) : QWidget(parent)
@@ -45,7 +46,7 @@ BasePropertyWidget::BasePropertyWidget(QWidget * parent) : QWidget(parent)
 	btn->setIconSize(QSize(14, 14));
 
 	displayWidget = new HeaderObject;
-	displayWidget->setStyleSheet("background: rgba(0,0,0,0);");
+	displayWidget->setStyleSheet(StyleSheet::MaterialsTransparent());
 	auto displayLayout = new QHBoxLayout;
 	displayWidget->setLayout(displayLayout);
 	displayLayout->setSpacing(0);
@@ -98,40 +99,9 @@ BasePropertyWidget::BasePropertyWidget(QWidget * parent) : QWidget(parent)
 	});
 	
 
-	displayName->setStyleSheet("QLineEdit{ background : rgba(29,29,29,0); border-bottom : 2px solid rgba(18,18,18,1); }"
-								"QLineEdit:hover{ background: rgba(32,32,32,1); border: 1px solid rgba(0,0,0,1);}"
-	);
+	displayName->setStyleSheet(StyleSheet::MaterialsPropertyName());
 
-	setStyleSheet("QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
-		"QMenu::item{padding: 2px 5px 2px 20px;	}"
-		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
-		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
-		"QCheckBox {   spacing: 2px 5px;}"
-		"QCheckBox::indicator {   width: 28px;   height: 28px; }"
-		"QCheckBox::indicator::unchecked {	image: url(:/icons/check-unchecked.png);}"
-		"QCheckBox::indicator::checked {		image: url(:/icons/check-checked.png);}"
-		"QLineEdit {	border: 0;	background: #292929;	padding: 6px;	margin: 0;}"
-		"QToolButton {	background: #1E1E1E;	border: 0;	padding: 6px;}"
-		"QToolButton:pressed {	background: #111;}"
-		"QToolButton:hover {	background: #404040;}"
-		"QDoubleSpinBox, QSpinBox {	border-radius: 1px;	padding: 6px;	background: #292929;}"
-		"QDoubleSpinBox::up-arrow, QSpinBox::up-arrow {	width:0;}"
-		"QDoubleSpinBox::up-button, QSpinBox::up-button, QDoubleSpinBox::down-button, QSpinBox::down-button {	width:0;}"
-		"QComboBox:editable {}"
-		"QComboBox QAbstractItemView::item {    show-decoration-selected: 1;}"
-		"QComboBox QAbstractItemView::item {    padding: 6px;}"
-		"QListView::item:selected {    background: #404040;}"
-		"QComboBox:!editable, QComboBox::drop-down:editable {     background: #1A1A1A;}"
-		"QComboBox:!editable:on, QComboBox::drop-down:editable:on {    background: #1A1A1A;}"
-		"QComboBox QAbstractItemView {    background-color: #1A1A1A;    selection-background-color: #404040;    border: 0;    outline: none;}"
-		"QComboBox QAbstractItemView::item {    border: none;    padding-left: 5px;}"
-		"QComboBox QAbstractItemView::item:selected {    background: #404040;    padding-left: 5px;}"
-		"QComboBox::drop-down {    subcontrol-origin: padding;    subcontrol-position: top right;    width: 18px;    border-left-width: 1px;}"
-		"QComboBox::down-arrow {    image: url(:/icons/down_arrow_check.png);	width: 18px;	height: 14px;} "
-		"QComboBox::down-arrow:!enabled {    image: url(:/icons/down_arrow_check_disabled.png);    width: 18px;    height: 14px;}"
-		"QLabel{}"
-		"QPushButton{padding : 3px; }"
-	);
+	setStyleSheet(StyleSheet::MaterialsPropertyMenu());
 
 
 }
@@ -215,10 +185,7 @@ WideRangeSpinBox::WideRangeSpinBox(QWidget *parent) : QDoubleSpinBox(parent)
 {
 	setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
     setRange(-1000, 1000);
-	setStyleSheet("QDoubleSpinBox{ border-radius : 1px; padding : 7px; background: #292929; }"
-		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
-		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}"
-	);
+	setStyleSheet(StyleSheet::MaterialsPropertyDoubleSpin());
 }
 
 
@@ -227,10 +194,7 @@ WideRangeIntBox::WideRangeIntBox(QWidget *parent) : QSpinBox(parent)
 	setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 	setRange(-INT32_MAX, INT32_MAX);
 	setRange(-1000, 1000);
-	setStyleSheet("QSpinBox{ border-radius : 1px; padding : 7px; background: #292929; }"
-		"QSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
-		"QSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}"
-	);
+	setStyleSheet(StyleSheet::MaterialsPropertySpin());
 }
 
 

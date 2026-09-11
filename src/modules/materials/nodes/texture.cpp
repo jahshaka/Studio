@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "irisgl/core/math/vec.h"
 #include "texture.h"
+#include "ui/style/stylesheet.h"
 
 /*    COMBINE NORMAL    */
 CombineNormalsNode::CombineNormalsNode()
@@ -139,13 +140,7 @@ UVNode::UVNode()
 	addPairRow("Set", uvSetCombo, nullptr);
 
 	widget = wid;
-	widget->setStyleSheet(
-		"QDoubleSpinBox{border: 2px solid rgba(200, 200, 200, .4); padding: 2px; background: rgba(0, 0, 0, 0.2);}"
-		"QComboBox{border: 2px solid rgba(200, 200, 200, .4); padding: 1px; background: rgba(0, 0, 0, 0.2);}"
-		"QWidget{ background: rgba(0,0,0,0); color: rgba(250,250,250,1); }"
-		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
-		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}"
-	);
+	widget->setStyleSheet(StyleSheet::MaterialsNodeTextureFields());
 
 	auto onEdit = [this](double) {
 		tiling = iris::Vec2(float(tileXBox->value()), float(tileYBox->value()));

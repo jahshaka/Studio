@@ -270,6 +270,86 @@ public:
 
 	// upgrader (upgrader.cpp)
 	static const QString UpgraderDialog();
+
+	// publish page (publishmodule.cpp)
+	static const QString PublishPage();
+	static const QString PublishTitle();
+	static const QString PublishSubtitle();
+	static const QString PublishCard();
+	static const QString PublishCardTitle();
+	static const QString PublishDetail();
+	static const QString PublishStatus();
+	static const QString PublishStatusError();
+	static const QString PublishPrimaryButton();
+	static const QString PublishSecondaryButton();
+	static const QString PublishPreviewFrame();
+	static const QString PublishPreviewLabel();
+	static const QString PublishPreviewSlot();
+
+	// materials page (effectspage.cpp)
+	static const QString EffectsPageRoot();
+	static const QString EffectsNodePropertiesPanel();
+	static const QString EffectsNodeTiles();
+	static const QString EffectsNodeTilesScrollBar();
+	static const QString EffectsDock();
+	static const QString EffectsToolBar();
+	static const QString EffectsEmptySpacer();
+	static const QString EffectsPreviewMenu();
+	static const QString EffectsDownloadButton();
+	static const QString EffectsProjectName();
+
+	// materials lists (listwidget.cpp)
+	static const QString MaterialsListTiles();
+	static const QString MaterialsListScrollBar();
+	static const QString EffectsTabbedWidget();
+	static const QString EffectsPresetsList();
+
+	// materials graph + lists (graphnodescene.cpp, listwidget.cpp; was NodeStyle::menuStyleSheet)
+	static const QString MaterialsContextMenu();
+
+	// materials node properties (nodepropertiespanel.cpp)
+	static const QString MaterialsMutedLabel();
+	static const QString MaterialsTexturePreviewButton();
+
+	// materials property rows (basepropertywidget.cpp)
+	static const QString MaterialsTransparent();
+	static const QString MaterialsPropertyName();
+	static const QString MaterialsPropertyMenu();
+	static const QString MaterialsPropertyDoubleSpin();
+	static const QString MaterialsPropertySpin();
+
+	// material settings (materialsettingswidget.cpp)
+	static const QString MaterialSettingsPanel();
+
+	// materials graph nodes (nodemodel.cpp, nodes/*.cpp)
+	static const QString MaterialsNodeMenu();
+
+	// materials trees (treewidget.cpp)
+	static const QString MaterialsTreeScrollBar();
+	static const QString MaterialsNodeTextureWidget();
+	static const QString MaterialsNodeTextureThumb();
+	static const QString MaterialsNodeTextureWidgetAlt();
+	static const QString MaterialsTree();
+	static const QString MaterialsNodeVectorFields();
+	static const QString MaterialsNodeValueBox();
+	static const QString MaterialsNodeTextureFields();
+
+	// materials create-new dialog (createnewdialog.cpp)
+	static const QString CreateNewTiles();
+	static const QString CreateNewSectionLabel();
+	static const QString CreateNewHolder();
+	static const QString CreateNewTabs();
+	static const QString CreateNewButtons();
+
+	// materials node search (searchdialog.cpp)
+	static const QString SearchDialogTabs();
+	static const QString SearchDialogBarRadius();
+	static const QString SearchDialogContainer();
+	static const QString SearchDialogBar();
+	static const QString SearchDialogRoot();
+
+	// materials shader assets (shaderassetwidget.cpp)
+	static const QString ShaderAssetConfirmDialog();
 //@@CLASSIC-DECLS@@
 };
 

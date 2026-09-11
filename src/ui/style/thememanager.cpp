@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QSet>
 #include <QStyleOptionTab>
+#include <QStyleOptionViewItem>
 #include <QTabBar>
 #include <QWidgetAction>
 
@@ -123,7 +124,26 @@ public:
             oclero::qlementine::QlementineStyle::drawControl(element, &fixed, p, w);
             return;
         }
+        if (element == QStyle::CE_ItemViewItem && isIconOverText(opt)) {
+            QCommonStyle::drawControl(element, opt, p, w);
+            return;
+        }
         oclero::qlementine::QlementineStyle::drawControl(element, opt, p, w);
+    }
+
+    // ICON-OVER-CAPTION ITEMS (theme sweep, 2026-09-11). Qlementine lays every
+    // item-view item out as icon-left/text-right and sizes it that way —
+    // it ignores QStyleOptionViewItem::decorationPosition — so an IconMode list
+    // (the Materials presets, the node palette, the Sample Scenes tiles) lost
+    // its captions: squeezed beside the icon and elided to "Lo…", or clipped
+    // away entirely. Such items get QCommonStyle's layout (which honours Top),
+    // while its background/selection still comes from Qlementine through
+    // proxy()->drawPrimitive(PE_PanelItemViewItem). The Classic sheets had
+    // hidden this: QStyleSheetStyle laid those items out itself.
+    static bool isIconOverText(const QStyleOption *opt)
+    {
+        const auto *item = qstyleoption_cast<const QStyleOptionViewItem *>(opt);
+        return item && item->decorationPosition == QStyleOptionViewItem::Top;
     }
 
     // TAB METRICS FROM THE TAB BAR ITSELF (theme sweep, 2026-09-11). Qlementine
@@ -175,6 +195,8 @@ public:
         QStyleOptionTab fixed;
         if (type == QStyle::CT_TabBarTab && correctTabPosition(opt, w, &fixed))
             return oclero::qlementine::QlementineStyle::sizeFromContents(type, &fixed, size, w);
+        if (type == QStyle::CT_ItemViewItem && isIconOverText(opt))
+            return QCommonStyle::sizeFromContents(type, opt, size, w);
         return oclero::qlementine::QlementineStyle::sizeFromContents(type, opt, size, w);
     }
 

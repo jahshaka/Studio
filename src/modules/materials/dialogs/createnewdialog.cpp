@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "irisgl/import/materialhelper.h"
 
 #include "../core/materialhelper.h"
+#include "ui/style/stylesheet.h"
 
 CreateNewDialog::CreateNewDialog(bool maximized) : QDialog()
 {
@@ -38,33 +39,7 @@ CreateNewDialog::~CreateNewDialog()
 
 void CreateNewDialog::configureStylesheet()
 {
-	setStyleSheet(
-		"QListView::item{ border-radius: 2px; border: 1px solid rgba(0,0,0,1); background: rgba(80,80,80,1); margin: 3px;  }"
-		"QListView::item:selected{ background: rgba(65,65,65,1); border: 1px solid rgba(50,150,250,1); }"
-		"QListView::item:hover{ background: rgba(55,55,55,1); border: 1px solid rgba(50,150,250,1); }"
-		"QListView::text{ top : -6; }"
-
-        "QScrollBar:vertical, QScrollBar:horizontal {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 18px; padding: 4px;}"
-        "QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 4px; width: 8px; }"
-        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
-        "QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
-        "QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-
-        "QWidget{background:rgba(32,32,32,1); color:rgba(240,240,240,1); border: 0px solid rgba(0,0,0,0);}"
-		"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9); border-radius : 2px; }"
-		"QMenu::item{padding: 4px 5px 4px 10px;	}"
-		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
-		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
-
-        "QPushButton{ background: #333; color: #DEDEDE; border : 0; padding: 4px 16px; }"
-		"QPushButton:hover{ background-color: #555; }"
-		"QPushButton:pressed{ background-color: #444; }"
-		"QPushButton:disabled{ color: #444; }"
-		"QPushButton:checked{ background-color: rgba(50,150,255,1); }"
-
-		"QLineEdit{background: rgba(0,0,0,0); border-bottom: 1px solid rgba(50,50,50,1);}"
-		"QLabel#infoLabel{color: rgba(200,200,200,.5);}"
-	);
+	setStyleSheet(StyleSheet::CreateNewTiles());
 	
 }
 
@@ -134,13 +109,7 @@ void CreateNewDialog::createViewWithOptions()
 	scrollView->setWidget(contentHolder);
 	scrollView->setWidgetResizable(true);
 	scrollView->setContentsMargins(0, 0, 0, 0);
-	scrollView->setStyleSheet(
-		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 10px; }"
-		"QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 5px;  left: 8px; }"
-		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
-		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
-		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-	);
+	scrollView->setStyleSheet(StyleSheet::EffectsNodeTilesScrollBar());
 
 	auto starterLabel = new QLabel("Starters");
 	auto presetLabel = new QLabel("Preset");
@@ -148,8 +117,8 @@ void CreateNewDialog::createViewWithOptions()
 	starterLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	presetLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-	starterLabel->setStyleSheet("QLabel{ background: rgba(20,20,20,1); padding: 3px; padding-left: 8px; color: rgba(200,200,200,1); }");
-	presetLabel->setStyleSheet(starterLabel->styleSheet());
+	starterLabel->setStyleSheet(StyleSheet::CreateNewSectionLabel());
+	presetLabel->setStyleSheet(StyleSheet::CreateNewSectionLabel());
 
 	contentLayout->addWidget(starterLabel);
 	contentLayout->addWidget(options);
@@ -243,30 +212,9 @@ void CreateNewDialog::createViewWithOptions()
 		confirm->click();
 	});
 
-	holder->setStyleSheet(
-		"QWidget{background:rgba(32,32,32,1); color:rgba(240,240,240,1); border: 0px solid rgba(0,0,0,0);}"
-		"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9); border-radius : 2px; }"
-		"QMenu::item{padding: 4px 5px 4px 10px;	}"
-		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
-		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
+	holder->setStyleSheet(StyleSheet::CreateNewHolder());
 
-		"QTabWidget::pane{border: 0px solid rgba(0,0,0,.5);	border - top: 0px solid rgba(0,0,0,0); border-left : 0px; border-right: 0px;	}"
-		"QTabWidget::tab - bar{	left: 1px;	}"
-		"QDockWidget::tab{	background:rgba(32,32,32,1);} border: 0px solid rgba(0,0,0,0);"
-
-		"QPushButton{ background: #777; color: #DEDEDE; border : 0; padding: 4px 16px; }"
-		"QPushButton:hover{ background-color: #555; }"
-		"QPushButton:pressed{ background-color: #444; }"
-		"QPushButton:disabled{ color: #444; }"
-		"QPushButton:checked{ background-color: rgba(50,150,255,1); }"
-	);
-
-	tabbedWidget->setStyleSheet(
-		"QTabWidget::pane{	border: 0px solid rgba(0, 0, 0, .5); border-top: 1px solid rgba(0, 0, 0, .4); border-bottom: 1px solid rgba(0,0,0,.4);}"
-		"QTabBar::tab{	background: rgba(21, 21, 21, .7); color: rgba(250, 250, 250, .9); font - weight: 400; font - size: 13em; padding: 5px 22px 5px 22px; }"
-		"QTabBar::tab:selected{ color: rgba(255, 255, 255, .99); border-top: 2px solid rgba(50,150,250,.8); }"
-		"QTabBar::tab:!selected{ background: rgba(55, 55, 55, .99); border : 1px solid rgba(21,21,21,.4); color: rgba(200,200,200,.5); }"
-	);
+	tabbedWidget->setStyleSheet(StyleSheet::CreateNewTabs());
 }
 
 void CreateNewDialog::createViewWithoutOptions()
@@ -475,13 +423,7 @@ OptionSelection::OptionSelection(NodeGraphPreset node) : QPushButton()
 
     layout->addWidget(name);
 
-    setStyleSheet("QPushButton{ background: #333; color: #DEDEDE; border : 0px; padding: 4px 16px; border-radius: 3px;}"
-                  "QPushButton:hover{ background-color: #555; }"
-                  "QPushButton:pressed{ background-color: #444; }"
-                  "QPushButton:disabled{ color: #444; }"
-                  "QPushButton:checked{ background-color: rgba(50,150,250,.8); }"
-                  "QLabel{ border: 0; background: rgba(0,0,0,0); }"
-                  );
+    setStyleSheet(StyleSheet::CreateNewButtons());
 
 	connect(this, &OptionSelection::clicked, [=]() {
 		emit buttonSelected(this);

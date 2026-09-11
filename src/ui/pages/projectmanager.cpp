@@ -421,11 +421,10 @@ void ProjectManager::setupDesktopControls()
 {
     currentDesktop = qBound(1, settings->getValue("current_desktop", 1).toInt(), 4);
 
-    const QString menuStyle = StyleSheet::QMenuDarkDesktop();
 
     // switcher popup: Desktop 1..4, current one checked
     desktopMenu = new QMenu(this);
-    desktopMenu->setStyleSheet(menuStyle);
+    desktopMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
     auto desktopGroup = new QActionGroup(desktopMenu);
     desktopGroup->setExclusive(true);
     for (int i = 1; i <= 4; ++i) {
@@ -448,7 +447,7 @@ void ProjectManager::setupDesktopControls()
     // per-desktop layout mode: Rows (sequential grid), Freeform (drag anywhere),
     // Sliders (N filmstrip rows — DESKTOP_SLIDER_SPEC.md)
     layoutMenu = new QMenu(this);
-    layoutMenu->setStyleSheet(menuStyle);
+    layoutMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
     auto layoutGroup = new QActionGroup(layoutMenu);
     layoutGroup->setExclusive(true);
     rowsAction = layoutMenu->addAction("Rows");

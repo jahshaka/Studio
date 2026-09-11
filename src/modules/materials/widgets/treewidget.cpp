@@ -12,32 +12,12 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include <QHeaderView>
 #include <QScrollBar>
+#include "ui/style/stylesheet.h"
 
 TreeWidget::TreeWidget() : QTreeWidget()
 {
-	setStyleSheet(
-		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
-		"QTreeWidget::branch { background-color:rgba(0,0,0,0); }"
-		"QTreeWidget::branch:hover { background-color: #303030; }"
-		"QTreeView::branch:open {background-color:rgba(0,0,0,0); image: url(:/icons/expand_arrow_open.png); }"
-		"QTreeView::branch:closed:has-children { background-color:rgba(0,0,0,0);image: url(:/icons/expand_arrow_closed.png); }"
-		"QTreeWidget::branch:selected { background-color: #404040; }"
-		"QTreeWidget::item:selected { selection-background-color: #404040;"
-		"								background-color:rgba(0,0,0,0); outline: none; padding: 5px 0; }"
-		/* Important, this is set for when the widget loses focus to fill the left gap */
-		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
-		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
-		"QTreeWidget::item {background-color:rgba(0,0,0,0); padding: 5px 0; height : 10px; }"
-		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
-	);
-	verticalScrollBar()->setStyleSheet(
-		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 10px; }"
-		"QScrollBar::handle{ background: rgba(62, 62, 62, 1);	border-radius: 4px;  left: 8px; }"
-		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
-		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
-		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-
-	);
+	setStyleSheet(StyleSheet::MaterialsTree());
+	verticalScrollBar()->setStyleSheet(StyleSheet::MaterialsTreeScrollBar());
 
 	setColumnCount(1);
 	setHeaderLabel("Nodes");
