@@ -857,6 +857,23 @@ bool Database::updateMetadataVersion(const QString& version)
 	return executeAndCheckQuery(query, "updateMetadataVersion");
 }
 
+namespace {
+Database::DependencyListener &dependencyListener()
+{
+    static Database::DependencyListener listener;
+    return listener;
+}
+void notifyDependencies(bool changed, const QString &projectGuid)
+{
+    if (changed && dependencyListener()) dependencyListener()(projectGuid);
+}
+}   // namespace
+
+void Database::setDependencyListener(DependencyListener listener)
+{
+    dependencyListener() = std::move(listener);
+}
+
 bool Database::createDependency(
     const int &dependerType,
     const int &dependeeType,
@@ -877,7 +894,9 @@ bool Database::createDependency(
     query.bindValue(":dependee", dependee);
     query.bindValue(":id", guid);
 
-    return executeAndCheckQuery(query, "insertGlobalDependency");
+    const bool ok = executeAndCheckQuery(query, "insertGlobalDependency");
+    notifyDependencies(ok, projectGuid);
+    return ok;
 }
 
 bool Database::addFavorite(const QString &guid)
@@ -1463,7 +1482,9 @@ bool Database::deleteDependency(const QString &dependee)
     QSqlQuery query;
     query.prepare("DELETE FROM dependencies WHERE dependee = ?");
     query.addBindValue(dependee);
-    return executeAndCheckQuery(query, "deleteDependency");
+    const bool ok = executeAndCheckQuery(query, "deleteDependency");
+    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    return ok;
 }
 
 bool Database::deleteDependency(const QString &depender, const QString &dependee)
@@ -1472,7 +1493,9 @@ bool Database::deleteDependency(const QString &depender, const QString &dependee
     query.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee = ?");
     query.addBindValue(depender);
     query.addBindValue(dependee);
-    return executeAndCheckQuery(query, "deleteDependency");
+    const bool ok = executeAndCheckQuery(query, "deleteDependency");
+    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    return ok;
 }
 
 bool Database::removeDependenciesByType(const QString &depender, const ModelTypes &type)
@@ -1482,7 +1505,9 @@ bool Database::removeDependenciesByType(const QString &depender, const ModelType
     query.addBindValue(depender);
     query.addBindValue(static_cast<int>(type));
 
-    return executeAndCheckQuery(query, "RemoveDependenciesByType");
+    const bool ok = executeAndCheckQuery(query, "RemoveDependenciesByType");
+    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    return ok;
 }
 
 bool Database::deleteRecord(const QString &table, const QString &row, const QVariant &value)

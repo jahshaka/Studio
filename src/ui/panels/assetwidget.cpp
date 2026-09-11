@@ -367,7 +367,9 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	// stale until the user clicked a folder.
 	connect(ProjectMembership::instance(), &ProjectMembership::changed, this,
 	        [this](const QString &projectGuid) {
-		if (!project || project->getProjectGuid() != projectGuid) return;
+		// Empty = "some project" (an edge delete that cannot name one).
+		if (!project || project->getProjectGuid().isEmpty()) return;
+		if (!projectGuid.isEmpty() && project->getProjectGuid() != projectGuid) return;
 		if (membershipRefreshPending) return;
 		membershipRefreshPending = true;
 		QTimer::singleShot(0, this, [this]() { flushPendingRefresh(); });

@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QCryptographicHash>
 
+#include <functional>
+
 #include "data/project.h"
 
 #include "irisgl/irisglfwd.h"
@@ -139,6 +141,17 @@ public:
 							 const QByteArray &asset = QByteArray(),
 							 const QByteArray &properties = QByteArray(),
 							 const AssetViewFilter view_filter = AssetViewFilter::Editor);
+
+    /// A LISTENER FOR DEPENDENCY-EDGE CHANGES. The editor's asset tray reads
+    /// USE from these edges (services/assettray.h — a directly-added image
+    /// stops folding into its companion material the moment a node uses it),
+    /// so a write here has to reach the tray the way a pin change does. Called
+    /// with the edge's project guid, or empty when the mutation cannot name
+    /// one (a delete by depender/dependee). One process-wide listener,
+    /// installed by services/projectmembership.cpp; none in a test that only
+    /// compiles this file.
+    using DependencyListener = std::function<void(const QString &projectGuid)>;
+    static void setDependencyListener(DependencyListener listener);
 
     bool createDependency(const int &dependerType,
                           const int &dependeeType,

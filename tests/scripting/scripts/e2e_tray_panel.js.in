@@ -135,9 +135,11 @@ var cube = scene.addPrimitive("cube", { position: { x: 4, y: 0, z: 4 } });
 assert(material.apply(cube, tinyMat) === true, "material.apply(cube, its material)");
 assert(guidsOf(panelRows()).indexOf(tinyMat) >= 0,
        "an APPLIED material stays in the panel (the old dependee filter hid it here)");
-assert(material.set(cube, { baseColorMap: tinyTex }) === true, "material.set(cube, {baseColorMap: tiny.png})");
+var plane = scene.addImagePlane(tinyTex, { position: { x: -4, y: 1, z: 4 } });
+assert(plane && plane.length > 10, "scene.addImagePlane(tiny.png)");
 assert(guidsOf(panelRows()).indexOf(tinyTex) >= 0,
-       "an image a node USES is a tile in the panel (the old filter hid it — the material depends on it)");
+       "an image a node USES is a tile in the panel (the old filter hid it — the plane depends on it)");
+assert(guidsOf(panelRows()).indexOf(plane) < 0, "... the image plane's own row is not");
 agree("after the uses");
 assert(project.close(), "closed");
 

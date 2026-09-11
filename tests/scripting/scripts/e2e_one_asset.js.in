@@ -203,15 +203,18 @@ assert(material.apply(cube, tinyMat) === true, "material.apply(cube, the compani
 assert(currentTray().indexOf(tinyMat) >= 0, "an APPLIED material is still a tile — a use never hides");
 assert(currentTray().indexOf(cube) < 0, "the cube's own row is not a tile");
 
-// Binding the IMAGE itself to a node's slot is a use of the image: now it is a
-// tile of its own (the companion is no longer the only thing using it).
-assert(material.set(cube, { baseColorMap: tinyTex }) === true, "material.set(cube, {baseColorMap: tiny.png})");
+// A scene node using the IMAGE itself (an image plane shows it) is a use of
+// the image: now it is a tile of its own (the companion is no longer the only
+// thing using it).
+var plane = scene.addImagePlane(tinyTex, { position: { x: 0, y: 1, z: 8 } });
+assert(plane && plane.length > 10, "scene.addImagePlane(tiny.png)");
 assert(currentTray().indexOf(tinyTex) >= 0,
-       "an image a scene node USES is a tile (material.set records the use like the panel does)");
+       "an image a scene node USES is a tile of its own (the image plane uses it)");
 assert(currentTray().indexOf(tinyMat) >= 0, "... and its material stays one too");
+assert(currentTray().indexOf(plane) < 0, "... while the image plane's own row is not a tile");
 
-// A LIBRARY image bound by guid without ever being added: the binding pins it
-// (no companion material is minted for a binding) and it is a tile.
+// A LIBRARY image bound to a slot by guid without ever being added: material.set
+// pins it as a binding (no companion material is minted) and it is a tile.
 var wideTex = assets.importFile(FIXTURES + "/implane_wide.png");
 var cube2 = scene.addPrimitive("cube", { position: { x: -6, y: 0, z: 6 } });
 assert(material.set(cube2, { baseColorMap: wideTex }) === true, "material.set(cube2, {baseColorMap: <library image>})");

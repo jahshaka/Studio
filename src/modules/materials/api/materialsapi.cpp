@@ -487,10 +487,9 @@ QVector<VerbInfo> MaterialApi::verbs() const
           Needs::Document },
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
-          "A texture ASSET guid on a map key is a USE, exactly as the material panel's texture row "
-          "records it: the image is pinned into the project as a binding (no companion material is "
-          "minted) and the node is recorded as using it — so it is a tile in the editor's asset tray "
-          "(assets.list({scope: 'project', tray: true})) and a project export carries it. "
+          "A texture ASSET guid on a map key pins that image into the open project as a binding "
+          "(the scene uses it; no companion material is minted) — so it is a tile in the editor's "
+          "asset tray (assets.list({scope: 'project', tray: true})) and a project export carries it. "
           "THE UV TRANSFORM takes two spellings: `textureScale` and `textureOffset` accept a "
           "two-element array [u, v] for per-axis tiling/offset, or a plain number meaning both "
           "axes (which is what every script written before per-axis tiling says, and it keeps "
@@ -635,8 +634,8 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     const QVariantMap expanded = expandUvPairKeys(values, &pairError);
     if (!pairError.isEmpty()) return fail(pairError);
 
-    // Texture ASSETS this call binds to a slot (by guid) — recorded as a USE
-    // once every key has been accepted (below).
+    // Texture ASSETS this call binds to a slot (by guid) — pinned into the
+    // project once every key has been accepted (below).
     QStringList boundTextures;
 
     for (auto it = expanded.constBegin(); it != expanded.constEnd(); ++it) {
@@ -780,24 +779,23 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         host.services->undo->push(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));
     }
 
-    // A MATERIAL SLOT IS A USE (lane L13) — the records the material panel's
-    // texture row writes (materialpropertywidget.cpp) and the decal / particle
-    // bindings write, so a script binding an image is the same event as a
-    // user binding one: the image is pinned into the project as a BINDING (it
-    // is referenced, not added — no companion material is minted) and the
-    // node -> texture edge names who uses it. The editor tray shows an image a
-    // scene node uses as a tile of its own, and a project export carries it.
-    // (Delete-then-create: `dependencies` has no unique key on the pair.)
+    // A MATERIAL SLOT BOUND BY GUID PINS THE IMAGE (lane L13): a scene now
+    // uses it, so the project must carry it — as a BINDING, like the decal,
+    // particle and light-profile bindings (it is referenced, not added: no
+    // companion material is minted). It is then a tile in the editor's tray
+    // and a project export carries it; before, the slot rendered the library
+    // bytes and the project never knew it used them.
+    //
+    // (No node -> texture dependency edge, unlike the material panel's texture
+    // row: the Assets page's LIBRARY grid still hides every dependee —
+    // Database::dependeeSubquery treats a USE edge like an import's membership
+    // edge — so the edge would take the image out of the library. Recorded for
+    // the lead: narrow that filter to library-asset dependers, then give this
+    // verb the panel's edge.)
     if (!boundTextures.isEmpty() && host.db && host.isProjectOpen()) {
-        const QString projectGuid = host.project->getProjectGuid();
-        for (const QString &textureGuid : boundTextures) {
+        for (const QString &textureGuid : boundTextures)
             ProjectAssets::addToProject(textureGuid, host.db, host.project,
                                         ProjectAssets::AddKind::Binding);
-            host.db->deleteDependency(meshNode->getGUID(), textureGuid);
-            host.db->createDependency(static_cast<int>(ModelTypes::Object),
-                                      static_cast<int>(ModelTypes::Texture),
-                                      meshNode->getGUID(), textureGuid, projectGuid);
-        }
     }
     return true;
 }
