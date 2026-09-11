@@ -60,6 +60,7 @@ add_custom_target(beta_walk ALL DEPENDS "${JAHSHAKA_BETA_WALK_DAE}")
 set(AVATAR_LOAD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarpreviewmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarsockets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
@@ -108,10 +109,13 @@ target_include_directories(test_avatar_preview PRIVATE ${CMAKE_SOURCE_DIR} ${CMA
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_avatar_preview PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    # S11's rig fixture (smoke S9): the generated Mixamo mannequin, a humanoid
+    # whose joints the built-in sockets actually recognise.
+    JAHSHAKA_TEST_MANNEQUIN="${JAHSHAKA_MANNEQUIN_DAE}")
 target_link_libraries(test_avatar_preview PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia)
-add_dependencies(test_avatar_preview JahshakaEngineMedia)
+add_dependencies(test_avatar_preview JahshakaEngineMedia beta_mannequin)
 add_test(NAME avatar.preview COMMAND test_avatar_preview WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.preview PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "avatar")
 

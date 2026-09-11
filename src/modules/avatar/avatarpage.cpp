@@ -220,13 +220,15 @@ QWidget *AvatarPage::buildCentreColumn()
     auto *layout = new QVBoxLayout(column);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    // The two INDEPENDENT toggles (§0.7) — not three exclusive modes: all four
-    // combinations are valid, and skeleton-on does not need the mesh.
+    // The THREE INDEPENDENT toggles (§0.7 + S9's rig) — not exclusive modes:
+    // every combination is valid, and skeleton-on does not need the mesh.
     auto *toggles = new QWidget(column);
     auto *toggleLayout = new QHBoxLayout(toggles);
     toggleLayout->setContentsMargins(0, 0, 0, 0);
     mMeshToggle = new QCheckBox(tr("Mesh"), toggles);
     mSkeletonToggle = new QCheckBox(tr("Skeleton"), toggles);
+    mRigToggle = new QCheckBox(tr("Rig"), toggles);
+    mRigToggle->setToolTip(tr("Show the character's attachment points (head, shoulder)"));
     connect(mMeshToggle, &QCheckBox::toggled, this, [this](bool on) {
         if (mUpdating || !mApi) return;
         mApi->setMeshVisible(on);
@@ -235,8 +237,13 @@ QWidget *AvatarPage::buildCentreColumn()
         if (mUpdating || !mApi) return;
         mApi->setSkeletonVisible(on);
     });
+    connect(mRigToggle, &QCheckBox::toggled, this, [this](bool on) {
+        if (mUpdating || !mApi) return;
+        mApi->setRigVisible(on);
+    });
     toggleLayout->addWidget(mMeshToggle);
     toggleLayout->addWidget(mSkeletonToggle);
+    toggleLayout->addWidget(mRigToggle);
     toggleLayout->addStretch(1);
 
     // The space switcher (AVATAR_SPACE_SPEC): the dropdown is a view over
@@ -622,6 +629,7 @@ void AvatarPage::refreshFromModel()
     const bool loaded = mModel->isLoaded();
     mMeshToggle->setChecked(mModel->meshVisible());
     mSkeletonToggle->setChecked(mModel->skeletonVisible());
+    mRigToggle->setChecked(mModel->rigVisible());
     mLoopToggle->setChecked(mModel->looping());
     if (mSpaceCombo)
         mSpaceCombo->setCurrentIndex(

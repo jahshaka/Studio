@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/import/graphicshelper.h"
 #include "irisgl/document/assets/skeleton.h"
+#include "modules/avatar/avatarsockets.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -844,6 +845,48 @@ QVector<BoneInfo> AvatarPreviewModel::bones() const
         info.parent = bone.parent;
         info.position = it->column(3).toVector3D();
         out.append(info);
+    }
+    return out;
+}
+
+QVector<iris::Vec3> AvatarPreviewModel::rigPoints() const
+{
+    QVector<iris::Vec3> out;
+    if (!mFragment) return out;
+
+    // EVERY SKINNED PIECE, not the first one — the same lesson
+    // avatar::sockets::installBuiltInsInSubtree records: a Mixamo export is
+    // several meshes bound to SUBSETS of one skeleton, and the first piece
+    // depth-first is the limbs (46 bones, no Head, no Shoulder). A
+    // first-piece-only read finds no attachment points on a perfectly good
+    // humanoid.
+    QVector<iris::SkeletonPtr> skeletons;
+    std::function<void(const iris::SceneNodePtr &)> find =
+        [&](const iris::SceneNodePtr &node) {
+            if (!node) return;
+            if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                auto meshNode = node.staticCast<iris::MeshNode>();
+                if (auto mesh = meshNode->getMesh())
+                    if (mesh->hasSkeleton()) skeletons.append(mesh->getSkeleton());
+            }
+            for (const auto &child : node->children()) find(child);
+        };
+    find(mFragment);
+    if (skeletons.isEmpty()) return out;
+
+    const QHash<QString, iris::Mat4> world = boneWorldMatrices();
+    QSet<QString> placed;
+    for (const QString &socket : sockets::builtInNames()) {
+        for (const iris::SkeletonPtr &skeleton : skeletons) {
+            const QString bone = sockets::mapBone(skeleton, socket);
+            if (bone.isEmpty()) continue;          // fail soft, like the install
+            const auto it = world.constFind(bone);
+            if (it == world.constEnd()) continue;
+            if (placed.contains(bone)) break;      // one marker per joint
+            placed.insert(bone);
+            out.append(it->column(3).toVector3D());
+            break;                                  // the first piece that knows it answers
+        }
     }
     return out;
 }

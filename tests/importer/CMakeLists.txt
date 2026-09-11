@@ -392,6 +392,7 @@ add_executable(test_importer_fitsize test_importer_fitsize.cpp
     # fitted character (the double-normalisation gate)
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarpreviewmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarsockets.cpp
     # database.cpp's link closure (same as tests/importer's other suites)
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp

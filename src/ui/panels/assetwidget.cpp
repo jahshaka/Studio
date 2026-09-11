@@ -57,6 +57,7 @@ For more information see the LICENSE file
 #include "services/import/importbatchrunner.h"
 #include "services/projectassets.h"
 #include "services/assetdelete.h"
+#include "services/assettray.h"
 #include "services/avatarassets.h"
 #include "services/assetmetadata.h"
 #include "services/assetservice.h"
@@ -605,8 +606,31 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 	item->setTextAlignment(Qt::AlignCenter);
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 
-	// Hide meshes for now, we work with objects which are parents for meshes, materials etc
+	// (The old "Hide meshes for now" note above an unconditional add is gone:
+	// hiding an import's members is a real rule now, applied where the listing
+	// is built — services/assettray.h — rather than wished for here.)
 	ui->assetView->addItem(item);
+}
+
+/// The AVATAR rows this project can see — the claim source for the tray
+/// collapse (an avatar swallows its model and its clips). Resolved from the
+/// project rather than from the listing so a type-filtered tray answers the
+/// same question the full one does.
+QVector<AssetRecord> AssetWidget::trayAvatarRows() const
+{
+    QVector<AssetRecord> avatars;
+    if (!db || !project) return avatars;
+    const QString projectGuid = project->getProjectGuid();
+    avatars = db->fetchFilteredAssets(projectGuid, static_cast<int>(ModelTypes::Avatar));
+    for (auto &record : avatars) record.type = static_cast<int>(ModelTypes::Avatar);
+    for (const auto &record : db->fetchProjectPinnedAssets(projectGuid)) {
+        if (record.type != static_cast<int>(ModelTypes::Avatar)) continue;
+        if (std::any_of(avatars.begin(), avatars.end(),
+                        [&](const AssetRecord &r) { return r.guid == record.guid; }))
+            continue;
+        avatars.append(record);
+    }
+    return avatars;
 }
 
 void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
@@ -639,12 +663,21 @@ void AssetWidget::updateAssetView(const QString &path, int filter, bool showDepe
 {
 	ui->assetView->clear();
 
+    // ONE TILE PER ASSET (owner rule, 2026-09-11): the editor tray shows asset
+    // CLOSURES, not catalog rows — the same collapse `assets.list({tray:true})`
+    // answers with, from the same function, so the panel and the verb can
+    // never drift (services/assettray.h). The Assets PAGE is untouched: that
+    // is where a user browses the members.
+    const auto tray = [this](const QVector<AssetRecord> &records) {
+        return assettray::collapse(db, records, trayAvatarRows());
+    };
+
     if (filter > 0) {
-        for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies)) addItem(asset);
+        for (const auto &asset : tray(db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies))) addItem(asset);
     }
     else {
         for (const auto &folder : db->fetchChildFolders(path, project->getProjectGuid())) addItem(folder);
-        for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
+        for (const auto &asset : tray(db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies))) addItem(asset);  /* TODO : irk this out */
         addCrumbs(db->fetchCrumbTrail(path, project->getProjectGuid()));
     }
 
@@ -659,7 +692,7 @@ void AssetWidget::updateAssetView(const QString &path, int filter, bool showDepe
         for (int i = 0; i < ui->assetView->count(); ++i)
             listed.insert(ui->assetView->item(i)->data(MODEL_GUID_ROLE).toString());
         for (const auto &pinned :
-             db->fetchProjectPinnedAssets(project->getProjectGuid(), showDependencies)) {
+             tray(db->fetchProjectPinnedAssets(project->getProjectGuid(), showDependencies))) {
             if (listed.contains(pinned.guid)) continue;
             if (filter > 0 && pinned.type != filter) continue;
             addItem(pinned);

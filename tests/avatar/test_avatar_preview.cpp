@@ -51,6 +51,9 @@ static int failures = 0;
 static const char *kRig = JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb";
 // S9's mocap clip: an ASCII .bvh on the same joint names (make_bvh_fixtures.py).
 static const char *kBvh = JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2_walk.bvh";
+// S11's rig fixture: Mixamo Beta (full humanoid skeleton, bare joint names),
+// generated beside this suite — the POSITIVE complement of rig2's fail-soft.
+static const char *kMannequin = JAHSHAKA_TEST_MANNEQUIN;
 
 // The fixture's material is baseColorFactor (0.9, 0.15, 0.15); the overlay is
 // the BoneOverlay default green; the sky is (28, 30, 36). Classify by
@@ -334,6 +337,62 @@ int main(int argc, char **argv)
             CHECK(count(b, isOverlay) > 10, "S10: the posed skeleton is still drawn");
             CHECK(std::fabs(centroidHalf - centroid0) > 1.0f,
                   "S10: ... and the drawn skeleton is somewhere else on screen for it");
+        }
+    }
+
+    // ---- S11 (smoke S9): the RIG toggle, the third independent layer -------
+    //
+    // "Rig" is what mesh and skeleton do not cover: the attachment points the
+    // avatar module owns (head, shoulder — what a camera or a prop binds to),
+    // marked at the joints they resolved to. Asserted on the MANNEQUIN, not on
+    // rig2: rig2's two bones are the fail-soft case (no recognizable head), and
+    // both halves of that rule are worth pinning.
+    {
+        avatar::AvatarPreviewModel rigged;
+        const bool loaded = rigged.load(QString::fromUtf8(kMannequin));
+        CHECK(loaded, "S11: the Mixamo mannequin loads into the preview model");
+        if (loaded) {
+            scene.setModel(&rigged);
+            const int points = rigged.rigPoints().size();
+            std::printf("    rig points: %d\n", points);
+            CHECK(points >= 1, "S11: the mannequin's rig resolves at least one attachment point");
+            CHECK(rigged.rigVisible() == false, "S11: the rig layer is off by default");
+
+            rigged.setMeshVisible(false);
+            rigged.setSkeletonVisible(false);
+            rigged.setRigVisible(false);
+            Image off = render(scene, *engine, view);
+            CHECK(scene.overlayMarkers() == 0, "S11: rig off -> no markers drawn");
+
+            rigged.setRigVisible(true);
+            Image on = render(scene, *engine, view);
+            show("S11 rig only", on);
+            CHECK(scene.overlayMarkers() == points,
+                  "S11: rig on -> one marker per attachment point");
+            CHECK(scene.overlaySegments() == 0,
+                  "S11: ... and the rig layer does not need the bones (skeleton still off)");
+            // THE PIXELS, as a DIFFERENCE: the character stands in a ROOM (the
+            // module's space draws a floor and walls), so "non-background" is
+            // not a marker test — what the toggle owns is exactly the pixels
+            // that change when it flips, with mesh and skeleton both off.
+            int changed = 0;
+            for (unsigned y = 0; y < on.height; ++y)
+                for (unsigned x = 0; x < on.width; ++x) {
+                    const Colour a = off.at(x, y), b = on.at(x, y);
+                    if (std::fabs(a.r - b.r) + std::fabs(a.g - b.g) + std::fabs(a.b - b.b) > 0.05f)
+                        ++changed;
+                }
+            std::printf("    pixels the rig toggle changed: %d\n", changed);
+            CHECK(changed > 10, "S11: THE PIXELS — flipping the rig layer draws the markers");
+
+            // The fail-soft half, on the two-bone fixture: no head, no markers,
+            // no error.
+            scene.setModel(&model);
+            model.setRigVisible(true);
+            render(scene, *engine, view);
+            CHECK(model.rigPoints().isEmpty() && scene.overlayMarkers() == 0,
+                  "S11: a rig with no recognizable joints draws nothing and does not fail");
+            model.setRigVisible(false);
         }
     }
 

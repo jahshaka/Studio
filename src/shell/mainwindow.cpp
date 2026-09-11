@@ -1098,6 +1098,33 @@ void MainWindow::spawnAvatarAsset(const QString &guid, const iris::Vec3 &positio
         QMessageBox::warning(this, tr("Add Avatar to Scene"), api->lastError());
 }
 
+void MainWindow::assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node)
+{
+    // NOTHING UNDER THE CURSOR (R2, 2026-09-11: an Animation tile dropped in
+    // the viewport did nothing at all, with no message). A clip is not a scene
+    // object — it is something a character wears — so the drop says that.
+    if (!node) {
+        showViewportToast(tr("Animation"),
+                          tr("Drop an animation onto a character to assign the clip"));
+        return;
+    }
+    if (!avatarModule) return;
+    auto *api = avatarModule->api();
+    if (!api) return;
+    const QVariantMap result =
+        api->quietly([&] { return api->loadClip(node->getGUID(), guid, QVariantMap()); });
+    if (result.isEmpty()) {
+        showViewportToast(tr("Animation"),
+                          api->lastError().isEmpty()
+                              ? tr("'%1' cannot take this clip").arg(node->getName())
+                              : api->lastError());
+        return;
+    }
+    const QVariantList added = result.value(QStringLiteral("clips")).toList();
+    showViewportToast(tr("Animation"),
+                      tr("%1 clip(s) added to %2").arg(added.size()).arg(node->getName()));
+}
+
 void MainWindow::openAssetInModule(const QString &guid, const QString &moduleId,
                                    const QString &scope)
 {

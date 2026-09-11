@@ -35,6 +35,7 @@ public:
     Q_INVOKABLE bool select(const QVariant &id = QVariant());
     Q_INVOKABLE QVariant selection();
     Q_INVOKABLE QVariantList selectionSet();
+    Q_INVOKABLE QVariantList outlinerRows();
     Q_INVOKABLE bool selectAdd(const QVariant &id = QVariant());
     Q_INVOKABLE bool selectToggle(const QString &id);
     Q_INVOKABLE QVariantList selectRange(const QString &fromId, const QString &toId);

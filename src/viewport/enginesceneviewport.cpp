@@ -666,10 +666,19 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
             }
         }
     } else if (type == static_cast<int>(ModelTypes::Object) || type == static_cast<int>(ModelTypes::ParticleSystem)
-               || type == static_cast<int>(ModelTypes::Texture)) {
+               || type == static_cast<int>(ModelTypes::Texture)
+               || type == static_cast<int>(ModelTypes::Avatar)
+               || type == static_cast<int>(ModelTypes::Animation)) {
         // Texture too (IMAGE_PLANE_SPEC §2): an image dropped on empty space
         // becomes an image plane at the drop point, so the drag must track it
         // exactly like Object drags.
+        //
+        // AVATAR and ANIMATION too (S9, 2026-09-11): the avatar drop already
+        // passed mDragScenePos on to avatar.spawn, but nothing UPDATED it for
+        // an avatar drag — so every character landed wherever the last tracked
+        // drag ended, i.e. on top of the previous one or at the origin. The
+        // clip drag tracks for the same reason: its drop resolves the node
+        // under the cursor.
         mDragScenePos = dropPositionAt(event->position());
     }
     event->acceptProposedAction();
@@ -693,6 +702,14 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // instance of the project's version — the same `avatar.spawn` verb the
         // drawer's "Add to Scene" and a script call, at the tracked drop point.
         if (mMainWindow) mMainWindow->spawnAvatarAsset(role.value(3).toString(), mDragScenePos, true);
+    } else if (type == static_cast<int>(ModelTypes::Animation)) {
+        // A CLIP IS WORN, NOT PLACED (S9): dropping an animation row on a
+        // character assigns it through avatar.loadClip; on empty space it says
+        // so in a toast instead of silently doing nothing (which is exactly
+        // what this branch's absence used to do).
+        if (mMainWindow)
+            mMainWindow->assignAnimationAsset(role.value(3).toString(),
+                                              pickAt(event->position(), true));
     } else if (type == static_cast<int>(ModelTypes::Material)) {
         if (mDragPreviewNode && mMainWindow) {
             auto target = mDragPreviewNode;

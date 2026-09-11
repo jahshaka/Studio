@@ -122,6 +122,7 @@ private:
     QComboBox   *mSpaceCombo = nullptr;
     QCheckBox   *mMeshToggle = nullptr;
     QCheckBox   *mSkeletonToggle = nullptr;
+    QCheckBox   *mRigToggle = nullptr;
     QPushButton *mPlayButton = nullptr;
     QPushButton *mPauseButton = nullptr;
     QPushButton *mStopButton = nullptr;

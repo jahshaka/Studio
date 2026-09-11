@@ -266,6 +266,7 @@ set(SRCS
     src/services/iesprofile.cpp
     src/services/lightbindings.cpp
     src/services/assetcas.cpp
+    src/services/assettray.cpp
     src/services/assetdelete.cpp
     src/services/assetgc.cpp
     src/services/assetmigration.cpp

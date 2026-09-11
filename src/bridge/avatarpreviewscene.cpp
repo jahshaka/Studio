@@ -107,6 +107,11 @@ int AvatarPreviewScene::overlayJoints() const
     return mOverlay ? mOverlay->visibleJoints() : 0;
 }
 
+int AvatarPreviewScene::overlayMarkers() const
+{
+    return mOverlay ? mOverlay->visibleMarkers() : 0;
+}
+
 void AvatarPreviewScene::frameSubject()
 {
     if (!mModel) return;
@@ -214,6 +219,12 @@ void AvatarPreviewScene::step(float dt, int width, int height)
                 segments.append(BoneOverlaySegment{ s.from, s.to, s.toAxis, s.toIsLeaf });
         }
         mOverlay->update(segments, mModel->skeletonVisible());
+        // THE RIG LAYER (S9), independent of the bones: the character's
+        // attachment points, sized off the subject so one rule works for a
+        // 2-unit rig and a 179-unit Mixamo character alike.
+        mOverlay->updateMarkers(mModel->rigPoints(),
+                                qMax(mSubjectRadius, 0.1f) * 0.06f,
+                                mModel->rigVisible());
     }
 }
 

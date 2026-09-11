@@ -288,6 +288,17 @@ public:
     void setMeshVisible(bool on);
     bool skeletonVisible() const { return mSkeletonVisible; }
     void setSkeletonVisible(bool on) { mSkeletonVisible = on; }
+    /// THE THIRD TOGGLE (S9, owner 2026-09-11): the RIG — the attachment
+    /// points the avatar module owns (the built-in `head` and `shoulder`
+    /// sockets), marked at the joints they resolve to. Independent of the
+    /// other two, like they are of each other.
+    bool rigVisible() const { return mRigVisible; }
+    void setRigVisible(bool on) { mRigVisible = on; }
+    /// Where the rig markers go, in world space: one point per BUILT-IN socket
+    /// this character's skeleton actually has (a rig with no recognizable head
+    /// contributes nothing — avatar::sockets fails soft, and so does this).
+    /// Empty with nothing loaded.
+    QVector<iris::Vec3> rigPoints() const;
 
     // ---- the rig ----------------------------------------------------------
     /// Where a POSE comes from.
@@ -383,6 +394,7 @@ private:
     bool  mDirty = true;
     bool  mMeshVisible = true;
     bool  mSkeletonVisible = false;
+    bool  mRigVisible = false;
 };
 
 } // namespace avatar

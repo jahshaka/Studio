@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QSet>
 #include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
 #include <algorithm>
 #include <functional>
 
@@ -91,11 +93,19 @@ QVector<VerbInfo> AvatarApi::verbs() const
         { "clearPreview", "avatar.clearPreview() -> bool",
           "Removes the previewed model and deletes its scratch extract dir.",
           Needs::Document },
-        { "preview", "avatar.preview() -> {name, file, bones, meshes, vertices, influences, height, sourceHeight, normalized, normalizeFactor, roomScale, ceilingHeight, clips, activeClip, time, duration, playing, looping, meshVisible, skeletonVisible} | undefined",
+        { "preview", "avatar.preview() -> {name, file, bones, meshes, vertices, influences, height, sourceHeight, normalized, normalizeFactor, roomScale, ceilingHeight, clips, activeClip, time, duration, playing, looping, meshVisible, skeletonVisible, rigVisible, rigPoints} | undefined",
           "Everything the page shows about the loaded model, including transport and toggle state. Undefined (falsy) when nothing is loaded.",
           Needs::Document },
         { "setMeshVisible", "avatar.setMeshVisible(on) -> bool",
           "Shows or hides the skinned mesh. Independent of the skeleton toggle: all four combinations are valid.",
+          Needs::Document },
+        { "setRigVisible", "avatar.setRigVisible(on) -> bool",
+          "Draws the character's RIG in the preview: the attachment points the avatar module "
+          "owns (the built-in head and shoulder sockets — what a camera or a prop is bound to), "
+          "marked at the joints they resolved to. The third toggle beside Mesh and Skeleton, and "
+          "independent of both: rig markers do not need the bones drawn, and a rig with no "
+          "recognizable head simply has fewer markers (avatar::sockets fails soft). Reported by "
+          "avatar.preview().rigVisible.",
           Needs::Document },
         { "setSkeletonVisible", "avatar.setSkeletonVisible(on) -> bool",
           "Shows or hides the bone-line overlay. Independent of the mesh toggle.",
@@ -470,6 +480,8 @@ QVariantMap AvatarApi::previewState() const
     out["looping"] = mModel->looping();
     out["meshVisible"] = mModel->meshVisible();
     out["skeletonVisible"] = mModel->skeletonVisible();
+    out["rigVisible"] = mModel->rigVisible();
+    out["rigPoints"] = mModel->rigPoints().size();
     return out;
 }
 
@@ -634,6 +646,14 @@ bool AvatarApi::setSkeletonVisible(bool on)
 {
     if (!mModel) return fail("avatar: not available in this session");
     mModel->setSkeletonVisible(on);
+    notifyChanged();
+    return true;
+}
+
+bool AvatarApi::setRigVisible(bool on)
+{
+    if (!mModel) return fail("avatar: not available in this session");
+    mModel->setRigVisible(on);
     notifyChanged();
     return true;
 }
@@ -1144,7 +1164,15 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
         node->avatarLink.asset = assetGuid;
         node->avatarLink.version = definitionVersion;
         node->avatarLink.name = definition.name;
-        if (!definition.name.isEmpty()) node->setName(definition.name);
+        if (!definition.name.isEmpty()) {
+            node->setName(definition.name);
+            // THE OUTLINER ALREADY HAS THE ROW (S9, R2 repro: a freshly
+            // spawned avatar's row read "RootNode" until something else
+            // refreshed the tree). addMaterialMesh inserted the node under the
+            // model file's own root name a moment ago; the rename above is the
+            // character's real name, so the panels have to hear about it.
+            if (host.services->sceneEdit) host.services->sceneEdit->notifyHierarchyChanged();
+        }
         QStringList warnings;
         applyDefinition(node, definition, definitionVersion, &warnings);
         for (const QString &warning : warnings)
@@ -1200,6 +1228,28 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
 // rides an archive, and the character's roles re-match on the spot because
 // AvatarLocomotion::refreshClips watches the clip set.
 
+QString AvatarApi::assetForContent(const QString &path) const
+{
+    if (!host.db) return QString();
+    const QString oid = AssetCas::hashFile(path);
+    if (oid.isEmpty()) return QString();
+    // The row that IS this file: its `source` content, still listed, of a type
+    // a clip can come out of (an animation-only download is an Animation row,
+    // a "with skin" download is an Object). Ordered so the answer is the same
+    // on every machine.
+    QSqlQuery query(QSqlDatabase::database());
+    query.prepare("SELECT AF.asset_guid FROM asset_files AF "
+                  "INNER JOIN assets A ON A.guid = AF.asset_guid "
+                  "WHERE AF.oid = ? AND AF.role = 'source' AND A.listed = 1 "
+                  "  AND A.type IN (?, ?) "
+                  "ORDER BY AF.asset_guid");
+    query.addBindValue(oid);
+    query.addBindValue(static_cast<int>(ModelTypes::Animation));
+    query.addBindValue(static_cast<int>(ModelTypes::Object));
+    if (query.exec() && query.next()) return query.value(0).toString();
+    return QString();
+}
+
 QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAssetGuid,
                                     QString *absolutePathOut)
 {
@@ -1232,6 +1282,18 @@ QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAsset
                        .arg(v, pathOrAssetGuid));
             return QString();
         }
+        // THE SAME BYTES ARE THE SAME ASSET (S9, 2026-09-11). Dropping the same
+        // Mixamo clip on a character twice — or loading it onto two characters
+        // — used to mint a NEW library row every time, so the tray grew a
+        // "Running" tile per gesture. The store is content-addressed, so the
+        // file's sha256 IS the identity: an existing row backed by these bytes
+        // is reused, and the import below only runs for bytes the library has
+        // never seen.
+        const QString existing = assetForContent(info.absoluteFilePath());
+        if (!existing.isEmpty()) {
+            guid = existing;
+        } else {
+
         // THE ONE PIPELINE — which now has a route for every shape the Avatar
         // page offers. An animation-only file (a Mixamo download "without
         // skin") and a .bvh capture both import as ModelTypes::Animation
@@ -1249,6 +1311,7 @@ QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAsset
             return QString();
         }
         guid = imported.objectGuid;
+        }
     }
 
     // THE PIN, when there is a project to pin into — the whole reason this

@@ -773,6 +773,33 @@ set_tests_properties(scripting.e2e.avatar_verbs PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# ONE ASSET IN THE EDITOR (smoke S9, owner rule 2026-09-11): the tray collapse
+# (assets.list({tray:true})), the placement of repeated adds, the outliner's
+# one-row-per-asset rule (editor.outlinerRows) and the clip-reuse rule, all as
+# VERBS — the same ones the tray, the viewport drop and the Avatar page call.
+# Fixtures come from tests/avatar (which configures AFTER this dir, so the paths
+# are spelled out exactly as the mannequin suite's are).
+set(JAHSHAKA_MANNEQUIN_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_mannequin.dae")
+set(JAHSHAKA_BETA_WALK_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_walk.dae")
+configure_file(scripts/e2e_one_asset.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js @ONLY)
+# A FRESH home per run: this suite asserts ABSOLUTE row counts ("one tray row",
+# "one animation row"), and a home that persists across gates accumulates a
+# second copy of everything.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_asset)
+add_test(NAME scripting.e2e.one_asset.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.one_asset.fresh_home PROPERTIES
+    FIXTURES_SETUP one_asset_home LABELS "scripting" TIMEOUT 60)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.one_asset
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.one_asset PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED one_asset_home
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that
 # used to be refused with a wrong message, the type-filtered listing, the
 # avatar consumers (loadClip by asset guid, avatar.animations) and the archive.
