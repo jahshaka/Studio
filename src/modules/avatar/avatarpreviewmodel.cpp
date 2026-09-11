@@ -167,7 +167,17 @@ void AvatarPreviewModel::buildDocument()
     mPanelLight->setName("avatar-panel");
     mPanelLight->name = "avatar-panel";
     mPanelLight->color = QColor(255, 250, 244);
-    mPanelLight->intensity = 1.25f;
+    // 0.75, not 1.25 (owner smoke S10, 2026-09-11). A ceiling panel lights a
+    // VERTICAL wall with the cosine of its own downward emission, so the wall
+    // is dark where it meets the ceiling and brightest where it meets the
+    // floor — measured on the Modern room at 1.25 the bottom metre of every
+    // wall clamped at 255/255/255 (the owner's "the bottom half of the walls
+    // blows out white") while its top read 44. The key at 0.75 over the
+    // room's mid-grey tile (avatarspace.cpp) puts the same gradient at 40..170
+    // with nothing clipped (tests/avatar S12); the room's white is now its seam
+    // lights, which is the design. The character is lit by the same panel and
+    // reads correspondingly softer.
+    mPanelLight->intensity = 0.75f;
     mPanelLight->rectWidth = 7.5f;
     mPanelLight->rectHeight = 7.5f;
     mPanelLight->distance = 30.0f;             // falloff range: generous for a 4m room
@@ -184,8 +194,19 @@ void AvatarPreviewModel::buildDocument()
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(28, 30, 36));
+    // NOTE: the room's ambient is the ENGINE scene's hemisphere
+    // (AvatarPreviewScene::configureScene), not this: a preview host syncs the
+    // mirror but never calls applyEnvironment, so the World-panel ambient of a
+    // preview document reaches nothing. Kept as the document's own value for
+    // anything that reads the document (and measured as dead for the picture,
+    // smoke S10).
     mDocument->setAmbientColor(QColor(70, 70, 78));
     mDocument->fogEnabled = false;
+
+    // THE PAGE'S GRADE, pinned on its own document (smoke S10, avatarspace.h):
+    // no tonemapper, no bloom, no GI, exposure pinned. The room is authored in
+    // the numbers it renders with.
+    space::pinWorkspaceGrade(mDocument);
 
     mCamera->update(0);
     mDocument->refresh();

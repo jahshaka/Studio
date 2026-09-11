@@ -23,11 +23,11 @@ For more information see the LICENSE file
 //             doubles as the fill light. The Grid's visual language — the
 //             room reads as lit-from-within architecture.
 //
-// Pure document composition: one shared plane mesh, five shared PbrMaterials,
-// ~270 nodes under a single group. Everything is isBuiltIn and unpickable —
+// Pure document composition: one shared cube mesh, five shared PbrMaterials,
+// ~250 nodes under a single group. Everything is isBuiltIn and unpickable —
 // the room is a workspace, never part of any exported document, and it must
-// never crowd avatar playback (no shadows, no GI, no planar reflections —
-// gloss + ambient carry the sheen).
+// never crowd avatar playback (no shadows, no GI, ONE planar reflector — the
+// floor plate; pinWorkspaceGrade below pins the rest of the page's grade).
 
 #include "irisglfwd.h"
 
@@ -52,6 +52,18 @@ constexpr float kRoomInteriorHeight = 4.0f;
 /// Builds the Tron room and returns its group node (already parented to the
 /// scene root). Null when the plane primitive is unavailable (headless tests).
 iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene);
+
+/// Pins the avatar workspace's GRADE on its own document (smoke S10).
+///
+/// The page's scene is a WORKSPACE, not a project scene: it is never saved,
+/// never gets a World Mode picked on it, and its look has to be the same on
+/// every box no matter what the user's project is set to. This states that in
+/// one place instead of relying on iris::Scene's defaults happening to agree —
+/// no tonemapper and no bloom (so a surface's brightness is exactly what the
+/// materials say), a PINNED exposure if anyone ever turns HDR on here, and GI
+/// OFF at a modest Rayon tier, because HlmsPbs's VCT/PCC binding is
+/// process-wide and a preview that enabled GI would steal it from the editor.
+void pinWorkspaceGrade(const iris::ScenePtr &scene);
 
 /// String round-trip for the verb + the persisted setting.
 const char *modeName(SpaceMode mode);

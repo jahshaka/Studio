@@ -97,12 +97,17 @@ add_test(NAME avatar.document COMMAND test_avatar_document WORKING_DIRECTORY "${
 set_tests_properties(avatar.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "avatar")
 jah_no_display(avatar.document)
 
+# models.qrc rides along because S12 (smoke S10) renders the MODERN ROOM, and
+# the room is built from :/content/primitives/cube.obj — without the resource
+# buildModernRoom fails soft to Grid mode and the arena's pixels go unasserted,
+# which is how its walls blew out unnoticed.
 add_executable(test_avatar_preview test_avatar_preview.cpp ${AVATAR_LOAD_SOURCES}
     ${CMAKE_SOURCE_DIR}/src/bridge/avatarpreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/boneoverlay.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_avatar_preview PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
+    ${CMAKE_SOURCE_DIR}/app/models.qrc)
+set_target_properties(test_avatar_preview PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_avatar_preview PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
