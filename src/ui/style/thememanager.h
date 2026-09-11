@@ -120,6 +120,28 @@ public:
     // (app.styleSheets) classifies each widget sheet with this: under
     // Qlementine a non-empty sheet that is NOT the theme's own is raw crud.
     static bool isThemeSheet(const QString &sheet);
+
+    // THE SPACE MENU — the header's text buttons (Desktop / Player / Editor /
+    // Materials / Assets / Avatar). The header is ours, not a stock control:
+    // flat labels on the near-black band, the ACTIVE space in the accent
+    // colour, the editor/player entries greyed while no scene is open. Under
+    // Qlementine one sheet per state carries the whole look (geometry, font
+    // size, colour) — the text colour cannot come from the palette, since the
+    // style paints button text from its theme. Classic keeps its archived
+    // border-colour swap (TopMenuSelected / Unselected / Disabled).
+    enum class TopMenuState { Idle, Active, Disabled };
+    static QString topMenuButtonSheet(TopMenuState state);
+    static void applyTopMenuButton(class QPushButton *button, TopMenuState state);
+
+    // The main window's font (platform audit F-S3). Under Qlementine the
+    // theme owns typography — nothing is set, the window inherits the
+    // theme's font. Classic keeps what it always rendered: the platform's
+    // default family at the application's point size (the old code also
+    // multiplied the POINT size by the device pixel ratio — a point size is
+    // already device-independent, so that doubled every font on a 2x display;
+    // at 1x, the only ratio Classic was ever judged at, dropping it is
+    // bit-for-bit).
+    static void applyWindowFont(QWidget *window);
 };
 
 #endif // JAH_THEMEMANAGER_H

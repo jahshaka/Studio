@@ -9,6 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#ifndef JAH_STYLESHEET_H
+#define JAH_STYLESHEET_H
+
 #include <QWidget>
 
 class StyleSheet : public QObject
@@ -122,6 +125,28 @@ public:
 	static void setStyle(QWidget *);
 	static void setStyle(QObject *);
 	static void setStyle(QList<QWidget *>);
+
+	/* ---- THE THEME SWEEP'S CLASSIC ARCHIVE (lane 16, classicsheets.cpp) ----
+	   Every raw setStyleSheet() string and every .ui-embedded styleSheet that
+	   Classic still needs, moved here VERBATIM behind the same kill switch:
+	   Classic renders bit-for-bit (the identical sheet lands on the identical
+	   widget), Qlementine gets "" — no QStyleSheetStyle over the style. One
+	   getter per former site (or per identical string), grouped by the file
+	   that calls it. */
+
+	// main window (mainwindow.ui root sheet)
+	static const QString MainWindowRoot();
+
+	// main window (mainwindow.cpp)
+	static const QString MainWindowPropertiesDock();
+	static const QString BorderNone();
+	static const QString MainWindowPresetsDock();
+	static const QString ViewportMenuButton();
+	static const QString ViewportCameraToggle();
+	static const QString PlayerControlsBar();
+//@@CLASSIC-DECLS@@
 };
+
+#endif // JAH_STYLESHEET_H
 
 

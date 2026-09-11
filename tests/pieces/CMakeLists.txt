@@ -56,6 +56,7 @@ add_executable(test_emitter_parity test_emitter_parity.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_emitter_parity PROPERTIES
@@ -98,6 +99,7 @@ add_executable(test_emitter_pieces test_emitter_pieces.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_emitter_pieces PROPERTIES
@@ -140,6 +142,7 @@ add_executable(test_piece_mirror test_piece_mirror.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 # bin/, like tests/materialpreview: the preview's primitive meshes are loaded

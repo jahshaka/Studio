@@ -27,6 +27,7 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
@@ -242,6 +243,7 @@ add_executable(test_rayon_panel
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
@@ -353,6 +355,7 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
@@ -465,6 +468,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
@@ -587,6 +591,7 @@ add_executable(test_properties_width
     ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
@@ -645,6 +650,7 @@ add_executable(test_project_tile test_project_tile.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/renameprojectdialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_project_tile PROPERTIES
@@ -725,6 +731,7 @@ add_executable(test_tree_multiselect
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp

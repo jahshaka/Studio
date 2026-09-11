@@ -5,6 +5,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_executable(test_theme_manager test_theme_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_theme_manager PROPERTIES AUTOMOC ON CXX_STANDARD 17)

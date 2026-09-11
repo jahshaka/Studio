@@ -27,6 +27,7 @@ add_executable(test_engine_material_preview test_engine_material_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_engine_material_preview PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC OFF CXX_STANDARD 17

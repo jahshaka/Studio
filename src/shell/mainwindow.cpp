@@ -202,6 +202,7 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/shippedassets.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
+#include "ui/style/themeroles.h"
 #include "ui/style/columnedpage.h"
 #include "ui/style/panelmetrics.h"
 
@@ -213,16 +214,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     project = Project::createNew();
 
     ui->setupUi(this);
+    // The root sheet mainwindow.ui used to embed (5 KB of classic CSS that,
+    // under Qlementine, put QStyleSheetStyle over the WHOLE window — docks,
+    // tabs, scrollbars, menus, every label). Classic-only now; the header's
+    // near-black band is a palette role under Qlementine.
+    setStyleSheet(StyleSheet::MainWindowRoot());
+    ThemeRoles::setSurface(ui->header, ThemeRoles::Surface::Header);
 
 	settings = SettingsManager::getDefaultManager();
 	SnapSettings::bindSettings(settings->settings);   // snap sizes persist beside the shortcuts
 	FlySpeedSettings::bindSettings(settings->settings);   // and the camera fly speeds
 
 
-    QFont font;
-    font.setFamily(font.defaultFamily());
-    font.setPointSize(font.pointSize() * devicePixelRatio());
-    setFont(font);
+    // F-S3: the theme owns the window's font (see ThemeManager::applyWindowFont
+    // for why the old device-pixel-ratio multiply is gone).
+    ThemeManager::applyWindowFont(this);
 
     // The legacy iris::Logger file now lives UNDER THE SESSION-LOG ROOT with
     // everything else (SESSION_LOG_SPEC §6). Two things changed:
@@ -1054,10 +1060,10 @@ WindowSpaces MainWindow::getWindowSpace()
 
 void MainWindow::deselectViewports()
 {
-	editor_menu->setStyleSheet(StyleSheet::TopMenuDisabled());
+	ThemeManager::applyTopMenuButton(editor_menu, ThemeManager::TopMenuState::Disabled);
 	editor_menu->setDisabled(true);
 	editor_menu->setCursor(Qt::ArrowCursor);
-	player_menu->setStyleSheet(StyleSheet::TopMenuDisabled());
+	ThemeManager::applyTopMenuButton(player_menu, ThemeManager::TopMenuState::Disabled);
 	player_menu->setDisabled(true);
 	player_menu->setCursor(Qt::ArrowCursor);
 }
@@ -1291,84 +1297,39 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
 void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 {
-	const QString disabledMenu = StyleSheet::TopMenuDisabled();
-	const QString selectedMenu = StyleSheet::TopMenuSelected();
-	const QString unselectedMenu = StyleSheet::TopMenuUnselected();
+	toolBar->setVisible(activeSpace == WindowSpaces::EDITOR);
 
-	if (activeSpace == WindowSpaces::EDITOR)
-		toolBar->setVisible(true);
-	else
-		toolBar->setVisible(false);
+	// One state per space button: the active space, the rest, and — while no
+	// scene is open — Editor and Player disabled. ThemeManager owns what each
+	// state looks like in each theme (Classic's border-colour swap, or the
+	// Qlementine header sheet with the accent-coloured active label).
+	const bool sceneOpen = projectService->isSceneOpen();
+	const QList<QPair<QPushButton *, WindowSpaces>> spaceButtons = {
+		{ worlds_menu, WindowSpaces::DESKTOP }, { assets_menu, WindowSpaces::ASSETS },
+		{ effect_menu, WindowSpaces::EFFECT }, { avatar_menu, WindowSpaces::AVATAR },
+		{ editor_menu, WindowSpaces::EDITOR }, { player_menu, WindowSpaces::PLAYER }
+	};
+	for (const auto &pair : spaceButtons) {
+		QPushButton *button = pair.first;
+		const bool needsScene = pair.second == WindowSpaces::EDITOR
+		                        || pair.second == WindowSpaces::PLAYER;
+		const bool enabled = sceneOpen || !needsScene;
+		if (needsScene) button->setEnabled(enabled);
+		button->setCursor(enabled ? Qt::PointingHandCursor : Qt::ArrowCursor);
+		ThemeManager::applyTopMenuButton(
+			button, !enabled                        ? ThemeManager::TopMenuState::Disabled
+			        : activeSpace == pair.second    ? ThemeManager::TopMenuState::Active
+			                                        : ThemeManager::TopMenuState::Idle);
+	}
 
-	worlds_menu->setStyleSheet(activeSpace==WindowSpaces::DESKTOP? selectedMenu:unselectedMenu);
-	worlds_menu->setCursor(Qt::PointingHandCursor);
-
-	assets_menu->setStyleSheet(activeSpace == WindowSpaces::ASSETS ? selectedMenu : unselectedMenu);
-	assets_menu->setCursor(Qt::PointingHandCursor);
-
-	effect_menu->setStyleSheet(activeSpace == WindowSpaces::EFFECT ? selectedMenu : unselectedMenu);
-	effect_menu->setCursor(Qt::PointingHandCursor);
-
-	// publish_menu is an ICON in the right cluster — the text-menu sheets set a
-	// 14px font that halves the glyph. It keeps the help-button styling always;
+	// publish_menu is an ICON in the right cluster with its own glyph sheet;
 	// active-space feedback comes from the page itself. Re-applying the sheet
 	// re-polishes the button, and Qlementine's polish re-sets its font, so the
 	// icon font is pushed again HERE (the helper does both, in that order) —
-	// otherwise the arrow drops to the inherited 17px UI font while Help and
+	// otherwise the arrow drops to the inherited UI font while Help and
 	// Preferences stay at 28 (owner report 2026-09-07).
 	ThemeManager::applyHeaderGlyphButton(publish_menu, headerGlyphFont());
 	publish_menu->setCursor(Qt::PointingHandCursor);
-
-	avatar_menu->setStyleSheet(activeSpace == WindowSpaces::AVATAR ? selectedMenu : unselectedMenu);
-	avatar_menu->setCursor(Qt::PointingHandCursor);
-
-	editor_menu->setStyleSheet(activeSpace == WindowSpaces::EDITOR ? selectedMenu : unselectedMenu);
-	player_menu->setStyleSheet(activeSpace == WindowSpaces::PLAYER ? selectedMenu : unselectedMenu);
-
-	// Under Qlementine the classic border-color swap above is neutralized (the
-	// getters return "") and a checked flat button renders invisibly on the
-	// near-black header, so the active space gets its label painted in the
-	// accent color instead — a text-only sheet, the one deliberate stylesheet
-	// in Qlementine mode. Runs after the classic swaps so it wins; the
-	// scene-closed branch below still overrides editor/player as before.
-	if (!ThemeManager::classicActive()) {
-		static const QString qlemActive =
-			QStringLiteral("QPushButton { color: #3498db; }");
-		const QList<QPair<QPushButton *, WindowSpaces>> spaceButtons = {
-			{ worlds_menu, WindowSpaces::DESKTOP }, { assets_menu, WindowSpaces::ASSETS },
-			{ effect_menu, WindowSpaces::EFFECT },
-			// publish_menu is NOT here: it is an icon with its own sheet above.
-			{ avatar_menu, WindowSpaces::AVATAR },
-			{ editor_menu, WindowSpaces::EDITOR }, { player_menu, WindowSpaces::PLAYER }
-		};
-		for (const auto &pair : spaceButtons)
-			pair.first->setStyleSheet(activeSpace == pair.second ? qlemActive : QString());
-	}
-
-	if (projectService->isSceneOpen()) {
-		editor_menu->setEnabled(true);
-		editor_menu->setCursor(Qt::PointingHandCursor);
-		player_menu->setEnabled(true);
-		player_menu->setCursor(Qt::PointingHandCursor);
-	}
-	else {
-		editor_menu->setEnabled(false);
-		editor_menu->setCursor(Qt::ArrowCursor);
-		player_menu->setEnabled(false);
-		player_menu->setCursor(Qt::ArrowCursor);
-		if (ThemeManager::classicActive()) {
-			editor_menu->setStyleSheet(disabledMenu);
-			player_menu->setStyleSheet(disabledMenu);
-		} else {
-			// TopMenuDisabled() is neutralized under Qlementine and its
-			// disabled rendering on the near-black header still reads white —
-			// grey the labels explicitly (owner, 2026-09-03).
-			static const QString qlemDisabled =
-				QStringLiteral("QPushButton { color: #63676d; }");
-			editor_menu->setStyleSheet(qlemDisabled);
-			player_menu->setStyleSheet(qlemDisabled);
-		}
-	}
 }
 
 void MainWindow::saveScene(const QString &filename, const QString &projectPath)
@@ -2332,8 +2293,7 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesWidget->setProject(project);
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
-    if (ThemeManager::classicActive())
-        sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");
+    sceneNodePropertiesDock->setStyleSheet(StyleSheet::MainWindowPropertiesDock());
 
     QWidget *sceneNodeDockWidgetContents = new ColumnBody(PanelMetrics::rightColumnWidth, viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
@@ -2342,7 +2302,8 @@ void MainWindow::setupDockWidgets()
     // a contract — there is no horizontal scrollbar below, so a panel that does
     // not fit here is CLIPPED (ui.properties_width).
     sceneNodeScrollArea->setMinimumWidth(PanelMetrics::rightColumnMinWidth);
-    sceneNodeScrollArea->setStyleSheet("border: 0");
+    sceneNodeScrollArea->setStyleSheet(StyleSheet::BorderNone());
+    sceneNodeScrollArea->setFrameShape(QFrame::NoFrame);
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
     sceneNodeScrollArea->setWidgetResizable(true);
@@ -2358,8 +2319,7 @@ void MainWindow::setupDockWidgets()
     presetsDock->setObjectName(QStringLiteral("presetsDock"));
 
     QWidget *presetDockContents = new ColumnBody(PanelMetrics::presetsPanelWidth);
-    if (ThemeManager::classicActive())
-        presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
+    presetDockContents->setStyleSheet(StyleSheet::MainWindowPresetsDock());
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
 	skyPresets->setDatabase(db);
@@ -2828,9 +2788,7 @@ void MainWindow::setupViewPort()
 	screenShotBtn->setIconSize(QSize(16,17));
 
     wireFramesButton = new QToolButton;
-    wireFramesButton->setStyleSheet(
-        "padding: 0 8px 0 0; margin: 0"
-    );
+    wireFramesButton->setStyleSheet(StyleSheet::ViewportMenuButton());
     wireFramesMenu = new QMenu;
 	wireFramesMenu->setStyleSheet(StyleSheet::QMenuFlat());
 
@@ -2912,7 +2870,7 @@ void MainWindow::setupViewPort()
     // six orthographic axis views. Same path as the view.* shortcuts and the
     // editor.setView verb (applyCameraView).
     viewsButton = new QToolButton;
-    viewsButton->setStyleSheet("padding: 0 8px 0 0; margin: 0");
+    viewsButton->setStyleSheet(StyleSheet::ViewportMenuButton());
     viewsMenu = new QMenu;
     viewsMenu->setStyleSheet(StyleSheet::QMenuFlat());
     auto viewsGroup = new QActionGroup(viewsMenu);
@@ -2954,7 +2912,7 @@ void MainWindow::setupViewPort()
     // (a camera added, renamed, deleted, a whole world closed) — and a stale
     // entry would hand the viewport a stale node.
     camerasButton = new QToolButton;
-    camerasButton->setStyleSheet("padding: 0 8px 0 0; margin: 0");
+    camerasButton->setStyleSheet(StyleSheet::ViewportMenuButton());
     camerasMenu = new QMenu;
     camerasMenu->setStyleSheet(StyleSheet::QMenuFlat());
     connect(camerasMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildCamerasMenu);
@@ -2980,7 +2938,7 @@ void MainWindow::setupViewPort()
 	playSimBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
 
 	cameraView = new QPushButton;
-	cameraView->setStyleSheet("QPushButton{background:rgba(0,0,0,0);}");
+	cameraView->setStyleSheet(StyleSheet::ViewportCameraToggle());
 	// The icon used to appear only after the first changeProjection() call —
 	// invisible on a transparent background, but an empty grey pill under the
 	// chrome button spec. The editor camera starts perspective; say so.
@@ -3016,8 +2974,7 @@ void MainWindow::setupViewPort()
     }
 
     playerControls = new QWidget;
-    if (ThemeManager::classicActive())
-        playerControls->setStyleSheet("background: #1A1A1A");
+    playerControls->setStyleSheet(StyleSheet::PlayerControlsBar());
 
     auto playerControlsLayout = new QHBoxLayout;
 
@@ -3026,6 +2983,7 @@ void MainWindow::setupViewPort()
     restartBtn->setToolTip("Restart playback");
     restartBtn->setToolTipDuration(-1);
     restartBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
+    ThemeRoles::setFlat(restartBtn);
     restartBtn->setIcon(QIcon(":/icons/rotate-to-right.svg"));
     restartBtn->setIconSize(QSize(16, 16));
 
@@ -3034,6 +2992,7 @@ void MainWindow::setupViewPort()
     playBtn->setToolTip("Play the scene");
     playBtn->setToolTipDuration(-1);
     playBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
+    ThemeRoles::setFlat(playBtn);
     playBtn->setIcon(QIcon(":/icons/g_play.svg"));
     playBtn->setIconSize(QSize(24, 24));
 
@@ -3042,6 +3001,7 @@ void MainWindow::setupViewPort()
     stopBtn->setToolTip("Stop playback");
     stopBtn->setToolTipDuration(-1);
     stopBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
+    ThemeRoles::setFlat(stopBtn);
     stopBtn->setIcon(QIcon(":/icons/g_stop.svg"));
     stopBtn->setIconSize(QSize(16, 16));
 

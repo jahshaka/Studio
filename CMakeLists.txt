@@ -422,6 +422,7 @@ set(SRCS
     thirdparty/qtawesome/QtAwesome.cpp
     thirdparty/qtawesome/QtAwesomeAnim.cpp
     src/ui/style/stylesheet.cpp
+    src/ui/style/classicsheets.cpp
     src/ui/style/thememanager.cpp
     src/ui/controls/colorview.cpp
     src/ui/dialogs/toast.cpp
@@ -694,6 +695,7 @@ set(HEADERS
     thirdparty/qtawesome/QtAwesomeAnim.h 
     src/ui/style/stylesheet.h
     src/ui/style/thememanager.h
+    src/ui/style/themeroles.h
     src/ui/controls/colorview.h
     src/ui/dialogs/toast.h
     src/ui/controls/tooltip.h

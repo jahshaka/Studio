@@ -364,6 +364,44 @@ void ThemeManager::clearClassicSheets(QWidget *root)
         if (!w->styleSheet().isEmpty()) w->setStyleSheet(QString());
 }
 
+QString ThemeManager::topMenuButtonSheet(TopMenuState state)
+{
+    if (s_classicActive) return QString();
+    // The geometry the header was designed around (the archived root sheet's
+    // #worlds_menu block): 17px labels, 14px padding, a 4px bottom band that
+    // keeps the header's height, no plate.
+    const char *color = "#eeeeee";
+    const char *hover = "#ffffff";
+    if (state == TopMenuState::Active) { color = "#3498db"; hover = "#4ba3e0"; }
+    if (state == TopMenuState::Disabled) { color = "#63676d"; hover = "#63676d"; }
+    return themeSheet(QStringLiteral(
+               "QPushButton { background: transparent; border: none;"
+               " border-bottom: 4px solid transparent; border-radius: 0px;"
+               " padding: 14px; font-size: 17px; color: %1; }"
+               "QPushButton:hover { color: %2; }")
+        .arg(QLatin1String(color), QLatin1String(hover)));
+}
+
+void ThemeManager::applyTopMenuButton(QPushButton *button, TopMenuState state)
+{
+    if (!button) return;
+    if (s_classicActive) {
+        button->setStyleSheet(state == TopMenuState::Active     ? StyleSheet::TopMenuSelected()
+                              : state == TopMenuState::Disabled ? StyleSheet::TopMenuDisabled()
+                                                                : StyleSheet::TopMenuUnselected());
+        return;
+    }
+    button->setStyleSheet(topMenuButtonSheet(state));
+}
+
+void ThemeManager::applyWindowFont(QWidget *window)
+{
+    if (!s_classicActive || !window) return;
+    QFont font;
+    font.setFamily(font.defaultFamily());
+    window->setFont(font);
+}
+
 bool ThemeManager::isThemeSheet(const QString &sheet)
 {
     return !sheet.isEmpty() && themeSheetRegistry().contains(sheet);
