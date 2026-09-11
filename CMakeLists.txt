@@ -17,6 +17,21 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "macOS deployment target")
 endif()
 
+# Compiler cache (2026-09-11): every tree and lane worktree shares one on-disk ccache
+# (~/.config/ccache/ccache.conf: base_dir = the workspace, hash_dir = false), so a lane's
+# first build reuses what the main tree and earlier lanes already compiled. Opt out with
+# -DJAH_NO_CCACHE=ON; an explicit CMAKE_<LANG>_COMPILER_LAUNCHER always wins.
+option(JAH_NO_CCACHE "Do not use ccache even when it is installed" OFF)
+find_program(JAH_CCACHE_PROGRAM ccache)
+if(JAH_CCACHE_PROGRAM AND NOT JAH_NO_CCACHE)
+    if(NOT CMAKE_C_COMPILER_LAUNCHER)
+        set(CMAKE_C_COMPILER_LAUNCHER "${JAH_CCACHE_PROGRAM}" CACHE STRING "C compiler launcher")
+    endif()
+    if(NOT CMAKE_CXX_COMPILER_LAUNCHER)
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${JAH_CCACHE_PROGRAM}" CACHE STRING "C++ compiler launcher")
+    endif()
+endif()
+
 project(Jahshaka)
 
 set(APP_OUTPUT_NAME "Jahshaka")
