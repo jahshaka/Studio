@@ -26,7 +26,10 @@
 // the coalescing gate lives in the mirror and the cheap path lives in the
 // engine, and the contract is the pair.
 #include <QGuiApplication>
+#include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <thread>
 #include <cstdio>
 
 #include "irisgl/core/math/quat.h"
@@ -315,6 +318,125 @@ int main(int argc, char **argv)
                     st.boundsMin.y, st.boundsMax.y, flyer->getLocalPos().y());
         CHECK(st.boundsMax.y > flyer->getLocalPos().y(),
               "the re-fitted volume reaches the cube's new height");
+    }
+
+    // =======================================================================
+    // THE PROBE CACHE UNDER A RE-SOLVE (ENGINE_CACHE_POLICY_SPEC P6/P7)
+    // =======================================================================
+    // Everything above is plain VCT, which has no probes. The same room as a
+    // HYBRID: a GI re-solve used to raise mDirty on EVERY probe at once, and
+    // Ogre renders every dirty probe inline — measured on the Showroom as
+    // 619 ms frames of 32 x 131 draws, fired by exactly the paths below (the
+    // settle after a drag, a drag PAUSING for 250 ms, world.refreshGi()). Now a
+    // re-solve STALES the grid and the budget spreads the captures, so no frame
+    // captures more than budget + dynamic probes. Counters, not milliseconds.
+    std::printf("-- hybrid: the probe cache under a re-solve\n");
+    doc->giMode = iris::GiMode::VCT_PCC_HYBRID;
+    doc->giPccGrid = iris::Vec3(2, 1, 2);             // 4 probes
+    doc->giUpdateBudget = 1;
+    doc->giDynamicProbes = 0;
+    doc->giBoundsMin = iris::Vec3(-7.2f, -0.3f, -7.2f);
+    doc->giBoundsMax = iris::Vec3(7.2f, 6.5f, 7.2f);
+    flyer->setLocalPos(iris::Vec3(0.0f, 0.6f, 1.0f));
+    for (int f = 0; f < 40; ++f) frame();             // push, build, sweep, settle
+    const int kHybridProbes = 4;
+    const int kAllowed = 1;                           // budget 1 + dynamic 0
+    {
+        const jahshaka::engine::GiStatus st = escene->giStatus();
+        CHECK(st.probeCount == kHybridProbes && st.pccBound, "hybrid: the 2x1x2 grid built and bound");
+        CHECK(st.staleProbes == 0, "hybrid: settled — nothing stale");
+    }
+    // Runs `n` frames and returns the most probes any ONE of them captured.
+    const auto worstCaptures = [&](int n) {
+        int worst = 0;
+        for (int f = 0; f < n; ++f) {
+            frame();
+            worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+        }
+        return worst;
+    };
+
+    // ---- world.refreshGi() (P6) ------------------------------------------------
+    {
+        const quint64 before = mirror.giRefreshCount();
+        ++doc->giRefreshSerial;
+        frame();
+        const jahshaka::engine::GiStatus st = escene->giStatus();
+        std::printf("   refreshGi: refresh frame captured %d, stale after it %d (reason %d)\n",
+                    st.probeCapturesLastFrame, st.staleProbes, int(st.lastStaleReason));
+        CHECK(mirror.giRefreshCount() == before + 1, "refreshGi: the re-solve ran on the next frame");
+        CHECK(st.probeCapturesLastFrame <= kAllowed,
+              "refreshGi: the re-solve frame captures no more than budget + dynamic (was: the whole grid)");
+        CHECK(st.lastStaleReason == jahshaka::engine::GiStaleReason::Refresh,
+              "refreshGi: it STALED the grid instead (reason: refresh)");
+        const int worst = worstCaptures(kHybridProbes);
+        CHECK(worst <= kAllowed, "refreshGi: every catch-up frame stays within the budget");
+        CHECK(escene->giStatus().staleProbes == 0,
+              "refreshGi: the grid has caught up within ceil(probes / budget) frames");
+        CHECK(worstCaptures(20) == 0, "refreshGi: ...and then captures nothing at all");
+    }
+
+    // ---- a light INTENSITY edit (P7) -------------------------------------------
+    // The mirror's GI signature used to hash light TRANSFORMS only, so a colour
+    // or intensity edit never re-solved the voxels, and nothing staled a probe
+    // either — only the old endless sweep ever brought the reflections round.
+    {
+        const quint64 before = mirror.giRefreshCount();
+        const unsigned long long serial = escene->giStatus().staleSerial;
+        sun->intensity = 3.0f;
+        frame();
+        const jahshaka::engine::GiStatus st = escene->giStatus();
+        CHECK(st.staleSerial > serial && st.lastStaleReason == jahshaka::engine::GiStaleReason::Light,
+              "intensity: the edit STALES the grid on its own frame (reason: light)");
+        const int worst = worstCaptures(30);
+        const quint64 solves = mirror.giRefreshCount() - before;
+        std::printf("   intensity edit: settle re-solves = %llu, worst frame captured %d\n",
+                    (unsigned long long)solves, worst);
+        CHECK(solves == 1, "intensity: exactly ONE settle re-solve (it used to be none at all)");
+        CHECK(worst <= kAllowed, "intensity: no frame captures more than budget + dynamic");
+        CHECK(escene->giStatus().staleProbes == 0 && worstCaptures(20) == 0,
+              "intensity: the grid catches up, then idles");
+    }
+
+    // ---- a drag that PAUSES for 250 ms (P6, scenemirror.h kGiStableMs) ---------
+    // The stability window fires on 15 still frames OR 250 ms of stillness,
+    // whichever comes first, so a user who stops moving for a quarter of a
+    // second mid-gesture gets a full re-solve mid-drag. That re-solve used to
+    // capture the whole grid in one frame; now it is spread like any other.
+    {
+        const quint64 before = mirror.giRefreshCount();
+        int worst = 0;
+        const auto dragFrames = [&](int n, float from) {
+            for (int f = 0; f < n; ++f) {
+                flyer->setLocalPos(iris::Vec3(from + 0.05f * float(f), 0.6f, 1.0f));
+                frame();
+                worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+            }
+        };
+        dragFrames(10, 0.0f);
+        const quint64 beforePause = mirror.giRefreshCount();
+        // THE PAUSE: the object holds still and frames keep coming, slowly —
+        // 120 ms apart, so the 250 ms clock (not the 15-frame count) is what
+        // fires the re-solve.
+        for (int f = 0; f < 5; ++f) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(120));
+            frame();
+            worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+        }
+        const quint64 pauseSolves = mirror.giRefreshCount() - beforePause;
+        dragFrames(10, 0.5f);                          // the drag carries on
+        for (int f = 0; f < 30; ++f) {                 // and lets go
+            frame();
+            worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+        }
+        std::printf("   paused drag: re-solves in the pause = %llu, total = %llu, worst frame "
+                    "captured %d\n", (unsigned long long)pauseSolves,
+                    (unsigned long long)(mirror.giRefreshCount() - before), worst);
+        CHECK(pauseSolves == 1, "paused drag: the 250 ms pause fires one mid-drag re-solve");
+        CHECK(worst <= kAllowed,
+              "paused drag: no frame of the gesture captures more than budget + dynamic probes");
+        CHECK(escene->giStatus().staleProbes == 0 && worstCaptures(20) == 0,
+              "paused drag: the grid catches up after the gesture, then idles");
     }
 
     doc->giMode = iris::GiMode::OFF;

@@ -1760,6 +1760,22 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.ifdConverged         = st.ifdConverged;
     out.ifdProbesPerFrame    = st.ifdProbesPerFrame;
     out.ifdRaster            = st.ifdSource == jahshaka::engine::GiSource::Raster;
+    out.probeCapturesLastFrame = st.probeCapturesLastFrame;
+    out.staleProbes            = st.staleProbes;
+    out.staleSerial            = quint64(st.staleSerial);
+    out.rebuilds               = quint64(st.rebuilds);
+    switch (st.lastStaleReason) {
+    case jahshaka::engine::GiStaleReason::None:     out.lastStaleReason = QStringLiteral("none"); break;
+    case jahshaka::engine::GiStaleReason::Rebuild:  out.lastStaleReason = QStringLiteral("rebuild"); break;
+    case jahshaka::engine::GiStaleReason::Refresh:  out.lastStaleReason = QStringLiteral("refresh"); break;
+    case jahshaka::engine::GiStaleReason::Moved:    out.lastStaleReason = QStringLiteral("moved"); break;
+    case jahshaka::engine::GiStaleReason::Light:    out.lastStaleReason = QStringLiteral("light"); break;
+    case jahshaka::engine::GiStaleReason::Material: out.lastStaleReason = QStringLiteral("material"); break;
+    case jahshaka::engine::GiStaleReason::Sky:      out.lastStaleReason = QStringLiteral("sky"); break;
+    case jahshaka::engine::GiStaleReason::Ambient:  out.lastStaleReason = QStringLiteral("ambient"); break;
+    case jahshaka::engine::GiStaleReason::Fog:      out.lastStaleReason = QStringLiteral("fog"); break;
+    case jahshaka::engine::GiStaleReason::Animated: out.lastStaleReason = QStringLiteral("animated"); break;
+    }
     return out;
 }
 

@@ -402,8 +402,9 @@ public:
         bool probeHdr = false, probeShadows = false;
         /// How many probes the renderer re-captures per frame — the RESOLVED
         /// GI update budget (FIX WAVE B1/B2). 0 means GI is PAUSED: every
-        /// reflection is frozen until world.refreshGi() asks for more. Every
-        /// probe still refreshes within ceil(probeCount / this) frames.
+        /// reflection is frozen until world.refreshGi() asks for more. A CEILING:
+        /// probes re-capture only while stale, so a change is caught up within
+        /// ceil(probeCount / this) frames and a still scene spends nothing.
         int  probeUpdatesPerFrame = 0;
         /// Rayon Epic's DYNAMIC PROBES, resolved: extra moved-covering probe
         /// re-captures per frame reserved on top of the budget, and how many
@@ -449,6 +450,17 @@ public:
         /// What is feeding the probes: true = rasterised captures (world.gi's
         /// ddgiSource resolved to raster and the engine took it), false = voxel.
         bool ifdRaster = false;
+        /// THE PROBE CACHE (ENGINE_CACHE_POLICY_SPEC P1/P6/P7): probes
+        /// re-capture only while stale. Captures the last rendered frame made,
+        /// probes still owed a capture, the input that last staled the grid
+        /// (none | rebuild | refresh | moved | light | material | sky | ambient
+        /// | fog | animated) with a serial per event, and the scene's
+        /// from-scratch GI builds so far.
+        int     probeCapturesLastFrame = 0;
+        int     staleProbes = 0;
+        QString lastStaleReason = QStringLiteral("none");
+        quint64 staleSerial = 0;
+        quint64 rebuilds = 0;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
