@@ -21,10 +21,11 @@ void grow(iris::Vec3 &mn, iris::Vec3 &mx, const iris::Vec3 &p)
 void swallow(const iris::SceneNodePtr &node, bool &any, iris::Vec3 &mn, iris::Vec3 &mx)
 {
     if (!node) return;
-    // A HIDDEN SUBTREE IS NOT LIT (SMOKE_FIX S12). The engine drops a hidden
-    // item's kGiGeometryBit, so it neither bounces light nor defines the
-    // automatic volume; a pinned volume that still stretched to it would put
-    // the user's Fit button at odds with what the renderer does.
+    // A HIDDEN SUBTREE IS NOT LIT (SMOKE_FIX S12). The engine drops the
+    // kGiGeometryBit of a hidden node AND of everything under it, so none of
+    // it bounces light or defines the automatic volume; a pinned volume that
+    // still stretched to it would put the user's Fit button at odds with what
+    // the renderer does. (fit() applies the ANCESTOR half at the entry.)
     if (!node->isVisible()) return;
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto mesh = node.staticCast<iris::MeshNode>();
@@ -74,7 +75,12 @@ bool fit(const QList<iris::SceneNodePtr> &nodes, float margin,
 {
     bool any = false;
     iris::Vec3 mn(1e30f, 1e30f, 1e30f), mx(-1e30f, -1e30f, -1e30f);
-    for (const auto &n : nodes) swallow(n, any, mn, mx);
+    // A listed node hidden by an ANCESTOR is as unlit as one hidden itself —
+    // the engine drops the GI bit of the whole hidden subtree (RENDER_PIPELINE
+    // _AUDIT 1.1) — so the entry test is the effective one; swallow's own test
+    // then covers every level below it.
+    for (const auto &n : nodes)
+        if (n && n->isVisibleInScene()) swallow(n, any, mn, mx);
     if (!any) return false;
     if (margin != 0.0f) {
         const iris::Vec3 m(margin, margin, margin);

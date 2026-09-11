@@ -432,16 +432,15 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
 /// Visibility, with the answer a caller actually wants: `visible` is the
 /// node's own flag, `visibleInScene` is false as soon as ANY ancestor is
 /// hidden — which is why a node can be `visible: true` and still not be on
-/// screen, a question that used to need a manual parent walk.
+/// screen. The rule is the document's (SceneNode::isVisibleInScene), the
+/// same one the mirror pushes to the renderer, so the report and the picture
+/// cannot disagree.
 inline QVariantMap visibilityToJs(const iris::SceneNodePtr &node)
 {
     QVariantMap m;
     if (!node) return m;
-    bool inherited = node->isVisible();
-    for (auto p = node->getParent(); p && inherited; p = p->getParent())
-        inherited = p->isVisible();
     m["visible"] = node->isVisible();
-    m["visibleInScene"] = inherited;
+    m["visibleInScene"] = node->isVisibleInScene();
     return m;
 }
 
