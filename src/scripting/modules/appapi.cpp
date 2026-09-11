@@ -332,13 +332,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "installed in THIS session describes itself completely. Read it beside the api.contract "
           "test, which proves docs/SCRIPTING.md still matches the registry that produced it.",
           Needs::Document },
-        { "dataRoot", "app.dataRoot() -> {root, overridden, settingsFile, database, assetStore}",
+        { "dataRoot", "app.dataRoot() -> {root, overridden, settingsFile, database, assetStore, projects}",
           "Where THIS run keeps its data (services/apppaths.h): the library database, the asset "
-          "store, the shader cache and the settings file. `overridden` is true when --data-root or "
-          "JAHSHAKA_DATA_ROOT chose the root, which is the only case in which the settings file "
-          "follows it — an ordinary run keeps jahsettings.ini in its historical place "
-          "(applicationDirPath in a Debug build). READ-ONLY on purpose: a setter would have to "
-          "move a live database and a live asset store while they are open.",
+          "store, the shader cache, the settings file and the PROJECTS root (`projects` is the "
+          "folder that holds `Projects/`, which is where project.create writes). `overridden` is "
+          "true when --data-root or JAHSHAKA_DATA_ROOT chose the root, which is the only case in "
+          "which the settings file and the projects follow it — an ordinary run keeps "
+          "jahsettings.ini in its historical place (applicationDirPath in a Debug build) and its "
+          "projects under the `default_directory` preference. READ-ONLY on purpose: a setter "
+          "would have to move a live database and a live asset store while they are open.",
           Needs::Document },
         { "lastError", "app.lastError() -> string | null",
           "Why the last verb answered falsy. Verbs REFUSE by returning their documented falsy "
@@ -602,6 +604,13 @@ QVariantMap AppApi::dataRoot()
     out["settingsFile"] = SettingsManager::getDefaultManager()->settings->fileName();
     out["database"] = QDir(root).filePath(Constants::JAH_DATABASE);
     out["assetStore"] = AssetStorePaths::root();
+    // THE PROJECTS (S-extra2): the root that used to ignore the override
+    // entirely, so every scripted run wrote its project folders into the
+    // developer's Documents. Read from the service so the verb reports the
+    // path project.create will really use, preference included.
+    out["projects"] = host.services && host.services->project
+                          ? host.services->project->projectsRoot()
+                          : AppPaths::projectsRoot(QString(), Constants::PROJECT_FOLDER);
     return out;
 }
 

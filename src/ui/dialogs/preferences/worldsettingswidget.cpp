@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 #include "ui_worldsettings.h"
 
+#include "services/apppaths.h"
+
 #include "irisgl/core/irisutils.h"
 
 #include <QFileDialog>
@@ -756,9 +758,11 @@ void WorldSettingsWidget::configureContent()
 	author->setText(db->getAuthorName());
 
 	// set default directory 
-	auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-		+ Constants::PROJECT_FOLDER;
-	defaultProjectDirectory = settings->getValue("default_directory", path).toString();
+	// services/apppaths.h: the data root when a run forces one, the
+	// `default_directory` preference otherwise (S-extra2) — the dial shows
+	// where projects REALLY go, not where they would go on a plain launch.
+	defaultProjectDirectory = AppPaths::projectsRoot(
+	    settings->getValue("default_directory", QString()).toString(), Constants::PROJECT_FOLDER);
 
 	projectDir->setText(defaultProjectDirectory);
 	//set editor path

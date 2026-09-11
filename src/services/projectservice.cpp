@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 
 #include "data/constants.h"
+#include "services/apppaths.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
@@ -45,9 +46,11 @@ ProjectService::ProjectService(Database *db,
 
 QString ProjectService::projectsRoot() const
 {
-    const auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-                       + Constants::PROJECT_FOLDER;
-    return settings->getValue("default_directory", spath).toString();
+    // One rule, in services/apppaths.h: the data root when a run forces one
+    // (so a scripted run stops writing project folders into the developer's
+    // Documents), the `default_directory` preference otherwise.
+    return AppPaths::projectsRoot(settings->getValue("default_directory", QString()).toString(),
+                                  Constants::PROJECT_FOLDER);
 }
 
 QString ProjectService::resolveProjectGuid(const QString &guidOrName, QString *nameOut,

@@ -797,5 +797,38 @@ assert(editor.overlays().grid === false,
     "THE NEW SCENE STARTS AT THE DEFAULT: the grid is off again, not inherited");
 assert(editor.overlays().lightWires === true, "and light wires are back at their default (on)");
 
-console.log("editor_controls: fly speed, post-fx params, screenshot grades and the "
-          + "new-scene defaults verified");
+// ---------------------------------------------------------------------------
+// S2: A DROP LANDS WHERE THE MOUSE IS (owner smoke, 2026-09-11 — "drag-and-drop
+// of a primitive lands at world centre; it should land where the mouse is").
+//
+// The viewport's drop and this verb are ONE function (editor.dropPointAt =
+// EngineSceneViewport::dropPositionAt): the surface under the cursor, else the
+// y=0 ground plane. The drop then hands that point to
+// SceneEditService::addPrimitive, which is exactly what
+// scene.addPrimitive(name, {position}) does here — so this drives the whole
+// placement path a dragged cube takes, minus the QDropEvent itself.
+var vp = editor.viewportState();
+assert(vp.width > 0 && vp.height > 0, "the viewport has a size (" + vp.width + "x" + vp.height + ")");
+
+var left = editor.dropPointAt(vp.width * 0.30, vp.height * 0.70);
+var right = editor.dropPointAt(vp.width * 0.70, vp.height * 0.70);
+assert(left !== null && right !== null, "editor.dropPointAt answers with a world point");
+assert(near(left.y, 0, 0.01) && near(right.y, 0, 0.01),
+    "the drop point is ON THE GROUND (y=0 plane / the surface under the cursor)");
+assert(Math.abs(left.x - right.x) > 1.0,
+    "two different pixels give two different points (" + left.x.toFixed(2) + " vs "
+    + right.x.toFixed(2) + ") — the cursor is what decides");
+
+var dropped = scene.addPrimitive("cube", { position: left });
+var dp = node.transform(dropped).position;
+assert(near(dp.x, left.x, 1e-2) && near(dp.y, left.y, 1e-2) && near(dp.z, left.z, 1e-2),
+    "the primitive is BORN at the drop point (" + [dp.x, dp.y, dp.z].join(",") + ")");
+assert(node.isStatic(dropped) === true, "...and placing it is not a move (still static)");
+
+var dropped2 = scene.addPrimitive("cube", { position: right });
+var dp2 = node.transform(dropped2).position;
+assert(Math.abs(dp2.x - dp.x) > 1.0,
+    "a second drop at another pixel lands somewhere else (no stacking at the origin)");
+
+console.log("editor_controls: fly speed, post-fx params, screenshot grades, the "
+          + "new-scene defaults and the drop point verified");

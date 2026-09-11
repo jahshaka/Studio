@@ -2053,11 +2053,6 @@ void MainWindow::addMesh(const QString &path, bool ignore, iris::Vec3 position)
     sceneEditService->addMesh(filename, ignore, position);
 }
 
-void MainWindow::addPrimitiveObject(const QString &text)
-{
-    sceneEditService->addPrimitive(text);
-}
-
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position, const QString &guid, const QString &assetName)
 {
     sceneEditService->addMaterialMesh(path, ignore, position, guid, assetName);
@@ -2994,8 +2989,12 @@ void MainWindow::setupViewPort()
         addMaterialMesh(path, v, pos, guid, name);
     });
 
-    connect(events, &EditorViewportEvents::addPrimitive, this, [this](QString guid) {
-        addPrimitiveObject(guid);
+    // Straight to the service, WITH the drop point (smoke S2). The shell hop
+    // this replaced (MainWindow::addPrimitiveObject) forwarded one argument and
+    // had exactly one caller — this lambda.
+    connect(events, &EditorViewportEvents::addPrimitive, this,
+            [this](QString guid, iris::Vec3 position) {
+        sceneEditService->addPrimitive(guid, position);
     });
 
     connect(events, &EditorViewportEvents::addDroppedParticleSystem, this, [this](bool v, iris::Vec3 pos, QString guid, QString name) {

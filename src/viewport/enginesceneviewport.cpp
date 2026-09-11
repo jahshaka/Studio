@@ -608,6 +608,16 @@ iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
     return iris::Vec3();
 }
 
+bool EngineSceneViewport::dropPointAt(const QPointF &point, iris::Vec3 *out)
+{
+    // ONE function behind the drop and the verb (S2): if these two ever
+    // disagreed, a script that "places where the cursor is" would place
+    // somewhere a drag never lands.
+    if (!out || !viewCamera()) return false;
+    *out = dropPositionAt(point);
+    return true;
+}
+
 // ---- drag and drop from the asset panel: ported from SceneViewWidget ----------------
 
 static QMap<int, QVariant> dragRoleData(const QMimeData *mime)
@@ -692,7 +702,13 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         emit mEvents.addDroppedParticleSystem(true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
     } else if (type == static_cast<int>(ModelTypes::Object)) {
         if (Constants::Reserved::DefaultPrimitives.contains(role.value(3).toString())) {
-            emit mEvents.addPrimitive(Constants::Reserved::DefaultPrimitives.value(role.value(3).toString()));
+            // WITH THE DROP POINT (smoke S2). This branch was the one dropped
+            // asset that carried no position — every primitive dragged into
+            // the viewport landed in front of the camera instead of under the
+            // cursor, while the mesh branch one line down has passed
+            // mDragScenePos since the beginning.
+            emit mEvents.addPrimitive(Constants::Reserved::DefaultPrimitives.value(role.value(3).toString()),
+                                      mDragScenePos);
             return;
         }
         emit mEvents.addDroppedMesh(QDir(mProject->getProjectFolder()).filePath(role.value(2).toString()),

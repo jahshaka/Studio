@@ -409,7 +409,13 @@ void SceneHierarchyWidget::treeSelectionChanged()
         for (const auto &n : set) if (!isWorldRoot(n)) filtered.append(n);
         set = filtered;
     }
-    if (set.isEmpty()) set = { node };
+    // NOTHING SELECTED IS AN ANSWER (smoke S3, owner: "clicking the empty
+    // space under the list deselects in the list but the node stays selected
+    // in the viewport"). An empty set used to be REPLACED by the current row —
+    // so Ctrl-clicking the last selected row re-announced it, and the panel and
+    // the viewport could never agree on "nothing". The current row survives as
+    // Qt's cursor; it is simply not a selection any more.
+    if (set.isEmpty()) { announceSet({}); return; }
 
     // The clicked/current row is the PRIMARY.
     QList<iris::SceneNodePtr> ordered;
@@ -447,6 +453,25 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
     // match the rule.
     if (watched == ui->sceneTree->viewport() && event->type() == QEvent::MouseButtonPress) {
         auto *me = static_cast<QMouseEvent *>(event);
+        // A CLICK ON EMPTY SPACE DESELECTS EVERYTHING (smoke S3). Qt clears its
+        // own selection for us, but it also clears the CURRENT item, and
+        // treeSelectionChanged's one path out starts with `if (!current)
+        // return` — so the clear was never announced and SelectionService (the
+        // properties panel, the viewport outline, the gizmo) kept the node the
+        // user had just deselected. Announced here, where "the user clicked
+        // nothing" is still known, through the same empty set `editor.select(null)`
+        // produces. Modified clicks are Qt's: Ctrl/Shift on empty space are
+        // range/toggle gestures, not a clear.
+        if (me->button() == Qt::LeftButton
+            && !(me->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier))
+            && !ui->sceneTree->itemAt(me->position().toPoint())) {
+            setSelectedSet({});                       // paints the clear
+            suppressSelectionSignal = true;
+            ui->sceneTree->setCurrentItem(nullptr);    // ...and drops the cursor row
+            suppressSelectionSignal = false;
+            announceSet({});
+            return false;   // Qt still gets the press (focus, the context menu)
+        }
         if (me->button() == Qt::LeftButton && (me->modifiers() & Qt::ShiftModifier)) {
             const QPoint pos = me->position().toPoint();
             // Column 0 only: the eye and lock columns stay per-row toggles.

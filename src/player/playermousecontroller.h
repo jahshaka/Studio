@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/cameracontrollerbase.h"
+#include "viewport/flystep.h"
 
 #include <functional>
 
@@ -67,6 +68,12 @@ public:
 
 	void update(float dt) override;
     void doGodMode(float dt);
+    /// What is held right now, as flight intentions (S13): arrows and W/A/S/D
+    /// are aliases here, Q/E (PageDown/PageUp) are the vertical pair. Both the
+    /// play-mode fly and the free camera turn it into motion through
+    /// viewport/flystep.h — the editor's own step, so "forward" is the
+    /// camera's true forward on every surface.
+    static flystep::Keys heldFlyKeys();
 	void postUpdate(float dt) override;
     void onMouseMove(int dx,int dy) override;
     void onMouseWheel(int delta) override;

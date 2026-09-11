@@ -44,8 +44,8 @@ fail=0
 # found it ABSENT, and the stale backup from run A then "restored" a file that
 # was supposed to stay gone. A test whose verdict depends on what the previous
 # run left behind is not a gate.
-rm -f shared.ini.bak report.js run1.log run2.log run3.log run4.log
-rm -rf root-cli root-env root-wins
+rm -f shared.ini.bak report.js makeproject.js run1.log run2.log run3.log run4.log run5.log
+rm -rf root-cli root-env root-wins root-project
 
 check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1; fi }
 
@@ -65,6 +65,7 @@ console.log("OVERRIDDEN=" + d.overridden);
 console.log("SETTINGS=" + d.settingsFile);
 console.log("DB=" + d.database);
 console.log("STORE=" + d.assetStore);
+console.log("PROJECTS=" + d.projects);
 JS
 }
 
@@ -84,6 +85,8 @@ grep -q "DB=$ROOT1/" run1.log
 check $? "the library database is under the data root"
 grep -q "STORE=$ROOT1/AssetStore" run1.log
 check $? "the asset store is under the data root"
+grep -q "PROJECTS=$ROOT1" run1.log
+check $? "the PROJECTS root is under the data root too (rig hygiene, smoke S-extra2)"
 test -f "$ROOT1/jahsettings.ini"
 check $? "...and the settings file was really written there"
 ls "$ROOT1"/*.db >/dev/null 2>&1
@@ -112,6 +115,29 @@ check $? "both-given run exits 0"
 grep -q "ROOT=$ROOT3" run3.log
 check $? "--data-root wins over JAHSHAKA_DATA_ROOT"
 
+# ---- 5b: A PROJECT REALLY LANDS THERE --------------------------------------
+# The path is one assertion; the FOLDER is the one that matters. Before this,
+# --data-root moved the database, the store, the cache and the settings and left
+# project.create writing into the developer's ~/Documents/Jahshaka/Projects —
+# nineteen empty project folders appeared there in one night of scripted runs.
+ROOT4="$PWD/root-project"
+DOCS_BEFORE="$(ls "$HOME/Documents/Jahshaka/Projects" 2>/dev/null | wc -l)"
+cat > makeproject.js <<'JS'
+var guid = project.create("DataRootProject");
+console.log("GUID=" + guid);
+console.log("PATH=" + project.current().folder);
+JS
+"$BIN" --headless --data-root "$ROOT4" --script makeproject.js > run5.log 2>&1
+check $? "a project-creating run with --data-root exits 0"
+grep -q "PATH=$ROOT4/Projects/" run5.log
+check $? "project.create writes its folder UNDER the data root"
+PGUID="$(grep '^GUID=' run5.log | head -1 | cut -d= -f2)"
+test -n "$PGUID" && test -d "$ROOT4/Projects/$PGUID"
+check $? "...and the folder is really there ($ROOT4/Projects/$PGUID)"
+DOCS_AFTER="$(ls "$HOME/Documents/Jahshaka/Projects" 2>/dev/null | wc -l)"
+[ "$DOCS_BEFORE" = "$DOCS_AFTER" ]
+check $? "...and NOTHING was created in the un-overridden Documents projects folder"
+
 # ---- 6: NO override — the historical location, unchanged -------------------
 # This run DOES write the shared file (that is the behaviour being asserted), so
 # it is bracketed by a byte-for-byte save/restore: a hygiene gate that leaves a
@@ -123,6 +149,8 @@ grep -q "OVERRIDDEN=false" run4.log
 check $? "with no override, app.dataRoot().overridden is false"
 grep -q "SETTINGS=$BINDIR/jahsettings.ini" run4.log
 check $? "with no override the settings file is where it has always been (Debug: beside the binary)"
+grep -q "PROJECTS=$HOME/Documents" run4.log
+check $? "with no override the projects root is the historical Documents folder (nothing moved)"
 
 if [ -f shared.ini.bak ]; then
     cp -p shared.ini.bak "$SHARED_INI"
