@@ -193,6 +193,11 @@ void EngineAssetViewer::cacheCurrentModel(QString guid)
     }
 }
 
+void EngineAssetViewer::frameSubject()
+{
+    mScene->frameSubject();
+}
+
 void EngineAssetViewer::orientCamera(iris::Vec3 pos, iris::Vec3 localRot, int distanceFromPivot)
 {
     mScene->orientCamera(pos, localRot, float(distanceFromPivot));

@@ -1110,25 +1110,37 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
             switch (page) {
             case PreviewPage::Viewer3D: {
+                // THE SAVED CAMERA IS RESTORED ONLY IF THERE IS ONE (`cached`).
+                // orientCamera ran unconditionally, so an asset with no stored
+                // camera block — everything imported by a verb, by the avatar
+                // module, by a drop that never reached the page's tail — had
+                // the framing the load had just computed overwritten with the
+                // DEFAULTS: the origin, distance 5, looking down -Z. On any
+                // model bigger than about five metres that is a camera inside
+                // the model, which is what the owner saw (smoke S5).
+                const auto restoreCamera = [&]() {
+                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
+                };
                 if (type == ModelTypes::Object || type == ModelTypes::ParticleSystem) {
                     // The model file IS the asset's source-role object; the
                     // old "scan the per-guid folder for a MODEL_EXTS suffix"
                     // was the retired legacy view's only remaining reader here.
                     const QString path = storeFile;
                     if (viewer->cachedAsset(guid))
-                        viewer->addNodeToScene(viewer->cachedAsset(guid), guid, true, false);
+                        viewer->addNodeToScene(viewer->cachedAsset(guid), guid, cached, false);
                     else
                         viewer->loadJafModel(path, guid, false, true, !cached);
-                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
+                    if (cached) restoreCamera();
+                    else        viewer->frameSubject();   // the editor's F, on the new subject
                 }
                 else if (type == ModelTypes::Material) {
                     viewer->loadJafMaterial(guid);
-                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
+                    if (cached) restoreCamera();
                 }
                 else if (type == ModelTypes::Shader) {
                     QMap<QString, QString> map;
                     viewer->loadJafShader(guid, map);
-                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
+                    if (cached) restoreCamera();
                 }
                 else if (type == ModelTypes::Sky) {
                     viewer->loadJafSky(guid);
@@ -1506,41 +1518,41 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
 // mid-batch takes the rendered thumbnail.
 void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fileName)
 {
-	// The grid tile and metadata pane read the `filename` member, which only
-	// the browse dialog used to set — a drag-and-dropped model got a nameless
-	// tile until restart (ASSETS_AUDIT.md finding 2). Every import path lands
-	// here, so set it here.
-	filename = fileName;
-	renameModelField->setText(QFileInfo(fileName).baseName());
+    // The grid tile and metadata pane read the `filename` member, which only
+    // the browse dialog used to set — a drag-and-dropped model got a nameless
+    // tile until restart (ASSETS_AUDIT.md finding 2). Every import path lands
+    // here, so set it here.
+    filename = fileName;
+    renameModelField->setText(QFileInfo(fileName).baseName());
 
-	ImportMeshTail::run(db, viewer, result, fileName);
+    ImportMeshTail::run(db, viewer, result, fileName);
 
-	// THE ONE THUMBNAIL ROUTINE (smoke S6). This used to persist the viewer's
-	// shot of the LIVE import fragment — a white, untextured render, because
-	// that fragment's material paths point into the staging directory the
-	// commit deleted. assetthumb::storeObject is what `assets.refreshThumbnail`
-	// runs: the committed blob, fitted, framed like the editor's F. A page
-	// import and a scripted import now store the same image.
-	assetthumb::storeObject(db, project, result.assetGuid, EngineHost::instance().engine());
+    // THE ONE THUMBNAIL ROUTINE (smoke S6). This used to persist the viewer's
+    // shot of the LIVE import fragment — a white, untextured render, because
+    // that fragment's material paths point into the staging directory the
+    // commit deleted. assetthumb::storeObject is what `assets.refreshThumbnail`
+    // runs: the committed blob, fitted, framed like the editor's F. A page
+    // import and a scripted import now store the same image.
+    assetthumb::storeObject(db, project, result.assetGuid, EngineHost::instance().engine());
 
-	if (auto *tile = fastGrid->tileByGuid(result.assetGuid)) {
-		tile->hideLoadingOverlay();
-		const auto record = db->fetchAsset(result.assetGuid);
-		QImage thumbnail;
-		if (thumbnail.loadFromData(record.thumbnail, "PNG"))
-			tile->setTile(QPixmap::fromImage(thumbnail));
-		// The freshly rendered camera properties feed the pane on selection.
-		tile->sceneProperties = QJsonDocument::fromJson(record.properties).object();
-	}
+    if (auto *tile = fastGrid->tileByGuid(result.assetGuid)) {
+        tile->hideLoadingOverlay();
+        const auto record = db->fetchAsset(result.assetGuid);
+        QImage thumbnail;
+        if (thumbnail.loadFromData(record.thumbnail, "PNG"))
+            tile->setTile(QPixmap::fromImage(thumbnail));
+        // The freshly rendered camera properties feed the pane on selection.
+        tile->sceneProperties = QJsonDocument::fromJson(record.properties).object();
+    }
 
-	renameWidget->setVisible(true);
-	tagWidget->setVisible(true);
-	updateAsset->setVisible(true);
+    renameWidget->setVisible(true);
+    tagWidget->setVisible(true);
+    updateAsset->setVisible(true);
 
-	// SELECT WHAT WAS JUST IMPORTED (smoke S4: "importing an asset does not
-	// select the new tile; a double click is needed"). The last item of a
-	// batch wins, which is the one whose preview is on screen anyway.
-	selectAsset(result.assetGuid);
+    // SELECT WHAT WAS JUST IMPORTED (smoke S4: "importing an asset does not
+    // select the new tile; a double click is needed"). The last item of a
+    // batch wins, which is the one whose preview is on screen anyway.
+    selectAsset(result.assetGuid);
 }
 
 // The tile gesture as a call — `assets.select`, the import tail's last step,
@@ -1549,25 +1561,25 @@ void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fi
 // selection nobody can see is not a selection.
 bool AssetView::selectAsset(const QString &guid)
 {
-	if (guid.isEmpty()) return false;
-	AssetGridItem *tile = fastGrid->tileByGuid(guid);
-	if (!tile && !db->fetchAsset(guid).guid.isEmpty()) {
-		// The page MIRRORS the library: a row that exists but whose tile has
-		// not been announced yet (a verb's import, a queued announcement that
-		// has not run) still selects — the tile is built now. The announcement
-		// handler checks for an existing tile, so nothing doubles up.
-		addLibraryTileForAsset(guid);
-		tile = fastGrid->tileByGuid(guid);
-	}
-	if (!tile) return false;
-	fastGrid->selectTile(tile);          // the double-click path: preview + pane
-	fastGrid->ensureWidgetVisible(tile, 32, 32);
-	return true;
+    if (guid.isEmpty()) return false;
+    AssetGridItem *tile = fastGrid->tileByGuid(guid);
+    if (!tile && !db->fetchAsset(guid).guid.isEmpty()) {
+        // The page MIRRORS the library: a row that exists but whose tile has
+        // not been announced yet (a verb's import, a queued announcement that
+        // has not run) still selects — the tile is built now. The announcement
+        // handler checks for an existing tile, so nothing doubles up.
+        addLibraryTileForAsset(guid);
+        tile = fastGrid->tileByGuid(guid);
+    }
+    if (!tile) return false;
+    fastGrid->selectTile(tile);          // the double-click path: preview + pane
+    fastGrid->ensureWidgetVisible(tile, 32, 32);
+    return true;
 }
 
 QString AssetView::selectedAssetGuid() const
 {
-	return selectedGridItem ? selectedGridItem->metadata["guid"].toString() : QString();
+    return selectedGridItem ? selectedGridItem->metadata["guid"].toString() : QString();
 }
 
 // THE import dispatch (ASSET_DRAWERS_SPEC §3): drop pad and browse dialog both

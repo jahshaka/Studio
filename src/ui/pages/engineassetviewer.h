@@ -44,6 +44,7 @@ public:
     void addNodeToScene(iris::SceneNodePtr sceneNode, QString guid = "", bool viewed = false,
                         bool cache = false, bool isOnGround = true) override;
     void cacheCurrentModel(QString guid) override;
+    void frameSubject() override;
     void orientCamera(iris::Vec3 pos, iris::Vec3 localRot, int distanceFromPivot) override;
     QJsonObject getSceneProperties() override;
     void loadJafModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
