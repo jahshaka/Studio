@@ -16,6 +16,7 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QList>
+#include <QPointF>
 #include <QObject>
 #include <QImage>
 #include <QSize>
@@ -43,7 +44,10 @@ class EditorViewportEvents : public QObject
 public:
     using QObject::QObject;
 signals:
-    void addPrimitive(QString guid);
+    /// A builtin primitive dropped INTO the viewport, at the world point under
+    /// the cursor (smoke S2 — the drop used to carry no position at all and
+    /// every dropped cube landed in front of the camera).
+    void addPrimitive(QString guid, iris::Vec3 position);
     void addDroppedMesh(QString path, bool ignore, iris::Vec3 position, QString guid, QString assetName);
     void addDroppedParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
     /// A Texture asset dropped on empty space — the shell spawns an image
@@ -115,6 +119,13 @@ public:
     virtual void setSelectedSet(const QList<iris::SceneNodePtr> &) {}
     virtual void clearSelectedNode() = 0;
     virtual void focusOnNode(iris::SceneNodePtr sceneNode) = 0;
+    /// WHERE A DROP AT THIS PIXEL LANDS: the surface under the cursor, else
+    /// the y=0 ground plane, in world space. The viewport's own drag-drop
+    /// paths and `editor.dropPointAt` are the same function, so a scripted
+    /// placement and a user's drop agree by construction. False when the
+    /// viewport has no camera (a headless stand-in never answers).
+    virtual bool dropPointAt(const QPointF &, iris::Vec3 *) { return false; }
+
     /// F: frames the current selection (no-op without one). Only the engine
     /// viewport implements it (EDITOR_SHORTCUTS_SPEC §2).
     virtual void focusOnSelection() {}

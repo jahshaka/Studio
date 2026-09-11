@@ -461,7 +461,6 @@ public slots:
     void addEmpty();
     void addCamera();
     void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
-    void addPrimitiveObject(const QString &guid);
 	void addMaterialMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3(), const QString &guid = QString(), const QString &name = QString());
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
     void addDragPlaceholder();

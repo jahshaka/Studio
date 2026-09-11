@@ -274,6 +274,9 @@ public:
                               iris::Vec3 *hitPoint = nullptr, bool forcePickable = false);
     /// Where a dragged asset would land: the picked surface, else the ground plane.
     iris::Vec3 dropPositionAt(const QPointF &point);
+    /// IEditorViewport: the same answer, for `editor.dropPointAt` and anything
+    /// else that has to place where a user's drop would place.
+    bool dropPointAt(const QPointF &point, iris::Vec3 *out) override;
 
 protected:
     void showEvent(QShowEvent *) override;

@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
+#include <QPointF>
 #include <QSize>
 #include <QUndoStack>
 #include <QElapsedTimer>
@@ -411,6 +412,15 @@ QVector<VerbInfo> EditorApi::verbs() const
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
+        { "dropPointAt", "editor.dropPointAt(x, y) -> {x, y, z} | null",
+          "WHERE A DROP AT THIS VIEWPORT PIXEL LANDS, in world space: the surface under the "
+          "cursor when the ray hits one, else the y=0 ground plane. `x`/`y` are viewport pixels "
+          "with the origin top-left, exactly as a mouse event carries them. This is the very "
+          "function the viewport's drag-and-drop uses to place what you drop (smoke S2), so "
+          "`scene.addPrimitive(name, {position: editor.dropPointAt(x, y)})` puts a cube exactly "
+          "where dragging one there would. Null when this session's viewport has no camera (the "
+          "document-only stand-ins).",
+          Needs::Engine },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"raw\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
           "`grade` says how the shot is DEVELOPED, and the default is deliberately the dullest answer: "
@@ -1601,6 +1611,18 @@ bool EditorApi::frame(int n, double dt)
                         .arg(iris::SimulationClock::kStepHz));
     host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
     return true;
+}
+
+QVariant EditorApi::dropPointAt(double x, double y)
+{
+    if (!requireEngine()) return QVariant();
+    iris::Vec3 point;
+    if (!host.viewport->dropPointAt(QPointF(x, y), &point)) return QVariant();
+    QVariantMap out;
+    out.insert("x", point.x());
+    out.insert("y", point.y());
+    out.insert("z", point.z());
+    return out;
 }
 
 QVariantMap EditorApi::viewportState()

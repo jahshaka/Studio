@@ -102,7 +102,8 @@ void SceneEditService::notifyNodeRemoved(const iris::SceneNodePtr &node) { emit 
 void SceneEditService::notifyHierarchyChanged() { emit hierarchyChanged(); }
 void SceneEditService::notifyTransformChanged() { emit transformRefreshRequested(); }
 
-void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QString &name)
+void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QString &name,
+                                           const std::optional<iris::Vec3> &position)
 {
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(meshPath, name, nodeGuid);
@@ -120,43 +121,64 @@ void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QStrin
         QByteArray(),
         QByteArray()
     );
-    addNodeToScene(node);
+    // WHERE THE MOUSE IS, when the caller knows (smoke S2): a drop carries the
+    // ray-cast surface/ground point under the cursor, and the funnel's own
+    // "in front of the camera" placement must not overwrite it. `ignore` is
+    // that switch, spelled the way every other dropped add spells it.
+    if (position) node->setLocalPos(*position);
+    addNodeToScene(node, position.has_value());
 }
 
-void SceneEditService::addPlane()    { addBuiltinPrimitive(":/content/primitives/plane.obj", "Plane"); }
-void SceneEditService::addGround()   { addBuiltinPrimitive(":/models/ground.obj", "Ground"); }
-void SceneEditService::addCone()     { addBuiltinPrimitive(":/content/primitives/cone.obj", "Cone"); }
-// "Plane" is not a typo: the pre-extraction addCapsule() named its node Plane
-// and the extraction preserves behaviour bit-for-bit.
-void SceneEditService::addCapsule()  { addBuiltinPrimitive(":/content/primitives/capsule.obj", "Plane"); }
-void SceneEditService::addCube()     { addBuiltinPrimitive(":/content/primitives/cube.obj", "Cube"); }
-void SceneEditService::addTorus()    { addBuiltinPrimitive(":/content/primitives/torus.obj", "Torus"); }
-void SceneEditService::addSphere()   { addBuiltinPrimitive(":/content/primitives/sphere.obj", "Sphere"); }
-void SceneEditService::addCylinder() { addBuiltinPrimitive(":/content/primitives/cylinder.obj", "Cylinder"); }
-void SceneEditService::addPyramid()  { addBuiltinPrimitive(":/content/primitives/pyramid.obj", "Pyramid"); }
-void SceneEditService::addTeapot()   { addBuiltinPrimitive(":/content/primitives/teapot.obj", "Teapot"); }
-void SceneEditService::addSponge()   { addBuiltinPrimitive(":/content/primitives/sponge.obj", "Sponge"); }
-void SceneEditService::addSteps()    { addBuiltinPrimitive(":/content/primitives/steps.obj", "Steps"); }
-void SceneEditService::addGear()     { addBuiltinPrimitive(":/content/primitives/gear.obj", "Gear"); }
+// The menu slots, over the ONE table below (they used to carry a second copy
+// of every resource path — thirteen strings maintained in two places).
+void SceneEditService::addPlane()    { addPrimitive(QStringLiteral("Plane")); }
+void SceneEditService::addGround()   { addPrimitive(QStringLiteral("Ground")); }
+void SceneEditService::addCone()     { addPrimitive(QStringLiteral("Cone")); }
+void SceneEditService::addCapsule()  { addPrimitive(QStringLiteral("Capsule")); }
+void SceneEditService::addCube()     { addPrimitive(QStringLiteral("Cube")); }
+void SceneEditService::addTorus()    { addPrimitive(QStringLiteral("Torus")); }
+void SceneEditService::addSphere()   { addPrimitive(QStringLiteral("Sphere")); }
+void SceneEditService::addCylinder() { addPrimitive(QStringLiteral("Cylinder")); }
+void SceneEditService::addPyramid()  { addPrimitive(QStringLiteral("Pyramid")); }
+void SceneEditService::addTeapot()   { addPrimitive(QStringLiteral("Teapot")); }
+void SceneEditService::addSponge()   { addPrimitive(QStringLiteral("Sponge")); }
+void SceneEditService::addSteps()    { addPrimitive(QStringLiteral("Steps")); }
+void SceneEditService::addGear()     { addPrimitive(QStringLiteral("Gear")); }
 
-void SceneEditService::addPrimitive(const QString &text)
+namespace {
+/// The shipped primitives, as ONE table: the name the verb and the drop use,
+/// the bundled mesh, and the node name. It replaces a fall-through chain of
+/// thirteen `if`s that had to be edited in two places to grow an argument
+/// ("Ground" was once missing from it entirely — AI_SURFACE_AUDIT #16).
+struct PrimitiveDef { const char *name; const char *mesh; const char *nodeName; };
+const PrimitiveDef kPrimitiveDefs[] = {
+    { "Ground",   ":/models/ground.obj",                "Ground"   },
+    { "Plane",    ":/content/primitives/plane.obj",     "Plane"    },
+    { "Cone",     ":/content/primitives/cone.obj",      "Cone"     },
+    { "Cube",     ":/content/primitives/cube.obj",      "Cube"     },
+    { "Cylinder", ":/content/primitives/cylinder.obj",  "Cylinder" },
+    { "Sphere",   ":/content/primitives/sphere.obj",    "Sphere"   },
+    { "Torus",    ":/content/primitives/torus.obj",     "Torus"    },
+    // "Plane" is not a typo: the pre-extraction addCapsule() named its node
+    // Plane and the extraction preserved it bit-for-bit.
+    { "Capsule",  ":/content/primitives/capsule.obj",   "Plane"    },
+    { "Gear",     ":/content/primitives/gear.obj",      "Gear"     },
+    { "Pyramid",  ":/content/primitives/pyramid.obj",   "Pyramid"  },
+    { "Teapot",   ":/content/primitives/teapot.obj",    "Teapot"   },
+    { "Sponge",   ":/content/primitives/sponge.obj",    "Sponge"   },
+    { "Steps",    ":/content/primitives/steps.obj",     "Steps"    },
+};
+}   // namespace
+
+void SceneEditService::addPrimitive(const QString &text,
+                                    const std::optional<iris::Vec3> &position)
 {
-    // "Ground" had an addGround() and a menu action but no branch here, so the
-    // one shipped floor primitive was unreachable from scene.addPrimitive —
-    // AI_SURFACE_AUDIT #16.
-    if (text == "Ground")   addGround();
-    if (text == "Plane")    addPlane();
-    if (text == "Cone")     addCone();
-    if (text == "Cube")     addCube();
-    if (text == "Cylinder") addCylinder();
-    if (text == "Sphere")   addSphere();
-    if (text == "Torus")    addTorus();
-    if (text == "Capsule")  addCapsule();
-    if (text == "Gear")     addGear();
-    if (text == "Pyramid")  addPyramid();
-    if (text == "Teapot")   addTeapot();
-    if (text == "Sponge")   addSponge();
-    if (text == "Steps")    addSteps();
+    for (const auto &def : kPrimitiveDefs) {
+        if (text == QLatin1String(def.name)) {
+            addBuiltinPrimitive(QLatin1String(def.mesh), QLatin1String(def.nodeName), position);
+            return;
+        }
+    }
 }
 
 void SceneEditService::addPointLight()

@@ -27,6 +27,8 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/vec.h"
 #include <QObject>
+
+#include <optional>
 #include <QString>
 #include <QStringList>
 #include <QHash>
@@ -108,7 +110,14 @@ public:
     void addSteps();
     void addGear();
     /// Name-dispatch over the primitives above ("Plane", "Cone", ...).
-    void addPrimitive(const QString &name);
+    ///
+    /// `position` is where the primitive is BORN, in world space (smoke S2:
+    /// "drag-and-drop of a primitive lands at world centre; it should land
+    /// where the mouse is"). Absent — the menus, the presets panel — keeps the
+    /// funnel's own placement (in front of the camera, stepped clear of
+    /// whatever already stands there).
+    void addPrimitive(const QString &name,
+                      const std::optional<iris::Vec3> &position = std::nullopt);
 
     void addPointLight();
     void addSpotLight();
@@ -352,7 +361,8 @@ signals:
     void materialApplied(const QString &presetType);
 
 private:
-    void addBuiltinPrimitive(const QString &meshPath, const QString &name);
+    void addBuiltinPrimitive(const QString &meshPath, const QString &name,
+                             const std::optional<iris::Vec3> &position = std::nullopt);
 
     Database *db;
     Project *project;

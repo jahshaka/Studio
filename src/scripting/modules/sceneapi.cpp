@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/sceneapi.h"
 
+#include <optional>
+
 
 #include <QtMath>
 
@@ -494,10 +496,20 @@ QVariant SceneApi::addPrimitive(const QString &name, const QVariantMap &options)
         count = int(asked);
     }
 
+    // BORN WHERE IT WAS ASKED FOR (S2). `position` used to reach the node only
+    // through finishAdd's TransformSceneNodeCommand, i.e. the primitive was
+    // first placed in front of the camera (and walked sideways by the
+    // free-spot search) and then moved — the same path the viewport's drop now
+    // takes, which carries the cursor's ground hit. finishAdd still applies
+    // the option so `parent` + local coordinates keep their exact meaning.
+    std::optional<iris::Vec3> birth;
+    if (options.contains(QStringLiteral("position")))
+        birth = vecFromJs(options.value(QStringLiteral("position")));
+
     QVariantList ids;
     for (int i = 0; i < count; ++i) {
         host.services->selection->select(iris::SceneNodePtr());
-        host.services->sceneEdit->addPrimitive(normalized);
+        host.services->sceneEdit->addPrimitive(normalized, birth);
         const QString id = finishAdd(options, QStringLiteral("scene.addPrimitive"));
         if (id.isEmpty()) return QVariant();   // finishAdd already threw
         ids.append(id);
