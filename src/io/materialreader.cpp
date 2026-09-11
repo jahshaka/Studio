@@ -68,16 +68,14 @@ V2 Material Spec:
 
 */
 
-MaterialReader::MaterialReader(TextureSource texSrc, QString globalSrcFolder)
+MaterialReader::MaterialReader(TextureSource texSrc)
 {
 	textureSource = texSrc;
-	globalSourceFolder = globalSrcFolder;
 }
 
-void MaterialReader::setSource(TextureSource texSrc, QString globalSrcFolder)
+void MaterialReader::setSource(TextureSource texSrc)
 {
 	textureSource = texSrc;
-	globalSourceFolder = globalSrcFolder;
 }
 
 // THE BUILTIN RETIREMENT (HLMS_ADOPTION P4b). A reserved guid used to name a
@@ -94,8 +92,8 @@ iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shader
 	// one guid) is resolved to the member texture the slot's role words name.
 	// Without the slot name this resolver could not be given the repair at all,
 	// which is why the resolver signature carries it now.
-	auto resolve = [this, db](const QString &ref, const QString &slot) {
-		return resolveTextureGuid(repairTextureSlot(ref, slot), db);
+	auto resolve = [this](const QString &ref, const QString &slot) {
+		return resolveTextureGuid(repairTextureSlot(ref, slot));
 	};
 	if (BuiltinMaterials::isBuiltin(shaderGuid))
 		return BuiltinMaterials::fromBuiltin(shaderGuid, values, resolve);
@@ -114,53 +112,25 @@ QString MaterialReader::repairTextureSlot(const QString &stored, const QString &
 	return AssetCas::repairTextureSlot(stored, slotName, "material reader");
 }
 
-QString MaterialReader::resolveTextureGuid(const QString &guid, Database *db)
+QString MaterialReader::resolveTextureGuid(const QString &guid)
 {
 	if (guid.isEmpty()) return QString();
+	// Pin first in a project (resolvePinned falls back to the library source
+	// itself), the library source for a store preview. THAT IS ALL (plan item
+	// 15c). Two by-NAME fallbacks followed until then — `projectFolder +
+	// row name` for a Project read and `globalSourceFolder + row name` for a
+	// GlobalAssets one — and the project half existed for exactly one asset:
+	// the default ground's Tile.png, which MainWindow::createDefaultScene
+	// copied into the project folder under a bare catalog row the store knew
+	// nothing about (the "reopen lighting blowout", 65,65,65 -> 255,255,255,
+	// was that asymmetry between this reader and the writer). The tile is a
+	// pinned store object now, like every texture, and both fallbacks went
+	// with it; so did the folder parameter the GlobalAssets half carried.
 	QSqlDatabase conn = QSqlDatabase::database();
 	const QString root = AssetStorePaths::root();
-
-	QString path;
 	if (textureSource == TextureSource::Project && project && !project->getProjectGuid().isEmpty())
-		path = AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
-	else
-		path = AssetCas::resolveSource(conn, root, guid);
-
-	if (path.isEmpty() && textureSource == TextureSource::GlobalAssets && db) {
-		const QString assetName = db->fetchAsset(guid).name;
-		if (!assetName.isEmpty()) {
-			const QString candidate = IrisUtils::join(globalSourceFolder, assetName);
-			if (QFileInfo::exists(candidate)) path = candidate;
-		}
-	}
-
-	// The PROJECT-FOLDER half of the same legacy fallback the WRITER still has.
-	// SceneWriter::assetGuidForTexturePath resolves a texture path to a guid two
-	// ways: through the CAS, and — when the file is not a store object — by
-	// looking the catalog up by FILE NAME within the project
-	// (Database::fetchAssetGUIDByName). That second branch is still live, and
-	// still fires: MainWindow::createDefaultScene copies Tile.png straight into
-	// the project folder and registers a bare catalog row, so the default
-	// ground's texture is exactly such an asset — a guid the store knows nothing
-	// about. The reader's matching branch was deleted when the pin world landed
-	// ("the flat join(projectFolder, name) resolution is GONE", materialreader.h)
-	// on the premise that project folders no longer hold asset files. They still
-	// do, for that one asset, and the asymmetry silently ERASED the texture on
-	// every save/reopen: the writer stored a guid, the reader resolved it to an
-	// empty path, and the default floor reopened as bare white diffuse
-	// (65,65,65 -> 255,255,255 — the "reopen lighting blowout", which was never
-	// a lighting bug at all). Writer and reader have to agree; this is the
-	// reader's half, and it is last-resort and existence-checked, so nothing in
-	// the pin world changes shape because of it.
-	if (path.isEmpty() && textureSource == TextureSource::Project && db &&
-	    project && !project->getProjectFolder().isEmpty()) {
-		const QString assetName = db->fetchAsset(guid).name;
-		if (!assetName.isEmpty()) {
-			const QString candidate = QDir(project->getProjectFolder()).filePath(assetName);
-			if (QFileInfo::exists(candidate)) path = candidate;
-		}
-	}
-	return path;
+		return AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
+	return AssetCas::resolveSource(conn, root, guid);
 }
 
 iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Database* db, bool loadTextures)
@@ -270,7 +240,7 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			const QString stored = repairTextureSlot(val.toString(), prop->name);
 				QString path;
 				if (!stored.isEmpty()) {
-					path = resolveTextureGuid(stored, db);
+					path = resolveTextureGuid(stored);
 					if (path.isEmpty() && QFileInfo::exists(stored)) path = stored;
 				}
 			mat->setValue(prop->name, path);
@@ -336,8 +306,8 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* 
         QJsonObject shaderDefinition = QJsonDocument::fromJson(shader).object();
 
 		if (!shaderDefinition.isEmpty()) {
-			const QString vPath = resolveTextureGuid(shaderDefinition["vertex_shader"].toString(), db);
-			const QString fPath = resolveTextureGuid(shaderDefinition["fragment_shader"].toString(), db);
+			const QString vPath = resolveTextureGuid(shaderDefinition["vertex_shader"].toString());
+			const QString fPath = resolveTextureGuid(shaderDefinition["fragment_shader"].toString());
 
 			if (!vPath.isEmpty()) shaderDefinition["vertex_shader"] = vPath;
 			if (!fPath.isEmpty()) shaderDefinition["fragment_shader"] = fPath;

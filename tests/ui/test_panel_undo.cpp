@@ -532,14 +532,22 @@ int main(int argc, char **argv)
         CHECK(equi != nullptr, "host: and it built the equirect row");
         if (equi) {
             const int before = stack.index();
-            // What the picker emits when a user drops or chooses an image.
-            emit equi->valueChanged(QStringLiteral("stub-asset.png"));
+            // What the picker emits when a user drops or chooses an image: the
+            // resolved file AND the guid of the row that was picked. The file is
+            // a store object, so its NAME is a sha256 that no catalog row is
+            // called — which is the point: the pick must reach the document
+            // through the CARRIED guid (plan item 15c). It used to look the row
+            // up by the file's name, found nothing for any imported image, and
+            // silently did nothing; this suite only passed because its stub
+            // answered one hard-coded name.
+            emit equi->valuesChanged(QStringLiteral("/store/objects/ab/abababab.png"),
+                                     QStringLiteral("stub-guid"));
             pump();
             const QJsonObject stored = scene->skyData.value(QStringLiteral("Equirectangular"));
             CHECK(stored.value(QStringLiteral("equiSkyGuid")).toString()
                       == QStringLiteral("stub-guid"),
-                  "host: the equirect pick RESOLVED through the library and reached the "
-                  "document (it returned on a null db before)");
+                  "host: the equirect pick reached the document by the picked row's GUID "
+                  "(not by the file's name; and not blocked by a null db, as before)");
             CHECK(stack.index() == before + 1, "host: as one undo step");
             stack.undo();
             pump();

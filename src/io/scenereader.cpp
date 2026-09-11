@@ -253,52 +253,27 @@ QString SceneReader::repairTextureSlot(const QString &stored, const QString &slo
 QString SceneReader::resolveAssetPath(const QString &guid)
 {
     if (guid.isEmpty()) return QString();
+    // A project load resolves through the project's PIN (resolvePinned falls
+    // back to the library source itself); a library-source read (a store
+    // preview, a library object dropped into a scene) through the library
+    // source. THAT IS ALL (plan item 15c).
+    //
+    // Two by-NAME fallbacks followed until then: `assetDirectory + row name`
+    // for a library-source read and `projectFolder + row name` for a project
+    // load. The second existed for exactly one asset — the default ground's
+    // Tile.png, which MainWindow::createDefaultScene copied into the project
+    // folder under a bare catalog row, and which the writer re-found by name
+    // on save: the two had to agree or the floor reopened bare white (the
+    // "reopen lighting blowout"). The first had lost its last real directory
+    // when the retired legacy store view went; every remaining caller passed
+    // the project folder, i.e. the same fallback through another door. The
+    // tile is a pinned store object now, like every texture, and all of it
+    // went — the folder the first one joined against included.
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
-
-    QString path;
     if (!useAlternativeLocation && project && !project->getProjectGuid().isEmpty())
-        path = AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
-    else
-        path = AssetCas::resolveSource(conn, root, guid);
-
-    if (path.isEmpty() && useAlternativeLocation && handle) {
-        // Preview loads may pass an explicit directory (a store view).
-        const QString name = handle->fetchAsset(guid).name;
-        if (!name.isEmpty()) {
-            const QString candidate = QDir(assetDirectory).filePath(name);
-            if (QFileInfo::exists(candidate)) path = candidate;
-        }
-    }
-
-    // THE PROJECT-FOLDER LAST RESORT, and the writer's matching branch is why
-    // it has to exist. SceneWriter::assetGuidForTexturePath resolves a texture
-    // path to a guid two ways: through the CAS, and — when the file is not a
-    // store object — by looking the catalog up by FILE NAME within the project
-    // (Database::fetchAssetGUIDByName). That second branch is still live and
-    // still fires: MainWindow::createDefaultScene copies Tile.png straight into
-    // the project folder and registers a bare catalog row, so the default
-    // ground's texture is exactly such an asset — a guid the store knows
-    // nothing about. Writer and reader have to agree, or a save/reopen ERASES
-    // the texture and the floor comes back bare white (the "reopen lighting
-    // blowout", which was never a lighting bug).
-    //
-    // MaterialReader::resolveTextureGuid has carried this branch since that
-    // defect was fixed; THIS reader did not, and did not need to while the
-    // default ground was a legacy material that went through the other reader.
-    // HLMS_ADOPTION P4b made it a PbrMaterial, which lands here — so the same
-    // asymmetry re-appeared, in the same place, with the same 65,65,65 ->
-    // 255,255,255 signature. Last-resort and existence-checked, so nothing in
-    // the pin world changes shape because of it.
-    if (path.isEmpty() && !useAlternativeLocation && handle && project &&
-        !project->getProjectFolder().isEmpty()) {
-        const QString name = handle->fetchAsset(guid).name;
-        if (!name.isEmpty()) {
-            const QString candidate = QDir(project->getProjectFolder()).filePath(name);
-            if (QFileInfo::exists(candidate)) path = candidate;
-        }
-    }
-    return path;
+        return AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
+    return AssetCas::resolveSource(conn, root, guid);
 }
 
 QStringList SceneReader::collectMeshSources(const QJsonObject &projectObj)
@@ -1087,10 +1062,16 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
 
         if (animObj.contains("skeletalAnimation")) {
             auto skelAnim = animObj["skeletalAnimation"].toObject();
+            const QString source = skelAnim["source"].toString();
+            const QString clipGuid = skelAnim["guid"].toString();
+            // The own-model route is only worked out when the clip has no guid
+            // of its own (every clip saved from a store path since F5 has one).
+            const QString ownModel = clipGuid.isEmpty()
+                ? ownModelGuidFor(nodeObj, QFileInfo(source).fileName())
+                : QString();
 
-            auto skel = this->getSkeletalAnimation(skelAnim["source"].toString(),
-                                                  skelAnim["name"].toString(),
-                                                  skelAnim["guid"].toString());
+            auto skel = this->getSkeletalAnimation(source, skelAnim["name"].toString(),
+                                                  clipGuid, ownModel);
             animation->setSkeletalAnimation(skel);
         }
 
@@ -1683,7 +1664,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
 	MaterialReader reader;
 	reader.setProject(project);
-	if (useAlternativeLocation) reader.setSource(TextureSource::GlobalAssets, assetDirectory);
+	if (useAlternativeLocation) reader.setSource(TextureSource::GlobalAssets);
     // A node with no material at all gets the default PbrMaterial — the one
     // material class there is (HLMS_ADOPTION P4b). It used to get an EMPTY
     // CustomMaterial: no shader, no properties, so every value the panel
@@ -1787,8 +1768,35 @@ iris::MeshPtr SceneReader::getMesh(QString filePath, int index)
     return iris::MeshPtr();
 }
 
+QString SceneReader::ownModelGuidFor(const QJsonObject &nodeObj, const QString &sourceFileName) const
+{
+    if (!handle || sourceFileName.isEmpty()) return QString();
+    QString found;
+    std::function<void(const QJsonObject &)> walk = [&](const QJsonObject &obj) {
+        if (!found.isEmpty()) return;
+        if (obj.value(QLatin1String("type")).toString() == QLatin1String("mesh")) {
+            // A mesh node names its model by the Mesh ROW's guid (the importer
+            // rewrites it so); a built-in primitive names a ':/' resource and a
+            // pre-store blob a path — neither is a row, and neither is looked up.
+            const QString mesh = obj.value(QLatin1String("mesh")).toString();
+            if (!mesh.isEmpty() && !mesh.startsWith(QLatin1Char(':'))
+                && !mesh.contains(QLatin1Char('/')) && !mesh.contains(QLatin1Char('\\'))) {
+                const QString rowName = handle->fetchAsset(mesh).name;
+                if (!rowName.isEmpty()
+                    && QFileInfo(rowName).fileName().compare(sourceFileName, Qt::CaseInsensitive) == 0)
+                    found = mesh;
+            }
+        }
+        for (const auto &child : obj.value(QLatin1String("children")).toArray())
+            walk(child.toObject());
+    };
+    walk(nodeObj);
+    return found;
+}
+
 iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, QString animName,
-                                                             const QString &assetGuid)
+                                                             const QString &assetGuid,
+                                                             const QString &ownModelGuid)
 {
     auto relPath = filePath;
     // The GUID FIRST when the file carries one (F5). It is the only reference
@@ -1805,18 +1813,19 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, Q
         if (byGuid.contains(animName)) return byGuid[animName];
         if (byGuid.size() == 1) return byGuid.first();
     }
+    // The persisted relative source, for a clip saved without a guid (a clip
+    // from a loose file on disk, or a model's own clip in an import blob).
     filePath = this->getAbsolutePath(filePath);
-    // Pin world: project folders no longer hold asset files, so a persisted
-    // scene-relative source usually resolves to nothing. Re-home it through
-    // the catalog: the mesh asset row with the source's file name, resolved
-    // pin-first (same bytes the mesh itself loads from).
-    if ((filePath.isEmpty() || !QFileInfo::exists(filePath)) && handle && project) {
-        const QString byName = handle->fetchAssetGUIDByName(
-            QFileInfo(relPath).fileName(), project->getProjectGuid());
-        if (!byName.isEmpty()) {
-            const QString resolved = resolveAssetPath(byName);
-            if (!resolved.isEmpty()) filePath = resolved;
-        }
+    // ...and when that file is gone, the model the clip's OWN subtree was
+    // built from, by the guid its mesh nodes carry (ownModelGuidFor). This
+    // used to be a catalog-wide by-NAME query for any row in the open project
+    // called like the clip's file (Database::fetchAssetGUIDByName, deleted by
+    // plan item 15c): it found the right row only when the model had been
+    // imported into THIS project, and the wrong one whenever two assets
+    // shared a file name.
+    if ((filePath.isEmpty() || !QFileInfo::exists(filePath)) && !ownModelGuid.isEmpty()) {
+        const QString resolved = resolveAssetPath(ownModelGuid);
+        if (!resolved.isEmpty()) filePath = resolved;
     }
     extractAssetsFromAssimpScene(filePath);
 

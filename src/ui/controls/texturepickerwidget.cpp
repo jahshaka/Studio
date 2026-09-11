@@ -14,6 +14,9 @@ For more information see the LICENSE file
 #include "qfiledialog.h"
 #include <Qt>
 #include "data/project.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "irisgl/core/irisutils.h"
@@ -69,7 +72,14 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
 		textureGuid = roleDataMap.value(3).toString();
-		changeMap(IrisUtils::join(project->getProjectFolder(), roleDataMap.value(1).toString()));
+		// The dropped row's BYTES, through the store (the project's pin, else the
+		// library source). It used to join the project folder with the row's
+		// display name — a file no project folder holds since the store landed,
+		// so a dropped texture reached the material as a path to nothing (plan
+		// item 15c removed the last files that join could find).
+		changeMap(AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+		                                  project ? project->getProjectGuid() : QString(),
+		                                  textureGuid));
 	}
 
 	event->acceptProposedAction();

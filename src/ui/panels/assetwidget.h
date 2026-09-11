@@ -303,6 +303,10 @@ protected:
     void dragEnterEvent(QDragEnterEvent*) override;
     void dropEvent(QDropEvent*) override;
 
+    /// The texture/material .jaf exports' payload: each member guid's stored
+    /// bytes copied into `<writePath>/assets/` under its display name.
+    void copyMemberFilesForExport(const QStringList &members, const QString &writePath);
+
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);

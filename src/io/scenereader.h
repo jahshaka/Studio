@@ -48,8 +48,8 @@ class SceneReader : public AssetIOBase
 	Database *handle = nullptr;
 
 	// The live Project, injected by every construction site (Phase 4: was the
-	// Globals::project static, which assetDirectory's member initialiser also
-	// read). Never left indeterminate for the same reason as `handle`.
+	// Globals::project static). Never left indeterminate for the same reason
+	// as `handle`.
 	Project *project = nullptr;
 
 	iris::MeshPrewarmPtr prewarm;
@@ -70,35 +70,23 @@ public:
 	/// createMesh() will resolve them. The plan the prewarm worker is given.
 	QStringList collectMeshSources(const QJsonObject &projectObj);
 
-	/// Injecting the project also seeds assetDirectory, which used to be
-	/// initialised from Globals::project in its member initialiser. The
-	/// isEmpty() guard reproduces the old initialiser-then-setBaseDirectory
-	/// ordering whichever order the two setters are called in.
-	void setProject(Project *p) {
-		project = p;
-		if (p && assetDirectory.isEmpty()) assetDirectory = p->getProjectFolder();
-	}
+	void setProject(Project *p) { project = p; }
 
-    QString assetDirectory;
     bool useAlternativeLocation;
-    void setBaseDirectory(const QString &location) {
-        assetDirectory = location;
-        useAlternativeLocation = true;
-    };
 
     /// Resolve guids against the LIBRARY source rather than the open
-    /// project's pins, with no directory fallback — what a store-asset
-    /// preview wants. The callers that used to say
-    /// setBaseDirectory(<storeRoot>/<guid>/) say this instead: the retired
-    /// legacy view is gone (deep audit 2026-09, area 6) and that directory
-    /// was only ever a pre-CAS fallback keyed on the WRONG asset's guid.
+    /// project's pins — what a store-asset preview wants, and what the
+    /// library-object drop and the fragment rebuild have always used. There
+    /// is no directory in it any more: `setBaseDirectory(dir)` (its old
+    /// spelling) only ever added a `dir + row name` fallback, and with the
+    /// retired legacy store view gone every caller passed the project folder
+    /// — the by-name fallback plan item 15c deleted.
     void setLibrarySource() { useAlternativeLocation = true; }
 
     /// Pin-world byte resolution (ASSET_PIPELINE_SPEC §3.1.5, phase 4):
-    /// project loads resolve guid → project pin → CAS object; preview loads
-    /// (useAlternativeLocation) resolve guid → library source, then the
-    /// explicit directory by recorded name. The flat
-    /// join(projectFolder, name) resolution is GONE.
+    /// project loads resolve guid → project pin → CAS object; library-source
+    /// reads (useAlternativeLocation) resolve guid → library source. No
+    /// folder-by-recorded-name resolution of any kind (plan item 15c).
     QString resolveAssetPath(const QString &guid);
 
     /// One material texture slot's stored guid, healed if it names the model
@@ -199,12 +187,31 @@ public:
     iris::MeshPtr getMesh(QString filePath, int index);
 
     /// `assetGuid` (F5, optional) is the STABLE half of the reference: a
-    /// stored file's name is a sha256, so the path-and-name re-home below
-    /// cannot resolve a clip that came from the asset store once the store has
-    /// moved. When a guid is given it is tried FIRST. Absent in every scene
-    /// written before 2026-09-06, which is why it has a default.
+    /// stored file's name is a sha256, so the persisted path cannot resolve a
+    /// clip that came from the asset store once the store has moved. When a
+    /// guid is given it is tried FIRST. Absent in every scene written before
+    /// 2026-09-06, which is why it has a default.
+    ///
+    /// `ownModelGuid` (optional) is the model row the clip's OWN node subtree
+    /// was built from (ownModelGuidFor): the last resort when the clip has no
+    /// guid and its persisted path is gone — a rigged model's own clips, in
+    /// an import blob or a placed instance, name the model's file and nothing
+    /// else.
     iris::SkeletalAnimationPtr getSkeletalAnimation(QString filePath, QString animName,
-                                                    const QString &assetGuid = QString());
+                                                    const QString &assetGuid = QString(),
+                                                    const QString &ownModelGuid = QString());
+
+    /// The Mesh row, among the meshes of `nodeObj`'s OWN subtree (the node and
+    /// its descendants, as the blob names them — by guid), whose file name is
+    /// `sourceFileName`; empty when none is. This is how a skeletal clip that
+    /// carries no guid finds its model's bytes: by the guids of the meshes it
+    /// animates, compared by file name against THOSE rows only — the rule
+    /// SceneEditService::addMaterialMesh already uses to tell a model's own
+    /// clips from borrowed ones. It replaced a catalog-wide query for any row
+    /// in the project CALLED like the clip's file (plan item 15c), which was
+    /// the only thing that made a placed rigged model keep its animation once
+    /// the file it was imported from was gone.
+    QString ownModelGuidFor(const QJsonObject &nodeObj, const QString &sourceFileName) const;
 };
 
 #endif // SCENEREADER_H

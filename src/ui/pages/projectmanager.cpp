@@ -380,21 +380,24 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
     if (option == QMessageBox::Yes) {
         QDir dirToRemove(QDir(projectFolder + "/Projects").filePath(widget->tileData.guid));
         if (dirToRemove.removeRecursively()) {
+            // The catalog half, by the deleted project's OWN guid (read before
+            // the tile goes). This used to stamp that guid onto the LIVE
+            // Project — which then carried a deleted project's identity around
+            // the desktop — and unlink every row NAME the deletes returned
+            // from `project->getProjectFolder()`: the folder of whatever
+            // project was open last, or the working directory for the startup
+            // placeholder, never the one just removed (that is gone already,
+            // recursively, above). Those names were the flat per-project
+            // copies; the last of them (the default scene's Tile.png, the sky
+            // and material presets, the particle image) became pinned store
+            // objects with plan item 15c, so the loops could only ever delete
+            // the wrong project's files. ProjectService::removeProject (the
+            // verb's door) never had them.
+            const QString guid = widget->tileData.guid;
             dynamicGrid->deleteTile(widget);
-            project->setProjectGuid(widget->tileData.guid);
-            db->deleteProject(project->getProjectGuid());
-
-			// Delete folder and contents
-			for (const auto &files : db->deleteFolderAndDependencies(project->getProjectGuid())) {
-				auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
-				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
-			}
-
-			// Delete asset and dependencies
-			for (const auto &files : db->deleteAssetAndDependencies(project->getProjectGuid())) {
-				auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
-				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
-			}
+            db->deleteProject(guid);
+            db->deleteFolderAndDependencies(guid);
+            db->deleteAssetAndDependencies(guid);
 
             checkForEmptyState();
         } else {

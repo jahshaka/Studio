@@ -673,8 +673,8 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
             QString source = skelAnim->source;
             // THE ASSET GUID (F5, 2026-09-06): the stable half of the reference.
             // Since the CAS a stored file's NAME is its sha256, so the reader's
-            // name-based re-home (fetchAssetGUIDByName) can never find the
-            // catalog row for a clip that came from the store — a project whose
+            // name-based re-home (deleted with plan item 15c) could never find
+            // the catalog row for a clip that came from the store — a project whose
             // store had moved lost every externally loaded clip, silently, at
             // bind pose. The guid survives that. Resolved from the ABSOLUTE
             // form so a re-save of an already-relative source keeps it, and
@@ -846,23 +846,20 @@ QString SceneWriter::assetGuidForTexturePath(const QString &path,
     // nothing, so every save wrote an empty guid and the next open rendered the
     // Particles sample's fire as untextured white billboards and its meshes
     // untextured grey. The oid is the join key that actually exists.
-    if (projectHandle && !projectHandle->getProjectGuid().isEmpty()) {
-        const QString guid = AssetCas::guidForStorePath(
-            QSqlDatabase::database(), AssetStorePaths::root(), path,
-            projectHandle->getProjectGuid(), prefer);
-        if (!guid.isEmpty()) return guid;
-    }
-    // Legacy fallback: files that still sit in a project folder under their own
-    // name (a pre-store project, a material preset's texture registered under
-    // its own file name, the default particle image copied at add time).
-    // Called on the CLASS: this used to be `handle->fetchAssetGUIDByName(...)`
-    // through a static Database* nobody ever assigned (item 7 — the setter's
-    // seven callers were all readers), which only escaped a crash because the
-    // query touches no member. Both the pointer and its setter are gone.
-    if (projectHandle)
-        return Database::fetchAssetGUIDByName(QFileInfo(path).fileName(),
-                                              projectHandle->getProjectGuid());
-    return QString();
+    //
+    // THE ONLY ANSWER (plan item 15c). There used to be a second one: a
+    // by-NAME catalog lookup within the project (Database::fetchAssetGUIDByName)
+    // for files sitting in a project folder under their own name. Its last
+    // producers — the default ground's Tile.png copy, the default particle
+    // image and the material/sky presets — all go through the import pipeline
+    // and a pin now, so every texture a scene can hold is either a store
+    // object (answered here) or a loose file with no guid at all (the material
+    // writer persists that by relative path). Nothing is left for a name to
+    // find — and a name was never an identity: two different files called
+    // "diffuse.png" were one asset to it.
+    if (!projectHandle || projectHandle->getProjectGuid().isEmpty()) return QString();
+    return AssetCas::guidForStorePath(QSqlDatabase::database(), AssetStorePaths::root(), path,
+                                      projectHandle->getProjectGuid(), prefer);
 }
 
 

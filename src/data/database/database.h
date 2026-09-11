@@ -318,7 +318,6 @@ public:
     /// NULL Database* today (SceneWriter's `handle` static is unset in the
     /// preset-apply path), which was undefined behaviour that happened to work;
     /// as a static member that call is merely pointless, not undefined.
-    static QString fetchAssetGUIDByName(const QString &name, const QString &projectGuid);
     QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
     QString fetchMeshObject(const QString &guid, const int ertype, const int eetype);
 

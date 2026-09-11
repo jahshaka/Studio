@@ -31,8 +31,9 @@ public:
     explicit SkyPresets(QWidget *parent = 0);
     ~SkyPresets();
 
-    void addSky(QString path, QString name);
-    void addCubeSky(QString path, QString name);
+    /// One tile: `name` is a ShippedAssets::skyPresets() name, `thumbnail`
+    /// the face shown on it.
+    void addCubeSky(const QString &thumbnail, const QString &name);
 
     void setMainWindow(MainWindow* mainWindow)
     {
@@ -53,7 +54,6 @@ public:
 	}
 
 protected slots:
-    void applySky(QListWidgetItem* item);
     void applyCubeSky(QListWidgetItem* item);
 
 signals:
@@ -61,8 +61,6 @@ signals:
 
 private:
     Ui::SkyPresets *ui;
-    QList<QString> skies;
-    QList<QString> alternativeSkies;
     MainWindow* mainWindow;
 };
 

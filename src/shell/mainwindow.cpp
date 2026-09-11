@@ -66,7 +66,6 @@ For more information see the LICENSE file
 #include <QScreen>
 #include <QHash>
 #include <QHashIterator>
-#include <QBuffer>
 #include <QDirIterator>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -200,6 +199,7 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/clipboardservice.h"
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
+#include "services/shippedassets.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include "ui/style/columnedpage.h"
@@ -442,20 +442,6 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->isBuiltIn = true;
     auto nodeGuid = GUIDManager::generateGUID();
     node->setGUID(nodeGuid);
-    QJsonObject props;
-    props.insert("type", "builtin");
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        project->getProjectGuid(),
-        project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
 
     {
         // Make the default plane a static physics object
@@ -471,53 +457,58 @@ iris::ScenePtr MainWindow::createDefaultScene()
         node->physicsProperty = physicsProperties;
     }
 
-	// The ground's tile. A REAL project (one with a guid and a folder) still
-	// gets the legacy copy + catalog row below, which the writer/reader
-	// project-folder fallback resolves on save/reopen (scenereader.cpp,
-	// materialreader.cpp — the default-assets-through-the-CAS lane deletes all
-	// of it). The STARTUP PLACEHOLDER project (Project::createNew: no guid,
-	// folder = QDir::currentPath()) must not: for years it copied Tile.png
-	// beside the binary and inserted a bare "Tile.png" row with an EMPTY
-	// project guid into the library DB on every launch — the stray Tile.png the
-	// governance notes warn about, and a row per boot nobody could see. It never
-	// saves, so it references the shipped file directly.
-	const QString shippedTile = IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
-	QString tilePath = shippedTile;
-	if (project && !project->getProjectGuid().isEmpty()) {
-	QFile::copy(shippedTile, QDir(project->getProjectFolder()).filePath("Tile.png"));
+    // THE GROUND'S TILE IS A LIBRARY TEXTURE (plan item 15c, audit D35). In a
+    // real project it goes through the one import pipeline the first time any
+    // project needs it (identified by its bytes, so every later project reuses
+    // the same row) and is PINNED here: the material holds the pinned store
+    // object, the writer saves its guid through the CAS and both readers
+    // resolve it pin-first — the same round trip as any texture a user
+    // imports, and a project export carries it. It used to be a QFile::copy
+    // into the project folder plus a bare "Tile.png" row with no stored bytes,
+    // which only the by-name fallbacks in the writer and the readers could
+    // find again; those are deleted with it.
+    //
+    // The STARTUP PLACEHOLDER project (Project::createNew: no guid, no folder)
+    // gets neither the tile row nor the Ground's own Object row: it never
+    // saves, so it renders the shipped file directly and writes nothing to the
+    // library (it used to insert a "Ground" row with an EMPTY project guid on
+    // every selftest and scripted boot).
+    const QString shippedTile = IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
+    QString tilePath = shippedTile;
+    if (project && !project->getProjectGuid().isEmpty()) {
+        QJsonObject props;
+        props.insert("type", "builtin");
+        db->createAssetEntry(
+            nodeGuid, node->getName(),
+            static_cast<int>(ModelTypes::Object),
+            project->getProjectGuid(),
+            project->getProjectGuid(),
+            QString(),
+            QString(),
+            QByteArray(),
+            QJsonDocument(props).toJson(),
+            QByteArray(),
+            QByteArray()
+        );
 
-	auto thumb = ThumbnailManager::createThumbnail(
-		IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 72, 72);
-
-	QByteArray thumbnailBytes;
-	QBuffer buffer(&thumbnailBytes);
-	buffer.open(QIODevice::WriteOnly);
-	QPixmap::fromImage(thumb->thumb).save(&buffer, "PNG");
-
-	const QString tileGuid = GUIDManager::generateGUID();
-	const QString assetGuid = db->createAssetEntry(tileGuid,
-												   "Tile.png",
-												   static_cast<int>(ModelTypes::Texture),
-												   project->getProjectGuid(),
-												   project->getProjectGuid(),
-                                                   QString(),
-                                                   QString(), 
-												   thumbnailBytes);
-
-    db->createDependency(
-        static_cast<int>(ModelTypes::Object),
-        static_cast<int>(ModelTypes::Texture),
-        nodeGuid, assetGuid,
-        project->getProjectGuid()
-    );
-
-    auto assetTexture = new AssetTexture;
-    assetTexture->fileName = "Tile.png";
-    assetTexture->assetGuid = assetGuid;
-    assetTexture->path = QDir(project->getProjectFolder()).filePath("Tile.png");
-    AssetManager::addAsset(assetTexture);
-	tilePath = assetTexture->path;
-	}
+        const ShippedAssets::Pinned tile =
+            ShippedAssets::pinTexture(shippedTile, QStringLiteral("Tile.png"), db, project);
+        if (tile.ok() && !tile.guid.isEmpty()) {
+            db->createDependency(
+                static_cast<int>(ModelTypes::Object),
+                static_cast<int>(ModelTypes::Texture),
+                nodeGuid, tile.guid,
+                project->getProjectGuid()
+            );
+            tilePath = tile.path;
+        } else {
+            // The floor still renders (the shipped file); what is lost is the
+            // guid on save, so say why instead of saving a scene that reopens
+            // untextured with nothing in the log.
+            irisLog("createDefaultScene: the ground tile could not be pinned into the project - "
+                    + tile.error);
+        }
+    }
 
     // The default scene's ground, as a PbrMaterial (HLMS_ADOPTION P4b). The
     // roughness is what the legacy Default shader's shininess 0 already meant

@@ -93,6 +93,30 @@ QString resolvePinnedAssetPath(Project *project, const QString &assetGuid, QStri
 }
 } // namespace
 
+// The texture/material .jaf exporters' payload: every member that HAS stored
+// bytes, copied under its display name. Walks GUIDS (plan item 15c). It used
+// to walk the dependency closure as a list of NAMES and turn each back into a
+// guid with a by-name catalog lookup scoped to the open project — which only
+// ever matched rows stamped with that project (so a pinned library texture,
+// stamped with whichever project imported it, was silently left out of the
+// archive) and matched the wrong row whenever two assets shared a name. A
+// member with no bytes (the material row itself, a DB-only asset) resolves
+// to nothing and is skipped, which is what the old "names without an
+// extension" filter approximated.
+void AssetWidget::copyMemberFilesForExport(const QStringList &members, const QString &writePath)
+{
+    QStringList seen;
+    for (const QString &member : members) {
+        if (member.isEmpty() || seen.contains(member)) continue;
+        seen << member;
+        QString name;
+        const QString assetPath = resolvePinnedAssetPath(project, member, &name);
+        if (assetPath.isEmpty()) continue;
+        if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
+        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", QFileInfo(name).fileName()));
+    }
+}
+
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -1328,7 +1352,7 @@ void AssetWidget::exportTexture()
     }
     manifest.close();
 
-    QStringList fullFileList = db->fetchAssetAndDependencies(guid);
+    QStringList members = db->fetchAssetGUIDAndDependencies(guid);
     auto shaderGuid = QJsonDocument::fromJson(db->fetchAssetData(guid)).object()["guid"].toString();
     bool exportCustomShader = false;
     QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
@@ -1339,16 +1363,8 @@ void AssetWidget::exportTexture()
             break;
         }
     }
-    if (exportCustomShader) fullFileList.append(db->fetchAssetAndDependencies(shaderGuid));
-
-    for (const auto &asset : fullFileList) {
-        // Name-listed dependency files resolve name -> guid -> pinned bytes.
-        const QString depGuid = db->fetchAssetGUIDByName(asset, project->getProjectGuid());
-        const QString assetPath = depGuid.isEmpty() ? QString()
-                                                    : resolvePinnedAssetPath(project, depGuid, nullptr);
-        if (assetPath.isEmpty()) continue;
-        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName()));
-    }
+    if (exportCustomShader) members.append(db->fetchAssetGUIDAndDependencies(shaderGuid));
+    copyMemberFilesForExport(members, writePath);
 
     // ONE zip loop (amendment 7): the shared helper replaces the
     // hand-rolled zip_entry sweep this site duplicated.
@@ -1385,7 +1401,7 @@ void AssetWidget::exportMaterial()
 	}
 	manifest.close();
 
-    QStringList fullFileList = db->fetchAssetAndDependencies(guid);
+    QStringList members = db->fetchAssetGUIDAndDependencies(guid);
     auto shaderGuid = QJsonDocument::fromJson(db->fetchAssetData(guid)).object()["guid"].toString();
     bool exportCustomShader = false;
     QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
@@ -1396,16 +1412,8 @@ void AssetWidget::exportMaterial()
             break;
         }
     }
-    if (exportCustomShader) fullFileList.append(db->fetchAssetAndDependencies(shaderGuid));
-
-    for (const auto &asset : fullFileList) {
-        // Name-listed dependency files resolve name -> guid -> pinned bytes.
-        const QString depGuid = db->fetchAssetGUIDByName(asset, project->getProjectGuid());
-        const QString assetPath = depGuid.isEmpty() ? QString()
-                                                    : resolvePinnedAssetPath(project, depGuid, nullptr);
-        if (assetPath.isEmpty()) continue;
-        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName()));
-    }
+    if (exportCustomShader) members.append(db->fetchAssetGUIDAndDependencies(shaderGuid));
+    copyMemberFilesForExport(members, writePath);
 
     // ONE zip loop (amendment 7): the shared helper replaces the
     // hand-rolled zip_entry sweep this site duplicated.

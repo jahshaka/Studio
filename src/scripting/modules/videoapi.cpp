@@ -105,14 +105,13 @@ QString VideoApi::sourceFor(const QString &videoGuid)
         fail(QStringLiteral("video: no video file or asset '%1'").arg(videoGuid));
         return QString();
     }
-    QSqlDatabase conn = QSqlDatabase::database();
-    QString resolved = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
-                                               host.project->getProjectGuid(), videoGuid);
-    if (resolved.isEmpty())
-        resolved = AssetCas::resolveSource(conn, AssetStorePaths::root(), videoGuid);
-    if (resolved.isEmpty())
-        resolved = QDir(host.project->getProjectFolder()).filePath(record.name);
-    if (!QFileInfo::exists(resolved)) {
+    // The pinned bytes, else the library source (resolvePinned falls back
+    // itself). The projectFolder + row-name join that followed is gone (plan
+    // item 15c): nothing puts asset files in a project folder any more.
+    const QString resolved = AssetCas::resolvePinned(QSqlDatabase::database(),
+                                                     AssetStorePaths::root(),
+                                                     host.project->getProjectGuid(), videoGuid);
+    if (resolved.isEmpty() || !QFileInfo::exists(resolved)) {
         fail(QStringLiteral("video: asset '%1' has no readable file in the store").arg(videoGuid));
         return QString();
     }
