@@ -59,11 +59,7 @@ FloatNodeModel::FloatNodeModel() :
 	valueBox->setAlignment(Qt::AlignCenter);
 	valueBox->setFixedSize(58, 20);
 	valueBox->setKeyboardTracking(false);
-	valueBox->setStyleSheet(
-		"QDoubleSpinBox{border: 1px solid rgba(200, 200, 200, .4); border-radius: 2px;"
-		" padding: 0 2px; background: rgba(0, 0, 0, 0.35); color: rgba(250,250,250,1); font-size: 11px;}"
-		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
-		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}");
+	valueBox->setStyleSheet(StyleSheet::MaterialsNodeValueBox());
 	this->widget = valueBox;
 	this->widgetBesideSockets = true;
 
@@ -236,8 +232,8 @@ TextureNode::TextureNode()
 		emit valueChanged(this, 0);
 	});
 	
-	widget->setStyleSheet("background:rgba(0,0,0,0); color: rgba(250,250,250,.9);");
-	texture->setStyleSheet("background:rgba(0,0,0,0); border : 2px solid rgba(50,50,50,.3);");
+	widget->setStyleSheet(StyleSheet::MaterialsNodeTextureWidgetAlt());
+	texture->setStyleSheet(StyleSheet::MaterialsNodeTextureThumb());
 
 
 	// THE UV INPUT (MATERIAL_UV_NODES_SPEC, owner's ask + D-2 option B1).
@@ -410,12 +406,7 @@ Vector2Node::Vector2Node()
 		emit valueChanged(this, 0);
 	});
 
-	widget->setStyleSheet(
-		"QDoubleSpinBox{border: 2px solid rgba(200, 200, 200, .4); padding: 2px; background: rgba(0, 0, 0, 0.2);}"
-		"QWidget{ background: rgba(0,0,0,0); color: rgba(250,250,250,1); }"
-		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
-		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}"
-	);
+	widget->setStyleSheet(StyleSheet::MaterialsNodeVectorFields());
 
 
 	addOutputSocket(new Vector2SocketModel("Result"));
@@ -497,12 +488,7 @@ Vector3Node::Vector3Node()
 		emit valueChanged(this, 0);
 	});
 
-	widget->setStyleSheet(
-		"QDoubleSpinBox{border: 2px solid rgba(200, 200, 200, .4); padding: 2px; background: rgba(0, 0, 0, 0.2);}"
-		"QWidget{ background: rgba(0,0,0,0); color: rgba(250,250,250,1); }"
-		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
-		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}"
-	);
+	widget->setStyleSheet(StyleSheet::MaterialsNodeVectorFields());
 
 
 	addOutputSocket(new Vector3SocketModel("Result"));
@@ -594,11 +580,7 @@ Vector4Node::Vector4Node()
 		emit valueChanged(this, 0);
 	});
 
-	widget->setStyleSheet(
-		"QDoubleSpinBox{border: 2px solid rgba(200, 200, 200, .4); padding: 2px; background: rgba(0, 0, 0, 0.2);}"
-		"QWidget{ background: rgba(0,0,0,0); color: rgba(250,250,250,1); }"
-		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
-		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}");
+	widget->setStyleSheet(StyleSheet::MaterialsNodeVectorFields());
 
 
 	addOutputSocket(new Vector4SocketModel("Result"));

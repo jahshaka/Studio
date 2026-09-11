@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QGraphicsEffect>
 #include <QMouseEvent>
 #include <QWindow>
+#include "ui/style/stylesheet.h"
 
 ColorView* ColorView::instance = 0;
 
@@ -88,7 +89,17 @@ void ColorView::configureView()
     aWidget->setLayout(aLayout);
 
     stackWidget = new QStackedWidget(this);
-	setStyle(new SliderMoveToMouseClickPositionStyle(this->style()));
+	// A QProxyStyle OWNS its base style: never give it the application's
+	// (under Qlementine, with no sheet on this widget, this->style() IS the app
+	// style — see HFloatSliderWidget). Installed under CLASSIC ONLY (its old
+	// argument); Qlementine already jumps to the click on left press, and a
+	// null-base proxy would be a fresh Fusion instance, not the app style.
+	// Parented so it no longer leaks (theme review SF-1).
+	if (StyleSheet::classicThemeActive()) {
+		auto *moveStyle = new SliderMoveToMouseClickPositionStyle(this->style());
+		moveStyle->setParent(this);
+		setStyle(moveStyle);
+	}
 
     rSlider = new QSlider(Qt::Horizontal, this);
     gSlider = new QSlider(Qt::Horizontal, this);

@@ -25,26 +25,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QPushButton {
-    background-color: #4D4D4D;
-    color: #DEDEDE;
-	padding: 6px;
-    border: 0;
-}
-
-QPushButton:hover {
-    background-color: #555;
-}
-
-QPushButton:pressed {
-    background-color: #444;
-}
-
-QWidget#texture {
-	background-color: #4D4D4D;
-}</string>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
     <number>0</number>

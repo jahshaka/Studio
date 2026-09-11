@@ -36,6 +36,8 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 #include "ui/controls/rowfit.h"
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 
 // TODO - omit height calculation
@@ -44,6 +46,12 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     ui(new Ui::AccordianBladeWidget)
 {
     ui->setupUi(this);
+    // accordionbladewidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::AccordionBladeRoot());
+    // Qlementine: the section header is a band in the theme's neutral colour
+    // with a flat chevron — the style's own button and label on a palette.
+    ThemeRoles::setSurface(ui->bg, ThemeRoles::Surface::Band);
+    ThemeRoles::setFlat(ui->toggle);
 
     stretch = 0;
     setMinimumHeight(ui->bg->height());

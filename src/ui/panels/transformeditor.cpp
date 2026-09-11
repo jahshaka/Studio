@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "commands/transformscenenodecommand.h"
+#include "ui/style/stylesheet.h"
 
 namespace {
 // per-pixel scrub sensitivity
@@ -35,21 +36,10 @@ TransformEditor::TransformEditor(QWidget* parent) :
     QWidget(parent)
 {
     setObjectName("TransformEditor");
-    setStyleSheet(
-        "QWidget#TransformEditor { border: none; }"
-        "QLabel { color: #DEDEDE; background: transparent; }"
-        "QDoubleSpinBox {"
-        "    border-radius: 1px; padding: 3px; background: #292929; color: #DEDEDE;"
-        "    selection-background-color: #3498db;"
-        "}"
-        // axis identity moved from the old X/Y/Z chips to a colored edge per field
-        "DragSpinBox#xpos, DragSpinBox#xrot, DragSpinBox#xscale { border-left: 3px solid #c0392b; }"
-        "DragSpinBox#ypos, DragSpinBox#yrot, DragSpinBox#yscale { border-left: 3px solid #27ae60; }"
-        "DragSpinBox#zpos, DragSpinBox#zrot, DragSpinBox#zscale { border-left: 3px solid #2980b9; }"
-        "QPushButton#resetBtn { background-color: #333; color: #DEDEDE; border: 0;"
-        "                       padding: 4px 16px; border-radius: 1px; }"
-        "QPushButton#resetBtn:hover { background-color: #555; }"
-        "QPushButton#resetBtn:pressed { background-color: #444; }");
+    // Classic's sheet (its axis identity is a coloured border-left per field);
+    // under Qlementine the fields stay the style's own and carry the same
+    // colours as a painted strip (DragSpinBox::setAxisColor, addRow).
+    setStyleSheet(StyleSheet::TransformEditorPanel());
 
     auto grid = new QGridLayout(this);
     grid->setContentsMargins(14, 4, 14, 6);
@@ -117,6 +107,12 @@ void TransformEditor::addRow(QGridLayout* grid, int row, const QString& title,
     x = createField(QString("x") + suffix, perPixelStep);
     y = createField(QString("y") + suffix, perPixelStep);
     z = createField(QString("z") + suffix, perPixelStep);
+
+    if (!StyleSheet::classicThemeActive()) {
+        x->setAxisColor(QColor(0xc0, 0x39, 0x2b));
+        y->setAxisColor(QColor(0x27, 0xae, 0x60));
+        z->setAxisColor(QColor(0x29, 0x80, 0xb9));
+    }
 
     grid->addWidget(x, row, 1);
     grid->addWidget(y, row, 2);

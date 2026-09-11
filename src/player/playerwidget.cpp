@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QVBoxLayout>
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 
 PlayerWidget::PlayerWidget(QWidget* parent, EnginePlayerView* view) :
@@ -28,18 +30,9 @@ PlayerWidget::PlayerWidget(QWidget* parent, EnginePlayerView* view) :
 void PlayerWidget::createUI()
 {
 	auto playerControls = new QWidget;
-	playerControls->setStyleSheet("background: #1A1A1A");
+	playerControls->setStyleSheet(StyleSheet::PlayerControlsBar());
 
 	auto playerControlsLayout = new QHBoxLayout;
-	/*
-	auto restartBtn = new QPushButton(playerControls);
-	restartBtn->setCursor(Qt::PointingHandCursor);
-	restartBtn->setToolTip("Restart playback");
-	restartBtn->setToolTipDuration(-1);
-	restartBtn->setStyleSheet("background: transparent");
-	restartBtn->setIcon(QIcon(":/icons/rotate-to-right.svg"));
-	restartBtn->setIconSize(QSize(16, 16));
-	*/
 
 	playIcon = QIcon(":/icons/g_play.svg");
 	stopIcon = QIcon(":/icons/g_stop.svg");
@@ -48,34 +41,17 @@ void PlayerWidget::createUI()
 	playBtn->setCursor(Qt::PointingHandCursor);
 	playBtn->setToolTip("Play the scene");
 	playBtn->setToolTipDuration(-1);
-	playBtn->setStyleSheet("background: transparent");
+	playBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
+	ThemeRoles::setFlat(playBtn);
 	playBtn->setIcon(playIcon);
 	playBtn->setIconSize(QSize(24, 24));
-	/*
-	auto stopBtn = new QPushButton(playerControls);
-	stopBtn->setCursor(Qt::PointingHandCursor);
-	stopBtn->setToolTip("Stop playback");
-	stopBtn->setToolTipDuration(-1);
-	stopBtn->setStyleSheet("background: transparent");
-	stopBtn->setIcon(QIcon(":/icons/g_stop.svg"));
-	stopBtn->setIconSize(QSize(16, 16));
-	*/
 
     playerControlsLayout->setSpacing(12);
     playerControlsLayout->setContentsMargins(6, 6, 6, 6);
     playerControlsLayout->addStretch();
-	//playerControlsLayout->addWidget(restartBtn);
 	playerControlsLayout->addWidget(playBtn);
-	//playerControlsLayout->addWidget(stopBtn);
 	playerControlsLayout->addStretch();
 
-	/*
-	connect(restartBtn, &QPushButton::pressed, [playBtn]() {
-		playBtn->setToolTip("Pause the scene");
-		playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-
-	});
-    */
 
 	connect(playBtn, &QPushButton::pressed, [this]() {
         onPlayScene();

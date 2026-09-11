@@ -131,6 +131,17 @@ int main(int argc, char **argv)
     CHECK(tray.value("consoleVisible").toBool() == false,
           "…and there is no Console tab until the console is asked for");
     CHECK(tray.value("tabs").toArray().size() == 1, "one tab in the bar to begin with");
+    // THE CORNER (owner, 2026-09-12): the right column runs to the bottom of the
+    // editor and the tray stops at its edge instead of running under it.
+    std::printf("    corner: trayRight=%d rightColumnLeft=%d rightColumnBottom=%d areaBottom=%d\n",
+                tray.value("trayRight").toInt(), tray.value("rightColumnLeft").toInt(),
+                tray.value("rightColumnBottom").toInt(), tray.value("areaBottom").toInt());
+    CHECK(tray.contains("trayRight") && tray.contains("rightColumnLeft"),
+          "the corner geometry is reported (tray and right column both visible)");
+    CHECK(tray.value("trayRight").toInt() < tray.value("rightColumnLeft").toInt(),
+          "the tray stops at the right column's edge — it does not run under it");
+    CHECK(tray.value("rightColumnBottom").toInt() >= tray.value("areaBottom").toInt() - 2,
+          "the right column runs to the bottom of the editor");
     // ONE TAB BAR PER CONCEPT (smoke L10 item 6). The tray's dock sits tabbed
     // with the Timeline, so Qt draws a SECOND tab bar at the bottom out of the
     // two docks' titles — which read "Timeline | Asset Browser" under a tray

@@ -24,6 +24,10 @@ For more information see the LICENSE file
 #include <QMenu>
 #include <QMetaObject>
 #include <QPushButton>
+#include <QSet>
+#include <QStyleOptionTab>
+#include <QStyleOptionViewItem>
+#include <QTabBar>
 #include <QWidgetAction>
 
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -31,6 +35,23 @@ For more information see the LICENSE file
 static bool s_classicActive = false;
 
 namespace {
+
+// Every sheet ThemeManager hands out, remembered by value. The live theme walk
+// (app.styleSheets, the theme.sheets suite) asks isThemeSheet() of every
+// non-empty widget sheet it finds: a sheet that came from here is the theme's
+// own chrome; anything else under Qlementine is a raw sheet that interposes
+// QStyleSheetStyle over the style — the regression the walk exists to catch.
+QSet<QString> &themeSheetRegistry()
+{
+    static QSet<QString> sheets;
+    return sheets;
+}
+
+QString themeSheet(const QString &css)
+{
+    if (!css.isEmpty()) themeSheetRegistry().insert(css);
+    return css;
+}
 
 // (The Qt 6.10 + Qlementine combo-popup stack overflow used to be worked around
 // here, by deferring the popup item view's polish one event-loop tick. It is
@@ -98,7 +119,98 @@ public:
         if (element == QStyle::CE_FocusFrame && w && w->window()
             && !w->window()->testAttribute(Qt::WA_KeyboardFocusChange))
             return;
+        QStyleOptionTab fixed;
+        if (element == QStyle::CE_TabBarTab && correctTabPosition(opt, w, &fixed)) {
+            oclero::qlementine::QlementineStyle::drawControl(element, &fixed, p, w);
+            return;
+        }
+        if (element == QStyle::CE_ItemViewItem && isIconOverText(opt)) {
+            QCommonStyle::drawControl(element, opt, p, w);
+            return;
+        }
         oclero::qlementine::QlementineStyle::drawControl(element, opt, p, w);
+    }
+
+    // ICON-OVER-CAPTION ITEMS (theme sweep, 2026-09-11). Qlementine lays every
+    // item-view item out as icon-left/text-right and sizes it that way —
+    // it ignores QStyleOptionViewItem::decorationPosition — so an IconMode list
+    // (the Materials presets, the node palette, the Sample Scenes tiles) lost
+    // its captions: squeezed beside the icon and elided to "Lo…", or clipped
+    // away entirely. Such items get QCommonStyle's layout (which honours Top),
+    // while its background/selection still comes from Qlementine through
+    // proxy()->drawPrimitive(PE_PanelItemViewItem). The Classic sheets had
+    // hidden this: QStyleSheetStyle laid those items out itself.
+    static bool isIconOverText(const QStyleOption *opt)
+    {
+        const auto *item = qstyleoption_cast<const QStyleOptionViewItem *>(opt);
+        return item && item->decorationPosition == QStyleOptionViewItem::Top;
+    }
+
+    // TAB METRICS FROM THE TAB BAR ITSELF (theme sweep, 2026-09-11). Qlementine
+    // insets the first and last tab of a bar by one spacing unit, and reads
+    // "first/last" from the option's `position` in three places that must agree
+    // — the tab's size (CT_TabBarTab), its text rect (SE_TabBarTabText, which is
+    // what QTabBar elides the label against) and its painting. QTabBar fills
+    // `position` from cached first/last-visible indices, and those can be stale
+    // for the layout pass that runs when a hidden bar is shown again: the
+    // editor's Timeline | Tray dock bar, after a trip to the Desktop, sized
+    // Timeline as a lone tab and Tray as a middle one, then painted Tray as the
+    // LAST tab — its text rect came out 8 px short and "Tray" drew as "T…".
+    // (The root sheet mainwindow.ui carried until this sweep hid it: the
+    // stylesheet style computed tab sizes itself.) Recomputing the position
+    // from the bar's actual visible tabs makes all three agree. A tab being
+    // DRAGGED is painted with position Moving (Qt 6.10, measured in the theme
+    // review) and is left alone, as is the lone-tab drag pixmap older Qt used
+    // (OnlyOneTab + NotAdjacent). [Upstream-fix candidate: tabExtraPadding in the vendored
+    // QlementineStyle.cpp could do this itself.]
+    static bool correctTabPosition(const QStyleOption *opt, const QWidget *w, QStyleOptionTab *out)
+    {
+        const auto *tab = qstyleoption_cast<const QStyleOptionTab *>(opt);
+        const auto *bar = qobject_cast<const QTabBar *>(w);
+        if (!tab || !bar || tab->tabIndex < 0 || tab->tabIndex >= bar->count()) return false;
+        if (tab->position == QStyleOptionTab::Moving) return false;
+        if (tab->position == QStyleOptionTab::OnlyOneTab
+            && tab->selectedPosition == QStyleOptionTab::NotAdjacent)
+            return false;
+        int first = -1, last = -1;
+        for (int i = 0; i < bar->count(); ++i) {
+            if (!bar->isTabVisible(i)) continue;
+            if (first < 0) first = i;
+            last = i;
+        }
+        if (first < 0) return false;
+        const int i = tab->tabIndex;
+        const QStyleOptionTab::TabPosition position =
+            first == last ? QStyleOptionTab::OnlyOneTab
+            : i == first  ? QStyleOptionTab::Beginning
+            : i == last   ? QStyleOptionTab::End
+                          : QStyleOptionTab::Middle;
+        if (position == tab->position) return false;
+        *out = *tab;
+        out->position = position;
+        return true;
+    }
+
+    QSize sizeFromContents(ContentsType type, const QStyleOption *opt, const QSize &size,
+                           const QWidget *w) const override
+    {
+        QStyleOptionTab fixed;
+        if (type == QStyle::CT_TabBarTab && correctTabPosition(opt, w, &fixed))
+            return oclero::qlementine::QlementineStyle::sizeFromContents(type, &fixed, size, w);
+        if (type == QStyle::CT_ItemViewItem && isIconOverText(opt))
+            return QCommonStyle::sizeFromContents(type, opt, size, w);
+        return oclero::qlementine::QlementineStyle::sizeFromContents(type, opt, size, w);
+    }
+
+    QRect subElementRect(SubElement element, const QStyleOption *opt,
+                         const QWidget *w) const override
+    {
+        QStyleOptionTab fixed;
+        if ((element == QStyle::SE_TabBarTabText || element == QStyle::SE_TabBarTabLeftButton
+             || element == QStyle::SE_TabBarTabRightButton)
+            && correctTabPosition(opt, w, &fixed))
+            return oclero::qlementine::QlementineStyle::subElementRect(element, &fixed, w);
+        return oclero::qlementine::QlementineStyle::subElementRect(element, opt, w);
     }
 
     // Same rule for the OTHER focus-ring path: widgets carrying a stylesheet
@@ -207,24 +319,24 @@ void ThemeManager::applyAtStartup(QApplication &app)
 QString ThemeManager::chromeButtonSheet()
 {
     if (s_classicActive) return QString();
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
         "QPushButton, QToolButton { background: #444; color: #eee;"
         " padding: 8px 12px; border-radius: 4px; }"
         "QPushButton:hover, QToolButton:hover { background: #555; }"
         "QPushButton:pressed, QToolButton:pressed { background: #3a3a3a; }"
         "QPushButton:checked, QToolButton:checked { background: #2980b9; }"
-        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
+        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }"));
 }
 
 QString ThemeManager::chromeAccentButtonSheet()
 {
     if (s_classicActive) return QString();
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
         "QPushButton { background: #3498db; color: white; padding: 8px 12px;"
         " border-radius: 4px; }"
         "QPushButton:hover { background: #4ba3e0; }"
         "QPushButton:pressed { background: #2884c4; }"
-        "QPushButton:disabled { background: #24384a; color: #7d8fa3; }");
+        "QPushButton:disabled { background: #24384a; color: #7d8fa3; }"));
 }
 
 QString ThemeManager::chromeCompactButtonSheet()
@@ -232,13 +344,13 @@ QString ThemeManager::chromeCompactButtonSheet()
     if (s_classicActive) return QString();
     // chromeButtonSheet at reduced height: identical palette, radius and
     // 12px side gutters — only the vertical padding shrinks.
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
         "QPushButton, QToolButton { background: #444; color: #eee;"
         " padding: 3px 12px; border-radius: 4px; }"
         "QPushButton:hover, QToolButton:hover { background: #555; }"
         "QPushButton:pressed, QToolButton:pressed { background: #3a3a3a; }"
         "QPushButton:checked, QToolButton:checked { background: #2980b9; }"
-        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
+        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }"));
 }
 
 QColor ThemeManager::tileCaptionBarColor(bool openProject)
@@ -260,13 +372,13 @@ QString ThemeManager::tileCaptionBarSheet(int fontSize, int cornerRadius, bool o
 {
     // Geometry identical for both states (owner-tuned: the top of the bar hugs
     // the text, the bottom gets two extra pixels) — only the background moves.
-    return QStringLiteral("background-color: %1; color: white; font-size: %2px;"
+    return themeSheet(QStringLiteral("background-color: %1; color: white; font-size: %2px;"
                           " padding-bottom: 2px;"
                           " border-bottom-left-radius: %3px;"
                           " border-bottom-right-radius: %3px;")
         .arg(tileCaptionBarColor(openProject).name(),
              QString::number(fontSize),
-             QString::number(cornerRadius));
+             QString::number(cornerRadius)));
 }
 
 QString ThemeManager::headerGlyphButtonSheet(const QFont &iconFont)
@@ -284,14 +396,14 @@ QString ThemeManager::headerGlyphButtonSheet(const QFont &iconFont)
     // whose sheet is re-applied after construction (updateTopMenuStates),
     // ended up rendering at the inherited 17px beside two 28px siblings. A
     // sheet-declared font wins every repolish, so all three stay identical.
-    return QStringLiteral(
+    return themeSheet(QStringLiteral(
                "QPushButton { background: transparent; border: none; padding: 0;"
                " font-family: \"%1\"; font-size: %2px;"
                " color: rgba(255,255,255,0.9); }"
                "QPushButton:hover { color: rgba(255,255,255,1.0); }"
                "QPushButton:pressed { color: rgba(255,255,255,0.7); }")
         .arg(iconFont.family())
-        .arg(iconFont.pixelSize() > 0 ? iconFont.pixelSize() : 28);
+        .arg(iconFont.pixelSize() > 0 ? iconFont.pixelSize() : 28));
 }
 
 void ThemeManager::applyHeaderGlyphButton(QPushButton *button, const QFont &iconFont)
@@ -336,12 +448,73 @@ void ThemeManager::switchifyMenuToggles(QMenu *menu)
     }
 }
 
-void ThemeManager::clearClassicSheets(QWidget *root)
+QString ThemeManager::topMenuButtonSheet(TopMenuState state)
 {
-    if (s_classicActive || !root) return;
+    if (s_classicActive) return QString();
+    // The geometry the header was designed around (the archived root sheet's
+    // #worlds_menu block): 17px labels, 14px padding, a 4px bottom band that
+    // keeps the header's height, no plate.
+    const char *color = "#eeeeee";
+    const char *hover = "#ffffff";
+    if (state == TopMenuState::Active) { color = "#3498db"; hover = "#4ba3e0"; }
+    if (state == TopMenuState::Disabled) { color = "#63676d"; hover = "#63676d"; }
+    return themeSheet(QStringLiteral(
+               "QPushButton { background: transparent; border: none;"
+               " border-bottom: 4px solid transparent; border-radius: 0px;"
+               " padding: 14px; font-size: 17px; color: %1; }"
+               "QPushButton:hover { color: %2; }")
+        .arg(QLatin1String(color), QLatin1String(hover)));
+}
 
-    if (!root->styleSheet().isEmpty()) root->setStyleSheet(QString());
-    const auto children = root->findChildren<QWidget *>();
-    for (auto *w : children)
-        if (!w->styleSheet().isEmpty()) w->setStyleSheet(QString());
+void ThemeManager::applyTopMenuButton(QPushButton *button, TopMenuState state)
+{
+    if (!button) return;
+    if (s_classicActive) {
+        button->setStyleSheet(state == TopMenuState::Active     ? StyleSheet::TopMenuSelected()
+                              : state == TopMenuState::Disabled ? StyleSheet::TopMenuDisabled()
+                                                                : StyleSheet::TopMenuUnselected());
+        return;
+    }
+    button->setStyleSheet(topMenuButtonSheet(state));
+}
+
+QString ThemeManager::sampleTileListSheet()
+{
+    return themeSheet(QStringLiteral(
+        "QListWidget { background: transparent; border: none; }"
+        "QListWidget::item { background: black; color: white; }"
+        "QListWidget::item:selected { background: #3498db; color: white; }"));
+}
+
+QString ThemeManager::accentGlyphButtonSheet()
+{
+    // Verbatim the sheet the Assets page's "+" carried in both themes before
+    // the sweep (Classic keeps it bit-for-bit through here).
+    return themeSheet(QStringLiteral(
+        "QPushButton { background: #3498db; color: #FFFFFF; border-radius: 2px;"
+        "              padding: 0; margin: 0; font-size: 16px; font-weight: bold; }"
+        "QPushButton:hover { background: #4EA8E5; }"));
+}
+
+QString ThemeManager::dropZoneSheet(const QString &paneName, const QString &labelName)
+{
+    if (s_classicActive) return QString();
+    return themeSheet(QStringLiteral(
+               "#%1 { border: 2px dashed #4a4a4a; border-radius: 6px; }"
+               // the caption gives the target its height — a real target, not a strip
+               "#%2 { padding: 24px 8px; }")
+        .arg(paneName, labelName));
+}
+
+void ThemeManager::applyWindowFont(QWidget *window)
+{
+    if (!s_classicActive || !window) return;
+    QFont font;
+    font.setFamily(font.defaultFamily());
+    window->setFont(font);
+}
+
+bool ThemeManager::isThemeSheet(const QString &sheet)
+{
+    return !sheet.isEmpty() && themeSheetRegistry().contains(sheet);
 }

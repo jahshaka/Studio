@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QFileDialog>
 #include "basepropertywidget.h"
+#include "ui/style/stylesheet.h"
 
 PropertyWidgetBase::PropertyWidgetBase() : QWidget()
 {
@@ -443,8 +444,8 @@ WidgetTexture::WidgetTexture()
 	
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->addWidget(texture);
-	setStyleSheet("background:rgba(0,0,0,0); color: rgba(250,250,250,.9); padding: 0px;");
-	texture->setStyleSheet("background:rgba(0,0,0,0); border : 2px solid rgba(50,50,50,.3);");
+	setStyleSheet(StyleSheet::MaterialsNodeTextureWidget());
+	texture->setStyleSheet(StyleSheet::MaterialsNodeTextureThumb());
 }
 
 WidgetTexture::~WidgetTexture()

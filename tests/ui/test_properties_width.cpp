@@ -39,6 +39,7 @@ For more information see the LICENSE file
 // part of every row's minimum) — the ui.selection_cost shape. Offscreen QPA.
 
 #include <QApplication>
+#include <QThread>
 #include <QComboBox>
 #include <QFocusFrame>
 #include <QEvent>
@@ -202,6 +203,37 @@ int main(int argc, char **argv)
     };
     for (int i = 0; i < 3; ++i) turn();
 
+    // SETTLED, NOT "TWO TURNS" (theme sweep, 2026-09-11). A rebuilt panel
+    // reaches its final layout through DEFERRED work — under Qlementine each
+    // combo gets its item delegate one event-loop turn after its popup
+    // container exists (the vendored ComboboxItemViewFilter), which re-sizes
+    // the combo and re-requests its row's layout. A fixed two turns raced that
+    // chain: on a loaded box a freshly shown row was measured before its
+    // layout had ever run (its combo still at its pre-layout 200x18, a row
+    // layout of 0x0 — healed a few milliseconds later). Turn until every
+    // visible row's geometry holds still between two turns (at least two, at
+    // most 25), so the suite measures the layout the user sees.
+    auto geometryPrint = [&]() {
+        QString print;
+        for (QWidget *c : panel->findChildren<QWidget *>())
+            if (c->isVisible()) {
+                const QRect g(c->mapTo(panel, QPoint(0, 0)), c->size());
+                print += QStringLiteral("%1,%2,%3,%4;").arg(g.x()).arg(g.y()).arg(g.width()).arg(g.height());
+            }
+        return print;
+    };
+    auto settle = [&]() {
+        turn();
+        QString before = geometryPrint();
+        for (int i = 0; i < 25; ++i) {
+            QThread::msleep(5);   // let zero/short timers come due on a loaded box
+            turn();
+            const QString after = geometryPrint();
+            if (after == before && i >= 1) return;
+            before = after;
+        }
+    };
+
     struct Sel { const char *name; iris::SceneNodePtr node; };
     const QVector<Sel> selections = {
         { "world (root)", scene->getRootNode() },
@@ -225,11 +257,11 @@ int main(int argc, char **argv)
     int elidedSeen = 0;
     for (int w : widths) {
         host.resize(w, 900);
-        for (int i = 0; i < 2; ++i) turn();
+        settle();
 
         for (const Sel &sel : selections) {
             panel->setSceneNode(sel.node);
-            for (int i = 0; i < 2; ++i) turn();
+            settle();
             // MEASURED PER SELECTION, not once per width: a taller panel raises
             // the VERTICAL scrollbar, which takes 12 px off the viewport. The
             // budget is whatever the panel actually has at this moment.

@@ -27,6 +27,7 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
@@ -101,7 +102,10 @@ set_tests_properties(ui.property_anim PROPERTIES
 # played, playing still decodes the fixture, stop()-before-play is safe.
 find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 add_executable(test_media_lazy test_media_lazy.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/videopreviewwidget.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/videopreviewwidget.cpp
+    # the widget's Classic sheet lives in the theme archive (theme sweep)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
 set_target_properties(test_media_lazy PROPERTIES
     AUTOMOC ON
     CXX_STANDARD 17
@@ -165,7 +169,10 @@ jah_lsan_blocked(ui.material_panel)
 # about setMask being quiet (the panel calls it while selecting a node).
 # Widgets only — no document, no engine, no display.
 add_executable(test_light_channels test_light_channels.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
+    # its warning note's Classic sheet lives in the theme archive (theme sweep)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
 set_target_properties(test_light_channels PROPERTIES
     AUTOMOC ON
     CXX_STANDARD 17
@@ -242,6 +249,7 @@ add_executable(test_rayon_panel
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
@@ -353,6 +361,7 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
@@ -465,6 +474,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
@@ -587,6 +597,7 @@ add_executable(test_properties_width
     ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
@@ -645,6 +656,7 @@ add_executable(test_project_tile test_project_tile.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/renameprojectdialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_project_tile PROPERTIES
@@ -673,7 +685,10 @@ set_tests_properties(ui.project_tile PROPERTIES
 # test is deliberately NOT at the screen's origin, which is the only place the
 # old "move a global point as a local one" arrangement looked right.
 add_executable(test_toast test_toast.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/toast.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/toast.cpp
+    # the widget's Classic sheet lives in the theme archive (theme sweep)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
 set_target_properties(test_toast PROPERTIES
     AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -725,6 +740,7 @@ add_executable(test_tree_multiselect
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp

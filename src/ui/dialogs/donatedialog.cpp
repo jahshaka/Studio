@@ -12,10 +12,19 @@ For more information see the LICENSE file
 #include "ui/dialogs/donatedialog.h"
 #include "ui_donate.h"
 #include "data/settingsmanager.h"
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 DonateDialog::DonateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::DonateDialog)
 {
     ui->setupUi(this);
+    // donate.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::DonateDialogRoot());
+    ui->widget_background->setStyleSheet(StyleSheet::DonateDialogBackground());
+    ui->ctrl->setStyleSheet(StyleSheet::DonateDialogCtrl());
+    // Qlementine: the same splash art, as the background's palette brush
+    ThemeRoles::setBackgroundPixmap(ui->widget_background,
+                                    QPixmap(QStringLiteral(":/images/splashv3.png")));
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint | Qt::FramelessWindowHint);
 
     connect(ui->checkBox, SIGNAL(released()), this, SLOT(saveAndClose()));

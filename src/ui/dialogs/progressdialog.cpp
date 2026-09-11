@@ -14,10 +14,16 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QWindow>
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 ProgressDialog::ProgressDialog(QWidget *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
     ui->setupUi(this);
+    // progressdialog.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::ProgressDialogRoot());
+    ui->stageLabel->setStyleSheet(StyleSheet::ProgressDialogStageLabel());
+    ThemeRoles::setTone(ui->stageLabel, ThemeRoles::Tone::Muted);
     // Qt::Dialog keeps this a top-level window now that callers parent us
     // (bare FramelessWindowHint has no window-type bit — a parented dialog
     // would collapse into an embedded child widget). Parenting matters:

@@ -10,12 +10,16 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "ui/dialogs/aboutdialog.h"
 #include "ui_aboutdialog.h"
+#include "ui/style/stylesheet.h"
 
 AboutDialog::AboutDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::AboutDialog)
 {
     ui->setupUi(this);
+    // aboutdialog.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::AboutDialogRoot());
+    ui->textBrowser->setStyleSheet(StyleSheet::AboutDialogTextBrowser());
     this->setWindowTitle("About");
 
     connect(ui->okButton,SIGNAL(clicked(bool)),this,SLOT(close()));

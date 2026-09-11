@@ -20,6 +20,28 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <algorithm>
+#include "ui/style/stylesheet.h"
+#include <QPixmap>
+
+namespace {
+// The key's colour ON its button. Classic paints the whole button with a sheet
+// (StyleSheet::ParticleRampSwatch); under Qlementine a sheet would hand the
+// button to QStyleSheetStyle, so the button stays the style's own and carries
+// the colour as an icon chip (opaque — the ramp's alpha reads in the strip).
+void paintSwatch(QPushButton *swatch, const QColor &colour)
+{
+    swatch->setStyleSheet(StyleSheet::ParticleRampSwatch(colour));
+    if (StyleSheet::classicThemeActive()) return;
+    QPixmap chip(28, 12);
+    chip.fill(QColor(colour.rgb()));
+    QPainter p(&chip);
+    p.setPen(QColor(0, 0, 0, 120));
+    p.drawRect(chip.rect().adjusted(0, 0, -1, -1));
+    p.end();
+    swatch->setIcon(QIcon(chip));
+    swatch->setIconSize(chip.size());
+}
+} // namespace
 
 namespace {
 
@@ -142,8 +164,7 @@ void ParticleColourRampWidget::rebuildRows()
         auto *swatch = new QPushButton(row);
         swatch->setFixedWidth(48);
         swatch->setAutoFillBackground(true);
-        swatch->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #222;")
-                                  .arg(mStops[i].colour.name()));
+        paintSwatch(swatch, mStops[i].colour);
         swatch->setToolTip(tr("The key's colour. Alpha fades the particle out."));
         connect(swatch, &QPushButton::clicked, this, [this, i, swatch]() {
             if (i >= mStops.size()) return;
@@ -151,8 +172,7 @@ void ParticleColourRampWidget::rebuildRows()
                 mStops[i].colour, this, tr("Particle colour"), QColorDialog::ShowAlphaChannel);
             if (!picked.isValid()) return;
             mStops[i].colour = picked;
-            swatch->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #222;")
-                                      .arg(picked.name()));
+            paintSwatch(swatch, picked);
             update();
             emit changed();
         });

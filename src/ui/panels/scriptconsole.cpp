@@ -23,6 +23,8 @@ For more information see the LICENSE file
 
 #include "scripting/scriptengine.h"
 #include "ui/style/panelmetrics.h"
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
     : QWidget(parent), mEngine(engine)
@@ -74,14 +76,11 @@ ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
     layout->addWidget(mLog, 1);
     layout->addLayout(inputRow);
 
-    setStyleSheet(QStringLiteral(
-        "#ScriptConsole { background-color: #151515; }"
-        "QPlainTextEdit { background-color: #1a1a1a; color: #e6e6e6;"
-        "  font-family: 'DejaVu Sans Mono', Consolas, monospace; font-size: 12px;"
-        "  border: 1px solid #262626; }"
-        "QPushButton { background-color: #2b2b2b; color: #e6e6e6; border: 1px solid #3a3a3a;"
-        "  padding: 4px 10px; }"
-        "QPushButton:hover { background-color: #3a3a3a; }"));
+    // Classic's console sheet; under Qlementine the log and the input are the
+    // style's own, in the theme's monospace face.
+    setStyleSheet(StyleSheet::ScriptConsolePanel());
+    ThemeRoles::setMonospace(mLog, 12);
+    ThemeRoles::setMonospace(mInput, 12);
 
     connect(runBtn, &QPushButton::clicked, this, &ScriptConsole::runInput);
     connect(fileBtn, &QPushButton::clicked, this, &ScriptConsole::chooseAndRunFile);

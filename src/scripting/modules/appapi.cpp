@@ -18,6 +18,7 @@ For more information see the LICENSE file
 
 #include "shell/mainwindow.h"
 #include "ui/style/panelmetrics.h"
+#include "ui/style/thememanager.h"
 #include "ui/pages/projectmanager.h"
 #include "scripting/apiregistry.h"
 #include "services/engineerrorpump.h"
@@ -34,8 +35,11 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "services/ogresamples.h"
 #include "irisgl/core/irisutils.h"
+#include <QApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QStyle>
+#include <QWidget>
 #include <QScreen>
 #include <QRect>
 
@@ -376,6 +380,38 @@ QVector<VerbInfo> AppApi::verbs() const
           "1920x1080 display — ui.window_minimum). Remembered exactly like a user's drag would be "
           "(the geometry is saved on quit). Leaves full screen or maximized first. A layout settles on the "
           "event loop, so measure columns in a LATER request than the resize.",
+          Needs::Window },
+        { "theme", "app.theme() -> {id, classic, style, font:{family, pointSize, pixelSize}}",
+          "The theme this session runs (appearance/theme, applied at startup — a change takes "
+          "effect at the next launch): 'qlementine-dark' (the default: the Qlementine QStyle owns "
+          "every stock widget) or 'classic' (the archived per-widget stylesheets). `style` is the "
+          "QStyle's class; `font` is the application font the theme set.",
+          Needs::Window },
+        { "styleSheets", "app.styleSheets({visibleOnly?, window?, full?}) -> {theme, classic, widgets, styled, "
+                         "themeOwned, raw, sheets:[{path, class, name, window, visible, owner, sheet}]}",
+          "THE LIVE THEME WALK (theme sweep, lane 16): every widget alive right now with a non-empty "
+          "styleSheet(), classified. owner 'theme' = a sheet ThemeManager handed out (the theme's own "
+          "chrome); 'raw' = anything else. Under Qlementine a raw sheet interposes QStyleSheetStyle "
+          "over the style for that widget and its whole subtree — the dark-on-dark / platform-light "
+          "hybrids the sweep removed — so the theme.sheets suite asserts zero raw sheets outside a "
+          "named allowlist on every page and dialog. Under Classic every sheet is by design and the "
+          "counts are informational. visibleOnly limits the walk to shown widgets; window limits it "
+          "to one top-level window by objectName. `sheet` is the first 160 characters, simplified "
+          "(full: the whole sheet, verbatim — what a before/after comparison of the Classic theme "
+          "diffs).",
+          Needs::Window },
+        { "dialogs", "app.dialogs() -> [{name, open}]",
+          "The dialogs app.dialog can open, by name, and whether each is open right now.",
+          Needs::Window },
+        { "dialog", "app.dialog(name, open=true) -> {name, open, window, title, x, y, width, height}",
+          "Opens (or, with open=false, closes) one of the app's dialogs by name — see app.dialogs. "
+          "INSPECTION ONLY: shown with show(), never exec() (a verb cannot wait inside exec()), so "
+          "there is no result to consume — a dialog whose production caller reads its result after "
+          "exec() (newProject, renameProject, getName) shows an accept button that does NOTHING "
+          "here. A dialog that sets its own window modality (Preferences is application-modal) is "
+          "still modal. For the theme walk (a dialog built on demand exists only while it is open) "
+          "and for rigs that photograph the UI — not for asking the user anything. Returns {} for "
+          "an unknown name.",
           Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
@@ -1046,5 +1082,133 @@ QVariantMap AppApi::waitForTextures()
     out.insert("waitedMs", engine->waitForTextureLoads());
     out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
     out.insert("doneStreaming", engine->texturesDoneStreaming());
+    return out;
+}
+
+QVariantMap AppApi::theme()
+{
+    QVariantMap out;
+    out["id"] = ThemeManager::classicActive() ? ThemeManager::classicId()
+                                              : ThemeManager::qlementineDarkId();
+    out["classic"] = ThemeManager::classicActive();
+    if (QStyle *style = QApplication::style())
+        out["style"] = QString::fromLatin1(style->metaObject()->className());
+    const QFont font = QApplication::font();
+    out["font"] = QVariantMap{ { "family", font.family() },
+                               { "pointSize", font.pointSizeF() },
+                               { "pixelSize", font.pixelSize() } };
+    return out;
+}
+
+namespace {
+
+// "MainWindow/centralWidget/AssetView/QLabel": objectNames where they exist,
+// class names where they do not — enough to find the widget in the source.
+QString widgetPath(const QWidget *w)
+{
+    QStringList parts;
+    for (const QWidget *p = w; p; p = p->parentWidget()) {
+        const QString name = p->objectName();
+        parts.prepend(name.isEmpty() ? QString::fromLatin1(p->metaObject()->className()) : name);
+        if (p->isWindow()) break;
+    }
+    return parts.join(QLatin1Char('/'));
+}
+
+QString windowName(const QWidget *w)
+{
+    const QWidget *win = w->window();
+    if (!win) return QString();
+    return win->objectName().isEmpty() ? QString::fromLatin1(win->metaObject()->className())
+                                       : win->objectName();
+}
+
+} // namespace
+
+QVariantMap AppApi::styleSheets(const QVariantMap &options)
+{
+    const bool visibleOnly = options.value("visibleOnly").toBool();
+    const QString onlyWindow = options.value("window").toString();
+    const bool full = options.value("full").toBool();
+
+    QVariantList sheets;
+    int widgets = 0, styled = 0, themeOwned = 0, raw = 0;
+    const QWidgetList all = QApplication::allWidgets();
+    for (QWidget *w : all) {
+        if (visibleOnly && !w->isVisible()) continue;
+        if (!onlyWindow.isEmpty() && windowName(w) != onlyWindow) continue;
+        ++widgets;
+        const QString sheet = w->styleSheet();
+        if (sheet.trimmed().isEmpty()) continue;
+        ++styled;
+        const bool ours = ThemeManager::isThemeSheet(sheet);
+        ours ? ++themeOwned : ++raw;
+        sheets.append(QVariantMap{
+            { "path", widgetPath(w) },
+            { "class", QString::fromLatin1(w->metaObject()->className()) },
+            { "name", w->objectName() },
+            { "window", windowName(w) },
+            { "visible", w->isVisible() },
+            { "owner", ours ? QStringLiteral("theme") : QStringLiteral("raw") },
+            { "sheet", full ? sheet : sheet.simplified().left(160) } });
+    }
+    QVariantMap out;
+    out["theme"] = ThemeManager::classicActive() ? ThemeManager::classicId()
+                                                 : ThemeManager::qlementineDarkId();
+    out["classic"] = ThemeManager::classicActive();
+    out["widgets"] = widgets;
+    out["styled"] = styled;
+    out["themeOwned"] = themeOwned;
+    out["raw"] = raw;
+    out["sheets"] = sheets;
+    return out;
+}
+
+QVariantList AppApi::dialogs()
+{
+    QVariantList out;
+    if (!host.mainWindow) {
+        fail("app.dialogs: this verb needs the editor window");
+        return out;
+    }
+    for (const QString &name : host.mainWindow->dialogNames()) {
+        // closeDialog/openDialog own the bookkeeping; "open" is simply whether
+        // the name's widget is on screen now.
+        out.append(QVariantMap{ { "name", name },
+                                { "open", host.mainWindow->isDialogOpen(name) } });
+    }
+    return out;
+}
+
+QVariantMap AppApi::dialog(const QString &name, bool open)
+{
+    QVariantMap out;
+    if (!host.mainWindow) {
+        fail("app.dialog: this verb needs the editor window");
+        return out;
+    }
+    if (!host.mainWindow->dialogNames().contains(name)) {
+        fail(QStringLiteral("app.dialog: no dialog named '%1' (app.dialogs() lists them)").arg(name));
+        return out;
+    }
+    out["name"] = name;
+    if (!open) {
+        host.mainWindow->closeDialog(name);
+        out["open"] = false;
+        return out;
+    }
+    QWidget *w = host.mainWindow->openDialog(name);
+    if (!w) {
+        fail(QStringLiteral("app.dialog: '%1' could not be opened in this session").arg(name));
+        return out;
+    }
+    out["open"] = w->isVisible();
+    out["window"] = windowName(w);
+    out["title"] = w->windowTitle();
+    const QRect g = w->frameGeometry();
+    out["x"] = g.x();
+    out["y"] = g.y();
+    out["width"] = g.width();
+    out["height"] = g.height();
     return out;
 }

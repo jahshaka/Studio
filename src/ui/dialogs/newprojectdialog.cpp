@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include "ui/dialogs/newprojectdialog.h"
-#include "ui_newprojectdialog.h"
 
 #include <QStandardPaths>
 #include <QMessageBox>

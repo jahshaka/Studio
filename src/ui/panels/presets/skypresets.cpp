@@ -15,12 +15,15 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "irisgl/core/logger.h"
 #include "services/shippedassets.h"
+#include "ui/style/stylesheet.h"
 
 SkyPresets::SkyPresets(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::SkyPresets)
 {
     ui->setupUi(this);
+    // skypresets.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::SkyPresetsRoot());
 
     mainWindow = nullptr;
 

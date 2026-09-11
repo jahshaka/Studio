@@ -299,6 +299,7 @@ add_executable(test_avatar_assets test_avatar_assets.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
     ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp)

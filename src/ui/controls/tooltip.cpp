@@ -23,6 +23,9 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QPropertyAnimation>
 #include <QTimer>
+#include <QHelpEvent>
+#include <QToolTip>
+#include "ui/style/stylesheet.h"
 
 ToolTip *ToolTip::instance = Q_NULLPTR;
 bool ToolTip::isFading = false;
@@ -52,9 +55,7 @@ void ToolTip::showToolTip(QWidget *sender)
 		QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 		qputenv("QT_AUTO_SCREEN_SCALE_FACTOR", "1");
 		instance->setWindowFlag(Qt::SubWindow);
-		instance->setStyleSheet("#container{background:rgba(0,0,00,.1); border: 2px solid rgba(0,0,0,.5); border-radius: .1px; padding: 3px;}"
-			"#header{background:rgba(50,50,50,.9); border: 0px solid rgba(0,0,0,.3); border-radius: 0px; padding: 5px 3px; color :rgba(255,255,255,.9);}"
-			"#body{background:rgba(70,70,70,.9); border: 0px solid rgba(0,0,0,.3); border-radius: 0px; padding: 3px; margin:0px; color :rgba(255,255,255,.9);}");
+		instance->setStyleSheet(StyleSheet::ToolTipPopup());
 	}
 	else for (auto child : instance->findChildren<QWidget *>())	child->deleteLater();
 	
@@ -272,4 +273,30 @@ bool ToolTipHelper::eventFilter(QObject *watched, QEvent *event)
 		return true;
 	}
 	return QObject::eventFilter(watched, event);
+}
+
+// ---------------------------------------------------------------------------
+// THE QLEMENTINE TOOLTIP (theme sweep): the style's own QToolTip, which
+// Qlementine already draws (rounded, themed). ToolTip above is the archived
+// Classic popup — a translucent frameless window whose look is entirely its
+// sheet. The one thing it added that a plain tooltip lacks is the
+// "Header | body" convention several tooltips are written in; this keeps it,
+// as rich text.
+bool NativeToolTipFormatter::eventFilter(QObject *watched, QEvent *event)
+{
+	if (event->type() != QEvent::ToolTip) return QObject::eventFilter(watched, event);
+	auto *w = qobject_cast<QWidget *>(watched);
+	if (!w) return false;
+	const QString tip = w->toolTip();
+	if (!tip.contains(QLatin1Char('|')) || Qt::mightBeRichText(tip)) return false;
+	const QStringList parts = tip.split(QLatin1Char('|'));
+	QString html;
+	if (!parts.first().trimmed().isEmpty())
+		html = QStringLiteral("<b>%1</b>").arg(parts.first().trimmed().toHtmlEscaped());
+	for (int i = 1; i < parts.size(); ++i) {
+		if (!html.isEmpty()) html += QStringLiteral("<br>");
+		html += parts.at(i).trimmed().toHtmlEscaped();
+	}
+	QToolTip::showText(static_cast<QHelpEvent *>(event)->globalPos(), html, w);
+	return true;
 }

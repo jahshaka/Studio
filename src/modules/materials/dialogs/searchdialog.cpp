@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "../models/libraryv1.h"
 #include "../models/properties.h"
 #include "data/project.h"
+#include "ui/style/stylesheet.h"
 
 
 
@@ -73,14 +74,9 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 	// (the Properties tab died with the §3b PropertyNode retirement)
 
 
-	tabWidget->setStyleSheet(
-		"QTabWidget::pane{	border: 1px solid rgba(0, 0, 0, .1); border-top: 0px solid rgba(0, 0, 0, 0); padding-top: 7px; }"
-		"QTabBar::tab{	background: rgba(21, 21, 21, .7); color: rgba(250, 250, 250, .9); font - weight: 400; font-size: 13em; padding: 5px 22px 5px 22px; }"
-		"QTabBar::tab:selected{ color: rgba(255, 255, 255, .99); border-top: 2px solid rgba(50,150,250,.8); }"
-		"QTabBar::tab:!selected{ background: rgba(55, 55, 55, .99); border : 1px solid rgba(21,21,21,.4); color: rgba(200,200,200,.5); }"
-	);
+	tabWidget->setStyleSheet(StyleSheet::SearchDialogTabs());
 
-	searchBar->setStyleSheet("border-radius : 2px; ");
+	searchBar->setStyleSheet(StyleSheet::SearchDialogBarRadius());
 
 
 	widgetLayout->addWidget(tabWidget);
@@ -142,16 +138,10 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 		}
 	});
 
-	searchContainer->setStyleSheet("background:rgba(32,32,32,0);");
-	searchBar->setStyleSheet("QLineEdit{ background:rgba(41,41,41,1); border: 1px solid rgba(150,150,150,.2); border-radius: 1px; color: rgba(250,250,250,.95); padding: 6px;  }");
+	searchContainer->setStyleSheet(StyleSheet::SearchDialogContainer());
+	searchBar->setStyleSheet(StyleSheet::SearchDialogBar());
 
-	setStyleSheet(""
-		"QWidget{background: rgba(21,21,21,1); border: 0px solid rgba(0,0,0,0);}"
-		"QListView::item{color: rgba(255,255,255,1); border-radius: 2px; border: 1px solid rgba(0,0,0,.31); background: rgba(51,51,51,1); margin: 3px;  }"
-		"QListView::item:selected{ background: rgba(155,155,155,1); border: 1px solid rgba(50,150,250,.1); }"
-		"QListView::item:hover{ background: rgba(95,95,95,1); border: .1px solid rgba(50,150,250,.1); }"
-		"QListView::text{ top : -6; }"
-	);
+	setStyleSheet(StyleSheet::SearchDialogRoot());
 
 
 	if (point == QPoint(0,0)) {

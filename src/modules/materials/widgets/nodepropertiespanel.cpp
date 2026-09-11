@@ -33,6 +33,8 @@ For more information see the LICENSE file
 
 #if (EFFECT_BUILD_AS_LIB)
 #include "ui/controls/colorpickerwidget.h"
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 #endif
 
 namespace
@@ -85,7 +87,8 @@ void NodePropertiesPanel::buildUi()
 	titleFont.setPointSizeF(titleFont.pointSizeF() + 1);
 	mNodeTitle->setFont(titleFont);
 	mNodeType = new QLabel;
-	mNodeType->setStyleSheet("color: rgba(200,200,200,.55);");
+	mNodeType->setStyleSheet(StyleSheet::MaterialsMutedLabel());
+	ThemeRoles::setTone(mNodeType, ThemeRoles::Tone::Muted);
 
 	nodeLayout->addWidget(mNodeTitle);
 	nodeLayout->addWidget(mNodeType);
@@ -128,7 +131,8 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	auto sub = new QLabel(compact
 		? tr("The selected master node's material")
 		: tr("No node selected"));
-	sub->setStyleSheet("color: rgba(200,200,200,.55);");
+	sub->setStyleSheet(StyleSheet::MaterialsMutedLabel());
+	ThemeRoles::setTone(sub, ThemeRoles::Tone::Muted);
 	layout->addWidget(sub);
 	layout->addSpacing(4);
 
@@ -154,6 +158,18 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	form.bakeResolution->setKeyboardTracking(false);
 	form.bakeResolution->setToolTip(tr("Per-texel bake resolution for this material (final quality)"));
 	formLayout->addRow(tr("Bake Resolution"), form.bakeResolution);
+
+	// The fields shrink with the dock instead of setting its floor: a style's
+	// natural line-edit/combo width (Qlementine's is generous) would otherwise
+	// run the column off its right edge — the page's scroll area has no
+	// horizontal bar, so a too-wide field is clipped, not scrolled.
+	// Qlementine only: Classic keeps its sheet-era sizing bit-for-bit (theme review MF-1).
+	if (!StyleSheet::classicThemeActive()) {
+		for (QWidget *field : std::initializer_list<QWidget *>{ form.name, form.blend, form.bakeResolution }) {
+			field->setMinimumWidth(48);
+			field->setSizePolicy(QSizePolicy::Preferred, field->sizePolicy().verticalPolicy());
+		}
+	}
 
 	layout->addLayout(formLayout);
 	layout->addStretch();
@@ -415,7 +431,8 @@ void NodePropertiesPanel::rebuildNodeEditors()
 		auto note = new QLabel(tr("Every UV set currently evaluates as UV 0 — the choice is "
 		                          "stored and reported, not yet sampled."));
 		note->setWordWrap(true);
-		note->setStyleSheet("color: rgba(200,200,200,.55);");
+		note->setStyleSheet(StyleSheet::MaterialsMutedLabel());
+		ThemeRoles::setTone(note, ThemeRoles::Tone::Muted);
 		mEditorLayout->insertWidget(mEditorLayout->count() - 1, note);
 		return;
 	}
@@ -425,7 +442,7 @@ void NodePropertiesPanel::rebuildNodeEditors()
 		button->setIconSize(QSize(120, 120));
 		button->setMinimumSize(140, 126);
 		button->setToolTip(tr("Choose an image"));
-		button->setStyleSheet("background:rgba(0,0,0,.2); border: 1px solid rgba(50,50,50,.4);");
+		button->setStyleSheet(StyleSheet::MaterialsTexturePreviewButton());
 		auto texNode = static_cast<TextureNode*>(mNode);
 		const auto path = texNode->getTexturePath();
 		if (!path.isEmpty())
@@ -442,7 +459,8 @@ void NodePropertiesPanel::rebuildNodeEditors()
 		? tr("This node has no editable values.")
 		: tr("This node has no panel-editable values; its controls live on the node body."));
 	info->setWordWrap(true);
-	info->setStyleSheet("color: rgba(200,200,200,.55);");
+	info->setStyleSheet(StyleSheet::MaterialsMutedLabel());
+	ThemeRoles::setTone(info, ThemeRoles::Tone::Muted);
 	mEditorLayout->insertWidget(mEditorLayout->count() - 1, info);
 }
 

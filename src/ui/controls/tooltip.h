@@ -46,4 +46,15 @@ public:
 	bool eventFilter(QObject *watched, QEvent *event);
 };
 
+// Qlementine's side (theme sweep): the style's native tooltip, with the
+// "Header | body" tooltips rendered as rich text. main() installs this instead
+// of ToolTipHelper when the Classic theme is not active.
+class NativeToolTipFormatter : public QObject
+{
+	Q_OBJECT
+public:
+	using QObject::QObject;
+	bool eventFilter(QObject *watched, QEvent *event) override;
+};
+
 #endif // TOOLTIP_H

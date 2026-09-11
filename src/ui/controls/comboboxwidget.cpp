@@ -14,10 +14,13 @@ For more information see the LICENSE file
 
 #include <QListView>
 #include <QStyledItemDelegate>
+#include "ui/style/stylesheet.h"
 
 ComboBoxWidget::ComboBoxWidget(QWidget* parent) : QWidget(parent), ui(new Ui::ComboBoxWidget)
 {
     ui->setupUi(this);
+    // comboboxwidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::ComboBoxWidgetRoot());
 
     ui->comboBox->setItemDelegate(new QStyledItemDelegate(ui->comboBox));   
 

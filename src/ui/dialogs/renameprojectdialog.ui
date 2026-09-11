@@ -13,38 +13,6 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">* {
-	color: #EEE;
-}
-
-#RenameProjectDialog {
-	background: #1A1A1A;
-}
-
-QPushButton  {
-    border: none;
-    background-color: #212121;
-    padding: 6px 16px;
-}
-
-QPushButton:hover {
-    background-color: #555;
-}
-
-QLabel {
-	color: #EEE;
-}
-
-QLineEdit {
-	border: 0;
-	padding: 4px;
-	color: #EEE;
-	font-size: 11px;
-	background: #404040;
-	margin-bottom: 3px;
-}</string>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
     <widget class="QLabel" name="label">

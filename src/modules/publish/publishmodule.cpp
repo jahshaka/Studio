@@ -31,78 +31,79 @@ For more information see the LICENSE file
 #include "export/previewlauncher.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
-
-namespace {
-
-const char *kButtonStyle =
-    "QPushButton { background: #3498db; color: #ffffff; border: none; border-radius: 4px;"
-    "              padding: 10px 26px; font-size: 14px; font-weight: 500; }"
-    "QPushButton:hover { background: #4aa3df; }"
-    "QPushButton:pressed { background: #2c81ba; }"
-    "QPushButton:disabled { background: #2c313a; color: rgba(255,255,255,0.35); }";
-
-const char *kSecondaryButtonStyle =
-    "QPushButton { background: #2c313a; color: rgba(255,255,255,0.85); border: none;"
-    "              border-radius: 4px; padding: 10px 20px; font-size: 13px; }"
-    "QPushButton:hover { background: #363c47; }"
-    "QPushButton:pressed { background: #23272e; }"
-    "QPushButton:disabled { background: #23262c; color: rgba(255,255,255,0.3); }";
-
-} // namespace
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
     : QWidget(parent), host(host_)
 {
     setObjectName("publishView");
-    setStyleSheet("#publishView { background: #1e1e1e; }");
+    // Classic's card design lives in the theme archive (StyleSheet::Publish*);
+    // under Qlementine the page is the style's own: palette surfaces, a
+    // StyledPanel card, theme text sizes/tones, and Process as the default
+    // (primary) button.
+    setStyleSheet(StyleSheet::PublishPage());
+    ThemeRoles::setSurface(this, ThemeRoles::Surface::Panel);
 
     auto *vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 24, 0, 24);
 
     auto *title = new QLabel(QStringLiteral("Publish"));
     title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet("font-size: 32px; font-weight: 500; color: rgba(255,255,255,0.92); background: transparent;");
+    title->setStyleSheet(StyleSheet::PublishTitle());
+    ThemeRoles::setTextSize(title, 32, QFont::Medium);
     auto *subtitle = new QLabel(QStringLiteral("Package the open scene for the web — a WebGPU viewer anyone can double-click."));
     subtitle->setAlignment(Qt::AlignCenter);
-    subtitle->setStyleSheet("font-size: 15px; color: rgba(255,255,255,0.55); background: transparent;");
+    subtitle->setStyleSheet(StyleSheet::PublishSubtitle());
+    ThemeRoles::setTextSize(subtitle, 15);
+    ThemeRoles::setTone(subtitle, ThemeRoles::Tone::Muted);
 
     // the Web target card
     auto *card = new QFrame();
     card->setObjectName("publishCard");
-    card->setStyleSheet("#publishCard { background: #262a31; border: 1px solid #32363e; border-radius: 10px; }");
+    card->setStyleSheet(StyleSheet::PublishCard());
+    ThemeRoles::setSurface(card, ThemeRoles::Surface::Raised);
+    ThemeRoles::setFrame(card, QFrame::StyledPanel);
     card->setFixedWidth(560);
     auto *cardLayout = new QVBoxLayout(card);
     cardLayout->setContentsMargins(28, 24, 28, 24);
     cardLayout->setSpacing(10);
 
     auto *cardTitle = new QLabel(QStringLiteral("Web  ·  glTF 2.0 + three.js (WebGPU)"));
-    cardTitle->setStyleSheet("font-size: 17px; font-weight: 500; color: rgba(255,255,255,0.9); background: transparent;");
+    cardTitle->setStyleSheet(StyleSheet::PublishCardTitle());
+    ThemeRoles::setTextSize(cardTitle, 17, QFont::Medium);
     dirLabel = new QLabel();
-    dirLabel->setStyleSheet("font-size: 12px; color: rgba(255,255,255,0.45); background: transparent;");
+    dirLabel->setStyleSheet(StyleSheet::PublishDetail());
+    ThemeRoles::setTone(dirLabel, ThemeRoles::Tone::Muted);
     dirLabel->setWordWrap(true);
 
     statusLabel = new QLabel(QStringLiteral("Open a project to publish its scene."));
-    statusLabel->setStyleSheet("font-size: 13px; color: rgba(255,255,255,0.65); background: transparent;");
+    statusLabel->setStyleSheet(StyleSheet::PublishStatus());
+    ThemeRoles::setTextSize(statusLabel, 13);
+    ThemeRoles::setTone(statusLabel, ThemeRoles::Tone::Muted);
     statusLabel->setWordWrap(true);
     detailLabel = new QLabel();
-    detailLabel->setStyleSheet("font-size: 12px; color: rgba(255,255,255,0.45); background: transparent;");
+    detailLabel->setStyleSheet(StyleSheet::PublishDetail());
+    ThemeRoles::setTone(detailLabel, ThemeRoles::Tone::Muted);
     detailLabel->setWordWrap(true);
     detailLabel->hide();
 
     processButton = new QPushButton(QStringLiteral("Process"));
-    processButton->setStyleSheet(kButtonStyle);
+    processButton->setStyleSheet(StyleSheet::PublishPrimaryButton());
+    // the page's primary action: Qlementine paints a default button in the accent
+    if (!StyleSheet::classicThemeActive()) processButton->setDefault(true);
     processButton->setCursor(Qt::PointingHandCursor);
     processButton->setMinimumHeight(40);
     previewButton = new QPushButton(QStringLiteral("Preview"));
-    previewButton->setStyleSheet(kSecondaryButtonStyle);
+    previewButton->setStyleSheet(StyleSheet::PublishSecondaryButton());
     previewButton->setCursor(Qt::PointingHandCursor);
     previewButton->setMinimumHeight(40);
     browserButton = new QPushButton(QStringLiteral("Open in browser"));
-    browserButton->setStyleSheet(kSecondaryButtonStyle);
+    browserButton->setStyleSheet(StyleSheet::PublishSecondaryButton());
     browserButton->setCursor(Qt::PointingHandCursor);
     browserButton->setMinimumHeight(40);
     folderButton = new QPushButton(QStringLiteral("Show folder"));
-    folderButton->setStyleSheet(kSecondaryButtonStyle);
+    folderButton->setStyleSheet(StyleSheet::PublishSecondaryButton());
     folderButton->setCursor(Qt::PointingHandCursor);
     folderButton->setMinimumHeight(40);
 
@@ -127,24 +128,27 @@ PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
     // the preview opens as the companion window exactly as before.
     previewFrame = new QFrame();
     previewFrame->setObjectName("previewFrame");
-    previewFrame->setStyleSheet(
-        "#previewFrame { background: #14161a; border: 1px solid #32363e; border-radius: 8px; }");
+    previewFrame->setStyleSheet(StyleSheet::PublishPreviewFrame());
+    ThemeRoles::setSurface(previewFrame, ThemeRoles::Surface::Workspace);
+    ThemeRoles::setFrame(previewFrame, QFrame::StyledPanel);
     previewFrame->setMinimumHeight(320);
     auto *pv = new QVBoxLayout(previewFrame);
     pv->setContentsMargins(10, 6, 10, 10);
     pv->setSpacing(6);
     auto *pvHeader = new QHBoxLayout();
     auto *pvLabel = new QLabel(QStringLiteral("Preview"));
-    pvLabel->setStyleSheet("font-size: 12px; color: rgba(255,255,255,0.55); background: transparent;");
+    pvLabel->setStyleSheet(StyleSheet::PublishPreviewLabel());
+    ThemeRoles::setTone(pvLabel, ThemeRoles::Tone::Muted);
     popOutButton = new QPushButton(QStringLiteral("Pop out"));
-    popOutButton->setStyleSheet(kSecondaryButtonStyle);
+    popOutButton->setStyleSheet(StyleSheet::PublishSecondaryButton());
     popOutButton->setCursor(Qt::PointingHandCursor);
     pvHeader->addWidget(pvLabel);
     pvHeader->addStretch();
     pvHeader->addWidget(popOutButton);
     pv->addLayout(pvHeader);
     previewSlot = new QWidget();
-    previewSlot->setStyleSheet("background: #000;");
+    previewSlot->setStyleSheet(StyleSheet::PublishPreviewSlot());
+    ThemeRoles::setSurface(previewSlot, ThemeRoles::Surface::Black);
     auto *slotLayout = new QVBoxLayout(previewSlot);
     slotLayout->setContentsMargins(0, 0, 0, 0);
     pv->addWidget(previewSlot, 1);
@@ -261,9 +265,9 @@ void PublishPage::showEvent(QShowEvent *event)
 
 void PublishPage::setStatus(const QString &text, bool isError)
 {
-    statusLabel->setStyleSheet(isError
-        ? "font-size: 13px; color: #e74c3c; background: transparent;"
-        : "font-size: 13px; color: rgba(255,255,255,0.65); background: transparent;");
+    statusLabel->setStyleSheet(isError ? StyleSheet::PublishStatusError()
+                                       : StyleSheet::PublishStatus());
+    ThemeRoles::setTone(statusLabel, isError ? ThemeRoles::Tone::Error : ThemeRoles::Tone::Muted);
     statusLabel->setText(text);
 }
 

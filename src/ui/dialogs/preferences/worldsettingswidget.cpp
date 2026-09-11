@@ -10,12 +10,25 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/dialogs/preferences/worldsettingswidget.h"
-#include "ui_worldsettings.h"
 
 #include "services/apppaths.h"
 
 #include "irisgl/core/irisutils.h"
 
+// (the widget builds its UI in code — the retired worldsettings.ui used to
+// bring these in through its generated header)
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QStackedWidget>
+#include <QTextBrowser>
+#include <QToolButton>
+#include <QVBoxLayout>
+#include "ui/controls/colorpickerwidget.h"
 #include <QFileDialog>
 #include <QKeySequenceEdit>
 #include <QListView>
@@ -48,6 +61,7 @@ For more information see the LICENSE file
 #include "ui/style/thememanager.h"
 #include "services/perfsampler.h"
 #include "services/services.h"
+#include "ui/style/themeroles.h"
 
 WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* settings) :
     QWidget(nullptr)
@@ -56,11 +70,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	db = handle;
     this->settings = settings;
 
-	//ui->author->setText(db->getAuthorName());
-	//ui->cc->setItemDelegate(new QStyledItemDelegate(ui->cc));
 
-	//auto lv = new QListView();
-	//ui->cc->setView(lv);
 
 
 	viewport = new QPushButton("Viewport");
@@ -164,69 +174,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	connect(database, &QPushButton::clicked, [=]() { stack->setCurrentIndex(7); });
 	connect(desktopBtn, &QPushButton::clicked, [=]() { stack->setCurrentIndex(8); });
 
-
- //   connect(ui->browseProject,  SIGNAL(pressed()),              SLOT(changeDefaultDirectory()));
- //   connect(ui->projectDefault, SIGNAL(textChanged(QString)),   SLOT(projectDirectoryChanged(QString)));
- //   connect(ui->browseEditor,   SIGNAL(pressed()),              SLOT(changeEditorPath()));
- //   connect(ui->editorPath,     SIGNAL(textChanged(QString)),   SLOT(editorPathChanged(QString)));
- //   connect(ui->outlineWidth,   SIGNAL(valueChanged(double)),   SLOT(outlineWidthChanged(double)));
- //   connect(ui->outlineColor,   SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
-	//connect(ui->showFPS,		SIGNAL(toggled(bool)),			SLOT(showFpsChanged(bool)));
-	////connect(ui->showPL,			SIGNAL(toggled(bool)),			SLOT(setShowPerspectiveLabel(bool)));
-	//connect(ui->autoSave,       SIGNAL(toggled(bool)),          SLOT(enableAutoSave(bool)));
-	//connect(ui->openInPlayer,   SIGNAL(toggled(bool)),          SLOT(enableOpenInPlayer(bool)));
-	//connect(ui->mouseControls,	SIGNAL(currentTextChanged(const QString&)),	SLOT(mouseControlChanged(const QString&)));
-
-	//QButtonGroup *buttonGroup = new QButtonGroup;
-	////ui->showPL->setChecked(SettingsManager::getDefaultManager()->getValue("show_PL", true).toBool());
-
-	//buttonGroup->addButton(ui->viewport_2);
-	//buttonGroup->addButton(ui->editor_2);
-	//buttonGroup->addButton(ui->content_2);
-	//buttonGroup->addButton(ui->mining_2);
-	//buttonGroup->addButton(ui->help);
-	//buttonGroup->addButton(ui->donate);
-	//buttonGroup->addButton(ui->about);
-	//buttonGroup->addButton(ui->shortcutss);
-
-	//// hide these for now
-	//ui->mining_2->hide();
-	//ui->donate->hide();
-
- //   //QPixmap p = IrisUtils::getAbsoluteAssetPath("app/images/mascot.png");
-
- //   //ui->logo->setPixmap(p.scaled(128, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
- //   //ui->logo->setAlignment(Qt::AlignCenter | Qt::AlignBottom);
-
-	//connect(buttonGroup,
-	//	static_cast<void(QButtonGroup::*)(QAbstractButton *, bool)>(&QButtonGroup::buttonToggled),
-	//	[](QAbstractButton *button, bool checked)
-	//{
-	//	QString style = checked ? "background: #3498db" : "background: #1E1E1E";
-	//	button->setStyleSheet(style);
-	//});
-
-	//connect(ui->viewport_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(0); });
-	//connect(ui->editor_2,   &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(1); });
-	//connect(ui->content_2,  &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(2); });
-	//connect(ui->mining_2,   &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(3); });
-	//connect(ui->help,       &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
-	//connect(ui->about,		&QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
-	//connect(ui->shortcutss,	&QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(6); });
-
-
-	//showFps = settings->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool();
-	//ui->showFPS->setChecked(showFps);
-
-	//autoSave = settings->getValue("auto_save", true).toBool();
-	//ui->autoSave->setChecked(autoSave);
-	//
-	//openInPlayer = settings->getValue("open_in_player", false).toBool();
-
-
-	//autoUpdate = settings->getValue("automatic_updates", true).toBool();
-	//ui->checkUpdates->setChecked(autoUpdate);
-	//ui->stackedWidget->setCurrentIndex(0);
 }
 
 
@@ -673,6 +620,7 @@ void WorldSettingsWidget::configureEditor()
 	themeCombo->setCurrentIndex(ThemeManager::currentThemeId() == ThemeManager::classicId() ? 1 : 0);
 	auto themeNote = new QLabel("Takes effect after restart.");
 	themeNote->setStyleSheet(StyleSheet::MutedInfoText());
+	ThemeRoles::setTone(themeNote, ThemeRoles::Tone::Muted);
 	layout->addWidget(themeLabel, 5, 0);
 	layout->addWidget(themeCombo, 5, 1);
 	layout->addWidget(themeNote, 6, 1);

@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QLayout>
 #include <QMenu>
 #include "data/project.h"
+#include "ui/style/stylesheet.h"
 
 QVariantAnimation* ListWidget::anim = Q_NULLPTR;
 
@@ -56,21 +57,9 @@ ListWidget::ListWidget() : QListWidget()
 	font.setPixelSize(12);
 	setFont(font);
 	setContentsMargins(0, 0, 0, 0);
-	verticalScrollBar()->setStyleSheet(
-		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 10px; }"
-		"QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 3px;  left: 8px; }"
-		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
-		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
-		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-		
-	);
+	verticalScrollBar()->setStyleSheet(StyleSheet::MaterialsListScrollBar());
 
-	setStyleSheet(
-		"QListView::item{ border-radius: 2px; border: 0px solid rgba(0,0,0,1); background: rgba(80,80,80,0); margin-left: 6px;  }"
-		"QListView::item:selected{ background: rgba(65,65,65,1); border: 1px solid rgba(50,150,250,1); }"
-		"QListView::item:hover{ background: rgba(55,55,55,1); border: 1px solid rgba(50,150,250,1); }"
-		"QListView::text{ top : -6; }"
-	);
+	setStyleSheet(StyleSheet::MaterialsListTiles());
 
     connect(this, SIGNAL(customContextMenuRequested(const QPoint&)),this, SLOT(customContextMenu(const QPoint&)));
 	
@@ -178,7 +167,7 @@ void ListWidget::customContextMenu(QPoint pos)
     auto guid = index.data(MODEL_GUID_ROLE).toString();
 
     QMenu menu;
-    menu.setStyleSheet(NodeStyle::menuStyleSheet);
+    menu.setStyleSheet(StyleSheet::MaterialsContextMenu());
 
 
     if(shaderContextMenuAllowed){

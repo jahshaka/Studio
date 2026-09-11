@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMouseEvent>
+#include <QPainter>
 
 namespace {
 // pixels of horizontal travel before a press turns into a scrub
@@ -32,6 +33,62 @@ DragSpinBox::DragSpinBox(QWidget* parent) : QDoubleSpinBox(parent)
     // scrub gestures land on the child line edit, watch it
     lineEdit()->installEventFilter(this);
     lineEdit()->setCursor(Qt::SizeHorCursor);
+}
+
+namespace {
+// The axis strip: a child ABOVE the field's line edit (which covers the spin
+// box's own paint area), mouse-transparent, painting one rounded 3 px bar.
+class AxisStrip : public QWidget
+{
+public:
+    AxisStrip(QWidget *parent, const QColor &color) : QWidget(parent), color_(color)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setAttribute(Qt::WA_NoSystemBackground, true);
+    }
+    void setColor(const QColor &color) { color_ = color; update(); }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setPen(Qt::NoPen);
+        p.setBrush(color_);
+        p.drawRoundedRect(QRectF(rect()), 1.5, 1.5);
+    }
+
+private:
+    QColor color_;
+};
+} // namespace
+
+void DragSpinBox::setAxisColor(const QColor &color)
+{
+    axisColor_ = color;
+    if (!color.isValid()) {
+        delete axisStrip_;
+        axisStrip_ = nullptr;
+        return;
+    }
+    if (!axisStrip_) axisStrip_ = new AxisStrip(this, color);
+    else static_cast<AxisStrip *>(axisStrip_)->setColor(color);
+    placeAxisStrip();
+    axisStrip_->show();
+    axisStrip_->raise();
+}
+
+void DragSpinBox::placeAxisStrip()
+{
+    // Inside the style's frame, flush with its left edge, the text area's height.
+    if (axisStrip_) axisStrip_->setGeometry(2, 3, 3, qMax(0, height() - 6));
+}
+
+void DragSpinBox::resizeEvent(QResizeEvent *event)
+{
+    QDoubleSpinBox::resizeEvent(event);
+    placeAxisStrip();
+    if (axisStrip_) axisStrip_->raise();
 }
 
 void DragSpinBox::setPerPixelStep(double step)

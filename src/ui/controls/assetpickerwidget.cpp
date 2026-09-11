@@ -13,12 +13,16 @@ For more information see the LICENSE file
 #include "ui_assetpickerwidget.h"
 #include "services/thumbnailmanager.h"
 #include "data/constants.h"
+#include "ui/style/stylesheet.h"
 
 AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     QDialog(parent),
     ui(new Ui::AssetPickerWidget)
 {
     ui->setupUi(this);
+    // assetpickerwidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::AssetPickerRoot());
+    ui->assetView->setStyleSheet(StyleSheet::AssetPickerAssetView());
 
     setWindowTitle("Select Asset");
     ui->viewButton->setCheckable(true);

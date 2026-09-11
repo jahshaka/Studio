@@ -69,7 +69,10 @@ int main()
         SliderLayoutModel m;
         m.build({ assigned("x", 1, 0), plain("new"), assigned("y", 1, 1), assigned("z", 0, 0) }, 2,
                 SliderLayoutModel::Seed::RowsOrder);
-        CHECK(dump(m) == "z,new|x,y", "stored assignments kept; new tile round-robins in");
+        // Owner rule (2026-09-12): on a desktop that already has an arrangement a
+        // NEW tile comes in at the TOP LEFT — the front of row 0 — and pushes that
+        // row over (was: round-robined onto the end of a row, i.e. "at the right").
+        CHECK(dump(m) == "new,z|x,y", "stored assignments kept; a NEW tile lands at the front of row 0");
 
         // feed the model's own answer back, shuffled, as the stored state
         QVector<SliderTileInfo> stored;
@@ -144,6 +147,20 @@ int main()
         CHECK(m.rowOffset(1) == -240.0, "offsets survive a same-row-count rebuild");
         m.build({ plain("a") }, 4, SliderLayoutModel::Seed::RowsOrder);
         CHECK(m.rowOffset(3) == 0.0, "new rows start at offset 0");
+    }
+
+    // --- several new tiles on an arranged desktop: all at the front of row 0, newest first
+    {
+        SliderLayoutModel m;
+        m.build({ plain("n1"), plain("n2"), assigned("a", 0, 0), assigned("b", 0, 1), assigned("c", 1, 0) }, 2,
+                SliderLayoutModel::Seed::RowsOrder);
+        CHECK(dump(m) == "n1,n2,a,b|c", "new tiles enter row 0 at the left in input order and push the row over");
+    }
+    // --- a desktop with NO arrangement yet still seeds round-robin (the first seed)
+    {
+        SliderLayoutModel m;
+        m.build({ plain("p"), plain("q"), plain("r") }, 2, SliderLayoutModel::Seed::RowsOrder);
+        CHECK(dump(m) == "p,r|q", "a first seed (no stored slots) is still round-robin");
     }
 
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }

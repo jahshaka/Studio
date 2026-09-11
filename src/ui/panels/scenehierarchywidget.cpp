@@ -51,6 +51,10 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     ui(new Ui::SceneHierarchyWidget)
 {
     ui->setupUi(this);
+    // scenehierarchywidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::SceneHierarchyRoot());
+    ui->widget->setStyleSheet(StyleSheet::SceneHierarchyWidget());
+    ui->sceneTree->setStyleSheet(StyleSheet::SceneHierarchySceneTree());
 
     mainWindow = nullptr;
 

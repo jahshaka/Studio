@@ -340,7 +340,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "already in does nothing), and NOT the same thing as a maximized window. The stats "
           "readout deliberately survives it: it is a diagnostic, not an editor helper.",
           Needs::Window },
-        { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible, title}",
+        { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible, title, trayRight, rightColumnLeft, rightColumnBottom, areaBottom}",
           "THE EDITOR'S BOTTOM TRAY, the one widget that carries the asset browser and the "
           "script console as TABS at its top (owner, 2026-09-11: turning the console on adds a "
           "Console tab beside Assets and the two share that widget). `tab` is the tab in front "
@@ -1509,6 +1509,23 @@ QVariantMap EditorApi::trayState()
     // DockState key): the one string the bottom tab bar is drawn from.
     const auto *dock = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("assetDock"));
     out["title"] = dock ? dock->windowTitle() : QString();
+    // THE CORNER (owner, 2026-09-12): the right column owns the bottom-right
+    // corner, so it runs to the bottom of the editor and the tray stops at its
+    // edge. Reported in the docks' shared parent (the editor's nested window)
+    // so a test can assert it: trayRight <= rightColumnLeft and
+    // rightColumnBottom == areaBottom.
+    const auto *props = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("sceneNodePropertiesDock"));
+    const auto *presets = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("presetsDock"));
+    if (dock && props && dock->parentWidget() && dock->isVisible() && props->isVisible()) {
+        const QWidget *area = dock->parentWidget();
+        out["trayRight"] = dock->geometry().right();
+        out["rightColumnLeft"] = props->geometry().left();
+        int bottom = props->geometry().bottom();
+        if (presets && presets->isVisible() && presets->parentWidget() == area)
+            bottom = std::max(bottom, presets->geometry().bottom());
+        out["rightColumnBottom"] = bottom;
+        out["areaBottom"] = area->height() - 1;
+    }
     return out;
 }
 

@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
+#include "ui/style/stylesheet.h"
 #endif
 
 ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()
@@ -358,26 +359,7 @@ void ShaderAssetWidget::deleteShader(QString guid)
 			dialog.close();
 		});
 
-		dialog.setStyleSheet(
-			"* { color: #EEE; }"
-			"QDialog { background: #202020; padding: 4px; }"
-			"QPushButton { background: #444; color: #EEE; border: 0; padding: 6px 10px; }"
-			"QPushButton:hover { background: #555; color: #EEE; }"
-			"QPushButton:pressed { background: #333; color: #EEE; }"
-			"QListWidget { show-decoration-selected: 1; background: #202020; border: 0; outline: 0 }"
-			"QListWidget::item:selected { background-color: #191919; }"
-			"QListWidget::item:selected:active { background-color: #191919; }"
-			"QListWidget::item { padding: 5px 0; }"
-			"QListWidget::item:hover { background: #303030; }"
-			"QListWidget::item:disabled { background: #202020; color: #888; }"
-			"QListWidget::item:disabled:hover { background: #202020; color: #888; }"
-			"QListWidget::item:hover:!active { background: #202020; color: #888; }"
-			"QListWidget { spacing: 0 5px; }"
-			"QListWidget::indicator { width: 18px; height: 18px; }"
-			"QListWidget::indicator::unchecked { image: url(:/icons/check-unchecked.png); }"
-			"QListWidget::indicator::checked { image: url(:/icons/check-checked.png); }"
-			"QListWidget::indicator::disabled { image: url(:/icons/check-disabled.png); }"
-		);
+		dialog.setStyleSheet(StyleSheet::ShaderAssetConfirmDialog());
 		dialog.exec();
 	}
 	

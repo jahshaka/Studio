@@ -18,6 +18,7 @@ add_executable(test_pbr_evaluator
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_pbr_evaluator PROPERTIES
@@ -58,6 +59,7 @@ add_executable(test_node_regressions
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_node_regressions PROPERTIES
@@ -99,6 +101,7 @@ add_executable(test_ao_removed
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_ao_removed PROPERTIES
@@ -137,6 +140,7 @@ add_executable(test_baker_parity
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_baker_parity PROPERTIES
@@ -175,6 +179,7 @@ add_executable(test_bake_output
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_bake_output PROPERTIES
@@ -223,6 +228,7 @@ add_executable(test_panel_migration
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_panel_migration PROPERTIES
@@ -274,6 +280,7 @@ add_executable(test_selection
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/nodepropertiespanel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/treewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_selection PROPERTIES
@@ -340,6 +347,7 @@ add_executable(resave_presets
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(resave_presets PROPERTIES

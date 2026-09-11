@@ -31,21 +31,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QPushButton {
-    background-color: #4D4D4D;
-    color: #DEDEDE;
-    border: 0;
-}
-
-QPushButton:hover {
-    background-color: #555;
-}
-
-QPushButton:pressed {
-    background-color: #444;
-}</string>
-  </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="leftMargin">
     <number>0</number>
@@ -107,9 +92,6 @@ QPushButton:pressed {
       </property>
       <item>
        <widget class="QLabel" name="filename">
-        <property name="styleSheet">
-         <string notr="true">background: #404040; padding: 2px</string>
-        </property>
         <property name="text">
          <string>TextLabel</string>
         </property>

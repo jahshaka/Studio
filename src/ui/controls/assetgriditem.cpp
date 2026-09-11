@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "ui/controls/assetgriditem.h"
 #include "data/project.h"          // ModelTypes
 #include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 // local
 AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent) : QWidget(parent) {
@@ -51,7 +52,8 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	textLabel->setStyleSheet(StyleSheet::AssetGridItemLabel("rgba(0, 0, 0, 3%)"));
 	gridImageLabel->setStyleSheet(StyleSheet::AssetGridItemThumbnail("rgba(0, 0, 0, 3%)"));
 
-	setStyleSheet("background: #272727");
+	setStyleSheet(StyleSheet::AssetGridTile());
+	ThemeRoles::setSurface(this, ThemeRoles::Surface::Raised);
 	setLayout(layout);
 	setCursor(Qt::PointingHandCursor);
 	setContextMenuPolicy(Qt::CustomContextMenu);
@@ -242,13 +244,17 @@ void AssetGridItem::showLoadingOverlay()
 		loadingPulse->setInterval(350);
 		connect(loadingPulse, &QTimer::timeout, this, [this]() {
 			pulsePhase = !pulsePhase;
-			loadingOverlay->setStyleSheet(pulsePhase
-				? "background: rgba(0, 0, 0, 55%); color: #3498db; font-size: 12px;"
-				: "background: rgba(0, 0, 0, 55%); color: #ffffff; font-size: 12px;");
+			// the pulse: accent / white text on the veil
+			loadingOverlay->setStyleSheet(pulsePhase ? StyleSheet::AssetGridLoadingOverlayAccent()
+			                                         : StyleSheet::AssetGridLoadingOverlay());
+			ThemeRoles::setTone(loadingOverlay, pulsePhase ? ThemeRoles::Tone::Accent
+			                                               : ThemeRoles::Tone::Normal);
 		});
 	}
 	pulsePhase = false;
-	loadingOverlay->setStyleSheet("background: rgba(0, 0, 0, 55%); color: #ffffff; font-size: 12px;");
+	loadingOverlay->setStyleSheet(StyleSheet::AssetGridLoadingOverlay());
+	ThemeRoles::setSurface(loadingOverlay, ThemeRoles::Surface::Scrim);
+	ThemeRoles::setTone(loadingOverlay, ThemeRoles::Tone::Normal);
 	loadingOverlay->setGeometry(rect());
 	loadingOverlay->show();
 	loadingOverlay->raise();

@@ -78,6 +78,21 @@ void SliderLayoutModel::build(const QVector<SliderTileInfo> &tiles, int rowCount
         unassigned = leftovers;
     }
 
+    // NEW TILES COME IN AT THE TOP LEFT (owner, 2026-09-12: "new projects on the
+    // desktop should always come in at the top left and push the rest over").
+    // When the desktop already HAS an arrangement (any stored slot), a tile with
+    // no slot is new — a project just created or imported — so it goes to the
+    // FRONT of the first row, in input order (the rows ordering is newest first),
+    // and that row's tiles move one place right. Only a desktop with NO stored
+    // arrangement at all (the very first seed) is dealt round-robin.
+    bool anyStored = false;
+    for (int r = 0; r < rowCount && !anyStored; ++r) anyStored = !stored[r].isEmpty();
+    if (seed == Seed::RowsOrder && anyStored) {
+        int at = 0;
+        for (const SliderTileInfo *tile : unassigned) m_rows[0].insert(at++, tile->guid);
+        unassigned.clear();
+    }
+
     // round-robin fill in input order (input order IS the rows-mode ordering)
     int next = 0;
     for (const SliderTileInfo *tile : unassigned) {

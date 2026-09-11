@@ -12,12 +12,15 @@ For more information see the LICENSE file
 #include "ui/dialogs/screenshotwidget.h"
 #include "ui_screenshotwidget.h"
 #include <QFileDialog>
+#include "ui/style/stylesheet.h"
 
 ScreenshotWidget::ScreenshotWidget(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::ScreenshotWidget)
 {
     ui->setupUi(this);
+    // screenshotwidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::ScreenshotDialogRoot());
 
     this->setWindowTitle("Screenshot");
     ui->label->setScaledContents(true);

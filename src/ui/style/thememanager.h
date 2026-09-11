@@ -50,12 +50,13 @@ public:
     // is constructed and before ANY widget (the Upgrader dialog is the first).
     static void applyAtStartup(QApplication &app);
 
-    // Crud sweeper for Qlementine mode: recursively clears every stylesheet on
-    // root and its child widgets so the QStyle owns the whole subtree. Reaches
-    // what the StyleSheet:: kill switch cannot — .ui-embedded sheets and raw
-    // setStyleSheet crud applied earlier in a constructor. No-op under Classic.
-    // Call at the END of a constructor, after setupUi and sheet-pushing code.
-    static void clearClassicSheets(QWidget *root);
+    // (clearClassicSheets — a recursive "wipe every sheet under this widget"
+    // for Qlementine mode — was deleted by the theme sweep, platform audit
+    // F-S1: it never had a caller, and after the sweep there is nothing left
+    // for it to clear. Classic CSS lives only in StyleSheet:: getters that
+    // return "" under Qlementine, and the few sheets Qlementine does carry are
+    // this class's own chrome — exactly what a blanket sweeper would have
+    // wiped. app.styleSheets / theme.sheets is the guard instead.)
 
     // THE chrome button spec (owner direction, one definition for all page
     // chrome): grey rounded button matching the blue accent buttons'
@@ -114,6 +115,51 @@ public:
     // code toggling the action programmatically keeps working. No-op under
     // Classic. Call once, after the menu's actions are all added.
     static void switchifyMenuToggles(class QMenu *menu);
+
+    // True when `sheet` is exactly a sheet this class handed out (every
+    // getter above records what it returns). The live theme walk
+    // (app.styleSheets) classifies each widget sheet with this: under
+    // Qlementine a non-empty sheet that is NOT the theme's own is raw crud.
+    static bool isThemeSheet(const QString &sheet);
+
+    // THE SPACE MENU — the header's text buttons (Desktop / Player / Editor /
+    // Materials / Assets / Avatar). The header is ours, not a stock control:
+    // flat labels on the near-black band, the ACTIVE space in the accent
+    // colour, the editor/player entries greyed while no scene is open. Under
+    // Qlementine one sheet per state carries the whole look (geometry, font
+    // size, colour) — the text colour cannot come from the palette, since the
+    // style paints button text from its theme. Classic keeps its archived
+    // border-colour swap (TopMenuSelected / Unselected / Disabled).
+    enum class TopMenuState { Idle, Active, Disabled };
+    static QString topMenuButtonSheet(TopMenuState state);
+    static void applyTopMenuButton(class QPushButton *button, TopMenuState state);
+
+    // The sample browser's tile list (Desktop ▸ Sample Scenes): the desktop
+    // tiles' look — thumbnail over a black name band, accent when selected —
+    // in BOTH themes (verbatim what the list carried before the sweep).
+    static QString sampleTileListSheet();
+
+    // A small square glyph button in the accent colour (the Assets page's
+    // "+" new-drawer button): the same look in BOTH themes — Classic shipped it
+    // as a raw sheet, and a Qlementine button cannot take its colour from the
+    // palette. 16px bold glyph, no padding (a 24px button has no room for any).
+    static QString accentGlyphButtonSheet();
+
+    // A drop target's affordance: a dashed rounded outline around the pane
+    // that accepts files (the Assets page's drop pad). "" under Classic,
+    // whose page sheet draws its own box. `labelName` is the objectName of the
+    // pane's caption label, which gets the target's vertical room.
+    static QString dropZoneSheet(const QString &paneName, const QString &labelName);
+
+    // The main window's font (platform audit F-S3). Under Qlementine the
+    // theme owns typography — nothing is set, the window inherits the
+    // theme's font. Classic keeps what it always rendered: the platform's
+    // default family at the application's point size (the old code also
+    // multiplied the POINT size by the device pixel ratio — a point size is
+    // already device-independent, so that doubled every font on a 2x display;
+    // at 1x, the only ratio Classic was ever judged at, dropping it is
+    // bit-for-bit).
+    static void applyWindowFont(QWidget *window);
 };
 
 #endif // JAH_THEMEMANAGER_H

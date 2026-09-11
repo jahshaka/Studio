@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QSignalBlocker>
 
 #include "ui/controls/dragspinbox.h"
+#include "ui/style/stylesheet.h"
 
 namespace {
 // The transform editor's numbers, verbatim (ui/panels/transformeditor.cpp):
@@ -23,19 +24,16 @@ namespace {
 // like the same control, because they are the same control.
 const int kTitleWidth = 56;
 
-// The row sheet, also from the transform editor. Kept as a literal here rather
-// than pulled into StyleSheet:: because it is inseparable from the layout above
-// (the axis colours ARE the X/Y/Z labels these rows do not have).
-const char *kSheet =
-    "QWidget#DragValueRow { border: none; background: transparent; }"
-    "QLabel { color: #DEDEDE; background: transparent; }"
-    "QDoubleSpinBox {"
-    "    border-radius: 1px; padding: 3px; background: #292929; color: #DEDEDE;"
-    "    selection-background-color: #3498db;"
-    "}"
-    "DragSpinBox#dragx { border-left: 3px solid #c0392b; }"
-    "DragSpinBox#dragy { border-left: 3px solid #27ae60; }"
-    "DragSpinBox#dragz { border-left: 3px solid #2980b9; }";
+// The row sheet (also the transform editor's) is Classic's
+// (StyleSheet::DragValueRowPanel); under Qlementine the fields are the style's
+// own and the X/Y/Z identity is a painted strip (DragSpinBox::setAxisColor).
+void colourAxes(DragSpinBox *x, DragSpinBox *y, DragSpinBox *z)
+{
+    if (StyleSheet::classicThemeActive()) return;
+    if (x) x->setAxisColor(QColor(0xc0, 0x39, 0x2b));
+    if (y) y->setAxisColor(QColor(0x27, 0xae, 0x60));
+    if (z) z->setAxisColor(QColor(0x29, 0x80, 0xb9));
+}
 
 DragSpinBox *makeField(QWidget *parent, const QString &objectName, double perPixelStep)
 {
@@ -67,7 +65,7 @@ DragFloatWidget::DragFloatWidget(const QString &title, QWidget *parent)
     : QWidget(parent)
 {
     setObjectName("DragValueRow");
-    setStyleSheet(kSheet);
+    setStyleSheet(StyleSheet::DragValueRowPanel());
 
     auto *grid = new QGridLayout(this);
     grid->setContentsMargins(14, 2, 14, 2);
@@ -104,7 +102,7 @@ DragVector3Widget::DragVector3Widget(const QString &title, QWidget *parent)
     : QWidget(parent)
 {
     setObjectName("DragValueRow");
-    setStyleSheet(kSheet);
+    setStyleSheet(StyleSheet::DragValueRowPanel());
 
     auto *grid = new QGridLayout(this);
     grid->setContentsMargins(14, 2, 14, 2);
@@ -115,6 +113,7 @@ DragVector3Widget::DragVector3Widget(const QString &title, QWidget *parent)
     x = makeField(this, QStringLiteral("dragx"), 0.02);
     y = makeField(this, QStringLiteral("dragy"), 0.02);
     z = makeField(this, QStringLiteral("dragz"), 0.02);
+    colourAxes(x, y, z);
     grid->addWidget(x, 0, 1);
     grid->addWidget(y, 0, 2);
     grid->addWidget(z, 0, 3);

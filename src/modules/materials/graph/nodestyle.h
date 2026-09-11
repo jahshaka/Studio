@@ -115,11 +115,4 @@ namespace Canvas
     constexpr qreal  fitMargin = 60.0;              // scene units around F-fit
 }
 
-// ------------------------------------------------------- shared stylesheets
-// One QMenu sheet (was copy-pasted in graphnodescene.cpp and listwidget.cpp)
-inline const char* const menuStyleSheet =
-    "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-    "QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-    "QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-    "QMenu::item:disabled { color: #555; }";
 }

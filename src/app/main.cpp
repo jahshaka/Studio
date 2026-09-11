@@ -42,7 +42,6 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "app/cli/scriptrunner.h"
 #include "app/cli/selftestrunner.h"
-#include "ui/dialogs/infodialog.h"
 #include "scripting/scriptengine.h"
 #include "data/constants.h"
 #include "app/updatechecker.h"
@@ -392,7 +391,12 @@ int main(int argc, char *argv[])
     
     updateChecker.checkForAppUpdate();
 
-	app.installEventFilter(new ToolTipHelper());
+	// Tooltips: Classic's own popup (ToolTipHelper), or the Qlementine style's
+	// native tooltip with "Header | body" rendered as rich text.
+	if (ThemeManager::classicActive())
+		app.installEventFilter(new ToolTipHelper());
+	else
+		app.installEventFilter(new NativeToolTipFormatter(&app));
 
     const int rc = app.exec();
     return finalizeAppExit(rc);

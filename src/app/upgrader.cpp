@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 
 #include <QDebug>
+#include "ui/style/stylesheet.h"
 
 void Upgrader::checkIfDeprecatedVersion()
 {
@@ -79,13 +80,7 @@ void Upgrader::checkIfDeprecatedVersion()
 			layout->addSpacing(8);
 			layout->addWidget(bwidget);
 
-			dialog.setStyleSheet(
-				"* { color: #EEE; }"
-				"QDialog { background: #222222; padding: 4px; }"
-				"QPushButton { background: #444; color: #EEE; border: 0; padding: 6px 10px; }"
-				"QPushButton:hover { background: #555; color: #EEE; }"
-				"QPushButton:pressed { background: #333; color: #EEE; }"
-			);
+			dialog.setStyleSheet(StyleSheet::UpgraderDialog());
 
 			bool proceed = false;
 

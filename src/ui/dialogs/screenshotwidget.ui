@@ -13,17 +13,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QPushButton  {
-    border: none;
-	padding: 6px 20px;
-    background-color: #212121;
-}
-
-QPushButton:hover {
-    background-color: #555;
-}</string>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
     <widget class="QLabel" name="label">

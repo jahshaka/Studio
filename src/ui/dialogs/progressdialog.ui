@@ -13,25 +13,6 @@
   <property name="windowTitle">
    <string>Jahshaka</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QLabel {
-	color: #EEEEEE;
-}
-
-QProgressBar {
-     border: 1px solid black;
-     background-color: #DEDEDE;
- }
-
- QProgressBar::chunk {
-     background-color: #3498db;
- }
-
-#ProgressDialog {
-	background: #222;
-	border: 1px solid black;
-}</string>
-  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
     <number>9</number>
@@ -59,9 +40,6 @@ QProgressBar {
     <widget class="QLabel" name="stageLabel">
      <property name="text">
       <string/>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">color: #999999;</string>
      </property>
     </widget>
    </item>

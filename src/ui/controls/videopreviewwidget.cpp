@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include <QVBoxLayout>
 #include <QVideoFrame>
 #include <QVideoSink>
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 namespace {
 QString formatTime(qint64 ms)
@@ -69,7 +71,9 @@ VideoPreviewWidget::VideoPreviewWidget(QWidget *parent) : QWidget(parent)
 
     nameLabel = new QLabel;
     nameLabel->setAlignment(Qt::AlignCenter);
-    nameLabel->setStyleSheet("font-size: 14px; color: #EEEEEE; padding: 4px;");
+    nameLabel->setStyleSheet(StyleSheet::VideoPreviewTitle());
+    ThemeRoles::setTextSize(nameLabel, 14);
+    ThemeRoles::setPadding(nameLabel, 4, 4, 4, 4);
 
     playButton = new QPushButton(tr("Pause"));
     playButton->setFixedWidth(64);
@@ -79,7 +83,8 @@ VideoPreviewWidget::VideoPreviewWidget(QWidget *parent) : QWidget(parent)
     seekSlider->setRange(0, 0);
 
     timeLabel = new QLabel("0:00 / 0:00");
-    timeLabel->setStyleSheet("color: #BABABA;");
+    timeLabel->setStyleSheet(StyleSheet::AssetViewMutedLabel());
+    ThemeRoles::setTone(timeLabel, ThemeRoles::Tone::Muted);
 
     loopButton = new QPushButton(tr("Loop"));
     loopButton->setCheckable(true);
