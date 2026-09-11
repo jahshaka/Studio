@@ -1002,6 +1002,19 @@ set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
 # Both are document-only, so they run --headless (offscreen platform, NULL
 # render system, DISPLAY unset) — the selection set, its verbs and its edits
 # never touch a pixel.
+# node.rename (plan item 15): the sibling-unique copy rule and ONE recorded undo
+# step per rename; the undo itself is asserted in mcp.e2e (a --script run's
+# macro never closes). Document verbs only -> --headless.
+set(_nr_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-node_rename)
+file(MAKE_DIRECTORY ${_nr_home}/run)
+add_test(NAME scripting.e2e.node_rename
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_node_rename.js --headless
+         WORKING_DIRECTORY ${_nr_home}/run)
+set_tests_properties(scripting.e2e.node_rename PROPERTIES
+    ENVIRONMENT "HOME=${_nr_home};JAHSHAKA_DATA_ROOT=${_nr_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
+    LABELS "scripting" TIMEOUT 120)
+jah_no_display(scripting.e2e.node_rename)
+
 foreach(_ms multiselect multiselect_edit)
     set(_ms_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${_ms})
     file(MAKE_DIRECTORY ${_ms_home})

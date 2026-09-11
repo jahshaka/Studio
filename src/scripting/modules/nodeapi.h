@@ -38,6 +38,7 @@ public:
 
     Q_INVOKABLE bool remove(const QString &id);
     Q_INVOKABLE QString duplicate(const QString &id);
+    Q_INVOKABLE QString rename(const QString &id, const QString &name);
     Q_INVOKABLE bool reparent(const QString &id, const QString &parentId);
     Q_INVOKABLE QVariantMap serialize(const QString &id);
     Q_INVOKABLE QString deserialize(const QVariantMap &fragment, const QString &parentId,

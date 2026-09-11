@@ -1578,7 +1578,23 @@ void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
         return;
     }
 
-    if (selectedNode) selectedNode->setName(newName);
+    // A NODE ROW: the same edit `node.rename` makes (API-first) — sibling-unique
+    // by the copy rule, one undo step. It used to be a bare setName, which
+    // recorded nothing (Ctrl+Z could not take a typo back) and happily made two
+    // siblings called "Cube". The node is the one the ROW names, not whatever
+    // happens to be selected: the two agree when the editor was opened by a
+    // double-click, but the context menu's Rename does not select.
+    const qint64 nodeId = item ? item->data(0, Qt::UserRole).toLongLong() : 0;
+    iris::SceneNodePtr node = nodeList.value(nodeId);
+    if (!node) node = selectedNode;
+    if (!node) return;
+    SceneEditService *service = (mainWindow && mainWindow->studioServices())
+                                    ? mainWindow->studioServices()->sceneEdit : nullptr;
+    const QString given = service ? service->renameNode(node, newName) : QString();
+    // The service rebuilds the tree on success; on a refusal (or no service)
+    // put the row back to the name the document actually holds.
+    if (given.isEmpty() && item && treeItemList.value(nodeId) == item)
+        item->setText(0, node->getName());
 }
 
 QTreeWidget * SceneHierarchyWidget::getWidget()

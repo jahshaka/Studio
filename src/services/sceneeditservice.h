@@ -213,6 +213,15 @@ public:
     bool deleteNode(iris::SceneNodePtr node);
     iris::SceneNodePtr duplicateNode(iris::SceneNodePtr node);
 
+    /// THE RENAME (plan item 15): `desired`, trimmed, made unique among the
+    /// node's siblings by the copy rule (services/nodenaming.h — "Cube" taken
+    /// becomes "Cube2", never "Cube Copy"). One undo step; a rename to the name
+    /// the node already has records nothing. Returns the name the node carries
+    /// afterwards, or an empty string when refused (no node, the world root,
+    /// or a blank name). `node.rename` and the outliner's inline editor both
+    /// land here, so a typed name and a scripted one follow the same rule.
+    QString renameNode(const iris::SceneNodePtr &node, const QString &desired);
+
     // ---- the selection SET (EDITOR_MULTISELECT_SPEC §2.5) ------------------
     //
     // The set-shaped half of delete/duplicate/copy/paste. Every one of them

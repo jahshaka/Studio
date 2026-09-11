@@ -52,6 +52,15 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "duplicate", "node.duplicate(id) -> newId",
           "Duplicates the node under the same parent. Undoable.",
           Needs::Document },
+        { "rename", "node.rename(id, name) -> name",
+          "Renames the node and returns the name it ACTUALLY got. Names are unique among "
+          "SIBLINGS by the same rule a duplicate follows: a name another child of the same "
+          "parent already carries gets the next free numeric suffix, no space (\"Cube\" taken "
+          "-> \"Cube2\", \"Cube2\" taken -> \"Cube3\"); nodes under different parents may "
+          "share a name. Leading/trailing spaces are trimmed; a blank name and the world root "
+          "are refused. Renaming a node to the name it already has changes nothing and records "
+          "nothing. One undo step — the outliner's inline rename is this same edit.",
+          Needs::Document },
         { "reparent", "node.reparent(id, parentId) -> bool",
           "Moves the node under a new parent, keeping its world pose; cycles are refused. Undoable.",
           Needs::Document },
@@ -557,6 +566,24 @@ QString NodeApi::duplicate(const QString &id)
         return QString();
     }
     return copy->getGUID();
+}
+
+QString NodeApi::rename(const QString &id, const QString &name)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.rename"));
+    if (!node) return QString();
+    if (node->isRootNode()) {
+        fail(QStringLiteral("node.rename: the world root keeps its name"));
+        return QString();
+    }
+    if (name.trimmed().isEmpty()) {
+        fail(QStringLiteral("node.rename: a node needs a name (got a blank one)"));
+        return QString();
+    }
+    const QString given = host.services->sceneEdit->renameNode(node, name);
+    if (given.isEmpty())
+        fail(QStringLiteral("node.rename: '%1' could not be renamed").arg(node->getName()));
+    return given;
 }
 
 bool NodeApi::reparent(const QString &id, const QString &parentId)
