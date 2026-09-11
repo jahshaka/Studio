@@ -135,9 +135,15 @@ void WorldShadowPropertyWidget::refreshRows()
     if (sceneView && sceneView->isInitialized()) st = sceneView->shadowStatus();
     if (memoryRow) {
         if (st.available && st.atlasWidth > 0) {
-            memoryRow->setText(QStringLiteral("~%1 MB VRAM (%2 x %3, %4 point/spot maps)")
-                                   .arg(int(st.atlasBytes / (1024 * 1024)))
-                                   .arg(st.atlasWidth).arg(st.atlasHeight).arg(st.focusedMaps));
+            // atlasBytes counts the planar mirrors' own atlases too (they hold
+            // the same number of lamp maps since ENGINE_CACHE_POLICY D3).
+            QString text = QStringLiteral("~%1 MB VRAM (%2 x %3, %4 point/spot maps")
+                               .arg(int(st.atlasBytes / (1024 * 1024)))
+                               .arg(st.atlasWidth).arg(st.atlasHeight).arg(st.focusedMaps);
+            if (st.reflectAtlasBytes > 0)
+                text += QStringLiteral("; %1 MB of it for mirrors")
+                            .arg(int(st.reflectAtlasBytes / (1024 * 1024)));
+            memoryRow->setText(text + QStringLiteral(")"));
             memoryRow->show();
         } else if (effective > 0) {
             memoryRow->setText(QStringLiteral("~%1 MB VRAM (%2 x %3)")

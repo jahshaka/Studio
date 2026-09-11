@@ -550,7 +550,7 @@ static int lampPasses(const ShadowStatus &st, NodeId lamp)
 
 static bool lampCached(const ShadowStatus &st, NodeId lamp)
 {
-    for (const ShadowMapInfo &m : st.mapped) if (m.node == lamp) return m.isStatic;
+    for (const ShadowMapInfo &m : st.mapped) if (m.node == lamp) return m.isCached;
     return false;
 }
 
@@ -587,7 +587,7 @@ static void t3_cache_view(Engine *e, View *v)
     // (a) THE FIRST FRAME: every lamp map renders exactly once...
     ShadowStatus st = frame(e, p, r);
     std::printf("    first frame: lamp passes %d / %d / %d, cached-map passes %u, viewCached %d\n",
-                p[0], p[1], p[2], st.staticMapRendersLastFrame, int(st.viewCached));
+                p[0], p[1], p[2], st.cachedMapRendersLastFrame, int(st.viewCached));
     CHECK(st.focusedMaps >= 3u && st.unmapped.empty(), "all three lamps hold a map (%u maps)", st.focusedMaps);
     CHECK(lampCached(st, r.lamps[0]) && lampCached(st, r.lamps[1]) && lampCached(st, r.lamps[2]) &&
           st.viewCached, "and all three are CACHED — no per-light switch exists any more");
@@ -595,7 +595,7 @@ static void t3_cache_view(Engine *e, View *v)
           "the first frame renders each lamp map once: 8 passes each (%d/%d/%d)", p[0], p[1], p[2]);
     // ...then never again while nothing changes.
     unsigned rest = 0;
-    for (int i = 0; i < 30; ++i) { st = frame(e, p, r); rest += st.staticMapRendersLastFrame + st.shadowPassesLastFrame; }
+    for (int i = 0; i < 30; ++i) { st = frame(e, p, r); rest += st.cachedMapRendersLastFrame + st.shadowPassesLastFrame; }
     CHECK(rest == 0u, "30 frames at rest: ZERO shadow passes (%u)", rest);
 
     // (b) THE CAMERA NEVER DIRTIES A MAP (P3): a 60-frame fly.
@@ -691,9 +691,14 @@ static void t3_cache_view(Engine *e, View *v)
     // AND THE PICTURE IS STILL RIGHT after ~110 frames of cached maps.
     Image img;
     v->readPixels(img);
-    const int moved = probe(img, -4.25f, -2.25f);   // the moved mover's shadow, one unit on
-    std::printf("    final: moved mover's shadow %d vs lit %d\n", moved, probe(img, -4.25f, -11.75f));
-    CHECK(moved < probe(img, -4.25f, -11.75f), "the cached maps still shade the room");
+    // The moved mover's top-centre shadow is at (-4.25,-1.25) (Light0 through
+    // (-5.5,1,-3.5)); the lit reference is its mirror across Light0's diagonal,
+    // the same distance from the lamp with nothing between them.
+    const int moved = probe(img, -4.25f, -1.25f);
+    const int movedLit = probe(img, -1.25f, -4.25f);
+    const double movedRatio = movedLit > 0 ? double(moved) / double(movedLit) : 1.0;
+    std::printf("    final: moved mover's shadow %d vs lit %d (ratio %.2f)\n", moved, movedLit, movedRatio);
+    CHECK(movedRatio < 0.35, "the cached maps still shade the room (ratio %.2f < 0.35)", movedRatio);
     e->destroyScene(r.scene);
 }
 

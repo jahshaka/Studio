@@ -1829,8 +1829,10 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     out.atlasWidth = int(st.atlasWidth);
     out.atlasHeight = int(st.atlasHeight);
     out.atlasBytes = qint64(st.atlasBytes);
+    out.reflectAtlasBytes = qint64(st.reflectAtlasBytes);
+    out.probeAtlasBytes = qint64(st.probeAtlasBytes);
     out.shadowPassesLastFrame = int(st.shadowPassesLastFrame);
-    out.staticMapRendersLastFrame = int(st.staticMapRendersLastFrame);
+    out.cachedMapRendersLastFrame = int(st.cachedMapRendersLastFrame);
     out.reflectPassesLastFrame = int(st.reflectPassesLastFrame);
     out.probePassesLastFrame = int(st.probePassesLastFrame);
     out.reflectLampPassesLastFrame = int(st.reflectLampPassesLastFrame);
@@ -1856,7 +1858,7 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
         ShadowMapEntry e;
         e.slot = int(m.slot);
         e.node = guidOf.value(quint64(m.node));
-        e.isStatic = m.isStatic;
+        e.isCached = m.isCached;
         e.dirty = m.dirty;
         e.pssm = m.pssm;
         e.passesLastFrame = int(m.passesLastFrame);

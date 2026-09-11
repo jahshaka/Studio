@@ -35,6 +35,8 @@
 #include "EnginePrivate.h"
 #include "jahshaka/engine/Engine.h"
 
+#include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -654,6 +656,87 @@ static void cacheKindsCase()
     engine.reset();
 }
 
+// ---------------------------------------------------------------------------
+// scancost: what the per-frame item walks cost (ENGINE_CACHE_POLICY_SPEC E2,
+// lead review item 4). N cube nodes in a grid, 4 shadow-casting point lamps and
+// a shadowed hybrid-GI scene (so the GI movement scan runs every frame too);
+// the engine's own steady-clock readings of collectShadowCacheFrame and
+// scanGiMovement, at rest and with 10 movers. Numbers, not a gate.
+static void scanCostCase(int n)
+{
+    std::string err;
+    EngineConfig cfg = config("spike-scancost.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); ++failures; return; }
+    View *v = engine->createOffscreenView("spike", 64, 64, Colour(0, 0, 0));
+    Scene *s = engine->createScene("scancost");
+    v->setScene(s);
+    auto *scene = static_cast<jahshaka::engine::detail::OgreScene *>(s);
+    const MeshId mesh = s->createMesh(cubeMesh());
+    PbrParams white; white.albedo = Colour(0.8f, 0.8f, 0.8f); white.roughness = 0.9f;
+    const MaterialId mat = s->createPbrMaterial(white);
+    const int side = int(std::ceil(std::sqrt(double(n))));
+    const float span = 30.0f, step = span / float(side);
+    std::vector<NodeId> cubes;
+    cubes.reserve(size_t(n));
+    for (int i = 0; i < n; ++i) {
+        const NodeId c = s->createNode();
+        s->attachMesh(c, mesh, mat);
+        s->setNodeTransform(c, Vec3(-span * 0.5f + step * float(i % side), 0.25f,
+                                    -span * 0.5f + step * float(i / side)),
+                            Quat(), Vec3(step * 0.4f, 0.5f, step * 0.4f));
+        cubes.push_back(c);
+    }
+    for (int i = 0; i < 4; ++i) {
+        const NodeId lamp = s->createNode();
+        LightDesc d; d.type = LightType::Point; d.intensity = 0.3f; d.range = 8.0f; d.castShadows = true;
+        s->setLight(lamp, d);
+        s->setNodeTransform(lamp, Vec3(i % 2 ? 7.0f : -7.0f, 3.0f, i / 2 ? 7.0f : -7.0f), Quat(), Vec3(1, 1, 1));
+    }
+    CameraDesc c;
+    c.position = Vec3(0, 40, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);
+    v->setCamera(c);
+    v->setShadows(true);
+    engine->setShadowMapBudget(8u);
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    gi.quality = GiQuality::Low;
+    gi.probeShadows = GiToggle::On;
+    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    // JAH_SCANCOST_NOGI=1: budget 0, so no GI consumer scans and the shadow
+    // cache walks on its own after updateSceneGraph (cached world AABBs).
+    gi.updateBudget = std::getenv("JAH_SCANCOST_NOGI") ? 0 : 1;
+    gi.dynamicProbes = 0;
+    s->setGlobalIllumination(gi);
+    for (int i = 0; i < 30; ++i) engine->renderOneFrame();
+    const auto sample = [&](int frames, bool move, double &shadowUs, double &giUs, double &frameMs) {
+        shadowUs = giUs = frameMs = 0.0;
+        for (int f = 0; f < frames; ++f) {
+            if (move)
+                for (int m = 0; m < 10; ++m) {
+                    const NodeId id = cubes[size_t(m * (n / 10))];
+                    s->setNodeTransform(id, Vec3(-span * 0.5f + step * float((m * (n / 10)) % side),
+                                                 0.25f + 0.2f * std::sin(0.1f * float(f + m)),
+                                                 -span * 0.5f + step * float((m * (n / 10)) / side)),
+                                        Quat(), Vec3(step * 0.4f, 0.5f, step * 0.4f));
+                }
+            const auto t0 = std::chrono::steady_clock::now();
+            engine->renderOneFrame();
+            frameMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            shadowUs += scene->shadowScanMicros();
+            giUs += scene->giScanMicros();
+        }
+        shadowUs /= frames; giUs /= frames; frameMs /= frames;
+    };
+    double a, b, fr;
+    sample(60, false, a, b, fr);
+    std::printf("    N=%5d at rest:     shadow scan %8.1f us   gi scan %8.1f us   (frame %.2f ms)\n", n, a, b, fr);
+    sample(60, true, a, b, fr);
+    std::printf("    N=%5d 10 movers:   shadow scan %8.1f us   gi scan %8.1f us   (frame %.2f ms)\n", n, a, b, fr);
+    engine.reset();
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "layout";
@@ -663,6 +746,9 @@ int main(int argc, char **argv)
     else if (mode == "r3")     r3Case();
     else if (mode == "atten")  attenCase();
     else if (mode == "cachekinds") cacheKindsCase();
+    else if (mode == "scancost") {
+        for (int i = 2; i < argc; ++i) scanCostCase(std::atoi(argv[i]));
+    }
     else { std::printf("unknown mode %s\n", mode.c_str()); return 2; }
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
     return failures ? 1 : 0;
