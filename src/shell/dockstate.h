@@ -15,7 +15,7 @@ For more information see the LICENSE file
 //
 // MainWindow::closeEvent writes `geometry` and `windowState` and the
 // constructor restores them — but `windowState` is the OUTER window's, and
-// every editor dock (Hierarchy, Properties, Presets, Asset Browser, Timeline)
+// every editor dock (Hierarchy, Properties, Presets, Tray, Timeline)
 // belongs to the INNER `viewPort` QMainWindow that hosts them. Its saveState()
 // was never called at all, so every dock the user moved, resized, floated,
 // tabbed or closed came back to the compiled-in layout on the next launch.

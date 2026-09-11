@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "io/materialreader.h"
 #include "irisgl/irisgl.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/import/model.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/texture.h"

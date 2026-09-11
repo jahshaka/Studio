@@ -19,6 +19,10 @@ target_include_directories(test_document_characterisation PRIVATE ${CMAKE_SOURCE
     # iris headers expose bullet types; this is IrisGL's own include path
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_document_characterisation PRIVATE IrisGL Qt6::Gui)
+# A model read from a Qt RESOURCE (smoke L10 item 4): the ":/" read path hands
+# assimp bytes from memory, the one path where its 200-byte format sniff decides.
+qt_add_resources(test_document_characterisation "document_fixtures"
+    PREFIX "/document-fixtures" BASE fixtures FILES fixtures/commented_header.obj)
 # This suite builds a DOCUMENT, and a document node is an engine node now
 # (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
 # system, no display, no GPU (tests/support/documentgraph.h). jah_no_display

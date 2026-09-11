@@ -87,8 +87,11 @@ class ScenePropertyCommand : public StudioCommand
 public:
     /// `before` must be read BEFORE the edit; the panel applies the edit
     /// itself (live, so the viewport follows a drag) and pushes this after.
+    /// `parent`: a composite step (a world verb that wrote several rows — one
+    /// call, one undo step) owns its rows as children.
     ScenePropertyCommand(const QString &text, const iris::ScenePtr &scene, const QString &key,
-                         const QVariant &before, const QVariant &after);
+                         const QVariant &before, const QVariant &after,
+                         QUndoCommand *parent = nullptr);
 
     void undo() override;
     void redo() override;

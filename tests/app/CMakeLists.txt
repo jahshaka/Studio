@@ -33,9 +33,13 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # (it is also how the sha256 smoke is taken by hand).
 #
 # Any "Validation Error" in the output fails the test. This is what caught the
-# stale depth buffer on resize.
+# stale depth buffer on resize. A SECOND arm (smoke L10 item 3) re-runs the
+# self-test with its ground deliberately broken and requires exit 1: the
+# self-test used to pass a groundless default scene because the sky alone
+# satisfies its centre-pixel check (engine_selftest.sh says why, in full).
 add_test(NAME app.engine_selftest_validation
-         COMMAND bash -c "\"$<TARGET_FILE:${CMAKE_PROJECT_NAME}>\" --engine-selftest \"${CMAKE_CURRENT_BINARY_DIR}/selftest_validation.png\" > \"${CMAKE_CURRENT_BINARY_DIR}/validation.log\" 2>&1; rc=$?; if grep -q 'Validation Error' \"${CMAKE_CURRENT_BINARY_DIR}/validation.log\"; then grep -m3 'Validation Error' \"${CMAKE_CURRENT_BINARY_DIR}/validation.log\"; exit 1; fi; exit $rc"
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
 set_tests_properties(app.engine_selftest_validation PROPERTIES
     ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"

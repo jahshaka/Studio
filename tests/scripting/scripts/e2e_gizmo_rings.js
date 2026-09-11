@@ -41,9 +41,26 @@ assert(corner.distancePx > corner.tolerancePx,
 // frame (Gizmo::updateSize), so a coarse grid over the middle of the viewport
 // crosses all three. Step 6 px: the pick tolerance is 7, so nothing is missed
 // between samples.
+// The camera's view direction, from the quaternion editor.camera() reports:
+// q * (0, 0, -1).
+function forwardOf(q) {
+    return { x: -2 * (q.x * q.z + q.scalar * q.y),
+             y: -2 * (q.y * q.z - q.scalar * q.x),
+             z: -(1 - 2 * (q.x * q.x + q.y * q.y)) };
+}
+
 function ringsFrom(name, pos) {
     assert(editor.setCamera({ position: pos, lookAt: { x: 0, y: 0, z: 0 } }),
            name + ": camera placed at " + pos.x + "," + pos.y + "," + pos.z);
+    // It must actually LOOK at the origin — including straight down, where a
+    // look-at built against a fixed world +Y used to degenerate (smoke L10
+    // item 1: the top camera pitched -36.87 degrees instead of -90, which is
+    // why this suite used to nudge it off the pole to z = 0.01).
+    var len = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+    var f = forwardOf(editor.camera().rotation);
+    var dot = -(f.x * pos.x + f.y * pos.y + f.z * pos.z) / len;
+    assert(dot > 0.99999, name + ": the camera looks at the origin (cos " + dot.toFixed(6) +
+           ", view " + f.x.toFixed(4) + "," + f.y.toFixed(4) + "," + f.z.toFixed(4) + ")");
     editor.frame(2);
     var found = {}, hits = 0, overTolerance = 0;
     var half = Math.min(view.width, view.height) * 0.45;
@@ -67,7 +84,7 @@ function ringsFrom(name, pos) {
 // front / top / right each put two of the three rings EDGE-ON to the camera —
 // the configurations in which exactly one ring used to be pickable.
 ringsFrom("front  (X and Y edge-on)", { x: 0, y: 0, z: 9 });
-ringsFrom("top    (X and Z edge-on)", { x: 0, y: 9, z: 0.01 });
+ringsFrom("top    (X and Z edge-on)", { x: 0, y: 9, z: 0 });   // exactly on the pole
 ringsFrom("right  (Y and Z edge-on)", { x: 9, y: 0, z: 0 });
 ringsFrom("ground (Y nearly edge-on)", { x: 7, y: 0.35, z: 7 });
 ringsFrom("iso",                       { x: 6, y: 6, z: 6 });

@@ -28,7 +28,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/animation/locomotion.h"
-#include "irisgl/import/model.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/texture.h"

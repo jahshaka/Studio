@@ -115,6 +115,12 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->fogBreakMinBrightness = v.toFloat(); });
     add("fogBreakFalloff", [](const ScenePtr &s) { return QVariant(s->fogBreakFalloff); },
         [](const ScenePtr &s, const QVariant &v) { s->fogBreakFalloff = v.toFloat(); });
+    // The retired LINEAR pair — no panel row writes them, but world.fog's
+    // `start`/`end` still do, and a verb records through this table too.
+    add("fogStart", [](const ScenePtr &s) { return QVariant(s->fogStart); },
+        [](const ScenePtr &s, const QVariant &v) { s->fogStart = v.toFloat(); });
+    add("fogEnd", [](const ScenePtr &s) { return QVariant(s->fogEnd); },
+        [](const ScenePtr &s, const QVariant &v) { s->fogEnd = v.toFloat(); });
     add("shadowEnabled", [](const ScenePtr &s) { return QVariant(s->shadowEnabled); },
         [](const ScenePtr &s, const QVariant &v) { s->shadowEnabled = v.toBool(); });
 
@@ -135,6 +141,24 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giDdgiAmbient = v.toFloat(); });
     add("giDdgiSource", [](const ScenePtr &s) { return QVariant(s->giDdgiSource); },
         [](const ScenePtr &s, const QVariant &v) { s->giDdgiSource = v.toInt(); });
+    // Verb-only integrator knobs (world.gi): no panel row, but the verb's one
+    // undo step records them through this table like every other world field.
+    add("giAutoBoundsMax", [](const ScenePtr &s) { return QVariant(s->giAutoBoundsMax); },
+        [](const ScenePtr &s, const QVariant &v) { s->giAutoBoundsMax = v.toFloat(); });
+    add("giRayMarchStepScale", [](const ScenePtr &s) { return QVariant(s->giRayMarchStepScale); },
+        [](const ScenePtr &s, const QVariant &v) { s->giRayMarchStepScale = v.toFloat(); });
+    add("giProbeHdr", [](const ScenePtr &s) { return QVariant(s->giProbeHdr); },
+        [](const ScenePtr &s, const QVariant &v) { s->giProbeHdr = v.toInt(); });
+    add("giProbeShadows", [](const ScenePtr &s) { return QVariant(s->giProbeShadows); },
+        [](const ScenePtr &s, const QVariant &v) { s->giProbeShadows = v.toInt(); });
+    add("giProbeOverlap", [](const ScenePtr &s) { return QVariant(s->giProbeOverlap); },
+        [](const ScenePtr &s, const QVariant &v) { s->giProbeOverlap = v.toFloat(); });
+    add("giProbeSnapDeviation", [](const ScenePtr &s) { return QVariant(s->giProbeSnapDeviation); },
+        [](const ScenePtr &s, const QVariant &v) { s->giProbeSnapDeviation = v.toFloat(); });
+    add("giProbeSnapSidesMin", [](const ScenePtr &s) { return QVariant(s->giProbeSnapSidesMin); },
+        [](const ScenePtr &s, const QVariant &v) { s->giProbeSnapSidesMin = v.toFloat(); });
+    add("giProbeSnapSidesMax", [](const ScenePtr &s) { return QVariant(s->giProbeSnapSidesMax); },
+        [](const ScenePtr &s, const QVariant &v) { s->giProbeSnapSidesMax = v.toFloat(); });
 
     // ---- Post Process: the looks stack ------------------------------------
     add("looks", [](const ScenePtr &s) { return QVariant(s->looks); },
@@ -208,8 +232,8 @@ bool set(const iris::ScenePtr &scene, const QString &id, const QVariant &value)
 
 ScenePropertyCommand::ScenePropertyCommand(const QString &text, const iris::ScenePtr &scene,
                                            const QString &key, const QVariant &before,
-                                           const QVariant &after)
-    : mScene(scene), mKey(key), mBefore(before), mAfter(after)
+                                           const QVariant &after, QUndoCommand *parent)
+    : StudioCommand(parent), mScene(scene), mKey(key), mBefore(before), mAfter(after)
 {
     setText(text);
 }

@@ -201,6 +201,13 @@ int main(int argc, char **argv)
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     cfg.logFile = "test_gpu_clips-ogre.log";
+    // Every "padded to" line the engine logs (OgreClips.cpp kMinClipLength):
+    // the smoke L10 item 2 block below asserts a one-frame Mixamo clip never
+    // produces one. Installed through the config so no line is missed.
+    static std::vector<std::string> sPadLines;
+    cfg.logSink = [](int, const std::string &message) {
+        if (message.find("padded to") != std::string::npos) sPadLines.push_back(message);
+    };
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");
@@ -652,6 +659,68 @@ int main(int argc, char **argv)
                       "G4: the pivot-composed FBX clip reproduces its own track on the engine");
                 s->removeNode(fDoc);
                 s->removeNode(fClip);
+            }
+        }
+    }
+
+    // ---- smoke L10 item 2: a ONE-FRAME Mixamo clip is never padded ---------
+    // Every Mixamo character download ships a "mixamo.com" clip of two
+    // identical keys one frame apart. The importer used to record it as zero
+    // seconds long (the canonical preset collapses the identical keys), and the
+    // engine padded it to 1 ms — logging "padded to" — on EVERY attach. The
+    // length now comes from the file's declared duration, so the pad (still
+    // the engine's guard for a genuinely zero-length clip) must stay silent.
+    {
+        auto fragment = iris::MeshNode::loadAsSceneFragment(
+            QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/mixamo_tpose.fbx"),
+            [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
+                return iris::DefaultMaterial::create();
+            },
+            nullptr, nullptr, QString());
+        CHECK(!fragment.isNull(), "the Mixamo T-pose fixture loads");
+        if (!fragment.isNull()) {
+            auto tDoc = iris::Scene::create();
+            tDoc->getRootNode()->addChild(fragment);
+            const auto rest = iris::ClipExtractor::captureRest(fragment);
+            std::function<iris::MeshNodePtr(const iris::SceneNodePtr &)> findSkinned =
+                [&](const iris::SceneNodePtr &n) -> iris::MeshNodePtr {
+                    if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                        auto m = n.staticCast<iris::MeshNode>();
+                        if (!m->getSkeleton().isNull()) return m;
+                    }
+                    for (const auto &c : n->children()) if (auto r = findSkinned(c)) return r;
+                    return iris::MeshNodePtr();
+                };
+            auto meshNode = findSkinned(fragment);
+            iris::AnimationPtr tpose;
+            for (const auto &a : fragment->getAnimations())
+                if (a && a->hasSkeletalAnimation()) tpose = a;
+            CHECK(!meshNode.isNull() && !tpose.isNull(), "...with its skinned mesh and its clip");
+            if (!meshNode.isNull() && !tpose.isNull()) {
+                SkeletonDesc tRig;
+                SceneMirror::toSkeletonDesc(meshNode->getSkeleton(), tRig);
+                MeshData tmd = armMeshData(meshNode->getMesh());
+                MeshId tMesh = s->createMesh(tmd);
+                NodeId tNode = s->createNode();
+                CHECK(s->attachSkinnedMesh(tNode, tMesh, matId, tRig), "the T-pose rig attaches");
+                iris::ExtractedClip tx;
+                CHECK(iris::ClipExtractor::extract(fragment, meshNode, meshNode->getSkeleton(),
+                                                   tpose->getSkeletalAnimation(), tpose->getName(),
+                                                   tpose->getLength(), &rest, tx, nullptr),
+                      "the one-frame clip extracts");
+                ClipDesc tDesc;
+                SceneMirror::toClipDesc(tx, tRig.id, tDesc);
+                std::printf("    one-frame clip: ClipDesc length %.6f s\n", double(tDesc.length));
+                const size_t padsBefore = sPadLines.size();
+                CHECK(s->attachClips(tNode, &tDesc, 1), "the one-frame clip attaches");
+                CHECK(tDesc.length > 0.0f,
+                      "L10 #2: the ClipDesc carries a real length (one frame), not zero");
+                CHECK(sPadLines.size() == padsBefore,
+                      "L10 #2: attaching it logged NO \"padded to\" line (the engine pad is "
+                      "silent for a Mixamo file)");
+                for (size_t i = padsBefore; i < sPadLines.size(); ++i)
+                    std::printf("      engine: %s\n", sPadLines[i].c_str());
+                s->removeNode(tNode);
             }
         }
     }

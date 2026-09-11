@@ -52,13 +52,52 @@ var beforeTier = pushes();
 assert(world.rayon({ tier: "high" }).tier === "high", "world.rayon(tier) accepted");
 assert(pushes() === beforeTier + 1, "a Rayon tier switch is ONE step");
 
-// FOUND ALONG THE WAY (debt L6, reported): world.gi() writes the same rows the
-// Rayon panel does and records NOTHING — the panel's sliders are undoable and
-// the verb is not, which is the API-first inversion pointing the wrong way. It
-// is asserted here so the gap is a failing expectation the day it is closed
-// rather than a silent difference: raise this to `=== beforeGi + 1` then.
-var beforeGi = pushes();
-assert(world.gi({ bounces: 2 }), "world.gi(bounces) accepted");
-assert(pushes() === beforeGi, "world.gi records NO undo step (a known gap, not a design)");
+// THE WORLD VERBS (smoke L10 item 5, closing the gap debt L6 recorded here):
+// world.ambient / gravity / fog / gi / sky write the same fields the World
+// panels write, and they now record through the same commands — one call, ONE
+// step, whatever mix of plain fields and quality-registry rows it touched.
+// (Undoing one is proven where a run boundary exists: mcp.e2e, "world verbs".)
+function oneStep(label, call) {
+    var before = pushes();
+    assert(call(), label + " accepted");
+    assert(pushes() === before + 1, label + " recorded exactly ONE step (" +
+           before + " -> " + pushes() + ")");
+}
+oneStep("world.ambient", function () { return world.ambient("#336699"); });
+oneStep("world.gravity", function () { return world.gravity(-4.5); });
+oneStep("world.fog (four keys)", function () {
+    return world.fog({ enabled: true, color: "#808080", density: 0.02, heightLevel: 1.5 });
+});
+// Registry rows (bounces PINS) and plain fields (updateBudget, bounds) in one call.
+oneStep("world.gi (a pinned row + plain fields)", function () {
+    return world.gi({ bounces: 2, updateBudget: 3, boundsMin: { x: -4, y: 0, z: -4 } });
+});
+oneStep("world.gi (tier + an explicit knob)", function () {
+    return world.gi({ tier: "medium", quality: "high" });
+});
+oneStep("world.sky (gradient)", function () {
+    return world.sky("gradient", { top: "#1a2b3c", bottom: "#ffeedd" });
+});
+
+// A call that changes nothing records nothing (the panel's before == after rule).
+var beforeSame = pushes();
+assert(world.gravity(-4.5), "world.gravity to the value it already has");
+assert(pushes() === beforeSame, "...records no step");
+
+// A REFUSED call records nothing AND changes nothing: world.fog used to write
+// `enabled` before it discovered the colour was unreadable.
+var fogBefore = world.get().fog;
+var beforeRefused = pushes();
+var refusedFog = false;
+try { world.fog({ enabled: !fogBefore.enabled, color: "not a colour" }); } catch (e) { refusedFog = true; }
+assert(refusedFog, "world.fog with an unreadable colour is refused");
+assert(pushes() === beforeRefused, "...records no step");
+assert(world.get().fog.enabled === fogBefore.enabled, "...and left fog.enabled untouched");
+var refusedGi = false;
+var budgetBefore = world.get().gi.updateBudget;
+try { world.gi({ updateBudget: budgetBefore + 1, quality: "bogus" }); } catch (e) { refusedGi = true; }
+assert(refusedGi, "world.gi with an unknown quality is refused");
+assert(pushes() === beforeRefused, "...records no step");
+assert(world.get().gi.updateBudget === budgetBefore, "...and rolled back the budget it had written");
 
 console.log("e2e_undo_macro: ALL OK");

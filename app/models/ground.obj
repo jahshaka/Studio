@@ -9,12 +9,10 @@ o Plane
 # world-space density (4 m squares at the default textureScale 4) and only the
 # horizon moves in.
 #
-# THE NOTE GOES *HERE*, NOT ABOVE `mtllib`: assimp's importers sniff the file
-# by searching only the FIRST 200 BYTES for a format token
-# (BaseImporter::SearchFileHeaderForToken's default), so a comment block in
-# front of `mtllib`/`o`/`v` pushes every token out of the window and the model
-# fails to load with nothing but "error parsing file" (cost this lane a
-# selftest hash, 2026-09-11).
+# (A comment block ABOVE `mtllib` once made this resource unloadable: a model
+# read from memory was dispatched by sniffing its first 200 bytes. IrisGL now
+# passes the extension as the format hint — iris::readSceneFile, smoke L10
+# item 4 — and --engine-selftest fails if the ground does not load.)
 v -50.000000 0.000000 50.000000
 v 50.000000 0.000000 50.000000
 v -50.000000 0.000000 -50.000000

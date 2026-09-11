@@ -2405,8 +2405,12 @@ void MainWindow::setupDockWidgets()
     presetsLayout->addWidget(presetsTabWidget);
     presetsDock->setWidget(presetDockContents);
 
-    // Asset Dock
-    assetDock = new QDockWidget("Asset Browser", viewPort);
+    // Asset Dock — titled "Tray" (smoke L10 item 6): it sits tabbed with the
+    // Timeline, and Qt draws that pairing as a second tab bar at the bottom
+    // made of the two DOCKS' titles. "Timeline | Asset Browser" under a tray
+    // whose own tabs read "Assets | Console" named one concept twice; the
+    // bottom bar now reads "Timeline | Tray".
+    assetDock = new QDockWidget(tr("Tray"), viewPort);
     assetDock->setObjectName(QStringLiteral("assetDock"));
     assetWidget = new AssetWidget(db, viewPort);
     assetWidget->setMainWindow(this);

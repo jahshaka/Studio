@@ -132,6 +132,23 @@ QByteArray AssetHelper::makeBlobFromPixmap(const QPixmap &thumbnail)
     return thumbnailBytes;
 }
 
+// Moved here from the materials exporter (Exporter::getAssetPath, smoke L10
+// item 7) so it can be tested — and fixed. EVERY view filter resolves through
+// the store, by guid. The EDITOR filter used to be spelled inline as
+// <Documents>/Jahshaka/<name>: the flat per-project copy the reference-with-pin
+// program deleted (2026-08-31), under a root the data-root override does not
+// move. A model's textures are registered Editor-filtered
+// (import/assetimporters.cpp), so an exported material that used one shipped
+// without it, silently.
+QString AssetHelper::storedFilePath(const AssetRecord &asset)
+{
+    if (asset.guid.isEmpty()) return QString();
+    const QString byName = AssetCas::resolveFile(QSqlDatabase::database(), AssetStorePaths::root(),
+                                                 asset.guid, asset.name);
+    if (!byName.isEmpty()) return byName;
+    return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), asset.guid);
+}
+
 QStringList AssetHelper::fetchAssetAndAllDependencies(const QString &guid, Database *db)
 {
     // RECURSIVE, with a visited set (AVATAR_ASSET_SPEC §4 D11). This used to
