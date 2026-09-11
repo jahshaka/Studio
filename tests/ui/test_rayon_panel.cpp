@@ -96,8 +96,8 @@ int main(int argc, char **argv)
     // Exactly what MainWindow::createDefaultScene does: a new scene is Epic.
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
-    CHECK(scene->giNumBounces == 3 && scene->giDynamicProbes == 2,
-          "a new Epic scene carries Epic's column (3 bounces, 2 dynamic probes)");
+    CHECK(scene->giNumBounces == 3 && scene->giDynamicProbes == 0,
+          "a new Epic scene carries Epic's column (3 bounces, no dynamic probes since R0)");
 
     WorldGiPropertyWidget panel;
     panel.setScene(scene);
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
                   "as one named undo step");
             stack.undo();
             pump();
-            CHECK(scene->giDynamicProbes == 2, "undone to Epic's two");
+            CHECK(scene->giDynamicProbes == 0, "undone to Epic's zero");
         }
 
         // A tick with no bracket (the slider's contract allows one) is its own

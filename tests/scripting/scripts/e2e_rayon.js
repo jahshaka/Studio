@@ -6,7 +6,7 @@
 // the four things the unification promised:
 //
 //   1. a NEW scene is born Realtime-Epic (D2), and Epic means hybrid + high +
-//      the irradiance field + three bounces + two dynamic probes (its own
+//      the irradiance field + three bounces (dynamic probes 0 since R0; its own
 //      column since owner option (b), 2026-09-09);
 //   2. the tier switch changes the underlying knobs, all of them, correctly —
 //      the alias, world.gi's `tier` key and world.override all write the SAME
@@ -38,8 +38,8 @@ assert(r.technique === "vct_pcc_hybrid", "which resolves the hybrid: " + r.techn
 assert(r.quality === "high", "at high voxel/probe quality: " + r.quality);
 assert(r.ddgi === true, "with the irradiance field on");
 assert(r.bounces === 3, "three light bounces (Epic's column): " + r.bounces);
-assert(r.dynamicProbes === 2, "and two dynamic probes a frame (Epic's column): " + r.dynamicProbes);
-assert(r.row && r.row.tier === "epic" && r.row.bounces === 3 && r.row.dynamicProbes === 2 &&
+assert(r.dynamicProbes === 0, "and no dynamic probes (Epic's column since REALTIME_REFLECTIONS R0): " + r.dynamicProbes);
+assert(r.row && r.row.tier === "epic" && r.row.bounces === 3 && r.row.dynamicProbes === 0 &&
        r.row.technique === "vct_pcc_hybrid" && r.row.quality === "high" && r.row.ddgi === true,
        "world.rayon().row is the effective table row: " + J(r.row));
 assert(Math.abs(r.ddgiIntensity - 1.0) < 1e-6, "at the calibrated intensity 1.0");
@@ -48,7 +48,7 @@ assert(r.custom === false, "and nothing pinned: " + J(r.deviations));
 // world.gi is the same model, read through the full surface.
 var gi = world.get().gi;
 assert(gi.tier === "epic" && gi.mode === "vct_pcc_hybrid" && gi.quality === "high" &&
-       gi.bounces === 3 && gi.dynamicProbes === 2,
+       gi.bounces === 3 && gi.dynamicProbes === 0,
        "world.get().gi agrees: " + J([gi.tier, gi.mode, gi.quality, gi.bounces, gi.dynamicProbes]));
 var gs = world.giStatus();
 assert(gs.dynamicProbes === 0 && gs.dynamicProbeUpdates === 0,
@@ -62,7 +62,7 @@ var expect = {
     low:    { technique: "instant_radiosity", quality: "low",    ddgi: false, bounces: 1, dynamicProbes: 0 },
     medium: { technique: "vct",               quality: "medium", ddgi: true,  bounces: 1, dynamicProbes: 0 },
     high:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 1, dynamicProbes: 0 },
-    epic:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 3, dynamicProbes: 2 }
+    epic:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 3, dynamicProbes: 0 }
 };
 for (var t in expect) {
     var got = world.rayon({ tier: t });
@@ -216,8 +216,8 @@ assert(byId["giDdgi"].tiers.medium.valueId === "on" && byId["giDdgi"].tiers.high
        byId["giDdgi"].tiers.low.valueId === "off",
        "the registry's field column: on from Medium up, off at Low");
 assert(byId["giBounces"].tiers.epic.value === 3 && byId["giBounces"].tiers.high.value === 1 &&
-       byId["giDynamicProbes"].tiers.epic.value === 2 && byId["giDynamicProbes"].tiers.high.value === 0,
-       "and Epic's column reads 3 bounces / 2 dynamic probes against High's 1 / 0");
+       byId["giDynamicProbes"].tiers.epic.value === 0 && byId["giDynamicProbes"].tiers.high.value === 0,
+       "and Epic's column reads 3 bounces / 0 dynamic probes against High's 1 / 0 (R0)");
 assert(byId["giMode"].tiers.epic.valueId === "vct_pcc_hybrid",
        "the Rayon columns are the Rayon tiers: " + byId["giMode"].tiers.epic.valueId);
 

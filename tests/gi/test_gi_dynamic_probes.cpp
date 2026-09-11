@@ -348,7 +348,7 @@ int main()
 
     moveMover(kMoverParked);
     hybrid.dynamicProbes = kDynamic;
-    CHECK(s->setGlobalIllumination(hybrid), "budget 1 + 2 dynamic probes (Epic's row)");
+    CHECK(s->setGlobalIllumination(hybrid), "budget 1 + 2 dynamic probes (Epic's former row; the engine feature is still covered until R2)");
     render(engine.get(), 8);      // settled and parked: two full sweeps
     {
         const GiStatus st = s->giStatus();

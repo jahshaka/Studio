@@ -75,7 +75,7 @@ static void testTierTable()
         { RayonTier::Low,    1, 0, 0, 1, 0, "Low = Instant Radiosity, low quality, no field, 1 bounce, no dynamic probes" },
         { RayonTier::Medium, 2, 1, 1, 1, 0, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce, no dynamic probes" },
         { RayonTier::High,   3, 2, 1, 1, 0, "High = VCT + probes 128^3, FIELD ON, 1 bounce, no dynamic probes" },
-        { RayonTier::Epic,   3, 2, 1, 3, 2, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces, TWO dynamic probes" },
+        { RayonTier::Epic,   3, 2, 1, 3, 0, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces, no dynamic probes (R0: movers go to SSR + planar)" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
@@ -134,8 +134,8 @@ static void testTierTable()
         worldmodes::setRayon(e, true, RayonTier::Epic);
         CHECK(giMode(h) == giMode(e) && giQuality(h) == giQuality(e) && giDdgi(h) == giDdgi(e),
               "High and Epic share technique, quality and the field");
-        CHECK(giBounces(e) > giBounces(h) && giDynamic(e) > giDynamic(h),
-              "and Epic alone carries the extra bounces and the dynamic probes");
+        CHECK(giBounces(e) > giBounces(h) && giDynamic(e) == 0 && giDynamic(h) == 0,
+              "and Epic alone carries the extra bounces (no tier reserves dynamic probes since R0)");
         // The engine-side columns each cost something real and are gated where
         // they render: gi.ddgi (bounces 1 -> 3 on the DDGI-fed floor) and
         // gi.dynamic_probes (one frame of catch-up at budget 1).
@@ -261,7 +261,7 @@ static void testWorldModeOwnership()
         { worldmodes::Mode::Low,    0, 0, 0, 1, 0, "World Low leaves GI off, as it always did" },
         { worldmodes::Mode::Medium, 0, 1, 0, 1, 0, "World Medium leaves GI off, as it always did" },
         { worldmodes::Mode::High,   1, 0, 0, 1, 0, "World High is Instant Radiosity at low quality, as it always did" },
-        { worldmodes::Mode::Epic,   3, 2, 1, 3, 2, "World Epic is Rayon Epic: the hybrid, high, the field, 3 bounces, 2 dynamic probes" },
+        { worldmodes::Mode::Epic,   3, 2, 1, 3, 0, "World Epic is Rayon Epic: the hybrid, high, the field, 3 bounces, no dynamic probes" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
@@ -301,7 +301,7 @@ static void testNewSceneDefault()
     CHECK(worldmodes::rayonTier(s) == RayonTier::Epic, "at Epic");
     CHECK(giMode(s) == 3 && giQuality(s) == 2 && giDdgi(s) == 1,
           "which is the hybrid, high quality, irradiance field on");
-    CHECK(giBounces(s) == 3 && giDynamic(s) == 2, "with three bounces and two dynamic probes (Epic's column)");
+    CHECK(giBounces(s) == 3 && giDynamic(s) == 0, "with three bounces and no dynamic probes (Epic's column since R0)");
     CHECK(s->giDdgiIntensity == 1.0f, "at the calibrated intensity 1.0");
     CHECK(s->giDdgiSource == -1, "and the field's source left at auto (voxel at every tier)");
 }

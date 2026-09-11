@@ -157,20 +157,23 @@ const Row *row(const QString &id);
 //   Low     Instant Radiosity     —       off   —           —          1        0              —                        (dial)
 //   Medium  VCT                   64^3    ON    auto=voxel  8192 fit   1        0              — (no probes)            (dial)
 //   High    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   1        0              512 / HDR / shadowed     (dial)
-//   Epic    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   3        2              512 / HDR / shadowed     (dial)
+//   Epic    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   3        0 (was 2)      512 / HDR / shadowed     (dial)
 //
 // Derived columns (not rows): voxels and probe faces/HDR/shadows follow
 // `giQuality` (OgreGi.cpp giVoxelResolution / buildPcc); the DDGI grid is the
 // engine's fixed 8192-probe aspect fit (kIfdTotalProbes); ddgiSource "auto" is
 // voxel at every tier — the raster feed (3.4-9 ms per probe, rayon2 S3) is an
-// Advanced opt-in and never a default. Epic's two columns are each measured:
-// bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7), dynamic
-// probes 0 -> 2 makes a mover's reflection catch up in ONE frame at budget 1
-// (gi.dynamic_probes case e).
+// Advanced opt-in and never a default. Epic's bounce column is measured:
+// bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7). Epic's
+// dynamic probes went 2 -> 0 on 2026-09-12 (REALTIME_REFLECTIONS_SPEC R0): the
+// alive-scene baseline measured the two per-frame mover captures at ~40 ms
+// (87 -> 47 ms/frame with things moving), and movers are reflected every frame
+// by SSR + planar instead. The engine feature stays reachable as a pinned
+// setting until lane R2 deletes the column (gi.dynamic_probes still covers it).
 //
 // The GI UPDATE BUDGET is deliberately NOT in the table: it is a "how fast may
 // this keep up" control, not a "how much machinery" one, and it stays a visible
-// row of its own (owner decision D5); Epic's dynamic probes ride ON TOP of it.
+// row of its own (owner decision D5); a pinned dynamicProbes setting rides ON TOP of it.
 //
 // WHETHER RAYON IS ON is `scene->giMode != OFF` — there is no second flag.
 // `scene->giTier` remembers the quality across an off/on trip.

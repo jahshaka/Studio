@@ -54,7 +54,9 @@ const RayonRow kRayonTable[4] = {
     /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
     /* Medium */ { 2, 1, 1, 1, 0 },   // VCT 64^3, DDGI-fed (voxel source)
     /* High   */ { 3, 2, 1, 1, 0 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
-    /* Epic   */ { 3, 2, 1, 3, 2 },   // ... plus 3 bounces and 2 dynamic probes a frame
+    /* Epic   */ { 3, 2, 1, 3, 0 },   // ... plus 3 bounces. Dynamic probes 0 (REALTIME_REFLECTIONS R0, 2026-09-12):
+                                      // the alive-scene baseline measured the 2 per-frame mover captures at ~40 ms
+                                      // (ALIVE 87 -> 47 ms); movers are reflected per frame by SSR + planar instead
 };
 /// The five rayonTiered row ids, in kRayonTable column order.
 const int kRayonRowCount = 5;
