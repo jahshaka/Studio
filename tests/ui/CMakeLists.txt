@@ -801,6 +801,30 @@ set_tests_properties(ui.window_minimum PROPERTIES
 jah_tsan_blocked(ui.window_minimum)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
 jah_lsan_blocked(ui.window_minimum)   # spawns the app
 
+# ui.shot_aspect — plan item 15 / platform audit C2b.2: an offscreen shot is a
+# function of the camera's pose and the SHOT's size, never the window's (same
+# pose, two window shapes, identical pixels, gizmo drawn), and a piloted camera
+# that constrains its aspect keeps its AUTHORED aspect (the pick paths used to
+# overwrite it with the viewport's every frame). MCP harness: the window is
+# re-shaped with app.resizeWindow and measured a request later.
+add_executable(test_shot_aspect test_shot_aspect.cpp)
+set_target_properties(test_shot_aspect PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_shot_aspect PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_include_directories(test_shot_aspect PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_shot_aspect PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
+file(MAKE_DIRECTORY ${_shot_home}/run)
+add_test(NAME ui.shot_aspect COMMAND test_shot_aspect
+         WORKING_DIRECTORY ${_shot_home}/run)
+set_tests_properties(ui.shot_aspect PROPERTIES
+    ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "ui")
+jah_tsan_blocked(ui.shot_aspect)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
+jah_lsan_blocked(ui.shot_aspect)   # spawns the app
+
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
 # claims — in its own comment, or by running --headless, or by building nothing

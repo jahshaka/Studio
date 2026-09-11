@@ -28,8 +28,13 @@ class ScenePicker
 public:
     /// World-space segment through a viewport pixel, from the near to the far plane,
     /// for a document camera drawn at `viewportWidth` x `viewportHeight`.
-    static void screenSegment(iris::CameraNodePtr camera, int viewportWidth, int viewportHeight,
-                              const QPointF &point, iris::Vec3 &segStart, iris::Vec3 &segEnd);
+    /// The size is FRACTIONAL on purpose: it sets the camera's aspect, and a
+    /// letterboxed picture (EngineSceneViewport::pictureRect) is not a whole
+    /// number of pixels tall — rounding it would nudge an authored 2.39 to
+    /// 2.3887 on every hover.
+    static void screenSegment(iris::CameraNodePtr camera, qreal viewportWidth,
+                              qreal viewportHeight, const QPointF &point,
+                              iris::Vec3 &segStart, iris::Vec3 &segEnd);
 
     /// Every hit along the segment, unsorted. Meshes are tested against their
     /// triangles in local space; lights, decals and CAMERAS as

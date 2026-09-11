@@ -358,6 +358,18 @@ private:
     void setCameraController(CameraControllerBase *c);
     /// Mouse ray for the current pointer position (false if the pointer never entered).
     bool mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const;
+    /// WHERE THE PICTURE IS, in widget pixels: the whole widget, except while
+    /// piloting a camera that CONSTRAINS its aspect — the engine letterboxes
+    /// that one (chain::letterboxRect), so the image is the inner rectangle at
+    /// the camera's authored aspect and the bars are not part of it. Every pick
+    /// ray and the gizmo's pixel frame are built through this rectangle, so
+    /// they unproject at the aspect that is actually on screen and never have
+    /// to overwrite the camera's authored aspect to get one (lane L11).
+    QRectF pictureRect() const;
+    /// ScenePicker::screenSegment through pictureRect(): `point` in widget
+    /// pixels, the segment through the picture under it.
+    void pictureSegment(const iris::CameraNodePtr &cam, const QPointF &point,
+                        iris::Vec3 &segStart, iris::Vec3 &segEnd) const;
 
     TranslationGizmo *mTranslateGizmo = nullptr;
     RotationGizmo    *mRotateGizmo = nullptr;
