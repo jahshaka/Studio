@@ -315,3 +315,24 @@ add_dependencies(test_gi_ddgi_raster JahshakaEngineMedia)
 add_test(NAME gi.ddgi_raster COMMAND test_gi_ddgi_raster
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_raster PROPERTIES TIMEOUT 900 LABELS "engine")
+
+# gi.hidden_volume — WHAT THE AUTOMATIC LIT VOLUME MAY CONTAIN (SMOKE_FIX S12 +
+# S14): a hidden object stops bouncing light and stops defining the volume, and
+# the automatic fit is capped in metres per voxel so a new project's ground
+# plane cannot voxelise a square kilometre. Its own binary for the same
+# process-wide-HlmsPbs-binding reason as its siblings.
+add_executable(test_gi_hidden_volume test_gi_hidden_volume.cpp)
+set_target_properties(test_gi_hidden_volume PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_hidden_volume PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_hidden_volume PRIVATE JahshakaEngine)
+add_dependencies(test_gi_hidden_volume JahshakaEngineMedia)
+add_test(NAME gi.hidden_volume COMMAND test_gi_hidden_volume
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hidden_volume PROPERTIES TIMEOUT 180 LABELS "engine")

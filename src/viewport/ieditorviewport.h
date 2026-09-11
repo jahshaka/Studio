@@ -363,6 +363,10 @@ public:
         /// way to see what the auto-fit decided — the document's giBounds rows
         /// stay at zero for every scene that never pinned them.
         QVector3D boundsMin, boundsMax;
+        /// METRES PER VOXEL of that volume — its largest axis over the tier's
+        /// voxel resolution. The number that says whether this scene's GI means
+        /// anything (a 1 km volume at 128^3 is 8 m per voxel); 0 with no volume.
+        float voxelMetres = 0.0f;
         QVector3D probeRegionMin, probeRegionMax;
         /// What the probe captures RESOLVED to (P3a/P3b). Both document fields
         /// are tri-state with an "auto" that consults the quality dial, and the

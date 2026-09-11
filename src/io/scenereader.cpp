@@ -500,6 +500,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giProbeShadows = qBound(-1, sceneObj["giProbeShadows"].toInt(-1), 1);
         scene->giProbeOverlap =
             float(qBound(0.01, sceneObj["giProbeOverlap"].toDouble(1.25), 8.0));
+        // The automatic volume's ceiling in metres (SMOKE_FIX S14). A scene
+        // written before it existed reads the default, which is the behaviour
+        // it will get from now on — there is nothing to migrate.
+        scene->giAutoBoundsMax =
+            float(qBound(0.0, sceneObj["giAutoBoundsMax"].toDouble(64.0), 100000.0));
         scene->giProbeSnapDeviation =
             float(qMax(0.0, sceneObj["giProbeSnapDeviation"].toDouble(0.05)));
         scene->giProbeSnapSidesMin =

@@ -78,7 +78,8 @@ exportformat::ManifestScene describe(const iris::ScenePtr &scene,
     for (const auto &n : scene->getRootNode()->children()) {
         if (n && n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             const auto mn = n.staticCast<iris::MeshNode>();
-            // The 1024 m backdrop, not the scene's size.
+            // The 100 m backdrop, not the scene's size (1024 m before the
+            // SMOKE_FIX S14 re-stage).
             //
             // KEYED ON THE MESH PATH ALONE, deliberately: `isBuiltIn` is set by
             // SceneEditService when the user ADDS a primitive and is never

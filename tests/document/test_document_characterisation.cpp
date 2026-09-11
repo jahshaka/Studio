@@ -44,6 +44,7 @@
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -732,6 +733,51 @@ int main(int argc, char **argv)
         // uninitialised read).
         iris::Environment env;
         CHECK(!env.isSimulating(), "environment: isSimulating() is false at birth");
+    }
+
+    // --- SMOKE_FIX S11: the material's PROPERTY ROWS are what gets SAVED, so a
+    //     row that disagrees with its field is a scene that reopens wrong.
+    //
+    // The owner's floor checkers were squashed after a reopen. Node scale was
+    // (1,1,1) in the file; what had drifted was the material's V tiling.
+    // `setValue("textureScale", 4)` writes BOTH fields (the uniform overload)
+    // but used to sync only the row it was NAMED with, so the live material
+    // tiled 4x4 while SceneWriter serialized textureScale 4, textureScaleV 1 —
+    // and the reader, applying rows in order, produced (4, 1) on reopen. Every
+    // scene built by createDefaultScene was written that way.
+    {
+        auto pbr = iris::PbrMaterial::create();
+        auto row = [&](const char *name) {
+            for (auto prop : pbr->properties)
+                if (prop->name == QLatin1String(name)) return prop->getValue().toFloat();
+            return -1.0f;
+        };
+        CHECK(std::fabs(row("textureScale") - 1.0f) < 1e-6f &&
+              std::fabs(row("textureScaleV") - 1.0f) < 1e-6f,
+              "uv rows: a fresh PbrMaterial is (1, 1) in its rows");
+
+        pbr->setValue(QStringLiteral("textureScale"), 4.0f);
+        CHECK(std::fabs(pbr->textureScale - 4.0f) < 1e-6f &&
+              std::fabs(pbr->textureScaleV - 4.0f) < 1e-6f,
+              "uv fields: setValue(textureScale, 4) is uniform tiling");
+        CHECK(std::fabs(row("textureScale") - 4.0f) < 1e-6f &&
+              std::fabs(row("textureScaleV") - 4.0f) < 1e-6f,
+              "uv rows: ...and BOTH rows follow, so the saved file says (4, 4)");
+
+        // The deliberate non-uniform case still works, and still SAVES: a
+        // caller sets V after U, which is the order both readers apply.
+        pbr->setValue(QStringLiteral("textureScaleV"), 1.0f);
+        CHECK(std::fabs(pbr->textureScale - 4.0f) < 1e-6f &&
+              std::fabs(pbr->textureScaleV - 1.0f) < 1e-6f &&
+              std::fabs(row("textureScale") - 4.0f) < 1e-6f &&
+              std::fabs(row("textureScaleV") - 1.0f) < 1e-6f,
+              "uv rows: an explicit (4, 1) survives in the fields AND the rows");
+
+        // The two-argument setter is the same contract from C++.
+        pbr->setTextureScale(2.0f, 3.0f);
+        CHECK(std::fabs(row("textureScale") - 2.0f) < 1e-6f &&
+              std::fabs(row("textureScaleV") - 3.0f) < 1e-6f,
+              "uv rows: setTextureScale(u, v) writes both rows too");
     }
 
     // --- Teardown with no GL must not crash either
