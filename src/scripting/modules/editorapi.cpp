@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/editorapi.h"
 
+#include <QDockWidget>
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
@@ -243,7 +244,9 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "setCamera", "editor.setCamera({position?, lookAt? | rotation?, fov?}) -> {position, rotation, projection, orthoSize, fov}",
           "Places the editor camera and returns the pose that resulted (the same shape editor.camera() reports, plus `fov`). "
           "`position` is the world-space eye point ({x,y,z} or [x,y,z]); every key is optional, so `{position:…}` alone moves "
-          "the camera without turning it. Orientation is EITHER `lookAt` (a world-space point to aim at, up = +Y) OR `rotation` "
+          "the camera without turning it. Orientation is EITHER `lookAt` (a world-space point to aim at, up = +Y; straight down "
+          "or up it keeps the camera's heading at the top or bottom of the frame — a top view is {position:{x:0,y:h,z:0}, "
+          "lookAt:{x:0,y:0,z:0}}) OR `rotation` "
           "(a {x,y,z,scalar} quaternion as editor.camera() returns it, or {x,y,z} Euler DEGREES as node.info() returns them) — "
           "passing both is refused rather than silently preferring one. `fov` is the vertical field of view in degrees and is "
           "inert while the camera is orthographic (editor.camera().projection says which it is; editor.setView switches). "
@@ -337,15 +340,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "already in does nothing), and NOT the same thing as a maximized window. The stats "
           "readout deliberately survives it: it is a diagnostic, not an editor helper.",
           Needs::Window },
-        { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible}",
+        { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible, title}",
           "THE EDITOR'S BOTTOM TRAY, the one widget that carries the asset browser and the "
           "script console as TABS at its top (owner, 2026-09-11: turning the console on adds a "
           "Console tab beside Assets and the two share that widget). `tab` is the tab in front "
           "(\"assets\" or \"console\"), `tabs` the tabs the tab bar is showing, "
           "`consoleVisible` whether the Console tab is in the bar at all, `consoleFocused` "
           "whether the console's INPUT line has the keyboard — the half of Ctrl+` a console "
-          "you still have to click does not deliver — and `visible` whether the tray widget "
-          "itself is on screen.",
+          "you still have to click does not deliver, `visible` whether the tray widget "
+          "itself is on screen, and `title` the tray DOCK's own title — what the bottom tab bar "
+          "shows beside \"Timeline\" when the two docks share the bottom area (\"Tray\").",
           Needs::Window },
         { "tray", "editor.tray({tab, console}) -> (the trayState map)",
           "DRIVES THAT TRAY. `tab: \"console\"` shows the Console tab, raises the tray and "
@@ -1501,6 +1505,10 @@ QVariantMap EditorApi::trayState()
     out["consoleVisible"] = host.mainWindow->isConsoleTabVisible();
     out["consoleFocused"] = host.mainWindow->isConsoleInputFocused();
     out["visible"] = host.mainWindow->isTrayVisible();
+    // The dock's title, read off the dock itself (objectName "assetDock", the
+    // DockState key): the one string the bottom tab bar is drawn from.
+    const auto *dock = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("assetDock"));
+    out["title"] = dock ? dock->windowTitle() : QString();
     return out;
 }
 

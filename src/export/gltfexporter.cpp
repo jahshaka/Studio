@@ -1338,7 +1338,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // stand still (AVATAR_ASSET_SPEC §5.6, verified 2026-09-09):
         //
         //   * `Mesh::getSkeletalAnimations` — the clips that came out of the
-        //     MODEL FILE, filled once by Mesh::loadAnimatedMesh at parse time.
+        //     MODEL FILE, filled once by Mesh::loadMesh at parse time.
         //   * the SCENE NODES' own animation lists — every clip loaded from
         //     another file (`avatar.loadClip`, the definition's clips at
         //     spawn) is attached with `SceneNode::addAnimation` and NEVER

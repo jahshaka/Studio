@@ -87,7 +87,8 @@ evidence string in the report (host-load timing, `VK_ERROR_OUT_OF_DEVICE_MEMORY`
 texture-worker SEGV class). Known contention-sensitive suites: open.responsive,
 app.engine_selftest_validation, app.input_keys, threading.newproject_stall,
 scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
-sun_light, ui.media_lazy, gi.budget. Every failure in a gate report carries a verdict
+sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM contention
+class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
 

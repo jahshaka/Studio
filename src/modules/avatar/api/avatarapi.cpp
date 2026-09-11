@@ -1456,8 +1456,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
         used.insert(unique);
         clip->setName(unique);
         // A ZERO-LENGTH clip must not loop (Animation::getSampleTime is a fmod,
-        // so length 0 samples at NaN) — Mixamo ships one in every character
-        // download. Same guard the preview has.
+        // so length 0 samples at NaN). Same guard the preview has.
         clip->calculateAnimationLength();
         if (!(clip->getLength() > 0.0f)) clip->setLooping(false);
         hostNode->addAnimation(clip);

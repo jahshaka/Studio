@@ -13,7 +13,7 @@ For more information see the LICENSE file
 // 2026-09-09).
 //
 // MainWindow saved `geometry` and `windowState`, and restored both — but the
-// editor's docks (Hierarchy, Properties, Presets, Asset Browser, Timeline) live
+// editor's docks (Hierarchy, Properties, Presets, Tray, Timeline) live
 // in a NESTED QMainWindow (`viewPort`), whose saveState() was never called at
 // all. Every dock the user moved, resized, floated, tabbed or closed came back
 // to the compiled-in layout on the next launch, and the loss was invisible
@@ -76,7 +76,7 @@ struct Shell {
         hierarchy  = makeDock("sceneHierarchyDock", "Hierarchy");
         properties = makeDock("sceneNodePropertiesDock", "Properties");
         presets    = makeDock("presetsDock", "Presets");
-        assets     = makeDock("assetDock", "Asset Browser");
+        assets     = makeDock("assetDock", "Tray");
         timeline   = makeDock("animationDock", "Timeline");
         window.addDockWidget(Qt::LeftDockWidgetArea, hierarchy);
         window.addDockWidget(Qt::RightDockWidgetArea, properties);
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
               "default: Hierarchy is on the left");
         CHECK(shell.window.dockWidgetArea(shell.assets) == Qt::BottomDockWidgetArea &&
                   shell.window.dockWidgetArea(shell.timeline) == Qt::BottomDockWidgetArea,
-              "default: the Asset Browser and the Timeline share the bottom area");
+              "default: the Tray and the Timeline share the bottom area");
     }
 
     // ---- 2. nothing stored: restore refuses, and says so --------------------

@@ -131,6 +131,15 @@ int main(int argc, char **argv)
     CHECK(tray.value("consoleVisible").toBool() == false,
           "…and there is no Console tab until the console is asked for");
     CHECK(tray.value("tabs").toArray().size() == 1, "one tab in the bar to begin with");
+    // ONE TAB BAR PER CONCEPT (smoke L10 item 6). The tray's dock sits tabbed
+    // with the Timeline, so Qt draws a SECOND tab bar at the bottom out of the
+    // two docks' titles — which read "Timeline | Asset Browser" under a tray
+    // whose own tabs already said "Assets | Console". The bottom bar names the
+    // two DOCKS, so the tray's dock is called what it is.
+    CHECK(tray.value("title").toString() == QLatin1String("Tray"),
+          qPrintable(QStringLiteral("the tray's dock is titled \"Tray\" (the bottom bar reads "
+                                    "\"Timeline | Tray\"), got \"%1\"")
+                         .arg(tray.value("title").toString())));
 
     tray = readObject(mcp, QStringLiteral("editor.tray({tab: 'console'})"));
     CHECK(tray.value("consoleVisible").toBool(), "asking for the console ADDS the Console tab");

@@ -157,8 +157,14 @@ assert(Math.abs(rot.x) < 1 && Math.abs(rot.y) < 1,
 near(node.info(shot).position.z, 5, 1e-3, "lookAt did not MOVE the camera");
 assert(camera.lookAt(shot, cube), "camera.lookAt(nodeId)");
 refuses(function () { camera.lookAt(shot, shot); }, "a camera cannot look at itself");
-refuses(function () { camera.lookAt(shot, { x: 0, y: 90, z: 5 }); },
-        "a target straight above the camera is refused (undefined roll)");
+// Straight up is a POSE now, not a refusal (smoke L10 item 1): the look-at
+// basis used a fixed world +Y, so a target on the camera's own vertical axis
+// left the roll undefined and the verb refused it. CameraNode::lookAt picks the
+// camera's own heading as the frame's up at the pole instead.
+assert(camera.lookAt(shot, { x: 0, y: 90, z: 5 }), "a target straight ABOVE the camera is looked at");
+near(node.info(shot).rotation.x, 90, 1e-2, "...with the camera pitched straight up");
+near(node.info(shot).position.y, 0, 1e-3, "...and not moved");
+assert(camera.lookAt(shot, cube), "and back at the cube");
 refuses(function () { camera.lookAt(cube, { x: 0, y: 0, z: 0 }); },
         "lookAt refuses a node that is not a camera");
 

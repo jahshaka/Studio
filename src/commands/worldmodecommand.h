@@ -57,7 +57,13 @@ public:
 
     /// `before` must be captured BEFORE the edit; the "after" state is captured
     /// here, so construct this after applying and push it after that.
-    WorldModeCommand(const QString &text, const iris::ScenePtr &scene, const Snapshot &before);
+    /// `parent`: a composite step owns it as a child (see ScenePropertyCommand).
+    WorldModeCommand(const QString &text, const iris::ScenePtr &scene, const Snapshot &before,
+                     QUndoCommand *parent = nullptr);
+
+    /// True when the two snapshots describe the same registry state (tier,
+    /// Rayon tier, pins and every row's value) — "did this edit change it".
+    static bool same(const Snapshot &a, const Snapshot &b);
 
     void undo() override;
     void redo() override;

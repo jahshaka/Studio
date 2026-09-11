@@ -26,9 +26,15 @@ WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene
     return snap;
 }
 
+bool WorldModeCommand::same(const Snapshot &a, const Snapshot &b)
+{
+    return a.worldMode == b.worldMode && a.rayonTier == b.rayonTier &&
+           a.overrides == b.overrides && a.rowValues == b.rowValues;
+}
+
 WorldModeCommand::WorldModeCommand(const QString &text, const iris::ScenePtr &scene,
-                                   const Snapshot &before)
-    : mScene(scene), mBefore(before)
+                                   const Snapshot &before, QUndoCommand *parent)
+    : StudioCommand(parent), mScene(scene), mBefore(before)
 {
     setText(text);
     mAfter = capture(scene);

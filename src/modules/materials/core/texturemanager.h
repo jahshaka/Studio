@@ -4,7 +4,6 @@
 #include <QMap>
 #include <QVector>
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/import/model.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/texture.h"
@@ -19,7 +18,6 @@
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/import/modelloader.h"
 #include "irisgl/document/animation/animableproperty.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/keyframeanimation.h"

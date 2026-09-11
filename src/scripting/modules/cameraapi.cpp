@@ -454,8 +454,9 @@ QVector<VerbInfo> CameraApi::verbs() const
           Needs::Document },
         { "lookAt", "camera.lookAt(id, target) -> bool",
           "Points a camera at a target, which is either a node id or a world position {x,y,z}. "
-          "Rotation only — the camera does not move — and +Y is up, so a target directly above "
-          "or below the camera is refused rather than yielding a degenerate roll. Undoable.",
+          "Rotation only — the camera does not move — and +Y is up. A target directly above "
+          "or below the camera points it straight up or down with its current heading kept at "
+          "the top (looking down) or bottom (looking up) of the frame. Undoable.",
           Needs::Document },
         { "screenshot", "camera.screenshot(id, path, {width?, height?, probes?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
           "Renders what THIS SCENE CAMERA sees to a PNG — the AI hook of CAMERAS_SPEC \u00a75. It "
@@ -1033,13 +1034,9 @@ bool CameraApi::lookAt(const QString &id, const QVariant &target)
     if (dir.lengthSquared() <= 0.0f)
         return fail("camera.lookAt: the target is exactly where the camera is — there is no "
                     "direction to look in");
-    // CameraNode::lookAt builds its basis against world +Y, so a target on the
-    // camera's own vertical axis has no defined roll and decomposes to garbage.
-    // Refused loudly rather than pointing somewhere arbitrary.
-    if (qAbs(dir.normalized().y()) > 0.99999f)
-        return fail("camera.lookAt: the target is straight above or below the camera, which "
-                    "leaves the roll undefined — offset it, or set the rotation with "
-                    "node.transform");
+    // A target straight above or below is a pose, not a refusal, since smoke
+    // L10 item 1: CameraNode::lookAt keeps the camera's heading as the frame's
+    // up at the pole instead of decomposing a degenerate basis.
 
     const iris::Vec3 pos = cam->getLocalPos();
     const iris::Vec3 scale = cam->getLocalScale();

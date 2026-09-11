@@ -22,8 +22,36 @@ For more information see the LICENSE file
 #include <QWidget>
 
 #include "bridge/enginehost.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "shell/mainwindow.h"
 #include "viewport/ieditorviewport.h"
+
+namespace {
+
+/// The default scene's built-in ground (MainWindow::createDefaultScene), found
+/// the way the viewport and the scene-extents service recognise it.
+iris::MeshNodePtr findDefaultGround(const iris::ScenePtr &scene)
+{
+    if (!scene || !scene->getRootNode()) return iris::MeshNodePtr();
+    for (const auto &child : scene->getRootNode()->children()) {
+        if (!child || child->getSceneNodeType() != iris::SceneNodeType::Mesh) continue;
+        auto mesh = child.staticCast<iris::MeshNode>();
+        if (mesh->isBuiltIn && mesh->meshPath == QStringLiteral(":/models/ground.obj")) return mesh;
+    }
+    return iris::MeshNodePtr();
+}
+
+int countNodes(const iris::SceneNodePtr &node)
+{
+    if (!node) return 0;
+    int n = 1;
+    for (const auto &child : node->children()) n += countNodes(child);
+    return n;
+}
+
+}   // namespace
 
 int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outPng)
 {
@@ -35,6 +63,41 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: %s\n", qPrintable(why));
         return 1;
     }
+    // EVERY exit from here on tears down the way the passing one always did.
+    // The failure returns below used to skip it, and a failing self-test then
+    // HUNG at process exit after its last shutdown step instead of exiting 1
+    // (found by the broken-ground arm: ctest's 180 s timeout, not an exit code).
+    struct EndSelftest {
+        MainWindow &window;
+        ~EndSelftest() { window.endEngineSelftest(); EngineHost::instance().shutdown(); }
+    } endSelftest{ window };
+
+    // THE DEFAULT SCENE MUST BE THE DEFAULT SCENE (smoke L10 item 3). On
+    // 2026-09-11 the ground failed to parse (`model :/models/ground.obj: error
+    // parsing file`) and this self-test rendered a groundless scene and exited
+    // 0: the pixel check below only asks that the centre is not the CLEAR
+    // colour, and the sky answers that on its own. So the scene is checked
+    // before a frame is pumped — the ground node exists and carries geometry.
+    //
+    // JAHSHAKA_SELFTEST_BREAK_GROUND is the test-only arm that proves this bites
+    // (app.engine_selftest_validation): it re-points the ground at a resource
+    // that does not exist, which leaves the node exactly as a parse failure
+    // does — a mesh path and no mesh. Read here and nowhere else.
+    const iris::ScenePtr scene = window.getScene();
+    const iris::MeshNodePtr ground = findDefaultGround(scene);
+    if (ground && qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_BREAK_GROUND"))
+        ground->setMesh(QStringLiteral(":/models/selftest-broken-ground.obj"));
+    const iris::MeshPtr groundMesh = ground ? ground->getMesh() : iris::MeshPtr();
+    if (!groundMesh || groundMesh->numVerts <= 0) {
+        std::fprintf(stderr, "engine-selftest: the default scene's ground did not load (%s) — "
+                             "a groundless scene is not the default scene; see the model "
+                             "error in the log\n",
+                     !ground ? "no Ground node" : qPrintable(QStringLiteral("mesh '%1' has no geometry")
+                                                                .arg(ground->meshPath)));
+        return 1;
+    }
+    std::fprintf(stderr, "engine-selftest: default scene: %d nodes, ground %d vertices\n",
+                 countNodes(scene->getRootNode()) - 1, groundMesh->numVerts);
 
     // Pump the render loop for ~30 frames (the driver ticks every 16 ms).
     QElapsedTimer clock;
@@ -123,7 +186,5 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     std::fprintf(stderr, "engine-selftest: %dx%d image, centre pixel (%d,%d,%d), clear (%d,%d,%d) -> %s\n",
                  img.width(), img.height(), centre.red(), centre.green(), centre.blue(),
                  clear.red(), clear.green(), clear.blue(), differs ? "PASS" : "FAIL");
-    window.endEngineSelftest();
-    EngineHost::instance().shutdown();
     return differs ? 0 : 1;
 }

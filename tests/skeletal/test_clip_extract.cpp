@@ -51,6 +51,10 @@ static const QString kGlbRig =
     QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb");
 static const QString kFbxRig =
     QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/pivot_rig.fbx");
+/// The Mixamo CHARACTER clip in its real shape (make_pivot_fbx.py --mixamo-tpose):
+/// two identical keys one frame apart at 30 fps.
+static const QString kFbxTpose =
+    QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/mixamo_tpose.fbx");
 
 struct Trs { iris::Vec3 pos; iris::Quat rot; iris::Vec3 scale; };
 
@@ -419,8 +423,8 @@ int main(int argc, char **argv)
                      ("FBX/" + anim->getName()).toUtf8().constData(), 1e-5f, 6e-2f);
         }
         CHECK(walkClips == 1 && zeroLengthClips == 1,
-              "the file carries one real clip and one ZERO-LENGTH clip (every Mixamo "
-              "character download ships one; engine-side it is fmod(t,0) = NaN)");
+              "the file carries one real clip and one ZERO-LENGTH clip (one key, no "
+              "declared duration; engine-side it is fmod(t,0) = NaN, so the engine pads it)");
 
         // The zero-length clip must still produce something usable: one key, at
         // t = 0. Padding its LENGTH is the engine backend's job (§9 R3 / D5);
@@ -436,6 +440,64 @@ int main(int argc, char **argv)
             for (const auto &track : clip.tracks)
                 if (track.keys.size() != 1 || std::fabs(track.keys[0].time) > 1e-6f) single = false;
             CHECK(single, "the zero-length clip extracts as exactly one key at t=0 per driven bone");
+        }
+    }
+
+    // =====================================================================
+    // 4. THE ONE-FRAME MIXAMO CLIP (smoke L10 item 2). Every Mixamo character
+    //    download ships "mixamo.com": two identical keys one frame apart, so
+    //    the file DECLARES one frame (mDuration 1 tick at 30 ticks/s). The
+    //    canonical preset's FindInvalidData collapses the identical keys to one
+    //    key at t = 0, the key span is then 0, and the importer used to record
+    //    a ZERO-length clip — which the engine padded to 1 ms, with a log
+    //    line, on every attach. The declared duration survives the collapse
+    //    and is what the length comes from now.
+    // =====================================================================
+    {
+        Assimp::Importer importer;
+        const aiScene *scene = importer.ReadFile(kFbxTpose.toStdString().c_str(),
+                                                 iris::ImportFlags::Canonical);
+        CHECK(scene && scene->mNumAnimations == 1, "the Mixamo T-pose fixture parses, one clip");
+        if (scene && scene->mNumAnimations == 1) {
+            const aiAnimation *a = scene->mAnimations[0];
+            unsigned maxKeys = 0;
+            for (unsigned c = 0; c < a->mNumChannels; ++c)
+                maxKeys = std::max(maxKeys, a->mChannels[c]->mNumRotationKeys);
+            std::printf("    mixamo_tpose.fbx: duration %.3f ticks at %.1f ticks/s, %u key(s)\n",
+                        a->mDuration, a->mTicksPerSecond, maxKeys);
+            CHECK(maxKeys == 1 && std::fabs(a->mDuration - 1.0) < 1e-9 &&
+                      std::fabs(a->mTicksPerSecond - 30.0) < 1e-9,
+                  "...in the real Mixamo shape: ONE key after the preset, a declared "
+                  "duration of 1 tick at 30 ticks/s");
+        }
+
+        Loaded f;
+        CHECK(load(kFbxTpose, extract.path(), f), "mixamo_tpose.fbx loads as a fragment");
+        if (!f.mesh.isNull()) {
+            iris::AnimationPtr tpose;
+            for (const auto &anim : f.fragment->getAnimations())
+                if (anim && anim->hasSkeletalAnimation()) tpose = anim;
+            CHECK(!tpose.isNull(), "its 'mixamo.com' clip is on the fragment");
+            if (!tpose.isNull()) {
+                std::printf("    clip length %.6f s\n", double(tpose->getLength()));
+                CHECK(std::fabs(tpose->getLength() - 1.0f / 30.0f) < 1e-6f,
+                      "the one-frame clip is ONE FRAME long (1/30 s, the file's declared "
+                      "duration), not zero");
+                iris::ExtractedClip clip;
+                const bool ok = iris::ClipExtractor::extract(
+                    f.fragment, f.mesh, f.mesh->getSkeleton(), tpose->getSkeletalAnimation(),
+                    tpose->getName(), tpose->getLength(), &f.rest, clip, nullptr);
+                bool held = ok && !clip.tracks.isEmpty() && clip.length > 0.0f;
+                for (const auto &track : clip.tracks) {
+                    if (track.keys.size() != 2 || std::fabs(track.keys[0].time) > 1e-6f ||
+                        std::fabs(track.keys[1].time - clip.length) > 1e-6f) { held = false; continue; }
+                    const Trs a{ track.keys[0].position, track.keys[0].rotation, track.keys[0].scale };
+                    const Trs b{ track.keys[1].position, track.keys[1].rotation, track.keys[1].scale };
+                    if (trsError(a, b) > 1e-6f) held = false;
+                }
+                CHECK(held, "it extracts as a HELD pose over [0, length] — two identical keys "
+                            "per driven bone, a clip the engine never has to pad");
+            }
         }
     }
 

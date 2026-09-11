@@ -537,9 +537,10 @@ iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAn
 {
     // A ZERO-LENGTH clip must not loop: Animation::getSampleTime is
     // `fmod(time, length)`, so a looping clip of length 0 samples at NaN and
-    // the pose it produces is undefined. Mixamo ships exactly such a clip in
-    // every CHARACTER download — a single-frame "mixamo.com" T-pose — and it
-    // is the clip the page selects by default.
+    // the pose it produces is undefined. (The single-frame "mixamo.com" T-pose
+    // every Mixamo CHARACTER download ships is one frame long since smoke L10
+    // item 2 — the file's declared duration — so this guards the clips that
+    // really declare nothing.)
     const auto finish = [](iris::AnimationPtr anim) {
         if (anim && !(anim->getLength() > 0.0f)) anim->setLooping(false);
         return anim;
@@ -567,6 +568,7 @@ iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAn
     auto inPlace = iris::SkeletalAnimation::create();
     inPlace->name = skel->name;
     inPlace->source = skel->source;
+    inPlace->declaredLength = skel->declaredLength;
     inPlace->boneAnimations = skel->boneAnimations;
     inPlace->boneAnimations[rootChannel] = QSharedPointer<iris::BoneAnimation>(stripped);
     return finish(iris::Animation::createFromSkeletalAnimation(inPlace));

@@ -22,6 +22,8 @@
 //   - F5: a scripted node.setProperty is UNDOABLE through undo_redo
 //   - lane D #14: a scripted node.physics write is UNDOABLE too (the only
 //     place undo is observable — a --script run's macro never closes)
+//   - smoke L10 #5: world.ambient/gravity/fog/gi/sky are UNDOABLE (value, and
+//     the pin of a quality-registry row)
 //   - F6: run_script timeoutMs interrupts a runaway loop, the app survives,
 //     and the NEXT request is served (the setInterrupted reset)
 //   - F16: run_script's module list is generated from the live registry
@@ -805,6 +807,55 @@ int main(int argc, char **argv)
         CHECK(reverted.value("type").toString() == "rigidbody"
                   && reverted.value("shape").toString() == "sphere",
               "...and the keys the second run never touched are still what the first wrote");
+    }
+
+    // ---- smoke L10 item 5: the WORLD verbs are UNDOABLE -------------------
+    // world.ambient / gravity / fog / gi / sky used to write the document and
+    // record nothing while the World panels' rows over the same fields had
+    // become undoable (debt L6) — the API-first inversion pointing the wrong
+    // way. They now push the panels' own commands (ScenePropertyCommand, and
+    // WorldModeCommand for a quality-registry row, which carries the PIN). Each
+    // case: one run sets, undo_redo undoes that run, a third run reads the
+    // value back — and for world.gi's pinned row, the pin state too.
+    {
+        struct Case { const char *label; const char *write; const char *read; };
+        const Case cases[] = {
+            { "world.ambient", "world.ambient('#0a141e')",
+              "JSON.stringify(world.get().ambient)" },
+            { "world.gravity", "world.gravity(-2.25)", "String(world.get().gravity)" },
+            { "world.fog", "world.fog({enabled: true, density: 0.125, heightLevel: 3})",
+              "JSON.stringify(world.get().fog)" },
+            { "world.gi (pinned row + plain field)", "world.gi({bounces: 1, updateBudget: 7})",
+              "JSON.stringify({gi: world.get().gi, pin: world.settings().giBounces.source})" },
+            { "world.gi (tier)", "world.gi({tier: 'low'})",
+              "JSON.stringify({gi: world.get().gi, tier: world.rayon().tier})" },
+            { "world.sky", "world.sky('gradient', {top: '#123456', offset: 0.3})",
+              "JSON.stringify(world.get().sky)" },
+        };
+        for (const Case &c : cases) {
+            const QJsonObject before = toolJson(callTool(net, url, token, ++id, "run_script",
+                QJsonObject{ { "script", QString::fromLatin1(c.read) } }));
+            const QString was = before.value("result").toString();
+            const QJsonObject wrote = toolJson(callTool(net, url, token, ++id, "run_script",
+                QJsonObject{ { "script", QString::fromLatin1(c.write) },
+                             { "label", QString::fromLatin1(c.label) } }));
+            const QJsonObject changed = toolJson(callTool(net, url, token, ++id, "run_script",
+                QJsonObject{ { "script", QString::fromLatin1(c.read) } }));
+            CHECK(wrote.value("ok").toBool() && changed.value("result").toString() != was,
+                  (QString("L10 #5: %1 wrote the document").arg(c.label)).toUtf8().constData());
+            const QJsonObject undone = toolJson(callTool(net, url, token, ++id, "undo_redo",
+                                                         QJsonObject{ { "action", "undo" } }));
+            const QJsonObject after = toolJson(callTool(net, url, token, ++id, "run_script",
+                QJsonObject{ { "script", QString::fromLatin1(c.read) } }));
+            const bool restored = undone.value("applied").toBool()
+                                  && after.value("result").toString() == was;
+            if (!restored)
+                printf("      before: %s\n      after undo: %s\n", qPrintable(was),
+                       qPrintable(after.value("result").toString()));
+            CHECK(restored, (QString("L10 #5: undo_redo REVERTED %1 (value%2)")
+                                 .arg(c.label, QString(c.read).contains("pin") ? " AND pin" : ""))
+                                .toUtf8().constData());
+        }
     }
 
     // ---- F6: timeoutMs interrupts a runaway script ------------------------

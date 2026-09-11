@@ -22,6 +22,7 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
+#include <QFile>
 #include <QImage>
 #include <QSet>
 #include <QStringList>
@@ -665,7 +666,99 @@ int main(int argc, char **argv)
             CHECK(fwd.z() < -0.9f, "invalidation: CameraNode::lookAt()");
         }
 
+        // CameraNode::lookAt AT THE POLE (smoke L10 item 1). The basis was built
+        // against a fixed world +Y, and a view straight down (or up) is parallel
+        // to it: the cross product is zero, and the decomposed rotation was
+        // whatever the degenerate matrix said — editor.setCamera({position:
+        // {0,9,0}, lookAt: {0,0,0}}) pitched -36.87 degrees instead of -90.
+        {
+            const auto forwardOf = [](const iris::CameraNodePtr &c) {
+                return c->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
+            };
+            const auto near3 = [](const iris::Vec3 &a, const iris::Vec3 &b, float tol) {
+                return (a - b).length() <= tol;
+            };
+            auto top = iris::CameraNode::create();
+            top->setLocalPos(iris::Vec3(0, 9, 0));
+            top->lookAt(iris::Vec3(0, 0, 0));
+            float pitch = 0, yaw = 0, roll = 0;
+            top->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+            std::printf("    straight down: pitch %.4f yaw %.4f roll %.4f\n",
+                        double(pitch), double(yaw), double(roll));
+            CHECK(std::fabs(pitch + 90.0f) < 1e-3f,
+                  "lookAt straight DOWN pitches the camera -90 degrees (within 1e-3)");
+            CHECK(near3(forwardOf(top), iris::Vec3(0, -1, 0), 1e-5f),
+                  "...and it really looks down -Y");
+            CHECK(near3(top->getLocalPos(), iris::Vec3(0, 9, 0), 1e-6f),
+                  "...without moving the camera");
+            // A fresh camera faces -Z, so the top of the frame is -Z: the same
+            // pose the top axis view takes (yaw 0, pitch -90).
+            CHECK(near3(top->getLocalRot().rotatedVector(iris::Vec3(0, 1, 0)),
+                        iris::Vec3(0, 0, -1), 1e-5f),
+                  "...with the camera's former heading (-Z) at the top of the frame");
+
+            auto bottom = iris::CameraNode::create();
+            bottom->setLocalPos(iris::Vec3(0, -4, 0));
+            bottom->lookAt(iris::Vec3(0, 3, 0));
+            bottom->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+            CHECK(std::fabs(pitch - 90.0f) < 1e-3f,
+                  "lookAt straight UP pitches the camera +90 degrees (within 1e-3)");
+            CHECK(near3(forwardOf(bottom), iris::Vec3(0, 1, 0), 1e-5f), "...and looks up +Y");
+
+            // The heading SURVIVES the pole: a camera turned 45 degrees and then
+            // aimed straight down keeps its right-hand side where it was, which
+            // is what "look down from where I stand" means — not a snap to +X.
+            auto turned = iris::CameraNode::create();
+            turned->setLocalPos(iris::Vec3(2, 5, -1));
+            turned->setLocalRot(iris::Quat::fromEulerAngles(0.0f, 45.0f, 0.0f));
+            const iris::Vec3 rightBefore = turned->getLocalRot().rotatedVector(iris::Vec3(1, 0, 0));
+            turned->lookAt(iris::Vec3(2, -3, -1));
+            CHECK(near3(forwardOf(turned), iris::Vec3(0, -1, 0), 1e-5f),
+                  "a yawed camera aimed straight down looks down");
+            CHECK(near3(turned->getLocalRot().rotatedVector(iris::Vec3(1, 0, 0)), rightBefore, 1e-5f),
+                  "...and keeps its heading (its right vector is unchanged)");
+
+            // Off the pole NOTHING moved: the ordinary case still builds its
+            // basis against world +Y (the default editor camera's pose, and so
+            // the self-test's pixels, ride this path).
+            auto ordinary = iris::CameraNode::create();
+            ordinary->setLocalPos(iris::Vec3(0, 3, 12));
+            ordinary->lookAt(iris::Vec3(0, 0, 0));
+            iris::Mat4 ref;
+            ref.setToIdentity();
+            ref.lookAt(iris::Vec3(0, 3, 12), iris::Vec3(0, 0, 0), iris::Vec3(0, 1, 0));
+            ref = ref.inverted();
+            auto oldPath = iris::CameraNode::create();   // what lookAt did before, verbatim
+            oldPath->setLocalTransform(ref);
+            const iris::Quat refRot = oldPath->getLocalRot();
+            const iris::Quat got = ordinary->getLocalRot();
+            CHECK(got.x() == refRot.x() && got.y() == refRot.y() && got.z() == refRot.z() &&
+                      got.scalar() == refRot.scalar(),
+                  "an off-pole lookAt is BIT-IDENTICAL to the fixed +Y basis it always used");
+        }
+
         tScene->cleanup();
+    }
+
+    // --- A model read from a Qt RESOURCE is dispatched by its extension ------
+    // (smoke L10 item 4). Mesh::loadMesh reads a ":/" path into memory and hands
+    // assimp the bytes; with no extension hint assimp can only SNIFF the first
+    // 200 bytes for a format keyword, so a comment block above `mtllib` made
+    // the default scene's ground unloadable ("error parsing file") on
+    // 2026-09-11. The fixture's first ~800 bytes are comments with no OBJ
+    // keyword in them.
+    {
+        const QString res = QStringLiteral(":/document-fixtures/commented_header.obj");
+        QFile probe(res);
+        CHECK(probe.open(QIODevice::ReadOnly) && probe.read(200).indexOf("mtllib") < 0,
+              "fixture: the resource exists and its first 200 bytes hold no format keyword");
+        auto mesh = iris::Mesh::loadMesh(res);
+        CHECK(!mesh.isNull() && mesh->numVerts > 0,
+              "an OBJ resource with 300+ bytes of leading comments LOADS (extension hint)");
+        auto node = iris::MeshNode::create();
+        node->setMesh(res);
+        CHECK(!node->getMesh().isNull(),
+              "...through MeshNode::setMesh too — the default scene's ground path");
     }
 
     // --- Retired node types (AVATAR_LOCOMOTION_SPEC Stage 0) ---------------

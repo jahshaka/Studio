@@ -18,8 +18,10 @@ For more information see the LICENSE file
 // step 6): MainWindow built normally, its default scene created and set on the
 // viewport exactly as newScene() does at runtime, ~40 frames pumped (with two
 // resizes — the engine must survive swapchain rebuilds), one offscreen
-// screenshot saved. Exit 0 iff the image exists and its centre pixel is not
-// the clear colour — i.e. the ground plane rendered.
+// screenshot saved. Exit 0 iff the default scene's ground loaded (a node with
+// real geometry — checked before any frame, smoke L10 item 3), the on-screen
+// view survived the resizes, and the image exists with a centre pixel that is
+// not the clear colour.
 
 class MainWindow;
 class QApplication;

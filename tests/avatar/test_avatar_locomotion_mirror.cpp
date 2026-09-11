@@ -97,12 +97,14 @@ static iris::AnimationPtr makeClip(const char *name, bool includeRoot, float len
     return a;
 }
 
-/// A MIXAMO ONE-FRAME CLIP: one key per bone at t = 0 and a length of 0. Real
-/// files like this exist (the owner's Dreyar pack has one) and the engine pads
-/// the length rather than dividing by it (OgreClips.cpp kMinClipLength) — the
+/// A ZERO-LENGTH CLIP: one key per bone at t = 0 and a length of 0, which the
+/// engine pads rather than dividing by (OgreClips.cpp kMinClipLength) — the
 /// "clip 'mixamo.com' has length 0.000000; padded to 0.001000s" line is the
-/// last thing the 2026-09-11 smoke log printed before the abort. It is in the
-/// S16 section below because that is the shape the crash arrived in.
+/// last thing the 2026-09-11 smoke log printed before the abort. The Mixamo
+/// character T-pose that printed it arrives ONE FRAME long since smoke L10 item
+/// 2 (the file's declared duration; skeletal.gpu_clips asserts no pad line), so
+/// this clip is built by hand: the pad is still the engine's guard, and the S16
+/// section below is the shape the crash arrived in.
 static iris::AnimationPtr makeZeroLengthClip(const char *name)
 {
     auto skelAnim = iris::SkeletalAnimation::create();

@@ -42,6 +42,7 @@
 #include "data/database/database.h"
 #include "data/project.h"
 #include "io/scenewriter.h"
+#include "services/assethelper.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -340,6 +341,35 @@ int main(int argc, char **argv)
         undo.markSaved();
         CHECK(!undo.isDirty() && undo.savedCountMatchesCurrent(),
               "saving clears the repair flag");
+    }
+
+    // ---- 6. the material exporter finds an imported texture's bytes -------
+    // (smoke L10 item 7). The exporter's asset-path helper (Exporter::getAssetPath
+    // until this lane, AssetHelper::storedFilePath now) spelled an EDITOR-filtered
+    // asset's path inline as <Documents>/Jahshaka/<name> — the flat per-project
+    // copy the reference-with-pin program deleted (2026-08-31), under a root
+    // the data-root override does not even move. A model's textures are
+    // registered Editor-filtered (assetimporters.cpp), so a material exported
+    // with one of them shipped without it, silently. Every filter now resolves
+    // through the store, by guid.
+    {
+        bool everyEditorFiltered = !textures.isEmpty();
+        bool everyResolved = !textures.isEmpty();
+        for (const QString &tex : textures) {
+            const AssetRecord rec = db.fetchAsset(tex);
+            everyEditorFiltered = everyEditorFiltered
+                && rec.view_filter == static_cast<int>(AssetViewFilter::Editor);
+            const QString path = AssetHelper::storedFilePath(rec);
+            QFile got(path), want(AssetCas::resolvePinned(conn, root, projectGuid, tex));
+            const bool same = got.open(QIODevice::ReadOnly) && want.open(QIODevice::ReadOnly)
+                              && got.readAll() == want.readAll();
+            if (!same) std::printf("    %s -> '%s'\n", qPrintable(rec.name), qPrintable(path));
+            everyResolved = everyResolved && same;
+        }
+        CHECK(everyEditorFiltered, "an imported model's textures are Editor-filtered rows");
+        CHECK(everyResolved,
+              "the material exporter resolves every one of them to its stored bytes "
+              "(not a <Documents>/Jahshaka/<name> path that no longer exists)");
     }
 
     SceneWriter::setProject(nullptr);

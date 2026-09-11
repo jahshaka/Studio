@@ -49,13 +49,24 @@ CLIPS
                   1.0 — three different key-time sets over one bone chain, so
                   the key-time UNION of §3.1 step 2 is exercised and a naive
                   "take the bone's own channel" translation cannot pass.
-    "mixamo.com"  a SINGLE key — a zero-length clip. Every Mixamo character
-                  download ships exactly one (the T-pose) and the Avatar page
-                  selects it by default; engine-side a zero-length clip is
-                  fmod(t, 0) = NaN (§9 R3), so it must be padded, and the only
-                  honest way to test that is with a file that really has one.
+    "mixamo.com"  a SINGLE key and NO declared duration — a genuinely
+                  zero-length clip, the shape the engine's length pad
+                  (OgreClips.cpp kMinClipLength, §9 R3) still guards against.
+                  (It was written as "the Mixamo T-pose"; a real Mixamo
+                  character's clip is NOT this shape — see the second file.)
 
-Run:  python3 make_pivot_fbx.py            (writes pivot_rig.fbx beside it)
+A SECOND FILE, mixamo_tpose.fbx (`--mixamo-tpose`), is the same rig carrying
+ONLY the clip a real Mixamo CHARACTER download ships (measured on the owner's
+Dreyar, Jennifer, Ely and Eve files, 2026-09-11): "mixamo.com", TWO IDENTICAL
+keys one frame apart at 30 fps, so the file declares a duration of one frame
+(mDuration 1 tick, mTicksPerSecond 30). The canonical preset's FindInvalidData
+step collapses the two identical keys into ONE key at t = 0 — which is how the
+importer came to record a zero-length clip and the engine came to pad it on
+every attach (smoke L10 item 2). The declared duration survives the collapse,
+and it is what the clip's length now comes from.
+
+Run:  python3 make_pivot_fbx.py                  (writes pivot_rig.fbx beside it)
+      python3 make_pivot_fbx.py --mixamo-tpose   (writes mixamo_tpose.fbx)
 """
 
 import math
@@ -193,8 +204,8 @@ CLIPS = [
             ("Z", [(0.0, 0.0), (0.25, 0.0), (1.0, 0.0)]),
         ]),
     ]),
-    # The zero-length T-pose clip every Mixamo character download ships: ONE
-    # key, so the clip length is 0.0 s. The value has to differ from the node's
+    # A zero-length clip: ONE key and no declared duration, so the clip length
+    # is 0.0 s and the engine pads it. The value has to differ from the node's
     # own Lcl Rotation or assimp's IsRedundantAnimationData drops the channel
     # (a single key equal to the rest transform carries no information) and the
     # whole clip disappears from the file — which is how the first draft of
@@ -204,6 +215,23 @@ CLIPS = [
             ("X", [(0.0, 0.0)]),
             ("Y", [(0.0, 0.0)]),
             ("Z", [(0.0, 20.0)]),
+        ]),
+    ]),
+]
+
+
+# The clip a real Mixamo CHARACTER download ships, in the shape it really has:
+# two identical keys, frame 0 and frame 1 at 30 fps. Written with TimeMode 30
+# fps (below) so assimp reports mTicksPerSecond 30 and mDuration 1, exactly as
+# it does for the owner's files. The value differs from the rest transform for
+# the same reason as above (a channel equal to rest is dropped outright).
+TPOSE_FPS = 30.0
+MIXAMO_TPOSE_CLIPS = [
+    ("mixamo.com", [
+        (ID_MODEL_ROOT, "Lcl Rotation", [
+            ("X", [(0.0, 0.0), (1.0 / TPOSE_FPS, 0.0)]),
+            ("Y", [(0.0, 0.0), (1.0 / TPOSE_FPS, 0.0)]),
+            ("Z", [(0.0, 20.0), (1.0 / TPOSE_FPS, 20.0)]),
         ]),
     ]),
 ]
@@ -221,7 +249,10 @@ def matrix_arr(name, m):
     return arr(name, column_major(m))
 
 
-def build():
+def build(clips=CLIPS, time_mode=None):
+    """time_mode: the FBX GlobalSettings TimeMode enum (6 = 30 fps), or None to
+    omit it (pivot_rig.fbx has always omitted it: assimp then reports 1 tick
+    per second, and its bytes must not move under the frozen goldens)."""
     out = []
     w = out.append
 
@@ -260,6 +291,8 @@ def build():
     w("\t\tP: \"CoordAxis\", \"int\", \"Integer\", \"\",0\n")
     w("\t\tP: \"CoordAxisSign\", \"int\", \"Integer\", \"\",1\n")
     w("\t\tP: \"UnitScaleFactor\", \"double\", \"Number\", \"\",100\n")
+    if time_mode is not None:
+        w("\t\tP: \"TimeMode\", \"enum\", \"\", \"\",%d\n" % time_mode)
     w("\t}\n")
     w("}\n")
 
@@ -365,7 +398,7 @@ def build():
 
     # ---- animation ----
     connections = []
-    for clip_name, targets in CLIPS:
+    for clip_name, targets in clips:
         stack_id, layer_id = new_id(), new_id()
         w("\tAnimationStack: %d, \"AnimStack::%s\", \"\" {\n" % (stack_id, clip_name))
         w("\t}\n")
@@ -423,7 +456,14 @@ def build():
 
 
 if __name__ == "__main__":
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pivot_rig.fbx")
+    import sys
+    here = os.path.dirname(os.path.abspath(__file__))
+    if "--mixamo-tpose" in sys.argv[1:]:
+        path = os.path.join(here, "mixamo_tpose.fbx")
+        text = build(MIXAMO_TPOSE_CLIPS, time_mode=6)   # 6 = eFrames30
+    else:
+        path = os.path.join(here, "pivot_rig.fbx")
+        text = build()
     with open(path, "w") as f:
-        f.write(build())
+        f.write(text)
     print("wrote %s (%d bytes)" % (path, os.path.getsize(path)))

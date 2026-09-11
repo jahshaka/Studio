@@ -9,9 +9,6 @@
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assethelper.h"
-#include <QSqlDatabase>
-#include "services/assetcas.h"
-#include "services/assetstorepaths.h"
 #include "modules/materials/core/materialhelper.h"
 
 class Exporter
@@ -43,7 +40,7 @@ public:
 		for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(materialGuid, dataBase)) {
 			auto asset = dataBase->fetchAsset(assetGuid);
 			//auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
-			auto assetPath = getAssetPath(asset);
+			auto assetPath = AssetHelper::storedFilePath(asset);
 			QFileInfo assetInfo(assetPath);
 			if (assetInfo.exists()) {
 				// The archive names files by their DISPLAY name, never by the
@@ -234,27 +231,6 @@ public:
 		return valuesObj;
 	}
 
-	static QString getAssetPath(const AssetRecord& asset)
-	{
-		if (asset.view_filter == AssetViewFilter::Editor) {
-			const QString path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-			                   + Constants::PROJECT_FOLDER;
-			return IrisUtils::join(path, asset.name);
-		}
-		if (asset.view_filter == AssetViewFilter::AssetsView ||
-		    asset.view_filter == AssetViewFilter::Effects) {
-			// Store assets resolve through the CAS by guid — the retired
-			// <root>/<guid>/<name> view is gone (deep audit 2026-09, area 6).
-			// resolveFile keeps the legacy folder as its own fallback, so an
-			// old store still exports.
-			const QString byName = AssetCas::resolveFile(
-			    QSqlDatabase::database(), AssetStorePaths::root(), asset.guid, asset.name);
-			if (!byName.isEmpty()) return byName;
-			return AssetCas::resolveSource(
-			    QSqlDatabase::database(), AssetStorePaths::root(), asset.guid);
-		}
-		return QString();
-	}
 };
 
 #endif //SHADERGRAPH_EXPORTER

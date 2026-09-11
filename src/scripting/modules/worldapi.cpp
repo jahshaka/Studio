@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include "services/gibounds.h"
 #include "services/undoservice.h"
 #include "commands/worldmodecommand.h"
+#include "commands/scenepropertycommand.h"
 #include "commands/sunlightlinkcommand.h"
 #include "services/jahlog.h"
 
@@ -64,16 +65,165 @@ QVariant giToggleToJs(int v)
     if (v == 0) return false;
     return QStringLiteral("auto");
 }
+
+/// The live sky TEXTURE is not a sceneprops value (the "sky" row carries the
+/// type, the per-type blobs and the live colour/gradient/analytic fields — the
+/// texture object is what an equirect or cubemap entry RESOLVED to). A textured
+/// world.sky swaps it, so its undo step puts the object back beside the row.
+/// Same first-redo guard as the commands it sits with: the verb has already
+/// applied the edit when the step is pushed.
+class SkyTextureCommand : public QUndoCommand
+{
+public:
+    SkyTextureCommand(const iris::ScenePtr &scene, iris::Texture2DPtr before,
+                      iris::Texture2DPtr after, QUndoCommand *parent)
+        : QUndoCommand(parent), mScene(scene), mBefore(std::move(before)),
+          mAfter(std::move(after)) {}
+    void undo() override { if (auto s = mScene.lock()) s->setSkyTexture(mBefore); }
+    void redo() override
+    {
+        if (mFirstRedo) { mFirstRedo = false; return; }
+        if (auto s = mScene.lock()) s->setSkyTexture(mAfter);
+    }
+
+private:
+    iris::SceneWPtr mScene;
+    iris::Texture2DPtr mBefore;
+    iris::Texture2DPtr mAfter;
+    bool mFirstRedo = true;
+};
+
+/// ONE WORLD VERB, ONE UNDO STEP (smoke L10 item 5; the gap debt L6's review
+/// recorded as its item 7). world.ambient / gravity / fog / gi / sky wrote the
+/// document and recorded NOTHING while the World panels' rows over the very
+/// same fields had become undoable — the API-first inversion pointing the
+/// wrong way. This records a verb's edit through the PANELS' OWN commands:
+///
+///   * each world field the call changed -> a ScenePropertyCommand (the
+///     sceneprops table the panels write through);
+///   * the quality registry, if the call changed it (a pinned row, a Rayon
+///     tier) -> a WorldModeCommand, which restores the value AND the pin;
+///   * the live sky texture, if a textured sky swapped it.
+///
+/// A call that changed one field pushes that one command, exactly what the
+/// panel's row pushes; a call that changed several pushes ONE composite whose
+/// children they are. A call that changed nothing pushes nothing (the panel's
+/// before == after rule). And a call that is REFUSED part-way — world.fog
+/// used to write `enabled` before it discovered the colour was unreadable —
+/// is rolled back when the recorder goes out of scope uncommitted, so a
+/// refusal changes nothing and records nothing.
+class WorldEdit
+{
+public:
+    enum Flag { Registry = 0x1, SkyTexture = 0x2 };
+
+    WorldEdit(iris::ScenePtr scene, QStringList keys, int flags = 0)
+        : mScene(std::move(scene)), mKeys(std::move(keys)), mFlags(flags)
+    {
+        for (const QString &k : mKeys) mBefore.insert(k, sceneprops::get(mScene, k));
+        if (mFlags & Registry) mModeBefore = WorldModeCommand::capture(mScene);
+        if (mFlags & SkyTexture) mTextureBefore = mScene->skyTexture;
+    }
+    WorldEdit(const WorldEdit &) = delete;
+    WorldEdit &operator=(const WorldEdit &) = delete;
+
+    ~WorldEdit() { if (!mDone) rollback(); }
+
+    /// Records everything the call changed as ONE step (none if nothing did).
+    /// Without an undo stack (headless hosts, tests) the edit simply stands.
+    void commit(UndoService *undo, const QString &text)
+    {
+        mDone = true;
+        if (!undo) return;
+        QStringList changed;
+        for (const QString &k : mKeys)
+            if (sceneprops::get(mScene, k) != mBefore.value(k)) changed.append(k);
+        const bool registry = (mFlags & Registry) &&
+                              !WorldModeCommand::same(mModeBefore, WorldModeCommand::capture(mScene));
+        const bool texture = (mFlags & SkyTexture) && mScene->skyTexture != mTextureBefore;
+        const int parts = int(changed.size()) + (registry ? 1 : 0) + (texture ? 1 : 0);
+        if (parts == 0) return;
+        if (parts == 1 && !texture) {   // exactly the command the panel's row pushes
+            if (registry) undo->push(new WorldModeCommand(text, mScene, mModeBefore));
+            else undo->push(new ScenePropertyCommand(text, mScene, changed.first(),
+                                                     mBefore.value(changed.first()),
+                                                     sceneprops::get(mScene, changed.first())));
+            return;
+        }
+        auto *step = new StudioCommand(text);
+        // Registry first: its undo (children undo in REVERSE) then runs last,
+        // after every plain field is back — the order a tier edit was applied in.
+        if (registry) new WorldModeCommand(text, mScene, mModeBefore, step);
+        for (const QString &k : changed)
+            new ScenePropertyCommand(text, mScene, k, mBefore.value(k),
+                                     sceneprops::get(mScene, k), step);
+        if (texture) new SkyTextureCommand(mScene, mTextureBefore, mScene->skyTexture, step);
+        undo->push(step);
+    }
+
+private:
+    void rollback()
+    {
+        if (!mScene) return;
+        if (mFlags & Registry) {
+            if (!WorldModeCommand::same(mModeBefore, WorldModeCommand::capture(mScene))) {
+                WorldModeCommand restore(QString(), mScene, mModeBefore);
+                restore.undo();
+            }
+        }
+        for (const QString &k : mKeys) {
+            const QVariant was = mBefore.value(k);
+            if (sceneprops::get(mScene, k) != was) sceneprops::set(mScene, k, was);
+        }
+        if (mFlags & SkyTexture) mScene->setSkyTexture(mTextureBefore);
+    }
+
+    iris::ScenePtr mScene;
+    QStringList mKeys;
+    int mFlags = 0;
+    QHash<QString, QVariant> mBefore;
+    WorldModeCommand::Snapshot mModeBefore;
+    iris::Texture2DPtr mTextureBefore;
+    bool mDone = false;
+};
+
+const QStringList &fogKeys()
+{
+    static const QStringList keys = {
+        QStringLiteral("fogEnabled"), QStringLiteral("fogColor"), QStringLiteral("fogStart"),
+        QStringLiteral("fogEnd"), QStringLiteral("fogDensity"), QStringLiteral("fogHeightDensity"),
+        QStringLiteral("fogHeightFalloff"), QStringLiteral("fogHeightLevel"),
+        QStringLiteral("fogBreakMinBrightness"), QStringLiteral("fogBreakFalloff")
+    };
+    return keys;
+}
+
+/// The world.gi fields that are NOT quality-registry rows (those ride the
+/// registry snapshot: giMode, giQuality, giBounces, giDynamicProbes, giDdgi).
+const QStringList &giPlainKeys()
+{
+    static const QStringList keys = {
+        QStringLiteral("giLightGuid"), QStringLiteral("giBoundsMin"), QStringLiteral("giBoundsMax"),
+        QStringLiteral("giPccGrid"), QStringLiteral("giUpdateBudget"),
+        QStringLiteral("giDdgiIntensity"), QStringLiteral("giDdgiAmbient"),
+        QStringLiteral("giDdgiSource"), QStringLiteral("giAutoBoundsMax"),
+        QStringLiteral("giRayMarchStepScale"), QStringLiteral("giProbeHdr"),
+        QStringLiteral("giProbeShadows"), QStringLiteral("giProbeOverlap"),
+        QStringLiteral("giProbeSnapDeviation"), QStringLiteral("giProbeSnapSidesMin"),
+        QStringLiteral("giProbeSnapSidesMax")
+    };
+    return keys;
+}
 }  // namespace
 
 QVector<VerbInfo> WorldApi::verbs() const
 {
     return {
         { "ambient", "world.ambient(color) -> bool",
-          "Sets the ambient light colour (\"#rrggbb\" or {r,g,b}).",
+          "Sets the ambient light colour (\"#rrggbb\" or {r,g,b}). One undo step — the World panel's own.",
           Needs::Document },
         { "gravity", "world.gravity(value) -> bool",
-          "Sets world gravity (drives the physics world too).",
+          "Sets world gravity (drives the physics world too). One undo step — the World panel's own.",
           Needs::Document },
         { "fog", "world.fog({enabled, color, density, heightDensity, heightFalloff, heightLevel, breakMinBrightness, breakFalloff, end, start}) -> bool",
           "Sets any subset of the fog settings. Fog is EXPONENTIAL: transmittance = 2^(-distance * density), "
@@ -84,7 +234,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           "`end` is the retired linear \"fully fogged\" distance, kept as a convenience: setting it "
           "re-derives the density from the start/end pair (density = 2/(start+end), the distance where "
           "both curves are half fogged). `start` no longer affects rendering on its own. "
-          "An unknown key is REFUSED with the list of the ones that exist.",
+          "An unknown key is REFUSED with the list of the ones that exist, and a refused call "
+          "(an unknown key or an unreadable colour) changes nothing. One call is one undo step, "
+          "whatever subset it sets.",
           Needs::Document },
         { "shadows", "world.shadows({enabled, mapBudget}) -> bool",
           "Shadow rendering for the scene. 'enabled' toggles it. "
@@ -113,7 +265,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'ddgiIntensity' (0..64, default 1) scales that replacement, because the technique itself has no brightness setting and the two diffuse terms are different integrals of the same bounce. Measured on a closed room, the field lands at about 86% of the cone-traced diffuse it takes over from, so the raw value 1.0 is also the calibrated default: raise it to trim the room brighter, lower it to trim it down, and 0 leaves the field bound while contributing nothing (the A/B measurement). world.giStatus()'s ifdBound / ifdProbes / ifdConverged / ifdProbesPerFrame report what the renderer did with all of this. "
           "'ddgiAmbient' (0..8, default 1) scales the AMBIENT the field would otherwise swallow. Inside a voxel volume the renderer's ordinary ambient term is switched off — the cone-traced bounce carried the ambient instead, weighted by how much sky each surface could see — and turning DDGI on removes that carrier, which used to leave open scenes 15-25% flatter (a sealed room saw no change, because a sealed room has no sky to see). The renderer now rebuilds the missing term from the field's own depth probes: the scene's ambient, times the fraction of the surrounding probes whose view along the surface's normal leaves the volume without hitting anything. 1 is that reconstruction and the default, 0 removes it again (which is exactly how DDGI behaved before this existed, and the A/B for measuring it), and above 1 is a sky-fill trim. The proxy reads the field's depth atlas as a cosine-integrated moment pair and applies the DDGI paper's visibility test at the escape distance, so a wall foot darkens like the cone reference does (rayon2 S1). "
           "'ddgiSource' (\"auto\"|\"voxel\"|\"raster\", default auto) is WHERE THE FIELD'S PROBES GET THEIR LIGHT. \"voxel\" cone-traces the voxel volume the field sits over — cheap, and blind to anything the voxelizer did not bake, so a skinned character animates inside a static voxel of itself. \"raster\" renders six 32x32 faces per probe from the LIVE scene instead: it sees skinned and animated geometry exactly as the viewport does, and it re-captures while rigs move, under the same updateBudget dial (the dial's unit stays reflection-probe equivalents; one raster probe is a few hundredths of one). The voxel volume is still built (the shader's ambient gate needs it) and the raster field is never born dark — it is converged from the voxels first and re-sourced in place. \"auto\" is the tier's choice, which is voxel at EVERY tier, epic included: raster is an Advanced opt-in, never a default. With a raster source the probes SEE the sky, so 'ddgiAmbient' applies only while no sky is bound (otherwise it would count the sky twice). world.giStatus()'s ifdSource says which one the renderer is actually running. "
-          "An unknown key is REFUSED with the list of the ones that exist.",
+          "An unknown key is REFUSED with the list of the ones that exist, and a refused call "
+          "changes nothing. One call is one undo step, whatever it touches — the quality rows "
+          "it pins (undo restores the pin too), the tier, and the plain GI fields.",
           Needs::Document },
         { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, voxelMetres, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeHdr, probeShadows, probeUpdatesPerFrame, dynamicProbes, dynamicProbeUpdates, cubemapProbeSlotsPerCell, probesClampedToRegion, worstProbeShapeCellRatio, reusedLastRefresh, ifdBound, ifdProbes, ifdConverged, ifdProbesPerFrame, ifdSource, live}",
           "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'voxelMetres' is that volume's largest axis divided by the tier's voxel resolution — the number that says whether the GI in this scene means anything at all, since a kilometre-wide volume at 128^3 is eight metres per voxel and is computing a constant; world.gi's autoBoundsMax is the ceiling the volume is held under. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region, which the renderer enforces. Being a UNION it is a weak reading: it equals the clamp box whenever any probe was clamped, so use 'probesClampedToRegion' for how degenerate the fit actually was. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer re-captures each frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked); every probe still refreshes within probeCount / probeUpdatesPerFrame frames. 'dynamicProbes' is world.gi's dynamicProbes RESOLVED (clamped to the probes that exist, 0 while GI is paused) and 'dynamicProbeUpdates' how many extra moved-covering re-captures that reservation actually spent on the last frame — 0 whenever nothing moved, which is the column's whole cost story. 'cubemapProbeSlotsPerCell' is the Forward+ per-cell reflection-probe budget: the renderer culls probes through a screen-space cluster grid and a cell that sees MORE probes than this drops the rest silently, which paints hard-edged black rectangles on reflective surfaces wherever it happens (they move with the camera, because the grid does). The renderer grows the budget to hold the probe grid it built, so a value below probeCount is a defect and not a setting. 'probesClampedToRegion' is how many of those probes had their depth-fitted parallax box corrected back into the probe region at the last build — the honest measure of how degenerate the shrink-fit was in this scene (it fits from ONE averaged depth sample per cube face, which means nothing once anything stands between a probe and a wall); it is not itself an artifact, the clamp handles it, but a high count says the fit is not doing the work here. 'worstProbeShapeCellRatio' is how far the worst probe's parallax box reaches past its own share of the region, as a multiple of that share — a diagnostic, because a probe standing in a room is RIGHT to have a room-sized box. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. The four ifd* fields are the IRRADIANCE FIELD (world.gi's 'ddgi'), reported the same way: 'ifdBound' is whether the PBR shader is sampling THIS scene's field — asking for DDGI and getting it are two different things, since the field needs a voxel volume to be built from and its compute jobs to be staged; 'ifdProbes' is how many probes it holds; 'ifdConverged' says every probe has been integrated since the last build or light change, and it is true on the frame the field binds (a build converges the whole field in one go) — it reads false only while a progressive re-integration after a light move is still running; 'ifdProbesPerFrame' is how fast that re-integration runs, derived from updateBudget, and 0 when GI is paused or there is no field; 'ifdSource' is what is FEEDING the probes — \"voxel\" or \"raster\" (world.gi's ddgiSource resolved; raster can be refused when its compositor is not staged, and then this reads voxel while the request says raster). 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
@@ -164,7 +318,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
-          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024).",
+          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024). One call is one undo step (the sky block, a pinned detail, the texture it bound); a refused call changes nothing.",
           Needs::Document },
         { "sunLight", "world.sunLight([id|null]) -> id",
           "Sun coupling: the DIRECTIONAL light the realistic sky's sun drives, by node id. Called with no argument it reads the current link (empty string = none). Given a node id it links that light — its rotation follows the sky's sun angles from then on, in the editor and in the player. Given null or an empty string it unlinks and the light goes back to manual control with the rotation it had before it was linked. One undo step either way; only the realistic sky has a sun, so the link is inert (but remembered) under any other sky type.",
@@ -263,7 +417,9 @@ bool WorldApi::ambient(const QVariant &color)
     bool ok = false;
     const QColor c = colorFromJs(color, scene->ambientColor, &ok);
     if (!ok) return fail(QStringLiteral("world.ambient: %1").arg(colorHelp(color)));
-    scene->setAmbientColor(c);
+    WorldEdit edit(scene, { QStringLiteral("ambientColor") });
+    sceneprops::set(scene, QStringLiteral("ambientColor"), c);   // the panel row's own setter
+    edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Ambient"));
     return true;
 }
 
@@ -271,7 +427,10 @@ bool WorldApi::gravity(double value)
 {
     auto scene = sceneOrFail(QStringLiteral("world.gravity"));
     if (!scene) return false;
-    scene->setWorldGravity(float(value));   // the setter drives the Bullet world too
+    WorldEdit edit(scene, { QStringLiteral("gravity") });
+    // The panel row's setter — setWorldGravity, which drives the Bullet world too.
+    sceneprops::set(scene, QStringLiteral("gravity"), float(value));
+    edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Gravity"));
     return true;
 }
 
@@ -294,6 +453,8 @@ bool WorldApi::fog(const QVariantMap &params)
     };
     const QString refusal = refuseUnknownKeys(QStringLiteral("world.fog"), params, known);
     if (!refusal.isEmpty()) return fail(refusal);
+    // One undo step; a refusal below (the colour) rolls back what was written.
+    WorldEdit edit(scene, fogKeys());
     if (params.contains("enabled")) scene->fogEnabled = params.value("enabled").toBool();
     if (params.contains("color")) {
         bool ok = false;
@@ -316,6 +477,7 @@ bool WorldApi::fog(const QVariantMap &params)
     if (params.contains("breakMinBrightness"))
         scene->fogBreakMinBrightness = params.value("breakMinBrightness").toFloat();
     if (params.contains("breakFalloff")) scene->fogBreakFalloff = params.value("breakFalloff").toFloat();
+    edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Fog"));
     return true;
 }
 
@@ -388,6 +550,11 @@ bool WorldApi::gi(const QVariantMap &params)
                        "N = N probe re-captures per frame)."));
     if (!refusal.isEmpty()) return fail(refusal);
 
+    // ONE call, ONE undo step, whatever it touches: the registry rows (and
+    // their pins, and the tier) plus the plain GI fields. A refusal part-way
+    // rolls every write back (WorldEdit).
+    WorldEdit edit(scene, giPlainKeys(), WorldEdit::Registry);
+
     // THE TIER FIRST (GI_UNIFIED_SPEC §2): it writes the technique, the quality
     // and the field through — honouring pins — so an explicit knob in the same
     // call lands after it and pins itself, which is the order a reader expects
@@ -401,8 +568,9 @@ bool WorldApi::gi(const QVariantMap &params)
                                        "which picks the technique, the voxel/probe quality and the "
                                        "irradiance field together")
                             .arg(t, worldmodes::rayonTierNames().join(QStringLiteral(", "))));
-        applyRayon(scene, worldmodes::rayonEnabled(scene), tier,
-                   QStringLiteral("Rayon Quality: %1").arg(worldmodes::rayonTierName(tier)));
+        // The tier's write only — the step is this call's one step (applyRayon
+        // would push a second one).
+        worldmodes::setRayon(scene, worldmodes::rayonEnabled(scene), tier);
     }
     if (params.contains("mode")) {
         const QString m = params.value("mode").toString().trimmed().toLower();
@@ -613,6 +781,7 @@ bool WorldApi::gi(const QVariantMap &params)
                 "exactly how DDGI behaved before this existed, and the A/B for measuring it."));
         scene->giDdgiAmbient = float(v);
     }
+    edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World GI"));
     return true;
 }
 
@@ -1232,6 +1401,13 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
 
     const QString t = type.trimmed().toLower();
 
+    // ONE undo step: the sky block (the panel's own "sky" row), the sky-detail
+    // registry row and its pin, and the live texture a textured sky swaps. The
+    // project's texture DEPENDENCY rows are not unwound (NodeEditCommand's
+    // contract: an orphaned pin is inert, assets.gc reclaims it). A refusal
+    // part-way rolls every write back.
+    WorldEdit edit(scene, { QStringLiteral("sky") }, WorldEdit::Registry | WorldEdit::SkyTexture);
+
     // Contract per SkyPropertyWidget: set the live fields AND rebuild
     // scene->skyData[<key>] (SceneWriter serializes only skyData), then
     // switchSkyTexture + queueSkyCapture for the legacy renderer. SceneMirror
@@ -1369,6 +1545,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         return fail(QStringLiteral("world.sky: unknown type '%1' (color, gradient, realistic, equirectangular, cubemap)").arg(type));
     }
 
+    edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Sky"));
     return true;
 }
 
