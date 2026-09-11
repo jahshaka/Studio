@@ -439,6 +439,29 @@ int main(int argc, char **argv)
               "paused drag: the grid catches up after the gesture, then idles");
     }
 
+    // ---- Instant Radiosity (Rayon Low) re-traces on a MATERIAL edit ----------
+    // (code review 2026-09-12, item 7). IR's trace reads the same diffuse
+    // colours VCT converts, and nothing re-traced it on an albedo edit: the
+    // material generation now covers IR too, through the mirror's own
+    // material term — one re-trace when the edit settles, no re-inject cadence.
+    {
+        doc->giMode = iris::GiMode::INSTANT_RADIOSITY;
+        for (int f = 0; f < 30; ++f) frame();
+        const quint64 before = mirror.giRefreshCount();
+        const quint64 injects = mirror.giLightRefreshCount();
+        wallMat->setBaseColor(QColor(13, 13, 255));
+        for (int f = 0; f < 30; ++f) frame();
+        std::printf("   IR albedo edit: re-traces = %llu, light re-injects = %llu\n",
+                    (unsigned long long)(mirror.giRefreshCount() - before),
+                    (unsigned long long)(mirror.giLightRefreshCount() - injects));
+        CHECK(mirror.giRefreshCount() - before == 1,
+              "IR: an albedo edit on traced geometry re-traces exactly once on settle");
+        CHECK(mirror.giLightRefreshCount() == injects,
+              "IR: ...with no per-frame cheap path while it waits");
+        for (int f = 0; f < 20; ++f) frame();
+        CHECK(mirror.giRefreshCount() - before == 1, "IR: and never again while nothing changes");
+    }
+
     doc->giMode = iris::GiMode::OFF;
     frame();
     mirror.setSource(iris::ScenePtr());

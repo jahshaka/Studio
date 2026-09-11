@@ -454,7 +454,7 @@ public:
         /// re-capture only while stale. Captures the last rendered frame made,
         /// probes still owed a capture, the input that last staled the grid
         /// (none | rebuild | refresh | moved | light | material | sky | ambient
-        /// | fog | animated) with a serial per event, and the scene's
+        /// | fog) with a serial per event, and the scene's
         /// from-scratch GI builds so far.
         int     probeCapturesLastFrame = 0;
         int     staleProbes = 0;

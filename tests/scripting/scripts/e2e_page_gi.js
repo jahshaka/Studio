@@ -24,7 +24,8 @@
 // space switch (scripting.e2e.space_switch), and the editor scene's items are
 // destroyed and re-adopted with it — a destroyed item is a from-scratch GI
 // rebuild by the engine's own rule (raw Item* in the voxelizer). That cost is
-// the graph migration's, reported to the lead as a finding, and printed here.
+// the graph migration's (recorded by the lead for a later lane) and is pinned
+// at its current value, two, below. Phase 1 pins ZERO.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -107,13 +108,20 @@ assert(app.space("editor"), "back to the editor");
 var st2 = settle("player round trip");
 var m2 = editor.mirrorStats();
 console.log("after player: " + JSON.stringify(st2) + " mirror " + JSON.stringify(m2));
-console.log("player round trip: from-scratch rebuilds " + st0.rebuilds + " -> " + st2.rebuilds +
-            " (the document graph's migration between the two engine scenes, not a push)");
 assert(st2.pccBound && st2.vctBound,
        "player round trip: the editor scene owns the GI binding again");
 assert(m2.giPushes === m0.giPushes,
        "player round trip: NO GI re-push from the mirror (" + m0.giPushes + " -> " + m2.giPushes + ")");
-st2.rebuilds = st0.rebuilds;           // the migration's, see the header
-sameGi(st0, st2, "player round trip (same arms rebuilt)");
+// THE RECORDED COST OF THE GRAPH MIGRATION (lead ledger, a later lane): the
+// editor scene's arm is rebuilt EXACTLY twice — once when the graph leaves for
+// the player's engine scene (its items are destroyed; nothing is left to
+// voxelize) and once when it comes back. Pinned at 2 so that a fix shows up as
+// a diff here and a regression (a third rebuild, e.g. a re-push) fails.
+assert(st2.rebuilds - st0.rebuilds === 2,
+       "player round trip: exactly the graph migration's two rebuilds (" + st0.rebuilds +
+       " -> " + st2.rebuilds + ")");
+var st2same = JSON.parse(JSON.stringify(st2));
+st2same.rebuilds = st0.rebuilds;       // compared above; the rest must match field for field
+sameGi(st0, st2same, "player round trip (the same arms, rebuilt)");
 
 console.log("page_gi: all assertions passed");

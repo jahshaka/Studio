@@ -67,7 +67,6 @@ static const char *reasonName(GiStaleReason r)
     case GiStaleReason::Sky:      return "sky";
     case GiStaleReason::Ambient:  return "ambient";
     case GiStaleReason::Fog:      return "fog";
-    case GiStaleReason::Animated: return "animated";
     }
     return "?";
 }
@@ -230,8 +229,14 @@ int main(int argc, char **argv)
     // too): VctMaterial caches each datablock's conversion by pointer, so the
     // voxel arm is rebuilt fresh under the probes it keeps.
     const quint64 solvesBeforeAlbedo = mirror.giRefreshCount();
+    const quint64 injectsBeforeAlbedo = mirror.giLightRefreshCount();
     input("albedo", GiStaleReason::Material,
           [&]() { wallMat->setBaseColor(QColor(5, 5, 255)); }, 40);
+    // A material-only edit waits for the settle WITHOUT the light re-inject
+    // cadence (and its irradiance-field reset): nothing a re-inject reads
+    // changed. The material generation is its own term for exactly this.
+    CHECK(mirror.giLightRefreshCount() == injectsBeforeAlbedo,
+          "albedo: the settle wait runs NO light re-inject (the material term is its own)");
     const Colour blueMirror = mirrorPixel();
     std::printf("   mirror, after the albedo edit   r=%.3f g=%.3f b=%.3f\n",
                 blueMirror.r, blueMirror.g, blueMirror.b);
@@ -280,6 +285,138 @@ int main(int argc, char **argv)
     // ---- an AMBIENT change ----------------------------------------------------
     input("ambient", GiStaleReason::Ambient,
           [&]() { doc->ambientColor = QColor(25, 25, 25); }, 12);
+
+    const auto lum = [](const Colour &c) { return c.r + c.g + c.b; };
+
+    // ---- the room's only lamp SWITCHED OFF (code review 2026-09-12, item 1) ----
+    // Visibility is not a LightDesc field, so setLight never saw it; a light's
+    // effective visibility flipping now stales the probes (engine) and moves
+    // the mirror's GI light signature (the voxel bounce follows on settle).
+    {
+        const Colour lit = mirrorPixel();
+        const unsigned long long serial = escene->giStatus().staleSerial;
+        const quint64 solves = mirror.giRefreshCount();
+        sun->setVisible(false);
+        frame();
+        const GiStatus st = escene->giStatus();
+        CHECK(st.staleSerial > serial && st.lastStaleReason == GiStaleReason::Light,
+              "lamp off: switching the only lamp off STALES the grid (reason light)");
+        frames(kProbes - 1);                                  // ceil(P / N) frames in all
+        const Colour dark = mirrorPixel();
+        std::printf("   mirror, lamp on %.3f/%.3f/%.3f -> off (after ceil(P/N) frames) %.3f/%.3f/%.3f\n",
+                    lit.r, lit.g, lit.b, dark.r, dark.g, dark.b);
+        CHECK(lum(dark) < lum(lit) - 0.3f,
+              "lamp off: the chrome probe pixel DARKENS within ceil(probes / budget) frames");
+        CHECK(worstOver(40) <= kAllowed && escene->giStatus().staleProbes == 0,
+              "lamp off: spread, then caught up");
+        CHECK(mirror.giRefreshCount() - solves == 1,
+              "lamp off: the voxel bounce re-solves once on settle (the signature sees it)");
+        CHECK(worstOver(20) == 0, "lamp off: ...and then the scene idles");
+        sun->setVisible(true);
+        frames(40);
+        const Colour back = mirrorPixel();
+        CHECK(std::fabs(lum(back) - lum(lit)) < 0.1f, "lamp back on: the reflection comes back");
+    }
+
+    // ---- an UNLIT plane arrives, moves and leaves (item 2) ---------------------
+    // Unlit geometry is CAPTURED by the probe faces (kVisibleBit) but is not GI
+    // geometry, so no GI invalidation ever fired for it: a probe-only stale
+    // now does, and the voxels are left alone (no re-solve).
+    {
+        const Colour before = mirrorPixel();
+        const quint64 solves = mirror.giRefreshCount();
+        auto plateMat = pbr(QColor(5, 255, 5));
+        plateMat->setShadingModel(1);                         // Unlit
+        iris::MeshNodePtr plate;
+        const unsigned long long serial = escene->giStatus().staleSerial;
+        plate = slab(doc, "unlit plate", plateMat, iris::Vec3(0.0f, 2.0f, 3.85f),
+                     iris::Vec3(2.0f, 2.0f, 0.1f));
+        frame();
+        CHECK(escene->giStatus().staleSerial > serial &&
+              escene->giStatus().lastStaleReason == GiStaleReason::Moved,
+              "unlit plane: its arrival STALES the probes (reason moved)");
+        frames(kProbes - 1);
+        const Colour shown = mirrorPixel();
+        std::printf("   mirror, unlit green plane added %.3f/%.3f/%.3f (was %.3f/%.3f/%.3f)\n",
+                    shown.r, shown.g, shown.b, before.r, before.g, before.b);
+        CHECK(shown.g > shown.r + 0.3f && shown.g > shown.b + 0.3f,
+              "unlit plane: it APPEARS in the chrome reflection within ceil(probes / budget) frames");
+        CHECK(worstOver(20) == 0 && escene->giStatus().staleProbes == 0, "unlit plane: then idles");
+
+        const unsigned long long serialMove = escene->giStatus().staleSerial;
+        plate->setLocalPos(iris::Vec3(-2.8f, 2.0f, 3.85f));    // off the reflection ray
+        frame();
+        CHECK(escene->giStatus().staleSerial > serialMove,
+              "unlit plane: MOVING it stales the probes (the movement scan sees unlit items)");
+        frames(kProbes - 1);
+        const Colour moved = mirrorPixel();
+        CHECK(std::fabs(lum(moved) - lum(before)) < 0.15f && moved.g < moved.b,
+              "unlit plane: moved off the ray, it leaves the reflection");
+        CHECK(worstOver(20) == 0, "unlit plane: then idles");
+
+        plate->setLocalPos(iris::Vec3(0.0f, 2.0f, 3.85f));     // back on the ray
+        frames(kProbes + 4);
+        CHECK(mirrorPixel().g > mirrorPixel().b + 0.3f, "unlit plane: back on the ray, back in the reflection");
+        const unsigned long long serialDel = escene->giStatus().staleSerial;
+        const unsigned long long rebuildsDel = escene->giStatus().rebuilds;
+        doc->getRootNode()->removeChild(plate);
+        plate.reset();
+        frame();
+        CHECK(escene->giStatus().staleSerial > serialDel,
+              "unlit plane: DELETING it stales the probes");
+        frames(kProbes - 1);
+        const Colour gone = mirrorPixel();
+        CHECK(std::fabs(lum(gone) - lum(before)) < 0.15f && gone.g < gone.b,
+              "unlit plane: deleted, it leaves the reflection within ceil(probes / budget) frames");
+        CHECK(mirror.giRefreshCount() == solves,
+              "unlit plane: all of it re-captured probes only — the voxels never re-solved");
+        // The delete destroys the node's OWN mesh, and a destroyed node-owned
+        // mesh is a from-scratch GI rebuild by the pre-existing rule (Instant
+        // Radiosity caches mesh VAOs; releaseNode) — lit or unlit. Its
+        // catch-up runs after the stale above; the scene idles once it is done.
+        std::printf("   unlit plane delete: from-scratch rebuilds %llu -> %llu (the node-owned "
+                    "mesh rule)\n", rebuildsDel, escene->giStatus().rebuilds);
+        frames(20);
+        CHECK(worstOver(20) == 0, "unlit plane: then idles");
+    }
+
+    // ---- TIME-VARYING CONTENT IS FROZEN (REALTIME_REFLECTIONS_SPEC O4 = A) ------
+    // A live texture rewritten every frame on visible lit geometry, with the
+    // shader clock running: the probes keep what they captured and spend
+    // NOTHING (SSR and planar reflections are what show such content live).
+    {
+        const NodeId liveNode = escene->createNode();
+        const MeshId liveMesh = escene->createMesh(enginetest::unitCubeMesh());
+        const MaterialId liveMat = escene->createPbrMaterial(PbrParams());
+        std::vector<unsigned char> rgba(4 * 4 * 4, 255);
+        const TextureId liveTex = escene->createTexture(4, 4, rgba.data(), true);
+        CHECK(liveNode && liveMesh && liveMat && liveTex &&
+              escene->setPbrTexture(liveMat, PbrTextureSlot::Albedo, liveTex) &&
+              escene->attachMesh(liveNode, liveMesh, liveMat),
+              "freeze: a cube wearing a LIVE texture");
+        escene->setNodeTransform(liveNode, Vec3(2.5f, 1.0f, -2.5f), Quat(), Vec3(1.0f, 1.0f, 1.0f));
+        frames(40);                                  // its arrival rebuilds and catches up
+        const unsigned long long serial = escene->giStatus().staleSerial;
+        int captured = 0;
+        float clock = 0.0f;
+        for (int f = 0; f < 60; ++f) {
+            for (size_t i = 0; i < rgba.size(); i += 4) {
+                rgba[i] = static_cast<unsigned char>((f * 37) & 255);
+                rgba[i + 1] = static_cast<unsigned char>(255 - ((f * 37) & 255));
+            }
+            escene->updateTexture(liveTex, 4, 4, rgba.data());
+            clock += 1.0f / 60.0f;
+            escene->setShaderTime(clock);
+            frame();
+            captured += escene->giStatus().probeCapturesLastFrame;
+        }
+        std::printf("   freeze: 60 frames of a live texture + a running clock: %d probe captures\n",
+                    captured);
+        CHECK(captured == 0 && escene->giStatus().staleSerial == serial,
+              "freeze: animated content present + idle -> ZERO probe captures, nothing staled");
+        escene->removeNode(liveNode);
+        frames(40);
+    }
 
     // =======================================================================
     // P10 — THE BINDING RE-ASSERT (Scene::reassertGiBinding)
