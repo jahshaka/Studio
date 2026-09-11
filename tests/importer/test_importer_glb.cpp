@@ -379,6 +379,64 @@ int main(int argc, char **argv)
 
         engine->destroyScene(s);
       }
+
+        // ============ 6b. a scene destroyed while its textures STREAM ============
+        //
+        // THE TEARDOWN free() (plan item 15; recorded by the rayon2 lane
+        // 2026-09-09 and seen again in the L9 gate 2026-09-11): under a gate's
+        // load this suite printed "all checks passed" and then died with
+        // glibc's `free(): invalid pointer` while the NULL render system was
+        // being uninstalled. The log line before it was the tell:
+        //
+        //   OGRE EXCEPTION(6:FileNotFoundException): Cannot open file: sneaky.jpg
+        //
+        // printed AFTER section 6 had already destroyed its scene and deleted
+        // the directory those files lived in. loadTexture SCHEDULES the decode
+        // (THREADING_ADOPTION P2) and returns; section 6 destroyed the scene the
+        // same instant, so on a loaded box the streaming worker was still
+        // holding load requests for textures the scene had just handed to
+        // TextureGpuManager::destroyTexture — which for an in-flight texture
+        // only QUEUES the destroy behind the load. The worker then opened a
+        // file that no longer existed, and the queued destroy met the failed
+        // request inside Root's teardown.
+        //
+        // On an idle machine the decodes of three 8x8 images finish before
+        // destroyScene, which is why it passed 4/4 solo. This arm takes the luck
+        // out: images big enough that their decode is still running when the
+        // scene dies, and the directory removed right after — exactly the
+        // sequence the gate hit by chance. The engine's rule (OgreScene::
+        // releaseTextureRec) is that a texture is never destroyed with a load in
+        // flight; this arm fails, loudly, the moment that rule stops holding.
+        Scene *busy = engine->createScene("imp-streaming");
+        CHECK(busy != nullptr, "engine scene for the streaming-teardown arm");
+        if (busy) {
+            auto *dir = new QTemporaryDir;
+            QImage noise(1024, 1024, QImage::Format_RGBA8888);
+            quint32 seed = 0x9E3779B9u;
+            for (int y = 0; y < noise.height(); ++y) {
+                auto *row = reinterpret_cast<quint32 *>(noise.scanLine(y));
+                for (int x = 0; x < noise.width(); ++x) {
+                    seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+                    row[x] = seed | 0xFF000000u;   // incompressible, so the decode is slow
+                }
+            }
+            // Encoded ONCE and copied: the copies are separate load requests
+            // (separate names), and the queued ones are the requests whose file
+            // is gone by the time the worker reaches them.
+            const QString first = QDir(dir->path()).filePath("big_0.png");
+            noise.save(first, "PNG");
+            int scheduled = 0;
+            for (int i = 0; i < 4; ++i) {
+                const QString big = QDir(dir->path()).filePath(QString("big_%1.png").arg(i));
+                if (i > 0) QFile::copy(first, big);
+                if (busy->loadTexture(big.toStdString(), true) != 0) ++scheduled;
+            }
+            CHECK(scheduled == 4, "four large textures scheduled");
+            engine->destroyScene(busy);   // the instant after scheduling, as section 6 did
+            delete dir;                   // and the files are gone, as section 6's were
+            CHECK(engine->texturesDoneStreaming(),
+                  "destroying a scene leaves NO texture load in flight (the teardown free())");
+        }
     }
 
     // ================= 7. double-import root-scale stability =================
