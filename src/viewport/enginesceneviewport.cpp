@@ -1831,6 +1831,14 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     out.atlasBytes = qint64(st.atlasBytes);
     out.shadowPassesLastFrame = int(st.shadowPassesLastFrame);
     out.staticMapRendersLastFrame = int(st.staticMapRendersLastFrame);
+    out.reflectPassesLastFrame = int(st.reflectPassesLastFrame);
+    out.probePassesLastFrame = int(st.probePassesLastFrame);
+    out.reflectLampPassesLastFrame = int(st.reflectLampPassesLastFrame);
+    out.probeLampPassesLastFrame = int(st.probeLampPassesLastFrame);
+    out.cachedInstances = int(st.cachedInstances);
+    out.uncachedInstances = int(st.uncachedInstances);
+    out.viewCached = st.viewCached;
+    out.mapsDirtiedLastFrame = int(st.mapsDirtiedLastFrame);
     // The engine speaks NodeIds; the panel and the verb speak guids. The map is
     // built from the scene's own light list rather than from a second index in
     // the mirror: a scene has a handful of lights, this runs on a readback, and
@@ -1851,6 +1859,7 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
         e.isStatic = m.isStatic;
         e.dirty = m.dirty;
         e.pssm = m.pssm;
+        e.passesLastFrame = int(m.passesLastFrame);
         out.mapped.push_back(e);
     }
     for (jahshaka::engine::NodeId id : st.unmapped) {

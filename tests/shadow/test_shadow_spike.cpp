@@ -20,10 +20,12 @@
 //   four    — four shadow-casting lamps over a floor. With two focused maps two
 //             of them are shadowless (the shipped defect); with four, all four
 //             cast.
-//   static  — one light fixed to a map with setLightFixedToShadowMap: its map
-//             must render ONCE and then never again until setStaticShadowMapDirty,
-//             while the dynamic maps re-render every frame. Counted from a
-//             CompositorWorkspaceListener, not inferred from pixels.
+//   cachekinds — the lamp-map cache (ENGINE_CACHE_POLICY_SPEC P4/P5) on the
+//             probe-capture and planar-reflect node instances, under the
+//             validation layer (gated as shadow.cache_kinds). It replaced
+//             `static`, the phase-0 proof that one light fixed by hand renders
+//             once: the engine now fixes every point/spot light itself, every
+//             frame, so a hand-fixed light is overwritten by design.
 //   r3      — the spec's risk R3: a shadow-node definition deleted while the
 //             hybrid's PCC probe workspaces still instantiate it.
 //
@@ -145,6 +147,7 @@ struct Room {
     Scene *scene = nullptr;
     NodeId lamps[4] = { 0, 0, 0, 0 };
     NodeId pillars[4] = { 0, 0, 0, 0 };
+    NodeId floor = 0;
 };
 
 static const float kQuadX[4] = { -6.0f, 6.0f, -6.0f, 6.0f };
@@ -164,6 +167,7 @@ static Room buildRoom(Engine *e, View *v, const char *name, int lampCount, bool 
     const NodeId floor = s->createNode();
     s->attachMesh(floor, mesh, mat);
     s->setNodeTransform(floor, Vec3(0, -0.1f, 0), Quat(), Vec3(40.0f, 0.2f, 40.0f));
+    room.floor = floor;
     for (int i = 0; i < lampCount; ++i) {
         const NodeId pillar = s->createNode();
         s->attachMesh(pillar, mesh, mat);
@@ -434,98 +438,6 @@ static void fourCase()
 }
 
 // ---------------------------------------------------------------------------
-// static: does a fixed map really render once?
-// ---------------------------------------------------------------------------
-namespace {
-/// Counts the shadow node's passes per frame, per shadow map. The pass's own
-/// definition carries the map index, and its parent node is the shadow node —
-/// which is how a pass that belongs to the atlas is told from every other pass
-/// in the workspace.
-struct PassCounter final : public Ogre::CompositorWorkspaceListener {
-    std::vector<unsigned> perMap;
-    unsigned total = 0;
-    void reset(size_t maps) { perMap.assign(maps, 0u); total = 0u; }
-    void passPreExecute(Ogre::CompositorPass *pass) override {
-        const Ogre::CompositorPassDef *def = pass->getDefinition();
-        const Ogre::CompositorNode *node = pass->getParentNode();
-        if (!node || node->getName() != Ogre::IdString(OgreView::kShadowNodeName)) return;
-        ++total;
-        if (def->mShadowMapIdx < perMap.size()) ++perMap[def->mShadowMapIdx];
-    }
-};
-}   // namespace
-
-static void staticCase()
-{
-    std::string err;
-    EngineConfig cfg = config("spike-static.log");
-    auto engine = Engine::create(cfg, err);
-    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); ++failures; return; }
-    View *v = engine->createOffscreenView("spike", 200, 200, Colour(0, 0, 0));
-    auto *impl = static_cast<OgreEngine *>(engine.get());
-    auto *view = static_cast<OgreView *>(v);
-    Room room = buildRoom(engine.get(), v, "roomStatic", 4, false);
-    impl->rebuildShadowAtlas(impl->shadowResolution(), 4u, true);
-    render(engine.get(), 6);
-
-    PassCounter counter;
-    counter.reset(3u + 4u);
-    view->addWorkspaceListener(&counter);
-
-    Ogre::CompositorShadowNode *node = view->shadowNodeInstance();
-    CHECK(node != nullptr, "the view's workspace instantiated the shadow node");
-    if (!node) { engine.reset(); return; }
-
-    // Fix lamp 0 to the LAST focused map (map index 6), the end of the range —
-    // upstream's ordering rule (OgreCompositorShadowNode.h:308-317) wants fixed
-    // lights out of the way of the dynamic sort, which fills from the front.
-    auto *scene = static_cast<jahshaka::engine::detail::OgreScene *>(room.scene);
-    Ogre::Light *light = scene->ogreLight(room.lamps[0]);
-    CHECK(light != nullptr, "lamp 0 has a backend light");
-    if (!light) { engine.reset(); return; }
-    node->setLightFixedToShadowMap(6u, light);
-
-    counter.reset(3u + 4u);
-    render(engine.get(), 1);
-    const unsigned firstFrameStatic = counter.perMap[6];
-    std::printf("    frame 1: static map passes %u, total shadow passes %u\n",
-                firstFrameStatic, counter.total);
-    CHECK(firstFrameStatic > 0u, "the fixed map renders on the frame it was fixed (dirty)");
-
-    counter.reset(3u + 4u);
-    render(engine.get(), 20);
-    std::printf("    frames 2-21: static map passes %u, dynamic map 3 passes %u, total %u\n",
-                counter.perMap[6], counter.perMap[3], counter.total);
-    CHECK(counter.perMap[6] == 0u, "a clean static map renders ZERO passes over 20 frames");
-    CHECK(counter.perMap[3] > 0u, "the dynamic maps keep rendering every frame");
-
-    node->setStaticShadowMapDirty(6u, false);
-    counter.reset(3u + 4u);
-    render(engine.get(), 5);
-    std::printf("    after setStaticShadowMapDirty: static map passes %u over 5 frames\n",
-                counter.perMap[6]);
-    CHECK(counter.perMap[6] > 0u && counter.perMap[6] <= 8u,
-          "a dirtied static map renders again, once");
-
-    // ...AND THE PICTURE IS STILL RIGHT. This is what the whole-atlas clear
-    // would have destroyed: the static map's contents have to survive 25 frames
-    // of other maps being cleared and redrawn in the same texture.
-    render(engine.get(), 4);
-    Image img;
-    v->readPixels(img);
-    int shadowed = 0;
-    for (int i = 0; i < 4; ++i) {
-        int dark = 0, lit = 0;
-        const double r = lampShadowRatio(img, i, &dark, &lit);
-        std::printf("    lamp %d: shadow probe %3d, lit probe %3d, ratio %.2f\n", i, dark, lit, r);
-        if (r < 0.55) ++shadowed;
-    }
-    CHECK(shadowed == 4, "all four shadows are still on screen, static one included (%d)", shadowed);
-    view->removeWorkspaceListener(&counter);
-    engine.reset();
-}
-
-// ---------------------------------------------------------------------------
 // r3: the definition deleted under the hybrid's probe workspaces
 // ---------------------------------------------------------------------------
 static void r3Case()
@@ -616,15 +528,141 @@ static void attenCase()
     engine.reset();
 }
 
+// ---------------------------------------------------------------------------
+// cachekinds: THE LAMP-MAP CACHE ON THE PROBE AND REFLECT NODE INSTANCES, UNDER
+// THE VALIDATION LAYER (ENGINE_CACHE_POLICY_SPEC §6 — E2's opening probe, kept
+// as the gate row `shadow.cache_kinds`).
+//
+// The view node's static path was proven by SHADOW_TOOLING P0 (`static`
+// above); a PROBE-capture node and a planar REFLECT node had never held a fixed
+// light. Two lamps, no sun, a shadowed planar floor and four shadowed probes:
+//   reflect: once cached, the slot's node renders NO lamp pass at rest;
+//   probe:   a capture after refreshShadows renders each lamp map on its FIRST
+//            face only (16 passes, not 6 x 16 = 96); the next capture none;
+//   and not one "Validation Error" (the ctest row fails on the string).
+//
+// WHAT THE PROBE FOUND (2026-09-12): with every pass of a node skipped (all its
+// lamps cached, no sun) the first touch of its DISCARDABLE atlas in a frame was
+// the scene pass sampling it, and Ogre's barrier solver threw ("Transitioning
+// texture from Undefined to a read-only layout ... keep_content",
+// OgreResourceTransition.cpp:185) — mid-analysis, leaving the pass's colour
+// target recorded as a render target, so the next frame's barrier was
+// COLOR_ATTACHMENT -> COLOR_ATTACHMENT over a SHADER_READ image: a validation
+// error on the mirror's and the probes' targets. The caching atlas is now
+// keep_content (buildShadowNode); the ctest row keeps it that way.
+namespace {
+struct KindCounter final : public Ogre::CompositorWorkspaceListener {
+    Ogre::IdString nodeName;
+    unsigned total = 0;
+    std::vector<unsigned> perMap;
+    explicit KindCounter(const char *n) : nodeName(n) { perMap.assign(3u + 16u, 0u); }
+    void passPreExecute(Ogre::CompositorPass *pass) override {
+        const Ogre::CompositorNode *node = pass->getParentNode();
+        if (!node || node->getName() != nodeName) return;
+        ++total;
+        const Ogre::uint32 idx = pass->getDefinition()->mShadowMapIdx;
+        if (idx < perMap.size()) ++perMap[idx];
+    }
+    void reset() { total = 0; std::fill(perMap.begin(), perMap.end(), 0u); }
+    unsigned lamps() const { unsigned n = 0; for (size_t i = 3; i < perMap.size(); ++i) n += perMap[i]; return n; }
+};
+void attach(KindCounter &c, const std::vector<Ogre::CompositorWorkspace *> &ws) {
+    for (Ogre::CompositorWorkspace *w : ws) {
+        const auto &ls = w->getListeners();
+        if (std::find(ls.begin(), ls.end(), &c) == ls.end()) w->addListener(&c);
+    }
+}
+void detach(KindCounter &c, const std::vector<Ogre::CompositorWorkspace *> &ws) {
+    for (Ogre::CompositorWorkspace *w : ws) w->removeListener(&c);
+}
+}   // namespace
+
+static void cacheKindsCase()
+{
+    std::printf("-- the lamp-map cache on probe-node and reflect-node instances\n");
+    std::string err;
+    EngineConfig cfg = config("spike-cachekinds.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); ++failures; return; }
+    View *v = engine->createOffscreenView("spike", 256, 256, Colour(0, 0, 0));
+    engine->setShadowMapBudget(2u);
+    Room room = buildRoom(engine.get(), v, "roomKinds", 2, false);
+    auto *scene = static_cast<jahshaka::engine::detail::OgreScene *>(room.scene);
+    PlanarReflectionParams pr; pr.budget = 1; pr.resolution = 256; pr.shadows = true;
+    CHECK(room.scene->setPlanarReflections(pr), "planar arm up");
+    CHECK(room.scene->setNodePlanarReflector(room.floor, true), "the floor is a reflector");
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    gi.quality = GiQuality::Low;
+    gi.probeShadows = GiToggle::On;
+    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    gi.updateBudget = 0;               // no captures but the ones this case asks for
+    gi.dynamicProbes = 0;
+    room.scene->setGlobalIllumination(gi);
+    render(engine.get(), 12);
+    const GiStatus gst = room.scene->giStatus();
+    std::printf("    gi: probes %d, probeShadows %d, planar active %d\n", gst.probeCount,
+                int(gst.probeShadows), room.scene->activePlanarReflectors());
+    CHECK(gst.probeShadows && gst.probeCount == 4, "four shadowed probes");
+
+    std::vector<Ogre::CompositorWorkspace *> probeWs, reflWs;
+    scene->shadowWorkspaces(jahshaka::engine::detail::ShadowNodeKind::Probe, probeWs);
+    scene->shadowWorkspaces(jahshaka::engine::detail::ShadowNodeKind::Reflect, reflWs);
+    CHECK(probeWs.size() == 4u && reflWs.size() == 1u, "every probe and the slot are reachable");
+    std::vector<Ogre::CompositorShadowNode *> probeNodes, reflNodes;
+    for (auto *w : probeWs) if (auto *n = w->findShadowNode(OgreView::kProbeShadowNodeName)) probeNodes.push_back(n);
+    for (auto *w : reflWs) if (auto *n = w->findShadowNode(OgreView::kReflectShadowNodeName)) reflNodes.push_back(n);
+    CHECK(probeNodes.size() == 4u && reflNodes.size() == 1u, "each workspace instantiated its node");
+    if (probeNodes.size() != 4u || reflNodes.size() != 1u) { engine.reset(); return; }
+    // THE ENGINE did the assignment: both lamps fixed on every instance.
+    Ogre::Light *l0 = scene->ogreLight(room.lamps[0]), *l1 = scene->ogreLight(room.lamps[1]);
+    unsigned fixedOk = 0;
+    for (auto *n : probeNodes) {
+        const auto &held = n->getShadowCastingLights();
+        bool has0 = false, has1 = false;
+        for (size_t i = 1; i < held.size(); ++i) {
+            if (held[i].isStatic && held[i].light == l0) has0 = true;
+            if (held[i].isStatic && held[i].light == l1) has1 = true;
+        }
+        if (has0 && has1) ++fixedOk;
+    }
+    CHECK(fixedOk == 4u, "every probe node holds both lamps cached (%u of 4)", fixedOk);
+
+    KindCounter probeC(OgreView::kProbeShadowNodeName), reflC(OgreView::kReflectShadowNodeName);
+    attach(probeC, probeWs);
+    attach(reflC, reflWs);
+    for (auto *p : scene->parallaxCorrectedCubemap()->getProbes()) p->mDirty = true;
+    render(engine.get(), 2);                    // every probe holds current maps now
+    reflC.reset();
+    render(engine.get(), 20);
+    std::printf("    20 frames at rest: reflect lamp passes %u (all %u)\n", reflC.lamps(), reflC.total);
+    CHECK(reflC.lamps() == 0u, "the mirror renders ZERO lamp passes at rest (%u)", reflC.lamps());
+
+    CHECK(engine->refreshShadows(), "refreshShadows dirties every cached map");
+    probeC.reset();
+    scene->parallaxCorrectedCubemap()->getProbes()[0]->mDirty = true;
+    render(engine.get(), 1);
+    std::printf("    capture after refreshShadows: probe lamp passes %u\n", probeC.lamps());
+    CHECK(probeC.lamps() == 16u, "a capture renders each dirty lamp map on its FIRST face only "
+                                 "(%u, want 16 not 96)", probeC.lamps());
+    probeC.reset();
+    scene->parallaxCorrectedCubemap()->getProbes()[0]->mDirty = true;
+    render(engine.get(), 1);
+    CHECK(probeC.lamps() == 0u, "and the next capture of that probe reuses them (%u)", probeC.lamps());
+    detach(probeC, probeWs);
+    detach(reflC, reflWs);
+    engine.reset();
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "layout";
     if (mode == "layout")      layoutCase();
     else if (mode == "ab")     abCase();
     else if (mode == "four")   fourCase();
-    else if (mode == "static") staticCase();
     else if (mode == "r3")     r3Case();
     else if (mode == "atten")  attenCase();
+    else if (mode == "cachekinds") cacheKindsCase();
     else { std::printf("unknown mode %s\n", mode.c_str()); return 2; }
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
     return failures ? 1 : 0;

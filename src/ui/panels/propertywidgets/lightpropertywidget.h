@@ -135,7 +135,6 @@ private:
     QPushButton *maskClear = nullptr;
     QLabel *maskNote = nullptr;
 
-    CheckBoxWidget* shadowStatic;
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;
     HFloatSliderWidget* shadowBias;
