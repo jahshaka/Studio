@@ -44,8 +44,24 @@ assert(node.isStatic(placed) === true, "…and reads back true");
 node.reparent(placed, group);
 assert(node.isStatic(placed) === true,
        "reparent under a static parent keeps the node static (world pose unchanged is not a move)");
-t = node.transform(placed);
-assert(near(t.position.x, 5), "world position survived the reparent (x=5)");
+// node.transform reports the LOCAL pose, so the world check has to ADD the
+// parent's — `group` is a direct child of the world root, so its local pose IS
+// its world pose. (This used to compare the local x with 5 and pass only
+// because an add with no position happened to land at x = 0; since S9 such an
+// add steps sideways when something is already standing there, which moved the
+// parent without changing anything this section is about.)
+//
+// The poses are read through scene.nodes(), which is a pure READ:
+// node.transform(id) with no change map still pushes a transform command, and
+// writing a static node's own values back demotes it (rule 4) — a read with a
+// side effect, noted 2026-09-11, not this section's subject.
+function localPosOf(id) {
+    const rows = scene.nodes();
+    for (var i = 0; i < rows.length; ++i) if (rows[i].id === id) return rows[i].position;
+    return null;
+}
+assert(near(localPosOf(placed).x + localPosOf(group).x, 5),
+       "world position survived the reparent (x=5)");
 
 // ---- F12: isStatic is the OUTCOME ----
 // A child born under a static parent inherits static physically; the verb
