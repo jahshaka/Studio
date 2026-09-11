@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -842,6 +843,80 @@ static void t3_counters(Engine *e, View *v)
     e->destroyScene(r.scene);
 }
 
+// T3u — A SCENE NOTHING DRAWS CAPTURES NO PROBES ACROSS AN ATLAS REBUILD.
+//
+// Found by app.input_keys / theme.sheets in the E2 lane: every shadow-atlas
+// rebuild re-creates each shadowed GI arm (the probe workspaces name the probe
+// shadow node), including an OFF-SCREEN scene's. The rebuild's own placement
+// (Ogre's updateAllDirtyProbes) ends in clearFrameData, and Ogre's automatic
+// PCC then captured that scene's probes in the same frame from its frame
+// listener, although no view drew the scene — the probe node early-out kept the
+// sun in its slot 0 against an empty light list, and the PBS pixel shader
+// hashed for "one directional caster, zero lights" cannot compile ('lights' :
+// no such field in 'passBuf'); the app then crashed saving the shader cache.
+// The test reads its own Ogre log: not one shader may fail to compile.
+static bool logHasCompileFailure(const char *path)
+{
+    FILE *f = std::fopen(path, "r");
+    if (!f) return false;
+    char line[4096];
+    bool bad = false;
+    while (std::fgets(line, sizeof line, f))
+        if (std::strstr(line, "failed to compile")) { bad = true; break; }
+    std::fclose(f);
+    return bad;
+}
+
+static void t3_undrawn_gi_rebuild(Engine *e, View *v)
+{
+    std::printf("-- T3u: an off-screen GI scene survives an atlas rebuild (no probe captures while undrawn)\n");
+    ensureRoomForThreeLamps(e, v);
+    CacheRoom a = buildCacheRoom(e, v, "t3u-gi");
+    const NodeId sun = a.scene->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 0.3f; d.castShadows = true;
+    a.scene->setLight(sun, d);
+    a.scene->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    gi.quality = GiQuality::Low;
+    gi.probeShadows = GiToggle::On;
+    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    gi.updateBudget = 1;
+    gi.dynamicProbes = 0;
+    a.scene->setGlobalIllumination(gi);
+    for (int i = 0; i < 20; ++i) e->renderOneFrame();
+    // Off screen: the view draws another scene; A keeps its GI arm. B has more
+    // shadow-casting lamps than the atlas has maps, so the engine GROWS the
+    // atlas — a rebuild at the TOP OF A FRAME (deriveShadowMapCount), the same
+    // place the cache's first lamp rebuilds it: A's arm is re-created and
+    // placed inside that frame, which is what the hazard needs (a rebuild
+    // between frames leaves the capture a frame later, and the probe node then
+    // rebuilds its light list honestly).
+    const unsigned mapsBefore = e->shadowStatus().focusedMaps;
+    v->setScene(nullptr);                       // a view shows one scene at a time
+    CacheRoom b = buildCacheRoom(e, v, "t3u-other");
+    for (int i = 0; i < 6; ++i) {
+        const NodeId lamp = b.scene->createNode();
+        b.scene->setLight(lamp, cacheLamp(6.0f));
+        const float ang = float(i) * 1.047f;
+        b.scene->setNodeTransform(lamp, Vec3(9.0f * std::cos(ang), 3.0f, 9.0f * std::sin(ang)), Quat(), Vec3(1, 1, 1));
+    }
+    for (int i = 0; i < 10; ++i) e->renderOneFrame();
+    const unsigned mapsAfter = e->shadowStatus().focusedMaps;
+    std::printf("    atlas grew %u -> %u maps while the GI scene was off screen\n", mapsBefore, mapsAfter);
+    CHECK(mapsAfter > mapsBefore, "the drawn scene's lamps grew the atlas (%u -> %u)", mapsBefore, mapsAfter);
+    v->setScene(nullptr);
+    CHECK(v->setScene(a.scene), "the GI scene goes back on screen");
+    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    Image img;
+    CHECK(v->readPixels(img), "the scene renders again once it is back on screen");
+    CHECK(!logHasCompileFailure("test-shadow-maps-ogre.log"),
+          "not one shader failed to compile (an undrawn scene's probe captured against an "
+          "empty light list hashes an uncompilable PBS pass)");
+    e->destroyScene(b.scene);
+    e->destroyScene(a.scene);
+}
+
 int main(int argc, char **argv)
 {
     const std::string only = argc > 1 ? argv[1] : std::string();
@@ -869,6 +944,7 @@ int main(int argc, char **argv)
     if (only.empty() || only == "t3r") t3_cache_reflect(engine.get(), v);
     if (only.empty() || only == "t3p") t3_cache_probe(engine.get(), v);
     if (only.empty() || only == "t3s") t3_counters(engine.get(), v);
+    if (only.empty() || only == "t3u") t3_undrawn_gi_rebuild(engine.get(), v);
     if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
     if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);
     if (only.empty() || only == "t6")  t6_atlas_overlay(engine.get(), v);
