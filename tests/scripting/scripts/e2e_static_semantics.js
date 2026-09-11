@@ -26,8 +26,23 @@ assert(node.isStatic(plain) === true, "a bare add is static by default");
 var placed = scene.addPrimitive("cube", { position: { x: 3, y: 0, z: 0 } });
 assert(node.isStatic(placed) === true,
        "an add WITH a position is still static (create-at is placement, not a move)");
+// ...AND A BARE node.transform(id) IS A PURE READ (S-extra, found by the
+// avatar lane 2026-09-11): it used to push a TransformSceneNodeCommand with the
+// node's own current values, which is a MOVE as far as rule 4 is concerned — so
+// merely ASKING a static node where it stood demoted it to dynamic, and left an
+// undo entry for nothing. This read is the same call the panels make.
+var pushesBeforeRead = editor.undoState().pushes;
 var t = node.transform(placed);
 assert(near(t.position.x, 3), "the position option was applied (x=3)");
+assert(editor.undoState().pushes === pushesBeforeRead,
+       "node.transform(id) with no change pushes NOTHING (a read is a read)");
+assert(node.isStatic(placed) === true,
+       "...and a static node is still static after being read");
+// An empty change map is the same thing spelled out.
+node.transform(placed, {});
+assert(editor.undoState().pushes === pushesBeforeRead,
+       "node.transform(id, {}) pushes nothing either");
+assert(node.isStatic(placed) === true, "...and still does not demote");
 
 var group = scene.addEmpty({});
 var parented = scene.addPrimitive("cube", { parent: group, position: { x: 1, y: 0, z: 0 } });

@@ -74,7 +74,10 @@ QVector<VerbInfo> NodeApi::verbs() const
           "owner outside it is left alone, which is the same rule node.duplicate follows.",
           Needs::Document },
         { "transform", "node.transform(id, {position, rotation, scale}) -> {position, rotation, scale}",
-          "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) and returns the result. Undoable.",
+          "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) "
+          "and returns the result. Undoable. WITH NO CHANGE \u2014 node.transform(id) \u2014 it is a pure READ: "
+          "nothing is pushed onto the undo stack and a SCENE_STATIC node stays static (a write of a node's own "
+          "values back onto it still counts as a move, and rule 4 demotes the subtree for it).",
           Needs::Document },
         { "size", "node.size(id) -> {x, y, z, largest, height}",
           "The node subtree's MEASURED size in the scene, in metres \u2014 the axis-aligned world "
@@ -625,6 +628,21 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.transform"));
     if (!node) return QVariantMap();
+
+    // READ AND WRITE ARE ONE VERB, so "read" has to mean read (found by the
+    // avatar lane, 2026-09-11): with no position/rotation/scale in the change
+    // map this used to push a TransformSceneNodeCommand carrying the node's
+    // CURRENT values — an undo entry for nothing, and, because a transform
+    // write is a MOVE however small, `markMoved` promoted a SCENE_STATIC node
+    // to dynamic. Asking a static node where it is cannot be what un-statics
+    // it.
+    const bool writes = change.contains(QStringLiteral("position"))
+                        || change.contains(QStringLiteral("rotation"))
+                        || change.contains(QStringLiteral("scale"));
+    if (!writes)
+        return { { "position", vecToJs(node->getLocalPos()) },
+                 { "rotation", vecToJs(node->getLocalRot().toEulerAngles()) },
+                 { "scale", vecToJs(node->getLocalScale()) } };
 
     const iris::Vec3 pos = vecFromJs(change.value("position"), node->getLocalPos());
     const iris::Vec3 rotEuler = vecFromJs(change.value("rotation"), node->getLocalRot().toEulerAngles());
