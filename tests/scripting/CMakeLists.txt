@@ -1146,6 +1146,14 @@ jah_no_display(scripting.e2e.live_textures)
 # point is what the renderer does with the generation counter.
 add_script_e2e(live_texture_pixels e2e_live_texture_pixels.js)
 
+# RENDER_PIPELINE_AUDIT 3.2 (smoke lane L12): a DUPLICATE RENDERS LIKE ITS
+# ORIGINAL. Every duplicate path (node.duplicate, Ctrl+D / Alt+drag through
+# editor.duplicateSelection, the outliner menu) handed the copy a blank base
+# Material and the mirror drew it grey. Pixel probes on the original, a
+# node.duplicate copy and a duplicateSelection copy, then a repaint of the copy
+# that must leave the original red (a copy, not a shared material).
+add_script_e2e(duplicate_material e2e_duplicate_material.js)
+
 # ASSET_MEDIA_SPEC §3 Option A + A-1: a VIDEO decoded into a live texture —
 # every decoded frame is a write, every write is a generation bump. Qt
 # Multimedia's ffmpeg backend decodes with no display (the same fact
