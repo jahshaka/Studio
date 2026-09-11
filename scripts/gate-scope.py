@@ -222,6 +222,38 @@ def cmake_src_refs():
     return refs
 
 
+# A build-registration edit that only adds or removes SOURCE FILES from a list (a new
+# .cpp beside its header, a deleted dead file) says nothing on its own: the files it
+# names are in the same diff and scope precisely. Such an edit no longer forces the
+# merge tier (2026-09-11, owner: "don't run the full gate twice" — seven lanes fell back
+# to MERGE in one day for exactly this). Anything else in the file (a flag, a target,
+# a find_package, a condition) still falls back, loudly.
+_LIST_ENTRY = re.compile(r'^"?[\w${}./+\-]+\.(?:cpp|cc|cxx|c|h|hh|hpp|ui|qrc|mm|js|js\.in|sh)"?\)?$')
+
+
+def _changed_lines(diff_text):
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---")): continue
+        if line.startswith(("+", "-")): yield line[1:].strip()
+
+
+def cmake_list_only(rng, relpath):
+    """True when every changed line of `relpath` in `rng` is a source-file list entry,
+    a comment or blank (and at least one line changed)."""
+    if not rng or ".." not in rng: return False
+    base, tip = rng.split("..", 1)
+    if relpath.startswith("irisgl/"):
+        old = sh(f"git rev-parse {base}:irisgl").strip()
+        new = sh(f"git rev-parse {tip}:irisgl").strip()
+        text = sh(f"git diff -U0 {old} {new} -- {relpath[len('irisgl/'):]}",
+                  cwd=os.path.join(ROOT, "irisgl"))
+    else:
+        text = sh(f"git diff -U0 {rng} -- {relpath}")
+    lines = [l for l in _changed_lines(text)]
+    if not lines: return False
+    return all(l == "" or l.startswith("#") or _LIST_ENTRY.match(l) for l in lines)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
@@ -237,6 +269,9 @@ def main():
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
     paths = a.files if a.files else touched_paths(a.range)
+    list_only = {p for p in paths
+                 if p in ("CMakeLists.txt", "irisgl/CMakeLists.txt", "tests/CMakeLists.txt")
+                 and cmake_list_only(a.range, p)}
 
     inv = load_inventory(build)
     costs = load_costs(build)
@@ -284,6 +319,10 @@ def main():
 
     for p in paths:
         hit = []
+        if p in list_only:
+            rationale.append((p, "source-list edit only → scoped by the files it names"))
+            code_moved = True
+            continue
         # 1. a test file → its dir's suites / the suites running that script
         if p.startswith("tests/"):
             parts = p.split("/")

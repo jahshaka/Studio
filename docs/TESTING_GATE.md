@@ -62,7 +62,12 @@ How a touched path selects suites (all read from the tree and the build dir's
    are the app-spawning groups; `*merge-tier` = "cannot be scoped");
 5. any path with NO rule, or a rule saying `*merge-tier` (root CMake, `irisgl/CMakeLists`,
    unknown `src/` files) → the whole run FALLS BACK to the MERGE tier, loudly. A guessing
-   rule is worse than the merge tier.
+   rule is worse than the merge tier. **Exception (2026-09-11):** an edit to `CMakeLists.txt`,
+   `irisgl/CMakeLists.txt` or `tests/CMakeLists.txt` whose every changed line is a source-file
+   list entry (a `.cpp`/`.h`/`.ui`/`.qrc`/script path), a comment or blank does NOT fall back —
+   the files it names are in the same diff and scope precisely (seven lanes fell back on
+   2026-09-11 for exactly this; replayed, 15c and the Assets lane scope to ~6 min instead of ~9).
+   A flag, target, find_package or condition change still falls back.
 6. Whenever `src/` or `irisgl/` moved, `app.startup_quiet` + `api.contract` ride along
    (~15 s: one rendering boot, the scripting contract).
 
@@ -79,6 +84,14 @@ api.contract. An engine change scopes to near-full by design (pixels move everyw
 catches, the rule for that path gains the suite — that is the feedback loop the owner asked
 for ("test it out as new lanes land"). Rules live in one table; keep the most specific
 prefix first.
+
+## 3b. Re-gating after a fix (2026-09-11, owner: "no double checking")
+
+A lane that gets a red on its tier FIXES, then re-runs ONLY (a) the suites that failed and (b)
+the SCOPED selection of the FIX's own diff (`scripts/gate-scope.sh <pre-fix tip>..<post-fix tip>
+--run`) — never the whole tier again. The batch gate before the push is the full safety net.
+The lead's post-merge targeted run stays (owner decision): it catches a merge interaction at
+merge time instead of at the batch gate.
 
 ## 4. Flake protocol (unchanged)
 
