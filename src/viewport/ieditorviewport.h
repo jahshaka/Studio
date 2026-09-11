@@ -236,6 +236,22 @@ public:
     /// stand-ins answer with the default.
     virtual QString gizmoTransformSpace() const { return QStringLiteral("global"); }
 
+    /// WHAT THE ACTIVE GIZMO ANSWERS AT A PIXEL (smoke S15). The rotation
+    /// gizmo picks in SCREEN SPACE — the cursor's distance from each ring's
+    /// projected circle — so "is this ring clickable from here" is a number,
+    /// and `editor.gizmoHitTest` is that number without a synthesized mouse
+    /// event. `handle` is "x" | "y" | "z" for a ring inside the pick
+    /// tolerance and empty otherwise; `distancePx` is the distance to the
+    /// NEAREST ring either way (-1 when nothing could be measured: no
+    /// selection, no camera, or a gizmo that does not pick this way).
+    struct GizmoPickResult
+    {
+        QString handle;
+        float distancePx = -1.0f;
+        float tolerancePx = 0.0f;
+    };
+    virtual GizmoPickResult gizmoHitTest(const QPointF &) const { return GizmoPickResult(); }
+
     // ---- play / physics ----
     virtual void startPlayingScene() = 0;
     virtual void pausePlayingScene() = 0;

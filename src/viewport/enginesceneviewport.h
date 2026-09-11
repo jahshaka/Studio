@@ -125,6 +125,9 @@ public:
     void setGizmoTransformToLocal() override;
     void setGizmoTransformToGlobal() override;
     QString gizmoTransformSpace() const override;
+    /// IEditorViewport: screen-space ring picking behind `editor.gizmoHitTest`
+    /// (smoke S15) — the same pick the mouse takes, asked at a pixel.
+    GizmoPickResult gizmoHitTest(const QPointF &point) const override;
     Gizmo *activeGizmo() const override { return mGizmo; }
     QString gizmoMode() const override;
 

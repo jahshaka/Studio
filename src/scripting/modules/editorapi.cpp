@@ -131,6 +131,19 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "setGizmoMode", "editor.setGizmoMode(\"translate\"|\"rotate\"|\"scale\") -> bool",
           "Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons.",
           Needs::Engine },
+        { "gizmoHitTest", "editor.gizmoHitTest(x, y) -> {ring, distancePx, tolerancePx}",
+          "WHICH ROTATION RING A VIEWPORT PIXEL HITS, and how far the cursor is from it in "
+          "pixels. `x`/`y` are viewport pixels with the origin top-left, exactly as a mouse "
+          "event carries them. `ring` is \"x\", \"y\" or \"z\" when the pixel is inside the pick "
+          "tolerance of that ring's projected circle, and null when it is not; `distancePx` is "
+          "the distance to the NEAREST ring either way, and `tolerancePx` the threshold the "
+          "pick used. The rotation gizmo picks in SCREEN SPACE (smoke S15) — a ring seen "
+          "edge-on projects to a line, which is still clickable, where the old 3D annulus test "
+          "made whichever ring the camera looked along unclickable everywhere. This is the very "
+          "function a click takes, so what the verb reports is what the mouse would do. `ring` "
+          "is null (and `distancePx` -1) when the rotate gizmo is not the active one, when "
+          "nothing is selected, or when this session's viewport has no camera.",
+          Needs::Engine },
         { "focusSelection", "editor.focusSelection() -> bool",
           "Frames the selection in the editor camera (the F key): bounds-aware distance, current view direction kept. "
           "With more than one node selected it frames the UNION of their world bounds, in one framing, so the whole set "
@@ -806,6 +819,23 @@ QString EditorApi::gizmoMode()
 {
     if (!requireEngine()) return QString();
     return host.viewport->gizmoMode();
+}
+
+QVariantMap EditorApi::gizmoHitTest(double x, double y)
+{
+    QVariantMap out;
+    // An explicit JS `null`, not an absent key: an invalid QVariant inside a
+    // map reaches a script as `undefined`, and `r.ring === null` is how a
+    // caller asks "did this pixel miss".
+    out.insert("ring", QVariant::fromValue(nullptr));
+    out.insert("distancePx", -1.0);
+    out.insert("tolerancePx", 0.0);
+    if (!requireEngine()) return out;
+    const IEditorViewport::GizmoPickResult pick = host.viewport->gizmoHitTest(QPointF(x, y));
+    if (!pick.handle.isEmpty()) out.insert("ring", pick.handle);
+    out.insert("distancePx", double(pick.distancePx));
+    out.insert("tolerancePx", double(pick.tolerancePx));
+    return out;
 }
 
 bool EditorApi::setGizmoMode(const QString &mode)

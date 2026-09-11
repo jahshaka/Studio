@@ -112,6 +112,53 @@ float Gizmo::getGizmoScale()
 	return gizmoScale;
 }
 
+// ---- PIXEL-SPACE PICKING (smoke S15) ---------------------------------------
+//
+// The camera's matrices are brought in step with the widget size HERE, the way
+// ScenePicker::screenSegment does it before every pick ray: the projection a
+// handle is measured through and the frustum a ray is unprojected from are then
+// the same matrices by construction, and a picture-vs-pick disagreement (the
+// class of bug the 2026-09-08 fov work chased) cannot come back through this
+// door.
+void Gizmo::setPickView(const iris::CameraNodePtr &camera, float width, float height,
+                        float devicePixelRatio)
+{
+	pickViewData.camera = camera;
+	pickViewData.width = width;
+	pickViewData.height = height;
+	pickViewData.devicePixelRatio = devicePixelRatio > 0.0f ? devicePixelRatio : 1.0f;
+	if (!pickViewData.isValid()) return;
+	camera->setAspectRatio(width / height);
+	camera->updateCameraMatrices();
+}
+
+bool Gizmo::projectToPixel(const iris::Vec3 &world, QPointF &pixel) const
+{
+	if (!pickViewData.isValid()) return false;
+	const iris::CameraNodePtr &cam = pickViewData.camera;
+	const iris::Vec4 clip = (cam->projMatrix * cam->viewMatrix) *
+	                        iris::Vec4(world.x(), world.y(), world.z(), 1.0f);
+	if (clip.w() <= 1e-6f) return false;             // behind the eye
+	const float ndcX = clip.x() / clip.w();
+	const float ndcY = clip.y() / clip.w();
+	// NDC y points UP, Qt's pixel y points DOWN.
+	pixel = QPointF(double((ndcX * 0.5f + 0.5f) * pickViewData.width),
+	                double((1.0f - (ndcY * 0.5f + 0.5f)) * pickViewData.height));
+	return true;
+}
+
+bool Gizmo::rayPixel(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
+                     const iris::Vec3 &reference, QPointF &pixel) const
+{
+	if (!pickViewData.isValid()) return false;
+	iris::Vec3 dir = rayDir;
+	if (dir.lengthSquared() < 1e-12f) return false;
+	dir.normalize();
+	float along = iris::Vec3::dotProduct(reference - rayPos, dir);
+	if (!(along > 1e-3f)) along = 1.0f;   // the reference is behind the ray's start
+	return projectToPixel(rayPos + dir * along, pixel);
+}
+
 void Gizmo::setTransformSpace(GizmoTransformSpace transformSpace)
 {
 	this->transformSpace = transformSpace;
