@@ -660,8 +660,9 @@ static void cacheKindsCase()
 // scancost: what the per-frame item walks cost (ENGINE_CACHE_POLICY_SPEC E2,
 // lead review item 4). N cube nodes in a grid, 4 shadow-casting point lamps and
 // a shadowed hybrid-GI scene (so the GI movement scan runs every frame too);
-// the engine's own steady-clock readings of collectShadowCacheFrame and
-// scanGiMovement, at rest and with 10 movers. Numbers, not a gate.
+// the engine's own steady-clock readings of the caster half (the walk plus
+// collectShadowCacheFrame) and of the GI movement scan, at rest and with 10
+// movers. Numbers, not a gate.
 static void scanCostCase(int n)
 {
     std::string err;
@@ -724,7 +725,7 @@ static void scanCostCase(int n)
             const auto t0 = std::chrono::steady_clock::now();
             engine->renderOneFrame();
             frameMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-            shadowUs += scene->shadowScanMicros();
+            shadowUs += scene->shadowScanMicros() + scene->casterWalkMicros();
             giUs += scene->giScanMicros();
         }
         shadowUs /= frames; giUs /= frames; frameMs /= frames;
