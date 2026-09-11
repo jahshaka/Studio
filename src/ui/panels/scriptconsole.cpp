@@ -124,6 +124,19 @@ void ScriptConsole::focusInput()
     if (mInput) mInput->setFocus(Qt::ShortcutFocusReason);
 }
 
+bool ScriptConsole::inputHasFocus() const
+{
+    if (!mInput) return false;
+    // THE WINDOW'S FOCUS WIDGET, not only hasFocus(). Whether a window is
+    // ACTIVE is the window manager's business, and the rig runs under an Xvfb
+    // with no window manager at all — nothing is ever active there until
+    // something clicks. What Ctrl+` promises is that the keyboard goes to the
+    // input line when it goes to this window, which is exactly this.
+    if (mInput->hasFocus()) return true;
+    const QWidget *top = mInput->window();
+    return top && top->focusWidget() == mInput;
+}
+
 void ScriptConsole::announce(const QString &text)
 {
     appendLine(text, QStringLiteral("#8ec6ff"));

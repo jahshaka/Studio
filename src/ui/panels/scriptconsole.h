@@ -41,6 +41,11 @@ public:
     /// shortcut did not really open (found on the rig, 2026-09-09).
     void focusInput();
 
+    /// Whether the INPUT line has the keyboard right now. The tray verb reports
+    /// it (editor.trayState().consoleFocused) so a suite can assert the second
+    /// half of what Ctrl+` promises: not just a visible console, a typable one.
+    bool inputHasFocus() const;
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 

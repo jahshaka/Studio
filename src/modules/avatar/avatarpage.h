@@ -34,6 +34,8 @@ For more information see the LICENSE file
 // arrives as an IAvatarPreviewWidget the shell injects.
 
 #include <QStringList>
+
+#include "ui/style/columnedpage.h"
 #include <QWidget>
 
 class QCheckBox;
@@ -53,10 +55,15 @@ namespace avatar
 class AvatarPreviewModel;
 class IAvatarPreviewWidget;
 
-class AvatarPage : public QWidget
+class AvatarPage : public QWidget, public ColumnedPage
 {
     Q_OBJECT
 public:
+    /// ColumnedPage (ui/style/columnedpage.h): the avatar library on the left,
+    /// the scope/details panel on the right — both sized from PanelMetrics.
+    QWidget *leftColumn() const override { return mLeftColumn; }
+    QWidget *rightColumn() const override { return mRightColumn; }
+
     AvatarPage(AvatarPreviewModel *model, QWidget *parent = nullptr);
 
     /// The engine-rendered centre view, injected by the shell when the engine
@@ -87,6 +94,9 @@ private:
     QWidget *buildLeftColumn();
     QWidget *buildCentreColumn();
     QWidget *buildRightColumn();
+    /// The two side columns, kept so the page can answer ColumnedPage.
+    QWidget *mLeftColumn = nullptr;
+    QWidget *mRightColumn = nullptr;
     void onImportClicked(bool intoProject);
     void onLoadAnimationClicked();
     /// The Load Animation… chooser: the library's Animation rows

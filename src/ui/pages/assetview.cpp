@@ -121,6 +121,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 
 #include "ui/dialogs/toast.h"
+#include "ui/style/panelmetrics.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 
@@ -1377,12 +1378,17 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     _splitter->setStretchFactor(0, 0);
     _splitter->setStretchFactor(1, 3);
-    _splitter->setStretchFactor(2, 1);
-    // Qlementine's larger control minimums inflated the metadata pane to a
-    // huge share of the page; keep it a sensible sidebar band (wide enough
-    // for its buttons to breathe, never dominating the grid).
-    _metadataPane->setMinimumWidth(280);
-    _metadataPane->setMaximumWidth(380);
+    _splitter->setStretchFactor(2, 0);
+    // THE COLUMNS ARE THE EDITOR'S COLUMNS (owner, 2026-09-11, smoke S1). The
+    // metadata pane used to live in a 280-380 band of its own — narrower than
+    // the editor's right column at one end, and pinned by a MAXIMUM the user
+    // could not drag past at the other. Both sides now come from
+    // ui/style/panelmetrics.h: the same minimums as the editor's columns, the
+    // same opening widths, and no maximum (the stretch factors keep the grid
+    // in the middle growing, which is what the old cap was really for).
+    _navPane->setMinimumWidth(PanelMetrics::leftColumnMinWidth);
+    _metadataPane->setMinimumWidth(PanelMetrics::rightColumnMinWidth);
+    _splitter->setSizes({ PanelMetrics::leftColumnWidth, 800, PanelMetrics::rightColumnWidth });
     
     // Offline-store banner (§3.1.2): persistent, non-modal, above the page.
     storeOfflineBanner = new QWidget(this);

@@ -27,7 +27,7 @@ For more information see the LICENSE file
 // It also pins the two rules the shell depends on:
 //   * restore() returns FALSE when there is nothing stored — that "false" is
 //     what tells MainWindow to apply the compiled-in default width instead
-//     (applyRightColumnWidthOnce), so a first run and a restored run differ;
+//     (applyColumnWidthsOnce), so a first run and a restored run differ;
 //   * a blob written at a different layout VERSION is refused rather than
 //     half-applied, which is how a future default layout reaches users who
 //     already have a saved one.
@@ -151,7 +151,7 @@ int main(int argc, char **argv)
               "round trip: a dock the user closed stays closed");
         CHECK(relaunched.hierarchy->isVisible() && relaunched.properties->isVisible(),
               "round trip: the docks that were open are open");
-        // The width is the reason applyRightColumnWidthOnce stands down for a
+        // The width is the reason applyColumnWidthsOnce stands down for a
         // restored layout: a restored column is WIDER than the compiled-in
         // default, and re-applying the default would undo the user's drag.
         CHECK(relaunched.properties->width() > PanelMetrics::rightColumnWidth,

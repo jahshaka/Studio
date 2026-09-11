@@ -752,6 +752,32 @@ set_tests_properties(ui.tree_multiselect PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.tree_multiselect)
 
+# ui.column_law — S1: every page's columns are the editor's columns, and the
+# console is a TAB of the editor's bottom tray. Spawns the REAL binary and
+# drives it over MCP (the shutdown suites' harness): these widths come out of a
+# LAYOUT, which only happens in a shown window with the event loop turning
+# between the show and the measurement — a --script run holds the loop for its
+# whole run and cannot see them. Needs a display (the app is the engine app);
+# scratch HOME + data root like every other app-spawning suite.
+find_package(Qt6 REQUIRED COMPONENTS Core Network)
+add_executable(test_column_law test_column_law.cpp)
+set_target_properties(test_column_law PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_column_law PRIVATE Qt6::Core Qt6::Network)
+target_include_directories(test_column_law PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_column_law PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_columns_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-columns)
+file(MAKE_DIRECTORY ${_columns_home}/run)
+add_test(NAME ui.column_law COMMAND test_column_law
+         WORKING_DIRECTORY ${_columns_home}/run)
+set_tests_properties(ui.column_law PROPERTIES
+    ENVIRONMENT "HOME=${_columns_home};JAHSHAKA_DATA_ROOT=${_columns_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "ui")
+jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
+jah_lsan_blocked(ui.column_law)   # spawns the app
+
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
 # claims — in its own comment, or by running --headless, or by building nothing
