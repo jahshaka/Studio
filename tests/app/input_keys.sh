@@ -583,14 +583,29 @@ sleep 0.5
 activate
 js "editor.select('$C')" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
-# Ctrl+` opens the script console dock AND puts the keyboard in its input line
-# (mainwindow.cpp, 2026-09-09 — it used to open a console you had to click
-# before it would take a character, which is also why this probe used to guess
-# at a pixel and miss). NOTE-ONLY still: the Qt contract being probed (a text
-# widget accepts the ShortcutOverride for Ctrl+C/V) is not something this suite
-# implements, so a miss is recorded rather than gated.
+# Ctrl+` shows the CONSOLE TAB of the editor's bottom tray AND puts the keyboard
+# in its input line (smoke S1: the console used to be a bottom dock of its own
+# and now shares the asset tray's widget; mainwindow.cpp toggleScriptConsole,
+# which is also what editor.tray calls). The two halves are GATED here, because
+# this is the only suite where a real Ctrl+` reaches a real window:
+TRAY_BEFORE=$(js 'JSON.stringify(editor.trayState())')
 key ctrl+grave
 sleep 0.6
+TRAY_AFTER=$(js 'JSON.stringify(editor.trayState())')
+note "tray before Ctrl+\`: $TRAY_BEFORE"
+note "tray after  Ctrl+\`: $TRAY_AFTER"
+[ "$(printf '%s' "$TRAY_BEFORE" | jq -r '.consoleVisible')" = "false" ] \
+    && ok "the tray starts with no Console tab" \
+    || bad "the Console tab was already there before Ctrl+\`"
+[ "$(printf '%s' "$TRAY_AFTER" | jq -r '.tab')" = "console" ] \
+    && ok "the Ctrl+\` KEY brings up the Console TAB of the asset tray" \
+    || bad "Ctrl+\` did not show the console tab (tab: $(printf '%s' "$TRAY_AFTER" | jq -r '.tab'))"
+[ "$(printf '%s' "$TRAY_AFTER" | jq -r '.consoleFocused')" = "true" ] \
+    && ok "…and the keyboard is in the console input, with no click" \
+    || bad "Ctrl+\` showed the console without focusing its input"
+# NOTE-ONLY below: the Qt contract being probed (a text widget accepts the
+# ShortcutOverride for Ctrl+C/V) is not something this suite implements, so a
+# miss is recorded rather than gated.
 key ctrl+v
 AFTER=$(js 'scene.nodes().length')
 [ "$AFTER" = "$BEFORE" ] \
@@ -664,12 +679,19 @@ else
 fi
 
 
-# The console dock is OPEN and focused when section 2 ends (its 5b probes
-# leave it that way). Close it before the next section flies the camera: an
-# open dock moves the viewport's centre, which is where the fly gesture puts
-# the pointer.
+# The console TAB is open and focused when section 2 ends (its 5b probes leave
+# it that way). Ctrl+` again puts the tray back on Assets — since S1 the console
+# shares the tray's widget, so this no longer changes the viewport's size, but
+# the round trip is worth gating: the chord that opens it has to close it.
 key ctrl+grave
 sleep 0.4
+TRAY_OFF=$(js 'JSON.stringify(editor.trayState())')
+[ "$(printf '%s' "$TRAY_OFF" | jq -r '.consoleVisible')" = "false" ] \
+    && ok "a second Ctrl+\` takes the Console tab away again" \
+    || bad "Ctrl+\` did not close the console tab ($TRAY_OFF)"
+[ "$(printf '%s' "$TRAY_OFF" | jq -r '.tab')" = "assets" ] \
+    && ok "…and the tray is back on Assets" \
+    || bad "the tray did not return to the Assets tab ($TRAY_OFF)"
 
 # ##########################################################################
 # SECTION 3 — THE ARROWS FLY AND THE LETTERS ARE FREE (was app.navigation_keys)

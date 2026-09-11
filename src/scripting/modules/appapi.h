@@ -59,6 +59,7 @@ public:
     Q_INVOKABLE QVariantList apiProblems();
     Q_INVOKABLE QVariantMap dataRoot();
     Q_INVOKABLE QVariantMap window();
+    Q_INVOKABLE QVariantMap columns();
     Q_INVOKABLE QVariant lastError();
 };
 

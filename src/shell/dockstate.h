@@ -43,7 +43,13 @@ namespace DockState {
 /// should override what users already have; Qt refuses to restore a blob whose
 /// version does not match, which turns the bump into "everyone gets the new
 /// default once".
-constexpr int kVersion = 1;
+///
+/// 2 (smoke S1, 2026-09-11): the script console stopped being a dock of the
+/// bottom area and became a TAB of the asset tray, so `scriptConsoleDock` no
+/// longer exists. A version-1 blob names it, and a blob that names a dock the
+/// window does not have leaves Qt guessing at the bottom area — the bump makes
+/// every existing layout fall back to the new default exactly once.
+constexpr int kVersion = 2;
 
 /// Writes `window`'s dock layout under `key`. Cheap and unconditional — the
 /// caller decides when (on close, for the editor).

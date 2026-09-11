@@ -337,6 +337,24 @@ QVector<VerbInfo> EditorApi::verbs() const
           "already in does nothing), and NOT the same thing as a maximized window. The stats "
           "readout deliberately survives it: it is a diagnostic, not an editor helper.",
           Needs::Window },
+        { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible}",
+          "THE EDITOR'S BOTTOM TRAY, the one widget that carries the asset browser and the "
+          "script console as TABS at its top (owner, 2026-09-11: turning the console on adds a "
+          "Console tab beside Assets and the two share that widget). `tab` is the tab in front "
+          "(\"assets\" or \"console\"), `tabs` the tabs the tab bar is showing, "
+          "`consoleVisible` whether the Console tab is in the bar at all, `consoleFocused` "
+          "whether the console's INPUT line has the keyboard — the half of Ctrl+` a console "
+          "you still have to click does not deliver — and `visible` whether the tray widget "
+          "itself is on screen.",
+          Needs::Window },
+        { "tray", "editor.tray({tab, console}) -> (the trayState map)",
+          "DRIVES THAT TRAY. `tab: \"console\"` shows the Console tab, raises the tray and "
+          "puts the keyboard in the console input — exactly what the Ctrl+` chord does, "
+          "through the same function; `tab: \"assets\"` brings the asset browser forward "
+          "without closing the console tab. `console: true|false` adds or removes the Console "
+          "tab itself (false returns the tray to Assets). Called with no argument it reads, "
+          "like editor.trayState().",
+          Needs::Window },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
           "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
           "`translate` in world units — which is also the ground grid's spacing — `rotate` in "
@@ -1457,6 +1475,66 @@ bool EditorApi::fullscreen(const QVariant &on)
         host.mainWindow->setImmersiveFullscreen(value.toBool());
     }
     return host.mainWindow->isImmersiveFullscreen();
+}
+
+// THE BOTTOM TRAY (smoke S1). The verb and the Ctrl+` chord call the SAME
+// MainWindow functions — the chord's ShortcutRegistry entry is one line calling
+// toggleScriptConsole() — so what a suite asserts through these verbs is what
+// the key really did, not a parallel implementation of it.
+QVariantMap EditorApi::trayState()
+{
+    QVariantMap out;
+    if (!host.mainWindow) {
+        fail("editor.trayState: this verb needs the editor window (a --script/--headless run "
+             "has no tray)");
+        return out;
+    }
+    const QString tab = host.mainWindow->trayTab();
+    if (tab.isEmpty()) {
+        fail("editor.trayState: this window has no bottom tray");
+        return out;
+    }
+    QVariantList tabs{ QStringLiteral("assets") };
+    if (host.mainWindow->isConsoleTabVisible()) tabs << QStringLiteral("console");
+    out["tab"] = tab;
+    out["tabs"] = tabs;
+    out["consoleVisible"] = host.mainWindow->isConsoleTabVisible();
+    out["consoleFocused"] = host.mainWindow->isConsoleInputFocused();
+    out["visible"] = host.mainWindow->isTrayVisible();
+    return out;
+}
+
+QVariantMap EditorApi::tray(const QVariantMap &change)
+{
+    if (!host.mainWindow) {
+        fail("editor.tray: this verb needs the editor window (a --script/--headless run has no "
+             "tray)");
+        return QVariantMap();
+    }
+    if (host.mainWindow->trayTab().isEmpty()) {
+        fail("editor.tray: this window has no bottom tray");
+        return QVariantMap();
+    }
+    static const QStringList known = { "tab", "console" };
+    for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
+        if (known.contains(it.key())) continue;
+        fail(QStringLiteral("editor.tray: unknown key '%1' (known: %2)")
+                 .arg(it.key(), known.join(", ")));
+        return QVariantMap();
+    }
+    // `console` first: turning the tab off and then asking for a tab is a
+    // contradiction the caller should see resolved in the order they wrote it,
+    // and `tab` is the more specific request.
+    if (change.contains("console"))
+        host.mainWindow->setConsoleTabVisible(change.value("console").toBool());
+    if (change.contains("tab")) {
+        const QString tab = change.value("tab").toString();
+        if (!host.mainWindow->setTrayTab(tab)) {
+            fail(QStringLiteral("editor.tray: unknown tab '%1' (assets|console)").arg(tab));
+            return QVariantMap();
+        }
+    }
+    return trayState();
 }
 
 QVariantMap EditorApi::snapSize()

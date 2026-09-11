@@ -202,6 +202,7 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/assetservice.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
+#include "ui/style/columnedpage.h"
 #include "ui/style/panelmetrics.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -305,12 +306,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	registerStudioModules(*scriptEngine);
 	for (auto *module : modules) module->registerApi(*scriptEngine);
 
+	// THE CONSOLE IS A TAB OF THE BOTTOM TRAY (owner, 2026-09-11, smoke S1),
+	// not a dock of its own: setupDockWidgets has already built the tray, so
+	// the console joins it here as a tab that stays hidden until Ctrl+` (or
+	// editor.tray) asks for it.
 	scriptConsole = new ScriptConsole(scriptEngine);
-	scriptConsoleDock = new QDockWidget("Script Console", viewPort);
-	scriptConsoleDock->setObjectName(QStringLiteral("scriptConsoleDock"));
-	scriptConsoleDock->setWidget(scriptConsole);
-	viewPort->addDockWidget(Qt::BottomDockWidgetArea, scriptConsoleDock);
-	scriptConsoleDock->hide();
+	if (bottomTray) {
+		consoleTabIndex = bottomTray->addTab(scriptConsole, tr("Console"));
+		bottomTray->setTabVisible(consoleTabIndex, false);
+		bottomTray->setCurrentIndex(kAssetsTrayTab);
+	}
 
 	// MCP endpoint (CLAUDE_EDITOR_SPEC.md phase 1): OFF by default — total
 	// lockdown, the scripting engine is the only capability surface. Started
@@ -1190,7 +1195,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			animationDock->setVisible(widgetStates[(int)Widget::TIMELINE]);
 			playerControls->setVisible(false);
 
-			applyRightColumnWidthOnce();
+			applyColumnWidthsOnce();
 
 			this->sceneView->setWindowSpace(space);
             playSceneBtn->show();
@@ -2260,6 +2265,43 @@ void MainWindow::exportSceneAsZip()
                                                           sceneView->editorCamera()));
     archiver->startExport(filePath);
 }
+
+namespace {
+
+// A DOCK BODY THAT *ASKS* FOR A WIDTH (smoke S1, F-X1).
+//
+// A dock area lays its docks out from their sizeHint and refuses to go below
+// their minimumSizeHint. The right column used to get its 396 px from a
+// MINIMUM — `presetsTabWidget->setMinimumWidth(396)` — which is why the column
+// could never be dragged to the 300 px `rightColumnMinWidth` advertises: the
+// default width was being expressed as a constraint. (And resizeDocks cannot
+// fix it from outside: the right column is a vertically split PAIR, a nested
+// dock layout, and Qt applies a horizontal resizeDocks to nested items only
+// approximately — measured on the rig 2026-09-11, the request simply does not
+// land, while the flat left column's does.)
+//
+// This is the same statement made the way Qt reads it: sizeHint = the column's
+// default width, minimum untouched. The column OPENS at PanelMetrics::
+// rightColumnWidth and drags down to rightColumnMinWidth, which is exactly what
+// the two constants say.
+class ColumnBody : public QWidget
+{
+public:
+    explicit ColumnBody(int hintWidth, QWidget *parent = nullptr)
+        : QWidget(parent), mHintWidth(hintWidth) {}
+
+    QSize sizeHint() const override
+    {
+        const QSize base = QWidget::sizeHint();
+        return QSize(qMax(base.width(), mHintWidth), base.height());
+    }
+
+private:
+    int mHintWidth;
+};
+
+}   // namespace
+
 void MainWindow::setupDockWidgets()
 {
     // Hierarchy Dock
@@ -2268,6 +2310,10 @@ void MainWindow::setupDockWidgets()
     sceneHierarchyWidget = new SceneHierarchyWidget;
     sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
     sceneHierarchyDock->setWidget(sceneHierarchyWidget);
+    // THE LEFT COLUMN IS ONE COLUMN, on every page (ui/style/panelmetrics.h).
+    // The editor's left column is the one the other pages copy, so it is sized
+    // from the constant rather than from whatever the tree's sizeHint asks for.
+    sceneHierarchyWidget->setMinimumWidth(PanelMetrics::leftColumnMinWidth);
     sceneHierarchyWidget->setMainWindow(this);
     if (sceneView) sceneView->setHierarchyDragSource(sceneHierarchyWidget->getWidget());
 
@@ -2298,7 +2344,7 @@ void MainWindow::setupDockWidgets()
     if (ThemeManager::classicActive())
         sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");
 
-    QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
+    QWidget *sceneNodeDockWidgetContents = new ColumnBody(PanelMetrics::rightColumnWidth, viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
     // THE RIGHT COLUMN IS ONE COLUMN (ui/style/panelmetrics.h): this dock and
     // the Presets panel below it are sized from the same number. The minimum is
@@ -2320,7 +2366,7 @@ void MainWindow::setupDockWidgets()
     presetsDock = new QDockWidget("Presets", viewPort);
     presetsDock->setObjectName(QStringLiteral("presetsDock"));
 
-    QWidget *presetDockContents = new QWidget;
+    QWidget *presetDockContents = new ColumnBody(PanelMetrics::presetsPanelWidth);
     if (ThemeManager::classicActive())
         presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
     SkyPresets *skyPresets = new SkyPresets;
@@ -2341,7 +2387,14 @@ void MainWindow::setupDockWidgets()
 
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
-    presetsTabWidget->setMinimumWidth(PanelMetrics::presetsPanelWidth);
+    // F-X1 (platform audit, 2026-09-10): this used to be `presetsPanelWidth`
+    // (396) — a MINIMUM 96 px wider than the column's own advertised minimum,
+    // so the right column could never actually be dragged to
+    // `rightColumnMinWidth` and the two constants contradicted each other.
+    // The panel OPENS at the column's default width (applyColumnWidthsOnce
+    // below); what it may be squeezed to is the column's minimum, one number
+    // for the whole column.
+    presetsTabWidget->setMinimumWidth(PanelMetrics::rightColumnMinWidth);
     presetsTabWidget->addTab(assetModelPanel, "Models");
     presetsTabWidget->addTab(assetMaterialPanel, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
@@ -2376,7 +2429,26 @@ void MainWindow::setupDockWidgets()
     QGridLayout *assetsLayout = new QGridLayout(assetDockContents);
     assetsLayout->addWidget(assetWidget);
     assetsLayout->setContentsMargins(0, 0, 0, 0);
-    assetDock->setWidget(assetDockContents);
+
+    // THE BOTTOM TRAY IS A TABBED HOST (owner, 2026-09-11, smoke S1): "the
+    // editor's bottom asset-tray widget gets TABS at its top, Unreal style —
+    // turning the console on adds a Console tab beside Assets and the two share
+    // that widget". The script console used to be a bottom dock of its own, so
+    // opening it SPLIT the bottom area and shrank the viewport; now it is a tab
+    // of the tray that is already there, and Ctrl+` picks the tab.
+    //
+    // The Console tab is added where the console itself is built (further up
+    // the constructor, with the script engine) and kept in the tab bar but
+    // HIDDEN until it is asked
+    // for — `setTabVisible` rather than add/remove, so the console widget keeps
+    // one parent for the life of the window and nothing can reparent it into a
+    // stray top-level.
+    bottomTray = new QTabWidget(viewPort);
+    bottomTray->setObjectName(QStringLiteral("bottomTray"));
+    bottomTray->setTabPosition(QTabWidget::North);
+    bottomTray->setDocumentMode(true);
+    bottomTray->addTab(assetDockContents, tr("Assets"));
+    assetDock->setWidget(bottomTray);
 
     // Animation Dock
     animationDock = new QDockWidget("Timeline", viewPort);
@@ -2417,7 +2489,7 @@ void MainWindow::setupDockWidgets()
     // to this nested QMainWindow, so MainWindow's own restoreState (which the
     // constructor calls) never reached them: every move, resize, float, tab
     // and close was forgotten at exit. `restoredViewportDocks` is what tells
-    // applyRightColumnWidthOnce to keep its hands off — a remembered column
+    // applyColumnWidthsOnce to keep its hands off — a remembered column
     // width must win over the compiled-in default (shell/dockstate.h).
     restoredViewportDocks =
         settings ? DockState::restore(viewPort, settings->settings, kViewportDockStateKey) : false;
@@ -2432,11 +2504,15 @@ QFont MainWindow::headerGlyphFont() const
 	return fontIcons->font(28);
 }
 
-/// THE RIGHT COLUMN OPENS AT ITS WIDTH (owner, 2026-09-08: "make the presets
+/// THE COLUMNS OPEN AT THEIR WIDTHS (owner, 2026-09-08: "make the presets
 /// right column the same width as the presets panel on the main screen — a
-/// little wider to match it"). It used to open at whatever the dock's old
-/// 326 px minimum and the viewport's stretch produced — 299 px measured on the
-/// rig, visibly narrower than the Presets panel it shares the column with.
+/// little wider to match it"; extended to the LEFT column 2026-09-11, smoke
+/// S1: "all right columns and left columns unify on the Editor's widths").
+/// The right column used to open at whatever the dock's old 326 px minimum and
+/// the viewport's stretch produced — 299 px measured on the rig, visibly
+/// narrower than the Presets panel it shares the column with — and the left
+/// column at whatever the tree's sizeHint asked for, which is the width every
+/// other page is now told to copy, so it has to be a number we chose.
 ///
 /// NOT in setupDockWidgets: a dock that is made visible is re-laid-out from its
 /// widget's sizeHint, and every entry to the editor page shows these docks, so
@@ -2446,28 +2522,165 @@ QFont MainWindow::headerGlyphFont() const
 /// page appears: a user switching space, and the scripted/MCP boot, which shows
 /// the page directly (beginEngineSelftest) and never calls switchSpace.
 ///
-/// ONCE per session. After that the user's drag is the answer — this is a
-/// starting size, not a constraint.
-void MainWindow::applyRightColumnWidthOnce()
+/// ONCE per session. After that the user's drag is the answer — these are
+/// starting sizes, not constraints.
+void MainWindow::applyColumnWidthsOnce()
 {
-    if (rightColumnSized) return;
-    rightColumnSized = true;
-    // A RESTORED LAYOUT ALREADY SAID HOW WIDE THE COLUMN IS. This is the
-    // compiled-in DEFAULT width, applied once per session; overriding a width
-    // the user dragged and this window just restored would make the dock state
-    // look like it was not saved at all.
-    if (restoredViewportDocks) return;
+    if (columnsSized) return;
+    columnsSized = true;
+    // A RESTORED LAYOUT ALREADY SAID HOW WIDE THE COLUMNS ARE: the widths below
+    // are the compiled-in DEFAULTS, applied once per session, and overriding a
+    // width the user dragged and this window just restored would make the dock
+    // state look like it was not saved at all. (The restored case is not simply
+    // skipped — see the queued block.)
     QTimer::singleShot(0, this, [this]() {
         if (!viewPort || !sceneNodePropertiesDock) return;
-        // BOTH docks in the column, from the one constant. Presets sits under
-        // Properties in the default layout now, and a horizontal resizeDocks
-        // that names only one of a vertically split pair leaves the other free
-        // to argue about the width.
+        // A RESTORED LAYOUT IS RESTORED AGAIN, HERE (smoke S1). The blob went
+        // in from setupDockWidgets — the constructor — where the nested
+        // viewPort QMainWindow has no size yet, and Qt scales the saved dock
+        // sizes down to whatever width it does have, clamping at the docks'
+        // minimums; the window then grows and the slack all goes to the central
+        // widget, so the columns come back NARROWER than the user left them,
+        // every launch. Measured on the base build 2026-09-11: a Hierarchy dock
+        // saved at 328 px came back at 288, and with the S1 minimums a column
+        // saved at 396 came back at its 300 floor — which would have put the
+        // editor's columns out of step with every other page's on the second
+        // launch. Applying the SAME blob now, at the real width, lands the
+        // sizes the user actually left.
+        if (restoredViewportDocks) {
+            if (settings) DockState::restore(viewPort, settings->settings, kViewportDockStateKey);
+            return;
+        }
+        // BOTH docks in the right column, from the one constant. Presets sits
+        // under Properties in the default layout now, and a horizontal
+        // resizeDocks that names only one of a vertically split pair leaves the
+        // other free to argue about the width. The Hierarchy dock is the left
+        // column and rides the same call.
         QList<QDockWidget *> column{ sceneNodePropertiesDock };
         QList<int> widths{ PanelMetrics::rightColumnWidth };
         if (presetsDock) { column << presetsDock; widths << PanelMetrics::rightColumnWidth; }
+        if (sceneHierarchyDock) {
+            column << sceneHierarchyDock;
+            widths << PanelMetrics::leftColumnWidth;
+        }
         viewPort->resizeDocks(column, widths, Qt::Horizontal);
     });
+}
+
+// ---------------------------------------------------------------------------
+// THE COLUMN LAW, MEASURED (smoke S1). A constant every page is SUPPOSED to
+// use proves nothing about the page that forgot; this reads the widgets the
+// pages name as their columns (ui/style/columnedpage.h) and reports the width
+// they actually have and the minimum they can actually be dragged to. The
+// editor answers from its own docks — the viewport page is a nested QMainWindow
+// the shell builds itself, not a ColumnedPage.
+MainWindow::ColumnMetrics MainWindow::activeColumns() const
+{
+    ColumnMetrics m;
+    const QWidget *left = nullptr;
+    const QWidget *right = nullptr;
+    if (currentSpace == WindowSpaces::EDITOR) {
+        left = sceneHierarchyDock;
+        right = sceneNodePropertiesDock;
+    } else if (ui && ui->stackedWidget) {
+        if (auto *page = dynamic_cast<ColumnedPage *>(ui->stackedWidget->currentWidget())) {
+            left = page->leftColumn();
+            right = page->rightColumn();
+        }
+    }
+    if (!left && !right) return m;
+    m.valid = true;
+    // The EFFECTIVE minimum: what a user's drag hits. A widget cannot go under
+    // its layout's minimumSizeHint even when nothing called setMinimumWidth, so
+    // the larger of the two is the real floor.
+    auto effectiveMin = [](const QWidget *w) {
+        return qMax(w->minimumWidth(), w->minimumSizeHint().width());
+    };
+    if (left)  { m.leftWidth  = left->width();  m.leftMin  = effectiveMin(left); }
+    if (right) { m.rightWidth = right->width(); m.rightMin = effectiveMin(right); }
+    return m;
+}
+
+// ---------------------------------------------------------------------------
+// THE BOTTOM TRAY'S TABS (smoke S1). One place decides what "the console is
+// showing" means, and both the Ctrl+` chord and the editor.tray verb come
+// through it.
+
+QString MainWindow::trayTab() const
+{
+    if (!bottomTray) return QString();
+    return (consoleTabIndex >= 0 && bottomTray->currentIndex() == consoleTabIndex)
+               ? QStringLiteral("console")
+               : QStringLiteral("assets");
+}
+
+bool MainWindow::isConsoleTabVisible() const
+{
+    return bottomTray && consoleTabIndex >= 0 && bottomTray->isTabVisible(consoleTabIndex);
+}
+
+bool MainWindow::isTrayVisible() const
+{
+    return assetDock && assetDock->isVisible();
+}
+
+bool MainWindow::isConsoleInputFocused() const
+{
+    return scriptConsole && scriptConsole->inputHasFocus();
+}
+
+void MainWindow::setConsoleTabVisible(bool visible, bool focusInput)
+{
+    if (!bottomTray || consoleTabIndex < 0) return;
+    if (visible) {
+        // The tray may be closed (the View menu's Assets toggle) or sitting
+        // behind the Timeline in the bottom area's own tab group. Asking for
+        // the console asks for the widget it lives in.
+        if (assetDock && !assetDock->isVisible()) {
+            trayForcedVisible = true;
+            assetDock->setVisible(true);
+        }
+        if (assetDock) assetDock->raise();
+        bottomTray->setTabVisible(consoleTabIndex, true);
+        bottomTray->setCurrentIndex(consoleTabIndex);
+        if (focusInput && scriptConsole) scriptConsole->focusInput();
+    } else {
+        bottomTray->setCurrentIndex(kAssetsTrayTab);
+        bottomTray->setTabVisible(consoleTabIndex, false);
+        // Put the tray back the way it was found: a console opened over a
+        // closed tray closes the tray with it.
+        if (trayForcedVisible && assetDock) assetDock->setVisible(false);
+        trayForcedVisible = false;
+    }
+}
+
+bool MainWindow::setTrayTab(const QString &tab, bool focusConsoleInput)
+{
+    if (!bottomTray) return false;
+    const QString wanted = tab.trimmed().toLower();
+    if (wanted == QLatin1String("console")) {
+        setConsoleTabVisible(true, focusConsoleInput);
+        return true;
+    }
+    if (wanted == QLatin1String("assets")) {
+        // Selecting Assets does NOT close the console: the tab stays in the bar
+        // (that is what a tab bar is for) — Ctrl+` is what removes it.
+        if (assetDock) assetDock->raise();
+        bottomTray->setCurrentIndex(kAssetsTrayTab);
+        return true;
+    }
+    return false;
+}
+
+void MainWindow::toggleScriptConsole()
+{
+    if (!bottomTray || consoleTabIndex < 0) return;
+    // "Showing" means all three: the tab exists, it is the tab in front, and
+    // the tray is on screen. Anything less and Ctrl+` brings it forward rather
+    // than closing something the user cannot see.
+    const bool showing = isConsoleTabVisible() && isTrayVisible()
+                         && bottomTray->currentIndex() == consoleTabIndex;
+    setConsoleTabVisible(!showing);
 }
 
 void MainWindow::setupViewPort()
@@ -3454,18 +3667,16 @@ void MainWindow::setupShortcuts()
     // ---- file / windows ----
     reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
             [this]() { saveScene(); });
+    // Ctrl+` = the Console TAB of the bottom tray (smoke S1). One function for
+    // the chord and for `editor.tray`, so the verb the suites drive is the code
+    // path the key takes: show the tab, raise the tray, AND put the keyboard in
+    // the input line (Ctrl+` used to open a console that still needed a mouse
+    // click before it would take a character, which also meant the chord rules
+    // the console is the natural place to exercise — Ctrl+A belongs to a
+    // focused text field — could not be reached from the keyboard at all).
     reg.add("console.toggle", "Script Console", "Windows",
-            QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this, [this]() {
-                if (!scriptConsoleDock) return;
-                const bool show = !scriptConsoleDock->isVisible();
-                scriptConsoleDock->setVisible(show);
-                // AND PUT THE KEYBOARD IN IT. Ctrl+` used to open a console
-                // that still needed a mouse click before it would take a
-                // character — which also meant the chord rules the console is
-                // the natural place to exercise (Ctrl+A belongs to a focused
-                // text field) could not be reached from the keyboard at all.
-                if (show && scriptConsole) scriptConsole->focusInput();
-            });
+            QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this,
+            [this]() { toggleScriptConsole(); });
     reg.add("claude.toggle", "Claude Assistant", "Windows",
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,
             [this]() { toggleClaudeChat(); });
@@ -3947,8 +4158,11 @@ void MainWindow::toggleGrid(bool state)
 // visible before (EDITOR_SHORTCUTS_SPEC §3).
 void MainWindow::toggleImmersiveFullscreen()
 {
+    // The script console is a TAB of assetDock now (smoke S1), so hiding the
+    // tray hides it with everything else in the bottom area — it is not a dock
+    // of its own to list here any more.
     QWidget *editorDocks[] = { sceneHierarchyDock, sceneNodePropertiesDock, presetsDock,
-                               assetDock, animationDock, scriptConsoleDock, toolBar };
+                               assetDock, animationDock, toolBar };
     if (!immersiveFullscreen) {
         immersiveFullscreen = true;
         preFullscreenMaximized = isMaximized();
@@ -4051,7 +4265,7 @@ bool MainWindow::beginEngineSelftest(QString &why)
     // The scripted/MCP boot shows this page without switchSpace(), so it needs
     // its own call — a screenshot taken over MCP must show the layout a user
     // gets, not a narrower one.
-    applyRightColumnWidthOnce();
+    applyColumnWidthsOnce();
     return true;
 }
 

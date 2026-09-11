@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "services/apppaths.h"
+#include "ui/style/panelmetrics.h"
 #include "irisgl/core/math/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include "io/ziphelper.h"
@@ -1092,17 +1093,24 @@ void EffectsPage::configureUI()
 	addDockWidget(Qt::LeftDockWidgetArea, materialSettingsDock, Qt::Vertical);
 	addDockWidget(Qt::RightDockWidgetArea, propertyWidget, Qt::Vertical);
 
-	// The right column starts and bottoms out at the left column's width
-	// (assetsDock is 330): the Display preview scales to any width, and the
+	// THE COLUMNS ARE THE EDITOR'S COLUMNS (owner, 2026-09-11, smoke S1): this
+	// page used to carry its own 330 for both sides, so walking from the editor
+	// to Materials moved both edges of the work area. Left = the assets/
+	// settings column, right = Display + Properties, both from
+	// ui/style/panelmetrics.h. The Display preview scales to any width and the
 	// properties panel scrolls (phase-5 owner fix - the dock used to open at
 	// ~750px and refuse to shrink).
-	displayWidget->setMinimumSize(330, 230);
-	resizeDocks({ displayWidget, propertyWidget }, { 330, 330 }, Qt::Horizontal);
+	displayWidget->setMinimumSize(PanelMetrics::rightColumnMinWidth, 230);
+	propertyWidget->setMinimumWidth(PanelMetrics::rightColumnMinWidth);
 	// The dock stays hidden until Studio hands in the engine-rendered preview
 	// (setEnginePreview).
 	displayWidget->hide();
 	displayWidget->toggleViewAction()->setEnabled(false);
-	assetsDock->setMinimumWidth(330);
+	assetsDock->setMinimumWidth(PanelMetrics::leftColumnMinWidth);
+	materialSettingsDock->setMinimumWidth(PanelMetrics::leftColumnMinWidth);
+	// The opening widths are applied on the first SHOW (showEvent): a dock is
+	// re-laid-out from its widget's sizeHint when it becomes visible, so a
+	// resizeDocks from here is undone before anyone sees it.
 
 	propertyWidget->setWidget(nodePropertiesPanel);
 	nodePropertiesPanel->setMinimumHeight(400);
@@ -1518,6 +1526,44 @@ int EffectsPage::graphUndoCount() const { return stack ? stack->index() : 0; }
 int EffectsPage::graphRedoCount() const
 {
 	return stack ? stack->count() - stack->index() : 0;
+}
+
+void EffectsPage::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+    if (mColumnsSized) return;
+    mColumnsSized = true;
+    applyColumnWidths();
+    // AND AGAIN once this show's layout pass has run: a dock that has just
+    // become visible is re-laid-out from its widget's sizeHint, which undoes a
+    // resize done inside the show itself.
+    QTimer::singleShot(0, this, [this]() { applyColumnWidths(); });
+}
+
+void EffectsPage::applyColumnWidths()
+{
+    // THE ONE WIDTH LAW (ui/style/panelmetrics.h), one resizeDocks per area:
+    // a single call naming docks from two areas resolves against one of them
+    // and leaves the other at its minimum.
+    resizeDocks({ displayWidget, propertyWidget },
+                { PanelMetrics::rightColumnWidth, PanelMetrics::rightColumnWidth },
+                Qt::Horizontal);
+    resizeDocks({ assetsDock, materialSettingsDock },
+                { PanelMetrics::leftColumnWidth, PanelMetrics::leftColumnWidth },
+                Qt::Horizontal);
+}
+
+QWidget *EffectsPage::leftColumn() const
+{
+    return assetsDock;
+}
+
+QWidget *EffectsPage::rightColumn() const
+{
+    // Display sits ABOVE Properties in the right column and is hidden until the
+    // shell hands in the engine preview, so the column's width is Properties'
+    // width — the widget that is always there.
+    return propertyWidget;
 }
 
 void EffectsPage::setSceneOpenProbe(std::function<bool()> probe)

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 
 #include "shell/mainwindow.h"
+#include "ui/style/panelmetrics.h"
 #include "ui/pages/projectmanager.h"
 #include "scripting/apiregistry.h"
 #include "services/engineerrorpump.h"
@@ -46,6 +47,16 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Window },
         { "space", "app.space(name) -> bool",
           "Switches the main window space: desktop, player, editor, materials, assets, publish, avatar. player and editor need an open project.",
+          Needs::Window },
+        { "columns", "app.columns() -> {space, left:{width, min}, right:{width, min}, "
+                     "metrics:{leftWidth, leftMin, rightWidth, rightMin}}",
+          "THE ACTIVE PAGE'S COLUMNS, measured. Every page's left and right columns are sized "
+          "from ONE set of constants (src/ui/style/panelmetrics.h — the editor's widths, owner "
+          "2026-09-11: \"all right columns (Materials, Avatars, Assets) and left columns unify "
+          "on the Editor's widths\"); this reports the width each column actually has on screen "
+          "and the minimum it can actually be dragged to, so the law can be asserted per page "
+          "instead of trusted. `metrics` is what PanelMetrics says those numbers should be. A "
+          "space with no columns (desktop, player) answers {space} alone.",
           Needs::Window },
         { "openTimings", "app.openTimings() -> [{stage, ms, items?, label?}]",
           "The millisecond ledger of the most recent scene open (services/loadtimeline.h): one entry per stage, "
@@ -631,6 +642,51 @@ QVariant AppApi::lastError()
 {
     if (host.lastError.isEmpty()) return jsNull();
     return host.lastError;
+}
+
+QVariantMap AppApi::columns()
+{
+    QVariantMap out;
+    if (!host.mainWindow) {
+        fail("app.columns: this verb needs the editor window (a --script/--headless run has no "
+             "pages)");
+        return out;
+    }
+    QString space;
+    switch (host.mainWindow->getWindowSpace()) {
+    case WindowSpaces::DESKTOP: space = QStringLiteral("desktop"); break;
+    case WindowSpaces::EDITOR:  space = QStringLiteral("editor"); break;
+    case WindowSpaces::PLAYER:  space = QStringLiteral("player"); break;
+    case WindowSpaces::EFFECT:  space = QStringLiteral("materials"); break;
+    case WindowSpaces::ASSETS:  space = QStringLiteral("assets"); break;
+    case WindowSpaces::PUBLISH: space = QStringLiteral("publish"); break;
+    case WindowSpaces::AVATAR:  space = QStringLiteral("avatar"); break;
+    default:                    space = QStringLiteral("unknown"); break;
+    }
+    out.insert("space", space);
+    // What the law SAYS, beside what the page DID — a caller comparing the two
+    // does not have to carry a copy of the constants.
+    QVariantMap metrics;
+    metrics.insert("leftWidth", PanelMetrics::leftColumnWidth);
+    metrics.insert("leftMin", PanelMetrics::leftColumnMinWidth);
+    metrics.insert("rightWidth", PanelMetrics::rightColumnWidth);
+    metrics.insert("rightMin", PanelMetrics::rightColumnMinWidth);
+    out.insert("metrics", metrics);
+    const MainWindow::ColumnMetrics m = host.mainWindow->activeColumns();
+    if (!m.valid) return out;
+    if (m.leftWidth > 0 || m.leftMin > 0) {
+        QVariantMap left;
+        left.insert("width", m.leftWidth);
+        left.insert("min", m.leftMin);
+        out.insert("left", left);
+    }
+    if (m.rightWidth > 0 || m.rightMin > 0) {
+        QVariantMap right;
+        right.insert("width", m.rightWidth);
+        right.insert("min", m.rightMin);
+        out.insert("right", right);
+    }
+    return out;
 }
 
 QVariantMap AppApi::window()

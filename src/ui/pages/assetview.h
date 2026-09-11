@@ -14,6 +14,8 @@ For more information see the LICENSE file
 
 #include <QWidget>
 
+#include "ui/style/columnedpage.h"
+
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/core/irisutils.h"
 #include "services/import/importtypes.h"
@@ -84,9 +86,15 @@ typedef struct directory_tuple
     QString parent_guid;
 };
 
-class AssetView : public QWidget
+class AssetView : public QWidget, public ColumnedPage
 {
 	Q_OBJECT
+
+public:
+	/// ColumnedPage (ui/style/columnedpage.h): the drawers tree on the left,
+	/// the metadata pane on the right — both sized from PanelMetrics.
+	QWidget *leftColumn() const override { return _navPane; }
+	QWidget *rightColumn() const override { return _metadataPane; }
 
 signals:
 	/// A store asset was pinned into the open project (button, Shift+click

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "modules/avatar/avatarpage.h"
+#include "ui/style/panelmetrics.h"
 
 #include <QAction>
 #include <QApplication>
@@ -48,14 +49,27 @@ const int kScrubSteps = 1000;
 AvatarPage::AvatarPage(AvatarPreviewModel *model, QWidget *parent)
     : QWidget(parent), mModel(model)
 {
+    // THE COLUMNS ARE THE EDITOR'S COLUMNS (owner, 2026-09-11, smoke S1). This
+    // page opened at 220/800/280 of its own invention; both side columns now
+    // come from ui/style/panelmetrics.h, the same numbers the editor shell and
+    // every other page use, so the work area keeps its edges across a page
+    // switch.
+    auto *left = buildLeftColumn();
+    auto *centre = buildCentreColumn();
+    auto *right = buildRightColumn();
+    left->setMinimumWidth(PanelMetrics::leftColumnMinWidth);
+    right->setMinimumWidth(PanelMetrics::rightColumnMinWidth);
+    mLeftColumn = left;
+    mRightColumn = right;
+
     auto *splitter = new QSplitter(Qt::Horizontal, this);
-    splitter->addWidget(buildLeftColumn());
-    splitter->addWidget(buildCentreColumn());
-    splitter->addWidget(buildRightColumn());
+    splitter->addWidget(left);
+    splitter->addWidget(centre);
+    splitter->addWidget(right);
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
     splitter->setStretchFactor(2, 0);
-    splitter->setSizes({ 220, 800, 280 });
+    splitter->setSizes({ PanelMetrics::leftColumnWidth, 800, PanelMetrics::rightColumnWidth });
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);

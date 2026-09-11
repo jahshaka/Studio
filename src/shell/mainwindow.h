@@ -274,6 +274,49 @@ public:
     /// owns the widget, the verbs own the capability (SCRIPTING_SPEC §2.3).
     AssetView *assetsPage() const { return _assetView; }
 
+    // ---- the editor's BOTTOM TRAY (smoke S1, owner 2026-09-11) -------------
+    // One widget along the bottom of the editor with TABS at its top: "Assets"
+    // (the asset browser that was always there) and "Console" (the script
+    // console, which used to be a bottom dock of its own and split the area).
+    // Ctrl+` and the `editor.tray` / `editor.trayState` verbs go through these
+    // — the key and the verb are the same code path, which is what lets a
+    // suite assert what the key did.
+
+    /// Which tab the tray is showing: "assets" or "console". Empty with no tray
+    /// (a --headless run has no window at all).
+    QString trayTab() const;
+    /// Shows a tab by name ("assets" | "console"). Naming the console shows the
+    /// tab if it was hidden, raises the tray and (focusConsoleInput) puts the
+    /// keyboard in the console's input line. False for an unknown name.
+    bool setTrayTab(const QString &tab, bool focusConsoleInput = true);
+    /// Whether the Console tab is in the tab bar at all.
+    bool isConsoleTabVisible() const;
+    /// Adds/removes the Console tab. Showing it selects it; hiding it returns
+    /// the tray to Assets.
+    void setConsoleTabVisible(bool visible, bool focusInput = true);
+    /// Whether the console's INPUT line has the keyboard right now — the half
+    /// of Ctrl+` that a console you still have to click does not deliver.
+    bool isConsoleInputFocused() const;
+    /// Whether the tray widget itself is on screen (the View menu can hide it).
+    bool isTrayVisible() const;
+    /// Ctrl+` : show + focus the Console tab, or hide it when it is already the
+    /// tab in front. The ShortcutRegistry entry calls exactly this.
+    void toggleScriptConsole();
+
+    /// THE ACTIVE PAGE'S COLUMNS (smoke S1). Every page's left and right
+    /// columns are sized from ui/style/panelmetrics.h; this reports what they
+    /// actually came out as, per page, so `app.columns` can gate the law
+    /// instead of trusting each page to have used the constant. `valid` is
+    /// false for a space that has no columns (Desktop, Player).
+    struct ColumnMetrics {
+        bool valid = false;
+        int leftWidth = 0;      ///< 0 when the page has no left column
+        int leftMin = 0;
+        int rightWidth = 0;     ///< 0 when the page has no right column
+        int rightMin = 0;
+    };
+    ColumnMetrics activeColumns() const;
+
     /// Orderly teardown of every background worker the window owns (import
     /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
     /// at most once; called from closeEvent and wired to aboutToQuit so the
@@ -751,19 +794,32 @@ private:
     SceneNodePropertiesWidget *sceneNodePropertiesWidget;
 
     QDockWidget *presetsDock;
-    /// Gives the Properties dock the right column's width, once per session
-    /// (ui/style/panelmetrics.h). Called from both ways the editor page opens.
-    void applyRightColumnWidthOnce();
+    /// Gives the editor's two COLUMNS their default widths, once per session
+    /// (ui/style/panelmetrics.h): the Properties/Presets column on the right
+    /// and the Hierarchy column on the left, which every other page copies.
+    /// Called from both ways the editor page opens.
+    void applyColumnWidthsOnce();
     /// Whether that has happened — after it has, a user's drag wins.
-    bool rightColumnSized = false;
+    bool columnsSized = false;
     /// True when the nested `viewPort` QMainWindow's dock layout came back from
     /// settings — the once-per-session default column width then stands down
     /// (shell/dockstate.h).
     bool restoredViewportDocks = false;
     QTabWidget *presetsTabWidget;
 
+    /// The bottom tray's dock. Its widget is `bottomTray`, whose first tab is
+    /// the asset browser and whose second is the script console.
     QDockWidget *assetDock;
     AssetWidget *assetWidget;
+    QTabWidget *bottomTray = nullptr;
+    /// The console's tab index in `bottomTray`, or -1 before the console is
+    /// built. The tab is always PRESENT and merely hidden (setTabVisible), so
+    /// the console widget keeps one parent for the window's whole life.
+    int consoleTabIndex = -1;
+    /// True when showing the console had to un-hide the tray dock — hiding the
+    /// console again puts the tray back the way the user left it.
+    bool trayForcedVisible = false;
+    static constexpr int kAssetsTrayTab = 0;
 
     QDockWidget *animationDock;
     AnimationWidget *animationWidget;
@@ -871,7 +927,6 @@ private:
     // scripting (SCRIPTING_SPEC §2): the host struct must outlive the engine
     struct ScriptHost *scriptHost = nullptr;
     class ScriptEngine *scriptEngine = nullptr;
-    QDockWidget *scriptConsoleDock = nullptr;
     class ScriptConsole *scriptConsole = nullptr;
     class McpServer *mcpServer = nullptr;
     class ClaudeChatHost *claudeChatHost = nullptr;

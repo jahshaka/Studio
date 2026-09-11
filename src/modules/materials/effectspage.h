@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+
+#include "ui/style/columnedpage.h"
 #include <QListWidget>
 #include <QVariantMap>
 #include <QMainWindow>
@@ -53,11 +55,27 @@ struct nodeListModel {
 
 };
 
-class EffectsPage : public QMainWindow
+class EffectsPage : public QMainWindow, public ColumnedPage
 {
     Q_OBJECT
 
 public:
+    /// ColumnedPage (ui/style/columnedpage.h): the assets/settings docks are
+    /// the left column, the Display/Properties docks the right one. Both are
+    /// sized from PanelMetrics, like every other page's.
+    QWidget *leftColumn() const override;
+    QWidget *rightColumn() const override;
+
+protected:
+    /// The page's columns get their widths the FIRST time it is shown, not in
+    /// the constructor: a dock is re-laid-out from its widget's sizeHint when it
+    /// becomes visible, so a resizeDocks from the ctor is simply undone (the
+    /// same trap the editor shell documents in applyColumnWidthsOnce). Measured
+    /// on the rig 2026-09-11 — both columns opened at their minimums.
+    void showEvent(QShowEvent *event) override;
+
+public:
+
     explicit EffectsPage( QWidget *parent = Q_NULLPTR, Database *database = Q_NULLPTR);
     void setNodeGraph(NodeGraph* graph);
     void newNodeGraph(QString *shaderName = Q_NULLPTR, int *templateType = Q_NULLPTR, QString *templateName = Q_NULLPTR);
@@ -243,6 +261,10 @@ private:
 	QWidget *centralWidget;
 	QDockWidget* displayWidget;
 	MaterialSettingsWidget *materialSettingsWidget;
+
+	/// Applies the PanelMetrics column widths; run once, from showEvent.
+	void applyColumnWidths();
+	bool mColumnsSized = false;
 
 	QDockWidget *propertyWidget;
 	QDockWidget *materialSettingsDock;
