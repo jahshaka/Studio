@@ -133,7 +133,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     spacer = new QLabel("");
     spacer->setMaximumWidth(10);
     spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    spacer->setStyleSheet("background: transparent; color: white");
+    spacer->setStyleSheet(StyleSheet::ItemGridTileSpacer());
 
     editButton = new QPushButton();
     editButton->setObjectName("editButton");
@@ -234,7 +234,6 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     setCursor(Qt::PointingHandCursor);
     setContextMenuPolicy(Qt::CustomContextMenu);
 
-//    setStyleSheet("border: 1px solid red");
 
     connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
 }
@@ -296,8 +295,10 @@ void ItemGridWidget::updateLabel(QString text)
 
 void ItemGridWidget::applyCaptionBarStyle()
 {
-    // (make things bigger at lower resolutions, as before)
-    const int captionFontSize = devicePixelRatio() > 1 ? 12 : 15;
+    // Pixels are device-independent in Qt; the old "smaller on a HiDPI
+    // screen" branch compensated for a scaling that does not happen (platform
+    // audit F-S4) — one size everywhere.
+    const int captionFontSize = 15;
     gridTextLabel->setStyleSheet(
         ThemeManager::tileCaptionBarSheet(captionFontSize, kTileCornerRadius, isOpenProject));
 }
@@ -306,7 +307,7 @@ void ItemGridWidget::setOpenProject(bool open)
 {
     isOpenProject = open;
 
-    const int borderWidth = devicePixelRatio() > 1 ? 3 : 5;
+    const int borderWidth = 5;   // device-independent (F-S4, see applyCaptionBarStyle)
     gridImageLabel->setStyleSheet(open ? StyleSheet::ItemGridTileBorderHighlight(borderWidth)
                                        : StyleSheet::ItemGridTileBorder(borderWidth));
     gridTextLabel->setText(open ? tileData.name + " [ Open ]" : tileData.name);
@@ -523,7 +524,7 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
 
     // Desktops: re-file this project onto another desktop (current one disabled)
     QMenu *moveMenu = menu.addMenu("Move to");
-    moveMenu->setStyleSheet(menu.styleSheet());
+    moveMenu->setStyleSheet(StyleSheet::QMenuDarkGrid());
     for (int i = 1; i <= 4; ++i) {
         QAction *moveAction = moveMenu->addAction(QString("Desktop %1").arg(i));
         moveAction->setEnabled(i != currentDesktop);
@@ -536,7 +537,7 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     // filmstrip row (current row disabled). Only offered in slider mode.
     if (sliderRowCount > 0) {
         QMenu *rowMenu = menu.addMenu("Move to row");
-        rowMenu->setStyleSheet(menu.styleSheet());
+        rowMenu->setStyleSheet(StyleSheet::QMenuDarkGrid());
         for (int r = 0; r < sliderRowCount; ++r) {
             QAction *rowAction = rowMenu->addAction(QString("Row %1").arg(r + 1));
             rowAction->setEnabled(!(hasSliderPos && r == sliderRow));

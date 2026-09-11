@@ -13,40 +13,6 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">#createProject {
-	background: #4898ff;
-	color: white;
-}
-
-#createProject:hover {
-	background-color: #51a1d6;
-}
-
-
-QLabel {
-	margin-right: 12px;
-}
-
-QPushButton, QToolButton {
-	border: 0;
-	padding: 5px;
-	background: #444;
-}
-
-QPushButton::hover {
-	background: #555;
-}
-
-QToolButton::hover {
-	background: #555;
-}
-
-QLineEdit {
-	background: #404040;
-	padding: 5px;
-}</string>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
     <number>0</number>
@@ -65,10 +31,6 @@ QLineEdit {
    </property>
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
-     <property name="styleSheet">
-      <string notr="true">background:rgba(20,20,20,1);
-color:rgba(255,255,255,.95);</string>
-     </property>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
        <widget class="QLabel" name="label">
@@ -79,9 +41,6 @@ color:rgba(255,255,255,.95);</string>
       </item>
       <item>
        <widget class="QTextEdit" name="textEdit">
-        <property name="styleSheet">
-         <string notr="true">background:rgba(35,35,35,1);</string>
-        </property>
         <property name="readOnly">
          <bool>true</bool>
         </property>
@@ -127,18 +86,6 @@ color:rgba(255,255,255,.95);</string>
          </item>
          <item>
           <widget class="QPushButton" name="close">
-           <property name="styleSheet">
-            <string notr="true">QPushButton{
-	padding: 5px 15px;
-background:rgba(50,50,50,1);
-border: 1px solid rgba(0,0,0,.1);
-}
-
-QPushButton:hover{
-	background: rgba(40,128, 185,.9);
-
-}</string>
-           </property>
            <property name="text">
             <string>Close</string>
            </property>
@@ -146,18 +93,6 @@ QPushButton:hover{
          </item>
          <item>
           <widget class="QPushButton" name="download">
-           <property name="styleSheet">
-            <string notr="true">QPushButton{
-	padding: 5px 15px;
-background:rgba(50,50,50,1);
-border: 1px solid rgba(0,0,0,.1);
-}
-
-QPushButton:hover{
-	background: rgba(40,128, 185,.9);
-
-}</string>
-           </property>
            <property name="text">
             <string>Download</string>
            </property>

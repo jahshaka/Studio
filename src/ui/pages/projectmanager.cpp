@@ -64,28 +64,24 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include "services/projectassets.h"
 #include "services/loadtimeline.h"
-#include "ui/dialogs/customdialog.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
+#include "ui/style/themeroles.h"
 
 ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *parent)
     : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
-
+    // The desktop page's skin: Classic's archived .ui root sheet (flat #444
+    // square buttons, combo/lineedit/QMessageBox rules) — nothing under
+    // Qlementine, where the style owns the page. The deliberate accents are the
+    // theme's: New Scene keeps the primary blue, and every footer button uses
+    // the one chrome spec shared with the editor toolbar (owner direction) —
+    // same padding, same rounded corners. (The ThemeManager sheets are "" under
+    // Classic.)
+    setStyleSheet(StyleSheet::ProjectManagerRoot());
     if (!ThemeManager::classicActive()) {
-        // The .ui root stylesheet is the classic desktop-page skin (flat #444
-        // square buttons, combo/lineedit/QMessageBox rules). Under Qlementine
-        // it fights the theme — buttons render square and flat instead of the
-        // themed rounded look — so drop it and let the style own the page.
-        // The deliberate accents survive below (New Scene keeps the primary
-        // blue). Classic keeps the sheet bit-for-bit.
-        setStyleSheet(QString());
         ui->newProject->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
-        // one footer button spec (owner direction): every grey button matches
-        // the blue New Scene geometry exactly — same padding, same rounded
-        // corners, grey — regardless of what ancestor sheets interpose. The
-        // spec is shared with the editor toolbar (ThemeManager).
         for (QPushButton *btn : { ui->importWorld, ui->downloadWorlds,
                                   ui->tileSizeBtn, ui->desktopSwitcher,
                                   ui->layoutToggle, ui->browseProjects })
@@ -722,10 +718,11 @@ QListWidget *ProjectManager::buildSampleList(const QMap<QString, QString> &entri
     QListWidget *sampleList = new QListWidget();
     sampleList->setAttribute(Qt::WA_MacShowFocusRect, false);
     sampleList->setObjectName("sampleList");
-    sampleList->setStyleSheet(
-        "QListWidget { background: transparent; border: none; }"
-        "QListWidget::item { background: black; color: white; }"
-        "QListWidget::item:selected { background: #3498db; color: white; }");
+    // The desktop tiles' look — names on a black band — in BOTH themes: a
+    // theme-owned sheet, like the desktop tile's caption bar. (Tried native
+    // under Qlementine during the sweep: its icon-mode items drop the name
+    // captions entirely.)
+    sampleList->setStyleSheet(ThemeManager::sampleTileListSheet());
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSpacing(4);
     sampleList->setResizeMode(QListWidget::Adjust);

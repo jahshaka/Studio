@@ -15,11 +15,18 @@ For more information see the LICENSE file
 #include <QDesktopServices>
 #include "data/settingsmanager.h"
 #include <QProcess>
+#include "ui/style/stylesheet.h"
 
 
 SoftwareUpdateDialog::SoftwareUpdateDialog(QWidget *parent) : QDialog(parent), ui(new Ui::SoftwareUpdateDialog)
 {
 	ui->setupUi(this); 
+	// softwareupdatedialog.ui used to embed these (classic-only now; theme sweep)
+	setStyleSheet(StyleSheet::SoftwareUpdateDialogRoot());
+	ui->widget->setStyleSheet(StyleSheet::SoftwareUpdateDialogWidget());
+	ui->textEdit->setStyleSheet(StyleSheet::SoftwareUpdateDialogTextEdit());
+	ui->close->setStyleSheet(StyleSheet::SoftwareUpdateDialogClose());
+	ui->download->setStyleSheet(StyleSheet::SoftwareUpdateDialogDownload());
 	setWindowTitle("Software Update");
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 

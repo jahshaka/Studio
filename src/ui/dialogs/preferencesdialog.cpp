@@ -27,6 +27,8 @@ PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, Settings
     ui(new Ui::PreferencesDialog)
 {
     ui->setupUi(this);
+    // preferencesdialog.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::PreferencesDialogRoot());
 
 	this->setWindowFlags(Qt::FramelessWindowHint);
 	setWindowModality(Qt::ApplicationModal);

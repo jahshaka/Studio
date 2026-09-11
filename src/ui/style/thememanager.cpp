@@ -464,6 +464,34 @@ void ThemeManager::applyTopMenuButton(QPushButton *button, TopMenuState state)
     button->setStyleSheet(topMenuButtonSheet(state));
 }
 
+QString ThemeManager::sampleTileListSheet()
+{
+    return themeSheet(QStringLiteral(
+        "QListWidget { background: transparent; border: none; }"
+        "QListWidget::item { background: black; color: white; }"
+        "QListWidget::item:selected { background: #3498db; color: white; }"));
+}
+
+QString ThemeManager::accentGlyphButtonSheet()
+{
+    // Verbatim the sheet the Assets page's "+" carried in both themes before
+    // the sweep (Classic keeps it bit-for-bit through here).
+    return themeSheet(QStringLiteral(
+        "QPushButton { background: #3498db; color: #FFFFFF; border-radius: 2px;"
+        "              padding: 0; margin: 0; font-size: 16px; font-weight: bold; }"
+        "QPushButton:hover { background: #4EA8E5; }"));
+}
+
+QString ThemeManager::dropZoneSheet(const QString &paneName, const QString &labelName)
+{
+    if (s_classicActive) return QString();
+    return themeSheet(QStringLiteral(
+               "#%1 { border: 2px dashed #4a4a4a; border-radius: 6px; }"
+               // the caption gives the target its height — a real target, not a strip
+               "#%2 { padding: 24px 8px; }")
+        .arg(paneName, labelName));
+}
+
 void ThemeManager::applyWindowFont(QWidget *window)
 {
     if (!s_classicActive || !window) return;

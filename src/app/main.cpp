@@ -42,7 +42,6 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "app/cli/scriptrunner.h"
 #include "app/cli/selftestrunner.h"
-#include "ui/dialogs/infodialog.h"
 #include "scripting/scriptengine.h"
 #include "data/constants.h"
 #include "app/updatechecker.h"

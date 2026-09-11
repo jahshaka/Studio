@@ -202,6 +202,74 @@ public:
 	// presets panels (assetmodelpanel.cpp, assetmaterialpanel.cpp)
 	static const QString PresetsListPanel();
 	static const QString PresetsContextMenu();
+
+	// assets page (assetview.cpp)
+	static const QString AssetViewMutedLabel();
+	static const QString AssetViewPreviewTitle();
+	static const QString AssetViewEmptyPreview();
+	static const QString AssetViewEmptyPreviewLabel();
+	static const QString AssetViewLocalAssetsLabel();
+	static const QString AssetViewNavPane();
+	static const QString AssetViewEmptyLibraryLabel();
+	static const QString AssetViewPaneBorderless();
+	static const QString AssetViewTailStatus();
+	static const QString AssetViewPaneBackground();
+	static const QString AssetViewUpdateButton();
+	static const QString AssetViewNothingSelected();
+	static const QString AssetViewStoreOfflineBanner();
+
+	// asset grid tiles (assetgriditem.cpp)
+	static const QString AssetGridTile();
+	static const QString AssetGridLoadingOverlay();
+	static const QString AssetGridLoadingOverlayAccent();
+
+	// video preview (videopreviewwidget.cpp)
+	static const QString VideoPreviewTitle();
+
+	// desktop tiles (itemgridwidget.cpp)
+	static const QString ItemGridTileSpacer();
+
+	// toast (toast.cpp)
+	static const QString ToastPanel();
+
+	// desktop page (projectmanager.ui, projectmanager.cpp)
+	static const QString ProjectManagerRoot();
+
+	// about dialog (aboutdialog.ui)
+	static const QString AboutDialogRoot();
+	static const QString AboutDialogTextBrowser();
+
+	// donate dialog (donate.ui)
+	static const QString DonateDialogRoot();
+	static const QString DonateDialogBackground();
+	static const QString DonateDialogCtrl();
+
+	// progress dialog (progressdialog.ui)
+	static const QString ProgressDialogRoot();
+	static const QString ProgressDialogStageLabel();
+
+	// rename project dialog (renameprojectdialog.ui)
+	static const QString RenameProjectDialogRoot();
+
+	// screenshot dialog (screenshotwidget.ui)
+	static const QString ScreenshotDialogRoot();
+
+	// software update dialog (softwareupdatedialog.ui)
+	static const QString SoftwareUpdateDialogRoot();
+	static const QString SoftwareUpdateDialogWidget();
+	static const QString SoftwareUpdateDialogTextEdit();
+	static const QString SoftwareUpdateDialogClose();
+	static const QString SoftwareUpdateDialogDownload();
+
+	// preferences dialog (preferencesdialog.ui)
+	static const QString PreferencesDialogRoot();
+
+	// splash (versionsplashscreen.cpp)
+	static const QString SplashVersionLabel();
+	static const QString SplashShaderLabel();
+
+	// upgrader (upgrader.cpp)
+	static const QString UpgraderDialog();
 //@@CLASSIC-DECLS@@
 };
 

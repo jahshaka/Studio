@@ -102,7 +102,10 @@ set_tests_properties(ui.property_anim PROPERTIES
 # played, playing still decodes the fixture, stop()-before-play is safe.
 find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 add_executable(test_media_lazy test_media_lazy.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/videopreviewwidget.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/videopreviewwidget.cpp
+    # the widget's Classic sheet lives in the theme archive (theme sweep)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
 set_target_properties(test_media_lazy PROPERTIES
     AUTOMOC ON
     CXX_STANDARD 17
@@ -682,7 +685,10 @@ set_tests_properties(ui.project_tile PROPERTIES
 # test is deliberately NOT at the screen's origin, which is the only place the
 # old "move a global point as a local one" arrangement looked right.
 add_executable(test_toast test_toast.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/toast.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/toast.cpp
+    # the widget's Classic sheet lives in the theme archive (theme sweep)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
 set_target_properties(test_toast PROPERTIES
     AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

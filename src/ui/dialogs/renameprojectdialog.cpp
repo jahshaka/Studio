@@ -11,10 +11,13 @@ For more information see the LICENSE file
 
 #include "ui/dialogs/renameprojectdialog.h"
 #include "ui_renameprojectdialog.h"
+#include "ui/style/stylesheet.h"
 
 RenameProjectDialog::RenameProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::RenameProjectDialog)
 {
     ui->setupUi(this);
+    // renameprojectdialog.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::RenameProjectDialogRoot());
     setWindowTitle("Rename Project");
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 

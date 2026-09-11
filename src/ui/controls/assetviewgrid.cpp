@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "ui/controls/assetviewgrid.h"
 #include "ui/controls/assetgriditem.h"
 #include "ui/pages/assetview.h"
+#include "ui/style/stylesheet.h"
 
 AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	this->parent = parent;
@@ -32,7 +33,7 @@ AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	// Frameless in both themes — the border:0 sheet alone doesn't stop
 	// Qlementine drawing the default QFrame around the scroll area.
 	setFrameShape(QFrame::NoFrame);
-    setStyleSheet("background: #202020; border: 0");
+    setStyleSheet(StyleSheet::AssetViewPaneBorderless());
 
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 }

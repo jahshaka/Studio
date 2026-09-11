@@ -25,35 +25,6 @@
   <property name="windowTitle">
    <string>Donate</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">#Donate {
-	border: 0 px solid black;
-}
-
-* {
-	color: #EEE;
-}
-
-
-QCheckBox {
-    spacing: 5px;
-	font-size: 12px;
-}
-
-QCheckBox::indicator {
-    width: 20px;
-    height: 20px;
-}
-
-QCheckBox::indicator::unchecked {
-	image: url(:/icons/check-unchecked.png);
-}
-
-QCheckBox::indicator::checked {	
-	image: url(:/icons/check-checked.png);
-}
-</string>
-  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
     <number>0</number>
@@ -83,12 +54,6 @@ QCheckBox::indicator::checked {
        <width>815</width>
        <height>480</height>
       </size>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">#widget_background{
- border-image: url(:/images/splashv3.png);
-border: 0px;
-}</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <property name="spacing">
@@ -172,25 +137,6 @@ border: 0px;
    </item>
    <item>
     <widget class="QWidget" name="ctrl" native="true">
-     <property name="styleSheet">
-      <string notr="true">#ctrl {
-	background: #111;
-}
-
-QPushButton, QToolButton {
-	border: 0;
-	padding: 6px 24px;
-	background: #444;
-}
-
-QPushButton::hover {
-	background: #555;
-}
-
-QToolButton::hover {
-	background: #555;
-}</string>
-     </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="leftMargin">
        <number>4</number>

@@ -34,10 +34,13 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QColor>
+#include <QEvent>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontInfo>
+#include <QFrame>
 #include <QPalette>
+#include <QPixmap>
 #include <QPushButton>
 #include <QToolButton>
 #include <QWidget>
@@ -93,7 +96,8 @@ enum class Surface {
     Raised,     // backgroundColorMain2      #262626 (the palette's Window)
     Band,       // neutralColor              #3a3a3a (the palette's Button) — section headers
     Warning,    // a warning banner's amber  #7a4a12 (pairs with Tone::Normal text)
-    Black       // video / render letterbox  #000000
+    Black,      // video / render letterbox  #000000
+    Scrim       // a 55% black veil over content (a tile's loading overlay)
 };
 
 inline QColor surfaceColor(Surface surface)
@@ -106,6 +110,7 @@ inline QColor surfaceColor(Surface surface)
     case Surface::Band:      return QApplication::palette().color(QPalette::Active, QPalette::Button);
     case Surface::Warning:   return QColor(0x7a, 0x4a, 0x12);
     case Surface::Black:     return QColor(0x00, 0x00, 0x00);
+    case Surface::Scrim:     return QColor(0, 0, 0, 140);
     }
     return QColor(0x1e, 0x1e, 0x1e);
 }
@@ -120,6 +125,57 @@ inline void setSurface(QWidget *w, Surface surface)
     w->setAutoFillBackground(true);
 }
 
+/// No background of its own: the parent shows through (a scroll area's
+/// viewport otherwise fills with the palette's Base).
+inline void clearBackground(QWidget *w)
+{
+    if (!w || StyleSheet::classicThemeActive()) return;
+    w->setAutoFillBackground(false);
+}
+
+/// A frame shape the style draws (Qlementine: NoFrame, or its rounded
+/// StyledPanel) — where Classic set `border:` in a sheet.
+inline void setFrame(QFrame *frame, QFrame::Shape shape)
+{
+    if (!frame || StyleSheet::classicThemeActive()) return;
+    frame->setFrameShape(shape);
+}
+
+namespace detail {
+// Re-stretches a container's background picture whenever the container is
+// resized (its size at construction is rarely its final size).
+class BackgroundPixmapFilter : public QObject
+{
+public:
+    BackgroundPixmapFilter(QWidget *w, const QPixmap &pixmap) : QObject(w), mPixmap(pixmap) { apply(w); }
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (event->type() == QEvent::Resize) apply(static_cast<QWidget *>(watched));
+        return false;
+    }
+
+private:
+    void apply(QWidget *w)
+    {
+        if (w->width() <= 0 || w->height() <= 0) return;
+        QPalette pal = w->palette();
+        pal.setBrush(QPalette::Window,
+                     QBrush(mPixmap.scaled(w->size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)));
+        w->setPalette(pal);
+    }
+    QPixmap mPixmap;
+};
+} // namespace detail
+
+/// A picture as a container's background, stretched to the container's size
+/// and re-stretched on every resize (Classic's `border-image:` — a dialog's art).
+inline void setBackgroundPixmap(QWidget *w, const QPixmap &pixmap)
+{
+    if (!w || pixmap.isNull() || StyleSheet::classicThemeActive()) return;
+    w->setAutoFillBackground(true);
+    w->installEventFilter(new detail::BackgroundPixmapFilter(w, pixmap));
+}
+
 /// A text size in PIXELS, keeping the theme's family (the theme owns
 /// typography; a page only says "bigger" or "bolder").
 inline void setTextSize(QWidget *w, int pixelSize, QFont::Weight weight = QFont::Normal)
@@ -129,6 +185,15 @@ inline void setTextSize(QWidget *w, int pixelSize, QFont::Weight weight = QFont:
     f.setPixelSize(pixelSize);
     f.setWeight(weight);
     w->setFont(f);
+}
+
+/// Breathing room around a label's text — what a Classic sheet said with
+/// `padding:` (a sheet's padding and contents margins would add up under
+/// Classic, so this, too, is Qlementine-only).
+inline void setPadding(QWidget *w, int left, int top, int right, int bottom)
+{
+    if (!w || StyleSheet::classicThemeActive()) return;
+    w->setContentsMargins(left, top, right, bottom);
 }
 
 /// A monospace face at a pixel size: the theme's bundled Roboto Mono when it

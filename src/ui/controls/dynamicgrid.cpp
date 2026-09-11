@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "ui/pages/projectmanager.h"
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 {
@@ -35,7 +37,10 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     gridWidget = new QWidget(this);
     gridWidget->setObjectName("gridWidget");
     setWidget(gridWidget);
-    setStyleSheet("background: transparent");
+    setStyleSheet(StyleSheet::BackgroundTransparent());
+    // Qlementine: the desktop shows through the grid, no frame around it
+    ThemeRoles::setFrame(this, QFrame::NoFrame);
+    ThemeRoles::clearBackground(viewport());
 
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
@@ -56,7 +61,6 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     // both arrive on the canvas (tiles swallow their own presses first)
     gridWidget->installEventFilter(this);
 
-//    setStyleSheet("border: 1px solid yellow");
 }
 
 void DynamicGrid::addToGridView(ProjectTileData tileData, int count, bool highlight)

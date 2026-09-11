@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include <QEvent>
 #include <QScreen>
 #include <QTimer>
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 namespace {
 /// How long a toast stays up when the caller does not say.
@@ -41,11 +43,12 @@ Toast::Toast(QWidget *parent) : QFrame(parent)
 		Qt::WindowStaysOnTopHint		  // Always on top
 	);
 
-	setStyleSheet(
-		"QWidget#Toast { background: #1E1E1E; border: 1px solid #3498db; }"
-		"QLabel { color: #EEE; }"
-		"QLabel#Caption { font-style: bold; font-size: 16px; }"
-	);
+	// Classic's toast sheet; under Qlementine the style's own rounded panel
+	// on the theme's surface, with a larger caption.
+	setStyleSheet(StyleSheet::ToastPanel());
+	ThemeRoles::setSurface(this, ThemeRoles::Surface::Panel);
+	ThemeRoles::setFrame(this, QFrame::StyledPanel);
+	ThemeRoles::setTextSize(caption, 16);
 
 	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 	setAttribute(Qt::WA_ShowWithoutActivating);

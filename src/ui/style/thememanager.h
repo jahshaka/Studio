@@ -133,6 +133,23 @@ public:
     static QString topMenuButtonSheet(TopMenuState state);
     static void applyTopMenuButton(class QPushButton *button, TopMenuState state);
 
+    // The sample browser's tile list (Desktop ▸ Sample Scenes): the desktop
+    // tiles' look — thumbnail over a black name band, accent when selected —
+    // in BOTH themes (verbatim what the list carried before the sweep).
+    static QString sampleTileListSheet();
+
+    // A small square glyph button in the accent colour (the Assets page's
+    // "+" new-drawer button): the same look in BOTH themes — Classic shipped it
+    // as a raw sheet, and a Qlementine button cannot take its colour from the
+    // palette. 16px bold glyph, no padding (a 24px button has no room for any).
+    static QString accentGlyphButtonSheet();
+
+    // A drop target's affordance: a dashed rounded outline around the pane
+    // that accepts files (the Assets page's drop pad). "" under Classic,
+    // whose page sheet draws its own box. `labelName` is the objectName of the
+    // pane's caption label, which gets the target's vertical room.
+    static QString dropZoneSheet(const QString &paneName, const QString &labelName);
+
     // The main window's font (platform audit F-S3). Under Qlementine the
     // theme owns typography — nothing is set, the window inherits the
     // theme's font. Classic keeps what it always rendered: the platform's

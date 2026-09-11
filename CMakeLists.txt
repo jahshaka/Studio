@@ -163,9 +163,6 @@ set(SRCS
     src/ui/dialogs/preferencesdialog.cpp 
     src/ui/dialogs/aboutdialog.cpp 
     src/ui/dialogs/preferences/worldsettingswidget.cpp 
-	src/ui/dialogs/customdialog.cpp
-	src/ui/dialogs/custompopup.cpp
-    src/ui/dialogs/loadmeshdialog.cpp 
     src/ui/panels/timeline/animationwidget.cpp 
     src/ui/panels/timeline/keyframewidget.cpp 
     src/ui/panels/timeline/timelinewidget.cpp 
@@ -173,7 +170,6 @@ set(SRCS
     src/data/project.cpp 
     src/data/settingsmanager.cpp 
     src/viewport/editorcameracontroller.cpp 
-    src/ui/dialogs/infodialog.cpp 
     src/viewport/engineviewwidget.cpp
     irisgl/mirror/scenemirror.cpp
     src/viewport/enginesceneviewport.cpp
@@ -427,7 +423,6 @@ set(SRCS
     src/ui/controls/colorview.cpp
     src/ui/dialogs/toast.cpp
     src/ui/controls/tooltip.cpp
-    src/ui/dialogs/dialoghelper.cpp
     # player
     src/player/playerwidget.cpp
     src/player/playermodule.cpp
@@ -446,11 +441,7 @@ set(HEADERS
     src/ui/dialogs/preferencesdialog.h 
     src/ui/dialogs/aboutdialog.h 
     src/ui/dialogs/preferences/worldsettingswidget.h 
-    src/ui/dialogs/customdialog.h
-    src/ui/dialogs/custompopup.h
     src/services/collisionhelper.h 
-    src/ui/dialogs/infodialog.h 
-    src/ui/dialogs/loadmeshdialog.h 
     src/ui/panels/timeline/animationwidget.h 
     src/ui/panels/timeline/keyframewidget.h
     src/ui/panels/timeline/timelinewidget.h 
@@ -699,7 +690,6 @@ set(HEADERS
     src/ui/controls/colorview.h
     src/ui/dialogs/toast.h
     src/ui/controls/tooltip.h
-    src/ui/dialogs/dialoghelper.h
 
     # player
     src/player/playerwidget.h
@@ -715,10 +705,7 @@ set(WIDGETS
     src/ui/controls/colorvaluewidget.ui 
     src/ui/controls/colorpickerwidget.ui 
     src/ui/dialogs/preferencesdialog.ui 
-    src/ui/dialogs/preferences/worldsettings.ui 
     src/ui/dialogs/aboutdialog.ui 
-    src/ui/dialogs/infodialog.ui 
-    src/ui/dialogs/loadmeshdialog.ui 
     src/ui/panels/timeline/animationwidget.ui 
     src/ui/controls/accordionbladewidget.ui 
     src/ui/panels/scenehierarchywidget.ui 
@@ -732,7 +719,6 @@ set(WIDGETS
     src/ui/controls/texturepickerwidget.ui 
     src/ui/controls/filepickerwidget.ui 
     src/ui/panels/propertywidget.ui 
-    src/ui/dialogs/newprojectdialog.ui 
     src/ui/panels/assetwidget.ui 
     src/ui/controls/assetpickerwidget.ui 
     src/ui/panels/timeline/keyframelabel.ui 

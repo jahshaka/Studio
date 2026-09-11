@@ -31,22 +31,6 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">#AboutDialog {
-	background: rgb(22, 26, 27);
-}
-
-QPushButton {
-	border: 0;
-	background: #444;
-	padding: 8px 24px;
-}
-
-QPushButton:hover {
-	background: #555;
-}
-</string>
-  </property>
   <layout class="QGridLayout" name="gridLayout_4">
    <property name="spacing">
     <number>0</number>
@@ -94,9 +78,6 @@ QPushButton:hover {
            </property>
            <item row="0" column="0">
             <widget class="QTextBrowser" name="textBrowser">
-             <property name="styleSheet">
-              <string notr="true">background: rgb(22, 26, 27)</string>
-             </property>
              <property name="frameShape">
               <enum>QFrame::NoFrame</enum>
              </property>

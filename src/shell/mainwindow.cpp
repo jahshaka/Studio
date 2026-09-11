@@ -50,7 +50,6 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginematerialpreview.h"
 #include "ui/dialogs/donatedialog.h"
-#include "ui/dialogs/custompopup.h"
 #include "services/assethelper.h"
 #include "services/assetstore.h"
 #include "services/scenenodehelper.h"
@@ -84,7 +83,6 @@ For more information see the LICENSE file
 #include <QPlainTextEdit>
 #include <QAbstractSpinBox>
 
-#include "ui/dialogs/loadmeshdialog.h"
 #include "ui/panels/timeline/nodekeyframeanimation.h"
 #include "ui/panels/timeline/nodekeyframe.h"
 

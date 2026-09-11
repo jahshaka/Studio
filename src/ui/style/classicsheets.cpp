@@ -1118,4 +1118,551 @@ const QString StyleSheet::PresetsContextMenu()
         "QMenu::item : disabled { color: #555; }");
 }
 
+const QString StyleSheet::AssetViewMutedLabel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("color: #BABABA;");
+}
+
+const QString StyleSheet::AssetViewPreviewTitle()
+{
+	JAH_CLASSIC_ONLY
+	return QString("font-size: 14px; color: #EEEEEE;");
+}
+
+const QString StyleSheet::AssetViewEmptyPreview()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #1e1e1e;");
+}
+
+const QString StyleSheet::AssetViewEmptyPreviewLabel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("font-size: 14px; color: #8f8f8f; background: transparent;");
+}
+
+const QString StyleSheet::AssetViewLocalAssetsLabel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("font-size: 12px; padding: 4px;");
+}
+
+const QString StyleSheet::AssetViewNavPane()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #202020;");
+}
+
+const QString StyleSheet::AssetViewEmptyLibraryLabel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("font-size: 16px; color: #BABABA;");
+}
+
+const QString StyleSheet::AssetViewPaneBorderless()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #202020; border: 0");
+}
+
+const QString StyleSheet::AssetViewTailStatus()
+{
+	JAH_CLASSIC_ONLY
+	return QString("padding: 4px 10px; color: #9a9a9a; font-size: 12px;");
+}
+
+const QString StyleSheet::AssetViewPaneBackground()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #202020");
+}
+
+const QString StyleSheet::AssetViewUpdateButton()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #3498db");
+}
+
+const QString StyleSheet::AssetViewNothingSelected()
+{
+	JAH_CLASSIC_ONLY
+	return QString("padding: 12px; text-align: center");
+}
+
+const QString StyleSheet::AssetViewStoreOfflineBanner()
+{
+	JAH_CLASSIC_ONLY
+	return QString("#StoreOfflineBanner { background: #7a4a12; }"
+        "#StoreOfflineBanner QLabel { color: #ffe0b3; background: transparent; }");
+}
+
+const QString StyleSheet::AssetGridTile()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #272727");
+}
+
+const QString StyleSheet::AssetGridLoadingOverlay()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: rgba(0, 0, 0, 55%); color: #ffffff; font-size: 12px;");
+}
+
+const QString StyleSheet::AssetGridLoadingOverlayAccent()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: rgba(0, 0, 0, 55%); color: #3498db; font-size: 12px;");
+}
+
+const QString StyleSheet::VideoPreviewTitle()
+{
+	JAH_CLASSIC_ONLY
+	return QString("font-size: 14px; color: #EEEEEE; padding: 4px;");
+}
+
+const QString StyleSheet::ItemGridTileSpacer()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: transparent; color: white");
+}
+
+const QString StyleSheet::ToastPanel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("QWidget#Toast { background: #1E1E1E; border: 1px solid #3498db; }"
+		"QLabel { color: #EEE; }"
+		"QLabel#Caption { font-style: bold; font-size: 16px; }");
+}
+
+const QString StyleSheet::ProjectManagerRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QMessageBox QPushButton  {
+    border: none;
+    background-color: #212121;
+    padding: 4px 16px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #555;
+}
+
+#searchIcon {
+	background: #303030;
+	padding: 4px;
+}
+
+/* ========================== */
+
+#lineEdit {
+	font-size: 14px;
+	background: #2f2f2f;
+	padding: 3px;
+	border: 0;
+}
+
+#newProject {
+	background: #4898ff;
+	color: white;
+}
+
+#newProject:hover {
+	background-color: #51a1d6;
+}
+
+#samples, #projects {
+	padding: 8px;
+	color: white;
+}
+
+#listWidget, #listWidget_2 {
+	background: #fff;
+}
+
+#listWidget {
+	padding-top: 4px;
+	padding-left: 2px;
+}
+
+QPushButton, QToolButton {
+	border: 0;
+	padding: 8px 12px;
+	background: #444;
+	border-radius: 4px;
+}
+
+QPushButton::hover {
+	background: #555;
+}
+
+QToolButton::hover {
+	background: #555;
+}
+
+QComboBox {
+    background: #1A1A1A;
+    border: 0;
+}
+
+QComboBox:editable {
+
+}
+
+QComboBox QAbstractItemView::item {
+    show-decoration-selected: 1;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QListView::item:selected {
+    background: #404040;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+     background: #1A1A1A;
+}
+
+/* QComboBox gets the on state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background: #1A1A1A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    selection-background-color: #404040;
+    border: 0;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    border: none;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #404040;
+    padding-left: 5px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left-width: 1px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+}
+
+QComboBox::down-arrow:!enabled {
+    image: url(:/icons/down_arrow_check_disabled.png);
+    width: 18px;
+    height: 14px;
+}
+)CSS");
+}
+
+const QString StyleSheet::AboutDialogRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(#AboutDialog {
+	background: rgb(22, 26, 27);
+}
+
+QPushButton {
+	border: 0;
+	background: #444;
+	padding: 8px 24px;
+}
+
+QPushButton:hover {
+	background: #555;
+}
+)CSS");
+}
+
+const QString StyleSheet::AboutDialogTextBrowser()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(background: rgb(22, 26, 27))CSS");
+}
+
+const QString StyleSheet::DonateDialogRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(#Donate {
+	border: 0 px solid black;
+}
+
+* {
+	color: #EEE;
+}
+
+
+QCheckBox {
+    spacing: 5px;
+	font-size: 12px;
+}
+
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+}
+
+QCheckBox::indicator::unchecked {
+	image: url(:/icons/check-unchecked.png);
+}
+
+QCheckBox::indicator::checked {	
+	image: url(:/icons/check-checked.png);
+}
+)CSS");
+}
+
+const QString StyleSheet::DonateDialogBackground()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(#widget_background{
+ border-image: url(:/images/splashv3.png);
+border: 0px;
+})CSS");
+}
+
+const QString StyleSheet::DonateDialogCtrl()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(#ctrl {
+	background: #111;
+}
+
+QPushButton, QToolButton {
+	border: 0;
+	padding: 6px 24px;
+	background: #444;
+}
+
+QPushButton::hover {
+	background: #555;
+}
+
+QToolButton::hover {
+	background: #555;
+})CSS");
+}
+
+const QString StyleSheet::ProgressDialogRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QLabel {
+	color: #EEEEEE;
+}
+
+QProgressBar {
+     border: 1px solid black;
+     background-color: #DEDEDE;
+ }
+
+ QProgressBar::chunk {
+     background-color: #3498db;
+ }
+
+#ProgressDialog {
+	background: #222;
+	border: 1px solid black;
+})CSS");
+}
+
+const QString StyleSheet::ProgressDialogStageLabel()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(color: #999999;)CSS");
+}
+
+const QString StyleSheet::RenameProjectDialogRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(* {
+	color: #EEE;
+}
+
+#RenameProjectDialog {
+	background: #1A1A1A;
+}
+
+QPushButton  {
+    border: none;
+    background-color: #212121;
+    padding: 6px 16px;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QLabel {
+	color: #EEE;
+}
+
+QLineEdit {
+	border: 0;
+	padding: 4px;
+	color: #EEE;
+	font-size: 11px;
+	background: #404040;
+	margin-bottom: 3px;
+})CSS");
+}
+
+const QString StyleSheet::ScreenshotDialogRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QPushButton  {
+    border: none;
+	padding: 6px 20px;
+    background-color: #212121;
+}
+
+QPushButton:hover {
+    background-color: #555;
+})CSS");
+}
+
+const QString StyleSheet::SoftwareUpdateDialogRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(#createProject {
+	background: #4898ff;
+	color: white;
+}
+
+#createProject:hover {
+	background-color: #51a1d6;
+}
+
+
+QLabel {
+	margin-right: 12px;
+}
+
+QPushButton, QToolButton {
+	border: 0;
+	padding: 5px;
+	background: #444;
+}
+
+QPushButton::hover {
+	background: #555;
+}
+
+QToolButton::hover {
+	background: #555;
+}
+
+QLineEdit {
+	background: #404040;
+	padding: 5px;
+})CSS");
+}
+
+const QString StyleSheet::SoftwareUpdateDialogWidget()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(background:rgba(20,20,20,1);
+color:rgba(255,255,255,.95);)CSS");
+}
+
+const QString StyleSheet::SoftwareUpdateDialogTextEdit()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(background:rgba(35,35,35,1);)CSS");
+}
+
+const QString StyleSheet::SoftwareUpdateDialogClose()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QPushButton{
+	padding: 5px 15px;
+background:rgba(50,50,50,1);
+border: 1px solid rgba(0,0,0,.1);
+}
+
+QPushButton:hover{
+	background: rgba(40,128, 185,.9);
+
+})CSS");
+}
+
+const QString StyleSheet::SoftwareUpdateDialogDownload()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QPushButton{
+	padding: 5px 15px;
+background:rgba(50,50,50,1);
+border: 1px solid rgba(0,0,0,.1);
+}
+
+QPushButton:hover{
+	background: rgba(40,128, 185,.9);
+
+})CSS");
+}
+
+const QString StyleSheet::PreferencesDialogRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QDialog#PreferencesDialog {
+	border: 1px solid #1E1E1E;
+	background: #222;
+	color: #EEE;
+}
+
+QPushButton, QToolButton {
+  border: 0;
+  padding: 5px 15px;
+  background: #444;
+	color: #EEE;
+}
+
+QPushButton::hover {
+  background: #555;
+}
+
+QToolButton::hover {
+  background: #555;
+}
+
+QLineEdit {
+  background: #404040;
+  padding: 5px;
+})CSS");
+}
+
+const QString StyleSheet::SplashVersionLabel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("color: white;");
+}
+
+const QString StyleSheet::SplashShaderLabel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("color: rgba(255,255,255,200);");
+}
+
+const QString StyleSheet::UpgraderDialog()
+{
+	JAH_CLASSIC_ONLY
+	return QString("* { color: #EEE; }"
+				"QDialog { background: #222222; padding: 4px; }"
+				"QPushButton { background: #444; color: #EEE; border: 0; padding: 6px 10px; }"
+				"QPushButton:hover { background: #555; color: #EEE; }"
+				"QPushButton:pressed { background: #333; color: #EEE; }");
+}
+
 //@@CLASSIC-DEFS@@

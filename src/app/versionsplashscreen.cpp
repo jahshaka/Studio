@@ -1,4 +1,6 @@
 #include "app/versionsplashscreen.h"
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 VersionSplashScreen::VersionSplashScreen(const QPixmap &pixmap)
     : QSplashScreen{pixmap}
@@ -9,7 +11,8 @@ VersionSplashScreen::VersionSplashScreen(const QPixmap &pixmap)
     QFont font;
     font.setPointSize(20);
     version_label_->setFont(font);
-    version_label_->setStyleSheet("color: white;");
+    version_label_->setStyleSheet(StyleSheet::SplashVersionLabel());
+    ThemeRoles::setTone(version_label_, ThemeRoles::Tone::Normal);
 
     // The startup shader-build line. Its own label rather than showMessage()
     // because showMessage is already taken by the revision string at the bottom
@@ -20,7 +23,8 @@ VersionSplashScreen::VersionSplashScreen(const QPixmap &pixmap)
     QFont small;
     small.setPointSize(11);
     shader_label_->setFont(small);
-    shader_label_->setStyleSheet("color: rgba(255,255,255,200);");
+    shader_label_->setStyleSheet(StyleSheet::SplashShaderLabel());
+    ThemeRoles::setTone(shader_label_, ThemeRoles::Tone::Muted);
     shader_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     shader_label_->hide();
 }

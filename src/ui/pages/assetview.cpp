@@ -124,6 +124,7 @@ For more information see the LICENSE file
 #include "ui/style/panelmetrics.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
+#include "ui/style/themeroles.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {
@@ -324,7 +325,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     imageActualButton->setFixedWidth(48);
     imageActualButton->setCursor(Qt::PointingHandCursor);
     imageZoomLabel = new QLabel;
-    imageZoomLabel->setStyleSheet("color: #BABABA;");
+    imageZoomLabel->setStyleSheet(StyleSheet::AssetViewMutedLabel());
+    ThemeRoles::setTone(imageZoomLabel, ThemeRoles::Tone::Muted);
 
     auto imageBar = new QHBoxLayout;
     imageBar->setContentsMargins(12, 6, 12, 6);
@@ -361,14 +363,16 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     audioNameLabel = new QLabel;
     audioNameLabel->setAlignment(Qt::AlignCenter);
-    audioNameLabel->setStyleSheet("font-size: 14px; color: #EEEEEE;");
+    audioNameLabel->setStyleSheet(StyleSheet::AssetViewPreviewTitle());
+    ThemeRoles::setTextSize(audioNameLabel, 14);
     audioPlayButton = new QPushButton(tr("Play"));
     audioPlayButton->setFixedWidth(64);
     audioPlayButton->setCursor(Qt::PointingHandCursor);
     audioSeekSlider = new QSlider(Qt::Horizontal);
     audioSeekSlider->setRange(0, 0);
     audioTimeLabel = new QLabel("0:00 / 0:00");
-    audioTimeLabel->setStyleSheet("color: #BABABA;");
+    audioTimeLabel->setStyleSheet(StyleSheet::AssetViewMutedLabel());
+    ThemeRoles::setTone(audioTimeLabel, ThemeRoles::Tone::Muted);
 
     auto audioControls = new QHBoxLayout;
     audioControls->addWidget(audioPlayButton);
@@ -419,7 +423,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     fileIconLabel->setPixmap(QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png")));
     fileNameLabel = new QLabel;
     fileNameLabel->setAlignment(Qt::AlignCenter);
-    fileNameLabel->setStyleSheet("font-size: 14px; color: #EEEEEE;");
+    fileNameLabel->setStyleSheet(StyleSheet::AssetViewPreviewTitle());
+    ThemeRoles::setTextSize(fileNameLabel, 14);
     auto filePageLayout = new QVBoxLayout;
     filePageLayout->addStretch();
     filePageLayout->addWidget(fileIconLabel);
@@ -433,12 +438,14 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     // no name. A dedicated page says what to do instead; initial and cleared
     // states land here (both themes are dark — explicit colors, no stray icon).
     assetEmptyViewer = new QWidget;
-    assetEmptyViewer->setStyleSheet("background: #1e1e1e;");
+    assetEmptyViewer->setStyleSheet(StyleSheet::AssetViewEmptyPreview());
+    ThemeRoles::setSurface(assetEmptyViewer, ThemeRoles::Surface::Panel);
     {
         auto *emptyPreviewLabel = new QLabel(tr("Select an asset to preview"));
         emptyPreviewLabel->setAlignment(Qt::AlignCenter);
-        emptyPreviewLabel->setStyleSheet(
-            "font-size: 14px; color: #8f8f8f; background: transparent;");
+        emptyPreviewLabel->setStyleSheet(StyleSheet::AssetViewEmptyPreviewLabel());
+        ThemeRoles::setTextSize(emptyPreviewLabel, 14);
+        ThemeRoles::setTone(emptyPreviewLabel, ThemeRoles::Tone::Muted);
         auto *emptyPreviewLayout = new QVBoxLayout;
         emptyPreviewLayout->addWidget(emptyPreviewLabel);
         assetEmptyViewer->setLayout(emptyPreviewLayout);
@@ -454,18 +461,17 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	auto headerLayout = new QHBoxLayout;
 	headerLayout->setContentsMargins(6, 6, 6, 6);
 	auto localAssetsLabel = new QLabel(tr("Local Assets"));
-	localAssetsLabel->setStyleSheet("font-size: 12px; padding: 4px;");
+	localAssetsLabel->setStyleSheet(StyleSheet::AssetViewLocalAssetsLabel());
+	ThemeRoles::setPadding(localAssetsLabel, 4, 4, 4, 4);
 	auto addDrawerButton = new QPushButton("+");
 	addDrawerButton->setFixedSize(24, 24);
 	addDrawerButton->setCursor(Qt::PointingHandCursor);
 	addDrawerButton->setToolTip(tr("New drawer"));
 	// Explicit style: the page-wide "QPushButton { padding: 8px 12px; }" rule
 	// left a 24px button ZERO content area — the + glyph was clipped away and
-	// the button invisible on the dark pane (owner-reported).
-	addDrawerButton->setStyleSheet(
-	    "QPushButton { background: #3498db; color: #FFFFFF; border-radius: 2px;"
-	    "              padding: 0; margin: 0; font-size: 16px; font-weight: bold; }"
-	    "QPushButton:hover { background: #4EA8E5; }");
+	// the button invisible on the dark pane (owner-reported). The theme's
+	// accent glyph button, identical in both themes.
+	addDrawerButton->setStyleSheet(ThemeManager::accentGlyphButtonSheet());
 	headerLayout->addWidget(localAssetsLabel);
 	headerLayout->addStretch();
 	headerLayout->addWidget(addDrawerButton);
@@ -487,8 +493,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	navLayout->setContentsMargins(0, 0, 0, 0);
 	navLayout->setSpacing(0);
     _navPane->setLayout(navLayout);
-    if (ThemeManager::classicActive())
-        _navPane->setStyleSheet("background: #202020;");
+    _navPane->setStyleSheet(StyleSheet::AssetViewNavPane());
 
 	// The drawers tree (ASSET_DRAWERS_SPEC §1): nested like a file system,
 	// rebuilt from the collections table by rebuildDrawerTree().
@@ -618,43 +623,13 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	emptyIcon->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
 	emptyIcon->setPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-empty-box-50.png"));
 	emptyLabel->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
-	emptyLabel->setStyleSheet("font-size: 16px; color: #BABABA;");
+	emptyLabel->setStyleSheet(StyleSheet::AssetViewEmptyLibraryLabel());
+	ThemeRoles::setTextSize(emptyLabel, 16);
+	ThemeRoles::setTone(emptyLabel, ThemeRoles::Tone::Muted);
 	emptyL->addWidget(emptyIcon);
 	emptyL->addWidget(emptyLabel);
 	emptyGrid->setLayout(emptyL);
 
-    auto meshObject = new QPushButton();
-    meshObject->setAccessibleName("filterObj");
-    meshObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-cube-filled-50.png")));
-    meshObject->setIconSize(QSize(16, 16));
-    meshObject->setStyleSheet("border-top-left-radius: 2px; border-bottom-left-radius: 2px;");
-
-	auto typeObject = new QPushButton();
-	typeObject->setAccessibleName("filterObj");
-	typeObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-purchase-order-50.png")));
-	typeObject->setIconSize(QSize(16, 16));
-
-	//auto scriptObject = new QPushButton();
-	//scriptObject->setAccessibleName("filterObj");
-	//scriptObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-music-50.png")));
-	//scriptObject->setIconSize(QSize(16, 16));
-	//scriptObject->setStyleSheet("border-top-right-radius: 2px; border-bottom-right-radius: 2px;");
-
-	auto imageObject = new QPushButton();
-	imageObject->setAccessibleName("filterObj");
-	imageObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-picture-50.png")));
-	imageObject->setIconSize(QSize(16, 16));
-	imageObject->setStyleSheet("border-top-right-radius: 2px; border-bottom-right-radius: 2px;");
-
-	QWidget *filterGroup = new QWidget;
-	auto fgL = new QHBoxLayout;
-	fgL->addWidget(meshObject);
-	//fgL->addWidget(typeObject);
-	//fgL->addWidget(imageObject);
-	//fgL->addWidget(scriptObject);
-	filterGroup->setLayout(fgL);
-    fgL->setContentsMargins(0, 0, 0, 0);
-	fgL->setSpacing(0);
 
 	searchTimer = new QTimer(this);
 	searchTimer->setSingleShot(true);   // timer can only fire once after started
@@ -724,7 +699,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	filterLayout->addWidget(viewModeButton);
 
 	//filterLayout->addWidget(new QLabel("Filter: "));
-	//filterLayout->addWidget(filterGroup);
 	filterLayout->addStretch();
 	filterLayout->addWidget(new QLabel("Search: "));
 	le = new QLineEdit();
@@ -758,8 +732,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	assetListView->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
 	assetListView->setContextMenuPolicy(Qt::CustomContextMenu);
 	assetListView->setVisible(false);
-	if (ThemeManager::classicActive())
-		assetListView->setStyleSheet("background: #202020; border: 0");
+	assetListView->setStyleSheet(StyleSheet::AssetViewPaneBorderless());
 	connect(assetListView, &QTreeWidget::itemClicked, this,
 	        [this](QTreeWidgetItem *item, int) {
 		if (auto *tile = fastGrid->tileByGuid(item->data(0, Qt::UserRole).toString()))
@@ -784,8 +757,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	// turn (the app keeps painting and clicking between items), with a
 	// subtle status strip under the grid while it works.
 	tailStatusLabel = new QLabel;
-	tailStatusLabel->setStyleSheet(
-	    "padding: 4px 10px; color: #9a9a9a; font-size: 12px;");
+	tailStatusLabel->setStyleSheet(StyleSheet::AssetViewTailStatus());
+	ThemeRoles::setPadding(tailStatusLabel, 10, 4, 10, 4);
+	ThemeRoles::setTone(tailStatusLabel, ThemeRoles::Tone::Muted);
 	tailStatusLabel->setVisible(false);
 	tailQueue = new ImportTailQueue(this);
 	connect(tailQueue, &ImportTailQueue::progress, this, [this](int done, int total) {
@@ -810,8 +784,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	viewsL->addWidget(assetListView);
 	viewsL->addWidget(tailStatusLabel);
 	views->setLayout(viewsL);
-    if (ThemeManager::classicActive())
-        views->setStyleSheet("background: #202020");
+    views->setStyleSheet(StyleSheet::AssetViewPaneBackground());
 
 	testL->addWidget(filterPane, 0, 0);
 	testL->addWidget(views, 1, 0);
@@ -884,8 +857,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     _metadataPane = new QWidget; 
 	_metadataPane->setObjectName(QStringLiteral("MetadataPane"));
-    if (ThemeManager::classicActive())
-        _metadataPane->setStyleSheet("background: #202020");
+    _metadataPane->setStyleSheet(StyleSheet::AssetViewPaneBackground());
     QVBoxLayout *metaLayout = new QVBoxLayout;
     metaLayout->setContentsMargins(10, 10, 10, 10);
     metaLayout->setSpacing(8);
@@ -925,7 +897,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	// metaLayout right after assetDropPad, not assetDropPadLayout.
 
 	updateAsset = new QPushButton("Update");
-	updateAsset->setStyleSheet("background: #3498db");
+	updateAsset->setStyleSheet(StyleSheet::AssetViewUpdateButton());
 	updateAsset->setVisible(false);
 
 	// FIT TO SIZE (services/fitsize.h) \u2014 the three actions of the "Imported
@@ -946,11 +918,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	if (!ThemeManager::classicActive()) {
 		// visible drop-target affordance (the classic dashed box was lost with
 		// the sheet kill-switch) + the shared chrome button spec
-		assetDropPad->setStyleSheet(
-			"#assetDropPad { border: 2px dashed #4a4a4a; border-radius: 6px; }"
-			// With the buttons below the box the label alone gives the drop
-			// target its height — keep it a real target, not a thin strip.
-			"#assetDropPadLabel { padding: 24px 8px; }");
+		assetDropPad->setStyleSheet(ThemeManager::dropZoneSheet(
+			QStringLiteral("assetDropPad"), QStringLiteral("assetDropPadLabel")));
 		for (QPushButton *chromeBtn : { browseButton, downloadWorld, fitRemeasure,
 		                                fitReset, fitSet, deleteFromLibrary })
 			chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
@@ -1283,7 +1252,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	policy2.setHorizontalPolicy(QSizePolicy::Preferred);
 	metadataMissing = new QLabel("Nothing selected...");
 	metadataMissing->setAlignment(Qt::AlignCenter);
-	metadataMissing->setStyleSheet("padding: 12px; text-align: center");
+	metadataMissing->setStyleSheet(StyleSheet::AssetViewNothingSelected());
+	ThemeRoles::setPadding(metadataMissing, 12, 12, 12, 12);
 	metadataMissing->setSizePolicy(policy2);
 	// ONE two-column label/value table (owner 2026-08-31) — replaces the old
 	// stack of "Key: value" labels. fetchMetadata() renders every row (type,
@@ -1393,9 +1363,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     // Offline-store banner (§3.1.2): persistent, non-modal, above the page.
     storeOfflineBanner = new QWidget(this);
     storeOfflineBanner->setObjectName(QStringLiteral("StoreOfflineBanner"));
-    storeOfflineBanner->setStyleSheet(
-        "#StoreOfflineBanner { background: #7a4a12; }"
-        "#StoreOfflineBanner QLabel { color: #ffe0b3; background: transparent; }");
+    storeOfflineBanner->setStyleSheet(StyleSheet::AssetViewStoreOfflineBanner());
+    ThemeRoles::setSurface(storeOfflineBanner, ThemeRoles::Surface::Warning);
     {
         auto *bl = new QHBoxLayout(storeOfflineBanner);
         bl->setContentsMargins(12, 6, 12, 6);
