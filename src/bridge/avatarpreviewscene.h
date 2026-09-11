@@ -76,6 +76,8 @@ public:
     int overlaySegments() const;
     int overlayStubs() const;
     int overlayJoints() const;
+    /// Rig markers drawn this frame (the third toggle, S9).
+    int overlayMarkers() const;
 
 protected:
     void configureScene(jahshaka::engine::Scene *scene) override;

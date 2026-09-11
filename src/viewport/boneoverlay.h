@@ -75,6 +75,12 @@ public:
     /// Pushes this frame's skeleton. `visible == false` (or no segments) hides
     /// every slot without destroying anything.
     void update(const QVector<BoneOverlaySegment> &segments, bool visible);
+    /// THE RIG LAYER (S9): a marker at each point, in its own colour and its
+    /// own node pool, independent of the bones — the Avatar page's third
+    /// toggle draws the character's attachment points with it, and the
+    /// prop-onto-a-bone UI the header already anticipated can reuse it.
+    /// `size` is the marker's world-space half-extent; <= 0 draws nothing.
+    void updateMarkers(const QVector<iris::Vec3> &points, float size, bool visible);
     /// Destroys every node, mesh and material this overlay made.
     void clear();
 
@@ -84,13 +90,16 @@ public:
     int visibleStubs() const { return mVisibleStubs; }
     /// Joint markers drawn (one per distinct joint position).
     int visibleJoints() const { return mVisibleJoints; }
+    /// Rig markers drawn by updateMarkers.
+    int visibleMarkers() const { return mVisibleMarkers; }
 
 private:
     bool ensureAssets();
     /// Grows `pool` as needed and returns the node for `index`, attaching `mesh`
     /// the first time. 0 when the engine refuses.
     jahshaka::engine::NodeId slot(QVector<jahshaka::engine::NodeId> &pool, int index,
-                                  jahshaka::engine::MeshId mesh);
+                                  jahshaka::engine::MeshId mesh,
+                                  jahshaka::engine::MaterialId material = 0);
     static void hideFrom(jahshaka::engine::Scene *scene,
                          const QVector<jahshaka::engine::NodeId> &pool, int first);
 
@@ -100,11 +109,15 @@ private:
     jahshaka::engine::MaterialId mMaterial = 0;
     QVector<jahshaka::engine::NodeId> mBoneNodes;    ///< segments, then leaf stubs
     QVector<jahshaka::engine::NodeId> mJointNodes;
+    QVector<jahshaka::engine::NodeId> mMarkerNodes;   ///< the rig layer's own pool
+    jahshaka::engine::MaterialId mMarkerMaterial = 0;
+    QColor mMarkerColour = QColor(255, 170, 40);      ///< rig markers, not bone green
     QColor mColour = QColor(60, 255, 90);
     float mMarkerScale = 0.13f;
     int mVisibleSegments = 0;
     int mVisibleStubs = 0;
     int mVisibleJoints = 0;
+    int mVisibleMarkers = 0;
 };
 
 #endif // BONEOVERLAY_H

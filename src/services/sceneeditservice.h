@@ -196,6 +196,10 @@ public:
     /// The funnel every add-verb ends in: default material, spawn offset,
     /// undoable AddSceneNodeCommand.
     void addNodeToScene(iris::SceneNodePtr sceneNode, bool ignore = false);
+    /// `spot` if no root-level node is already standing there, else the first
+    /// free spot stepping along `step` (S9: repeated "Add to Scene" clicks all
+    /// landed on ONE point in front of the camera and read as duplicates).
+    iris::Vec3 freeSpotNear(const iris::Vec3 &spot, const iris::Vec3 &step) const;
 
     bool deleteNode(iris::SceneNodePtr node);
     iris::SceneNodePtr duplicateNode(iris::SceneNodePtr node);

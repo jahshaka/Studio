@@ -175,6 +175,58 @@ void run()
                          "%2 after)").arg(before).arg(tree->selectedItems().size())
               .toUtf8().constData());
 
+    // ---- S9: AN ASSET IS ONE ROW, on the real widget ---------------------
+    //
+    // The document half of this rule is asserted by editor.outlinerRows in
+    // scripting.e2e.one_asset; THIS is the widget, where it has to be true by
+    // NOT CREATING the rows — a hidden row would still be a member of a Shift
+    // range (EDITOR_MULTISELECT_SPEC §2.2), which is exactly the interaction
+    // the spec flagged.
+    {
+        auto assetRoot = iris::SceneNode::create();
+        assetRoot->setName(QStringLiteral("character"));
+        root->addChild(assetRoot);
+        for (int i = 1; i <= 3; ++i) {
+            auto part = iris::SceneNode::create();
+            part->setName(QStringLiteral("part%1").arg(i));
+            part->setAttached(true);              // what an import marks its insides
+            assetRoot->addChild(part);
+            auto deep = iris::SceneNode::create();
+            deep->setName(QStringLiteral("deep%1").arg(i));
+            deep->setAttached(true);
+            part->addChild(deep);
+        }
+        panel.repopulateTree();
+        QApplication::processEvents();
+
+        CHECK(rowFor(tree, "character") != nullptr, "one_asset: the asset root has a row");
+        CHECK(rowFor(tree, "part1") == nullptr && rowFor(tree, "deep1") == nullptr,
+              "one_asset: its attached parts (and their children) have NO rows");
+        const int rows = panel.visibleNodeRows().size();
+        CHECK(rows == 8,
+              QStringLiteral("one_asset: 6 loose rows + the World root + ONE asset row = 8 "
+                             "(got %1) — the document has %2 nodes under the asset")
+                  .arg(rows).arg(6).toUtf8().constData());
+
+        // A part arriving after the tree exists (the incremental insert the add
+        // command uses) gets no row either.
+        auto late = iris::SceneNode::create();
+        late->setName(QStringLiteral("latePart"));
+        late->setAttached(true);
+        assetRoot->addChild(late);
+        panel.insertChild(late);
+        QApplication::processEvents();
+        CHECK(rowFor(tree, "latePart") == nullptr,
+              "one_asset: an attached node inserted incrementally gets no row either");
+
+        // Detaching is how a user takes a part OUT of its asset: the row appears.
+        late->setAttached(false);
+        panel.repopulateTree();
+        QApplication::processEvents();
+        CHECK(rowFor(tree, "latePart") != nullptr,
+              "one_asset: detaching a part gives it a row of its own");
+    }
+
     scene.reset();
 }
 

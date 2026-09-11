@@ -201,6 +201,11 @@ public:
 	/// drop of an avatar row take the same path a script does.
 	/// `hasPosition` false spawns in front of the editor camera.
 	void spawnAvatarAsset(const QString &guid, const iris::Vec3 &position, bool hasPosition);
+	/// Assigns an ANIMATION library row to a character already in the scene —
+	/// the viewport's drop of a clip tile onto a body, through the module's
+	/// `avatar.loadClip` verb (S9). A null node, or a node the verb refuses,
+	/// says so in a viewport toast instead of doing nothing silently.
+	void assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node);
 	void deselectViewports();
 
 	/// Views dropdown / view.* shortcuts / editor.setView verb — ONE path:

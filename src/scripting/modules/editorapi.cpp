@@ -62,6 +62,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "The whole selection: the primary first, then the rest in document pre-order "
           "(an ancestor before its descendants, siblings by index). Empty when nothing is selected.",
           Needs::Document },
+        { "outlinerRows", "editor.outlinerRows() -> [{id, name, type, children}]",
+          "The OUTLINER's rows, in row order — what the editor's scene tree shows, which since "
+          "S9 (2026-09-11) is ONE ROW PER ASSET: a node an import marked `attached` is a PART of "
+          "its asset (a Mixamo character is a wrapper, a root, a mesh and five material splits) "
+          "and has no row, nor do its descendants. The document is unchanged — scene.nodes() and "
+          "node.children() still see every part — so this is the verb that answers \"what does "
+          "the user see\". `children` counts the row's CHILD ROWS, not its document children. "
+          "With no editor window (a --headless run) it answers from the document by the same "
+          "rule, which is what the suites assert on.",
+          Needs::Document },
         { "selectAdd", "editor.selectAdd(id | [id]) -> bool",
           "Adds to the selection without replacing it (the viewport's Shift+click, the tree's "
           "Ctrl+click on an unselected row). The LAST id added becomes the primary.",
@@ -541,6 +551,62 @@ QVariantList EditorApi::selectionSet()
     if (!host.services || !host.services->selection) return out;
     for (const auto &node : host.services->selection->selectedSet())
         if (node) out.append(node->getGUID());
+    return out;
+}
+
+namespace {
+
+/// The document's answer to "which rows would the outliner draw": pre-order,
+/// the World root excluded, an `attached` node's subtree skipped (S9 — the
+/// same rule SceneHierarchyWidget::isAssetPart applies to the widget).
+void outlinerRowsOf(const iris::SceneNodePtr &node, const iris::SceneNodePtr &root,
+                    QList<iris::SceneNodePtr> &out)
+{
+    if (!node) return;
+    if (node != root) out.append(node);
+    const int kids = node->childCount();
+    for (int i = 0; i < kids; ++i) {
+        iris::SceneNode *raw = node->childAt(i);
+        if (!raw) continue;
+        const iris::SceneNodePtr child = raw->sharedFromThis();
+        if (child->isAttached() && node != root) continue;   // an asset's own part
+        outlinerRowsOf(child, root, out);
+    }
+}
+
+}   // namespace
+
+QVariantList EditorApi::outlinerRows()
+{
+    QVariantList out;
+    if (!host.services || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return out;
+    }
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) { fail("editor.outlinerRows: no scene is open"); return out; }
+
+    QList<iris::SceneNodePtr> rows;
+    // THE WIDGET IS THE AUTHORITY when there is one (folders reorder the root
+    // level, a collapsed subtree is not on screen) — the same precedence
+    // rangeInVisibleOrder uses.
+    if (host.mainWindow)
+        if (auto *panel = host.mainWindow->hierarchyPanel())
+            rows = panel->visibleNodeRows();
+    if (rows.isEmpty()) outlinerRowsOf(scene->getRootNode(), scene->getRootNode(), rows);
+
+    for (const auto &node : rows) {
+        if (!node || node->isRootNode()) continue;
+        int childRows = 0;
+        const int kids = node->childCount();
+        for (int i = 0; i < kids; ++i)
+            if (iris::SceneNode *child = node->childAt(i))
+                if (!child->isAttached()) ++childRows;
+        out.append(QVariantMap{ { "id", node->getGUID() },
+                                { "name", node->getName() },
+                                { "type", scriptmod::nodeTypeName(node->getSceneNodeType()) },
+                                { "children", childRows } });
+    }
     return out;
 }
 

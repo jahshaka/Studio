@@ -260,6 +260,8 @@ public:
 	void addItem(const FolderRecord &folderData);
 	void addItem(const AssetRecord &assetData);
 	void addCrumbs(const QVector<FolderRecord> &folderData);
+    /// The avatar rows the tray collapse resolves closures against (S9).
+    QVector<AssetRecord> trayAvatarRows() const;
     void updateAssetView(const QString &path, int filter = 0, bool showDependencies = false);
     void updateAssetContentsView(const QString &guid);
     void trigger();

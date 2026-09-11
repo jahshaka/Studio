@@ -138,12 +138,12 @@ bool BoneOverlay::ensureAssets()
     return mBoneMesh && mMaterial;
 }
 
-NodeId BoneOverlay::slot(QVector<NodeId> &pool, int index, MeshId mesh)
+NodeId BoneOverlay::slot(QVector<NodeId> &pool, int index, MeshId mesh, MaterialId material)
 {
     while (pool.size() <= index) pool.append(NodeId(0));
     if (!pool[index]) {
         const NodeId node = mTarget->createNode();
-        if (node) mTarget->attachMesh(node, mesh, mMaterial);
+        if (node) mTarget->attachMesh(node, mesh, material ? material : mMaterial);
         pool[index] = node;
     }
     return pool[index];
@@ -245,20 +245,52 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
     hideFrom(mTarget, mJointNodes, drawn);
 }
 
+void BoneOverlay::updateMarkers(const QVector<iris::Vec3> &points, float size, bool visible)
+{
+    mVisibleMarkers = 0;
+    if (!mTarget) return;
+    const bool draw = visible && !points.isEmpty() && size > 0.0f;
+    if (!draw) { hideFrom(mTarget, mMarkerNodes, 0); return; }
+    if (!ensureAssets()) return;
+    if (!mMarkerMaterial)
+        mMarkerMaterial = mTarget->createUnlitMaterial(
+            Colour(float(mMarkerColour.redF()), float(mMarkerColour.greenF()),
+                   float(mMarkerColour.blueF()), 1.0f), false);
+    if (!mMarkerMaterial || !mMarkerMesh) return;
+
+    int drawn = 0;
+    for (const iris::Vec3 &point : points) {
+        const NodeId node = slot(mMarkerNodes, drawn, mMarkerMesh, mMarkerMaterial);
+        if (!node) continue;
+        iris::Mat4 m;
+        m.translate(point);
+        m.scale(size, size, size);
+        SceneMirror::pushTransform(mTarget, node, m);
+        mTarget->setNodeVisible(node, true);
+        ++drawn;
+    }
+    mVisibleMarkers = drawn;
+    hideFrom(mTarget, mMarkerNodes, drawn);
+}
+
 void BoneOverlay::clear()
 {
     if (!mTarget) {
         mBoneNodes.clear();
         mJointNodes.clear();
-        mVisibleSegments = mVisibleStubs = mVisibleJoints = 0;
+        mMarkerNodes.clear();
+        mVisibleSegments = mVisibleStubs = mVisibleJoints = mVisibleMarkers = 0;
         return;
     }
     for (NodeId n : mBoneNodes) if (n) mTarget->removeNode(n);
     for (NodeId n : mJointNodes) if (n) mTarget->removeNode(n);
+    for (NodeId n : mMarkerNodes) if (n) mTarget->removeNode(n);
     mBoneNodes.clear();
     mJointNodes.clear();
+    mMarkerNodes.clear();
     if (mBoneMesh) { mTarget->destroyMesh(mBoneMesh); mBoneMesh = 0; }
     if (mMarkerMesh) { mTarget->destroyMesh(mMarkerMesh); mMarkerMesh = 0; }
     if (mMaterial) { mTarget->destroyMaterial(mMaterial); mMaterial = 0; }
-    mVisibleSegments = mVisibleStubs = mVisibleJoints = 0;
+    if (mMarkerMaterial) { mTarget->destroyMaterial(mMarkerMaterial); mMarkerMaterial = 0; }
+    mVisibleSegments = mVisibleStubs = mVisibleJoints = mVisibleMarkers = 0;
 }

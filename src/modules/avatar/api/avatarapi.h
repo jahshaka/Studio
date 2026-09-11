@@ -82,6 +82,7 @@ public:
     Q_INVOKABLE QVariant preview();
     Q_INVOKABLE bool setMeshVisible(bool on);
     Q_INVOKABLE bool setSkeletonVisible(bool on);
+    Q_INVOKABLE bool setRigVisible(bool on);
     Q_INVOKABLE QVariantList clips();
     /// Every ModelTypes::Animation row in the library, with the rig question
     /// answered against the loaded character (see the verb's help).
@@ -191,6 +192,9 @@ private:
     /// Resolves a path OR an existing asset guid to a PINNED project asset and
     /// the absolute path of its stored bytes. Empty guid on failure (message
     /// recorded).
+    /// The library row already backed by this file's BYTES (content-addressed
+    /// store), or empty. What keeps a clip from being imported twice (S9).
+    QString assetForContent(const QString &path) const;
     QString resolveClipAsset(const char *verb, const QString &pathOrAssetGuid,
                              QString *absolutePathOut);
     /// Parses `absolutePath` for skeletal clips, scores them against the

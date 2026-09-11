@@ -269,7 +269,9 @@ private:
 	// detach a node from its parent and update the treenode ui
 	void detachFromParent(iris::SceneNodePtr node);
 
-	void refreshAttachmentColors(iris::SceneNodePtr node);
+	/// One asset = one row: a node the import marked `attached` is a PART of
+	/// its asset and gets no outliner row (nor do its descendants). S9.
+	bool isAssetPart(const iris::SceneNodePtr &node) const;
 
 private:
     Ui::SceneHierarchyWidget *ui;

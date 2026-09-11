@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "services/assetmigration.h"
 #include "services/assetstore.h"
 #include "services/assettags.h"
+#include "services/assettray.h"
 #include "services/assetstorepaths.h"
 #include "services/meshbakestore.h"
 #include "data/constants.h"
@@ -105,9 +106,10 @@ QString storeFileFor(const QString &guid)
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, limit}) -> [{guid, name, type, drawer}]",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, limit}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
-          "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); rigged: true keeps only MODEL rows whose metadata says the file carries a skeleton (the candidates avatar.createAsset accepts — refused for scope 'session', which has no metadata); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag, then rigged — and limit last, so a limited listing is the first N of the filtered set, not a sample of it. rigged is the expensive one on a library that predates the rig metadata (it backfills the block once per row it reaches), which is why it is applied last.",
+          "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); rigged: true keeps only MODEL rows whose metadata says the file carries a skeleton (the candidates avatar.createAsset accepts — refused for scope 'session', which has no metadata); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag, then rigged — and limit last, so a limited listing is the first N of the filtered set, not a sample of it. rigged is the expensive one on a library that predates the rig metadata (it backfills the block once per row it reaches), which is why it is applied last. "
+          "tray: true is THE EDITOR TRAY's listing — one row per asset CLOSURE, which is what an asset is to the person using the editor (owner rule, 2026-09-11). An import's members (its Mesh row, its Texture rows) are dropped, and a model or an animation clip an AVATAR row in the same scope is built from is shown as that avatar instead of on its own, so one character is ONE tile however many catalog rows it took to make. Nothing is deleted and every guid still resolves — the Assets page still browses the members. Refused for scope 'session', which has no catalog rows to collapse.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
@@ -345,6 +347,32 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         return AssetMetadata::ensure(host.db, record.guid)
             .value(QStringLiteral("hasSkeleton")).toBool();
     };
+    // THE TRAY LISTING (S9): one row per asset closure. Resolved against the
+    // AVATAR rows of the same scope rather than of the filtered listing, so
+    // `{type:'object', tray:true}` answers the same question a full listing
+    // does instead of showing a character's model because the avatar row was
+    // filtered out from under it.
+    const bool trayOnly = options.value("tray", false).toBool();
+    const auto trayClaimants = [this, &scope]() {
+        QVector<AssetRecord> avatars;
+        if (scope == QLatin1String("project") && host.project) {
+            const QString projectGuid = host.project->getProjectGuid();
+            avatars = host.db->fetchFilteredAssets(projectGuid,
+                                                   static_cast<int>(ModelTypes::Avatar));
+            for (auto &record : avatars) record.type = static_cast<int>(ModelTypes::Avatar);
+            for (const auto &record : host.db->fetchProjectPinnedAssets(projectGuid)) {
+                if (record.type != static_cast<int>(ModelTypes::Avatar)) continue;
+                if (std::any_of(avatars.begin(), avatars.end(),
+                                [&](const AssetRecord &r) { return r.guid == record.guid; }))
+                    continue;
+                avatars.append(record);
+            }
+        } else {
+            for (const auto &record : host.db->fetchAssetsForAssetView())
+                if (record.type == static_cast<int>(ModelTypes::Avatar)) avatars.append(record);
+        }
+        return avatars;
+    };
     const bool hasDrawer = options.contains("drawer");
     const int drawerFilter = options.value("drawer", -1).toInt();
     const int limit = options.value("limit", 0).toInt();
@@ -370,6 +398,11 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         if (riggedOnly) {
             fail("assets.list: scope 'session' carries no metadata — a rigged filter has "
                  "nothing to read there. List scope 'store'/'project'");
+            return out;
+        }
+        if (trayOnly) {
+            fail("assets.list: scope 'session' has no catalog rows to collapse — the tray "
+                 "listing is a rule over library/project rows. List scope 'store'/'project'");
             return out;
         }
         // The live AssetManager registrations — what the viewport's drag-drop
@@ -426,6 +459,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
                     continue;
                 records.append(record);
             }
+            if (trayOnly) records = assettray::collapse(host.db, records, trayClaimants());
             for (const auto &record : records) {
                 if (hasDrawer && record.collection != drawerFilter) continue;
                 if (!nameMatches(record.name)) continue;
@@ -456,6 +490,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         return out;
     }
 
+    if (trayOnly) records = assettray::collapse(host.db, records, trayClaimants());
     for (const auto &record : records) {
         if (typeFilter >= 0 && record.type != typeFilter) continue;
         if (hasDrawer && record.collection != drawerFilter) continue;

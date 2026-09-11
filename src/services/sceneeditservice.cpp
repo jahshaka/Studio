@@ -731,6 +731,34 @@ void SceneEditService::addNodeToActiveNode(iris::SceneNodePtr sceneNode)
     emit hierarchyChanged();
 }
 
+iris::Vec3 SceneEditService::freeSpotNear(const iris::Vec3 &spot, const iris::Vec3 &step) const
+{
+    auto scene = this->scene();
+    if (!scene || !scene->getRootNode()) return spot;
+    // 1 m apart is "not the same body" at the 1 u = 1 m scene scale, and the
+    // stride is wider than the gap so the second try always clears the first.
+    const float kMinSeparation = 1.0f;
+    const float kStride = 1.5f;
+    iris::Vec3 side = step;
+    if (side.length() < 0.0001f) side = iris::Vec3(1, 0, 0);
+    side = side.normalized();
+
+    iris::Vec3 candidate = spot;
+    // Bounded: eight tries is a row of characters wide enough that the ninth
+    // add landing on the eighth is nobody's real workflow — and an unbounded
+    // search with a full scene would walk forever.
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        bool taken = false;
+        for (const auto &child : scene->getRootNode()->children()) {
+            if (!child) continue;
+            if ((child->getLocalPos() - candidate).length() < kMinSeparation) { taken = true; break; }
+        }
+        if (!taken) return candidate;
+        candidate = candidate + side * (kStride * float(attempt + 1));
+    }
+    return candidate;
+}
+
 void SceneEditService::addNodeToScene(iris::SceneNodePtr sceneNode, bool ignore)
 {
     auto scene = this->scene();
@@ -742,9 +770,16 @@ void SceneEditService::addNodeToScene(iris::SceneNodePtr sceneNode, bool ignore)
     // @TODO: add this to a constants file
     if (!ignore) {
         const float spawnDist = 10.0f;
-        auto offset = viewport->editorCamera()->getLocalRot().rotatedVector(iris::Vec3(0, -1.0f, -spawnDist));
-        offset += viewport->editorCamera()->getLocalPos();
-        sceneNode->setLocalPos(offset);
+        auto camera = viewport->editorCamera();
+        auto offset = camera->getLocalRot().rotatedVector(iris::Vec3(0, -1.0f, -spawnDist));
+        offset += camera->getLocalPos();
+        // NEVER STACKED (S9, owner report: "adding one part puts 3-4 copies in
+        // the scene"). An add with no position lands in front of the camera —
+        // and a SECOND one, from a camera that has not moved, landed at the
+        // exact same point, so two characters occupied one body. Step sideways
+        // (camera right) until the spot is free.
+        sceneNode->setLocalPos(freeSpotNear(offset, camera->getLocalRot().rotatedVector(
+                                                        iris::Vec3(1, 0, 0))));
     }
 
     // apply default material to mesh nodes if there is none

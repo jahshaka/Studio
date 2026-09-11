@@ -1,0 +1,162 @@
+// scripting.e2e.one_asset — AN ASSET IS ONE THING IN THE EDITOR (owner rule,
+// 2026-09-11; smoke item S9).
+//
+// The owner added one Mixamo character to a project and got THREE tiles in the
+// editor tray and a pile of bodies standing in one spot. R2's repro (ledger
+// §55) found why: "Add to Project" pins the whole closure (the Object row, the
+// Avatar row, the clip's Animation row) and the tray listed every pinned row;
+// every add landed on the SAME point (the avatar drop reused a stale drag
+// position, "Add to Scene" places in front of a camera that has not moved);
+// loading the same clip twice minted a second library row; and a clip tile
+// dropped in the viewport did nothing at all.
+//
+// This is the whole rule as VERBS — the same ones the tray, the viewport drop
+// and the Avatar page call:
+//
+//   1. assets.list({tray:true}) is ONE row for a character, however many
+//      catalog rows it took to make, while assets.list() still lists them all;
+//   2. three spawns at three points are three nodes at three DIFFERENT
+//      positions, and three spawns with NO position do not stack either;
+//   3. editor.outlinerRows() is one row per asset — the parts of an import are
+//      not scene objects — while scene.nodes() still sees every part;
+//   4. loading the same clip twice reuses the library row it made the first
+//      time (the tray does not grow a tile per gesture);
+//   5. the clip lands on the character (what the viewport drop does through
+//      avatar.loadClip).
+//
+// THE FIXTURE PAIR, generated at build time by tests/avatar from the shipped
+// Skeletal Animation sample: beta_mannequin.dae (Mixamo Beta, full skeleton,
+// clip stripped) and beta_walk.dae (the same export with the BODY stripped and
+// its clip renamed "Walking" — an animation-only file). --headless: every verb
+// here is Needs::Document.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function guidsOf(rows) { return rows.map(function (r) { return r.guid; }); }
+
+var RIG  = "@JAHSHAKA_MANNEQUIN_DAE@";
+var WALK = "@JAHSHAKA_BETA_WALK_DAE@";
+
+project.create("one asset");
+
+// ---- 1. the tray is one row per closure ----------------------------------
+
+// A fresh project already has rows of its own (the default Ground and its
+// tile texture), so every count below is relative to THIS.
+var baseTray = assets.list({ scope: "project", tray: true }).length;
+console.log("tray rows before the character: " + baseTray);
+
+var modelGuid = assets.import(RIG);
+assert(assets.addToProject(modelGuid) === modelGuid, "the model joins the project");
+
+// Before an avatar exists, the model IS the asset: one tray row for it.
+var trayBefore = assets.list({ scope: "project", tray: true });
+assert(guidsOf(trayBefore).indexOf(modelGuid) >= 0,
+       "a plain model is its own tray row (" + trayBefore.length + " row(s))");
+assert(trayBefore.length === baseTray + 1,
+       "... and its mesh/texture members are not tiles (" + trayBefore.length + " rows)");
+assert(guidsOf(assets.list({ scope: "project" })).length > trayBefore.length,
+       "... while the plain listing still has every member row");
+
+var avatarGuid = avatar.createAsset(modelGuid);
+assert(avatarGuid.length > 10, "avatar.createAsset -> " + avatarGuid);
+
+// The clip, added the way the Avatar page adds one: the module imports it into
+// the library and names it in the definition (which is what makes it the
+// AVATAR's clip rather than a loose library row).
+avatar.open(avatarGuid, { scope: "library" });
+assert(!!avatar.loadAnimation(WALK), "avatar.loadAnimation(beta_walk.dae) onto the avatar");
+var clipRows = assets.list({ type: "animation" });
+assert(clipRows.length === 1, "the clip is ONE library row (" + clipRows.length + ")");
+var clipGuid = clipRows[0].guid;
+avatar.save();
+assert(assets.addToProject(avatarGuid) === avatarGuid,
+       "the avatar joins the project — one gesture, whole closure pinned");
+
+// EVERY row is still there — nothing was deleted, this is a view rule.
+var all = guidsOf(assets.list({ scope: "project" }));
+assert(all.indexOf(modelGuid) >= 0 && all.indexOf(avatarGuid) >= 0,
+       "the plain project listing still has the model AND the avatar");
+
+var tray = assets.list({ scope: "project", tray: true });
+console.log("tray: " + JSON.stringify(tray));
+var trayGuids = guidsOf(tray);
+assert(trayGuids.indexOf(avatarGuid) >= 0, "THE RULE: the character's tray row is the AVATAR");
+assert(trayGuids.indexOf(modelGuid) < 0, "... its model is not a second tile");
+assert(trayGuids.indexOf(clipGuid) < 0, "... its clip is not a third tile");
+assert(tray.filter(function (r) { return r.type === "mesh"; }).length === 0,
+       "... and no import MEMBER (mesh row) is a tile");
+assert(tray.length === baseTray + 1,
+       "ONE character, ONE tray row (" + tray.length + " rows, " + baseTray + " of them the project's own)");
+
+var sessionRefused = false;
+try { assets.list({ scope: "session", tray: true }); } catch (e) { sessionRefused = true; }
+assert(sessionRefused, "a tray listing of the session scope is refused, not silently ignored");
+
+// ---- 2. three adds are three places --------------------------------------
+
+var baseRows = editor.outlinerRows().length;
+console.log("rows before any character: " + baseRows);
+
+var points = [ { x: 1, y: 0, z: 2 }, { x: -3, y: 0, z: 4 }, { x: 5, y: 0, z: -1 } ];
+var placed = points.map(function (p) { return avatar.spawn(avatarGuid, { position: p }); });
+assert(placed.length === 3 && placed[0] !== placed[1] && placed[1] !== placed[2],
+       "three spawns -> three nodes");
+for (var i = 0; i < 3; ++i) {
+    var t = node.transform(placed[i], {});
+    assert(Math.abs(t.position.x - points[i].x) < 0.001
+           && Math.abs(t.position.z - points[i].z) < 0.001,
+           "spawn " + i + " landed at the point it was given ("
+           + t.position.x.toFixed(2) + ", " + t.position.z.toFixed(2) + ")");
+}
+
+// The tray/module "Add to Scene" path: NO position at all. It places in front
+// of the camera — and the second one must not stand inside the first.
+var stacked = [ avatar.spawn(avatarGuid), avatar.spawn(avatarGuid), avatar.spawn(avatarGuid) ];
+var spots = stacked.map(function (id) { return node.transform(id, {}).position; });
+console.log("no-position spawns: " + JSON.stringify(spots));
+for (var a = 0; a < spots.length; ++a)
+    for (var b = a + 1; b < spots.length; ++b) {
+        var dx = spots[a].x - spots[b].x, dy = spots[a].y - spots[b].y, dz = spots[a].z - spots[b].z;
+        assert(Math.sqrt(dx * dx + dy * dy + dz * dz) > 0.5,
+               "no-position spawns " + a + " and " + b + " are not in the same spot");
+    }
+
+// ---- 3. one asset, one outliner row --------------------------------------
+
+var rows = editor.outlinerRows();
+console.log("outliner rows: " + JSON.stringify(rows.map(function (r) { return r.name; })));
+assert(rows.length === baseRows + 6,
+       "six characters -> SIX new outliner rows (" + baseRows + " -> " + rows.length + ")");
+assert(rows.filter(function (r) { return r.id === placed[0]; }).length === 1,
+       "the spawned character has exactly one row");
+assert(rows.filter(function (r) { return r.name === "RootNode"; }).length === 0,
+       "no import's internal RootNode is an outliner row");
+assert(scene.nodes().length > rows.length,
+       "the DOCUMENT still has every part (" + scene.nodes().length + " nodes) — this is a view rule");
+
+// ---- 4. the same clip is the same asset ----------------------------------
+
+var clipsBefore = assets.list({ type: "animation" }).length;
+avatar.loadAnimation(WALK);                 // the page's "Add Animation", again
+avatar.loadClip(placed[0], WALK);           // the viewport's clip drop
+avatar.loadClip(placed[1], WALK);           // ... onto a second character
+var clipsAfter = assets.list({ type: "animation" });
+console.log("animation rows: " + JSON.stringify(clipsAfter.map(function (r) { return r.name; })));
+assert(clipsAfter.length === clipsBefore,
+       "the same file loaded three more times reused the library row it already had ("
+       + clipsBefore + " -> " + clipsAfter.length + ")");
+
+// ---- 5. the clip is ON the character (the viewport drop's verb) ----------
+
+var roles = avatar.clipRoles(placed[0]);
+assert(roles.clips.length > 0, "the character carries the clip it was given");
+
+// ... and the avatar's clip rows are not tray tiles of their own.
+var trayAfter = guidsOf(assets.list({ scope: "project", tray: true }));
+console.log("tray after clips: " + JSON.stringify(trayAfter));
+assert(trayAfter.indexOf(avatarGuid) >= 0, "the avatar is still the character's tile");
+
+console.log("e2e_one_asset: all sections passed");

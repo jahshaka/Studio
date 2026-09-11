@@ -1275,6 +1275,27 @@ void SceneHierarchyWidget::repopulateTree()
     }
 }
 
+/// ONE ASSET, ONE ROW (owner rule, 2026-09-11). An import's parts are marked
+/// `attached` (MeshNode::buildNodeFromModel: the root is NOT, everything under
+/// it is), and those parts are the asset's insides — a Mixamo character is a
+/// Sketchfab wrapper, a RootNode, a Head mesh and five material splits, i.e.
+/// NINE rows for one thing the user dropped. The outliner shows the asset
+/// root; the parts stay in the document, where scripts, the mirror and the
+/// Avatar module read them.
+///
+/// The rows are NOT CREATED rather than hidden, deliberately: the shift-range
+/// selection walks the widget's rows (EDITOR_MULTISELECT_SPEC §2.2), so a
+/// hidden row would still be a selectable member of a range.
+///
+/// "Attach All Children" / "Detach From Parent" in the row's context menu are
+/// what fold and unfold a subtree by hand.
+bool SceneHierarchyWidget::isAssetPart(const iris::SceneNodePtr &node) const
+{
+    if (!node || !scene) return false;
+    auto parent = node->getParent();
+    return node->isAttached() && parent && parent != scene->getRootNode();
+}
+
 void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
                                         QSharedPointer<iris::SceneNode> sceneNode)
 {
@@ -1289,6 +1310,9 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
         iris::SceneNode *raw = sceneNode->childAt(i);
         if (!raw) continue;
         const iris::SceneNodePtr childNode = raw->sharedFromThis();
+        // The asset's own parts are not scene rows (see isAssetPart): skip the
+        // row AND the subtree under it.
+        if (isAssetPart(childNode)) { nodeList.insert(childNode->getNodeId(), childNode); continue; }
         auto childTreeItem = createTreeItems(childNode);
         QTreeWidgetItem *host = parentTreeItem;
         if (rootLevel) {
@@ -1301,8 +1325,6 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
         treeItemList.insert(childNode->getNodeId(), childTreeItem);
         populateTree(childTreeItem, childNode);
     }
-
-	this->refreshAttachmentColors(sceneNode);
 }
 
 QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
@@ -1389,7 +1411,11 @@ void SceneHierarchyWidget::showItemAndChildren(QTreeWidgetItem * item)
 void SceneHierarchyWidget::attachAllChildren(iris::SceneNodePtr node)
 {
 	_attachAllChildren(node);
-	refreshAttachmentColors(node);
+	// Attachment decides which rows EXIST now (isAssetPart), so folding a
+	// subtree into its root is a repopulate, not a recolour. (The old
+	// refreshAttachmentColors painted every row the same white in both
+	// branches of its own condition — it was a no-op and is deleted.)
+	repopulateTree();
 }
 
 void SceneHierarchyWidget::_attachAllChildren(iris::SceneNodePtr node)
@@ -1407,38 +1433,7 @@ void SceneHierarchyWidget::_attachAllChildren(iris::SceneNodePtr node)
 void SceneHierarchyWidget::detachFromParent(iris::SceneNodePtr node)
 {
 	node->setAttached(false);
-	refreshAttachmentColors(node);
-}
-
-void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
-{
-	auto nodeScene = node->getScene();
-	if (!nodeScene) return;
-	auto rootNode = nodeScene->getRootNode();
-	auto treeNode = treeItemList.value(node->getNodeId());
-	if (!treeNode) return;
-    treeNode->setForeground(0, QBrush(QColor(255, 255, 255, 255)));
-	if (node->isAttached() &&
-		node->getParent() != rootNode) {
-        treeNode->setForeground(0, QBrush(QColor(255, 255, 255, 255)));
-	}
-
-	for (int i = 0; i < treeNode->childCount(); i++) {
-		/*
-		if (node->parent == rootNode) {
-			treeNode->setTextColor(0, QColor(255, 255, 255, 255));
-		}
-		*/
-
-		auto childTreeNode = treeNode->child(i);
-		// Folder rows sit between the world row and its objects; they have no
-		// node and no colour of their own.
-		if (isFolderItem(childTreeNode)) continue;
-		qint64 nodeId = childTreeNode->data(0, Qt::UserRole).toLongLong();
-		auto childNode = nodeList.value(nodeId);
-		if (!childNode) continue;
-		refreshAttachmentColors(childNode);
-	}
+	repopulateTree();
 }
 
 void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
@@ -1489,6 +1484,13 @@ void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
         const QString folder = scenefolders::normalize(childNode->folderPath);
         if (!folder.isEmpty())
             if (auto *folderRow = folderItemFor(folder)) parentTreeItem = folderRow;
+    }
+    if (isAssetPart(childNode)) {
+        // The incremental twin of populateTree's skip: an asset's parts arrive
+        // with it (AddSceneNodeCommand walks the subtree) and get no rows.
+        nodeList.insert(childNode->getNodeId(), childNode);
+        for (auto child : childNode->children()) insertChild(child);
+        return;
     }
     auto childItem = createTreeItems(childNode);
     // Folder rows share a level with the objects, and they come first — so a
