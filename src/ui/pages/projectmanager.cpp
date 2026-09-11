@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "ui/pages/projectmanager.h"
 #include "ui_projectmanager.h"
 
+#include "services/apppaths.h"
+
 #include <chrono>
 #include <memory>
 
@@ -186,8 +188,12 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     // If we're opening a new scene, close the old one first
     if (mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
 
-	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+	// services/apppaths.h decides: the data root when a run forces one, the
+	// `default_directory` preference otherwise (S-extra2 — a sandboxed run must
+	// not create project folders in the user's Documents).
+	const auto projectFolder = AppPaths::projectsRoot(
+	    SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString(),
+	    Constants::PROJECT_FOLDER);
 
 	project->setProjectPath(
         QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
@@ -301,9 +307,8 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
     // there later; assets never do).
     db->updateProjectDesktop(result.projectGuid, currentDesktop);
 
-    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-                                 Constants::PROJECT_FOLDER);
-    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+    const auto defaultProjectDirectory = AppPaths::projectsRoot(
+        settings->getValue("default_directory", QString()).toString(), Constants::PROJECT_FOLDER);
     auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(result.projectGuid);
     QDir().mkpath(pDir);
 
@@ -328,8 +333,9 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
 }
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+    const auto projectFolder = AppPaths::projectsRoot(
+        SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString(),
+        Constants::PROJECT_FOLDER);
 
     project->setProjectPath(
         QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
@@ -362,8 +368,9 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+    const auto projectFolder = AppPaths::projectsRoot(
+        SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString(),
+        Constants::PROJECT_FOLDER);
 
     auto option = QMessageBox::question(this,
                                         "Deleting Project",

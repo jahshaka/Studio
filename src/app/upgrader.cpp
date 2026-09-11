@@ -9,8 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "services/apppaths.h"
 #include "app/upgrader.h"
+#include "services/apppaths.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -128,10 +128,14 @@ void Upgrader::checkIfDeprecatedVersion()
 #endif // Q_OS_WIN
 				}
 
-				// get the current project working directory
-				auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+				// get the current project working directory — services/apppaths.h,
+				// the same answer every other caller gets (S-extra2). It matters
+				// HERE more than anywhere: this branch removes that directory
+				// recursively, and a sandboxed run must wipe its OWN root, never
+				// the developer's Documents.
+				const auto defaultProjectDirectory = AppPaths::projectsRoot(
+					SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString(),
 					Constants::PROJECT_FOLDER);
-				auto defaultProjectDirectory = SettingsManager::getDefaultManager()->getValue("default_directory", pFldr).toString();
 
 				QDir projectDir(defaultProjectDirectory);
 				if (!projectDir.removeRecursively()) {

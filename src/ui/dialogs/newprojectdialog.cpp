@@ -15,6 +15,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/irisutils.h"
 #include "data/settingsmanager.h"
+#include "services/apppaths.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include "ui/dialogs/newprojectdialog.h"
@@ -50,8 +51,11 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent)
     connect(create, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
     connect(cancel, SIGNAL(pressed()), SLOT(close()));
 
-    auto pathText = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-	projectPath = settingsManager->getValue("default_directory", pathText).toString();
+    // services/apppaths.h: the data root when a run forces one, the
+    // `default_directory` preference otherwise (S-extra2).
+    projectPath = AppPaths::projectsRoot(
+        settingsManager->getValue("default_directory", QString()).toString(),
+        Constants::PROJECT_FOLDER);
 
 	projectPathEdit->setText(projectPath);
 

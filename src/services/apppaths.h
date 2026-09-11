@@ -127,6 +127,36 @@ inline QString dataRoot()
 /// AppDataLocation otherwise) so nobody's preferences move.
 inline bool isOverridden() { return detail::state().overridden; }
 
+/// THE PROJECTS ROOT for this run — the folder that holds the `Projects/`
+/// directory every project's own folder is created under.
+///
+/// It follows the data root when one is forced, and that is the whole point
+/// (lighting-audit item 15, smoke 2026-09-11): `--data-root` moved the library
+/// database, the asset store, the shader cache and the settings file, but NOT
+/// the projects, so every scripted run, every app-spawning suite and every
+/// agent on the rig created project folders in the DEVELOPER'S
+/// `~/Documents/Jahshaka/Projects` — nineteen empty ones in a single night.
+/// A hermetic run has to be hermetic on disk as well as in the database.
+///
+/// `configuredDirectory` is the `default_directory` preference (empty when
+/// unset) and `documentsSubFolder` is the historical Documents child
+/// (`Constants::PROJECT_FOLDER`) — both passed IN, because this header is
+/// included by ~20 test targets and must stay free of Studio's constants and
+/// its settings manager. With no override the answer is exactly what every
+/// call site computed inline before: the preference, else Documents.
+inline QString projectsRoot(const QString &configuredDirectory,
+                            const QString &documentsSubFolder)
+{
+    // The override WINS over the preference: a `default_directory` carried in
+    // by a copied settings file would otherwise write a sandboxed run's
+    // projects straight back into the user's Documents, which is the defect.
+    if (isOverridden()) return dataRoot();
+    const QString configured = configuredDirectory.trimmed();
+    if (!configured.isEmpty()) return detail::cleaned(configured);
+    return detail::cleaned(
+        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + documentsSubFolder);
+}
+
 /// The settings file for this run: `<dataRoot>/jahsettings.ini` when
 /// overridden, otherwise the historical location. SettingsManager is the only
 /// caller; it lives here so "the override redirects settings AND data
