@@ -142,6 +142,26 @@ int main(int argc, char **argv)
           "the tray stops at the right column's edge — it does not run under it");
     CHECK(tray.value("rightColumnBottom").toInt() >= tray.value("areaBottom").toInt() - 2,
           "the right column runs to the bottom of the editor");
+    // THE PRESETS LINE (owner, 2026-09-12): the right column's Presets panel
+    // starts on the same horizontal line as the Tray — and stays there when the
+    // Tray is resized.
+    std::printf("    presets line: trayTop=%d presetsTop=%d\n",
+                tray.value("trayTop").toInt(), tray.value("presetsTop").toInt());
+    CHECK(tray.contains("presetsTop") &&
+              qAbs(tray.value("presetsTop").toInt() - tray.value("trayTop").toInt()) <= 2,
+          "the Presets panel's top is on the Tray's top line");
+    {
+        const QJsonObject tall = readObject(mcp, QStringLiteral("editor.tray({height: 160})"));
+        settle(mcp);
+        const QJsonObject after = readObject(mcp, QStringLiteral("editor.trayState()"));
+        std::printf("    presets line after a 160 px tray: trayTop=%d presetsTop=%d\n",
+                    after.value("trayTop").toInt(), after.value("presetsTop").toInt());
+        CHECK(!tall.isEmpty() && after.value("trayTop").toInt() > tray.value("trayTop").toInt(),
+              "editor.tray({height}) resizes the Tray (a shorter Tray starts lower)");
+        CHECK(qAbs(after.value("presetsTop").toInt() - after.value("trayTop").toInt()) <= 2,
+              "…and the Presets panel follows it onto the same line");
+    }
+    tray = readObject(mcp, QStringLiteral("editor.trayState()"));
     // ONE TAB BAR PER CONCEPT (smoke L10 item 6). The tray's dock sits tabbed
     // with the Timeline, so Qt draws a SECOND tab bar at the bottom out of the
     // two docks' titles — which read "Timeline | Asset Browser" under a tray

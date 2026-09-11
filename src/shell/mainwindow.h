@@ -300,6 +300,12 @@ public:
     bool isConsoleInputFocused() const;
     /// Whether the tray widget itself is on screen (the View menu can hide it).
     bool isTrayVisible() const;
+    /// The editor's bottom Tray height (owner 2026-09-12, editor.tray({height})).
+    bool setTrayHeight(int height);
+    /// THE PRESETS LINE: the right column's Presets panel starts on the SAME
+    /// horizontal line as the bottom Tray (owner 2026-09-12). Re-run whenever the
+    /// Tray is resized, so the two panels move together.
+    void alignPresetsWithTray();
     /// Ctrl+` : show + focus the Console tab, or hide it when it is already the
     /// tab in front. The ShortcutRegistry entry calls exactly this.
     void toggleScriptConsole();
@@ -811,6 +817,7 @@ private:
     /// and the Hierarchy column on the left, which every other page copies.
     /// Called from both ways the editor page opens.
     void applyColumnWidthsOnce();
+    bool presetsAlignQueued = false;
     /// Whether that has happened — after it has, a user's drag wins.
     bool columnsSized = false;
     /// True when the nested `viewPort` QMainWindow's dock layout came back from

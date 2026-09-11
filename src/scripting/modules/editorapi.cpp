@@ -340,7 +340,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "already in does nothing), and NOT the same thing as a maximized window. The stats "
           "readout deliberately survives it: it is a diagnostic, not an editor helper.",
           Needs::Window },
-        { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible, title, trayRight, rightColumnLeft, rightColumnBottom, areaBottom}",
+        { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible, title, trayRight, rightColumnLeft, rightColumnBottom, areaBottom, trayTop, presetsTop}",
           "THE EDITOR'S BOTTOM TRAY, the one widget that carries the asset browser and the "
           "script console as TABS at its top (owner, 2026-09-11: turning the console on adds a "
           "Console tab beside Assets and the two share that widget). `tab` is the tab in front "
@@ -351,12 +351,14 @@ QVector<VerbInfo> EditorApi::verbs() const
           "itself is on screen, and `title` the tray DOCK's own title — what the bottom tab bar "
           "shows beside \"Timeline\" when the two docks share the bottom area (\"Tray\").",
           Needs::Window },
-        { "tray", "editor.tray({tab, console}) -> (the trayState map)",
+        { "tray", "editor.tray({tab, console, height}) -> (the trayState map)",
           "DRIVES THAT TRAY. `tab: \"console\"` shows the Console tab, raises the tray and "
           "puts the keyboard in the console input — exactly what the Ctrl+` chord does, "
           "through the same function; `tab: \"assets\"` brings the asset browser forward "
           "without closing the console tab. `console: true|false` adds or removes the Console "
-          "tab itself (false returns the tray to Assets). Called with no argument it reads, "
+          "tab itself (false returns the tray to Assets). `height: px` resizes the tray (at least "
+          "40), and the right column's Presets panel follows so its top stays on the tray's top "
+          "line. Called with no argument it reads, "
           "like editor.trayState().",
           Needs::Window },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
@@ -1525,6 +1527,10 @@ QVariantMap EditorApi::trayState()
             bottom = std::max(bottom, presets->geometry().bottom());
         out["rightColumnBottom"] = bottom;
         out["areaBottom"] = area->height() - 1;
+        // THE PRESETS LINE (owner 2026-09-12): Presets starts where the Tray does.
+        out["trayTop"] = dock->geometry().top();
+        if (presets && presets->isVisible() && presets->parentWidget() == area)
+            out["presetsTop"] = presets->geometry().top();
     }
     return out;
 }
@@ -1540,7 +1546,7 @@ QVariantMap EditorApi::tray(const QVariantMap &change)
         fail("editor.tray: this window has no bottom tray");
         return QVariantMap();
     }
-    static const QStringList known = { "tab", "console" };
+    static const QStringList known = { "tab", "console", "height" };
     for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
         if (known.contains(it.key())) continue;
         fail(QStringLiteral("editor.tray: unknown key '%1' (known: %2)")
@@ -1552,6 +1558,13 @@ QVariantMap EditorApi::tray(const QVariantMap &change)
     // and `tab` is the more specific request.
     if (change.contains("console"))
         host.mainWindow->setConsoleTabVisible(change.value("console").toBool());
+    if (change.contains("height")) {
+        const int h = change.value("height").toInt();
+        if (!host.mainWindow->setTrayHeight(h)) {
+            fail(QStringLiteral("editor.tray: height %1 refused (at least 40 px, and the editor tray must exist)").arg(h));
+            return QVariantMap();
+        }
+    }
     if (change.contains("tab")) {
         const QString tab = change.value("tab").toString();
         if (!host.mainWindow->setTrayTab(tab)) {

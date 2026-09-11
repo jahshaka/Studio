@@ -650,6 +650,10 @@ bool MainWindow::handleMouseWheel(QWheelEvent *event)
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
+    if (obj == assetDock && event->type() == QEvent::Resize && !presetsAlignQueued) {
+        presetsAlignQueued = true;
+        QTimer::singleShot(0, this, [this]() { presetsAlignQueued = false; alignPresetsWithTray(); });
+    }
     switch (event->type()) {
         case QEvent::MouseButtonPress: {
             dragging = true;
@@ -2402,6 +2406,9 @@ void MainWindow::setupDockWidgets()
     bottomTray->setDocumentMode(true);
     bottomTray->addTab(assetDockContents, tr("Assets"));
     assetDock->setWidget(bottomTray);
+    // The Presets line follows the Tray (owner 2026-09-12): a Tray resize —
+    // a drag of its top edge, a layout restore — re-aligns the right column.
+    assetDock->installEventFilter(this);
 
     // Animation Dock
     animationDock = new QDockWidget("Timeline", viewPort);
@@ -2506,6 +2513,7 @@ void MainWindow::applyColumnWidthsOnce()
         if (restoredViewportDocks) {
             if (settings) DockState::restore(viewPort, settings->settings, kViewportDockStateKey);
             viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);   // see setupDockWidgets
+            alignPresetsWithTray();
             return;
         }
         // BOTH docks in the right column, from the one constant. Presets sits
@@ -2521,7 +2529,47 @@ void MainWindow::applyColumnWidthsOnce()
             widths << PanelMetrics::leftColumnWidth;
         }
         viewPort->resizeDocks(column, widths, Qt::Horizontal);
+        alignPresetsWithTray();
     });
+}
+
+// THE PRESETS LINE (owner, 2026-09-12): "the bottom drawer with the materials
+// and preset shapes needs to start at the same horizontal line as the asset
+// module". The right column runs to the bottom (the corner rule), so the
+// Presets panel's top is set to the Tray's top: Presets gets the Tray's height
+// and Properties the rest of the column. Skipped when either panel is hidden or
+// floating — there is no shared line to meet then.
+void MainWindow::alignPresetsWithTray()
+{
+    if (!viewPort || !assetDock || !presetsDock || !sceneNodePropertiesDock) return;
+    if (!assetDock->isVisible() || !presetsDock->isVisible() || !sceneNodePropertiesDock->isVisible())
+        return;
+    if (assetDock->isFloating() || presetsDock->isFloating() || sceneNodePropertiesDock->isFloating())
+        return;
+    const int trayTop = assetDock->geometry().top();
+    const int columnTop = sceneNodePropertiesDock->geometry().top();
+    const int columnBottom = presetsDock->geometry().bottom();
+    if (trayTop <= columnTop || columnBottom <= trayTop) return;
+    // Two passes at most: the dock separators take a few pixels the first
+    // request cannot know about, so measure what landed and correct once.
+    int presetsH = columnBottom - trayTop + 1;
+    for (int pass = 0; pass < 2; ++pass) {
+        const int delta = presetsDock->geometry().top() - trayTop;
+        if (qAbs(delta) <= 1) return;                       // on the line
+        if (pass == 1) presetsH += delta;                   // the separator's share
+        const int propsH = qMax(1, (columnBottom - columnTop + 1) - presetsH);
+        viewPort->resizeDocks({ sceneNodePropertiesDock, presetsDock }, { propsH, presetsH }, Qt::Vertical);
+        if (QLayout *l = viewPort->layout()) l->activate();
+    }
+}
+
+bool MainWindow::setTrayHeight(int height)
+{
+    if (!viewPort || !assetDock || height < 40) return false;
+    viewPort->resizeDocks({ assetDock }, { height }, Qt::Vertical);
+    QCoreApplication::processEvents();
+    alignPresetsWithTray();
+    return true;
 }
 
 // ---------------------------------------------------------------------------
