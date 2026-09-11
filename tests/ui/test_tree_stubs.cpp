@@ -55,4 +55,5 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &) { re
 // before scenenode.h's explicit one).
 #include "services/selectionservice.h"
 void SceneEditService::notifyHierarchyChanged() {}
+void SceneEditService::notifyTransformChanged() {}   // SetNodePropertyCommand (the outliner eye, 2026-09-12)
 void SelectionService::select(iris::SceneNodePtr) {}

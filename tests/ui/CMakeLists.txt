@@ -736,6 +736,7 @@ add_executable(test_tree_multiselect
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/reparentscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/scenefoldercommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp

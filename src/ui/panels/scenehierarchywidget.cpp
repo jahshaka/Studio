@@ -21,7 +21,9 @@ For more information see the LICENSE file
 #include <QItemSelectionModel>
 #include <QUndoStack>
 
+#include <functional>
 #include "commands/reparentscenenodecommand.h"
+#include "commands/setnodepropertycommand.h"
 #include "commands/scenefoldercommand.h"
 #include "services/scenefolders.h"
 
@@ -857,8 +859,13 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 
 	// Our icons are in the second column
 	if (column == 1) {
-		if (item->data(1, Qt::UserRole).toBool()) hideItemAndChildren(item);
-		else showItemAndChildren(item);
+		// THE EYE SETS THE CLICKED NODE'S OWN FLAG, ONE UNDO STEP (render audit
+		// #7/#9 follow-up, 2026-09-12). It used to write the hidden flag onto
+		// every descendant (no undo, no verb), so the document forgot which
+		// children the user had hidden: "show parent" re-revealed them. The
+		// engine now cascades EFFECTIVE visibility itself (L12), so the parent's
+		// flag is all a hide or show needs; a child's own flag is never touched.
+		setItemVisible(item, !item->data(1, Qt::UserRole).toBool());
 	}
     else if (column == 2) {
         if (item->data(2, Qt::UserRole).toBool()) lockItemAndChildren(item);
@@ -1206,26 +1213,6 @@ void SceneHierarchyWidget::detachFromParent()
 	detachFromParent(selectedNode);
 }
 
-void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
-{
-	if (isFolderItem(item)) {
-		for (int i = 0; i < item->childCount(); i++) showHideNode(item->child(i), show);
-		return;
-	}
-	qint64 nodeId = item->data(1,Qt::UserRole).toLongLong();
-    auto node = nodeList[nodeId];
-
-    if (show) {
-        node->show();
-    } else {
-        node->hide();
-    }
-
-	for (int i = 0; i < item->childCount(); i++) {
-		showHideNode(item->child(i), show);
-	}
-}
-
 void SceneHierarchyWidget::repopulateTree()
 {
     if (!scene) return;
@@ -1400,40 +1387,48 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
     return childTreeItem;
 }
 
-void SceneHierarchyWidget::hideItemAndChildren(QTreeWidgetItem * item)
+void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 {
-	// A folder row carries no node — recurse THROUGH it, never into
-	// nodeList[0] (a null shared pointer waiting to be dereferenced).
-	if (isFolderItem(item)) {
-		for (int i = 0; i < item->childCount(); i++) hideItemAndChildren(item->child(i));
-		return;
-	}
-	qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-	item->setIcon(1, *hiddenIcon);
-	nodeList[nodeId]->hide();
-	item->setData(1, Qt::UserRole, QVariant::fromValue(false));
+	// A folder row carries no node: its eye sets the OWN flag of each node
+	// directly inside it (their descendants follow through the cascade), in one
+	// undo step. Nested folders are walked through, never into nodeList[0].
+	QVector<iris::SceneNodePtr> nodes;
+	std::function<void(QTreeWidgetItem *)> collect = [&](QTreeWidgetItem *it) {
+		if (isFolderItem(it)) {
+			for (int i = 0; i < it->childCount(); i++) collect(it->child(i));
+			return;
+		}
+		const qint64 nodeId = it->data(0, Qt::UserRole).toLongLong();
+		if (nodeList.contains(nodeId) && nodeList[nodeId]) nodes.push_back(nodeList[nodeId]);
+	};
+	collect(item);
 
-	for (int i = 0; i < item->childCount(); i++) {
-		hideItemAndChildren(item->child(i));
+	auto *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo : nullptr;
+	const bool macro = undo && undo->stack() && nodes.size() > 1;
+	if (macro) undo->stack()->beginMacro(visible ? tr("Show Objects") : tr("Hide Objects"));
+	for (const auto &node : nodes) {
+		if (node->isVisible() == visible) continue;
+		if (undo) undo->push(new SetNodePropertyCommand(node, QStringLiteral("visible"), !visible, visible));
+		else node->setVisible(visible);
 	}
-}
+	if (macro) undo->stack()->endMacro();
 
-void SceneHierarchyWidget::showItemAndChildren(QTreeWidgetItem * item)
-{
-	// A folder row carries no node — recurse THROUGH it, never into
-	// nodeList[0] (a null shared pointer waiting to be dereferenced).
-	if (isFolderItem(item)) {
-		for (int i = 0; i < item->childCount(); i++) showItemAndChildren(item->child(i));
-		return;
-	}
-	qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-	item->setIcon(1, *visibleIcon);
-	nodeList[nodeId]->show();
-	item->setData(1, Qt::UserRole, QVariant::fromValue(true));
-
-	for (int i = 0; i < item->childCount(); i++) {
-		showItemAndChildren(item->child(i));
-	}
+	// The row icons follow the nodes' OWN flags (what the eye edits).
+	std::function<void(QTreeWidgetItem *)> paint = [&](QTreeWidgetItem *it) {
+		if (!isFolderItem(it)) {
+			const qint64 nodeId = it->data(0, Qt::UserRole).toLongLong();
+			if (nodeList.contains(nodeId) && nodeList[nodeId]) {
+				const bool own = nodeList[nodeId]->isVisible();
+				it->setIcon(1, own ? *visibleIcon : *hiddenIcon);
+				it->setData(1, Qt::UserRole, QVariant::fromValue(own));
+			}
+		} else {
+			it->setIcon(1, visible ? *visibleIcon : *hiddenIcon);
+			it->setData(1, Qt::UserRole, QVariant::fromValue(visible));
+		}
+		for (int i = 0; i < it->childCount(); i++) paint(it->child(i));
+	};
+	paint(item);
 }
 
 //todo : attach physics objects

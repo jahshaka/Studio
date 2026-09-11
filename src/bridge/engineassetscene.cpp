@@ -230,14 +230,14 @@ void EngineAssetScene::setBackdrop(unsigned int id)
         mDocument->fogEnabled = false;
         mDocument->shadowEnabled = false;
         mDocument->setSkyColor(QColor(25, 25, 25));
-        if (mFloor) mFloor->hide();
+        if (mFloor) mFloor->setVisible(false);
         mShadows = false;
         break;
     case 2:
         mDocument->fogEnabled = false;
         mDocument->shadowEnabled = false;
         mDocument->setSkyColor(QColor(82, 82, 82));
-        if (mFloor) mFloor->hide();
+        if (mFloor) mFloor->setVisible(false);
         mShadows = false;
         break;
     case 3:
@@ -245,7 +245,7 @@ void EngineAssetScene::setBackdrop(unsigned int id)
         mDocument->fogEnabled = true;          // exponential, at the document default density
         mDocument->fogColor = QColor(25, 25, 25);
         mDocument->shadowEnabled = true;
-        if (mFloor) mFloor->show();
+        if (mFloor) mFloor->setVisible(true);
         mShadows = true;
         break;
     default:

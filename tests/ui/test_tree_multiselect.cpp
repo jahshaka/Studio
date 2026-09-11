@@ -38,6 +38,7 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QTest>
+#include <QHeaderView>
 #include <QTreeWidget>
 
 #include <cstdio>
@@ -278,6 +279,45 @@ void run()
         QApplication::processEvents();
         CHECK(rowFor(tree, "latePart") != nullptr,
               "one_asset: detaching a part gives it a row of its own");
+    }
+
+    // ---- the EYE sets only the clicked node's OWN flag (2026-09-12, render audit
+    // #7/#9 follow-up): hiding a parent through the eye must not rewrite its
+    // children's flags, so a child the user hid stays hidden when the parent is
+    // shown again (the old hide/showItemAndChildren wrote every descendant).
+    {
+        auto parent = iris::SceneNode::create();
+        parent->setName(QStringLiteral("eyeParent"));
+        auto keep = iris::SceneNode::create();
+        keep->setName(QStringLiteral("eyeKeep"));
+        auto hidden = iris::SceneNode::create();
+        hidden->setName(QStringLiteral("eyeHidden"));
+        root->addChild(parent);
+        parent->addChild(keep);
+        parent->addChild(hidden);
+        hidden->setVisible(false);            // the user hid this one themselves
+        panel.repopulateTree();
+        tree->expandAll();
+        QApplication::processEvents();
+        QTreeWidgetItem *pRow = rowFor(tree, "eyeParent");
+        CHECK(pRow != nullptr, "eye: the parent has a row");
+        auto clickEye = [&](QTreeWidgetItem *row) {
+            tree->scrollToItem(row);
+            const QRect r = tree->visualItemRect(row);
+            const int x = tree->header()->sectionPosition(1) + tree->header()->sectionSize(1) / 2;
+            QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(x, r.center().y()));
+            QApplication::processEvents();
+        };
+        if (pRow) {
+            clickEye(pRow);                   // hide the parent
+            CHECK(!parent->isVisible(), "eye: clicking the parent's eye hides the parent");
+            CHECK(keep->isVisible(), "eye: a child's OWN flag is untouched by the parent's hide");
+            CHECK(!keep->isVisibleInScene(), "eye: ...but the child is effectively hidden (the cascade)");
+            pRow = rowFor(tree, "eyeParent");
+            clickEye(pRow);                   // show it again
+            CHECK(parent->isVisible() && keep->isVisible(), "eye: showing the parent shows the child again");
+            CHECK(!hidden->isVisible(), "eye: the child the user hid STAYS hidden when the parent is shown");
+        }
     }
 
     scene.reset();

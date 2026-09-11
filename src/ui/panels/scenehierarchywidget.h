@@ -226,7 +226,6 @@ private:
                                          const QPoint &pos, QTreeWidgetItem **rowOut,
                                          QString *folderOut) const;
 
-	void showHideNode(QTreeWidgetItem* item, bool show);
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
     QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
@@ -254,8 +253,7 @@ private:
     /// re-announced the same set and every consumer rebuilt for nothing.
     QList<qint64> lastAnnouncedSet;
 
-	void hideItemAndChildren(QTreeWidgetItem* item);
-	void showItemAndChildren(QTreeWidgetItem* item);
+	void setItemVisible(QTreeWidgetItem *item, bool visible);
 	void lockItemAndChildren(QTreeWidgetItem* item);
 	void releaseItemAndChildren(QTreeWidgetItem* item);
 

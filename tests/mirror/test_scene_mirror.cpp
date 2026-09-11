@@ -998,11 +998,11 @@ int main(int argc, char **argv)
         CHECK(rebound.b > rebound.r + 0.05f, "changing the image re-binds the decal");
 
         // Hiding the node hides the decal (the LAYER_VISIBILITY cascade).
-        decal->hide();
+        decal->setVisible(false);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
         CHECK(std::abs(centre(img).r - bare.r) < 0.02f, "hiding a decal node hides the projection");
-        decal->show();
+        decal->setVisible(true);
 
         // An UNRESOLVABLE image leaves the node decal-free rather than keeping the
         // previous one bound (a stale decal would keep painting the old picture).
