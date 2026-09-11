@@ -66,13 +66,13 @@ var EXPECTED = {
     // and it is REGENERABLE (scenes/tools/make_grand_showroom.js), which the
     // world it replaced was not.
     "Showroom": { nodes: 23, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot"],
-                  types: { mesh: 17, light: 5 }, objects: 0 },
+                  types: { mesh: 17, light: 5 } },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
     // 14 since a799312a removed the two stray default-scene lights the resize
     // pass had left behind (the expectation lagged the re-stage — three lanes
     // independently flagged it).
     "Mirror Room": { nodes: 14, names: ["RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
-                     types: { mesh: 11, light: 2 }, objects: 0 },
+                     types: { mesh: 11, light: 2 } },
     "Skeletal Animation": { nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
                             types: { mesh: 4, light: 2 } },
     // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
@@ -772,10 +772,13 @@ app.engineErrors(true);
 var imported = project.importArchive(ZIP);
 assert(imported && imported.guid && imported.guid.length > 10, "importArchive -> " + (imported ? imported.guid : "null"));
 assert(imported.assets > 0, "catalog rows imported (" + imported.assets + ")");
-// OBJECTS: model files in the archive's CAS. The two script-built samples
-// (Showroom, Mirror Room) are made of PRIMITIVES, whose meshes are app
-// resources rather than library assets, so a correct import of those ingests
-// none — `objects` is per-sample expectation, not a universal contract.
+// OBJECTS: stored files in the archive's CAS — at the least the ground's
+// Tile.png, which every sample's default Ground uses. The two script-built
+// samples (Showroom, Mirror Room) are made of PRIMITIVES, whose meshes are app
+// resources rather than library assets, and until lane L13 they shipped NO
+// objects at all: their Tile.png row had no stored bytes, so the ground came
+// back untextured after an import (they are regenerated now, and this is the
+// guard). `objects` stays a per-sample override for a sample that needs one.
 var wantObjects = want.objects === undefined ? 1 : want.objects;
 assert(imported.objects >= wantObjects,
        "objects ingested (" + imported.objects + " >= " + wantObjects + ")");
