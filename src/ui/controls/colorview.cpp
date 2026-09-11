@@ -91,10 +91,15 @@ void ColorView::configureView()
     stackWidget = new QStackedWidget(this);
 	// A QProxyStyle OWNS its base style: never give it the application's
 	// (under Qlementine, with no sheet on this widget, this->style() IS the app
-	// style — see HFloatSliderWidget). Null follows the app style unowned;
-	// Classic keeps its old argument.
-	setStyle(new SliderMoveToMouseClickPositionStyle(
-		StyleSheet::classicThemeActive() ? this->style() : nullptr));
+	// style — see HFloatSliderWidget). Installed under CLASSIC ONLY (its old
+	// argument); Qlementine already jumps to the click on left press, and a
+	// null-base proxy would be a fresh Fusion instance, not the app style.
+	// Parented so it no longer leaks (theme review SF-1).
+	if (StyleSheet::classicThemeActive()) {
+		auto *moveStyle = new SliderMoveToMouseClickPositionStyle(this->style());
+		moveStyle->setParent(this);
+		setStyle(moveStyle);
+	}
 
     rSlider = new QSlider(Qt::Horizontal, this);
     gSlider = new QSlider(Qt::Horizontal, this);

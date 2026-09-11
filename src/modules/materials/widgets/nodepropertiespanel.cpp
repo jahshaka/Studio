@@ -163,9 +163,12 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	// natural line-edit/combo width (Qlementine's is generous) would otherwise
 	// run the column off its right edge — the page's scroll area has no
 	// horizontal bar, so a too-wide field is clipped, not scrolled.
-	for (QWidget *field : std::initializer_list<QWidget *>{ form.name, form.blend, form.bakeResolution }) {
-		field->setMinimumWidth(48);
-		field->setSizePolicy(QSizePolicy::Preferred, field->sizePolicy().verticalPolicy());
+	// Qlementine only: Classic keeps its sheet-era sizing bit-for-bit (theme review MF-1).
+	if (!StyleSheet::classicThemeActive()) {
+		for (QWidget *field : std::initializer_list<QWidget *>{ form.name, form.blend, form.bakeResolution }) {
+			field->setMinimumWidth(48);
+			field->setSizePolicy(QSizePolicy::Preferred, field->sizePolicy().verticalPolicy());
+		}
 	}
 
 	layout->addLayout(formLayout);

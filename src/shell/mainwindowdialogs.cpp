@@ -18,10 +18,12 @@ For more information see the LICENSE file
 // by name is also what a rig needs to photograph them, and what an MCP client
 // needs to show the user a dialog it is talking about.
 //
-// Every entry opens NON-modally: a verb cannot sit inside exec() (the script
-// host would never get control back), so a dialog that production code runs
-// with exec() is shown here with show() — same widget tree, same sheets, no
-// result to consume. Dialogs the window already owns (Preferences, About,
+// Every entry opens with show(), never exec(): a verb cannot sit inside exec()
+// (the script host would never get control back), so a dialog that production
+// code runs with exec() is shown here — same widget tree, same sheets, NO
+// result to consume (newProject/renameProject/getName's accept buttons do
+// nothing this way: INSPECTION ONLY). A dialog that sets its own modality
+// (Preferences, Qt::ApplicationModal) is still modal when shown (theme review SF-2). Dialogs the window already owns (Preferences, About,
 // Claude) are shown and hidden, never rebuilt; the rest are built fresh per
 // open and deleted on close.
 

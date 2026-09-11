@@ -43,12 +43,19 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     // with the sheet gone (theme sweep) it is THE APPLICATION'S QlementineStyle,
     // which the first destroyed row then deleted — every later paint and every
     // animator callback ran on a freed style (shutdown SIGABRT/SIGSEGV inside
-    // qlementine::WidgetAnimationManager::removeWidget). A null base follows the
-    // application style without owning it. Classic keeps its old argument
-    // (bit-for-bit).
-    auto *sliderStyle = new CustomStyle(StyleSheet::classicThemeActive() ? this->style() : nullptr);
-    sliderStyle->setParent(this);
-    setStyle(sliderStyle);
+    // qlementine::WidgetAnimationManager::removeWidget).
+    //
+    // So the proxy is installed under CLASSIC ONLY (its old argument, bit-for-bit).
+    // Under Qlementine it is not needed at all: the child QSlider never sees a
+    // style set on this row, and Qlementine already answers
+    // SH_Slider_AbsoluteSetButtons with Qt::LeftButton (QlementineStyle.cpp:4414);
+    // a null-base proxy would build a fresh FUSION instance per row, not follow
+    // the app style (theme review SF-1).
+    if (StyleSheet::classicThemeActive()) {
+        auto *sliderStyle = new CustomStyle(this->style());
+        sliderStyle->setParent(this);
+        setStyle(sliderStyle);
+    }
 
     ui->spinbox->setButtonSymbols(QAbstractSpinBox::NoButtons);
 

@@ -94,3 +94,13 @@ jah_lsan_lane(theme.manager)
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(theme.manager)
+
+# theme.no_raw_sheets — the static half of the no-raw-stylesheet law (theme review SF-3):
+# the live walk cannot see menus and dialogs built on demand, so the source is linted too.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME theme.no_raw_sheets
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/no_raw_sheets.py ${CMAKE_SOURCE_DIR})
+    set_tests_properties(theme.no_raw_sheets PROPERTIES LABELS "theme" TIMEOUT 60)
+    jah_no_display(theme.no_raw_sheets)
+endif()

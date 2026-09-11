@@ -405,11 +405,13 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Window },
         { "dialog", "app.dialog(name, open=true) -> {name, open, window, title, x, y, width, height}",
           "Opens (or, with open=false, closes) one of the app's dialogs by name — see app.dialogs. "
-          "ALWAYS non-modal, even for dialogs the editor runs modally: a verb cannot wait inside "
-          "exec(), so this shows the same widget tree with no result to consume. For the theme walk "
-          "(a dialog built on demand exists only while it is open), for rigs that photograph the "
-          "UI, and for a client that wants to put a dialog in front of the user. Returns {} for an "
-          "unknown name.",
+          "INSPECTION ONLY: shown with show(), never exec() (a verb cannot wait inside exec()), so "
+          "there is no result to consume — a dialog whose production caller reads its result after "
+          "exec() (newProject, renameProject, getName) shows an accept button that does NOTHING "
+          "here. A dialog that sets its own window modality (Preferences is application-modal) is "
+          "still modal. For the theme walk (a dialog built on demand exists only while it is open) "
+          "and for rigs that photograph the UI — not for asking the user anything. Returns {} for "
+          "an unknown name.",
           Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",

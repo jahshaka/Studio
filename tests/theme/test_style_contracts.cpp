@@ -98,12 +98,14 @@ int main(int argc, char **argv)
         CHECK(s->sizeFromContents(QStyle::CT_TabBarTab, &lone, QSize(), &bar)
                   == s->sizeFromContents(QStyle::CT_TabBarTab, &first, QSize(), &bar),
               "tabs: a stale lone-tab position does not widen the first tab");
+        // (Qt 6.10 paints a DRAGGED tab with position Moving; the correction passes it
+        // through — a one-line guard, not observable through this two-tab fixture.)
         QStyleOptionTab dragged = first;
         dragged.position = QStyleOptionTab::OnlyOneTab;
-        dragged.selectedPosition = QStyleOptionTab::NotAdjacent;   // a drag pixmap
+        dragged.selectedPosition = QStyleOptionTab::NotAdjacent;   // older Qt's drag pixmap
         CHECK(s->sizeFromContents(QStyle::CT_TabBarTab, &dragged, QSize(), &bar)
                   != s->sizeFromContents(QStyle::CT_TabBarTab, &first, QSize(), &bar),
-              "tabs: a dragged tab's pixmap keeps its lone-tab metrics");
+              "tabs: an older-Qt lone-tab drag pixmap keeps its lone-tab metrics");
     }
 
     // ---- 3. icon-over-caption items --------------------------------------------

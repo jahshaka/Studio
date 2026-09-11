@@ -158,15 +158,17 @@ public:
     // LAST tab — its text rect came out 8 px short and "Tray" drew as "T…".
     // (The root sheet mainwindow.ui carried until this sweep hid it: the
     // stylesheet style computed tab sizes itself.) Recomputing the position
-    // from the bar's actual visible tabs makes all three agree. A dragged tab's
-    // pixmap is painted as a lone tab on purpose (OnlyOneTab + NotAdjacent) and
-    // is left alone. [Upstream-fix candidate: tabExtraPadding in the vendored
+    // from the bar's actual visible tabs makes all three agree. A tab being
+    // DRAGGED is painted with position Moving (Qt 6.10, measured in the theme
+    // review) and is left alone, as is the lone-tab drag pixmap older Qt used
+    // (OnlyOneTab + NotAdjacent). [Upstream-fix candidate: tabExtraPadding in the vendored
     // QlementineStyle.cpp could do this itself.]
     static bool correctTabPosition(const QStyleOption *opt, const QWidget *w, QStyleOptionTab *out)
     {
         const auto *tab = qstyleoption_cast<const QStyleOptionTab *>(opt);
         const auto *bar = qobject_cast<const QTabBar *>(w);
         if (!tab || !bar || tab->tabIndex < 0 || tab->tabIndex >= bar->count()) return false;
+        if (tab->position == QStyleOptionTab::Moving) return false;
         if (tab->position == QStyleOptionTab::OnlyOneTab
             && tab->selectedPosition == QStyleOptionTab::NotAdjacent)
             return false;
