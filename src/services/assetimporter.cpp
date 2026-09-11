@@ -54,7 +54,6 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     result.objectGuid = imported.assetGuid;
     result.meshGuid = imported.meshGuid;
     result.error = imported.error;
-    result.node = imported.node;
     return result;
 }
 
@@ -72,6 +71,5 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
     result.objectGuid = imported.assetGuid;
     result.meshGuid = imported.meshGuid;
     result.error = imported.error;
-    result.node = imported.node;
     return result;
 }

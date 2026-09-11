@@ -76,6 +76,7 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "services/loadtimeline.h"
 #include "io/materialreader.h"
+#include "ui/style/panelmetrics.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include <QActionGroup>
@@ -107,6 +108,17 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->viewport()->installEventFilter(this);
 	ui->assetTree->viewport()->installEventFilter(this);
 	ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
+
+	// THE TRAY MAY BE SHORT (plan item 15: the window on a 1366x768 laptop).
+	// The bottom tray is a dock, and a dock area never goes below the sum of
+	// its content's minimum heights — which the WINDOW then inherits. Two list
+	// views at Qt's default scroll-area minimum put this panel's floor at 169 px
+	// and, with the tray around it, the editor window's at 694 px: taller than a
+	// 768-line screen leaves once a taskbar and a title bar have taken theirs.
+	// A list that can show one row is still a list, and the user who wants a
+	// taller tray drags the splitter — this is a floor, not a size.
+	ui->assetView->setMinimumHeight(PanelMetrics::trayListMinHeight);
+	ui->assetTree->setMinimumHeight(PanelMetrics::trayListMinHeight);
 	
 	connect(ui->assetTree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
 		this, SLOT(treeItemSelected(QTreeWidgetItem*)));

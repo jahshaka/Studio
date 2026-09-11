@@ -508,13 +508,47 @@ bool EngineSceneViewport::mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris:
     // every drag in this widget goes through a ray built here, so the pixel
     // context screen-space ring picking needs is set here too — one place, and
     // it cannot be out of step with the ray built two lines below.
-    if (mGizmo) mGizmo->setPickView(cam, float(width()), float(height()),
+    const QRectF picture = pictureRect();
+    if (mGizmo) mGizmo->setPickView(cam, float(picture.width()), float(picture.height()),
                                     float(devicePixelRatioF()));
     if (!mHaveMouse) return false;
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(cam, width(), height(), mMousePos, a, b);
+    pictureSegment(cam, mMousePos, a, b);
     rayPos = a; rayDir = (b - a).normalized();
     return true;
+}
+
+QRectF EngineSceneViewport::pictureRect() const
+{
+    const QRectF whole(0.0, 0.0, width(), height());
+    const iris::CameraNodePtr cam = viewCamera();
+    // The same condition the frame tick uses to leave the aspect alone
+    // (syncFrame: a piloted camera that constrains its aspect keeps the
+    // authored number, and the engine letterboxes to it).
+    if (!mPilot || !cam || !cam->constrainAspect || width() <= 0 || height() <= 0) return whole;
+    const double aspect = cam->aspectRatio > 0.01f ? cam->aspectRatio : 16.0 / 9.0;
+    const double target = double(width()) / double(height());
+    // chain::letterboxRect (OgreChain.cpp), in pixels.
+    if (aspect > target) {                 // wider than the widget: bars top and bottom
+        const double h = double(width()) / aspect;
+        return QRectF(0.0, (double(height()) - h) * 0.5, double(width()), h);
+    }
+    const double w = double(height()) * aspect;   // taller: bars left and right
+    return QRectF((double(width()) - w) * 0.5, 0.0, w, double(height()));
+}
+
+void EngineSceneViewport::pictureSegment(const iris::CameraNodePtr &cam, const QPointF &point,
+                                         iris::Vec3 &segStart, iris::Vec3 &segEnd) const
+{
+    // screenSegment sets the camera's aspect from the size it is given (it has
+    // to: it unprojects through the camera's matrices). Given the WIDGET, that
+    // silently rewrote a piloted, constrained camera's authored aspect with
+    // the viewport's on every hover — the letterbox then matched the widget
+    // and vanished, and a save wrote the viewport's shape into the camera.
+    // Given the picture, the aspect it sets is the one already there.
+    const QRectF picture = pictureRect();
+    ScenePicker::screenSegment(cam, picture.width(), picture.height(),
+                               point - picture.topLeft(), segStart, segEnd);
 }
 
 bool EngineSceneViewport::ensureEngineScene()
@@ -589,7 +623,7 @@ iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool select
     const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
     if (!mScene || !cam) return iris::SceneNodePtr();
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(cam, width(), height(), point, a, b);
+    pictureSegment(cam, point, a, b);
     const auto hits = ScenePicker::pickAll(mScene, a, b, cam->getGlobalPosition(), forcePickable);
     const ScenePick best = ScenePicker::nearest(hits);
     if (hitPoint && best.node) *hitPoint = best.hitPoint;
@@ -607,7 +641,7 @@ iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
     const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
     if (!cam) return iris::Vec3();
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(cam, width(), height(), point, a, b);
+    pictureSegment(cam, point, a, b);
     const iris::Plane floor = iris::IntersectionHelper::computePlaneND(iris::Vec3(100, 0, 100), iris::Vec3(-100, 0, 100), iris::Vec3(-100, 0, -100));
     float t; iris::Vec3 q;
     if (iris::IntersectionHelper::intersectSegmentPlane(a, a + (b - a).normalized() * 1024.0f, floor, t, q)) return q;
@@ -623,11 +657,12 @@ IEditorViewport::GizmoPickResult EngineSceneViewport::gizmoHitTest(const QPointF
     // Size and view exactly as a mouse pick would, then ask the same question
     // at the given pixel — a script and a click cannot disagree.
     mRotateGizmo->updateSize(cam);
-    mRotateGizmo->setPickView(cam, float(width()), float(height()),
+    const QRectF picture = pictureRect();
+    mRotateGizmo->setPickView(cam, float(picture.width()), float(picture.height()),
                               float(devicePixelRatioF()));
     out.tolerancePx = kRingPickTolerancePx;
     float distancePx = -1.0f;
-    out.handle = mRotateGizmo->ringNameAtPixel(point, distancePx);
+    out.handle = mRotateGizmo->ringNameAtPixel(point - picture.topLeft(), distancePx);
     out.distancePx = distancePx;
     return out;
 }
@@ -986,7 +1021,7 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
     const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
     if (!mSelectedNode || !mScene || !cam || !mHaveMouse) return false;
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(cam, width(), height(), mMousePos, a, b);
+    pictureSegment(cam, mMousePos, a, b);
     // refreshTransforms = false: this runs on every mouse move inside a live
     // translate drag, and the mirror's sync() already updated the document's
     // global transforms this frame. The update is a full recursive walk.
@@ -1892,13 +1927,33 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // take the picture, put the viewport's own sizing back. The rays are the
     // ones the last refreshOverlay used, deliberately — this must change the
     // gizmo's SIZE and nothing about which part is highlighted.
+    //
+    // THE CAMERA TAKES THE SHOT'S ASPECT FOR THE WHOLE SHOT, gizmo or not
+    // (lane L11, platform audit C2b.2). For a free camera the engine already
+    // resolves the frame from the shot's own target (OgreView::applyCamera),
+    // so this changes no pixel of the scene; what it changes is that every
+    // DOCUMENT-side reader — the gizmo's screen-constant size, the camera's
+    // own projMatrix — describes the picture being taken instead of the
+    // window beside it. ONE EXCEPTION, and it used to be a defect: a piloted
+    // camera that CONSTRAINS its aspect renders letterboxed at its AUTHORED
+    // aspect in any view, the shot included, so its aspect is the shot's
+    // already. The old gizmo-only swap wrote the shot's shape over it, and a
+    // shot of a 2.39 camera with a selection came out with no bars at all.
+    //
+    // What this does NOT make window-independent is a pose that was FRAMED for
+    // the window: F / editor.focusSelection / editor.frameNode back off until
+    // the subject fills the viewport's rendered angle, which on a window wider
+    // than 16:9 depends on the window (the framing hold). A shot of that pose
+    // differs between windows because the POSE does; a shot of a pose set with
+    // editor.setCamera is the same picture at any window size (ui.shot_aspect).
     const iris::CameraNodePtr shotCam = viewCamera();
     const bool resizeGizmo = shotCam && mGizmo && mOverlay && mSelectedNode && !mGameView;
     const float viewportAspect = shotCam ? shotCam->aspectRatio : 0.0f;
+    const bool authoredAspect = shotCam && mPilot && shotCam->constrainAspect;
     iris::Vec3 gizmoRayPos, gizmoRayDir, gizmoViewDir;
+    if (resizeGizmo) mouseRay(gizmoRayPos, gizmoRayDir, gizmoViewDir);   // the viewport's rays
+    if (shotCam && !authoredAspect) shotCam->setAspectRatio(float(width) / float(height));
     if (resizeGizmo) {
-        mouseRay(gizmoRayPos, gizmoRayDir, gizmoViewDir);
-        shotCam->setAspectRatio(float(width) / float(height));
         mGizmo->updateSize(shotCam);
         mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
     }
@@ -1956,8 +2011,8 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     mEngine->destroyView(shot);
     // ...and the viewport gets its own sizing back, before anything presents
     // another on-screen frame.
+    if (shotCam && !authoredAspect) shotCam->setAspectRatio(viewportAspect);
     if (resizeGizmo) {
-        shotCam->setAspectRatio(viewportAspect);
         mGizmo->updateSize(shotCam);
         mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
     }

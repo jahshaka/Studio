@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QImageReader>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPointer>
 #include <QPixmap>
 #include <QTemporaryDir>
 #include <QSqlDatabase>
@@ -57,6 +58,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
 #include "commands/deletescenenodecommand.h"
+#include "commands/nodeeditcommand.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
 #include "data/database/database.h"
@@ -861,6 +863,37 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
     undo->push(new AddSceneNodeCommand(source->getParent(), node,
                                        after >= 0 ? after + 1 : -1));
     return node;
+}
+
+QString SceneEditService::renameNode(const iris::SceneNodePtr &node, const QString &desired)
+{
+    if (!node || node->isRootNode()) return QString();
+    const QString wanted = desired.trimmed();
+    if (wanted.isEmpty()) return QString();
+
+    // Unique among the SIBLINGS, excluding the node itself: renaming "Cube2"
+    // to "Cube2" is a no-op, not a request for "Cube3".
+    const QString given = nodenaming::uniqueSiblingName(node->getParent(), wanted, node.data());
+    const QString before = node->getName();
+    if (given == before) return given;
+
+    // The outliner rebuilds from the document on hierarchyChanged — the same
+    // refresh a reparent raises — so undo and redo put the row text back too,
+    // not only the name. A QPointer rather than a raw `this`: the command sits
+    // on the undo stack, and this service is the one thing it captures without
+    // owning (the stack is cleared on project close; the service lives with
+    // the window).
+    QPointer<SceneEditService> self(this);
+    const iris::SceneNodePtr target = node;
+    auto apply = [self, target](const QString &name) {
+        target->setName(name);
+        if (self) self->notifyHierarchyChanged();
+    };
+    undo->push(new NodeEditCommand(
+        QStringLiteral("Rename %1 to %2").arg(before, given),
+        [apply, given]() { apply(given); },
+        [apply, before]() { apply(before); }));
+    return given;
 }
 
 SceneFragment SceneEditService::captureFragment(const iris::SceneNodePtr &node) const

@@ -17,10 +17,10 @@
 #include "irisgl/core/math/intersectionhelper.h"
 
 namespace {
-iris::Vec3 unproject(const iris::CameraNodePtr &cam, int w, int h, const QPointF &pos, float depth)
+iris::Vec3 unproject(const iris::CameraNodePtr &cam, qreal w, qreal h, const QPointF &pos, float depth)
 {
-    const float mousex = (2.0f * float(pos.x())) / float(w) - 1.0f;
-    const float mousey = (2.0f * float(pos.y())) / float(h) - 1.0f;
+    const float mousex = float((2.0 * pos.x()) / w - 1.0);
+    const float mousey = float((2.0 * pos.y()) / h - 1.0);
     const iris::Vec4 hcc(mousex, -mousey, depth, 1.0f);
     const iris::Vec4 eye = cam->projMatrix.inverted() * hcc;
     const iris::Vec4 world = cam->viewMatrix.inverted() * eye;
@@ -28,11 +28,11 @@ iris::Vec3 unproject(const iris::CameraNodePtr &cam, int w, int h, const QPointF
 }
 }
 
-void ScenePicker::screenSegment(iris::CameraNodePtr camera, int w, int h, const QPointF &point,
+void ScenePicker::screenSegment(iris::CameraNodePtr camera, qreal w, qreal h, const QPointF &point,
                                 iris::Vec3 &segStart, iris::Vec3 &segEnd)
 {
-    if (!camera || w <= 0 || h <= 0) { segStart = segEnd = iris::Vec3(); return; }
-    camera->setAspectRatio(float(w) / float(h));
+    if (!camera || w <= 0.0 || h <= 0.0) { segStart = segEnd = iris::Vec3(); return; }
+    camera->setAspectRatio(float(w / h));
     camera->update(0.0f);
     camera->updateCameraMatrices();
     segStart = unproject(camera, w, h, point, -1.0f);

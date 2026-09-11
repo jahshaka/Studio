@@ -165,7 +165,6 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         return false;
     }
     out.metadata = modelStats;
-    out.node = node;
 
     // The source model file — recorded under BOTH the Object guid and the Mesh
     // member guid (same content id: the CAS dedups). Scene instantiation

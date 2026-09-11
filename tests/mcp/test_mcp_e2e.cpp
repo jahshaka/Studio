@@ -20,6 +20,8 @@
 //   - undo_redo reverts the last run_script call (describe_scene confirms)
 //   - api_docs returns the registry reference (whole and per-module)
 //   - F5: a scripted node.setProperty is UNDOABLE through undo_redo
+//   - plan item 15: node.rename is UNDOABLE through undo_redo (the colliding
+//     rename answers the sibling-unique name; undo restores the old one)
 //   - lane D #14: a scripted node.physics write is UNDOABLE too (the only
 //     place undo is observable — a --script run's macro never closes)
 //   - smoke L10 #5: world.ambient/gravity/fog/gi/sky are UNDOABLE (value, and
@@ -760,6 +762,44 @@ int main(int argc, char **argv)
             QJsonObject{ { "script", QStringLiteral("node.property('%1','intensity')").arg(lightId) } }));
         CHECK(qAbs(reread.value("result").toDouble() - 99) < 0.001,
               "F5: and redo restores the scripted property write");
+    }
+
+    // ---- plan item 15: node.rename is UNDOABLE -----------------------------
+    // node.rename records one NodeEditCommand (SceneEditService::renameNode —
+    // the outliner's inline editor makes the same edit). scripting.e2e.
+    // node_rename proves the sibling rule and that ONE step is recorded; only
+    // two closed run_script macros can prove the step is UNDONE.
+    {
+        const QJsonObject made = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script",
+                           "var a = scene.addPrimitive('cube');"
+                           "var b = scene.addPrimitive('sphere');"
+                           "node.rename(a, 'Hero');"
+                           "JSON.stringify({a:a, b:b})" },
+                         { "label", "two shapes, one named Hero" } }));
+        CHECK(made.value("ok").toBool(), "run_script adds two shapes and names one Hero");
+        const QJsonObject ids =
+            QJsonDocument::fromJson(made.value("result").toString().toUtf8()).object();
+        const QString bId = ids.value("b").toString();
+        const QString oldName = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.info('%1').name").arg(bId) } }))
+                                    .value("result").toString();
+
+        // Second run, so the first run's macro is closed: the colliding rename.
+        const QJsonObject renamed = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.rename('%1', 'Hero')").arg(bId) },
+                         { "label", "rename into a taken name" } }));
+        CHECK(renamed.value("ok").toBool() && renamed.value("result").toString() == "Hero2",
+              "node.rename into a sibling's name answers the uniquified one (Hero2)");
+
+        const QJsonObject undone = toolJson(callTool(net, url, token, ++id, "undo_redo",
+                                                     QJsonObject{ { "action", "undo" } }));
+        CHECK(undone.value("applied").toBool(), "undo_redo applies the rename's undo");
+        const QJsonObject read = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.info('%1').name").arg(bId) } }));
+        CHECK(!oldName.isEmpty() && read.value("result").toString() == oldName,
+              qPrintable(QStringLiteral("node.rename: undo restores the old name ('%1', got '%2')")
+                             .arg(oldName, read.value("result").toString())));
     }
 
     // ---- lane D #14: node.physics is UNDOABLE -----------------------------

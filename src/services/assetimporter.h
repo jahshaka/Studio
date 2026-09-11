@@ -27,8 +27,6 @@ For more information see the LICENSE file
 
 #include <QString>
 
-#include "irisgl/irisglfwd.h"
-
 class Database;
 class Project;
 
@@ -40,7 +38,6 @@ public:
         QString objectGuid;     // empty on failure
         QString meshGuid;
         QString error;
-        iris::SceneNodePtr node;   // the imported (guid-rewritten) scene fragment
         bool ok() const { return !objectGuid.isEmpty(); }
     };
 

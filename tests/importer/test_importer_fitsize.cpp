@@ -39,6 +39,7 @@
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QSqlDatabase>
+#include <QTemporaryDir>
 #include <cmath>
 #include <cstdio>
 
@@ -49,6 +50,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "data/project.h"
 #include "modules/avatar/avatarpreviewmodel.h"
+#include "services/assethelper.h"
 #include "services/assetmetadata.h"
 #include "services/assetstorepaths.h"
 #include "services/fitsize.h"
@@ -69,8 +71,16 @@ static QString fixture(const char *relative)
     return QString(JAHSHAKA_TEST_SOURCE_DIR) + "/" + relative;
 }
 
-/// One import through the real pipeline. Returns the row guid and keeps the
-/// document fragment the importer produced (what a placement instantiates).
+/// One import through the real pipeline. Returns the row guid, the metadata
+/// block the pipeline recorded, and the model's document fragment to measure.
+///
+/// The fragment comes from AssetHelper::extractTexturesAndMaterialFromMesh —
+/// the parse the mesh importer itself runs — and not from the import result:
+/// ImportResult carried that fragment (`node`) until 2026-09-11, when its last
+/// production reader (the Assets page's import tail) moved to the library blob
+/// (smoke S6) and the field was deleted with its writers (lane L11, CRUD). The
+/// numbers under test are transforms and extents, which the pipeline's guid
+/// rewrite never touches, so the parse is the same subject.
 struct Imported
 {
     QString guid;
@@ -95,8 +105,14 @@ static Imported importModel(AssetImportService &service, const QString &projectG
         return out;
     }
     out.guid = result.assetGuid;
-    out.node = result.node;
     out.meta = AssetMetadata::ensure(&db, out.guid);
+    // Embedded textures go to a throwaway dir, never beside the fixture (an
+    // empty extractDir means "next to the source", which is the repo).
+    QTemporaryDir extract;
+    QStringList names, paths;
+    bool embedded = false;
+    out.node = AssetHelper::extractTexturesAndMaterialFromMesh(path, names, paths, embedded,
+                                                               nullptr, extract.path());
     return out;
 }
 

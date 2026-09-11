@@ -34,8 +34,6 @@ For more information see the LICENSE file
 
 class QTemporaryDir;
 
-#include "irisgl/irisglfwd.h"
-
 struct ImportRequest
 {
     QString sourcePath;
@@ -56,7 +54,6 @@ struct ImportResult
     QString jafKind;            // .jaf imports: the manifest kind ("object", …)
     QMap<QString, QString> guidMap;   // .jaf imports: archive guid → new guid
     QJsonObject metadata;       // the describe-stage block recorded on the row
-    iris::SceneNodePtr node;    // mesh imports: the guid-rewritten fragment
     bool ok() const { return error.isEmpty() && !assetGuid.isEmpty(); }
 };
 
@@ -114,7 +111,6 @@ struct StagedAsset
     QVector<StagedDep> deps;
     QJsonObject metadata;                // describe-stage block ("metadata" property)
     QJsonObject importRecord;            // determinism record ("import" property)
-    iris::SceneNodePtr node;
     QString jafKind;
     StagedJaf jaf;
     QStringList warnings;

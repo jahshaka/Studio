@@ -321,7 +321,6 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
 
     result.assetGuid = staged.mainGuid;
     result.meshGuid = staged.meshGuid;
-    result.node = staged.node;
     result.jafKind = staged.jafKind;
     result.metadata = staged.metadata;
 

@@ -778,6 +778,53 @@ set_tests_properties(ui.column_law PROPERTIES
 jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
 jah_lsan_blocked(ui.column_law)   # spawns the app
 
+# ui.window_minimum — plan item 15: the main window fits a 1366x768 laptop in
+# every space (its floor <= 1366x640) and, put at 1366x680, keeps both columns
+# at or above their minimums with >= 400 px for the viewport. Same harness and
+# the same reason as ui.column_law: floors and widths come out of LAYOUT, which
+# needs the real, shown window and a turning event loop.
+add_executable(test_window_minimum test_window_minimum.cpp)
+set_target_properties(test_window_minimum PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_window_minimum PRIVATE Qt6::Core Qt6::Network)
+target_include_directories(test_window_minimum PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_window_minimum PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_winmin_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-window-minimum)
+file(MAKE_DIRECTORY ${_winmin_home}/run)
+add_test(NAME ui.window_minimum COMMAND test_window_minimum
+         WORKING_DIRECTORY ${_winmin_home}/run)
+set_tests_properties(ui.window_minimum PROPERTIES
+    ENVIRONMENT "HOME=${_winmin_home};JAHSHAKA_DATA_ROOT=${_winmin_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "ui")
+jah_tsan_blocked(ui.window_minimum)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
+jah_lsan_blocked(ui.window_minimum)   # spawns the app
+
+# ui.shot_aspect — plan item 15 / platform audit C2b.2: an offscreen shot is a
+# function of the camera's pose and the SHOT's size, never the window's (same
+# pose, two window shapes, identical pixels, gizmo drawn), and a piloted camera
+# that constrains its aspect keeps its AUTHORED aspect (the pick paths used to
+# overwrite it with the viewport's every frame). MCP harness: the window is
+# re-shaped with app.resizeWindow and measured a request later.
+add_executable(test_shot_aspect test_shot_aspect.cpp)
+set_target_properties(test_shot_aspect PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_shot_aspect PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_include_directories(test_shot_aspect PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_shot_aspect PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
+file(MAKE_DIRECTORY ${_shot_home}/run)
+add_test(NAME ui.shot_aspect COMMAND test_shot_aspect
+         WORKING_DIRECTORY ${_shot_home}/run)
+set_tests_properties(ui.shot_aspect PROPERTIES
+    ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "ui")
+jah_tsan_blocked(ui.shot_aspect)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
+jah_lsan_blocked(ui.shot_aspect)   # spawns the app
+
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
 # claims — in its own comment, or by running --headless, or by building nothing

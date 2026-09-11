@@ -57,4 +57,17 @@ assert(shot.center.g > shot.center.r + 20 && shot.center.g > shot.center.b + 20,
 // the engine thumbnail path renders the same resolved material
 assert(assets.refreshThumbnail(guid) === true, "assets.refreshThumbnail renders");
 
+// ...AND LEAVES THE EDITOR'S COPY ALONE (lane L11). The thumbnail scene loads
+// the same files, and the renderer hands both scenes the SAME texture (file
+// textures are shared by path and colour space). The thumbnail scene's teardown
+// used to DESTROY it: the editor's quad lost its maps on the spot — the centre
+// went from (7,114,7) to a flat (90,124,90) — and its texture record dangled
+// until shutdown freed it a second time (this suite's teardown SEGV). File
+// textures are refcounted across scenes now; the last one out destroys.
+editor.frame(5);
+var again = editor.screenshot("import_render_after_thumbnail.png", 512, 512);
+console.log("centre pixel after the thumbnail render " + JSON.stringify(again.center));
+assert(again.center.g > again.center.r + 20 && again.center.g > again.center.b + 20,
+       "the editor's quad still samples its GREEN map after a thumbnail of the same asset");
+
 console.log("e2e_import_render: ALL OK");

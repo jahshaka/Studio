@@ -31,6 +31,8 @@ void MainWindow::exportNode(const iris::SceneNodePtr &, ModelTypes) {}
 
 // ---- the scene-edit service (menu rows only) -------------------------------
 bool SceneEditService::setDecalTexture(const iris::DecalNodePtr &, const QString &) { return false; }
+// The inline editor's commit (node.rename's edit) — the suite never opens an editor.
+QString SceneEditService::renameNode(const iris::SceneNodePtr &, const QString &) { return {}; }
 
 // ---- the clipboard (menu rows only) ----------------------------------------
 //

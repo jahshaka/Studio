@@ -19,8 +19,9 @@ For more information see the LICENSE file
 // texture guid to a file in the store. Anything else is a copy of the truth
 // that goes stale:
 //
-//   * the IMPORT-TIME fragment (ImportResult::node) carries material paths
-//     into the import's STAGING directory, which the commit deletes — so the
+//   * the IMPORT-TIME fragment (ImportResult::node, deleted 2026-09-11 once
+//     nothing read it) carried material paths into the import's STAGING
+//     directory, which the commit deletes — so the
 //     Assets page rendered a white model and PERSISTED it as the thumbnail
 //     (the owner's "GLB imports show no textures in Assets", 2026-09-11);
 //     `assets.refreshThumbnail` already said so in a comment and rebuilt from
