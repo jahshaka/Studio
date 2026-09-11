@@ -19,56 +19,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QWidget#floater {
-	/*background: #212121; */
-}
-
-QSlider::sub-page {
-	border: 0px solid transparent;
-	height: 2px;
-	background: #3498db;
-	margin: 2px 0;
-}
-
-
-QSlider::groove:horizontal {
-    border: 0px solid transparent;
-    height: 4px;
-    background: #1e1e1e;
-    margin: 2px 0;
-}
-
-QSlider::handle:horizontal {
-    background-color: #CCC;
-    width: 12px;
-    border: 1px solid #1e1e1e;
-    margin: -5px 0px;
-    border-radius:7px;
-}
-
-QSlider::handle:horizontal:pressed {
-    background-color: #AAA;
-    width: 12px;
-    border: 1px solid #1e1e1e;
-    margin: -5px 0px;
-    border-radius: 7px;
-}
-
-QDoubleSpinBox {
-	border-radius: 1px;
-	padding: 7px;
-	background: #292929;
-}
-
-QSlider::handle:horizontal:disabled {
-    background-color: #bbbbbb;
-    width: 12px;
-    border: 0px solid transparent;
-    margin: -1px -1px;
-    border-radius: 4px;
-}</string>
-  </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="spacing">
     <number>0</number>

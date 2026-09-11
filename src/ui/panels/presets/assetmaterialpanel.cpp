@@ -30,6 +30,7 @@ For more information see the LICENSE file
 
 #include "io/scenewriter.h"
 #include "ui/panels/singledragowner.h"
+#include "ui/style/stylesheet.h"
 
 AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
 {
@@ -59,9 +60,7 @@ AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
     connect(listView,   SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,       SLOT(applyMaterialPreset(QListWidgetItem*)));
 
-    setStyleSheet(
-        "QListWidget { padding: 4px; border: 0; background: #202020; }"
-    );
+    setStyleSheet(StyleSheet::PresetsListPanel());
 
     addDefaultItems();
     addFavorites();
@@ -242,12 +241,7 @@ bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
 void AssetMaterialPanel::showContextMenu(const QPoint &pos)
 {
     QMenu contextMenu;
-    contextMenu.setStyleSheet(
-        "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-        "QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-        "QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-        "QMenu::item : disabled { color: #555; }"
-    );
+    contextMenu.setStyleSheet(StyleSheet::PresetsContextMenu());
 
     QAction action("Remove Item", this);
     connect(&action, &QAction::triggered, this, [this, pos]() {

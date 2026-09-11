@@ -166,7 +166,10 @@ jah_lsan_blocked(ui.material_panel)
 # about setMask being quiet (the panel calls it while selecting a node).
 # Widgets only — no document, no engine, no display.
 add_executable(test_light_channels test_light_channels.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
+    # its warning note's Classic sheet lives in the theme archive (theme sweep)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
 set_target_properties(test_light_channels PROPERTIES
     AUTOMOC ON
     CXX_STANDARD 17

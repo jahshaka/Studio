@@ -13,58 +13,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QWidget#sceneTree {
-	background-color: #202020;
-	border-top: 1px solid #111;
-}
-
-#addBtn, #deleteBtn, #folderBtn {
-	padding: 4px;
-}
-
-#addBtn {
-	border: 0;
-}
-
-#deleteBtn, #folderBtn {
-	border-left: 1px solid #333;
-}
-
-QTreeWidget {
-  outline: none;
-  selection-background-color: #404040;
-  color: #CECECE;
-}
-
-QTreeWidget::item {
-	padding: 6px;
-}
-
-QTreeWidget::item:selected {
-	selection-background-color: #404040;
-	background: #404040;
-	outline: none;
-  }
-
-
-/* important when the widget loses focus */
-QTreeWidget::item:selected:!active {
-	background: #404040;
-	padding: 0;
-	color: #CECECE;
-}
-
-QTreeWidget::item:selected:active {
-	background: #404040;
-	padding: 0;
-}
-
-QTreeWidget::item:hover {
-
-}
-  </string>
-  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
     <number>0</number>
@@ -88,12 +36,6 @@ QTreeWidget::item:hover {
        <width>0</width>
        <height>0</height>
       </size>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QWidget#widget{
-	border: none;
-	background-color: #303030;
-}</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="spacing">
@@ -206,9 +148,6 @@ QTreeWidget::item:hover {
    </item>
    <item>
     <widget class="SceneTreeWidget" name="sceneTree">
-     <property name="styleSheet">
-      <string notr="true">outline: none</string>
-     </property>
      <property name="rootIsDecorated">
       <bool>true</bool>
      </property>

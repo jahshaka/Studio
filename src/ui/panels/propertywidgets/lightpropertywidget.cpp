@@ -40,6 +40,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 namespace {
 
@@ -73,7 +75,8 @@ QWidget *makeBindingRow(const QString &title, QLabel **valueOut, QPushButton **p
 
     auto *note = new QLabel(row);
     note->setWordWrap(true);
-    note->setStyleSheet(QStringLiteral("color: #d08b3c;"));
+    note->setStyleSheet(StyleSheet::WarningNote());
+    ThemeRoles::setTone(note, ThemeRoles::Tone::Warning);
     note->hide();
     outer->addWidget(note);
 

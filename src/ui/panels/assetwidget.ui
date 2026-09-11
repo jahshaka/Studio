@@ -13,9 +13,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true"/>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
     <number>0</number>
@@ -110,9 +107,6 @@
    </item>
    <item row="2" column="0">
     <widget class="QSplitter" name="splitter">
-     <property name="styleSheet">
-      <string notr="true"/>
-     </property>
      <property name="lineWidth">
       <number>0</number>
      </property>
@@ -137,9 +131,6 @@
         <width>0</width>
         <height>0</height>
        </size>
-      </property>
-      <property name="styleSheet">
-       <string notr="true"/>
       </property>
       <property name="headerHidden">
        <bool>true</bool>

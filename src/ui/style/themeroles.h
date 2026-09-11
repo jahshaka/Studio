@@ -35,6 +35,8 @@ For more information see the LICENSE file
 #include <QApplication>
 #include <QColor>
 #include <QFont>
+#include <QFontDatabase>
+#include <QFontInfo>
 #include <QPalette>
 #include <QPushButton>
 #include <QToolButton>
@@ -89,6 +91,7 @@ enum class Surface {
     Workspace,  // backgroundColorWorkspace  #151515
     Panel,      // backgroundColorMain1      #1e1e1e
     Raised,     // backgroundColorMain2      #262626 (the palette's Window)
+    Band,       // neutralColor              #3a3a3a (the palette's Button) — section headers
     Warning,    // a warning banner's amber  #7a4a12 (pairs with Tone::Normal text)
     Black       // video / render letterbox  #000000
 };
@@ -100,6 +103,7 @@ inline QColor surfaceColor(Surface surface)
     case Surface::Workspace: return QColor(0x15, 0x15, 0x15);
     case Surface::Panel:     return QColor(0x1e, 0x1e, 0x1e);
     case Surface::Raised:    return QColor(0x26, 0x26, 0x26);
+    case Surface::Band:      return QApplication::palette().color(QPalette::Active, QPalette::Button);
     case Surface::Warning:   return QColor(0x7a, 0x4a, 0x12);
     case Surface::Black:     return QColor(0x00, 0x00, 0x00);
     }
@@ -124,6 +128,18 @@ inline void setTextSize(QWidget *w, int pixelSize, QFont::Weight weight = QFont:
     QFont f = w->font();
     f.setPixelSize(pixelSize);
     f.setWeight(weight);
+    w->setFont(f);
+}
+
+/// A monospace face at a pixel size: the theme's bundled Roboto Mono when it
+/// is registered (Qlementine ships it), else the platform's fixed font.
+inline void setMonospace(QWidget *w, int pixelSize)
+{
+    if (!w || StyleSheet::classicThemeActive()) return;
+    QFont f(QStringLiteral("Roboto Mono"));
+    f.setStyleHint(QFont::Monospace);
+    if (!QFontInfo(f).fixedPitch()) f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    f.setPixelSize(pixelSize);
     w->setFont(f);
 }
 

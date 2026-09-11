@@ -16,12 +16,16 @@ For more information see the LICENSE file
 #include "ui_filepickerwidget.h"
 
 #include "ui/controls/assetpickerwidget.h"
+#include "ui/style/stylesheet.h"
 
 FilePickerWidget::FilePickerWidget(QWidget *parent) :
     BaseWidget(parent),
     ui(new Ui::FilePickerWidget)
 {
     ui->setupUi(this);
+    // filepickerwidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::FilePickerRoot());
+    ui->filename->setStyleSheet(StyleSheet::FilePickerFilename());
 
     connect(ui->load, SIGNAL(pressed()), this, SLOT(filePicker()));
 

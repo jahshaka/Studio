@@ -392,7 +392,12 @@ int main(int argc, char *argv[])
     
     updateChecker.checkForAppUpdate();
 
-	app.installEventFilter(new ToolTipHelper());
+	// Tooltips: Classic's own popup (ToolTipHelper), or the Qlementine style's
+	// native tooltip with "Header | body" rendered as rich text.
+	if (ThemeManager::classicActive())
+		app.installEventFilter(new ToolTipHelper());
+	else
+		app.installEventFilter(new NativeToolTipFormatter(&app));
 
     const int rc = app.exec();
     return finalizeAppExit(rc);

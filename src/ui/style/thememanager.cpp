@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include <QMetaObject>
 #include <QPushButton>
 #include <QSet>
+#include <QStyleOptionTab>
+#include <QTabBar>
 #include <QWidgetAction>
 
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -116,7 +118,75 @@ public:
         if (element == QStyle::CE_FocusFrame && w && w->window()
             && !w->window()->testAttribute(Qt::WA_KeyboardFocusChange))
             return;
+        QStyleOptionTab fixed;
+        if (element == QStyle::CE_TabBarTab && correctTabPosition(opt, w, &fixed)) {
+            oclero::qlementine::QlementineStyle::drawControl(element, &fixed, p, w);
+            return;
+        }
         oclero::qlementine::QlementineStyle::drawControl(element, opt, p, w);
+    }
+
+    // TAB METRICS FROM THE TAB BAR ITSELF (theme sweep, 2026-09-11). Qlementine
+    // insets the first and last tab of a bar by one spacing unit, and reads
+    // "first/last" from the option's `position` in three places that must agree
+    // — the tab's size (CT_TabBarTab), its text rect (SE_TabBarTabText, which is
+    // what QTabBar elides the label against) and its painting. QTabBar fills
+    // `position` from cached first/last-visible indices, and those can be stale
+    // for the layout pass that runs when a hidden bar is shown again: the
+    // editor's Timeline | Tray dock bar, after a trip to the Desktop, sized
+    // Timeline as a lone tab and Tray as a middle one, then painted Tray as the
+    // LAST tab — its text rect came out 8 px short and "Tray" drew as "T…".
+    // (The root sheet mainwindow.ui carried until this sweep hid it: the
+    // stylesheet style computed tab sizes itself.) Recomputing the position
+    // from the bar's actual visible tabs makes all three agree. A dragged tab's
+    // pixmap is painted as a lone tab on purpose (OnlyOneTab + NotAdjacent) and
+    // is left alone. [Upstream-fix candidate: tabExtraPadding in the vendored
+    // QlementineStyle.cpp could do this itself.]
+    static bool correctTabPosition(const QStyleOption *opt, const QWidget *w, QStyleOptionTab *out)
+    {
+        const auto *tab = qstyleoption_cast<const QStyleOptionTab *>(opt);
+        const auto *bar = qobject_cast<const QTabBar *>(w);
+        if (!tab || !bar || tab->tabIndex < 0 || tab->tabIndex >= bar->count()) return false;
+        if (tab->position == QStyleOptionTab::OnlyOneTab
+            && tab->selectedPosition == QStyleOptionTab::NotAdjacent)
+            return false;
+        int first = -1, last = -1;
+        for (int i = 0; i < bar->count(); ++i) {
+            if (!bar->isTabVisible(i)) continue;
+            if (first < 0) first = i;
+            last = i;
+        }
+        if (first < 0) return false;
+        const int i = tab->tabIndex;
+        const QStyleOptionTab::TabPosition position =
+            first == last ? QStyleOptionTab::OnlyOneTab
+            : i == first  ? QStyleOptionTab::Beginning
+            : i == last   ? QStyleOptionTab::End
+                          : QStyleOptionTab::Middle;
+        if (position == tab->position) return false;
+        *out = *tab;
+        out->position = position;
+        return true;
+    }
+
+    QSize sizeFromContents(ContentsType type, const QStyleOption *opt, const QSize &size,
+                           const QWidget *w) const override
+    {
+        QStyleOptionTab fixed;
+        if (type == QStyle::CT_TabBarTab && correctTabPosition(opt, w, &fixed))
+            return oclero::qlementine::QlementineStyle::sizeFromContents(type, &fixed, size, w);
+        return oclero::qlementine::QlementineStyle::sizeFromContents(type, opt, size, w);
+    }
+
+    QRect subElementRect(SubElement element, const QStyleOption *opt,
+                         const QWidget *w) const override
+    {
+        QStyleOptionTab fixed;
+        if ((element == QStyle::SE_TabBarTabText || element == QStyle::SE_TabBarTabLeftButton
+             || element == QStyle::SE_TabBarTabRightButton)
+            && correctTabPosition(opt, w, &fixed))
+            return oclero::qlementine::QlementineStyle::subElementRect(element, &fixed, w);
+        return oclero::qlementine::QlementineStyle::subElementRect(element, opt, w);
     }
 
     // Same rule for the OTHER focus-ring path: widgets carrying a stylesheet

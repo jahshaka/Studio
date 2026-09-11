@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "ui/panels/singledragowner.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
+#include "ui/style/stylesheet.h"
 
 AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
 {
@@ -57,9 +58,7 @@ AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
 
     connect(listView, SIGNAL(doubleClicked(QModelIndex)), SLOT(addObjectToScene(QModelIndex)));
 
-    setStyleSheet(
-        "QListWidget { padding: 4px; border: 0; background: #202020; }"
-    );
+    setStyleSheet(StyleSheet::PresetsListPanel());
 
     addDefaultItems();
     addFavorites();
@@ -311,12 +310,7 @@ void AssetModelPanel::removeFavorite(const QString &assetGuid)
 void AssetModelPanel::showContextMenu(const QPoint &pos)
 {
     QMenu contextMenu;
-    contextMenu.setStyleSheet(
-        "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-        "QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-        "QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-        "QMenu::item : disabled { color: #555; }"
-    );
+    contextMenu.setStyleSheet(StyleSheet::PresetsContextMenu());
 
     QAction action("Remove Item", this);
     connect(&action, &QAction::triggered, this, [this, pos]() {

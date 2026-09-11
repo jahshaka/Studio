@@ -144,6 +144,64 @@ public:
 	static const QString ViewportMenuButton();
 	static const QString ViewportCameraToggle();
 	static const QString PlayerControlsBar();
+
+	// accordion blades (accordionbladewidget.ui)
+	static const QString AccordionBladeRoot();
+
+	// value rows (hfloatsliderwidget.ui)
+	static const QString HFloatSliderRoot();
+
+	// combo rows (comboboxwidget.ui)
+	static const QString ComboBoxWidgetRoot();
+
+	// texture picker (texturepickerwidget.ui)
+	static const QString TexturePickerRoot();
+
+	// file picker (filepickerwidget.ui)
+	static const QString FilePickerRoot();
+	static const QString FilePickerFilename();
+
+	// asset picker (assetpickerwidget.ui)
+	static const QString AssetPickerRoot();
+	static const QString AssetPickerAssetView();
+
+	// scene hierarchy (scenehierarchywidget.ui)
+	static const QString SceneHierarchyRoot();
+	static const QString SceneHierarchyWidget();
+	static const QString SceneHierarchySceneTree();
+
+	// sky presets (skypresets.ui)
+	static const QString SkyPresetsRoot();
+
+	// timeline (animationwidget.ui)
+	static const QString AnimationWidgetRoot();
+	static const QString AnimationWidgetInsertFrame();
+
+	// timeline (animationwidget.cpp)
+	static const QString TimelineModeActive();
+	static const QString TimelineModeIdle();
+
+	// transform editor (transformeditor.cpp)
+	static const QString TransformEditorPanel();
+
+	// drag value rows (dragvaluewidgets.cpp)
+	static const QString DragValueRowPanel();
+
+	// particle colour ramp (particlerampwidget.cpp) — a colour swatch button
+	static const QString ParticleRampSwatch(const QColor &colour);
+
+	// tooltips (tooltip.cpp — Classic's popup; Qlementine uses the native tooltip)
+	static const QString ToolTipPopup();
+
+	// script console (scriptconsole.cpp)
+	static const QString ScriptConsolePanel();
+
+	// light panels (lightchannelswidget.cpp, lightpropertywidget.cpp)
+	static const QString WarningNote();
+
+	// presets panels (assetmodelpanel.cpp, assetmaterialpanel.cpp)
+	static const QString PresetsListPanel();
+	static const QString PresetsContextMenu();
 //@@CLASSIC-DECLS@@
 };
 

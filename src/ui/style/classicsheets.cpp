@@ -29,6 +29,8 @@ For more information see the LICENSE file
 
 #include "ui/style/stylesheet.h"
 
+#include <QColor>
+
 #define JAH_CLASSIC_ONLY if (!StyleSheet::classicThemeActive()) return QString();
 
 const QString StyleSheet::MainWindowRoot()
@@ -385,6 +387,735 @@ const QString StyleSheet::PlayerControlsBar()
 {
 	JAH_CLASSIC_ONLY
 	return QString("background: #1A1A1A");
+}
+
+const QString StyleSheet::AccordionBladeRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QWidget#AccordionBladeWidget {
+	background-color: #212121;
+	border: 0;
+}
+
+QWidget#bg {
+	background-color: #4D4D4D;
+}
+
+QPushButton#toggle {
+	background-color: #4D4D4D;
+    border: 0;
+}
+
+QLabel#content_title {
+	background-color: #4D4D4D;
+})CSS");
+}
+
+const QString StyleSheet::HFloatSliderRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QWidget#floater {
+	/*background: #212121; */
+}
+
+QSlider::sub-page {
+	border: 0px solid transparent;
+	height: 2px;
+	background: #3498db;
+	margin: 2px 0;
+}
+
+
+QSlider::groove:horizontal {
+    border: 0px solid transparent;
+    height: 4px;
+    background: #1e1e1e;
+    margin: 2px 0;
+}
+
+QSlider::handle:horizontal {
+    background-color: #CCC;
+    width: 12px;
+    border: 1px solid #1e1e1e;
+    margin: -5px 0px;
+    border-radius:7px;
+}
+
+QSlider::handle:horizontal:pressed {
+    background-color: #AAA;
+    width: 12px;
+    border: 1px solid #1e1e1e;
+    margin: -5px 0px;
+    border-radius: 7px;
+}
+
+QDoubleSpinBox {
+	border-radius: 1px;
+	padding: 7px;
+	background: #292929;
+}
+
+QSlider::handle:horizontal:disabled {
+    background-color: #bbbbbb;
+    width: 12px;
+    border: 0px solid transparent;
+    margin: -1px -1px;
+    border-radius: 4px;
+})CSS");
+}
+
+const QString StyleSheet::ComboBoxWidgetRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(
+   QComboBox {
+    /*border-radius: 3px;
+    padding: 1px 18px 1px 3px;
+    min-width: 6em;*/
+}
+
+QComboBox:editable {
+
+}
+
+QComboBox QAbstractItemView::item {
+    show-decoration-selected: 1;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QListView::item:selected {
+    background: #404040;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+     background: #1A1A1A;
+}
+
+/* QComboBox gets the on state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background: #1A1A1A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    selection-background-color: #404040;
+    border: 0;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    border: none;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #404040;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:!enabled {
+    background: #1A1A1A;
+    color: #555;
+    padding-left: 5px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left-width: 1px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+}
+
+QComboBox::down-arrow:!enabled {
+    image: url(:/icons/down_arrow_check_disabled.png);
+    width: 18px;
+    height: 14px;
+}
+)CSS");
+}
+
+const QString StyleSheet::TexturePickerRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QPushButton {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+	padding: 6px;
+    border: 0;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
+QWidget#texture {
+	background-color: #4D4D4D;
+})CSS");
+}
+
+const QString StyleSheet::FilePickerRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QPushButton {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+})CSS");
+}
+
+const QString StyleSheet::FilePickerFilename()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(background: #404040; padding: 2px)CSS");
+}
+
+const QString StyleSheet::AssetPickerRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QWidget#AssetPickerWidget, #assetView {
+	background: #202020;
+}
+
+QLabel {
+	color: #EEE;
+}
+
+QPushButton {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+	padding: 2px 8px;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
+QSlider::groove:horizontal {
+   /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
+    background: #404040;
+}
+
+QSlider::handle:horizontal {
+    background: #AFAFAF;
+    width: 10px;
+    margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
+}
+
+QListView {
+	background: #303030;
+	border: 0;
+}
+
+QListWidget {
+	background: #404040;
+	color: #CECECE;
+}
+
+QListView::item:selected {
+    border: 1px solid #3498db;
+	background: #3498db;
+	color: #CECECE;
+}
+
+/* ================== */
+
+ QScrollBar:vertical {
+     background-color: #212121;
+     width: 18px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+	background-color: #444;
+     min-height: 20px;
+     margin-left: 2px;
+     margin-right: 2px;
+ }
+
+QScrollBar::handle:vertical:hover {
+	background-color: #555;
+	min-height: 20px;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+
+QScrollBar::add-line:vertical {
+	background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 2px 2px  0 2px;
+	subcontrol-position: bottom;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::sub-line:vertical {
+    background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 0 2px 2px 2px;
+	subcontrol-position: top;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::up-arrow:vertical {
+    image: url(:/icons/up-arrow.svg);
+}
+
+QScrollBar::up-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover {
+    background-color: #555;
+}
+
+/* ========================== */
+
+/* For icon only */
+/*QListView::icon {
+    left: 10px;
+}*/
+
+/* For text only */
+/*QListView::text {
+    left: 10px;
+}*/)CSS");
+}
+
+const QString StyleSheet::AssetPickerAssetView()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QScrollBar:vertical {
+	background: #1e1e1e;
+})CSS");
+}
+
+const QString StyleSheet::SceneHierarchyRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QWidget#sceneTree {
+	background-color: #202020;
+	border-top: 1px solid #111;
+}
+
+#addBtn, #deleteBtn, #folderBtn {
+	padding: 4px;
+}
+
+#addBtn {
+	border: 0;
+}
+
+#deleteBtn, #folderBtn {
+	border-left: 1px solid #333;
+}
+
+QTreeWidget {
+  outline: none;
+  selection-background-color: #404040;
+  color: #CECECE;
+}
+
+QTreeWidget::item {
+	padding: 6px;
+}
+
+QTreeWidget::item:selected {
+	selection-background-color: #404040;
+	background: #404040;
+	outline: none;
+  }
+
+
+/* important when the widget loses focus */
+QTreeWidget::item:selected:!active {
+	background: #404040;
+	padding: 0;
+	color: #CECECE;
+}
+
+QTreeWidget::item:selected:active {
+	background: #404040;
+	padding: 0;
+}
+
+QTreeWidget::item:hover {
+
+}
+  )CSS");
+}
+
+const QString StyleSheet::SceneHierarchyWidget()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QWidget#widget{
+	border: none;
+	background-color: #303030;
+})CSS");
+}
+
+const QString StyleSheet::SceneHierarchySceneTree()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(outline: none)CSS");
+}
+
+const QString StyleSheet::SkyPresetsRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QListWidget {
+	padding: 4px;
+  border: 0;
+	background: #202020;
+})CSS");
+}
+
+const QString StyleSheet::AnimationWidgetRoot()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QWidget#AnimationWidget {
+	background: #202020;
+}
+
+QPushButton:!enabled, QToolButton:!enabled, QComboBox:!enabled {
+	background: #222;
+	color: #555;
+}
+
+QSplitter::handle {
+	background: black;
+}
+
+QPushButton {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+	padding: 4px 16px;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
+#widget_11 > QPushButton {
+	padding: 4px;
+	background: transparent;
+}
+
+#insertFrame {
+	padding-right: 4px;
+}
+/*
+#insertFrame {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+	padding: 2px 8px;
+}
+
+#insertFrame:hover {
+    background-color: #555;
+}
+
+#insertFrame:pressed {
+    background-color: #444;
+}
+*/
+
+#curvesBtn, #dopeSheetBtn {
+	width: 64px;
+}
+
+#widget_11 > #stopBtn {
+	height: 10px;
+	width: 12px;
+	margin-left: -2px;
+	margin-right: 5px;
+	background: transparent;
+}
+
+QWidget#controls > QToolButton:hover {
+	background-color: rgb(235, 235, 235);
+	border-style: inset;
+}
+
+QComboBox {
+    background: #1A1A1A;
+    border: 0;
+}
+
+QComboBox:editable {
+
+}
+
+QComboBox QAbstractItemView::item {
+    show-decoration-selected: 1;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QListView::item:selected {
+    background: #404040;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+     background: #1A1A1A;
+}
+
+/* QComboBox gets the on state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background: #1A1A1A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    selection-background-color: #404040;
+    border: 0;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    border: none;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #404040;
+    padding-left: 5px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left-width: 1px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+}
+
+QComboBox::down-arrow:!enabled {
+    image: url(:/icons/down_arrow_check_disabled.png);
+    width: 18px;
+    height: 14px;
+}
+
+QTreeView, QTreeWidget { show-decoration-selected: 1; }
+QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; background: #202020; border: 0; }
+QTreeWidget::branch { background-color: #202020; }
+QTreeWidget::branch:hover { background-color: #303030; }
+QTreeWidget::branch:selected { background-color: #404040; }
+QTreeWidget::item:selected { selection-background-color: #404040;
+								background: #404040; outline: none; padding: 5px 0; }
+/* Important, this is set for when the widget loses focus to fill the left gap */
+QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }
+QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }
+QTreeWidget::item { padding: 5px 0; }
+QTreeWidget::item:hover { background: #303030; padding: 5px 0; }
+
+)CSS");
+}
+
+const QString StyleSheet::AnimationWidgetInsertFrame()
+{
+	JAH_CLASSIC_ONLY
+	return QString(R"CSS(QComboBox {
+    background: #1A1A1A;
+    border: 0;
+}
+
+QComboBox:editable {
+
+}
+
+QComboBox QAbstractItemView::item {
+    show-decoration-selected: 1;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QListView::item:selected {
+    background: #404040;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+     background: #1A1A1A;
+}
+
+/* QComboBox gets the on state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background: #1A1A1A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    selection-background-color: #404040;
+    border: 0;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    border: none;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #404040;
+    padding-left: 5px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left-width: 1px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+}
+
+QComboBox::down-arrow:!enabled {
+    image: url(:/icons/down_arrow_check_disabled.png);
+    width: 18px;
+    height: 14px;
+})CSS");
+}
+
+const QString StyleSheet::TimelineModeActive()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #2980b9");
+}
+
+const QString StyleSheet::TimelineModeIdle()
+{
+	JAH_CLASSIC_ONLY
+	return QString("background: #555");
+}
+
+const QString StyleSheet::TransformEditorPanel()
+{
+	JAH_CLASSIC_ONLY
+	return QString(        "QWidget#TransformEditor { border: none; }"
+        "QLabel { color: #DEDEDE; background: transparent; }"
+        "QDoubleSpinBox {"
+        "    border-radius: 1px; padding: 3px; background: #292929; color: #DEDEDE;"
+        "    selection-background-color: #3498db;"
+        "}"
+        // axis identity moved from the old X/Y/Z chips to a colored edge per field
+        "DragSpinBox#xpos, DragSpinBox#xrot, DragSpinBox#xscale { border-left: 3px solid #c0392b; }"
+        "DragSpinBox#ypos, DragSpinBox#yrot, DragSpinBox#yscale { border-left: 3px solid #27ae60; }"
+        "DragSpinBox#zpos, DragSpinBox#zrot, DragSpinBox#zscale { border-left: 3px solid #2980b9; }"
+        "QPushButton#resetBtn { background-color: #333; color: #DEDEDE; border: 0;"
+        "                       padding: 4px 16px; border-radius: 1px; }"
+        "QPushButton#resetBtn:hover { background-color: #555; }"
+        "QPushButton#resetBtn:pressed { background-color: #444; }");
+}
+
+const QString StyleSheet::DragValueRowPanel()
+{
+	JAH_CLASSIC_ONLY
+	return QString(    "QWidget#DragValueRow { border: none; background: transparent; }"
+    "QLabel { color: #DEDEDE; background: transparent; }"
+    "QDoubleSpinBox {"
+    "    border-radius: 1px; padding: 3px; background: #292929; color: #DEDEDE;"
+    "    selection-background-color: #3498db;"
+    "}"
+    "DragSpinBox#dragx { border-left: 3px solid #c0392b; }"
+    "DragSpinBox#dragy { border-left: 3px solid #27ae60; }"
+    "DragSpinBox#dragz { border-left: 3px solid #2980b9; }");
+}
+
+const QString StyleSheet::ParticleRampSwatch(const QColor &colour)
+{
+	JAH_CLASSIC_ONLY
+	return QStringLiteral("background-color: %1; border: 1px solid #222;")
+		.arg(colour.name());
+}
+
+const QString StyleSheet::ToolTipPopup()
+{
+	JAH_CLASSIC_ONLY
+	return QString("#container{background:rgba(0,0,00,.1); border: 2px solid rgba(0,0,0,.5); border-radius: .1px; padding: 3px;}"
+			"#header{background:rgba(50,50,50,.9); border: 0px solid rgba(0,0,0,.3); border-radius: 0px; padding: 5px 3px; color :rgba(255,255,255,.9);}"
+			"#body{background:rgba(70,70,70,.9); border: 0px solid rgba(0,0,0,.3); border-radius: 0px; padding: 3px; margin:0px; color :rgba(255,255,255,.9);}");
+}
+
+const QString StyleSheet::ScriptConsolePanel()
+{
+	JAH_CLASSIC_ONLY
+	return QString(        "#ScriptConsole { background-color: #151515; }"
+        "QPlainTextEdit { background-color: #1a1a1a; color: #e6e6e6;"
+        "  font-family: 'DejaVu Sans Mono', Consolas, monospace; font-size: 12px;"
+        "  border: 1px solid #262626; }"
+        "QPushButton { background-color: #2b2b2b; color: #e6e6e6; border: 1px solid #3a3a3a;"
+        "  padding: 4px 10px; }"
+        "QPushButton:hover { background-color: #3a3a3a; }");
+}
+
+const QString StyleSheet::WarningNote()
+{
+	JAH_CLASSIC_ONLY
+	return QString(QStringLiteral("color: #d08b3c;"));
+}
+
+const QString StyleSheet::PresetsListPanel()
+{
+	JAH_CLASSIC_ONLY
+	return QString("QListWidget { padding: 4px; border: 0; background: #202020; }");
+}
+
+const QString StyleSheet::PresetsContextMenu()
+{
+	JAH_CLASSIC_ONLY
+	return QString("QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+        "QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+        "QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+        "QMenu::item : disabled { color: #555; }");
 }
 
 //@@CLASSIC-DEFS@@

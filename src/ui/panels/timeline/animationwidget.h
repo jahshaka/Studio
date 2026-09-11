@@ -32,6 +32,7 @@ class KeyFrameCurveWidget;
 class AnimationWidgetData;
 class CreateAnimationWidget;
 class QUndoCommand;
+class QPushButton;
 struct StudioServices;
 
 namespace Ui
@@ -142,6 +143,11 @@ private slots:
     /// time a key is written. Selecting a node deliberately does NOT create one
     /// (see the .cpp): an empty clip minted on every click serializes.
     iris::AnimationPtr ensureAnimation();
+
+private:
+    /// Which of Dope sheet | Curves is showing (theme sweep): checked under
+    /// Qlementine, Classic's swapped sheets otherwise. `idle` may be null.
+    void markTimelineMode(QPushButton *active, QPushButton *idle);
 
 private:
     /// Records a keyframe edit on the app's undo stack (F16). The edit has

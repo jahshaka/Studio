@@ -24,12 +24,15 @@ For more information see the LICENSE file
 #include <QDrag>
 #include <QStandardItemModel>
 #include <QDragEnterEvent>
+#include "ui/style/stylesheet.h"
 
 TexturePickerWidget::TexturePickerWidget(QWidget *parent) :
 	BaseWidget(parent),
 	ui(new Ui::TexturePickerWidget)
 {
 	ui->setupUi(this);
+	// texturepickerwidget.ui used to embed these (classic-only now; theme sweep)
+	setStyleSheet(StyleSheet::TexturePickerRoot());
 	this->ui->texture->installEventFilter(this);
 	type = WidgetType::TextureWidget;
 

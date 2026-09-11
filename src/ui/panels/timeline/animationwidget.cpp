@@ -39,6 +39,8 @@ For more information see the LICENSE file
 #include "ui/panels/timeline/animationwidgetdata.h"
 #include "ui/panels/timeline/createanimationwidget.h"
 #include "ui/dialogs/getnamedialog.h"
+#include "ui/style/stylesheet.h"
+#include <QButtonGroup>
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
@@ -46,6 +48,9 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     ui(new Ui::AnimationWidget)
 {
     ui->setupUi(this);
+    // animationwidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::AnimationWidgetRoot());
+    ui->insertFrame->setStyleSheet(StyleSheet::AnimationWidgetInsertFrame());
 
     connect(ui->addAnimBtn,SIGNAL(clicked(bool)), this, SLOT(addAnimation()));
     connect(ui->deleteAnimBtn,SIGNAL(clicked(bool)), this, SLOT(deleteAnimation()));
@@ -112,7 +117,20 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     playIcon = QIcon(":/icons/play-arrow.svg");
     pauseIcon = QIcon(":/icons/pause.svg");
 
-    ui->dopeSheetBtn->setStyleSheet("background: #2980b9");
+    // Dope sheet | Curves is a two-way mode switch. Qlementine paints the
+    // mode that is showing as a CHECKED button (the style's accent); Classic
+    // keeps its two swapped sheets (markTimelineMode).
+    // (An exclusive group, so a click on the mode already showing cannot
+    // un-check it on release.)
+    if (!StyleSheet::classicThemeActive()) {
+        ui->dopeSheetBtn->setCheckable(true);
+        ui->curvesBtn->setCheckable(true);
+        auto *modes = new QButtonGroup(this);
+        modes->setExclusive(true);
+        modes->addButton(ui->dopeSheetBtn);
+        modes->addButton(ui->curvesBtn);
+    }
+    markTimelineMode(ui->dopeSheetBtn, nullptr);
 
     // null scene node
     setSceneNode(iris::SceneNodePtr());
@@ -516,8 +534,7 @@ void AnimationWidget::showKeyFrameWidget()
     keyFrameWidget->show();
     curveWidget->hide();
 
-    ui->dopeSheetBtn->setStyleSheet("background: #2980b9");
-    ui->curvesBtn->setStyleSheet("background: #555");
+    markTimelineMode(ui->dopeSheetBtn, ui->curvesBtn);
 }
 
 void AnimationWidget::showCurveWidget()
@@ -526,8 +543,18 @@ void AnimationWidget::showCurveWidget()
     curveWidget->show();
     ui->keylabelView->highlightDefaultProperty();
 
-    ui->curvesBtn->setStyleSheet("background: #2980b9");
-    ui->dopeSheetBtn->setStyleSheet("background: #555;");
+    markTimelineMode(ui->curvesBtn, ui->dopeSheetBtn);
+}
+
+void AnimationWidget::markTimelineMode(QPushButton *active, QPushButton *idle)
+{
+    if (StyleSheet::classicThemeActive()) {
+        active->setStyleSheet(StyleSheet::TimelineModeActive());
+        if (idle) idle->setStyleSheet(StyleSheet::TimelineModeIdle());
+        return;
+    }
+    active->setChecked(true);
+    if (idle) idle->setChecked(false);
 }
 
 void AnimationWidget::hideCreateAnimWidget()

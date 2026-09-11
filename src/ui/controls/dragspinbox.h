@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef DRAGSPINBOX_H
 #define DRAGSPINBOX_H
 
+#include <QColor>
 #include <QDoubleSpinBox>
 #include <QPoint>
 
@@ -41,6 +42,13 @@ public:
 
     bool isScrubbing() const;
 
+    // AXIS IDENTITY (X red / Y green / Z blue): a 3 px strip painted on the
+    // field's left edge. The style draws the field itself — this is the
+    // sheet-free replacement for the Classic theme's `border-left: 3px solid`
+    // rule, which under Qlementine would hand the whole field to
+    // QStyleSheetStyle. Invalid colour (the default) = no strip.
+    void setAxisColor(const QColor &color);
+
 signals:
     void scrubStarted();
     // cancelled = true when the drag was aborted with Esc
@@ -49,6 +57,7 @@ signals:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
 private:
@@ -68,6 +77,9 @@ private:
     int lastGlobalX_ = 0;
     double startValue_ = 0;
     double scrubValue_ = 0;
+    QColor axisColor_;
+    QWidget *axisStrip_ = nullptr;
+    void placeAxisStrip();
 };
 
 #endif // DRAGSPINBOX_H

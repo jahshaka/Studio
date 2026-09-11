@@ -15,12 +15,15 @@ For more information see the LICENSE file
 #include "ui_hfloatsliderwidget.h"
 
 #include <QSignalBlocker>
+#include "ui/style/stylesheet.h"
 
 HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     BaseWidget(parent),
     ui(new Ui::HFloatSliderWidget)
 {
     ui->setupUi(this);
+    // hfloatsliderwidget.ui used to embed these (classic-only now; theme sweep)
+    setStyleSheet(StyleSheet::HFloatSliderRoot());
     connect(ui->spinbox,    SIGNAL(valueChanged(double)),   SLOT(onValueSpinboxChanged(double)));
     connect(ui->spinbox,    SIGNAL(editingFinished()),      SLOT(onSpinboxEditingFinished()));
     connect(ui->slider,     SIGNAL(valueChanged(int)),      SLOT(onValueSliderChanged(int)));
@@ -33,7 +36,17 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     // 176 of them in a single run of ui.material_panel, which is one properties
     // panel. Parent it to the widget so the row frees it with everything else.
     // (Found by the LeakSanitizer lane, scripts/sanitize.sh lsan.)
-    auto *sliderStyle = new CustomStyle(this->style());
+    //
+    // AND NEVER HAND IT THE APP'S STYLE: a QProxyStyle constructed with a base
+    // style TAKES OWNERSHIP of it. While every row carried the classic sheet,
+    // this->style() here was the row's own QStyleSheetStyle; under Qlementine
+    // with the sheet gone (theme sweep) it is THE APPLICATION'S QlementineStyle,
+    // which the first destroyed row then deleted — every later paint and every
+    // animator callback ran on a freed style (shutdown SIGABRT/SIGSEGV inside
+    // qlementine::WidgetAnimationManager::removeWidget). A null base follows the
+    // application style without owning it. Classic keeps its old argument
+    // (bit-for-bit).
+    auto *sliderStyle = new CustomStyle(StyleSheet::classicThemeActive() ? this->style() : nullptr);
     sliderStyle->setParent(this);
     setStyle(sliderStyle);
 

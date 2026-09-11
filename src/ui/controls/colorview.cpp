@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QGraphicsEffect>
 #include <QMouseEvent>
 #include <QWindow>
+#include "ui/style/stylesheet.h"
 
 ColorView* ColorView::instance = 0;
 
@@ -88,7 +89,12 @@ void ColorView::configureView()
     aWidget->setLayout(aLayout);
 
     stackWidget = new QStackedWidget(this);
-	setStyle(new SliderMoveToMouseClickPositionStyle(this->style()));
+	// A QProxyStyle OWNS its base style: never give it the application's
+	// (under Qlementine, with no sheet on this widget, this->style() IS the app
+	// style — see HFloatSliderWidget). Null follows the app style unowned;
+	// Classic keeps its old argument.
+	setStyle(new SliderMoveToMouseClickPositionStyle(
+		StyleSheet::classicThemeActive() ? this->style() : nullptr));
 
     rSlider = new QSlider(Qt::Horizontal, this);
     gSlider = new QSlider(Qt::Horizontal, this);

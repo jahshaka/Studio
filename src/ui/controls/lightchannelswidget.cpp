@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 
 namespace {
 constexpr quint32 kAll = 0xFFFFFFFFu;
@@ -84,7 +86,8 @@ LightChannelsWidget::LightChannelsWidget(QWidget *parent) : QWidget(parent)
 
     mNote = new QLabel(this);
     mNote->setWordWrap(true);
-    mNote->setStyleSheet(QStringLiteral("color: #d08b3c;"));
+    mNote->setStyleSheet(StyleSheet::WarningNote());
+    ThemeRoles::setTone(mNote, ThemeRoles::Tone::Warning);
     mNote->hide();
     outer->addWidget(mNote);
 
