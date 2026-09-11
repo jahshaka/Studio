@@ -8,13 +8,24 @@
 // dynamicProbes) for one question, and neither of them was "how much may this
 // cost per frame".
 //
-// What this suite pins, and it is the whole model in four properties:
+// What this suite pins, and it is the whole model in five properties:
 //
-//   A. THE SWEEP IS A GUARANTEE. At `updateBudget = N` over P probes, every
-//      probe re-captures within ceil(P / N) frames — not "the N nearest ones
-//      do". Priority (staleness x proximity x covers-a-moved-AABB) reorders a
-//      sweep; it cannot starve one. Asserted through the PICTURE: after a full
-//      sweep the budget-1 grid shows what the budget-P grid shows.
+//   A. A CHANGE IS CAUGHT UP WITHIN ceil(P / N) FRAMES (restated 2026-09-12,
+//      ENGINE_CACHE_POLICY_SPEC P1, lead-accepted). At `updateBudget = N` over
+//      P probes, an input that changes what the probes see (here: geometry
+//      moving) marks the grid STALE, and every probe has re-captured within
+//      ceil(P / N) frames of that change — not "the N nearest ones do".
+//      Priority (staleness x proximity x covers-a-moved-AABB) orders the
+//      catch-up; it cannot starve a probe. Asserted through the PICTURE (after
+//      ceil(P/N) frames the budget-1 grid shows what the budget-P grid shows)
+//      and through the counters (staleProbes drains to 0). The OLD property —
+//      "every probe re-captures every ceil(P/N) frames, for ever" — was the
+//      defect: it cost one probe capture every frame of a still scene.
+//
+//   E. A STILL SCENE CAPTURES NOTHING (P1). Once caught up, 120 idle frames
+//      re-capture ZERO probes on every frame (giStatus probeCapturesLastFrame)
+//      and the frame's draw count does not move (app.renderStats' draws — the
+//      whole-frame cross-check a probe capture shows up in).
 //
 //   B. MOVING GEOMETRY COSTS THE CHEAP PATHS, NOT A RE-SOLVE PER FRAME. A
 //      40-frame drag costs ZERO full GI re-solves, the light re-injection runs
@@ -37,6 +48,7 @@
 // Mirror-linked, like gi.coalesce: half the contract (the debounce, the
 // counters) is mirror-side and half (the budget, the reuse arm) is engine-side.
 #include <QGuiApplication>
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -196,6 +208,21 @@ int main(int argc, char **argv)
           "budget 0: moving geometry costs no re-solve and no re-inject");
     CHECK(std::fabs(pausedMoved.g - pausedParked.g) < 0.05f,
           "budget 0: the reflection is frozen at what it last captured");
+    // ...until world.refreshGi() asks — the paused contract's other half. A
+    // paused scene has no budget to spread a re-capture over, so an explicit
+    // refresh captures the whole grid at once, as it always did (P6 spreads
+    // re-captures only where there IS a budget).
+    {
+        const quint64 before = mirror.giRefreshCount();
+        ++doc->giRefreshSerial;
+        frame();
+        const Colour refreshed = mirrorPixel();
+        show("budget 0, after world.refreshGi()", refreshed);
+        CHECK(mirror.giRefreshCount() == before + 1, "budget 0: world.refreshGi() still re-solves");
+        CHECK(refreshed.g > refreshed.r + 0.5f,
+              "budget 0: ...and re-captures at once (the mirror shows the slab on the next frame)");
+        CHECK(escene->giStatus().staleProbes == 0, "budget 0: nothing is left stale after it");
+    }
 
     // =======================================================================
     // A. THE SWEEP, and B's counters with it
@@ -211,12 +238,28 @@ int main(int argc, char **argv)
     const Colour sweepParked = mirrorPixel();
     show("budget 1, mover parked (settled)", sweepParked);
 
+    // Caught up and IDLE before the move: nothing is stale, so the move below
+    // is the only thing the grid has to catch up with.
+    frames(30);
+    CHECK(escene->giStatus().staleProbes == 0, "A: settled — no probe is stale before the move");
     const quint64 refreshA = mirror.giRefreshCount(), lightA = mirror.giLightRefreshCount();
+    const unsigned long long serialA = escene->giStatus().staleSerial;
     moveMover(kMoverOnRay);
     frame();
     const Colour afterOne = mirrorPixel();
+    {
+        const GiStatus st = escene->giStatus();
+        std::printf("   after the move: staleProbes=%d reason=%d captures=%d\n",
+                    st.staleProbes, int(st.lastStaleReason), st.probeCapturesLastFrame);
+        CHECK(st.staleSerial > serialA && st.lastStaleReason == GiStaleReason::Moved,
+              "A: the move STALED the grid, and says why (moved)");
+        CHECK(st.probeCapturesLastFrame == 1,
+              "A: ...and the budget spent exactly one capture on it this frame");
+    }
     frames(kProbes - 1);
     const Colour afterSweep = mirrorPixel();
+    CHECK(escene->giStatus().staleProbes == 0,
+          "A: within ceil(probes / budget) frames of the change no probe is stale (caught up)");
     show("budget 1, ONE frame after the move", afterOne);
     show("budget 1, a FULL SWEEP after the move", afterSweep);
     std::printf("   during the catch-up: full re-solves = %llu, light re-injects = %llu\n",
@@ -283,6 +326,38 @@ int main(int argc, char **argv)
     frames(25);
     CHECK(mirror.giRefreshCount() - refreshB == 1,
           "...and never again while nothing moves (the re-solve is not self-sustaining)");
+
+    // =======================================================================
+    // E. A STILL SCENE CAPTURES NOTHING (ENGINE_CACHE_POLICY_SPEC P1)
+    // =======================================================================
+    std::printf("-- E: 120 idle frames\n");
+    frames(30);                       // anything owed (the settle's stale grid) drains
+    CHECK(escene->giStatus().staleProbes == 0, "E: caught up before the idle run");
+    {
+        RenderStats rs;
+        engine->renderStats(rs);      // switches metrics recording on
+        frame();
+        engine->renderStats(rs);
+        const unsigned long long draws0 = rs.draws;
+        int capturingFrames = 0, drawMoves = 0, worstCaptures = 0;
+        const quint64 refreshE = mirror.giRefreshCount(), lightE = mirror.giLightRefreshCount();
+        for (int f = 0; f < 120; ++f) {
+            frame();
+            const GiStatus st = escene->giStatus();
+            if (st.probeCapturesLastFrame != 0) ++capturingFrames;
+            worstCaptures = std::max(worstCaptures, st.probeCapturesLastFrame);
+            engine->renderStats(rs);
+            if (rs.draws != draws0) ++drawMoves;
+        }
+        std::printf("   idle: frames that captured a probe = %d (worst %d), frames whose "
+                    "draws moved off %llu = %d\n", capturingFrames, worstCaptures,
+                    (unsigned long long)draws0, drawMoves);
+        CHECK(capturingFrames == 0,
+              "E: 120 idle frames re-capture ZERO probes (probeCapturesLastFrame 0 every frame)");
+        CHECK(drawMoves == 0, "E: ...and the frame's draw count never moves");
+        CHECK(mirror.giRefreshCount() == refreshE && mirror.giLightRefreshCount() == lightE,
+              "E: ...and nothing re-solves or re-injects either");
+    }
 
     // =======================================================================
     // D. THE REUSE ARM, AND WHAT IT SAVES (B4)
