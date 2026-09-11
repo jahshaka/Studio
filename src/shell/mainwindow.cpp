@@ -2446,6 +2446,9 @@ void MainWindow::setupDockWidgets()
     // width must win over the compiled-in default (shell/dockstate.h).
     restoredViewportDocks =
         settings ? DockState::restore(viewPort, settings->settings, kViewportDockStateKey) : false;
+    // A saved dock layout carries the dock-area CORNERS: restoring one saved
+    // before the corner rule would put the default corner back. Re-assert it.
+    viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
 
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
@@ -2502,6 +2505,7 @@ void MainWindow::applyColumnWidthsOnce()
         // sizes the user actually left.
         if (restoredViewportDocks) {
             if (settings) DockState::restore(viewPort, settings->settings, kViewportDockStateKey);
+            viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);   // see setupDockWidgets
             return;
         }
         // BOTH docks in the right column, from the one constant. Presets sits
@@ -3077,6 +3081,11 @@ void MainWindow::setupViewPort()
     viewPort = new QMainWindow;
     viewPort->setWindowFlags(Qt::Widget);
     viewPort->setCentralWidget(container);
+    // THE RIGHT COLUMN RUNS TO THE BOTTOM (owner, 2026-09-12): the bottom-right
+    // corner belongs to the right dock area, so Properties + Presets extend the
+    // full height of the editor and the bottom Tray (Assets | Console,
+    // Timeline) stops at the right column's edge instead of running under it.
+    viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
 
     // The engine viewport is the only renderer. When the engine cannot start
     // (offscreen platform: --headless scripts, --dump-api-docs) a document-only
