@@ -25,6 +25,14 @@ function blueDominant(c) { return c.b > c.r + 40 && c.b > c.g + 40; }
 
 var guid = project.create("Duplicate Material " + Date.now());
 assert(guid.length > 10, "project.create");
+// GI OFF: this suite compares a copy's MATERIAL with the original's by pixel,
+// at a different position. A new project is born Epic, and adding/moving a node
+// re-solves GI over several frames — at 3 frames the copy was sometimes still
+// darker than the original from the bounce light alone (push #13 gate:
+// (76,10,10) vs (114,14,14), 2 of 3 cold solo runs). Without GI the two
+// positions are lit identically by the direct lights, so the probe measures the
+// material and nothing else. The tolerance is unchanged.
+assert(world.gi({ mode: "off" }) === true, "GI off (the probes measure the material, not the bounce)");
 
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 assert(material.set(cube, { baseColor: "#c81414", metallic: 0, roughness: 0.6 }) === true,
