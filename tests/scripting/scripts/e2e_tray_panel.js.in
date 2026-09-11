@@ -28,7 +28,7 @@
 
 var SCENES = "@SOURCE_DIR@/scenes";
 var FIXTURES = "@SOURCE_DIR@/tests/scripting/fixtures";
-var SAMPLES = ["Matcaps", "Mirror Room", "Particles", "Physics", "Showroom",
+var SAMPLES = ["Matcaps", "Mirror Room", "Particles", "Physics", "Showroom", "Showroom 2",
                "Skeletal Animation", "World Background"];
 
 function assert(cond, msg) {

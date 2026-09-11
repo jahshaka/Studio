@@ -24,7 +24,7 @@
 # where it runs per sample against the owner's real first run.
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
-set(_samples "Matcaps" "Mirror Room" "Particles" "Physics" "Showroom" "Skeletal Animation" "World Background")
+set(_samples "Matcaps" "Mirror Room" "Particles" "Physics" "Showroom" "Showroom 2" "Skeletal Animation" "World Background")
 
 foreach(SAMPLE IN LISTS _samples)
     string(REPLACE " " "_" _slug "${SAMPLE}")

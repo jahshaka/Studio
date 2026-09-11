@@ -761,9 +761,9 @@ QListWidget *ProjectManager::buildSampleList(const QMap<QString, QString> &entri
         sampleList->addItem(item);
     }
 
-    // fixed size that fits the grid cleanly. Seven samples since the Mirror
-    // Room landed, so the last row is half full — a 4x2 dialog is 200 px wider
-    // than this one and buys nothing.
+    // fixed size that fits the grid cleanly: three columns, as many rows as
+    // the samples need (eight since Showroom 2, 2026-09-12 — three rows, the
+    // last one two thirds full; a 4x2 dialog is 200 px wider and buys nothing).
     const int sampleColumns = 3;
     const int sampleRows = std::max(1, (sampleList->count() + sampleColumns - 1) / sampleColumns);
     sampleList->setFixedSize(sampleColumns * sampleGridSize.width() + 16,
@@ -795,6 +795,11 @@ QDialog *ProjectManager::prepareSampleBrowser()
     samples.insert("preview/world.png",      "World Background");
     samples.insert("preview/physics.png",    "Physics");
     samples.insert("preview/showroom.png",   "Showroom");
+    // The Grand Showroom at 2x (owner, 2026-09-12: "too small to fly around
+    // in") — the same generator at S = 1 (scenes/tools/make_grand_showroom.js).
+    // It sits beside the original, which stays as the owner's reference until
+    // he calls its removal.
+    samples.insert("preview/showroom2.png",  "Showroom 2");
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
     QListWidget *sampleList = buildSampleList(samples, dir.absolutePath());
