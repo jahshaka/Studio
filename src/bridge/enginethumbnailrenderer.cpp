@@ -116,39 +116,24 @@ iris::ScenePtr EngineThumbnailRenderer::buildPreviewScene(iris::CameraNodePtr &c
     return scene;
 }
 
-static void collectBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere> &spheres)
-{
-    if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
-        if (meshNode->getMesh()) spheres.append(meshNode->getTransformedBoundingSphere());
-    }
-    for (auto child : node->children()) collectBoundingSpheres(child, spheres);
-}
-
+// THE FRAMING (smoke S6, the second half of the owner's Assets report).
+//
+// This used to merge the subject's per-mesh bounding SPHERES — starting from a
+// unit sphere at the ORIGIN, which no subject need be near — and then park the
+// camera at `(0, centre.y, dist)`, i.e. on the world's Z axis whatever the
+// subject's x/z. A model authored away from its origin (the owner's
+// ruined_city_free_5.glb) was therefore framed for a box that also had to
+// contain the origin, and viewed from off to one side: a textured but tiny,
+// off-centre tile. The preview and the editor's F already measured the world
+// AABB, so this asks the one function they ask (viewport/previewframing.h) and
+// backs the camera straight out of the box's centre.
 static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
 {
-    // Same framing as the legacy generator: merge the subject's bounding spheres
-    // and back the camera off along +Z until the sphere fits the vertical FOV.
-    QList<iris::BoundingSphere> spheres;
-    collectBoundingSpheres(subject, spheres);
-    iris::BoundingSphere bound;
-    if (spheres.count() == 0) {
-        bound.pos = iris::Vec3(0, 0, 0);
-        bound.radius = 1;
-    } else if (spheres.count() == 1) {
-        bound = spheres[0];
-    } else {
-        bound.pos = iris::Vec3(0, 0, 0);
-        bound.radius = 1;
-        for (auto &sphere : spheres) bound = iris::BoundingSphere::merge(bound, sphere);
-    }
-    const float dist = preview::framingDistance(bound.radius, cam->effectiveFovDegrees());
-    // The clip planes must follow the framing distance: a large model (cm-scaled
-    // glb) framed at ~2.9 * radius sat beyond the default farClip of 500 and
-    // rendered a blank thumbnail (ASSETS_AUDIT.md finding 3).
-    preview::clipPlanesForFraming(dist, bound.radius, cam->nearClip, cam->farClip);
-    cam->setLocalPos(iris::Vec3(0, bound.pos.y(), dist));
-    cam->lookAt(bound.pos);
+    const preview::Framing framing = preview::frameSubject(subject, cam->effectiveFovDegrees());
+    cam->nearClip = framing.nearClip;
+    cam->farClip = framing.farClip;
+    cam->setLocalPos(framing.target + iris::Vec3(0, 0, framing.distance));
+    cam->lookAt(framing.target);
     cam->update(0);
 }
 

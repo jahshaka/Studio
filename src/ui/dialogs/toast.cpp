@@ -12,14 +12,17 @@ For more information see the LICENSE file
 #include "ui/dialogs/toast.h"
 
 #include <QApplication>
-#include <QGraphicsDropShadowEffect>
-#include <QStyle>
+#include <QEvent>
+#include <QScreen>
 #include <QTimer>
-#include <QDebug>
+
+namespace {
+/// How long a toast stays up when the caller does not say.
+constexpr int kDefaultHoldMs = 1650;
+}
 
 Toast::Toast(QWidget *parent) : QFrame(parent)
 {
-	setParent(parent);
 	setObjectName("Toast");
 	toastLayout = new QVBoxLayout;
 	setLayout(toastLayout);
@@ -45,48 +48,98 @@ Toast::Toast(QWidget *parent) : QFrame(parent)
 	);
 
 	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-	//setGeometry(QStyle::alignedRect(Qt::RightToLeft, Qt::AlignTop, size(), QDesktopWidget().availableGeometry()));
-
-	//QRect position = frameGeometry();
-	//position.moveCenter(parent->rect().center());
-	//move(position.topLeft());
-
-
 	setAttribute(Qt::WA_ShowWithoutActivating);
-	//setGeometry(QStyle::alignedRect(
-	//	Qt::LeftToRight,
-	//	Qt::AlignTop,
-	//	size(),
-	//	parent->rect())
-	//);
-		//qApp->desktop()->availableGeometry()));
-
 	setLineWidth(1);
-	//QGraphicsDropShadowEffect* effect = new QGraphicsDropShadowEffect();
-	//effect->setColor(QColor(32, 32, 32));
-	//effect->setBlurRadius(12); 
-	//this->setGraphicsEffect(effect);
+
+	mHold.setSingleShot(true);
+	connect(&mHold, &QTimer::timeout, this, &Toast::hide);
+
+	// A toast follows its window: moved, resized or maximised, it stays on its
+	// anchor instead of hanging where the window used to be.
+	if (QWidget *owner = ownerWindow()) owner->installEventFilter(this);
 }
 
-void Toast::showToast(const QString &title, const QString &text, const float &delay)
+void Toast::setAnchor(Anchor anchor, QWidget *widget)
+{
+	mAnchor = anchor;
+	mAnchorWidget = widget;
+	if (isVisible()) reposition();
+}
+
+void Toast::showToast(const QString &title, const QString &text, int holdMs)
 {
 	caption->setText(title);
 	info->setText(text);
+	adjustSize();
+	reposition();
+	mHold.start(holdMs > 0 ? holdMs : kDefaultHoldMs);
 	show();
 }
 
-void Toast::showToast(const QString &title, const QString &text, const float &delay, const QPoint &pos, const QRect &rect)
+QWidget *Toast::ownerWindow() const
 {
-	caption->setText(title);
-	info->setText(text);
+	if (QWidget *p = parentWidget()) return p->window();
+	return QApplication::activeWindow();
+}
 
-	QTimer::singleShot(1650, this, &Toast::hide);
+void Toast::showEvent(QShowEvent *event)
+{
+	QFrame::showEvent(event);
+	// The size is only final once the style has laid the labels out; place it
+	// again here so the FIRST appearance is centred too (the very complaint:
+	// the toast that shows once, off to one side, and is gone before anything
+	// would have corrected it).
+	reposition();
+}
 
-	//QRect position = frameGeometry();
-	//position.moveBottomRight(QPoint(rect.width() - position.width(), rect.height() - position.height()));
-	//move(position.bottomRight());
+bool Toast::eventFilter(QObject *watched, QEvent *event)
+{
+	if (isVisible() && watched == ownerWindow()
+	    && (event->type() == QEvent::Resize || event->type() == QEvent::Move))
+		reposition();
+	return QFrame::eventFilter(watched, event);
+}
 
-	//setGeometry(QStyle::alignedRect(Qt::RightToLeft, Qt::AlignBottom, QSize(frameGeometry().width(), frameGeometry().height()), rect));
+QRect Toast::geometryInWindow() const
+{
+	QWidget *owner = ownerWindow();
+	if (!owner) return geometry();
+	return QRect(owner->mapFromGlobal(geometry().topLeft()), size());
+}
 
-	show();
+// THE PLACEMENT. A Toast is a frameless TOP-LEVEL, so move() takes SCREEN
+// coordinates — every anchor is therefore computed through mapToGlobal on the
+// widget it is anchored to, never by adding a window origin to a local point
+// (audit F-D4: the two shell call sites did exactly that, which is right only
+// while the window sits at the screen's origin — i.e. on the test rig).
+void Toast::reposition()
+{
+	QWidget *owner = ownerWindow();
+	const QSize mine = sizeHint().expandedTo(size());
+	QWidget *anchorWidget = (mAnchor == Anchor::WidgetTop && mAnchorWidget) ? mAnchorWidget.data() : owner;
+	if (!anchorWidget) return;
+
+	const QRect area(anchorWidget->mapToGlobal(QPoint(0, 0)), anchorWidget->size());
+	QPoint topLeft;
+	switch (mAnchor) {
+	case Anchor::WidgetTop:
+		topLeft = QPoint(area.center().x() - mine.width() / 2, area.top() + mMargin);
+		break;
+	case Anchor::WindowCentre:
+		topLeft = QPoint(area.center().x() - mine.width() / 2, area.center().y() - mine.height() / 2);
+		break;
+	case Anchor::WindowBottom:
+	default:
+		// BOTTOM-CENTRE OF THE APP WINDOW — the owner's rule for every message
+		// that is not pinned to something else.
+		topLeft = QPoint(area.center().x() - mine.width() / 2,
+		                 area.bottom() - mine.height() - mMargin);
+		break;
+	}
+	// Never off the owner's area: a long message on a small window would push
+	// the toast past the edge, where nobody reads it.
+	topLeft.setX(qBound(area.left(), topLeft.x(), qMax(area.left(), area.right() - mine.width())));
+	topLeft.setY(qBound(area.top(), topLeft.y(), qMax(area.top(), area.bottom() - mine.height())));
+	move(topLeft);
+	resize(mine);
 }

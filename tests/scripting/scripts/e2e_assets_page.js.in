@@ -1,0 +1,106 @@
+// scripting.e2e.assets_page — the Assets module's smoke round (S4-S7,
+// 2026-09-11), through the verbs the page's own gestures call.
+//
+//   S4  an import does not select its new tile  -> assets.select / assets.selected
+//   S5  the preview renders the AUTHORED size while the editor places the
+//       FITTED one ("massive in Assets, tiny in the editor")
+//   S6  model thumbnails are white/untextured on the page path while the verb
+//       path is textured — one routine now, rendered from the stored blob,
+//       framed from the subject's bounds
+//   S7  WASD/arrows do not fly in the Assets module
+//
+// Engine up (no --headless): the thumbnail is a render.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var TEXTURED = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+var MILLIMETRE_CUBE = "@SOURCE_DIR@/tests/importer/fixtures/unit_cube_mm.fbx";
+
+project.create("Assets page " + Date.now());
+
+// ---- S6: the thumbnail the import stored ----------------------------------
+var guid = assets.importFile(TEXTURED);
+assert(guid.length > 10, "assets.importFile -> " + guid);
+
+var thumb = assets.thumbnail(guid);
+assert(!thumb.empty, "the import stored a thumbnail");
+console.log("   thumbnail centre " + JSON.stringify(thumb.centre)
+            + " coverage " + thumb.coverage.toFixed(3));
+// The fixture is a green quad with a red corner: a WHITE render (the defect —
+// the page persisted its render of the live import node, whose textures point
+// into the deleted staging dir) has r ~ g ~ b and a high level.
+assert(thumb.centre.g > 40, "the thumbnail is lit: g=" + thumb.centre.g);
+assert(thumb.centre.g > thumb.centre.r + 20 && thumb.centre.g > thumb.centre.b + 20,
+       "THE THUMBNAIL IS TEXTURED (green texel region, not a white/grey model): "
+       + JSON.stringify(thumb.centre));
+// ...and FRAMED: a subject framed for a box that also had to contain the world
+// origin came out a smudge in the middle of 512x512 (the ruined-city tile).
+assert(thumb.coverage > 0.15, "the subject FILLS the tile: coverage " + thumb.coverage);
+
+// Re-rendering through the verb reproduces it: the page tail, the page's
+// Rebuild Thumbnail and this verb are one routine.
+assert(assets.refreshThumbnail(guid) === true, "assets.refreshThumbnail re-renders");
+var again = assets.thumbnail(guid);
+assert(Math.abs(again.coverage - thumb.coverage) < 0.02
+       && Math.abs(again.centre.g - thumb.centre.g) <= 8,
+       "the verb re-render matches the import's stored image (one routine): "
+       + JSON.stringify(again.centre) + " vs " + JSON.stringify(thumb.centre));
+
+// ---- S4: selecting an asset in the page -----------------------------------
+assert(assets.select(guid) === true, "assets.select(guid)");
+assert(assets.selected() === guid, "the page's current tile IS the imported asset");
+
+// ---- S5: the preview shows the size the editor places ----------------------
+var preview = assets.preview();
+assert(preview.guid === guid, "assets.preview reports the selected asset");
+assert(preview.bounds, "the preview has a subject with geometry");
+
+assert(assets.addToProject(guid) === guid, "assets.addToProject");
+var nodeId = assets.addToScene(guid, { position: { x: 0, y: 0, z: 0 } });
+assert(nodeId && nodeId.length > 10, "assets.addToScene -> " + nodeId);
+var placed = scene.bounds({ nodes: [nodeId] });
+
+function close(a, b, tol) { return Math.abs(a - b) <= tol * Math.max(1e-4, Math.abs(b)); }
+console.log("   preview size " + JSON.stringify(preview.bounds.size)
+            + " placed size " + JSON.stringify(placed.size));
+assert(close(preview.bounds.size.x, placed.size.x, 0.01)
+       && close(preview.bounds.size.y, placed.size.y, 0.01)
+       && close(preview.bounds.size.z, placed.size.z, 0.01),
+       "THE PREVIEW IS THE SIZE THE EDITOR PLACES");
+
+// The case that made the owner report it: a model whose declared unit is wrong
+// (a 1 mm cube) is fitted x1000 on the way into a scene. The preview must show
+// the same fitted metre, not the millimetre the file claims.
+var tiny = assets.importFile(MILLIMETRE_CUBE);
+assert(tiny.length > 10, "assets.importFile(1 mm cube) -> " + tiny);
+var fit = assets.metadata(tiny).fitScale;
+assert(fit > 100, "the 1 mm cube is fitted (x" + fit + ")");
+assert(assets.select(tiny) === true, "assets.select(the mis-declared model)");
+var tinyPreview = assets.preview();
+assert(tinyPreview.bounds, "the mis-declared model previews with bounds");
+console.log("   fitted preview size " + JSON.stringify(tinyPreview.bounds.size));
+assert(tinyPreview.bounds.size.x > 0.5 && tinyPreview.bounds.size.x < 2.0,
+       "the preview renders the FITTED metre, not the authored millimetre: "
+       + tinyPreview.bounds.size.x);
+
+// ---- S7: the preview flies -------------------------------------------------
+var before = assets.preview().camera;
+assert(assets.fly({ forward: 2 }) === true, "assets.fly({forward: 2})");
+var after = assets.preview().camera;
+var moved = Math.sqrt(Math.pow(after.position.x - before.position.x, 2)
+                      + Math.pow(after.position.y - before.position.y, 2)
+                      + Math.pow(after.position.z - before.position.z, 2));
+console.log("   camera moved " + moved.toFixed(3) + " m forward");
+assert(Math.abs(moved - 2) < 0.001, "forward flight moved the camera 2 m");
+assert(after.distance === before.distance,
+       "the orbit distance is unchanged — flying moves the pivot, not the zoom");
+
+var sideBefore = assets.preview().camera.position;
+assert(assets.fly({ x: 0, y: 3, z: 0 }) === true, "assets.fly({y: 3}) (world offset)");
+var sideAfter = assets.preview().camera.position;
+assert(Math.abs(sideAfter.y - sideBefore.y - 3) < 0.001, "world-space fly moved +3 in y");
+
+console.log("scripting.e2e.assets_page PASSED");

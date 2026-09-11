@@ -402,13 +402,13 @@ bool MainWindow::bounceIfViewportIsDead()
     // bounces them, so the message reappears instead of a dead page.
     if (!sceneView || sceneView->viewCreationError().isEmpty()) return false;
     if (!viewErrorToast) viewErrorToast = new Toast(this);
+    // The anchor is the Toast's own (audit F-D4: this used to add a global
+    // window origin to a local point, which is only right at the screen's
+    // origin — i.e. on the test rig and nowhere else).
+    viewErrorToast->setAnchor(Toast::Anchor::WindowCentre);
     viewErrorToast->showToast(tr("3D view unavailable"),
                               tr("The 3D view could not be created: %1")
-                                  .arg(sceneView->viewCreationError()),
-                              0, QPoint(), QRect());
-    viewErrorToast->adjustSize();
-    viewErrorToast->move(rect().center() - QPoint(viewErrorToast->width() / 2, 0) +
-                         mapToGlobal(QPoint(0, 0)) - QPoint(0, height() / 4));
+                                  .arg(sceneView->viewCreationError()));
     goToDesktop();
     return true;
 }
@@ -3544,11 +3544,9 @@ void MainWindow::showViewportToast(const QString &title, const QString &text)
 {
     if (!sceneView) return;
     if (!snapToast) snapToast = new Toast(this);
-    snapToast->showToast(title, text, 0, QPoint(), QRect());   // auto-hides
-    snapToast->adjustSize();
-    QWidget *vp = sceneView->asWidget();
-    const QPoint top = vp->mapToGlobal(QPoint(vp->width() / 2, 24));
-    snapToast->move(top - QPoint(snapToast->width() / 2, 0));
+    // Top-centre of the VIEWPORT, through the widget itself (audit F-D4).
+    snapToast->setAnchor(Toast::Anchor::WidgetTop, sceneView->asWidget());
+    snapToast->showToast(title, text);   // auto-hides
 }
 
 // THE FLY-SPEED DROPDOWN follows FlySpeedSettings, never the other way round

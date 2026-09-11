@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QPixmap>
 #include <QTimer>
 #include <QDebug>
 
@@ -23,10 +22,8 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 
 #include "services/assetcas.h"
-#include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "ui/pages/iassetviewer.h"
-#include "irisgl/document/scenegraph/scenenode.h"
 
 // ---- ImportTailQueue -------------------------------------------------------
 
@@ -83,38 +80,20 @@ ImportMeshTail::Outcome ImportMeshTail::run(Database *db, IAssetViewer *viewer,
     QElapsedTimer timer;
     timer.start();
 
-    if (result.node) {
-        // The pipeline's convert already parsed the model on the worker and
-        // registerSession re-pointed its textures at durable CAS paths — no
-        // second assimp parse. Deep-duplicate for the viewer: the original
-        // is the session-registered asset, and the preview-material
-        // conversion (EngineThumbnailRenderer::previewMaterials via
-        // addNodeToScene) swaps materials in place.
-        auto previewNode = result.node->duplicate();
-        viewer->addNodeToScene(previewNode, guid, false, true);
-        outcome.usedPreparedNode = true;
-    }
-    else {
-        // No fragment came through (older path, .jaf-shaped callers):
-        // the stored model loads through the viewer's reader as before —
-        // resolved by guid through the CAS, not from the retired per-guid
-        // view (deep audit 2026-09, area 6).
-        QString storedModel = AssetCas::resolveFile(
-            QSqlDatabase::database(), AssetStorePaths::root(),
-            guid, QFileInfo(fileName).fileName());
-        if (storedModel.isEmpty())
-            storedModel = AssetCas::resolveSource(
-                QSqlDatabase::database(), AssetStorePaths::root(), guid);
-        viewer->loadModel(storedModel, guid);
-    }
-
-    outcome.snapshot = viewer->takeScreenshot(512, 512);
+    // THE LIBRARY LOAD — the committed asset, not the import fragment (see the
+    // header). The viewer resolves the row's blob through the store and applies
+    // the asset's fit, which is what makes this preview agree with a tile
+    // double-click, with the thumbnail, and with the editor's drop.
+    QString storedModel = AssetCas::resolveFile(
+        QSqlDatabase::database(), AssetStorePaths::root(),
+        guid, QFileInfo(fileName).fileName());
+    if (storedModel.isEmpty())
+        storedModel = AssetCas::resolveSource(
+            QSqlDatabase::database(), AssetStorePaths::root(), guid);
+    viewer->loadModel(storedModel, guid);
+    outcome.previewed = true;
 
     if (db) {
-        if (!outcome.snapshot.isNull())
-            db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(
-                                               QPixmap::fromImage(outcome.snapshot)));
-
         // Camera/orbit properties merged WITHOUT clobbering the pipeline's
         // "metadata"/"import" blocks (ASSETS_AUDIT.md finding 5).
         QJsonObject properties =
@@ -126,7 +105,6 @@ ImportMeshTail::Outcome ImportMeshTail::run(Database *db, IAssetViewer *viewer,
     }
 
     qInfo() << "import tail:" << QFileInfo(fileName).fileName()
-            << (outcome.usedPreparedNode ? "prepared-node" : "reader-load")
-            << timer.elapsed() << "ms";
+            << "library-preview" << timer.elapsed() << "ms";
     return outcome;
 }

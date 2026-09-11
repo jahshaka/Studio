@@ -537,6 +537,23 @@ set_tests_properties(scripting.e2e.import_render PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.assets_page — the owner's Assets-module smoke round (S4-S7,
+# 2026-09-11): the import selects its tile, the preview is the size the editor
+# places (fit-to-size on both paths), the stored thumbnail is TEXTURED and
+# FRAMED (it used to be a render of the live import fragment, whose textures
+# live in the deleted staging dir), and the preview flies. Engine up (no
+# --headless): the thumbnail is a render and the preview is a scene.
+configure_file(scripts/e2e_assets_page.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_page.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-assets_page)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.assets_page
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_page.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.assets_page PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # VISUAL_PARITY_SPEC item 5: a saved shader GRAPH gets a real thumbnail —
 # createGraph -> colour wired into Base Color -> save -> refreshThumbnail
 # renders the evaluated PbrMaterial on the preview sphere, and the stored PNG's

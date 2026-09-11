@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/qtinterop.h"
+#include "bridge/assetthumbnail.h"
 #include "bridge/enginehost.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
@@ -1505,27 +1506,68 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
 // mid-batch takes the rendered thumbnail.
 void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fileName)
 {
-    // The grid tile and metadata pane read the `filename` member, which only
-    // the browse dialog used to set — a drag-and-dropped model got a nameless
-    // tile until restart (ASSETS_AUDIT.md finding 2). Every import path lands
-    // here, so set it here.
-    filename = fileName;
-    renameModelField->setText(QFileInfo(fileName).baseName());
+	// The grid tile and metadata pane read the `filename` member, which only
+	// the browse dialog used to set — a drag-and-dropped model got a nameless
+	// tile until restart (ASSETS_AUDIT.md finding 2). Every import path lands
+	// here, so set it here.
+	filename = fileName;
+	renameModelField->setText(QFileInfo(fileName).baseName());
 
-    const auto outcome = ImportMeshTail::run(db, viewer, result, fileName);
+	ImportMeshTail::run(db, viewer, result, fileName);
 
-    if (auto *tile = fastGrid->tileByGuid(result.assetGuid)) {
-        tile->hideLoadingOverlay();
-        if (!outcome.snapshot.isNull())
-            tile->setTile(QPixmap::fromImage(outcome.snapshot));
-        // The freshly rendered camera properties feed the pane on selection.
-        tile->sceneProperties = QJsonDocument::fromJson(
-            db->fetchAsset(result.assetGuid).properties).object();
-    }
+	// THE ONE THUMBNAIL ROUTINE (smoke S6). This used to persist the viewer's
+	// shot of the LIVE import fragment — a white, untextured render, because
+	// that fragment's material paths point into the staging directory the
+	// commit deleted. assetthumb::storeObject is what `assets.refreshThumbnail`
+	// runs: the committed blob, fitted, framed like the editor's F. A page
+	// import and a scripted import now store the same image.
+	assetthumb::storeObject(db, project, result.assetGuid, EngineHost::instance().engine());
 
-    renameWidget->setVisible(true);
-    tagWidget->setVisible(true);
-    updateAsset->setVisible(true);
+	if (auto *tile = fastGrid->tileByGuid(result.assetGuid)) {
+		tile->hideLoadingOverlay();
+		const auto record = db->fetchAsset(result.assetGuid);
+		QImage thumbnail;
+		if (thumbnail.loadFromData(record.thumbnail, "PNG"))
+			tile->setTile(QPixmap::fromImage(thumbnail));
+		// The freshly rendered camera properties feed the pane on selection.
+		tile->sceneProperties = QJsonDocument::fromJson(record.properties).object();
+	}
+
+	renameWidget->setVisible(true);
+	tagWidget->setVisible(true);
+	updateAsset->setVisible(true);
+
+	// SELECT WHAT WAS JUST IMPORTED (smoke S4: "importing an asset does not
+	// select the new tile; a double click is needed"). The last item of a
+	// batch wins, which is the one whose preview is on screen anyway.
+	selectAsset(result.assetGuid);
+}
+
+// The tile gesture as a call — `assets.select`, the import tail's last step,
+// and anything else that wants to put an asset in front of the user. The
+// scroll matters: a library of hundreds files the new tile off-screen, and a
+// selection nobody can see is not a selection.
+bool AssetView::selectAsset(const QString &guid)
+{
+	if (guid.isEmpty()) return false;
+	AssetGridItem *tile = fastGrid->tileByGuid(guid);
+	if (!tile && !db->fetchAsset(guid).guid.isEmpty()) {
+		// The page MIRRORS the library: a row that exists but whose tile has
+		// not been announced yet (a verb's import, a queued announcement that
+		// has not run) still selects — the tile is built now. The announcement
+		// handler checks for an existing tile, so nothing doubles up.
+		addLibraryTileForAsset(guid);
+		tile = fastGrid->tileByGuid(guid);
+	}
+	if (!tile) return false;
+	fastGrid->selectTile(tile);          // the double-click path: preview + pane
+	fastGrid->ensureWidgetVisible(tile, 32, 32);
+	return true;
+}
+
+QString AssetView::selectedAssetGuid() const
+{
+	return selectedGridItem ? selectedGridItem->metadata["guid"].toString() : QString();
 }
 
 // THE import dispatch (ASSET_DRAWERS_SPEC §3): drop pad and browse dialog both
@@ -1593,10 +1635,9 @@ bool AssetView::shutdownImports(int msTimeout)
 void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 {
 	if (importRunner && importRunner->isRunning()) {
-		Toast *t = new Toast(this);
+		Toast *t = libraryToast();
 		t->showToast(tr("Import in progress"),
-		             tr("Wait for the current import to finish (or cancel it) first."),
-		             0, parent->pos(), QRect());
+		             tr("Wait for the current import to finish (or cancel it) first."));
 		return;
 	}
 
@@ -1661,10 +1702,9 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 		if (auto eng = EngineHost::instance().engine()) eng->reclaimMemory();
 
 		if (cancelled) {
-			Toast *t = new Toast(this);
+			Toast *t = libraryToast();
 			t->showToast(tr("Import cancelled"),
-			             tr("The import was cancelled. Files already completed stay in the library."),
-			             0, parent->pos(), QRect());
+			             tr("The import was cancelled. Files already completed stay in the library."));
 		}
 		if (!importErrors.isEmpty()) {
 			QMessageBox::warning(this, tr("Import failed"),
@@ -1680,6 +1720,12 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 
 		fastGrid->updateGridColumns(fastGrid->lastWidth);
 		filterFromSelection();
+
+		// SELECT WHAT WAS IMPORTED (smoke S4). A mesh selects when its tail
+		// lands (the preview is part of the selection); everything else —
+		// images, audio, video, .jaf archives — has no tail, so the batch
+		// selects its last asset here.
+		if (!tailQueue->isRunning()) selectAsset(lastImportedGuid);
 	});
 
 	importRunner->start();
@@ -1702,6 +1748,7 @@ void AssetView::handleImportedFile(const ImportRequest &request, const ImportRes
 		// NOW, mid-batch, with the loading overlay up — the render lands on
 		// the tile when its turn comes.
 		pendingViewerTails.append({ result, request.sourcePath });
+		lastImportedGuid = result.assetGuid;
 		if (!isJaf) {
 			addLibraryTileForAsset(result.assetGuid);
 			if (auto *tile = fastGrid->tileByGuid(result.assetGuid))
@@ -1712,6 +1759,7 @@ void AssetView::handleImportedFile(const ImportRequest &request, const ImportRes
 
 	// Media (image/audio/video): the tile appears live, mid-batch.
 	addLibraryTileForAsset(result.assetGuid);
+	lastImportedGuid = result.assetGuid;
 	if (request.typeHint == static_cast<int>(ModelTypes::Video))
 		pendingVideoThumbGuids.append(result.assetGuid);   // real frame, post-dialog
 }
@@ -1803,6 +1851,15 @@ void AssetView::addLibraryTileForAsset(const QString &guid)
 	fastGrid->addTo(gridItem, 0);
 	fastGrid->updateGridColumns(fastGrid->lastWidth);
 	filterFromSelection();
+}
+
+// ONE toast for the page, reused. Every message used to `new Toast(this)` and
+// never delete it: four leaked top-level windows per import, per delete, per
+// add-to-project, for the life of the session.
+Toast *AssetView::libraryToast()
+{
+	if (!mToast) mToast = new Toast(this);
+	return mToast;
 }
 
 void AssetView::stopMediaPreviews()
@@ -2529,11 +2586,12 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	// the pin must be visible without switching pages back and forth.
 	emit assetAddedToProject(guid);
 
-	Toast *t = new Toast(this);
+	// Bottom-centre of the app window, which is where the Toast puts itself
+	// (smoke S8) — the old call passed a position nothing read.
+	Toast *t = libraryToast();
 	t->showToast(
-		"Asset Added To Project",
-		QString("%1 has been added successfully to the open project.").arg(item->metadata["name"].toString()),
-		0, parent->pos(), QRect()
+		tr("Asset Added To Project"),
+		tr("%1 has been added successfully to the open project.").arg(item->metadata["name"].toString())
 	);
 }
 
@@ -2832,12 +2890,15 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 		break;
 	case ModelTypes::Object:
 	case ModelTypes::ParticleSystem: {
-		// the import-time flow: load into the asset viewer, screenshot it —
-		// the same lit, textured render a fresh import stores today.
+		// THE one thumbnail routine — `assets.refreshThumbnail`'s body: the
+		// stored blob, fitted, framed. (It used to be a screenshot of this
+		// page's viewer, which is a second render of a second node.) The
+		// preview follows so the user sees what was rebuilt.
 		viewers->setCurrentIndex(0);
-		viewer->loadJafModel(sourceFile, guid, false, true, false);
-		const QImage shot = viewer->takeScreenshot(512, 512);
+		const QImage shot = assetthumb::renderObject(db, project, guid,
+		                                             EngineHost::instance().engine());
 		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
+		viewer->loadJafModel(sourceFile, guid, false, true, false);
 		break;
 	}
 	case ModelTypes::Material: {
@@ -2974,11 +3035,10 @@ void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 
 	if (outcome.unlisted) {
 		// The user must know the asset did NOT vanish from their projects.
-		Toast *t = new Toast(this);
+		Toast *t = libraryToast();
 		t->showToast(tr("Removed From Library"),
 		             tr("%1 is still used by %n project(s) and stays in them.", "",
-		                outcome.pinCount).arg(name),
-		             0, parent->pos(), QRect());
+		                outcome.pinCount).arg(name));
 	}
 }
 

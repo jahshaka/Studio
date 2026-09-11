@@ -21,20 +21,25 @@ For more information see the LICENSE file
 // dialog (owner-reported; measured seconds for one large GLB). Two fixes
 // live here:
 //
-//  * ImportMeshTail::run consumes the PIPELINE'S OWN parsed fragment
-//    (ImportResult::node, produced by MeshImporter::convert on the worker)
-//    instead of re-parsing the stored model with assimp a second time — the
-//    engine upload + offscreen render is all that remains on the UI thread.
-//    The fragment is deep-duplicated first: the same node instance is the
-//    session-registered asset, and the viewer's preview-material conversion
-//    mutates materials in place.
+//  * ImportMeshTail::run previews THE ASSET THE LIBRARY STORED, through the
+//    viewer's ordinary library load (IAssetViewer::loadModel -> the stored
+//    blob, textures resolved through the store, the asset's fit applied) —
+//    the very path a tile double-click takes, so a just-imported asset and a
+//    re-selected one are the same picture.
+//
+//    IT USED TO RENDER `ImportResult::node->duplicate()`, the LIVE import
+//    fragment, whose material paths point into the import's staging directory
+//    — deleted by the time this runs. That white render was then PERSISTED as
+//    the asset's thumbnail, which is the owner's "GLB imports show no textures
+//    in the Assets tiles/thumbnails/preview while the editor drop has them"
+//    (smoke S6, 2026-09-11). The deleted optimisation was one assimp parse per
+//    import; the price of it was a white thumbnail that never healed.
 //
 //  * ImportTailQueue runs one tail item per EVENT-LOOP TURN (queued
 //    single-shots), so the window keeps painting, clicking and moving
 //    between items — tiles update live, one by one, the way the media
 //    tiles already did mid-batch.
 
-#include <QImage>
 #include <QObject>
 #include <QVector>
 #include <functional>
@@ -74,19 +79,19 @@ private:
     bool mRunning = false;
 };
 
-/// The per-mesh tail body: preview load + rendered thumbnail + the row's
-/// camera properties. UI/engine-thread work by nature (the engine renders,
-/// the default DB connection commits) — but ONE item's worth, no parse.
+/// The per-mesh tail body: the library preview + the row's camera properties.
+/// One item's worth of UI/engine-thread work.
+///
+/// The THUMBNAIL is not written here: it is assetthumb::storeObject (the one
+/// routine `assets.refreshThumbnail` uses), called by the page — so a page
+/// import and a scripted import store the same image instead of two renders
+/// of two different nodes.
 namespace ImportMeshTail
 {
     struct Outcome
     {
-        /// True when ImportResult::node (the worker-parsed fragment) fed the
-        /// viewer directly — the no-second-parse path.
-        bool usedPreparedNode = false;
-        /// The rendered 512x512 thumbnail; null when the viewer cannot
-        /// render (headless stand-in).
-        QImage snapshot;
+        /// True when the stored asset was found and handed to the viewer.
+        bool previewed = false;
     };
 
     Outcome run(Database *db, IAssetViewer *viewer,

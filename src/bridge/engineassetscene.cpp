@@ -181,23 +181,26 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
     mDocument->rootNode->addChild(node);
     node->update(0);
 
-    auto aabb = nodeBoundingBox(node);
-    iris::BoundingSphere bound = aabb.getMinimalEnclosingSphere();
-    if (bound.radius <= 0.0f) { bound.pos = node->getGlobalPosition(); bound.radius = 1; }
-    const float dist = preview::framingDistance(bound.radius, mCamera->effectiveFovDegrees());
-
-    // The framing distance grows with the subject; the clip planes must follow
-    // it or a large model sits entirely beyond its own far plane and renders
-    // nothing (ASSETS_AUDIT.md finding 3: any radius over ~170 vanished).
-    mSubjectRadius = bound.radius;
-    preview::clipPlanesForFraming(dist, mSubjectRadius, mCamera->nearClip, mCamera->farClip);
+    // THE FRAMING is preview::frameSubject — the editor's F, shared with the
+    // thumbnail renderer (viewport/previewframing.h). The clip planes come
+    // with it: the framing distance grows with the subject, and a large model
+    // whose far plane did not follow rendered nothing at all (ASSETS_AUDIT.md
+    // finding 3: any radius over ~170 vanished).
+    const preview::Framing framing = preview::frameSubject(node, mCamera->effectiveFovDegrees());
+    mSubjectRadius = framing.radius;
+    mCamera->nearClip = framing.nearClip;
+    mCamera->farClip = framing.farClip;
 
     if (!viewed) {
-        mLookAt = bound.pos;
-        mLocalPos = iris::Vec3(0, bound.pos.y(), 12);
+        mLookAt = framing.target;
+        // Straight out of the box's centre, at the framing distance: the old
+        // (0, centre.y, 12) put the camera on the world's Z axis whatever the
+        // subject's x/z, so a model authored away from its origin was previewed
+        // from an angle and off-centre (the same defect as the thumbnail's).
+        mLocalPos = framing.target + iris::Vec3(0, 0, framing.distance);
         mLocalRot = iris::Vec3(0, 0, 0);
     }
-    mDistanceFromPivot = dist;
+    mDistanceFromPivot = framing.distance;
 }
 
 iris::SceneNodePtr EngineAssetScene::setMaterialSubject(iris::MaterialPtr material, const QString &name)
@@ -334,6 +337,50 @@ void EngineAssetScene::orbit(float yawDegrees, float pitchDegrees)
 {
     mOrbit.orbit(yawDegrees, pitchDegrees);
     mOrbit.apply(mCamera);
+}
+
+// FLY (smoke S7). The pivot carries the camera: orbitmath::applyPose parks the
+// camera one orbit radius behind the pivot along the current look direction, so
+// translating the pivot translates the camera by exactly the same vector and
+// the orbit the user has set up survives the flight.
+void EngineAssetScene::flyBy(const iris::Vec3 &worldDelta)
+{
+    if (worldDelta.isNull()) return;
+    mOrbit.pivot += worldDelta;
+    mLookAt = mOrbit.pivot;
+    applyClipPlanes();
+    mOrbit.apply(mCamera);
+}
+
+void EngineAssetScene::flyStep(const flystep::Keys &keys, float dt)
+{
+    if (!keys.any() || dt <= 0.0f) return;
+    // The speed scales with the SUBJECT: a 50 m environment and a 10 cm prop
+    // are both previewed here, and a fixed metres-per-second step is a crawl
+    // in one and a jump across the other. The orbit distance is the framing's
+    // own measure of "how big is what I am looking at".
+    const float speed = qMax(0.5f, mOrbit.distFromPivot) * 1.2f;
+    flyBy(flystep::delta(mCamera->getLocalRot(), keys, speed, dt));
+}
+
+iris::Vec3 EngineAssetScene::cameraPosition() const
+{
+    return mCamera ? mCamera->getLocalPos() : iris::Vec3();
+}
+
+iris::AABB EngineAssetScene::subjectBounds() const
+{
+    auto s = subject();
+    if (!s) return iris::AABB();
+    return preview::worldBoundingBox(s);
+}
+
+void EngineAssetScene::frameSubject()
+{
+    auto s = subject();
+    if (!s) return;
+    setSubject(s, false, false);   // re-measures and re-frames where it stands
+    resetCamera();
 }
 
 void EngineAssetScene::wheel(int delta)

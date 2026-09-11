@@ -47,6 +47,11 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
+#include "bridge/assetthumbnail.h"
+#include "bridge/engineassetscene.h"
+#include "ui/pages/assetview.h"
+#include "ui/pages/engineassetviewer.h"
+#include "viewport/flystep.h"
 #include "bridge/enginethumbnailrenderer.h"
 #include "viewport/ieditorviewport.h"
 #include "bridge/enginehost.h"
@@ -247,9 +252,21 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
           "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, materials and shader graphs render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
           Needs::Document },
-        { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}}",
-          "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions and the colour of its centre pixel (0-255). empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
+        { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}, coverage}",
+          "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions, the colour of its centre pixel (0-255) and `coverage` — the fraction of the image (0..1) that differs from the background the renderer cleared to, i.e. how much of the tile the subject fills. empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
           Needs::Document },
+        { "select", "assets.select(guid) -> bool",
+          "Selects an asset in the ASSETS PAGE: the tile becomes current, is scrolled into view and its preview loads — exactly what a double-click on the tile does. This is what an import does with the asset it just made (the tile used to appear unselected and had to be hunted for). False when the page has no tile for that guid (a guid the current drawer/filter hides, or a session with no window).",
+          Needs::Window },
+        { "selected", "assets.selected() -> guid | ''",
+          "The guid of the Assets page's current tile, empty when nothing is selected.",
+          Needs::Window },
+        { "preview", "assets.preview() -> {guid, subject, bounds: {min, max, size, center}, camera: {position, pivot, distance}}",
+          "What the Assets page's preview viewer is showing: the selected asset's guid, the previewed node's name, its WORLD BOUNDS (the size the preview renders, which is the size the editor places — the fit-to-size factor is applied on both paths) and where the orbit camera stands. `bounds` is absent when nothing with geometry is previewed. The verb a test uses to prove a preview and a drop agree.",
+          Needs::Window },
+        { "fly", "assets.fly({x, y, z} | {forward, right, up}) -> bool",
+          "Flies the Assets preview camera, camera-relative, in metres: `forward`/`right`/`up` are along the camera's own axes (the arrow/WASD keys' directions, the editor's fly step), `x`/`y`/`z` are a world-space offset. Both forms move the orbit pivot, so the arcball survives the flight. False when no asset preview is up.",
+          Needs::Window },
         { "exportRaw", "assets.exportRaw(guid, dir, {dependencies: true, hash: true}) -> {dir, manifest, files, assets, totalBytes, warnings}",
           "Exports a store asset's files (and, by default, its dependencies' files) as loose files with their original names into dir, plus a jah.manifest.json (manifest v2: guids, types, dependency edges, sizes, sha256 content ids — hashing skippable via {hash: false}). Identical bytes are written once; assets with no stored files still get manifest entries. The unified-export front half (ASSET_PIPELINE_SPEC §3.3); .jaf export joins it in the final half.",
           Needs::Document },
@@ -1033,21 +1050,17 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
 
     QImage image;
     EngineThumbnailRenderer renderer(engine);
-    if (record.type == static_cast<int>(ModelTypes::Object)) {
-        // ALWAYS rebuild from the blob: the session-registered import node
-        // carries texture properties rewritten to raw guids (no reader ever
-        // resolved them), so rendering it gives the white, untextured
-        // thumbnail this verb existed to replace. SceneReader + the database
-        // handle resolves those guids to store files.
-        SceneReader reader;
-        reader.setDatabaseHandle(host.db);
-        reader.setProject(host.project);
-        // LIBRARY resolution: the store asset's own bytes, by guid.
-        reader.setLibrarySource();
-        auto blob = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
-        iris::SceneNodePtr node = reader.readSceneNode(blob);
-        if (!node) return fail("assets.refreshThumbnail: could not rebuild the object");
-        image = renderer.renderNode(node, QSize(512, 512));
+    if (record.type == static_cast<int>(ModelTypes::Object)
+        || record.type == static_cast<int>(ModelTypes::ParticleSystem)) {
+        // THE one model-thumbnail routine (bridge/assetthumbnail.h): ALWAYS
+        // from the blob — the session-registered import node carries texture
+        // properties into the staging directory the commit deleted, so
+        // rendering it gives the white, untextured thumbnail this verb existed
+        // to replace, which is exactly what the Assets PAGE was persisting
+        // until smoke S6. The page's import tail and its Rebuild Thumbnail run
+        // this same function now.
+        image = assetthumb::renderObject(host.db, host.project, guid, engine);
+        if (image.isNull()) return fail("assets.refreshThumbnail: could not rebuild the object");
     } else if (record.type == static_cast<int>(ModelTypes::Material)) {
         auto matObject = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
         MaterialReader reader;
@@ -1076,6 +1089,114 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
     return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(image)));
 }
 
+// ---- the Assets PAGE (smoke S4/S5/S7) --------------------------------------
+//
+// Three verbs onto the page the owner was clicking: select the tile an import
+// just made, read back what the preview is showing (so "the preview and the
+// editor disagree about scale" is a test rather than a screenshot), and fly the
+// preview camera. The page owns the widgets; these are the calls that drive
+// them, and the page's own gestures call the same functions.
+
+AssetView *AssetsApi::assetsPage(const QString &verb)
+{
+    AssetView *page = host.mainWindow ? host.mainWindow->assetsPage() : nullptr;
+    if (!page) { fail(QStringLiteral("%1: there is no Assets page in this session").arg(verb)); return nullptr; }
+    return page;
+}
+
+bool AssetsApi::select(const QString &guid)
+{
+    AssetView *page = assetsPage(QStringLiteral("assets.select"));
+    if (!page) return false;
+    if (guid.isEmpty()) return refuse("assets.select: no guid given");
+    if (!page->selectAsset(guid))
+        return refuse(QStringLiteral("assets.select: the Assets page shows no tile for '%1'").arg(guid));
+    return true;
+}
+
+QString AssetsApi::selected()
+{
+    AssetView *page = assetsPage(QStringLiteral("assets.selected"));
+    return page ? page->selectedAssetGuid() : QString();
+}
+
+QVariantMap AssetsApi::preview(const QVariantMap &options)
+{
+    QVariantMap out;
+    AssetView *page = assetsPage(QStringLiteral("assets.preview"));
+    if (!page) return out;
+    const QString refusal = refuseUnknownKeys(QStringLiteral("assets.preview"), options, {});
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+
+    out["guid"] = page->selectedAssetGuid();
+    auto *viewer = dynamic_cast<EngineAssetViewer *>(page->previewViewer());
+    if (!viewer || !viewer->assetScene()) {
+        refuse("assets.preview: this session has no engine asset preview");
+        return out;
+    }
+    EngineAssetScene *scene = viewer->assetScene();
+    auto subject = scene->subject();
+    out["subject"] = subject ? subject->getName() : QString();
+
+    const iris::AABB bounds = scene->subjectBounds();
+    if (bounds.getMin().x() <= bounds.getMax().x()) {
+        const iris::Vec3 mn = bounds.getMin(), mx = bounds.getMax();
+        auto vec = [](const iris::Vec3 &v) {
+            return QVariantMap{ { "x", v.x() }, { "y", v.y() }, { "z", v.z() } };
+        };
+        out["bounds"] = QVariantMap{ { "min", vec(mn) }, { "max", vec(mx) },
+                                     { "size", vec(mx - mn) }, { "center", vec(bounds.getCenter()) } };
+    }
+    const iris::Vec3 pos = scene->cameraPosition(), pivot = scene->pivot();
+    out["camera"] = QVariantMap{
+        { "position", QVariantMap{ { "x", pos.x() }, { "y", pos.y() }, { "z", pos.z() } } },
+        { "pivot", QVariantMap{ { "x", pivot.x() }, { "y", pivot.y() }, { "z", pivot.z() } } },
+        { "distance", scene->distanceFromPivot() }
+    };
+    return out;
+}
+
+bool AssetsApi::fly(const QVariantMap &move)
+{
+    AssetView *page = assetsPage(QStringLiteral("assets.fly"));
+    if (!page) return false;
+    static const QStringList known = { QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z"),
+                                       QStringLiteral("forward"), QStringLiteral("right"),
+                                       QStringLiteral("up") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("assets.fly"), move, known);
+    if (!refusal.isEmpty()) return fail(refusal);
+
+    auto *viewer = dynamic_cast<EngineAssetViewer *>(page->previewViewer());
+    if (!viewer || !viewer->assetScene())
+        return refuse("assets.fly: this session has no engine asset preview");
+    EngineAssetScene *scene = viewer->assetScene();
+    auto camera = scene->camera();
+    if (!camera) return refuse("assets.fly: the preview has no camera");
+
+    const double x = normalizeJs(move.value("x", 0)).toDouble();
+    const double y = normalizeJs(move.value("y", 0)).toDouble();
+    const double z = normalizeJs(move.value("z", 0)).toDouble();
+    const double fwd = normalizeJs(move.value("forward", 0)).toDouble();
+    const double rgt = normalizeJs(move.value("right", 0)).toDouble();
+    const double up = normalizeJs(move.value("up", 0)).toDouble();
+
+    // The camera-relative half is flystep's basis — the very directions the
+    // arrow/WASD keys use, so a scripted fly and a held key are one motion.
+    flystep::Keys keys;
+    keys.forward = fwd > 0; keys.back = fwd < 0;
+    keys.right = rgt > 0;   keys.left = rgt < 0;
+    keys.up = up > 0;       keys.down = up < 0;
+    iris::Vec3 delta = iris::Vec3(float(x), float(y), float(z));
+    if (keys.any()) {
+        const iris::Vec3 dir = flystep::direction(camera->getLocalRot(), keys);
+        const float metres = float(std::max({ std::abs(fwd), std::abs(rgt), std::abs(up) }));
+        delta += dir * metres;
+    }
+    if (delta.isNull()) return refuse("assets.fly: no movement given");
+    scene->flyBy(delta);
+    return true;
+}
+
 QVariantMap AssetsApi::thumbnail(const QString &guid)
 {
     QVariantMap out;
@@ -1095,6 +1216,24 @@ QVariantMap AssetsApi::thumbnail(const QString &guid)
     if (!image.isNull()) {
         const QColor c = image.pixelColor(image.width() / 2, image.height() / 2);
         out["centre"] = QVariantMap{ { "r", c.red() }, { "g", c.green() }, { "b", c.blue() } };
+        // HOW MUCH OF THE TILE THE SUBJECT FILLS. A thumbnail can be textured
+        // and still be wrong — the owner's ruined-city tile was a correct
+        // render of a 50 m model framed for a box that also had to contain the
+        // world origin, so it came out a smudge in the middle of 512x512
+        // (smoke S6). Coverage is the fraction of pixels that differ from the
+        // corner (the background the renderer cleared to), which is the number
+        // that says so.
+        const QRgb background = image.pixel(1, 1);
+        const int bgR = qRed(background), bgG = qGreen(background), bgB = qBlue(background);
+        qint64 lit = 0;
+        for (int y = 0; y < image.height(); ++y)
+            for (int x = 0; x < image.width(); ++x) {
+                const QRgb p = image.pixel(x, y);
+                if (std::abs(qRed(p) - bgR) > 8 || std::abs(qGreen(p) - bgG) > 8
+                    || std::abs(qBlue(p) - bgB) > 8)
+                    ++lit;
+            }
+        out["coverage"] = double(lit) / double(qMax(1, image.width() * image.height()));
     }
     return out;
 }

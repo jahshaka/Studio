@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "viewport/gizmo.h"
 #include "viewport/ieditorviewport.h"
+#include "viewport/flystep.h"
 #include "viewport/flyspeedsettings.h"
 
 #include <QDebug>
@@ -332,20 +333,9 @@ void EditorCameraController::update(float dt)
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
 
     const iris::Quat rot = camera->getLocalRot();
-    const iris::Vec3 worldUp(0, 1, 0);
     const iris::Vec3 forward = rot.rotatedVector(iris::Vec3(0, 0, -1));
     const iris::Vec3 camRight = rot.rotatedVector(iris::Vec3(1, 0, 0));
     const iris::Vec3 camUp = rot.rotatedVector(iris::Vec3(0, 1, 0));
-    // Strafe stays HORIZONTAL in free flight (right = forward x worldUp), which
-    // is the whole point of flying against the world's up rather than the
-    // camera's — except that the cross product DEGENERATES when the camera
-    // looks straight up or straight down: Vec3::normalized() returns a ZERO
-    // vector there, so A and D silently did nothing at the poles (found while
-    // building the axis-view lock, 2026-09-08 — a top view is exactly that
-    // pose). Falling back to the camera's own right vector is the same
-    // direction everywhere else and the only defined one there.
-    iris::Vec3 right = iris::Vec3::crossProduct(forward, worldUp).normalized();
-    if (right.isNull()) right = camRight;
 
     const auto held = [this](int key) { return heldKeys.contains(key); };
 
@@ -368,16 +358,21 @@ void EditorCameraController::update(float dt)
         if (held(Qt::Key_PageUp))   move -= forward;
         if (held(Qt::Key_PageDown)) move += forward;
     } else {
-        if (held(Qt::Key_Up))       move += forward;
-        if (held(Qt::Key_Down))     move -= forward;
-        if (held(Qt::Key_Right))    move += right;
-        if (held(Qt::Key_Left))     move -= right;
-        if (held(Qt::Key_PageUp))   move += worldUp;
-        if (held(Qt::Key_PageDown)) move -= worldUp;
+        // FREE FLIGHT is viewport/flystep.h — the one definition of "which way
+        // do the fly keys move a camera", shared with the Assets preview
+        // (smoke S7). The horizontal strafe and its pole fallback live there.
+        flystep::Keys keys;
+        keys.forward = held(Qt::Key_Up);
+        keys.back    = held(Qt::Key_Down);
+        keys.right   = held(Qt::Key_Right);
+        keys.left    = held(Qt::Key_Left);
+        keys.up      = held(Qt::Key_PageUp);
+        keys.down    = held(Qt::Key_PageDown);
+        move = flystep::direction(rot, keys);
     }
     if (move.isNull()) return;
 
-    const float boost = heldKeys.contains(Qt::Key_Shift) ? 3.0f : 1.0f;
+    const float boost = heldKeys.contains(Qt::Key_Shift) ? flystep::kBoost : 1.0f;
     const float speed = linearSpeed * FlySpeedSettings::multiplier(FlySpeedSettings::Editor);
     camera->setLocalPos(camera->getLocalPos() + move.normalized() * speed * boost * dt);
     camera->update(0);

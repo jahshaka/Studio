@@ -669,6 +669,23 @@ set_tests_properties(ui.project_tile PROPERTIES
 # shell/dockstate.h against a real QSettings file and a real nested QMainWindow
 # built the way the shell builds one. Widgets only: no engine, no project,
 # no display.
+# ui.toast — WHERE A TOAST SITS (owner smoke S8 + audit F-D4). The window under
+# test is deliberately NOT at the screen's origin, which is the only place the
+# old "move a global point as a local one" arrangement looked right.
+add_executable(test_toast test_toast.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/toast.cpp)
+set_target_properties(test_toast PROPERTIES
+    AUTOMOC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_toast PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_toast PRIVATE Qt6::Widgets)
+add_test(NAME ui.toast COMMAND test_toast
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.toast PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.toast)
+
 add_executable(test_dock_state test_dock_state.cpp)
 set_target_properties(test_dock_state PROPERTIES
     AUTOMOC ON CXX_STANDARD 17

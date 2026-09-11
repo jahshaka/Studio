@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "io/assetmanager.h"
 #include "io/scenereader.h"
+#include "services/libraryassetnode.h"
 #include "io/materialreader.h"
 #include "bridge/enginehost.h"
 #include "bridge/enginethumbnailrenderer.h"
@@ -112,14 +113,14 @@ void ThumbnailGenerator::processOneEngineRequest()
 QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, QSize size)
 {
     if (request.type == ThumbnailRequestType::ImportedMesh) {
-        if (!db || !project) return QImage();
-        QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(request.id));
-        SceneReader reader;
-        reader.setDatabaseHandle(db);
-        reader.setProject(project);
-        reader.setBaseDirectory(IrisUtils::join(project->getProjectFolder()));
-        QJsonObject objectHierarchy = document.object();
-        auto node = reader.readSceneNode(objectHierarchy);
+        // THE library node — the stored blob with the asset's fit applied
+        // (services/libraryassetnode.h), the same node `assets.refreshThumbnail`
+        // and the Assets page render. This used to read the blob here with a
+        // reader of its own and NO fit, so the editor panel's "Refresh
+        // thumbnail" drew a mis-declared model at its authored size while
+        // every other surface drew it at the size it is placed (smoke S5).
+        if (!db) return QImage();
+        auto node = libraryasset::fromLibrary(db, project, request.id);
         if (!node) return QImage();
         return engineRenderer->renderNode(node, size);
     }

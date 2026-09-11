@@ -19,6 +19,8 @@
 #include <Qt>
 #include "irisgl/irisglfwd.h"
 #include "bridge/enginepreviewscene.h"   // brings jahshaka/engine/Engine.h
+#include "viewport/flystep.h"
+#include "irisgl/core/geometry/aabb.h"
 #include "viewport/previeworbit.h"
 
 class SceneMirror;
@@ -67,6 +69,23 @@ public:
     void wheel(int delta);
     /// Turns the orbit by whole angles (tests; the same path the mouse takes).
     void orbit(float yawDegrees, float pitchDegrees);
+    /// FLY (smoke S7): moves the orbit PIVOT by a world-space offset, which
+    /// carries the camera with it — the preview writes its camera from the
+    /// orbit every frame, so a camera moved directly would be overwritten on
+    /// the next one. `assets.fly` and the viewer's arrow/WASD keys both land
+    /// here; the direction is viewport/flystep.h, the editor's own.
+    void flyBy(const iris::Vec3 &worldDelta);
+    /// One frame of held-key flight at the Assets surface's speed.
+    void flyStep(const flystep::Keys &keys, float dt);
+    /// Where the camera stands and what it orbits (verbs, tests).
+    iris::Vec3 cameraPosition() const;
+    iris::Vec3 pivot() const { return mOrbit.pivot; }
+    float distanceFromPivot() const { return mOrbit.distFromPivot; }
+    /// World-space bounds of the previewed subject, empty box when there is none.
+    iris::AABB subjectBounds() const;
+    /// Re-frames the current subject the way the editor's F does (the framing
+    /// setSubject computed) and lands the camera on it.
+    void frameSubject();
 
     /// One frame: orbit lerp, document update, document -> engine, sky and camera
     /// -> view. `width`/`height` are the view's pixel size (aspect ratio).

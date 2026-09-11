@@ -75,6 +75,49 @@ inline void clipPlanesForFraming(float dist, float radius, float &nearClip, floa
     nearClip = qBound(0.1f, farClip / 50000.0f, 100.0f);
 }
 
+/// THE FRAMING OF A SUBJECT — the editor's F, as data.
+///
+/// Every surface that "frames a model" asks the same three questions (what is
+/// the middle of it, how big is it, how far back does the camera go) and three
+/// call sites answered them three ways: the editor's F (world AABB -> centre +
+/// half-diagonal), the Assets preview (the same box through
+/// getMinimalEnclosingSphere, which IS centre + half-diagonal) and the
+/// thumbnail renderer (a MERGE of per-mesh bounding spheres seeded with a unit
+/// sphere at the ORIGIN, then a camera parked at x = 0 whatever the subject's
+/// x — which is why a 50 m city thumbnailed tiny and off-centre, smoke S6).
+/// One function, so a thumbnail, a preview and F all show the same picture.
+struct Framing
+{
+    iris::Vec3 target;      ///< what the camera looks at (the box's centre)
+    float radius = 1.0f;    ///< half the box's diagonal
+    float distance = 1.0f;  ///< how far back the camera sits along its view axis
+    float nearClip = 0.1f;
+    float farClip = 500.0f;
+    bool hasGeometry = false;   ///< false = nothing under the node has a mesh
+};
+
+inline Framing frameBounds(const iris::AABB &bounds, const iris::Vec3 &fallbackTarget,
+                           float fovDegrees)
+{
+    Framing f;
+    f.target = fallbackTarget;
+    if (bounds.getMin().x() <= bounds.getMax().x()) {   // non-empty (meshes exist)
+        f.target = bounds.getCenter();
+        f.radius = qMax(0.05f, bounds.getSize().length() * 0.5f);
+        f.hasGeometry = true;
+    }
+    f.distance = qMax(1.0f, framingDistance(f.radius, fovDegrees));
+    clipPlanesForFraming(f.distance, f.radius, f.nearClip, f.farClip);
+    return f;
+}
+
+/// The framing of a node's whole subtree, measured where the node stands.
+inline Framing frameSubject(const iris::SceneNodePtr &node, float fovDegrees)
+{
+    if (!node) return Framing();
+    return frameBounds(worldBoundingBox(node), node->getGlobalPosition(), fovDegrees);
+}
+
 } // namespace preview
 
 #endif // PREVIEWFRAMING_H
