@@ -106,16 +106,6 @@ static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec
     return n;
 }
 
-// Wall-clock cost of `frames` frames, in milliseconds per frame. Debug build,
-// which is the build the owner's fps rule is about.
-static double msPerFrame(Engine *e, int frames)
-{
-    render(e, 3);        // let the first (cold) frames out of the measurement
-    const auto t0 = std::chrono::steady_clock::now();
-    render(e, frames);
-    const auto t1 = std::chrono::steady_clock::now();
-    return std::chrono::duration<double, std::milli>(t1 - t0).count() / double(frames);
-}
 
 int main()
 {
@@ -387,15 +377,51 @@ int main()
     // FRAME COST (spec §7: budget the re-render cost). Printed, plus a shape
     // assertion. Debug build on whatever GPU is running the gate.
     // =======================================================================
-    std::printf("\n   --- frame cost, %dx128x128 offscreen, Debug ---\n", 1);
+    //
+    // MEASURED OVER A LIVE SCENE (restated 2026-09-12, ENGINE_CACHE_POLICY_SPEC
+    // P1). Probes re-capture only while stale since P1, so a STILL scene costs
+    // the same at every budget — this block used to time a still scene and so
+    // measured the forever-sweep, which was the defect. Here the mover slides
+    // every frame (the grid is stale every frame), the reservation is off, and
+    // budget n spends exactly n captures a frame; the counter says so. The
+    // same budget at rest is then asserted to capture NOTHING.
+    std::printf("\n   --- frame cost, %dx128x128 offscreen, Debug, a LIVE scene ---\n", 1);
+    hybrid.dynamicProbes = 0;
     double cost[5] = { 0, 0, 0, 0, 0 };
+    float moverX = kMoverParked;
+    const auto liveFrame = [&]() {
+        moverX = (moverX == kMoverParked) ? kMoverParked + 0.4f : kMoverParked;
+        moveMover(moverX);
+        render(engine.get(), 1);
+    };
     for (int n : { 0, 1, 2, 4 }) {
         hybrid.updateBudget = n;
         s->setGlobalIllumination(hybrid);
-        render(engine.get(), 4);
-        cost[n] = msPerFrame(engine.get(), 30);
-        std::printf("   updateBudget = %d   %6.2f ms/frame   (updates/frame: %d)\n",
-                    n, cost[n], s->giStatus().probeUpdatesPerFrame);
+        render(engine.get(), 6);                   // the post-build catch-up
+        for (int w = 0; w < 3; ++w) liveFrame();   // cold frames out of the measurement
+        int worst = 0, least = 1 << 30;
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int f = 0; f < 30; ++f) {
+            liveFrame();
+            const int c = s->giStatus().probeCapturesLastFrame;
+            worst = std::max(worst, c); least = std::min(least, c);
+        }
+        cost[n] = std::chrono::duration<double, std::milli>(
+                      std::chrono::steady_clock::now() - t0).count() / 30.0;
+        std::printf("   updateBudget = %d   %6.2f ms/frame   (captures/frame %d..%d)\n",
+                    n, cost[n], least, worst);
+        char msg[160];
+        std::snprintf(msg, sizeof msg, "live scene, budget %d: every frame captures exactly %d", n, n);
+        CHECK(least == n && worst == n, msg);
+        moveMover(kMoverParked);
+        render(engine.get(), 8);                   // still again: caught up
+        int restWorst = 0;
+        for (int f = 0; f < 10; ++f) {
+            render(engine.get(), 1);
+            restWorst = std::max(restWorst, s->giStatus().probeCapturesLastFrame);
+        }
+        std::snprintf(msg, sizeof msg, "still scene, budget %d: captures NOTHING (P1)", n);
+        CHECK(restWorst == 0, msg);
     }
     const double perProbe1 = cost[1] - cost[0];
     const double perProbe4 = (cost[4] - cost[0]) / 4.0;
@@ -411,16 +437,24 @@ int main()
     // Auto toggles, turns on HDR captures and SHADOWED captures — so this is
     // the honest ceiling of what one live probe can cost, not a resolution
     // scaling. Nothing is asserted; the number is what a lane brief needs.
+    // Over the live scene, like the block above (a still one captures nothing).
+    const auto liveMs = [&](int frames) {
+        for (int w = 0; w < 3; ++w) liveFrame();
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int f = 0; f < frames; ++f) liveFrame();
+        return std::chrono::duration<double, std::milli>(
+                   std::chrono::steady_clock::now() - t0).count() / double(frames);
+    };
     {
         GiParams high = hybrid;
         high.quality = GiQuality::High;
         high.updateBudget = 0;
         s->setGlobalIllumination(high); render(engine.get(), 4);
-        const double h0 = msPerFrame(engine.get(), 20);
+        const double h0 = liveMs(20);
         high.updateBudget = 1;
         s->setGlobalIllumination(high); render(engine.get(), 4);
         const GiStatus hs = s->giStatus();
-        const double h1 = msPerFrame(engine.get(), 20);
+        const double h1 = liveMs(20);
         std::printf("   HIGH quality (512px faces, hdr=%s, shadows=%s): "
                     "%6.2f -> %6.2f ms/frame  (+%.2f ms for one probe update)\n",
                     hs.probeHdr ? "on" : "off", hs.probeShadows ? "on" : "off", h0, h1, h1 - h0);

@@ -208,6 +208,21 @@ int main(int argc, char **argv)
           "budget 0: moving geometry costs no re-solve and no re-inject");
     CHECK(std::fabs(pausedMoved.g - pausedParked.g) < 0.05f,
           "budget 0: the reflection is frozen at what it last captured");
+    // ...until world.refreshGi() asks — the paused contract's other half. A
+    // paused scene has no budget to spread a re-capture over, so an explicit
+    // refresh captures the whole grid at once, as it always did (P6 spreads
+    // re-captures only where there IS a budget).
+    {
+        const quint64 before = mirror.giRefreshCount();
+        ++doc->giRefreshSerial;
+        frame();
+        const Colour refreshed = mirrorPixel();
+        show("budget 0, after world.refreshGi()", refreshed);
+        CHECK(mirror.giRefreshCount() == before + 1, "budget 0: world.refreshGi() still re-solves");
+        CHECK(refreshed.g > refreshed.r + 0.5f,
+              "budget 0: ...and re-captures at once (the mirror shows the slab on the next frame)");
+        CHECK(escene->giStatus().staleProbes == 0, "budget 0: nothing is left stale after it");
+    }
 
     // =======================================================================
     // A. THE SWEEP, and B's counters with it
