@@ -1064,11 +1064,12 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
             auto skelAnim = animObj["skeletalAnimation"].toObject();
             const QString source = skelAnim["source"].toString();
             const QString clipGuid = skelAnim["guid"].toString();
-            // The own-model route is only worked out when the clip has no guid
-            // of its own (every clip saved from a store path since F5 has one).
-            const QString ownModel = clipGuid.isEmpty()
-                ? ownModelGuidFor(nodeObj, QFileInfo(source).fileName())
-                : QString();
+            // The own-model route is the last resort when neither the clip's
+            // guid nor its persisted path resolves — worked out for every
+            // clip, because a clip WITH a guid whose row was purged needs it
+            // too (15c review #2; the deleted by-name lookup ran in that case).
+            // One walk of this node's subtree per skeletal clip.
+            const QString ownModel = ownModelGuidFor(nodeObj, QFileInfo(source).fileName());
 
             auto skel = this->getSkeletalAnimation(source, skelAnim["name"].toString(),
                                                   clipGuid, ownModel);
@@ -1846,6 +1847,13 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, Q
     if (!animMap.isEmpty())
         qWarning() << "getSkeletalAnimation: no clip named" << animName
                    << "in" << relPath << "- clips:" << animMap.keys();
+    else
+        // Nothing resolved at all — the guid, the persisted path and the
+        // clip's own model all missed. Say so: the character is at bind pose
+        // and this is the only trace of why (15c review #3).
+        qWarning() << "getSkeletalAnimation: clip" << animName << "from" << relPath
+                   << "could not be resolved (guid" << assetGuid << "/ own model" << ownModelGuid
+                   << ") — the node keeps its bind pose";
 
     return iris::SkeletalAnimationPtr();
 }

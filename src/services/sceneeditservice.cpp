@@ -263,27 +263,34 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // afterwards (the texture, below) survives and anything set before does not.
     if (preset != iris::ParticlePreset::Custom) node->applyPreset(preset);
 
-    auto fguid = GUIDManager::generateGUID();
-    if (!db->checkIfRecordExists("name", "Systems", "folders", false, project->getProjectGuid())) {
-        if (!db->createFolder("Systems", project->getProjectGuid(), fguid, project->getProjectGuid(), false))
-            return iris::ParticleSystemNodePtr();
-    }
-
     auto nodeGuid = GUIDManager::generateGUID();
     node->setGUID(nodeGuid);
-    QJsonObject props;
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::ParticleSystem),
-        fguid,
-        project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
+    // The "Systems" folder and the emitter's ParticleSystem row belong to a
+    // PROJECT: with none open (a headless script, the startup placeholder)
+    // they used to land in the library stamped with an empty project guid, one
+    // row per emitter nobody could see (15c review #1 — the same guard the
+    // material presets and the default Ground row got in 15c).
+    const bool haveProject = project && !project->getProjectGuid().isEmpty();
+    if (haveProject) {
+        auto fguid = GUIDManager::generateGUID();
+        if (!db->checkIfRecordExists("name", "Systems", "folders", false, project->getProjectGuid())) {
+            if (!db->createFolder("Systems", project->getProjectGuid(), fguid, project->getProjectGuid(), false))
+                return iris::ParticleSystemNodePtr();
+        }
+        QJsonObject props;
+        db->createAssetEntry(
+            nodeGuid, node->getName(),
+            static_cast<int>(ModelTypes::ParticleSystem),
+            fguid,
+            project->getProjectGuid(),
+            QString(),
+            QString(),
+            QByteArray(),
+            QJsonDocument(props).toJson(),
+            QByteArray(),
+            QByteArray()
+        );
+    }
 
     // The default particle image — a LIBRARY TEXTURE pinned into the project
     // (plan item 15c), bound through setParticleTexture, the same door the
