@@ -1074,9 +1074,6 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["shadowType"] = evalShadowTypeName(shadowMap->shadowType);
     sceneNodeObject["shadowSize"] = shadowMap->resolution;
     sceneNodeObject["shadowBias"] = shadowMap->bias;
-    // Static shadow map (SHADOW_TOOLING_SPEC.md §4.3); absent means false in
-    // every scene written before it existed, which is also its default.
-    sceneNodeObject["shadowStatic"] = shadowMap->staticMap;
 }
 
 void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)

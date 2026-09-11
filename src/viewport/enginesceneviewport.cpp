@@ -1829,8 +1829,19 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     out.atlasWidth = int(st.atlasWidth);
     out.atlasHeight = int(st.atlasHeight);
     out.atlasBytes = qint64(st.atlasBytes);
+    out.reflectAtlasBytes = qint64(st.reflectAtlasBytes);
+    out.probeAtlasBytes = qint64(st.probeAtlasBytes);
     out.shadowPassesLastFrame = int(st.shadowPassesLastFrame);
-    out.staticMapRendersLastFrame = int(st.staticMapRendersLastFrame);
+    out.cachedMapRendersLastFrame = int(st.cachedMapRendersLastFrame);
+    out.shaderLightMismatches = int(st.shaderLightMismatches);
+    out.reflectPassesLastFrame = int(st.reflectPassesLastFrame);
+    out.probePassesLastFrame = int(st.probePassesLastFrame);
+    out.reflectLampPassesLastFrame = int(st.reflectLampPassesLastFrame);
+    out.probeLampPassesLastFrame = int(st.probeLampPassesLastFrame);
+    out.cachedInstances = int(st.cachedInstances);
+    out.uncachedInstances = int(st.uncachedInstances);
+    out.viewCached = st.viewCached;
+    out.mapsDirtiedLastFrame = int(st.mapsDirtiedLastFrame);
     // The engine speaks NodeIds; the panel and the verb speak guids. The map is
     // built from the scene's own light list rather than from a second index in
     // the mirror: a scene has a handful of lights, this runs on a readback, and
@@ -1848,9 +1859,10 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
         ShadowMapEntry e;
         e.slot = int(m.slot);
         e.node = guidOf.value(quint64(m.node));
-        e.isStatic = m.isStatic;
+        e.isCached = m.isCached;
         e.dirty = m.dirty;
         e.pssm = m.pssm;
+        e.passesLastFrame = int(m.passesLastFrame);
         out.mapped.push_back(e);
     }
     for (jahshaka::engine::NodeId id : st.unmapped) {

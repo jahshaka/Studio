@@ -807,41 +807,14 @@ int main(int argc, char **argv)
         point->shadowMap->shadowType = iris::ShadowMapType::None;
         CHECK(!SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=None stops casting");
 
-        // STATIC SHADOW MAPS (SHADOW_TOOLING_SPEC.md §4.3), the mirror's three
-        // contributions, as units.
-        //
-        // 1. The flag reaches the engine at all. A field missing from
-        //    toLightDesc is invisible; a field missing from LightDesc::operator==
-        //    (the mirror's push-on-change guard, beside the struct) reaches the
-        //    engine ONCE and then never again, which is the more expensive
-        //    mistake and the reason both are asserted here.
+        // (The STATIC SHADOW flag and the transform-write counter the mirror
+        // watched for it are gone — ENGINE_CACHE_POLICY_SPEC P2/P3: every
+        // point/spot map is cached and the ENGINE detects its inputs, per light.
+        // What the mirror still carries is world.refreshShadows()'s serial.)
         point->shadowMap->shadowType = iris::ShadowMapType::Soft;
-        point->shadowMap->staticMap = true;
-        LightDesc statik = SceneMirror::toLightDesc(point.data());
-        CHECK(statik.shadowStatic, "shadowStatic flows through toLightDesc");
-        LightDesc dynamic_ = statik;
-        dynamic_.shadowStatic = false;
-        CHECK(statik != dynamic_,
-              "LightDesc::operator== NOTICES shadowStatic — without this the flag "
-              "would reach the engine once and never change again");
-        point->shadowMap->staticMap = false;
-        CHECK(!SceneMirror::toLightDesc(point.data()).shadowStatic, "...and back off again");
 
-        // 2. "A caster moved" — the change key the mirror watches, since the
-        //    renderer cannot see a document transform write at all.
-        const quint64 writesBefore = iris::graph::transformWrites();
-        point->setLocalPos(iris::Vec3(1.0f, 2.0f, 3.0f));
-        const quint64 writesAfter = iris::graph::transformWrites();
-        std::printf("    transformWrites: %llu -> %llu\n",
-                    (unsigned long long)writesBefore, (unsigned long long)writesAfter);
-        CHECK(writesAfter > writesBefore,
-              "a document transform write bumps graph::transformWrites");
-        CHECK(iris::graph::transformWrites() == writesAfter,
-              "...and merely READING it changes nothing");
-
-        // 3. world.refreshShadows()'s serial: monotonic, and the document's
-        //    default is zero so a fresh scene never looks like a pending
-        //    refresh.
+        // world.refreshShadows()'s serial: monotonic, and the document's
+        // default is zero so a fresh scene never looks like a pending refresh.
         CHECK(doc->shadowRefreshSerial == 0, "a fresh scene has no pending shadow refresh");
         ++doc->shadowRefreshSerial;
         CHECK(doc->shadowRefreshSerial == 1, "the refresh serial is a plain monotonic counter");

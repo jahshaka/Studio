@@ -473,9 +473,10 @@ public:
     struct ShadowMapEntry {
         int     slot = 0;        ///< 0 = the directional/PSSM slot, 1..N the focused maps
         QString node;            ///< the light's document guid, empty when it is not ours
-        bool    isStatic = false;
+        bool    isCached = false; ///< held by the lamp-map cache
         bool    dirty = false;
         bool    pssm = false;
+        int     passesLastFrame = 0;
     };
     struct ShadowStatusInfo {
         bool available = false;
@@ -488,11 +489,22 @@ public:
         int  budget = 0;         ///< the effective ceiling (resolution-capped)
         int  requestedBudget = 0;
         int  atlasWidth = 0, atlasHeight = 0;
-        qint64 atlasBytes = 0;
+        qint64 atlasBytes = 0;          ///< view atlas + the planar mirrors' atlases
+        qint64 reflectAtlasBytes = 0;
+        qint64 probeAtlasBytes = 0;
         QVector<ShadowMapEntry> mapped;
         QStringList unmapped;    ///< guids of casters with no map — the silent failures
         int shadowPassesLastFrame = 0;
-        int staticMapRendersLastFrame = 0;
+        int cachedMapRendersLastFrame = 0;
+        int shaderLightMismatches = 0;   ///< the cache's self-check; 0 is the only healthy value
+        int reflectPassesLastFrame = 0;
+        int probePassesLastFrame = 0;
+        int reflectLampPassesLastFrame = 0;
+        int probeLampPassesLastFrame = 0;
+        int cachedInstances = 0;
+        int uncachedInstances = 0;
+        bool viewCached = false;
+        int mapsDirtiedLastFrame = 0;
     };
     virtual ShadowStatusInfo shadowStatus() const { return {}; }
 

@@ -283,16 +283,22 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
-        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, mapped:[{slot, node, static, dirty, pssm}], unmapped:[guid], shadowPassesLastFrame, staticMapRendersLastFrame}",
+        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, reflectAtlasBytes, probeAtlasBytes, mapped:[{slot, node, cached, dirty, pssm, passes}], unmapped:[guid], shadowPassesLastFrame, cachedMapRendersLastFrame, reflectPassesLastFrame, probePassesLastFrame, reflectLampPassesLastFrame, probeLampPassesLastFrame, cachedInstances, uncachedInstances, viewCached, mapsDirtiedLastFrame, shaderLightMismatches}",
           "What the SHADOW ATLAS is actually doing, as opposed to what was asked for — the same \"the renderer beats the request\" reading as world.giStatus() and world.antiAliasing(). "
           "It exists because the renderer keeps a fixed number of point/spot shadow maps and fills them with the casters closest to the camera, DROPPING the rest without a word: 'casters' is how many shadow-casting point and spot lights the scene has, 'focusedMaps' how many of them can have a map at once, and 'unmapped' NAMES the lights that got none — the lights whose shadows are silently missing. Empty is the healthy state. "
-          "'budget' is the ceiling actually in force (world.shadows' mapBudget, clamped by what the resolution can afford: 16 maps at 1024, 8 at 2048, 4 at 4096, 2 at 8192), 'requestedBudget' what was asked for before that clamp. 'maps' counts TEXTURE rectangles (pssmSplits + focusedMaps) while 'mapped' has one entry per LIGHT SLOT — three of the rectangles belong to the one directional light, which is why slot 0 is flagged 'pssm'. Each entry names the light's guid, and whether its map is 'static' (rendered once and kept — see the light's Static Shadow row) and currently 'dirty' (scheduled to re-render). "
-          "'atlasWidth'/'atlasHeight'/'atlasBytes' are the one depth texture all of this is packed into; the point-light cube scratch (~48 MB, allocated once for any point caster) is not counted. "
-          "'shadowPassesLastFrame' and 'staticMapRendersLastFrame' are the cost readings: how many shadow-node passes the last frame ran, and how many of those were a static map re-rendering — 0 for a settled static map, which is the whole point of the feature. ASKING TURNS THEM ON (a per-pass listener is not free), so the FIRST call reports 0 and every call after a rendered frame reports the truth, exactly like app.stats' metricsRecording. "
+          "'budget' is the ceiling actually in force (world.shadows' mapBudget, clamped by what the resolution can afford: 16 maps at 1024, 8 at 2048, 4 at 4096, 2 at 8192), 'requestedBudget' what was asked for before that clamp. 'maps' counts TEXTURE rectangles (pssmSplits + focusedMaps) while 'mapped' has one entry per LIGHT SLOT — three of the rectangles belong to the one directional light, which is why slot 0 is flagged 'pssm'. Each entry names the light's guid, whether its map is 'cached' (rendered once and kept), whether it is 'dirty' (scheduled to re-render) and the 'passes' the last frame spent on it (0 for a cached lamp at rest; 8 when a point lamp re-renders). "
+          "EVERY point and spot shadow map is CACHED: the renderer re-renders a lamp's map only when that lamp moves or changes reach, range or cone, or when something that casts shadows moves, appears, disappears or changes shape inside that lamp's reach — per lamp, in the frame it happens; the camera, gizmos and helpers never re-render one, and neither does a colour or intensity edit. The sun's (directional) splits follow the camera and render every frame. The one exception is a view with more lamps than maps: it stays on the closest-to-camera choice and re-renders every frame ('viewCached' false, 'uncachedInstances' counts it). "
+          "'atlasWidth'/'atlasHeight' are the viewport's depth atlas, the texture all of this is packed into; 'atlasBytes' is that atlas PLUS every planar mirror slot's own half-resolution atlas ('reflectAtlasBytes', the same number of lamp maps as the viewport's), and 'probeAtlasBytes' is the reflection probes' quarter-resolution atlases (one per shadowed probe, not in atlasBytes). The point-light cube scratch (one per atlas) is not counted anywhere. "
+          "The cost readings, for the last rendered frame: 'shadowPassesLastFrame' = the shadow-node passes of the viewport, 'cachedMapRendersLastFrame' = how many of those re-rendered a cached lamp map (0 at rest — the whole point); 'reflectPassesLastFrame'/'reflectLampPassesLastFrame' the same for the planar mirrors' shadow maps and 'probePassesLastFrame'/'probeLampPassesLastFrame' for the reflection probes' (a probe capture renders a dirty lamp map on its first face and reuses it on the other five); 'cachedInstances' = shadow-map sets (the viewport, each mirror, each probe) whose lamps are cached, 'mapsDirtiedLastFrame' = lamp maps marked to re-render. ASKING TURNS THE COUNTERS ON (a per-pass listener is not free) and they switch themselves off again about 120 frames after the last call, so the FIRST call reports 0 and every call after a rendered frame reports the truth, exactly like app.stats' metricsRecording. "
+          "'shaderLightMismatches' is the cache's own SELF-CHECK, cumulative for the session: the number of "
+          "render passes prepared while the renderer's shadow node declared fewer shadow maps than its own "
+          "light list indexes. That state generates a pixel shader that cannot compile (and used to crash the "
+          "shader-cache save), so anything but 0 is a renderer defect worth reporting — the engine also logs the "
+          "first four with the slot layout that produced them. "
           "'live' is false without an engine viewport, and the numbers are then the document's request rather than a measurement.",
           Needs::Document },
         { "refreshShadows", "world.refreshShadows() -> bool",
-          "Re-renders every STATIC shadow map in the scene once, on the next frame — the shadow twin of world.refreshGi(). A light whose 'Static Shadow' is on has its shadow map rendered once and kept, which saves six cube-face passes plus a copy every frame for a fixed lamp; the renderer re-renders it by itself when the light moves or changes, when geometry is attached or destroyed, and when ANY transform in the document changes. This verb is for the case the renderer cannot see — a material or a texture edited outside those paths, or a script that wants the re-render to have happened before its next read. Harmless and cheap with no static lights (it sets a flag). It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
+          "Re-renders every cached point and spot shadow map in the scene once, on the next frame — the shadow twin of world.refreshGi(). Every such map is rendered once and kept; the renderer re-renders a lamp's map by itself when the lamp moves or changes, and when anything that casts shadows moves, appears, disappears or changes shape inside the lamp's reach. This verb is for what it cannot see, or for a script that wants the re-render to have happened before its next read. Harmless and cheap (it sets a flag). It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
         { "fitGiBounds", "world.fitGiBounds({nodes, margin}) -> {boundsMin, boundsMax}",
           "PINS the global-illumination bounds to the given objects: the union of their world bounds plus an optional margin is written into the scene's giBoundsMin/giBoundsMax, which switches the lit volume off automatic. 'nodes' is a list of node ids and is REQUIRED — there is deliberately no 'whatever is selected' default (the World panel's Fit Bounds To Scene button passes the scene's contents; a caller that wants a selection passes it). Children are included, so fitting an imported model's root fits the model rather than its origin. Returns the box it wrote. Clear the pin — hand the volume back to the automatic fit, which world.giStatus() reports — by setting both corners equal again through world.gi.",
@@ -1034,10 +1040,21 @@ QVariantMap WorldApi::shadowStatus()
         out[QStringLiteral("atlasWidth")] = 0;
         out[QStringLiteral("atlasHeight")] = 0;
         out[QStringLiteral("atlasBytes")] = 0;
+        out[QStringLiteral("reflectAtlasBytes")] = 0;
+        out[QStringLiteral("probeAtlasBytes")] = 0;
         out[QStringLiteral("mapped")] = QVariantList();
         out[QStringLiteral("unmapped")] = QVariantList();
         out[QStringLiteral("shadowPassesLastFrame")] = 0;
-        out[QStringLiteral("staticMapRendersLastFrame")] = 0;
+        out[QStringLiteral("cachedMapRendersLastFrame")] = 0;
+        out[QStringLiteral("shaderLightMismatches")] = 0;
+        out[QStringLiteral("reflectPassesLastFrame")] = 0;
+        out[QStringLiteral("probePassesLastFrame")] = 0;
+        out[QStringLiteral("reflectLampPassesLastFrame")] = 0;
+        out[QStringLiteral("probeLampPassesLastFrame")] = 0;
+        out[QStringLiteral("cachedInstances")] = 0;
+        out[QStringLiteral("uncachedInstances")] = 0;
+        out[QStringLiteral("viewCached")] = false;
+        out[QStringLiteral("mapsDirtiedLastFrame")] = 0;
         return out;
     }
     out[QStringLiteral("resolution")] = st.resolution;
@@ -1050,14 +1067,17 @@ QVariantMap WorldApi::shadowStatus()
     out[QStringLiteral("atlasWidth")] = st.atlasWidth;
     out[QStringLiteral("atlasHeight")] = st.atlasHeight;
     out[QStringLiteral("atlasBytes")] = double(st.atlasBytes);
+    out[QStringLiteral("reflectAtlasBytes")] = double(st.reflectAtlasBytes);
+    out[QStringLiteral("probeAtlasBytes")] = double(st.probeAtlasBytes);
     QVariantList mapped;
     for (const IEditorViewport::ShadowMapEntry &e : st.mapped) {
         QVariantMap m;
         m[QStringLiteral("slot")] = e.slot;
         m[QStringLiteral("node")] = e.node;
-        m[QStringLiteral("static")] = e.isStatic;
+        m[QStringLiteral("cached")] = e.isCached;
         m[QStringLiteral("dirty")] = e.dirty;
         m[QStringLiteral("pssm")] = e.pssm;
+        m[QStringLiteral("passes")] = e.passesLastFrame;
         mapped.append(m);
     }
     out[QStringLiteral("mapped")] = mapped;
@@ -1065,7 +1085,16 @@ QVariantMap WorldApi::shadowStatus()
     for (const QString &g : st.unmapped) unmapped.append(g);
     out[QStringLiteral("unmapped")] = unmapped;
     out[QStringLiteral("shadowPassesLastFrame")] = st.shadowPassesLastFrame;
-    out[QStringLiteral("staticMapRendersLastFrame")] = st.staticMapRendersLastFrame;
+    out[QStringLiteral("cachedMapRendersLastFrame")] = st.cachedMapRendersLastFrame;
+    out[QStringLiteral("shaderLightMismatches")] = st.shaderLightMismatches;
+    out[QStringLiteral("reflectPassesLastFrame")] = st.reflectPassesLastFrame;
+    out[QStringLiteral("probePassesLastFrame")] = st.probePassesLastFrame;
+    out[QStringLiteral("reflectLampPassesLastFrame")] = st.reflectLampPassesLastFrame;
+    out[QStringLiteral("probeLampPassesLastFrame")] = st.probeLampPassesLastFrame;
+    out[QStringLiteral("cachedInstances")] = st.cachedInstances;
+    out[QStringLiteral("uncachedInstances")] = st.uncachedInstances;
+    out[QStringLiteral("viewCached")] = st.viewCached;
+    out[QStringLiteral("mapsDirtiedLastFrame")] = st.mapsDirtiedLastFrame;
     return out;
 }
 

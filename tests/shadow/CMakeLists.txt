@@ -20,13 +20,25 @@ target_include_directories(test_shadow_spike PRIVATE
 target_link_libraries(test_shadow_spike PRIVATE JahshakaEngine OgreNext)
 add_dependencies(test_shadow_spike JahshakaEngineMedia)
 
-# Only the arithmetic runs in the gate by default; the device-side modes are the
-# phase-0 evidence and are driven by hand (and by the phase-1/2 suites that
-# replace them).
+# The arithmetic runs in the gate, and so does `cachekinds` (below); the other
+# device-side modes are the phase-0 evidence and are driven by hand (and by the
+# phase-1/2 suites that replace them).
 add_test(NAME shadow.layout COMMAND test_shadow_spike layout
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.layout PROPERTIES TIMEOUT 120 LABELS "document")
 jah_no_display(shadow.layout)
+
+# THE LAMP-MAP CACHE ON THE PROBE AND REFLECT NODE INSTANCES, under the Khronos
+# validation layer (ENGINE_CACHE_POLICY_SPEC §6 — E2's opening probe, kept). It
+# found that an all-cached node with no sun let Ogre's barrier solver throw
+# mid-pass and desync a layout: any "Validation Error" — or that solver
+# message — fails the row, whatever the exit code says.
+add_test(NAME shadow.cache_kinds COMMAND test_shadow_spike cachekinds
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadow.cache_kinds PROPERTIES
+    TIMEOUT 120 LABELS "engine"
+    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+    FAIL_REGULAR_EXPRESSION "Validation Error;from Undefined to a read-only layout")
 
 # THE GATE SUITE (SHADOW_TOOLING_SPEC.md §7): the budget, the derivation, the
 # status readback and the rebuild churn, through the PUBLIC engine API only.

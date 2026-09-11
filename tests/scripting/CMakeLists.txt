@@ -138,6 +138,25 @@ add_script_e2e(light_masks e2e_light_masks.js)
 # gi.pcc_mirror engine suite. Engine UP, not --headless: the verb's entire value
 # is that it measures the renderer rather than echoing the document.
 add_script_e2e(gi_status e2e_gi_status.js)
+# THE LAMP-MAP CACHE UNDER REFLECTION PROBES, ON A COLD SHADER CACHE
+# (ENGINE_CACHE_POLICY_SPEC P2/P4, ogre-patch 0025). The home is WIPED before
+# the run — that is the point of the case: the defect it guards only shows while
+# shaders are being generated and compiled for the first time, and it took the
+# process down through the shader-cache save when it did. The script asserts the
+# engine's own self-check (world.shadowStatus().shaderLightMismatches).
+set(_scHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shadow_cache_probes)
+add_test(NAME scripting.e2e.shadow_cache_probes.fresh_home
+         COMMAND sh -c "rm -rf '${_scHome}' && mkdir -p '${_scHome}/run'")
+set_tests_properties(scripting.e2e.shadow_cache_probes.fresh_home PROPERTIES
+    FIXTURES_SETUP shadowCacheProbesFreshHome LABELS "scripting")
+add_test(NAME scripting.e2e.shadow_cache_probes
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadow_cache_probes.js
+         WORKING_DIRECTORY ${_scHome}/run)
+set_tests_properties(scripting.e2e.shadow_cache_probes PROPERTIES
+    ENVIRONMENT "HOME=${_scHome};JAHSHAKA_DATA_ROOT=${_scHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED shadowCacheProbesFreshHome
+    LABELS "scripting" TIMEOUT 240)
 # REFLECTIONS_ADOPTION_SPEC P1a/P1d: the GI BOUNDS surface — the resolved
 # volumes world.giStatus() now reports (there was no way to see what the
 # automatic fit decided), the per-node exclude flag, world.fitGiBounds and
