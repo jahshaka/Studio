@@ -48,6 +48,7 @@ public:
     Q_INVOKABLE QVariantList clipboard();
     Q_INVOKABLE QString gizmoMode();
     Q_INVOKABLE bool setGizmoMode(const QString &mode);
+    Q_INVOKABLE QVariantMap gizmoHitTest(double x, double y);
     Q_INVOKABLE bool focusSelection();
     Q_INVOKABLE bool gameView(bool enabled);
     Q_INVOKABLE bool isGameView();

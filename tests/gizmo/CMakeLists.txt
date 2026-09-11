@@ -40,6 +40,30 @@ set_tests_properties(gizmo.screen_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
                      TIMEOUT 120 LABELS "document")
 jah_no_display(gizmo.screen_size)
 
+# gizmo.ring_pick — EVERY ROTATION RING IS CLICKABLE FROM EVERY CAMERA ANGLE
+# (smoke S15, the owner's "sometimes I can't click R, sometimes G or B"). Walks
+# each ring's own projected circle from six cameras — including the edge-on case
+# for all three axes — and asserts the screen-space pick answers at every pixel,
+# that the old 3D annulus rule answered at none of them when the ring is
+# edge-on, and that the drag angle stays finite and bounded. Document-only, like
+# gizmo.screen_size: no display, no GPU, no pixels.
+add_executable(test_gizmo_ring_pick test_gizmo_ring_pick.cpp test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+set_target_properties(test_gizmo_ring_pick PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_gizmo_ring_pick PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_gizmo_ring_pick PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+jah_document_graph(test_gizmo_ring_pick)
+add_test(NAME gizmo.ring_pick COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_ring_pick
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(gizmo.ring_pick PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "document")
+jah_no_display(gizmo.ring_pick)
+
 # gizmo.group_transform — the SELECTION SET's transform (EDITOR_MULTISELECT_SPEC
 # §2.4 / §5). Document-only, like gizmo.screen_size, but with a REAL undo stack
 # and the real TransformSceneNodeCommand: the one-undo-step-for-N-members claim

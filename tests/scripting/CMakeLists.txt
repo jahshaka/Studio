@@ -109,6 +109,10 @@ add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
 add_script_e2e(custom_piece e2e_custom_piece.js)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 add_script_e2e(editor_controls e2e_editor_controls.js)
+# smoke S15: every rotation ring clickable from every camera, asked through
+# editor.gizmoHitTest in the REAL viewport (gizmo.ring_pick covers the geometry
+# document-side).
+add_script_e2e(gizmo_rings e2e_gizmo_rings.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).
 add_script_e2e(desktops e2e_desktops.js)
 # STATS_OVERLAY_SPEC phase 1 — the DATA half of the engine-drawn stats overlay,

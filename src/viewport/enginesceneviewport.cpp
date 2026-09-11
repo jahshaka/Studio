@@ -504,6 +504,12 @@ bool EngineSceneViewport::mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris:
     const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
     if (!cam) return false;
     viewDir = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
+    // THE VIEW THE GIZMO IS PICKED IN (smoke S15). Every gizmo hit test and
+    // every drag in this widget goes through a ray built here, so the pixel
+    // context screen-space ring picking needs is set here too — one place, and
+    // it cannot be out of step with the ray built two lines below.
+    if (mGizmo) mGizmo->setPickView(cam, float(width()), float(height()),
+                                    float(devicePixelRatioF()));
     if (!mHaveMouse) return false;
     iris::Vec3 a, b;
     ScenePicker::screenSegment(cam, width(), height(), mMousePos, a, b);
@@ -606,6 +612,24 @@ iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
     float t; iris::Vec3 q;
     if (iris::IntersectionHelper::intersectSegmentPlane(a, a + (b - a).normalized() * 1024.0f, floor, t, q)) return q;
     return iris::Vec3();
+}
+
+IEditorViewport::GizmoPickResult EngineSceneViewport::gizmoHitTest(const QPointF &point) const
+{
+    GizmoPickResult out;
+    if (!mGizmo || mGizmo != mRotateGizmo || !mSelectedNode) return out;
+    const iris::CameraNodePtr cam = viewCamera();
+    if (!cam) return out;
+    // Size and view exactly as a mouse pick would, then ask the same question
+    // at the given pixel — a script and a click cannot disagree.
+    mRotateGizmo->updateSize(cam);
+    mRotateGizmo->setPickView(cam, float(width()), float(height()),
+                              float(devicePixelRatioF()));
+    out.tolerancePx = kRingPickTolerancePx;
+    float distancePx = -1.0f;
+    out.handle = mRotateGizmo->ringNameAtPixel(point, distancePx);
+    out.distancePx = distancePx;
+    return out;
 }
 
 bool EngineSceneViewport::dropPointAt(const QPointF &point, iris::Vec3 *out)
