@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "player/playermousecontroller.h"
 #include "viewport/keyboardstate.h"
 #include "viewport/flyspeedsettings.h"
+#include "viewport/flystep.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -272,36 +273,21 @@ void PlayerMouseController::update(float dt)
         this->doGodMode(dt);
 		return;
     }
-	const iris::Vec3 upVector(0, 1, 0);
-	auto forwardVector = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
-	auto x = iris::Vec3::crossProduct(forwardVector, upVector).normalized();
-	auto z = iris::Vec3::crossProduct(upVector, x).normalized();
-
-	// Arrow-key fly, in play mode. The other half of this branch drove the
-	// removed viewer node's character controller (AVATAR_LOCOMOTION_SPEC
-	// Stage 0); piloted movement comes back as its own component in Stage 2.
-	const auto held = [](int a, int b) {
-		return KeyboardState::isKeyDown(a) || KeyboardState::isKeyDown(b);
-	};
-
-	auto camPos = camera->getLocalPos();
-	// left
-	if (held(Qt::Key_Left, Qt::Key_A))
-		camPos -= x * linearSpeed;
-
-	// right
-	if (held(Qt::Key_Right, Qt::Key_D))
-		camPos += x * linearSpeed;
-
-	// up
-	if (held(Qt::Key_Up, Qt::Key_W))
-		camPos += z * linearSpeed;
-
-	// down
-	if (held(Qt::Key_Down, Qt::Key_S))
-		camPos -= z * linearSpeed;
-
-	camera->setLocalPos(camPos);
+	// PLAY-MODE FLY, along the camera's TRUE forward (owner smoke S13,
+	// 2026-09-11: "WASD/arrows in the player are locked to XY and ignore the
+	// camera's facing"). It used to fly along the forward PROJECTED onto the
+	// ground plane — cross(up, cross(forward, up)) — so looking down and
+	// pressing W walked over the floor instead of descending, while the free
+	// camera two functions down already flew properly. One definition now:
+	// viewport/flystep.h, the editor's own step, which also keeps the strafe
+	// horizontal and defines it at the poles.
+	//
+	// The other half of this branch drove the removed viewer node's character
+	// controller (AVATAR_LOCOMOTION_SPEC Stage 0); piloted movement comes back
+	// as its own component in Stage 2.
+	camera->setLocalPos(camera->getLocalPos()
+	                    + flystep::direction(camera->getLocalRot(), heldFlyKeys())
+	                          * linearSpeed);
 
 	updateCameraTransform();
 
@@ -325,37 +311,32 @@ void PlayerMouseController::doGodMode(float dt)
 {
     const float linearSpeed =
         movementSpeed * FlySpeedSettings::multiplier(FlySpeedSettings::Player) * dt;
-    auto forwardVector = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
-    auto sideVector = camera->getLocalRot().rotatedVector(iris::Vec3(1, 0, 0));
-    //auto x = iris::Vec3::crossProduct(forwardVector,upVector).normalized();
-    //auto z = iris::Vec3::crossProduct(upVector,x).normalized();
+    // SAME STEP AS PLAY MODE, and as the editor's (S13): viewport/flystep.h.
+    // This function's own version differed in one detail nobody wanted — it
+    // strafed along the camera's ROLLED right rather than a horizontal one.
+    camera->setLocalPos(camera->getLocalPos()
+                        + flystep::direction(camera->getLocalRot(), heldFlyKeys())
+                              * linearSpeed);
+    updateCameraTransform();
+}
 
-    auto x = sideVector;
-    auto z = forwardVector;
-
+// WHAT IS HELD, as flight intentions — both spellings, one table (the arrow
+// keys and W/A/S/D are aliases on this surface, as they are in the Assets
+// preview; the editor answers to the arrows alone). Q/E are the vertical pair,
+// exactly as flystep::HeldKeys spells them for the preview.
+flystep::Keys PlayerMouseController::heldFlyKeys()
+{
     const auto held = [](int a, int b) {
         return KeyboardState::isKeyDown(a) || KeyboardState::isKeyDown(b);
     };
-
-    auto camPos = camera->getLocalPos();
-    // left
-    if(held(Qt::Key_Left, Qt::Key_A))
-        camPos -= x * linearSpeed;
-
-    // right
-    if(held(Qt::Key_Right, Qt::Key_D))
-        camPos += x * linearSpeed;
-
-    // up
-    if(held(Qt::Key_Up, Qt::Key_W))
-        camPos += z * linearSpeed;
-
-    // down
-    if(held(Qt::Key_Down, Qt::Key_S))
-        camPos -= z * linearSpeed;
-
-    camera->setLocalPos(camPos);
-    updateCameraTransform();
+    flystep::Keys keys;
+    keys.forward = held(Qt::Key_Up,    Qt::Key_W);
+    keys.back    = held(Qt::Key_Down,  Qt::Key_S);
+    keys.left    = held(Qt::Key_Left,  Qt::Key_A);
+    keys.right   = held(Qt::Key_Right, Qt::Key_D);
+    keys.up      = held(Qt::Key_E,     Qt::Key_PageUp);
+    keys.down    = held(Qt::Key_Q,     Qt::Key_PageDown);
+    return keys;
 }
 
 void PlayerMouseController::postUpdate(float dt)

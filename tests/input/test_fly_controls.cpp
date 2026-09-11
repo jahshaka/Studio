@@ -91,6 +91,24 @@ iris::Vec3 playerFly(const QVector<Qt::Key> &keys, float dt = 1.0f)
     return cam->getLocalPos();
 }
 
+/// One second of PLAY-MODE flight from a camera pitched `pitchDegrees`
+/// (negative looks down), and where it ended up. The play branch is the other
+/// half of update(); it is the one smoke S13 reported.
+iris::Vec3 playerPlayFly(const QVector<Qt::Key> &keys, float pitchDegrees, float dt = 1.0f)
+{
+    KeyboardState::reset();
+    PlayerMouseController c;
+    auto cam = freshCamera();
+    cam->setLocalRot(iris::Quat::fromEulerAngles(pitchDegrees, 0, 0));
+    cam->update(0);
+    c.setCamera(cam);
+    c.setPlayState(true);                     // PLAYING: update()'s own branch
+    for (Qt::Key k : keys) KeyboardState::keyStates[int(k)] = true;
+    c.update(dt);
+    KeyboardState::reset();
+    return cam->getLocalPos();
+}
+
 }   // namespace
 
 int main(int argc, char **argv)
@@ -149,6 +167,48 @@ int main(int argc, char **argv)
         CHECK(near(a.x(), left.x()) && a.x() < -1.0f, "player: A is Left");
         const iris::Vec3 d = playerFly({ Qt::Key_D }), right = playerFly({ Qt::Key_Right });
         CHECK(near(d.x(), right.x()) && d.x() > 1.0f, "player: D is Right");
+    }
+
+    // ---- S13: PLAY MODE FLIES WHERE THE CAMERA LOOKS ---------------------
+    //
+    // Owner smoke, 2026-09-11: "WASD/arrows in the player are locked to XY and
+    // ignore the camera's facing; they should fly in the camera direction like
+    // the editor." The play branch built its forward as
+    // cross(worldUp, cross(forward, worldUp)) — the forward FLATTENED onto the
+    // ground plane — so a camera looking 45 degrees down and holding W walked
+    // over the floor at constant height. It flies through viewport/flystep.h
+    // now, the same step the editor and the Assets preview use.
+    {
+        const iris::Vec3 level = playerPlayFly({ Qt::Key_W }, 0.0f);
+        CHECK(level.z() < -1.0f && near(level.y(), 0.0f),
+              "play: W flies forward, and a LEVEL camera still holds its height");
+
+        const iris::Vec3 down45 = playerPlayFly({ Qt::Key_W }, -45.0f);
+        std::printf("    play W pitched -45 -> (%.3f %.3f %.3f)\n",
+                    down45.x(), down45.y(), down45.z());
+        CHECK(down45.y() < -1.0f, "play: pitched down 45 degrees, W DESCENDS (S13)");
+        CHECK(down45.z() < -1.0f, "play: ...and still travels forward");
+        CHECK(near(down45.y(), down45.z(), 1e-2f),
+              "play: at 45 degrees the descent and the forward run are equal — the "
+              "camera's TRUE forward, not a flattened one");
+
+        const iris::Vec3 up30 = playerPlayFly({ Qt::Key_Up }, 30.0f);
+        CHECK(up30.y() > 1.0f, "play: pitched UP, the arrow key climbs (both spellings, one step)");
+
+        // The strafe is the flystep horizontal one on this surface too: a
+        // pitched camera must not push the player into the floor with D.
+        const iris::Vec3 strafe = playerPlayFly({ Qt::Key_D }, -60.0f);
+        CHECK(near(strafe.y(), 0.0f), "play: strafing stays horizontal whatever the pitch");
+        CHECK(strafe.x() > 1.0f, "play: D strafes right");
+
+        // Q/E are the vertical pair the editor spells PageDown/PageUp.
+        const iris::Vec3 rise = playerPlayFly({ Qt::Key_E }, -45.0f);
+        CHECK(near(rise.y(), rise.length(), 1e-3f) && rise.y() > 1.0f,
+              "play: E rises along the WORLD up, whatever the camera does");
+
+        // ...and the free camera answers the same way (one definition).
+        const iris::Vec3 godDown = playerFly({ Qt::Key_W });   // level camera
+        CHECK(godDown.z() < -1.0f, "the free camera still flies forward");
     }
 
     // ---- item 5: the speed multiplier ------------------------------------
