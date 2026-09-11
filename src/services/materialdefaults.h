@@ -47,10 +47,11 @@ inline QString providerName(const iris::SceneNodePtr &node)
 }
 
 /// A FRESH instance of `node`'s own default material, or null when it has
-/// none. `pinnedTextures` receives the texture rows the default pinned into
-/// the project (the floor's checker), which the node then uses.
+/// none. `textures` receives the texture rows the default uses (the floor's
+/// checker, pinned into the project), `newlyPinned` those of them this call
+/// pinned — the project did not pin them before, so an undo takes them back.
 iris::MaterialPtr create(const iris::SceneNodePtr &node, Database *db, Project *project,
-                         QStringList *pinnedTextures = nullptr);
+                         QStringList *textures = nullptr, QStringList *newlyPinned = nullptr);
 
 }   // namespace materialdefaults
 

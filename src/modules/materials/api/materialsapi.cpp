@@ -528,13 +528,13 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "scene's DEFAULT FLOOR (node.properties(id).defaultFloor, the Ground every new scene and "
           "every shipped demo stands on) is the first and only provider today, and its default is "
           "the floor's own checker material (the shipped tile, textureScale 4, roughness 1, "
-          "metallic 0) — never a shared library row. The reset CLEARS what the user applied: the "
-          "node stops using an applied material asset (material.apply) and the textures its slots "
-          "were bound to, and an applied material nothing else in the project uses any more is "
-          "released from the project, so the editor's tray stops listing it — the LIBRARY row is "
-          "never touched. ONE undo step (undo puts the user's material, edges and pins back). A "
-          "node with no default of its own answers false, changes nothing and records why "
-          "(app.lastError).",
+          "metallic 0) — never a shared library row. The reset CLEARS what the user applied from "
+          "the NODE: it stops using an applied material asset (material.apply) and the textures "
+          "its slots were bound to. Project membership is not touched: the applied material stays "
+          "in the project (and the tray), exactly as when the material on any other mesh is "
+          "replaced — assets.removeFromProject takes it out. ONE undo step (undo puts the user's "
+          "material and its use back). A node with no default of its own answers false, changes "
+          "nothing and records why (app.lastError).",
           Needs::Document },
         { "setDetail", "material.setDetail(nodeId, layer, {map, normalMap, blend, offset:{x,y}, scale:{x,y}, weight, normalWeight}) -> bool",
           "One DETAIL LAYER, ergonomically. A detail layer is a second diffuse map blended into "
@@ -807,10 +807,16 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     // edge — so the edge would take the image out of the library. Recorded for
     // the lead: narrow that filter to library-asset dependers, then give this
     // verb the panel's edge.)
+    // Only an image the project does not pin yet: addToProject re-pins to the
+    // library's CURRENT version, which would silently upgrade an older pin.
     if (!boundTextures.isEmpty() && host.db && host.isProjectOpen()) {
-        for (const QString &textureGuid : boundTextures)
+        const QString projectGuid = host.project->getProjectGuid();
+        for (const QString &textureGuid : boundTextures) {
+            if (host.db->isAssetPinnedBy(projectGuid, textureGuid)) continue;
+            if (host.db->fetchAsset(textureGuid).projectGuid == projectGuid) continue;
             ProjectAssets::addToProject(textureGuid, host.db, host.project,
                                         ProjectAssets::AddKind::Binding);
+        }
     }
     return true;
 }

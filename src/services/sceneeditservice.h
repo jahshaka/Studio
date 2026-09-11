@@ -338,11 +338,13 @@ public:
 
     /// RESETS the mesh node's material to the node's OWN default (owner,
     /// 2026-09-12; services/materialdefaults.h — the default floor is the
-    /// first provider): the default material back, the user-applied material
-    /// cleared from the node, and released from the project when nothing else
-    /// in it uses it. ONE undo step. False, changing nothing, when the node is
-    /// not a mesh or has no default of its own. `material.reset` and the
-    /// material panel's reset both call this.
+    /// first provider): the default material back and the user-applied
+    /// material cleared from the NODE (its use edges). Project membership is
+    /// not touched — the applied material stays pinned, as when any mesh's
+    /// material is replaced. ONE undo step (commands/resetmaterialcommand.h).
+    /// False, changing nothing, when the node is not a mesh or has no default
+    /// of its own. `material.reset` and the material panel's reset both call
+    /// this.
     bool resetMaterial(iris::SceneNodePtr node);
 
     /// Snapshots the node's material into a .material asset registered under

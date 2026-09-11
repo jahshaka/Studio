@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
 
+#include <functional>
+
 #include <algorithm>
 
 #include "services/assetcas.h"
@@ -943,6 +945,17 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     // — it calls rebuildFragment directly, because restoring a deleted node
     // must give back the guid the rest of the document still refers to.)
     regenerateGuids(node, guidMapOut);
+    // A pasted floor is a copy, and a scene has ONE default floor
+    // (services/defaultfloor.h): the copy — and anything under it — is an
+    // ordinary mesh, as Duplicate makes it. (Here and not in rebuildFragment:
+    // an undo of a delete must give the floor back AS the floor.)
+    std::function<void(const iris::SceneNodePtr &)> clearFloor =
+        [&clearFloor](const iris::SceneNodePtr &n) {
+            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh)
+                n.staticCast<iris::MeshNode>()->defaultFloor = false;
+            for (const auto &child : n->children()) clearFloor(child);
+        };
+    clearFloor(node);
     if (!parent) parent = sc->getRootNode();
     // ...and a fresh NAME when the one it carries is already taken under that
     // parent — the same rule Duplicate uses, because a paste is a copy too
@@ -1279,8 +1292,11 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     // so a library material applied by guid is pinned in as a BINDING (a
     // tray/verb drop of a project member is already pinned — idempotent), and
     // the node -> material edge says who uses it.
+    // Only when the project does not pin it yet: addToProject re-pins to the
+    // library's CURRENT version, which would silently upgrade an older pin.
     if (project && !project->getProjectGuid().isEmpty()
-        && db->fetchAsset(assetGuid).projectGuid != project->getProjectGuid())
+        && db->fetchAsset(assetGuid).projectGuid != project->getProjectGuid()
+        && !db->isAssetPinnedBy(project->getProjectGuid(), assetGuid))
         ProjectAssets::addToProject(assetGuid, db, project, ProjectAssets::AddKind::Binding);
     for (const auto &meshNode : meshes) {
         db->deleteDependency(meshNode->getGUID(), assetGuid);
@@ -1303,11 +1319,11 @@ bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
 {
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
     if (!materialdefaults::hasDefault(node)) return false;
-    QStringList defaultTextures;
-    auto material = materialdefaults::create(node, db, project, &defaultTextures);
+    QStringList defaultTextures, newlyPinned;
+    auto material = materialdefaults::create(node, db, project, &defaultTextures, &newlyPinned);
     if (!material) return false;
     undo->push(new ResetMaterialCommand(db, project, node.staticCast<iris::MeshNode>(),
-                                        material, defaultTextures));
+                                        material, defaultTextures, newlyPinned));
     emit materialApplied(QStringLiteral("PBR"));
     return true;
 }

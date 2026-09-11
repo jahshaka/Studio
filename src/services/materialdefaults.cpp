@@ -19,13 +19,18 @@ For more information see the LICENSE file
 namespace materialdefaults {
 
 iris::MaterialPtr create(const iris::SceneNodePtr &node, Database *db, Project *project,
-                         QStringList *pinnedTextures)
+                         QStringList *textures, QStringList *newlyPinned)
 {
-    if (pinnedTextures) pinnedTextures->clear();
+    if (textures) textures->clear();
+    if (newlyPinned) newlyPinned->clear();
     if (!defaultfloor::isDefaultFloor(node)) return iris::MaterialPtr();
     QString tileGuid;
-    auto material = defaultfloor::createMaterial(db, project, &tileGuid);
-    if (pinnedTextures && !tileGuid.isEmpty()) pinnedTextures->append(tileGuid);
+    bool tileNew = false;
+    auto material = defaultfloor::createMaterial(db, project, &tileGuid, &tileNew);
+    if (!tileGuid.isEmpty()) {
+        if (textures) textures->append(tileGuid);
+        if (newlyPinned && tileNew) newlyPinned->append(tileGuid);
+    }
     return material;
 }
 

@@ -1847,6 +1847,30 @@ QStringList Database::fetchDependers(const QString &dependee, const QString &pro
     return out;
 }
 
+QVector<DependencyRecord> Database::fetchNodeDependencies(const QString &depender,
+                                                         const QString &projectGuid)
+{
+    QVector<DependencyRecord> out;
+    if (depender.isEmpty() || projectGuid.isEmpty()) return out;
+    QSqlQuery query;
+    query.prepare("SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
+                  "FROM dependencies WHERE depender = ? AND project_guid = ?");
+    query.addBindValue(depender);
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchNodeDependencies");
+    while (query.next()) {
+        DependencyRecord record;
+        record.dependerType = query.value(0).toInt();
+        record.dependeeType = query.value(1).toInt();
+        record.projectGuid = query.value(2).toString();
+        record.depender = query.value(3).toString();
+        record.dependee = query.value(4).toString();
+        record.id = query.value(5).toString();
+        out.append(record);
+    }
+    return out;
+}
+
 QVector<AssetRecord> Database::fetchAssetsFromParent(const QString & guid)
 {
     auto guids = fetchAssetGUIDAndDependencies(guid, false);

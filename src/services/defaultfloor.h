@@ -51,9 +51,11 @@ QString shippedTilePath();   ///< the shipped checker the tile row is minted fro
 
 /// A FRESH instance of the floor's own default material. In a real project
 /// (`project` with a guid) the checker is pinned into it and `tileGuid`, when
-/// given, names the pinned row; the startup placeholder (no guid) renders the
-/// shipped file and writes nothing.
-iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *tileGuid = nullptr);
+/// given, names the pinned row, and `tileNewlyPinned` says whether THIS call
+/// pinned it (the project had no pin on the tile before); the startup
+/// placeholder (no guid) renders the shipped file and writes nothing.
+iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *tileGuid = nullptr,
+                                    bool *tileNewlyPinned = nullptr);
 
 /// The default floor NODE, with its material. In a real project it also records
 /// the node's own Object row (the built-in marker: a node is not a tray tile)

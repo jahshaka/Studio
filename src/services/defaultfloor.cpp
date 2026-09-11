@@ -34,7 +34,8 @@ QString shippedTilePath()
     return IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
 }
 
-iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *tileGuid)
+iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *tileGuid,
+                                    bool *tileNewlyPinned)
 {
     // THE GROUND'S TILE IS A LIBRARY TEXTURE (plan item 15c, audit D35). In a
     // real project it goes through the one import pipeline the first time any
@@ -49,12 +50,14 @@ iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *til
     // to the library.
     QString tilePath = shippedTilePath();
     if (tileGuid) tileGuid->clear();
+    if (tileNewlyPinned) *tileNewlyPinned = false;
     if (db && project && !project->getProjectGuid().isEmpty()) {
         const ShippedAssets::Pinned tile =
             ShippedAssets::pinTexture(tilePath, QStringLiteral("Tile.png"), db, project);
         if (tile.ok() && !tile.guid.isEmpty()) {
             tilePath = tile.path;
             if (tileGuid) *tileGuid = tile.guid;
+            if (tileNewlyPinned) *tileNewlyPinned = tile.newlyPinned;
         } else {
             // The floor still renders (the shipped file); what is lost is the
             // guid on save, so say why instead of saving a scene that reopens

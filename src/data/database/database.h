@@ -290,6 +290,11 @@ public:
     /// `projectGuid` — who in this project uses the asset (a node's material
     /// slot, the ground, a decal, an emitter, a material). Duplicates removed.
     QStringList fetchDependers(const QString &dependee, const QString &projectGuid);
+    /// Every dependency edge `depender` has, recorded for `projectGuid` — what
+    /// a scene node USES, as the catalog records it (material.reset's
+    /// ResetMaterialCommand drops and restores a subset of these).
+    QVector<DependencyRecord> fetchNodeDependencies(const QString &depender,
+                                                    const QString &projectGuid);
     /// The other direction: which PROJECTS pin this asset (guid + name, named
     /// by the projects table; a pin whose project row is gone reports the guid
     /// as its name). This is what `assets.pins` answers and what the Assets

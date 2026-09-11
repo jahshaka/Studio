@@ -10,12 +10,14 @@
 //   2. a user's edits to that material are undone by material.reset — ONE
 //      undo step;
 //   3. a LIBRARY material applied to the floor (material.apply) joins the
-//      project as a use (the tray lists it); the reset clears it: the floor's
-//      own default is back, the library row is untouched and back in the
-//      library grid, and — nothing else using it — it leaves the project, so
-//      the tray stops listing it; while a second node still uses it, it stays;
+//      project as a use (the tray lists it); the reset clears it from the
+//      floor — the floor's own default is back, ONE undo step — and does NOT
+//      touch project membership: the material stays in the project, the
+//      library row is untouched, another mesh wearing it keeps it, and a
+//      texture deleted from the library meanwhile keeps its row (undo is
+//      proven across run boundaries in mcp.e2e);
 //   4. a node with no default of its own answers false and changes nothing;
-//      a duplicate of the floor is an ordinary mesh;
+//      a duplicate or a PASTE of the floor is an ordinary mesh;
 //   5. the flag survives save + reopen, and the reset still works after it.
 //
 // Document verbs only -> --headless.
@@ -28,9 +30,6 @@ function J(x) { return JSON.stringify(x); }
 function near(a, b) { return Math.abs(a - b) < 1e-4; }
 function trayGuids() {
     return assets.list({ scope: "project", tray: true }).map(function (r) { return r.guid; });
-}
-function storeGuids() {
-    return assets.list({ scope: "store" }).map(function (r) { return r.guid; });
 }
 function theFloors() {
     return scene.nodes().filter(function (r) {
@@ -81,23 +80,49 @@ assert(back.baseColor === base.baseColor, "... and its base colour is the defaul
 // ---- 3. a library material, applied then cleared ----------------------------
 assert(material.apply(floor, redMat) === true, "material.apply(the floor, the library material)");
 assert(trayGuids().indexOf(redMat) >= 0, "applying a library material is a USE: it joins the project (tray)");
-assert(!near(material.get(floor).textureScale, 4) || ("" + material.get(floor).baseColorMap).length === 0,
-       "the floor wears the applied material now");
-assert(material.reset(floor) === true, "material.reset clears the applied material");
+assert(material.get(floor).baseColor !== base.baseColor, "the floor wears the applied material now ("
+       + material.get(floor).baseColor + ")");
+pushes = editor.undoState().pushes;
+assert(material.reset(floor) === true, "material.reset clears the applied material from the floor");
+assert(editor.undoState().pushes === pushes + 1, "... as ONE undo step");
 isFloorDefault(floor, "after clearing the applied material");
-assert(trayGuids().indexOf(redMat) < 0,
-       "nothing else uses it, so it left the project — the tray no longer lists it");
+assert(trayGuids().indexOf(redMat) >= 0,
+       "project membership is NOT touched: the applied material is still in the project (the tray)");
 var meta = assets.metadata(redMat);
 assert(meta && meta.guid === redMat && meta.listed === true, "the LIBRARY row is untouched");
-assert(storeGuids().indexOf(redMat) >= 0, "... and it is in the library grid");
 
-// ...but a material something else still uses stays in the project.
+// Another mesh wearing the same material is not the reset's business.
 var cube = scene.addPrimitive("cube", { position: { x: 3, y: 1, z: 0 } });
 assert(material.apply(cube, redMat) === true && material.apply(floor, redMat) === true,
        "the same library material on a cube AND the floor");
+var cubeRed = J(material.get(cube));
 assert(material.reset(floor) === true, "reset the floor");
-assert(trayGuids().indexOf(redMat) >= 0, "the cube still uses it: it stays in the project");
+assert(J(material.get(cube)) === cubeRed, "the cube keeps its material");
 isFloorDefault(floor, "the floor alone was reset");
+
+// A TEXTURE DELETED FROM THE LIBRARY while its material is applied: the reset
+// must not take it with it (a library delete of a pinned asset only UNLISTS it,
+// and the row has to survive for undo — scripted in mcp.e2e, where a run
+// boundary lets undo reach the reset).
+var tex = assets.importFile(fixtures + "/tiny.png");
+var texMat = materials.createFromImage(tex);
+assert(texMat && texMat.length > 10, "a material with a texture: materials.createFromImage(tiny.png)");
+assert(material.apply(floor, texMat) === true, "applied to the floor");
+assert(assets.remove(tex) === true && assets.metadata(tex).listed === false,
+       "tiny.png deleted from the library: it is pinned, so it is UNLISTED");
+assert(material.reset(floor) === true, "reset the floor");
+var texMeta = assets.metadata(tex);
+assert(texMeta && texMeta.guid === tex, "the unlisted texture's row still exists after the reset");
+assert(trayGuids().indexOf(texMat) >= 0, "... and its material is still in the project");
+
+// A PASTED floor is a copy: the scene keeps ONE default floor.
+var frag = node.serialize(floor);
+var pasted = node.deserialize(frag, "", -1);
+assert(pasted && pasted !== floor, "node.deserialize(the floor's fragment) — a paste");
+assert(node.property(pasted, "defaultFloor") === false, "the pasted floor is an ordinary mesh");
+assert(theFloors().length === 1 && theFloors()[0] === floor, "still exactly ONE default floor");
+assert(material.reset(pasted) === false, "... and it has no reset");
+node.remove(pasted);
 
 // ---- 4. no default, no reset ------------------------------------------------
 var cubeBefore = J(material.get(cube));

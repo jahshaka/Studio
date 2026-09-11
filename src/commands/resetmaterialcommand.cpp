@@ -12,23 +12,36 @@ For more information see the LICENSE file
 #include "commands/resetmaterialcommand.h"
 
 #include <QObject>
-#include <QSqlQuery>
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "data/project.h"
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "services/assetdelete.h"
 #include "services/projectassets.h"
+#include "services/projectmembership.h"
+
+namespace {
+
+/// The kinds of edge that mean "this node uses that material / texture" —
+/// the only ones a reset clears.
+bool isMaterialUse(const DependencyRecord &edge)
+{
+    return edge.dependeeType == static_cast<int>(ModelTypes::Material)
+           || edge.dependeeType == static_cast<int>(ModelTypes::Shader)
+           || edge.dependeeType == static_cast<int>(ModelTypes::Texture);
+}
+
+}   // namespace
 
 ResetMaterialCommand::ResetMaterialCommand(Database *db, Project *project,
                                            iris::MeshNodePtr meshNode,
                                            iris::MaterialPtr defaultMaterial,
-                                           const QStringList &defaultTextures)
+                                           const QStringList &defaultTextures,
+                                           const QStringList &newlyPinned)
     : db(db), project(project), meshNode(meshNode),
       oldMaterial(meshNode ? meshNode->getMaterial() : iris::MaterialPtr()),
-      defaultMaterial(defaultMaterial), defaultTextures(defaultTextures)
+      defaultMaterial(defaultMaterial), defaultTextures(defaultTextures),
+      newlyPinned(newlyPinned)
 {
     setText(QObject::tr("Reset Material"));
 }
@@ -39,58 +52,34 @@ void ResetMaterialCommand::redo()
     meshNode->setMaterial(defaultMaterial);
 
     droppedEdges.clear();
-    releasedPins.clear();
+    createdDefaultEdges.clear();
     const QString projectGuid = project ? project->getProjectGuid() : QString();
     if (!db || projectGuid.isEmpty()) return;
     const QString nodeGuid = meshNode->getGUID();
 
-    // What the node USES, as the catalog records it: an applied material asset
-    // (Object -> Material, applyMaterialAsset), a graph material picked in the
-    // panel (Object -> Shader), textures bound to its slots (Object ->
-    // Texture). Every one of them but the default's own textures stops being
-    // used by this node.
-    QStringList applied;
-    {
-        QSqlQuery query;
-        query.prepare("SELECT depender_type, dependee_type, dependee FROM dependencies "
-                      "WHERE depender = ? AND project_guid = ?");
-        query.addBindValue(nodeGuid);
-        query.addBindValue(projectGuid);
-        if (query.exec()) {
-            while (query.next()) {
-                const Edge edge{ query.value(0).toInt(), query.value(1).toInt(),
-                                 query.value(2).toString() };
-                if (defaultTextures.contains(edge.dependee)) continue;
-                droppedEdges.append(edge);
-                if (edge.dependeeType == static_cast<int>(ModelTypes::Material)
-                    || edge.dependeeType == static_cast<int>(ModelTypes::Shader))
-                    applied.append(edge.dependee);
-            }
-        }
+    // The default's own pins, back after an undo took them (the first redo
+    // runs right after the default was built, which pinned them already).
+    if (!newlyPinnedLive) {
+        for (const QString &texture : newlyPinned)
+            if (!db->isAssetPinnedBy(projectGuid, texture))
+                ProjectAssets::addToProject(texture, db, project, ProjectAssets::AddKind::Binding);
+        newlyPinnedLive = true;
     }
-    for (const Edge &edge : droppedEdges) db->deleteDependency(nodeGuid, edge.dependee);
 
-    // The default's own textures are what the node uses now (delete-then-create:
-    // the table has no unique key on the pair).
+    // What the node used: material / shader / texture edges only, minus the
+    // default's own textures (those stay — they are what it uses now).
+    for (const DependencyRecord &edge : db->fetchNodeDependencies(nodeGuid, projectGuid))
+        if (isMaterialUse(edge) && !defaultTextures.contains(edge.dependee))
+            droppedEdges.append(edge);
+    for (const DependencyRecord &edge : droppedEdges) db->deleteDependency(nodeGuid, edge.dependee);
+
+    // ...and the default's textures are recorded as used, remembering which of
+    // those edges THIS redo made, so undo takes back exactly those.
     for (const QString &texture : defaultTextures) {
-        db->deleteDependency(nodeGuid, texture);
+        if (db->checkIfDependencyExists(nodeGuid, texture)) continue;
         db->createDependency(static_cast<int>(ModelTypes::Object),
                              static_cast<int>(ModelTypes::Texture), nodeGuid, texture, projectGuid);
-    }
-
-    // An applied material nothing else in this project uses leaves the project
-    // (the tray rule's USE — services/assettray.h): its pin is released, the
-    // library row untouched. Only a PIN is released — a row the project owns
-    // outright is left alone — and never an unlisted row, whose last pin going
-    // would delete it for good (assetdelete::removeFromProject reaps those),
-    // which undo could not bring back.
-    applied.removeDuplicates();
-    for (const QString &asset : applied) {
-        if (!db->fetchDependers(asset, projectGuid).isEmpty()) continue;
-        if (!db->isAssetPinnedBy(projectGuid, asset)) continue;
-        const AssetRecord record = db->fetchAsset(asset);
-        if (record.guid.isEmpty() || !record.listed) continue;
-        if (assetdelete::removeFromProject(db, asset, projectGuid).ok) releasedPins.append(asset);
+        createdDefaultEdges.append(texture);
     }
 }
 
@@ -101,14 +90,23 @@ void ResetMaterialCommand::undo()
 
     const QString projectGuid = project ? project->getProjectGuid() : QString();
     if (!db || projectGuid.isEmpty()) return;
-    for (const QString &asset : releasedPins)
-        ProjectAssets::addToProject(asset, db, project, ProjectAssets::AddKind::Binding);
     const QString nodeGuid = meshNode->getGUID();
-    for (const Edge &edge : droppedEdges) {
-        db->deleteDependency(nodeGuid, edge.dependee);
+
+    for (const QString &texture : createdDefaultEdges) db->deleteDependency(nodeGuid, texture);
+    // Every dropped row again (redo deleted by pair, so a duplicated pair went
+    // in one delete and comes back as the same number of rows).
+    for (const DependencyRecord &edge : droppedEdges)
         db->createDependency(edge.dependerType, edge.dependeeType, nodeGuid, edge.dependee,
                              projectGuid);
-    }
-    releasedPins.clear();
+    createdDefaultEdges.clear();
     droppedEdges.clear();
+
+    // The pins building the default minted: the project did not have them.
+    // Only the pin row goes (never the project-remove path): the library row
+    // and its bytes stay, and redo pins it again.
+    if (newlyPinnedLive && !newlyPinned.isEmpty()) {
+        for (const QString &texture : newlyPinned) db->unpinAsset(projectGuid, texture);
+        newlyPinnedLive = false;
+        ProjectMembership::instance()->announce(projectGuid);
+    }
 }
