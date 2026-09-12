@@ -19,7 +19,9 @@
 //      the frame instead of ending in a square with sky around it (that is
 //      exactly the picture the owner reported). The floor's own mesh is 100 m;
 //      what fills the rest is the mirror's horizon plane (SceneMirror::
-//      syncGroundHorizon).
+//      syncGroundHorizon). AND IT IS NOT A TEXTURE SEAM EITHER: the checker
+//      crosses all four edges of that square in phase, probed from straight
+//      above (2b) — the trap this feature fell into on its first cut.
 //   3. AND IT CHANGES NO LIGHTING. The horizon is an engine helper, not
 //      geometry: the automatic GI volume, its voxel size and the probe grid are
 //      the same numbers with it as without it — which is the constraint lane L3
@@ -128,6 +130,71 @@ var spread = Math.max.apply(null, corners) - Math.min.apply(null, corners);
 for (var c = 0; c < corners.length; c++)
     assert(corners[c] < 64, "the frame's corner " + c + " is ground, not sky (" + corners[c] + ")");
 assert(spread >= 2, "...and it is the CHECKER, not a flat fill (spread " + spread + ")");
+
+// ---- 2b. AND THE CHECKER CROSSES THAT EDGE IN PHASE -------------------------
+//
+// The corner probes above only say "not sky", and a horizon with the right
+// checker DENSITY but the wrong PHASE passes them while replacing the geometry
+// edge with a texture seam — which is exactly what the first cut of this
+// feature did (a hand-picked UV constant with no offset: 0.195 of a repeat out,
+// 0.78 m at the default textureScale 4). So: straddle the seam, and compare it
+// against an interior line of the same floor.
+//
+// SELF-CALIBRATING, because the shipped tile is not an axis-aligned checker at
+// all — it is a diamond lattice, so "are these two points the same colour" says
+// as much about where the diamonds fall as about the seam. Instead: the mean
+// |difference| between pairs of points 0.15 m either side of a LINE, measured
+// once over an interior line (no seam there, so this is what the pattern itself
+// costs) and once over the floor's edge. A phase break moves the second well
+// past the first; a continuous checker cannot.
+//
+// The camera looks STRAIGHT DOWN from 20 m, so both sides are at the same scale
+// and the same light; at 45 degrees over a 16:9 shot the frame is 29.44 m wide
+// and 16.56 m deep, so 0.15 m is 6.5 px — clear of the 5x5 probe boxes either
+// side. Ten pairs down the frame are ten positions ALONG the line, which is
+// what catches a v axis that cycles.
+// THE CAMERA IS DELIBERATELY NOT STRAIGHT DOWN. A lookAt along -Y leaves the up
+// vector degenerate and the view rolls by an arbitrary angle (45 degrees, as it
+// happens), which turns the floor's edge into a diagonal across the frame and
+// makes every "straddle the centre line" probe miss it. Standing 6 m back and
+// 20 m up, looking at a point ON the edge, is roll-free: the edge's direction
+// has no component along the camera's right axis, so it projects to the frame's
+// vertical centre line at every depth, and pairs 1.2% of the width either side
+// straddle it at every height.
+var SEAM_DX = 0.012;
+function lineMetric(cx, cz, alongZ, tag) {
+    var eye = alongZ ? { x: cx, y: 20, z: cz - 6 } : { x: cx - 6, y: 20, z: cz };
+    editor.setCamera({ position: eye, lookAt: { x: cx, y: 0, z: cz } });
+    editor.frame(45, 1 / 60);
+    var pts = [], i;
+    for (i = 0; i < 10; i++) {
+        var t = 0.08 + i * 0.09;
+        pts.push({ x: 0.5 - SEAM_DX, y: t });
+        pts.push({ x: 0.5 + SEAM_DX, y: t });
+    }
+    var shot = editor.screenshot("ground_seam_" + tag + ".png", 1280, 720, pts, "raw");
+    var v = shot.probes.map(function (p) { return Math.round(lum(p)); });
+    var sum = 0;
+    for (i = 0; i < 10; i++) sum += Math.abs(v[i * 2] - v[i * 2 + 1]);
+    var mean = sum / 10;
+    console.log("seam " + tag + ": mean|d| = " + mean.toFixed(2) + "  " + J(v));
+    return mean;
+}
+// Fog is still off from the block above; a plain view of the floor's own
+// checker is all this needs.
+var interior = Math.max(lineMetric(30, 0, true, "interior_x"),
+                        lineMetric(0, 30, false, "interior_z"));
+console.log("the pattern's own cost across the same gap: " + interior.toFixed(2) + "/255");
+var EDGES = [ { x: 50, z: 0, alongZ: true,  tag: "east" },
+              { x: -50, z: 0, alongZ: true,  tag: "west" },
+              { x: 0, z: 50, alongZ: false, tag: "north" },
+              { x: 0, z: -50, alongZ: false, tag: "south" } ];
+for (var e = 0; e < EDGES.length; e++) {
+    var m = lineMetric(EDGES[e].x, EDGES[e].z, EDGES[e].alongZ, EDGES[e].tag);
+    assert(m <= interior + 2.0,
+           "the checker crosses the " + EDGES[e].tag + " edge IN PHASE — no texture seam where "
+           + "the geometry one was (" + m.toFixed(2) + " vs the pattern's own " + interior.toFixed(2) + ")");
+}
 
 // The floor itself is still 100 m: the horizon is not the document growing.
 var b = scene.bounds({ nodes: [ground] });

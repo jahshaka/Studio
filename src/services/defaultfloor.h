@@ -81,6 +81,11 @@ constexpr float kMetallic = 0.0f;
 // other material to the floor (drag a library material onto it, or
 // material.apply) is untouched by all of this; `material.reset` brings the
 // matte default back.
+// WHAT THE WORKFLOW COSTS: the floor is now the only object in a default scene
+// on the SPECULAR workflow, and the workflow is part of the Hlms shader hash —
+// so a cold shader cache compiles one extra PSO family for it (paid once per
+// build id, like every other first-frame compile; the disk cache carries it
+// after that).
 constexpr int   kWorkflow = 1;     ///< PbrMaterial's Specular workflow: the fresnel rows are the read ones
 constexpr float kIor = 1.0f;       ///< -> setFresnel(0): no reflectance at any angle
 QColor specularColor();            ///< kS: black, the master switch on every specular path
