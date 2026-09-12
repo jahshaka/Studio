@@ -38,8 +38,9 @@ assert(r.technique === "vct_pcc_hybrid", "which resolves the hybrid: " + r.techn
 assert(r.quality === "high", "at high voxel/probe quality: " + r.quality);
 assert(r.ddgi === true, "with the irradiance field on");
 assert(r.bounces === 3, "three light bounces (Epic's column): " + r.bounces);
-assert(r.dynamicProbes === 0, "and no dynamic probes (Epic's column since REALTIME_REFLECTIONS R0): " + r.dynamicProbes);
-assert(r.row && r.row.tier === "epic" && r.row.bounces === 3 && r.row.dynamicProbes === 0 &&
+assert(r.dynamicProbes === undefined,
+       "and NO dynamic-probe column at all (deleted with the feature, REALTIME_REFLECTIONS R2)");
+assert(r.row && r.row.tier === "epic" && r.row.bounces === 3 && r.row.dynamicProbes === undefined &&
        r.row.technique === "vct_pcc_hybrid" && r.row.quality === "high" && r.row.ddgi === true,
        "world.rayon().row is the effective table row: " + J(r.row));
 assert(Math.abs(r.ddgiIntensity - 1.0) < 1e-6, "at the calibrated intensity 1.0");
@@ -48,21 +49,21 @@ assert(r.custom === false, "and nothing pinned: " + J(r.deviations));
 // world.gi is the same model, read through the full surface.
 var gi = world.get().gi;
 assert(gi.tier === "epic" && gi.mode === "vct_pcc_hybrid" && gi.quality === "high" &&
-       gi.bounces === 3 && gi.dynamicProbes === 0,
-       "world.get().gi agrees: " + J([gi.tier, gi.mode, gi.quality, gi.bounces, gi.dynamicProbes]));
+       gi.bounces === 3 && gi.dynamicProbes === undefined,
+       "world.get().gi agrees, without the deleted key: " + J([gi.tier, gi.mode, gi.quality, gi.bounces]));
 var gs = world.giStatus();
-assert(gs.dynamicProbes === 0 && gs.dynamicProbeUpdates === 0,
-       "headless giStatus carries the two dynamic-probe fields (0, no engine): " + J([gs.dynamicProbes, gs.dynamicProbeUpdates]));
+assert(gs.dynamicProbes === undefined && gs.dynamicProbeUpdates === undefined,
+       "and giStatus has dropped both dynamic-probe fields");
 assert(world.get().rayon.tier === "epic", "world.get().rayon agrees too");
 
 // ---- 2. the tier switch moves the knobs -------------------------------------
 // THE TABLE (owner option (b)): Medium and High are DDGI-fed; Epic's column
-// is the bounces and the dynamic probes.
+// is the bounces — the only one left since R2 deleted the dynamic probes.
 var expect = {
-    low:    { technique: "instant_radiosity", quality: "low",    ddgi: false, bounces: 1, dynamicProbes: 0 },
-    medium: { technique: "vct",               quality: "medium", ddgi: true,  bounces: 1, dynamicProbes: 0 },
-    high:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 1, dynamicProbes: 0 },
-    epic:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 3, dynamicProbes: 0 }
+    low:    { technique: "instant_radiosity", quality: "low",    ddgi: false, bounces: 1 },
+    medium: { technique: "vct",               quality: "medium", ddgi: true,  bounces: 1 },
+    high:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 1 },
+    epic:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 3 }
 };
 for (var t in expect) {
     var got = world.rayon({ tier: t });
@@ -72,15 +73,13 @@ for (var t in expect) {
     assert(got.quality === want.quality, "  quality -> " + got.quality);
     assert(got.ddgi === want.ddgi, "  irradiance field -> " + got.ddgi);
     assert(got.bounces === want.bounces, "  bounces -> " + got.bounces);
-    assert(got.dynamicProbes === want.dynamicProbes, "  dynamic probes -> " + got.dynamicProbes);
-    assert(got.row.bounces === want.bounces && got.row.dynamicProbes === want.dynamicProbes &&
-           got.row.ddgi === want.ddgi, "  and the row readback matches the table");
+    assert(got.row.bounces === want.bounces && got.row.ddgi === want.ddgi,
+           "  and the row readback matches the table");
     // The write-through invariant, seen from the OTHER verb: the backing
     // fields the mirror and the serializer read are the resolved values.
     var w = world.get().gi;
     assert(w.mode === want.technique && w.quality === want.quality &&
-           w.bounces === want.bounces && w.dynamicProbes === want.dynamicProbes,
-           "  and world.gi reads the same fields back");
+           w.bounces === want.bounces, "  and world.gi reads the same fields back");
     assert(got.custom === false, "  no deviation after a clean tier switch");
 }
 
@@ -149,26 +148,20 @@ assert(world.gi({ ddgi: "auto" }), "world.gi({ddgi:'auto'}) unpins it");
 assert(world.rayon().ddgi === true && world.rayon().custom === false,
        "and the tier decides again");
 
-// Epic's two columns pin the same way through world.gi's bounces and
-// dynamicProbes keys — and the range is refused, catchably.
+// Epic's column pins the same way through world.gi's bounces key.
 assert(world.gi({ bounces: 2 }), "pin the bounces to 2 at Epic");
 assert(world.rayon().bounces === 2 && world.rayon().custom === true &&
        world.settings().giBounces.source === "override",
        "Epic at 2 bounces is Custom, with the registry agreeing: " + J(world.rayon().deviations));
-assert(world.gi({ dynamicProbes: 4 }), "pin four dynamic probes");
-assert(world.rayon().dynamicProbes === 4 && world.rayon().deviations.length === 2,
-       "two named deviations: " + J(world.rayon().deviations));
-world.rayon({ tier: "medium" });
-assert(world.rayon().bounces === 2 && world.rayon().dynamicProbes === 4,
-       "both pins SURVIVE a tier switch to Medium");
+// THE DELETED KEY (R2): world.gi refuses it by name like any other unknown key.
 threw = false;
-try { world.gi({ dynamicProbes: 9 }); } catch (e) { threw = true; }
-assert(threw, "dynamicProbes above 8 is refused");
-assert(world.clearOverride({ id: "giBounces" }).source === "mode" &&
-       world.clearOverride({ id: "giDynamicProbes" }).source === "mode",
-       "clearOverride hands both back");
-assert(world.rayon().bounces === 1 && world.rayon().dynamicProbes === 0 && world.rayon().custom === false,
-       "and Medium's 1 bounce / 0 dynamic probes come back");
+try { world.gi({ dynamicProbes: 4 }); } catch (e) { threw = true; }
+assert(threw, "the retired dynamicProbes key is refused by world.gi");
+world.rayon({ tier: "medium" });
+assert(world.rayon().bounces === 2, "the pin SURVIVES a tier switch to Medium");
+assert(world.clearOverride({ id: "giBounces" }).source === "mode", "clearOverride hands it back");
+assert(world.rayon().bounces === 1 && world.rayon().custom === false,
+       "and Medium's 1 bounce comes back");
 world.rayon({ tier: "epic" });
 
 // ---- 5. one undo step per gesture, and the round trip -----------------------
@@ -210,14 +203,13 @@ assert(byId["rayon"].tierSpace === "world", "which the WORLD mode drives");
 assert(byId["giMode"].tierSpace === "rayon", "while the technique row is Rayon's");
 assert(byId["giQuality"].tierSpace === "rayon", "and so is the quality row");
 assert(byId["giDdgi"].tierSpace === "rayon", "and the irradiance-field row");
-assert(byId["giBounces"].tierSpace === "rayon" && byId["giDynamicProbes"].tierSpace === "rayon",
-       "and Epic's two column rows");
+assert(byId["giBounces"].tierSpace === "rayon", "and Epic's column row");
+assert(!byId["giDynamicProbes"], "the retired dynamic-probe row is not in the registry at all");
 assert(byId["giDdgi"].tiers.medium.valueId === "on" && byId["giDdgi"].tiers.high.valueId === "on" &&
        byId["giDdgi"].tiers.low.valueId === "off",
        "the registry's field column: on from Medium up, off at Low");
-assert(byId["giBounces"].tiers.epic.value === 3 && byId["giBounces"].tiers.high.value === 1 &&
-       byId["giDynamicProbes"].tiers.epic.value === 0 && byId["giDynamicProbes"].tiers.high.value === 0,
-       "and Epic's column reads 3 bounces / 0 dynamic probes against High's 1 / 0 (R0)");
+assert(byId["giBounces"].tiers.epic.value === 3 && byId["giBounces"].tiers.high.value === 1,
+       "and Epic's column reads 3 bounces against High's 1");
 assert(byId["giMode"].tiers.epic.valueId === "vct_pcc_hybrid",
        "the Rayon columns are the Rayon tiers: " + byId["giMode"].tiers.epic.valueId);
 

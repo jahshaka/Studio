@@ -1747,8 +1747,6 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeHdr       = st.probeHdr;
     out.probeShadows   = st.probeShadows;
     out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;
-    out.dynamicProbes        = st.dynamicProbes;
-    out.dynamicProbeUpdates  = st.dynamicProbeUpdates;
     out.probeShapeMin        = q(st.probeShapeMin);
     out.probeShapeMax        = q(st.probeShapeMax);
     out.cubemapProbeSlotsPerCell = st.cubemapProbeSlotsPerCell;

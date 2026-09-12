@@ -164,7 +164,7 @@ assert(Math.abs(reopened.snapSidesMin - 0.3) < 1e-4, "snapSidesMin survived");
 assert(Math.abs(reopened.snapSidesMax - 0.3) < 1e-4, "snapSidesMax survived");
 
 // ---- phase D2: THE GI UPDATE BUDGET (FIX WAVE B1/B2) ---------------------
-// The verb half of the model whose pixels gi.budget and gi.dynamic_probes own.
+// The verb half of the model whose pixels gi.budget and gi.mobility own.
 // What belongs here rather than there: the default, the refusals, the RESOLVED
 // figure coming back through the renderer, the clamp, that it is document
 // state, and that the two keys it REPLACED are gone by name.
@@ -179,19 +179,20 @@ threw = "";
 try { world.gi({ updateBudge: 1 }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("updateBudge") >= 0,
        "world.gi REFUSES the near-miss key by name (updateBudge is not updateBudget): " + threw);
-// The key this replaced is REFUSED rather than silently aliased: a script
+// The keys this replaced are REFUSED rather than silently aliased: a script
 // written against the old model must fail loudly and be told the new spelling.
-// ('dynamicProbes' is a LIVE key again since the Rayon tier table gained
-// Epic's column — with a different meaning: extra moved-covering re-captures
-// on top of the budget, not the retired nearest-N; scripting.e2e.rayon and
-// gi.dynamic_probes gate it.)
+// Both generations of 'dynamicProbes' are retired now — the nearest-N one and
+// Epic's moved-covering reservation (deleted 2026-09-12: moving objects are not
+// captured by the probes at all, so there is nothing to reserve for).
 threw = "";
 try { world.gi({ autoRefresh: false }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("autoRefresh") >= 0 && threw.indexOf("updateBudget") >= 0,
        "world.gi refuses the retired autoRefresh key and names updateBudget: " + threw);
-assert(world.gi({ dynamicProbes: 1 }) && world.get().gi.dynamicProbes === 1,
-       "world.gi accepts dynamicProbes (Epic's column) and world.get().gi reads it back");
-assert(world.gi({ dynamicProbes: 0 }), "and back to the sweep alone for the cases below");
+threw = "";
+try { world.gi({ dynamicProbes: 1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("dynamicProbes") >= 0,
+       "world.gi refuses the retired dynamicProbes key by name: " + threw);
+assert(world.get().gi.dynamicProbes === undefined, "and world.get().gi no longer reports it");
 
 // A grid of two, one update a frame. quality stays low so the six face renders
 // a probe update costs are 128px ones.

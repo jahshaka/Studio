@@ -80,7 +80,7 @@ void WorldGiPropertyWidget::rebuild()
     // them, and refreshPins() dereferences whichever this build leaves set.
     rayonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;
     quality = nullptr; lightSelector = nullptr; bounces = nullptr;
-    dynamicProbes = nullptr; boundsMin = nullptr; boundsMax = nullptr;
+    boundsMin = nullptr; boundsMax = nullptr;
     pccGrid = nullptr; updateBudget = nullptr; ddgiToggle = nullptr;
     ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
     fitBoundsButton = nullptr; advancedButton = nullptr; resetAdvancedButton = nullptr;
@@ -305,18 +305,6 @@ void WorldGiPropertyWidget::rebuild()
                                                                   qBound(1, qRound(g.y()), 8),
                                                                   qBound(1, qRound(g.z()), 8)));
                          });
-            // DYNAMIC PROBES (Epic's other column). A Rayon tier row; pins.
-            dynamicProbes = this->addFloatValueSlider(
-                tr("Dynamic Probes") + pinMark(scene, "giDynamicProbes"), 0.0f, 8.0f,
-                float(qBound(0, scene->giDynamicProbes, 8)));
-            dynamicProbes->setToolTip(
-                tr("Extra reflection-probe re-captures per frame, on top of the GI Update "
-                   "Budget, reserved for the probes covering whatever MOVED this frame — so a "
-                   "moving object's reflection follows it frame by frame instead of waiting "
-                   "its turn in the budget's sweep. Costs nothing while the scene is still. "
-                   "Epic sets 2; the other tiers 0 (the sweep alone)."));
-            wireRayonSlider(dynamicProbes, &WorldGiPropertyWidget::onDynamicProbesChanged,
-                            tr("Rayon Dynamic Probes"));
         }
 
         // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). On at every voxel tier
@@ -432,8 +420,6 @@ void WorldGiPropertyWidget::refreshPins()
     if (!scene) return;
     if (bounces)
         bounces->ui->label->setText(tr("Light Bounces") + pinMark(scene, "giBounces"));
-    if (dynamicProbes)
-        dynamicProbes->ui->label->setText(tr("Dynamic Probes") + pinMark(scene, "giDynamicProbes"));
 
     if (tierSelector && tierSelector->getWidget()) {
         QComboBox *combo = tierSelector->getWidget();
@@ -599,12 +585,6 @@ void WorldGiPropertyWidget::onLightChanged(int row)
 void WorldGiPropertyWidget::onBouncesChanged(float value)
 {
     editRayonRow(QStringLiteral("giBounces"), qBound(1, qRound(value), 4), tr("Rayon Light Bounces"));
-}
-
-void WorldGiPropertyWidget::onDynamicProbesChanged(float value)
-{
-    editRayonRow(QStringLiteral("giDynamicProbes"), qBound(0, qRound(value), 8),
-                 tr("Rayon Dynamic Probes"));
 }
 
 void WorldGiPropertyWidget::onDdgiToggled(bool on)

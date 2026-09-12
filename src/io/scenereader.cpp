@@ -455,16 +455,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             sceneObj.contains("giUpdateBudget")
                 ? qBound(0, sceneObj["giUpdateBudget"].toInt(1), 512)
                 : (sceneObj["giAutoRefresh"].toBool(true) ? 1 : 0);
-        // Dynamic reflection probes (Rayon Epic's column). Absent in every
-        // document written before the tier table gained it; 0 (the sweep
-        // alone) is what those rendered, and a document without a tier
-        // derives one below and pins this only where it deviates. The
-        // PRESENCE test comes first: `sceneObj[...]` on this non-const object
-        // INSERTS a null key when it is absent (QJsonObject::operator[]), so a
-        // contains() after the read would always say yes — the option-(b)
-        // bump below keys on it.
+        // `giDynamicProbes` — Rayon Epic's old fifth column, DELETED with the
+        // feature (REALTIME_REFLECTIONS_SPEC R2, 2026-09-12: a moving object is
+        // not in a probe capture at all any more, so there is nothing to
+        // reserve captures for). The VALUE is ignored wherever it appears; only
+        // its PRESENCE is still read, as a format-era marker for the option-(b)
+        // bump below — a document that carries a tier but never carried this
+        // key was written by the one-day P2 table.
         hasDynamicProbesKey = sceneObj.contains("giDynamicProbes");
-        scene->giDynamicProbes = qBound(0, sceneObj["giDynamicProbes"].toInt(0), 8);
         if (sceneObj.contains("giPccGrid"))   // pre-hybrid documents keep the 3x2x3 default
             scene->giPccGrid = readVector3(sceneObj["giPccGrid"].toObject());
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
@@ -633,8 +631,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
                 // A P2 document could not carry a `giBounces` pin (the row did
                 // not exist), so a hand-set bounce count would be overwritten
                 // by the tier's — pin it first when it deviates (code review
-                // 2026-09-10). dynamicProbes cannot deviate: it is 0 in every
-                // such document.
+                // 2026-09-10).
                 const worldmodes::RayonTier tier = worldmodes::rayonTier(scene);
                 if (scene->giNumBounces != worldmodes::rayonBounces(tier))
                     worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), scene->giNumBounces);

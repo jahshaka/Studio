@@ -57,7 +57,6 @@ static int giMode(const iris::ScenePtr &s)    { return int(s->giMode); }
 static int giQuality(const iris::ScenePtr &s) { return int(s->giQuality); }
 static int giDdgi(const iris::ScenePtr &s)    { return s->giDdgi > 0 ? 1 : 0; }
 static int giBounces(const iris::ScenePtr &s) { return s->giNumBounces; }
-static int giDynamic(const iris::ScenePtr &s) { return s->giDynamicProbes; }
 
 // ---------------------------------------------------------------------------
 // 1. THE TABLE
@@ -70,25 +69,24 @@ static void testTierTable()
     // (voxel resolution, probe faces/HDR/shadows, the 8192-probe field grid,
     // ddgiSource auto = voxel) follow giQuality / the engine and are pinned
     // by gi.modes, gi.pcc_mirror and gi.ddgi.
-    struct Want { RayonTier tier; int mode, quality, ddgi, bounces, dynamic; const char *name; };
+    struct Want { RayonTier tier; int mode, quality, ddgi, bounces; const char *name; };
     const Want wants[] = {
-        { RayonTier::Low,    1, 0, 0, 1, 0, "Low = Instant Radiosity, low quality, no field, 1 bounce, no dynamic probes" },
-        { RayonTier::Medium, 2, 1, 1, 1, 0, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce, no dynamic probes" },
-        { RayonTier::High,   3, 2, 1, 1, 0, "High = VCT + probes 128^3, FIELD ON, 1 bounce, no dynamic probes" },
-        { RayonTier::Epic,   3, 2, 1, 3, 0, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces, no dynamic probes (R0: movers go to SSR + planar)" },
+        { RayonTier::Low,    1, 0, 0, 1, "Low = Instant Radiosity, low quality, no field, 1 bounce" },
+        { RayonTier::Medium, 2, 1, 1, 1, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
+        { RayonTier::High,   3, 2, 1, 1, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
+        { RayonTier::Epic,   3, 2, 1, 3, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces (the FOUR-column table: movers are reflected by SSR + planar, never by a probe re-capture)" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setRayon(s, true, w.tier);
         CHECK(giMode(s) == w.mode && giQuality(s) == w.quality && giDdgi(s) == w.ddgi &&
-                  giBounces(s) == w.bounces && giDynamic(s) == w.dynamic, w.name);
+                  giBounces(s) == w.bounces, w.name);
         // The accessors ARE the table (one owner): what they say per column
         // must be what the tier wrote.
         CHECK(worldmodes::rayonTechnique(w.tier) == w.mode &&
                   worldmodes::rayonQuality(w.tier) == w.quality &&
                   worldmodes::rayonDdgi(w.tier) == w.ddgi &&
-                  worldmodes::rayonBounces(w.tier) == w.bounces &&
-                  worldmodes::rayonDynamicProbes(w.tier) == w.dynamic,
+                  worldmodes::rayonBounces(w.tier) == w.bounces,
               "the column accessors agree with the write-through");
         CHECK(s->giTier == int(w.tier), "the tier is recorded on the document");
         CHECK(worldmodes::rayonEnabled(s), "and Rayon reads enabled");
@@ -103,19 +101,18 @@ static void testTierTable()
                   qPrintable(QStringLiteral("write-through holds for %1").arg(id)));
         }
     }
-    CHECK(worldmodes::rayonRowIds().size() == 5, "the tier writes exactly five rows through");
-    // 5 x 4: EVERY cell of every rayonTiered row is the table's cell. The rows
+    CHECK(worldmodes::rayonRowIds().size() == 4, "the tier writes exactly four rows through");
+    // 4 x 4: EVERY cell of every rayonTiered row is the table's cell. The rows
     // derive their tier[] from kRayonTable (worldmodes.cpp rayonColumns) and
     // the public readers read the same table one column at a time, so a cell
     // that disagrees here is a second copy of the table — which is exactly what
     // the rayontiers review found (13 of 20 cells untested while hand-copied).
     {
         using Reader = int (*)(RayonTier);
-        const Reader readers[5] = { worldmodes::rayonTechnique, worldmodes::rayonQuality,
-                                    worldmodes::rayonDdgi, worldmodes::rayonBounces,
-                                    worldmodes::rayonDynamicProbes };
+        const Reader readers[4] = { worldmodes::rayonTechnique, worldmodes::rayonQuality,
+                                    worldmodes::rayonDdgi, worldmodes::rayonBounces };
         const QStringList ids = worldmodes::rayonRowIds();
-        for (int c = 0; c < 5 && c < ids.size(); ++c) {
+        for (int c = 0; c < 4 && c < ids.size(); ++c) {
             const worldmodes::Row *r = worldmodes::row(ids[c]);
             for (int t = 0; t < 4; ++t) {
                 const int want = readers[c](RayonTier(t));
@@ -134,20 +131,19 @@ static void testTierTable()
         worldmodes::setRayon(e, true, RayonTier::Epic);
         CHECK(giMode(h) == giMode(e) && giQuality(h) == giQuality(e) && giDdgi(h) == giDdgi(e),
               "High and Epic share technique, quality and the field");
-        CHECK(giBounces(e) > giBounces(h) && giDynamic(e) == 0 && giDynamic(h) == 0,
-              "and Epic alone carries the extra bounces (no tier reserves dynamic probes since R0)");
-        // The engine-side columns each cost something real and are gated where
-        // they render: gi.ddgi (bounces 1 -> 3 on the DDGI-fed floor) and
-        // gi.dynamic_probes (one frame of catch-up at budget 1).
+        CHECK(giBounces(e) > giBounces(h),
+              "and Epic alone carries the extra bounces — the ONLY column between "
+              "them since R2 deleted the dynamic-probe reservation");
+        // The engine-side column costs something real and is gated where it
+        // renders: gi.ddgi (bounces 1 -> 3 on the DDGI-fed floor).
     }
-    // A tier switch DOWN from Epic hands the columns back: a Medium scene has
-    // one bounce and no reservation, whatever it was before.
+    // A tier switch DOWN from Epic hands the column back: a Medium scene has
+    // one bounce, whatever it was before.
     {
         auto s = freshScene();
         worldmodes::setRayon(s, true, RayonTier::Epic);
         worldmodes::setRayon(s, true, RayonTier::Medium);
-        CHECK(giBounces(s) == 1 && giDynamic(s) == 0,
-              "Medium after Epic is back to 1 bounce and 0 dynamic probes");
+        CHECK(giBounces(s) == 1, "Medium after Epic is back to 1 bounce");
     }
     // The intensity is NOT tiered: 1.0 is the calibrated default and a scene
     // that trimmed it must keep the trim across a tier switch.
@@ -228,22 +224,26 @@ static void testPins()
     CHECK(giDdgi(s) == 1 && !worldmodes::rayonCustom(s),
           "Reset Advanced Settings hands every Rayon row back to the tier");
 
-    // And so are Epic's two columns: the Advanced "Light Bounces" and "Dynamic
-    // Probes" rows go through the registry, so an edit there is a pin.
+    // And so is Epic's column: the Advanced "Light Bounces" row goes through
+    // the registry, so an edit there is a pin.
     CHECK(worldmodes::setRowValue(s, QStringLiteral("giBounces"), 2), "pin the bounces to 2 at Epic");
     CHECK(giBounces(s) == 2 && worldmodes::rayonCustom(s), "Epic at 2 bounces is Custom");
     CHECK(worldmodes::rayonDeviations(s) == QStringList{ QStringLiteral("Rayon Light Bounces") },
           "and the deviation is named");
     worldmodes::setRayon(s, true, RayonTier::High);
-    CHECK(giBounces(s) == 2 && giDynamic(s) == 0,
-          "a tier switch keeps the pinned bounces and moves the unpinned dynamic probes");
+    CHECK(giBounces(s) == 2, "a tier switch keeps the pinned bounces");
     CHECK(!worldmodes::setRowValue(s, QStringLiteral("giBounces"), 9), "an out-of-range bounce count is refused");
-    CHECK(!worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), -1), "and so is a negative reservation");
-    CHECK(worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), 4), "pin 4 dynamic probes at High");
-    CHECK(giDynamic(s) == 4 && worldmodes::rayonDeviations(s).size() == 2, "two named deviations now");
+    // THE DELETED ROW (lane R2): `giDynamicProbes` is not a registry row any
+    // more, so the registry refuses it by name — which is also the guard that
+    // nothing re-introduces it quietly.
+    CHECK(!worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), 4),
+          "the retired dynamic-probe row is gone from the registry");
+    CHECK(worldmodes::rayonRowIds().size() == 4 &&
+          !worldmodes::rayonRowIds().contains(QStringLiteral("giDynamicProbes")),
+          "Rayon is a FOUR-column table");
     worldmodes::clearRayonOverrides(s);
-    CHECK(giBounces(s) == 1 && giDynamic(s) == 0 && !worldmodes::rayonCustom(s),
-          "and Reset hands both columns back to High");
+    CHECK(giBounces(s) == 1 && !worldmodes::rayonCustom(s),
+          "and Reset hands the column back to High");
 }
 
 // ---------------------------------------------------------------------------
@@ -261,14 +261,14 @@ static void testWorldModeOwnership()
         { worldmodes::Mode::Low,    0, 0, 0, 1, 0, "World Low leaves GI off, as it always did" },
         { worldmodes::Mode::Medium, 0, 1, 0, 1, 0, "World Medium leaves GI off, as it always did" },
         { worldmodes::Mode::High,   1, 0, 0, 1, 0, "World High is Instant Radiosity at low quality, as it always did" },
-        { worldmodes::Mode::Epic,   3, 2, 1, 3, 0, "World Epic is Rayon Epic: the hybrid, high, the field, 3 bounces, no dynamic probes" },
+        { worldmodes::Mode::Epic,   3, 2, 1, 3, 0, "World Epic is Rayon Epic: the hybrid, high, the field, 3 bounces" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setMode(s, w.mode);
         CHECK(giMode(s) == w.giMode && giDdgi(s) == w.ddgi, w.name);
-        if (w.giMode != 0) CHECK(giQuality(s) == w.giQuality && giBounces(s) == w.bounces &&
-                                     giDynamic(s) == w.dynamic, "  ... and its quality, bounces and dynamic probes");
+        if (w.giMode != 0) CHECK(giQuality(s) == w.giQuality && giBounces(s) == w.bounces,
+                                 "  ... and its quality and bounces");
     }
 
     // A pinned Rayon dial survives a World Mode switch like any other pin —
@@ -276,8 +276,8 @@ static void testWorldModeOwnership()
     auto s = freshScene();
     worldmodes::setMode(s, worldmodes::Mode::Epic);
     CHECK(worldmodes::setRowValue(s, worldmodes::rayonRowId(), 2), "pin the Rayon dial to Medium");
-    CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1 && giDynamic(s) == 0,
-          "the pin resolved Medium through (VCT, medium, DDGI-fed, 1 bounce, no dynamic probes)");
+    CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
+          "the pin resolved Medium through (VCT, medium, DDGI-fed, 1 bounce)");
     worldmodes::setMode(s, worldmodes::Mode::Low);
     CHECK(giMode(s) == 2 && giQuality(s) == 1,
           "and World Low did NOT switch it off — the pin won");
@@ -301,7 +301,7 @@ static void testNewSceneDefault()
     CHECK(worldmodes::rayonTier(s) == RayonTier::Epic, "at Epic");
     CHECK(giMode(s) == 3 && giQuality(s) == 2 && giDdgi(s) == 1,
           "which is the hybrid, high quality, irradiance field on");
-    CHECK(giBounces(s) == 3 && giDynamic(s) == 0, "with three bounces and no dynamic probes (Epic's column since R0)");
+    CHECK(giBounces(s) == 3, "with three bounces (Epic's column)");
     CHECK(s->giDdgiIntensity == 1.0f, "at the calibrated intensity 1.0");
     CHECK(s->giDdgiSource == -1, "and the field's source left at auto (voxel at every tier)");
 }
@@ -319,7 +319,8 @@ static void testMigration()
     // Background were re-staged under the one-day P2 table and carry
     // giTier=medium with giDdgi normalised to 0 and no field pin: those take
     // the reader's option-(b) bump instead (scenereader.cpp: a tier-carrying
-    // document without `giDynamicProbes` has its tier re-applied, pins
+    // document that never carried the retired `giDynamicProbes` key has its
+    // tier re-applied, pins
     // honoured), which is the tier application section 1 pins — modelled
     // below as the same setRayon call. Mirror Room and Showroom carry
     // giTier=epic and were re-staged by this lane to Epic's columns without
@@ -343,17 +344,17 @@ static void testMigration()
         s->giNumBounces = sm.giBounces;
         s->worldMode = int(worldmodes::Mode::Epic);
         // What the renderer reads, BEFORE.
-        const int mode0 = giMode(s), quality0 = giQuality(s), bounces0 = giBounces(s), dyn0 = giDynamic(s);
+        const int mode0 = giMode(s), quality0 = giQuality(s), bounces0 = giBounces(s);
 
         worldmodes::deriveRayonFromDocument(s);
 
-        // THE ACCEPTANCE CRITERION, option (b): technique, quality, bounces and
-        // dynamic probes did not move — and the untouched field FOLLOWED THE
+        // THE ACCEPTANCE CRITERION, option (b): technique, quality and bounces
+        // did not move — and the untouched field FOLLOWED THE
         // TIER, which for a vct+medium document is ON. That is the owner's
         // re-pin of these five samples (Rayon-2 S1-S3: the DDGI-fed arm is the
         // one that is right in open AND sealed scenes), taken here on purpose.
-        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giBounces(s) == bounces0 && giDynamic(s) == dyn0,
-              qPrintable(QStringLiteral("%1: technique, quality, bounces, dynamic probes preserved").arg(sm.name)));
+        CHECK(giMode(s) == mode0 && giQuality(s) == quality0 && giBounces(s) == bounces0,
+              qPrintable(QStringLiteral("%1: technique, quality, bounces preserved").arg(sm.name)));
         CHECK(giDdgi(s) == 1,
               qPrintable(QStringLiteral("%1: the untouched field follows the tier -> DDGI-fed (the re-pin)").arg(sm.name)));
         CHECK(worldmodes::rayonTier(s) == sm.wantTier, sm.why);
@@ -380,7 +381,7 @@ static void testMigration()
         s->worldMode = int(worldmodes::Mode::Epic);
         s->worldOverrides.insert(worldmodes::rayonRowId(), 2);
         worldmodes::setRayon(s, worldmodes::rayonEnabled(s), worldmodes::rayonTier(s));
-        CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1 && giDynamic(s) == 0,
+        CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
               "Skeletal/World Background: the re-applied Medium tier turns the field on, nothing else moves");
         CHECK(!worldmodes::rayonCustom(s) && s->worldOverrides.value(worldmodes::rayonRowId()).toInt() == 2,
               "reads as Medium (not Custom), dial pin kept");
@@ -404,7 +405,7 @@ static void testMigration()
         s->worldOverrides.insert(QStringLiteral("giQuality"), 2);
         worldmodes::deriveRayonFromDocument(s);
         CHECK(worldmodes::rayonTier(s) == RayonTier::High, "hybrid + high, field untouched -> High");
-        CHECK(giDdgi(s) == 1 && giBounces(s) == 1 && giDynamic(s) == 0, "DDGI-fed, one bounce, no dynamic probes");
+        CHECK(giDdgi(s) == 1 && giBounces(s) == 1, "DDGI-fed, one bounce");
         CHECK(!worldmodes::rayonCustom(s), "reads as High, not Custom");
         CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")) &&
                   !s->worldOverrides.contains(QStringLiteral("giQuality")),
@@ -481,7 +482,7 @@ static void testMigration()
     }
     // A P1-era scene that opted into the field explicitly on the hybrid is
     // the new HIGH row, not Epic: no pre-tier document could have rendered
-    // Epic's bounces or dynamic probes, so Epic is only ever chosen.
+    // Epic's bounces, so Epic is only ever chosen deliberately.
     {
         auto s = freshScene();
         s->giMode = iris::GiMode::VCT_PCC_HYBRID;

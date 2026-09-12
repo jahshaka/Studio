@@ -143,7 +143,7 @@ private:
     /// backing fields, exactly like a World Mode rewrites thirteen).
     void applyRayon(const iris::ScenePtr &scene, bool enabled,
                     worldmodes::RayonTier tier, const QString &undoText);
-    /// The tier's own table row (technique/quality/ddgi/bounces/dynamicProbes),
+    /// The tier's own table row (technique/quality/ddgi/bounces),
     /// before any pin — what world.rayon() reports as `row`.
     static QVariantMap rayonRow(worldmodes::RayonTier tier);
     /// world.rayon()'s read shape, shared by the reader and the writer path.

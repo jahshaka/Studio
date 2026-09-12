@@ -406,10 +406,6 @@ public:
         /// probes re-capture only while stale, so a change is caught up within
         /// ceil(probeCount / this) frames and a still scene spends nothing.
         int  probeUpdatesPerFrame = 0;
-        /// Rayon Epic's DYNAMIC PROBES, resolved: extra moved-covering probe
-        /// re-captures per frame reserved on top of the budget, and how many
-        /// the renderer actually spent on the last frame (0 at rest).
-        int  dynamicProbes = 0, dynamicProbeUpdates = 0;
         /// The union of the probes' fitted parallax shapes (FIX WAVE A2). Must
         /// lie inside the probe region; a shape that escaped it is what makes
         /// reflections go black in hard-edged, cluster-shaped patches.
