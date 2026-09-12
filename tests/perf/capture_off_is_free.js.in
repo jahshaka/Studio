@@ -1,0 +1,99 @@
+// perf.capture_off_is_free — OFF IS OFF (RENDER_LOOP_MONITOR_SPEC §4.1), and
+// the state machine's edges.
+//
+// The monitor's first promise is that it costs nothing when nobody asked for
+// it: at MonitorLevel::Off no listener is attached to any workspace, no ring is
+// allocated, no GPU query pool exists and no clock is read. The first three are
+// facts the engine REPORTS (MonitorStatus), which is why they are asserted here
+// instead of trusted; the fourth cannot be reported, so it is measured — the
+// SAME RUN renders a window of frames with the monitor off, then on, then off
+// again, and the two off windows have to agree.
+//
+// SAME-RUN RATIOS ONLY, never absolute milliseconds: on the rig half of an idle
+// frame is the Xvfb present copy and absolute times vary sixfold between runs
+// (render audit X4). The tolerance below is deliberately loose — this suite
+// catches "the monitor left something attached", not a regression of a few
+// percent, and a test that fails on box noise would be deleted within a week.
+//
+// It also drives the state machine's refusals and the EARLY STOP, which is what
+// Ctrl+F4-pressed-twice does: a short bundle must still be a valid one.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+function windowMs(frames) {
+    var t0 = Date.now();
+    editor.frame(frames);
+    return Date.now() - t0;
+}
+
+var guid = project.create("Capture Off Is Free " + Date.now());
+assert(guid.length > 10, "project.create -> " + guid);
+scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+editor.frame(10);                       // warm: first frames compile shaders
+
+// ---- OFF: the four assertions the engine makes about itself ---------------
+var idle = perf.status();
+assert(idle.phase === "idle", "the monitor starts idle");
+assert(idle.recording === false, "and is not recording");
+assert(idle.engine.level === "off", "the engine's monitor is Off");
+assert(idle.engine.attachedListeners === 0, "no listener is attached to any workspace");
+assert(idle.engine.ringCapacity === 0, "the frame ring is not allocated");
+assert(idle.engine.gpu.queryPools === 0, "no GPU query pool exists");
+assert(perf.mark("nobody is listening") === false,
+       "perf.mark refuses with no capture running (a mark nobody records would be a lie)");
+assert(perf.stop().stopped === false, "perf.stop answers false rather than throwing");
+
+// ---- the three windows ----------------------------------------------------
+var FRAMES = 60;
+var off1 = windowMs(FRAMES);
+var started = perf.capture({ seconds: 30, out: "@JAH_TEST_BUNDLE@" });
+assert(started.started === true, "perf.capture started");
+assert(perf.status().engine.ringCapacity > 0, "the ring is allocated while recording");
+// AFTER a frame, deliberately: the engine rebuilds its attached-listener list
+// every frame (a workspace that died took its listener list with it, so the
+// list is never trusted across one), and the count is therefore 0 between the
+// start and the first frame.
+editor.frame(2);
+assert(perf.status().engine.attachedListeners > 0,
+       "listeners attach while recording (" + perf.status().engine.attachedListeners + ")");
+var on = windowMs(FRAMES);
+// EARLY STOP: the owner's second press of Ctrl+F4.
+var stopped = perf.stop();
+assert(stopped.stopped === true, "perf.stop stopped it early");
+assert(stopped.frames > 0, "the early stop still recorded frames (" + stopped.frames + ")");
+assert(stopped.path.length > 0, "and it names the bundle it wrote");
+var off2 = windowMs(FRAMES);
+
+console.log("windows: off=" + off1 + " on=" + on + " off=" + off2 + " ms for " + FRAMES + " frames");
+
+// ---- OFF AGAIN: back to exactly the state it started in -------------------
+var after = perf.status();
+assert(after.engine.attachedListeners === 0, "every listener detached again");
+assert(after.engine.ringCapacity === 0, "the ring was freed again");
+assert(after.engine.gpu.queryPools === 0, "the GPU query pool was torn down");
+assert(after.phase === "idle", "the state machine is idle again");
+assert(after.lastBundle === stopped.path, "status() remembers the bundle it wrote");
+
+// The two off windows agree. The threshold is a FACTOR, not milliseconds, and
+// it is generous: a monitor that left its listeners attached would not be 30%
+// slower, it would be a different frame (the shadow counter's unconditional
+// attach measurably moved a neighbouring suite's phase — OgreShadow.cpp:783).
+var slower = off2 / Math.max(1, off1);
+assert(slower < 2.0,
+       "the second off window is not slower than the first (" + off1 + " -> " + off2 +
+       " ms, x" + slower.toFixed(2) + ")");
+console.log("recording cost x" + (on / Math.max(1, off1)).toFixed(2) +
+            " of an off window (recorded, never asserted: the monitor judges nothing)");
+
+// A capture with a length shorter than a frame still produces a bundle rather
+// than a half-written directory: the auto-stop is a timer, and the drain at the
+// stop is a LOOP over the engine's holding queue (Engine.h takeFrameRecords).
+var quick = perf.capture({ seconds: 0.2, out: "@JAH_TEST_BUNDLE@-quick" });
+assert(quick.started === true, "a 0.2 s capture starts");
+editor.frame(4);
+var quickStop = perf.stop();
+assert(quickStop.stopped === true, "and stops");
+assert(quickStop.frames > 0, "with frames in it (" + quickStop.frames + ")");

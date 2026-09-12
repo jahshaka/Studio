@@ -1,0 +1,82 @@
+// The app half of perf.capture_bundle — it RECORDS; test_capture_bundle.cpp
+// reads what it wrote and judges it (the scripting engine has no file access,
+// deliberately, so validation lives in the C++ half).
+//
+// What this script arranges, and why each piece is here:
+//   * a project with a cube and a light, so there is geometry to draw;
+//   * a capture into the directory the harness passed in $BUNDLE;
+//   * a NAMED MARK, which the harness looks for in events.jsonl;
+//   * a GI REFRESH and a SHADER COMPILE inside the window — the brief's
+//     "a capture that runs while a GI rebuild and a shader compile happen has
+//     both in events.jsonl with their causes";
+//   * an early stop (perf.stop) rather than waiting out the 20 s: an early
+//     stop must still write a complete, valid, shorter bundle.
+// Everything it learns that the files cannot say for themselves is printed on
+// one CAPTUREBUNDLE line for the harness to compare against.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+// Substituted by CMake (configure_file): the directory the C++ half then reads.
+var bundle = "@JAH_TEST_BUNDLE@";
+
+var guid = project.create("Capture Bundle " + Date.now());
+assert(guid.length > 10, "project.create -> " + guid);
+
+var st = editor.viewportState();
+console.log("viewport state: " + st.state);
+
+// Something to render, and something that will make the engine compile: a new
+// primitive with a fresh material is a new Hlms permutation on first sight.
+scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+editor.frame(4);
+
+var started = perf.capture({ seconds: 30, out: bundle, label: "capture-bundle" });
+assert(started.started === true, "perf.capture started -> " + JSON.stringify(started));
+assert(perf.status().recording === true, "perf.status() says recording");
+assert(perf.status().engine.level === "review", "the engine's monitor is at Review");
+// AFTER a frame: the engine rebuilds its attached-listener list every frame, so
+// the count is 0 between the start of a capture and its first frame.
+editor.frame(2);
+assert(perf.status().engine.attachedListeners > 0,
+       "listeners are attached while recording (" + perf.status().engine.attachedListeners + ")");
+
+// A second capture must be REFUSED, not silently stacked.
+var second = perf.capture({ seconds: 1 });
+assert(second.started === false, "a second capture while one runs is refused");
+
+perf.mark("bundle-marker");
+editor.frame(6);
+
+// A GI refresh inside the window: the engine tags it as an event with its cause.
+world.refreshGi();
+editor.frame(8);
+
+// A PERMUTATION NOTHING HAS SEEN YET -> a shader compile inside the window.
+// Fog is an Hlms piece: switching it on re-compiles every material's shader,
+// which is the most reliable compile a script can ask for.
+scene.addPrimitive("sphere", { position: { x: 2, y: 1, z: 0 } });
+world.setFog({ enabled: true, density: 0.02 });
+editor.frame(10);
+
+// The numbers the files cannot state about themselves.
+var probes = world.giStatus().probeCount;
+var stats = app.renderStats();
+var stopped = perf.stop();
+assert(stopped.stopped === true, "perf.stop -> " + JSON.stringify(stopped));
+assert(stopped.frames > 0, "the capture recorded frames (" + stopped.frames + ")");
+assert(perf.status().recording === false, "the monitor is off again");
+assert(perf.status().engine.attachedListeners === 0, "every listener detached at Off");
+assert(perf.status().engine.ringCapacity === 0, "the ring is freed at Off");
+assert(perf.status().engine.gpu.queryPools === 0, "no GPU query pool survives a capture");
+
+console.log("CAPTUREBUNDLE " + JSON.stringify({
+    path: stopped.path,
+    frames: stopped.frames,
+    events: stopped.events,
+    probes: probes,
+    draws: stats.draws,
+    toast: perf.status().toast,
+}));
