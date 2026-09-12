@@ -144,8 +144,12 @@ int main()
     PbrParams zeroed = sheen;
     zeroed.fresnelColour  = Colour(0, 0, 0);    // ...and the author says
     zeroed.specularColour = Colour(0, 0, 0);    //    "not reflective", with both controls
-    CHECK(addPlate(s, zeroed, Vec3(-2.0f, 1.8f, -3.85f), Vec3(3.9f, 3.4f, 0.12f)) != 0,
+    const MaterialId zeroedMat = s->createPbrMaterial(zeroed);
+    const NodeId zeroedPlate = s->createNode();
+    CHECK(zeroedMat && zeroedPlate &&
+              s->attachMesh(zeroedPlate, s->createMesh(enginetest::unitCubeMesh()), zeroedMat),
           "the zero-reflectance panel attaches");
+    s->setNodeTransform(zeroedPlate, Vec3(-2.0f, 1.8f, -3.85f), Quat(), Vec3(3.9f, 3.4f, 0.12f));
     CHECK(addPlate(s, sheen,  Vec3( 2.0f, 1.8f, -3.85f), Vec3(3.9f, 3.4f, 0.12f)) != 0,
           "the reflective panel attaches");
 
@@ -291,6 +295,7 @@ int main()
     // statement of it, and the instrumented measurement in the lane report
     // counted the flushes it produces: ZERO in 100 pushes.
     {
+        const unsigned churnBefore = s->giStatus().probeGateCrossings;
         PbrParams keep = mirrored;
         for (int i = 0; i < 100; ++i) {
             keep.specularColour = Colour(1.0f - 0.001f * float(i % 10),
@@ -304,6 +309,113 @@ int main()
         CHECK(delta(afterChurn, afterEdit) < 0.02f,
               "(e) 100 ordinary kS pushes leave the picture where it was (no crossing,\n"
               "          and therefore no shader rebuild)");
+        // ...AND THE OTHER HALF OF THAT SENTENCE, MEASURED (round-3 item 9).
+        // "The picture did not move" is not "nothing was flushed" — the shader
+        // could have been rebuilt to the identical result. The engine counts
+        // the crossings the gate causes, so both halves are gateable.
+        CHECK(s->giStatus().probeGateCrossings == churnBefore,
+              "(e) ...and NOTHING was flushed: 100 non-crossing pushes cross the gate\n"
+              "          zero times (the count is the measurement, not the picture)");
+    }
+
+    // ---- (f) A DRAG THROUGH BLACK CROSSES TWICE AND COMES BACK -------------
+    // The one workflow that crosses the gate repeatedly, and the reason the
+    // count is worth having: a user drags Specular Color down through black and
+    // back up. Every frame the drag is AT black rebuilds the shader — bounded
+    // (two crossings for one round trip, and only at the crossing itself), and
+    // the picture has to land exactly where it started.
+    {
+        const unsigned before = s->giStatus().probeGateCrossings;
+        const Colour startPix = afterEdit;
+        PbrParams drag = mirrored;
+        for (int i = 20; i >= 0; --i) {         // 1.0 .. 0.0, a slider dragged to black
+            const float v = float(i) * 0.05f;
+            drag.specularColour = Colour(v, v, v);
+            drag.metalness = v;                 // both controls, as the panel's author would
+            s->setPbrMaterial(editedMat, drag);
+        }
+        const unsigned atBlack = s->giStatus().probeGateCrossings;
+        for (int i = 0; i <= 20; ++i) {         // ...and back
+            const float v = float(i) * 0.05f;
+            drag.specularColour = Colour(v, v, v);
+            drag.metalness = v;
+            s->setPbrMaterial(editedMat, drag);
+        }
+        const unsigned after = s->giStatus().probeGateCrossings;
+        std::printf("   probe-gate crossings: %u -> %u -> %u (41 pushes through black)\n",
+                    before, atBlack, after);
+        CHECK(atBlack == before + 1u,
+              "(f) dragging the slider to black crosses the gate exactly ONCE");
+        CHECK(after == atBlack + 1u,
+              "(f) ...and dragging it back up crosses exactly once more — a drag through\n"
+              "          black is two shader rebuilds, not one per frame");
+        render(engine.get(), 6);
+        view->readPixels(img);
+        const Colour backAgain = img.at(editX, editY);
+        show("runtime plate, after the round trip", backAgain);
+        CHECK(delta(backAgain, startPix) < 0.02f,
+              "(f) ...and the picture lands exactly where the drag started");
+    }
+
+    // ---- (g) CLEAR COAT IS INSIDE THE GATE, AND THE A/B THAT PROVES IT -----
+    // Patch 0028 originally EXCLUDED clear-coated materials, on the stated
+    // grounds that "clearCoatEnvColourS is not multiplied by kS". It is
+    // (200.BRDFs_piece_ps.any:334, this pin):
+    //     Rs += pixelData.clearCoatEnvColourS * pixelData.specular.xyz *
+    //           ( 0.04 * clearCoatEnvBRDF.x + clearCoatEnvBRDF.y ) * pixelData.clearCoat
+    // with pixelData.specular = the datablock's kS, so a zero-kS clear-coated
+    // material provably reflects nothing either and the exclusion bought the
+    // full per-pixel probe loop for a term that is multiplied away.
+    //
+    // THE A/B IS IN ONE BINARY AND ONE FRAME, which is stronger than comparing
+    // two builds: the third push below authors a separate-fresnel F0 of
+    // (0, 5e-4, 0). That is above the predicate's epsilon, so the gate lets go
+    // and the per-pixel probe loop RUNS — proved by the crossing count, not
+    // assumed — while kS stays 0 and the panel's albedo stays black, so every
+    // environment term (the coat's included) is still multiplied away. If the
+    // coat's reflection escaped kS, THIS is the push that would show it.
+    {
+        view->readPixels(img);
+        const Colour gatedPlain = img.at(zeroX, zeroY);
+        const unsigned c0 = s->giStatus().probeGateCrossings;
+
+        PbrParams coated = zeroed;
+        coated.clearCoat = 1.0f;
+        coated.clearCoatRoughness = 0.05f;   // <= the base roughness, so the base
+                                             // layer's roughness lerp is a no-op
+        CHECK(s->setPbrMaterial(zeroedMat, coated), "(g) the clear coat applies");
+        render(engine.get(), 6);
+        view->readPixels(img);
+        const Colour gatedCoated = img.at(zeroX, zeroY);
+        const unsigned c1 = s->giStatus().probeGateCrossings;
+        CHECK(c1 == c0,
+              "(g) a clear coat does NOT cross the gate — the coat is inside the\n"
+              "          predicate, so a zero-reflectance material keeps the loop OFF");
+
+        PbrParams coatedUngated = coated;
+        coatedUngated.separateFresnel = true;
+        coatedUngated.fresnelColour = Colour(0.0f, 0.0005f, 0.0f);   // above kEps: the gate lets go
+        CHECK(s->setPbrMaterial(zeroedMat, coatedUngated), "(g) the un-gating F0 applies");
+        render(engine.get(), 6);
+        view->readPixels(img);
+        const Colour ungatedCoated = img.at(zeroX, zeroY);
+        const unsigned c2 = s->giStatus().probeGateCrossings;
+        CHECK(c2 == c1 + 1u,
+              "(g) ...and THIS push does cross it: the probe loop is now running on a\n"
+              "          clear-coated material whose kS is still zero");
+
+        show("zeroed panel, no coat, gated", gatedPlain);
+        show("zeroed panel, coated, gated", gatedCoated);
+        show("zeroed panel, coated, UNGATED", ungatedCoated);
+        CHECK(delta(gatedCoated, gatedPlain) < 0.002f,
+              "(g) adding a clear coat to a zero-reflectance material moves no pixel");
+        CHECK(delta(ungatedCoated, gatedCoated) < 0.002f,
+              "(g) THE A/B: with the probe loop RUNNING, the clear-coated zero-kS panel\n"
+              "          renders identically to the gated one — kS multiplies the clear\n"
+              "          coat's environment term away too, so folding it into the gate\n"
+              "          is arithmetically free");
+        CHECK(ungatedCoated.r < 0.01f && ungatedCoated.g < 0.01f && ungatedCoated.b < 0.01f,
+              "(g) ...and it is still black: no environment term of any kind reaches it");
     }
 
     engine->destroyScene(s);

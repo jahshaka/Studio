@@ -30,6 +30,8 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
@@ -66,6 +68,17 @@ static int failures = 0;
 static void pump()
 {
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+}
+
+/// Runs the event loop for `ms`, so a TIMER fires — the Reflections row polls
+/// while the panel is visible and nothing else can make that happen.
+static void spin(int ms)
+{
+    QElapsedTimer clock;
+    clock.start();
+    while (clock.elapsed() < ms)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    pump();
 }
 
 /// The widget the panel builds for a labelled row is a wrapper; the control a
@@ -355,7 +368,91 @@ int main(int argc, char **argv)
         row = label();
         CHECK(row && row->isHidden(),
               "...and plain VCT hides the row rather than reporting a grid it never builds");
+
+        // ---- THE ROW IS LIVE, NOT A SNAPSHOT (round-3 item 5) --------------
+        // Its input is the SCENE's LAYOUT, which this panel cannot hear about:
+        // rebuild() runs on setScene and after a World-GI edit, so adding four
+        // walls to an open scene left the row saying "Sky" while the renderer
+        // had already built the grid. It re-reads on show and polls while it is
+        // visible. Driven here by moving the stub's status WITHOUT touching the
+        // panel, exactly as the renderer would.
+        viewport.status.mode = QStringLiteral("vct_pcc_hybrid");
+        viewport.status.probeGridRefused = true;
+        viewport.status.probeCount = 0;
+        panel.setScene(scene);
+        pump();
+        CHECK(label() && valueOf(label()).contains(QStringLiteral("Sky")),
+              "the row starts at 'Sky' for the open scene");
+
+        viewport.status.probeGridRefused = false;      // ...the user builds a room
+        viewport.status.probeCount = 8;
+        pump();                                        // no panel call at all
+        CHECK(valueOf(label()).contains(QStringLiteral("Sky")),
+              "...and nothing has told the panel, so it is still stale here");
+        panel.show();                                  // showEvent re-reads it
+        pump();
+        CHECK(label() && !label()->isHidden() &&
+                  valueOf(label()).contains(QStringLiteral("8 probes")),
+              "SHOWING the panel re-reads the renderer: the row catches up");
+
+        viewport.status.probeCount = 12;               // ...and it keeps up while open
+        spin(1400);                                    // one poll interval (1 s) plus slack
+        CHECK(valueOf(label()).contains(QStringLiteral("12 probes")),
+              "...and the poll keeps it current while the panel is on screen");
+        panel.hide();
+        pump();
+        viewport.status.probeCount = 31;
+        spin(1400);
+        CHECK(!valueOf(label()).contains(QStringLiteral("31 probes")),
+              "...and the poll STOPS when the panel is hidden (it costs nothing closed)");
         panel.setSceneView(nullptr);
+    }
+
+    // ---- 7. AN OFF-DIAL PROBE SIZE SAYS WHAT IT IS (round-3 item 8) --------
+    // `world.gi({probeSize})` takes anything from 64 to 1024 and the dial offers
+    // four of them. A pinned 64 used to select row 0, "Automatic", WITH the pin
+    // mark beside it — the row said the tier decides and the mark said the
+    // author does, which is a contradiction the panel cannot be allowed to
+    // print. An off-dial value gets a row of its own.
+    {
+        const auto probeCombo = [&panel]() -> ComboBoxWidget * {
+            for (ComboBoxWidget *c : panel.findChildren<ComboBoxWidget *>())
+                for (QLabel *l : c->findChildren<QLabel *>())
+                    if (l->text().startsWith(QStringLiteral("Probe Capture"))) return c;
+            return nullptr;
+        };
+        worldmodes::setMode(scene, worldmodes::Mode::Epic);
+        scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        // Exactly what `world.gi({probeSize: 64})` does — the only route to an
+        // off-dial value, and it pins the row as it writes it.
+        scene->giProbeCaptureSize = 64;
+        worldmodes::pinRowValue(scene, QStringLiteral("giProbeSize"), 64);
+        panel.setScene(scene);
+        pump();
+        if (auto *adv = buttonWith(&panel, QStringLiteral("Advanced"))) adv->setChecked(true);
+        pump();
+        ComboBoxWidget *combo = probeCombo();
+        CHECK(combo != nullptr, "the Advanced block has a Probe Capture Size row");
+        if (combo && combo->getWidget()) {
+            QComboBox *box = combo->getWidget();
+            CHECK(box->currentText().contains(QStringLiteral("64")),
+                  "a script-pinned 64 px reads as 64, not as 'Automatic'");
+            CHECK(!box->currentText().contains(QStringLiteral("Automatic")),
+                  "...so the row and its pin mark cannot contradict each other");
+        }
+        // ...and an ON-dial value still uses its own row, with nothing appended.
+        scene->giProbeCaptureSize = 512;
+        worldmodes::pinRowValue(scene, QStringLiteral("giProbeSize"), 512);
+        panel.setScene(scene);
+        pump();
+        if (auto *adv = buttonWith(&panel, QStringLiteral("Advanced"))) adv->setChecked(true);
+        pump();
+        combo = probeCombo();
+        if (combo && combo->getWidget()) {
+            QComboBox *box = combo->getWidget();
+            CHECK(box->count() == 4 && box->currentText().contains(QStringLiteral("512")),
+                  "an on-dial value keeps the four-row dial and picks its own row");
+        }
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

@@ -21,14 +21,33 @@
 // enormous floor, and a measurement that cannot see it is worthless however
 // well it does on a test-sized world.
 //
-//   1. four 10 m walls + a mirror     ENCLOSED, probes built
-//   2. four 30 m walls                ENCLOSED
+//   1. four 10 m walls + a mirror     ENCLOSED, probes built, region [-4.9, 4.9]
+//   2. four 30 m walls                ENCLOSED               region [-14.8, 14.8]
 //   3. four walls + a ceiling         ENCLOSED (all three axes)
 //   4. ground + props, no walls       OPEN — no probes, and the SKY reflects
 //   5. ground + one large object      OPEN
 //   6. four corner pillars            OPEN (a pillar is not a slab, at any size)
+//   7. case 1 built at x = +25        ENCLOSED, region x = [20, 30]
+//   8. case 3 built at x = +25        ENCLOSED, region x = [20, 30]
+//   9. case 1 + a wall shelf at y=2.2 ENCLOSED, region y still [0, 4]
+//  10. a hall open on X, one
+//      full-height partition in it    ENCLOSED on Y+Z, region NOT cut at the partition
+//  11. case 1 + a tabletop            ENCLOSED, region unchanged
+//  12. case 1 + a rug                 ENCLOSED, region unchanged
+//      pinned bounds on open geometry grid built anyway (the escape hatch)
 //
-// Cases 7 and 8 of the contract — the Mirror Room's free-standing MirrorPanel
+// ROWS 7-12 EXIST BECAUSE ROWS 1-6 COULD NOT SEE THE ROUND-2 DEFECTS (the
+// lead's round-3 send-back, 2026-09-13): every one of them was built
+// symmetrically about the world origin and held no furniture, so a table of
+// them was a demonstration rather than a contract. It varies POSITION and
+// CONTENT now. Measured RED on the tip before the R1/R2/R3 rules landed:
+//   7  enclosedAxes 1, refused, region x = [-22.47, 29.90]   (the room lost its
+//                                                             reflections)
+//   8  region x = [-19.60, 29.90]   (a 10 m room's probes fitted over 50 m)
+//   9  region y = [0.00, 2.05]      (a shelf read as the ceiling)
+//  10  region x = [-0.90, 34.00]    (the whole -X half of the hall dropped)
+//
+// Two further contract rows — the Mirror Room's free-standing MirrorPanel
 // (defect A1) and the Grand Showroom's columns (defect A2) — live in
 // gi.pcc_bounds, which already models both; they are named here so the table is
 // readable as a whole.
@@ -83,15 +102,30 @@ static void addDefaultGround(Scene *s)
     addBox(s, Colour(0.45f, 0.45f, 0.45f), Vec3(0.0f, -0.1f, 0.0f), Vec3(100.0f, 0.2f, 100.0f));
 }
 
-/// Four walls of the given half-span, height and thickness, centred on origin.
-static void addWalls(Scene *s, float span, float height, float thick = 0.2f)
+/// Four walls of the given half-span, height and thickness, around (cx, cz).
+/// The CENTRE is a parameter because "where on the ground did the author build
+/// it" is a question the measurement has to be indifferent to (contract rows 7
+/// and 8): a room is a room at the origin and at x = +25.
+static void addWalls(Scene *s, float span, float height, float thick = 0.2f,
+                     float cx = 0.0f, float cz = 0.0f)
 {
     const Colour white(0.85f, 0.85f, 0.85f);
     const float y = height * 0.5f, outer = span * 2.0f + thick * 2.0f;
-    addBox(s, white, Vec3(-span, y, 0.0f), Vec3(thick, height, outer));
-    addBox(s, white, Vec3( span, y, 0.0f), Vec3(thick, height, outer));
-    addBox(s, white, Vec3(0.0f, y, -span), Vec3(outer, height, thick));
-    addBox(s, white, Vec3(0.0f, y,  span), Vec3(outer, height, thick));
+    addBox(s, white, Vec3(cx - span, y, cz), Vec3(thick, height, outer));
+    addBox(s, white, Vec3(cx + span, y, cz), Vec3(thick, height, outer));
+    addBox(s, white, Vec3(cx, y, cz - span), Vec3(outer, height, thick));
+    addBox(s, white, Vec3(cx, y, cz + span), Vec3(outer, height, thick));
+}
+
+/// A mirror cube: the thing whose reflections the whole feature is about.
+static void addMirror(Scene *s, const Vec3 &pos, float size = 1.8f)
+{
+    PbrParams mirrorP; mirrorP.albedo = Colour(1, 1, 1);
+    mirrorP.metalness = 1.0f; mirrorP.roughness = 0.0f;
+    const NodeId mirror = s->createNode();
+    s->attachMesh(mirror, s->createMesh(enginetest::unitCubeMesh()),
+                  s->createPbrMaterial(mirrorP));
+    s->setNodeTransform(mirror, pos, Quat(), Vec3(size, size, size));
 }
 
 /// The sky, in two separately coloured halves so "the sky IBL is bound" is a
@@ -171,12 +205,7 @@ int main()
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
         addDefaultGround(s);
         addWalls(s, 5.0f, 4.0f);
-        PbrParams mirrorP; mirrorP.albedo = Colour(1, 1, 1);
-        mirrorP.metalness = 1.0f; mirrorP.roughness = 0.0f;
-        const NodeId mirror = s->createNode();
-        s->attachMesh(mirror, s->createMesh(enginetest::unitCubeMesh()),
-                      s->createPbrMaterial(mirrorP));
-        s->setNodeTransform(mirror, Vec3(0.0f, 1.4f, 0.0f), Quat(), Vec3(1.8f, 1.8f, 1.8f));
+        addMirror(s, Vec3(0.0f, 1.4f, 0.0f));
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 2.6f, 5.0f), Vec3(0.0f, 1.4f, 0.0f));
 
@@ -307,6 +336,151 @@ int main()
         report("6. four corner pillars", v);
         CHECK(v.enclosedAxes < 2, "6: pillars enclose nothing");
         CHECK(v.refused && v.probes == 0, "6: ...so no probes, and the sky reflects");
+        engine->destroyScene(s);
+    }
+
+    // ---- 7. THE SAME ROOM, BUILT SOMEWHERE ELSE ON THE GROUND --------------
+    // Case 1 verbatim, translated to x = +25. NOTHING about a room changes when
+    // the author builds it away from the world origin, and a measurement that
+    // says otherwise is measuring the world rather than the layout. Red before
+    // the round-3 rules: the old test asked which side of the CONTENT CENTRE a
+    // slab sat on, and with the 100 m ground being the content on X and Z that
+    // centre IS the world origin — measured enclosedAxes 1 and region
+    // x = [-50.00, 12.90], i.e. the room lost its reflections by being built
+    // 25 m from the middle of its own floor.
+    {
+        Scene *s = engine->createScene("room10_offset");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f, 0.2f, 25.0f, 0.0f);
+        addMirror(s, Vec3(25.0f, 1.4f, 0.0f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        const Verdict v = measure(engine.get(), s);
+        report("7. case 1 translated to x=+25", v);
+        CHECK(v.enclosedAxes >= 2, "7: a room is a room wherever on the ground it stands");
+        CHECK(!v.refused && v.probes == 4, "7: ...so the probe grid is built");
+        CHECK(v.regionMin.x > 19.5f && v.regionMin.x < 20.5f &&
+              v.regionMax.x > 29.5f && v.regionMax.x < 30.5f,
+              "7: ...and the region is THAT room, x=[20,30] — not [-50,30]");
+        CHECK(v.regionMin.z > -6.0f && v.regionMax.z < 6.0f,
+              "7: ...with Z unchanged by the translation");
+        engine->destroyScene(s);
+    }
+
+    // ---- 8. THE ROOFED ROOM, BUILT SOMEWHERE ELSE --------------------------
+    // Case 3 translated the same way. This is the worse half of the same
+    // defect: the roof carried the verdict, so the grid WAS built — over a
+    // region spanning the whole 80 m of ground from the world origin to the far
+    // wall (measured x = [-50.00, 29.90] for a 10 m room), which is precisely
+    // the oversized-region shrink-fit chain A1/A2 exist to prevent.
+    {
+        Scene *s = engine->createScene("roofed_offset");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f, 0.2f, 25.0f, 0.0f);
+        addBox(s, Colour(0.85f, 0.85f, 0.85f), Vec3(25.0f, 4.1f, 0.0f), Vec3(10.4f, 0.2f, 10.4f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        const Verdict v = measure(engine.get(), s);
+        report("8. case 3 (roofed) translated to x=+25", v);
+        CHECK(v.enclosedAxes >= 2, "8: the roofed room encloses too, off the origin");
+        CHECK(!v.refused && v.probes == 4, "8: ...so the probe grid is built");
+        CHECK(v.regionMin.x > 19.5f && v.regionMax.x < 30.5f,
+              "8: ...and over the ROOM, x=[20,30] — not the 80 m from the origin to it");
+        engine->destroyScene(s);
+    }
+
+    // ---- 9. A WALL SHELF IS NOT A CEILING ----------------------------------
+    // Case 1 with a 2.0 x 0.3 x 0.8 shelf mounted at y = 2.2. It is thin and
+    // broad RELATIVE TO ITSELF, so it is a Y slab — and being the outermost one
+    // above the floor it used to be read as the room's ceiling: region
+    // y = [0.00, 2.05], every probe in the bottom half of the room and the
+    // parallax boxes clamped to match. Shelves, mezzanine lips, hanging panels
+    // and suspended light boxes are ordinary interior objects; what separates
+    // a ceiling from them is that a ceiling COVERS the room.
+    {
+        Scene *s = engine->createScene("shelf");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f);
+        addMirror(s, Vec3(0.0f, 1.4f, 0.0f));
+        addBox(s, Colour(0.7f, 0.6f, 0.5f), Vec3(0.0f, 2.2f, -4.5f), Vec3(2.0f, 0.3f, 0.8f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        const Verdict v = measure(engine.get(), s);
+        report("9. case 1 + a 2.0 x 0.3 m wall shelf at y=2.2", v);
+        CHECK(v.enclosedAxes >= 2, "9: the room still measures ENCLOSED");
+        CHECK(!v.refused && v.probes == 4, "9: ...so the probe grid is built");
+        CHECK(v.regionMax.y > 3.5f && v.regionMin.y > -0.5f && v.regionMin.y < 0.5f,
+              "9: ...and the region is still floor-to-ceiling, y=[0,4] — a shelf is furniture");
+        engine->destroyScene(s);
+    }
+
+    // ---- 10. A PARTITION IN A HALL THAT IS OPEN ON X -----------------------
+    // A 40 m hall with two long walls and a roof — enclosed on Y and Z, open at
+    // both ends — and a full-height partition standing across it at x = -1.
+    // The partition is the only X slab there is, and the old pull ran whenever
+    // a slab sat beyond the content centre INDEPENDENTLY of whether the axis
+    // enclosed: region x came back [-0.90, 50.00], dropping the whole -X half
+    // of the hall, and the grid was still built because Y and Z carried the
+    // verdict. A lone slab with the hall on both sides of it closes nothing.
+    {
+        Scene *s = engine->createScene("hall");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        const Colour white(0.85f, 0.85f, 0.85f);
+        addDefaultGround(s);
+        addBox(s, white, Vec3(0.0f, 2.0f, -4.0f), Vec3(40.0f, 4.0f, 0.2f));
+        addBox(s, white, Vec3(0.0f, 2.0f,  4.0f), Vec3(40.0f, 4.0f, 0.2f));
+        addBox(s, white, Vec3(0.0f, 4.1f,  0.0f), Vec3(40.4f, 0.2f, 8.4f));   // the roof
+        addBox(s, white, Vec3(-1.0f, 2.0f, 0.0f), Vec3(0.2f, 4.0f, 8.0f));    // THE partition
+        addMirror(s, Vec3(6.0f, 1.4f, 0.0f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        const Verdict v = measure(engine.get(), s);
+        report("10. a hall open on X, with a full-height partition at x=-1", v);
+        CHECK(v.enclosedAxes >= 2, "10: the hall encloses on Y and Z");
+        CHECK(!v.refused && v.probes == 4, "10: ...so the probe grid is built");
+        CHECK(v.regionMin.x < -10.0f,
+              "10: ...and the region is NOT truncated at the partition's face (x=-0.9)");
+        CHECK(v.regionMax.y < 4.2f && v.regionMin.z > -4.1f && v.regionMax.z < 4.1f,
+              "10: ...while the two axes that DO enclose are the hall's own");
+        engine->destroyScene(s);
+    }
+
+    // ---- 11-12. ORDINARY FURNITURE CHANGES NOTHING -------------------------
+    // A tabletop and a rug are both thin-and-broad, i.e. both Y slabs by shape.
+    // Neither covers the room, so neither can close a face; the region is case
+    // 1's, unchanged, in both.
+    {
+        Scene *s = engine->createScene("tabletop");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f);
+        addMirror(s, Vec3(0.0f, 1.4f, 0.0f));
+        addBox(s, Colour(0.5f, 0.35f, 0.2f), Vec3(-2.0f, 0.75f, 1.0f), Vec3(1.2f, 0.06f, 0.9f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        const Verdict v = measure(engine.get(), s);
+        report("11. case 1 + a tabletop", v);
+        CHECK(v.enclosedAxes >= 2 && !v.refused && v.probes == 4, "11: still a room");
+        CHECK(v.regionMax.y > 3.5f, "11: ...and the tabletop is not the ceiling");
+        engine->destroyScene(s);
+    }
+    {
+        Scene *s = engine->createScene("rug");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f);
+        addMirror(s, Vec3(0.0f, 1.4f, 0.0f));
+        addBox(s, Colour(0.4f, 0.15f, 0.15f), Vec3(0.0f, 0.06f, 0.0f), Vec3(3.0f, 0.12f, 2.0f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        const Verdict v = measure(engine.get(), s);
+        report("12. case 1 + a rug", v);
+        CHECK(v.enclosedAxes >= 2 && !v.refused && v.probes == 4, "12: still a room");
+        CHECK(v.regionMin.y > -0.5f && v.regionMin.y < 0.5f && v.regionMax.y > 3.5f,
+              "12: ...and the floor is still the floor (a rug on it is not a second one)");
         engine->destroyScene(s);
     }
 

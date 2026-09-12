@@ -26,6 +26,7 @@ class IEditorViewport;
 class CheckBoxWidget;
 class DragVector3Widget;
 class QPushButton;
+class QTimer;
 struct StudioServices;
 
 /**
@@ -123,6 +124,19 @@ private:
     bool advancedResettable() const;
     void addResetAdvancedButton();
 
+protected:
+    /// THE ROW IS A LIVE READING, SO IT HAS TO BE READ WHILE IT IS ON SCREEN
+    /// (round-3 item 5). `rebuild()` runs on setScene and after a World-GI
+    /// edit, and nothing else: add four walls to an open scene and the row went
+    /// on saying "Sky" while the renderer had already built the grid. It is
+    /// refreshed when the panel is shown, and polled while it is visible — the
+    /// input is the SCENE's layout, which nothing in this panel can hear about.
+    /// The poll stops the moment the panel is hidden.
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+
+private:
+
     QSharedPointer<iris::Scene> scene;
     StudioServices *services = nullptr;
     IEditorViewport *sceneView = nullptr;
@@ -139,6 +153,11 @@ private:
     DragVector3Widget *pccGrid = nullptr;
     ComboBoxWidget *probeSize = nullptr;
     LabelWidget *reflectionsRow = nullptr;
+    /// Polls refreshReflectionsRow while the panel is visible (see showEvent).
+    QTimer *reflectionsPoll = nullptr;
+    /// The last text written into `reflectionsRow` (LabelWidget has no getter),
+    /// so the poll only touches the widget when the reading actually moved.
+    QString reflectionsText;
     HFloatSliderWidget *updateBudget = nullptr;
     CheckBoxWidget *ddgiToggle = nullptr;
     HFloatSliderWidget *ddgiIntensity = nullptr;

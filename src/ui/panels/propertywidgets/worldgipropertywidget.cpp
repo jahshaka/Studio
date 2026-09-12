@@ -28,8 +28,12 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "ui_hfloatsliderwidget.h"
 
+#include <QHideEvent>
+#include <QCoreApplication>
 #include <QPointer>
 #include <QPushButton>
+#include <QShowEvent>
+#include <QTimer>
 #include <QSignalBlocker>
 #include <QVector3D>
 
@@ -48,7 +52,17 @@ int probeSizeRow(int px)
 {
     for (int i = 0; i < kProbeSizeRowCount; ++i)
         if (kProbeSizeRows[i] == px) return i;
-    return 0;   // anything a script pinned that is not on the dial reads Automatic
+    return -1;  // off the dial — see probeSizeOffDialLabel
+}
+/// `world.gi({probeSize})` accepts anything from 64 to 1024, and the dial only
+/// offers four of them. Showing 64 or 1024 as "Automatic" WITH the pin mark
+/// beside it read as a contradiction — the row said the tier decides and the
+/// mark said the author does (round-3 item 8). An off-dial value gets its own
+/// row instead, so the combo always says what is actually in force; picking any
+/// other row replaces it, and the temporary row goes away on the next rebuild.
+QString probeSizeOffDialLabel(int px)
+{
+    return QCoreApplication::translate("WorldGiPropertyWidget", "%1 px (set by script)").arg(px);
 }
 int probeSizeValue(int row)
 {
@@ -96,7 +110,7 @@ void WorldGiPropertyWidget::rebuild()
     rayonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;
     quality = nullptr; lightSelector = nullptr; bounces = nullptr;
     boundsMin = nullptr; boundsMax = nullptr;
-    pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr;
+    pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr; reflectionsText.clear();
     updateBudget = nullptr; ddgiToggle = nullptr;
     ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
     fitBoundsButton = nullptr; advancedButton = nullptr; resetAdvancedButton = nullptr;
@@ -360,7 +374,16 @@ void WorldGiPropertyWidget::rebuild()
             probeSize->addItem(tr("128 px"));
             probeSize->addItem(tr("256 px"));
             probeSize->addItem(tr("512 px"));
-            probeSize->setCurrentIndex(probeSizeRow(scene->giProbeCaptureSize));
+            {
+                const int row = probeSizeRow(scene->giProbeCaptureSize);
+                if (row >= 0) {
+                    probeSize->setCurrentIndex(row);
+                } else {
+                    // Off-dial (64..1024 through world.gi): shown as itself.
+                    probeSize->addItem(probeSizeOffDialLabel(scene->giProbeCaptureSize));
+                    probeSize->setCurrentIndex(kProbeSizeRowCount);
+                }
+            }
             probeSize->setToolTip(
                 tr("The pixel size of ONE reflection-probe cube face. A probe is six of them "
                    "plus a mip chain, so the probe array's video memory goes with the SQUARE "
@@ -472,11 +495,46 @@ void WorldGiPropertyWidget::refreshReflectionsRow()
         reflectionsRow->hide();     // no probe arm in this technique: nothing to report
         return;
     }
-    reflectionsRow->setText(st.probeGridRefused
-                                ? tr("Sky")
-                                : (st.probeCount == 1 ? tr("1 probe")
-                                                      : tr("%1 probes").arg(st.probeCount)));
+    const QString text = st.probeGridRefused
+                             ? tr("Sky")
+                             : (st.probeCount == 1 ? tr("1 probe")
+                                                   : tr("%1 probes").arg(st.probeCount));
+    // Only write when it MOVED: this runs on a timer while the panel is open,
+    // and a setText per second would repaint the row forever. LabelWidget has
+    // no getter, so the last value written is kept here.
+    if (reflectionsText != text) { reflectionsText = text; reflectionsRow->setText(text); }
     reflectionsRow->show();
+}
+
+// THE POLL (round-3 item 5). What this row reports is decided by the LAYOUT of
+// the scene — the renderer measures the walls and either builds a probe grid or
+// leaves the sky bound — and the panel hears about none of that: rebuild() runs
+// on setScene and after a World-GI edit only, so adding four walls to an open
+// scene left the row saying "Sky" while the grid was already live, which is
+// exactly the row a puzzled author would be reading. Same shape as the MSAA
+// section's achieved row (one cheap read of the viewport's status struct), with
+// a timer because the input is not an edit this panel can connect to.
+//
+// It costs nothing while the panel is closed: the timer only runs between show
+// and hide, and the row is skipped entirely without a viewport or outside the
+// hybrid.
+void WorldGiPropertyWidget::showEvent(QShowEvent *event)
+{
+    AccordianBladeWidget::showEvent(event);
+    refreshReflectionsRow();
+    if (!reflectionsPoll) {
+        reflectionsPoll = new QTimer(this);
+        reflectionsPoll->setInterval(1000);
+        connect(reflectionsPoll, &QTimer::timeout, this,
+                &WorldGiPropertyWidget::refreshReflectionsRow);
+    }
+    reflectionsPoll->start();
+}
+
+void WorldGiPropertyWidget::hideEvent(QHideEvent *event)
+{
+    if (reflectionsPoll) reflectionsPoll->stop();
+    AccordianBladeWidget::hideEvent(event);
 }
 
 bool WorldGiPropertyWidget::advancedResettable() const
@@ -673,6 +731,10 @@ void WorldGiPropertyWidget::onQualityChanged(int row)
 void WorldGiPropertyWidget::onProbeSizeChanged(int row)
 {
     if (!scene) return;
+    // The appended off-dial row (a script-pinned 64 or 1024) is a DISPLAY of
+    // what is in force, not a choice: re-picking it must not quietly rewrite
+    // the pin to Automatic, which is what probeSizeValue would answer for it.
+    if (row < 0 || row >= kProbeSizeRowCount) return;
     editRayonRow(QStringLiteral("giProbeSize"), probeSizeValue(row), tr("Rayon Probe Capture Size"));
 }
 
