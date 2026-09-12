@@ -34,6 +34,27 @@ set_tests_properties(document.characterisation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.characterisation)
 
+# document.mobility — THE RESOLUTION RULE (SPECS/REALTIME_REFLECTIONS_SPEC.md
+# §3.3.2): which objects the renderer may bake into the room's lighting and
+# which it has to handle per frame. Every driver with its own reason, rule 2's
+# parent inheritance, the user's setting (including where a driver openly beats
+# it), the "an editor drag does NOT promote" claim the whole design rests on —
+# a promotion costs a from-scratch GI rebuild — and the play-scoped soft
+# promotion. Document only: NULL render system, no display.
+add_executable(test_mobility test_mobility.cpp)
+set_target_properties(test_mobility PROPERTIES AUTOMOC OFF)
+target_include_directories(test_mobility PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_mobility PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_mobility)
+add_test(NAME document.mobility COMMAND test_mobility
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.mobility PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.mobility)
+
 # The leak lane (scripts/sanitize.sh lsan): the document model itself — every
 # node, mesh, material and animation type constructed and dropped. No Vulkan,
 # no app process, so LeakSanitizer runs with detect_leaks=1 here.

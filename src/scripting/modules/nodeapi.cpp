@@ -99,10 +99,10 @@ QVector<VerbInfo> NodeApi::verbs() const
           "(a light, an empty, a bone) \u2014 that is not an error, it is the measurement.",
           Needs::Document },
         { "property", "node.property(id, key) -> value",
-          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, spotFalloff, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values. A mesh's `faceCullingMode` comes back as a NAME (\"none\" | \"front\" | \"back\" | \"material\"), never as the document's ordinal.",
+          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, spotFalloff, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values. The ENUM rows come back as NAMES, never as the document's ordinal: a mesh's `faceCullingMode` (\"none\" | \"front\" | \"back\" | \"material\") and every node's `mobility` (\"auto\" | \"static\" | \"movable\" — node.mobility(id) is the fuller read, with what auto resolved to and why).",
           Needs::Document },
         { "setProperty", "node.setProperty(id, key, value) -> bool",
-          "Writes a reflected property (same keys as node.property; node.properties(id) lists them, and says which are writable). Enum rows travel as NAMES: a mesh's `faceCullingMode` takes \"none\" | \"front\" | \"back\" | \"material\" (\"material\" = the material decides, which is the default), and an ordinal is refused with that list. Undoable — the write rides the run's undo macro.",
+          "Writes a reflected property (same keys as node.property; node.properties(id) lists them, and says which are writable). Enum rows travel as NAMES: a mesh's `faceCullingMode` takes \"none\" | \"front\" | \"back\" | \"material\" (\"material\" = the material decides, which is the default), and `mobility` takes \"auto\" | \"static\" | \"movable\" (does this object move? — node.mobility(id) explains what auto resolves to); an ordinal is refused with that list. Undoable — the write rides the run's undo macro.",
           Needs::Document },
         { "properties", "node.properties(id) -> [{name, displayName, type, value, min?, max?, options?, writable}]",
           "Every property this node reflects, in the order the document declares them — the "
@@ -113,7 +113,7 @@ QVector<VerbInfo> NodeApi::verbs() const
           "unbounded, not 0..0. 'writable' false means node.setProperty will refuse the row "
           "(a mesh's meshPath/meshIndex, a particle emitter's texture): those need an operation "
           "reflection cannot do, and have their own verbs. 'options' is present on the ENUM rows "
-          "(today: a mesh's faceCullingMode) and lists the exact names the row accepts — the "
+          "(every node's mobility, a mesh's faceCullingMode) and lists the exact names the row accepts — the "
           "value is one of those names, never an ordinal. The light and decal ASSET bindings "
           "(IES profile, area mask, decal image) are not rows here — node.setLightProfile, "
           "node.setLightTexture and node.setDecalTexture own them.",
@@ -251,32 +251,33 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "folder", "node.folder(id) -> path",
           "Which outliner folder this node is filed under, \"\" for the root level.",
           Needs::Document },
-        { "setStatic", "node.setStatic(id, value) -> bool",
-          "Declares that this object and everything under it NEVER MOVE "
-          "(SPECS/SCENEGRAPH_SPEC.md §6). A static subtree is skipped entirely by the engine's "
-          "per-frame transform AND bounds passes — they run for it only on the frames something "
-          "in it changed — which is where the scene graph's headroom at high node counts comes "
-          "from. Ground, architecture and imported props are marked automatically when they join "
-          "the scene and when a project loads; this verb is the manual override.\n\n"
-          "FOUR RULES, all enforced. (1) It applies to the WHOLE SUBTREE, never to one node: the "
-          "engine gives a child its parent's class and propagates that down, so nothing else is "
-          "expressible. (2) A static object's PARENT must be static, or be the scene root — "
-          "marking something under a moving parent is refused, because it would freeze in place "
-          "when the parent moved. (3) Objects whose renderable cannot change class refuse "
-          "outright: lights, particle systems, decals, cameras, viewers, physics bodies, socket "
-          "riders, animated nodes and skinned characters. (4) MOVING A STATIC OBJECT UNDOES IT — "
-          "the first transform write demotes the subtree and clears the flag, so you can never "
-          "get a wrong picture out of a stale mark, and you never pay a static rebuild per frame "
-          "while dragging.\n\n"
-          "NOT saved with the scene: the classification is re-derived on load from the same "
-          "rules. Not undoable.",
-          Needs::Document },
-        { "isStatic", "node.isStatic(id) -> bool",
-          "Whether this object actually lives in the static (never-moving) half of the scene "
-          "graph — the OUTCOME, not the ask: a child under a static parent answers true even "
-          "though nobody marked it by name, and a mark the graph refused answers false "
-          "(node.setStatic reports the refusal at the time). Unrelated to "
-          "node.physicsInfo(id).isStatic, which is the physics body type.",
+        { "mobility", "node.mobility(id) -> {setting, resolved, reason, graphStatic}",
+          "DOES THIS THING MOVE? — the one classification the renderer reads "
+          "(SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3). `setting` is what a human chose: "
+          "\"auto\" (the default, nobody said), \"static\" or \"movable\", written with "
+          "node.setProperty(id, 'mobility', name). `resolved` is what that WORKS OUT TO right "
+          "now — \"static\" or \"movable\" — and `reason` says why, which is the whole point of "
+          "the verb.\n\n"
+          "THE RULE, first match wins: (1) a DRIVER on the object itself — \"physics\" (a "
+          "physics body), \"avatar\" (a character), \"socket\" (it rides a bone on something "
+          "else), \"animation\" (an animation with real channels), \"skeleton\" (a rig with a "
+          "clip), \"particles\" (an emitter); (2) \"parent\" — its parent moves, so it travels "
+          "with it; (3) \"user\" — the explicit setting; (4) \"play\" — it started moving "
+          "during play with nothing predicting it (see below); (5) \"default\" — nothing "
+          "moves it, so it is treated as fixed.\n\n"
+          "IT IS PREDICTIVE, NEVER \"it moved\". Dragging an object in the editor does NOT make "
+          "it movable: changing an object's class makes the renderer rebuild the room's "
+          "lighting from scratch, and doing that in the middle of a drag is exactly the "
+          "half-second freeze this design removes. Nothing ever goes back to fixed on its own "
+          "either — remove the driver, or set it by hand.\n\n"
+          "A setting that cannot hold is RECORDED, not refused: \"static\" on a physics body "
+          "reads back as setting \"static\", resolved \"movable\", reason \"physics\", and "
+          "becomes true the moment the body is removed.\n\n"
+          "`graphStatic` is a DIFFERENT question and is reported for diagnostics only: whether "
+          "the object really sits in the never-moving half of the scene graph, an engine-side "
+          "cost optimisation (SCENEGRAPH_SPEC §6). A light is never graphStatic — its "
+          "renderable cannot switch class — and is perfectly `static` mobility, because it does "
+          "not move. Moving an object clears graphStatic and leaves the mobility setting alone.",
           Needs::Document },
         { "physics", "node.physics(id, {type, shape, mass, restitution, friction, damping, collisionMargin}) -> bool",
           "Makes the node a physics body and/or edits its body settings — the Properties panel's "
@@ -518,33 +519,22 @@ QString NodeApi::folder(const QString &id)
     return node->getFolderPath();
 }
 
-bool NodeApi::setStatic(const QString &id, bool value)
+QVariantMap NodeApi::mobility(const QString &id)
 {
-    auto node = nodeOrFail(id, QStringLiteral("node.setStatic"));
-    if (!node) return false;
-    node->setStaticHint(value);
-    // Report what the GRAPH did, not what was asked. The two disagree exactly
-    // when one of node.setStatic's rules refused the change, and a verb that
-    // answered true regardless would be lying about the only thing this call is
-    // for. `isStaticInGraph()` is the outcome; `staticHint()` is the intent.
-    if (node->isStaticInGraph() != value)
-        return fail(QStringLiteral("node.setStatic: '%1' would not switch — a static object's "
-                                   "parent must be static or be the scene root, and lights, "
-                                   "particle systems, decals, cameras, viewers, physics bodies, "
-                                   "socket riders, animated and skinned nodes are never static")
-                        .arg(node->getName()));
-    return true;
-}
-
-bool NodeApi::isStatic(const QString &id)
-{
-    auto node = nodeOrFail(id, QStringLiteral("node.isStatic"));
-    if (!node) return false;
-    // The OUTCOME, same honesty rule as node.setStatic's return: a child that
-    // inherited static from a static parent answers true (it IS in the static
-    // manager) even though nobody asked for it by name; a hint the graph
-    // refused answers false. The ask surfaces through setStatic's refusal.
-    return node->isStaticInGraph();
+    QVariantMap out;
+    auto node = nodeOrFail(id, QStringLiteral("node.mobility"));
+    if (!node) return out;
+    iris::MobilityReason why = iris::MobilityReason::Default;
+    const iris::Mobility resolved = node->resolvedMobility(&why);
+    out.insert(QStringLiteral("setting"),
+               QString::fromLatin1(iris::mobilityName(node->mobility())));
+    out.insert(QStringLiteral("resolved"), QString::fromLatin1(iris::mobilityName(resolved)));
+    out.insert(QStringLiteral("reason"), QString::fromLatin1(iris::mobilityReasonName(why)));
+    // The OUTCOME of the graph's own classification, which is not the same
+    // question (see the verb's doc): a child under a static parent answers true
+    // though nobody marked it, and a light answers false whatever its mobility.
+    out.insert(QStringLiteral("graphStatic"), node->isStaticInGraph());
+    return out;
 }
 
 bool NodeApi::remove(const QString &id)
@@ -755,6 +745,27 @@ int cullModeValue(const QString &name)
         if (wanted == QLatin1String(row.name)) return row.value;
     return -1;
 }
+
+// ---- mobility: the second ENUM row, same rule (names, never ordinals) ------
+// The names are the DOCUMENT's (iris::mobilityName), so the file, the verb, the
+// panel and this surface cannot drift apart.
+QStringList mobilityNames()
+{
+    return { QStringLiteral("auto"), QStringLiteral("static"), QStringLiteral("movable") };
+}
+
+QString mobilityRowName(int value)
+{
+    return QString::fromLatin1(iris::mobilityName(static_cast<iris::Mobility>(value)));
+}
+
+/// -1 when the name is not one of ours.
+int mobilityRowValue(const QString &name)
+{
+    iris::Mobility m = iris::Mobility::Auto;
+    if (!iris::mobilityFromName(name, m)) return -1;
+    return int(m);
+}
 } // namespace
 
 QVariant NodeApi::properties(const QString &id)
@@ -779,6 +790,11 @@ QVariant NodeApi::properties(const QString &id)
             row["value"] = cullModeName(row.value(QStringLiteral("value")).toInt());
             row["options"] = QVariant(cullModeNames());
         }
+        if (prop->name == QLatin1String("mobility")) {
+            row["type"] = QStringLiteral("list");
+            row["value"] = mobilityRowName(row.value(QStringLiteral("value")).toInt());
+            row["options"] = QVariant(mobilityNames());
+        }
         out.append(row);
     }
     qDeleteAll(props);
@@ -796,6 +812,7 @@ QVariant NodeApi::property(const QString &id, const QString &key)
         return QVariant();
     }
     if (key == QLatin1String("faceCullingMode")) return cullModeName(value.toInt());
+    if (key == QLatin1String("mobility")) return mobilityRowName(value.toInt());
     switch (value.typeId()) {
     case QMetaType::QVector3D: return vecToJs(iris::fromQt(value.value<QVector3D>()));
     case QMetaType::QColor:    return colorToJs(value.value<QColor>());
@@ -830,6 +847,14 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
                                        "(%2) — this enum travels as a NAME, never as an ordinal")
                             .arg(value.toString(), cullModeNames().join(QStringLiteral(", "))));
         converted = mode;
+    }
+    if (key == QLatin1String("mobility")) {
+        const int m = mobilityRowValue(value.toString());
+        if (m < 0)
+            return fail(QStringLiteral("node.setProperty: '%1' is not a mobility (%2) — this "
+                                       "enum travels as a NAME, never as an ordinal")
+                            .arg(value.toString(), mobilityNames().join(QStringLiteral(", "))));
+        converted = m;
     }
     switch (current.typeId()) {
     case QMetaType::QVector3D:

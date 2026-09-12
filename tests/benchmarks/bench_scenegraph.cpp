@@ -396,10 +396,10 @@ static size_t applyStaticTags(SynthScene &s)
             // canBeStatic() first, so an 's' node under a 'd' ancestor is
             // SKIPPED rather than refused — a refusal is a warning per node,
             // and there are thousands of them.
-            if (iris::graph::canBeStatic(n->graphNode())) n->setStaticHint(true);
+            if (iris::graph::canBeStatic(n->graphNode())) n->_applyStaticHint(true);
         } else if (n->isStaticInGraph()) {
             // It inherited static from a static parent; the tag says it moves.
-            n->setStaticHint(false);
+            n->_applyStaticHint(false);
         }
     }
     for (const iris::SceneNodePtr &n : s.all)

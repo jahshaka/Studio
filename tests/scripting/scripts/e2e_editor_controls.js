@@ -823,7 +823,7 @@ var dropped = scene.addPrimitive("cube", { position: left });
 var dp = node.transform(dropped).position;
 assert(near(dp.x, left.x, 1e-2) && near(dp.y, left.y, 1e-2) && near(dp.z, left.z, 1e-2),
     "the primitive is BORN at the drop point (" + [dp.x, dp.y, dp.z].join(",") + ")");
-assert(node.isStatic(dropped) === true, "...and placing it is not a move (still static)");
+assert(node.mobility(dropped).graphStatic === true, "...and placing it is not a move (still static)");
 
 var dropped2 = scene.addPrimitive("cube", { position: right });
 var dp2 = node.transform(dropped2).position;

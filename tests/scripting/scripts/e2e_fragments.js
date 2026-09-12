@@ -81,9 +81,9 @@ assert(node.info(pasted2).parent === host, "...and it landed under that parent")
 // A ground plane: eligible, root-level, and exactly what the default policy
 // loves to mark static. The user says no.
 var ground = scene.addPrimitive("plane");
-assert(node.isStatic(ground) === true, "the default policy marked the plane static");
-assert(node.setStatic(ground, false), "the user pins it DYNAMIC");
-assert(node.isStatic(ground) === false, "...and it is dynamic now");
+assert(node.mobility(ground).graphStatic === true, "the resolution rule marked the plane static");
+assert(node.setProperty(ground, "mobility", "movable"), "the user pins it MOVABLE");
+assert(node.mobility(ground).graphStatic === false, "...and it is dynamic now");
 var groundName = node.info(ground).name;
 
 // A second one the user leaves alone, as the control.
@@ -102,10 +102,12 @@ function byName(n) {
 var groundAgain = byName(groundName);
 var controlAgain = byName(controlName);
 assert(groundAgain !== null && controlAgain !== null, "both planes survived the round trip");
-assert(node.isStatic(groundAgain) === false,
-       "THE OVERRIDE PERSISTED: the user's dynamic pin beat the load-time policy");
-assert(node.isStatic(controlAgain) === true,
-       "...while the untouched node was re-derived static by the same policy");
+assert(node.mobility(groundAgain).graphStatic === false,
+       "THE SETTING PERSISTED: the user's Movable pin beat the load-time resolution");
+assert(node.mobility(groundAgain).setting === "movable",
+       "...and it came back out of the file as the setting, not as a derived answer");
+assert(node.mobility(controlAgain).graphStatic === true,
+       "...while the untouched node was re-derived static by the same rule");
 
 // The pasted subtrees survived too — proof the fragment rebuild produced real
 // document nodes and not a detached island the writer skipped.

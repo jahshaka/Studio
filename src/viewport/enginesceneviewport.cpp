@@ -1880,6 +1880,17 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.giPushes = mMirror->giPushCount();
     s.giRefreshes = mMirror->giRefreshCount();
     s.giLightRefreshes = mMirror->giLightRefreshCount();
+    // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): the document's resolution and
+    // what the engine recorded of it, side by side.
+    s.movableNodes = mMirror->movableNodeCount();
+    s.mobilityMisses = mMirror->mobilityMissCount();
+    s.lastMobilityMiss = mMirror->lastMobilityMiss();
+    if (mEngineScene) {
+        const jahshaka::engine::MobilityStatus m = mEngineScene->mobilityStatus();
+        s.engineMovableNodes = quint64(m.movableNodes);
+        s.engineMovableItems = quint64(m.movableItems);
+        s.engineMovableLights = quint64(m.movableLights);
+    }
     return s;
 }
 

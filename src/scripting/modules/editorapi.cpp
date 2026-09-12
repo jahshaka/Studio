@@ -444,7 +444,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
           "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
           Needs::Document },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, movableNodes, engineMovableNodes, engineMovableItems, engineMovableLights, mobilityMisses, lastMobilityMiss}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
           "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
@@ -458,7 +458,18 @@ QVector<VerbInfo> EditorApi::verbs() const
           "no longer re-solves at all, it re-injects the lights into the voxels that are already "
           "there every few frames and waits for the drag to stop before the real re-solve. So "
           "during a drag this is the counter that moves and `giRefreshes` is the one that must "
-          "NOT. `available` "
+          "NOT.\n\n"
+          "MOBILITY (SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3): `movableNodes` is how many of the "
+          "scene's objects the document resolved as MOVING on the last sync — physics bodies, "
+          "characters, socket riders, animated objects, particle emitters, and everything "
+          "travelling with one of them (node.mobility(id) explains any single object). The three "
+          "`engineMovable*` counts are the same question asked of the RENDERER — how many it has "
+          "recorded, and how many of those carry geometry or a light — so a disagreement between "
+          "`movableNodes` and `engineMovableNodes` is a push that did not land. `mobilityMisses` "
+          "counts objects that started moving DURING PLAY with nothing predicting they would "
+          "(a script pushing a prop): each moves smoothly and leaves its old bounce light behind "
+          "until play stops, and each is worth marking Movable by hand — `lastMobilityMiss` "
+          "names the last one. `available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
@@ -1831,6 +1842,14 @@ QVariantMap EditorApi::mirrorStats()
     out.insert("giPushes", QVariant::fromValue(s.giPushes));
     out.insert("giRefreshes", QVariant::fromValue(s.giRefreshes));
     out.insert("giLightRefreshes", QVariant::fromValue(s.giLightRefreshes));
+    // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): "how many things in this scene
+    // move?", from the document's resolution and from the engine's records.
+    out.insert("movableNodes", QVariant::fromValue(s.movableNodes));
+    out.insert("engineMovableNodes", QVariant::fromValue(s.engineMovableNodes));
+    out.insert("engineMovableItems", QVariant::fromValue(s.engineMovableItems));
+    out.insert("engineMovableLights", QVariant::fromValue(s.engineMovableLights));
+    out.insert("mobilityMisses", QVariant::fromValue(s.mobilityMisses));
+    out.insert("lastMobilityMiss", s.lastMobilityMiss);
     return out;
 }
 

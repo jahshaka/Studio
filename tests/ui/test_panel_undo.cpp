@@ -61,6 +61,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
 #include "ui/panels/propertywidgets/lightpropertywidget.h"
+#include "ui/panels/propertywidgets/mobilitypropertywidget.h"
 #include "ui/panels/propertywidgets/physicspropertywidget.h"
 #include "ui/panels/propertywidgets/skypropertywidget.h"
 #include "ui/panels/propertywidgets/worldaapropertywidget.h"
@@ -426,6 +427,60 @@ int main(int argc, char **argv)
         CHECK(stack.index() == steps + 1, "light: as ONE step");
         stack.undo();
         CHECK(light->shadowMap->shadowType == bornWith, "light: undone");
+    }
+
+    // ---- 6b. THE MOVEMENT ROW (REALTIME_REFLECTIONS_SPEC §3.3) -------------
+    // "Does this object move?" — the classification the renderer bakes the
+    // room's lighting on. The row must REFLECT what the document says (the
+    // panel is where an author discovers what Auto decided) and WRITE what the
+    // author picks, as one undo step, through the same reflected key
+    // node.setProperty(id, 'mobility', ...) writes.
+    {
+        auto node = iris::SceneNode::create();
+        scene->getRootNode()->addChild(node, false);
+        MobilityPropertyWidget panel;
+        panel.setServices(&services);
+        const int before = stack.index();
+        panel.setSceneNode(node);        // SELECTING a node is not an edit
+        pump();
+        CHECK(stack.index() == before, "movement: selecting a node records nothing");
+        CHECK(node->mobility() == iris::Mobility::Auto,
+              "movement: ...and did not write the row's default back into it");
+
+        ComboBoxWidget *row = comboWith(&panel, QStringLiteral("Movement"));
+        CHECK(row != nullptr, "movement: the row is on the blade");
+        CHECK(row && row->getWidget() && row->getWidget()->count() == 3,
+              "movement: three choices — auto, static, movable");
+        CHECK(row && row->getWidget() && row->getWidget()->currentIndex() == 0,
+              "movement: the row REFLECTS the document (a fresh node is auto)");
+
+        // What AUTO resolved to is shown, in plain words, with the reason.
+        CHECK(MobilityPropertyWidget::resolvedText(node) == QStringLiteral("Never moves - nothing moves it"),
+              "movement: the result line says what auto worked out to");
+
+        if (row && row->getWidget()) row->getWidget()->setCurrentIndex(2);   // movable
+        CHECK(node->mobility() == iris::Mobility::Movable,
+              "movement: picking Movable wrote it through to the document");
+        CHECK(stack.index() == before + 1, "movement: as ONE undo step");
+        CHECK(MobilityPropertyWidget::resolvedText(node) == QStringLiteral("Moves - you set it"),
+              "movement: ...and the result line followed it");
+        stack.undo();
+        pump();
+        CHECK(node->mobility() == iris::Mobility::Auto, "movement: undone");
+
+        // A DRIVEN node: the row still shows the SETTING (auto), and the result
+        // line is where the author learns why it moves anyway.
+        node->isPhysicsBody = true;
+        node->physicsProperty.type = iris::PhysicsType::RigidBody;
+        panel.setSceneNode(node);
+        pump();
+        CHECK(row && row->getWidget() && row->getWidget()->currentIndex() == 0,
+              "movement: a driven node still shows its SETTING (auto), not the answer");
+        CHECK(MobilityPropertyWidget::resolvedText(node)
+                  == QStringLiteral("Moves - it is a physics object"),
+              "movement: ...and the result line explains what drives it");
+        node->isPhysicsBody = false;
+        node->removeFromParent();
     }
 
     // ---- 7. THE PHYSICS SECTION (a struct, not a reflected property) -------

@@ -394,17 +394,15 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["rot"] = jsonQuaternion(sceneNode->getLocalRot().normalized());
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 	sceneNodeObj["visible"] = sceneNode->isVisible();
-    // SCENE_STATIC, and ONLY when a human decided it (iris::StaticOverride).
-    // The derived hint is not written: applyStaticDefaults is a greedy policy
-    // that runs on every load, and persisting its output would store a
-    // derivation and freeze today's policy into every document ever saved. An
-    // absent key therefore means "re-derive", which is what every node in every
-    // scene says, and the two present values beat the policy on load.
-    switch (sceneNode->staticOverride()) {
-    case iris::StaticOverride::Static:  sceneNodeObj["static"] = true;  break;
-    case iris::StaticOverride::Dynamic: sceneNodeObj["static"] = false; break;
-    case iris::StaticOverride::None: break;
-    }
+    // MOBILITY, and ONLY when a human decided it (iris::Mobility, format v3 —
+    // it replaces v2's boolean "static" key, which is no longer written).
+    // `auto` is not written: the resolution rule runs on every load, and
+    // persisting its output would store a derivation and freeze today's rule
+    // into every document ever saved. An absent key therefore means
+    // "re-derive", which is what every node in every scene says, and the two
+    // present values beat the rule on load.
+    if (sceneNode->mobility() != iris::Mobility::Auto)
+        sceneNodeObj["mobility"] = QString::fromLatin1(iris::mobilityName(sceneNode->mobility()));
     // Written only when TRUE, like the exporter's jah["visible"]: the flag is
     // off on every node in every scene but a handful, and a key on every node
     // in the file for a feature almost nothing uses is noise.

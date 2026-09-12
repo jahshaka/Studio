@@ -44,10 +44,13 @@ For more information see the LICENSE file
 //     so the LEGACY node objects that still exist outside scene files (library
 //     Object asset blobs — see below) keep reading correctly.
 //
-//  3. SCENE_STATIC is persisted, as an OVERRIDE (iris::StaticOverride). Not the
-//     derived hint: `applyStaticDefaults` is a greedy policy and writing its
-//     output would freeze today's policy into every document. Only the places a
-//     human disagreed with it are written.
+//  3. MOBILITY is persisted, as the USER'S SETTING (iris::Mobility: the
+//     "mobility" key, "static" | "movable"). Not the derived answer: the
+//     resolution rule runs on every load, and writing its output would freeze
+//     today's rule into every document. Only the places a human disagreed with
+//     it are written. v2's boolean "static" key (the old StaticOverride) is
+//     still READ with the same meaning — true = static, false = movable — and
+//     is never written again.
 //
 //  4. One writer per key. v1's type-specific writers reached back into the node
 //     object and re-wrote keys the common writer had already written — `guid`

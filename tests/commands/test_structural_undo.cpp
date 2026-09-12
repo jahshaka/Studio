@@ -177,11 +177,11 @@ int main(int argc, char **argv)
         QList<iris::SceneNodePtr> kids;
         auto scene = sceneWithChildren(1, kids);
         auto node = kids[0];
-        node->setStaticHint(true);
+        node->setMobility(iris::Mobility::Static);
         CHECK(node->staticHint() && node->isStaticInGraph(),
-              "static: an eligible root-level node takes the hint");
-        CHECK(node->staticOverride() == iris::StaticOverride::Static,
-              "static: an explicit setStaticHint records the USER's decision");
+              "static: an eligible root-level node takes the graph class");
+        CHECK(node->mobility() == iris::Mobility::Static,
+              "mobility: an explicit setMobility records the USER's decision");
 
         QUndoStack stack;
         push(stack, new TransformSceneNodeCommand(node, iris::Vec3(5, 0, 0),
@@ -194,8 +194,8 @@ int main(int argc, char **argv)
         CHECK(node->getLocalPos().x() == 0.0f, "transform/undo: the position came back");
         CHECK(node->staticHint() && node->isStaticInGraph(),
               "transform/undo: SO DID THE STATIC CLASSIFICATION (audit F3)");
-        CHECK(node->staticOverride() == iris::StaticOverride::Static,
-              "transform/undo: and the user override the serializer writes");
+        CHECK(node->mobility() == iris::Mobility::Static,
+              "transform/undo: and the user setting the serializer writes");
 
         stack.redo();
         CHECK(!node->staticHint(), "transform/redo: demoted again, as the move did");
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
         QList<iris::SceneNodePtr> kids;
         auto scene = sceneWithChildren(1, kids);
         auto node = kids[0];
-        node->setStaticHint(true);
+        node->setMobility(iris::Mobility::Static);
 
         QUndoStack stack;
         push(stack, new SetNodePropertyCommand(node, QStringLiteral("position"),

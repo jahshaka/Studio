@@ -531,6 +531,23 @@ public:
         /// that run while a light is being dragged, instead of the full
         /// re-solves the drag used to cost (REFLECTIONS_ADOPTION_SPEC.md P2).
         quint64 giLightRefreshes = 0;
+        // ---- MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3, lane R1) -----------
+        /// How many of the document's nodes resolved MOVABLE on the last sync
+        /// — the mirror's count of what it pushed.
+        quint64 movableNodes = 0;
+        /// The same question asked of the ENGINE: how many nodes it has
+        /// RECORDED as movable, and what they carry. The two agree when the
+        /// push landed, which is what makes this readable proof rather than a
+        /// restatement of the document (the renderer does not act on it until
+        /// lane R2, so nothing else in the frame would show it).
+        quint64 engineMovableNodes = 0;
+        quint64 engineMovableItems = 0;
+        quint64 engineMovableLights = 0;
+        /// SOFT PROMOTIONS (§3.3.3, owner decision O3): nodes that started
+        /// moving during play with nothing predicting it. Counted once per node
+        /// per play session; `lastMobilityMiss` names the last one.
+        quint64 mobilityMisses = 0;
+        QString lastMobilityMiss;
     };
     /// How many times the mirror has pushed a NEW global-illumination
     /// configuration into the engine, and how many times it has asked for the

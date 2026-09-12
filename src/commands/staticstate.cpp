@@ -44,7 +44,7 @@ StaticState captureStatic(const iris::SceneNodePtr &node)
     StaticState state;
     walk(node, [&](iris::SceneNode *n) {
         state.hints.append(n->staticHint());
-        state.overrides.append(static_cast<quint8>(n->staticOverride()));
+        state.mobilities.append(static_cast<quint8>(n->mobility()));
     });
     return state;
 }
@@ -55,10 +55,10 @@ void restoreStatic(const iris::SceneNodePtr &node, const StaticState &state)
     int i = 0;
     walk(node, [&](iris::SceneNode *n) {
         if (i >= state.hints.size()) return;      // the subtree grew since the capture
-        n->_setStaticOverride(static_cast<iris::StaticOverride>(state.overrides[i]));
-        // _applyStaticHint, not setStaticHint: restoring a classification is not
-        // the user deciding one, and stamping an override here would write the
-        // derived policy into the file on the next save.
+        n->_setMobility(static_cast<iris::Mobility>(state.mobilities[i]));
+        // _applyStaticHint, not setMobility: restoring a classification is not
+        // the user deciding one, and stamping a setting here would write the
+        // derived answer into the file on the next save.
         //
         // TOP-DOWN, which the pre-order walk already is: a node can only be made
         // static once its parent is (rule 2), and this is the order that lets a

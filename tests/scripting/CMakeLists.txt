@@ -61,6 +61,25 @@ add_script_e2e(build_scene e2e_build_scene.js)
 # and its EDITS (D5-reduced delete/duplicate/copy/paste, placement, fresh
 # guids). Document verbs only -> --headless: no engine, no display.
 
+# MOVEMENT AS A VERB (SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3.5): the
+# `mobility` reflected row and node.mobility's reading of it — every driver with
+# its own reason, rule 2's inheritance, a driver openly beating a user setting,
+# ONE undo step per write, the setting surviving a save and reopen, and the two
+# claims the design rests on: an editor move neither promotes an object nor
+# clears the user's setting (a promotion costs a from-scratch GI rebuild).
+# It also opens a scene written BEFORE mobility, through the same
+# writer/reader pair the file uses (node.serialize/deserialize). Document verbs
+# only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mobility)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.mobility
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.mobility PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 add_script_e2e(undo_macro e2e_undo_macro.js)
 # SCENEGRAPH_SPEC §3 step 4: the v2 scene format's fragment pair
 # (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,
@@ -138,6 +157,15 @@ add_script_e2e(light_masks e2e_light_masks.js)
 # gi.pcc_mirror engine suite. Engine UP, not --headless: the verb's entire value
 # is that it measures the renderer rather than echoing the document.
 add_script_e2e(gi_status e2e_gi_status.js)
+# THE SURPRISE MOVER (REALTIME_REFLECTIONS_SPEC §3.3.3, owner decision O3): an
+# object nobody marked as moving starts moving during PLAY. It moves smoothly,
+# is treated as movable from that frame, leaves its old bounce light behind
+# until play stops, and the author is warned ONCE by name — and, the claim that
+# matters, world.giStatus().rebuilds does not move while it happens (option B
+# was a half-second freeze at that exact moment). Engine UP, not --headless:
+# editor.mirrorStats() and world.giStatus() are measurements of the renderer.
+add_script_e2e(mobility_play e2e_mobility_play.js)
+
 # THE LAMP-MAP CACHE UNDER REFLECTION PROBES, ON A COLD SHADER CACHE
 # (ENGINE_CACHE_POLICY_SPEC P2/P4, ogre-patch 0025). The home is WIPED before
 # the run — that is the point of the case: the defect it guards only shows while
@@ -1004,6 +1032,7 @@ jah_no_display(
     scripting.e2e.mannequin
     scripting.e2e.locomotion
     scripting.e2e.static_semantics
+    scripting.e2e.mobility
     scripting.e2e.anim
     scripting.e2e.drawers
     scripting.e2e.asset_delete

@@ -3,7 +3,7 @@
 // F1 (scripted adds with options lost the static default — every MCP-built
 // scene was fully dynamic), F7 (reparent demoted a static subtree through the
 // keep-world-pose write), F2 (reparenting the active camera cleared it),
-// F12 (isStatic answered the ask, not the outcome), F4 (picking had no verb,
+// F12 (the static read answered the ask, not the outcome), F4 (picking had no verb,
 // and the document fallback disagreed with the engine about hidden nodes).
 // Document verbs only -> --headless (NULL render system, no display).
 //
@@ -16,15 +16,20 @@ function assert(cond, msg) {
     console.log("ok: " + msg);
 }
 function near(a, b) { return Math.abs(a - b) < 1e-3; }
+// The GRAPH class, which is what this suite is about. node.isStatic was deleted
+// with StaticOverride (REALTIME_REFLECTIONS_SPEC §3.3.5 CRUD); `graphStatic` on
+// node.mobility is the same reading, and the mobility half of the same verb has
+// its own suite (scripting.e2e.mobility).
+function graphStatic(id) { return node.mobility(id).graphStatic; }
 
 project.create("Static Semantics " + Date.now());
 
 // ---- F1: the static default survives creation options ----
 var plain = scene.addPrimitive("cube");
-assert(node.isStatic(plain) === true, "a bare add is static by default");
+assert(graphStatic(plain) === true, "a bare add is static by default");
 
 var placed = scene.addPrimitive("cube", { position: { x: 3, y: 0, z: 0 } });
-assert(node.isStatic(placed) === true,
+assert(graphStatic(placed) === true,
        "an add WITH a position is still static (create-at is placement, not a move)");
 // ...AND A BARE node.transform(id) IS A PURE READ (S-extra, found by the
 // avatar lane 2026-09-11): it used to push a TransformSceneNodeCommand with the
@@ -36,28 +41,28 @@ var t = node.transform(placed);
 assert(near(t.position.x, 3), "the position option was applied (x=3)");
 assert(editor.undoState().pushes === pushesBeforeRead,
        "node.transform(id) with no change pushes NOTHING (a read is a read)");
-assert(node.isStatic(placed) === true,
+assert(graphStatic(placed) === true,
        "...and a static node is still static after being read");
 // An empty change map is the same thing spelled out.
 node.transform(placed, {});
 assert(editor.undoState().pushes === pushesBeforeRead,
        "node.transform(id, {}) pushes nothing either");
-assert(node.isStatic(placed) === true, "...and still does not demote");
+assert(graphStatic(placed) === true, "...and still does not demote");
 
 var group = scene.addEmpty({});
 var parented = scene.addPrimitive("cube", { parent: group, position: { x: 1, y: 0, z: 0 } });
-assert(node.isStatic(group) === true, "the empty parent is static");
-assert(node.isStatic(parented) === true, "an add with {parent, position} is static");
+assert(graphStatic(group) === true, "the empty parent is static");
+assert(graphStatic(parented) === true, "an add with {parent, position} is static");
 
 // ---- rule 4 still fires for a REAL move ----
 node.transform(placed, { position: { x: 5, y: 0, z: 0 } });
-assert(node.isStatic(placed) === false, "a transform write demotes (rule 4)");
-assert(node.setStatic(placed, true) === true, "an explicit re-mark works");
-assert(node.isStatic(placed) === true, "…and reads back true");
+assert(graphStatic(placed) === false, "a transform write demotes (rule 4)");
+assert(node.setProperty(placed, "mobility", "static") === true, "an explicit re-mark works");
+assert(graphStatic(placed) === true, "…and reads back true");
 
 // ---- F7: reparent preserves the static hint and the world pose ----
 node.reparent(placed, group);
-assert(node.isStatic(placed) === true,
+assert(graphStatic(placed) === true,
        "reparent under a static parent keeps the node static (world pose unchanged is not a move)");
 // node.transform reports the LOCAL pose, so the world check has to ADD the
 // parent's — `group` is a direct child of the world root, so its local pose IS
@@ -78,14 +83,17 @@ function localPosOf(id) {
 assert(near(localPosOf(placed).x + localPosOf(group).x, 5),
        "world position survived the reparent (x=5)");
 
-// ---- F12: isStatic is the OUTCOME ----
+// ---- F12: the static read is the OUTCOME ----
 // A child born under a static parent inherits static physically; the verb
 // answers what the graph did, not what was asked by name.
 var child = scene.addPrimitive("sphere", { parent: group });
-assert(node.isStatic(child) === true, "a child under a static parent reads static (inheritance)");
-// A light can never be static; the outcome stays false and setStatic refuses.
+assert(graphStatic(child) === true, "a child under a static parent reads static (inheritance)");
+// A light can never be graph-static; the outcome stays false.
 var light = scene.addLight("point", {});
-assert(node.isStatic(light) === false, "a light is never static");
+assert(graphStatic(light) === false, "a light is never graph-static");
+// ...and mobility is the OTHER question: an undriven light does not move.
+assert(node.mobility(light).resolved === "static",
+       "a light nothing drives resolves static mobility (it cannot be graph-static, it just does not move)");
 
 // ---- F2: the active camera survives a reparent ----
 var cam = scene.addCamera({});
@@ -225,10 +233,10 @@ var rMoving = named(scene.addPrimitive("cube", { position: { x: 6, y: 0, z: 0 } 
 anim.create(rMoving, "Move");
 assert(anim.keyframe(rMoving, "position", 0) === true, "keyed a real position track");
 assert(anim.keyframe(rMoving, "position", 1) === true, "…and a second key");
-// A USER decision, which the file DOES carry and the policy must never
-// overrule (StaticOverride).
-var rPinned = named(scene.addPrimitive("cube", { position: { x: 8, y: 0, z: 0 } }), "R_pinnedDynamic");
-assert(node.setStatic(rPinned, false) === true, "pinned Dynamic by hand");
+// A USER decision, which the file DOES carry and the resolution rule must never
+// overrule (iris::Mobility).
+var rPinned = named(scene.addPrimitive("cube", { position: { x: 8, y: 0, z: 0 } }), "R_pinnedMovable");
+assert(node.setProperty(rPinned, "mobility", "movable") === true, "pinned Movable by hand");
 
 assert(project.save() === true, "repro project saved");
 assert(project.close() === true, "repro project closed");
@@ -240,18 +248,20 @@ function byName(n) {
     throw new Error("assert failed: no node named " + n + " after reopen");
 }
 
-assert(node.isStatic(byName("R_ground")) === true,
+assert(graphStatic(byName("R_ground")) === true,
        "REOPENED: the ground reads static (was false — the whole defect)");
-assert(node.isStatic(byName("R_prop")) === true, "REOPENED: a loaded prop reads static");
-assert(node.isStatic(byName("R_propChild")) === true,
+assert(graphStatic(byName("R_prop")) === true, "REOPENED: a loaded prop reads static");
+assert(graphStatic(byName("R_propChild")) === true,
        "REOPENED: a child of a loaded prop reads static (rule 2 cascades DOWN, not out)");
-assert(node.isStatic(byName("R_emptyAnim")) === true,
+assert(graphStatic(byName("R_emptyAnim")) === true,
        "REOPENED: a node carrying a CHANNEL-LESS animation is still static");
-assert(node.isStatic(byName("R_emptyAnimChild")) === true,
+assert(graphStatic(byName("R_emptyAnimChild")) === true,
        "REOPENED: …and so is its child (rule 2 would have refused the whole branch)");
-assert(node.isStatic(byName("R_animated")) === false,
+assert(graphStatic(byName("R_animated")) === false,
        "REOPENED: a node with a real position track is NOT static");
-assert(node.isStatic(byName("R_pinnedDynamic")) === false,
-       "REOPENED: a user's Dynamic pin beats the policy");
+assert(graphStatic(byName("R_pinnedMovable")) === false,
+       "REOPENED: a user's Movable pin beats the resolution rule");
+assert(node.mobility(byName("R_pinnedMovable")).setting === "movable",
+       "REOPENED: ...and the setting itself came back out of the file");
 
 console.log("static_semantics: all assertions passed");

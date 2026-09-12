@@ -101,16 +101,16 @@ assert(differs, "centre pixel (" + s1.center.r + "," + s1.center.g + "," + s1.ce
 // (scripting.e2e.static_semantics is the full contract; this block pins the
 // explicit switch both ways).
 var stat = scene.addEmpty({ position: { x: 3, y: 0, z: 0 } });
-assert(node.isStatic(stat) === true, "a new empty is static by default (even with options)");
+assert(node.mobility(stat).graphStatic === true, "a new empty is static by default (even with options)");
 // A transform write is a real move: it demotes (rule 4). The transform lands.
 node.transform(stat, { position: { x: 7, y: 1, z: 0 } });
 assert(Math.abs(node.transform(stat).position.x - 7) < 1e-3,
        "a static node still accepts a transform");
-assert(node.isStatic(stat) === false, "...and the move demoted it (rule 4)");
-assert(node.setStatic(stat, true) === true, "node.setStatic(true) on an empty");
-assert(node.isStatic(stat) === true, "...and it reads back as static");
-assert(node.setStatic(stat, false) === true, "node.setStatic(false) switches back");
-assert(node.isStatic(stat) === false, "...and it reads back as dynamic");
+assert(node.mobility(stat).graphStatic === false, "...and the move demoted it (rule 4)");
+assert(node.setProperty(stat, "mobility", "static") === true, "mobility static on an empty");
+assert(node.mobility(stat).graphStatic === true, "...and it reads back as static");
+assert(node.setProperty(stat, "mobility", "movable") === true, "mobility movable switches back");
+assert(node.mobility(stat).graphStatic === false, "...and it reads back as dynamic");
 assert(node.remove(stat), "node.remove(static probe)");
 
 // ---- error surface: guard errors are catchable; a bad id READS null, WRITES throw ----

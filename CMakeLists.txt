@@ -374,6 +374,7 @@ set(SRCS
     src/io/materialreader.cpp 
     src/ui/controls/filepickerwidget.cpp 
     src/ui/panels/propertywidgets/meshpropertywidget.cpp
+    src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     src/ui/panels/propertywidgets/shaderpropertywidget.cpp 
     src/ui/panels/propertywidget.cpp 
     src/ui/dialogs/newprojectdialog.cpp 
