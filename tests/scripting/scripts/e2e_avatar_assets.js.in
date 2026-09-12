@@ -86,7 +86,14 @@ assert(v1.length > 10, "the library has a version: " + v1);
 
 assert(!!avatar.loadAnimation(WALK),
        "avatar.loadAnimation(beta_walk.dae) onto the open library avatar");
-assert(avatar.asset().dirty === true, "... marks the definition dirty");
+// WRITTEN THROUGH, not left dirty (AV1, owner 2026-09-13: "each avatar keeps
+// track of its animations"). A clip added to the open avatar goes into that
+// avatar's stored definition as it is added — switching characters used to
+// drop it silently, and so did quitting. The version moved on the spot.
+assert(avatar.asset().dirty === false,
+       "... and the definition was SAVED as part of the edit, not left dirty");
+assert(avatar.asset().version !== v1,
+       "... at a new version: " + avatar.asset().version);
 
 var saved = avatar.save();
 assert(saved.scope === "library", "avatar.save writes back to the LIBRARY scope");
@@ -150,11 +157,16 @@ assert(projectOpen.version === v2, "... at the pinned version");
 
 var beforeRename = clipNamesOf(projectOpen.definition)[0];
 avatar.setClipOptions(beforeRename, { name: "Project Walk" });
-assert(avatar.asset().dirty === true, "editing the project's version marks it dirty");
+// Same write-through on the PROJECT scope, and it is a copy-on-write: the
+// edit is stored the moment it is made, at a version of this project's own.
+assert(avatar.asset().dirty === false,
+       "editing the project's version stores it immediately");
+assert(avatar.asset().version !== v2,
+       "... COPY-ON-WRITE: a new version " + avatar.asset().version);
 
 var projectSaved = avatar.save();
 assert(projectSaved.scope === "project", "avatar.save writes to the PROJECT scope");
-assert(projectSaved.version !== v2, "... COPY-ON-WRITE: a new version " + projectSaved.version);
+assert(projectSaved.version !== v2, "... a project version, not the library's " + v2);
 var vProject = projectSaved.version;
 
 // THE LIBRARY IS UNTOUCHED — that is the owner's rule, asserted.
