@@ -80,6 +80,12 @@ private:
     LabelWidget *autoRow = nullptr;
     LabelWidget *memoryRow = nullptr;
     LabelWidget *mapsRow = nullptr;
+    /// THE SUN (SUN_AND_LIGHT_DEFAULTS Q1/Q1d): which directional light is this
+    /// scene's sun and why, and — when there is more than one — that the others
+    /// cast nothing. "No sun" is a legal, common answer and is said plainly,
+    /// never as a warning: an interior lit by lamps is an ordinary scene.
+    LabelWidget *sunRow = nullptr;
+    LabelWidget *secondaryRow = nullptr;
 };
 
 #endif // WORLDSHADOWPROPERTYWIDGET_H

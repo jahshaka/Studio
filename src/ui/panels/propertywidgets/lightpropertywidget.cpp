@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/lightchannelswidget.h"
+#include "ui/controls/labelwidget.h"
+#include "ui/controls/dragvaluewidgets.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -155,16 +157,38 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     lightChannels = new LightChannelsWidget(this);
     lightChannels->setDescription(
         tr("This light only lights objects that share a channel with it. Shadows are NOT "
-           "filtered: an object this light does not light still casts a shadow from it."));
+           "filtered: an object this light does not light still casts a shadow from it. Turn "
+           "off Cast Shadow on the object itself to stop that."));
     this->addWidgetToContent(lightChannels);
     connect(lightChannels, &LightChannelsWidget::maskChanged,
             this, &LightPropertyWidget::lightChannelsChanged);
 
+    // THE SUN (SUN_AND_LIGHT_DEFAULTS Q1/Q1d). Directional lights only, and it
+    // is the only place the word "sun" is a thing in this editor: there is one
+    // directional light type and the sun is the ROLE the lowest priority wins.
+    sunReadout = this->addLabel(tr("Sun"), QString());
+    forwardShadingPriority =
+        this->addDragFloat(tr("Forward Shading Priority"), 0.0, 0.0, 15.0, 0.05, 0);
+    forwardShadingPriority->setToolTip(
+        tr("0 is the sun. The first directional light in a scene takes 0 and lights and shadows "
+           "the whole world; every further one slots into the next free number automatically and "
+           "is a SECONDARY light — it lights the scene fully but casts no shadow, because the "
+           "renderer has exactly one directional shadow slot. Lower wins."));
+
     shadowType = this->addComboBox("Shadow Type");
-    shadowType->addItem("None");
+    // "Off (fill light)" rather than "None" (owner decision Q4): the switch is
+    // named for what it is FOR — a light you deliberately add for fill and do
+    // not want a second set of shadows from — and not as a performance dial.
+    // Shadows are ON for every new light; this is how you say otherwise.
+    shadowType->addItem("Off (fill light)");
     shadowType->addItem("Hard");
 	shadowType->addItem("Soft");
 	shadowType->addItem("Very Soft");
+    shadowType->setToolTip(
+        tr("Every new light casts soft shadows. \"Off (fill light)\" is the deliberate "
+           "exception: the light still lights everything it reaches, straight through walls and "
+           "floors, which is what a fill light is for and is also the commonest cause of a room "
+           "that is lit from outside."));
     //shadowType->addItem("Softer");
     shadowSize = this->addComboBox("Shadow Size");
     shadowSize->addItem("512");
@@ -223,6 +247,7 @@ void LightPropertyWidget::wireRows()
     rowundo::bind(shadowSize, rows(QStringLiteral("shadowMapResolution"), [this](const QVariant &row) {
         return QVariant(shadowSize->getWidget()->itemText(row.toInt()).toInt());
     }));
+    rowundo::bind(forwardShadingPriority, rows(QStringLiteral("forwardShadingPriority")));
 
     // Accurate (LTC) area lights ignore the mask entirely — say so the moment
     // the user flips the switch, not the next time the panel is rebuilt. (The
@@ -290,6 +315,7 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 
         shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap->resolution));
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
+        refreshSunRows();
         //shadowBias->setValue(lightNode->shadowMap->bias);
 
         // Point lights: legacy never shadowed them (controls hidden); the engine
@@ -483,11 +509,44 @@ void LightPropertyWidget::clearMask()
     bindMask(QString());
 }
 
+// THE SUN ROW. Directional lights only — on any other type the two rows say
+// nothing true, so they are not shown at all rather than shown disabled.
+void LightPropertyWidget::refreshSunRows()
+{
+    if (!sunReadout || !forwardShadingPriority) return;
+    if (!lightNode || lightNode->lightType != iris::LightType::Directional) {
+        sunReadout->hide();
+        forwardShadingPriority->hide();
+        return;
+    }
+    sunReadout->show();
+    forwardShadingPriority->show();
+    forwardShadingPriority->setValue(lightNode->forwardShadingPriority);
+
+    auto scene = lightNode->getScene();
+    auto sun = scene ? scene->sunLight() : iris::LightNodePtr();
+    const bool isSun = sun && sun.data() == lightNode.data();
+    const QString reason = scene ? scene->sunReason() : QStringLiteral("none");
+    QString text;
+    if (isSun && reason == QLatin1String("pinned"))
+        text = tr("This light IS the sun (chosen by hand in the World panel).");
+    else if (isSun)
+        text = tr("This light IS the sun — the lowest Forward Shading Priority in the scene.");
+    else if (sun)
+        text = tr("Secondary light. \"%1\" is the sun (priority %2); this one lights the scene "
+                  "but casts no shadow.")
+                   .arg(sun->getName())
+                   .arg(sun->forwardShadingPriority);
+    else
+        text = tr("This light is not in a scene yet.");
+    sunReadout->setText(text);
+}
+
 QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
 {
     switch(shadowType){
     case iris::ShadowMapType::None:
-        return "None";
+        return "Off (fill light)";
     case iris::ShadowMapType::Hard:
         return "Hard";
     case iris::ShadowMapType::Soft:
@@ -496,7 +555,7 @@ QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
         return "Very Soft";
     }
 
-    return "None";
+    return "Off (fill light)";
 }
 
 iris::ShadowMapType LightPropertyWidget::evalShadowMapType(QString shadowType)

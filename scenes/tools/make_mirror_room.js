@@ -136,7 +136,15 @@ material.set(tp, { baseColor: "#20a040", roughness: 0.4, metallic: 0.0 });
 // ---- light -----------------------------------------------------------------
 // POINT lights, deliberately: a directional light injects NOTHING into VCT in a
 // sealed room (the upstream light-injection march), and this room's whole point
-// is bounced colour.
+// is bounced colour. So this sample has NO SUN — which is a completely ordinary
+// scene and never a warning (owner decision, SUN_AND_LIGHT_DEFAULTS_SPEC Q1c):
+// the first directional light added to a scene is its sun, and a scene that has
+// none is simply lit by its lamps and its sky.
+//
+// Both lamps CAST: every new light of every type is born casting soft shadows
+// (owner decision 1). "FillLight" is a name, not a switch — a light that
+// deliberately casts nothing is one whose Shadow Type is set to "Off (fill
+// light)", and neither of these is.
 var l1 = scene.addLight("point", { position: sv({ x: 0, y: 3.2, z: 0 }) });
 node.setProperty(l1, "name", "KeyLight");
 node.setProperty(l1, "intensity", 1.4);

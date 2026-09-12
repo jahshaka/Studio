@@ -257,6 +257,12 @@ add_script_e2e(presentation_state e2e_presentation_state.js)
 # directional light to the realistic sky's sun, the light follows the dials,
 # unlinking gives manual control back, and the link is a document field.
 add_script_e2e(sun_light e2e_sun_light.js)
+# SUN_AND_LIGHT_DEFAULTS_SPEC Q1b/Q1c: THE SCENE-ERROR AREA. The general
+# facility (raise / never repeat / dismiss / clear / scan) and its two first
+# customers — two directional lights fighting to be the sun, and a light whose
+# shadows are off standing over something it lights straight through. Plus the
+# case that is deliberately NOT an issue: a scene with no directional light.
+add_script_e2e(scene_issues e2e_scene_issues.js)
 add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 

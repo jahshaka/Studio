@@ -351,10 +351,15 @@ QVector<Row> buildRows()
         r.cost = QStringLiteral("A ceiling, not an allocation: the engine grows the atlas in "
                                 "steps (2, 4, 8, 16) to fit the scene's shadow-casting point and "
                                 "spot lights, and never shrinks it again in one session. Each "
-                                "focused map costs R x R of the atlas (at 2048: ~17 MB) and, for "
-                                "a POINT light, six cube-face renders plus a copy every frame. "
-                                "Empty maps cost no shaders. Lights beyond the budget still light "
-                                "the scene; they simply cast no shadow.");
+                                "focused map costs R x R of the atlas (at 2048: ~17 MB), so the "
+                                "view's atlas runs ~56 MB at 2 lamps, ~88 at 4 and ~160 at 8 — "
+                                "and every planar mirror keeps its own half-resolution copy "
+                                "(~38 MB at 8) and every shadowed reflection probe a "
+                                "quarter-resolution one (~5.5 MB). A point lamp's map is six "
+                                "cube-face renders plus a copy, but only in a frame where "
+                                "something in its reach changed: a still scene re-renders none "
+                                "of them. Empty maps cost no shaders. Lights beyond the budget "
+                                "still light the scene; they simply cast no shadow.");
         r.get = [](const iris::ScenePtr &s) { return s->shadowMapBudget; };
         r.set = [](const iris::ScenePtr &s, int v) { s->shadowMapBudget = v; };
         out.append(r);
@@ -369,15 +374,20 @@ QVector<Row> buildRows()
                       { QStringLiteral("hard"),     QStringLiteral("Hard"),       0 },
                       { QStringLiteral("soft"),     QStringLiteral("Soft"),       1 },
                       { QStringLiteral("verysoft"), QStringLiteral("Very Soft"),  2 } };
-        // EPIC IS SOFT (4x4), NOT VERY SOFT (6x6) — fps audit F6. 6x6 is 36
-        // shadow-map taps per shaded pixel against 4x4's 16, more than double,
-        // for a softening step most scenes cannot be shown to need at 2048.
+        // EPIC IS SOFT, NOT VERY SOFT — fps audit F6. THE REAL TAP COUNTS on
+        // this engine pin, read from the shader rather than assumed (they were
+        // quoted as 16 vs 36 here for a year, which is the arithmetic of the
+        // filter's NAME and not of its loop): OgreHlmsPbs.cpp sets pcf /
+        // pcf_iterations and ShadowMapping_piece_ps.any runs them, so Hard =
+        // PCF_2x2 = ONE gather-based sample, Soft = PCF_4x4 = 9 taps, Very Soft
+        // = PCF_6x6 = 25 taps — per shadowed light, per shaded pixel.
         r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
-        r.cost = QStringLiteral("PCF filter width for every shadowed light: Hard 2x2, Soft 4x4, "
-                                "Very Soft 6x6 taps — 36 taps per shaded pixel against 16, which "
-                                "is why no tier asks for Very Soft. Auto uses the softest quality "
-                                "any light in the scene asked for. Takes effect next frame; no "
-                                "rebuild.");
+        r.cost = QStringLiteral("PCF filter width for every shadowed light: Hard (2x2) is 1 "
+                                "hardware gather, Soft (4x4) is 9 taps and Very Soft (6x6) is "
+                                "25 — per shadowed light, on every pixel it lights, which is why "
+                                "no tier asks for Very Soft. The sun costs this three times over, "
+                                "once per cascade. Auto uses the softest quality any light in the "
+                                "scene asked for. Takes effect next frame; no rebuild.");
         r.get = [](const iris::ScenePtr &s) { return s->shadowFilterTier; };
         r.set = [](const iris::ScenePtr &s, int v) { s->shadowFilterTier = v; };
         out.append(r);
