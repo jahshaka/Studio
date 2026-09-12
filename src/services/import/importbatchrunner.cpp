@@ -104,6 +104,8 @@ void ImportBatchRunner::runBatch()
             }, Qt::QueuedConnection);
             return !mCancelled.load();
         };
+        auto fileClock = std::make_shared<QElapsedTimer>();
+        fileClock->start();
         auto prepared = std::make_shared<PreparedImport>(
             mService->prepare(request, workerProgress));
 
@@ -123,7 +125,7 @@ void ImportBatchRunner::runBatch()
         // requestAbort() flags shutdown. The shared_ptrs keep the prepared
         // plan and the semaphore alive for whichever side runs last.
         auto hopDone = std::make_shared<QSemaphore>();
-        QMetaObject::invokeMethod(this, [this, i, prepared, hopDone]() {
+        QMetaObject::invokeMethod(this, [this, i, prepared, hopDone, fileClock]() {
             if (!mAborted.load()) {
                 ImportResult result;
                 if (!prepared->ok()) {
@@ -135,6 +137,12 @@ void ImportBatchRunner::runBatch()
                     };
                     result = mService->commit(*prepared, uiProgress);
                 }
+                // The session log's import record — the threaded route wrote
+                // none until AV1 (2026-09-13), so a drop on the Assets page
+                // and an avatar import were both invisible afterwards, with
+                // their warnings.
+                AssetImportService::logImportRecord(prepared->request, result,
+                                                    fileClock->elapsed());
                 emit fileFinished(i, prepared->request, result);          // direct: UI thread
             }
             hopDone->release();

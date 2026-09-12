@@ -48,6 +48,7 @@ class QTimer;
 class QTreeWidget;
 
 class AvatarApi;
+class ProgressDialog;
 
 namespace avatar
 {
@@ -69,8 +70,10 @@ public:
     /// The engine-rendered centre view, injected by the shell when the engine
     /// runs. Headless sessions get a placeholder label instead.
     void setPreviewWidget(IAvatarPreviewWidget *preview);
-    /// The verbs the widgets drive. Set by the module after registerApi.
-    void setApi(AvatarApi *api) { mApi = api; }
+    /// The verbs the widgets drive. Set by the module after registerApi; also
+    /// where the page subscribes to the API's background-job signals (the
+    /// import/switch progress dialog).
+    void setApi(AvatarApi *api);
 
     /// Re-reads the model into every widget. Called after each verb.
     void refreshFromModel();
@@ -97,7 +100,10 @@ private:
     /// The two side columns, kept so the page can answer ColumnedPage.
     QWidget *mLeftColumn = nullptr;
     QWidget *mRightColumn = nullptr;
-    void onImportClicked(bool intoProject);
+    void onImportClicked();
+    /// "Add to Project" — the CURRENTLY LOADED avatar, the same one code path
+    /// the library row's context-menu entry takes (owner 2026-09-13).
+    void onAddToProjectClicked();
     void onLoadAnimationClicked();
     /// The Load Animation… chooser: the library's Animation rows
     /// (avatar.animations) plus an Import File… escape. Returns an asset guid,
@@ -125,7 +131,10 @@ private:
     /// the module shipped with: every load is an import now (D7).
     QTreeWidget *mLibrary = nullptr;
     QPushButton *mImportButton = nullptr;
-    QPushButton *mImportToProjectButton = nullptr;
+    /// Adds the LOADED avatar to the open project; disabled when none is.
+    QPushButton *mAddToProjectButton = nullptr;
+    /// The Assets page's dialog, for the threaded import and the switch.
+    ProgressDialog *mProgress = nullptr;
     QPushButton *mSaveButton = nullptr;
     QLabel      *mScopeLabel = nullptr;
     QPushButton *mLoadAnimButton = nullptr;

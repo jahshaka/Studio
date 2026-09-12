@@ -181,6 +181,36 @@ public:
     /// straight off disk.
     bool load(const QString &path, QString *error = nullptr,
               const QString &displayName = QString());
+
+    // ---- the SPLIT load (AV1: the frozen app) -----------------------------
+    //
+    // The expensive half of `load` is the assimp parse + embedded-texture
+    // extraction, and it touches NO model state — the same shape
+    // AssetImportService::prepare has, for the same reason: on the owner's
+    // Jennifer.fbx it cost 1.5 s of frozen UI on every avatar switch. It is a
+    // STATIC function taking nothing but a path, so a caller may run it on a
+    // worker thread while the model keeps serving the frames the UI draws, and
+    // then hand the result back here.
+    //
+    // `apply` is UI-THREAD ONLY (it grafts the parsed fragment into the live
+    // document the mirror walks) and consumes the prepared subject.
+    struct PreparedSubject
+    {
+        QString path;            ///< absolute path the parse read
+        QString displayName;     ///< the catalog row's name, or empty
+        iris::SceneNodePtr node; ///< the parsed fragment, not yet in a document
+        std::shared_ptr<QTemporaryDir> scratch;   ///< where embedded textures went
+        QString error;
+        bool ok() const { return error.isEmpty() && !node.isNull(); }
+    };
+    /// THREAD-SAFE: parses `path` and extracts its embedded textures into a
+    /// fresh scratch dir. Never touches this object (it is static); the result
+    /// is inert until `applySubject` takes it.
+    static std::shared_ptr<PreparedSubject> prepareSubject(const QString &path,
+                                                           const QString &displayName = QString());
+    /// UI thread: replaces the loaded subject with `prepared`. False + `error`
+    /// when the prepare failed (the loaded subject is then left alone).
+    bool applySubject(const std::shared_ptr<PreparedSubject> &prepared, QString *error = nullptr);
     /// Reads `path` for CLIPS ONLY and appends them to the clip list of the
     /// already-loaded character (the Mixamo workflow: one character file, then
     /// one file per animation). Accepts both shapes an exporter produces — a
@@ -355,7 +385,7 @@ private:
     QString mFilePath;
     QString mName;
     HeightNormalization mNormalization;
-    std::unique_ptr<QTemporaryDir> mScratch;
+    std::shared_ptr<QTemporaryDir> mScratch;
 
     // Clip display names, in the order they were added: the character file's
     // own first, then each loadAnimation's. `skel` is the clip AS AUTHORED —

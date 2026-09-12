@@ -358,37 +358,74 @@ QString AvatarPreviewModel::extractDir() const
     return mScratch ? mScratch->path() : QString();
 }
 
+// THE EXPENSIVE HALF, on whatever thread the caller runs it (AV1). Nothing
+// here reads or writes a member: the parse produces a detached fragment and a
+// scratch dir, and `applySubject` is what makes them this model's subject.
+std::shared_ptr<AvatarPreviewModel::PreparedSubject>
+AvatarPreviewModel::prepareSubject(const QString &path, const QString &displayName)
+{
+    auto prepared = std::make_shared<PreparedSubject>();
+    prepared->displayName = displayName;
+
+    const QFileInfo info(path);
+    if (!info.exists() || !info.isFile()) {
+        prepared->error = QStringLiteral("no such file: %1").arg(path);
+        return prepared;
+    }
+    prepared->path = info.absoluteFilePath();
+
+    // R0.12: an empty extract dir writes embedded textures BESIDE the source —
+    // into the owner's Downloads folder. Per-session scratch, cleaned on clear().
+    prepared->scratch =
+        std::make_shared<QTemporaryDir>(QDir::tempPath() + "/jahshaka-avatar-XXXXXX");
+    if (!prepared->scratch->isValid()) {
+        prepared->error =
+            QStringLiteral("could not create a scratch directory for embedded textures");
+        return prepared;
+    }
+
+    QStringList textureList, texturesFullPath;
+    bool hasEmbedded = false;
+    prepared->node = AssetHelper::extractTexturesAndMaterialFromMesh(
+        prepared->path, textureList, texturesFullPath, hasEmbedded, nullptr,
+        prepared->scratch->path());
+    if (!prepared->node)
+        prepared->error =
+            QStringLiteral("could not read %1 (unsupported or corrupt model)").arg(info.fileName());
+    return prepared;
+}
+
 bool AvatarPreviewModel::load(const QString &path, QString *error,
                               const QString &displayName)
+{
+    return applySubject(prepareSubject(path, displayName), error);
+}
+
+bool AvatarPreviewModel::applySubject(const std::shared_ptr<PreparedSubject> &prepared,
+                                      QString *error)
 {
     const auto fail = [error](const QString &why) {
         if (error) *error = why;
         return false;
     };
-
-    const QFileInfo info(path);
-    if (!info.exists() || !info.isFile())
-        return fail(QStringLiteral("no such file: %1").arg(path));
+    if (!prepared) return fail(QStringLiteral("no subject was prepared"));
+    if (!prepared->ok())
+        return fail(prepared->error.isEmpty()
+                        ? QStringLiteral("the subject could not be read")
+                        : prepared->error);
 
     // One subject at a time, deliberately (R0.4): pose state lives on the
     // shared iris::Mesh asset, so two instances of one rig would share a pose.
+    // LAST, not first: the old subject stays on screen for the whole parse, so
+    // an avatar switch never shows an empty room while it loads.
     clear();
+    mScratch = prepared->scratch;
 
-    // R0.12: an empty extract dir writes embedded textures BESIDE the source —
-    // into the owner's Downloads folder. Per-session scratch, cleaned on clear().
-    mScratch.reset(new QTemporaryDir(QDir::tempPath() + "/jahshaka-avatar-XXXXXX"));
-    if (!mScratch->isValid())
-        return fail(QStringLiteral("could not create a scratch directory for embedded textures"));
-
-    QStringList textureList, texturesFullPath;
-    bool hasEmbedded = false;
-    auto node = AssetHelper::extractTexturesAndMaterialFromMesh(
-        path, textureList, texturesFullPath, hasEmbedded, nullptr, mScratch->path());
-    if (!node)
-        return fail(QStringLiteral("could not read %1 (unsupported or corrupt model)").arg(info.fileName()));
+    const QFileInfo info(prepared->path);
+    auto node = prepared->node;
 
     mFilePath = info.absoluteFilePath();
-    mName = displayName.isEmpty() ? info.completeBaseName() : displayName;
+    mName = prepared->displayName.isEmpty() ? info.completeBaseName() : prepared->displayName;
     // The fragment root keeps the name the file gave it: it may itself be a
     // bone (or a clip channel target), and renaming it would silently unhook
     // the pose lookup, which is name-matched end to end.

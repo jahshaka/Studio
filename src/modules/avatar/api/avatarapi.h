@@ -38,6 +38,8 @@ For more information see the LICENSE file
 
 namespace avatar { class AvatarPreviewModel; }
 namespace iris { class AvatarPossession; class AvatarLocomotion; }
+class ImportBatchRunner;
+template <typename T> class QFutureWatcher;
 
 class AvatarApi : public ApiModule
 {
@@ -153,6 +155,22 @@ public:
     Q_INVOKABLE QVariantMap importAvatar(const QString &path,
                                          const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap open(const QString &guid, const QVariantMap &options = QVariantMap());
+
+    // ---- AV1: the module must not freeze the app --------------------------
+    //
+    // `importAvatar` and `open` both took seconds ON THE UI THREAD (measured on
+    // the owner's Jennifer.fbx: 9332 ms to import, 1541 ms to switch), which is
+    // an app that looks crashed. Both take `{async: true}`, which starts the
+    // work — the pipeline's own ImportBatchRunner for the import, the preview
+    // parse on a QtConcurrent worker for the switch — and RETURNS IMMEDIATELY,
+    // exactly as `editor.importAssets` does for the Assets page. `progress()`
+    // is what a script (and the page's ProgressDialog) watches.
+    Q_INVOKABLE QVariantMap progress();
+    Q_INVOKABLE bool cancelImport();
+    /// The module is going away (AvatarModule::shutdown): stop and join every
+    /// background job, then forget the model. Without it a worker's completion
+    /// would re-enter a freed AvatarPreviewModel.
+    void detachModel();
     Q_INVOKABLE QVariantMap asset();
     Q_INVOKABLE QVariantMap save();
     Q_INVOKABLE QVariantMap saveToLibrary(const QString &guid = QString());
@@ -187,7 +205,51 @@ public:
         return fn();
     }
 
+signals:
+    /// The page's ProgressDialog, driven by the verbs (never by the widgets):
+    /// one background job at a time, started/staged/finished.
+    void busyStarted(const QString &title, bool cancellable);
+    void busyStage(const QString &stage, int done, int total);
+    void busyFinished(bool cancelled, const QString &error);
+
 private:
+    // ---- the one background job (AV1) ------------------------------------
+    struct Job
+    {
+        QString kind;          ///< "import" | "open" | "" (idle)
+        bool running = false;
+        QString file;          ///< what is being worked on (display name)
+        QString stage;
+        int done = 0;
+        int total = 0;
+        bool cancelled = false;
+        QString error;
+        QVariantMap result;    ///< the finished job's return value
+    };
+    Job mJob;
+    ImportBatchRunner *mImportRunner = nullptr;
+    /// The import job's tail, held while the runner works.
+    struct PendingImport
+    {
+        AvatarAssets::Scope scope = AvatarAssets::Scope::Library;
+        QString name;          ///< the {name} override
+        QString objectGuid;    ///< filled by fileFinished
+        QStringList warnings;
+    };
+    PendingImport mPendingImport;
+    /// The async open's worker + what to do with its result.
+    QFutureWatcher<std::shared_ptr<avatar::AvatarPreviewModel::PreparedSubject>> *mOpenWatcher
+        = nullptr;
+    /// Starts (or chains) the two async jobs; both report through mJob.
+    bool startImport(const QString &path, AvatarAssets::Scope scope, int drawerId,
+                     const QString &name);
+    void finishImport(bool cancelled);
+    /// The definition half of `open` (cheap, UI thread). Fills mOpen and
+    /// returns the preview's model path, empty when there is nothing to show.
+    QString openDefinition(const QString &guid, AvatarAssets::Scope scope, QString *rowNameOut);
+    void startPreviewLoad(const QString &modelPath, const QString &rowName);
+    void endJob(bool cancelled, const QString &error, const QVariantMap &result = QVariantMap());
+
     /// loadClip's halves, shared with spawn's `clips` option.
     /// Resolves a path OR an existing asset guid to a PINNED project asset and
     /// the absolute path of its stored bytes. Empty guid on failure (message
@@ -247,6 +309,13 @@ private:
 
     /// The open definition, or a recorded refusal.
     bool requireOpenAsset(const char *verb);
+    /// WRITES THE OPEN DEFINITION BACK, right now (owner 2026-09-13: "each
+    /// avatar keeps track of its animations"). Every definition edit — a clip
+    /// added, removed, renamed, its looping/root-motion/default changed —
+    /// calls this, so switching avatars, closing the module or quitting the
+    /// app can never drop it. No-op when nothing is open or nothing changed;
+    /// records (never throws) when the store refuses.
+    bool persistOpen(const char *verb);
     /// Applies a definition to a spawned wrapper: clips, defaults, movement,
     /// locomotion. Shared by the linked spawn and by refreshInstances, so an
     /// instance created now and one refreshed later cannot end up different.

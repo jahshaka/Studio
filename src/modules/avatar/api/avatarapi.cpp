@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
+#include <QFutureWatcher>
+#include <QtConcurrent>
 #include <algorithm>
 #include <functional>
 
@@ -44,6 +46,8 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetmetadata.h"
 #include "services/assetservice.h"
+#include "services/import/importbatchrunner.h"
+#include "services/import/importtypes.h"
 #include "services/assetstorepaths.h"
 #include "services/projectassets.h"
 #include "services/rigsignature.h"
@@ -359,31 +363,54 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "avatar is made FROM a model, the model stays a model. NOT undoable — asset "
           "mutations never are (SCRIPTING_SPEC \u00a71.6.5).",
           Needs::Document },
-        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name}) -> {asset, avatar, name, open}",
+        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name, async}) -> {asset, avatar, name, open} | {started, async}",
           "THE way a character enters Jahshaka (\u00a74 D7: every load is an import — "
           "avatar.loadPreview is retired). Imports a rigged model file through the ONE import "
           "pipeline, mints an avatar asset from it AND OPENS IT for editing, in one call — the "
           "module's 'Import Avatar…'. `asset` is the model Object's guid, `avatar` the new "
           "avatar's, `open` what avatar.asset would report. scope 'project' also pins it into "
           "the open project. A file with no skeleton is imported (it is a perfectly good model) "
-          "and only the AVATAR is refused, so nothing is lost either way. NOT undoable.",
+          "and only the AVATAR is refused, so nothing is lost either way. "
+          "{async: true} runs the whole thing — import, mint, open, preview — OFF the UI thread "
+          "through the pipeline's own ImportBatchRunner (the Assets page's threaded import) and "
+          "returns {started: true} immediately; watch avatar.progress() and cancel with "
+          "avatar.cancelImport(). That is what the module's 'Import Avatar…' uses: a rigged FBX "
+          "took 9.3 s of frozen UI synchronously. NOT undoable.",
           Needs::Document },
-        { "open", "avatar.open(guid, {scope}) -> {guid, scope, version, name, dirty, definition}",
+        { "progress", "avatar.progress() -> {running, kind, file, stage, done, total, cancelled, error, result}",
+          "What the module's background job is doing — an {async: true} import or open. `kind` "
+          "is 'import' while the file is being read and stored and 'open' while the character is "
+          "being prepared for the preview; `result` carries what the synchronous verb would have "
+          "returned once it is done (running false). Idle before the first async call.",
+          Needs::Document },
+        { "cancelImport", "avatar.cancelImport() -> bool",
+          "Cancels a running async avatar import. The pipeline rolls its own transaction back, so "
+          "a cancelled import leaves no library row, no stored object and no avatar. False when "
+          "no import is running (an async OPEN cannot be cancelled — the parse is uninterruptible "
+          "and leaves nothing behind).",
+          Needs::Document },
+        { "open", "avatar.open(guid, {scope, async}) -> {guid, scope, version, name, dirty, definition}",
           "Opens an avatar asset for editing at a SCOPE: 'library' reads the library's current "
           "version, 'project' reads the version this project pinned. Everything the module "
           "edits afterwards — clips, options, the default clip — edits THAT definition, and "
           "`avatar.save` writes it back where it came from. With no scope given, a project "
           "that has the asset opens the project's version (that is the one whose edits are "
           "the user's own) and otherwise the library's. Replaces the retired "
-          "`avatar.loadPreview`: every load is an import now (\u00a74 D7).",
+          "`avatar.loadPreview`: every load is an import now (\u00a74 D7). {async: true} returns as "
+          "soon as the DEFINITION is open (the clip list and the scope banner are already right) "
+          "and parses the character for the preview on a worker — the owner-measured 1.5 s "
+          "avatar switch, off the UI thread; watch avatar.progress().",
           Needs::Document },
         { "asset", "avatar.asset() -> {guid, scope, version, name, dirty, definition} | undefined",
           "What the module currently has open, and whether it has unsaved edits. Undefined "
           "when nothing is open.",
           Needs::Document },
         { "save", "avatar.save() -> {guid, scope, version}",
-          "Writes the open definition back TO THE SCOPE IT WAS OPENED FROM, and that is the "
-          "whole model: a LIBRARY save publishes a new version of the library asset and moves "
+          "Writes the open definition back TO THE SCOPE IT WAS OPENED FROM. Clip edits "
+          "(loadAnimation, removeClip, setClipOptions, setDefaultClip) already write themselves "
+          "through as they are made — each avatar keeps its own animations across a switch and a "
+          "restart — so this verb is the explicit re-write and the retry after a failed one. "
+          "The scope model is the whole point: a LIBRARY save publishes a new version of the library asset and moves "
           "no project's pin, so a project that already added the avatar keeps what it added; "
           "a PROJECT save is copy-on-write — new content, this project's pin moves, the "
           "library and every other project untouched. A project save also refreshes every "
@@ -400,18 +427,20 @@ QVector<VerbInfo> AvatarApi::verbs() const
           Needs::Document },
         { "removeClip", "avatar.removeClip(name) -> bool",
           "Removes a clip from the OPEN definition (not from the library — the clip asset "
-          "stays where it is). Marks the definition dirty; `avatar.save` commits it. Clearing "
-          "the default clip re-points it at the first remaining clip.",
+          "stays where it is). WRITTEN THROUGH to the avatar's stored definition as it is "
+          "made, like every clip edit here. Clearing the default clip re-points it at the "
+          "first remaining clip.",
           Needs::Document },
         { "setClipOptions", "avatar.setClipOptions(name, {looping, rootMotion, name}) -> {name, looping, rootMotion}",
           "Edits one clip entry of the open definition. Renaming through `name` is a rename of "
           "the JOIN KEY every consumer uses (the scene plays clips by name, roles bind by "
           "name), so it is refused when the new name is taken and it carries the default-clip "
-          "pointer with it. Marks the definition dirty.",
+          "pointer with it. Written through to the stored definition as it is made.",
           Needs::Document },
         { "setDefaultClip", "avatar.setDefaultClip(name) -> bool",
           "Which clip a freshly spawned instance plays. An empty name clears it. Refuses a "
-          "name the definition does not have.",
+          "name the definition does not have. Written through to the stored definition as it "
+          "is made, so it is still the default after a switch and after a restart.",
           Needs::Document },
         { "instances", "avatar.instances(assetGuid) -> [{node, name, asset, version, stale}]",
           "The LINKED avatar instances in the open scene — wrappers spawned from an avatar "
@@ -575,6 +604,10 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
             mOpen.definition.defaultClip = mOpen.definition.clips.first().name;
             mOpen.dirty = true;
         }
+        // EACH AVATAR KEEPS ITS OWN ANIMATIONS (owner 2026-09-13): written into
+        // THIS avatar's stored definition now, not at some later Save the user
+        // may never press — switching characters or quitting used to drop it.
+        persistOpen("avatar.loadAnimation");
     }
     // The clip list changed but the subject did not: no re-framing (the
     // camera must not jump when a user adds a second walk cycle).
@@ -2324,7 +2357,7 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
         return out;
     }
 
-    static const QStringList known = { "scope", "drawer", "name" };
+    static const QStringList known = { "scope", "drawer", "name", "async" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
             record(QStringLiteral("avatar.importAvatar: unknown option '%1' (known: %2)")
@@ -2342,6 +2375,22 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     const QFileInfo info(path);
     if (!info.exists() || !info.isFile()) {
         record(QStringLiteral("avatar.importAvatar: no such file '%1'").arg(path));
+        return out;
+    }
+
+    // ASYNC (AV1, owner-measured 9332 ms of frozen UI): the SAME pipeline,
+    // through the SAME ImportBatchRunner the Assets page uses — prepare (the
+    // assimp parse, texture extraction, hashing) on a worker, the commit on
+    // this thread. The verb returns as soon as the batch is running; the mint
+    // and the open are chained onto its completion, and `avatar.progress()`
+    // is what the page's dialog and a script watch.
+    if (options.value(QStringLiteral("async")).toBool()) {
+        if (!startImport(info.absoluteFilePath(), scope,
+                         options.value(QStringLiteral("drawer"), -1).toInt(),
+                         options.value(QStringLiteral("name")).toString()))
+            return out;
+        out["started"] = true;
+        out["async"] = true;
         return out;
     }
 
@@ -2380,15 +2429,253 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     return out;
 }
 
+// ---------------------------------------------------------------------------
+// THE BACKGROUND JOBS (AV1). One at a time, reported through mJob and the
+// busy* signals; the page turns those into the Assets page's ProgressDialog.
+
+bool AvatarApi::startImport(const QString &path, AvatarAssets::Scope scope, int drawerId,
+                            const QString &name)
+{
+    if (mJob.running) {
+        record("avatar.importAvatar: an avatar import is already running");
+        return false;
+    }
+    mPendingImport = PendingImport();
+    mPendingImport.scope = scope;
+    mPendingImport.name = name;
+
+    mJob = Job();
+    mJob.kind = QStringLiteral("import");
+    mJob.running = true;
+    mJob.file = QFileInfo(path).fileName();
+    mJob.stage = QStringLiteral("read");
+
+    mImportRunner = new ImportBatchRunner(host.db, host.project, this);
+    ImportRequest request;
+    request.sourcePath = path;
+    request.drawerId = drawerId;
+    // NO TYPE HINT — the pipeline sniffs, exactly as the synchronous
+    // AssetImporter::importFile does for this verb (a rigged file is an
+    // Object; a clip-only file becomes an Animation and the avatar is refused
+    // afterwards, which is the same answer either way).
+    connect(mImportRunner, &ImportBatchRunner::stageProgress, this,
+            [this](int, const QString &stage, int done, int total) {
+                mJob.stage = stage;
+                mJob.done = done;
+                mJob.total = total;
+                emit busyStage(stage, done, total);
+            });
+    connect(mImportRunner, &ImportBatchRunner::fileFinished, this,
+            [this](int, const ImportRequest &, const ImportResult &result) {
+                mPendingImport.objectGuid = result.assetGuid;
+                mPendingImport.warnings = result.warnings;
+                if (!result.error.isEmpty()) mJob.error = result.error;
+            });
+    connect(mImportRunner, &ImportBatchRunner::finished, this,
+            [this](bool cancelled) { finishImport(cancelled); });
+    mImportRunner->setRequests({ request });
+
+    emit busyStarted(QStringLiteral("Importing %1").arg(mJob.file), true);
+    mImportRunner->start();
+    return true;
+}
+
+void AvatarApi::finishImport(bool cancelled)
+{
+    if (auto *runner = mImportRunner) {
+        mImportRunner = nullptr;
+        runner->deleteLater();
+    }
+    const QString fileName = mJob.file;
+    const QString objectGuid = mPendingImport.objectGuid;
+    mJob.result.insert(QStringLiteral("warnings"), mPendingImport.warnings);
+
+    if (cancelled) {
+        // The pipeline rolled its own transaction back (importbatchrunner.h):
+        // nothing of a cancelled import stays in the library, so there is
+        // nothing to undo here either.
+        endJob(true, QString());
+        return;
+    }
+    if (objectGuid.isEmpty()) {
+        const QString why = mJob.error.isEmpty() ? QStringLiteral("the import produced no asset")
+                                                 : mJob.error;
+        record(QStringLiteral("avatar.importAvatar: '%1' could not be imported: %2")
+                   .arg(fileName, why));
+        endJob(false, why);
+        return;
+    }
+    // The library gained a row on a path the Assets page cannot see by itself
+    // (the sync verb announces through AssetService; the runner commits
+    // directly), so announce it here — same rule, one announcement per import.
+    if (host.services && host.services->assets)
+        host.services->assets->announceLibraryChanged(objectGuid);
+
+    QString error;
+    const QString avatarGuid = AvatarAssets::create(objectGuid, mPendingImport.scope, host.db,
+                                                    host.project, mPendingImport.name, &error);
+    mJob.result.insert(QStringLiteral("asset"), objectGuid);
+    if (avatarGuid.isEmpty()) {
+        record(QStringLiteral("avatar.importAvatar: '%1' was imported as a model, but no avatar "
+                              "could be made from it: %2").arg(fileName, error));
+        endJob(false, error);
+        return;
+    }
+    mJob.result.insert(QStringLiteral("avatar"), avatarGuid);
+    mJob.result.insert(QStringLiteral("name"), host.db->fetchAsset(avatarGuid).name);
+
+    // AND OPENS IT (§4 D7-A) — the definition now, the preview on the worker:
+    // the second half of the freeze was this open re-parsing the model.
+    QString rowName;
+    const QString modelPath = openDefinition(avatarGuid, mPendingImport.scope, &rowName);
+    mJob.result.insert(QStringLiteral("open"), asset());
+    if (modelPath.isEmpty()) {
+        endJob(false, QString());
+        return;
+    }
+    mJob.kind = QStringLiteral("open");
+    startPreviewLoad(modelPath, rowName);
+}
+
+void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowName)
+{
+    mJob.running = true;
+    mJob.stage = QStringLiteral("preview");
+    emit busyStage(QStringLiteral("preview"), 0, 0);
+
+    // THE 1.5 s SWITCH (owner-measured): an assimp parse of the stored model
+    // plus its embedded-texture extraction, on the UI thread. It reads nothing
+    // of this object, so it runs on a pool thread while the module keeps
+    // drawing the character already loaded; only the graft comes back here.
+    auto *watcher =
+        new QFutureWatcher<std::shared_ptr<avatar::AvatarPreviewModel::PreparedSubject>>(this);
+    mOpenWatcher = watcher;
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher]() {
+        watcher->deleteLater();
+        if (mOpenWatcher != watcher) return;   // superseded or detached
+        mOpenWatcher = nullptr;
+        QString error;
+        if (mModel) {
+            const auto prepared = watcher->result();
+            if (!mModel->applySubject(prepared, &error)) {
+                record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
+                                      "previewed: %2").arg(mOpen.definition.name, error));
+            }
+            notifySubjectChanged();
+        }
+        endJob(false, error);
+    });
+    watcher->setFuture(QtConcurrent::run([modelPath, rowName]() {
+        return avatar::AvatarPreviewModel::prepareSubject(modelPath, rowName);
+    }));
+}
+
+void AvatarApi::endJob(bool cancelled, const QString &error, const QVariantMap &result)
+{
+    if (!result.isEmpty()) mJob.result = result;
+    mJob.running = false;
+    mJob.cancelled = cancelled;
+    mJob.stage.clear();
+    if (!error.isEmpty()) mJob.error = error;
+    notifyChanged();
+    emit busyFinished(cancelled, mJob.error);
+}
+
+QVariantMap AvatarApi::progress()
+{
+    QVariantMap out;
+    out["running"] = mJob.running;
+    out["kind"] = mJob.kind;
+    out["file"] = mJob.file;
+    out["stage"] = mJob.stage;
+    out["done"] = mJob.done;
+    out["total"] = mJob.total;
+    out["cancelled"] = mJob.cancelled;
+    out["error"] = mJob.error;
+    out["result"] = mJob.result;
+    return out;
+}
+
+bool AvatarApi::cancelImport()
+{
+    if (!mImportRunner) return false;
+    mImportRunner->cancel();
+    return true;
+}
+
+void AvatarApi::detachModel()
+{
+    // Order matters: stop the import worker (it may still queue a commit onto
+    // this thread), then the preview parse, then forget the model. mOpenWatcher
+    // is cleared FIRST so a completion that is already queued does nothing.
+    if (auto *runner = mImportRunner) {
+        mImportRunner = nullptr;
+        runner->requestAbort();
+        runner->waitForDone(5000);
+        runner->deleteLater();
+    }
+    if (auto *watcher = mOpenWatcher) {
+        mOpenWatcher = nullptr;
+        watcher->disconnect(this);
+        // The parse cannot be interrupted (assimp), but it touches nothing of
+        // ours — join it so the pool is not torn down under a running task.
+        watcher->waitForFinished();
+        watcher->deleteLater();
+    }
+    mJob.running = false;
+    mModel = nullptr;
+}
+
+// The CHEAP half of open: the definition (a small JSON read out of the CAS)
+// becomes the module's open asset, and the model file the preview will need is
+// resolved. Returns that path — empty when there is nothing to preview.
+QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope,
+                                  QString *rowNameOut)
+{
+    const auto loaded = AvatarAssets::load(guid, scope, host.db, host.project);
+    if (!loaded.ok()) {
+        record(QStringLiteral("avatar.open: %1").arg(loaded.error));
+        return QString();
+    }
+
+    // NOTHING UNSAVED IS EVER DROPPED (owner 2026-09-13): every definition edit
+    // writes through as it is made, so this is belt and braces — but an avatar
+    // switch used to discard the clips the user had just added, silently.
+    persistOpen("avatar.open");
+
+    mOpen.guid = guid;
+    mOpen.scope = scope;
+    mOpen.version = loaded.oid;
+    mOpen.definition = loaded.definition;
+    mOpen.dirty = false;
+
+    if (rowNameOut)
+        *rowNameOut = loaded.definition.name.isEmpty() ? loaded.name : loaded.definition.name;
+    if (!mModel) return QString();
+
+    // The PREVIEW follows the definition: the module's centre panel shows the
+    // model this avatar names, resolved through the CAS at the scope's version
+    // exactly as an instance would resolve it.
+    const QString modelPath =
+        (scope == AvatarAssets::Scope::Project && host.project)
+            ? AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                      host.project->getProjectGuid(), loaded.definition.modelAsset)
+            : AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(),
+                                      loaded.definition.modelAsset);
+    if (modelPath.isEmpty() || !QFileInfo::exists(modelPath)) return QString();
+    return modelPath;
+}
+
 QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
 {
     QVariantMap out;
     if (!host.db) { record("avatar.open: not available in this session"); return out; }
 
-    static const QStringList known = { "scope" };
+    static const QStringList known = { "scope", "async" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
-            record(QStringLiteral("avatar.open: unknown option '%1' (known: scope)").arg(it.key()));
+            record(QStringLiteral("avatar.open: unknown option '%1' (known: %2)")
+                       .arg(it.key(), known.join(QStringLiteral(", "))));
             return out;
         }
 
@@ -2408,41 +2695,43 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
                     : AvatarAssets::Scope::Library;
     }
 
-    const auto loaded = AvatarAssets::load(guid, scope, host.db, host.project);
-    if (!loaded.ok()) {
-        record(QStringLiteral("avatar.open: %1").arg(loaded.error));
+    const bool async = options.value(QStringLiteral("async")).toBool();
+    if (async && mJob.running) {
+        record("avatar.open: a background job is already running");
         return out;
     }
 
-    mOpen.guid = guid;
-    mOpen.scope = scope;
-    mOpen.version = loaded.oid;
-    mOpen.definition = loaded.definition;
-    mOpen.dirty = false;
+    QString rowName;
+    const QString modelPath = openDefinition(guid, scope, &rowName);
+    if (!mOpen.isOpen() || mOpen.guid != guid) return out;   // openDefinition recorded why
 
-    // The PREVIEW follows the definition: the module's centre panel shows the
-    // model this avatar names, resolved through the CAS at the scope's version
-    // exactly as an instance would resolve it.
-    if (mModel) {
-        const QString modelPath =
-            (scope == AvatarAssets::Scope::Project && host.project)
-                ? AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                          host.project->getProjectGuid(), loaded.definition.modelAsset)
-                : AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(),
-                                          loaded.definition.modelAsset);
-        if (!modelPath.isEmpty() && QFileInfo::exists(modelPath)) {
-            QString loadError;
-            // THE ROW'S NAME, not the file's: a store object is named after
-            // its sha256, so the subject (and every junk-named clip in it)
-            // would otherwise be called "c826b4bf…".
-            if (!mModel->load(modelPath, &loadError,
-                              loaded.definition.name.isEmpty() ? loaded.name
-                                                               : loaded.definition.name))
-                record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
-                                      "previewed: %2").arg(loaded.name, loadError));
-        }
-        notifySubjectChanged();
+    if (modelPath.isEmpty()) {
+        notifyChanged();
+        return asset();
     }
+
+    if (async) {
+        // THE SWITCH, off the UI thread (owner-measured 1541 ms): the clip
+        // column and the scope banner are already correct — they come from the
+        // definition — and the 3D subject follows when the parse lands.
+        mJob = Job();
+        mJob.kind = QStringLiteral("open");
+        mJob.file = rowName;
+        mJob.result = asset();
+        emit busyStarted(QStringLiteral("Loading %1").arg(rowName), false);
+        startPreviewLoad(modelPath, rowName);
+        notifyChanged();
+        return asset();
+    }
+
+    QString loadError;
+    // THE ROW'S NAME, not the file's: a store object is named after its
+    // sha256, so the subject (and every junk-named clip in it) would otherwise
+    // be called "c826b4bf…".
+    if (!mModel->load(modelPath, &loadError, rowName))
+        record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
+                              "previewed: %2").arg(rowName, loadError));
+    notifySubjectChanged();
     notifyChanged();
     return asset();
 }
@@ -2458,6 +2747,41 @@ QVariantMap AvatarApi::asset()
     out["dirty"] = mOpen.dirty;
     out["definition"] = definitionToJs(mOpen.definition);
     return out;
+}
+
+// THE WRITE-THROUGH (owner 2026-09-13, "each avatar keeps track of its
+// animations"). The module's definition edits used to live in this object
+// until someone pressed Save: switching avatars replaced mOpen and the clips
+// were gone, and so were they after a restart. Every edit now goes to the
+// store where it was opened from — the same call `avatar.save` makes, so
+// library scopes publish and project scopes copy-on-write exactly as before.
+bool AvatarApi::persistOpen(const char *verb)
+{
+    if (!mOpen.isOpen() || !mOpen.dirty) return true;
+    if (!host.db) return false;
+
+    QString error;
+    const QString version = AvatarAssets::save(mOpen.guid, mOpen.scope, mOpen.definition, host.db,
+                                               host.project, &error);
+    if (version.isEmpty()) {
+        // Recorded, never thrown: the edit stays in the session (dirty) and
+        // the page's Save button is the retry.
+        record(QStringLiteral("%1: the change could not be saved: %2")
+                   .arg(QString::fromLatin1(verb), error));
+        return false;
+    }
+    mOpen.version = version;
+    mOpen.dirty = false;
+
+    // A PROJECT save moved this project's pin, which is what linked instances
+    // in the open scene follow (§4 D4) — same tail avatar.save has.
+    if (mOpen.scope == AvatarAssets::Scope::Project) {
+        if (host.services && host.services->assets)
+            host.services->assets->announcePinChanged(mOpen.guid);
+        else
+            onAssetPinChanged(mOpen.guid);
+    }
+    return true;
 }
 
 QVariantMap AvatarApi::save()
@@ -2534,6 +2858,7 @@ bool AvatarApi::removeClip(const QString &name)
                                            ? QString()
                                            : mOpen.definition.clips.first().name;
     mOpen.dirty = true;
+    persistOpen("avatar.removeClip");
     notifyChanged();
     return true;
 }
@@ -2583,6 +2908,7 @@ QVariantMap AvatarApi::setClipOptions(const QString &name, const QVariantMap &va
         entry->rootMotion = values.value(QStringLiteral("rootMotion")).toBool();
 
     mOpen.dirty = true;
+    persistOpen("avatar.setClipOptions");
     out["name"] = entry->name;
     out["looping"] = entry->looping;
     out["rootMotion"] = entry->rootMotion;
@@ -2598,6 +2924,7 @@ bool AvatarApi::setDefaultClip(const QString &name)
                           .arg(mOpen.definition.name, name));
     mOpen.definition.defaultClip = name;
     mOpen.dirty = true;
+    persistOpen("avatar.setDefaultClip");
     notifyChanged();
     return true;
 }

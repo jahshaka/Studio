@@ -178,24 +178,30 @@ ImportResult AssetImportService::import(const ImportRequest &request,
     PreparedImport prepared = prepare(request, progress);
     ImportResult out = prepared.ok() ? commit(prepared, progress) : prepared.result;
 
+    logImportRecord(request, out, clock.elapsed());
+    return out;
+}
+
+void AssetImportService::logImportRecord(const ImportRequest &request, const ImportResult &result,
+                                         qint64 elapsedMs)
+{
     const QString source = QFileInfo(request.sourcePath).fileName();
-    if (out.ok()) {
+    if (result.ok()) {
         JAH_LOG(JahLog::assets, Display,
                 QStringLiteral("import: '%1' -> %2 (%3 object(s), %4 ms)%5")
-                    .arg(source, out.assetGuid)
-                    .arg(out.objectOids.size())
-                    .arg(clock.elapsed())
-                    .arg(out.warnings.isEmpty()
+                    .arg(source, result.assetGuid)
+                    .arg(result.objectOids.size())
+                    .arg(elapsedMs)
+                    .arg(result.warnings.isEmpty()
                              ? QString()
-                             : QStringLiteral(" — %1 warning(s)").arg(out.warnings.size())));
-        for (const QString &w : out.warnings)
+                             : QStringLiteral(" — %1 warning(s)").arg(result.warnings.size())));
+        for (const QString &w : result.warnings)
             JAH_LOG(JahLog::assets, Warning, QStringLiteral("import '%1': %2").arg(source, w));
     } else {
         JAH_LOG(JahLog::assets, Error,
                 QStringLiteral("import: '%1' FAILED after %2 ms — %3")
-                    .arg(source).arg(clock.elapsed()).arg(out.error));
+                    .arg(source).arg(elapsedMs).arg(result.error));
     }
-    return out;
 }
 
 PreparedImport AssetImportService::prepare(const ImportRequest &request,

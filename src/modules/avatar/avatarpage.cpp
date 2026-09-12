@@ -10,7 +10,9 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "modules/avatar/avatarpage.h"
+#include "ui/dialogs/progressdialog.h"
 #include "ui/style/panelmetrics.h"
+#include "ui/style/themeroles.h"
 
 #include <QAction>
 #include <QApplication>
@@ -130,6 +132,13 @@ QWidget *AvatarPage::buildLeftColumn()
     mLibrary->setRootIsDecorated(true);
     mLibrary->header()->setStretchLastSection(true);
     mLibrary->setToolTip(tr("Double-click to edit; right-click for project actions"));
+    // ACTIVATION LOADS A CHARACTER, so it takes a double-click or Enter — never
+    // a single click, and never the right-click that raises the menu (owner
+    // 2026-09-13: "I right click and it starts reloading her"). See
+    // ThemeRoles::setActivateOnDoubleClick: Qlementine answers
+    // SH_ItemView_ActivateItemOnSingleClick true and Qt emits `activated` on
+    // ANY button's release when it does.
+    ThemeRoles::setActivateOnDoubleClick(mLibrary);
     connect(mLibrary, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem *item, int) {
         if (!item) return;
         const QString guid = item->data(0, Qt::UserRole).toString();
@@ -143,17 +152,23 @@ QWidget *AvatarPage::buildLeftColumn()
 
     // EVERY LOAD IS AN IMPORT (D7): a file picked here goes through the one
     // import pipeline and becomes a library row, not a session entry that dies
-    // with the process. The second button does the same and pins it, so
-    // "bring this character into my project" is one gesture rather than three.
+    // with the process. ONE IMPORTER (owner 2026-09-13: "we don't import file
+    // and add to project. We only import into the avatar module"): this button
+    // brings a character into the MODULE and nothing else — the old
+    // "Import to Project…" second importer is deleted.
     mImportButton = new QPushButton(tr("Import Avatar..."), column);
-    connect(mImportButton, &QPushButton::clicked, this, [this]() { onImportClicked(false); });
+    mImportButton->setToolTip(tr("Import a character file into the avatar library"));
+    connect(mImportButton, &QPushButton::clicked, this, &AvatarPage::onImportClicked);
     layout->addWidget(mImportButton);
 
-    mImportToProjectButton = new QPushButton(tr("Import to Project..."), column);
-    mImportToProjectButton->setToolTip(tr("Import the file AND add it to the open project, in "
-                                          "one step"));
-    connect(mImportToProjectButton, &QPushButton::clicked, this, [this]() { onImportClicked(true); });
-    layout->addWidget(mImportToProjectButton);
+    // ... and the button under it acts on the avatar that is LOADED, which is
+    // the same action the library row's right-click menu offers, through the
+    // same signal. Greyed out when nothing is loaded.
+    mAddToProjectButton = new QPushButton(tr("Add to Project"), column);
+    mAddToProjectButton->setToolTip(tr("Add the loaded avatar to the open project"));
+    mAddToProjectButton->setEnabled(false);
+    connect(mAddToProjectButton, &QPushButton::clicked, this, &AvatarPage::onAddToProjectClicked);
+    layout->addWidget(mAddToProjectButton);
     return column;
 }
 
@@ -171,9 +186,12 @@ void AvatarPage::openSelected(const QString &guid, const QString &scope)
     if (!mApi || guid.isEmpty()) return;
     QVariantMap options;
     if (!scope.isEmpty()) options.insert(QStringLiteral("scope"), scope);
-    QApplication::setOverrideCursor(Qt::WaitCursor);
+    // ASYNC (owner 2026-09-13: switching "is not fast" — 1541 ms measured with
+    // nothing on screen). The verb returns with the definition open, so the
+    // clip column and the banner are right immediately; the character itself
+    // is parsed on a worker behind the progress dialog the signals raise.
+    options.insert(QStringLiteral("async"), true);
     const QVariantMap opened = mApi->quietly([&] { return mApi->open(guid, options); });
-    QApplication::restoreOverrideCursor();
     if (opened.isEmpty() && !mApi->lastError().isEmpty())
         QMessageBox::warning(this, tr("Open Avatar"), mApi->lastError());
     refreshFromModel();
@@ -372,6 +390,9 @@ QWidget *AvatarPage::buildRightColumn()
     mAnimations->setRootIsDecorated(false);
     mAnimations->header()->setStretchLastSection(true);
     mAnimations->setToolTip(tr("Double-click a clip to play it on the loaded character"));
+    // The same trap as the library list: a right-click here must open the clip
+    // menu, not switch the clip under the cursor.
+    ThemeRoles::setActivateOnDoubleClick(mAnimations);
     // itemActivated is the double-click (and Enter) — the ONE clip switcher.
     // It carries the DISPLAY name, which is what avatar.setClip takes.
     connect(mAnimations, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem *item, int) {
@@ -446,36 +467,93 @@ void AvatarPage::setPreviewWidget(IAvatarPreviewWidget *preview)
     preview->setPreviewModel(mModel);
 }
 
-void AvatarPage::onImportClicked(bool intoProject)
+void AvatarPage::onImportClicked()
 {
     if (!mApi) return;
     QStringList filters;
     for (const auto &ext : Constants::MODEL_EXTS) filters.append("*." + ext);
     const QString path = QFileDialog::getOpenFileName(
-        this, intoProject ? tr("Import an avatar into the project") : tr("Import an avatar"),
-        QString(), tr("Models (%1)").arg(filters.join(' ')));
+        this, tr("Import an avatar"), QString(), tr("Models (%1)").arg(filters.join(' ')));
     if (path.isEmpty()) return;
 
-    // R0.11: the assimp parse is synchronous on the UI thread — a large FBX
-    // freezes the page for seconds. The busy cursor is the honest stopgap; the
-    // threaded ImportBatchRunner is a later problem if it becomes one.
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    QVariantMap options;
-    if (intoProject) options.insert(QStringLiteral("scope"), QStringLiteral("project"));
-    const QVariantMap result = mApi->quietly([&] { return mApi->importAvatar(path, options); });
-    QApplication::restoreOverrideCursor();
-
-    const QString avatarGuid = result.value(QStringLiteral("avatar")).toString();
-    if (avatarGuid.isEmpty()) {
-        QMessageBox::warning(this, tr("Import Avatar"),
-                             mApi->lastError().isEmpty()
-                                 ? tr("That file could not be imported as an avatar.")
-                                 : mApi->lastError());
-        refreshFromModel();
-        return;
-    }
-    // The verb already opened it (D7-A) — the page just catches up.
+    // THREADED (AV1): the assimp parse, the texture extraction and the store
+    // used to run on the UI thread — 9.3 s of an app that looks crashed on the
+    // owner's Jennifer.fbx. {async: true} is the pipeline's own
+    // ImportBatchRunner, the same one the Assets page drives, and the progress
+    // dialog comes up from the API's busyStarted signal.
+    const QVariantMap started =
+        mApi->quietly([&] { return mApi->importAvatar(path, { { "async", true } }); });
+    if (started.isEmpty() && !mApi->lastError().isEmpty())
+        QMessageBox::warning(this, tr("Import Avatar"), mApi->lastError());
     refreshFromModel();
+}
+
+void AvatarPage::onAddToProjectClicked()
+{
+    if (!mApi) return;
+    const QString guid = mApi->asset().value(QStringLiteral("guid")).toString();
+    if (guid.isEmpty()) return;      // the button is disabled in this state
+    emit addAvatarToProject(guid);   // ONE path with the right-click entry
+    refreshFromModel();
+}
+
+// The page's view over the API's background jobs: one dialog, the same one the
+// Assets page uses, driven by the verbs rather than by the widgets.
+void AvatarPage::setApi(AvatarApi *api)
+{
+    mApi = api;
+    if (!mApi) return;
+    if (!mProgress) {
+        mProgress = new ProgressDialog(this);
+        connect(mProgress, &ProgressDialog::canceled, this, [this]() {
+            if (mApi) mApi->cancelImport();
+        });
+    }
+    connect(mApi, &AvatarApi::busyStarted, this,
+            [this](const QString &title, bool cancellable) {
+        mProgress->resetCancel();
+        mProgress->setCancelVisible(cancellable);
+        mProgress->setRange(0, 0);
+        mProgress->setValue(0);
+        mProgress->setLabelText(title);
+        mProgress->setStageText(tr("Reading…"));
+        mProgress->show();
+    });
+    connect(mApi, &AvatarApi::busyStage, this,
+            [this](const QString &stage, int done, int total) {
+        QString text;
+        if (stage == QStringLiteral("sniff")) text = tr("Reading…");
+        else if (stage == QStringLiteral("convert")) text = tr("Converting…");
+        else if (stage == QStringLiteral("extract")) text = tr("Extracting archive…");
+        else if (stage == QStringLiteral("textures"))
+            text = tr("Extracting textures (%1/%2)…").arg(done + 1).arg(total);
+        else if (stage == QStringLiteral("hash"))
+            text = tr("Hashing content (%1/%2)…").arg(done + 1).arg(total);
+        else if (stage == QStringLiteral("store")) text = tr("Storing (%1/%2)…").arg(done + 1).arg(total);
+        else if (stage == QStringLiteral("preview")) text = tr("Preparing the character…");
+        else text = stage;
+        mProgress->setStageText(text);
+        mProgress->setRange(0, total);
+        if (total > 0) mProgress->setValue(done);
+    });
+    connect(mApi, &AvatarApi::busyFinished, this, [this](bool cancelled, const QString &error) {
+        mProgress->hide();
+        refreshFromModel();
+        if (cancelled) return;   // nothing was written: the pipeline rolled back
+        if (!error.isEmpty())
+            QMessageBox::warning(this, tr("Import Avatar"), error);
+        else {
+            // The IMPORT's own warnings, surfaced rather than only logged — a
+            // Mixamo export's texture paths point outside the file, and the
+            // user should be told which maps did not come with it.
+            const QStringList warnings =
+                mApi->progress().value(QStringLiteral("result")).toMap()
+                    .value(QStringLiteral("warnings")).toStringList();
+            if (!warnings.isEmpty())
+                QMessageBox::information(this, tr("Imported with warnings"),
+                                         warnings.join(QStringLiteral("\n")));
+        }
+    });
 }
 
 void AvatarPage::onSaveClicked()
@@ -655,6 +733,11 @@ void AvatarPage::refreshFromModel()
     mLoadAnimButton->setEnabled(loaded);
 
     refreshLibrary();
+    // "Add to Project" acts on what is LOADED, so it is greyed out until an
+    // avatar is open (owner 2026-09-13).
+    if (mAddToProjectButton)
+        mAddToProjectButton->setEnabled(
+            mApi && !mApi->asset().value(QStringLiteral("guid")).toString().isEmpty());
 
     const auto clips = mModel->clips();
     // WITH AN AVATAR OPEN the rows are the DEFINITION's clips — the avatar's
