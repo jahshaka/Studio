@@ -268,7 +268,22 @@ int main(int argc, char **argv)
         // The population baseline is taken once every node TYPE has been shown
         // (and its blade built) — the first 15 switches are construction, not
         // steady state.
-        if (i == 19) {
+        //
+        // AT 50, NOT AT 20 (2026-09-12, lane R1): construction is not finished
+        // when the last blade has been shown. A qlementine focus frame — and
+        // the per-widget WidgetWithFocusFrameEventFilter behind it — attaches
+        // ONE EVENT-LOOP TURN AFTER ITS WIDGET'S FIRST PAINT (the comment on
+        // `turn` above), so the tail of that construction is paced by paints
+        // rather than by switches, and on a loaded box a handful of rows were
+        // still to arrive at switch 20. That sampled a baseline five objects
+        // short of the steady state and read as growth (a full 317-suite gate,
+        // -j4: 3682 -> 3687, where the same binary run alone reports
+        // 3687 -> 3687 and every other run of the day agreed).
+        //
+        // This is not a weaker assertion: it is the same "no growth in steady
+        // state", measured over the last 150 switches instead of the last 180,
+        // with the baseline taken after the lazy construction has settled.
+        if (i == 49) {
             warmObjects = population();
             warmFrames = frames();
             warmWidgets = QApplication::allWidgets().size();
@@ -297,7 +312,7 @@ int main(int argc, char **argv)
                 firstSwitchAvg > 0 ? lastSwitchAvg / firstSwitchAvg : 0.0);
     std::printf("  total %.0f ms\n", total);
     std::printf("  population: panel objects %d -> %d, focus frames %d -> %d, "
-                "app widgets %d -> %d (baseline taken at switch 20)\n",
+                "app widgets %d -> %d (baseline taken at switch 50)\n",
                 warmObjects, endObjects, warmFrames, endFrames, warmWidgets, endWidgets);
     std::printf("  ParentChange over the last 50 switches: %d total, %d on the %d reused blades, "
                 "%d focus-frame RE-derivations\n\n",
