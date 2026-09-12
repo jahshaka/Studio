@@ -89,6 +89,11 @@ add_script_e2e(fragments e2e_fragments.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+# GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
+# a high oblique view (the two things the owner reported while testing push #18).
+# The document half of the floor is scripting.e2e.default_floor, which is
+# headless; this one needs a camera.
+add_script_e2e(default_ground e2e_default_ground.js)
 # HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
 # roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts

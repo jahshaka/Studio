@@ -29,6 +29,8 @@ namespace defaultfloor {
 
 QString meshPath() { return QStringLiteral(":/models/ground.obj"); }
 
+QColor specularColor() { return QColor(0, 0, 0); }
+
 QString shippedTilePath()
 {
     return IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
@@ -68,12 +70,17 @@ iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *til
     }
 
     // A PbrMaterial (HLMS_ADOPTION P4b). The roughness is what the legacy
-    // Default shader's shininess 0 already meant through the mirror's remap.
+    // Default shader's shininess 0 already meant through the mirror's remap;
+    // the workflow/ior/specular trio is the floor's ZERO SPECULAR, and the
+    // header states why it takes two values rather than one.
     auto material = iris::PbrMaterial::create();
     material->setValue("baseColorMap", tilePath);
     material->setValue("textureScale", kTextureScale);
     material->setValue("roughness", kRoughness);
     material->setValue("metallic", kMetallic);
+    material->setValue("workflow", kWorkflow);
+    material->setValue("ior", kIor);
+    material->setValue("specularColor", specularColor());
     return material;
 }
 

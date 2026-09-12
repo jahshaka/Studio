@@ -96,12 +96,14 @@ var CEIL_BOTTOM = 3.75;    // ceiling slab: centre 4.25, half-height 0.5
 var WALL_HALF = CEIL_BOTTOM / 2;
 
 // ---- the room: 8.5 x 3.75 x 8.5 of interior, sealed ------------------------
-// The slab's satin finish is the default floor's OWN material in this room
-// (roughness 0.55 on the checker); "Reset to Default Floor" (material.reset)
-// returns it to the plain default.
+// A MATTE floor (owner, 2026-09-13: "the ground should not be reflective, it
+// should have 0 specular"). This room used to give the default floor the old
+// slab's satin finish (roughness 0.55 on the checker); the reflections this
+// sample exists to show belong to the mirror panel, the sphere and the torus,
+// not to the floor. The floor is left as a new scene is born with it
+// (services/defaultfloor.h).
 var ground = scene.find("Ground");
 assert(ground && node.property(ground, "defaultFloor") === true, "the room stands on the default floor");
-assert(material.set(ground, { roughness: 0.55 }), "the floor's satin finish");
 slab("Ceiling",  { x: 0, y: 4.25, z: 0 },           { x: 9, y: 0.5, z: 9 },          "#cccccc");
 slab("RedWall",  { x: 0, y: WALL_HALF, z: 4.75 },   { x: 9, y: WALL_HALF, z: 0.5 },  "#e01010", 0.8);  // THE wall
 slab("BlueWall", { x: 0, y: WALL_HALF, z: -4.75 },  { x: 9, y: WALL_HALF, z: 0.5 },  "#1040d8", 0.8);

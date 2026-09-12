@@ -162,18 +162,22 @@ var FLOOR_TOP = 0.0;
 var CEIL_BOTTOM = 6.75;  // ceiling slab: centre y 7.25, half-height 0.5
 var WALL_HALF = (CEIL_BOTTOM - 0.0) / 2;   // walls span the floor line to the ceiling
 
-// A POLISHED floor: the roughness ladder above it is only legible because the
-// floor itself reflects. The slab's polish is the default floor's OWN material
-// in this room — roughness 0.32, metallic 0.05 on the checker — and "Reset to
-// Default Floor" (material.reset) returns it to the plain default.
-// The CHECKER scales with the room: textureScale is a repeat count over the
-// fixed 100 m ground, so a checker cell twice as big is half the repeats (the
-// default 4 = 2 m cells in the S = 0.5 room, 2 = 4 m cells at S = 1).
+// A MATTE floor (owner, 2026-09-13: "the ground should not be reflective, it
+// should have 0 specular"). This room used to put the deleted gallery slab's
+// polish on the default floor — roughness 0.32, metallic 0.05 — and the owner
+// reversed that while testing push #18. The default floor is left exactly as a
+// new scene is born with it (services/defaultfloor.h: roughness 1, no
+// specular); the room keeps its polished look in the SLABS, the columns and
+// the metal ladder, which is where it belongs.
+// The one thing still authored here is the CHECKER's size: textureScale is a
+// repeat count over the fixed 100 m ground, so a checker cell twice as big is
+// half the repeats (the default 4 = 2 m cells in the S = 0.5 room, 2 = 4 m
+// cells at S = 1).
 var ground = scene.find("Ground");
 assert(ground && node.property(ground, "defaultFloor") === true, "the room stands on the default floor");
 var CHECKER = material.get(ground).textureScale / GROW;
-assert(material.set(ground, { roughness: 0.32, metallic: 0.05, textureScale: CHECKER }),
-       "the floor's polish, checker at textureScale " + CHECKER);
+assert(material.set(ground, { textureScale: CHECKER }),
+       "the floor keeps its matte default, checker at textureScale " + CHECKER);
 slab("Ceiling", { x: 0, y: 7.25, z: 0 },      { x: 24, y: 0.5, z: 24 }, "#b5b5b5");
 slab("WallN",   { x: 0, y: WALL_HALF, z: 12.25 },  { x: 24, y: WALL_HALF, z: 0.5 }, "#c8452a", 0.7);  // warm
 slab("WallS",   { x: 0, y: WALL_HALF, z: -12.25 }, { x: 24, y: WALL_HALF, z: 0.5 }, "#2a56c8", 0.7);  // cold
