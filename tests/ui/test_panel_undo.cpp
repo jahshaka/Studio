@@ -450,7 +450,15 @@ int main(int argc, char **argv)
         ComboBoxWidget *row = comboWith(&panel, QStringLiteral("Movement"));
         CHECK(row != nullptr, "movement: the row is on the blade");
         CHECK(row && row->getWidget() && row->getWidget()->count() == 3,
-              "movement: three choices — auto, static, movable");
+              "movement: three choices");
+        // PLAIN ENGLISH, in the same words as the result line below it (the
+        // owner is not a programmer): the document's "auto"/"static"/"movable"
+        // is a file format, not a sentence.
+        CHECK(row && row->getWidget()
+                  && row->getWidget()->itemText(0) == QStringLiteral("Auto")
+                  && row->getWidget()->itemText(1) == QStringLiteral("Static (never moves)")
+                  && row->getWidget()->itemText(2) == QStringLiteral("Movable (moves)"),
+              "movement: the choices read plainly, in the row's own vocabulary");
         CHECK(row && row->getWidget() && row->getWidget()->currentIndex() == 0,
               "movement: the row REFLECTS the document (a fresh node is auto)");
 

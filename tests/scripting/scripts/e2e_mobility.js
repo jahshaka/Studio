@@ -67,6 +67,14 @@ reads(body, "movable", "physics", "a SIMULATED physics body resolves movable/phy
 // moving would take it out of the room's reflections and bounce light.
 assert(node.physics(body, { type: "static" }) === true, "make it an immovable body");
 reads(body, "static", "default", "a STATIC physics body (the ground) does not move");
+// ...and NEITHER IS A BODY WITH NO TYPE: the panel's Collision Shape row alone
+// marks a node a physics body, leaving the type at "none" and the mass at its
+// default — and a scene saved before the file carried a type reads back the
+// same way. That must not say "it is a physics object" over a Physics section
+// reading "None".
+assert(node.physics(body, { type: "none", shape: "cube" }) === true,
+       "a shape with no type (what the panel's shape row alone produces)");
+reads(body, "static", "default", "a SHAPE-only body (type none) does not move");
 assert(node.physics(body, { type: "rigidbody", mass: 1 }) === true, "back to a simulated one");
 reads(body, "movable", "physics", "...and it moves again");
 
@@ -177,6 +185,18 @@ fragment2.node["static"] = false;                  // v2's "Dynamic"
 var legacyDynamic = node.deserialize(fragment2, "", -1);
 assert(node.mobility(legacyDynamic).setting === "movable",
        "LEGACY: the old `static: false` (Dynamic) reads as Movable — same meaning");
+
+// A SCENE SAVED BEFORE THE PHYSICS BLOCK CARRIED A TYPE reads back as type
+// "none" (a missing key is 0), so it must classify like the shape-only body
+// above rather than as a mover.
+var legacyBodyFrag = node.serialize(byName("M_auto"));
+legacyBodyFrag.node["physicsObject"] = true;
+legacyBodyFrag.node["physicsProperties"] = { mass: 1, shape: 3 };   // no "type" at all
+var legacyBody = node.deserialize(legacyBodyFrag, "", -1);
+assert(node.physicsInfo(legacyBody).type === "none",
+       "LEGACY: a physics block with no type reads back as none");
+reads(legacyBody, "static", "default",
+      "LEGACY: ...and such a body does not resolve as moving");
 
 // A fragment with NEITHER key re-derives, which is what almost every node in
 // every file says.

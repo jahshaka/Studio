@@ -42,9 +42,13 @@ public:
     void setSceneNode(iris::SceneNodePtr sceneNode);
     void setServices(StudioServices *s) { services = s; }
 
-    /// The combo's items, in index order, as the DOCUMENT spells them
-    /// (iris::mobilityName). Index IS iris::Mobility, which is what makes the
-    /// row's mapping a cast rather than a table.
+    /// The combo's items, in index order, IN PLAIN ENGLISH. Index IS
+    /// iris::Mobility (Auto, Static, Movable), which is what makes the row's
+    /// mapping a cast rather than a table — the words are what the author
+    /// reads, the index is what the document stores.
+    static QStringList settingLabels();
+    /// The same three, as the DOCUMENT and the verbs spell them
+    /// (iris::mobilityName): "auto" | "static" | "movable". Same order.
     static QStringList settingNames();
     /// "Auto (Movable - animation)" / "Movable (you set this)" — the resolved
     /// line under the combo. Static so the test can assert the wording without

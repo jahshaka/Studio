@@ -1969,8 +1969,11 @@ int main(int argc, char **argv)
         CHECK(target->mobilityStatus().movableNodes == 0,
               "mobility: ...and so does the engine");
 
-        // The carrier becomes a physics body: it and everything under it move.
+        // The carrier becomes a SIMULATED physics body: it and everything under
+        // it move. (Type matters — a body with no type is what the panel's
+        // Collision Shape row alone produces, and that does not move.)
         carrier->isPhysicsBody = true;
+        carrier->physicsProperty.type = iris::PhysicsType::RigidBody;
         mmirror.sync();
         engine->renderOneFrame();
         CHECK(target->nodeMovable(riderId),
@@ -1986,6 +1989,7 @@ int main(int argc, char **argv)
         // ...and back. Nothing here is automatic in the other direction for a
         // node that MOVED (§3.3.3), but removing the DRIVER is authoring.
         carrier->isPhysicsBody = false;
+        carrier->physicsProperty.type = iris::PhysicsType::None;
         mmirror.sync();
         CHECK(!target->nodeMovable(riderId) && mmirror.movableNodeCount() == 0,
               "mobility: removing the driver puts the branch back (authoring, not automatic)");

@@ -1764,6 +1764,23 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.staleProbes            = st.staleProbes;
     out.staleSerial            = quint64(st.staleSerial);
     out.rebuilds               = quint64(st.rebuilds);
+    // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3.4): what the RENDERER holds —
+    // the document's resolution reaches it through Scene::setNodeMovable, and
+    // editor.mirrorStats().movableNodes is the document's own side of the same
+    // question. The misses are the mirror's (only the thing walking the
+    // document can notice an object that started moving with nothing predicting
+    // it), reported here because this is where a reader is already looking at
+    // what the room's lighting is made of.
+    {
+        const jahshaka::engine::MobilityStatus m = view()->scene()->mobilityStatus();
+        out.movableItems     = int(m.movableItems);
+        out.movableLights    = int(m.movableLights);
+        out.mobilityRebuilds = quint64(m.mobilityRebuilds);
+    }
+    if (mMirror) {
+        out.mobilityMisses   = mMirror->mobilityMissCount();
+        out.lastMobilityMiss = mMirror->lastMobilityMiss();
+    }
     switch (st.lastStaleReason) {
     case jahshaka::engine::GiStaleReason::None:     out.lastStaleReason = QStringLiteral("none"); break;
     case jahshaka::engine::GiStaleReason::Rebuild:  out.lastStaleReason = QStringLiteral("rebuild"); break;
@@ -1880,17 +1897,10 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.giPushes = mMirror->giPushCount();
     s.giRefreshes = mMirror->giRefreshCount();
     s.giLightRefreshes = mMirror->giLightRefreshCount();
-    // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): the document's resolution and
-    // what the engine recorded of it, side by side.
+    // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): what the DOCUMENT resolved.
+    // The renderer's own records — and the play-time misses — are reported by
+    // world.giStatus(), beside the probe and rebuild counters they belong with.
     s.movableNodes = mMirror->movableNodeCount();
-    s.mobilityMisses = mMirror->mobilityMissCount();
-    s.lastMobilityMiss = mMirror->lastMobilityMiss();
-    if (mEngineScene) {
-        const jahshaka::engine::MobilityStatus m = mEngineScene->mobilityStatus();
-        s.engineMovableNodes = quint64(m.movableNodes);
-        s.engineMovableItems = quint64(m.movableItems);
-        s.engineMovableLights = quint64(m.movableLights);
-    }
     return s;
 }
 

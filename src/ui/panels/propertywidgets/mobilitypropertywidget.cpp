@@ -40,6 +40,16 @@ QStringList MobilityPropertyWidget::settingNames()
              QString::fromLatin1(iris::mobilityName(iris::Mobility::Movable)) };
 }
 
+QStringList MobilityPropertyWidget::settingLabels()
+{
+    // WHAT THE AUTHOR READS, in the same words as everything else on this row.
+    // The document's spellings ("auto"/"static"/"movable") are a file format,
+    // not a sentence: "static" is jargon, and a lower-case word in a combo box
+    // beside "Moves" and "Never moves" is a third vocabulary for one idea.
+    // Same order, so the index is still the enum.
+    return { tr("Auto"), tr("Static (never moves)"), tr("Movable (moves)") };
+}
+
 QString MobilityPropertyWidget::resolvedText(const iris::SceneNodePtr &node)
 {
     if (!node) return QString();
@@ -68,18 +78,19 @@ MobilityPropertyWidget::MobilityPropertyWidget()
            [this]() { return !loading; })
 {
     setting = this->addComboBox("Movement");
-    for (const QString &name : settingNames()) setting->addItem(name);
+    for (const QString &label : settingLabels()) setting->addItem(label);
     if (QComboBox *box = setting->getWidget()) {
         box->setToolTip(tr(
             "Does this object move?\n\n"
             "Auto works it out: anything driven by physics, an animation, a character, a bone "
-            "or particles moves, and so does anything attached to something that moves. "
-            "Everything else is treated as fixed.\n\n"
-            "Fixed objects light the room and appear in its reflections. Moving objects are lit "
-            "by the room and cast shadows every frame, but never make the room's lighting redo "
-            "itself - which is what keeps the frame rate steady while things move.\n\n"
+            "or particles MOVES, and so does anything attached to something that moves. "
+            "Everything else NEVER MOVES.\n\n"
+            "An object that never moves lights the room and appears in its reflections. One "
+            "that moves is lit by the room and casts shadows every frame, but never makes the "
+            "room's lighting redo itself - which is what keeps the frame rate steady while "
+            "things move.\n\n"
             "Set it by hand when Auto is wrong: Movable for something a script will push, "
-            "Static for something that only ever moves while you are building the scene."));
+            "Static for something you only ever move yourself while building the scene."));
     }
     // The row's own mapping: the combo index IS the enum (settingNames()).
     rowundo::bind(setting, rows(QStringLiteral("mobility"),
@@ -87,7 +98,7 @@ MobilityPropertyWidget::MobilityPropertyWidget()
     // The combo changing is also the moment the resolved line can change.
     connect(setting, SIGNAL(currentIndexChanged(int)), this, SLOT(refreshResolved()));
 
-    resolved = this->addLabel("Result", "");
+    resolved = this->addLabel("Right now", "");
 }
 
 void MobilityPropertyWidget::refreshResolved()

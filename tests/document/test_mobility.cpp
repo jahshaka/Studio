@@ -47,6 +47,16 @@
 #include "../support/documentgraph.h"
 
 static int failures = 0;
+/// The log-noise gate below: how many qWarning()s an operation produced.
+static int gWarnings = 0;
+static void countWarnings(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
+{
+    Q_UNUSED(ctx);
+    if (type == QtWarningMsg || type == QtCriticalMsg) {
+        ++gWarnings;
+        printf("      (unexpected warning: %s)\n", qUtf8Printable(msg));
+    }
+}
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); \
     else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -96,6 +106,21 @@ int main(int argc, char **argv)
         body->physicsProperty.type = iris::PhysicsType::RigidBody;
         body->physicsProperty.objectMass = 1.0f;
         CHECK(is(body, "movable/physics"), "a SIMULATED physics body resolves movable/physics");
+
+        // A BODY WITH NO TYPE IS NOT A MOVER EITHER, and this one is the
+        // likeliest of the three in a real project: the Properties panel's
+        // COLLISION SHAPE row sets isPhysicsBody on its own, leaving Physics
+        // Type at None and the mass at its constructor default of 1. Any node
+        // whose shape was ever touched would have read as moving — with the
+        // Movement blade saying "it is a physics object" directly above a
+        // Physics blade reading "None". Same shape for a scene saved before the
+        // file carried a physics `type` at all: the reader gets 0 = None.
+        body->physicsProperty.type = iris::PhysicsType::None;
+        body->physicsProperty.objectMass = 1.0f;          // the ctor default
+        body->physicsProperty.shape = iris::PhysicsCollisionShape::Cube;
+        CHECK(is(body, "static/default"),
+              "a SHAPE-only body (type None, the panel's Collision Shape row) does NOT move");
+        body->physicsProperty.shape = iris::PhysicsCollisionShape::None;
 
         // AN IMMOVABLE BODY IS NOT A MOVER. The default scene's GROUND is a
         // physics body of type Static — the thing a character walks on — so a
@@ -213,6 +238,7 @@ int main(int argc, char **argv)
         // A DRIVER BEATS THE SETTING, openly: the setting is recorded, the
         // resolution says physics, and removing the body makes it true.
         pinned->isPhysicsBody = true;
+        pinned->physicsProperty.type = iris::PhysicsType::RigidBody;
         CHECK(is(pinned, "movable/physics"), "an explicit Static on a physics body does NOT hold");
         CHECK(pinned->mobility() == Mobility::Static,
               "...but the setting is still recorded (it becomes true when the body goes)");
@@ -284,6 +310,7 @@ int main(int argc, char **argv)
         branch->addChild(mover, false);
         root->addChild(branch, false);
         mover->isPhysicsBody = true;
+        mover->physicsProperty.type = iris::PhysicsType::RigidBody;
         branch->applyStaticDefaults();
         CHECK(branch->isStaticInGraph() && still->isStaticInGraph(),
               "the pass marks the still half of a branch");
@@ -292,6 +319,40 @@ int main(int argc, char **argv)
         CHECK(branch->mobility() == Mobility::Auto && still->mobility() == Mobility::Auto,
               "the pass records NO user decision (that would freeze today's rule into the file)");
         CHECK(is(underMover, "movable/parent"), "the child of the mover resolves movable/parent");
+    }
+
+    // ---- PINNING A PARENT MOVABLE IS QUIET --------------------------------
+    // Rule 2 makes this a SUBTREE change: the children resolve movable with it,
+    // and their recorded graph hints have to go with them. When they did not,
+    // every later scene bind replayed a stale "make me static" under a now
+    // dynamic parent, the graph refused each one, and the log filled with a
+    // warning per child per bind for a classification the document had already
+    // abandoned.
+    {
+        auto parent = iris::SceneNode::create();
+        auto childA = iris::SceneNode::create();
+        auto childB = iris::SceneNode::create();
+        childA->addChild(childB, false);
+        parent->addChild(childA, false);
+        root->addChild(parent, false);
+        parent->applyStaticDefaults();
+        CHECK(parent->isStaticInGraph() && childA->isStaticInGraph() && childB->isStaticInGraph(),
+              "log: the branch starts out graph-static");
+
+        gWarnings = 0;
+        QtMessageHandler previous = qInstallMessageHandler(countWarnings);
+        parent->setMobility(Mobility::Movable);
+        CHECK(gWarnings == 0, "log: pinning the parent Movable warns about nothing");
+        CHECK(!childA->staticHint() && !childB->staticHint(),
+              "log: ...because the children's recorded hints went with it (rule 2)");
+        CHECK(is(childA, "movable/parent") && is(childB, "movable/parent"),
+              "log: ...and the whole branch resolves movable");
+
+        // The replay a scene bind performs is now silent too, which is where
+        // the noise actually showed up.
+        root->reapplyStaticHints();
+        CHECK(gWarnings == 0, "log: ...and a later scene bind replays it in silence");
+        qInstallMessageHandler(previous);
     }
 
     printf(failures ? "document.mobility: %d FAILURES\n" : "document.mobility: all passed\n",
