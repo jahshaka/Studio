@@ -4835,6 +4835,74 @@ void monitor_snapshot_names_the_graph() {
     CHECK(!st.gpuCompiled || st.gpuSupported || !st.gpuReason.empty());
 }
 
+void monitor_gpu_timestamps() {
+    // P1c (ogre-patch 0027) and BOTH its off-switches (owner decision D3).
+    //
+    // BUILD: without JAH_GPU_TIMESTAMPS the render system answers no such
+    //   custom attribute, `gpuCompiled` is false and the reason names the
+    //   production build. This case passes either way — it asserts the
+    //   CONTRACT, not the presence of the patch, so it is meaningful on a
+    //   packaging build too.
+    // RUNTIME: even in a dev build no query pool exists until a capture starts.
+    Fixture fx;
+    MonitorRig rig;
+    const bool built = rig.build(fx, "mon-gpu");
+    REQUIRE(built);
+    render(fx.e, 3);
+
+    // OFF: no pools, whatever the build says.
+    MonitorStatus st = fx.e->monitorStatus();
+    CHECK_MSG(st.gpuQueryPools == 0u, "no capture, no query pool: %u", st.gpuQueryPools);
+    CHECK(!st.gpuActive);
+    CHECK(!st.gpuReason.empty());
+
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    st = fx.e->monitorStatus();
+    std::printf("    gpu: compiled=%d supported=%d active=%d pools=%u reason='%s'\n",
+                int(st.gpuCompiled), int(st.gpuSupported), int(st.gpuActive), st.gpuQueryPools,
+                st.gpuReason.c_str());
+    if (!st.gpuCompiled) {
+        // A production-configured engine: the hooks are upstream's empty stubs.
+        CHECK(!st.gpuSupported);
+        CHECK(!st.gpuActive);
+        CHECK(st.gpuQueryPools == 0u);
+        CHECK_MSG(!st.gpuReason.empty(), "an engine without the patch must say so");
+        fx.e->setFrameMonitor(MonitorLevel::Off);
+        return;
+    }
+    CHECK_MSG(st.gpuActive, "a dev build in a capture must own its pools: %s",
+              st.gpuReason.c_str());
+    CHECK_MSG(st.gpuQueryPools > 0u, "a capture owns query pools");
+
+    // Render past the two-frame readback latency and drain.
+    std::vector<FrameRecord> recs;
+    for (int i = 0; i < 8; ++i) {
+        rig.s->setNodeTransform(rig.cube, Vec3(0.1f * float(i), 0.6f, 0), Quat(),
+                                Vec3(0.8f, 0.8f, 0.8f));
+        render(fx.e, 1);
+    }
+    fx.e->takeFrameRecords(recs);
+    unsigned sampled = 0, frames = 0;
+    float anyGpu = -1.0f;
+    for (const FrameRecord &r : recs) {
+        ++frames;
+        if (r.gpuMs >= 0.0f) anyGpu = r.gpuMs;
+        for (const FramePass &p : r.passes)
+            if (p.gpuMs >= 0.0f) ++sampled;
+    }
+    std::printf("    %u frames drained, %u passes carry GPU time, frame gpuMs %.3f\n",
+                frames, sampled, anyGpu);
+    CHECK_MSG(sampled > 0u, "with the patch on, passes must carry GPU times");
+    CHECK_MSG(anyGpu >= 0.0f, "a frame's gpuMs is the sum of its sampled passes");
+
+    // ...and the pools go with the capture.
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+    st = fx.e->monitorStatus();
+    CHECK_MSG(st.gpuQueryPools == 0u, "stopping the capture frees the pools: %u",
+              st.gpuQueryPools);
+    CHECK(!st.gpuActive);
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -4919,6 +4987,7 @@ int main(int argc, char **argv) {
         { "monitor_survives_rebuilds_and_view_destruction",
                                                     monitor_survives_rebuilds_and_view_destruction },
         { "monitor_snapshot_names_the_graph",       monitor_snapshot_names_the_graph },
+        { "monitor_gpu_timestamps",                 monitor_gpu_timestamps },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";
