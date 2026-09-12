@@ -599,7 +599,6 @@ static void cacheKindsCase()
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 0;               // no captures but the ones this case asks for
-    gi.dynamicProbes = 0;
     room.scene->setGlobalIllumination(gi);
     render(engine.get(), 12);
     const GiStatus gst = room.scene->giStatus();
@@ -708,7 +707,6 @@ static void scanCostCase(int n)
     // JAH_SCANCOST_NOGI=1: budget 0, so no GI consumer scans and the shadow
     // cache walks on its own after updateSceneGraph (cached world AABBs).
     gi.updateBudget = std::getenv("JAH_SCANCOST_NOGI") ? 0 : 1;
-    gi.dynamicProbes = 0;
     s->setGlobalIllumination(gi);
     for (int i = 0; i < 30; ++i) engine->renderOneFrame();
     const auto sample = [&](int frames, bool move, double &shadowUs, double &giUs, double &frameMs) {

@@ -334,7 +334,6 @@ int main(int argc, char **argv)
     doc->giMode = iris::GiMode::VCT_PCC_HYBRID;
     doc->giPccGrid = iris::Vec3(2, 1, 2);             // 4 probes
     doc->giUpdateBudget = 1;
-    doc->giDynamicProbes = 0;
     doc->giBoundsMin = iris::Vec3(-7.2f, -0.3f, -7.2f);
     doc->giBoundsMax = iris::Vec3(7.2f, 6.5f, 7.2f);
     flyer->setLocalPos(iris::Vec3(0.0f, 0.6f, 1.0f));
@@ -437,6 +436,46 @@ int main(int argc, char **argv)
               "paused drag: no frame of the gesture captures more than budget + dynamic probes");
         CHECK(escene->giStatus().staleProbes == 0 && worstCaptures(20) == 0,
               "paused drag: the grid catches up after the gesture, then idles");
+    }
+
+    // ---- A MOVING LAMP RE-INJECTS AND NEVER SETTLES -------------------------
+    // REALTIME_REFLECTIONS_SPEC §3.3.4, owner decision O2 (lane R2). A lamp the
+    // document classifies as MOVING — a carried torch, a swaying pendant, a
+    // light on an animated rig — is not a still-world input: hashing it into
+    // the settle signature (which is what every light did) means an animated
+    // lamp holds the stability window open for ever and then pays a full
+    // re-solve every time it pauses. It rides the CHEAP cadence instead, so its
+    // bounce follows it, and the room's own lighting is never re-solved for it.
+    //
+    // The STATIC drag at the top of this suite is the control: same motion, same
+    // frames, ONE re-solve on release. Here: none, ever.
+    {
+        doc->giMode = iris::GiMode::VCT;
+        for (int f = 0; f < 30; ++f) frame();
+        sun->setMobility(iris::Mobility::Movable);
+        for (int f = 0; f < 20; ++f) frame();          // the classification lands
+        const quint64 solves = mirror.giRefreshCount();
+        const quint64 injects = mirror.giLightRefreshCount();
+        for (int f = 0; f < 60; ++f) {
+            const float t = float(f + 1) / 60.0f;
+            sun->setLocalRot(iris::Quat::fromEulerAngles(80.0f - 160.0f * t, 0.0f, 0.0f));
+            frame();
+        }
+        // ...and it STOPS, for longer than the settle window, which is the
+        // frame a still lamp would have re-solved on.
+        for (int f = 0; f < 40; ++f) frame();
+        const quint64 movingSolves = mirror.giRefreshCount() - solves;
+        const quint64 movingInjects = mirror.giLightRefreshCount() - injects;
+        std::printf("   MOVABLE lamp, 60 frames of motion + 40 still: re-solves = %llu, "
+                    "cheap re-injects = %llu\n", (unsigned long long)movingSolves,
+                    (unsigned long long)movingInjects);
+        CHECK(movingSolves == 0,
+              "a MOVABLE lamp costs ZERO full GI re-solves, moving or stopping "
+              "(a still lamp's drag costs one on release)");
+        CHECK(movingInjects >= 4,
+              "...and its bounce still follows it on the cheap re-inject cadence");
+        sun->setMobility(iris::Mobility::Auto);
+        for (int f = 0; f < 30; ++f) frame();
     }
 
     // ---- Instant Radiosity (Rayon Low) re-traces on a MATERIAL edit ----------

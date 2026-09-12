@@ -117,7 +117,6 @@ int main(int argc, char **argv)
     doc->giNumBounces = 2;
     doc->giPccGrid = iris::Vec3(2, 1, 2);          // 4 probes
     doc->giUpdateBudget = 1;
-    doc->giDynamicProbes = 0;
     doc->ambientColor = QColor(0, 0, 0);
     doc->ambientFromSky = false;
     doc->skyType = iris::SkyType::SINGLE_COLOR;

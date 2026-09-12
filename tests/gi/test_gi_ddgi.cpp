@@ -437,8 +437,9 @@ int main(int argc, char **argv)
     }
 
     // ---- 5b. EPIC'S BOUNCES COLUMN (the Rayon tier table, option (b)) ------
-    // Epic differs from High by `numBounces` 3 against 1 (and the dynamic
-    // probes, gated in gi.dynamic_probes). Bounces are VctLighting's extra
+    // Epic differs from High by `numBounces` 3 against 1 — the only column
+    // left between them since R2 deleted the dynamic-probe reservation.
+    // Bounces are VctLighting's extra
     // light-propagation passes (OgreVctLighting.h:290 update(numBounces);
     // setAllowMultipleBounces :204-213), and the field cone-traces the volume
     // they land in — IrradianceField has no bounce of its own at this pin

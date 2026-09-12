@@ -62,6 +62,15 @@ assert(dragged.movableNodes === 1,
        "MOVING IT IN THE EDITOR DOES NOT PROMOTE IT [" + dragged.movableNodes + "]");
 assert(world.giStatus().mobilityMisses === 0,
        "...and is not a miss either (it is authoring)");
+// ...and it still costs what moving a STILL object has always cost: exactly one
+// re-solve when the gesture settles. That is the control for the promotion case
+// below — the settle machinery is untouched, it is only mobility flips that no
+// longer reach it — and letting it land here is what keeps that window clean.
+var solvesAfterDrag = editor.mirrorStats().giRefreshes;
+editor.frame(60);
+assert(editor.mirrorStats().giRefreshes === solvesAfterDrag + 1,
+       "an editor drag of a STILL object still settles into exactly one re-solve [" +
+       solvesAfterDrag + " -> " + editor.mirrorStats().giRefreshes + "]");
 
 // ---- play, and push the unmarked crate ----------------------------------
 var rebuildsBefore = world.giStatus().rebuilds;
@@ -98,6 +107,23 @@ assert(world.giStatus().rebuilds === rebuildsBefore,
 assert(world.giStatus().mobilityRebuilds === 0,
        "...and none is charged to mobility either (recording a class is free)");
 
+// ---- THE SETTLE MUST NOT HEAR ABOUT IT (code review 2026-09-12, item 1) --
+// The renderer's GI geometry signature is the mirror's settle key, and an
+// object entering or leaving the bounce CHANGES it — so without the mobility
+// gate, the frame the crate promoted would arm a pending refresh and fire a
+// full re-solve about a quarter of a second later: a hitch, at play, which is
+// the exact thing this program exists to remove. Sixty-plus frames is well past
+// both settle gates (15 frames / 250 ms).
+var solvesBefore = editor.mirrorStats().giRefreshes;
+var rebuildsNow = world.giStatus().rebuilds;
+editor.frame(90);
+assert(editor.mirrorStats().giRefreshes === solvesBefore,
+       "NO GI re-solve settles out of the promotion (" + editor.mirrorStats().giRefreshes +
+       " vs " + solvesBefore + ")");
+assert(world.giStatus().rebuilds === rebuildsNow,
+       "...and no from-scratch rebuild either, 90 frames past the settle window");
+assert(world.giStatus().mobilityRebuilds === 0, "...and the mobility counter is still zero");
+
 // ---- stop: the promotion goes with the play session ---------------------
 assert(editor.stop() === true, "editor.stop()");
 editor.frame(3);
@@ -118,5 +144,28 @@ editor.frame(2);
 assert(world.giStatus().mobilityMisses === missesBefore,
        "A MARKED OBJECT IS NEVER A MISS (marking it is exactly the fix the warning asks for)");
 assert(editor.stop() === true, "stop");
+
+// ---- AN AUTHORING FLIP COSTS ONE REBUILD, AND EXACTLY ONE ---------------
+// The other half of item 1: marking a still object Movable takes it out of the
+// bounce, which the renderer pays for with one from-scratch rebuild. The settle
+// must not add a SECOND one on top of it, however long the scene then idles.
+assert(editor.stop() === true, "stopped");
+editor.frame(10);
+var reb0 = world.giStatus().rebuilds;
+var mob0 = world.giStatus().mobilityRebuilds;
+var solves0 = editor.mirrorStats().giRefreshes;
+assert(node.setProperty(prop, "mobility", "movable") === true, "mark the Crate Movable by hand");
+editor.frame(90);                       // well past both settle gates
+var after = world.giStatus();
+assert(after.mobilityRebuilds === mob0 + 1,
+       "the flip costs EXACTLY ONE mobility rebuild [" + mob0 + " -> " + after.mobilityRebuilds + "]");
+assert(after.rebuilds === reb0 + 1,
+       "...one from-scratch GI rebuild in total [" + reb0 + " -> " + after.rebuilds + "]");
+assert(editor.mirrorStats().giRefreshes === solves0,
+       "...and NO re-solve settled out of it on top [" + editor.mirrorStats().giRefreshes +
+       " vs " + solves0 + "]");
+editor.frame(60);
+assert(world.giStatus().rebuilds === reb0 + 1 && world.giStatus().mobilityRebuilds === mob0 + 1,
+       "...and 60 more idle frames add nothing");
 
 console.log("mobility_play: all assertions passed");

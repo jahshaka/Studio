@@ -250,7 +250,6 @@ static void hiddenParent(Engine *engine, View *view)
     gi.quality = GiQuality::High;
     gi.numBounces = 3;
     gi.ddgi = GiToggle::On;
-    gi.dynamicProbes = 2;
     CHECK(s->setGlobalIllumination(gi), "Epic's GI arms (hybrid, High, 3 bounces, field on)");
     render(engine, 6);
     view->readPixels(img);

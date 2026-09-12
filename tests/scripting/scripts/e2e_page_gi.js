@@ -40,7 +40,7 @@ function vecEq(a, b) {
 // nothing rebuilt must agree on every one of them.
 function sameGi(a, b, what) {
     var keys = ["mode", "probeCount", "pccBound", "vctBound", "ifdBound", "ifdProbes",
-                "probeUpdatesPerFrame", "dynamicProbes", "cubemapProbeSlotsPerCell",
+                "probeUpdatesPerFrame", "cubemapProbeSlotsPerCell",
                 "probesClampedToRegion", "probeHdr", "probeShadows", "rebuilds"];
     for (var i = 0; i < keys.length; ++i) {
         var k = keys[i];

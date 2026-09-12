@@ -149,25 +149,6 @@ add_test(NAME gi.overlay COMMAND test_gi_overlay
 set_tests_properties(gi.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "engine")
 
-# gi.dynamic_probes — DYNAMIC PROBES (REFLECTIONS_ADOPTION_SPEC.md P5a). Its own
-# binary for the same process-wide-HlmsPbs-binding reason as its siblings, and
-# because it TIMES frames: a suite sharing a process with another scene's GI
-# rebuild could not measure a per-frame cost honestly.
-add_executable(test_gi_dynamic_probes test_gi_dynamic_probes.cpp)
-set_target_properties(test_gi_dynamic_probes PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_dynamic_probes PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_dynamic_probes PRIVATE JahshakaEngine)
-add_dependencies(test_gi_dynamic_probes JahshakaEngineMedia)
-add_test(NAME gi.dynamic_probes COMMAND test_gi_dynamic_probes
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.dynamic_probes PROPERTIES TIMEOUT 120 LABELS "engine")
 
 
 # gi.budget — THE GI UPDATE BUDGET (FIX WAVE B1-B5). Mirror-linked for the same
@@ -366,3 +347,26 @@ add_dependencies(test_gi_hidden_volume JahshakaEngineMedia)
 add_test(NAME gi.hidden_volume COMMAND test_gi_hidden_volume
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.hidden_volume PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# gi.mobility — MOVERS LEAVE THE STILL-WORLD LAYER (REALTIME_REFLECTIONS_SPEC
+# §3.3, lane R2). A movable object is drawn by the per-frame layers (view,
+# planar mirror, SSR) and casts shadows there in the frame it moves, and is
+# absent from the reflection-probe captures, the voxel bounce and every GI
+# signature — so a scene full of moving things costs the room's lighting
+# nothing. Its own binary for the same process-wide-HlmsPbs-binding reason as
+# its hybrid siblings.
+add_executable(test_gi_mobility test_gi_mobility.cpp)
+set_target_properties(test_gi_mobility PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_mobility PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_mobility PRIVATE JahshakaEngine)
+add_dependencies(test_gi_mobility JahshakaEngineMedia)
+add_test(NAME gi.mobility COMMAND test_gi_mobility
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.mobility PROPERTIES TIMEOUT 300 LABELS "engine")

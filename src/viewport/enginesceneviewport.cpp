@@ -1747,8 +1747,6 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeHdr       = st.probeHdr;
     out.probeShadows   = st.probeShadows;
     out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;
-    out.dynamicProbes        = st.dynamicProbes;
-    out.dynamicProbeUpdates  = st.dynamicProbeUpdates;
     out.probeShapeMin        = q(st.probeShapeMin);
     out.probeShapeMax        = q(st.probeShapeMax);
     out.cubemapProbeSlotsPerCell = st.cubemapProbeSlotsPerCell;
@@ -1791,6 +1789,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     case jahshaka::engine::GiStaleReason::Sky:      out.lastStaleReason = QStringLiteral("sky"); break;
     case jahshaka::engine::GiStaleReason::Ambient:  out.lastStaleReason = QStringLiteral("ambient"); break;
     case jahshaka::engine::GiStaleReason::Fog:      out.lastStaleReason = QStringLiteral("fog"); break;
+    case jahshaka::engine::GiStaleReason::Mobility: out.lastStaleReason = QStringLiteral("mobility"); break;
     }
     return out;
 }

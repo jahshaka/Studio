@@ -41,8 +41,8 @@ struct StudioServices;
  * quality row, so this panel writes through worldmodes and the same state is
  * reachable from world.rayon, world.gi, world.settings and world.override.
  *
- * UNDO (rayontiers review follow-up, 2026-09-10): the two Epic-column sliders
- * (Light Bounces, Dynamic Probes) are undoable through WorldModeCommand, ONE
+ * UNDO (rayontiers review follow-up, 2026-09-10): the Epic-column slider
+ * (Light Bounces) is undoable through WorldModeCommand, ONE
  * step per gesture — the snapshot is taken on the slider's valueChangeStart
  * (press, or the first typed step), every tick writes through live so the
  * viewport follows the drag, and the command is pushed on valueChangeEnd
@@ -82,7 +82,6 @@ protected slots:
     void onQualityChanged(int row);
     void onLightChanged(int row);
     void onBouncesChanged(float value);
-    void onDynamicProbesChanged(float value);
     void onDdgiToggled(bool on);
     void onDdgiSourceChanged(int index);
     void onFitBoundsClicked();
@@ -124,7 +123,6 @@ private:
     ComboBoxWidget *quality = nullptr;
     ComboBoxWidget *lightSelector = nullptr;
     HFloatSliderWidget *bounces = nullptr;
-    HFloatSliderWidget *dynamicProbes = nullptr;
     DragVector3Widget *boundsMin = nullptr;
     DragVector3Widget *boundsMax = nullptr;
     DragVector3Widget *pccGrid = nullptr;

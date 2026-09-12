@@ -1358,7 +1358,6 @@ static void t3_cache_probe(Engine *e, View *v)
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 1;
-    gi.dynamicProbes = 0;
     r.scene->setGlobalIllumination(gi);
     e->shadowStatus();
     // Build, place, and let the grid's first catch-up give every probe its own
@@ -1528,7 +1527,6 @@ static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 4;
-    gi.dynamicProbes = 0;
     r.scene->setGlobalIllumination(gi);
     // The probes capture with the sun alone: every probe node builds its light
     // list in these frames, and none of them holds a cached lamp.
@@ -1579,7 +1577,6 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 1;
-    gi.dynamicProbes = 0;
     a.scene->setGlobalIllumination(gi);
     for (int i = 0; i < 20; ++i) e->renderOneFrame();
     // Off screen: the view draws another scene; A keeps its GI arm. B has more

@@ -3,10 +3,10 @@
 // What shipped before this wave: GI updated when a LIGHT moved (debounced), and
 // otherwise never. Moving an object changed nothing until somebody pressed
 // Refresh; reflection probes were captured once at build time and frozen there
-// unless an author opted into `dynamicProbes`, which pinned the nearest N probes
-// live for ever and cost their full price every frame. Two knobs (autoRefresh,
-// dynamicProbes) for one question, and neither of them was "how much may this
-// cost per frame".
+// unless an author opted into the old `dynamicProbes`, which pinned the nearest
+// N probes live for ever and cost their full price every frame. Two knobs
+// (autoRefresh, dynamicProbes) for one question, and neither of them was "how
+// much may this cost per frame". Both are gone.
 //
 // What this suite pins, and it is the whole model in five properties:
 //
@@ -112,7 +112,7 @@ int main(int argc, char **argv)
     view->setScene(escene);
 
     // ---- the room ---------------------------------------------------------
-    // gi.dynamic_probes' room, in DOCUMENT form: a sealed box with one red wall
+    // THE ROOM, in DOCUMENT form: a sealed box with one red wall
     // behind the camera, a mirror cube in the middle, and a green slab that
     // slides across the red wall's inner face. The mirror's centre pixel is
     // therefore a direct read of "what do the probes currently hold".

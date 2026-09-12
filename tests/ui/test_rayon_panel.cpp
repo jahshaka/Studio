@@ -96,8 +96,7 @@ int main(int argc, char **argv)
     // Exactly what MainWindow::createDefaultScene does: a new scene is Epic.
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
-    CHECK(scene->giNumBounces == 3 && scene->giDynamicProbes == 0,
-          "a new Epic scene carries Epic's column (3 bounces, no dynamic probes since R0)");
+    CHECK(scene->giNumBounces == 3, "a new Epic scene carries Epic's column (3 bounces)");
 
     WorldGiPropertyWidget panel;
     panel.setScene(scene);
@@ -128,9 +127,8 @@ int main(int argc, char **argv)
         if (tier) tier->setCurrentIndex(1);   // Medium
         pump();
         CHECK(scene->giMode == iris::GiMode::VCT && int(scene->giQuality) == 1 &&
-                  scene->giDdgi == 1 && scene->giNumBounces == 1 && scene->giDynamicProbes == 0,
-              "picking Medium wrote the technique, the quality (DDGI-fed), the bounces and "
-              "the dynamic probes through");
+                  scene->giDdgi == 1 && scene->giNumBounces == 1,
+              "picking Medium wrote the technique, the quality (DDGI-fed) and the bounces through");
         CHECK(scene->giTier == int(worldmodes::RayonTier::Medium),
               "and recorded the tier on the document");
     }
@@ -266,26 +264,12 @@ int main(int argc, char **argv)
             pump();
         }
 
-        // Dynamic Probes is wired the same way (Epic = hybrid, so its row exists).
-        HFloatSliderWidget *dyn = sliderWith(&panel, QStringLiteral("Dynamic Probes"));
-        CHECK(dyn != nullptr, "the Dynamic Probes slider is on the Advanced surface at Epic");
-        if (dyn) {
-            // index(), not count(): the undone bounces step above is still ON
-            // the stack until this push discards it.
-            const int before = stack.index();
-            emit dyn->ui->slider->sliderPressed();
-            dyn->setValue(5.0f);
-            emit dyn->ui->slider->sliderReleased();
-            pump();
-            CHECK(scene->giDynamicProbes == 5 && scene->worldOverrides.contains(QStringLiteral("giDynamicProbes")),
-                  "a dynamic-probes drag writes through and pins");
-            CHECK(stack.index() == before + 1 &&
-                      stack.text(stack.index() - 1) == QStringLiteral("Rayon Dynamic Probes"),
-                  "as one named undo step");
-            stack.undo();
-            pump();
-            CHECK(scene->giDynamicProbes == 0, "undone to Epic's zero");
-        }
+        // THE DELETED SLIDER (lane R2): "Dynamic Probes" reserved extra probe
+        // re-captures for whatever moved, and the feature is gone — moving
+        // objects are not in a probe capture at all now. The row must not come
+        // back on any surface.
+        CHECK(sliderWith(&panel, QStringLiteral("Dynamic Probes")) == nullptr,
+              "the retired Dynamic Probes slider is gone from the Advanced surface");
 
         // A tick with no bracket (the slider's contract allows one) is its own
         // one-step edit — nothing can write through without an undo step.

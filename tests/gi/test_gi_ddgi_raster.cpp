@@ -334,6 +334,36 @@ int main()
     CHECK(!st.ifdConverged, "posing the rig RE-ARMS the converged raster field");
     for (int f = 0; f < framesToConverge + 2; ++f) e->renderOneFrame();
     CHECK(s->giStatus().ifdConverged, "and it re-converges under the budget");
+
+    // 4a-bis. A MOVABLE RIG DOES NOT RE-ARM IT (REALTIME_REFLECTIONS_SPEC
+    // §3.3.4, lane R2). The re-arm above is the STILL rig's — the control that
+    // keeps this pair honest. A MOVABLE rig carries kMovableBit, and a raster
+    // probe face renders `visibility_mask 0x1`, so the field cannot contain it:
+    // restarting an 8192-probe sweep for a walking character would be a whole
+    // re-converge per animated frame for a picture that is the same either way.
+    {
+        s->setNodeMovable(r.arm.node, true);
+        if (r.arm.grey) s->setNodeMovable(r.arm.grey, true);
+        for (int f = 0; f < framesToConverge + 2; ++f) e->renderOneFrame();
+        CHECK(s->giStatus().ifdConverged, "movable rig: the field starts converged");
+        bool armed = false;
+        for (int f = 0; f < 30; ++f) {
+            pose(s, r.arm, 1.0f - 0.02f * float(f));       // keep posing, every frame
+            e->renderOneFrame();
+            if (!s->giStatus().ifdConverged) armed = true;
+        }
+        CHECK(!armed, "30 frames of a MOVABLE rig posing re-arm the raster field ZERO times");
+        // ...and the still rig still does, so the gate is the class and nothing else.
+        s->setNodeMovable(r.arm.node, false);
+        if (r.arm.grey) s->setNodeMovable(r.arm.grey, false);
+        for (int f = 0; f < framesToConverge + 2; ++f) e->renderOneFrame();
+        pose(s, r.arm, 1.0f);
+        e->renderOneFrame();
+        CHECK(!s->giStatus().ifdConverged,
+              "...and the SAME rig marked still re-arms it again (the control)");
+        for (int f = 0; f < framesToConverge + 2; ++f) e->renderOneFrame();
+        CHECK(s->giStatus().ifdConverged, "re-converged, back where case 4 left off");
+    }
     Image rasterH; r.view->readPixels(rasterH);
     dumpFrame(rasterV, "raster_vertical");
     dumpFrame(rasterH, "raster_horizontal");

@@ -136,9 +136,9 @@ const Row *row(const QString &id);
 // ONE dial where there were five: the World panel shows an on/off toggle, a
 // quality tier and the update budget, and everything the tier consumes moves
 // under an Advanced disclosure. NOTHING new was invented to do it — a Rayon
-// tier is a registry row (`rayon`) whose write-through targets are five other
-// registry rows (`giMode`, `giQuality`, `giDdgi`, `giBounces`,
-// `giDynamicProbes`, all `rayonTiered`). The invariant is the same one line as
+// tier is a registry row (`rayon`) whose write-through targets are four other
+// registry rows (`giMode`, `giQuality`, `giDdgi`, `giBounces`, all
+// `rayonTiered`). The invariant is the same one line as
 // everywhere else in this file:
 //
 //     a backing field is ALWAYS the resolved value.
@@ -150,37 +150,38 @@ const Row *row(const QString &id);
 // worldmodes.cpp; the engine's GiQuality stays three-valued (it is the
 // RESOLUTION dial — voxels, probe faces — and Epic changes no resolution), so
 // Epic's two extra columns are ordinary document fields the engine already
-// reads (numBounces) or now reads (dynamicProbes), written through like the
-// other three.
+// reads (numBounces), written through like the other two.
 //
-//   tier    technique             voxels  ddgi  ddgiSource  DDGI grid  bounces  dynamicProbes  probe faces/HDR/shadows  budget
-//   Low     Instant Radiosity     —       off   —           —          1        0              —                        (dial)
-//   Medium  VCT                   64^3    ON    auto=voxel  8192 fit   1        0              — (no probes)            (dial)
-//   High    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   1        0              512 / HDR / shadowed     (dial)
-//   Epic    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   3        0 (was 2)      512 / HDR / shadowed     (dial)
+//   tier    technique             voxels  ddgi  ddgiSource  DDGI grid  bounces  probe faces/HDR/shadows  budget
+//   Low     Instant Radiosity     —       off   —           —          1        —                        (dial)
+//   Medium  VCT                   64^3    ON    auto=voxel  8192 fit   1        — (no probes)            (dial)
+//   High    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   1        512 / HDR / shadowed     (dial)
+//   Epic    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   3        512 / HDR / shadowed     (dial)
 //
 // Derived columns (not rows): voxels and probe faces/HDR/shadows follow
 // `giQuality` (OgreGi.cpp giVoxelResolution / buildPcc); the DDGI grid is the
 // engine's fixed 8192-probe aspect fit (kIfdTotalProbes); ddgiSource "auto" is
 // voxel at every tier — the raster feed (3.4-9 ms per probe, rayon2 S3) is an
 // Advanced opt-in and never a default. Epic's bounce column is measured:
-// bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7). Epic's
-// dynamic probes went 2 -> 0 on 2026-09-12 (REALTIME_REFLECTIONS_SPEC R0): the
-// alive-scene baseline measured the two per-frame mover captures at ~40 ms
-// (87 -> 47 ms/frame with things moving), and movers are reflected every frame
-// by SSR + planar instead. The engine feature stays reachable as a pinned
-// setting until lane R2 deletes the column (gi.dynamic_probes still covers it).
+// bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7).
+//
+// THE FIFTH COLUMN IS GONE (lane R2, 2026-09-12). "Dynamic probes" reserved
+// extra probe re-captures per frame for the probes a MOVING object was inside;
+// R0 set it to 0 in every tier after the alive-scene baseline measured it, and
+// R2 deleted the feature outright, because a moving object is no longer in a
+// probe capture at all (it is reflected every frame by SSR and the planar
+// mirrors instead). Scenes saved with the old key simply ignore it.
 //
 // The GI UPDATE BUDGET is deliberately NOT in the table: it is a "how fast may
 // this keep up" control, not a "how much machinery" one, and it stays a visible
-// row of its own (owner decision D5); a pinned dynamicProbes setting rides ON TOP of it.
+// row of its own (owner decision D5).
 //
 // WHETHER RAYON IS ON is `scene->giMode != OFF` — there is no second flag.
 // `scene->giTier` remembers the quality across an off/on trip.
 enum class RayonTier { Low = 0, Medium = 1, High = 2, Epic = 3 };
 
-/// The registry id of the tier row, and of the five rows it writes through
-/// (giMode, giQuality, giDdgi, giBounces, giDynamicProbes — in that order).
+/// The registry id of the tier row, and of the four rows it writes through
+/// (giMode, giQuality, giDdgi, giBounces — in that order).
 QString     rayonRowId();
 QStringList rayonRowIds();
 
@@ -195,13 +196,11 @@ bool      rayonEnabled(const iris::ScenePtr &scene);
 
 /// What the tier resolves each of its rows to — THE TABLE, read one column at
 /// a time. `technique` is a GiMode ordinal, `quality` a GiQuality ordinal,
-/// `ddgi` 0/1, `bounces` the total light bounces (1..4), `dynamicProbes` the
-/// per-frame moved-covering probe re-captures reserved on top of the budget.
+/// `ddgi` 0/1, `bounces` the total light bounces (1..4).
 int rayonTechnique(RayonTier t);
 int rayonQuality(RayonTier t);
 int rayonDdgi(RayonTier t);
 int rayonBounces(RayonTier t);
-int rayonDynamicProbes(RayonTier t);
 
 /// Applies a Rayon state: records the tier, writes each `rayonTiered` row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes
