@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/core/logger.h"
 #include "services/jahlog.h"
 #include "services/sessionmarkers.h"
+#include "services/framemonitor.h"
 #include "services/perfsampler.h"
 
 #include "data/guidmanager.h"
@@ -931,6 +932,26 @@ void MainWindow::setupServices()
     perfSampler = new PerfSampler(this);
     services->perfSampler = perfSampler;
     perfSampler->startFromSettings();
+
+    // THE MONITOR'S ONLY VISIBLE OUTPUT (owner, 2026-09-12): a toast when a
+    // capture starts and a toast naming the bundle when it stops. The monitor
+    // owns no widgets and shows nothing itself — it asks, the shell answers —
+    // and it is told what was really shown, so the START toast's LIFETIME goes
+    // into events.jsonl and analysis knows which frames it overlapped.
+    //
+    // Connected unconditionally, and that costs nothing: it fires twice per
+    // capture and never while idle.
+    connect(&FrameMonitor::instance(), &FrameMonitor::toastRequested, this,
+            [this](const QString &title, const QString &text, int holdMs) {
+                if (!snapToast) snapToast = new Toast(this);
+                // BOTTOM-CENTRE of the window, not over the viewport: the stop
+                // toast carries a path, and the viewport anchor is the place
+                // gesture feedback (snap size, fly speed) lives.
+                snapToast->setAnchor(Toast::Anchor::WindowBottom);
+                snapToast->showToast(title, text, holdMs);
+                FrameMonitor::instance().noteToastShown(title, text,
+                                                        holdMs > 0 ? holdMs : 1650);
+            });
 
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
@@ -3516,6 +3537,27 @@ void MainWindow::setupShortcuts()
             [this]() { setShowFrameStats(!sceneView->getShowFps()); });
     reg.add("window.fullscreen", "Immersive Fullscreen", "View", QKeySequence(Qt::Key_F11), this,
             [this]() { toggleImmersiveFullscreen(); });
+    // Ctrl+F4 — THE CAPTURE KEY (owner, 2026-09-12: "I would prefer to activate
+    // the monitor Ctrl+F4 and then it captures the next 20 seconds of data for
+    // you"). EDITOR ONLY, and deliberately: the monitor's scope is the editor
+    // viewport's frame and everything it drives (RENDER_LOOP_MONITOR_SPEC
+    // SCOPE). Pressed again while recording it stops early and writes what it
+    // has. It goes through perf.capture / perf.stop — the same verbs a script
+    // and the MCP tool call — never a second path (SCRIPTING_SPEC §2.3).
+    //
+    // NOTHING IS DRAWN by this beyond the two toasts wired in
+    // connectFrameMonitorToasts(): an on-screen display would itself cost frame
+    // time and passes and contaminate what the capture measures.
+    reg.add("perf.capture", "Capture Render Monitor Data (20 s)", "View",
+            QKeySequence(Qt::CTRL | Qt::Key_F4), this, [this]() {
+                if (currentSpace != WindowSpaces::EDITOR) return;
+                if (FrameMonitor::instance().isRecording()) { FrameMonitor::instance().stop(); return; }
+                FrameMonitor::Request request;
+                if (project) request.label = project->getProjectName();
+                QString error;
+                if (!FrameMonitor::instance().start(request, &error))
+                    showViewportToast(tr("Render Monitor"), error);
+            });
 
     // ---- playback (Space is the gizmo cycle now — Unreal PIE puts play on
     // Alt+P; the toolbar Play button is unchanged) ----

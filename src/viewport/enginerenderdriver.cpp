@@ -5,6 +5,7 @@
 #include <QTimer>
 
 #include "services/engineerrorpump.h"
+#include "services/framemonitor.h"
 #include "services/jahlog.h"
 #include "services/loadtimeline.h"
 
@@ -42,6 +43,26 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         QElapsedTimer frame;
         frame.start();
         ++mStats.ticks;
+        // THE RENDER-LOOP MONITOR (RENDER_LOOP_MONITOR_SPEC §4.2), and it costs
+        // one not-taken branch when no capture is running. The tick's TOP is
+        // where the gap since the previous tick is closed and split into idle
+        // (blocked in the event loop) and UI (the thread was busy with
+        // something that was not a frame) — the difference between "15 fps that
+        // feels like 60" and a real stall.
+        // The gap is pushed only for ticks that will actually draw. The flag is
+        // read HERE, before beforeFrame, rather than reusing `anythingToDraw`
+        // below: this call has to happen before the host's own sync stages so
+        // the stage list reads in order. The one frame they can disagree on is
+        // the first after a viewport is shown by beforeFrame itself, which
+        // loses one gap stage and nothing else.
+        // SHORT-CIRCUITED ON THE FLAG FIRST: with no capture running this must
+        // not even ask the engine (hasEnabledViews is a virtual call, and the
+        // tick already makes that call once below — "free when off" means the
+        // off path is unchanged, not merely cheap).
+        FrameMonitor::instance().noteTickStart(framemonitor::active() && mEngine
+                                               && mEngine->hasEnabledViews());
+        if (framemonitor::active() && mEngine)
+            mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Driver);
         emit beforeFrame();
         // Nothing is showing anywhere — every viewport widget is hidden, so
         // every View is disabled (EngineViewWidget's show/hideEvent). Drawing
@@ -108,6 +129,11 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             mStats.workMs = sum / mWorkFilled;
             if (ms > mStats.worstMs) mStats.worstMs = ms;
         }
+        // The monitor drains the engine's ring here, at the one point in the
+        // process where a frame has just finished, and re-arms the gap clock —
+        // only for ticks that actually rendered (a skipped tick keeps the clock
+        // running, so an absence arrives as one gap instead of none).
+        FrameMonitor::instance().noteTickEnd(anythingToDraw);
         if (ms >= kSlowFrameMs) {
             ++mStats.slowFrames;
             LoadTimeline::add(QStringLiteral("frame:slow"), ms);

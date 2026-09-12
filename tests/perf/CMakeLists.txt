@@ -90,3 +90,60 @@ set_tests_properties(perf.epic_steady_state PROPERTIES
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(perf.pacing)
+
+# ---------------------------------------------------------------------------
+# THE RENDER-LOOP MONITOR (RENDER_LOOP_MONITOR_SPEC.md §4.8, lane MON-P1b)
+# ---------------------------------------------------------------------------
+#
+# Two suites, both DATA-INTEGRITY ONLY (owner D5: "the profiler shouldn't care
+# about the targets, it should just collect data"). Nothing here asserts a
+# performance number; the only inequality in either of them is a same-run ratio
+# that catches a listener left attached.
+
+# perf.capture_bundle — the bundle is complete, parseable and internally
+# consistent. Split in two on purpose: the app RECORDS (capture_bundle.js, which
+# needs the engine and a project) and the harness READS what it wrote, because
+# the scripting engine has no file access.
+set(_cb_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle)
+set(JAH_TEST_BUNDLE ${_cb_home}/bundle)
+configure_file(capture_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js @ONLY)
+add_executable(test_capture_bundle test_capture_bundle.cpp)
+set_target_properties(test_capture_bundle PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_capture_bundle PRIVATE Qt6::Core)
+target_compile_definitions(test_capture_bundle PRIVATE
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+    JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"
+    JAH_TEST_BUNDLE="${JAH_TEST_BUNDLE}")
+add_test(NAME perf.capture_bundle COMMAND test_capture_bundle
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(perf.capture_bundle PROPERTIES
+    LABELS "perf"
+    TIMEOUT 420)
+
+# perf.capture_off_is_free — off costs nothing, and the state machine's edges
+# (refusals, the early stop, the return to exactly the state it started in).
+# The engine is up: "no listener is attached to any workspace" needs workspaces.
+set(_off_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off)
+set(JAH_TEST_BUNDLE ${_off_home}/perf/bundle)
+configure_file(capture_off_is_free.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js @ONLY)
+file(MAKE_DIRECTORY ${_off_home}/run)
+add_test(NAME perf.capture_off_is_free
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js
+         WORKING_DIRECTORY ${_off_home}/run)
+set_tests_properties(perf.capture_off_is_free PROPERTIES
+    # JAHSHAKA_PERF_ROOT: `out` is confined to the capture root (a capture
+    # creates directories and truncates files in whatever it is pointed at), so
+    # the suite says where its own root is.
+    ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_off_home}/perf"
+    LABELS "perf"
+    # RUN_SERIAL because it MEASURES: the two off windows are compared against
+    # each other in the same run, which survives a loaded box far better than an
+    # absolute number would — but four Vulkan suites sharing the GPU can still
+    # make one window of 60 frames twice the other's for reasons that have
+    # nothing to do with the monitor.
+    RUN_SERIAL TRUE
+    TIMEOUT 300)

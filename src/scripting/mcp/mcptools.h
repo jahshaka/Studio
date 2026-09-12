@@ -26,6 +26,10 @@ For more information see the LICENSE file
 //                  content) — the byte-carrying VIEW of assets.list, which is
 //                  where the capability lives
 //   undo_redo      escape hatch onto the editor undo stack
+//   capture_perf   the render-loop monitor: record the next N seconds of the
+//                  frame into a capture bundle, stop one early, ask what it is
+//                  doing, or drop a named mark into a running capture. One tool
+//                  for the four perf.* verbs, because they are one workflow
 //
 // Per-verb MCP tools are explicitly rejected (spec): one tool per verb would
 // mean one tool descriptor per registry verb in every model call — hundreds,
@@ -60,6 +64,7 @@ private:
     QJsonObject screenshot(const QJsonObject &args);
     QJsonObject browseAssets(const QJsonObject &args);
     QJsonObject undoRedo(const QJsonObject &args);
+    QJsonObject capturePerf(const QJsonObject &args);
 
     ScriptEngine *mEngine;
 };

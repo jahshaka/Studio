@@ -1,4 +1,5 @@
 #include "bridge/offscreenrenderscope.h"
+#include "services/framemonitor.h"
 #include "bridge/stableoffscreenrender.h"
 #include "bridge/sceneworkerthreads.h"
 #include "player/engineplayerscene.h"
@@ -196,6 +197,19 @@ void EnginePlayerScene::stepFrames(int n, float dt, int width, int height)
     if (!engine || !mView || !mScene) return;
     for (int i = 0; i < n; ++i) {
         step(dt, width, height);
+        // Scripted player stepping: tag the cause per iteration (the engine
+        // consumes it and resets to Driver on every frame), so a capture can
+        // tell a player frame from the editor's loop.
+        //
+        // NO DRAIN HERE, unlike the editor's scripted loop: this TU is compiled
+        // into two player test targets that link the engine and Qt but nothing
+        // of the shell, and FrameMonitor::noteTickEnd would drag EngineHost,
+        // the settings manager and the session log into both. Records still
+        // reach the bundle — the stop drains the engine's ring in a loop — and
+        // the player is a later extension of the monitor's scope anyway
+        // (RENDER_LOOP_MONITOR_SPEC SCOPE).
+        if (framemonitor::active())
+            engine->setNextFrameCause(jahshaka::engine::FrameCause::Player);
         engine->renderOneFrame();
     }
 }

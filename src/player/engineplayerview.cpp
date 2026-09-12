@@ -10,6 +10,7 @@
 #include "player/playermousecontroller.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginehost.h"
+#include "services/framemonitor.h"
 #include "viewport/ieditorviewport.h"
 #include "viewport/keyboardstate.h"
 #include "irisgl/core/viewport.h"
@@ -116,6 +117,16 @@ void EnginePlayerView::syncFrame()
 {
     if (!mActive || !view()) return;
     if (!mScene->attach(view())) return;
+    // THE FRAME ABOUT TO BE RENDERED IS A PLAYER FRAME (RENDER_LOOP_MONITOR_SPEC
+    // §4.2's frame reason). This runs inside the driver's beforeFrame, after the
+    // driver's own `Driver` tag and before renderOneFrame, so the last word is
+    // the truthful one: a frame whose sync included an ACTIVE player view is
+    // the player's. The monitor's SCOPE is the editor for now — this costs one
+    // branch and means a capture taken in the player space is not silently
+    // labelled as the editor's loop.
+    if (framemonitor::active())
+        if (auto engine = EngineHost::instance().engine())
+            engine->setNextFrameCause(jahshaka::engine::FrameCause::Player);
     mScene->step(-1.0f, width(), height());     // the wall clock, in the scene's timer
 }
 
