@@ -319,6 +319,12 @@ private:
     /// through it so the axis views cannot disagree about the grid.
     /// `helpers` is the caller's "editor helpers are drawable now" state.
     void pushGridForView(bool helpers);
+    /// Every in-viewport editor helper (light/camera wires, selection outline,
+    /// grid, GI boxes), pushed from the ONE place that knows what they should
+    /// be. `helpers` false is Game View's answer — and, for the duration of one
+    /// picture, a user's screenshot's (SS1). Reversible by construction: both
+    /// callers push from the same owned fields.
+    void pushEditorHelpers(bool helpers);
 
     /// Pushes cameraRotationLocked() onto BOTH camera controllers — the active
     /// one and the idle one, so switching camera mode inside an axis view

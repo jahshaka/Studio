@@ -189,12 +189,18 @@ QVariantMap PlayerApi::screenshot(const QString &path, const QVariantMap &option
             : IEditorViewport::ScreenshotGrade::Plain;
     if (options.contains(QStringLiteral("grade"))) {
         const QString word = options.value(QStringLiteral("grade")).toString().trimmed().toLower();
-        if (word == QLatin1String("raw"))           grade = IEditorViewport::ScreenshotGrade::Plain;
+        // EVERY SPELLING THE DOC PROMISES, and it is the same list
+        // editor.screenshot takes — a verb whose parser is narrower than its
+        // own documentation is how the player's whole `scene` branch shipped
+        // unreachable in the first cut of this lane (lead review, item 1).
+        if (word == QLatin1String("plain") || word == QLatin1String("raw"))
+            grade = IEditorViewport::ScreenshotGrade::Plain;
         else if (word == QLatin1String("tonemap"))  grade = IEditorViewport::ScreenshotGrade::Tonemap;
+        else if (word == QLatin1String("scene"))    grade = IEditorViewport::ScreenshotGrade::Scene;
         else if (word == QLatin1String("viewport")) grade = IEditorViewport::ScreenshotGrade::Viewport;
         else {
             fail(QStringLiteral("player.screenshot: unknown grade '%1' "
-                                "(raw | tonemap | viewport)").arg(word));
+                                "(plain | raw | tonemap | scene | viewport)").arg(word));
             return out;
         }
     }

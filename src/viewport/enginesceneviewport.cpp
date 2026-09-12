@@ -235,6 +235,69 @@ void EngineSceneViewport::pushGridForView(bool helpers)
                                                                 : QStringLiteral("floor");
 }
 
+// EVERY IN-VIEWPORT EDITOR HELPER, PUSHED FROM ONE PLACE.
+//
+// G (Game View) hides them all; play mode hides the grid, the camera bodies and
+// the GI boxes too (the Unreal look), while the rest keep their play behaviour.
+//
+// IT IS A FUNCTION BECAUSE IT HAS TO BE REVERSIBLE (SS1 review item 3). A user's
+// screenshot leaves the helpers out (owner, 2026-09-13), which means something
+// has to take them away for the duration of one picture and PUT THEM BACK — and
+// "put them back" cannot be approximated, because the very next thing a script
+// may ask for is the plain readback the entire pixel corpus asserts never moves.
+// The first cut cleared five switches by hand and trusted refreshOverlay() to
+// restore them; refreshOverlay only pushes the OVERLAY description, so the
+// restore happened by accident at the next syncFrame and two screenshots in one
+// script run returned a helper-less second picture. Now both callers push the
+// same state from the same owned fields, so the round trip is exact by
+// construction rather than by hope.
+void EngineSceneViewport::pushEditorHelpers(bool helpers)
+{
+    if (!mMirror) return;
+    mMirror->setLightWires(mShowLightWires && helpers);
+    // Camera bodies + frustum wires (CAMERAS_SPEC D2). Same "editor helper"
+    // rule as the light wires — G (Game View) and play hide them — but a
+    // separate toggle, because they are a different object and the View
+    // Options row for light wires must not silently govern cameras.
+    mMirror->setCameraBodies(helpers && !mPlaying);
+    mMirror->setHighlightWireframe(mSelectionWireframe);
+    // No selection outline for the World root (the whole scene would glow)
+    // or for the built-in ground PLANE — owner ask 2026-08-31. The first
+    // implementation tested `isBuiltIn`, which every Add-menu primitive
+    // carries (addBuiltinPrimitive sets it on cubes, spheres, capsules —
+    // and the sample scenes are assembled from exactly those), so every
+    // primitive silently lost its outline while selection/gizmo/panel kept
+    // working (2026-09-06 sighting; cost a day of misattributed reports).
+    // The exclusion is the GROUND MESH specifically, nothing wider.
+    // The SET, member by member (EDITOR_MULTISELECT_SPEC §2.3) — the two
+    // exclusions above apply per member, not to the selection as a whole.
+    QList<iris::SceneNodePtr> highlight;
+    if (helpers) {
+        for (const auto &node : mSelectedSet) {
+            if (!node) continue;
+            if (mScene && node == mScene->getRootNode()) continue;
+            if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                const auto mn = node.staticCast<iris::MeshNode>();
+                if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
+                    continue;
+            }
+            highlight.append(node);
+        }
+    }
+    // The PRIMARY goes over EXPLICITLY (EDITOR_MULTISELECT_SPEC D4 b): the
+    // two exclusions above run per member, so the primary can be filtered
+    // out of `highlight` while secondaries survive — and then "the first
+    // entry" would hand the brighter outline to a node that is not the
+    // primary. The mirror re-checks membership and drops a primary that is
+    // not in the list.
+    mMirror->setHighlightedNodes(highlight, mSelectedNode);
+    // Grid spacing = the translate snap size ([ and ] re-space it live).
+    pushGridForView(helpers && !mPlaying);
+    // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
+    // rest, so Game View and play hide them.
+    mMirror->setGiVolumeOverlay(mShowGiVolume && helpers && !mPlaying);
+}
+
 // The canonical AXIS views and the orientation each one snaps to. File scope
 // because two questions need it: which view a name IS (setCameraView) and
 // whether the current view is an axis one (the rotation lock).
@@ -1652,48 +1715,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // play behaviour.
     const bool helpers = !mGameView;
     if (mMirror) {
-        mMirror->setLightWires(mShowLightWires && helpers);
-        // Camera bodies + frustum wires (CAMERAS_SPEC D2). Same "editor helper"
-        // rule as the light wires — G (Game View) and play hide them — but a
-        // separate toggle, because they are a different object and the View
-        // Options row for light wires must not silently govern cameras.
-        mMirror->setCameraBodies(helpers && !mPlaying);
-        mMirror->setHighlightWireframe(mSelectionWireframe);
-        // No selection outline for the World root (the whole scene would glow)
-        // or for the built-in ground PLANE — owner ask 2026-08-31. The first
-        // implementation tested `isBuiltIn`, which every Add-menu primitive
-        // carries (addBuiltinPrimitive sets it on cubes, spheres, capsules —
-        // and the sample scenes are assembled from exactly those), so every
-        // primitive silently lost its outline while selection/gizmo/panel kept
-        // working (2026-09-06 sighting; cost a day of misattributed reports).
-        // The exclusion is the GROUND MESH specifically, nothing wider.
-        // The SET, member by member (EDITOR_MULTISELECT_SPEC §2.3) — the two
-        // exclusions above apply per member, not to the selection as a whole.
-        QList<iris::SceneNodePtr> highlight;
-        if (helpers) {
-            for (const auto &node : mSelectedSet) {
-                if (!node) continue;
-                if (mScene && node == mScene->getRootNode()) continue;
-                if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                    const auto mn = node.staticCast<iris::MeshNode>();
-                    if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
-                        continue;
-                }
-                highlight.append(node);
-            }
-        }
-        // The PRIMARY goes over EXPLICITLY (EDITOR_MULTISELECT_SPEC D4 b): the
-        // two exclusions above run per member, so the primary can be filtered
-        // out of `highlight` while secondaries survive — and then "the first
-        // entry" would hand the brighter outline to a node that is not the
-        // primary. The mirror re-checks membership and drops a primary that is
-        // not in the list.
-        mMirror->setHighlightedNodes(highlight, mSelectedNode);
-        // Grid spacing = the translate snap size ([ and ] re-space it live).
-        pushGridForView(helpers && !mPlaying);
-        // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
-        // rest, so Game View and play hide them.
-        mMirror->setGiVolumeOverlay(mShowGiVolume && helpers && !mPlaying);
+        pushEditorHelpers(helpers);
         // The mirror reports its OWN sub-stages from inside sync() (it is the
         // only place that can see them); this scope is their parent, and the
         // subtraction keeps it exclusive.
@@ -1990,18 +2012,18 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
 
 // ---- DOES A USER'S SCREENSHOT CONTAIN THE EDITOR'S HELPERS? ---------------
 //
-// It does today: the transform gizmo and the selection outline are in the
-// picture, and so are the light/camera wires, the grid and the GI-volume boxes
-// whenever the viewport is showing them. SS1 (2026-09-13) put the question to
-// the OWNER rather than answering it — "a screenshot of the editor" and "a
-// picture of the scene" are both defensible and it is not a builder's call.
+// NO — OWNER, 2026-09-13. A user's screenshot is a picture of the SCENE, so the
+// transform gizmo, the selection outline, the light and camera wires, the grid
+// and the GI-volume boxes are all left out of it, even while the viewport is
+// showing them. SS1 asked the question rather than assuming an answer; this is
+// the answer.
 //
-// Everything the other answer needs is behind this ONE constant: false takes
-// every editor helper out of the user's shot (ScreenshotGrade::Scene) and puts
-// them back the moment it is taken. Left TRUE, because that is what the tool
-// does today and changing it silently would be the worse mistake; the lead has
-// the question.
-static constexpr bool kUserShotKeepsEditorHelpers = true;
+// It applies to ScreenshotGrade::Scene ONLY — the user's door. The script
+// grades are measuring instruments whose contents are pinned by suites, and
+// several of those suites photograph a gizmo on purpose (gizmo.screen_size,
+// app.selection_outline, ui.shot_aspect). Flipping this constant is still the
+// whole switch, in both directions.
+static constexpr bool kUserShotKeepsEditorHelpers = false;
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrade grade)
 {
@@ -2069,14 +2091,13 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
 
     if (mMirror) {
         if (hideHelpers) {
-            // The same five switches Game View throws, for the duration of one
-            // picture; refreshOverlay() below puts the viewport's own answers
-            // back before anything presents another on-screen frame.
-            mMirror->setLightWires(false);
-            mMirror->setCameraBodies(false);
-            mMirror->setHighlightedNodes(QList<iris::SceneNodePtr>(), iris::SceneNodePtr());
-            pushGridForView(false);
-            mMirror->setGiVolumeOverlay(false);
+            // Game View's own answer, for the duration of one picture, through
+            // the ONE function that knows what every helper should be — so the
+            // restore below is exact rather than approximate (review item 3:
+            // the first cut cleared five switches by hand and left the next
+            // shot in the same run helper-less, which would have moved the
+            // plain readback the whole pixel corpus asserts).
+            pushEditorHelpers(false);
             if (mOverlay) {
                 iris::Vec3 rayPos, rayDir, viewDir;
                 mouseRay(rayPos, rayDir, viewDir);
@@ -2154,7 +2175,23 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         mGizmo->updateSize(shotCam);
         mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
     }
-    if (hideHelpers) refreshOverlay();
+    if (hideHelpers) {
+        // ...and the viewport gets its helpers back, in full, before the mirror
+        // is synced by anything else — including the very next screenshot in
+        // the same script run. The overlay half is syncFrame's own block: the
+        // mirror carries the wires, the outline, the grid and the GI boxes,
+        // the OVERLAY carries the gizmo, and a restore that did only one of
+        // them would still be a restore that does not restore.
+        pushEditorHelpers(!mGameView);
+        if (mMirror) mMirror->sync();
+        if (mGizmo && viewCamera() && mSelectedNode) mGizmo->updateSize(viewCamera());
+        if (mOverlay) {
+            iris::Vec3 rayPos, rayDir, viewDir;
+            mouseRay(rayPos, rayDir, viewDir);
+            mOverlay->update((!mGameView && mSelectedNode) ? mGizmo : nullptr,
+                             rayPos, rayDir, viewDir);
+        }
+    }
     return result;
 }
 

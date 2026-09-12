@@ -3947,6 +3947,126 @@ void fixed_exposure_tonemap() {
 
 /// Bloom: a bright emissive surface bleeds light into the dark background
 /// around it. The assertion is that bleed, not a colour.
+/// THE MEASURED EXPOSURE, READ BACK (SS1, 2026-09-13 — View::measuredExposureScale).
+///
+/// WHY THE VERB EXISTS. A one-shot offscreen view lives about two frames, so
+/// the automatic exposure — a temporal filter converging at 75% per second —
+/// can never converge in one. A screenshot that re-seeds it therefore grades at
+/// the seed, and the grey-card constant the deterministic form substitutes for
+/// a measurement is about a stop off in a bright room. The view that HAS
+/// converged is the one on screen; this verb is how its answer crosses over,
+/// and `PostFxDesc::exposureScale` is how it is spent.
+///
+/// FIVE THINGS, four of which are the documented ways to get 0 back — a
+/// readback of a texture nobody has written is the reflection_map class of
+/// defect (CLAUDE.md), where "finite and positive" happily passes garbage.
+void measured_exposure_is_readable_and_refuses_to_guess() {
+    Fixture fx;
+    View *v = fx.view("measured-exp-view", 96, 96, Colour(0, 0, 0)); REQUIRE(v);
+    Scene *s = fx.scene("measured-exp-scene");                       REQUIRE(s);
+
+    // 1. NO CHAIN AT ALL. An offscreen view that never opted in has no HDR node
+    //    and therefore no history: 0, and not an error.
+    CHECK_MSG(v->measuredExposureScale() == 0.0f,
+              "an offscreen view with no chain measures nothing: %f",
+              double(v->measuredExposureScale()));
+
+    v->setScene(s);
+    s->setAmbient(Colour(0.05f, 0.05f, 0.06f), Colour(0.05f, 0.05f, 0.06f));
+    MeshId cube = s->createMesh(unitCubeData());
+    PbrParams lit;
+    lit.albedo   = Colour(0.0f, 0.0f, 0.0f);
+    lit.emissive = Colour(0.8f, 0.8f, 0.8f);
+    MaterialId mat = s->createPbrMaterial(lit);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, cube, mat));
+    s->setNodeTransform(n, Vec3(0, 0, 0), Quat(), Vec3(0.9f, 0.9f, 0.9f));
+    enginetest::testCameraLookAt(v, Vec3(0, 0, 3.0f), Vec3(0, 0, 0));
+
+    // 2. THE AUTOMATIC CHAIN, BUT NOTHING PRESENTED YET. Building the workspace
+    //    creates the 1x1 history; it has not been written, and the verb must
+    //    say so rather than read it.
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    fxDesc.hdr      = true;
+    fxDesc.exposure = 0.6f;
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->measuredExposureScale() == 0.0f,
+              "a freshly built chain that has drawn nothing measures nothing: %f",
+              double(v->measuredExposureScale()));
+
+    // 3. CONVERGED. Four seconds of frames is 0.25^4 of the way there; the
+    //    value is the tonemapper's own multiplier, so it must be a plausible
+    //    positive number rather than merely non-zero.
+    renderFor(fx.e, 4.0);
+    const float measured = v->measuredExposureScale();
+    std::printf("    measured exposure scale after convergence: %f\n", double(measured));
+    CHECK_MSG(measured > 0.0f && std::isfinite(measured),
+              "a converged automatic chain reports its multiplier: %f", double(measured));
+    CHECK_MSG(measured > 1e-4f && measured < 1e4f,
+              "and it is a plausible exposure, not undefined memory: %f", double(measured));
+    // Reading it twice in a row cannot move it (no frame in between).
+    CHECK_MSG(v->measuredExposureScale() == measured,
+              "two reads with no frame between them agree");
+
+    // 4. A REBUILD IS A NEW HISTORY. This is the defect the review caught: the
+    //    per-VIEW frame counter does not reset on a workspace rebuild, but
+    //    `jahOldLum` is destroyed and recreated by one — so a shape change
+    //    followed immediately by a read would have returned the seed at best
+    //    and unwritten VRAM at worst. Turning SSAO on is exactly such a change.
+    const unsigned genBefore = v->workspaceGeneration();
+    fxDesc.ssao = true;
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->workspaceGeneration() > genBefore,
+              "ssao is a shape change: the workspace rebuilt (%u -> %u)",
+              genBefore, v->workspaceGeneration());
+    CHECK_MSG(v->measuredExposureScale() == 0.0f,
+              "AFTER A REBUILD the history is unwritten and the verb refuses to read it: %f",
+              double(v->measuredExposureScale()));
+    renderFor(fx.e, 4.0);
+    CHECK_MSG(v->measuredExposureScale() > 0.0f,
+              "...and it reports again once the NEW graph has drawn: %f",
+              double(v->measuredExposureScale()));
+
+    // 5. THE FIXED FORM MEASURES NOTHING, BY CONSTRUCTION. Its exposure is a
+    //    constant the caller already has; there is no reduction chain and no
+    //    history to read, and answering with the clear colour would be a
+    //    different question dressed as this one.
+    fxDesc.tonemapFixed  = true;
+    fxDesc.exposureScale = 0.0f;
+    v->setPostFx(fxDesc);
+    renderFor(fx.e, 1.0);
+    CHECK_MSG(v->measuredExposureScale() == 0.0f,
+              "the fixed grade has no measurement to report: %f",
+              double(v->measuredExposureScale()));
+
+    // ...and the other half of the pair: exposureScale REPLACES the grey card
+    // without rebuilding anything, which is what lets a screenshot be handed a
+    // measured value at the moment it is taken.
+    const unsigned genFixed = v->workspaceGeneration();
+    render(fx.e, 2); Image card; REQUIRE(v->readPixels(card));
+    fxDesc.exposureScale = 4.0f;          // far from e^(0.6-2)/0.18 = 1.37
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->workspaceGeneration() == genFixed,
+              "exposureScale is a clear colour, not a graph edit: no rebuild (%u)",
+              v->workspaceGeneration());
+    render(fx.e, 2); Image pinned; REQUIRE(v->readPixels(pinned));
+    CHECK_MSG(pinned.rgba != card.rgba,
+              "a pinned exposureScale grades differently from the grey card it replaces");
+    // And it is still deterministic: it is a constant by the time it gets here.
+    renderFor(fx.e, 0.5);
+    Image pinnedAgain; REQUIRE(v->readPixels(pinnedAgain));
+    CHECK_MSG(pinnedAgain.rgba == pinned.rgba,
+              "a pinned exposureScale is time-independent, like the card");
+
+    // 0 means "derive it from exposure" — the old behaviour, exactly.
+    fxDesc.exposureScale = 0.0f;
+    v->setPostFx(fxDesc);
+    render(fx.e, 2); Image backToCard; REQUIRE(v->readPixels(backToCard));
+    CHECK_MSG(backToCard.rgba == card.rgba,
+              "exposureScale = 0 is the grey card again, byte for byte");
+}
+
 void bloom_bleeds_bright_areas() {
     Fixture fx;
     View *v = fx.view("bloom-view", 96, 96, Colour(0, 0, 0)); REQUIRE(v);
@@ -5139,6 +5259,8 @@ int main(int argc, char **argv) {
         { "postfx_is_ignored_offscreen_unless_asked", postfx_is_ignored_offscreen_unless_asked },
         { "hdr_tonemap_and_exposure",               hdr_tonemap_and_exposure },
         { "fixed_exposure_tonemap",                 fixed_exposure_tonemap },
+        { "measured_exposure_is_readable_and_refuses_to_guess",
+                                                    measured_exposure_is_readable_and_refuses_to_guess },
         { "bloom_bleeds_bright_areas",              bloom_bleeds_bright_areas },
         { "ssao_darkens_creases",                   ssao_darkens_creases },
         { "smaa_smooths_edges",                     smaa_smooths_edges },

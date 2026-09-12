@@ -129,6 +129,14 @@ assert(node.mobility(ball).resolved === "movable", "the ball is a MOVABLE object
 editor.setCamera({ position: { x: 0.6, y: 2.1, z: 5.4 },
                    lookAt:   { x: 0.0, y: 0.9, z: -1.0 }, fov: 45 });
 
+// NO EDITOR HELPERS for phases A-F, and that is not tidiness: since the owner's
+// decision of 2026-09-13 a user's screenshot leaves them OUT, so a viewport with
+// a grid up would make `plain` and `scene` differ by the GRID as well as by the
+// chain — and every phase below is measuring the chain. Phase G is where the
+// helpers are switched on, on purpose, and is the assertion that they stay out.
+editor.setOverlays({ grid: false, lightWires: false });
+editor.select(null);
+
 // ---------------------------------------------------------------------------
 // PHASE A — THE PLAIN GRADE IS THE TEST PICTURE, AND IT DOES NOT MOVE.
 //
@@ -286,6 +294,51 @@ assert(p1.g > p1.r + 12 && p1.g > p1.b + 12,
        "the MOVABLE ball is in the shot, and it is green");
 assert((p1.g - p1.r) - (p0.g - p0.r) > 12,
        "hiding it takes the green with it — that pixel really is the ball");
+
+// ---------------------------------------------------------------------------
+// PHASE G — A USER'S SCREENSHOT LEAVES THE EDITOR'S HELPERS OUT.
+//
+// OWNER, 2026-09-13, answering the question this lane put to him: a screenshot
+// is a picture of the SCENE. The gizmo, the selection outline, the light and
+// camera wires, the grid and the GI boxes are all out of it, even while the
+// viewport is showing them. Asserted the only way that cannot pass for the
+// wrong reason: with the helpers switched ON and a node selected, the PLAIN
+// readback must move a lot and the user's picture must not move at all.
+//
+// AND THE RESTORE (review item 3). The first cut cleared the helper switches by
+// hand and trusted refreshOverlay() to put them back; it does not, so the next
+// picture in the same run came back helper-less — and the next picture is very
+// often the exact readback the whole pixel corpus swears never moves. Two
+// plain shots either side of a scene shot, byte for byte, is that assertion.
+console.log("---- phase G: the helpers are the editor's, not the picture's ----");
+editor.setOverlays({ grid: true, lightWires: true });
+assert(editor.select(ball), "the ball is selected — gizmo and outline are up");
+settle();
+
+var plainHelpersA = shoot("plain");
+var sceneHelpers  = shoot("scene");
+var plainHelpersB = shoot("plain");
+assert(maxDelta(plainHelpersA, plainHelpersB) === 0,
+       "A SCENE SHOT DOES NOT LEAK: the plain readback after one is byte-identical to the one before");
+
+editor.select(null);
+editor.setOverlays({ grid: false, lightWires: false });
+settle();
+var plainBare = shoot("plain");
+var sceneBare = shoot("scene");
+
+console.log("   plain  with helpers vs without: max channel delta " + maxDelta(plainHelpersA, plainBare));
+console.log("   scene  with helpers vs without: max channel delta " + maxDelta(sceneHelpers, sceneBare));
+assert(maxDelta(plainHelpersA, plainBare) > 20,
+       "the helpers ARE in the viewport (a plain shot moves by " +
+       maxDelta(plainHelpersA, plainBare) + " when they go)");
+// Not exact equality, and the reason is worth stating: the helpers are out of
+// the PICTURE, but they are still on screen, so they move the viewport's own
+// measured exposure by a hair — and the user's shot borrows that exposure. A
+// couple of 8-bit levels is that hair; the gizmo is 20+.
+assert(maxDelta(sceneHelpers, sceneBare) <= 3,
+       "and NONE of them is in the user's picture (delta " +
+       maxDelta(sceneHelpers, sceneBare) + ")");
 
 // ---------------------------------------------------------------------------
 // PHASE F — THE OTHER TWO GRADES STILL EXIST AND STILL MEAN WHAT THEY SAY.

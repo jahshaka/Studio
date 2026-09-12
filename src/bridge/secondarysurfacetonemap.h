@@ -44,21 +44,16 @@ For more information see the LICENSE file
 
 namespace secondaryfx {
 
-/// The exposure the secondary surfaces grade at. iris::Scene's own default
-/// (scene.cpp: "+0.6, not 0" — the amount that puts mid-grey back where it was
-/// when HDR comes on), so a thumbnail of a scene nobody has regraded matches
-/// the viewport beside it.
-constexpr float kFixedExposure = 0.6f;
-
 /// THE THUMBNAIL GRADE. Turns the deterministic tonemap on (or back off) for an
-/// OFFSCREEN view. `exposure` is the SCENE's (the caller has it); the default is
-/// iris::Scene's own, for a caller with no scene to ask. Passing the scene's
-/// value is SS1's one-line half of this file: a thumbnail of a world the user
-/// regraded used to ignore the regrade entirely.
+/// OFFSCREEN view, at the SCENE's exposure — which every caller now passes, and
+/// which is SS1's one-line half of this file: a thumbnail of a world the user
+/// had regraded used to be a picture of the ungraded one, because this took a
+/// hardcoded +0.6 instead. `exposure` has NO DEFAULT on purpose (the old
+/// kFixedExposure constant is deleted): a caller with no scene to ask is a
+/// caller that has not thought about it.
 /// Safe on a null view; safe to call every frame (an unchanged PostFxDesc never
 /// reaches the backend — OgreView::setPostFx early-outs on equality).
-inline void apply(jahshaka::engine::View *view, bool enabled,
-                  float exposure = kFixedExposure)
+inline void apply(jahshaka::engine::View *view, bool enabled, float exposure)
 {
     if (!view) return;
     jahshaka::engine::PostFxDesc fx = view->postFx();
