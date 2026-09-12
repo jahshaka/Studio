@@ -54,11 +54,11 @@ function J(x) { return JSON.stringify(x); }
 // What each sample is supposed to BE. Node counts are minima (a sample may
 // grow), names are the ones the sample's design promises.
 var EXPECTED = {
-    "Matcaps": { nodes: 5, names: ["StanfordDragon", "Ground", "Directional Light"],
+    "Matcaps": { tier: "medium", nodes: 5, names: ["StanfordDragon", "Ground", "Directional Light"],
                  types: { mesh: 2, light: 2 } },
-    "Particles": { nodes: 10, names: ["Fire Pit", "Ground", "Sphere"],
+    "Particles": { tier: "medium", nodes: 10, names: ["Fire Pit", "Ground", "Sphere"],
                    types: { mesh: 3, particles: 4 } },
-    "Physics": { nodes: 16, names: ["Teapot", "ball", "pipe", "Ground"],
+    "Physics": { tier: "medium", nodes: 16, names: ["Teapot", "ball", "pipe", "Ground"],
                  types: { mesh: 13, light: 2 } },
     // The GRAND SHOWROOM (2026-09-07) replaced the old 241-node import: a
     // sealed hall of primitives — 6 room slabs, 4 columns, a 4-sphere metal
@@ -67,13 +67,13 @@ var EXPECTED = {
     // world it replaced was not.
     // ONE FLOOR since lane L13 (owner, 2026-09-12): the gallery stands on the
     // default floor (the Ground), and the slab it used to lay over it is gone.
-    "Showroom": { nodes: 22, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot"],
+    "Showroom": { tier: "epic", nodes: 22, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot"],
                   types: { mesh: 16, light: 5 } },
     // SHOWROOM 2 (lane L14, owner 2026-09-12): the same generator at twice the
     // size. 20 nodes — the Showroom's 22 without the new-scene template's
     // Directional Light and Point Light, which a sealed room cannot use (the
     // generator removes them). Its three lights are ALL the room has.
-    "Showroom 2": { nodes: 20, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0"],
+    "Showroom 2": { tier: "epic", nodes: 20, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0"],
                     types: { mesh: 16, light: 3 }, lightsExactly: 3,
                     absent: ["Directional Light", "Point Light"] },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
@@ -81,14 +81,14 @@ var EXPECTED = {
     // pass had left behind (the expectation lagged the re-stage — three lanes
     // independently flagged it).
     // 13 since lane L13: one floor, the default one (the Floor slab is gone).
-    "Mirror Room": { nodes: 13, names: ["Ground", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
+    "Mirror Room": { tier: "epic", nodes: 13, names: ["Ground", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
                      types: { mesh: 10, light: 2 } },
-    "Skeletal Animation": { nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
+    "Skeletal Animation": { tier: "medium", nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
                             types: { mesh: 4, light: 2 } },
     // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
     // were all "SceneNode24" (an importer leftover) and the first had no guid
     // at all, so no by-name or by-id verb could tell them apart.
-    "World Background": { nodes: 7, names: ["Dragon", "Dragon3", "Ground"],
+    "World Background": { tier: "medium", nodes: 7, names: ["Dragon", "Dragon3", "Ground"],
                           types: { mesh: 4, light: 2 } }
 };
 
@@ -831,6 +831,19 @@ assert(imported.objects >= wantObjects,
 
 // 2. OPEN and check the content is the content.
 assert(project.open(imported.guid) === true, "project.open");
+
+// THE RAYON TIER THE SAMPLE WAS AUTHORED AT (push #17 gate finding, 2026-09-13):
+// nothing in this suite asserted it, so the reader change that deleted the P2
+// migration had no safety net here — the gate had to check the eight samples by
+// hand. A sample must open at its own tier with NO deviations: `custom` true (or
+// a non-empty deviation list) means a pin or a stale override is dragging the
+// dial off the table, which is exactly what that migration used to paper over.
+var ray = world.rayon();
+assert(ray.tier === want.tier,
+       SAMPLE + " opens at its authored tier (" + ray.tier + " === " + want.tier + ")");
+assert(ray.custom === false && (!ray.deviations || ray.deviations.length === 0),
+       "  ...with no deviations (custom " + ray.custom + ", deviations " +
+       JSON.stringify(ray.deviations || []) + ")");
 var s = structure();
 console.log("structure: " + J(s.byType) + " total " + s.count);
 assert(s.count >= want.nodes, "node count >= " + want.nodes + " (" + s.count + ")");
