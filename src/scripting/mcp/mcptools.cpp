@@ -651,9 +651,20 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
     // (tonemapped, bloomed, anti-aliased) instead of like a neutral thumbnail.
     // Default TRUE here, unlike editor.screenshot: this tool exists so a human
     // or an assistant can SEE the work, not to assert exact pixels.
+    //
+    // ...WHICH IS THE `Scene` GRADE, not `Viewport` (SS1 review item 6). Both
+    // render the whole chain; the difference is the exposure, and an offscreen
+    // view lives about two frames, so `Viewport` re-seeds an adaptive filter
+    // that cannot converge and grades at the seed. `Scene` carries the exposure
+    // the on-screen viewport has actually converged on — which is precisely
+    // what "see what the user sees" means. The boolean stays the argument
+    // (false is still the exact readback) because that is what the tool's
+    // schema documents.
     const bool postFx = args.value(QLatin1String("postFx")).toBool(true);
     host.viewport->renderFrames(2);
-    const QImage img = host.viewport->takeScreenshot(width, height, postFx);
+    const QImage img = host.viewport->takeScreenshot(
+        width, height, postFx ? IEditorViewport::ScreenshotGrade::Scene
+                              : IEditorViewport::ScreenshotGrade::Plain);
     if (img.isNull())
         return textResult(QStringLiteral("screenshot: the viewport returned no image"), true);
 

@@ -322,21 +322,53 @@ public:
         (void)postFx; return takeScreenshot(width, height);
     }
 
-    /// HOW A SCREENSHOT IS GRADED (owner report 2026-09-07, fix wave item 6).
-    /// The boolean above says "the whole viewport chain or nothing", and both
-    /// answers are wrong for the everyday case: `false` photographs raw linear
-    /// radiance, so a bright scene clips to white; `true` drags in the scene's
-    /// bloom, AO, SMAA and its ADAPTIVE exposure, which makes the shot depend on
-    /// how many frames it happened to render.
+    /// HOW A SCREENSHOT IS DEVELOPED — ONE FUNCTION, AN EXPLICIT MODE
+    /// (owner, 2026-09-13: "match the screenshot to the scene properly", and
+    /// "your pixel tests can have their own screenshot ... use the same
+    /// function to get what you want and what the users want").
+    ///
+    /// The tension this enum exists to hold: the PIXEL SUITES want a plain,
+    /// exact, ungraded readback and must keep getting exactly that, while a
+    /// USER pressing Screenshot wants the picture they are looking at. So the
+    /// plain picture is an EXPLICIT opt-in whose name says what it is, and the
+    /// user's door asks for `Scene`.
     enum class ScreenshotGrade {
-        Raw,       ///< no post chain at all — what every pixel suite asserts
-        Tonemap,   ///< the deterministic filmic grade only (secondaryfx::apply)
-        Viewport,  ///< the scene's full post chain — the old `postFx = true`
+        /// NO POST-PROCESSING AT ALL: 1x MSAA, linear radiance clipped to 8
+        /// bits, the same pixels on every machine and in every frame. THIS IS
+        /// THE TEST PICTURE — every pixel assertion in the tree asserts it, and
+        /// it is the default of `editor.screenshot` / `player.screenshot` for
+        /// that reason. Script word "plain" (and "raw", the spelling the suites
+        /// were written with; both mean this and always will).
+        Plain,
+        /// THE THUMBNAIL PICTURE: the deterministic filmic grade and nothing
+        /// else — no bloom, no AO, no SMAA, no SSR, exposure a constant
+        /// (secondaryfx::apply). A photograph of the CONTENT that does not clip
+        /// to white wherever the scene is bright, cheap enough for an import
+        /// sweep of hundreds. Script word "tonemap".
+        Tonemap,
+        /// THE EDITOR'S OWN PICTURE, and the answer a user gets: the scene's
+        /// WHOLE chain as the world has it — SSAO, SSR, bloom, SMAA, the looks
+        /// stack, HDR and the tonemap — at the on-screen view's CURRENT
+        /// MEASURED exposure, carried across as a constant
+        /// (secondaryfx::applyScene). Matches the viewport, and is repeatable
+        /// because the exposure stopped being a temporal filter on the way in.
+        /// A world with HDR off gets an UNGRADED shot, like the viewport.
+        /// Script word "scene".
+        Scene,
+        /// The scene's whole chain with its own ADAPTIVE exposure, RE-SEEDED
+        /// from the description's exposure value. This is what `postFx: true`
+        /// has always meant and it stays, because it is the door a PIPPED
+        /// CAMERA's own exposure reaches a shot through (camera.screenshot,
+        /// tests/cameras) — there is no on-screen view measuring THAT camera.
+        /// For the editor camera prefer `Scene`: a two-frame view cannot
+        /// converge, so this one grades at its seed. Script word "viewport".
+        Viewport,
     };
     /// Default maps onto the boolean overload, so a viewport that has no chain
     /// (headless) needs no new code.
     virtual QImage takeScreenshot(int width, int height, ScreenshotGrade grade) {
-        return takeScreenshot(width, height, grade == ScreenshotGrade::Viewport);
+        return takeScreenshot(width, height, grade == ScreenshotGrade::Viewport ||
+                                             grade == ScreenshotGrade::Scene);
     }
 
     /// The ACHIEVED anti-aliasing (MSAA) sample count of the viewport's render

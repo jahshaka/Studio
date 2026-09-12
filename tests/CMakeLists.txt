@@ -280,3 +280,6 @@ add_subdirectory(hygiene)
 # graph's emitter targets, and the emitter's own gates.
 add_subdirectory(pieces)
 add_subdirectory(apppaths)
+# WHO IS ALLOWED TO SEE A MODAL WINDOW (owner decision D3): the first-launch
+# greeting's driven-session predicate, src/app/firstrun.h.
+add_subdirectory(firstrun)

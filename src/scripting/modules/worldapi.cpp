@@ -283,7 +283,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
-        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, reflectAtlasBytes, probeAtlasBytes, mapped:[{slot, node, cached, dirty, pssm, passes}], unmapped:[guid], shadowPassesLastFrame, cachedMapRendersLastFrame, reflectPassesLastFrame, probePassesLastFrame, reflectLampPassesLastFrame, probeLampPassesLastFrame, cachedInstances, uncachedInstances, viewCached, mapsDirtiedLastFrame, shaderLightMismatches}",
+        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, reflectAtlasBytes, probeAtlasBytes, mapped:[{slot, node, cached, dirty, pssm, passes}], unmapped:[guid], shadowPassesLastFrame, cachedMapRendersLastFrame, reflectPassesLastFrame, probePassesLastFrame, reflectLampPassesLastFrame, probeLampPassesLastFrame, cachedInstances, uncachedInstances, viewCached, mapsDirtiedLastFrame, shaderLightMismatches, sun, secondaryDirectionals}",
           "What the SHADOW ATLAS is actually doing, as opposed to what was asked for — the same \"the renderer beats the request\" reading as world.giStatus() and world.antiAliasing(). "
           "It exists because the renderer keeps a fixed number of point/spot shadow maps and fills them with the casters closest to the camera, DROPPING the rest without a word: 'casters' is how many shadow-casting point and spot lights the scene has, 'focusedMaps' how many of them can have a map at once, and 'unmapped' NAMES the lights that got none — the lights whose shadows are silently missing. Empty is the healthy state. "
           "'budget' is the ceiling actually in force (world.shadows' mapBudget, clamped by what the resolution can afford: 16 maps at 1024, 8 at 2048, 4 at 4096, 2 at 8192), 'requestedBudget' what was asked for before that clamp. 'maps' counts TEXTURE rectangles (pssmSplits + focusedMaps) while 'mapped' has one entry per LIGHT SLOT — three of the rectangles belong to the one directional light, which is why slot 0 is flagged 'pssm'. Each entry names the light's guid, whether its map is 'cached' (rendered once and kept), whether it is 'dirty' (scheduled to re-render) and the 'passes' the last frame spent on it (0 for a cached lamp at rest; 8 when a point lamp re-renders). "
@@ -295,6 +295,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "light list indexes. That state generates a pixel shader that cannot compile (and used to crash the "
           "shader-cache save), so anything but 0 is a renderer defect worth reporting — the engine also logs the "
           "first four with the slot layout that produced them. "
+          "'sun' is the scene's PRIMARY directional light — the one directional the atlas has a slot for — and 'secondaryDirectionals' names every other one. They light the scene fully and cast NOTHING, because the node declares exactly one directional slot (three PSSM splits); before the sun lane which of two directionals filled it was decided by engine creation order and could flip across a reload. Give a secondary a different Forward Shading Priority to choose, or swap which one is the sun. Both are DOCUMENT facts, so they are reported with live:false too. An empty 'sun' means the scene has no directional light, which is normal. "
           "'live' is false without an engine viewport, and the numbers are then the document's request rather than a measurement.",
           Needs::Document },
         { "refreshShadows", "world.refreshShadows() -> bool",
@@ -333,8 +334,34 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "skyPreset", "world.skyPreset(name) -> {front, back, left, right, top, bottom}",
           "Applies one shipped cube sky (name from world.skyPresets, case-insensitive) — exactly what clicking it in the Presets panel does. Its six face images become LIBRARY TEXTURES through the one import pipeline the first time any project uses them (identified by their bytes, so the next project reuses the same rows) and are pinned into this project; the sky is then set through world.sky cubemap with their guids, so it saves, reopens and exports like any other textured sky. Returns the six face guids by slot. One undo step for the sky (the pins and catalog rows are library state and stay). Needs an open project; an unknown name is refused with the list.",
           Needs::Document },
-        { "sunLight", "world.sunLight([id|null]) -> id",
-          "Sun coupling: the DIRECTIONAL light the realistic sky's sun drives, by node id. Called with no argument it reads the current link (empty string = none). Given a node id it links that light — its rotation follows the sky's sun angles from then on, in the editor and in the player. Given null or an empty string it unlinks and the light goes back to manual control with the rotation it had before it was linked. One undo step either way; only the realistic sky has a sun, so the link is inert (but remembered) under any other sky type.",
+        { "sunLight", "world.sunLight([id|null|\"auto\"]) -> id",
+          "THE SUN — this scene's primary directional light, by node id. THE RULE: the FIRST "
+          "directional light in a scene is the sun; every further one is a secondary light, "
+          "ordered by its Forward Shading Priority (0 wins, and a new directional auto-slots into "
+          "the lowest free number). A scene needs NO sun at all — an interior lit only by lamps is "
+          "a perfectly ordinary scene, and two of the eight shipped samples are exactly that — so "
+          "an empty answer here is never an error. \"Sun\" is a role, not a light type: there is "
+          "one directional light type and this is the name for the one that wins. "
+          "Called with no argument it READS the resolved sun (empty string when the scene has no "
+          "directional light) — not the pin, which most scenes leave empty. Given a node id it "
+          "PINS that light as the sun, overriding the priority order; it must be a directional "
+          "light. Given null, \"\" or \"auto\" it drops the pin and the priority order decides "
+          "again. One undo step either way. world.sun() is the same answer with its reasoning, the "
+          "secondaries and the sky link attached; the sky's Azimuth/Elevation dials steer the sun "
+          "only while world.sky(..., {drivesSun: true}).",
+          Needs::Document },
+        { "sun", "world.sun() -> {light, name, explicit, reason, priority, castsShadows, skyDriven, secondaries, nextPriority}",
+          "WHAT THE SUN IS AND WHY. `light`/`name` are the resolved primary directional light "
+          "(empty when the scene has none, which is normal and not a warning); `explicit` says "
+          "whether an author pinned it and `reason` how it was chosen — \"pinned\", \"priority\" "
+          "(the lowest Forward Shading Priority, ties broken by creation order) or \"none\". "
+          "`priority` is that number, and -1 when there is no sun. `castsShadows` is the sun's own "
+          "Shadow Type being anything but Off — and it is the ONLY directional light that can cast "
+          "one: the renderer has a single directional shadow slot, so `secondaries` (every other "
+          "directional, with its name and priority) light the scene fully and cast nothing. That "
+          "used to be decided by engine creation order, silently and differently across reloads. "
+          "`skyDriven` is whether the realistic sky's sun dials aim it; `nextPriority` is the "
+          "number the next directional light added to this scene will take.",
           Needs::Document },
         { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
@@ -355,7 +382,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Drops every pinned row and re-applies the current mode. Returns world.settings(). Undoable.",
           Needs::Document },
         { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius, distortionStrength}) -> object",
-          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal PINS the exposure, which is the deterministic setting the secondary surfaces (thumbnails, previews, screenshots) grade with; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres; distortionStrength is a global multiplier on every distortion material's own strength (0 is inert — the frame is bit for bit the frame with no distortion at all). Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
+          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal stops the exposure from following the scene's content, but it is still the AUTOMATIC chain (a temporal filter that takes about a second to arrive) and it is NOT the constant the secondary surfaces grade with: that one substitutes a 0.18 grey card for the measurement and lands somewhere else entirely (measured on one floor region, 12.9 against 86.6 — SS1, 2026-09-13). For a picture that is deterministic by construction ask editor.screenshot for the \"tonemap\" or \"scene\" grade; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres; distortionStrength is a global multiplier on every distortion material's own strength (0 is inert — the frame is bit for bit the frame with no distortion at all). Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
           Needs::Document },
         // ---- THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1) ----------------------
         { "looks", "world.looks() -> [{id, label, enabled, params}]",
@@ -1054,6 +1081,16 @@ QVariantMap WorldApi::shadowStatus()
     QVariantMap out;
     out[QStringLiteral("live")] = st.available;
     out[QStringLiteral("requestedBudget")] = scene->shadowMapBudget;
+    // THE SUN AND THE SECONDARIES are DOCUMENT facts (one resolver), so they
+    // are reported whether or not a renderer is up — unlike everything below,
+    // which is a measurement.
+    {
+        auto sun = scene->sunLight();
+        out[QStringLiteral("sun")] = sun ? sun->getGUID() : QString();
+        QVariantList secondaries;
+        for (const auto &l : scene->secondaryDirectionals()) secondaries.append(l->getGUID());
+        out[QStringLiteral("secondaryDirectionals")] = secondaries;
+    }
     if (!st.available) {
         out[QStringLiteral("resolution")] = scene->shadowResolution;
         out[QStringLiteral("maps")] = 0;
@@ -1174,15 +1211,30 @@ QString WorldApi::sunLight(const QVariant &light)
     auto scene = sceneOrFail(QStringLiteral("world.sunLight"));
     if (!scene) return QString();
 
-    // No argument at all = read. (An explicit null/"" is an UNLINK, which is
-    // why "is it valid?" and "was it given?" are different questions here.)
-    if (!light.isValid()) return scene->sunLightGuid;
+    // READ = THE RESOLVED SUN, not the pin (SUN_AND_LIGHT_DEFAULTS Q1). This
+    // used to answer the raw `sunLightGuid`, which read "" in every scene we
+    // ship — every one of them leaves the pin empty — while the scene plainly
+    // HAD a sun. One resolver, one answer: iris::Scene::sunLight().
+    // (world.sun() is the same answer with its reasoning attached.)
+    if (!light.isValid()) {
+        auto sun = scene->sunLight();
+        return sun ? sun->getGUID() : QString();
+    }
 
+    // "auto" is the EXPLICIT way to say "unpin, let the priority decide" — the
+    // same write as null, spelled for a reader.
     const QString id = light.isNull() ? QString() : light.toString();
+    if (id.compare(QLatin1String("auto"), Qt::CaseInsensitive) == 0) {
+        if (!scene->sunLightGuid.isEmpty())
+            pushSunLinkUndo(QStringLiteral("Automatic Sun"), scene, QString());
+        auto sun = scene->sunLight();
+        return sun ? sun->getGUID() : QString();
+    }
     if (id.isEmpty()) {
-        if (scene->sunLightGuid.isEmpty()) return QString();
-        pushSunLinkUndo(QStringLiteral("Unlink Sun Light"), scene, QString());
-        return QString();
+        if (!scene->sunLightGuid.isEmpty())
+            pushSunLinkUndo(QStringLiteral("Unpin Sun Light"), scene, QString());
+        auto sun = scene->sunLight();
+        return sun ? sun->getGUID() : QString();
     }
 
     auto node = findNodeByGuid(scene->getRootNode(), id);
@@ -1195,15 +1247,40 @@ QString WorldApi::sunLight(const QVariant &light)
     if (lightNode->lightType != iris::LightType::Directional) {
         // The sun is infinitely far away: only a directional light can stand in
         // for it, and silently accepting a point light would "work" (the guid
-        // sticks) while nothing ever moved.
-        fail(QStringLiteral("world.sunLight: '%1' is not a DIRECTIONAL light — the sky's sun can "
-                            "only drive a directional light").arg(id));
+        // sticks) while nothing was ever the sun.
+        fail(QStringLiteral("world.sunLight: '%1' is not a DIRECTIONAL light — only a "
+                            "directional light can be the sun").arg(id));
         return QString();
     }
 
     if (scene->sunLightGuid != id)
-        pushSunLinkUndo(QStringLiteral("Link Sun Light"), scene, id);
+        pushSunLinkUndo(QStringLiteral("Pin Sun Light"), scene, id);
     return scene->sunLightGuid;
+}
+
+// THE SUN, with its reasoning attached (SUN_AND_LIGHT_DEFAULTS Q1/Q1d).
+QVariantMap WorldApi::sun()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.sun"));
+    if (!scene) return QVariantMap();
+    auto sun = scene->sunLight();
+    QVariantMap out;
+    out[QStringLiteral("light")] = sun ? sun->getGUID() : QString();
+    out[QStringLiteral("name")] = sun ? sun->getName() : QString();
+    out[QStringLiteral("explicit")] = !scene->sunLightGuid.isEmpty();
+    out[QStringLiteral("reason")] = scene->sunReason();
+    out[QStringLiteral("priority")] = sun ? sun->forwardShadingPriority : -1;
+    out[QStringLiteral("castsShadows")] =
+        sun && sun->shadowMap && sun->shadowMap->shadowType != iris::ShadowMapType::None;
+    out[QStringLiteral("skyDriven")] = scene->skyDrivesSun;
+    QVariantList secondaries;
+    for (const auto &l : scene->secondaryDirectionals())
+        secondaries.append(QVariantMap{ { QStringLiteral("light"), l->getGUID() },
+                                        { QStringLiteral("name"), l->getName() },
+                                        { QStringLiteral("priority"), l->forwardShadingPriority } });
+    out[QStringLiteral("secondaries")] = secondaries;
+    out[QStringLiteral("nextPriority")] = scene->nextForwardShadingPriority();
+    return out;
 }
 
 void WorldApi::pushSunLinkUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid)
@@ -1474,6 +1551,15 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
     // part-way rolls every write back.
     WorldEdit edit(scene, { QStringLiteral("sky") }, WorldEdit::Registry | WorldEdit::SkyTexture);
 
+    // THE SKY STEERS THE SUN (SUN_AND_LIGHT_DEFAULTS Q1/Q1e). A boolean on the
+    // scene, not a light guid: "which directional light is the sun" is
+    // world.sunLight's question and has ONE answer (iris::Scene::sunLight), and
+    // this is the separate decision to let the Azimuth/Elevation dials aim it.
+    // Accepted for every sky type — only the analytic sky HAS a sun, so a
+    // colour sky simply stops driving and resumes when it comes back.
+    if (params.contains(QStringLiteral("drivesSun")))
+        scene->skyDrivesSun = params.value(QStringLiteral("drivesSun")).toBool();
+
     // Contract per SkyPropertyWidget: set the live fields AND rebuild
     // scene->skyData[<key>] (SceneWriter serializes only skyData), then
     // switchSkyTexture + queueSkyCapture for the legacy renderer. SceneMirror
@@ -1551,9 +1637,9 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         def.insert("sunPosZ", double(r.sunPosZ));
         scene->skyData.insert("Realistic", def);
         scene->skyType = iris::SkyType::REALISTIC;
-        // Sun coupling (re-audit F5): the linked light follows the sun HERE and
-        // not only on the next Scene::update, so a headless script sees the new
-        // rotation the moment this call returns.
+        // Sun coupling (re-audit F5): the sun follows the sky HERE and not only
+        // on the next Scene::update, so a headless script sees the new rotation
+        // the moment this call returns.
         scene->applySunCoupling();
     } else if (t == "equirectangular" || t == "equirect") {
         if (!requireProject()) return false;   // texture resolution needs the project's pins
@@ -1726,6 +1812,7 @@ QVariantMap WorldApi::get()
     sky["detail"] = scene->skyBakeResolution;
     // The light the sun drives, if any (re-audit F5) — empty string = none.
     sky["sunLight"] = scene->sunLightGuid;
+    sky["drivesSun"] = scene->skyDrivesSun;
     out["sky"] = sky;
     return out;
 }

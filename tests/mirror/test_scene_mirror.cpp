@@ -2074,11 +2074,16 @@ int main(int argc, char **argv)
         sdoc->skyRealistic.setSunAngles(0.0f, 85.0f);
         sdoc->skyType = iris::SkyType::SINGLE_COLOR;   // keep the sky OUT of the pixels
         CHECK(!sdoc->applySunCoupling(),
-              "sun coupling: nothing is driven until a light is linked");
+              "sun coupling: nothing is driven until the sky is told to steer");
 
         sdoc->skyType = iris::SkyType::REALISTIC;
-        sdoc->sunLightGuid = sunLight->getGUID();
-        CHECK(sdoc->applySunCoupling(), "sun coupling: linking swings the light");
+        // THE STEERING IS ITS OWN SWITCH since the sun lane: the sky aims
+        // whichever light IS the sun (iris::Scene::sunLight — here the scene's
+        // one directional), instead of a guid that meant both "this is the sun"
+        // and "the sky drives it" (SUN_AND_LIGHT_DEFAULTS Q1/Q1e).
+        CHECK(sdoc->sunLight() == sunLight, "sun coupling: the scene's directional IS its sun");
+        sdoc->skyDrivesSun = true;
+        CHECK(sdoc->applySunCoupling(), "sun coupling: turning the steering on swings the light");
 
         // (a) DOCUMENT: the light now emits along the sun -> scene direction.
         const auto sunDir = [&sdoc]() {
@@ -2133,18 +2138,18 @@ int main(int argc, char **argv)
         CHECK(high.r > 0.2f, "sun coupling: the overhead sun lights the floor");
         CHECK(dropped > 0.1f, "sun coupling: dropping the sun to the horizon darkens the floor");
 
-        // Unlinking stops the driving and leaves the light alone.
-        sdoc->sunLightGuid.clear();
+        // Turning the steering off stops the driving and leaves the light alone.
+        sdoc->skyDrivesSun = false;
         const iris::Quat parked = sunLight->getGlobalRotation();
         sdoc->skyRealistic.setSunAngles(180.0f, 60.0f);
-        CHECK(!sdoc->applySunCoupling(), "sun coupling: an unlinked scene drives nothing");
+        CHECK(!sdoc->applySunCoupling(), "sun coupling: an unsteered scene drives nothing");
         const iris::Quat after = sunLight->getGlobalRotation();
         CHECK(qFuzzyCompare(parked.x(), after.x()) && qFuzzyCompare(parked.y(), after.y()) &&
               qFuzzyCompare(parked.z(), after.z()) && qFuzzyCompare(parked.scalar(), after.scalar()),
-              "sun coupling: unlinked, the light keeps its rotation");
+              "sun coupling: unsteered, the light keeps its rotation");
 
-        // A non-realistic sky has no sun: the link is remembered but inert.
-        sdoc->sunLightGuid = sunLight->getGUID();
+        // A non-realistic sky has no sun: the switch is remembered but inert.
+        sdoc->skyDrivesSun = true;
         sdoc->skyType = iris::SkyType::GRADIENT;
         CHECK(!sdoc->applySunCoupling(), "sun coupling: only the realistic sky has a sun");
 

@@ -220,7 +220,14 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // linear radiance clipped to 8 bits made every brightly-lit asset a white
     // card. Deterministic (fixed exposure), so a thumbnail is still a
     // reproducible picture of its content.
-    secondaryfx::apply(view(), true);
+    //
+    // AT THE DOCUMENT'S OWN EXPOSURE (SS1, 2026-09-13). This used to take the
+    // header's default and therefore ignored the World's exposure completely:
+    // a scene the user had regraded produced thumbnails of the ungraded world.
+    // Asset previews are built at iris::Scene's default (+0.6), so their
+    // pictures are byte-identical to what they were; only a regraded document
+    // moves, and it moves TOWARDS the viewport.
+    secondaryfx::apply(view(), true, document->exposure);
 
     view()->setEnabled(true);
     // The editor does not pay for a thumbnail (fps audit F5): renderOneFrame

@@ -50,7 +50,6 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginematerialpreview.h"
-#include "ui/dialogs/donatedialog.h"
 #include "services/assethelper.h"
 #include "services/assetstore.h"
 #include "services/scenenodehelper.h"
@@ -137,6 +136,8 @@ For more information see the LICENSE file
 
 #include "ui/pages/assetview.h"
 #include "ui/dialogs/toast.h"
+#include "ui/controls/sceneissuebar.h"
+#include "services/sceneissues.h"
 
 #include "zip.h"
 
@@ -458,7 +459,12 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->setLocalPos(iris::Vec3(-4, 4, 0));
     plight->intensity = 1;
     plight->icon = iris::Texture2D::load(":/icons/bulb.png");
-	plight->setShadowMapType(iris::ShadowMapType::None);
+	// SHADOWS ARE ON BY DEFAULT (owner decision 1, SUN_AND_LIGHT_DEFAULTS §3.1).
+	// This line used to force the new scene's point light to cast nothing, so
+	// the ONE place a user meets the default said the opposite of the document's
+	// own default (ShadowMap's constructor has been Soft/2048 for years). It is
+	// also the class of bug behind the owner's Showroom: a lamp above a sealed
+	// roof lit the floor through it, and nothing said why.
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
@@ -650,15 +656,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		}
 	}
 
-#ifndef BUILD_PLAYER_ONLY
-    if (closing) {
-        if (!getSettingsManager()->getValue("ddialog_seen", "false").toBool()) {
-            DonateDialog dialog;
-            dialog.updateVersion(Constants::CONTENT_VERSION);
-            dialog.exec();
-        }
-    }
-#endif // !BUILD_PLAYER_ONLY
+	// (THE DONATE DIALOG USED TO RUN HERE, modally, as the last thing a user
+	// saw on the way out. It moved to FIRST LAUNCH — app/firstrun.h, called
+	// from main() — for two reasons: asking on the way out is the worst moment
+	// to ask, and a nested modal event loop inside closeEvent meant app.quit()
+	// could not complete until somebody clicked it. Owner decision D3,
+	// 2026-09-12. Nothing may be added here that runs its own event loop.)
 
 	// STEP 1 of the shutdown order (the whole sequence is documented in one
 	// place, at ~MainWindow, and enumerated in shell/shutdownorder.h). Recorded
@@ -952,6 +955,18 @@ void MainWindow::setupServices()
                 FrameMonitor::instance().noteToastShown(title, text,
                                                         holdMs > 0 ? holdMs : 1650);
             });
+
+    // THE SCENE-ERROR AREA (services/sceneissues.h, owner Q1b/Q1c). A visible,
+    // dismissible list of the things wrong with the OPEN SCENE that the person
+    // using the editor can fix — beside the frame-rate readout, because that is
+    // where the owner asked for it. Engine diagnostics never come here: they go
+    // to the log and to the monitor's capture bundle.
+    //
+    // The scanner runs on a slow timer rather than per frame: the conditions it
+    // looks for are authoring state, not frame state, and raising an issue that
+    // is already live is a no-op by construction, so a second of latency costs
+    // nothing and a per-frame walk of every light against every mesh would.
+    wireSceneIssues();
 
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
@@ -2767,7 +2782,10 @@ void MainWindow::setupViewPort()
     auto containerLayout = new QVBoxLayout;
 
     auto screenShotBtn = new QPushButton;
-    screenShotBtn->setToolTip("Take a screenshot of the scene");
+    screenShotBtn->setToolTip(tr("Photograph the viewport at 1920x1080 — this camera, this lens, "
+                                 "and the world's own settings (global illumination, reflections, "
+                                 "ambient occlusion, bloom, anti-aliasing, the looks stack and the "
+                                 "exposure the view is currently at)"));
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
     screenShotBtn->setIcon(QIcon(":/icons/icons8-camera-48.png"));
@@ -3717,6 +3735,41 @@ void MainWindow::stepSnapSize(int direction)
 // The transient readout over the viewport — one toast, reused, for every
 // "you just changed this with a gesture" message (snap size, fly speed). It was
 // stepSnapSize's tail; the fly-speed wheel needed the identical five lines.
+// THE SCENE-ERROR AREA. The bar is a view of SceneIssues and owns no state;
+// this is the whole of the shell's involvement — build it lazily over the
+// viewport, let its Select button drive the ordinary selection verb, and tick
+// the scanner.
+void MainWindow::wireSceneIssues()
+{
+    if (sceneIssueTimer) return;
+    sceneIssueTimer = new QTimer(this);
+    sceneIssueTimer->setInterval(1000);
+    connect(sceneIssueTimer, &QTimer::timeout, this, [this]() {
+        // Only while the editor is what the user is looking at: the scanner
+        // talks about the open scene, and the other spaces have their own.
+        if (!sceneEditService) return;
+        auto scene = sceneEditService->scene();
+        if (!scene) { SceneIssues::instance().reset(); return; }
+        SceneIssues::instance().scan(scene);
+        if (!sceneIssueBar && SceneIssues::instance().visibleCount() > 0) {
+            sceneIssueBar = new SceneIssueBar(this);
+            // Under the engine-drawn frame-stats rows (three lines plus their
+            // inset) so the two never overlap when F3 is on.
+            sceneIssueBar->setAnchor(sceneView ? sceneView->asWidget() : nullptr, 96);
+            connect(sceneIssueBar, &SceneIssueBar::selectRequested, this,
+                    [this](const QString &guid) {
+                        if (!sceneEditService || !selectionService) return;
+                        auto scene = sceneEditService->scene();
+                        if (!scene) return;
+                        auto node = scene->nodes.value(guid);
+                        if (node) selectionService->select(node);
+                    });
+            sceneIssueBar->refresh();
+        }
+    });
+    sceneIssueTimer->start();
+}
+
 void MainWindow::showViewportToast(const QString &title, const QString &text)
 {
     if (!sceneView) return;
@@ -4101,7 +4154,14 @@ void MainWindow::spaceKeyActiveSpace()
 
 void MainWindow::takeScreenshot()
 {
-    auto img = sceneView->takeScreenshot();
+    // THE USER'S DOOR, AND IT ASKS FOR THE SCENE'S OWN PICTURE (owner,
+    // 2026-09-13: "match the screenshot to the scene properly"). The grade is
+    // named here rather than left to the viewport's default because the default
+    // door is the THUMBNAIL grade and has other callers — project preview tiles
+    // and the asset viewer — which must stay cheap. See
+    // IEditorViewport::ScreenshotGrade for what each answer is a picture of.
+    auto img = sceneView->takeScreenshot(1920, 1080,
+                                         IEditorViewport::ScreenshotGrade::Scene);
     ScreenshotWidget screenshotWidget;
     screenshotWidget.setMaximumWidth(1280);
     screenshotWidget.setMaximumHeight(720);

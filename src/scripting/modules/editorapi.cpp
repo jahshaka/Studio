@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "io/sceneformat.h"
 #include "services/services.h"
 #include "services/playbackservice.h"
+#include "services/sceneissues.h"
 #include "services/sceneeditservice.h"
 #include "services/clipboardservice.h"
 #include "services/selectionservice.h"
@@ -470,6 +471,50 @@ QVector<VerbInfo> EditorApi::verbs() const
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
+        { "issues", "editor.issues(includeDismissed=true) -> [{id, kind, node, nodeName, message, action, dismissed}]",
+          "THE SCENE-ERROR AREA — the things wrong with the OPEN SCENE that the person using the "
+          "editor can fix, shown in the viewport beside the frame-rate readout and listed here. "
+          "The rule that decides what belongs in it: if you can fix it in your scene it is an "
+          "issue; if it exists for us to debug the engine it stays in the log (app.engineErrors, "
+          "log.tail, and the monitor's capture bundle). So there are never shader compiles, cache "
+          "misses or pass counts here. Every issue NAMES the object it is about (`node` is a guid "
+          "you can pass straight to editor.select) and says what to DO about it (`action`), and it "
+          "never repeats itself: raising one that is already live changes nothing at all. "
+          "`dismissed` is true for one the user waved away — it stays live, so nothing can nag "
+          "with it again, and it comes back only after the condition has gone and returned. "
+          "Pass false to list only what is actually on screen.",
+          Needs::Document },
+        { "raiseIssue", "editor.raiseIssue({kind, node, message, action, id}) -> id",
+          "Raises a scene issue, or does NOTHING and returns the same id when one with that id is "
+          "already live. `kind` is required and is the machine-readable class (\"sun.tie\", "
+          "\"shadow.leak\", or your own); `message` is required and is what is wrong in plain "
+          "words; `node` is the guid of the object it is about, `action` what to do about it, and "
+          "`id` defaults to \"<kind>:<node>\", which is what makes repeats free. Use it for "
+          "conditions a user can fix — never for engine diagnostics, which belong in the log.",
+          Needs::Document },
+        { "dismissIssue", "editor.dismissIssue(id) -> bool",
+          "Hides a scene issue the way the user's dismiss button does: it stays LIVE, so nothing "
+          "can raise it again, and it is gone from the viewport. False when there is no such "
+          "issue. editor.clearIssue(id) is the other half — \"the condition is gone\" — and after "
+          "it the next occurrence is shown again.",
+          Needs::Document },
+        { "clearIssue", "editor.clearIssue(id) -> bool",
+          "Forgets a scene issue entirely, which is what \"the scene was fixed\" means: a later "
+          "raise of the same id is a new event and is shown again, dismissed or not. The scanner "
+          "(editor.checkScene) does this for its own kinds by itself. False when there is no such "
+          "issue.",
+          Needs::Document },
+        { "checkScene", "editor.checkScene() -> {issues, visible, raised:[id], list:[...]}",
+          "Runs the scene checker once against the open scene and returns what is live afterwards "
+          "— the same thing the editor does on a timer, exposed so a script or a test can drive "
+          "it. It knows two conditions today, both of which used to reach nobody: \"sun.tie\", "
+          "two directional lights set to the same Forward Shading Priority, so which one is the "
+          "sun comes out of a tie-break the author never chose; and \"shadow.leak\", a light "
+          "whose shadows are switched off standing close enough to solid geometry to light "
+          "straight through it. Conditions that have been fixed are cleared, so this is safe to "
+          "call as often as you like. `raised` names the issues this call raised for the first "
+          "time (empty on a second identical call — the never-repeat rule).",
+          Needs::Document },
         { "dropPointAt", "editor.dropPointAt(x, y) -> {x, y, z} | null",
           "WHERE A DROP AT THIS VIEWPORT PIXEL LANDS, in world space: the surface under the "
           "cursor when the ray hits one, else the y=0 ground plane. `x`/`y` are viewport pixels "
@@ -479,13 +524,14 @@ QVector<VerbInfo> EditorApi::verbs() const
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"raw\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
-          "`grade` says how the shot is DEVELOPED, and the default is deliberately the dullest answer: "
-          "\"raw\" (or false) is no post-processing at all — the neutral, exactly-reproducible readback pixel assertions want, and what this verb has always returned. "
-          "\"tonemap\" applies the deterministic filmic grade ONLY (fixed exposure, no bloom, no ambient occlusion, no SMAA): a picture of the CONTENT that no longer clips to white wherever the scene is bright, and still the same picture every time. "
-          "\"viewport\" (or true) renders the scene's whole post-processing chain so the shot matches what the viewport shows, at the cost of the scene's ADAPTIVE exposure making it depend on how many frames it rendered. "
-          "The editor's own Screenshot action uses \"tonemap\".",
+          "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
+          "\"plain\" (also spelled \"raw\", or false) is NO POST-PROCESSING AT ALL — 1x MSAA, linear radiance clipped to 8 bits, the same pixels on every machine and in every frame. This is the picture the pixel suites assert and what this verb has always returned. "
+          "\"tonemap\" is the THUMBNAIL picture: the deterministic filmic grade only (the scene's exposure as a constant; no bloom, no ambient occlusion, no SMAA, no reflections), so a bright scene does not clip to white and a sweep of hundreds stays cheap. "
+          "\"scene\" is THE EDITOR'S OWN PICTURE and what the Screenshot button in the editor takes: the scene's WHOLE post chain exactly as the world has it — global illumination, screen-space reflections, ambient occlusion, bloom, SMAA, the looks stack, HDR and the tonemap — at this camera's pose and lens, graded at the exposure the on-screen viewport has currently converged on (carried across as a constant, so the shot is repeatable). A world with HDR switched off photographs ungraded, like the viewport. "
+          "\"viewport\" (or true) is the same whole chain but with the chain's OWN adaptive exposure re-seeded from the scene's (or the driving camera's) exposure value; an offscreen view lives about two frames and cannot converge, so it grades at that seed. It exists for camera.screenshot, where there is no on-screen view measuring the camera in question — for the editor camera prefer \"scene\". "
+          "The editor's own Screenshot action uses \"scene\"; project preview tiles and asset thumbnails use \"tonemap\".",
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
           "Opens a nested undo macro inside the script's run (finer-grained grouping).",
@@ -1846,6 +1892,68 @@ QVariantMap EditorApi::mirrorStats()
     return out;
 }
 
+// ---------------------------------------------------------------------------
+// THE SCENE-ERROR AREA (services/sceneissues.h) — API FIRST
+// ---------------------------------------------------------------------------
+// The verbs are the model's whole surface; the viewport's error bar reads the
+// same store and adds nothing. All Needs::Document: an issue is a statement
+// about the document, and a headless run must be able to make and read one (it
+// is how the suite proves the never-repeat rule without a window).
+QVariantList EditorApi::issues(bool includeDismissed)
+{
+    return SceneIssues::instance().toVariant(includeDismissed);
+}
+
+QString EditorApi::raiseIssue(const QVariantMap &issue)
+{
+    SceneIssue out;
+    out.kind = issue.value(QStringLiteral("kind")).toString().trimmed();
+    out.message = issue.value(QStringLiteral("message")).toString().trimmed();
+    if (out.kind.isEmpty()) {
+        fail(QStringLiteral("editor.raiseIssue: 'kind' is required (the issue's class, e.g. "
+                            "'sun.tie')"));
+        return QString();
+    }
+    if (out.message.isEmpty()) {
+        fail(QStringLiteral("editor.raiseIssue: 'message' is required — an issue with nothing to "
+                            "say cannot help anyone"));
+        return QString();
+    }
+    out.node = issue.value(QStringLiteral("node")).toString();
+    out.action = issue.value(QStringLiteral("action")).toString();
+    out.id = issue.value(QStringLiteral("id")).toString();
+    // The name is resolved HERE and stored, so a message keeps naming the thing
+    // it was raised about even after the node is renamed or deleted.
+    if (!out.node.isEmpty()) {
+        if (auto scene = (host.services && host.services->sceneEdit)
+                              ? host.services->sceneEdit->scene() : iris::ScenePtr()) {
+            auto node = scene->nodes.value(out.node);
+            if (node) out.nodeName = node->getName();
+        }
+    }
+    return SceneIssues::instance().raise(out);
+}
+
+bool EditorApi::dismissIssue(const QString &id) { return SceneIssues::instance().dismiss(id); }
+
+bool EditorApi::clearIssue(const QString &id) { return SceneIssues::instance().clear(id); }
+
+QVariantMap EditorApi::checkScene()
+{
+    auto &store = SceneIssues::instance();
+    QStringList before;
+    for (const auto &i : store.issues(true)) before << i.id;
+    store.scan((host.services && host.services->sceneEdit)
+                   ? host.services->sceneEdit->scene() : iris::ScenePtr());
+    QVariantList raised;
+    for (const auto &i : store.issues(true))
+        if (!before.contains(i.id)) raised.append(i.id);
+    return QVariantMap{ { QStringLiteral("issues"), store.issues(true).size() },
+                        { QStringLiteral("visible"), store.visibleCount() },
+                        { QStringLiteral("raised"), raised },
+                        { QStringLiteral("list"), store.toVariant(true) } };
+}
+
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
                                   const QVariantList &probes, const QVariant &grade)
 {
@@ -1853,27 +1961,30 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
     if (!requireEngine()) return out;
     if (path.isEmpty()) { fail("editor.screenshot: a file path is required"); return out; }
 
-    // THE GRADE (fix wave 2026-09-07 item 6). This argument was a BOOLEAN
-    // (`postFx`) and it stays compatible with one — false is Raw, true is
-    // Viewport — because the whole pixel-suite corpus passes it that way, and
-    // because Raw MUST remain the default: this verb is the tree's measuring
-    // instrument and its exact colours are what dozens of assertions pin.
-    // "tonemap" is the new third answer: the deterministic filmic grade alone,
-    // for a shot that should look like the editor rather than like a readback.
-    IEditorViewport::ScreenshotGrade mode = IEditorViewport::ScreenshotGrade::Raw;
+    // THE GRADE (IEditorViewport::ScreenshotGrade, where each answer is
+    // documented). This argument was a BOOLEAN (`postFx`) and it stays
+    // compatible with one — false is Plain, true is Viewport — because the
+    // whole pixel-suite corpus passes it that way, and because PLAIN MUST
+    // REMAIN THE DEFAULT: this verb is the tree's measuring instrument and its
+    // exact colours are what dozens of assertions pin. "scene" is the picture
+    // the editor's own Screenshot button takes (SS1).
+    IEditorViewport::ScreenshotGrade mode = IEditorViewport::ScreenshotGrade::Plain;
     if (!grade.isNull() && grade.isValid()) {
         const QVariant g = scriptmod::normalizeJs(grade);
         if (g.typeId() == QMetaType::Bool) {
             mode = g.toBool() ? IEditorViewport::ScreenshotGrade::Viewport
-                              : IEditorViewport::ScreenshotGrade::Raw;
+                              : IEditorViewport::ScreenshotGrade::Plain;
         } else {
             const QString word = g.toString().trimmed().toLower();
-            if (word == QLatin1String("raw"))           mode = IEditorViewport::ScreenshotGrade::Raw;
+            if (word == QLatin1String("plain") || word == QLatin1String("raw"))
+                mode = IEditorViewport::ScreenshotGrade::Plain;
             else if (word == QLatin1String("tonemap"))  mode = IEditorViewport::ScreenshotGrade::Tonemap;
+            else if (word == QLatin1String("scene"))    mode = IEditorViewport::ScreenshotGrade::Scene;
             else if (word == QLatin1String("viewport")) mode = IEditorViewport::ScreenshotGrade::Viewport;
             else {
                 fail(QStringLiteral("editor.screenshot: unknown grade '%1' "
-                                    "(raw | tonemap | viewport, or a boolean)").arg(g.toString()));
+                                    "(plain | raw | tonemap | scene | viewport, or a boolean)")
+                         .arg(g.toString()));
                 return out;
             }
         }

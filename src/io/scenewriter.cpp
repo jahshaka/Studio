@@ -142,6 +142,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // The directional light the realistic sky's sun drives; empty = none
     // (VISUAL_PARITY re-audit F5).
     sceneObj["sunLight"] = scene->sunLightGuid;
+    sceneObj["skyDrivesSun"] = scene->skyDrivesSun;
     sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
@@ -1058,6 +1059,13 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["rectHeight"] = lightNode->rectHeight;
     sceneNodeObject["doubleSided"] = lightNode->doubleSided;
     sceneNodeObject["accurate"] = lightNode->accurate;
+    // FORWARD SHADING PRIORITY (directional lights only; 0 = the sun). Written
+    // only when it is not the default, the pattern the node flags already use:
+    // an absent key means the default, so no existing file grows a byte and a
+    // point light never carries a row that means nothing on it.
+    if (lightNode->lightType == iris::LightType::Directional &&
+        lightNode->forwardShadingPriority != 0)
+        sceneNodeObject["forwardShadingPriority"] = lightNode->forwardShadingPriority;
     // Asset BINDINGS travel as guids; the resolved path and the profile's
     // photometric scale are runtime state the reader re-derives from the store.
     sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;

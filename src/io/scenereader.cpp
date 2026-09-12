@@ -310,7 +310,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	scene->skyGuid = sceneObj["skyGuid"].toString();
 	// Sun coupling (re-audit F5); absent in every document written before it,
 	// which reads as "nothing is driven" — the default.
-	scene->sunLightGuid = sceneObj["sunLight"].toString();
+	scene->sunLightGuid = sceneObj.value("sunLight").toString();
+	// THE SKY STEERS THE SUN — a separate switch since the sun lane. Every
+	// document written before it carried a non-empty `sunLight` guid to mean
+	// exactly "driven", so those files keep driving and nothing changes for
+	// them; new files write the boolean.
+	scene->skyDrivesSun =
+		sceneObj.value("skyDrivesSun").toBool(!scene->sunLightGuid.isEmpty());
 	scene->ambientMusicGuid = sceneObj["ambientMusicGuid"].toString();
 	auto volume = sceneObj["ambientMusicVolume"].toDouble(50);
 	scene->setAmbientMusicVolume(volume);
@@ -1243,16 +1249,24 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     return meshNode;
 }
 
+// SHADOWS ARE ON UNLESS THE FILE SAYS OTHERWISE (owner decision 1).
+//
+// This returned None for anything it did not recognise — INCLUDING an absent
+// key — so the reader and `ShadowMap::ShadowMap()` (Soft, 2048, for years)
+// stated two different defaults for one question. Our own writer always writes
+// the key, so only a hand-edited file or a future importer could reach the
+// divergence; that is exactly the kind of thing that is discovered late.
+// An explicit "none" still means none, and always will.
 iris::ShadowMapType evalShadowMapType(QString shadowType)
 {
     if (shadowType=="hard")
         return iris::ShadowMapType::Hard;
-    if (shadowType=="soft")
-        return iris::ShadowMapType::Soft;
     if (shadowType=="verysoft")
         return iris::ShadowMapType::VerySoft;
+    if (shadowType=="none")
+        return iris::ShadowMapType::None;
 
-    return iris::ShadowMapType::None;
+    return iris::ShadowMapType::Soft;
 }
 
 /**
@@ -1301,7 +1315,14 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // ensure shadow map size isnt too big ro too small
     auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
     shadowMap->setResolution(res);
-    shadowMap->shadowType = evalShadowMapType(nodeObj["shadowType"].toString());
+    // value(), not operator[]: a read through operator[] on a NON-CONST
+    // QJsonObject INSERTS a null member.
+    shadowMap->shadowType = evalShadowMapType(nodeObj.value("shadowType").toString());
+    // FORWARD SHADING PRIORITY (directional lights only) — absent means the
+    // default, which is what the writer relies on (it writes the key only when
+    // it is non-zero).
+    lightNode->forwardShadingPriority =
+        qMax(0, nodeObj.value("forwardShadingPriority").toInt(0));
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional) {

@@ -40,10 +40,8 @@
 #include <QGuiApplication>
 #include <QVariantList>
 
-#include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <thread>
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/math/quat.h"
@@ -92,19 +90,85 @@ unsigned long long pixelHash(const Image &img)
     return h;
 }
 
-/// Frames with REAL time in them. HDR adaptation is charged in wall clock
-/// (~75%/s), so a tight loop of one-millisecond offscreen frames converges on
-/// nothing however many of them there are.
-void settle(double seconds)
-{
-    const auto start = std::chrono::steady_clock::now();
-    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < seconds) {
-        gEngine->renderOneFrame();
-        std::this_thread::sleep_for(std::chrono::milliseconds(8));
-    }
-}
-
 void frames(int n) { for (int i = 0; i < n; ++i) gEngine->renderOneFrame(); }
+
+// ---------------------------------------------------------------------------
+// SETTLING, AND WHY IT IS COUNTED IN FRAMES
+//
+// This used to be `settle(double seconds)`: a wall-clock loop of
+// renderOneFrame() + an 8 ms sleep, on the belief that "HDR adaptation is
+// charged in wall clock". IT IS NOT, and has not been since the A4.2
+// fixed-clock merge (2026-09-10). The adaptation step is
+// HDR/DownScale03_SumLumEnd's `timeSinceLast`, declared
+// `param_named_auto timeSinceLast frame_time 1`, and Ogre's frame_time comes
+// from ControllerManager — which this engine puts in FRAME-DELAY mode at boot,
+// at a fixed Engine::kDefaultFrameDelta = 1/60 s (OgreEngine.cpp:154). Every
+// rendered frame therefore advances the exposure history by exactly 1/60 s,
+// and NO rendered frame advances it by wall clock.
+//
+// So the old helper measured the wrong axis: in 1.5 wall-clock seconds a quiet
+// box got ~150 frames (2.5 s of adaptation) and a box under a -j4 gate got a
+// fraction of that. The reference shot in part B is taken first, before the
+// experiments, and it was the one that suffered — the suite read an
+// UNCONVERGED reference against a converged comparison and failed its own 1.5
+// tolerance. Three gates saw it (2026-09-10, 2026-09-12 at 75.40 vs 78.20,
+// 2026-09-13 at 78.14 vs 76.39) and every solo retry passed. Nothing was ever
+// wrong with the engine; the test sampled too early.
+//
+// Two helpers replace it, and neither can be stretched by load:
+//
+//   settle(n)              render exactly n frames = exactly n/60 s of
+//                          adaptation, on any box, at any load.
+//   settledLuma(view, ...) render until the PICTURE STOPS MOVING and return
+//                          its mean luma — "the measured value holding still",
+//                          which is the only definition of converged that does
+//                          not encode a guess about the adaptation rate.
+//
+// The tolerances are untouched. A tolerance is the assertion.
+
+/// n frames = n/60 s of adaptation. Deterministic, and load-independent.
+void settle(int n) { frames(n); }
+
+/// A generous cap on convergence. At 1/60 s per frame this is 10 s of
+/// adaptation against a rate of ~75%/s — thirty thousand times the distance
+/// any of these shots has to travel. It exists so a broken chain fails on an
+/// assertion rather than hanging.
+constexpr int kMaxSettleFrames = 600;
+/// Frames between two luma readbacks while converging.
+constexpr int kSettleStep = 10;
+/// Two consecutive readbacks this close (out of 255) are "still". The
+/// assertions below are made at tolerances of 1.5 and 8.0 luma levels, so a
+/// twentieth of a level is well inside the noise floor of every one of them.
+constexpr double kStillEpsilon = 0.05;
+
+/// Renders `view` until its mean luminance holds still, and returns it.
+/// Optionally hands back the frame it settled on and that frame's hash.
+double settledLuma(View *view, unsigned long long *hashOut = nullptr,
+                   const char *label = nullptr)
+{
+    Image img;
+    view->readPixels(img);
+    double previous = luma(img);
+    int rendered = 0;
+    while (rendered < kMaxSettleFrames) {
+        frames(kSettleStep);
+        rendered += kSettleStep;
+        view->readPixels(img);
+        const double now = luma(img);
+        if (std::fabs(now - previous) < kStillEpsilon) {
+            if (label)
+                std::printf("    [%s settled after %d frames (%.2f s of adaptation) at %.2f]\n",
+                            label, rendered, rendered / 60.0, now);
+            if (hashOut) *hashOut = pixelHash(img);
+            return now;
+        }
+        previous = now;
+    }
+    std::printf("    [WARNING: %s did not settle in %d frames — last %.2f]\n",
+                label ? label : "view", kMaxSettleFrames, previous);
+    if (hashOut) *hashOut = pixelHash(img);
+    return previous;
+}
 
 /// A lit scene with a bright, blooming highlight in it. Everything that follows
 /// is measured on this one picture.
@@ -150,10 +214,14 @@ void a1_two_views_two_exposures()
     // disagree, A1's real assertion below means nothing.
     a->setPostFx(pinned(0.6f));
     b->setPostFx(pinned(0.6f));
-    settle(1.5);
-    Image ia, ib;
-    a->readPixels(ia); b->readPixels(ib);
-    const double same0 = luma(ia), same1 = luma(ib);
+    Image ib;
+    // CONVERGED, not "1.5 seconds later": settledLuma renders until the
+    // picture holds still. One engine renders both views every frame, so
+    // settling A settles B — they are read at the same frame count, which is
+    // the only way a control means anything.
+    const double same0 = settledLuma(a, nullptr, "A1 control A");
+    b->readPixels(ib);
+    const double same1 = luma(ib);
     std::printf("    control: A %.2f  B %.2f\n", same0, same1);
     CHECK(std::fabs(same0 - same1) < 1.0,
           "CONTROL: two views asking for the SAME exposure agree (%.2f vs %.2f)", same0, same1);
@@ -162,9 +230,9 @@ void a1_two_views_two_exposures()
     // the per-view listener the second view rendered with the first's exposure.
     a->setPostFx(pinned(-1.4f));    // two stops down
     b->setPostFx(pinned(2.0f));     // two stops up
-    settle(2.0);
-    a->readPixels(ia); b->readPixels(ib);
-    const double dark = luma(ia), bright = luma(ib);
+    const double dark = settledLuma(a, nullptr, "A1 dark A");
+    b->readPixels(ib);
+    const double bright = luma(ib);
     std::printf("    per-view: A (E -1.4) %.2f  B (E +2.0) %.2f\n", dark, bright);
     CHECK(bright > dark + 8.0,
           "PER-VIEW EXPOSURE: two views render their OWN exposure in the same frame "
@@ -174,9 +242,9 @@ void a1_two_views_two_exposures()
     // first-view-wins global could never do.
     a->setPostFx(pinned(2.0f));
     b->setPostFx(pinned(-1.4f));
-    settle(2.0);
-    a->readPixels(ia); b->readPixels(ib);
-    const double swappedA = luma(ia), swappedB = luma(ib);
+    const double swappedA = settledLuma(a, nullptr, "A1 swapped A");
+    b->readPixels(ib);
+    const double swappedB = luma(ib);
     std::printf("    swapped:  A (E +2.0) %.2f  B (E -1.4) %.2f\n", swappedA, swappedB);
     CHECK(swappedA > swappedB + 8.0,
           "PER-VIEW EXPOSURE: swapping the two descriptions swaps the two pictures "
@@ -246,10 +314,11 @@ void a3_cut_reseeds_the_exposure_history()
     populate(s);
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.6f, 2.6f), Vec3(0, 0, 0));
 
+    // CONVERGED, both times: "the same starting point" is what makes the two
+    // two-frame shots below comparable, and a wall-clock settle could not
+    // promise it under load.
     v->setPostFx(pinned(-1.4f));
-    settle(2.5);
-    Image dark; v->readPixels(dark);
-    const double darkLuma = luma(dark);
+    const double darkLuma = settledLuma(v, nullptr, "A3 dark");
 
     // THE CUT, without the hook: a new exposure, two frames. The history still
     // holds the old grade, so almost nothing has moved yet.
@@ -260,7 +329,11 @@ void a3_cut_reseeds_the_exposure_history()
 
     // ...and the same cut WITH the hook, from the same starting point.
     v->setPostFx(pinned(-1.4f));
-    settle(2.5);
+    const double darkAgain = settledLuma(v, nullptr, "A3 dark again");
+    CHECK(std::fabs(darkAgain - darkLuma) < 0.5,
+          "CONTROL: the second run-up reaches the SAME dark grade as the first "
+          "(%.2f vs %.2f) — the two cuts below start from one place",
+          darkAgain, darkLuma);
     v->setPostFx(pinned(2.0f));
     v->resetExposureHistory();
     frames(2);
@@ -268,18 +341,16 @@ void a3_cut_reseeds_the_exposure_history()
     const double cutLuma = luma(cut);
 
     // Where it ends up if you simply wait.
-    settle(2.5);
-    Image settled; v->readPixels(settled);
-    const double settledLuma = luma(settled);
+    const double settledGrade = settledLuma(v, nullptr, "A3 settled");
 
     std::printf("    dark %.2f -> two frames later %.2f (fade) / %.2f (re-seeded), settles at %.2f\n",
-                darkLuma, fadingLuma, cutLuma, settledLuma);
+                darkLuma, fadingLuma, cutLuma, settledGrade);
     CHECK(cutLuma > fadingLuma + 4.0,
           "CAMERA CUT: re-seeding lands the new grade immediately instead of fading into it "
           "(%.2f vs %.2f two frames after the cut)", cutLuma, fadingLuma);
-    CHECK(std::fabs(cutLuma - settledLuma) < std::fabs(fadingLuma - settledLuma),
+    CHECK(std::fabs(cutLuma - settledGrade) < std::fabs(fadingLuma - settledGrade),
           "CAMERA CUT: the re-seeded frame is nearer the settled grade than the fading one "
-          "(|%.2f-%.2f| vs |%.2f-%.2f|)", cutLuma, settledLuma, fadingLuma, settledLuma);
+          "(|%.2f-%.2f| vs |%.2f-%.2f|)", cutLuma, settledGrade, fadingLuma, settledGrade);
 
     v->setPostFx(PostFxDesc());
     gEngine->destroyView(v); gEngine->destroyScene(s);
@@ -340,8 +411,15 @@ struct Doc {
 /// Renders `view` the way a screenshot with postFx:true does: the world's
 /// description, then the driving camera's substitution, then the deliberate
 /// offscreen opt-in — in that order, because that IS the order the app uses.
+/// `fixedFrames` = 0 (the default) settles to CONVERGENCE — every graded shot
+/// in this part is compared against another graded shot, and the whole suite's
+/// oldest flake was a reference sampled before it had arrived. A non-zero value
+/// renders exactly that many frames instead, for the one shot that must NOT
+/// converge: B4's plain view has no chain to converge, and its two hashes have
+/// to be taken at an identical frame count to be compared byte for byte.
 double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
-             bool optIn, unsigned long long *hashOut = nullptr, double settleSeconds = 1.5)
+             bool optIn, unsigned long long *hashOut = nullptr, int fixedFrames = 0,
+             const char *label = nullptr)
 {
     mirror.sync();
     mirror.applyEnvironment(view);
@@ -351,7 +429,9 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
         fx.allowOffscreen = true;
         view->setPostFx(fx);
     }
-    settle(settleSeconds);
+    if (fixedFrames <= 0)
+        return settledLuma(view, hashOut, label);
+    settle(fixedFrames);
     Image img;
     view->readPixels(img);
     if (hashOut) *hashOut = pixelHash(img);
@@ -374,7 +454,8 @@ void partB()
 
     // ---- B3 first: INHERIT changes nothing --------------------------------
     unsigned long long inheritHash = 0;
-    const double inherited = shoot(mirror, view, doc.camera, true, &inheritHash);
+    const double inherited = shoot(mirror, view, doc.camera, true, &inheritHash, 0,
+                                   "B3 reference (inherit)");
     std::printf("    world grade through an inheriting camera: %.2f\n", inherited);
 
     // ---- B1: the camera's own exposure, in STOPS --------------------------
@@ -474,7 +555,8 @@ void partB()
     doc.camera->exposureMode = iris::CameraExposureMode::Inherit;
     doc.camera->postOverrides = QJsonObject();
     unsigned long long backHash = 0;
-    const double back = shoot(mirror, view, doc.camera, true, &backHash);
+    const double back = shoot(mirror, view, doc.camera, true, &backHash, 0,
+                              "B3 back to inherit");
     std::printf("    back to inherit: %.2f (was %.2f)\n", back, inherited);
     CHECK(std::fabs(back - inherited) < 1.5,
           "INHERIT: clearing every override puts the camera back on the world's grade "
@@ -487,7 +569,7 @@ void partB()
     if (!plain) { std::printf("FAIL: plain view\n"); ++failures; return; }
     plain->setScene(target);
     unsigned long long neutral = 0;
-    shoot(mirror, plain, doc.camera, false, &neutral, 0.3);
+    shoot(mirror, plain, doc.camera, false, &neutral, 18);
 
     doc.camera->exposureMode = iris::CameraExposureMode::Manual;
     doc.camera->exposure = 4.0f;
@@ -496,7 +578,7 @@ void partB()
     doc.camera->setPostOverride(QStringLiteral("bloomThreshold"), 0.01);
     doc.camera->setPostOverride(QStringLiteral("ssao"), true);
     unsigned long long loud = 0;
-    shoot(mirror, plain, doc.camera, false, &loud, 0.3);
+    shoot(mirror, plain, doc.camera, false, &loud, 18);
     CHECK(neutral == loud,
           "DETERMINISM: an offscreen view that did not opt in is BYTE-IDENTICAL whatever the "
           "driving camera overrides (hash %llu vs %llu)", neutral, loud);

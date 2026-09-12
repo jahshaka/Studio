@@ -235,6 +235,69 @@ void EngineSceneViewport::pushGridForView(bool helpers)
                                                                 : QStringLiteral("floor");
 }
 
+// EVERY IN-VIEWPORT EDITOR HELPER, PUSHED FROM ONE PLACE.
+//
+// G (Game View) hides them all; play mode hides the grid, the camera bodies and
+// the GI boxes too (the Unreal look), while the rest keep their play behaviour.
+//
+// IT IS A FUNCTION BECAUSE IT HAS TO BE REVERSIBLE (SS1 review item 3). A user's
+// screenshot leaves the helpers out (owner, 2026-09-13), which means something
+// has to take them away for the duration of one picture and PUT THEM BACK — and
+// "put them back" cannot be approximated, because the very next thing a script
+// may ask for is the plain readback the entire pixel corpus asserts never moves.
+// The first cut cleared five switches by hand and trusted refreshOverlay() to
+// restore them; refreshOverlay only pushes the OVERLAY description, so the
+// restore happened by accident at the next syncFrame and two screenshots in one
+// script run returned a helper-less second picture. Now both callers push the
+// same state from the same owned fields, so the round trip is exact by
+// construction rather than by hope.
+void EngineSceneViewport::pushEditorHelpers(bool helpers)
+{
+    if (!mMirror) return;
+    mMirror->setLightWires(mShowLightWires && helpers);
+    // Camera bodies + frustum wires (CAMERAS_SPEC D2). Same "editor helper"
+    // rule as the light wires — G (Game View) and play hide them — but a
+    // separate toggle, because they are a different object and the View
+    // Options row for light wires must not silently govern cameras.
+    mMirror->setCameraBodies(helpers && !mPlaying);
+    mMirror->setHighlightWireframe(mSelectionWireframe);
+    // No selection outline for the World root (the whole scene would glow)
+    // or for the built-in ground PLANE — owner ask 2026-08-31. The first
+    // implementation tested `isBuiltIn`, which every Add-menu primitive
+    // carries (addBuiltinPrimitive sets it on cubes, spheres, capsules —
+    // and the sample scenes are assembled from exactly those), so every
+    // primitive silently lost its outline while selection/gizmo/panel kept
+    // working (2026-09-06 sighting; cost a day of misattributed reports).
+    // The exclusion is the GROUND MESH specifically, nothing wider.
+    // The SET, member by member (EDITOR_MULTISELECT_SPEC §2.3) — the two
+    // exclusions above apply per member, not to the selection as a whole.
+    QList<iris::SceneNodePtr> highlight;
+    if (helpers) {
+        for (const auto &node : mSelectedSet) {
+            if (!node) continue;
+            if (mScene && node == mScene->getRootNode()) continue;
+            if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                const auto mn = node.staticCast<iris::MeshNode>();
+                if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
+                    continue;
+            }
+            highlight.append(node);
+        }
+    }
+    // The PRIMARY goes over EXPLICITLY (EDITOR_MULTISELECT_SPEC D4 b): the
+    // two exclusions above run per member, so the primary can be filtered
+    // out of `highlight` while secondaries survive — and then "the first
+    // entry" would hand the brighter outline to a node that is not the
+    // primary. The mirror re-checks membership and drops a primary that is
+    // not in the list.
+    mMirror->setHighlightedNodes(highlight, mSelectedNode);
+    // Grid spacing = the translate snap size ([ and ] re-space it live).
+    pushGridForView(helpers && !mPlaying);
+    // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
+    // rest, so Game View and play hide them.
+    mMirror->setGiVolumeOverlay(mShowGiVolume && helpers && !mPlaying);
+}
+
 // The canonical AXIS views and the orientation each one snaps to. File scope
 // because two questions need it: which view a name IS (setCameraView) and
 // whether the current view is an axis one (the rotation lock).
@@ -1652,48 +1715,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // play behaviour.
     const bool helpers = !mGameView;
     if (mMirror) {
-        mMirror->setLightWires(mShowLightWires && helpers);
-        // Camera bodies + frustum wires (CAMERAS_SPEC D2). Same "editor helper"
-        // rule as the light wires — G (Game View) and play hide them — but a
-        // separate toggle, because they are a different object and the View
-        // Options row for light wires must not silently govern cameras.
-        mMirror->setCameraBodies(helpers && !mPlaying);
-        mMirror->setHighlightWireframe(mSelectionWireframe);
-        // No selection outline for the World root (the whole scene would glow)
-        // or for the built-in ground PLANE — owner ask 2026-08-31. The first
-        // implementation tested `isBuiltIn`, which every Add-menu primitive
-        // carries (addBuiltinPrimitive sets it on cubes, spheres, capsules —
-        // and the sample scenes are assembled from exactly those), so every
-        // primitive silently lost its outline while selection/gizmo/panel kept
-        // working (2026-09-06 sighting; cost a day of misattributed reports).
-        // The exclusion is the GROUND MESH specifically, nothing wider.
-        // The SET, member by member (EDITOR_MULTISELECT_SPEC §2.3) — the two
-        // exclusions above apply per member, not to the selection as a whole.
-        QList<iris::SceneNodePtr> highlight;
-        if (helpers) {
-            for (const auto &node : mSelectedSet) {
-                if (!node) continue;
-                if (mScene && node == mScene->getRootNode()) continue;
-                if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                    const auto mn = node.staticCast<iris::MeshNode>();
-                    if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
-                        continue;
-                }
-                highlight.append(node);
-            }
-        }
-        // The PRIMARY goes over EXPLICITLY (EDITOR_MULTISELECT_SPEC D4 b): the
-        // two exclusions above run per member, so the primary can be filtered
-        // out of `highlight` while secondaries survive — and then "the first
-        // entry" would hand the brighter outline to a node that is not the
-        // primary. The mirror re-checks membership and drops a primary that is
-        // not in the list.
-        mMirror->setHighlightedNodes(highlight, mSelectedNode);
-        // Grid spacing = the translate snap size ([ and ] re-space it live).
-        pushGridForView(helpers && !mPlaying);
-        // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
-        // rest, so Game View and play hide them.
-        mMirror->setGiVolumeOverlay(mShowGiVolume && helpers && !mPlaying);
+        pushEditorHelpers(helpers);
         // The mirror reports its OWN sub-stages from inside sync() (it is the
         // only place that can see them); this scope is their parent, and the
         // subtraction keeps it exclusive.
@@ -1974,21 +1996,37 @@ QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
-    // THE USER'S SCREENSHOT IS TONEMAPPED (owner report 2026-09-07, item 6).
-    // This is the no-argument door — the View menu's Screenshot action and the
-    // preview dialog it opens — and it used to hand back raw linear radiance
-    // clipped to 8 bits, so a photograph of an HDR scene was blown out where
-    // the viewport beside it was graded. The SCRIPT door (editor.screenshot)
-    // still defaults to Raw, deliberately: that one is a measuring instrument
-    // and every pixel suite in the tree asserts its exact colours.
+    // THE DEFAULT DOOR IS THE THUMBNAIL GRADE, and it is not the user's door.
+    // Its callers are project preview tiles (ProjectService) and the asset
+    // viewer — pictures OF CONTENT, taken in sweeps, which must stay cheap
+    // (SS1 keeps `secondaryfx`'s minimal chain exactly where it belongs). The
+    // USER's Screenshot action asks for ScreenshotGrade::Scene explicitly
+    // (MainWindow::takeScreenshot); the SCRIPT door defaults to Plain,
+    // deliberately, because that one is a measuring instrument and every pixel
+    // suite in the tree asserts its exact colours.
     return takeScreenshot(width, height, ScreenshotGrade::Tonemap);
 }
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
 {
     return takeScreenshot(width, height,
-                          postFx ? ScreenshotGrade::Viewport : ScreenshotGrade::Raw);
+                          postFx ? ScreenshotGrade::Viewport : ScreenshotGrade::Plain);
 }
+
+// ---- DOES A USER'S SCREENSHOT CONTAIN THE EDITOR'S HELPERS? ---------------
+//
+// NO — OWNER, 2026-09-13. A user's screenshot is a picture of the SCENE, so the
+// transform gizmo, the selection outline, the light and camera wires, the grid
+// and the GI-volume boxes are all left out of it, even while the viewport is
+// showing them. SS1 asked the question rather than assuming an answer; this is
+// the answer.
+//
+// It applies to ScreenshotGrade::Scene ONLY — the user's door. The script
+// grades are measuring instruments whose contents are pinned by suites, and
+// several of those suites photograph a gizmo on purpose (gizmo.screen_size,
+// app.selection_outline, ui.shot_aspect). Flipping this constant is still the
+// whole switch, in both directions.
+static constexpr bool kUserShotKeepsEditorHelpers = false;
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrade grade)
 {
@@ -2037,7 +2075,13 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // differs between windows because the POSE does; a shot of a pose set with
     // editor.setCamera is the same picture at any window size (ui.shot_aspect).
     const iris::CameraNodePtr shotCam = viewCamera();
-    const bool resizeGizmo = shotCam && mGizmo && mOverlay && mSelectedNode && !mGameView;
+    // The helpers question, resolved once (see kUserShotKeepsEditorHelpers).
+    // Only the USER's picture is affected: the script grades are measuring
+    // instruments and their contents are pinned by suites.
+    const bool hideHelpers = !kUserShotKeepsEditorHelpers &&
+                             grade == ScreenshotGrade::Scene && !mGameView;
+    const bool resizeGizmo = shotCam && mGizmo && mOverlay && mSelectedNode &&
+                             !mGameView && !hideHelpers;
     const float viewportAspect = shotCam ? shotCam->aspectRatio : 0.0f;
     const bool authoredAspect = shotCam && mPilot && shotCam->constrainAspect;
     iris::Vec3 gizmoRayPos, gizmoRayDir, gizmoViewDir;
@@ -2049,6 +2093,20 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     }
 
     if (mMirror) {
+        if (hideHelpers) {
+            // Game View's own answer, for the duration of one picture, through
+            // the ONE function that knows what every helper should be — so the
+            // restore below is exact rather than approximate (review item 3:
+            // the first cut cleared five switches by hand and left the next
+            // shot in the same run helper-less, which would have moved the
+            // plain readback the whole pixel corpus asserts).
+            pushEditorHelpers(false);
+            if (mOverlay) {
+                iris::Vec3 rayPos, rayDir, viewDir;
+                mouseRay(rayPos, rayDir, viewDir);
+                mOverlay->update(nullptr, rayPos, rayDir, viewDir);
+            }
+        }
         mMirror->sync();
         // The shot view starts with a hardcoded background; give it the document
         // sky (flat colour) and world settings (shadows toggle) like the live view.
@@ -2056,18 +2114,28 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);
         if (viewCamera()) mMirror->applyCamera(viewCamera(), shot, freeCameraFramingAspect());
-        // applyEnvironment pushed the scene's post-fx description, which an
-        // offscreen view ignores unless it is told otherwise (POST_CHAIN_SPEC
-        // §7.3). `grade` is that opt-in, and it has three answers because the
-        // two the boolean offered were both wrong for the common case:
-        //   Raw       nothing at all — a neutral, exactly reproducible readback,
-        //             which is what every pixel suite asserts;
-        //   Tonemap   the deterministic filmic grade ONLY (no bloom, no AO, no
-        //             SMAA, fixed exposure) — a picture of the CONTENT that no
-        //             longer clips wherever the scene is bright;
-        //   Viewport  the scene's whole chain, adaptive exposure and all — what
-        //             `postFx: true` has always meant.
-        if (grade == ScreenshotGrade::Viewport) {
+        // applyEnvironment (and applyCamera, a line above) pushed the scene's
+        // post-fx description — the VIEWPORT's description — which an offscreen
+        // view ignores unless it is told otherwise (POST_CHAIN_SPEC §7.3).
+        // `grade` is that opt-in, and IEditorViewport::ScreenshotGrade documents
+        // the four answers; this is where each one is carried out:
+        //   Plain     nothing at all — the neutral, exactly reproducible
+        //             readback every pixel suite asserts;
+        //   Tonemap   the deterministic filmic grade ONLY, at the SCENE's
+        //             exposure — the thumbnail picture;
+        //   Scene     the whole chain at the on-screen view's MEASURED
+        //             exposure — the editor's own picture, what a user gets;
+        //   Viewport  the whole chain with its own adaptive exposure re-seeded
+        //             from the description — what `postFx: true` has always
+        //             meant, and the door a pipped camera's exposure uses.
+        if (grade == ScreenshotGrade::Scene) {
+            // THE MEASURED EXPOSURE COMES FROM THE VIEW ON SCREEN, read here
+            // because this is the only place that has both views: the shot can
+            // never measure (two frames), the viewport has been measuring this
+            // same scene for as long as it has been open. 0 (no on-screen view,
+            // no HDR, nothing presented yet) falls back inside applyScene.
+            secondaryfx::applyScene(shot, view() ? view()->measuredExposureScale() : 0.0f);
+        } else if (grade == ScreenshotGrade::Viewport) {
             jahshaka::engine::PostFxDesc fx = shot->postFx();
             fx.allowOffscreen = true;
             shot->setPostFx(fx);
@@ -2080,7 +2148,11 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
             // pushed makes the first frame the right frame.
             shot->resetExposureHistory();
         } else if (grade == ScreenshotGrade::Tonemap) {
-            secondaryfx::apply(shot, true);
+            // ...at the SCENE's exposure, which is what the description
+            // applyEnvironment just pushed carries (SS1: this used to be the
+            // caller's default and the World's value was thrown away, so every
+            // regraded world photographed at +0.6).
+            secondaryfx::apply(shot, true, shot->postFx().exposure);
         }
     }
     // A screenshot is an offscreen render of this same scene: without this
@@ -2105,6 +2177,23 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     if (resizeGizmo) {
         mGizmo->updateSize(shotCam);
         mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
+    }
+    if (hideHelpers) {
+        // ...and the viewport gets its helpers back, in full, before the mirror
+        // is synced by anything else — including the very next screenshot in
+        // the same script run. The overlay half is syncFrame's own block: the
+        // mirror carries the wires, the outline, the grid and the GI boxes,
+        // the OVERLAY carries the gizmo, and a restore that did only one of
+        // them would still be a restore that does not restore.
+        pushEditorHelpers(!mGameView);
+        if (mMirror) mMirror->sync();
+        if (mGizmo && viewCamera() && mSelectedNode) mGizmo->updateSize(viewCamera());
+        if (mOverlay) {
+            iris::Vec3 rayPos, rayDir, viewDir;
+            mouseRay(rayPos, rayDir, viewDir);
+            mOverlay->update((!mGameView && mSelectedNode) ? mGizmo : nullptr,
+                             rayPos, rayDir, viewDir);
+        }
     }
     return result;
 }

@@ -67,11 +67,42 @@ assert(material.get(hero).reflectionMap === "",
 // same part of the same shape every time and the two are directly comparable.
 // y = 0.35 is the sphere's upper half — where a sky reflection lives; the
 // centre pixel reflects the ground and is black in either case.
+//
+// EVERY SHOT IS SETTLED, AND THAT IS THE WHOLE POINT OF THIS FUNCTION.
+// A screenshot is the editor's own picture (SS1): it is graded at the
+// VIEWPORT'S MEASURED EXPOSURE, and that measurement is an adaptation history
+// which moves for as long as the picture is moving. This scene is re-framed
+// onto a different sphere before every probe, so the history is always
+// travelling when the shot is taken — and it advances by FRAMES, not by wall
+// clock (the engine runs Ogre's controllers in frame-delay mode at a fixed
+// 1/60 s, Engine::kDefaultFrameDelta). A fixed `editor.frame(4)` therefore
+// bought four frames of adaptation on a quiet box and four frames on a loaded
+// one, but the shot it fed was compared against shots taken from a different
+// distance away — which is why the "blue cast (sanity)" threshold below redded
+// in every gate on 2026-09-11 and passed 3/3 solo.
+//
+// So the shot is repeated until the PROBE ITSELF HOLDS STILL. Two consecutive
+// reads within `settledWithin` levels is converged; the loop is capped so a
+// genuinely unstable picture fails an assertion instead of hanging. On a quiet
+// box this costs one extra iteration.
+var settledWithin = 2;   // summed |dr|+|dg|+|db|, out of 255 per channel
+var settleTries   = 20;
 function probeOf(node, name) {
     editor.select(null);
     editor.frameNode(node, { yaw: 0, pitch: 10, distance: 3 });
-    editor.frame(4);
-    return editor.screenshot(name, 256, 256, [{ x: 0.5, y: 0.35 }]).probes[0];
+    var previous = null, probe = null;
+    for (var t = 0; t < settleTries; ++t) {
+        editor.frame(4);
+        probe = editor.screenshot(name, 256, 256, [{ x: 0.5, y: 0.35 }]).probes[0];
+        if (previous !== null && dist(previous, probe) <= settledWithin) {
+            if (t > 1) console.log("    (" + name + " settled after " + ((t + 1) * 4) + " frames)");
+            return probe;
+        }
+        previous = probe;
+    }
+    console.log("    WARNING: " + name + " never settled in " +
+                (settleTries * 4) + " frames — last " + show("probe", probe));
+    return probe;
 }
 
 var h0 = probeOf(hero, "reflection_hero_before.png");

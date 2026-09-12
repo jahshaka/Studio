@@ -242,15 +242,20 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
         cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
         mMirror->applyCamera(cam, shot, freecam::kFreeCameraFramingAspect);
         cam->setAspectRatio(saved);
-        // The three grades (IEditorViewport::ScreenshotGrade), exactly as the
-        // editor's takeScreenshot resolves them — the player is the other
-        // space, not another policy.
-        if (grade == int(IEditorViewport::ScreenshotGrade::Viewport)) {
+        // The grades (IEditorViewport::ScreenshotGrade), exactly as the editor's
+        // takeScreenshot resolves them — the player is the other space, not
+        // another policy.
+        if (grade == int(IEditorViewport::ScreenshotGrade::Scene)) {
+            // The player's on-screen view is the one that has been measuring
+            // this scene; the shot borrows its exposure (SS1). No view (the
+            // player page was never shown) falls back inside applyScene.
+            secondaryfx::applyScene(shot, mView ? mView->measuredExposureScale() : 0.0f);
+        } else if (grade == int(IEditorViewport::ScreenshotGrade::Viewport)) {
             jahshaka::engine::PostFxDesc fx = shot->postFx();
             fx.allowOffscreen = true;
             shot->setPostFx(fx);
         } else if (grade == int(IEditorViewport::ScreenshotGrade::Tonemap)) {
-            secondaryfx::apply(shot, true);
+            secondaryfx::apply(shot, true, shot->postFx().exposure);
         }
     }
 

@@ -27,11 +27,13 @@
 //      independent #if blocks in Ogre and two independent shader properties;
 //      one of them working proves nothing about the other.
 //   5. AN EMPTY MASK IS LEGAL and means "no direct light at all".
-//   6. SHADOWS ARE NOT FILTERED. Measured, not assumed, and reported honestly:
-//      an object masked off a light still renders into that light's shadow map,
-//      so it still darkens the ground for the objects the light does light.
-//      The shadow map is one texture shared by every receiver; the caster pass
-//      cannot know who is going to read it.
+//   6. SHADOWS ARE STILL NOT FILTERED — measured again by the sun lane, with a
+//      probe that can finally tell the two states apart, and the answer did not
+//      change. An object masked off a light still renders into that light's
+//      shadow map and still darkens the ground for the objects the light does
+//      light. The owner asked for Unreal's behaviour here (channels gating
+//      shadows); the lane's attempt at it is recorded in the report, and this
+//      case stays the honest characterisation until it lands.
 //
 // HOW A CUBE IS MEASURED: the camera is put in front of exactly one cube and
 // the centre pixel is read. No projection arithmetic, no dependence on where
@@ -41,6 +43,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 
 using namespace jahshaka::engine;
 
@@ -226,8 +229,15 @@ void maskSurvivesItemRebuild(Engine *engine, View *view)
 // A ground plane, a blocker cube above it, and one shadow-casting directional
 // light tilted so the shadow lands beside the cube. First with the blocker on
 // the light's channel (the ordinary case: lit blocker, dark shadow), then with
-// the blocker masked OFF the light. If Ogre filtered the caster pass by mask,
-// the shadow would disappear; it does not, and the test says so.
+// the blocker masked OFF the light. If the caster pass filtered by mask, the
+// shadow would disappear; it does not, and the test says so.
+//
+// THE PROBE MATTERS MORE THAN IT LOOKS (sun lane, 2026-09-13). This case used
+// to scan the WHOLE ground row, which includes the blocker's own top face — and
+// a blocker masked off the light is as dark as a shadow, so the probe reported
+// "something dark is there" in both states and could not have detected a
+// change. It now scans only the strip the shadow falls on, which is what makes
+// the verdict below worth anything.
 // ---------------------------------------------------------------------------
 void shadowsIgnoreMasks(Engine *engine, View *view)
 {
@@ -268,14 +278,22 @@ void shadowsIgnoreMasks(Engine *engine, View *view)
     c.fovDegrees = 50;
     view->setCamera(c);
 
-    // Contrast across a ground row beside the cube: a cast shadow is the only
-    // thing in this scene that can create any.
+    // CONTRAST ACROSS THE GROUND STRIP THE SHADOW FALLS ON, and NOT across the
+    // caster itself — which is the whole difficulty of measuring this. The sun
+    // is rolled 45 degrees about Z, so the cube's shadow lands to its +X side
+    // (measured: pixels ~76-100 of 128 with this camera), while the cube's own
+    // top face covers the middle ~56-72. An UNLIT cube is as dark as a shadow,
+    // so a probe that includes the cube reports "something dark is there" in
+    // both states and can never tell the two apart — the original version of
+    // this case did exactly that, which is why it read the old behaviour as
+    // "the shadow survives" even where it does not.
+    const unsigned shadowLo = 74, shadowHi = 112;
     auto groundContrast = [&](int *darkestOut) {
-        for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+        for (int i = 0; i < 10; ++i) engine->renderOneFrame();
         Image img;
         if (!view->readPixels(img)) return -1;
         int darkest = 255, brightest = 0;
-        for (unsigned x = 2; x < img.width - 2; ++x) {
+        for (unsigned x = shadowLo; x < std::min(shadowHi, img.width - 2); ++x) {
             const Colour q = img.at(x, img.height / 2);
             const int l = int(std::lround((q.r + q.g + q.b) / 3.0f * 255.0f));
             darkest = std::min(darkest, l);
@@ -284,7 +302,6 @@ void shadowsIgnoreMasks(Engine *engine, View *view)
         if (darkestOut) *darkestOut = darkest;
         return brightest - darkest;
     };
-
     int darkOn = 0;
     const int contrastOnChannel = groundContrast(&darkOn);
     std::printf("   blocker ON the light's channel:  ground contrast %d (darkest %d)\n",
@@ -307,6 +324,8 @@ void shadowsIgnoreMasks(Engine *engine, View *view)
     CHECK(std::abs(contrastOffChannel - contrastOnChannel) < 25,
           "...and the shadow is essentially unchanged, not merely present");
 
+    s->setNodeLightMask(blocker, kChannel1);
+
     // The control that proves the measurement can move at all: with the caster
     // hidden outright the contrast collapses.
     s->setNodeVisible(blocker, false);
@@ -314,6 +333,106 @@ void shadowsIgnoreMasks(Engine *engine, View *view)
     std::printf("   blocker hidden:                  ground contrast %d\n", contrastHidden);
     CHECK(contrastHidden < contrastOnChannel / 2,
           "the control: hiding the caster DOES remove the shadow (the probe is not blind)");
+
+    view->setShadows(false);
+    view->setScene(nullptr);
+    engine->destroyScene(s);
+}
+
+// ---------------------------------------------------------------------------
+// Case 7: PER-OBJECT CAST SHADOW (SUN_AND_LIGHT_DEFAULTS §2.4), the escape
+// hatch the spec recommends INSTEAD of channel-filtered shadows — and the end
+// of a wire that was dead for years: iris::SceneNode::castShadow has been
+// serialized, reflected and set to false by the default floor since long before
+// the engine had anywhere to put it, and nothing pushed it anywhere.
+//
+// Same rig as case 6, so the two verdicts are directly comparable: the mask
+// leaves the shadow alone, this removes it outright.
+// ---------------------------------------------------------------------------
+void perObjectCastShadow(Engine *engine, View *view)
+{
+    std::printf("-- per-object Cast Shadow\n");
+    Scene *s = engine->createScene("masks_castshadow");
+    view->setScene(s);
+    s->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.05f, 0.05f, 0.05f));
+
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams p;
+    p.albedo = Colour(0.9f, 0.9f, 0.9f);
+    p.roughness = 0.9f;
+    const MaterialId mat = s->createPbrMaterial(p);
+
+    const NodeId ground = s->createNode();
+    s->attachMesh(ground, mesh, mat);
+    s->setNodeTransform(ground, Vec3(0, -0.55f, 0), Quat(), Vec3(8, 0.1f, 8));
+    const NodeId blocker = s->createNode();
+    s->attachMesh(blocker, mesh, mat);
+    s->setNodeTransform(blocker, Vec3(0, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+
+    const NodeId sun = s->createNode();
+    LightDesc d;
+    d.type = LightType::Directional;
+    d.intensity = 3.0f;
+    d.castShadows = true;
+    s->setLight(sun, d);
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(0, 0, 0.3826834f, 0.9238795f), Vec3(1, 1, 1));
+    view->setShadows(true);
+
+    CameraDesc c;
+    c.position = Vec3(0, 6, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);
+    c.fovDegrees = 50;
+    view->setCamera(c);
+
+    const unsigned shadowLo = 74, shadowHi = 112;
+    auto shadowStrip = [&]() {
+        for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+        Image img;
+        if (!view->readPixels(img)) return -1;
+        int darkest = 255;
+        for (unsigned x = shadowLo; x < std::min(shadowHi, img.width - 2); ++x) {
+            const Colour q = img.at(x, img.height / 2);
+            darkest = std::min(darkest, int(std::lround((q.r + q.g + q.b) / 3.0f * 255.0f)));
+        }
+        return darkest;
+    };
+
+    CHECK(s->nodeCastShadow(blocker), "a node is born casting (Ogre's own default)");
+    const int withShadow = shadowStrip();
+    std::printf("   casting:            darkest %d\n", withShadow);
+    CHECK(withShadow < 40, "the blocker's shadow is on the ground to begin with");
+
+    s->setNodeCastShadow(blocker, false);
+    const int withoutShadow = shadowStrip();
+    std::printf("   Cast Shadow = off:  darkest %d\n", withoutShadow);
+    CHECK(!s->nodeCastShadow(blocker), "the engine reports the flag back");
+    CHECK(withoutShadow > 200,
+          "PER-OBJECT CAST SHADOW WORKS: the ground is clear where the shadow was");
+
+    // ...and the object is still THERE and still lit: this hides the shadow,
+    // not the thing.
+    {
+        Image img;
+        view->readPixels(img);
+        const Colour centre = img.at(img.width / 2, img.height / 2);
+        std::printf("   ...the blocker itself: %.2f\n", centre.r);
+        CHECK(centre.r > 0.3f, "...while the blocker is still visible and still lit");
+    }
+
+    s->setNodeCastShadow(blocker, true);
+    const int backAgain = shadowStrip();
+    std::printf("   Cast Shadow = on:   darkest %d\n", backAgain);
+    CHECK(backAgain < 40, "turning it back on restores the shadow");
+
+    // IT SURVIVES AN ITEM REBUILD, for the reason the light mask does: a
+    // material swap destroys and recreates the Item, and a fresh Item is born
+    // casting.
+    s->setNodeCastShadow(blocker, false);
+    CHECK(s->attachMesh(blocker, mesh, s->createPbrMaterial(p)),
+          "the mesh re-attached (the Item was rebuilt)");
+    const int afterRebuild = shadowStrip();
+    std::printf("   after re-attach:    darkest %d\n", afterRebuild);
+    CHECK(afterRebuild > 200, "...and the node still casts nothing");
 
     view->setShadows(false);
     view->setScene(nullptr);
@@ -337,6 +456,7 @@ int main()
     maskingCase(engine.get(), view, LightType::Point);
     maskSurvivesItemRebuild(engine.get(), view);
     shadowsIgnoreMasks(engine.get(), view);
+    perObjectCastShadow(engine.get(), view);
 
     engine.reset();
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);

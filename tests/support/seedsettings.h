@@ -14,13 +14,20 @@ For more information see the LICENSE file
 // SEEDING THE PREFERENCES AN APP-SPAWNING SUITE NEEDS, into the file the app it
 // is about to spawn will ACTUALLY READ.
 //
-// Four suites need the same two keys before they can drive a real binary:
+// Four suites need the same key before they can drive a real binary:
 //
-//   ddialog_seen  the donate dialog is modal at shutdown. Unseeded, `app.quit()`
-//                 puts it on screen and the process never exits — the suite then
-//                 fails on its exit budget with ZERO shutdown steps recorded,
-//                 which is not a shutdown-ordering failure at all.
-//   auto_save     the unsaved-changes prompt, same shape, same consequence.
+//   auto_save     the unsaved-changes prompt is modal on the quit path.
+//                 Unseeded, `app.quit()` puts it on screen and the process never
+//                 exits — the suite then fails on its exit budget with ZERO
+//                 shutdown steps recorded, which is not a shutdown-ordering
+//                 failure at all.
+//
+// `ddialog_seen` used to be seeded here too, for exactly the same reason: the
+// donate dialog ran MODALLY inside MainWindow::closeEvent. It moved to FIRST
+// LAUNCH (owner decision D3, 2026-09-12 — src/app/firstrun.h), where it cannot
+// touch the quit path at all AND is suppressed outright for any run that is
+// being driven; the seeding is therefore DEAD and is gone (CRUD law). The
+// contract it stood in for is now asserted directly, by app.first_launch.
 //
 // They each had their own copy of the same block, and every copy wrote
 // `<binary dir>/jahsettings.ini` — the file that IS shared by every run of a
@@ -81,13 +88,12 @@ inline QStringList settingsFilesForSpawnedApp(const QString &binary)
     return inis;
 }
 
-/// Seeds the two keys every app-spawning suite needs to reach a clean quit.
+/// Seeds the key every app-spawning suite needs to reach a clean quit.
 inline void seedSettingsForSpawnedApp(const QString &binary)
 {
     const QStringList inis = settingsFilesForSpawnedApp(binary);
     for (const QString &ini : inis) {
         QSettings settings(ini, QSettings::IniFormat);
-        settings.setValue(QStringLiteral("ddialog_seen"), true);
         settings.setValue(QStringLiteral("auto_save"), true);
         settings.sync();
     }

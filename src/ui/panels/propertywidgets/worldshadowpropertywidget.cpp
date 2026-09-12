@@ -94,10 +94,12 @@ void WorldShadowPropertyWidget::build()
     connect(qualitySelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldShadowPropertyWidget::onQualityChanged);
 
+    sunRow = this->addLabel("Sun", QString());
+    secondaryRow = this->addLabel("Other Directionals", QString());
     autoRow = this->addLabel("Auto Resolves To", QString());
     memoryRow = this->addLabel("Atlas Memory", QString());
     mapsRow = this->addLabel("Shadow Maps", QString());
-    for (LabelWidget *row : { autoRow, memoryRow, mapsRow })
+    for (LabelWidget *row : { sunRow, secondaryRow, autoRow, memoryRow, mapsRow })
         if (row) row->hide();
 }
 
@@ -111,6 +113,44 @@ void WorldShadowPropertyWidget::refreshRows()
     {
         const QSignalBlocker quiet(qualitySelector);
         qualitySelector->setCurrentIndex(shadowRowFor(scene->shadowResolution));
+    }
+
+    // ---- THE SUN, in words (owner Q1d) --------------------------------
+    // Document facts, so they are right with no renderer: one resolver answers
+    // both rows (iris::Scene::sunLight / secondaryDirectionals).
+    if (sunRow) {
+        auto sun = scene->sunLight();
+        const QString reason = scene->sunReason();
+        if (!sun) {
+            sunRow->setText(QStringLiteral("No sun in this scene — objects are lit by the lamps "
+                                           "and the sky. That is a perfectly ordinary scene; "
+                                           "adding a directional light makes it the sun."));
+        } else if (reason == QLatin1String("pinned")) {
+            sunRow->setText(QStringLiteral("%1 — chosen by hand").arg(sun->getName()));
+        } else {
+            sunRow->setText(QStringLiteral("%1 — chosen automatically (lowest Forward Shading "
+                                           "Priority, %2)")
+                                .arg(sun->getName())
+                                .arg(sun->forwardShadingPriority));
+        }
+        sunRow->show();
+    }
+    if (secondaryRow) {
+        const auto others = scene->secondaryDirectionals();
+        if (others.isEmpty()) {
+            secondaryRow->hide();
+        } else {
+            QStringList names;
+            for (const auto &l : others)
+                names << QStringLiteral("%1 (%2)").arg(l->getName()).arg(l->forwardShadingPriority);
+            secondaryRow->setText(
+                QStringLiteral("%1 directional lights. Only the sun casts a shadow — the "
+                               "renderer has one directional slot. The others: %2. Set Forward "
+                               "Shading Priority on a light to choose.")
+                    .arg(others.size() + 1)
+                    .arg(names.join(QStringLiteral(", "))));
+            secondaryRow->show();
+        }
     }
 
     const int derived = derivedFromLights();
