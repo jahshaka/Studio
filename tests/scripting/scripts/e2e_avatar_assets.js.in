@@ -86,20 +86,36 @@ assert(v1.length > 10, "the library has a version: " + v1);
 
 assert(!!avatar.loadAnimation(WALK),
        "avatar.loadAnimation(beta_walk.dae) onto the open library avatar");
-// WRITTEN THROUGH, not left dirty (AV1, owner 2026-09-13: "each avatar keeps
-// track of its animations"). A clip added to the open avatar goes into that
-// avatar's stored definition as it is added — switching characters used to
-// drop it silently, and so did quitting. The version moved on the spot.
-assert(avatar.asset().dirty === false,
-       "... and the definition was SAVED as part of the edit, not left dirty");
-assert(avatar.asset().version !== v1,
-       "... at a new version: " + avatar.asset().version);
+// WRITTEN THROUGH, COALESCED (AV1, owner 2026-09-13: "each avatar keeps track
+// of its animations"). A clip added to the open avatar goes into THAT avatar's
+// stored definition without anyone pressing Save — switching characters used
+// to drop it silently, and so did quitting. The write is coalesced over a
+// short window so three clip toggles are one CAS publish and one instance
+// refresh: `pending` IS that window, and every flush point (an open,
+// avatar.save, module shutdown) forces it. A --script run has no event-loop
+// turn inside it, so the window is what this suite sees — the unforced write
+// is asserted over a live event loop by avatar.responsive.
+assert(avatar.asset().pending === true, "... and ARMS the write-through");
+assert(avatar.asset().dirty === true, "... which is what `dirty` means now");
 
 var saved = avatar.save();
 assert(saved.scope === "library", "avatar.save writes back to the LIBRARY scope");
 assert(saved.version !== v1, "... as a NEW version: " + saved.version);
-var v2 = saved.version;
 assert(avatar.asset().dirty === false, "... and the definition is clean again");
+assert(avatar.asset().pending === false, "... with no write left armed");
+
+// AN OPEN IS A FLUSH POINT, and that is what makes a switch safe: an edit
+// made and NOT saved by hand is written before the module lets go of the
+// avatar. Edit, reopen (which flushes, then re-reads from the store), and the
+// edit is in the bytes that came back.
+avatar.setClipOptions(clipNamesOf(avatar.asset().definition)[0], { rootMotion: true });
+assert(avatar.asset().pending === true, "an armed write is pending before the reopen");
+var reopened = avatar.open(avatarGuid, { scope: "library" });
+assert(reopened.definition.clips[0].rootMotion === true,
+       "the armed write was FLUSHED by the open — the reloaded definition carries it");
+assert(reopened.pending === false && reopened.dirty === false,
+       "... and the reopened definition is clean");
+var v2 = reopened.version;
 
 var libraryClips = clipNamesOf(avatar.asset().definition);
 assert(libraryClips.length >= 1,
@@ -157,12 +173,9 @@ assert(projectOpen.version === v2, "... at the pinned version");
 
 var beforeRename = clipNamesOf(projectOpen.definition)[0];
 avatar.setClipOptions(beforeRename, { name: "Project Walk" });
-// Same write-through on the PROJECT scope, and it is a copy-on-write: the
-// edit is stored the moment it is made, at a version of this project's own.
-assert(avatar.asset().dirty === false,
-       "editing the project's version stores it immediately");
-assert(avatar.asset().version !== v2,
-       "... COPY-ON-WRITE: a new version " + avatar.asset().version);
+// Same write-through on the PROJECT scope, where it is a copy-on-write.
+assert(avatar.asset().pending === true,
+       "editing the project's version arms its own write");
 
 var projectSaved = avatar.save();
 assert(projectSaved.scope === "project", "avatar.save writes to the PROJECT scope");

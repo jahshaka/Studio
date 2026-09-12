@@ -2704,17 +2704,19 @@ void AvatarApi::detachModel()
 QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope,
                                   QString *rowNameOut)
 {
+    // NOTHING UNSAVED IS EVER DROPPED (owner 2026-09-13): definition edits are
+    // written through, and a coalesced one still in its window is FLUSHED here
+    // — an avatar switch used to discard the clips the user had just added,
+    // silently. BEFORE the read, always: re-opening the avatar that is already
+    // open would otherwise read the bytes the pending write is about to
+    // replace and hand the user back their own edit, undone.
+    flushPersist("avatar.open");
+
     const auto loaded = AvatarAssets::load(guid, scope, host.db, host.project);
     if (!loaded.ok()) {
         record(QStringLiteral("avatar.open: %1").arg(loaded.error));
         return QString();
     }
-
-    // NOTHING UNSAVED IS EVER DROPPED (owner 2026-09-13): definition edits are
-    // written through, and a coalesced one still in its window is FLUSHED here
-    // — an avatar switch used to discard the clips the user had just added,
-    // silently.
-    flushPersist("avatar.open");
     // ... and whatever the module was about to show, it is not this. Any parse
     // in flight is detached before mOpen moves (the stale-apply defect).
     abandonPreviewLoad();
