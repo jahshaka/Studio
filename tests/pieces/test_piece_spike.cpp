@@ -55,7 +55,20 @@ int gChecks = 0;
             std::printf("\n");                                                   \
         }                                                                        \
     } while (0)
-#define REQUIRE(cond) do { CHECK(cond); if (!(cond)) return; } while (0)
+/// EVALUATES `cond` EXACTLY ONCE. It used to be
+/// `do { CHECK(cond); if (!(cond)) return; } while (0)`, which evaluates it
+/// TWICE — and 189 of this file's REQUIRE sites have SIDE EFFECTS: `readPixels`
+/// rendered and read back twice, `pip::build` built two overlapping PiP rigs,
+/// `msaa::addUnlitCube` added two cubes. Those cases were self-consistent so
+/// they passed, but they did not test what they say. Found by lane MON-P1a,
+/// where a doubled `MonitorRig::build` failed on the duplicate view name and
+/// made five new cases silently skip themselves with one check each.
+#define REQUIRE(cond)                                                                \
+    do {                                                                             \
+        const bool jahRequireOk_ = (cond);                                           \
+        CHECK(jahRequireOk_);                                                        \
+        if (!jahRequireOk_) return;                                                  \
+    } while (0)
 
 std::unique_ptr<Engine> gEngine;
 std::string gDir;   // scratch directory for piece files

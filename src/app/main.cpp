@@ -209,10 +209,6 @@ int main(int argc, char *argv[])
     // MainWindow starts the engine, and the run then continues normally — which
     // is exactly what a cold-start benchmark needs and what a user with a
     // suspect cache needs (SHADER_CACHE_SPEC §4.5).
-    // --profile: recorded on the host BEFORE the engine exists; resolveConfig
-    // folds it into EngineConfig::profile when MainWindow starts the engine.
-    if (cli.profile) EngineHost::setProfilingRequested(true);
-
     if (cli.clearShaderCache) {
         const bool ok = EngineHost::clearShaderCacheOnDisk();
         std::fprintf(stderr, "shader cache: %s\n",

@@ -55,12 +55,6 @@ struct CliOptions
     /// Our `r.InvalidateCachedShaders`, and the flag every benchmark of a cold
     /// start has to use.
     bool clearShaderCache = false;
-    /// --profile: the engine's opt-in PASS PROFILER (EngineConfig::profile,
-    /// riders lane R4) — every view logs the CPU submission time of each
-    /// compositor pass to the ogre log, one summary line per ~120 frames. Off
-    /// by default and free when off. `app.profiling(true)` is the same switch
-    /// at runtime.
-    bool profile = false;
 
     // ---- the session log (SESSION_LOG_SPEC §3.5, layer 3 of the precedence
     // chain: compiled default -> ini -> COMMAND LINE -> runtime) -------------

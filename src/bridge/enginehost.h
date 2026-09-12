@@ -25,9 +25,6 @@ public:
     /// then the build-machine defaults the engine library was configured with.
     /// The native display is NOT filled in here; start() does that.
     static jahshaka::engine::EngineConfig resolveConfig();
-    /// `--profile` (CliOptions): the engine's opt-in pass profiler, requested
-    /// before the engine exists. resolveConfig folds it into the config.
-    static void setProfilingRequested(bool on);
 
     // ---- Persistent shader cache (SHADER_CACHE_SPEC.md) ----
     /// Where the cache lives: AppDataLocation/shadercache. Empty when the
