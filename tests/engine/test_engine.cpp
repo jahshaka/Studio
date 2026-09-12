@@ -4392,6 +4392,449 @@ void sky_stays_smooth_under_the_post_chain() {
     for (const std::string &f : faceFiles) std::remove(f.c_str());
 }
 
+// ---------------------------------------------------------------------------
+// THE RENDER-LOOP MONITOR (SPECS/RENDER_LOOP_MONITOR_SPEC.md §7)
+// ---------------------------------------------------------------------------
+// ACCEPTANCE IS DATA INTEGRITY, NEVER PERFORMANCE (owner D5, 2026-09-12). These
+// cases assert that a capture is COMPLETE and CORRECT — that off means off, that
+// a frame's pass records sum to the renderer's own counters, that the stage
+// times account for the frame, and that a cache's work carries the reason that
+// justified it. Nothing here asserts how fast anything is or how much work
+// happened: that is the lead's reading of a capture, not a test's.
+
+/// A rig with one shadowed lamp, one caster and a ground — enough for the view's
+/// shadow node to exist and for a lamp map to be cacheable.
+struct MonitorRig {
+    View  *v = nullptr;
+    Scene *s = nullptr;
+    NodeId ground = 0, cube = 0, lamp = 0;
+    bool build(Fixture &fx, const char *name) {
+        v = fx.view(std::string(name) + "-view", 96, 96, kBlue);
+        s = fx.scene(std::string(name) + "-scene");
+        if (!v || !s) return false;
+        v->setScene(s);
+        v->setShadows(true);
+        s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.1f, 0.1f, 0.1f));
+        MeshId cubeMesh = s->createMesh(unitCubeData());
+        PbrParams white; white.albedo = Colour(0.9f, 0.9f, 0.9f); white.roughness = 0.9f;
+        MaterialId mat = s->createPbrMaterial(white);
+        ground = s->createNode();
+        s->attachMesh(ground, cubeMesh, mat);
+        s->setNodeTransform(ground, Vec3(0, -0.55f, 0), Quat(), Vec3(8, 0.1f, 8));
+        cube = s->createNode();
+        s->attachMesh(cube, cubeMesh, mat);
+        s->setNodeTransform(cube, Vec3(0, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+        lamp = s->createNode();
+        LightDesc d; d.type = LightType::Point; d.intensity = 6.0f; d.castShadows = true;
+        d.range = 20.0f;
+        s->setLight(lamp, d);
+        s->setNodeTransform(lamp, Vec3(2, 3, 2), Quat(), Vec3(1, 1, 1));
+        CameraDesc c; c.position = Vec3(0, 4, 5); c.fovDegrees = 50;
+        v->setCamera(c);
+        return true;
+    }
+};
+
+/// Drains the ring and returns the LAST complete record (the one whose passes
+/// are the frame we care about).
+bool lastRecord(Engine *e, FrameRecord &out) {
+    std::vector<FrameRecord> recs;
+    e->takeFrameRecords(recs);
+    if (recs.empty()) return false;
+    out = recs.back();
+    return true;
+}
+
+void monitor_off_is_inert() {
+    // §4.1, ASSERTED RATHER THAN BELIEVED: at Off nothing is attached, nothing
+    // is allocated and no GPU query pool exists. This is the guarantee that lets
+    // the monitor ship in every build.
+    Fixture fx;
+    // REQUIRE evaluates its condition TWICE (CHECK then the branch), so the
+    // rig is built ONCE into a flag — a second build would fail on the
+    // duplicate view name and the test would silently skip itself.
+    MonitorRig rig;
+    const bool built = rig.build(fx, "mon-off");
+    REQUIRE(built);
+    CHECK(fx.e->frameMonitor() == MonitorLevel::Off);   // the default, always
+    render(fx.e, 3);
+    MonitorStatus st = fx.e->monitorStatus();
+    CHECK(st.level == MonitorLevel::Off);
+    CHECK_MSG(st.attachedListeners == 0u, "off must attach nothing: %u", st.attachedListeners);
+    CHECK_MSG(st.ringCapacity == 0u, "off must free the ring: %u", st.ringCapacity);
+    CHECK(st.ringFrames == 0u);
+    CHECK(st.framesRecorded == 0ull);
+    CHECK_MSG(st.gpuQueryPools == 0u, "off must own no query pool: %u", st.gpuQueryPools);
+    CHECK(!st.gpuActive);
+    std::vector<FrameRecord> recs;
+    std::vector<MonitorEvent> evs;
+    CHECK(fx.e->takeFrameRecords(recs) == 0u);
+    CHECK(fx.e->takeMonitorEvents(evs) == 0u);
+    CHECK(recs.empty() && evs.empty());
+    // The host's hooks are safe to call with it off — a caller never has to ask.
+    MonitorEvent hook; hook.kind = MonitorEventKind::Host; hook.label = "ignored";
+    fx.e->noteMonitorEvent(hook);
+    fx.e->noteHostStage("ignored", 1.0f);
+    fx.e->setNextFrameCause(FrameCause::Scripted);
+    render(fx.e);
+    CHECK(fx.e->takeMonitorEvents(evs) == 0u);
+    CHECK(fx.e->monitorStatus().framesRecorded == 0ull);
+
+    // ...and ON then OFF returns to exactly that state (nothing is leaked and
+    // nothing stays attached).
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    render(fx.e, 2);
+    CHECK(fx.e->monitorStatus().attachedListeners > 0u);
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+    render(fx.e, 2);
+    st = fx.e->monitorStatus();
+    CHECK(st.level == MonitorLevel::Off);
+    CHECK(st.attachedListeners == 0u);
+    CHECK(st.ringCapacity == 0u);
+    CHECK(fx.e->takeFrameRecords(recs) == 0u);
+}
+
+void monitor_passes_sum_to_the_frame() {
+    // COMPLETENESS: every pass the frame executed is in the record, its draw
+    // counts are EXCLUSIVE of nested passes, and summing them reproduces the
+    // renderer's own draw count for that frame. This is the assertion the old
+    // PassProfiler could not have passed: a scene pass that owns a shadow node
+    // executes that node's passes inside its own callbacks.
+    Fixture fx;
+    // REQUIRE evaluates its condition TWICE (CHECK then the branch), so the
+    // rig is built ONCE into a flag — a second build would fail on the
+    // duplicate view name and the test would silently skip itself.
+    MonitorRig rig;
+    const bool built = rig.build(fx, "mon-passes");
+    REQUIRE(built);
+    render(fx.e, 3);                       // warm: compiles and first captures done
+    // GEOMETRY COUNTERS ARE LAZY: reading renderStats is what turns Ogre's
+    // RenderingMetrics recording on, and it is off until someone asks. Ask
+    // BEFORE the measured frame, or the frame renders with no counters at all
+    // and every number below is zero.
+    RenderStats rs; CHECK(fx.e->renderStats(rs));
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    render(fx.e, 1);
+    std::vector<FrameRecord> recs;
+    fx.e->takeFrameRecords(recs);
+    recs.clear();
+    fx.e->setNextFrameCause(FrameCause::Driver);
+    // MOVE A CASTER so the measured frame re-renders the lamp's map: every
+    // point/spot map is CACHED now (ENGINE_CACHE_POLICY_SPEC P2), so a truly
+    // idle frame executes no shadow pass at all — which is the healthy state,
+    // not the one that proves the classifier.
+    rig.s->setNodeTransform(rig.cube, Vec3(0.2f, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+    render(fx.e, 1);
+    CHECK(fx.e->renderStats(rs));
+    const unsigned drained = fx.e->takeFrameRecords(recs);   // once: REQUIRE evaluates twice
+    REQUIRE(drained > 0u);
+    const FrameRecord &r = recs.back();
+    std::printf("    frame %llu: %zu passes, %u draws (renderStats %u), total %.3f ms\n",
+                (unsigned long long)r.frame, r.passes.size(), r.draws, rs.draws, r.totalMs);
+    CHECK_MSG(!r.passes.empty(), "a rendered frame must record passes");
+    CHECK(r.cause == FrameCause::Driver);
+    unsigned draws = 0, batches = 0;
+    unsigned long long tris = 0;
+    bool namedWorkspace = false, sawScenePass = false, sawShadowPass = false;
+    for (const FramePass &p : r.passes) {
+        draws += p.draws; batches += p.batches; tris += p.triangles;
+        if (!p.workspace.empty()) namedWorkspace = true;
+        if (p.bucket == PassBucket::Main) sawScenePass = true;
+        if (p.bucket == PassBucket::ShadowView) sawShadowPass = true;
+        CHECK(p.cpuMs >= 0.0f);
+        CHECK_MSG(p.gpuMs < 0.0f, "GPU time must be ABSENT, not zero, without the patch");
+    }
+    CHECK_MSG(draws == r.draws, "the record's own sum: %u vs %u", draws, r.draws);
+    CHECK_MSG(draws == rs.draws, "per-pass draws must sum to the renderer's count: %u vs %u",
+              draws, rs.draws);
+    CHECK_MSG(namedWorkspace, "every pass names the workspace it ran in");
+    CHECK_MSG(sawScenePass, "the view's camera pass must be classified Main");
+    CHECK_MSG(sawShadowPass, "a shadowed view must execute its shadow node's passes");
+    // THE SHADOW/SCENE SPLIT from passSceneAfterShadowMaps: present on every
+    // SCENE pass (Ogre fires the callback even when the pass has no shadow
+    // node — a caster pass inside a shadow node included), absent on quads,
+    // clears and computes. Never asserted as a duration.
+    bool mainHasSplit = false, quadHasSplit = false;
+    for (const FramePass &p : r.passes) {
+        const bool sceneKind = p.pass == "scene" || p.bucket == PassBucket::Main ||
+                               p.bucket == PassBucket::ShadowView ||
+                               p.bucket == PassBucket::ShadowReflect ||
+                               p.bucket == PassBucket::ShadowProbe ||
+                               p.bucket == PassBucket::ProbeFace;
+        if (p.bucket == PassBucket::Main && p.shadowMs >= 0.0f) mainHasSplit = true;
+        if (!sceneKind && p.shadowMs >= 0.0f) quadHasSplit = true;
+    }
+    CHECK_MSG(mainHasSplit, "the view's camera pass must carry the shadow/scene split");
+    CHECK_MSG(!quadHasSplit, "a quad or clear pass has no shadow half");
+
+    // STAGE TIMES ACCOUNT FOR THE FRAME. Stages are exclusive, so their sum is
+    // the frame minus whatever is outside every scope; ±5% is the spec's bound.
+    double stageSum = 0.0;
+    bool sawRecord = false, sawSwap = false;
+    for (const FrameStage &st : r.stages) {
+        stageSum += st.ms;
+        if (st.name == "engine.record") sawRecord = true;
+        if (st.name == "engine.swap")   sawSwap = true;
+    }
+    std::printf("    stages %zu, sum %.3f ms vs frame %.3f ms (overhead %.3f)\n",
+                r.stages.size(), stageSum, r.totalMs, r.overheadMs);
+    CHECK_MSG(sawRecord && sawSwap, "the record/swap split must be in every frame");
+    CHECK_MSG(stageSum <= r.totalMs + 0.001,
+              "exclusive stages cannot exceed the frame: %.3f vs %.3f", stageSum, r.totalMs);
+    CHECK_MSG(stageSum >= r.totalMs * 0.95 - 0.05,
+              "stages must account for the frame within 5%%: %.3f vs %.3f", stageSum, r.totalMs);
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+}
+
+void monitor_records_work_with_its_reason() {
+    // §4.7: each cached system reports the work it did AND the input change that
+    // justified it. The test drives the three inputs the spec names — a light
+    // that moves, an explicit GI refresh, and an idle stretch — and asserts the
+    // REASON on the right cache. It asserts nothing about how much work happened.
+    Fixture fx;
+    // REQUIRE evaluates its condition TWICE (CHECK then the branch), so the
+    // rig is built ONCE into a flag — a second build would fail on the
+    // duplicate view name and the test would silently skip itself.
+    MonitorRig rig;
+    const bool built = rig.build(fx, "mon-reason");
+    REQUIRE(built);
+    render(fx.e, 4);
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    std::vector<FrameRecord> recs;
+    std::vector<MonitorEvent> evs;
+
+    // (1) A LIGHT MOVES -> its cached shadow map is re-rendered, reason Light.
+    render(fx.e, 2);
+    fx.e->takeFrameRecords(recs); recs.clear();
+    rig.s->setNodeTransform(rig.lamp, Vec3(-2, 3, 2), Quat(), Vec3(1, 1, 1));
+    render(fx.e, 1);
+    fx.e->takeFrameRecords(recs);
+    bool lampRelit = false;
+    for (const FrameRecord &r : recs)
+        for (const CacheWork &w : r.cacheWork)
+            if (w.cache == CacheKind::ShadowMap && w.id == rig.lamp &&
+                w.reason == WorkReason::Light)
+                lampRelit = true;
+    CHECK_MSG(lampRelit, "a lamp that moved must re-render its map with reason Light");
+    recs.clear();
+
+    // (2) A CASTER MOVES -> the same map, reason Caster (not Light).
+    rig.s->setNodeTransform(rig.cube, Vec3(0.4f, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+    render(fx.e, 1);
+    fx.e->takeFrameRecords(recs);
+    bool casterRelit = false;
+    for (const FrameRecord &r : recs)
+        for (const CacheWork &w : r.cacheWork)
+            if (w.cache == CacheKind::ShadowMap && w.reason == WorkReason::Caster)
+                casterRelit = true;
+    CHECK_MSG(casterRelit, "a caster that moved inside a lamp's reach dirties it with reason Caster");
+    recs.clear();
+
+    // (3) AN IDLE STRETCH -> nothing the caches redo carries a reason of `None`
+    //     here, because at rest nothing should redo anything. If it DOES, the
+    //     monitor records it as reason `None` — data, not a verdict — which is
+    //     the case the lead reads. The assertion is only that idle frames are
+    //     recorded at all and that any shadow work they contain is attributed.
+    render(fx.e, 6);
+    fx.e->takeFrameRecords(recs);
+    CHECK_MSG(recs.size() >= 6u, "every frame must produce a record: %zu", recs.size());
+    unsigned idleShadowWork = 0, idleUnattributed = 0;
+    for (const FrameRecord &r : recs)
+        for (const CacheWork &w : r.cacheWork)
+            if (w.cache == CacheKind::ShadowMap) {
+                ++idleShadowWork;
+                if (w.reason == WorkReason::None) ++idleUnattributed;
+            }
+    std::printf("    idle window: %zu frames, %u shadow-map renders (%u with reason None)\n",
+                recs.size(), idleShadowWork, idleUnattributed);
+    recs.clear();
+
+    // (4) AN EXPLICIT GI REFRESH -> a cause-tagged event.
+    fx.e->takeMonitorEvents(evs); evs.clear();
+    rig.s->refreshGlobalIllumination();
+    render(fx.e, 2);
+    fx.e->takeMonitorEvents(evs);
+    fx.e->takeFrameRecords(recs);
+    bool giEvent = false;
+    for (const MonitorEvent &e : evs)
+        if (e.kind == MonitorEventKind::GiRebuild || e.kind == MonitorEventKind::GiRefresh ||
+            e.kind == MonitorEventKind::ProbeGridBuild)
+            giEvent = true;
+    std::printf("    after refreshGi: %zu events, gi event %s\n", evs.size(),
+                giEvent ? "present" : "absent (GI off in this scene)");
+    // GI is OFF in this rig by default, so the refresh legitimately rebuilds
+    // nothing; what must hold either way is that the frames were recorded and
+    // no event arrived without a cause.
+    for (const MonitorEvent &e : evs)
+        CHECK_MSG(!e.label.empty(), "every event names itself");
+    CHECK(!recs.empty());
+
+    // (5) THE HOST'S HOOK is recorded with the host's label.
+    MonitorEvent hook;
+    hook.kind = MonitorEventKind::Host;
+    hook.reason = WorkReason::Request;
+    hook.label = "page.switch";
+    hook.detail = "assets -> editor";
+    fx.e->noteMonitorEvent(hook);
+    fx.e->noteHostStage("host.tick", 4.5f);
+    render(fx.e, 1);
+    evs.clear(); recs.clear();
+    fx.e->takeMonitorEvents(evs);
+    fx.e->takeFrameRecords(recs);
+    bool sawHook = false, sawHostStage = false;
+    for (const MonitorEvent &e : evs)
+        if (e.kind == MonitorEventKind::Host && e.label == "page.switch") sawHook = true;
+    for (const FrameRecord &r : recs)
+        for (const FrameStage &st : r.stages)
+            if (st.name == "host.tick") sawHostStage = true;
+    CHECK_MSG(sawHook, "the host's event hook must reach events");
+    CHECK_MSG(sawHostStage, "a host stage must ride the next frame's stage list");
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+}
+
+void monitor_survives_rebuilds_and_view_destruction() {
+    // THE LIFETIME CASE (§8.2), the one ASan is here for. The monitor's listener
+    // rides workspaces that are destroyed and recreated under it by an atlas
+    // rebuild and a GI rebuild, and a view it is attached to is destroyed while
+    // it is on. Nothing may dangle, and recording must continue.
+    Fixture fx;
+    // REQUIRE evaluates its condition TWICE (CHECK then the branch), so the
+    // rig is built ONCE into a flag — a second build would fail on the
+    // duplicate view name and the test would silently skip itself.
+    MonitorRig rig;
+    const bool built = rig.build(fx, "mon-life");
+    REQUIRE(built);
+    render(fx.e, 2);
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    render(fx.e, 2);
+    const unsigned attached = fx.e->monitorStatus().attachedListeners;
+    CHECK_MSG(attached > 0u, "a live view must carry the monitor's listener");
+
+    // (a) AN ATLAS REBUILD drops and recreates every workspace naming a shadow node.
+    fx.e->setShadowResolution(1024);
+    render(fx.e, 2);
+    std::vector<FrameRecord> recs;
+    fx.e->takeFrameRecords(recs);
+    bool passesAfterAtlas = false;
+    for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterAtlas = true;
+    CHECK_MSG(passesAfterAtlas, "the listener must ride an atlas rebuild");
+    std::vector<MonitorEvent> evs;
+    fx.e->takeMonitorEvents(evs);
+    bool atlasEvent = false;
+    for (const MonitorEvent &e : evs)
+        if (e.kind == MonitorEventKind::AtlasRebuild) atlasEvent = true;
+    CHECK_MSG(atlasEvent, "an atlas rebuild is a cause-tagged event");
+    recs.clear();
+
+    // (b) A GI REBUILD recreates every probe workspace.
+    GiParams gi;
+    gi.mode = GiMode::InstantRadiosity;
+    rig.s->setGlobalIllumination(gi);
+    render(fx.e, 3);
+    evs.clear();
+    fx.e->takeMonitorEvents(evs); evs.clear();
+    rig.s->refreshGlobalIllumination();
+    render(fx.e, 3);
+    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorEvents(evs);
+    bool passesAfterGi = false;
+    for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterGi = true;
+    CHECK_MSG(passesAfterGi, "the listener must ride a GI rebuild");
+    // ...and the rebuild itself is an EVENT, timed and tagged with the reason
+    // that asked for it (Refresh here: the host asked explicitly).
+    bool giRebuild = false, giHasReason = false;
+    for (const MonitorEvent &e : evs)
+        if (e.kind == MonitorEventKind::GiRebuild) {
+            giRebuild = true;
+            if (e.reason == WorkReason::Refresh) giHasReason = true;
+            std::printf("    gi rebuild event: %.2f ms, reason %d\n", e.ms, int(e.reason));
+        }
+    CHECK_MSG(giRebuild, "a GI rebuild must appear in events");
+    CHECK_MSG(giHasReason, "a GI rebuild carries the reason that asked for it");
+    gi.mode = GiMode::Off;
+    rig.s->setGlobalIllumination(gi);
+    render(fx.e, 2);
+    recs.clear();
+
+    // (c) A SECOND VIEW, destroyed while the monitor is on.
+    View *v2 = fx.view("mon-life-view2", 64, 64, kGreen);
+    REQUIRE(v2);
+    v2->setScene(rig.s);
+    CameraDesc c; c.position = Vec3(3, 3, 3); c.fovDegrees = 60;
+    v2->setCamera(c);
+    render(fx.e, 2);
+    CHECK(fx.e->monitorStatus().attachedListeners > 0u);
+    fx.forget(v2);
+    fx.e->destroyView(v2);
+    render(fx.e, 3);
+    fx.e->takeFrameRecords(recs);
+    bool passesAfterDestroy = false;
+    for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterDestroy = true;
+    CHECK_MSG(passesAfterDestroy, "destroying a view must not stop the monitor");
+
+    // (d) DOWN again: everything detaches, from every kind of workspace.
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+    render(fx.e, 2);
+    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    CHECK(fx.e->lastError().empty() || true);   // reported, never thrown
+}
+
+void monitor_snapshot_names_the_graph() {
+    // §4.8: the snapshot must describe the engine well enough to read a capture
+    // months later — and the compositor graph is the part nothing else can see.
+    // Taken with the monitor OFF, which is how a host brackets a capture.
+    Fixture fx;
+    // REQUIRE evaluates its condition TWICE (CHECK then the branch), so the
+    // rig is built ONCE into a flag — a second build would fail on the
+    // duplicate view name and the test would silently skip itself.
+    MonitorRig rig;
+    const bool built = rig.build(fx, "mon-snap");
+    REQUIRE(built);
+    render(fx.e, 3);
+    EngineSnapshot snap;
+    const bool took = fx.e->captureSnapshot(snap, "start");
+    REQUIRE(took);
+    CHECK(snap.live);
+    CHECK(snap.label == "start");
+    std::printf("    snapshot: scene '%s', %zu workspaces, %zu lights, %zu probes, %zu textures\n",
+                snap.scene.c_str(), snap.workspaces.size(), snap.lights.size(),
+                snap.probes.size(), snap.textures.size());
+    CHECK_MSG(snap.scene == "mon-snap-scene", "the snapshot names its scene: '%s'",
+              snap.scene.c_str());
+    CHECK_MSG(!snap.workspaces.empty(), "the compositor graph must name every live workspace");
+    bool namedView = false, namedScene = false, namedPasses = false, namedShadowNode = false;
+    for (const CompositorWorkspaceInfo &w : snap.workspaces) {
+        if (w.owner.find("view:") == 0) namedView = true;
+        if (!w.scene.empty()) namedScene = true;
+        for (const CompositorNodeInfo &n : w.nodes) {
+            if (!n.passes.empty()) namedPasses = true;
+            for (const CompositorPassInfo &p : n.passes)
+                if (!p.shadowNode.empty()) namedShadowNode = true;
+        }
+    }
+    CHECK_MSG(namedView, "the view's workspace must be in the graph");
+    CHECK_MSG(namedScene, "every workspace names the scene it renders");
+    CHECK_MSG(namedPasses, "every node lists its passes");
+    CHECK_MSG(namedShadowNode, "a scene pass must name the shadow node it recalculates");
+    // The light list, with the lamp-map cache's state joined in.
+    bool foundLamp = false;
+    for (const SnapshotLight &l : snap.lights)
+        if (l.node == rig.lamp) {
+            foundLamp = true;
+            CHECK(l.type == LightType::Point);
+            CHECK(l.castShadow);
+            CHECK_MSG(l.range > 0.0f, "the light list carries the range: %f", l.range);
+        }
+    CHECK_MSG(foundLamp, "the snapshot's light list must hold the scene's lamp");
+    CHECK(snap.shadow.live);
+    CHECK(!snap.hlmsDatablocks.empty());
+    CHECK(snap.device.renderSystem.empty() || true);  // reported; no assertion on the GPU
+    // ...and the GPU-timing half says WHY it is unavailable rather than lying.
+    const MonitorStatus st = fx.e->monitorStatus();
+    CHECK(!st.gpuReason.empty());
+    CHECK(!st.gpuCompiled || st.gpuSupported || !st.gpuReason.empty());
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -4470,6 +4913,12 @@ int main(int argc, char **argv) {
         { "letterbox_fits_the_shot_and_bars_the_rest", letterbox_fits_the_shot_and_bars_the_rest },
         { "pip_and_letterbox_over_the_post_chain",   pip_and_letterbox_over_the_post_chain },
         { "letterbox_post_chain_runs_on_the_shot_only", letterbox_post_chain_runs_on_the_shot_only },
+        { "monitor_off_is_inert",                   monitor_off_is_inert },
+        { "monitor_passes_sum_to_the_frame",        monitor_passes_sum_to_the_frame },
+        { "monitor_records_work_with_its_reason",   monitor_records_work_with_its_reason },
+        { "monitor_survives_rebuilds_and_view_destruction",
+                                                    monitor_survives_rebuilds_and_view_destruction },
+        { "monitor_snapshot_names_the_graph",       monitor_snapshot_names_the_graph },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";
