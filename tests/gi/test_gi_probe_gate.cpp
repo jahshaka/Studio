@@ -149,6 +149,23 @@ int main()
     CHECK(addPlate(s, sheen,  Vec3( 2.0f, 1.8f, -3.85f), Vec3(3.9f, 3.4f, 0.12f)) != 0,
           "the reflective panel attaches");
 
+    // THE RUNTIME-EDIT SUBJECT (round-2 fix). It is built NOT REFLECTIVE — the
+    // shape GF1's default floor has: specular colour black, no authored F0 — so
+    // the gate is ON for it when the shader is first generated. Halfway through
+    // the suite the "user" makes it a mirror, and the probe reflection has to
+    // APPEAR with no other edit. See the case at the bottom.
+    PbrParams matte;
+    matte.albedo = Colour(0, 0, 0);      // no diffuse term: what is left is the gate's business
+    matte.metalness = 0.0f;              // ...and no authored F0 in the metallic workflow
+    matte.roughness = 0.05f;
+    matte.specularColour = Colour(0, 0, 0);
+    const MaterialId editedMat = s->createPbrMaterial(matte);
+    const NodeId editedPlate = s->createNode();
+    CHECK(editedMat && editedPlate &&
+              s->attachMesh(editedPlate, s->createMesh(enginetest::unitCubeMesh()), editedMat),
+          "the runtime-edit plate attaches, authored NOT reflective");
+    s->setNodeTransform(editedPlate, Vec3(0.0f, 1.5f, -2.0f), Quat(), Vec3(2.4f, 1.2f, 0.2f));
+
     CHECK(enginetest::addDirectionalLight(s, Vec3(0.0f, -0.12f, 0.993f), 6.0f) != 0,
           "directional light created");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.5f, 2.0f), Vec3(0.0f, 2.5f, -3.85f));
@@ -227,6 +244,67 @@ int main()
     // (d) diffuse GI is untouched by the gate.
     CHECK(onCeil.r > offCeil.r + 0.05f,
           "diffuse GI still lights the wall above the panels (the gate does not take\n          needs_env_brdf with it)");
+
+    // ---- (e) A RUNTIME REFLECTANCE EDIT REBUILDS THE SHADER ----------------
+    // THE DEFECT THIS IS THE FAIL-BEFORE FOR (round-2 send-back, 2026-09-13).
+    // The gate is decided in `calculateHashForPreCreate`, which runs only on
+    // `flushRenderables()`, and at this pin `setSpecular`/`setMetalness`/
+    // `setFresnel` schedule a const-buffer update and nothing else. Jahshaka's
+    // own material push writes kS on the LIVE datablock every time a material
+    // changes and deliberately never flushes (OgreMaterials applyPbr's guard,
+    // which exists to keep the mirror's per-frame push off the hash path). So
+    // the exact workflow the ground lane promises — a matte floor whose
+    // Specular Color the user raises to make it a mirror — updated a constant
+    // while the SHADER stayed gated, and the floor went on reflecting nothing
+    // until some unrelated edit happened to flush it.
+    //
+    // Patch 0028 mirrors upstream's own `setClearCoat` idiom: evaluate
+    // `hasZeroSpecularResponse()` before and after, flush only when it CROSSES.
+    // Measured without that fix, on this exact case: the plate stayed black
+    // (r-g +0.0000) after the edit.
+    const unsigned editX = 64, editY = 103;      // the plate, below the chrome box
+    const Colour beforeEdit = img.at(editX, editY);
+    show("runtime plate, authored matte", beforeEdit);
+    CHECK(std::fabs(beforeEdit.r - beforeEdit.g) < 0.002f && beforeEdit.r < 0.02f,
+          "(e) the not-reflective plate shows nothing at all while the grid is live");
+
+    PbrParams mirrored = matte;
+    mirrored.albedo = Colour(1, 1, 1);
+    mirrored.metalness = 1.0f;                   // ...and the author makes it a mirror,
+    mirrored.specularColour = Colour(1, 1, 1);   //    with the two controls the gate reads
+    CHECK(s->setPbrMaterial(editedMat, mirrored), "(e) the material edit applies");
+    render(engine.get(), 6);
+    view->readPixels(img);
+    const Colour afterEdit = img.at(editX, editY);
+    show("runtime plate, now a mirror", afterEdit);
+    std::printf("   runtime plate (r-g) = %+.4f  ->  %+.4f\n",
+                beforeEdit.r - beforeEdit.g, afterEdit.r - afterEdit.g);
+    CHECK(afterEdit.r - afterEdit.g > 0.08f,      // measured +0.1373 against +0.0000
+          "(e) THE FIX: raising the material's reflectance makes the probe reflection\n"
+          "          APPEAR, with no other edit — the shader was rebuilt on the crossing");
+
+    // ...AND AN ORDINARY EDIT MUST NOT FLUSH. The per-frame material push is
+    // why applyPbr avoids flushRenderables at all, so a gate that flushed on
+    // every kS write would put a full hash recompute of every renderable back
+    // on the 60 Hz path. The crossing test makes that impossible by
+    // construction (both sides false => no flush); this loop is the executable
+    // statement of it, and the instrumented measurement in the lane report
+    // counted the flushes it produces: ZERO in 100 pushes.
+    {
+        PbrParams keep = mirrored;
+        for (int i = 0; i < 100; ++i) {
+            keep.specularColour = Colour(1.0f - 0.001f * float(i % 10),
+                                         1.0f - 0.001f * float(i % 10),
+                                         1.0f - 0.001f * float(i % 10));
+            s->setPbrMaterial(editedMat, keep);
+        }
+        render(engine.get(), 3);
+        view->readPixels(img);
+        const Colour afterChurn = img.at(editX, editY);
+        CHECK(delta(afterChurn, afterEdit) < 0.02f,
+              "(e) 100 ordinary kS pushes leave the picture where it was (no crossing,\n"
+              "          and therefore no shader rebuild)");
+    }
 
     engine->destroyScene(s);
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall ok\n", failures);

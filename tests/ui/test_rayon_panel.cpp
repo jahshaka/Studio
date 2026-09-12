@@ -46,7 +46,9 @@ For more information see the LICENSE file
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
+#include "ui/controls/labelwidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "viewport/headlesseditorviewport.h"
 #include "ui_hfloatsliderwidget.h"
 
 #include "../support/documentgraph.h"
@@ -85,6 +87,17 @@ static HFloatSliderWidget *sliderWith(QWidget *w, const QString &label)
             if (l->text().startsWith(label)) return s;
     return nullptr;
 }
+
+/// A document-only viewport that reports whatever GI status the case needs —
+/// the READ-ONLY "Reflections" row's only input (the same GiStatus
+/// world.giStatus() publishes). HeadlessEditorViewport already implements the
+/// whole interface and answers isInitialized() true.
+class StubViewport : public HeadlessEditorViewport
+{
+public:
+    GiStatusInfo status;
+    GiStatusInfo giStatus() const override { return status; }
+};
 
 int main(int argc, char **argv)
 {
@@ -285,6 +298,64 @@ int main(int argc, char **argv)
             CHECK(scene->giNumBounces == 3, "and undoes");
         }
         panel.setServices(nullptr);
+    }
+
+    // ---- 6. WHERE THE REFLECTIONS COME FROM (read-only) --------------------
+    // Owner's standing rule: the overlay toast is for scene errors the user can
+    // FIX, never for engine data — and an open scene reflecting the sky is
+    // CORRECT, not an error. So the renderer's decision to build no probe grid
+    // is surfaced as a DATA row, reading the same GiStatus world.giStatus()
+    // publishes (probeGridRefused / probeCount). Never a toast, never a
+    // scene-issue row.
+    {
+        const auto label = [&panel]() -> LabelWidget * {
+            for (LabelWidget *l : panel.findChildren<LabelWidget *>())
+                for (QLabel *q : l->findChildren<QLabel *>())
+                    if (q->text().startsWith(QStringLiteral("Reflections"))) return l;
+            return nullptr;
+        };
+        const auto valueOf = [](LabelWidget *l) -> QString {
+            QStringList texts;
+            for (QLabel *q : l->findChildren<QLabel *>()) texts << q->text();
+            return texts.join(QStringLiteral("|"));
+        };
+
+        worldmodes::setMode(scene, worldmodes::Mode::Epic);
+        panel.setScene(scene);
+        pump();
+        LabelWidget *row = label();
+        CHECK(row != nullptr, "the GI section has a read-only Reflections row");
+        CHECK(row && row->isHidden(),
+              "...hidden with no viewport to ask (a document-only host says nothing)");
+
+        StubViewport viewport;
+        viewport.status.available = true;
+        viewport.status.mode = QStringLiteral("vct_pcc_hybrid");
+        viewport.status.probeGridRefused = true;
+        viewport.status.probeCount = 0;
+        panel.setSceneView(&viewport);
+        panel.setScene(scene);
+        pump();
+        row = label();
+        CHECK(row && !row->isHidden() && valueOf(row).contains(QStringLiteral("Sky")),
+              "an OPEN scene reads 'Sky' — the refusal is visible, as data");
+
+        viewport.status.probeGridRefused = false;
+        viewport.status.probeCount = 18;
+        panel.setScene(scene);
+        pump();
+        row = label();
+        CHECK(row && !row->isHidden() && valueOf(row).contains(QStringLiteral("18 probes")),
+              "...and an enclosed scene reads its probe count");
+
+        // A technique with no probe arm has nothing to report, so the row goes.
+        viewport.status.mode = QStringLiteral("vct");
+        panel.setScene(scene);
+        pump();
+        row = label();
+        CHECK(row && row->isHidden(),
+              "...and plain VCT hides the row rather than reporting a grid it never builds");
+        panel.setSceneView(nullptr);
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

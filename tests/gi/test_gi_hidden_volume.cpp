@@ -182,10 +182,19 @@ static NodeId addCubeUnder(Scene *s, NodeId parent, const Colour &albedo)
 
 static bool isGreen(const Colour &c) { return c.g > 0.15f && c.g > c.r * 2.0f && c.g > c.b * 2.0f; }
 
-static void hiddenParent(Engine *engine, View *view)
+// THE SCENE both halves below measure: a white floor, an empty root with a red
+// panel (section 1's bouncer) and a TALL green pillar (y 0..10, the panel stops
+// at 6) standing in front of it where the camera sees it.
+struct HiddenParentScene {
+    Scene *s = nullptr;
+    NodeId root = 0, panel = 0, pillar = 0;
+};
+
+static HiddenParentScene buildHiddenParentScene(Engine *engine, View *view, const char *name)
 {
-    std::printf("-- 1.1/1.2: a hidden PARENT takes its children out of GI; showing it keeps a hidden child hidden\n");
-    Scene *s = engine->createScene("gi_hidden_parent");
+    HiddenParentScene h;
+    h.s = engine->createScene(name);
+    Scene *s = h.s;
     view->setScene(s);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
 
@@ -193,18 +202,14 @@ static void hiddenParent(Engine *engine, View *view)
     enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.05f, 0.0f));
     enginetest::setNodeScale(s, floor, Vec3(14.0f, 0.1f, 14.0f));
 
-    // THE MODEL: an empty root with two parts. The red panel is section 1's
-    // bouncer; the green pillar is TALL (y 0..10, the panel stops at 6), so
-    // whether it is in the lit volume reads straight off the bounds, and it
-    // stands in front of the panel where the camera sees it.
-    const NodeId root = s->createNode();
-    const NodeId panel = addCubeUnder(s, root, Colour(1.0f, 0.05f, 0.05f));
-    enginetest::setNodePosition(s, panel, Vec3(0.0f, 3.0f, -3.0f));
-    enginetest::setNodeScale(s, panel, Vec3(12.0f, 6.0f, 0.9f));
-    const NodeId pillar = addCubeUnder(s, root, Colour(0.05f, 1.0f, 0.05f));
-    enginetest::setNodePosition(s, pillar, Vec3(2.5f, 5.0f, -1.5f));
-    enginetest::setNodeScale(s, pillar, Vec3(1.0f, 10.0f, 1.0f));
-    CHECK(root && panel && pillar, "an empty root with two lit parts");
+    h.root = s->createNode();
+    h.panel = addCubeUnder(s, h.root, Colour(1.0f, 0.05f, 0.05f));
+    enginetest::setNodePosition(s, h.panel, Vec3(0.0f, 3.0f, -3.0f));
+    enginetest::setNodeScale(s, h.panel, Vec3(12.0f, 6.0f, 0.9f));
+    h.pillar = addCubeUnder(s, h.root, Colour(0.05f, 1.0f, 0.05f));
+    enginetest::setNodePosition(s, h.pillar, Vec3(2.5f, 5.0f, -1.5f));
+    enginetest::setNodeScale(s, h.pillar, Vec3(1.0f, 10.0f, 1.0f));
+    CHECK(h.root && h.panel && h.pillar, "an empty root with two lit parts");
 
     const NodeId lightNode = s->createNode();
     const float half = 40.0f * 3.14159265f / 180.0f;
@@ -218,31 +223,52 @@ static void hiddenParent(Engine *engine, View *view)
     s->setLight(lightNode, light);
 
     enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 6.0f), Vec3(0.0f, 0.0f, -0.5f));
-    const unsigned fx = 64, fy = 96;      // the floor, between the camera and the panel
-    const unsigned px = 114, py = 28;     // the pillar's lit front face, low down
+    return h;
+}
 
-    render(engine);
+static const unsigned kFloorX = 64, kFloorY = 96;   // the floor, camera-side of the panel
+static const unsigned kPillarX = 114, kPillarY = 28;// the pillar's lit front face, low down
+
+// ---------------------------------------------------------------------------
+// 1.1a — THE BOUNCE. A hidden parent's children stop lighting the scene, and
+// showing it brings their light back.
+//
+// ITS LIT VOLUME IS PINNED, and that is deliberate (round-2 send-back,
+// 2026-09-13): this floor-and-panel scene is, correctly, an OPEN scene — one
+// wall and no enclosure — so with an automatic volume the hybrid now declines
+// to build a probe grid in it and the floor's red gain falls to the DIFFUSE
+// half alone, 0.015 against a noise floor of 0.010. That is a 1.5x margin on a
+// bounce measurement, i.e. a flake waiting to happen, and lowering the
+// threshold to meet it (the first attempt in this lane) is not an answer.
+// Pinned bounds stand the enclosure rule down — the documented escape hatch —
+// so this half measures the full diffuse + specular bounce it always did, at
+// the margin it always had. The VOLUME contract, which cannot be measured with
+// the volume pinned, is asserted on its own scene immediately below.
+// ---------------------------------------------------------------------------
+static void hiddenParentBounce(Engine *engine, View *view)
+{
+    std::printf("-- 1.1a: a hidden PARENT takes its children's bounce out of GI\n");
+    HiddenParentScene h = buildHiddenParentScene(engine, view, "gi_hidden_parent_bounce");
+    Scene *s = h.s;
+
     Image img;
+    render(engine);
     view->readPixels(img);
-    std::printf("   pillar probe, everything shown  r=%.3f g=%.3f b=%.3f\n",
-                img.at(px, py).r, img.at(px, py).g, img.at(px, py).b);
-    CHECK(isGreen(img.at(px, py)), "the pillar probe pixel is ON the pillar");
+    CHECK(isGreen(img.at(kPillarX, kPillarY)), "the pillar probe pixel is ON the pillar");
 
     // The user hides the PILLAR ITSELF — its own flag, the state that must
     // survive everything its parent does below.
-    s->setNodeVisible(pillar, false);
+    s->setNodeVisible(h.pillar, false);
 
     // THE REFERENCE: the floor with the whole model gone, before GI exists.
-    s->setNodeVisible(root, false);
+    s->setNodeVisible(h.root, false);
     render(engine);
     view->readPixels(img);
-    const Colour noModel = img.at(fx, fy);
-    s->setNodeVisible(root, true);
+    const Colour noModel = img.at(kFloorX, kFloorY);
+    s->setNodeVisible(h.root, true);
     render(engine);
     view->readPixels(img);
-    std::printf("   pillar probe after root hide/show r=%.3f g=%.3f b=%.3f\n",
-                img.at(px, py).r, img.at(px, py).g, img.at(px, py).b);
-    CHECK(!isGreen(img.at(px, py)),
+    CHECK(!isGreen(img.at(kPillarX, kPillarY)),
           "showing the root does NOT re-draw the pillar the user hid itself");
 
     GiParams gi;
@@ -250,71 +276,118 @@ static void hiddenParent(Engine *engine, View *view)
     gi.quality = GiQuality::High;
     gi.numBounces = 3;
     gi.ddgi = GiToggle::On;
+    gi.boundsMin = Vec3(-7.5f, -0.4f, -7.5f);   // PINNED: see the header above
+    gi.boundsMax = Vec3( 7.5f,  7.0f,  7.5f);
     CHECK(s->setGlobalIllumination(gi), "Epic's GI arms (hybrid, High, 3 bounces, field on)");
     render(engine, 6);
     view->readPixels(img);
-    const Colour withModel = img.at(fx, fy);
+    const Colour withModel = img.at(kFloorX, kFloorY);
     const GiStatus shownSt = s->giStatus();
-    showBox("volume, root shown", shownSt);
-    std::printf("   floor no-model r=%.3f g=%.3f | root shown r=%.3f g=%.3f (ifd converged %d)\n",
-                noModel.r, noModel.g, withModel.r, withModel.g, int(shownSt.ifdConverged));
+    std::printf("   floor no-model r=%.3f g=%.3f | root shown r=%.3f g=%.3f "
+                "(probes %d, ifd converged %d)\n",
+                noModel.r, noModel.g, withModel.r, withModel.g,
+                shownSt.probeCount, int(shownSt.ifdConverged));
+    CHECK(shownSt.probeCount > 0 && !shownSt.probeGridRefused,
+          "pinned bounds stand the enclosure rule down, so the probes are live here");
     const float bounceOn = (withModel.r - withModel.g) - (noModel.r - noModel.g);
-    // THRESHOLD MOVED 0.02 -> 0.008 WITH A VERDICT (2026-09-13 reflection-probe
-    // lane, owner decision Q3). This case cannot pin its lit volume — the
-    // assertion four lines below is that the AUTO volume excludes the hidden
-    // pillar — and the hybrid now declines to build a probe grid in a scene it
-    // measures as OPEN, which this floor-and-panel scene is. So the red this
-    // floor gains from the shown model is the DIFFUSE half only (cone tracing
-    // and the irradiance field) where it used to be diffuse plus the probes'
-    // specular. Measured here, same scene, same frame count: 0.015 (r-g gain 0.439-0.424 against a 0.353/0.353 floor),
-    // where the pre-decision reading with the probes alive was 0.180. The
-    // contract is unchanged — showing a model must add its bounce and hiding it
-    // must take it away, which the two assertions after this still pin at the
-    // same strength — only the magnitude the owner's decision left behind is.
-    CHECK(bounceOn > 0.008f, "the shown model's panel bounces red onto the floor");
-    CHECK(shownSt.boundsMax.y - shownSt.boundsMin.y < 8.5f,
-          "the pillar the user hid is not in the lit volume (y 0..10 would be)");
+    std::printf("   bounce ON = %+.4f\n", bounceOn);
+    // Measured +0.0980 here against a +0.0001 noise floor; the ratio below is
+    // the real gate, this is the floor under it.
+    CHECK(bounceOn > 0.03f, "the shown model's panel bounces red onto the floor");
 
     // HIDE THE ROOT. Every part must leave GI with it, not just the root.
-    s->setNodeVisible(root, false);
+    s->setNodeVisible(h.root, false);
     s->refreshGlobalIllumination();
     render(engine, 6);
     view->readPixels(img);
-    const Colour hidden = img.at(fx, fy);
-    const GiStatus hiddenSt = s->giStatus();
-    showBox("volume, root hidden", hiddenSt);
+    const Colour hidden = img.at(kFloorX, kFloorY);
     std::printf("   floor root hidden r=%.3f g=%.3f\n", hidden.r, hidden.g);
     const float bounceOff = (hidden.r - hidden.g) - (noModel.r - noModel.g);
     CHECK(std::fabs(bounceOff) < 0.01f,
           "hiding the ROOT returns the floor's red bounce to its no-model value");
+    // THE RATIO, stated: the bounce the model adds must dominate the noise the
+    // measurement carries when the model is gone (the lead's round-2 note —
+    // a magnitude alone says nothing about whether the reading is safe).
+    std::printf("   signal/noise = %.1fx\n", bounceOn / std::max(std::fabs(bounceOff), 1e-4f));
+    CHECK(bounceOn > std::fabs(bounceOff) * 4.0f,
+          "...and the bounce is at least 4x the measurement's own noise floor");
+
+    // SHOW IT AGAIN: the panel comes back, the pillar stays the user's hidden.
+    s->setNodeVisible(h.root, true);
+    s->refreshGlobalIllumination();
+    render(engine, 6);
+    view->readPixels(img);
+    const Colour shown = img.at(kFloorX, kFloorY);
+    std::printf("   floor root shown again r=%.3f g=%.3f | pillar probe r=%.3f g=%.3f b=%.3f\n",
+                shown.r, shown.g, img.at(kPillarX, kPillarY).r, img.at(kPillarX, kPillarY).g,
+                img.at(kPillarX, kPillarY).b);
+    CHECK(std::fabs((shown.r - shown.g) - (withModel.r - withModel.g)) < 0.02f,
+          "showing the root restores the panel's bounce");
+    CHECK(!isGreen(img.at(kPillarX, kPillarY)),
+          "...and the pillar the user hid is STILL not drawn");
+
+    GiParams off;
+    s->setGlobalIllumination(off);
+    render(engine, 2);
+    view->setScene(nullptr);
+    engine->destroyScene(s);
+}
+
+// ---------------------------------------------------------------------------
+// 1.1b/1.2 — THE VOLUME. The same scene with an AUTOMATIC lit volume, which is
+// the only way this contract can be read: a hidden part must leave the volume,
+// and showing its parent must not bring back a part the user hid itself.
+// ---------------------------------------------------------------------------
+static void hiddenParentVolume(Engine *engine, View *view)
+{
+    std::printf("-- 1.1b/1.2: a hidden PARENT takes its children out of the lit VOLUME\n");
+    HiddenParentScene h = buildHiddenParentScene(engine, view, "gi_hidden_parent_volume");
+    Scene *s = h.s;
+
+    Image img;
+    s->setNodeVisible(h.pillar, false);          // the user hides the pillar itself
+    render(engine);
+
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 3;
+    gi.ddgi = GiToggle::On;
+    CHECK(s->setGlobalIllumination(gi), "Epic's GI arms over an AUTOMATIC volume");
+    render(engine, 6);
+    const GiStatus shownSt = s->giStatus();
+    showBox("volume, root shown", shownSt);
+    CHECK(shownSt.boundsMax.y - shownSt.boundsMin.y < 8.5f,
+          "the pillar the user hid is not in the lit volume (y 0..10 would be)");
+
+    s->setNodeVisible(h.root, false);
+    s->refreshGlobalIllumination();
+    render(engine, 6);
+    const GiStatus hiddenSt = s->giStatus();
+    showBox("volume, root hidden", hiddenSt);
     CHECK(hiddenSt.boundsMax.y - hiddenSt.boundsMin.y <
               (shownSt.boundsMax.y - shownSt.boundsMin.y) * 0.5f,
           "the automatic volume no longer contains the hidden root's parts");
 
-    // SHOW IT AGAIN: the panel comes back, the pillar stays the user's hidden.
-    s->setNodeVisible(root, true);
+    s->setNodeVisible(h.root, true);
     s->refreshGlobalIllumination();
     render(engine, 6);
     view->readPixels(img);
-    const Colour shown = img.at(fx, fy);
     const GiStatus againSt = s->giStatus();
     showBox("volume, root shown again", againSt);
-    std::printf("   floor root shown again r=%.3f g=%.3f | pillar probe r=%.3f g=%.3f b=%.3f\n",
-                shown.r, shown.g, img.at(px, py).r, img.at(px, py).g, img.at(px, py).b);
-    CHECK(std::fabs((shown.r - shown.g) - (withModel.r - withModel.g)) < 0.02f,
-          "showing the root restores the panel's bounce");
-    CHECK(!isGreen(img.at(px, py)), "...and the pillar the user hid is STILL not drawn");
-    CHECK(againSt.boundsMax.y - againSt.boundsMin.y < 8.5f,
-          "...nor back in the lit volume");
+    CHECK(!isGreen(img.at(kPillarX, kPillarY)),
+          "showing the root keeps the pillar the user hid out of the picture");
+    CHECK(againSt.boundsMax.y - againSt.boundsMin.y < 8.5f, "...nor back in the lit volume");
 
     // Showing the pillar itself is the one thing that brings it back.
-    s->setNodeVisible(pillar, true);
+    s->setNodeVisible(h.pillar, true);
     s->refreshGlobalIllumination();
     render(engine, 6);
     view->readPixels(img);
     const GiStatus pillarSt = s->giStatus();
     showBox("volume, pillar shown", pillarSt);
-    CHECK(isGreen(img.at(px, py)) && pillarSt.boundsMax.y - pillarSt.boundsMin.y > 9.5f,
+    CHECK(isGreen(img.at(kPillarX, kPillarY)) &&
+              pillarSt.boundsMax.y - pillarSt.boundsMin.y > 9.5f,
           "showing the pillar itself draws it and puts it in the volume");
 
     GiParams off;
@@ -452,7 +525,8 @@ int main()
     View *view = engine->createOffscreenView("gi_hidden_volume", 128, 128, Colour(0, 0, 0));
 
     hiddenGeometry(engine.get(), view);
-    hiddenParent(engine.get(), view);
+    hiddenParentBounce(engine.get(), view);
+    hiddenParentVolume(engine.get(), view);
     volumeCeiling(engine.get(), view);
 
     std::printf(failures ? "FAILED (%d)\n" : "PASSED\n", failures);

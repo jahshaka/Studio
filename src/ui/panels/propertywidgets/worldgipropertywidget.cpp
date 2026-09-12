@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
+#include "viewport/ieditorviewport.h"
 #include "ui/controls/dragvaluewidgets.h"
 #include "services/gibounds.h"
 #include "services/services.h"
@@ -95,7 +96,8 @@ void WorldGiPropertyWidget::rebuild()
     rayonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;
     quality = nullptr; lightSelector = nullptr; bounces = nullptr;
     boundsMin = nullptr; boundsMax = nullptr;
-    pccGrid = nullptr; probeSize = nullptr; updateBudget = nullptr; ddgiToggle = nullptr;
+    pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr;
+    updateBudget = nullptr; ddgiToggle = nullptr;
     ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
     fitBoundsButton = nullptr; advancedButton = nullptr; resetAdvancedButton = nullptr;
     editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
@@ -152,6 +154,33 @@ void WorldGiPropertyWidget::rebuild()
     tierSelector->setEnabled(on);
     connect(tierSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldGiPropertyWidget::onTierChanged);
+
+    // ---- 2b. WHERE THE REFLECTIONS COME FROM (read-only) -------------------
+    // Owner's standing rule: the overlay toast is for scene errors the user can
+    // FIX, never for engine data — and an open scene reflecting the sky is
+    // CORRECT, not an error. So the renderer's decision is DATA here: one line,
+    // never a toast and never a scene-issue row.
+    //
+    // A reflection probe is a photograph of an enclosure. The renderer measures
+    // whether this scene has one (OgreGi's facing-slab reading) and declines the
+    // grid in an open scene, leaving the sky cubemap bound instead — cheaper
+    // and sharper than 18-32 captures of the sky. That decision is invisible
+    // otherwise: probeCount 0 in the hybrid looks exactly like the silent build
+    // failure gi.pcc_mirror exists to catch. This reads the same GiStatus
+    // world.giStatus() publishes (probeGridRefused / probeCount).
+    reflectionsRow = this->addLabel(tr("Reflections"), QString());
+    if (reflectionsRow) {
+        reflectionsRow->setToolTip(
+            tr("Where this scene's reflections are actually coming from.\n\n"
+               "A reflection probe is a photograph of an enclosure taken from a point, so the "
+               "renderer measures whether the scene HAS one — a floor and a ceiling, or two "
+               "facing walls — before building a grid of them. In an open scene there is nothing "
+               "to photograph but the sky, and the sky itself is both cheaper and sharper than a "
+               "grid of photographs of it: that is \"Sky\", and it is the right answer rather "
+               "than a failure. Add walls and a ceiling — or pin the GI bounds under Advanced — "
+               "and the probes appear."));
+        reflectionsRow->hide();
+    }
 
     // ---- 3. THE UPDATE BUDGET ----------------------------------------------
     // NOT tier-driven, on purpose (owner decision D5): the tier answers "how
@@ -424,6 +453,30 @@ void WorldGiPropertyWidget::rebuild()
     // Only worth offering when there is something to hand back — the same rule
     // the World Mode panel's "Reset All Pinned Rows" follows.
     if (advancedResettable()) addResetAdvancedButton();
+
+    refreshReflectionsRow();
+}
+
+// THE ACHIEVED READING, exactly like the MSAA section's "Driver Delivers" row:
+// what the renderer DID, not what the document asked for. The row exists from
+// the start and hides itself when there is nothing to say (no viewport, GI off,
+// or a technique that has no probe arm at all) rather than being added and
+// removed, because a row that comes and goes is what makes a panel rebuild
+// itself mid-gesture.
+void WorldGiPropertyWidget::refreshReflectionsRow()
+{
+    if (!reflectionsRow) return;
+    if (!scene || !sceneView || !sceneView->isInitialized()) { reflectionsRow->hide(); return; }
+    const IEditorViewport::GiStatusInfo st = sceneView->giStatus();
+    if (!st.available || st.mode != QStringLiteral("vct_pcc_hybrid")) {
+        reflectionsRow->hide();     // no probe arm in this technique: nothing to report
+        return;
+    }
+    reflectionsRow->setText(st.probeGridRefused
+                                ? tr("Sky")
+                                : (st.probeCount == 1 ? tr("1 probe")
+                                                      : tr("%1 probes").arg(st.probeCount)));
+    reflectionsRow->show();
 }
 
 bool WorldGiPropertyWidget::advancedResettable() const
@@ -541,6 +594,9 @@ void WorldGiPropertyWidget::editRegistry(const QString &text, const std::functio
     QPointer<WorldGiPropertyWidget> self(this);
     panelundo::runWorldModeEdit(services, scene, text, edit, [self]() {
         if (!self) return;
+        // Apply first, so the read-only Reflections row rebuild() fills reports
+        // what the renderer did with THIS edit (the MSAA section's pattern).
+        if (self->sceneView && self->sceneView->isInitialized()) self->sceneView->renderFrames(2);
         self->rebuild();
         // The sibling sections (World Mode above all, which lists every one of
         // these rows with its pin mark) display what was just written.

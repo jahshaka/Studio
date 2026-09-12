@@ -21,6 +21,8 @@ For more information see the LICENSE file
 
 class ComboBoxWidget;
 class HFloatSliderWidget;
+class LabelWidget;
+class IEditorViewport;
 class CheckBoxWidget;
 class DragVector3Widget;
 class QPushButton;
@@ -73,6 +75,10 @@ public:
     /// the panel suite without a stack): the edits still apply, just without
     /// an undo step.
     void setServices(StudioServices *services) { this->services = services; }
+    /// The live viewport, for the one READ-ONLY row in this section: where the
+    /// scene's reflections are actually coming from. Nullable (headless hosts,
+    /// the panel suite) — the row then stays hidden.
+    void setSceneView(IEditorViewport *sceneView) { this->sceneView = sceneView; }
 
 protected slots:
     void onRayonToggled(bool on);
@@ -111,11 +117,15 @@ private:
     /// Re-reads the pin marks, the tier row's "Custom" entry and the reset
     /// button from the document WITHOUT rebuilding the rows.
     void refreshPins();
+    /// Re-reads the ACHIEVED reflection source from the renderer (the same
+    /// GiStatus world.giStatus() reports) into the read-only row.
+    void refreshReflectionsRow();
     bool advancedResettable() const;
     void addResetAdvancedButton();
 
     QSharedPointer<iris::Scene> scene;
     StudioServices *services = nullptr;
+    IEditorViewport *sceneView = nullptr;
     WorldModeCommand::Snapshot editBefore;
     bool editing = false;
     CheckBoxWidget *rayonSwitch = nullptr;
@@ -128,6 +138,7 @@ private:
     DragVector3Widget *boundsMax = nullptr;
     DragVector3Widget *pccGrid = nullptr;
     ComboBoxWidget *probeSize = nullptr;
+    LabelWidget *reflectionsRow = nullptr;
     HFloatSliderWidget *updateBudget = nullptr;
     CheckBoxWidget *ddgiToggle = nullptr;
     HFloatSliderWidget *ddgiIntensity = nullptr;
