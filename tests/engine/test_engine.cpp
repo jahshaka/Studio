@@ -43,7 +43,20 @@ int gChecks   = 0;
         }                                                                            \
     } while (0)
 /// Bail out of the current test: continuing would dereference null.
-#define REQUIRE(cond) do { CHECK(cond); if (!(cond)) return; } while (0)
+/// EVALUATES `cond` EXACTLY ONCE. It used to be
+/// `do { CHECK(cond); if (!(cond)) return; } while (0)`, which evaluates it
+/// TWICE — and 189 of this file's REQUIRE sites have SIDE EFFECTS: `readPixels`
+/// rendered and read back twice, `pip::build` built two overlapping PiP rigs,
+/// `msaa::addUnlitCube` added two cubes. Those cases were self-consistent so
+/// they passed, but they did not test what they say. Found by lane MON-P1a,
+/// where a doubled `MonitorRig::build` failed on the duplicate view name and
+/// made five new cases silently skip themselves with one check each.
+#define REQUIRE(cond)                                                                \
+    do {                                                                             \
+        const bool jahRequireOk_ = (cond);                                           \
+        CHECK(jahRequireOk_);                                                        \
+        if (!jahRequireOk_) return;                                                  \
+    } while (0)
 
 EngineConfig testConfig() {
     EngineConfig cfg;
@@ -4429,7 +4442,13 @@ struct MonitorRig {
         d.range = 20.0f;
         s->setLight(lamp, d);
         s->setNodeTransform(lamp, Vec3(2, 3, 2), Quat(), Vec3(1, 1, 1));
-        CameraDesc c; c.position = Vec3(0, 4, 5); c.fovDegrees = 50;
+        // PITCHED DOWN ~35 degrees: with the identity orientation the camera
+        // looked horizontally from y=4 and never saw the ground at all, so a
+        // planar reflector on it never became an active actor.
+        CameraDesc c;
+        c.position = Vec3(0, 4, 5);
+        c.orientation = Quat(-0.3007058f, 0.0f, 0.0f, 0.9537170f);
+        c.fovDegrees = 50;
         v->setCamera(c);
         return true;
     }
@@ -4868,6 +4887,127 @@ void monitor_snapshot_names_the_graph() {
     CHECK(!st.gpuCompiled || st.gpuSupported || !st.gpuReason.empty());
 }
 
+void monitor_detaches_from_a_scene_it_stopped_drawing() {
+    // THE USE-AFTER-FREE THE REVIEW FOUND. The listener is attached to a
+    // scene's PRIVATE workspaces (planar slots, probe captures) while that
+    // scene is DRAWN, and the old detach walked only what was drawn at the
+    // moment the capture stopped. Disable the view that draws scene A — which
+    // is exactly what a page switch does, and a disabled view KEEPS its
+    // workspace and its scene's arms — stop the capture, and A's planar
+    // workspace still held `&mListener`, a member of the FrameMonitor that was
+    // just destroyed. Re-enable the view and the next frame executes that
+    // workspace through freed memory.
+    //
+    // Under ASan this case is the proof; on a plain build it is a regression
+    // guard. It also covers the plain-correctness half: after a stop, NOTHING
+    // anywhere still carries the listener.
+    Fixture fx;
+    MonitorRig rigA;
+    const bool builtA = rigA.build(fx, "mon-swap-a");
+    REQUIRE(builtA);
+    // Scene A gets a planar reflector, so it owns a private workspace of its
+    // own — the kind the old detach could not reach.
+    PlanarReflectionParams planar;
+    planar.budget = 1;
+    rigA.s->setPlanarReflections(planar);
+    rigA.s->setNodePlanarReflector(rigA.ground, true);
+    render(fx.e, 3);
+    CHECK_MSG(rigA.s->activePlanarReflectors() > 0,
+              "the rig's mirror must actually render, or this case guards nothing");
+
+    // A SECOND view on its own scene, so the frame still has something to draw
+    // while A's view is disabled.
+    Scene *sceneB = fx.scene("mon-swap-b");
+    REQUIRE(sceneB);
+    sceneB->setAmbient(Colour(0.2f, 0.2f, 0.2f), Colour(0.1f, 0.1f, 0.1f));
+    View *viewB = fx.view("mon-swap-b-view", 64, 64, kGreen);
+    REQUIRE(viewB);
+    viewB->setScene(sceneB);
+
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    render(fx.e, 3);                       // A is drawn: its mirror takes the listener
+    CHECK_MSG(fx.e->monitorStatus().attachedListeners >= 3u,
+              "the view, the second view and the mirror all carry it: %u",
+              fx.e->monitorStatus().attachedListeners);
+
+    // THE PAGE SWITCH: A's view is disabled, so A stops being drawn. Its
+    // workspaces live on, listener and all.
+    rigA.v->setEnabled(false);
+    render(fx.e, 3);
+    fx.e->setFrameMonitor(MonitorLevel::Off);   // the FrameMonitor dies here
+    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+
+    // ...and back. With the defect, this frame executed A's mirror workspace
+    // through a destroyed listener.
+    // DRAIN FIRST. `lastError()` is a PEEK — the sink is never cleared on
+    // success, so an earlier case's deliberate refusal (unlit_refuses_rigged_meshes)
+    // is still sitting in it. `takeLastError()` is what answers "has anything
+    // failed SINCE".
+    fx.e->takeLastError();
+    rigA.v->setEnabled(true);
+    render(fx.e, 4);
+    {
+        const std::string err = fx.e->takeLastError();
+        CHECK_MSG(err.empty(), "rendering the re-enabled view after a stop: %s", err.c_str());
+    }
+    CHECK_MSG(rigA.s->activePlanarReflectors() > 0, "the mirror still renders afterwards");
+
+    // On and off again over the same switch must also be clean.
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    render(fx.e, 2);
+    rigA.v->setEnabled(false);
+    render(fx.e, 2);
+    rigA.v->setEnabled(true);
+    render(fx.e, 2);
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+    render(fx.e, 2);
+    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    {
+        const std::string err = fx.e->takeLastError();
+        CHECK_MSG(err.empty(), "a capture across a view disable/enable is clean: %s", err.c_str());
+    }
+}
+
+void monitor_is_forward_only_for_compiles() {
+    // FORWARD ONLY, for shader compiles too. The compile counter is a log
+    // listener that has been counting since the process started, so a capture
+    // must SEED its window when it opens. It did not: the first frame of every
+    // capture reported every shader compiled since boot, and a second capture
+    // re-reported everything between the two.
+    Fixture fx;
+    MonitorRig rig;
+    const bool built = rig.build(fx, "mon-fwd");
+    REQUIRE(built);
+    render(fx.e, 6);                       // warm: this process has compiled plenty
+
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    renderAndFlush(fx.e, 1);
+    std::vector<FrameRecord> recs;
+    fx.e->takeFrameRecords(recs);
+    unsigned compiles = 0;
+    for (const FrameRecord &r : recs) compiles += r.shaderCompiles;
+    std::printf("    first capture, warm process: %u compile(s) reported over %zu frame(s)\n",
+                compiles, recs.size());
+    CHECK_MSG(compiles == 0u,
+              "a capture in a warm process must report NO compiles from before it: %u", compiles);
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+    recs.clear();
+    fx.e->takeFrameRecords(recs);
+
+    // A SECOND capture must not re-report the first one's window either.
+    fx.e->setFrameMonitor(MonitorLevel::Review);
+    renderAndFlush(fx.e, 1);
+    recs.clear();
+    fx.e->takeFrameRecords(recs);
+    compiles = 0;
+    for (const FrameRecord &r : recs) compiles += r.shaderCompiles;
+    CHECK_MSG(compiles == 0u, "a second capture must not re-report the first's: %u", compiles);
+    // ...and the tail of the FIRST capture must not have leaked into this one.
+    for (const FrameRecord &r : recs)
+        CHECK_MSG(r.startMs >= 0.0, "every record is relative to ITS capture's start");
+    fx.e->setFrameMonitor(MonitorLevel::Off);
+}
+
 void monitor_gpu_timestamps() {
     // P1c (ogre-patch 0027) and BOTH its off-switches (owner decision D3).
     //
@@ -5020,6 +5160,9 @@ int main(int argc, char **argv) {
         { "monitor_survives_rebuilds_and_view_destruction",
                                                     monitor_survives_rebuilds_and_view_destruction },
         { "monitor_snapshot_names_the_graph",       monitor_snapshot_names_the_graph },
+        { "monitor_detaches_from_a_scene_it_stopped_drawing",
+                                                    monitor_detaches_from_a_scene_it_stopped_drawing },
+        { "monitor_is_forward_only_for_compiles",   monitor_is_forward_only_for_compiles },
         { "monitor_gpu_timestamps",                 monitor_gpu_timestamps },
         { "teardown_is_clean",                      teardown_is_clean },
     };

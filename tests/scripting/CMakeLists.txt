@@ -214,7 +214,8 @@ add_script_e2e(particles e2e_particles.js)
 # active one, tracks per property, keys (write/overwrite/read/remove), the
 # document evaluation (seek poses the node between the keys), looping, and the
 # save/close/open round trip. Every verb is a document verb -> --headless.
-# Riders lane R4: app.memoryStats / app.reclaimMemory / app.profiling. The
+# Riders lane R4: app.memoryStats / app.reclaimMemory (app.profiling went with
+# chain::PassProfiler, lane MON-P1a). The
 # NULL render system has a VaoManager and scene managers, and the document's
 # nodes live in the engine's staging manager, so the verbs are real headless
 # (shape + counts; magnitudes are the box's, never pinned) -> --headless.
