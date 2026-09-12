@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "services/sceneissues.h"
 
 #include <QDateTime>
+#include <QVector>
 
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -217,6 +218,18 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     {
         QList<iris::SceneNodePtr> blockers;
         collectBlockers(scene->getRootNode(), blockers);
+        // The boxes ONCE, not once per light: this runs on a timer in the
+        // editor, and the owner's box is CPU-bound on the frame.
+        struct Blocker { iris::SceneNodePtr node; iris::Vec3 mn, mx; };
+        QVector<Blocker> boxes;
+        boxes.reserve(blockers.size());
+        for (const auto &blocker : blockers) {
+            Blocker b;
+            b.node = blocker;
+            if (!sceneextents::worldAabb(QList<iris::SceneNodePtr>{ blocker }, false, b.mn, b.mx))
+                continue;
+            boxes.append(b);
+        }
         for (const auto &light : scene->lights) {
             if (light.isNull() || !light->isVisible()) continue;
             if (light->lightType != iris::LightType::Point &&
@@ -226,14 +239,12 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 continue;
             const iris::Vec3 pos = light->getGlobalPosition();
             const float reach = qMax(0.01f, light->distance);
-            for (const auto &blocker : blockers) {
-                iris::Vec3 mn, mx;
-                if (!sceneextents::worldAabb(QList<iris::SceneNodePtr>{ blocker }, false, mn, mx))
-                    continue;
+            for (const auto &b : boxes) {
+                const iris::SceneNodePtr &blocker = b.node;
                 // Inside the thing is not "through" it (a lamp modelled into a
                 // fitting, a bulb inside a shade).
-                if (boxContains(pos, mn, mx)) continue;
-                if (!sphereTouchesBox(pos, reach, mn, mx)) continue;
+                if (boxContains(pos, b.mn, b.mx)) continue;
+                if (!sphereTouchesBox(pos, reach, b.mn, b.mx)) continue;
                 SceneIssue issue;
                 issue.kind = QStringLiteral("shadow.leak");
                 issue.node = light->getGUID();
@@ -255,11 +266,13 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // Only the kinds this scanner owns: an issue raised by a verb or by another
     // producer is not ours to forget.
     static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak") };
+    bool removed = false;
     for (int i = mIssues.size() - 1; i >= 0; --i) {
         if (!kScanned.contains(mIssues[i].kind)) continue;
         if (live.contains(mIssues[i].id)) continue;
         mIssues.removeAt(i);
-        emit changed();
+        removed = true;            // ONE signal for the whole pass, not one per row
     }
+    if (removed) emit changed();
     return mIssues.size();
 }
