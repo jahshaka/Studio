@@ -146,54 +146,96 @@ bool hasCompanionMaterial(const QString &textureGuid)
     return query.exec() && query.next();
 }
 
+QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids)
+{
+    QHash<QString, QStringList> out;
+    QStringList unique = textureGuids;
+    unique.removeAll(QString());
+    unique.removeDuplicates();
+    if (unique.isEmpty()) return out;
+    QSqlDatabase conn = QSqlDatabase::database();
+    if (!conn.isOpen()) return out;
+
+    const auto placeholders = [](int count) {
+        QString out;
+        for (int i = 0; i < count; ++i) out += (i ? ",?" : "?");
+        return out;
+    };
+
+    // 1. the CANDIDATES: every Material that names one of these textures.
+    QHash<QString, QStringList> candidatesOf;   // texture -> materials
+    QStringList candidates;
+    {
+        QSqlQuery query(conn);
+        query.prepare("SELECT dependee, depender FROM dependencies "
+                      "WHERE depender_type = ? AND dependee IN (" +
+                      placeholders(unique.size()) + ")");
+        query.addBindValue(static_cast<int>(ModelTypes::Material));
+        for (const QString &guid : unique) query.addBindValue(guid);
+        if (!query.exec()) return out;
+        while (query.next()) {
+            const QString material = query.value(1).toString();
+            candidatesOf[query.value(0).toString()].append(material);
+            candidates << material;
+        }
+    }
+    candidates.removeDuplicates();
+    if (candidates.isEmpty()) return out;
+
+    // 2. THE STAMP IS THE TEST: `companionOf` names the texture this material
+    // was minted for (createMaterialAsset above). A material the user authored
+    // on the same image carries no stamp and is never one of these, whatever
+    // its shape. Rows minted before the stamp existed answer no — nothing is
+    // owed to old data (CRUD law), and the cost of answering no is a leftover
+    // pin the user removes by hand.
+    QHash<QString, QString> stampOf;
+    {
+        QSqlQuery query(conn);
+        query.prepare("SELECT guid, asset FROM assets WHERE guid IN (" +
+                      placeholders(candidates.size()) + ")");
+        for (const QString &guid : candidates) query.addBindValue(guid);
+        if (!query.exec()) return out;
+        while (query.next()) {
+            const QJsonObject definition =
+                QJsonDocument::fromJson(query.value(1).toByteArray()).object();
+            stampOf.insert(query.value(0).toString(),
+                           definition.value(QStringLiteral("companionOf")).toString());
+        }
+    }
+
+    // 3. Still UNEDITED: a companion the user has since given a second map is
+    // theirs now, and a project keeps it. (The stamp says where the row came
+    // from; this says it has not become something else.)
+    QHash<QString, QStringList> dependeesOf;
+    {
+        QSqlQuery query(conn);
+        query.prepare("SELECT DISTINCT depender, dependee FROM dependencies WHERE depender IN (" +
+                      placeholders(candidates.size()) + ")");
+        for (const QString &guid : candidates) query.addBindValue(guid);
+        if (!query.exec()) return out;
+        while (query.next()) {
+            QStringList &list = dependeesOf[query.value(0).toString()];
+            const QString dependee = query.value(1).toString();
+            if (!list.contains(dependee)) list.append(dependee);
+        }
+    }
+
+    for (auto it = candidatesOf.constBegin(); it != candidatesOf.constEnd(); ++it) {
+        const QString &textureGuid = it.key();
+        for (const QString &candidate : it.value()) {
+            if (stampOf.value(candidate) != textureGuid) continue;
+            const QStringList &dependees = dependeesOf.value(candidate);
+            if (dependees.size() == 1 && dependees.first() == textureGuid)
+                out[textureGuid].append(candidate);
+        }
+    }
+    return out;
+}
+
 QStringList companionMaterials(const QString &textureGuid)
 {
-    QStringList companions;
-    if (textureGuid.isEmpty()) return companions;
-    QSqlDatabase conn = QSqlDatabase::database();
-    if (!conn.isOpen()) return companions;
-
-    // THE STAMP IS THE TEST: `companionOf` names the texture this material was
-    // minted for (createMaterialAsset above). A material the user authored on
-    // the same image carries no stamp and is never one of these, whatever its
-    // shape. Rows minted before the stamp existed answer no — nothing is owed
-    // to old data (CRUD law), and the cost of answering no is a leftover pin
-    // the user removes by hand.
-    //
-    // The candidate set still comes from the dependency edges, so this costs
-    // one query plus one blob read per material that names this texture.
-    QSqlQuery query(conn);
-    query.prepare("SELECT depender FROM dependencies WHERE dependee = ? AND depender_type = ?");
-    query.addBindValue(textureGuid);
-    query.addBindValue(static_cast<int>(ModelTypes::Material));
-    if (!query.exec()) return companions;
-
-    QStringList candidates;
-    while (query.next()) candidates << query.value(0).toString();
-
-    for (const QString &candidate : candidates) {
-        QSqlQuery blob(conn);
-        blob.prepare("SELECT asset FROM assets WHERE guid = ?");
-        blob.addBindValue(candidate);
-        if (!blob.exec() || !blob.next()) continue;
-        const QJsonObject definition =
-            QJsonDocument::fromJson(blob.value(0).toByteArray()).object();
-        if (definition.value(QStringLiteral("companionOf")).toString() != textureGuid) continue;
-
-        // Still UNEDITED: a companion the user has since given a second map is
-        // theirs now, and a project keeps it. (The stamp says where the row
-        // came from; this says it has not become something else.)
-        QSqlQuery deps(conn);
-        deps.prepare("SELECT dependee FROM dependencies WHERE depender = ?");
-        deps.addBindValue(candidate);
-        if (!deps.exec()) continue;
-        QStringList dependees;
-        while (deps.next()) dependees << deps.value(0).toString();
-        dependees.removeDuplicates();
-        if (dependees.size() == 1 && dependees.first() == textureGuid)
-            companions << candidate;
-    }
-    return companions;
+    if (textureGuid.isEmpty()) return {};
+    return companionMaterials(QStringList{ textureGuid }).value(textureGuid);
 }
 
 } // namespace ImageMaterial

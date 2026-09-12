@@ -220,6 +220,32 @@ var cube2 = scene.addPrimitive("cube", { position: { x: -6, y: 0, z: 6 } });
 assert(material.set(cube2, { baseColorMap: wideTex }) === true, "material.set(cube2, {baseColorMap: <library image>})");
 assert(currentTray().indexOf(wideTex) >= 0, "a library image bound to a slot joins the project as a tile");
 assert(companionOf(wideTex) === "", "... as a BINDING: no companion material was minted for it");
+// ...AND IT RECORDS WHAT IT USES, the same edge the material panel's texture
+// row writes (small-items round B). The verb used to leave the edge out
+// because the library grid hid every dependee, so recording a USE deleted the
+// image from the user's library; the grid hides MEMBERSHIP now.
+assert(assets.dependencies(cube2).indexOf(wideTex) >= 0,
+       "material.set recorded the node -> texture edge (the export carries the image)");
+assert(material.set(cube2, { baseColorMap: wideTex }) === true, "re-binding the same image");
+assert(assets.dependencies(cube2).filter(function (g) { return g === wideTex; }).length === 1,
+       "... writes ONE edge, not a second row");
+
+// ---- 6b. A USE NEVER TAKES A ROW OUT OF THE LIBRARY ------------------------
+//
+// The Assets page's LIBRARY GRID (assets.list({scope:'store'})) used to hide
+// every row that appeared as a `dependee` — and the editor records USE as a
+// dependency — so a library asset vanished from the user's library the moment
+// anything used it: the image they added to a project (the companion material
+// minted for it is a depender), the image a material slot binds, the image on
+// a plane. The grid hides MEMBERSHIP now (an import's Mesh and Texture rows,
+// whose parent is their Object), which is the same rule the tray uses.
+function libraryGrid() { return guidsOf(assets.list({ scope: "store" })); }
+assert(libraryGrid().indexOf(tinyTex) >= 0,
+       "an image ADDED to a project (its companion material uses it) is still in the library");
+assert(libraryGrid().indexOf(wideTex) >= 0,
+       "an image bound to a material slot is still in the library");
+assert(libraryGrid().indexOf(modelGuid) >= 0,
+       "a model an AVATAR was made from is still in the library");
 
 // An emitter: its image is a tile, the emitter's own row is not.
 var emitter = scene.addParticles("fire", { position: { x: 0, y: 1, z: -6 } });
@@ -245,6 +271,22 @@ assert(quadMembers.length > 0, "the GLB brought " + quadMembers.length + " membe
 quadMembers.forEach(function (m) {
     assert(currentTray().indexOf(m.guid) < 0, "import member '" + m.name + "' is not a tile");
 });
+// THE EDITOR'S OWN HIDDEN FOLDERS travel too (small-items round B). Applying
+// a material preset files a Material row under Presets/ and adding an emitter
+// files its row under Systems/ — and both writers minted a FRESH folder guid
+// on every call while only creating the folder the first time, so every row
+// after the first was filed under a guid nothing owned. A project archive then
+// pins every row it imports, the project's OWN rows included, and the tray
+// lists pins at its root: a folder nothing owned emptied itself onto the root
+// of the imported project. Two presets and two emitters make both visible.
+var presets = materials.presets();
+assert(presets.length >= 2, "the shipped material presets (" + presets.length + ")");
+var cube3 = scene.addPrimitive("cube", { position: { x: 8, y: 0, z: -8 } });
+var cube4 = scene.addPrimitive("cube", { position: { x: 10, y: 0, z: -8 } });
+assert(material.apply(cube3, presets[0].name) === true, "material.apply(preset 0)");
+assert(material.apply(cube4, presets[1].name) === true, "material.apply(preset 1)");
+assert(scene.addParticles().length > 10, "a second emitter");
+
 function trayNames() {
     return assets.list({ scope: "project", tray: true })
         .map(function (r) { return r.type + ":" + r.name; }).sort();
