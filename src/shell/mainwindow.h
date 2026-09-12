@@ -70,7 +70,6 @@ class AnimationWidget;
 class TexturedPlaneLayerWidget;
 class WorldLayerWidget;
 class EndlessPlaneLayerWidget;
-class DonateDialog;
 
 class MaterialWidget;
 class TransformGizmo;

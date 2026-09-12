@@ -86,17 +86,21 @@ struct McpClient
     }
 };
 
-/// Merge (never overwrite) the two keys the close path reads, so no modal
-/// donate dialog blocks the scripted quit and autosave keeps the close
-/// prompt-free — in BOTH settings locations. SettingsManager reads
-/// jahsettings.ini from
-// applicationDirPath() under QT_DEBUG and from AppDataLocation otherwise
-// (src/data/settingsmanager.h:44-57), so seeding only the binary's directory
-// silently stopped working the first time this suite met a RelWithDebInfo
-// build: ddialog_seen stayed false, MainWindow::closeEvent ran
-// DonateDialog::exec(), and the modal nested event loop swallowed app.quit()
-// until the exit budget expired. Both cases of this test failed, for a reason
-// that had nothing to do with import shutdown.
+/// Merge (never overwrite) the one key the close path still reads: autosave,
+/// which keeps the unsaved-changes prompt off the scripted quit.
+///
+/// THE DONATE DIALOG IS NO LONGER ONE OF THEM. It used to be seeded here as
+/// well, and that seeding was a workaround for a real defect on THIS suite's
+/// subject: `DonateDialog::exec()` ran inside MainWindow::closeEvent, so a
+/// nested modal event loop sat in the middle of the quit path and swallowed
+/// `app.quit()` until the exit budget expired. The first time this suite met a
+/// RelWithDebInfo build the seeding missed the settings file the app actually
+/// read, both cases failed, and the failure looked like an import-shutdown bug.
+/// The dialog moved to FIRST LAUNCH (owner decision D3, 2026-09-12 —
+/// src/app/firstrun.h) and is suppressed outright for any driven run, so the
+/// workaround is deleted: THIS SUITE NOW PROVES THE QUIT PATH WITH NOTHING
+/// SEEDED ABOUT IT. If a modal dialog ever creeps back into closeEvent, this is
+/// the suite that reds.
 static void seedSettings()
 {
     testsupport::seedSettingsForSpawnedApp(QStringLiteral(JAHSHAKA_BINARY));
