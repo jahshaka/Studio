@@ -28,6 +28,7 @@
 // OffscreenRenderScope so the on-screen views do not pay for the extra frames.
 
 #include "jahshaka/engine/Engine.h"
+#include "services/framemonitor.h"
 
 /// Renders at least `minFrames` frames, then keeps rendering while the engine's
 /// texture load-request counter moves between frames, up to `maxExtra` more.
@@ -42,7 +43,17 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
 {
     if (!engine) return 0u;
     unsigned rendered = 0u;
-    for (unsigned i = 0; i < minFrames; ++i) { engine->renderOneFrame(); ++rendered; }
+    // FRAMES NOBODY SAW (RENDER_LOOP_MONITOR_SPEC §4.2's frame reason): a
+    // thumbnail, a screenshot or a preview readback renders the whole engine
+    // and is never displayed. A capture that could not tell those from the
+    // owner's own frames would read as a loop running at twice the rate, with
+    // half its frames mysteriously cheap. The cause is set before EVERY
+    // renderOneFrame because the engine consumes it and resets to Driver.
+    auto markOffscreen = [engine] {
+        if (framemonitor::active())
+            engine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
+    };
+    for (unsigned i = 0; i < minFrames; ++i) { markOffscreen(); engine->renderOneFrame(); ++rendered; }
     // renderOneFrame already waited at its head, so the counter read here is
     // taken with the streaming worker idle: any movement it shows afterwards
     // was caused by the frames above, which is exactly the condition of
@@ -60,6 +71,7 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
         const unsigned long long now = engine->textureLoadRequests();
         if (now == seen) break;
         seen = now;
+        markOffscreen();
         engine->renderOneFrame();
         ++rendered;
     }

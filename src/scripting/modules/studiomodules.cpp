@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "scripting/modules/logapi.h"
 #include "scripting/modules/nodeapi.h"
 #include "scripting/modules/particlesapi.h"
+#include "scripting/modules/perfapi.h"
 #include "scripting/modules/projectapi.h"
 #include "scripting/modules/sceneapi.h"
 #include "scripting/modules/textureapi.h"
@@ -63,6 +64,11 @@ void registerStudioModules(ScriptEngine &engine)
     // CameraApi, InputApi and LogApi were: the registry order every generated
     // doc and tool schema already has stays unchanged.
     engine.addModule(new ClipboardApi(host));
+    // The render-loop monitor's capture verbs (RENDER_LOOP_MONITOR_SPEC §4.6).
+    // Appended for the same reason every module since CameraApi was: the
+    // registry order every generated doc and tool schema already has stays
+    // unchanged.
+    engine.addModule(new PerfApi(host));
     // The materials/material/graph verbs are the materials module's — the
     // shell's module loop calls MaterialsModule::registerApi right after this
     // (audit §6.3.4), keeping the registry order unchanged.

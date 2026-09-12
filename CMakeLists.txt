@@ -213,6 +213,7 @@ set(SRCS
     src/scripting/modules/textureapi.cpp
     src/scripting/modules/videoapi.cpp
     src/scripting/modules/clipboardapi.cpp
+    src/scripting/modules/perfapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishapi.cpp
@@ -265,6 +266,7 @@ set(SRCS
     src/services/jahlog.cpp
     src/services/sessionmarkers.cpp
     src/services/perfsampler.cpp
+    src/services/framemonitor.cpp
     src/services/sessionheader.cpp
     src/services/loadtimeline.cpp
     src/services/meshbakestore.cpp
@@ -842,6 +844,54 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
+
+# ---- THE TREE'S PROVENANCE, for a perf capture's machine.json ---------------
+# RENDER_LOOP_MONITOR_SPEC §4.8 asks every capture bundle to name the Studio and
+# irisgl commits, the Ogre pin and the patch stack that produced the binary that
+# recorded it — a capture the lead reads days later is worth what its provenance
+# is worth. Computed here, where GIT_COMMIT_HASH already is, because none of it
+# can be read at runtime from a shipped app. Each one degrades to "unknown"
+# rather than failing a configure on a tarball with no .git.
+execute_process(
+    COMMAND git log -1 --pretty=format:%h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/irisgl
+    OUTPUT_VARIABLE IRISGL_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT IRISGL_COMMIT_HASH)
+    set(IRISGL_COMMIT_HASH "unknown")
+endif()
+add_definitions("-DIRISGL_COMMIT_HASH=\"${IRISGL_COMMIT_HASH}\"")
+
+execute_process(
+    COMMAND git log -1 --pretty=format:%h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next
+    OUTPUT_VARIABLE OGRE_PIN_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT OGRE_PIN_HASH)
+    set(OGRE_PIN_HASH "unknown")
+endif()
+add_definitions("-DOGRE_PIN_HASH=\"${OGRE_PIN_HASH}\"")
+
+# The patch stack as FILENAMES, comma-separated: "0001-...,0002-...". The names
+# carry the number and the subject, which is what a reader of a bundle wants —
+# and a patch added or renumbered after this configure shows up as a stale
+# string, never as a wrong one, because the app also prints the configure time.
+file(GLOB _ogre_patch_files
+     "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-patches/[0-9][0-9][0-9][0-9]-*.patch")
+set(OGRE_PATCH_STACK "")
+foreach(_p ${_ogre_patch_files})
+    get_filename_component(_pn "${_p}" NAME)
+    if(OGRE_PATCH_STACK)
+        set(OGRE_PATCH_STACK "${OGRE_PATCH_STACK},${_pn}")
+    else()
+        set(OGRE_PATCH_STACK "${_pn}")
+    endif()
+endforeach()
+add_definitions("-DOGRE_PATCH_STACK=\"${OGRE_PATCH_STACK}\"")
 
 # For convenience, put the shared files built from IrisGL along with the final binary
 # (libassimp is IrisGL's PRIVATE runtime dependency — placed beside the binary so

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "scripting/scriptengine.h"
 #include "services/engineerrorpump.h"
+#include "services/framemonitor.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "viewport/ieditorviewport.h"
@@ -295,6 +296,49 @@ QJsonArray McpTools::listTools() const
                     { "enum", QJsonArray{ "undo", "redo" } } } } } },
             { "required", QJsonArray{ "action" } } } } });
 
+    tools.append(QJsonObject{
+        { "name", "capture_perf" },
+        { "description",
+          "THE RENDER-LOOP MONITOR (RENDER_LOOP_MONITOR_SPEC): record what the engine "
+          "actually does, frame by frame, into a capture bundle on disk for later analysis. "
+          "It collects data and judges nothing — no budgets, no verdicts.\n"
+          "action:\"start\" (the default) records the NEXT `seconds` (20 by default) and "
+          "returns the bundle's path; recording is FORWARD ONLY, there is no history behind "
+          "the call. action:\"stop\" ends a running capture early and still writes a "
+          "complete, shorter bundle. action:\"status\" says what the monitor is doing and "
+          "where the last bundle went. action:\"mark\" drops a named marker into the "
+          "running capture, which is how a before/after is anchored.\n"
+          "The bundle is a directory containing machine.json (GPU, driver, display, pacing, "
+          "build, commits, Ogre pin and patch stack), snapshot_start/end.json (every GI "
+          "parameter, the probe grid, the shadow setup, the light list, VRAM, and the "
+          "compositor graph — which workspace renders which scene), frames.jsonl (one record "
+          "per frame: every stage, every pass with its workspace/kind/draws/triangles, each "
+          "cache's work AND the reason for it, the replayed-frame marker), events.jsonl (GI "
+          "rebuilds, shader compiles, texture loads, UI stalls, marks — each with its cause), "
+          "trace.json (Chrome/Perfetto) and ogre.log for the window.\n"
+          "These are the perf.capture / perf.stop / perf.status / perf.mark verbs; run_script "
+          "can call them directly." },
+        { "inputSchema", QJsonObject{
+            { "type", "object" },
+            { "properties", QJsonObject{
+                { "action", QJsonObject{
+                    { "type", "string" },
+                    { "enum", QJsonArray{ "start", "stop", "status", "mark" } },
+                    { "description", "What to do (default \"start\")." } } },
+                { "seconds", QJsonObject{
+                    { "type", "number" },
+                    { "description", "Capture length for \"start\" (default: the app's "
+                                     "capture-length preference, 20 s)." } } },
+                { "label", QJsonObject{
+                    { "type", "string" },
+                    { "description", "Names the bundle directory for \"start\" (the open "
+                                     "scene's name when omitted), or the marker's text for "
+                                     "\"mark\"." } } },
+                { "out", QJsonObject{
+                    { "type", "string" },
+                    { "description", "Write the bundle to this directory instead of the "
+                                     "default capture root." } } } } } } } });
+
     return tools;
 }
 
@@ -306,6 +350,7 @@ QJsonObject McpTools::call(const QString &name, const QJsonObject &args)
     if (name == QLatin1String("screenshot"))     return screenshot(args);
     if (name == QLatin1String("browse_assets"))  return browseAssets(args);
     if (name == QLatin1String("undo_redo"))      return undoRedo(args);
+    if (name == QLatin1String("capture_perf"))   return capturePerf(args);
     return textResult(QStringLiteral("unknown tool: %1").arg(name), true);
 }
 
@@ -786,4 +831,44 @@ QJsonObject McpTools::undoRedo(const QJsonObject &args)
         { "redoText", stack->redoText() },
         { "index", stack->index() },
         { "count", stack->count() } });
+}
+
+// THE SAME VERBS, through the same object the console and the key use
+// (SCRIPTING_SPEC §2.3): this tool is a bridge, never a second implementation.
+QJsonObject McpTools::capturePerf(const QJsonObject &args)
+{
+    const QString action = args.value(QLatin1String("action")).toString(QStringLiteral("start"));
+    FrameMonitor &monitor = FrameMonitor::instance();
+
+    auto statusJson = [&monitor]() {
+        return QJsonObject::fromVariantMap(monitor.status());
+    };
+
+    if (action == QLatin1String("status")) return jsonResult(statusJson());
+
+    if (action == QLatin1String("mark")) {
+        const QString label = args.value(QLatin1String("label")).toString();
+        if (!monitor.mark(label))
+            return textResult(QStringLiteral("capture_perf: no capture is running to mark"), true);
+        return jsonResult(QJsonObject{ { "marked", true }, { "label", label } });
+    }
+
+    if (action == QLatin1String("stop")) {
+        QString error;
+        if (!monitor.stop(&error)) return textResult(QStringLiteral("capture_perf: %1").arg(error), true);
+        return jsonResult(statusJson());
+    }
+
+    if (action != QLatin1String("start"))
+        return textResult(QStringLiteral("capture_perf: action must be start, stop, status or mark"),
+                          true);
+
+    FrameMonitor::Request request;
+    request.seconds = args.value(QLatin1String("seconds")).toDouble(0.0);
+    request.label = args.value(QLatin1String("label")).toString();
+    request.outDir = args.value(QLatin1String("out")).toString();
+    QString error;
+    if (!monitor.start(request, &error))
+        return textResult(QStringLiteral("capture_perf: %1").arg(error), true);
+    return jsonResult(statusJson());
 }

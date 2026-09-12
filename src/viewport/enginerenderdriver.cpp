@@ -5,6 +5,7 @@
 #include <QTimer>
 
 #include "services/engineerrorpump.h"
+#include "services/framemonitor.h"
 #include "services/jahlog.h"
 #include "services/loadtimeline.h"
 
@@ -42,6 +43,15 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         QElapsedTimer frame;
         frame.start();
         ++mStats.ticks;
+        // THE RENDER-LOOP MONITOR (RENDER_LOOP_MONITOR_SPEC §4.2), and it costs
+        // one not-taken branch when no capture is running. The tick's TOP is
+        // where the gap since the previous tick is closed and split into idle
+        // (blocked in the event loop) and UI (the thread was busy with
+        // something that was not a frame) — the difference between "15 fps that
+        // feels like 60" and a real stall.
+        FrameMonitor::instance().noteTickStart();
+        if (framemonitor::active() && mEngine)
+            mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Driver);
         emit beforeFrame();
         // Nothing is showing anywhere — every viewport widget is hidden, so
         // every View is disabled (EngineViewWidget's show/hideEvent). Drawing
@@ -108,6 +118,9 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             mStats.workMs = sum / mWorkFilled;
             if (ms > mStats.worstMs) mStats.worstMs = ms;
         }
+        // The monitor drains the engine's ring here, at the one point in the
+        // process where a frame has just finished, and re-arms the gap clock.
+        FrameMonitor::instance().noteTickEnd();
         if (ms >= kSlowFrameMs) {
             ++mStats.slowFrames;
             LoadTimeline::add(QStringLiteral("frame:slow"), ms);

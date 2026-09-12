@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include <QMessageBox>
 #include <QProcess>
 
+#include "services/framemonitor.h"
 #include "services/framepacing.h"
 #include "services/outlinesettings.h"
 #include "services/shortcutregistry.h"
@@ -482,6 +483,33 @@ void WorldSettingsWidget::configureViewport()
 		if (mainWindow && mainWindow->studioServices()
 		    && mainWindow->studioServices()->perfSampler)
 			mainWindow->studioServices()->perfSampler->start(seconds);
+	});
+
+	// ---- the render monitor's capture length (RENDER_LOOP_MONITOR_SPEC §4.6)
+	// THE ONLY monitor UI there is, by decision: the monitor has no level dial
+	// (Off, or Review for the length of one capture) and no on-screen display,
+	// so the single thing a user can set is how long Ctrl+F4 records for. Same
+	// capability perf.capture() drives, same persisted key — the verb and its
+	// test landed before this row existed (SCRIPTING_SPEC §2.3).
+	auto captureLabel = new QLabel("Monitor Capture Length :");
+	setSizePolicyForWidgets(captureLabel);
+	auto captureSpin = new QSpinBox;
+	captureSpin->setRange(1, 600);
+	captureSpin->setSuffix(" s");
+	captureSpin->setToolTip(
+		"How many seconds Ctrl+F4 records into a capture bundle. The render monitor is OFF "
+		"until you press it and records FORWARD from that moment — never the past — then "
+		"writes everything the frame did (every stage, every pass, each cache's work and the "
+		"reason for it, GI rebuilds, shader compiles, UI stalls) into a folder under "
+		"~/Developer/spikes/perf. A toast names the folder when it is done. Press Ctrl+F4 "
+		"again to stop early. Nothing is drawn over the viewport while it records, and "
+		"nothing at all runs when it is off.");
+	StyleSheet::setStyle({ captureLabel, captureSpin });
+	layout->addWidget(captureLabel, 9, 0);
+	layout->addWidget(captureSpin, 9, 2);
+	captureSpin->setValue(int(FrameMonitor::preferredSeconds()));
+	connect(captureSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [](int seconds) {
+		FrameMonitor::setPreferredSeconds(double(seconds));
 	});
 
 	layout->setColumnStretch(1, 50);

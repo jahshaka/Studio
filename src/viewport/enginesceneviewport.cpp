@@ -51,6 +51,7 @@
 #include "viewport/freecamerapolicy.h"
 #include "bridge/secondarysurfacetonemap.h"
 #include "services/engineerrorpump.h"
+#include "services/framemonitor.h"
 #include "services/loadtimeline.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -1593,6 +1594,14 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // (not playing, not simulating) the document ignores the steps and only
     // the engine-side delta is produced.
     float simulated = 0.0f;
+    // THE HOST'S STAGE TREE (RENDER_LOOP_MONITOR_SPEC §4.2). Each scope is a
+    // pair of not-taken branches while no capture runs; inside one they report
+    // EXCLUSIVE milliseconds into the frame record the engine is building, so
+    // frames.jsonl carries one tree per frame — host stages and engine stages
+    // in the same list, summing to the frame.
+    framemonitor::Stage syncStage("host.sync");
+    {
+    framemonitor::Stage docStage("host.doc");
     if (mPlaying && mPlayback) {
         iris::Viewport vp; vp.width = width(); vp.height = height(); vp.pixelRatioScale = 1.0f;
         simulated = mPlayback->update(vp, dt);   // physics, animation, play controllers move the document
@@ -1604,6 +1613,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         // clock ticks — for the Simulate physics and the engine's particles.
         if (mScene && !(mPlayback && mPlayback->isScenePaused()))
             simulated = mScene->advance(dt);
+    }
     }
     // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5). The arm is COMPUTED in
     // the document (Scene::advance, right after the movement step, so it never
@@ -1684,18 +1694,36 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
         // rest, so Game View and play hide them.
         mMirror->setGiVolumeOverlay(mShowGiVolume && helpers && !mPlaying);
+        // The mirror reports its OWN sub-stages from inside sync() (it is the
+        // only place that can see them); this scope is their parent, and the
+        // subtraction keeps it exclusive.
+        mMirror->setMonitorEngine(framemonitor::active() ? mEngine.get() : nullptr);
+        framemonitor::Stage mirrorStage("host.mirror");
         mMirror->sync();
     }
+    framemonitor::Stage overlayStage("host.overlay");
     if (mGizmo && viewCamera() && mSelectedNode) mGizmo->updateSize(viewCamera());
     if (mOverlay) {
         iris::Vec3 rayPos, rayDir, viewDir;
         mouseRay(rayPos, rayDir, viewDir);
         mOverlay->update((helpers && mSelectedNode) ? mGizmo : nullptr, rayPos, rayDir, viewDir);
     }
-    if (mMirror) mMirror->applySky(view());
-    if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
-    if (mMirror && viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
-    syncPip();
+    overlayStage.end();
+    {
+        // env: the sky and the environment push — where a synchronous GI
+        // rebuild happens, which is one of the "15 fps that feels like 15"
+        // candidates the monitor exists to tell apart (the engine tags the
+        // rebuild itself as an event with its cause).
+        framemonitor::Stage envStage("host.env");
+        if (mMirror) mMirror->applySky(view());
+        if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
+    }
+    {
+        framemonitor::Stage camStage("host.camera");
+        if (mMirror && viewCamera())
+            mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
+        syncPip();
+    }
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
     // particles too. They are simulated inside the engine, which has NO clock
     // of its own (Engine.h "Simulation clock"): every frame is told how many
@@ -1816,6 +1844,12 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     for (int i = 0; i < n; ++i) {
         syncFrame(dt);
         ++mFrameEpoch;
+        // A SCRIPTED frame is not a driver frame, and a capture taken while a
+        // script runs must not read like the owner's own loop (§4.2's frame
+        // reason). Set per iteration: the engine consumes the cause and resets
+        // it to Driver on every frame.
+        if (framemonitor::active())
+            mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Scripted);
         mEngine->renderOneFrame();
         // The deterministic path bypasses EngineRenderDriver entirely, so it
         // has to drain the engine's error sink itself or a scripted/headless
