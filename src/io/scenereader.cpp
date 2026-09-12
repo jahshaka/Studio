@@ -828,20 +828,34 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // masked back to 32 bits, so a hand-edited -1 also reads as "everything".
     sceneNode->setLightMask(static_cast<quint32>(
         static_cast<qlonglong>(nodeObj["lightMask"].toDouble(4294967295.0)) & 0xFFFFFFFFll));
-    // SCENE_STATIC, the persisted USER OVERRIDE (format v2). Absent — every
-    // node of every scene written before v2, and the overwhelming majority
-    // after it — means "no opinion": the default policy decides, in the
+    // MOBILITY, the persisted USER SETTING (format v3). Absent — every node of
+    // every scene written before v3, and the overwhelming majority after it —
+    // means "no opinion": the resolution rule decides, in the
     // applyStaticDefaults pass that runs once the whole tree is built.
     //
-    // The RAW setter, not setStaticHint: this node's parent chain does not
-    // exist yet (the reader builds children before it attaches the subtree), so
+    // The RAW setter, not setMobility: this node's parent chain does not exist
+    // yet (the reader builds children before it attaches the subtree), so
     // asking the graph to make it static now would be refused by rule 2 and log
     // a warning per node. Recording the intent here and letting the pass at the
     // end of the load act on it is the same thing, in the right order.
-    if (nodeObj.contains(QLatin1String("static")))
-        sceneNode->_setStaticOverride(nodeObj["static"].toBool()
-                                          ? iris::StaticOverride::Static
-                                          : iris::StaticOverride::Dynamic);
+    //
+    // v2's BOOLEAN "static" key is still READ (true = static, false = movable,
+    // which is exactly what v2's Static/Dynamic override meant) so scenes saved
+    // before mobility open with the same meaning. It is never written again,
+    // and a file carrying both keys is answered by the new one.
+    iris::Mobility mobility = iris::Mobility::Auto;
+    if (nodeObj.contains(QLatin1String("mobility"))) {
+        if (!iris::mobilityFromName(nodeObj["mobility"].toString(), mobility)) {
+            qWarning("SceneReader: node '%s' carries an unknown mobility '%s' — resolving it "
+                     "automatically instead.",
+                     qUtf8Printable(sceneNode->getName()),
+                     qUtf8Printable(nodeObj["mobility"].toString()));
+            mobility = iris::Mobility::Auto;
+        }
+    } else if (nodeObj.contains(QLatin1String("static"))) {
+        mobility = nodeObj["static"].toBool() ? iris::Mobility::Static : iris::Mobility::Movable;
+    }
+    if (mobility != iris::Mobility::Auto) sceneNode->_setMobility(mobility);
     // Socket attachment (CAMERAS_SPEC §5). The RAW setter: the owner is very
     // often read AFTER this node (a camera can precede the character it rides),
     // so nothing here can validate the guid. Scene::addNode registers whatever

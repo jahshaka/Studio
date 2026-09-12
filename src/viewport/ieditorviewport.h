@@ -461,6 +461,26 @@ public:
         QString lastStaleReason = QStringLiteral("none");
         quint64 staleSerial = 0;
         quint64 rebuilds = 0;
+        /// MOBILITY (SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3.4). What the
+        /// renderer has been told MOVES, which is what decides who may be baked
+        /// into the room's lighting at all — so it belongs beside the probe and
+        /// rebuild counters rather than in the mirror's own statistics.
+        ///
+        /// `movableItems`/`movableLights` are the engine's own records (the
+        /// document's resolution reaches it through Scene::setNodeMovable).
+        /// `mobilityMisses` counts objects that started moving DURING PLAY with
+        /// nothing predicting they would — each keeps its old bounce light as a
+        /// ghost until play stops, and each is worth marking Movable by hand;
+        /// `lastMobilityMiss` names the last one. `mobilityRebuilds` counts GI
+        /// rebuilds a mobility CHANGE caused: it is 0 in every scene today,
+        /// because the renderer only records mobility so far (lane R1) and
+        /// recording costs nothing — lane R2, which spends it on render
+        /// channels, is where a flip can become a rebuild.
+        int     movableItems = 0;
+        int     movableLights = 0;
+        quint64 mobilityMisses = 0;
+        QString lastMobilityMiss;
+        quint64 mobilityRebuilds = 0;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
@@ -531,6 +551,13 @@ public:
         /// that run while a light is being dragged, instead of the full
         /// re-solves the drag used to cost (REFLECTIONS_ADOPTION_SPEC.md P2).
         quint64 giLightRefreshes = 0;
+        // ---- MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3, lane R1) -----------
+        /// How many of the document's nodes resolved MOVABLE on the last sync —
+        /// the mirror's own count, which is why it lives here and not in
+        /// world.giStatus(): this is what the DOCUMENT decided, the giStatus
+        /// counters are what the RENDERER recorded, and a disagreement between
+        /// the two is a push that did not land.
+        quint64 movableNodes = 0;
     };
     /// How many times the mirror has pushed a NEW global-illumination
     /// configuration into the engine, and how many times it has asked for the

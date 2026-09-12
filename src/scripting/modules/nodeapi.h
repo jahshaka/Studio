@@ -75,8 +75,7 @@ public:
     Q_INVOKABLE bool attached(const QString &id);
     Q_INVOKABLE bool setFolder(const QString &id, const QString &path);
     Q_INVOKABLE QString folder(const QString &id);
-    Q_INVOKABLE bool setStatic(const QString &id, bool value);
-    Q_INVOKABLE bool isStatic(const QString &id);
+    Q_INVOKABLE QVariantMap mobility(const QString &id);
     Q_INVOKABLE bool physics(const QString &id, const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantMap physicsInfo(const QString &id);
 

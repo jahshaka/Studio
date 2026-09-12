@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/decalpropertywidget.h"
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
+#include "ui/panels/propertywidgets/mobilitypropertywidget.h"
 #include "ui/panels/propertywidgets/shaderpropertywidget.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 #include "ui/panels/propertywidgets/physicspropertywidget.h"
@@ -156,6 +157,13 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     transformWidget = transformPropView->addTransformControls();
     transformPropView->expand();
 
+    // MOVEMENT (REALTIME_REFLECTIONS_SPEC §3.3), right under Transformation:
+    // "does this move?" is a property of the OBJECT, not of its mesh, so it is
+    // its own blade and every node kind gets it.
+    mobilityPropView = new MobilityPropertyWidget();
+    mobilityPropView->setPanelTitle("Movement");
+    mobilityPropView->expand();
+
     physicsPropView = new PhysicsPropertyWidget();
     physicsPropView->setPanelTitle("Physics Properties");
 
@@ -212,6 +220,7 @@ QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
         fogPropView, worldPropView, skyPropView,
         worldModesPropView, worldGiPropView, worldPostFxPropView,
         worldAaPropView, worldShadowPropView, transformPropView,
+        mobilityPropView,
         physicsPropView, meshPropView, lightPropView, decalPropView,
         emitterPropView, cameraPostFxPropView, shaderPropView
     };
@@ -286,6 +295,11 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
         else {
             transformWidget->setSceneNode(sceneNode);
             mount(transformPropView);
+            // EVERY node kind: the resolution has an answer for all of them,
+            // and a light or an emitter is exactly the kind of thing an author
+            // needs to pin by hand.
+            mobilityPropView->setSceneNode(sceneNode);
+            mount(mobilityPropView);
 
             switch (sceneNode->getSceneNodeType()) {
                 case iris::SceneNodeType::Light: {
@@ -488,6 +502,7 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     if (worldPostFxPropView) worldPostFxPropView->setServices(services);
     if (lightPropView) lightPropView->setServices(services);
     if (meshPropView) meshPropView->setServices(services);
+    if (mobilityPropView) mobilityPropView->setServices(services);
     if (physicsPropView) physicsPropView->setServices(services);
     if (emitterPropView) emitterPropView->setServices(services);
     if (cameraPostFxPropView) cameraPostFxPropView->setServices(services);

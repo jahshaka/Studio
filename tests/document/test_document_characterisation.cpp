@@ -52,6 +52,7 @@
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/physics/physicsproperties.h"
+#include "irisgl/document/physics/avatarmovement.h"
 // The reparent command's cycle guard is header-only document logic (its
 // undo/redo bodies live in the app; only the static guard is exercised here).
 #include "commands/reparentscenenodecommand.h"
@@ -500,13 +501,13 @@ int main(int argc, char **argv)
             auto stat = iris::SceneNode::create();
             host->addChild(stat, false);
             CHECK(!stat->staticHint(), "static: a fresh node is dynamic");
-            stat->setStaticHint(true);
+            stat->_applyStaticHint(true);
             CHECK(!stat->isStaticInGraph(),
                   "static: refused under a dynamic parent (rule 2 — it would freeze there)");
             stat->_clearStaticHint();
 
             CHECK(host->isStaticEligible(), "static: a plain empty is eligible");
-            host->setStaticHint(true);
+            host->_applyStaticHint(true);
             CHECK(host->isStaticInGraph(), "static: a child of the scene root may be static");
 
             // RULE 1 — static is a SUBTREE property: marking `host` took its
@@ -515,12 +516,12 @@ int main(int argc, char **argv)
             CHECK(stat->isStaticInGraph(), "static: the whole subtree went with it (rule 1)");
 
             // ...and a static subtree still resolves its world transforms.
-            host->setStaticHint(false);
+            host->_applyStaticHint(false);
             host->setLocalPos(iris::Vec3(5, 0, 0));
-            host->setStaticHint(true);
-            stat->setStaticHint(false);
+            host->_applyStaticHint(true);
+            stat->_applyStaticHint(false);
             stat->setLocalPos(iris::Vec3(1, 0, 0));
-            stat->setStaticHint(true);
+            stat->_applyStaticHint(true);
             tScene->refresh();
             CHECK(approx(worldPos(stat), iris::Vec3(6, 0, 0)),
                   "static: a static subtree resolves against its parent");
@@ -541,9 +542,9 @@ int main(int argc, char **argv)
             auto lamp = iris::LightNode::create();
             tRoot->addChild(lamp, false);
             CHECK(!lamp->isStaticEligible(), "static: a light is never eligible");
-            lamp->setStaticHint(true);
+            lamp->_applyStaticHint(true);
             CHECK(!lamp->staticHint() && !lamp->isStaticInGraph(),
-                  "static: setStaticHint on a light changes nothing");
+                  "static: asking for the static graph class on a light changes nothing");
             lamp->removeFromParent();
 
             // Eligibility also refuses anything that is going to move: a
@@ -557,6 +558,14 @@ int main(int argc, char **argv)
             CHECK(!body->isStaticEligible(), "static: a socket rider is never eligible");
             body->setSocketAttachment(QString(), QString());
             CHECK(body->isStaticEligible(), "static: ...and eligible again once neither holds");
+            // AVATAR WRAPPERS, the gap mobility closed (REALTIME_REFLECTIONS_SPEC
+            // §2): a character walks every frame of play, and until 2026-09-12
+            // eligibility did not say so — the default policy marked it static
+            // and rule 4 demoted it after its first step.
+            body->setAvatarComponent(iris::AvatarMovementPtr(new iris::AvatarMovement()));
+            CHECK(!body->isStaticEligible(), "static: an avatar wrapper is never eligible");
+            body->setAvatarComponent(iris::AvatarMovementPtr());
+            CHECK(body->isStaticEligible(), "static: ...and eligible again once it is removed");
             body->removeFromParent();
 
             // THE DEFAULT POLICY: applyStaticDefaults marks a whole freshly
@@ -586,7 +595,7 @@ int main(int argc, char **argv)
             lampBranch->removeFromParent();
             branch->removeFromParent();
 
-            host->setStaticHint(false);
+            host->_applyStaticHint(false);
             host->removeFromParent();
         }
 

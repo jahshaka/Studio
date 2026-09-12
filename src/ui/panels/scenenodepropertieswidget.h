@@ -33,6 +33,7 @@ class EmitterPropertyWidget;
 class CameraPostFxPropertyWidget;
 class NodePropertyWidget;
 class MeshPropertyWidget;
+class MobilityPropertyWidget;
 class PhysicsPropertyWidget;
 class DemoPane;
 class IEditorViewport;
@@ -155,6 +156,10 @@ private:
 	/// library sky asset while one is — because a selection is exclusive.
 	SkyPropertyWidget *skyPropView;
 	MeshPropertyWidget* meshPropView;
+    /// MOVEMENT (REALTIME_REFLECTIONS_SPEC §3.3): the per-object mobility row,
+    /// mounted for EVERY node kind — a lamp on a swinging arm needs it as much
+    /// as a prop does.
+    MobilityPropertyWidget* mobilityPropView;
     PhysicsPropertyWidget *physicsPropView;
     DemoPane* demoPane;
 

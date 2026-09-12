@@ -1894,7 +1894,7 @@ int main(int argc, char **argv)
         pre->setMaterial(iris::PbrMaterial::create());
         pre->setName("static-before-attach");
         sdoc->getRootNode()->addChild(pre, false);
-        pre->setStaticHint(true);
+        pre->setMobility(iris::Mobility::Static);
         CHECK(pre->isStaticInGraph(), "static: marked before the mirror ever saw it");
 
         auto post = iris::MeshNode::create();
@@ -1912,19 +1912,122 @@ int main(int argc, char **argv)
               "static: both nodes reached the engine");
 
         // Now switch one that ALREADY has an Item: the Item has to travel.
-        post->setStaticHint(true);
+        post->setMobility(iris::Mobility::Static);
         CHECK(post->isStaticInGraph(),
               "static: a node with a live Item still switches (the Item goes with it)");
         smirror.sync();
         engine->renderOneFrame();
 
-        // ...and moving it puts both node and Item back (rule 4).
+        // ...and moving it puts both node and Item back (rule 4) — the GRAPH
+        // class only: the user's mobility setting survives a drag since
+        // REALTIME_REFLECTIONS_SPEC §3.3.3.
         post->setLocalPos(iris::Vec3(4, 0, 0));
         CHECK(!post->isStaticInGraph(), "static: the move demoted it again");
+        CHECK(post->mobility() == iris::Mobility::Static,
+              "mobility: ...and the move did NOT clear the user's setting");
         smirror.sync();
         engine->renderOneFrame();
         CHECK(true, "static: the scene still renders after both switches");
         smirror.setSource(nullptr);
+    }
+
+    // ---- MOBILITY REACHES THE ENGINE (REALTIME_REFLECTIONS_SPEC §3.3) ------
+    // The document resolves "does this move?"; the mirror pushes the answer per
+    // node, and the engine records it (lane R2 spends it). What is asserted
+    // here is the SEAM: the resolution the document computed is the one the
+    // engine holds, including rule 2's inheritance and the play-time soft
+    // promotion — none of which is visible in a pixel, which is why it needs a
+    // counter.
+    {
+        auto mdoc = iris::Scene::create();
+        auto still = iris::MeshNode::create();
+        still->setMesh(":assets/models/cube.obj");
+        still->setMaterial(iris::PbrMaterial::create());
+        still->setName("mobility-still");
+        mdoc->getRootNode()->addChild(still, false);
+
+        auto carrier = iris::SceneNode::create();
+        carrier->setName("mobility-carrier");
+        auto rider = iris::MeshNode::create();
+        rider->setMesh(":assets/models/cube.obj");
+        rider->setMaterial(iris::PbrMaterial::create());
+        rider->setName("mobility-rider");
+        rider->setLocalPos(iris::Vec3(3, 0, 0));
+        carrier->addChild(rider, false);
+        mdoc->getRootNode()->addChild(carrier, false);
+
+        SceneMirror mmirror(target);
+        mmirror.setSource(mdoc);
+        mmirror.sync();
+        engine->renderOneFrame();
+        const NodeId stillId = mmirror.engineNode(still.data());
+        const NodeId riderId = mmirror.engineNode(rider.data());
+        CHECK(stillId != 0 && riderId != 0, "mobility: both nodes reached the engine");
+        CHECK(!target->nodeMovable(stillId) && !target->nodeMovable(riderId),
+              "mobility: a still scene pushes NOTHING as movable");
+        CHECK(mmirror.movableNodeCount() == 0, "mobility: ...and the mirror counts zero");
+        CHECK(target->mobilityStatus().movableNodes == 0,
+              "mobility: ...and so does the engine");
+
+        // The carrier becomes a SIMULATED physics body: it and everything under
+        // it move. (Type matters — a body with no type is what the panel's
+        // Collision Shape row alone produces, and that does not move.)
+        carrier->isPhysicsBody = true;
+        carrier->physicsProperty.type = iris::PhysicsType::RigidBody;
+        mmirror.sync();
+        engine->renderOneFrame();
+        CHECK(target->nodeMovable(riderId),
+              "mobility: a driver on the PARENT makes the child movable in the engine (rule 2)");
+        CHECK(!target->nodeMovable(stillId), "mobility: ...and leaves the still node alone");
+        CHECK(mmirror.movableNodeCount() == 2,
+              "mobility: the mirror counts the carrier and its rider");
+        CHECK(target->mobilityStatus().movableNodes == 2,
+              "mobility: the ENGINE holds the same count (the push landed)");
+        CHECK(target->mobilityStatus().movableItems == 1,
+              "mobility: one of them carries geometry");
+
+        // ...and back. Nothing here is automatic in the other direction for a
+        // node that MOVED (§3.3.3), but removing the DRIVER is authoring.
+        carrier->isPhysicsBody = false;
+        carrier->physicsProperty.type = iris::PhysicsType::None;
+        mmirror.sync();
+        CHECK(!target->nodeMovable(riderId) && mmirror.movableNodeCount() == 0,
+              "mobility: removing the driver puts the branch back (authoring, not automatic)");
+
+        // ---- THE SURPRISE MOVER (O3): play only, warned once, no rebuild ---
+        const quint64 refreshesBefore = mmirror.giRefreshCount();
+        const quint64 pushesBefore = mmirror.giPushCount();
+        mdoc->setPlaying(true);
+        mmirror.sync();                       // the frame that sees it standing still
+        CHECK(mmirror.mobilityMissCount() == 0, "mobility: standing still during play is not a miss");
+        still->setLocalPos(iris::Vec3(0, 2, 0));
+        mmirror.sync();
+        CHECK(target->nodeMovable(stillId),
+              "mobility: a node that starts moving during play is movable from that frame");
+        CHECK(mmirror.mobilityMissCount() == 1 &&
+              mmirror.lastMobilityMiss() == QStringLiteral("mobility-still"),
+              "mobility: ...counted once, naming the node");
+        still->setLocalPos(iris::Vec3(0, 3, 0));
+        mmirror.sync();
+        still->setLocalPos(iris::Vec3(0, 4, 0));
+        mmirror.sync();
+        CHECK(mmirror.mobilityMissCount() == 1,
+              "mobility: ...and NOT once per frame it keeps moving (one warning per play session)");
+        CHECK(mmirror.giRefreshCount() == refreshesBefore && mmirror.giPushCount() == pushesBefore,
+              "mobility: the soft promotion costs NO GI refresh (that is the whole point of O3)");
+
+        // Play stop clears it: the document drops the soft flag, the mirror
+        // re-resolves, and the engine is told.
+        mdoc->setPlaying(false);
+        mmirror.sync();
+        CHECK(!target->nodeMovable(stillId) && mmirror.mobilityMissCount() == 1,
+              "mobility: play stop clears the promotion (the ghost bounce goes with it)");
+
+        // An explicit setting reaches the engine the same way.
+        still->setMobility(iris::Mobility::Movable);
+        mmirror.sync();
+        CHECK(target->nodeMovable(stillId), "mobility: an explicit Movable reaches the engine");
+        mmirror.setSource(nullptr);
     }
 
     // ---- SUN COUPLING: the sky's sun drives a directional light (F5) --------

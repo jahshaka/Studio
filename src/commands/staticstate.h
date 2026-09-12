@@ -31,17 +31,21 @@ namespace structuralundo
 // engine's per-frame transform and bounds passes, for the rest of the session
 // AND — since the override is what the serializer writes — across saves.
 //
+// (Since mobility, REALTIME_REFLECTIONS_SPEC §3.3.3, rule 4 clears the GRAPH
+// class only — the user's Static/Movable setting survives a move. The setting
+// is still captured here, because a REPARENT can change what resolves.)
+//
 // The fix is undo's job, not the graph's: capture the classification of the
 // whole subtree before the write, restore it after the undo. Both halves are
 // pre-order walks, which is also the order rule 2 needs (a node may only be
 // made static once its parent already is).
 struct StaticState
 {
-    /// Per node, in pre-order: the derived hint and the user's override
-    /// (iris::StaticOverride, as its underlying integer so this header does not
-    /// have to drag scenenode.h in).
+    /// Per node, in pre-order: the derived GRAPH hint and the user's MOBILITY
+    /// setting (iris::Mobility, as its underlying integer so this header does
+    /// not have to drag scenenode.h in).
     QVector<bool> hints;
-    QVector<quint8> overrides;
+    QVector<quint8> mobilities;
 
     bool isEmpty() const { return hints.isEmpty(); }
 };
