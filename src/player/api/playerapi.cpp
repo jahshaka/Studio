@@ -83,7 +83,7 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "so a shot taken through the editor viewport would photograph the editor's world state "
           "and call it the player. Works before the Player page has ever been shown. `probes` are "
           "the same 5x5 averages editor.screenshot returns, in normalized 0..1 image coordinates; "
-          "`grade` develops the shot the same three ways editor.screenshot does — \"raw\" (the default: a neutral, exactly-reproducible readback), \"tonemap\" (the deterministic filmic grade only, so a bright scene does not clip to white) or \"viewport\" (the scene's whole post chain). `postFx` is the older boolean spelling of raw/viewport and still works.",
+          "`grade` develops the shot exactly as editor.screenshot does — \"plain\" (also \"raw\"; the default: no post-processing at all, the neutral exactly-reproducible readback the pixel suites assert), \"tonemap\" (the thumbnail picture: the deterministic filmic grade only, so a bright scene does not clip to white), \"scene\" (the player's own picture: the whole post chain as the world has it, at the exposure the on-screen player view has converged on) or \"viewport\" (the whole chain with its own adaptive exposure re-seeded from the scene's value). `postFx` is the older boolean spelling of plain/viewport and still works.",
           Needs::Engine },
     };
 }
@@ -186,15 +186,21 @@ QVariantMap PlayerApi::screenshot(const QString &path, const QVariantMap &option
     IEditorViewport::ScreenshotGrade grade =
         options.value(QStringLiteral("postFx"), false).toBool()
             ? IEditorViewport::ScreenshotGrade::Viewport
-            : IEditorViewport::ScreenshotGrade::Raw;
+            : IEditorViewport::ScreenshotGrade::Plain;
     if (options.contains(QStringLiteral("grade"))) {
         const QString word = options.value(QStringLiteral("grade")).toString().trimmed().toLower();
-        if (word == QLatin1String("raw"))           grade = IEditorViewport::ScreenshotGrade::Raw;
+        // EVERY SPELLING THE DOC PROMISES, and it is the same list
+        // editor.screenshot takes — a verb whose parser is narrower than its
+        // own documentation is how the player's whole `scene` branch shipped
+        // unreachable in the first cut of this lane (lead review, item 1).
+        if (word == QLatin1String("plain") || word == QLatin1String("raw"))
+            grade = IEditorViewport::ScreenshotGrade::Plain;
         else if (word == QLatin1String("tonemap"))  grade = IEditorViewport::ScreenshotGrade::Tonemap;
+        else if (word == QLatin1String("scene"))    grade = IEditorViewport::ScreenshotGrade::Scene;
         else if (word == QLatin1String("viewport")) grade = IEditorViewport::ScreenshotGrade::Viewport;
         else {
             fail(QStringLiteral("player.screenshot: unknown grade '%1' "
-                                "(raw | tonemap | viewport)").arg(word));
+                                "(plain | raw | tonemap | scene | viewport)").arg(word));
             return out;
         }
     }

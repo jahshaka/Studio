@@ -2786,7 +2786,10 @@ void MainWindow::setupViewPort()
     auto containerLayout = new QVBoxLayout;
 
     auto screenShotBtn = new QPushButton;
-    screenShotBtn->setToolTip("Take a screenshot of the scene");
+    screenShotBtn->setToolTip(tr("Photograph the viewport at 1920x1080 — this camera, this lens, "
+                                 "and the world's own settings (global illumination, reflections, "
+                                 "ambient occlusion, bloom, anti-aliasing, the looks stack and the "
+                                 "exposure the view is currently at)"));
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
     screenShotBtn->setIcon(QIcon(":/icons/icons8-camera-48.png"));
@@ -4155,7 +4158,14 @@ void MainWindow::spaceKeyActiveSpace()
 
 void MainWindow::takeScreenshot()
 {
-    auto img = sceneView->takeScreenshot();
+    // THE USER'S DOOR, AND IT ASKS FOR THE SCENE'S OWN PICTURE (owner,
+    // 2026-09-13: "match the screenshot to the scene properly"). The grade is
+    // named here rather than left to the viewport's default because the default
+    // door is the THUMBNAIL grade and has other callers — project preview tiles
+    // and the asset viewer — which must stay cheap. See
+    // IEditorViewport::ScreenshotGrade for what each answer is a picture of.
+    auto img = sceneView->takeScreenshot(1920, 1080,
+                                         IEditorViewport::ScreenshotGrade::Scene);
     ScreenshotWidget screenshotWidget;
     screenshotWidget.setMaximumWidth(1280);
     screenshotWidget.setMaximumHeight(720);

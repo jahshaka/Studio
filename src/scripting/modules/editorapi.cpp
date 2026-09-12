@@ -524,13 +524,14 @@ QVector<VerbInfo> EditorApi::verbs() const
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"raw\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
-          "`grade` says how the shot is DEVELOPED, and the default is deliberately the dullest answer: "
-          "\"raw\" (or false) is no post-processing at all — the neutral, exactly-reproducible readback pixel assertions want, and what this verb has always returned. "
-          "\"tonemap\" applies the deterministic filmic grade ONLY (fixed exposure, no bloom, no ambient occlusion, no SMAA): a picture of the CONTENT that no longer clips to white wherever the scene is bright, and still the same picture every time. "
-          "\"viewport\" (or true) renders the scene's whole post-processing chain so the shot matches what the viewport shows, at the cost of the scene's ADAPTIVE exposure making it depend on how many frames it rendered. "
-          "The editor's own Screenshot action uses \"tonemap\".",
+          "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
+          "\"plain\" (also spelled \"raw\", or false) is NO POST-PROCESSING AT ALL — 1x MSAA, linear radiance clipped to 8 bits, the same pixels on every machine and in every frame. This is the picture the pixel suites assert and what this verb has always returned. "
+          "\"tonemap\" is the THUMBNAIL picture: the deterministic filmic grade only (the scene's exposure as a constant; no bloom, no ambient occlusion, no SMAA, no reflections), so a bright scene does not clip to white and a sweep of hundreds stays cheap. "
+          "\"scene\" is THE EDITOR'S OWN PICTURE and what the Screenshot button in the editor takes: the scene's WHOLE post chain exactly as the world has it — global illumination, screen-space reflections, ambient occlusion, bloom, SMAA, the looks stack, HDR and the tonemap — at this camera's pose and lens, graded at the exposure the on-screen viewport has currently converged on (carried across as a constant, so the shot is repeatable). A world with HDR switched off photographs ungraded, like the viewport. "
+          "\"viewport\" (or true) is the same whole chain but with the chain's OWN adaptive exposure re-seeded from the scene's (or the driving camera's) exposure value; an offscreen view lives about two frames and cannot converge, so it grades at that seed. It exists for camera.screenshot, where there is no on-screen view measuring the camera in question — for the editor camera prefer \"scene\". "
+          "The editor's own Screenshot action uses \"scene\"; project preview tiles and asset thumbnails use \"tonemap\".",
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
           "Opens a nested undo macro inside the script's run (finer-grained grouping).",
@@ -1960,27 +1961,30 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
     if (!requireEngine()) return out;
     if (path.isEmpty()) { fail("editor.screenshot: a file path is required"); return out; }
 
-    // THE GRADE (fix wave 2026-09-07 item 6). This argument was a BOOLEAN
-    // (`postFx`) and it stays compatible with one — false is Raw, true is
-    // Viewport — because the whole pixel-suite corpus passes it that way, and
-    // because Raw MUST remain the default: this verb is the tree's measuring
-    // instrument and its exact colours are what dozens of assertions pin.
-    // "tonemap" is the new third answer: the deterministic filmic grade alone,
-    // for a shot that should look like the editor rather than like a readback.
-    IEditorViewport::ScreenshotGrade mode = IEditorViewport::ScreenshotGrade::Raw;
+    // THE GRADE (IEditorViewport::ScreenshotGrade, where each answer is
+    // documented). This argument was a BOOLEAN (`postFx`) and it stays
+    // compatible with one — false is Plain, true is Viewport — because the
+    // whole pixel-suite corpus passes it that way, and because PLAIN MUST
+    // REMAIN THE DEFAULT: this verb is the tree's measuring instrument and its
+    // exact colours are what dozens of assertions pin. "scene" is the picture
+    // the editor's own Screenshot button takes (SS1).
+    IEditorViewport::ScreenshotGrade mode = IEditorViewport::ScreenshotGrade::Plain;
     if (!grade.isNull() && grade.isValid()) {
         const QVariant g = scriptmod::normalizeJs(grade);
         if (g.typeId() == QMetaType::Bool) {
             mode = g.toBool() ? IEditorViewport::ScreenshotGrade::Viewport
-                              : IEditorViewport::ScreenshotGrade::Raw;
+                              : IEditorViewport::ScreenshotGrade::Plain;
         } else {
             const QString word = g.toString().trimmed().toLower();
-            if (word == QLatin1String("raw"))           mode = IEditorViewport::ScreenshotGrade::Raw;
+            if (word == QLatin1String("plain") || word == QLatin1String("raw"))
+                mode = IEditorViewport::ScreenshotGrade::Plain;
             else if (word == QLatin1String("tonemap"))  mode = IEditorViewport::ScreenshotGrade::Tonemap;
+            else if (word == QLatin1String("scene"))    mode = IEditorViewport::ScreenshotGrade::Scene;
             else if (word == QLatin1String("viewport")) mode = IEditorViewport::ScreenshotGrade::Viewport;
             else {
                 fail(QStringLiteral("editor.screenshot: unknown grade '%1' "
-                                    "(raw | tonemap | viewport, or a boolean)").arg(g.toString()));
+                                    "(plain | raw | tonemap | scene | viewport, or a boolean)")
+                         .arg(g.toString()));
                 return out;
             }
         }

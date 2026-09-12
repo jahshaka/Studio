@@ -101,6 +101,28 @@ assert(noPath, "a screenshot with no path is refused");
 assert(player.play(), "play again for the running shot");
 var running = player.screenshot("player-running.png", { width: 64, height: 64, postFx: true });
 assert(running.width === 64, "a postFx shot of the RUNNING player came back");
+
+// EVERY GRADE THE VERB DOCUMENTS IS A GRADE THE VERB TAKES (SS1, lead review
+// item 1). The first cut of that lane shipped the player's parser accepting
+// only raw|tonemap|viewport while its own doc — and docs/SCRIPTING.md —
+// promised "plain" and "scene", so a script written from the shipped
+// documentation got "unknown grade", and the player's whole Scene branch was
+// unreachable code. One call per spelling; "scene" is the player's own picture
+// (the whole post chain at the player view's converged exposure).
+["plain", "raw", "tonemap", "scene", "viewport"].forEach(function (g) {
+    var shot = player.screenshot("player-grade-" + g + ".png",
+                                 { width: 64, height: 64, grade: g });
+    assert(shot.width === 64 && shot.height === 64,
+           "player.screenshot takes the grade its documentation promises: \"" + g + "\"");
+});
+var badGrade = false;
+try { player.screenshot("player-bad.png", { grade: "sepia" }); } catch (e) {
+    badGrade = true;
+    assert(e.message.indexOf("scene") > 0,
+           "and the refusal LISTS the grades it takes: " + e.message);
+}
+assert(badGrade, "an unknown player grade is refused, catchably");
+
 assert(player.stop(), "stop");
 
 console.log("e2e_player_verbs: ALL OK");
