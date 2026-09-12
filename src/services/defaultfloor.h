@@ -28,10 +28,13 @@ For more information see the LICENSE file
 //   * its OWN material — never a shared library row, never a library tile: the
 //     checker (the shipped tile.png, pinned into the project through the one
 //     import pipeline and content-identified, so every project reuses the same
-//     row), textureScale 4, roughness 1, metallic 0;
+//     row), textureScale 4, roughness 1, metallic 0, and NO SPECULAR AT ALL
+//     (owner, 2026-09-13: "the ground should not be reflective, it should have
+//     0 specular") — see kWorkflow/kIor/specularColor() below;
 //   * the document flag `defaultFloor` (irisgl MeshNode) — what the reset and
 //     the demos look for, never the name or the mesh path.
 
+#include <QColor>
 #include <QString>
 
 #include "irisgl/irisglfwd.h"
@@ -46,6 +49,42 @@ namespace defaultfloor {
 constexpr float kTextureScale = 4.0f;
 constexpr float kRoughness = 1.0f;
 constexpr float kMetallic = 0.0f;
+
+// A FLOOR WITH NO SPECULAR (owner, 2026-09-13, testing push #18: "the ground
+// should not be reflective, it should have 0 specular"). Two values carry it,
+// and BOTH are needed — measured on this pin, grazing camera, the default
+// scene, 5x5 probe averages (spikes/gf1-ground/):
+//
+//   today (metallic workflow, F0 0.04, kS white)   66 65 67 81
+//   F0 = 0 alone                                   61 59 59 74
+//   kS = 0 alone                                   61 59 59 72
+//   both                                           61 59 59 72
+//
+//   * kIor = 1.0 in the SPECULAR workflow: `setFresnel` is fed
+//     ((1 - ior) / (1 + ior))^2 = 0 (OgreMaterials.cpp applyPbr), so the floor's
+//     F0 is exactly zero — the index of refraction of air. In the METALLIC
+//     workflow F0 is not authorable at all: the shader computes
+//     lerp(0.04, albedo, metalness) (Hlms/Pbs/Any/Main/800.PixelShader_piece_ps
+//     .any:330), i.e. every dielectric reflects 4% of the sky, always. That 4%
+//     IS the sheen the owner saw.
+//   * specularColor (kS) BLACK: F0 = 0 is not the whole story. Direct light
+//     still carries Schlick's (1 - VdotH)^5 rim (200.BRDFs_piece_ps.any:9) and,
+//     once the LTC matrix is loaded, the environment term keeps an additive
+//     envBRDF.y bias (:306-308). kS multiplies EVERY specular path in every
+//     workflow (OgreHlmsPbsDatablock.h:441-447), so zeroing it is the only
+//     complete answer — worth 2/255 at the near probe above.
+//
+// MAKING A FLOOR REFLECTIVE AGAIN (it must stay possible — a mirror floor is a
+// legitimate scene): raise Specular Color back to white in the material panel —
+// that one row is the master switch — and give it an IOR (1.5 is the dielectric
+// default) or switch Workflow to Metallic, then lower Roughness. Applying any
+// other material to the floor (drag a library material onto it, or
+// material.apply) is untouched by all of this; `material.reset` brings the
+// matte default back.
+constexpr int   kWorkflow = 1;     ///< PbrMaterial's Specular workflow: the fresnel rows are the read ones
+constexpr float kIor = 1.0f;       ///< -> setFresnel(0): no reflectance at any angle
+QColor specularColor();            ///< kS: black, the master switch on every specular path
+
 QString meshPath();          ///< ":/models/ground.obj"
 QString shippedTilePath();   ///< the shipped checker the tile row is minted from
 
