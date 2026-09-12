@@ -55,7 +55,12 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // the stage list reads in order. The one frame they can disagree on is
         // the first after a viewport is shown by beforeFrame itself, which
         // loses one gap stage and nothing else.
-        FrameMonitor::instance().noteTickStart(mEngine && mEngine->hasEnabledViews());
+        // SHORT-CIRCUITED ON THE FLAG FIRST: with no capture running this must
+        // not even ask the engine (hasEnabledViews is a virtual call, and the
+        // tick already makes that call once below — "free when off" means the
+        // off path is unchanged, not merely cheap).
+        FrameMonitor::instance().noteTickStart(framemonitor::active() && mEngine
+                                               && mEngine->hasEnabledViews());
         if (framemonitor::active() && mEngine)
             mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Driver);
         emit beforeFrame();
