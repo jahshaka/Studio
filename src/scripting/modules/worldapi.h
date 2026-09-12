@@ -67,6 +67,7 @@ public:
     /// cubemap with their guids. Returns the face guids by slot.
     Q_INVOKABLE QVariantMap skyPreset(const QString &name);
     Q_INVOKABLE QString sunLight(const QVariant &light = QVariant());
+    Q_INVOKABLE QVariantMap sun();
     Q_INVOKABLE QVariantMap get();
 
     // ---- World Modes (POST_CHAIN_SPEC.md §9.6) -----------------------------

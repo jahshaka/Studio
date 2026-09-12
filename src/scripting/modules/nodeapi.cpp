@@ -187,6 +187,20 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "planarReflector", "node.planarReflector(id) -> bool",
           "Whether this object is a planar reflection plane.",
           Needs::Document },
+        { "setCastShadow", "node.setCastShadow(id, enabled) -> bool",
+          "PER-OBJECT SHADOW CASTING — Unreal's Cast Shadow tick. False takes this object out of "
+          "EVERY shadow map (the sun's cascades, every lamp's, the mirrors' and the reflection "
+          "probes') while leaving it fully lit and fully visible: it stops darkening the room, it "
+          "does not disappear. It is the escape hatch for the things that should not cast — a "
+          "ground plane, a sky dome, a backdrop, a decorative interior shell — and it is what to "
+          "reach for when a lighting channel does not do what you expected, because CHANNELS DO "
+          "NOT FILTER SHADOWS (node.setLightMask says so too). The default scene's Ground has been "
+          "marked this way since long before it worked. Cheap: one flag on the object, no rebuild, "
+          "and the lamps that could see it re-render in the frame it changes. Undoable.",
+          Needs::Document },
+        { "castShadow", "node.castShadow(id) -> bool",
+          "Whether this object casts shadows. True unless somebody turned it off.",
+          Needs::Document },
         { "setLightMask", "node.setLightMask(id, channels) -> bool",
           "LIGHTING CHANNELS — \"this light only affects these objects\". Set on a LIGHT it is "
           "the set of channels the light illuminates; set on an OBJECT it is the set of channels "
@@ -391,6 +405,28 @@ bool NodeApi::setPlanarReflector(const QString &id, bool enabled)
                    [node, vp, enabled]() { planarreflectors::set(node, enabled, vp, nullptr); },
                    [node, vp, was]() { planarreflectors::set(node, was, vp, nullptr); });
     return true;
+}
+
+bool NodeApi::setCastShadow(const QString &id, bool enabled)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setCastShadow"));
+    if (!node) return false;
+    const bool was = node->getShadowCastingEnabled();
+    if (was == enabled) return true;       // idempotent, and no undo entry for a no-op
+    node->setShadowCastingEnabled(enabled);
+    // The MIRROR pushes it to the renderer on the next sync, like every other
+    // node flag — there is no second, direct engine call to keep in step.
+    recordNodeEdit(QStringLiteral("cast shadow"),
+                   [node, enabled]() { node->setShadowCastingEnabled(enabled); },
+                   [node, was]() { node->setShadowCastingEnabled(was); });
+    return true;
+}
+
+bool NodeApi::castShadow(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.castShadow"));
+    if (!node) return false;
+    return node->getShadowCastingEnabled();
 }
 
 bool NodeApi::planarReflector(const QString &id)

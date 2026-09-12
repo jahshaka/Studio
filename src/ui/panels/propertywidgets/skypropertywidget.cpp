@@ -485,16 +485,24 @@ void SkyPropertyWidget::addSunLinkRow()
 	sunDrivesLight = nullptr;
 	auto live = liveScene();
 	if (!live) return;
-	sunDrivesLight = this->addCheckBox("Drive Selected Directional Light",
-									   !live->sunLightGuid.isEmpty());
+	// IT STEERS THE SUN, and it no longer PICKS a light (SUN_AND_LIGHT_DEFAULTS
+	// Q1/Q1e). This row used to write the scene's sunLight guid, which meant
+	// one field answered two different questions — "which directional light is
+	// the sun" and "does the sky aim it" — and you could not have one without
+	// the other. Which light is the sun is now the World panel's Sun row and
+	// the light's own Forward Shading Priority; this is only the steering.
+	sunDrivesLight = this->addCheckBox("The Sky's Sun Steers the Sun Light",
+									   live->skyDrivesSun);
 	// addCheckBox drops its `value` argument (accordionbladewidget.cpp:216) —
 	// the same pre-existing defect the Ambient From Sky row works around.
-	sunDrivesLight->setValue(!live->sunLightGuid.isEmpty());
+	sunDrivesLight->setValue(live->skyDrivesSun);
 	sunDrivesLight->setToolTip(QStringLiteral(
-		"Point a directional light down the sky's sun: the Sun Azimuth and Sun Elevation dials "
-		"then drive its rotation, so the shadows and the lighting follow the sky. Uses the "
-		"selected directional light, or the scene's first one if the selection is something "
-		"else. Turning it off gives the light back the rotation it had before it was linked."));
+		"Aim this scene's SUN — its primary directional light — down the sky's sun: the Sun "
+		"Azimuth and Sun Elevation dials then drive its rotation, so the shadows and the lighting "
+		"follow the sky. The sun is the directional light with the lowest Forward Shading "
+		"Priority (the World panel's Sun row says which one, and lets you pin another). In a "
+		"scene with no directional light there is nothing to steer and this does nothing. "
+		"Turning it off gives the light back the rotation it had before."));
 	connect(sunDrivesLight, &CheckBoxWidget::valueChanged,
 			this, &SkyPropertyWidget::onSunDrivesLightChanged);
 }
@@ -503,13 +511,12 @@ void SkyPropertyWidget::onSunDrivesLightChanged(bool on)
 {
 	auto live = liveScene();
 	if (loading || !live) return;
-	const iris::SceneNodePtr selected =
-		(services && services->selection) ? services->selection->selected() : iris::SceneNodePtr();
 	// sunlink::setDriven records its OWN undo step (SunLightLinkCommand) — the
-	// same one world.sunLight pushes.
-	const QString linked = sunlink::setDriven(live, services, on, selected);
-	// A scene with no directional light cannot honour the request: put the box
-	// back rather than leaving it showing a coupling that does not exist.
+	// same one world.sky's `drivesSun` parameter pushes. It no longer takes the
+	// selection: the sun is resolved by the scene, not by what is highlighted.
+	const QString linked = sunlink::setDriven(live, services, on);
+	// A scene with no directional light has no sun to steer: put the box back
+	// rather than leaving it showing a coupling that does not exist.
 	if (on && linked.isEmpty() && sunDrivesLight) {
 		QSignalBlocker block(sunDrivesLight);
 		sunDrivesLight->setValue(false);

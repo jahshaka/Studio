@@ -12,14 +12,18 @@ For more information see the LICENSE file
 #ifndef SUNLINK_H
 #define SUNLINK_H
 
-// Sun coupling, panel side (VISUAL_PARITY re-audit F5).
+// Sun STEERING, panel side (SUN_AND_LIGHT_DEFAULTS_SPEC Q1/Q1e).
 //
-// The sky panel and the verb both carry the "drive a directional light"
-// toggle, so the three lines of policy live here instead of in either of them:
-// which light a toggle would pick, and how the toggle is applied so it lands as
-// one undo step on the same command `world.sunLight` uses. (It was written for
-// TWO sky panels; they are one implementation since debt L6, and this is still
-// the right home for the policy — the verb is the other caller.)
+// The sky panel's "The Sky's Sun Steers the Sun Light" checkbox, and nothing
+// else. WHICH light is the sun is not decided here and is not decided anywhere
+// else either: `iris::Scene::sunLight()` is the ONE resolver, and this file's
+// own depth-first "the selected directional, else the first one in traversal
+// order" rule — one of the three that could disagree with each other — is gone
+// with it (it changed its answer silently when a light was re-parented).
+//
+// What is left is the one line of policy the checkbox needs: how the toggle is
+// applied so it lands as a single undo step on the same command `world.sky`'s
+// `drivesSun` parameter uses.
 
 #include <QString>
 
@@ -30,21 +34,14 @@ struct StudioServices;
 namespace sunlink
 {
 
-/// The light a "drive the sky's sun" toggle would link right now: the SELECTED
-/// node when it is a directional light, else the scene's first directional
-/// light in creation order. Null when the scene has no directional light —
-/// which is the one case the toggle has to refuse.
-iris::LightNodePtr resolveTarget(const iris::ScenePtr &scene,
-                                 const iris::SceneNodePtr &selected);
-
-/// Turns the coupling on or off. `on` links resolveTarget()'s light; !on
-/// unlinks and hands the light back the rotation it had before it was driven.
+/// Turns the sky's steering on or off. While it is on, the realistic sky's Sun
+/// Azimuth/Elevation dials drive the SUN's rotation, whichever light that is;
+/// turning it off hands that light back the rotation it had before.
 /// Pushed through the undo stack when `services` has one, applied directly
-/// otherwise (headless, tests). Returns the guid that is linked afterwards —
-/// empty when unlinked OR when the request was refused for want of a light,
-/// so a caller can put its checkbox back where it was.
-QString setDriven(const iris::ScenePtr &scene, StudioServices *services, bool on,
-                  const iris::SceneNodePtr &selected);
+/// otherwise (headless, tests). Returns the guid of the light being steered
+/// afterwards — empty when steering is off OR when the scene has no directional
+/// light to steer, so a caller can put its checkbox back where it was.
+QString setDriven(const iris::ScenePtr &scene, StudioServices *services, bool on);
 
 }
 

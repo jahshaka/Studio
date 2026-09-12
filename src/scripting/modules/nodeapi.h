@@ -66,6 +66,12 @@ public:
     Q_INVOKABLE bool setParticleTexture(const QString &id, const QString &assetGuid);
     Q_INVOKABLE QVariant particleTexture(const QString &id);
     Q_INVOKABLE bool setPlanarReflector(const QString &id, bool enabled);
+    /// PER-OBJECT SHADOW CASTING (SUN_AND_LIGHT_DEFAULTS §2.4). The document
+    /// has carried iris::SceneNode::castShadow for years with nothing pushing
+    /// it anywhere; these are the verbs at the front of the wire the sun lane
+    /// finished (mirror -> Scene::setNodeCastShadow -> Item::setCastShadows).
+    Q_INVOKABLE bool setCastShadow(const QString &id, bool enabled);
+    Q_INVOKABLE bool castShadow(const QString &id);
     Q_INVOKABLE bool planarReflector(const QString &id);
     Q_INVOKABLE bool setLightMask(const QString &id, const QVariant &channels);
     Q_INVOKABLE QVariant lightMask(const QString &id);

@@ -6,7 +6,11 @@
 //   1. a new scene stands on THE default floor — found by its document flag
 //      (node.property(id, "defaultFloor")), never by its name — wearing its
 //      OWN material: the checker (the shipped tile, pinned), textureScale 4,
-//      roughness 1, metallic 0; the tile is a tray tile, the floor is not;
+//      roughness 1, metallic 0, and NO SPECULAR (owner 2026-09-13: "the ground
+//      should not be reflective, it should have 0 specular" — the Specular
+//      workflow at ior 1.0 with a black kS, services/defaultfloor.h); the tile
+//      is a tray tile, the floor is not; what it LOOKS like at a grazing angle
+//      is scripting.e2e.default_ground, which has a camera;
 //   2. a user's edits to that material are undone by material.reset — ONE
 //      undo step;
 //   3. a LIBRARY material applied to the floor (material.apply) joins the
@@ -43,6 +47,9 @@ function isFloorDefault(id, tag) {
            tag + ": the floor wears its own default — the checker, textureScale 4, roughness 1, "
            + "metallic 0 (" + J({ map: ("" + m.baseColorMap).length > 0, textureScale: m.textureScale,
                                    roughness: m.roughness, metallic: m.metallic }) + ")");
+    assert(m.workflow === 1 && near(m.ior, 1) && String(m.specularColor).toLowerCase() === "#000000",
+           tag + ": ...and NO SPECULAR — the Specular workflow at ior 1.0 (F0 = 0) with a black kS ("
+           + J({ workflow: m.workflow, ior: m.ior, specularColor: m.specularColor }) + ")");
     return m;
 }
 
@@ -67,8 +74,10 @@ assert(tile.length === 1 && trayGuids().indexOf(tile[0].guid) >= 0,
 assert(trayGuids().indexOf(floor) < 0, "... and the floor itself is not (a node, not a library asset)");
 
 // ---- 2. the user's edits, reset ---------------------------------------------
-assert(material.set(floor, { roughness: 0.25, metallic: 0.6, textureScale: 1, baseColor: "#ff2020" }),
-       "the user customises the floor's own material");
+assert(material.set(floor, { roughness: 0.25, metallic: 0.6, textureScale: 1, baseColor: "#ff2020",
+                            workflow: 0, ior: 1.5, specularColor: "#ffffff" }),
+       "the user customises the floor's own material — a POLISHED, reflective floor, which is "
+       + "exactly what the reset has to be able to undo");
 assert(near(material.get(floor).roughness, 0.25), "... roughness 0.25 took");
 var pushes = editor.undoState().pushes;
 assert(material.reset(floor) === true, "material.reset(the floor)");

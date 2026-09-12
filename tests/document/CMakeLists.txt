@@ -95,3 +95,22 @@ add_test(NAME document.physics_restart COMMAND test_physics_restart
 set_tests_properties(document.physics_restart PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120)
 jah_no_display(document.physics_restart)
+
+# document.light_defaults — SHADOWS ON BY DEFAULT and THE ONE SUN RESOLVER
+# (SPECS/SUN_AND_LIGHT_DEFAULTS_SPEC.md). The constructor's shadow default, the
+# scene's uninitialised master switch, and the whole contract of
+# iris::Scene::sunLight(): pin, priority, the TIE, and "this scene has no sun"
+# as a normal answer. Document only: NULL render system, no display.
+add_executable(test_light_defaults test_light_defaults.cpp)
+set_target_properties(test_light_defaults PROPERTIES AUTOMOC OFF)
+target_include_directories(test_light_defaults PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_light_defaults PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_light_defaults)
+add_test(NAME document.light_defaults COMMAND test_light_defaults
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.light_defaults PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.light_defaults)

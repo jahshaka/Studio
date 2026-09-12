@@ -210,10 +210,17 @@ void SceneEditService::addSpotLight()
 void SceneEditService::addDirectionalLight()
 {
     auto node = iris::LightNode::create();
-    node->shadowMap->shadowType = iris::ShadowMapType::Soft;
+    // (The re-statement of ShadowMapType::Soft that used to be here is gone —
+    // CRUD: the constructor is the ONE place the shadow default lives, and a
+    // second copy of it is a second thing to forget.)
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(":/icons/light.png");   // the sun glyph
     node->setName("Directional Light");
+    // AUTOMATIC FORWARD SHADING PRIORITY (owner decision Q1): the first
+    // directional light in a scene takes 0 and IS the sun; a second slots into
+    // 1, a third into 2. Nothing is decided by creation luck, and the author
+    // can still change the row afterwards.
+    if (auto s = scene()) node->forwardShadingPriority = s->nextForwardShadingPriority();
     addNodeToScene(node);
 }
 

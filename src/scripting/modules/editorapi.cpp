@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "io/sceneformat.h"
 #include "services/services.h"
 #include "services/playbackservice.h"
+#include "services/sceneissues.h"
 #include "services/sceneeditservice.h"
 #include "services/clipboardservice.h"
 #include "services/selectionservice.h"
@@ -469,6 +470,50 @@ QVector<VerbInfo> EditorApi::verbs() const
           "reached the renderer at all. `available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
+          Needs::Document },
+        { "issues", "editor.issues(includeDismissed=true) -> [{id, kind, node, nodeName, message, action, dismissed}]",
+          "THE SCENE-ERROR AREA — the things wrong with the OPEN SCENE that the person using the "
+          "editor can fix, shown in the viewport beside the frame-rate readout and listed here. "
+          "The rule that decides what belongs in it: if you can fix it in your scene it is an "
+          "issue; if it exists for us to debug the engine it stays in the log (app.engineErrors, "
+          "log.tail, and the monitor's capture bundle). So there are never shader compiles, cache "
+          "misses or pass counts here. Every issue NAMES the object it is about (`node` is a guid "
+          "you can pass straight to editor.select) and says what to DO about it (`action`), and it "
+          "never repeats itself: raising one that is already live changes nothing at all. "
+          "`dismissed` is true for one the user waved away — it stays live, so nothing can nag "
+          "with it again, and it comes back only after the condition has gone and returned. "
+          "Pass false to list only what is actually on screen.",
+          Needs::Document },
+        { "raiseIssue", "editor.raiseIssue({kind, node, message, action, id}) -> id",
+          "Raises a scene issue, or does NOTHING and returns the same id when one with that id is "
+          "already live. `kind` is required and is the machine-readable class (\"sun.tie\", "
+          "\"shadow.leak\", or your own); `message` is required and is what is wrong in plain "
+          "words; `node` is the guid of the object it is about, `action` what to do about it, and "
+          "`id` defaults to \"<kind>:<node>\", which is what makes repeats free. Use it for "
+          "conditions a user can fix — never for engine diagnostics, which belong in the log.",
+          Needs::Document },
+        { "dismissIssue", "editor.dismissIssue(id) -> bool",
+          "Hides a scene issue the way the user's dismiss button does: it stays LIVE, so nothing "
+          "can raise it again, and it is gone from the viewport. False when there is no such "
+          "issue. editor.clearIssue(id) is the other half — \"the condition is gone\" — and after "
+          "it the next occurrence is shown again.",
+          Needs::Document },
+        { "clearIssue", "editor.clearIssue(id) -> bool",
+          "Forgets a scene issue entirely, which is what \"the scene was fixed\" means: a later "
+          "raise of the same id is a new event and is shown again, dismissed or not. The scanner "
+          "(editor.checkScene) does this for its own kinds by itself. False when there is no such "
+          "issue.",
+          Needs::Document },
+        { "checkScene", "editor.checkScene() -> {issues, visible, raised:[id], list:[...]}",
+          "Runs the scene checker once against the open scene and returns what is live afterwards "
+          "— the same thing the editor does on a timer, exposed so a script or a test can drive "
+          "it. It knows two conditions today, both of which used to reach nobody: \"sun.tie\", "
+          "two directional lights set to the same Forward Shading Priority, so which one is the "
+          "sun comes out of a tie-break the author never chose; and \"shadow.leak\", a light "
+          "whose shadows are switched off standing close enough to solid geometry to light "
+          "straight through it. Conditions that have been fixed are cleared, so this is safe to "
+          "call as often as you like. `raised` names the issues this call raised for the first "
+          "time (empty on a second identical call — the never-repeat rule).",
           Needs::Document },
         { "dropPointAt", "editor.dropPointAt(x, y) -> {x, y, z} | null",
           "WHERE A DROP AT THIS VIEWPORT PIXEL LANDS, in world space: the surface under the "
@@ -1845,6 +1890,68 @@ QVariantMap EditorApi::mirrorStats()
     // world.giStatus() (§3.3.4), where R2's counters live.
     out.insert("movableNodes", QVariant::fromValue(s.movableNodes));
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// THE SCENE-ERROR AREA (services/sceneissues.h) — API FIRST
+// ---------------------------------------------------------------------------
+// The verbs are the model's whole surface; the viewport's error bar reads the
+// same store and adds nothing. All Needs::Document: an issue is a statement
+// about the document, and a headless run must be able to make and read one (it
+// is how the suite proves the never-repeat rule without a window).
+QVariantList EditorApi::issues(bool includeDismissed)
+{
+    return SceneIssues::instance().toVariant(includeDismissed);
+}
+
+QString EditorApi::raiseIssue(const QVariantMap &issue)
+{
+    SceneIssue out;
+    out.kind = issue.value(QStringLiteral("kind")).toString().trimmed();
+    out.message = issue.value(QStringLiteral("message")).toString().trimmed();
+    if (out.kind.isEmpty()) {
+        fail(QStringLiteral("editor.raiseIssue: 'kind' is required (the issue's class, e.g. "
+                            "'sun.tie')"));
+        return QString();
+    }
+    if (out.message.isEmpty()) {
+        fail(QStringLiteral("editor.raiseIssue: 'message' is required — an issue with nothing to "
+                            "say cannot help anyone"));
+        return QString();
+    }
+    out.node = issue.value(QStringLiteral("node")).toString();
+    out.action = issue.value(QStringLiteral("action")).toString();
+    out.id = issue.value(QStringLiteral("id")).toString();
+    // The name is resolved HERE and stored, so a message keeps naming the thing
+    // it was raised about even after the node is renamed or deleted.
+    if (!out.node.isEmpty()) {
+        if (auto scene = (host.services && host.services->sceneEdit)
+                              ? host.services->sceneEdit->scene() : iris::ScenePtr()) {
+            auto node = scene->nodes.value(out.node);
+            if (node) out.nodeName = node->getName();
+        }
+    }
+    return SceneIssues::instance().raise(out);
+}
+
+bool EditorApi::dismissIssue(const QString &id) { return SceneIssues::instance().dismiss(id); }
+
+bool EditorApi::clearIssue(const QString &id) { return SceneIssues::instance().clear(id); }
+
+QVariantMap EditorApi::checkScene()
+{
+    auto &store = SceneIssues::instance();
+    QStringList before;
+    for (const auto &i : store.issues(true)) before << i.id;
+    store.scan((host.services && host.services->sceneEdit)
+                   ? host.services->sceneEdit->scene() : iris::ScenePtr());
+    QVariantList raised;
+    for (const auto &i : store.issues(true))
+        if (!before.contains(i.id)) raised.append(i.id);
+    return QVariantMap{ { QStringLiteral("issues"), store.issues(true).size() },
+                        { QStringLiteral("visible"), store.visibleCount() },
+                        { QStringLiteral("raised"), raised },
+                        { QStringLiteral("list"), store.toVariant(true) } };
 }
 
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,

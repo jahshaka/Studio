@@ -135,6 +135,14 @@ private:
     QPushButton *maskClear = nullptr;
     QLabel *maskNote = nullptr;
 
+    /// THE SUN, directional lights only (SUN_AND_LIGHT_DEFAULTS Q1). The
+    /// readout says which light IS the sun and why; the number is the row that
+    /// decides it. Both hidden on every other light type.
+    class LabelWidget*      sunReadout = nullptr;
+    class DragFloatWidget*  forwardShadingPriority = nullptr;
+    /// Re-reads the scene's sun and re-labels the two rows above.
+    void refreshSunRows();
+
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;
     HFloatSliderWidget* shadowBias;

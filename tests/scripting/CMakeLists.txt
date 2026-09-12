@@ -89,6 +89,11 @@ add_script_e2e(fragments e2e_fragments.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+# GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
+# a high oblique view (the two things the owner reported while testing push #18).
+# The document half of the floor is scripting.e2e.default_floor, which is
+# headless; this one needs a camera.
+add_script_e2e(default_ground e2e_default_ground.js)
 # HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
 # roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts
@@ -257,6 +262,12 @@ add_script_e2e(presentation_state e2e_presentation_state.js)
 # directional light to the realistic sky's sun, the light follows the dials,
 # unlinking gives manual control back, and the link is a document field.
 add_script_e2e(sun_light e2e_sun_light.js)
+# SUN_AND_LIGHT_DEFAULTS_SPEC Q1b/Q1c: THE SCENE-ERROR AREA. The general
+# facility (raise / never repeat / dismiss / clear / scan) and its two first
+# customers — two directional lights fighting to be the sun, and a light whose
+# shadows are off standing over something it lights straight through. Plus the
+# case that is deliberately NOT an issue: a scene with no directional light.
+add_script_e2e(scene_issues e2e_scene_issues.js)
 add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 

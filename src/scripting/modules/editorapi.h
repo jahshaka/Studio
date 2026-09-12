@@ -97,6 +97,14 @@ public:
     Q_INVOKABLE QVariant dropPointAt(double x, double y);
     Q_INVOKABLE QVariantMap viewportState();
     Q_INVOKABLE QVariantMap mirrorStats();
+    /// THE SCENE-ERROR AREA (services/sceneissues.h). Document verbs: the store
+    /// is a document-side model, so a --headless run can raise, list, dismiss
+    /// and scan exactly as the editor does — the viewport bar is only a view.
+    Q_INVOKABLE QVariantList issues(bool includeDismissed = true);
+    Q_INVOKABLE QString raiseIssue(const QVariantMap &issue);
+    Q_INVOKABLE bool dismissIssue(const QString &id);
+    Q_INVOKABLE bool clearIssue(const QString &id);
+    Q_INVOKABLE QVariantMap checkScene();
     Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256,
                                        const QVariantList &probes = QVariantList(),
                                        const QVariant &grade = QVariant());
