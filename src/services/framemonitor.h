@@ -162,8 +162,10 @@ public:
     /// tick ended and splits it into idle (the event loop was blocked, waiting)
     /// and UI (the event loop was busy with something else).
     void noteTickStart();
-    /// The render driver, at the end of a tick: drains what the engine has
-    /// published so far and re-arms the gap clock.
+    /// The end of a rendered frame — the render driver's tick, and the
+    /// viewport's scripted `editor.frame` loop, which renders with the driver
+    /// idle. Drains what the engine has published so far and re-arms the gap
+    /// clock (so the "gap" is always the time since anything last rendered).
     void noteTickEnd();
     /// The shell, after it really showed a toast this object asked for — so the
     /// event log carries the toast's LIFETIME and analysis knows which frames

@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QThreadPool>
 
 #include "bridge/enginehost.h"
+#include "services/framemonitor.h"
 #include "scripting/scriptengine.h"
 #include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
@@ -46,6 +47,14 @@ int finalizeAppExit(int rc)
     // main-thread watchdog normally stops. Stopping it again here is a no-op
     // for the window-close path and the only stop the CLI paths get.
     MainThreadWatchdog::stop();
+
+    // A CAPTURE STILL RUNNING IS FINISHED AND WRITTEN, here, before the engine
+    // goes: the bundle's records live in the engine's ring until they are
+    // drained, so quitting mid-capture would otherwise throw away everything
+    // the owner was recording when they hit the problem — which is exactly the
+    // capture worth keeping. Stopping it is idempotent and a no-op when nothing
+    // is running.
+    FrameMonitor::instance().stop();
 
     // The engine borrows Qt's X display: release it before QApplication goes away.
     EngineHost::instance().shutdown();

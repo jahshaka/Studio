@@ -1856,6 +1856,12 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         // run would be the one place failures stay silent — which is exactly
         // where the gates live (services/engineerrorpump.h).
         EngineErrorPump::instance().drain(mEngine.get());
+        // AND THE MONITOR'S RING, for the same reason the driver drains at the
+        // end of its tick: a capture taken while a script runs has no driver
+        // ticks at all (the script holds the UI thread), so without this every
+        // record would sit in the engine's ring until the capture stopped — and
+        // a run that threw, or an app that quit, would take them with it.
+        FrameMonitor::instance().noteTickEnd();
     }
     // Scripted stepping is the deterministic path: editor.frame(2) must be
     // enough to take the cover down, exactly as two driver frames would.

@@ -55,10 +55,17 @@ world.refreshGi();
 editor.frame(8);
 
 // A PERMUTATION NOTHING HAS SEEN YET -> a shader compile inside the window.
-// Fog is an Hlms piece: switching it on re-compiles every material's shader,
-// which is the most reliable compile a script can ask for.
-scene.addPrimitive("sphere", { position: { x: 2, y: 1, z: 0 } });
+// MSAA IS A SHADER PROPERTY (HlmsBaseProp::MsaaSamples, set from the target's
+// sample description — SHADER_CACHE_SPEC's warm-up shape exists because of it),
+// so changing the sample count recompiles every material's shader. Measured
+// 2026-09-12: fog alone compiled NOTHING here, because the startup warm-up had
+// already produced the fog variants — the suite asks for something the warm-up
+// cannot have covered, and asks three ways (MSAA, fog, a particle system).
+world.setAntiAliasing(4);
+editor.frame(8);
 world.setFog({ enabled: true, density: 0.02 });
+scene.addPrimitive("sphere", { position: { x: 2, y: 1, z: 0 } });
+scene.addParticles("fire", { position: { x: 1, y: 1, z: 0 } });
 editor.frame(10);
 
 // The numbers the files cannot state about themselves.
