@@ -39,7 +39,8 @@ function vecEq(a, b) {
 // The fields a rebuild could move. A reading taken on the same scene with
 // nothing rebuilt must agree on every one of them.
 function sameGi(a, b, what) {
-    var keys = ["mode", "probeCount", "pccBound", "vctBound", "ifdBound", "ifdProbes",
+    var keys = ["mode", "probeCount", "pccBound", "probeGridRefused", "probeEnclosedAxes",
+                "vctBound", "ifdBound", "ifdProbes",
                 "probeUpdatesPerFrame", "cubemapProbeSlotsPerCell",
                 "probesClampedToRegion", "probeHdr", "probeShadows", "rebuilds"];
     for (var i = 0; i < keys.length; ++i) {
@@ -79,7 +80,19 @@ var m0 = editor.mirrorStats();
 console.log("before: " + JSON.stringify(st0) + " mirror " + JSON.stringify(m0));
 assert(st0.live === true, "giStatus is live");
 assert(st0.mode === "vct_pcc_hybrid", "the default project runs the VCT + probes hybrid");
-assert(st0.pccBound && st0.vctBound, "the editor scene owns the GI binding");
+// THE DEFAULT PROJECT IS AN OPEN SCENE, AND SINCE 2026-09-13 THAT MEANS NO
+// PROBE GRID (owner decision Q3: "a user starts in the editor in a new project
+// with an open scene ... I would think the sky is your first reflection
+// asset."). The renderer MEASURES the enclosure — a ground plane and a cube are
+// enclosed on no axis — and declines the grid, leaving the sky cubemap bound as
+// the reflection source and cone tracing carrying the bounce. So the binding
+// this page-switch suite follows is the VOXEL one, and `probeGridRefused` is
+// asserted here so that "pccBound false" can never quietly become the old
+// silent hybrid-degradation failure instead.
+assert(st0.vctBound, "the editor scene owns the GI binding");
+assert(st0.pccBound === false && st0.probeCount === 0 && st0.probeGridRefused === true,
+       "...and the default open scene has no probe grid, by decision: " +
+       JSON.stringify({ enclosedAxes: st0.probeEnclosedAxes, refused: st0.probeGridRefused }));
 assert(m0.available === true, "mirrorStats available");
 
 // ---- phase 1: editor -> assets / materials -> editor ------------------------
@@ -108,7 +121,7 @@ assert(app.space("editor"), "back to the editor");
 var st2 = settle("player round trip");
 var m2 = editor.mirrorStats();
 console.log("after player: " + JSON.stringify(st2) + " mirror " + JSON.stringify(m2));
-assert(st2.pccBound && st2.vctBound,
+assert(st2.vctBound && st2.pccBound === st0.pccBound,
        "player round trip: the editor scene owns the GI binding again");
 assert(m2.giPushes === m0.giPushes,
        "player round trip: NO GI re-push from the mirror (" + m0.giPushes + " -> " + m2.giPushes + ")");

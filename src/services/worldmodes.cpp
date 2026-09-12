@@ -50,21 +50,28 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// there is no second copy to drift — gi.tiers asserts the rows against the
 /// readers cell by cell (the review found 13 of the 20 cells were untested
 /// while they were hand-copied).
-struct RayonRow { int technique, quality, ddgi, bounces; };
+/// The fifth column, probeSize, is the REFLECTION-PROBE CAPTURE SIZE in pixels
+/// per cube face (owner, 2026-09-13 Q4: "yes halve it but add it to the world
+/// settings"). 0 = follow the engine's quality dial, which is what every tier
+/// writes today: the halving that decision asked for lives in the engine
+/// (High 512 -> 256, OgreGi.cpp buildPcc), so no tier needs a number here and
+/// the column exists so an author can pin one per scene.
+struct RayonRow { int technique, quality, ddgi, bounces, probeSize; };
 const RayonRow kRayonTable[4] = {
-    /* Low    */ { 1, 0, 0, 1 },   // Instant Radiosity, low; nothing to feed a field from
-    /* Medium */ { 2, 1, 1, 1 },   // VCT 64^3, DDGI-fed (voxel source)
-    /* High   */ { 3, 2, 1, 1 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
-    /* Epic   */ { 3, 2, 1, 3 },   // ... plus 3 bounces
+    /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
+    /* Medium */ { 2, 1, 1, 1, 0 },   // VCT 64^3, DDGI-fed (voxel source)
+    /* High   */ { 3, 2, 1, 1, 0 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
+    /* Epic   */ { 3, 2, 1, 3, 0 },   // ... plus 3 bounces
 };
-/// The four rayonTiered row ids, in kRayonTable column order.
-const int kRayonRowCount = 4;
+/// The rayonTiered row ids, in kRayonTable column order.
+const int kRayonRowCount = 5;
 int rayonColumn(const RayonRow &r, int i) {
     switch (i) {
     case 0: return r.technique;
     case 1: return r.quality;
     case 2: return r.ddgi;
-    default: return r.bounces;
+    case 3: return r.bounces;
+    default: return r.probeSize;
     }
 }
 /// Fills a rayonTiered row's four tier cells from the table's column `column`.
@@ -524,6 +531,34 @@ QVector<Row> buildRows()
     // Int rows over document fields the engine already consumes; the engine's
     // quality dial is untouched (it is the RESOLUTION dial, and Epic changes
     // no resolution).
+    // THE PROBE CAPTURE SIZE (owner decision 2026-09-13 Q4: "yes halve it but
+    // add it to the world settings"). A rayonTiered row like the four above, so
+    // an edit PINS it; every tier's column is 0 = "follow the quality dial",
+    // because the halving itself is the engine's default now.
+    {
+        Row r;
+        r.id = QStringLiteral("giProbeSize");
+        r.label = QStringLiteral("Rayon Probe Capture Size");
+        r.group = QStringLiteral("Global Illumination");
+        r.type = RowType::Enum;
+        r.rayonTiered = true;
+        r.options = { { QStringLiteral("auto"), QStringLiteral("Automatic"), 0 },
+                      { QStringLiteral("128"),  QStringLiteral("128 px"),  128 },
+                      { QStringLiteral("256"),  QStringLiteral("256 px"),  256 },
+                      { QStringLiteral("512"),  QStringLiteral("512 px"),  512 } };
+        rayonColumns(r, 4);
+        r.cost = QStringLiteral("The pixel size of ONE reflection-probe cube face. A probe is six "
+                                "of them plus a mip chain, so the grid's video memory goes with "
+                                "the SQUARE of this: at 256 a probe is 4.0 MB in HDR and a "
+                                "32-probe room 128 MB; at 512 it is 16.0 MB and 512 MB. "
+                                "Automatic follows the quality dial — 128 at Low, 256 above — "
+                                "and 256 is the shipped answer at every tier from Medium up, "
+                                "because the roughness blur the renderer convolves into these "
+                                "captures hides the difference on everything but a mirror.");
+        r.get = [](const iris::ScenePtr &s) { return qBound(0, s->giProbeCaptureSize, 1024); };
+        r.set = [](const iris::ScenePtr &s, int v) { s->giProbeCaptureSize = qBound(0, v, 1024); };
+        out.append(r);
+    }
     {
         Row r;
         r.id = QStringLiteral("giBounces");
@@ -821,7 +856,8 @@ QString rayonRowId() { return QStringLiteral("rayon"); }
 QStringList rayonRowIds()
 {
     return { QStringLiteral("giMode"), QStringLiteral("giQuality"),
-             QStringLiteral("giDdgi"), QStringLiteral("giBounces") };
+             QStringLiteral("giDdgi"), QStringLiteral("giBounces"),
+             QStringLiteral("giProbeSize") };
 }
 
 QString rayonTierName(RayonTier t)
@@ -863,15 +899,17 @@ int rayonTechnique(RayonTier t) { return kRayonTable[tierIndex(t)].technique; }
 int rayonQuality(RayonTier t)   { return kRayonTable[tierIndex(t)].quality; }
 int rayonDdgi(RayonTier t)      { return kRayonTable[tierIndex(t)].ddgi; }
 int rayonBounces(RayonTier t)   { return kRayonTable[tierIndex(t)].bounces; }
+int rayonProbeSize(RayonTier t) { return kRayonTable[tierIndex(t)].probeSize; }
 
 namespace {
 /// The four values a scene RENDERS, in kRayonTable column order.
-void rayonHave(const iris::ScenePtr &s, int have[4])
+void rayonHave(const iris::ScenePtr &s, int have[kRayonRowCount])
 {
     have[0] = int(s->giMode);
     have[1] = int(s->giQuality);
     have[2] = s->giDdgi > 0 ? 1 : 0;
     have[3] = qBound(1, s->giNumBounces, 4);
+    have[4] = qBound(0, s->giProbeCaptureSize, 1024);
 }
 }   // namespace
 
@@ -898,6 +936,7 @@ void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier)
     if (!pinned(scene, "giQuality")) scene->giQuality = iris::GiQuality(qBound(0, row.quality, 2));
     if (!pinned(scene, "giDdgi"))    scene->giDdgi = row.ddgi;
     if (!pinned(scene, "giBounces")) scene->giNumBounces = row.bounces;
+    if (!pinned(scene, "giProbeSize")) scene->giProbeCaptureSize = qBound(0, row.probeSize, 1024);
     if (!pinned(scene, "giMode")) scene->giMode = iris::GiMode(qBound(1, row.technique, 3));
     else if (scene->giMode == iris::GiMode::OFF) {
         // A pin of "off" is what an Advanced technique picker set to Off would
@@ -919,7 +958,7 @@ QStringList rayonDeviations(const iris::ScenePtr &scene)
     // whatever the machinery rows say, so the tier row reads Off, not Custom.
     if (!scene || !rayonEnabled(scene)) return out;
     const RayonRow &want = kRayonTable[tierIndex(rayonTier(scene))];
-    int have[4];
+    int have[kRayonRowCount];
     rayonHave(scene, have);
     const QStringList ids = rayonRowIds();
     for (int i = 0; i < kRayonRowCount; ++i) {
@@ -975,7 +1014,7 @@ void deriveRayonFromDocument(const iris::ScenePtr &scene)
     // PIN WHAT DEVIATES, DROP WHAT DOES NOT. A pin whose value is the tier's
     // own is noise: it would freeze that field through every future tier switch
     // and make the dial look broken, and dropping it changes no value at all.
-    int have[4];
+    int have[kRayonRowCount];
     rayonHave(scene, have);
     const QStringList ids = rayonRowIds();
     for (int i = 0; i < kRayonRowCount; ++i) {

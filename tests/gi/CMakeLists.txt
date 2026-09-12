@@ -391,3 +391,60 @@ add_dependencies(test_gi_ddgi_edge JahshakaEngineMedia)
 add_test(NAME gi.ddgi_edge COMMAND test_gi_ddgi_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_edge PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# THE MATERIAL GATE (owner 2026-09-13 Q1, ogre-patch 0028): a material with
+# no specular response samples no reflection probe, and the ones beside it still
+# do. Its own binary for the same process-wide-HlmsPbs-binding reason as its
+# siblings.
+add_executable(test_gi_probe_gate test_gi_probe_gate.cpp)
+set_target_properties(test_gi_probe_gate PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_probe_gate PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_probe_gate PRIVATE JahshakaEngine)
+add_dependencies(test_gi_probe_gate JahshakaEngineMedia)
+add_test(NAME gi.probe_gate COMMAND test_gi_probe_gate
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.probe_gate PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# VISIBILITY FROM THE PROBE (owner 2026-09-13 Q2, ogre-patch 0029): a surface
+# occluded from a probe takes nothing from it. Synthetic room, never the
+# Showroom (not open-to-open deterministic).
+add_executable(test_gi_probe_visibility test_gi_probe_visibility.cpp)
+set_target_properties(test_gi_probe_visibility PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_probe_visibility PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_probe_visibility PRIVATE JahshakaEngine)
+add_dependencies(test_gi_probe_visibility JahshakaEngineMedia)
+add_test(NAME gi.probe_visibility COMMAND test_gi_probe_visibility
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.probe_visibility PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# NO ENCLOSURE MEANS NO PROBE GRID (owner 2026-09-13 Q3): an open scene builds
+# no probes and reflects the sky; adding walls builds them.
+add_executable(test_gi_probe_open test_gi_probe_open.cpp)
+set_target_properties(test_gi_probe_open PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_probe_open PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_probe_open PRIVATE JahshakaEngine)
+add_dependencies(test_gi_probe_open JahshakaEngineMedia)
+add_test(NAME gi.probe_open COMMAND test_gi_probe_open
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.probe_open PROPERTIES TIMEOUT 180 LABELS "engine")

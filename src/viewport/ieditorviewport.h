@@ -432,6 +432,13 @@ public:
         /// shadow half falls back when no shadow node exists — so the request
         /// alone never says what the reflections actually contain.
         bool probeHdr = false, probeShadows = false;
+        int  probeCaptureSize = 0;
+        int  probeEnclosedAxes = 0;
+        bool probeGridRefused = false;
+        /// Material edits that CROSSED the reflection-probe gate on this scene
+        /// (ogre-patch 0028): the one material edit that rebuilds a shader.
+        /// Cumulative, never reset.
+        unsigned probeGateCrossings = 0;
         /// How many probes the renderer re-captures per frame — the RESOLVED
         /// GI update budget (FIX WAVE B1/B2). 0 means GI is PAUSED: every
         /// reflection is frozen until world.refreshGi() asks for more. A CEILING:

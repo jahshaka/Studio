@@ -218,6 +218,10 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_executable(test_rayon_panel
     test_rayon_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    # ieditorviewport.h is listed as a SOURCE so AUTOMOC generates the moc for
+    # EditorViewportEvents: the Reflections-row case drives the panel from a
+    # HeadlessEditorViewport, which constructs one.
+    ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
     # The row-undo spine (debt L6): every panel row's gesture and the command it
     # becomes.
     test_undo_stubs.cpp

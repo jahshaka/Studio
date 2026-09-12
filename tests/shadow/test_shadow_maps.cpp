@@ -404,6 +404,14 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
     e->setShadowMapBudget(2u);          // hold the derivation still
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE, because this case needs a probe grid to exist at all
+    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
+    // declines to build probes in an open scene — a floor with a block on it is
+    // exactly that — unless the author has pinned the lit volume. This suite is
+    // about probe-capture shadow caching, not about probe placement, so it says
+    // where the space is and gets its grid.
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     // DELIBERATELY THE CHEAPEST HYBRID THAT STILL SHADOWS ITS PROBES: Low
     // quality (a small voxel volume) with probeShadows pinned On rather than
     // left to follow the dial, and a 2x1x2 probe grid. This case is about a
@@ -1354,6 +1362,14 @@ static void t3_cache_probe(Engine *e, View *v)
     CacheRoom r = buildCacheRoom(e, v, "t3p");
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE, because this case needs a probe grid to exist at all
+    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
+    // declines to build probes in an open scene — a floor with a block on it is
+    // exactly that — unless the author has pinned the lit volume. This suite is
+    // about probe-capture shadow caching, not about probe placement, so it says
+    // where the space is and gets its grid.
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
@@ -1523,6 +1539,14 @@ static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
     r.scene->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE, because this case needs a probe grid to exist at all
+    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
+    // declines to build probes in an open scene — a floor with a block on it is
+    // exactly that — unless the author has pinned the lit volume. This suite is
+    // about probe-capture shadow caching, not about probe placement, so it says
+    // where the space is and gets its grid.
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
@@ -1573,6 +1597,14 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
     a.scene->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE, because this case needs a probe grid to exist at all
+    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
+    // declines to build probes in an open scene — a floor with a block on it is
+    // exactly that — unless the author has pinned the lit volume. This suite is
+    // about probe-capture shadow caching, not about probe placement, so it says
+    // where the space is and gets its grid.
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;

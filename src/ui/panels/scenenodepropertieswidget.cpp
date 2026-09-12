@@ -272,6 +272,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldPropView->setScene(sceneNode->getScene());
             worldModesPropView->setSceneView(sceneView);
             worldModesPropView->setScene(sceneNode->getScene());
+            worldGiPropView->setSceneView(sceneView);
             worldGiPropView->setScene(sceneNode->getScene());
             worldPostFxPropView->setSceneView(sceneView);
             worldPostFxPropView->setScene(sceneNode->getScene());

@@ -49,18 +49,26 @@ var createMs = Date.now() - t0;
 
 // THE DEFERRAL IS A DEFERRAL, NOT A CANCELLATION, and this is the assertion
 // that says so. The instant project.create returns, the born-epic scene's GI is
-// deliberately NOT built yet — measured: pccBound false, probeCount 0, where
-// the same read before the fix returned true and 18. Give the viewport its
-// frames and it must arm: a "fix" that simply left global illumination off
-// would pass every timing budget in this file and ruin every scene.
+// deliberately NOT built yet. Give the viewport its frames and it must arm: a
+// "fix" that simply left global illumination off would pass every timing budget
+// in this file and ruin every scene.
+//
+// WHAT "ARMED" MEANS FOR A NEW PROJECT CHANGED ON 2026-09-13 (owner decision
+// Q3, SPECS/REFLECTION_PROBE_AUDIT.md): a new project's scene is OPEN — a
+// ground plane and nothing enclosing it — and the hybrid now measures that and
+// declines to build a probe grid there, leaving the sky cubemap as the
+// reflection source. So the arming this suite watches for is the VOXEL half
+// (vctBound), and `probeGridRefused` is asserted with it so that a silent
+// hybrid failure can never masquerade as the decision.
 var giAtReturn = world.giStatus();
 editor.frame(4);
 var gi = world.giStatus();
-if (!gi.live || !gi.pccBound || !gi.vctBound || gi.probeCount <= 0)
+if (!gi.live || !gi.vctBound || !gi.probeGridRefused || gi.pccBound)
     fail("global illumination never armed after project creation (live=" + gi.live +
          " pccBound=" + gi.pccBound + " vctBound=" + gi.vctBound +
-         " probeCount=" + gi.probeCount + ") — the initial thumbnail's GI park did not " +
-         "restore");
+         " probeCount=" + gi.probeCount + " probeGridRefused=" + gi.probeGridRefused +
+         " probeEnclosedAxes=" + gi.probeEnclosedAxes +
+         ") — the initial thumbnail's GI park did not restore");
 
 var after = world.rayon();
 if (!after.enabled || after.tier !== "epic")

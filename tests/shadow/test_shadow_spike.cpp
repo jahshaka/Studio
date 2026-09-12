@@ -457,6 +457,14 @@ static void r3Case()
     Room room = buildRoom(engine.get(), v, "roomGi", 3, false);
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE, because this case needs a probe grid to exist at all
+    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
+    // declines to build probes in an open scene — a floor with a block on it is
+    // exactly that — unless the author has pinned the lit volume. This suite is
+    // about probe-capture shadow caching, not about probe placement, so it says
+    // where the space is and gets its grid.
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::High;          // probeShadows resolves true at high
     gi.probeShadows = GiToggle::On;
     room.scene->setGlobalIllumination(gi);
@@ -595,6 +603,14 @@ static void cacheKindsCase()
     CHECK(room.scene->setNodePlanarReflector(room.floor, true), "the floor is a reflector");
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE, because this case needs a probe grid to exist at all
+    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
+    // declines to build probes in an open scene — a floor with a block on it is
+    // exactly that — unless the author has pinned the lit volume. This suite is
+    // about probe-capture shadow caching, not about probe placement, so it says
+    // where the space is and gets its grid.
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
@@ -701,6 +717,14 @@ static void scanCostCase(int n)
     engine->setShadowMapBudget(8u);
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE, because this case needs a probe grid to exist at all
+    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
+    // declines to build probes in an open scene — a floor with a block on it is
+    // exactly that — unless the author has pinned the lit volume. This suite is
+    // about probe-capture shadow caching, not about probe placement, so it says
+    // where the space is and gets its grid.
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;

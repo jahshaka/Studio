@@ -21,9 +21,12 @@ For more information see the LICENSE file
 
 class ComboBoxWidget;
 class HFloatSliderWidget;
+class LabelWidget;
+class IEditorViewport;
 class CheckBoxWidget;
 class DragVector3Widget;
 class QPushButton;
+class QTimer;
 struct StudioServices;
 
 /**
@@ -73,6 +76,10 @@ public:
     /// the panel suite without a stack): the edits still apply, just without
     /// an undo step.
     void setServices(StudioServices *services) { this->services = services; }
+    /// The live viewport, for the one READ-ONLY row in this section: where the
+    /// scene's reflections are actually coming from. Nullable (headless hosts,
+    /// the panel suite) — the row then stays hidden.
+    void setSceneView(IEditorViewport *sceneView) { this->sceneView = sceneView; }
 
 protected slots:
     void onRayonToggled(bool on);
@@ -80,6 +87,7 @@ protected slots:
     void onAdvancedToggled(bool on);
     void modeChanged(int row);
     void onQualityChanged(int row);
+    void onProbeSizeChanged(int row);
     void onLightChanged(int row);
     void onBouncesChanged(float value);
     void onDdgiToggled(bool on);
@@ -110,11 +118,28 @@ private:
     /// Re-reads the pin marks, the tier row's "Custom" entry and the reset
     /// button from the document WITHOUT rebuilding the rows.
     void refreshPins();
+    /// Re-reads the ACHIEVED reflection source from the renderer (the same
+    /// GiStatus world.giStatus() reports) into the read-only row.
+    void refreshReflectionsRow();
     bool advancedResettable() const;
     void addResetAdvancedButton();
 
+protected:
+    /// THE ROW IS A LIVE READING, SO IT HAS TO BE READ WHILE IT IS ON SCREEN
+    /// (round-3 item 5). `rebuild()` runs on setScene and after a World-GI
+    /// edit, and nothing else: add four walls to an open scene and the row went
+    /// on saying "Sky" while the renderer had already built the grid. It is
+    /// refreshed when the panel is shown, and polled while it is visible — the
+    /// input is the SCENE's layout, which nothing in this panel can hear about.
+    /// The poll stops the moment the panel is hidden.
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+
+private:
+
     QSharedPointer<iris::Scene> scene;
     StudioServices *services = nullptr;
+    IEditorViewport *sceneView = nullptr;
     WorldModeCommand::Snapshot editBefore;
     bool editing = false;
     CheckBoxWidget *rayonSwitch = nullptr;
@@ -126,6 +151,13 @@ private:
     DragVector3Widget *boundsMin = nullptr;
     DragVector3Widget *boundsMax = nullptr;
     DragVector3Widget *pccGrid = nullptr;
+    ComboBoxWidget *probeSize = nullptr;
+    LabelWidget *reflectionsRow = nullptr;
+    /// Polls refreshReflectionsRow while the panel is visible (see showEvent).
+    QTimer *reflectionsPoll = nullptr;
+    /// The last text written into `reflectionsRow` (LabelWidget has no getter),
+    /// so the poll only touches the widget when the reading actually moved.
+    QString reflectionsText;
     HFloatSliderWidget *updateBudget = nullptr;
     CheckBoxWidget *ddgiToggle = nullptr;
     HFloatSliderWidget *ddgiIntensity = nullptr;
