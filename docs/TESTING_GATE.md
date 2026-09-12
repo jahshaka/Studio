@@ -107,7 +107,7 @@ not a gate.
 
 ## 5. Why the full gate cost 25 minutes, and what the cleanup changed
 
-**After the cleanup (2026-09-10, measured on the main tree at 8cb9af75): 287 suites, 572 s at
+**After the cleanup (2026-09-10, measured on the main tree at 8cb9af75): 327 suites (measured 2026-09-13 on the push #16 gate; 331 registered), 572 s at
 -j4.** The remaining floor is a ~112 s serial tail at the end of the run (the RUN_SERIAL
 islands drain single-file; `app.input_keys` alone is 55 s and runs last with three cores
 idle) — the next win is splitting that driver or scheduling the serial rows first
