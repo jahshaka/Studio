@@ -489,8 +489,11 @@ QVector<VerbInfo> MaterialApi::verbs() const
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
           "A texture ASSET guid on a map key pins that image into the open project as a binding "
-          "(the scene uses it; no companion material is minted) — so it is a tile in the editor's "
-          "asset tray (assets.list({scope: 'project', tray: true})) and a project export carries it. "
+          "(the scene uses it; no companion material is minted) and records the node -> texture "
+          "dependency the material panel's texture row records — so it is a tile in the editor's "
+          "asset tray (assets.list({scope: 'project', tray: true})), assets.dependencies(nodeId) "
+          "names it, and a project export carries it. Recording a use never takes the image out "
+          "of the LIBRARY: the Assets page hides an import's MEMBERS, not what a scene uses. "
           "THE UV TRANSFORM takes two spellings: `textureScale` and `textureOffset` accept a "
           "two-element array [u, v] for per-axis tiling/offset, or a plain number meaning both "
           "axes (which is what every script written before per-axis tiling says, and it keeps "
@@ -801,12 +804,14 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     // and a project export carries it; before, the slot rendered the library
     // bytes and the project never knew it used them.
     //
-    // (No node -> texture dependency edge, unlike the material panel's texture
-    // row: the Assets page's LIBRARY grid still hides every dependee —
-    // Database::dependeeSubquery treats a USE edge like an import's membership
-    // edge — so the edge would take the image out of the library. Recorded for
-    // the lead: narrow that filter to library-asset dependers, then give this
-    // verb the panel's edge.)
+    // AND IT RECORDS THE EDGE, exactly as the material panel's texture row does
+    // (MaterialPropertyWidget::updateTextureDependency) — the verb and the
+    // panel are one path or they are two rules. The edge was left out by L13
+    // because the library grid hid every dependee, so recording what a slot
+    // uses deleted the image from the user's library; the grid now hides
+    // MEMBERSHIP instead (Database::memberSubquery), and a USE edge hides
+    // nothing anywhere.
+    //
     // Only a LIBRARY image (a project's own rows are members already — the view
     // filter tells them apart; project_guid does not, an import made with a
     // project open records it) that the project does not pin yet: addToProject
@@ -815,8 +820,14 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     if (!boundTextures.isEmpty() && host.db && host.isProjectOpen()) {
         const QString projectGuid = host.project->getProjectGuid();
         for (const QString &textureGuid : boundTextures) {
-            if (host.db->isAssetPinnedBy(projectGuid, textureGuid)) continue;
             const AssetRecord row = host.db->fetchAsset(textureGuid);
+            // The panel writes ONE edge per node+texture: delete before create,
+            // so re-binding the same image does not stack rows.
+            host.db->deleteDependency(nodeId, textureGuid);
+            host.db->createDependency(static_cast<int>(ModelTypes::Object),
+                                      static_cast<int>(ModelTypes::Texture),
+                                      nodeId, textureGuid, projectGuid);
+            if (host.db->isAssetPinnedBy(projectGuid, textureGuid)) continue;
             if (row.view_filter != AssetViewFilter::AssetsView
                 && row.view_filter != AssetViewFilter::Effects)
                 continue;

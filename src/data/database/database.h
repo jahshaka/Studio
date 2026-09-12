@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #ifndef DATABASE_H
 #define DATABASE_H
 
+#include <QHash>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QSqlDriver>
 #include <QSqlError>
@@ -121,6 +123,14 @@ public:
                        const QByteArray &sceneBlob = QByteArray(),
                        const QByteArray &thumbnail = QByteArray());
     bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid, const QString &projectGuid, bool visible = true);
+    /// THE PROJECT'S FOLDER NAMED `folderName`, CREATED IF IT IS NOT THERE —
+    /// and its guid either way. The editor's own hidden folders (Systems for
+    /// particle emitters, Presets for applied material presets) are found by
+    /// NAME, so every writer needs the existing folder's guid rather than the
+    /// fresh one it would have minted: minting one and using it without
+    /// creating the folder is what filed every emitter after the first under a
+    /// guid nothing owned (small-items round B). Empty on failure.
+    QString ensureFolder(const QString &folderName, const QString &projectGuid, bool visible = true);
     QString createAssetEntry(const QString &guid,
                              const QString &assetname,
                              const int &type,
@@ -275,12 +285,35 @@ public:
     /// which is where "what is a tile" is decided (the dependee filter that
     /// used to ride here hid every asset a scene USED — lane L13).
     QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1);
-    /// The LIBRARY grid's "hide dependees" rule as a SQL fragment: `column NOT
-    /// IN (the dependees of a non-avatar edge)`. The Assets page grid and the
-    /// import's re-listing check AND it in (a member row must never be
-    /// re-listed into a listing that hides it). NOT the editor tray's rule —
-    /// that one is services/assettray.h. Definition + rationale: database.cpp.
-    static QString dependeeSubquery(const QString &column);
+    /// THE MEMBERSHIP RULE as a SQL fragment: `column NOT IN (the rows whose
+    /// parent is another ASSET)` — an import's Mesh and Texture members, which
+    /// ride their Object and are never library tiles of their own. The Assets
+    /// page grid and the import's re-listing check AND it in (a member row must
+    /// never be re-listed into a listing that hides it). It is the SAME
+    /// question the editor tray asks in services/assettray.h, so the two
+    /// listings cannot disagree. Definition + rationale: database.cpp.
+    static QString memberSubquery(const QString &column);
+    /// BATCH READS for the listing rules (small-items round B). Each is ONE
+    /// query for a whole listing's worth of rows; the per-row reads they
+    /// replace made the editor tray cost a query per tile, on every edge write
+    /// and every search keystroke.
+    ///
+    /// Which of `guids` name a row that EXISTS, and which project owns it:
+    /// guid → project_guid (empty for a library row). A guid that names no row
+    /// is absent from the hash — that is the "is my parent an asset?" test.
+    QHash<QString, QString> fetchAssetOwners(const QStringList &guids);
+    /// The stored `asset` blob of each of `guids` that has one, guid → bytes.
+    QHash<QString, QByteArray> fetchAssetDataFor(const QStringList &guids);
+    /// Every dependency edge recorded for `projectGuid`, as dependee →
+    /// dependers (duplicates removed). The batch form of fetchDependers.
+    QHash<QString, QStringList> fetchProjectDependers(const QString &projectGuid);
+    /// The guids this project pins (project_assets rows), without reading a
+    /// catalog row for each. The batch form of isAssetPinnedBy.
+    QSet<QString> fetchProjectPinnedGuids(const QString &projectGuid);
+    /// The guids of every FOLDER this project owns, in one query — "is this
+    /// row filed somewhere?", which is how a listing tells a row that belongs
+    /// in a folder from one that belongs at the root.
+    QSet<QString> fetchProjectFolderGuids(const QString &projectGuid);
     /// Reference-with-pin membership (ASSET_PIPELINE_SPEC §3.1.5): the LIBRARY
     /// assets this project pinned (project_assets rows), as full catalog
     /// records. This is THE source assets.list({scope:'project'}) and the

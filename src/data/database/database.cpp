@@ -700,6 +700,41 @@ bool Database::createFolder(const QString &folderName, const QString &parentFold
     return executeAndCheckQuery(query, "CreateFolder");
 }
 
+// FIND THE PROJECT'S FOLDER BY NAME, OR MAKE IT — and answer with the guid
+// either way (small-items round B). The editor keeps two hidden folders per
+// project, Systems (one row per particle emitter) and Presets (one row per
+// applied material preset), and both writers did this:
+//
+//     auto fguid = GUIDManager::generateGUID();
+//     if (!db->checkIfRecordExists("name", "Systems", "folders", ...))
+//         db->createFolder("Systems", ..., fguid, ...);
+//     db->createAssetEntry(..., fguid, ...);          // the row's parent
+//
+// which is right exactly once. On every later call the folder already exists,
+// createFolder is skipped, and the row is still filed under the FRESH guid —
+// a folder nothing owns. Every emitter after the first and every preset after
+// the first ended up in a folder that is not in the folders table and not
+// reachable from the asset panel: the row exists, resolves by guid and is
+// invisible. One helper, one query, no fresh guid unless a folder is really
+// created.
+QString Database::ensureFolder(const QString &folderName, const QString &projectGuid, bool visible)
+{
+    if (folderName.isEmpty() || projectGuid.isEmpty()) return QString();
+
+    QSqlQuery query;
+    query.prepare("SELECT guid FROM folders WHERE name = ? AND project_guid = ? LIMIT 1");
+    query.addBindValue(folderName);
+    query.addBindValue(projectGuid);
+    if (executeAndCheckQuery(query, "ensureFolder") && query.next())
+        return query.value(0).toString();
+
+    const QString guid = GUIDManager::generateGUID();
+    // The project's own folders hang off the project guid, as the editor's
+    // folder writers have always filed them.
+    if (!createFolder(folderName, projectGuid, guid, projectGuid, visible)) return QString();
+    return guid;
+}
+
 QString Database::createAssetEntry(
 	const QString &guid,
 	const QString &assetName,
@@ -1641,9 +1676,10 @@ AssetRecord Database::fetchAsset(const QString &guid)
     // catalog — silently answering "library" for project assets.
     query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
-    executeAndCheckQuery(query, "fetchAsset");
-
-    if (query.exec()) {
+    // ONE exec. This used to run executeAndCheckQuery AND `query.exec()`, so
+    // every by-guid read — the most called query in the catalog — cost two
+    // round trips and two statement preparations (small-items round B).
+    if (executeAndCheckQuery(query, "fetchAsset")) {
         if (query.first()) {
             AssetRecord data;
             data.name = query.value(0).toString();
@@ -1708,28 +1744,121 @@ QMap<QString, qint64> Database::fetchAssetFileSizes()
     return sizes;
 }
 
-// The "hide dependees" rule, in ONE place (AVATAR_ASSET_SPEC, found while
-// building it). The Assets page's LIBRARY grid (and the import's re-listing
-// check) hide assets that appear as a `dependee`, and the rule exists to hide
-// MEMBER rows an import created — the Mesh and Texture rows that ride an
-// Object. (The editor's asset TRAY used it too until lane L13: the editor
-// records USE as a dependency, so there it hid every asset a scene used. The
-// tray's rule is services/assettray.h.)
+// THE MEMBERSHIP RULE, in ONE place — and it is the SAME question the editor
+// tray asks (services/assettray.h rule 1): a row is a MEMBER when its `parent`
+// is another ASSET. An import writes exactly that (assetimporters sets the Mesh
+// and Texture rows' parent to their Object's guid); a folder guid and a project
+// guid are not in the assets table, which is what tells the three kinds of
+// parent apart.
 //
-// An AVATAR row depends on the rigged Object it instantiates, which under
-// the naive rule made "Create Avatar" DELETE the model from the Assets grid:
-// the user's own imported character silently vanished from the library the
-// moment they made an avatar of it.
-//
-// So the rule is "hide rows that are a MEMBER of something", and membership is
-// what an import's own edges mean — not what a REFERENCE means. Avatar edges
-// are references, and are excluded here rather than at each call site.
-QString Database::dependeeSubquery(const QString &column)
+// IT USED TO BE A DEPENDENCY TEST — "hide every row that appears as a dependee
+// of a non-avatar edge" — and that asked the wrong question (small-items round
+// B). The editor records USE as a dependency: a texture on a material slot, on
+// the ground, on a decal, on an emitter, and the companion material minted for
+// an image the user adds to a project. So a LIBRARY asset vanished from the
+// Assets page grid the moment anything used it — the user's own imported image
+// disappeared from their library the moment they added it to a project, and
+// material.set had to refuse to record what it binds (materialsapi.cpp) to
+// avoid causing it. The avatar carve-out that rule needed (an avatar DEPENDS on
+// the model it instantiates, so "Create Avatar" deleted the character from the
+// grid) is gone with it: a referenced model's parent is its folder, not the
+// avatar.
+QString Database::memberSubquery(const QString &column)
 {
-    return QStringLiteral("%1 NOT IN (SELECT dependee FROM dependencies "
-                          "WHERE depender_type != %2)")
-        .arg(column)
-        .arg(static_cast<int>(ModelTypes::Avatar));
+    return QStringLiteral("%1 NOT IN (SELECT M.guid FROM assets M "
+                          "JOIN assets P ON P.guid = M.parent)")
+        .arg(column);
+}
+
+// ---------------------------------------------------------------------------
+// BATCH READS for the listing rules (small-items round B). The editor tray's
+// collapse asked one question PER ROW — "does my parent exist?", "who uses this
+// image?", "is this companion pinned?" — and the tray runs on every edge write
+// and every search KEYSTROKE (AssetWidget::searchAssets lists every folder per
+// key), so those per-row queries were per-keypress. Each of these answers the
+// same question for a whole listing in one statement.
+// ---------------------------------------------------------------------------
+namespace {
+/// `?, ?, ?` for `count` bind values — SQLite's parameter limit is 32766, far
+/// above any listing, and a bound IN() keeps the guids out of the SQL text.
+QString placeholders(int count)
+{
+    QString out;
+    out.reserve(count * 2);
+    for (int i = 0; i < count; ++i) out += (i ? ",?" : "?");
+    return out;
+}
+}   // namespace
+
+QHash<QString, QString> Database::fetchAssetOwners(const QStringList &guids)
+{
+    QHash<QString, QString> out;
+    QStringList unique = guids;
+    unique.removeAll(QString());
+    unique.removeDuplicates();
+    if (unique.isEmpty()) return out;
+
+    QSqlQuery query;
+    query.prepare("SELECT guid, project_guid FROM assets WHERE guid IN (" +
+                  placeholders(unique.size()) + ")");
+    for (const QString &guid : unique) query.addBindValue(guid);
+    executeAndCheckQuery(query, "fetchAssetOwners");
+    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toString());
+    return out;
+}
+
+QHash<QString, QByteArray> Database::fetchAssetDataFor(const QStringList &guids)
+{
+    QHash<QString, QByteArray> out;
+    QStringList unique = guids;
+    unique.removeAll(QString());
+    unique.removeDuplicates();
+    if (unique.isEmpty()) return out;
+
+    QSqlQuery query;
+    query.prepare("SELECT guid, asset FROM assets WHERE guid IN (" +
+                  placeholders(unique.size()) + ")");
+    for (const QString &guid : unique) query.addBindValue(guid);
+    executeAndCheckQuery(query, "fetchAssetDataFor");
+    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toByteArray());
+    return out;
+}
+
+QHash<QString, QStringList> Database::fetchProjectDependers(const QString &projectGuid)
+{
+    QHash<QString, QStringList> out;
+    if (projectGuid.isEmpty()) return out;
+    QSqlQuery query;
+    query.prepare("SELECT DISTINCT dependee, depender FROM dependencies WHERE project_guid = ?");
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchProjectDependers");
+    while (query.next())
+        out[query.value(0).toString()].append(query.value(1).toString());
+    return out;
+}
+
+QSet<QString> Database::fetchProjectFolderGuids(const QString &projectGuid)
+{
+    QSet<QString> out;
+    if (projectGuid.isEmpty()) return out;
+    QSqlQuery query;
+    query.prepare("SELECT guid FROM folders WHERE project_guid = ?");
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchProjectFolderGuids");
+    while (query.next()) out.insert(query.value(0).toString());
+    return out;
+}
+
+QSet<QString> Database::fetchProjectPinnedGuids(const QString &projectGuid)
+{
+    QSet<QString> out;
+    if (projectGuid.isEmpty()) return out;
+    QSqlQuery query;
+    query.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchProjectPinnedGuids");
+    while (query.next()) out.insert(query.value(0).toString());
+    return out;
 }
 
 QVector<AssetRecord> Database::fetchAssetsForAssetView()
@@ -1751,7 +1880,7 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
         // longer a library tile — this is THE grid query and the source of
         // assets.list({scope: 'store'}).
         "AND A.listed = 1 "
-        "AND " + dependeeSubquery(QStringLiteral("A.guid")) + " "
+        "AND " + memberSubquery(QStringLiteral("A.guid")) + " "
         "ORDER BY A.name DESC"
     );
     query.bindValue(":view_filter", AssetViewFilter::AssetsView);
@@ -1822,13 +1951,31 @@ QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGu
     QVector<AssetRecord> records;
     if (projectGuid.isEmpty()) return records;
 
+    // ONE JOIN, not a fetchAsset per pin (small-items round B): a project with
+    // 30 pins cost 31 queries here, and the editor tray reads this on every
+    // edge write and every search keystroke.
     QSqlQuery query;
-    query.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
+    query.prepare("SELECT A.name, A.thumbnail, A.guid, A.parent, A.type, A.properties, "
+                  "A.view_filter, A.date_created, A.collection, A.tags, A.project_guid, A.listed "
+                  "FROM project_assets PA JOIN assets A ON A.guid = PA.asset_guid "
+                  "WHERE PA.project_guid = ?");
     query.addBindValue(projectGuid);
     executeAndCheckQuery(query, "fetchProjectPinnedAssets");
 
     while (query.next()) {
-        const auto record = fetchAsset(query.value(0).toString());
+        AssetRecord record;
+        record.name = query.value(0).toString();
+        record.thumbnail = query.value(1).toByteArray();
+        record.guid = query.value(2).toString();
+        record.parent = query.value(3).toString();
+        record.type = query.value(4).toInt();
+        record.properties = query.value(5).toByteArray();
+        record.view_filter = query.value(6).toInt();
+        record.dateCreated = query.value(7).toDateTime();
+        record.collection = query.value(8).toInt();
+        record.tags = query.value(9).toByteArray();
+        record.projectGuid = query.value(10).toString();
+        record.listed = query.value(11).toInt() != 0;
         if (!record.guid.isEmpty()) records.push_back(record);
     }
     return records;
@@ -3850,6 +3997,7 @@ QString Database::importAsset(
 	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
 	QMap<QString, QString> assetGuids; /* old x new guid */
+	QMap<QString, QString> archiveParents; /* new guid x the archive's parent */
 
 	QString guidToReturn = GUIDManager::generateGUID();
 
@@ -3897,7 +4045,8 @@ QString Database::importAsset(
 			data.license = record.value(9).toString();
 			data.hash = record.value(10).toString();
 			data.version = record.value(11).toString();
-            if (!parent.isEmpty()) data.parent = parent;
+            // The ARCHIVE's parent, remapped below once every new guid exists.
+            archiveParents.insert(data.guid, record.value(12).toString());
 			data.tags = record.value(13).toByteArray();
 			data.properties = record.value(14).toByteArray();
 			data.asset = record.value(15).toByteArray();
@@ -3908,6 +4057,20 @@ QString Database::importAsset(
 
 		assetsToImport.push_back(data);
 	}
+
+    // MEMBERSHIP SURVIVES THE ARCHIVE (small-items round B). A row's `parent`
+    // is its owning ASSET for an import member (the Mesh row, the member
+    // textures), and that guid is re-minted here — so it has to be remapped,
+    // exactly as importProject remaps its own. Before this, every .jaf import
+    // dropped the parent entirely and a model's members arrived as rows of
+    // their own: tiles in the editor tray and, now that membership is what the
+    // library grid hides by (memberSubquery), tiles in the Assets grid too.
+    // A parent that is not one of the archive's assets is the caller's folder
+    // (the `parent` argument) or nothing.
+    for (auto &asset : assetsToImport) {
+        const QString mapped = assetGuids.value(archiveParents.value(asset.guid));
+        asset.parent = !mapped.isEmpty() ? mapped : parent;
+    }
 
     for (auto &asset : assetsToImport) {
         if (asset.type == static_cast<int>(ModelTypes::Shader)   ||
@@ -4042,6 +4205,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
     QMap<QString, QString> assetGuids; /* old x new guid */
+    QMap<QString, QString> archiveParents; /* new guid x the archive's parent */
 
     QString guidToReturn = GUIDManager::generateGUID();
 
@@ -4089,7 +4253,8 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             data.license = record.value(9).toString();
             data.hash = record.value(10).toString();
             data.version = record.value(11).toString();
-            if (!parent.isEmpty()) data.parent = parent;
+            // The ARCHIVE's parent, remapped below once every new guid exists.
+            archiveParents.insert(data.guid, record.value(12).toString());
             data.tags = record.value(13).toByteArray();
             data.properties = record.value(14).toByteArray();
             data.asset = record.value(15).toByteArray();
@@ -4099,6 +4264,12 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         }
 
         assetsToImport.push_back(data);
+    }
+
+    // Membership survives the archive — see importAsset above.
+    for (auto &asset : assetsToImport) {
+        const QString mapped = assetGuids.value(archiveParents.value(asset.guid));
+        asset.parent = !mapped.isEmpty() ? mapped : parent;
     }
 
     for (auto &asset : assetsToImport) {

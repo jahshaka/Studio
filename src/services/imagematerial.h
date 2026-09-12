@@ -22,6 +22,7 @@ For more information see the LICENSE file
 // alphaMode 2 (BLEND — "the material carries the image's true alpha";
 // cutout stays a manual option in the panel).
 
+#include <QHash>
 #include <QString>
 #include <QStringList>
 
@@ -68,6 +69,13 @@ bool hasCompanionMaterial(const QString &textureGuid);
 /// assetdelete::removeFromProject to take the companion out of a project with
 /// the image it was minted for.
 QStringList companionMaterials(const QString &textureGuid);
+
+/// The same question for MANY textures at once, in three queries instead of
+/// three per texture: textureGuid -> its companions (a texture with none is
+/// absent). The editor tray asks it once per image in a listing, on every edge
+/// write and every search keystroke, so the single-guid form above is written
+/// in terms of THIS one — there is one rule, and it is here.
+QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids);
 
 } // namespace ImageMaterial
 

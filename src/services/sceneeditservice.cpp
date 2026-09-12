@@ -283,11 +283,15 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // material presets and the default Ground row got in 15c).
     const bool haveProject = project && !project->getProjectGuid().isEmpty();
     if (haveProject) {
-        auto fguid = GUIDManager::generateGUID();
-        if (!db->checkIfRecordExists("name", "Systems", "folders", false, project->getProjectGuid())) {
-            if (!db->createFolder("Systems", project->getProjectGuid(), fguid, project->getProjectGuid(), false))
-                return iris::ParticleSystemNodePtr();
-        }
+        // THE EXISTING FOLDER'S GUID (small-items round B). This minted a fresh
+        // guid, created "Systems" only when it was not there, and filed the
+        // emitter's row under the fresh guid either way — so the first emitter
+        // landed in the folder and every emitter after it was parented to a
+        // guid nothing owned: a row that exists, resolves by guid, and appears
+        // in no folder the asset panel can open.
+        const QString fguid = db->ensureFolder(QStringLiteral("Systems"),
+                                               project->getProjectGuid(), false);
+        if (fguid.isEmpty()) return iris::ParticleSystemNodePtr();
         QJsonObject props;
         db->createAssetEntry(
             nodeGuid, node->getName(),
@@ -1212,10 +1216,12 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
         return;
     }
 
-    auto fguid = GUIDManager::generateGUID();
-    if (!db->checkIfRecordExists("name", "Presets", "folders", false, project->getProjectGuid())) {
-        if (!db->createFolder("Presets", project->getProjectGuid(), fguid, project->getProjectGuid(), false)) return;
-    }
+    // The existing folder's guid, or a new folder — see addParticleSystem: the
+    // fresh-guid-either-way shape filed every preset after the first under a
+    // folder nothing owned.
+    const QString fguid = db->ensureFolder(QStringLiteral("Presets"),
+                                           project->getProjectGuid(), false);
+    if (fguid.isEmpty()) return;
 
     QJsonObject material;
     SceneWriter::writeSceneNodeMaterial(material, mat);

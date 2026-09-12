@@ -126,11 +126,11 @@ QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
     // kind of asset — no sniff needed (and no second sniff paid).
     //
     // TOP-LEVEL ROWS ONLY (code review 2026-09-10). An unlisted MODEL's
-    // texture member is hidden from every listing as a dependee, so re-listing
-    // it would answer "imported" with a row that appears nowhere: the user
-    // imports the texture standalone and gets nothing. Such a member falls
-    // through to the normal import and gets its own, visible, listed row —
-    // sharing the same CAS object, which costs no bytes.
+    // texture MEMBER is hidden from every listing (its parent is the Object it
+    // rides), so re-listing it would answer "imported" with a row that appears
+    // nowhere: the user imports the texture standalone and gets nothing. Such a
+    // member falls through to the normal import and gets its own, visible,
+    // listed row — sharing the same CAS object, which costs no bytes.
     //
     // Newest first: two unlisted rows can share one source oid (the same file
     // imported twice, then both deleted while pinned), and the more recently
@@ -142,7 +142,7 @@ QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
     match.prepare("SELECT AF.asset_guid FROM asset_files AF "
                   "JOIN assets A ON A.guid = AF.asset_guid "
                   "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 "
-                  "AND " + Database::dependeeSubquery(QStringLiteral("A.guid")) + " "
+                  "AND " + Database::memberSubquery(QStringLiteral("A.guid")) + " "
                   "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1");
     match.addBindValue(oid);
     if (!match.exec() || !match.next()) return QString();

@@ -80,13 +80,21 @@ namespace assettray {
 QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QString &folderGuid,
                           int typeFilter = -1);
 
-/// The rule applied to an arbitrary listing of `projectGuid`'s rows.
+/// The rule applied to an arbitrary listing of `projectGuid`'s rows. The
+/// overload taking `pinned` (the project's pinned members, which rule 3 needs)
+/// is for a caller that has already read them — `list` has.
 QVector<AssetRecord> collapse(Database *db, const QString &projectGuid,
                               const QVector<AssetRecord> &records);
+QVector<AssetRecord> collapse(Database *db, const QString &projectGuid,
+                              const QVector<AssetRecord> &records,
+                              const QVector<AssetRecord> &pinned);
 
 /// The guids `collapse` drops out of `records`.
 QStringList hidden(Database *db, const QString &projectGuid,
                    const QVector<AssetRecord> &records);
+QStringList hidden(Database *db, const QString &projectGuid,
+                   const QVector<AssetRecord> &records,
+                   const QVector<AssetRecord> &pinned);
 
 }   // namespace assettray
 
