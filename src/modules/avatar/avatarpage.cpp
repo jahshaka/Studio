@@ -184,6 +184,11 @@ QString AvatarPage::selectedAvatarGuid(QString *scopeOut) const
 void AvatarPage::openSelected(const QString &guid, const QString &scope)
 {
     if (!mApi || guid.isEmpty()) return;
+    // A second activation WHILE one is loading is a no-op, not a refusal: the
+    // progress dialog is already up and telling the user what is happening, and
+    // a modal "a background job is already running" box on top of it would be
+    // the module shouting at an impatient double-click.
+    if (mApi->progress().value(QStringLiteral("running")).toBool()) return;
     QVariantMap options;
     if (!scope.isEmpty()) options.insert(QStringLiteral("scope"), scope);
     // ASYNC (owner 2026-09-13: switching "is not fast" — 1541 ms measured with
