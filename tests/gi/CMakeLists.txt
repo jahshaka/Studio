@@ -370,3 +370,24 @@ add_dependencies(test_gi_mobility JahshakaEngineMedia)
 add_test(NAME gi.mobility COMMAND test_gi_mobility
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.mobility PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
+# sealed box whose GI bounds top sits inside its ceiling slab, measured from
+# OUTSIDE. Gates the cage clamp, the outside-the-volume fade and the fallback to
+# the term the field's binding deletes (VctDisableDiffuse). Its own binary for
+# the same process-wide-HlmsPbs-binding reason as its gi.ddgi siblings.
+add_executable(test_gi_ddgi_edge test_gi_ddgi_edge.cpp)
+set_target_properties(test_gi_ddgi_edge PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_ddgi_edge PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_ddgi_edge PRIVATE JahshakaEngine)
+add_dependencies(test_gi_ddgi_edge JahshakaEngineMedia)
+add_test(NAME gi.ddgi_edge COMMAND test_gi_ddgi_edge
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ddgi_edge PROPERTIES TIMEOUT 300 LABELS "engine")
