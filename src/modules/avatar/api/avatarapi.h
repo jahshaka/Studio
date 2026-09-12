@@ -26,6 +26,7 @@ For more information see the LICENSE file
 
 #include <QHash>
 #include <QImage>
+#include <QPointer>
 #include <QVariantList>
 #include <QVariantMap>
 #include <functional>
@@ -39,6 +40,7 @@ For more information see the LICENSE file
 namespace avatar { class AvatarPreviewModel; }
 namespace iris { class AvatarPossession; class AvatarLocomotion; }
 class ImportBatchRunner;
+class QTimer;
 template <typename T> class QFutureWatcher;
 
 class AvatarApi : public ApiModule
@@ -206,6 +208,11 @@ public:
     }
 
 signals:
+    /// A write-through FAILED and the user can do something about it (the
+    /// owner's rule: a problem the user can fix gets a visible message, not a
+    /// log line). The page shows it; the edit stays in the session, dirty, and
+    /// Save is the retry.
+    void persistFailed(const QString &message);
     /// The page's ProgressDialog, driven by the verbs (never by the widgets):
     /// one background job at a time, started/staged/finished.
     void busyStarted(const QString &title, bool cancellable);
@@ -240,7 +247,26 @@ private:
     /// The async open's worker + what to do with its result.
     QFutureWatcher<std::shared_ptr<avatar::AvatarPreviewModel::PreparedSubject>> *mOpenWatcher
         = nullptr;
+    /// Monotonic "which subject the module means to show". Bumped by every open
+    /// (sync or async) and by detachModel; a parse applies its result only when
+    /// the epoch it started in is still current.
+    quint64 mLoadEpoch = 0;
     /// Starts (or chains) the two async jobs; both report through mJob.
+    /// A DEFINITION EDIT IS REFUSED WHILE A JOB RUNS (lead review, AV1 round 2
+    /// — a data-corruption class, not a nicety): between an async open's
+    /// return and its parse landing, the module shows character A while the
+    /// OPEN DEFINITION is already B, so a clip loaded in that window is
+    /// matched against A's skeleton, appended to B's definition and written
+    /// through into B's stored file — permanently, and invisibly once the
+    /// preview swaps. Every verb that edits the definition (or picks the
+    /// preview's clip) takes this first; the page greys the same controls.
+    bool requireIdle(const char *verb);
+    /// Abandons the preview parse in flight, if any: the epoch moves, so a
+    /// result that arrives later applies nothing. EVERY open calls it — a
+    /// synchronous open during an async one used to leave the preview on the
+    /// old character with the definition on the new one.
+    void abandonPreviewLoad();
+
     bool startImport(const QString &path, AvatarAssets::Scope scope, int drawerId,
                      const QString &name);
     void finishImport(bool cancelled);
@@ -316,6 +342,18 @@ private:
     /// app can never drop it. No-op when nothing is open or nothing changed;
     /// records (never throws) when the store refuses.
     bool persistOpen(const char *verb);
+    /// COALESCED (lead review, AV1 round 2): a definition write is a full CAS
+    /// publish — stage, hash, ingest, pointer move or copy-on-write, dependency
+    /// reconciliation, metadata, sidecar — plus a pin announcement that
+    /// re-resolves every linked instance in the scene. Three clip toggles in a
+    /// row were three of those. An edit marks the definition dirty and arms a
+    /// short single-shot instead; the write (and its ONE announcement) happens
+    /// when the user stops, and every flush point (an open, a save, shutdown)
+    /// forces it immediately.
+    void schedulePersist();
+    /// Writes NOW when a coalesced write is pending — the flush points.
+    bool flushPersist(const char *verb);
+    QTimer *mPersistTimer = nullptr;
     /// Applies a definition to a spawned wrapper: clips, defaults, movement,
     /// locomotion. Shared by the linked spawn and by refreshInstances, so an
     /// instance created now and one refreshed later cannot end up different.

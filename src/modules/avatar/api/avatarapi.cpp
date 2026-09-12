@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QFutureWatcher>
+#include <QTimer>
 #include <QtConcurrent>
 #include <algorithm>
 #include <functional>
@@ -381,7 +382,14 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "What the module's background job is doing — an {async: true} import or open. `kind` "
           "is 'import' while the file is being read and stored and 'open' while the character is "
           "being prepared for the preview; `result` carries what the synchronous verb would have "
-          "returned once it is done (running false). Idle before the first async call.",
+          "returned once it is done (running false). Idle before the first async call. "
+          "WHILE IT REPORTS running THE MODULE REFUSES DEFINITION EDITS (loadAnimation, "
+          "removeClip, setClipOptions, setDefaultClip, setClip/playClip by name, "
+          "setCharacterHeight) and refuses an open during an IMPORT: between an async open's "
+          "return and its parse landing the definition is the new avatar's while the preview is "
+          "still the old character, so an edit made in that window would be matched against the "
+          "wrong skeleton and stored in the wrong avatar's file. An open during a preview parse "
+          "is allowed and SUPERSEDES it.",
           Needs::Document },
         { "cancelImport", "avatar.cancelImport() -> bool",
           "Cancels a running async avatar import. The pipeline rolls its own transaction back, so "
@@ -401,9 +409,12 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "and parses the character for the preview on a worker — the owner-measured 1.5 s "
           "avatar switch, off the UI thread; watch avatar.progress().",
           Needs::Document },
-        { "asset", "avatar.asset() -> {guid, scope, version, name, dirty, definition} | undefined",
-          "What the module currently has open, and whether it has unsaved edits. Undefined "
-          "when nothing is open.",
+        { "asset", "avatar.asset() -> {guid, scope, version, name, dirty, pending, definition} | undefined",
+          "What the module currently has open, and whether it has unsaved edits. `pending` is "
+          "true while a clip edit's write-through is armed but not yet made (edits are "
+          "coalesced over ~250 ms so three clip toggles are one publish and one instance "
+          "refresh); any open, `avatar.save` and module shutdown force it immediately. "
+          "Undefined when nothing is open.",
           Needs::Document },
         { "save", "avatar.save() -> {guid, scope, version}",
           "Writes the open definition back TO THE SCOPE IT WAS OPENED FROM. Clip edits "
@@ -526,6 +537,9 @@ bool AvatarApi::record(const QString &message)
 QVariant AvatarApi::setCharacterHeight(double metres)
 {
     if (!mModel) { fail("avatar: not available in this session"); return QVariant(); }
+    // The subject is about to be replaced (see requireIdle): scaling the one
+    // on screen would be scaling the wrong character.
+    if (!requireIdle("avatar.setCharacterHeight")) return QVariant();
     QString error;
     if (!mModel->setCharacterHeight(float(metres), &error)) {
         record(QStringLiteral("avatar.setCharacterHeight: %1").arg(error));
@@ -539,6 +553,11 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
 {
     mLastError.clear();
     if (!mModel) { record("avatar: not available in this session"); return QVariant(); }
+    // THE CORRUPTION WINDOW (lead review, AV1 round 2): during an async open
+    // the preview is still the OUTGOING character while mOpen is already the
+    // incoming one, so a clip loaded here would be matched against the wrong
+    // skeleton and written into the wrong avatar's stored definition.
+    if (!requireIdle("avatar.loadAnimation")) return QVariant();
     if (pathOrAssetGuid.trimmed().isEmpty()) {
         record("avatar.loadAnimation: a file path or an asset guid is required");
         return QVariant();
@@ -605,9 +624,10 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
             mOpen.dirty = true;
         }
         // EACH AVATAR KEEPS ITS OWN ANIMATIONS (owner 2026-09-13): written into
-        // THIS avatar's stored definition now, not at some later Save the user
-        // may never press — switching characters or quitting used to drop it.
-        persistOpen("avatar.loadAnimation");
+        // THIS avatar's stored definition, not at some later Save the user may
+        // never press — switching characters or quitting used to drop it. The
+        // write is coalesced (schedulePersist) and every flush point forces it.
+        schedulePersist();
     }
     // The clip list changed but the subject did not: no re-framing (the
     // camera must not jump when a user adds a second walk cycle).
@@ -746,6 +766,7 @@ QVariantList AvatarApi::animations()
 bool AvatarApi::setClip(const QString &name)
 {
     if (!mModel) return fail("avatar: not available in this session");
+    if (!requireIdle("avatar.setClip")) return false;
     if (!mModel->isLoaded()) return fail("avatar.setClip: nothing is loaded");
     if (!mModel->setClip(name))
         return fail(QStringLiteral("avatar.setClip: no clip named '%1'").arg(name));
@@ -756,6 +777,9 @@ bool AvatarApi::setClip(const QString &name)
 bool AvatarApi::playClip(const QString &name)
 {
     if (!mModel) return fail("avatar: not available in this session");
+    // Named form only: it SELECTS a clip, and during a switch the clip names
+    // on screen are the outgoing character's. A bare play() is harmless.
+    if (!name.isEmpty() && !requireIdle("avatar.playClip")) return false;
     if (!mModel->isLoaded()) return fail("avatar.playClip: nothing is loaded");
     if (!name.isEmpty() && !mModel->setClip(name))
         return fail(QStringLiteral("avatar.playClip: no clip named '%1'").arg(name));
@@ -2433,6 +2457,35 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
 // THE BACKGROUND JOBS (AV1). One at a time, reported through mJob and the
 // busy* signals; the page turns those into the Assets page's ProgressDialog.
 
+// WHILE A JOB RUNS, THE MODULE IS NOT IN A STATE TO BE EDITED (lead review).
+// During an async open the DEFINITION is already the new avatar's while the
+// PREVIEW is still the old character, so a clip added in that window is
+// matched against the wrong skeleton and written into the wrong avatar's file.
+// During an import there is no open subject at all yet. Both are refusals, not
+// silent no-ops: the caller (a script or a button) is told why.
+bool AvatarApi::requireIdle(const char *verb)
+{
+    if (!mJob.running) return true;
+    const QString what = mJob.kind == QLatin1String("import")
+                             ? QStringLiteral("importing '%1'").arg(mJob.file)
+                             : QStringLiteral("loading '%1'").arg(mJob.file);
+    return record(QStringLiteral("%1: the avatar module is busy %2 — try again when it "
+                                 "finishes").arg(QString::fromLatin1(verb), what));
+}
+
+void AvatarApi::abandonPreviewLoad()
+{
+    ++mLoadEpoch;                      // any parse in flight now applies nothing
+    auto *stale = mOpenWatcher;
+    if (!stale) return;
+    mOpenWatcher = nullptr;
+    stale->disconnect(this);           // our completion lambda is bound to `this`
+    // The parse itself cannot be interrupted (assimp) and its result is inert;
+    // the watcher just has to outlive it and then go.
+    if (stale->isFinished()) stale->deleteLater();
+    else connect(stale, &QFutureWatcherBase::finished, stale, &QObject::deleteLater);
+}
+
 bool AvatarApi::startImport(const QString &path, AvatarAssets::Scope scope, int drawerId,
                             const QString &name)
 {
@@ -2541,6 +2594,12 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
 {
     mJob.running = true;
     mJob.stage = QStringLiteral("preview");
+    mJob.kind = QStringLiteral("open");
+    // THE PREVIEW PARSE CANNOT BE CANCELLED (assimp), so the dialog must stop
+    // offering it: a live Cancel button that latches "Cancelling…" and then
+    // does nothing is worse than no button (lead review). Re-announcing the
+    // phase is also what tells the user the import part is over.
+    emit busyStarted(QStringLiteral("Loading %1").arg(rowName), false);
     emit busyStage(QStringLiteral("preview"), 0, 0);
 
     // THE 1.5 s SWITCH (owner-measured): an assimp parse of the stored model
@@ -2550,9 +2609,14 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     auto *watcher =
         new QFutureWatcher<std::shared_ptr<avatar::AvatarPreviewModel::PreparedSubject>>(this);
     mOpenWatcher = watcher;
-    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher]() {
+    const quint64 epoch = mLoadEpoch;
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, epoch]() {
         watcher->deleteLater();
-        if (mOpenWatcher != watcher) return;   // superseded or detached
+        // TWO guards, and the epoch is the load-bearing one: the watcher
+        // pointer only catches a REPLACED parse, while the epoch also catches
+        // a SYNCHRONOUS open that landed while this one was parsing (which
+        // would otherwise put character A on screen under B's definition).
+        if (mOpenWatcher != watcher || epoch != mLoadEpoch) return;
         mOpenWatcher = nullptr;
         QString error;
         if (mModel) {
@@ -2605,6 +2669,9 @@ bool AvatarApi::cancelImport()
 
 void AvatarApi::detachModel()
 {
+    // A coalesced write still in its window would die with the module: flush
+    // before anything else (this is the app-quit path).
+    flushPersist("avatar");
     // Order matters: stop the import worker (it may still queue a commit onto
     // this thread), then the preview parse, then forget the model. mOpenWatcher
     // is cleared FIRST so a completion that is already queued does nothing.
@@ -2614,11 +2681,16 @@ void AvatarApi::detachModel()
         runner->waitForDone(5000);
         runner->deleteLater();
     }
+    ++mLoadEpoch;
     if (auto *watcher = mOpenWatcher) {
         mOpenWatcher = nullptr;
         watcher->disconnect(this);
-        // The parse cannot be interrupted (assimp), but it touches nothing of
-        // ours — join it so the pool is not torn down under a running task.
+        // The parse cannot be interrupted (assimp) and it touches nothing of
+        // ours, so the join is bounded by the parse itself — measured at 0.4-1.5 s
+        // on the owner's file. Quitting DURING a preview parse therefore waits
+        // that long; quitting during the import phase does not (the runner
+        // abandons). Joining is the safe half of the trade: the pool must not
+        // be torn down under a running task.
         watcher->waitForFinished();
         watcher->deleteLater();
     }
@@ -2638,10 +2710,14 @@ QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope
         return QString();
     }
 
-    // NOTHING UNSAVED IS EVER DROPPED (owner 2026-09-13): every definition edit
-    // writes through as it is made, so this is belt and braces — but an avatar
-    // switch used to discard the clips the user had just added, silently.
-    persistOpen("avatar.open");
+    // NOTHING UNSAVED IS EVER DROPPED (owner 2026-09-13): definition edits are
+    // written through, and a coalesced one still in its window is FLUSHED here
+    // — an avatar switch used to discard the clips the user had just added,
+    // silently.
+    flushPersist("avatar.open");
+    // ... and whatever the module was about to show, it is not this. Any parse
+    // in flight is detached before mOpen moves (the stale-apply defect).
+    abandonPreviewLoad();
 
     mOpen.guid = guid;
     mOpen.scope = scope;
@@ -2696,16 +2772,25 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
     }
 
     const bool async = options.value(QStringLiteral("async")).toBool();
-    if (async && mJob.running) {
-        record("avatar.open: a background job is already running");
+    // AN IMPORT OWNS THE MODULE while it runs (it ends by opening what it
+    // imported, so a competing open would be undone a moment later). A PREVIEW
+    // PARSE does not: a new open simply supersedes it, whichever form either
+    // one takes — openDefinition detaches the old parse and moves the epoch.
+    if (mJob.running && mJob.kind == QLatin1String("import")) {
+        record(QStringLiteral("avatar.open: the avatar module is busy importing '%1' — try "
+                              "again when it finishes").arg(mJob.file));
         return out;
     }
+    const bool supersededParse = mJob.running;
 
     QString rowName;
     const QString modelPath = openDefinition(guid, scope, &rowName);
     if (!mOpen.isOpen() || mOpen.guid != guid) return out;   // openDefinition recorded why
 
     if (modelPath.isEmpty()) {
+        // Nothing to show: if a parse was superseded, its job ends here or the
+        // page's dialog would stay up forever.
+        if (supersededParse && mJob.running) endJob(false, QString());
         notifyChanged();
         return asset();
     }
@@ -2732,6 +2817,9 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
         record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
                               "previewed: %2").arg(rowName, loadError));
     notifySubjectChanged();
+    // A SYNCHRONOUS open that superseded a parse owns the outcome now: end the
+    // job it took over, so the progress dialog comes down.
+    if (supersededParse && mJob.running) endJob(false, QString());
     notifyChanged();
     return asset();
 }
@@ -2745,6 +2833,9 @@ QVariantMap AvatarApi::asset()
     out["version"] = mOpen.version;
     out["name"] = mOpen.definition.name;
     out["dirty"] = mOpen.dirty;
+    // A write is ARMED but not yet made (the coalescing window). `dirty` alone
+    // cannot tell "nobody asked" from "asked, about to happen".
+    out["pending"] = mPersistTimer && mPersistTimer->isActive();
     out["definition"] = definitionToJs(mOpen.definition);
     return out;
 }
@@ -2755,8 +2846,33 @@ QVariantMap AvatarApi::asset()
 // were gone, and so were they after a restart. Every edit now goes to the
 // store where it was opened from — the same call `avatar.save` makes, so
 // library scopes publish and project scopes copy-on-write exactly as before.
+void AvatarApi::schedulePersist()
+{
+    if (!mOpen.isOpen()) return;
+    mOpen.dirty = true;
+    if (!mPersistTimer) {
+        mPersistTimer = new QTimer(this);
+        mPersistTimer->setSingleShot(true);
+        // 250 ms: long enough that the three clicks of "looping, root motion,
+        // make default" are ONE publish and one instance refresh, short enough
+        // that a user who edits and immediately closes the module still hits a
+        // flush point rather than the timer.
+        mPersistTimer->setInterval(250);
+        connect(mPersistTimer, &QTimer::timeout, this, [this]() { persistOpen("avatar"); });
+    }
+    mPersistTimer->start();
+    notifyChanged();   // the page shows the pending state (Save re-enabled)
+}
+
+bool AvatarApi::flushPersist(const char *verb)
+{
+    if (mPersistTimer) mPersistTimer->stop();
+    return persistOpen(verb);
+}
+
 bool AvatarApi::persistOpen(const char *verb)
 {
+    if (mPersistTimer) mPersistTimer->stop();
     if (!mOpen.isOpen() || !mOpen.dirty) return true;
     if (!host.db) return false;
 
@@ -2765,9 +2881,16 @@ bool AvatarApi::persistOpen(const char *verb)
                                                host.project, &error);
     if (version.isEmpty()) {
         // Recorded, never thrown: the edit stays in the session (dirty) and
-        // the page's Save button is the retry.
+        // the page's Save button is the retry. AND SAID OUT LOUD (owner's rule
+        // — a problem the user can act on gets a message, not a log line):
+        // losing an avatar's clip list to a silent write failure is exactly
+        // the class this lane exists to remove.
+        const QString message =
+            QStringLiteral("'%1' could not be saved: %2\n\nThe change is still here — press "
+                           "Save to try again.").arg(mOpen.definition.name, error);
         record(QStringLiteral("%1: the change could not be saved: %2")
                    .arg(QString::fromLatin1(verb), error));
+        emit persistFailed(message);
         return false;
     }
     mOpen.version = version;
@@ -2789,6 +2912,7 @@ QVariantMap AvatarApi::save()
     QVariantMap out;
     if (!requireOpenAsset("avatar.save")) return out;
     if (!host.db) { record("avatar.save: not available in this session"); return out; }
+    if (mPersistTimer) mPersistTimer->stop();   // this IS the write
 
     QString error;
     const QString version = AvatarAssets::save(mOpen.guid, mOpen.scope, mOpen.definition, host.db,
@@ -2843,6 +2967,7 @@ QVariantMap AvatarApi::saveToLibrary(const QString &guid)
 bool AvatarApi::removeClip(const QString &name)
 {
     if (!requireOpenAsset("avatar.removeClip")) return false;
+    if (!requireIdle("avatar.removeClip")) return false;
     int index = -1;
     for (int i = 0; i < mOpen.definition.clips.size(); ++i)
         if (mOpen.definition.clips[i].name == name) { index = i; break; }
@@ -2858,7 +2983,7 @@ bool AvatarApi::removeClip(const QString &name)
                                            ? QString()
                                            : mOpen.definition.clips.first().name;
     mOpen.dirty = true;
-    persistOpen("avatar.removeClip");
+    schedulePersist();
     notifyChanged();
     return true;
 }
@@ -2867,6 +2992,7 @@ QVariantMap AvatarApi::setClipOptions(const QString &name, const QVariantMap &va
 {
     QVariantMap out;
     if (!requireOpenAsset("avatar.setClipOptions")) return out;
+    if (!requireIdle("avatar.setClipOptions")) return out;
 
     static const QStringList known = { "looping", "rootMotion", "name" };
     for (auto it = values.constBegin(); it != values.constEnd(); ++it)
@@ -2908,7 +3034,7 @@ QVariantMap AvatarApi::setClipOptions(const QString &name, const QVariantMap &va
         entry->rootMotion = values.value(QStringLiteral("rootMotion")).toBool();
 
     mOpen.dirty = true;
-    persistOpen("avatar.setClipOptions");
+    schedulePersist();
     out["name"] = entry->name;
     out["looping"] = entry->looping;
     out["rootMotion"] = entry->rootMotion;
@@ -2919,12 +3045,13 @@ QVariantMap AvatarApi::setClipOptions(const QString &name, const QVariantMap &va
 bool AvatarApi::setDefaultClip(const QString &name)
 {
     if (!requireOpenAsset("avatar.setDefaultClip")) return false;
+    if (!requireIdle("avatar.setDefaultClip")) return false;
     if (!name.isEmpty() && !mOpen.definition.findClip(name))
         return record(QStringLiteral("avatar.setDefaultClip: '%1' has no clip called '%2'")
                           .arg(mOpen.definition.name, name));
     mOpen.definition.defaultClip = name;
     mOpen.dirty = true;
-    persistOpen("avatar.setDefaultClip");
+    schedulePersist();
     notifyChanged();
     return true;
 }

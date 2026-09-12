@@ -26,6 +26,14 @@
 //      per-clip settings and the default-clip pointer.
 //   6. quitting with an avatar import IN FLIGHT still terminates (the
 //      import.shutdown zombie class, applied to the module's own worker).
+//   7. THE SWITCH WINDOW IS NOT EDITABLE (lead review, AV1 round 2): between an
+//      async open's return and its parse landing the definition is the new
+//      avatar's while the preview is still the old character, so every
+//      definition edit REFUSES and the incoming avatar's stored file is
+//      untouched — the data-corruption class this round fixes.
+//   8. A SYNCHRONOUS open during an async one wins: the superseded parse
+//      applies nothing (it used to leave the preview on the old character
+//      under the new one's definition), and the same for async-during-async.
 //
 // "Responsive" is measured, not asserted by eye: the app's heartbeat probe
 // (app.heartbeat / app.heartbeatStats) reports the WORST gap between ticks on
@@ -392,8 +400,23 @@ int main(int argc, char **argv)
     mcp.runScript(QStringLiteral("avatar.setClipOptions('%1', {looping: false, rootMotion: true})")
                       .arg(clip));
     mcp.runScript(QStringLiteral("avatar.setDefaultClip('%1')").arg(clip));
-    CHECK(!mcp.value(QStringLiteral("avatar.asset().dirty")).toBool(),
-          "the clip was WRITTEN THROUGH into the avatar's stored definition, not left unsaved");
+    // COALESCED, not immediate (AV1 round 2): the edit arms a short single-shot
+    // so three clip toggles are ONE CAS publish and one instance refresh. What
+    // the user is promised is that it lands without them pressing anything.
+    bool settled = false;
+    QElapsedTimer settleTimer;
+    settleTimer.start();
+    while (settleTimer.elapsed() < 10000) {
+        const QJsonObject open = mcp.runScript(QStringLiteral("avatar.asset()"))
+                                     .value("result").toObject();
+        if (!open.value("dirty").toBool() && !open.value("pending").toBool()) { settled = true; break; }
+        QThread::msleep(50);
+    }
+    std::printf("info: the coalesced write settled after %lld ms\n",
+                static_cast<long long>(settleTimer.elapsed()));
+    CHECK(settled,
+          "the clip WRITES ITSELF THROUGH into the avatar's stored definition, with nobody "
+          "pressing Save");
 
     // switch away and back
     mcp.runScript(QStringLiteral("avatar.open('%1')").arg(syncAvatar));
@@ -404,6 +427,83 @@ int main(int argc, char **argv)
     CHECK(clipNames(mcp, QStringLiteral("avatar.asset().definition.clips.map(function(c){return c.name})"))
               .contains(clip),
           "the clip is still there after switching away and back");
+
+    // ---- 7. the SWITCH WINDOW refuses every definition edit ---------------
+    //
+    // Fail-before (measured on the previous tip): `loadAnimation` during an
+    // async switch matched the clip against the OUTGOING character's skeleton,
+    // appended it to the INCOMING avatar's definition and wrote it to that
+    // avatar's file — permanently, and invisibly the moment the preview swapped.
+    {
+        const QString victim = syncAvatar;     // the avatar being switched TO
+        const QString beforeVersion =
+            mcp.string(QStringLiteral("(function(){var a = avatar.open('%1'); var v = a.version; "
+                                      "return v;})()").arg(victim));
+        // back to the other one, then switch to the victim ASYNCHRONOUSLY and
+        // edit inside the window.
+        mcp.runScript(QStringLiteral("avatar.open('%1')").arg(asyncAvatar));
+        const QJsonObject duringSwitch = mcp.runScript(
+            QStringLiteral("var opened = avatar.open('%1', {async: true});"
+                           "var refusals = [];"
+                           "function refused(f) { try { f(); return false; } catch (e) { return true; } }"
+                           "refusals.push(refused(function(){ avatar.loadAnimation('%2'); }));"
+                           "refusals.push(refused(function(){ avatar.setDefaultClip(''); }));"
+                           "refusals.push(refused(function(){ avatar.removeClip('%3'); }));"
+                           "refusals.push(refused(function(){ avatar.setClipOptions('%3', {looping: true}); }));"
+                           "refusals.push(refused(function(){ avatar.setCharacterHeight(1.9); }));"
+                           "refusals.push(refused(function(){ avatar.setClip('%3'); }));"
+                           "({running: avatar.progress().running, open: opened.guid,"
+                           "  refusals: refusals, clips: avatar.asset().definition.clips.length});")
+                .arg(victim, walk, clip)).value("result").toObject();
+        std::printf("info: during the switch: %s\n",
+                    QJsonDocument(duringSwitch).toJson(QJsonDocument::Compact).constData());
+        const QJsonArray refusals = duringSwitch.value("refusals").toArray();
+        bool allRefused = refusals.size() == 6;
+        for (const QJsonValue &v : refusals) allRefused = allRefused && v.toBool();
+        CHECK(duringSwitch.value("running").toBool(),
+              "the switch was still in flight while the edits were attempted");
+        CHECK(allRefused, "every definition edit REFUSED inside the switch window");
+        CHECK(duringSwitch.value("clips").toInt() == 0,
+              "... and the incoming avatar's clip list did not grow in memory");
+
+        const JobStats afterWindow = waitForJob(mcp, "switch-window");
+        CHECK(afterWindow.done, "the switch finished normally afterwards");
+        const QString afterVersion =
+            mcp.string(QStringLiteral("avatar.asset().version"));
+        CHECK(!beforeVersion.isEmpty() && afterVersion == beforeVersion,
+              "the incoming avatar's STORED definition is byte-identical (no version moved)");
+        CHECK(mcp.integer(QStringLiteral("avatar.asset().definition.clips.length")) == 0,
+              "... and it still has no clips after the parse landed");
+        // The same gesture from the UI is greyed out rather than refused: the
+        // page reads the same progress() the verbs guard on (avatarpage.cpp).
+    }
+
+    // ---- 8. a SYNCHRONOUS open supersedes a parse in flight ---------------
+    {
+        mcp.runScript(QStringLiteral("avatar.open('%1')").arg(syncAvatar));
+        const QJsonObject raced = mcp.runScript(
+            QStringLiteral("avatar.open('%1', {async: true});"
+                           "var sync = avatar.open('%2');"
+                           "({guid: sync.guid, running: avatar.progress().running,"
+                           "  preview: avatar.preview().name});").arg(asyncAvatar, syncAvatar))
+                .value("result").toObject();
+        std::printf("info: sync open during an async one: %s\n",
+                    QJsonDocument(raced).toJson(QJsonDocument::Compact).constData());
+        CHECK(raced.value("guid").toString() == syncAvatar,
+              "the synchronous open wins the definition");
+        CHECK(!raced.value("running").toBool(),
+              "... and ends the job it superseded (the dialog cannot hang)");
+        // Give the abandoned parse time to land; it must change nothing.
+        QThread::msleep(3000);
+        CHECK(mcp.string(QStringLiteral("avatar.asset().guid")) == syncAvatar,
+              "the superseded parse did not move the open definition");
+        const QString previewName = mcp.string(QStringLiteral("avatar.preview().name"));
+        const QString openName = mcp.string(QStringLiteral("avatar.asset().name"));
+        std::printf("info: preview='%s' definition='%s'\n",
+                    previewName.toUtf8().constData(), openName.toUtf8().constData());
+        CHECK(previewName == openName,
+              "the PREVIEW and the DEFINITION are the same character (the stale-apply defect)");
+    }
 
     // ---- 6. quitting with an import IN FLIGHT -----------------------------
     mcp.runScript(QStringLiteral("avatar.importAvatar('%1', {async: true})").arg(rig));

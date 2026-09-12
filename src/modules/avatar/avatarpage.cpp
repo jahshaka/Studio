@@ -523,6 +523,9 @@ void AvatarPage::setApi(AvatarApi *api)
         mProgress->setLabelText(title);
         mProgress->setStageText(tr("Reading…"));
         mProgress->show();
+        // The definition-editing controls grey out for the duration (the same
+        // rule the verbs enforce) — the page has to re-read to show it.
+        refreshFromModel();
     });
     connect(mApi, &AvatarApi::busyStage, this,
             [this](const QString &stage, int done, int total) {
@@ -540,6 +543,10 @@ void AvatarPage::setApi(AvatarApi *api)
         mProgress->setStageText(text);
         mProgress->setRange(0, total);
         if (total > 0) mProgress->setValue(done);
+    });
+    connect(mApi, &AvatarApi::persistFailed, this, [this](const QString &message) {
+        QMessageBox::warning(this, tr("Avatar not saved"), message);
+        refreshFromModel();
     });
     connect(mApi, &AvatarApi::busyFinished, this, [this](bool cancelled, const QString &error) {
         mProgress->hide();
@@ -724,6 +731,13 @@ void AvatarPage::refreshFromModel()
     mUpdating = true;
 
     const bool loaded = mModel->isLoaded();
+    // WHILE A JOB RUNS THE PAGE IS READ-ONLY for anything that edits the
+    // definition or picks a clip (lead review, AV1 round 2): during a switch
+    // the character on screen is the OUTGOING one while the open definition is
+    // already the incoming avatar's, so "Load Animation…" there would file a
+    // clip matched against the wrong skeleton into the wrong avatar. The verbs
+    // refuse it too — this is the same rule, made visible.
+    const bool busy = mApi && mApi->progress().value(QStringLiteral("running")).toBool();
     mMeshToggle->setChecked(mModel->meshVisible());
     mSkeletonToggle->setChecked(mModel->skeletonVisible());
     mRigToggle->setChecked(mModel->rigVisible());
@@ -735,14 +749,17 @@ void AvatarPage::refreshFromModel()
     const QWidget *const transport[] = { mPlayButton, mPauseButton, mStopButton,
                                          mLoopToggle, mRootMotionToggle, mScrub };
     for (const QWidget *w : transport) const_cast<QWidget *>(w)->setEnabled(loaded);
-    mLoadAnimButton->setEnabled(loaded);
+    mLoadAnimButton->setEnabled(loaded && !busy);
+    // The clip list is the clip SWITCHER (a double-click plays one) and the
+    // clip EDITOR (its context menu): both are definition/preview edits.
+    mAnimations->setEnabled(!busy);
 
     refreshLibrary();
     // "Add to Project" acts on what is LOADED, so it is greyed out until an
     // avatar is open (owner 2026-09-13).
     if (mAddToProjectButton)
         mAddToProjectButton->setEnabled(
-            mApi && !mApi->asset().value(QStringLiteral("guid")).toString().isEmpty());
+            !busy && mApi && !mApi->asset().value(QStringLiteral("guid")).toString().isEmpty());
 
     const auto clips = mModel->clips();
     // WITH AN AVATAR OPEN the rows are the DEFINITION's clips — the avatar's
@@ -815,6 +832,10 @@ void AvatarPage::refreshFromModel()
             mScopeLabel->setText(tr("No avatar open."));
             mSaveButton->setEnabled(false);
         } else {
+            // `dirty` is now normally false — clip edits write themselves
+            // through — so Save is enabled only when there is really something
+            // to write: a coalesced write still in its window, or one that
+            // FAILED and is waiting to be retried.
             const bool dirty = openAsset.value(QStringLiteral("dirty")).toBool();
             const QString scope = openAsset.value(QStringLiteral("scope")).toString();
             mScopeLabel->setText(
