@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "ui/style/thememanager.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 #include "data/settingsmanager.h"
 #include "data/constants.h"
 
@@ -256,6 +257,13 @@ public:
         if (hint == QStyle::SH_ItemView_ActivateItemOnSingleClick) {
             for (const QWidget *w = widget; w; w = w->parentWidget()) {
                 if (qobject_cast<const QFileDialog *>(w))
+                    return 0;
+                // ... and any view that says its activation is expensive
+                // (ThemeRoles::setActivateOnDoubleClick). The Avatar module's
+                // library LOADS a character on activation, and Qt emits
+                // `activated` on a RIGHT-button release too, so the owner's
+                // right-click reloaded the avatar instead of opening the menu.
+                if (w->property(ThemeRoles::activateOnDoubleClickProperty()).toBool())
                     return 0;
             }
         }

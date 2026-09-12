@@ -41,7 +41,10 @@ set_property(TARGET test_style_contracts PROPERTY AUTOUIC_SEARCH_PATHS
 target_include_directories(test_style_contracts PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_style_contracts PRIVATE Qt6::Widgets qlementine)
+# Qt6::Test for the synthetic mouse/key gestures the activation contract needs
+# (a right-click must raise a menu, never activate).
+find_package(Qt6 REQUIRED COMPONENTS Test)
+target_link_libraries(test_style_contracts PRIVATE Qt6::Widgets Qt6::Test qlementine)
 set(_style_contracts_root ${CMAKE_CURRENT_BINARY_DIR}/style-contracts-root)
 add_test(NAME theme.style_contracts COMMAND test_style_contracts
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

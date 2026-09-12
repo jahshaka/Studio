@@ -135,5 +135,9 @@ void AvatarModule::shutdown()
     // ours, and it must go before the engine does.
     if (mPreview) mPreview->setPreviewModel(nullptr);
     if (mPage) mPage->detachModel();   // stop the 100ms ticker + null its raw pointer
+    // AV1: the API may have an import worker or a preview parse in flight, and
+    // both end by touching the model we are about to free (the import.shutdown
+    // zombie class). detachModel stops and joins them first.
+    if (mApi) mApi->detachModel();
     mModel.reset();
 }

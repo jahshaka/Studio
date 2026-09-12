@@ -211,6 +211,27 @@ inline void setMonospace(QWidget *w, int pixelSize)
 /// An icon/text button with no plate until hovered — the style's own flat
 /// button (QPushButton::flat, QToolButton::autoRaise), where Classic used a
 /// "background: transparent" sheet.
+// ---------------------------------------------------------------------------
+// ITEM VIEWS WHOSE ACTIVATION IS EXPENSIVE (AV1, owner 2026-09-13)
+// ---------------------------------------------------------------------------
+// Qlementine answers SH_ItemView_ActivateItemOnSingleClick with TRUE, and
+// QAbstractItemView emits `activated` on the release of ANY button when it
+// does — including the RIGHT button that was only meant to raise a context
+// menu. On a list whose activation LOADS A CHARACTER that is the owner's
+// report: "I right click and it starts reloading her... so I can't access the
+// menu". Views marked here get the platform-default rule instead — a click
+// selects, a double-click or Enter activates — and their context menus work.
+//
+// Marked, not hard-coded, so the rule is a property of the VIEW (its
+// activation is expensive), read by JahQlementineStyle::styleHint in
+// thememanager.cpp. A no-op under Classic, whose base style already answers 0.
+inline const char *activateOnDoubleClickProperty() { return "jahActivateOnDoubleClick"; }
+
+inline void setActivateOnDoubleClick(QWidget *view)
+{
+    if (view) view->setProperty(activateOnDoubleClickProperty(), true);
+}
+
 inline void setFlat(QAbstractButton *b)
 {
     if (!b || StyleSheet::classicThemeActive()) return;

@@ -170,6 +170,44 @@ int main(int argc, char **argv)
         CHECK(warnings.size() == 1 && warnings.first().contains("instead"),
               "1: and says so");
 
+        // ---- 1b: WITHDRAWING a warning is exact, and earned (AV1) ---------
+        //
+        // A model may name a texture by its exporter's temp directory AND carry
+        // the bytes embedded (every Mixamo "with skin" FBX does): containment
+        // refuses the path, the embedded lookup then extracts the media, and
+        // the warning is withdrawn. Two rules make that honest.
+        {
+            iris::MaterialHelper::takeContainmentWarnings();
+
+            // (a) EXACT: withdrawing "beside.png" must not eat the warning
+            // about "/some/other/machine/beside.png", which merely CONTAINS it.
+            iris::MaterialHelper::containedTexturePath("/some/other/machine/beside.png", modelDir);
+            iris::MaterialHelper::registerRetraction("beside.png", modelDir + "/beside.png");
+            iris::MaterialHelper::settleRetractions();
+            QStringList kept = iris::MaterialHelper::takeContainmentWarnings();
+            CHECK(kept.size() == 1 && kept.first().contains("/some/other/machine/beside.png"),
+                  "1b: withdrawing one texture's warning does not remove another's whose "
+                  "name merely contains it");
+
+            // (b) the reference's OWN warning is withdrawn, once its bytes exist.
+            iris::MaterialHelper::containedTexturePath("../../outside_secret.png", modelDir);
+            iris::MaterialHelper::registerRetraction("../../outside_secret.png",
+                                                     modelDir + "/beside.png");
+            iris::MaterialHelper::settleRetractions();
+            CHECK(iris::MaterialHelper::takeContainmentWarnings().isEmpty(),
+                  "1b: a reference resolved from the model's own embedded media is no longer "
+                  "warned about");
+
+            // (c) EARNED: a write that did not land keeps the warning — the one
+            // case where the user really is missing a texture.
+            iris::MaterialHelper::containedTexturePath("../../outside_secret.png", modelDir);
+            iris::MaterialHelper::registerRetraction("../../outside_secret.png",
+                                                     modelDir + "/never_written.png");
+            iris::MaterialHelper::settleRetractions();
+            CHECK(iris::MaterialHelper::takeContainmentWarnings().size() == 1,
+                  "1b: a failed extraction keeps its warning (the withdrawal is earned)");
+        }
+
         CHECK(iris::MaterialHelper::containedTexturePath("*0", modelDir) ==
                   QStringLiteral("*0"),
               "1: assimp's embedded reference \"*0\" is not a path and passes through");

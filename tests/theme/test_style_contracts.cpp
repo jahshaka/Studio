@@ -28,11 +28,22 @@
 // decorationPosition, sizing and painting every item icon-left/text-right, so
 // those lists lost their captions; JahQlementineStyle routes such items to
 // QCommonStyle's layout.
+//
+// 4. An item view whose ACTIVATION IS EXPENSIVE (ThemeRoles::
+// setActivateOnDoubleClick — the Avatar module's library, which LOADS a
+// character) activates on a double-click or Enter and NEVER on a single click,
+// which is what makes its context menu reachable: Qlementine answers
+// SH_ItemView_ActivateItemOnSingleClick true and QAbstractItemView then emits
+// `activated` on the release of ANY button — including the right button. That
+// is the owner's report (2026-09-13): "I right click and it starts reloading
+// her... so I can't access the menu".
 #include <QApplication>
 #include <QStyleOptionTab>
 #include <QListWidget>
 #include <QStyleOptionViewItem>
 #include <QTabBar>
+#include <QTest>
+#include <QTreeWidget>
 #include <QPointer>
 #include <QStyle>
 #include <cstdio>
@@ -41,6 +52,7 @@
 
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/themeroles.h"
 #include "ui/style/thememanager.h"
 
 namespace {
@@ -156,6 +168,67 @@ int main(int argc, char **argv)
     }
     QApplication::processEvents();
     CHECK(!appStyle.isNull(), "qlementine: a rebuilt panel of rows leaves the app style alive");
+
+    // ---- 4. expensive activation takes a double-click ------------------------
+    {
+        QStyle *s = QApplication::style();
+        QTreeWidget plain;
+        plain.setColumnCount(1);
+        new QTreeWidgetItem(&plain, { QStringLiteral("Jennifer") });
+        CHECK(s->styleHint(QStyle::SH_ItemView_ActivateItemOnSingleClick, nullptr, &plain) != 0,
+              "activation: an ordinary view keeps Qlementine's single-click activation");
+
+        QTreeWidget library;
+        library.setColumnCount(1);
+        auto *row = new QTreeWidgetItem(&library, { QStringLiteral("Jennifer") });
+        ThemeRoles::setActivateOnDoubleClick(&library);
+        CHECK(s->styleHint(QStyle::SH_ItemView_ActivateItemOnSingleClick, nullptr, &library) == 0,
+              "activation: a marked view activates on a DOUBLE click instead");
+        // ... and the child of a marked view is covered too (a view's viewport
+        // is what the style is asked about for some hints).
+        CHECK(s->styleHint(QStyle::SH_ItemView_ActivateItemOnSingleClick, nullptr,
+                           library.viewport()) == 0,
+              "activation: the marked view's viewport answers the same");
+
+        library.show();
+        QApplication::processEvents();
+        int activations = 0;
+        QObject::connect(&library, &QTreeWidget::itemActivated,
+                         [&activations](QTreeWidgetItem *, int) { ++activations; });
+        const QPoint at = library.visualItemRect(row).center();
+
+        // THE OWNER'S GESTURE: a right-click over a loaded avatar.
+        QTest::mouseClick(library.viewport(), Qt::RightButton, Qt::NoModifier, at);
+        QApplication::processEvents();
+        CHECK(activations == 0, "activation: a RIGHT click activates nothing (the menu's gesture)");
+
+        QTest::mouseClick(library.viewport(), Qt::LeftButton, Qt::NoModifier, at);
+        QApplication::processEvents();
+        CHECK(activations == 0, "activation: a single LEFT click only selects");
+        CHECK(library.currentItem() == row, "activation: ... and it DOES select");
+
+        QTest::mouseDClick(library.viewport(), Qt::LeftButton, Qt::NoModifier, at);
+        QApplication::processEvents();
+        CHECK(activations == 1, "activation: a DOUBLE click activates (loads) exactly once");
+
+        QTest::keyClick(&library, Qt::Key_Return);
+        QApplication::processEvents();
+        CHECK(activations == 2, "activation: Enter still activates");
+
+        // The unmarked view is the fail-before: the same right-click on it
+        // activates, which is exactly what the Avatar page's library did.
+        int plainActivations = 0;
+        QObject::connect(&plain, &QTreeWidget::itemActivated,
+                         [&plainActivations](QTreeWidgetItem *, int) { ++plainActivations; });
+        plain.show();
+        QApplication::processEvents();
+        QTest::mouseClick(plain.viewport(), Qt::RightButton, Qt::NoModifier,
+                          plain.visualItemRect(plain.topLevelItem(0)).center());
+        QApplication::processEvents();
+        CHECK(plainActivations == 1,
+              "activation: an UNMARKED view really does activate on a right click "
+              "(the defect this marking fixes)");
+    }
 
     // ---- Classic: the row keeps its archived sheet (and its old proxy base)
     StyleSheet::setClassicThemeActive(true);

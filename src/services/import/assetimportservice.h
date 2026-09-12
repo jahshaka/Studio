@@ -65,6 +65,15 @@ public:
     PreparedImport prepare(const ImportRequest &request,
                            const ImportProgressFn &progress = ImportProgressFn());
 
+    /// THE IMPORT RECORD (SESSION_LOG_SPEC §5), for the routes that do not go
+    /// through `import`. It used to live inside that one function, so every
+    /// THREADED import — the Assets page's drops and browse dialog, and now
+    /// the Avatar module's — wrote nothing at all to the session log and its
+    /// warnings were lost with it (found by AV1, 2026-09-13: the owner's
+    /// Jennifer.fbx line came from the synchronous avatar path).
+    static void logImportRecord(const ImportRequest &request, const ImportResult &result,
+                                qint64 elapsedMs);
+
     /// The DB half: store (CAS) + register + drawer filing, one transaction
     /// with the existing rollback/orphan-cleanup semantics. MUST run on the
     /// thread that owns the default QSqlDatabase connection (the UI thread in
