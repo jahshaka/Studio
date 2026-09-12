@@ -489,8 +489,11 @@ QVector<VerbInfo> MaterialApi::verbs() const
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
           "A texture ASSET guid on a map key pins that image into the open project as a binding "
-          "(the scene uses it; no companion material is minted) — so it is a tile in the editor's "
-          "asset tray (assets.list({scope: 'project', tray: true})) and a project export carries it. "
+          "(the scene uses it; no companion material is minted) and records the node -> texture "
+          "dependency the material panel's texture row records — so it is a tile in the editor's "
+          "asset tray (assets.list({scope: 'project', tray: true})), assets.dependencies(nodeId) "
+          "names it, and a project export carries it. Recording a use never takes the image out "
+          "of the LIBRARY: the Assets page hides an import's MEMBERS, not what a scene uses. "
           "THE UV TRANSFORM takes two spellings: `textureScale` and `textureOffset` accept a "
           "two-element array [u, v] for per-axis tiling/offset, or a plain number meaning both "
           "axes (which is what every script written before per-axis tiling says, and it keeps "
