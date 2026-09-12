@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
 
-DonateDialog::DonateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::DonateDialog)
+DonateDialog::DonateDialog(QWidget *parent) : QDialog(parent), ui(new Ui::DonateDialog)
 {
     ui->setupUi(this);
     // donate.ui used to embed these (classic-only now; theme sweep)

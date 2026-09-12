@@ -50,7 +50,6 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginematerialpreview.h"
-#include "ui/dialogs/donatedialog.h"
 #include "services/assethelper.h"
 #include "services/assetstore.h"
 #include "services/scenenodehelper.h"
@@ -657,15 +656,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		}
 	}
 
-#ifndef BUILD_PLAYER_ONLY
-    if (closing) {
-        if (!getSettingsManager()->getValue("ddialog_seen", "false").toBool()) {
-            DonateDialog dialog;
-            dialog.updateVersion(Constants::CONTENT_VERSION);
-            dialog.exec();
-        }
-    }
-#endif // !BUILD_PLAYER_ONLY
+	// (THE DONATE DIALOG USED TO RUN HERE, modally, as the last thing a user
+	// saw on the way out. It moved to FIRST LAUNCH — app/firstrun.h, called
+	// from main() — for two reasons: asking on the way out is the worst moment
+	// to ask, and a nested modal event loop inside closeEvent meant app.quit()
+	// could not complete until somebody clicked it. Owner decision D3,
+	// 2026-09-12. Nothing may be added here that runs its own event loop.)
 
 	// STEP 1 of the shutdown order (the whole sequence is documented in one
 	// place, at ~MainWindow, and enumerated in shell/shutdownorder.h). Recorded

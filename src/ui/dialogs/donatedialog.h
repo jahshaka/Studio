@@ -25,7 +25,7 @@ class DonateDialog : public QDialog
     Q_OBJECT
 
 public:
-    DonateDialog(QDialog *parent = Q_NULLPTR);
+    DonateDialog(QWidget *parent = Q_NULLPTR);
     ~DonateDialog();
 
     void updateVersion(const QString& version);

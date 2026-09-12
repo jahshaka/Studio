@@ -37,6 +37,8 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "services/apppaths.h"
 #include "app/cli/clioptions.h"
+#include "app/firstrun.h"
+#include "ui/dialogs/donatedialog.h"
 #include "services/assetstorepaths.h"
 #include "services/assetstore.h"
 #include "data/settingsmanager.h"
@@ -372,6 +374,28 @@ int main(int argc, char *argv[])
     // Make our window render as normal going forward
     //window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();   // splash.finish above hides the splash here
+
+    // FIRST LAUNCH, ONCE: the donate greeting (owner decision D3, 2026-09-12).
+    // It used to run modally inside MainWindow::closeEvent — the last thing a
+    // user saw on the way out, and a nested event loop inside the quit path.
+    // It runs HERE instead: the window is up, nothing is closing, and every
+    // DRIVEN way of starting this application (a suite, a script, MCP, the
+    // selftest, an offscreen run) is excluded by ONE predicate in
+    // app/firstrun.h. Note the CLI paths above all `return` before this line,
+    // so the predicate is belt and braces for them — and load-bearing for the
+    // ordinary windowed run a rig starts with `--data-root`.
+    //
+    // The dialog's CONTENT is untouched by this move.
+    if (FirstRun::shouldGreet(
+            cli, SettingsManager::getDefaultManager()
+                     ->getValue("ddialog_seen", "false").toBool())) {
+        DonateDialog greeting(&window);
+        greeting.updateVersion(Constants::CONTENT_VERSION);
+        greeting.exec();
+        // Shown is seen, whether or not the user ticked the box: a greeting
+        // that returns every launch until it is acknowledged is nagware.
+        SettingsManager::getDefaultManager()->setValue("ddialog_seen", true);
+    }
 
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
