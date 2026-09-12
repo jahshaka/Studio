@@ -588,6 +588,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     {
         const QString m = sceneObj["worldMode"].toString().trimmed().toLower();
         scene->worldOverrides = sceneObj["worldOverrides"].toObject();
+        // A PIN OF A ROW THAT NO LONGER EXISTS is dropped on the way in (CRUD).
+        // `giDynamicProbes` was Rayon's fifth column until R2 deleted the
+        // feature; a scene the user had pinned it on (the shipped Showroom was
+        // one) would otherwise carry the dead key through every save for ever,
+        // and the World panel would have nothing to show for it.
+        scene->worldOverrides.remove(QStringLiteral("giDynamicProbes"));
         if (m.isEmpty()) {
             // A document written before World Modes existed — the shipped sample
             // scenes, and nothing else. §12 decision 8: it reads as EPIC, and the
