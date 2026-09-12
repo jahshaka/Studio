@@ -34,6 +34,10 @@ endif()
 
 project(Jahshaka)
 
+if(WIN32)
+    add_compile_definitions(NOMINMAX)
+endif()
+
 set(APP_OUTPUT_NAME "Jahshaka")
 
 # Bundle identity (MACOS_BUNDLE_SPEC §1.8): CMake's MacOSXBundleInfo.plist.in

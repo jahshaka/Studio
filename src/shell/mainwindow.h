@@ -93,7 +93,7 @@ class ProjectManager;
 
 class GizmoHitData;
 class AdvancedGizmoHandle;
-class MaterialPreset;
+struct MaterialPreset;
 class AssetWidget;
 
 // services (src/services/) — the shell constructs these and delegates to them

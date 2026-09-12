@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 
 class MainWindow;
-class MaterialPreset;
+struct MaterialPreset;
 
 class AssetMaterialPanel : public AssetPanel
 {

@@ -33,12 +33,24 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
 #include <dirent.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
 #include <fstream>
 #include <string>
 #include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -104,6 +116,19 @@ ShaderCacheStats runCycle(const char *what, bool *createdOut = nullptr) {
 
 std::vector<std::string> cacheFiles() {
     std::vector<std::string> out;
+#ifdef _WIN32
+    WIN32_FIND_DATAA entry {};
+    HANDLE handle = FindFirstFileA((gCacheDir + "/*").c_str(), &entry);
+    if (handle == INVALID_HANDLE_VALUE) return out;
+    do {
+        const std::string name = entry.cFileName;
+        if (name == "." || name == ".." || name == "cache.lock" ||
+            entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            continue;
+        out.push_back(name);
+    } while (FindNextFileA(handle, &entry));
+    FindClose(handle);
+#else
     DIR *d = opendir(gCacheDir.c_str());
     if (!d) return out;
     while (dirent *e = readdir(d)) {
@@ -112,6 +137,7 @@ std::vector<std::string> cacheFiles() {
         out.push_back(n);
     }
     closedir(d);
+#endif
     return out;
 }
 
@@ -128,8 +154,16 @@ void writeFile(const std::string &p, const std::vector<char> &bytes) {
     if (!bytes.empty()) f.write(bytes.data(), std::streamsize(bytes.size()));
 }
 
+void removeFile(const std::string &path) {
+#ifdef _WIN32
+    DeleteFileA(path.c_str());
+#else
+    ::unlink(path.c_str());
+#endif
+}
+
 void wipeDir() {
-    for (const std::string &n : cacheFiles()) ::unlink((gCacheDir + "/" + n).c_str());
+    for (const std::string &n : cacheFiles()) removeFile(gCacheDir + "/" + n);
 }
 
 /// A BYTE SNAPSHOT OF A SEEDED CACHE, and the restore that puts it back.
@@ -283,7 +317,7 @@ static void fingerprint_mismatch() {
 static void manifest_missing() {
     wipeDir();
     runCycle("seed");
-    ::unlink((gCacheDir + "/cache-manifest.txt").c_str());
+    removeFile(gCacheDir + "/cache-manifest.txt");
     const ShaderCacheStats after = runCycle("after-manifest-delete");
     CHECK(after.compiledThisRun > 0, "no manifest means no load, however good the payload looks");
     CHECK(!after.microcodeLoaded, "the unverifiable microcode file is not read");
@@ -439,6 +473,35 @@ static void concurrent_processes(const char *self) {
     wipeDir();
     runCycle("seed");
 
+#ifdef _WIN32
+    HANDLE processes[2] = {};
+    int worst = 0;
+    for (int i = 0; i < 2; ++i) {
+        std::string command = std::string("\"") + self + "\" --child \"" + gCacheDir + "\"";
+        std::vector<char> commandLine(command.begin(), command.end());
+        commandLine.push_back('\0');
+        STARTUPINFOA startup {};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process {};
+        if (!CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                            nullptr, &startup, &process)) {
+            std::printf("    child %d failed to start: %lu\n", i, GetLastError());
+            worst = 1;
+            continue;
+        }
+        CloseHandle(process.hThread);
+        processes[i] = process.hProcess;
+    }
+    for (int i = 0; i < 2; ++i) {
+        if (!processes[i]) continue;
+        WaitForSingleObject(processes[i], INFINITE);
+        DWORD rc = 1;
+        GetExitCodeProcess(processes[i], &rc);
+        CloseHandle(processes[i]);
+        if (rc > static_cast<DWORD>(worst)) worst = static_cast<int>(rc);
+        std::printf("    child %d exited %lu\n", i, static_cast<unsigned long>(rc));
+    }
+#else
     pid_t pids[2];
     for (int i = 0; i < 2; ++i) {
         pids[i] = fork();
@@ -458,6 +521,7 @@ static void concurrent_processes(const char *self) {
         if (rc > worst) worst = rc;
         std::printf("    child %d exited %d\n", i, rc);
     }
+#endif
     CHECK(worst == 0, "both concurrent processes exited cleanly");
 
     // And the cache they shared is still loadable afterwards.
@@ -469,7 +533,13 @@ int main(int argc, char **argv) {
     // The cache directory lives beside the binary; ctest gives each suite its
     // own working directory, so nothing here can reach a real user's cache.
     gCacheDir = "shadercache-test";
-    ::mkdir(gCacheDir.c_str(), 0755);
+#ifdef _WIN32
+    if (!CreateDirectoryA(gCacheDir.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return 1;
+#else
+    if (::mkdir(gCacheDir.c_str(), 0755) != 0 && errno != EEXIST)
+        return 1;
+#endif
 
     if (argc > 2 && std::strcmp(argv[1], "--child") == 0) {
         gCacheDir = argv[2];

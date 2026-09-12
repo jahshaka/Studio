@@ -44,7 +44,7 @@ class Database;
 class IEditorViewport;
 class UndoService;
 class SelectionService;
-class MaterialPreset;
+struct MaterialPreset;
 
 /// Options for SceneEditService::addImagePlane. Defaults are the
 /// owner-approved §8 calls (IMAGE_PLANE_SPEC): double-sided ON (a

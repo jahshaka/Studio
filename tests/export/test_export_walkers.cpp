@@ -224,22 +224,22 @@ int main(int argc, char **argv)
             else if (name == "childCube") childIdx = i;
         }
         CHECK(cubeIdx >= 0 && childIdx >= 0, "trs: cube and childCube both exported");
-        auto near = [](double a, double b) { return std::fabs(a - b) < 1e-5; };
+        auto approximatelyEqual = [](double a, double b) { return std::fabs(a - b) < 1e-5; };
         if (cubeIdx >= 0) {
             const QJsonObject n = nodes.at(cubeIdx).toObject();
             const QJsonArray t = n["translation"].toArray();
-            CHECK(t.size() == 3 && near(t[0].toDouble(), 1.5) &&
-                      near(t[1].toDouble(), -2.25) && near(t[2].toDouble(), 3.0),
+            CHECK(t.size() == 3 && approximatelyEqual(t[0].toDouble(), 1.5) &&
+                      approximatelyEqual(t[1].toDouble(), -2.25) && approximatelyEqual(t[2].toDouble(), 3.0),
                   "trs: parent translation exported verbatim");
             const QJsonArray s = n["scale"].toArray();
-            CHECK(s.size() == 3 && near(s[0].toDouble(), 2.0) &&
-                      near(s[1].toDouble(), 3.0) && near(s[2].toDouble(), 4.0),
+            CHECK(s.size() == 3 && approximatelyEqual(s[0].toDouble(), 2.0) &&
+                      approximatelyEqual(s[1].toDouble(), 3.0) && approximatelyEqual(s[2].toDouble(), 4.0),
                   "trs: parent non-uniform scale exported");
             // 90 deg about +Y = (0, sin45, 0, cos45); glTF stores xyzw.
             const QJsonArray q = n["rotation"].toArray();
             const double s45 = std::sin(M_PI / 4.0);
-            CHECK(q.size() == 4 && near(q[0].toDouble(), 0.0) && near(q[1].toDouble(), s45) &&
-                      near(q[2].toDouble(), 0.0) && near(q[3].toDouble(), s45),
+            CHECK(q.size() == 4 && approximatelyEqual(q[0].toDouble(), 0.0) && approximatelyEqual(q[1].toDouble(), s45) &&
+                      approximatelyEqual(q[2].toDouble(), 0.0) && approximatelyEqual(q[3].toDouble(), s45),
                   "trs: parent rotation exported as an xyzw quaternion");
             const QJsonArray kids = n["children"].toArray();
             CHECK(kids.size() == 1 && kids[0].toInt() == childIdx,
