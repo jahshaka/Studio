@@ -311,6 +311,8 @@ set(SRCS
     src/services/shortcutregistry.cpp
     src/services/gibounds.cpp
     src/services/sceneextents.cpp
+    src/services/sceneissues.cpp
+    src/ui/controls/sceneissuebar.cpp
     src/services/sunlink.cpp
     src/services/looks.cpp
     src/services/worldmodes.cpp

@@ -239,6 +239,18 @@ material.set(tp, { baseColor: "#20a040", roughness: 0.35 });
 // which is invariant under a uniform scale ONLY if r scales with d — halve the
 // room and keep r, and every corner gets brighter. Intensity, by the same
 // algebra, must NOT change. LIGHT_RANGE is the shipped 40 at the shipped size.
+//
+// SHADOWS ARE ON (owner decision, SUN_AND_LIGHT_DEFAULTS_SPEC): every light of
+// every type is born casting soft shadows, so these three lamps cast, and a
+// re-run of this tool writes "soft" for all of them. The shipped archive still
+// carries ONE of them switched off explicitly — it is the lamp above the roof
+// that used to light the floor THROUGH it, which is the very case the default
+// exists to stop — and re-authoring the samples is a separate, owner-level
+// decision (owner Q3: do not).
+//
+// There is NO directional light in this room on purpose: a directional injects
+// nothing into VCT in a sealed hall. A scene with no sun is completely
+// ordinary and nothing in the editor complains about it.
 var LIGHT_RANGE = 40 * S;
 [[0, 6.2, 0, 0.65], [-8, 5, -8, 0.5], [8, 5, 8, 0.5]].forEach(function (L, i) {
     var l = scene.addLight("point", { position: sv({ x: L[0], y: L[1], z: L[2] }) });

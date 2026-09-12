@@ -891,6 +891,12 @@ private:
     /// "The 3D view could not be created" — the respecced Failed state
     /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
     class Toast *viewErrorToast = nullptr;
+    /// THE SCENE-ERROR AREA (services/sceneissues.h): a dismissible list of the
+    /// scene problems the user can fix, over the viewport beside the frame-rate
+    /// readout. Built on the first issue and kept; the timer runs the scanner.
+    class SceneIssueBar *sceneIssueBar = nullptr;
+    class QTimer *sceneIssueTimer = nullptr;
+    void wireSceneIssues();
     void stepSnapSize(int direction);
     // F11 immersive fullscreen restore state (EDITOR_SHORTCUTS_SPEC §3)
     bool immersiveFullscreen = false;

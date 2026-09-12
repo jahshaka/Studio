@@ -18,57 +18,30 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
-namespace {
-
-iris::LightNodePtr firstDirectional(const iris::SceneNodePtr &node)
-{
-    if (!node) return iris::LightNodePtr();
-    auto light = node.dynamicCast<iris::LightNode>();
-    if (light && light->lightType == iris::LightType::Directional) return light;
-    const auto children = node->children();
-    for (const auto &child : children)
-        if (auto hit = firstDirectional(child)) return hit;
-    return iris::LightNodePtr();
-}
-
-}
-
 namespace sunlink
 {
 
-iris::LightNodePtr resolveTarget(const iris::ScenePtr &scene, const iris::SceneNodePtr &selected)
-{
-    if (!scene) return iris::LightNodePtr();
-    // Selection first: "drive the SELECTED directional light" is what the row
-    // says, and a scene with several suns has to be steerable.
-    if (selected) {
-        auto light = selected.dynamicCast<iris::LightNode>();
-        if (light && light->lightType == iris::LightType::Directional) return light;
-    }
-    return firstDirectional(scene->getRootNode());
-}
-
-QString setDriven(const iris::ScenePtr &scene, StudioServices *services, bool on,
-                  const iris::SceneNodePtr &selected)
+QString setDriven(const iris::ScenePtr &scene, StudioServices *services, bool on)
 {
     if (!scene) return QString();
-
-    QString target;
     if (on) {
-        auto light = resolveTarget(scene, selected);
-        if (!light) return QString();          // nothing to drive: refuse
-        target = light->getGUID();
-        if (target == scene->sunLightGuid) return target;
-    } else if (scene->sunLightGuid.isEmpty()) {
+        // Nothing to steer is a refusal, not a silently-on switch: the caller
+        // puts its checkbox back. (A scene with no directional light is normal
+        // and is not an error — it simply has no sun for the sky to aim.)
+        if (!scene->sunLight()) return QString();
+    } else if (!scene->skyDrivesSun) {
         return QString();                       // already off
     }
 
-    auto *cmd = new SunLightLinkCommand(on ? QStringLiteral("Link Sun Light")
-                                           : QStringLiteral("Unlink Sun Light"),
-                                        scene, target);
+    auto *cmd = new SunLightLinkCommand(on ? QStringLiteral("Sky Steers the Sun")
+                                           : QStringLiteral("Sky Stops Steering the Sun"),
+                                        scene, on);
     if (services && services->undo) services->undo->push(cmd);
     else { cmd->redo(); delete cmd; }
-    return scene->sunLightGuid;
+
+    if (!scene->skyDrivesSun) return QString();
+    auto sun = scene->sunLight();
+    return sun ? sun->getGUID() : QString();
 }
 
 }

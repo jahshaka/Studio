@@ -91,7 +91,20 @@ QVector<VerbInfo> SceneApi::verbs() const
           "undo macro.",
           Needs::Document },
         { "addLight", "scene.addLight(type, {position, ...}) -> id",
-          "Adds a light: point, spot, directional or area. Undoable.",
+          "Adds a light: point, spot, directional or area. "
+          "IT CASTS SHADOWS — every new light of every type is born casting soft shadows, and "
+          "the way to have one that does not is to set its Shadow Type to \"Off (fill light)\" "
+          "(node.setProperty(id, \"shadowMapType\", 0)), which is a deliberate choice a fill "
+          "light makes and not a performance dial. A light that does not cast lights everything "
+          "it reaches straight through walls and floors. "
+          "THE FIRST DIRECTIONAL LIGHT IN A SCENE IS THE SUN: it takes Forward Shading Priority 0 "
+          "and is the only directional the renderer can cast a shadow from. Each further "
+          "directional auto-slots into the next free priority and is a SECONDARY light — it "
+          "lights the scene fully and casts nothing; lower the priority to make one the sun, or "
+          "pin one outright with world.sunLight. A scene needs no sun at all: an interior lit by "
+          "lamps is perfectly ordinary and nothing complains about it. world.sun() reports which "
+          "light is the sun and why. "
+          "Undoable.",
           Needs::Document },
         { "addEmpty", "scene.addEmpty({position, parent}) -> id",
           "Adds an empty group node. Undoable.",
