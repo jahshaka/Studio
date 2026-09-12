@@ -83,11 +83,6 @@ function settle() { editor.frame(240, 1 / 60); }
 // every assertion below is a DIFFERENCE measured inside one open anyway.
 assert(project.create("Shot Grades " + Date.now()).length > 10, "created the project");
 
-["Directional Light", "Point Light"].forEach(function (n) {
-    var stray = scene.find(n);
-    if (stray) node.remove(stray);
-});
-
 function slab(name, pos, scale, color, rough, metal) {
     var id = scene.addPrimitive("cube", { position: pos });
     node.setProperty(id, "name", name);
@@ -96,12 +91,21 @@ function slab(name, pos, scale, color, rough, metal) {
     return id;
 }
 
-// The floor is the scene's own default ground, polished: a near-mirror plane is
-// what makes screen-space reflections visible at all (phase D).
-var ground = scene.find("Ground");
-assert(ground !== null, "the scene has its default ground");
-assert(material.set(ground, { roughness: 0.08, metallic: 0.9, baseColor: "#b8bcc4" }),
-       "the floor is polished — SSR needs a smooth surface to reflect in");
+["Directional Light", "Point Light"].forEach(function (n) {
+    var stray = scene.find(n);
+    if (stray) node.remove(stray);
+});
+
+
+// THE REFLECTIVE FLOOR IS THIS SUITE'S OWN SLAB, not the scene's default
+// ground. A near-mirror plane is what makes screen-space reflections visible at
+// all (phase D), and the default ground is somebody else's subject: it has
+// changed material, size and edge treatment twice in two days (GF1), and each
+// time it moved this suite's SSR reading with it. A slab laid on top answers
+// only to this file.
+var mirrorFloor = slab("MirrorFloor", { x: 0, y: 0.02, z: 0 },
+                       { x: 6, y: 0.02, z: 6 }, "#b8bcc4", 0.06, 1.0);
+assert(mirrorFloor.length > 0, "the room stands on its own polished floor");
 
 slab("BackWall",  { x: 0, y: 1.8, z: -4.5 }, { x: 6, y: 1.8, z: 0.25 }, "#d8d4cc", 0.85);
 slab("LeftWall",  { x: -4.5, y: 1.8, z: 0 }, { x: 0.25, y: 1.8, z: 6 }, "#e02020", 0.85);
