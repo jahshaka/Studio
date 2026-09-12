@@ -662,9 +662,12 @@ static QVector<ParamRow> buildPostFxParams()
         p.ownerRowId = QStringLiteral("hdr");
         p.minValue = -8.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
         p.doc = QStringLiteral("The bottom of the window automatic exposure may adapt within. "
-                               "Set equal to Exposure Max to PIN the exposure — the "
-                               "deterministic setting, and the one every secondary surface "
-                               "(thumbnails, previews, screenshots) grades with.");
+                               "Set equal to Exposure Max and the exposure stops following the "
+                               "scene's content — but it is still the automatic chain, which "
+                               "takes about a second to arrive, and it is NOT the constant "
+                               "thumbnails and previews grade with (measured, they land far "
+                               "apart). A screenshot that has to be identical every time asks "
+                               "for the \"tonemap\" or \"scene\" grade instead.");
         p.get = [](const iris::ScenePtr &s) { return double(s->exposureMin); };
         p.set = [](const iris::ScenePtr &s, double v) { s->exposureMin = float(v); };
         out.append(p);

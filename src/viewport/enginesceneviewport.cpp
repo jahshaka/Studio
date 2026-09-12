@@ -1971,21 +1971,37 @@ QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
-    // THE USER'S SCREENSHOT IS TONEMAPPED (owner report 2026-09-07, item 6).
-    // This is the no-argument door — the View menu's Screenshot action and the
-    // preview dialog it opens — and it used to hand back raw linear radiance
-    // clipped to 8 bits, so a photograph of an HDR scene was blown out where
-    // the viewport beside it was graded. The SCRIPT door (editor.screenshot)
-    // still defaults to Raw, deliberately: that one is a measuring instrument
-    // and every pixel suite in the tree asserts its exact colours.
+    // THE DEFAULT DOOR IS THE THUMBNAIL GRADE, and it is not the user's door.
+    // Its callers are project preview tiles (ProjectService) and the asset
+    // viewer — pictures OF CONTENT, taken in sweeps, which must stay cheap
+    // (SS1 keeps `secondaryfx`'s minimal chain exactly where it belongs). The
+    // USER's Screenshot action asks for ScreenshotGrade::Scene explicitly
+    // (MainWindow::takeScreenshot); the SCRIPT door defaults to Plain,
+    // deliberately, because that one is a measuring instrument and every pixel
+    // suite in the tree asserts its exact colours.
     return takeScreenshot(width, height, ScreenshotGrade::Tonemap);
 }
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
 {
     return takeScreenshot(width, height,
-                          postFx ? ScreenshotGrade::Viewport : ScreenshotGrade::Raw);
+                          postFx ? ScreenshotGrade::Viewport : ScreenshotGrade::Plain);
 }
+
+// ---- DOES A USER'S SCREENSHOT CONTAIN THE EDITOR'S HELPERS? ---------------
+//
+// It does today: the transform gizmo and the selection outline are in the
+// picture, and so are the light/camera wires, the grid and the GI-volume boxes
+// whenever the viewport is showing them. SS1 (2026-09-13) put the question to
+// the OWNER rather than answering it — "a screenshot of the editor" and "a
+// picture of the scene" are both defensible and it is not a builder's call.
+//
+// Everything the other answer needs is behind this ONE constant: false takes
+// every editor helper out of the user's shot (ScreenshotGrade::Scene) and puts
+// them back the moment it is taken. Left TRUE, because that is what the tool
+// does today and changing it silently would be the worse mistake; the lead has
+// the question.
+static constexpr bool kUserShotKeepsEditorHelpers = true;
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrade grade)
 {
@@ -2034,7 +2050,13 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // differs between windows because the POSE does; a shot of a pose set with
     // editor.setCamera is the same picture at any window size (ui.shot_aspect).
     const iris::CameraNodePtr shotCam = viewCamera();
-    const bool resizeGizmo = shotCam && mGizmo && mOverlay && mSelectedNode && !mGameView;
+    // The helpers question, resolved once (see kUserShotKeepsEditorHelpers).
+    // Only the USER's picture is affected: the script grades are measuring
+    // instruments and their contents are pinned by suites.
+    const bool hideHelpers = !kUserShotKeepsEditorHelpers &&
+                             grade == ScreenshotGrade::Scene && !mGameView;
+    const bool resizeGizmo = shotCam && mGizmo && mOverlay && mSelectedNode &&
+                             !mGameView && !hideHelpers;
     const float viewportAspect = shotCam ? shotCam->aspectRatio : 0.0f;
     const bool authoredAspect = shotCam && mPilot && shotCam->constrainAspect;
     iris::Vec3 gizmoRayPos, gizmoRayDir, gizmoViewDir;
@@ -2046,6 +2068,21 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     }
 
     if (mMirror) {
+        if (hideHelpers) {
+            // The same five switches Game View throws, for the duration of one
+            // picture; refreshOverlay() below puts the viewport's own answers
+            // back before anything presents another on-screen frame.
+            mMirror->setLightWires(false);
+            mMirror->setCameraBodies(false);
+            mMirror->setHighlightedNodes(QList<iris::SceneNodePtr>(), iris::SceneNodePtr());
+            pushGridForView(false);
+            mMirror->setGiVolumeOverlay(false);
+            if (mOverlay) {
+                iris::Vec3 rayPos, rayDir, viewDir;
+                mouseRay(rayPos, rayDir, viewDir);
+                mOverlay->update(nullptr, rayPos, rayDir, viewDir);
+            }
+        }
         mMirror->sync();
         // The shot view starts with a hardcoded background; give it the document
         // sky (flat colour) and world settings (shadows toggle) like the live view.
@@ -2053,18 +2090,28 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);
         if (viewCamera()) mMirror->applyCamera(viewCamera(), shot, freeCameraFramingAspect());
-        // applyEnvironment pushed the scene's post-fx description, which an
-        // offscreen view ignores unless it is told otherwise (POST_CHAIN_SPEC
-        // §7.3). `grade` is that opt-in, and it has three answers because the
-        // two the boolean offered were both wrong for the common case:
-        //   Raw       nothing at all — a neutral, exactly reproducible readback,
-        //             which is what every pixel suite asserts;
-        //   Tonemap   the deterministic filmic grade ONLY (no bloom, no AO, no
-        //             SMAA, fixed exposure) — a picture of the CONTENT that no
-        //             longer clips wherever the scene is bright;
-        //   Viewport  the scene's whole chain, adaptive exposure and all — what
-        //             `postFx: true` has always meant.
-        if (grade == ScreenshotGrade::Viewport) {
+        // applyEnvironment (and applyCamera, a line above) pushed the scene's
+        // post-fx description — the VIEWPORT's description — which an offscreen
+        // view ignores unless it is told otherwise (POST_CHAIN_SPEC §7.3).
+        // `grade` is that opt-in, and IEditorViewport::ScreenshotGrade documents
+        // the four answers; this is where each one is carried out:
+        //   Plain     nothing at all — the neutral, exactly reproducible
+        //             readback every pixel suite asserts;
+        //   Tonemap   the deterministic filmic grade ONLY, at the SCENE's
+        //             exposure — the thumbnail picture;
+        //   Scene     the whole chain at the on-screen view's MEASURED
+        //             exposure — the editor's own picture, what a user gets;
+        //   Viewport  the whole chain with its own adaptive exposure re-seeded
+        //             from the description — what `postFx: true` has always
+        //             meant, and the door a pipped camera's exposure uses.
+        if (grade == ScreenshotGrade::Scene) {
+            // THE MEASURED EXPOSURE COMES FROM THE VIEW ON SCREEN, read here
+            // because this is the only place that has both views: the shot can
+            // never measure (two frames), the viewport has been measuring this
+            // same scene for as long as it has been open. 0 (no on-screen view,
+            // no HDR, nothing presented yet) falls back inside applyScene.
+            secondaryfx::applyScene(shot, view() ? view()->measuredExposureScale() : 0.0f);
+        } else if (grade == ScreenshotGrade::Viewport) {
             jahshaka::engine::PostFxDesc fx = shot->postFx();
             fx.allowOffscreen = true;
             shot->setPostFx(fx);
@@ -2077,7 +2124,11 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
             // pushed makes the first frame the right frame.
             shot->resetExposureHistory();
         } else if (grade == ScreenshotGrade::Tonemap) {
-            secondaryfx::apply(shot, true);
+            // ...at the SCENE's exposure, which is what the description
+            // applyEnvironment just pushed carries (SS1: this used to be the
+            // caller's default and the World's value was thrown away, so every
+            // regraded world photographed at +0.6).
+            secondaryfx::apply(shot, true, shot->postFx().exposure);
         }
     }
     // A screenshot is an offscreen render of this same scene: without this
@@ -2103,6 +2154,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         mGizmo->updateSize(shotCam);
         mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
     }
+    if (hideHelpers) refreshOverlay();
     return result;
 }
 

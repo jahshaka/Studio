@@ -1335,3 +1335,24 @@ foreach(_clip clipboard clipboard_xproject clipboard_assets)
         LABELS "scripting" TIMEOUT 300)
     jah_no_display(scripting.e2e.${_clip})
 endforeach()
+
+# WHAT A SCREENSHOT IS A PICTURE OF (SS1, owner 2026-09-13 — "match the
+# screenshot to the scene properly"). The four ScreenshotGrade modes through
+# editor.screenshot: the plain readback the whole pixel corpus asserts does not
+# move; a world with HDR off photographs ungraded; the World's exposure reaches
+# both the scene grade and the thumbnail grade; the chain (SSR above all) is in
+# the user's picture; and a MOVABLE object is in it.
+#
+# ENGINE-UP AND ON-SCREEN, deliberately not --headless: the scene grade's
+# exposure is read off the VIEWPORT's converged luminance history, so the suite
+# is only meaningful with a real viewport rendering real frames. Four settle()
+# runs of 240 frames at Epic is what the timeout is for.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-screenshot_grades)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.screenshot_grades
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_screenshot_grades.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.screenshot_grades PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 600)
