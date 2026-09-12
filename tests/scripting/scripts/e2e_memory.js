@@ -1,5 +1,5 @@
 // scripting.e2e.memory — the MEMORY verbs (riders lane R4): app.memoryStats,
-// app.reclaimMemory and the profiler switch app.profiling. Headless: the NULL
+// app.reclaimMemory. Headless: the NULL
 // render system has a VaoManager and scene managers like Vulkan's, and the
 // document's nodes live in the engine's staging manager, so the SIMD half is
 // real here; the GPU rows are the NULL manager's (zero) and only their SHAPE
@@ -114,11 +114,10 @@ console.log("    reclaim: RSS " + r.before.residentBytes + " -> " + r.after.resi
 var m2 = app.memoryStats();
 assert(m2.simdNodes === r.after.simdNodes, "memoryStats after the reclaim agrees with it");
 
-// ---- the profiler switch ----------------------------------------------------
-assert(app.profiling() === false, "the pass profiler is OFF by default");
-assert(app.profiling(true) === true, "app.profiling(true) turns it on");
-assert(app.profiling() === true, "and it reads back on");
-assert(app.profiling(false) === false, "app.profiling(false) turns it off");
-assert(app.profiling() === false, "and it reads back off");
+// (THE PROFILER SWITCH `app.profiling` WAS HERE and is DELETED with the verb,
+// lane MON-P1a / owner decision D4: the render-loop monitor replaces
+// chain::PassProfiler, whose per-pass numbers were wrong for every scene pass
+// that owns a shadow node. Its successor is the `perf` module's capture verbs,
+// covered by that module's own suites.)
 
 console.log("memory verbs: all checks passed");

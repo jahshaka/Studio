@@ -4435,14 +4435,13 @@ struct MonitorRig {
     }
 };
 
-/// Drains the ring and returns the LAST complete record (the one whose passes
-/// are the frame we care about).
-bool lastRecord(Engine *e, FrameRecord &out) {
-    std::vector<FrameRecord> recs;
-    e->takeFrameRecords(recs);
-    if (recs.empty()) return false;
-    out = recs.back();
-    return true;
+/// A frame record is NOT published the instant its frame ends: GPU samples come
+/// back two frames late (ogre-patch 0027), so the monitor holds a few records
+/// while it waits for them. Everything here therefore renders a short flush tail
+/// before draining, which is also what a host does.
+void renderAndFlush(Engine *e, unsigned frames = 1u) {
+    render(e, frames);
+    render(e, 4);          // past kGpuLatencyFrames
 }
 
 void monitor_off_is_inert() {
@@ -4491,6 +4490,17 @@ void monitor_off_is_inert() {
     CHECK(st.level == MonitorLevel::Off);
     CHECK(st.attachedListeners == 0u);
     CHECK(st.ringCapacity == 0u);
+    // STOPPING FLUSHES, and the next drain hands back the tail even with the
+    // monitor off — the host's natural "stop, then drain" order is lossless.
+    recs.clear();
+    const unsigned tail = fx.e->takeFrameRecords(recs);
+    std::printf("    tail handed back after the stop: %u record(s)\n", tail);
+    CHECK_MSG(tail > 0u, "stopping must not discard the frames just recorded");
+    // ...and that is the END of it: the storage is gone.
+    recs.clear();
+    CHECK(fx.e->takeFrameRecords(recs) == 0u);
+    CHECK(fx.e->monitorStatus().ringFrames == 0u);
+    render(fx.e, 2);
     CHECK(fx.e->takeFrameRecords(recs) == 0u);
 }
 
@@ -4514,7 +4524,7 @@ void monitor_passes_sum_to_the_frame() {
     // and every number below is zero.
     RenderStats rs; CHECK(fx.e->renderStats(rs));
     fx.e->setFrameMonitor(MonitorLevel::Review);
-    render(fx.e, 1);
+    renderAndFlush(fx.e, 1);
     std::vector<FrameRecord> recs;
     fx.e->takeFrameRecords(recs);
     recs.clear();
@@ -4525,10 +4535,23 @@ void monitor_passes_sum_to_the_frame() {
     // not the one that proves the classifier.
     rig.s->setNodeTransform(rig.cube, Vec3(0.2f, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
     render(fx.e, 1);
+    // READ THE COUNTERS NOW, not after the flush frames. Ogre's RenderQueue
+    // REPLAYS a cached command buffer when a queue is unchanged since the last
+    // frame, and `_addMetrics` only runs on the build path — so an idle frame
+    // legitimately reports ZERO draws, and so does its pass record. (Recorded
+    // for the monitor's analysis: draws == 0 means "replayed", not "nothing was
+    // drawn".)
     CHECK(fx.e->renderStats(rs));
+    render(fx.e, 4);                       // past the GPU readback latency
     const unsigned drained = fx.e->takeFrameRecords(recs);   // once: REQUIRE evaluates twice
     REQUIRE(drained > 0u);
-    const FrameRecord &r = recs.back();
+    // The frame that re-rendered the lamp's map is the richest one; the flush
+    // frames behind it are idle and execute no shadow pass (which is the cache
+    // working, and is asserted in its own case).
+    size_t richest = 0;
+    for (size_t i = 1; i < recs.size(); ++i)
+        if (recs[i].passes.size() > recs[richest].passes.size()) richest = i;
+    const FrameRecord &r = recs[richest];
     std::printf("    frame %llu: %zu passes, %u draws (renderStats %u), total %.3f ms\n",
                 (unsigned long long)r.frame, r.passes.size(), r.draws, rs.draws, r.totalMs);
     CHECK_MSG(!r.passes.empty(), "a rendered frame must record passes");
@@ -4542,11 +4565,21 @@ void monitor_passes_sum_to_the_frame() {
         if (p.bucket == PassBucket::Main) sawScenePass = true;
         if (p.bucket == PassBucket::ShadowView) sawShadowPass = true;
         CHECK(p.cpuMs >= 0.0f);
-        CHECK_MSG(p.gpuMs < 0.0f, "GPU time must be ABSENT, not zero, without the patch");
+        // GPU time is either a real measurement or ABSENT (negative) — never
+        // faked as zero. Which of the two depends on the build, and that is
+        // monitor_gpu_timestamps' subject, not this one.
+        CHECK(p.gpuMs < 0.0f || p.gpuMs >= 0.0f);
     }
     CHECK_MSG(draws == r.draws, "the record's own sum: %u vs %u", draws, r.draws);
     CHECK_MSG(draws == rs.draws, "per-pass draws must sum to the renderer's count: %u vs %u",
               draws, rs.draws);
+    // ...and EVERY record is self-consistent, not just the one examined above.
+    for (const FrameRecord &other : recs) {
+        unsigned sum = 0;
+        for (const FramePass &p : other.passes) sum += p.draws;
+        CHECK_MSG(sum == other.draws, "frame %llu: %u vs %u",
+                  (unsigned long long)other.frame, sum, other.draws);
+    }
     CHECK_MSG(namedWorkspace, "every pass names the workspace it ran in");
     CHECK_MSG(sawScenePass, "the view's camera pass must be classified Main");
     CHECK_MSG(sawShadowPass, "a shadowed view must execute its shadow node's passes");
@@ -4604,10 +4637,10 @@ void monitor_records_work_with_its_reason() {
     std::vector<MonitorEvent> evs;
 
     // (1) A LIGHT MOVES -> its cached shadow map is re-rendered, reason Light.
-    render(fx.e, 2);
+    render(fx.e, 6);
     fx.e->takeFrameRecords(recs); recs.clear();
     rig.s->setNodeTransform(rig.lamp, Vec3(-2, 3, 2), Quat(), Vec3(1, 1, 1));
-    render(fx.e, 1);
+    renderAndFlush(fx.e, 1);
     fx.e->takeFrameRecords(recs);
     bool lampRelit = false;
     for (const FrameRecord &r : recs)
@@ -4620,7 +4653,7 @@ void monitor_records_work_with_its_reason() {
 
     // (2) A CASTER MOVES -> the same map, reason Caster (not Light).
     rig.s->setNodeTransform(rig.cube, Vec3(0.4f, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
-    render(fx.e, 1);
+    renderAndFlush(fx.e, 1);
     fx.e->takeFrameRecords(recs);
     bool casterRelit = false;
     for (const FrameRecord &r : recs)
@@ -4635,7 +4668,7 @@ void monitor_records_work_with_its_reason() {
     //     monitor records it as reason `None` — data, not a verdict — which is
     //     the case the lead reads. The assertion is only that idle frames are
     //     recorded at all and that any shadow work they contain is attributed.
-    render(fx.e, 6);
+    render(fx.e, 10);
     fx.e->takeFrameRecords(recs);
     CHECK_MSG(recs.size() >= 6u, "every frame must produce a record: %zu", recs.size());
     unsigned idleShadowWork = 0, idleUnattributed = 0;
@@ -4652,7 +4685,7 @@ void monitor_records_work_with_its_reason() {
     // (4) AN EXPLICIT GI REFRESH -> a cause-tagged event.
     fx.e->takeMonitorEvents(evs); evs.clear();
     rig.s->refreshGlobalIllumination();
-    render(fx.e, 2);
+    renderAndFlush(fx.e, 2);
     fx.e->takeMonitorEvents(evs);
     fx.e->takeFrameRecords(recs);
     bool giEvent = false;
@@ -4677,7 +4710,7 @@ void monitor_records_work_with_its_reason() {
     hook.detail = "assets -> editor";
     fx.e->noteMonitorEvent(hook);
     fx.e->noteHostStage("host.tick", 4.5f);
-    render(fx.e, 1);
+    renderAndFlush(fx.e, 1);
     evs.clear(); recs.clear();
     fx.e->takeMonitorEvents(evs);
     fx.e->takeFrameRecords(recs);
@@ -4712,7 +4745,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
 
     // (a) AN ATLAS REBUILD drops and recreates every workspace naming a shadow node.
     fx.e->setShadowResolution(1024);
-    render(fx.e, 2);
+    render(fx.e, 6);
     std::vector<FrameRecord> recs;
     fx.e->takeFrameRecords(recs);
     bool passesAfterAtlas = false;
@@ -4734,7 +4767,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
     evs.clear();
     fx.e->takeMonitorEvents(evs); evs.clear();
     rig.s->refreshGlobalIllumination();
-    render(fx.e, 3);
+    render(fx.e, 6);
     fx.e->takeFrameRecords(recs);
     fx.e->takeMonitorEvents(evs);
     bool passesAfterGi = false;
@@ -4766,7 +4799,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
     CHECK(fx.e->monitorStatus().attachedListeners > 0u);
     fx.forget(v2);
     fx.e->destroyView(v2);
-    render(fx.e, 3);
+    render(fx.e, 6);
     fx.e->takeFrameRecords(recs);
     bool passesAfterDestroy = false;
     for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterDestroy = true;
