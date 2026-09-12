@@ -307,7 +307,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 
     //scene already contains root node, so just add children
     auto sceneObj = projectObj["scene"].toObject();
-    bool hasDynamicProbesKey = true;   // set in the GI block below, read in the World Mode block
 	scene->skyGuid = sceneObj["skyGuid"].toString();
 	// Sun coupling (re-audit F5); absent in every document written before it,
 	// which reads as "nothing is driven" — the default.
@@ -455,14 +454,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             sceneObj.contains("giUpdateBudget")
                 ? qBound(0, sceneObj["giUpdateBudget"].toInt(1), 512)
                 : (sceneObj["giAutoRefresh"].toBool(true) ? 1 : 0);
-        // `giDynamicProbes` — Rayon Epic's old fifth column, DELETED with the
-        // feature (REALTIME_REFLECTIONS_SPEC R2, 2026-09-12: a moving object is
-        // not in a probe capture at all any more, so there is nothing to
-        // reserve captures for). The VALUE is ignored wherever it appears; only
-        // its PRESENCE is still read, as a format-era marker for the option-(b)
-        // bump below — a document that carries a tier but never carried this
-        // key was written by the one-day P2 table.
-        hasDynamicProbesKey = sceneObj.contains("giDynamicProbes");
+        // (`giDynamicProbes` — Rayon Epic's old fifth column — is READ BY
+        // NOTHING. The feature is deleted, R2 2026-09-12: a moving object is not
+        // in a probe capture at all any more, so there is nothing to reserve
+        // captures for. An old file may carry the key; it is simply ignored,
+        // and the pin it may have left in worldOverrides is dropped below.)
         if (sceneObj.contains("giPccGrid"))   // pre-hybrid documents keep the 3x2x3 default
             scene->giPccGrid = readVector3(sceneObj["giPccGrid"].toObject());
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
@@ -623,26 +619,16 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // has always done, and preserving its old GI settings as pins would
             // pin every row of every old document for ever.
             if (!sceneObj.contains("giTier")) worldmodes::deriveRayonFromDocument(scene);
-            // THE TIER TABLE'S OPTION-(b) BUMP (2026-09-09). A document that
-            // carries a tier but no `giDynamicProbes` was written by the
-            // one-day P2 table (Medium/High field OFF, no Epic columns): its
-            // tier already said what it wanted, and the old derivation had
-            // normalised an untouched field tri-state to a concrete 0. It is
-            // re-applied here — pins honoured, exactly what the dial does —
-            // so it comes up as its tier under the table as it stands (the
-            // Skeletal Animation and World Background samples are that
-            // shape). A document this build wrote carries the key and is
-            // never touched; a pinned field survives either way.
-            else if (!hasDynamicProbesKey) {
-                // A P2 document could not carry a `giBounces` pin (the row did
-                // not exist), so a hand-set bounce count would be overwritten
-                // by the tier's — pin it first when it deviates (code review
-                // 2026-09-10).
-                const worldmodes::RayonTier tier = worldmodes::rayonTier(scene);
-                if (scene->giNumBounces != worldmodes::rayonBounces(tier))
-                    worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), scene->giNumBounces);
-                worldmodes::setRayon(scene, worldmodes::rayonEnabled(scene), tier);
-            }
+            // (THE TIER TABLE'S OPTION-(b) BUMP LIVED HERE and is DELETED,
+            // 2026-09-12.) It re-applied the tier to any document that carried
+            // a `giTier` but no `giDynamicProbes` — the one-day P2 table's
+            // shape — and it keyed on the PRESENCE of a key that this build no
+            // longer writes, so from the moment R2 deleted the column every
+            // file the app saves would have taken it on every open, silently
+            // re-normalising unpinned deviations for ever (code review
+            // 2026-09-12, item 3). No migrations are owed (CRUD law): a
+            // document's own rows are what it renders, and a sample that comes
+            // up at the wrong tier is re-authored, never patched by the reader.
         }
     }
     // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.

@@ -1789,6 +1789,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     case jahshaka::engine::GiStaleReason::Sky:      out.lastStaleReason = QStringLiteral("sky"); break;
     case jahshaka::engine::GiStaleReason::Ambient:  out.lastStaleReason = QStringLiteral("ambient"); break;
     case jahshaka::engine::GiStaleReason::Fog:      out.lastStaleReason = QStringLiteral("fog"); break;
+    case jahshaka::engine::GiStaleReason::Mobility: out.lastStaleReason = QStringLiteral("mobility"); break;
     }
     return out;
 }

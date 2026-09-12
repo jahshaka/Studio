@@ -343,6 +343,46 @@ static void sectionA(Engine *engine)
               "deleting a mover costs no capture and no rebuild (%d)", onDelete);
     }
 
+    // ---- A9: THE GHOST HEALS (code review 2026-09-12, item 5) --------------
+    // A soft promotion leaves the object's bounce where it stood and clears for
+    // free — but only while the voxels still HOLD that bounce. If they are
+    // rebuilt from scratch meanwhile the object is not in them, and a free
+    // clearing push would leave a hole for ever. So the clearing push
+    // invalidates exactly when a rebuild happened in between, and only then.
+    {
+        // (a) no rebuild in between: clearing is free, as O3 promises.
+        const NodeId prop = box(s, Vec3(1.4f, 0.6f, 2.0f), Vec3(0.6f, 0.6f, 0.6f),
+                                Colour(0.9f, 0.9f, 0.4f), 0.0f, 0.6f);
+        frames(30);
+        unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
+        unsigned long long reb = s->giStatus().rebuilds;
+        s->setNodeMovable(prop, true, MobilityChange::Soft);
+        frames(10);
+        s->setNodeMovable(prop, false, MobilityChange::Soft);
+        frames(10);
+        CHECK(s->mobilityStatus().mobilityRebuilds == mob && s->giStatus().rebuilds == reb,
+              "a promotion and its clear cost nothing at all when nothing rebuilt in between");
+        // (b) a rebuild DID happen while promoted: the clear pays for the hole.
+        mob = s->mobilityStatus().mobilityRebuilds;
+        s->setNodeMovable(prop, true, MobilityChange::Soft);
+        frames(5);
+        GiParams regrid = gi;
+        regrid.pccProbesX = 2; regrid.pccProbesY = 1; regrid.pccProbesZ = 3;   // 6 probes: a from-scratch build
+        s->setGlobalIllumination(regrid);
+        frames(30);
+        reb = s->giStatus().rebuilds;
+        CHECK(reb > 0, "...a from-scratch rebuild happened while it was promoted");
+        s->setNodeMovable(prop, false, MobilityChange::Soft);
+        frames(30);
+        std::printf("-- ghost heal: mobilityRebuilds %llu -> %llu, rebuilds %llu -> %llu\n",
+                    mob, s->mobilityStatus().mobilityRebuilds, reb, s->giStatus().rebuilds);
+        CHECK(s->mobilityStatus().mobilityRebuilds == mob + 1,
+              "clearing a promotion the voxels were rebuilt under costs ONE counted rebuild");
+        CHECK(s->giStatus().rebuilds > reb, "...and the object really is back in the voxels");
+        s->removeNode(prop);
+        frames(20);
+    }
+
     // ---- A8: the counters ---------------------------------------------------
     {
         const MobilityStatus m = s->mobilityStatus();
