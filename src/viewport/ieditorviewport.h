@@ -400,6 +400,9 @@ public:
         /// shadow half falls back when no shadow node exists — so the request
         /// alone never says what the reflections actually contain.
         bool probeHdr = false, probeShadows = false;
+        int  probeCaptureSize = 0;
+        int  probeEnclosedAxes = 0;
+        bool probeGridRefused = false;
         /// How many probes the renderer re-captures per frame — the RESOLVED
         /// GI update budget (FIX WAVE B1/B2). 0 means GI is PAUSED: every
         /// reflection is frozen until world.refreshGi() asks for more. A CEILING:

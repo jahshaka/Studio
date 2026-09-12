@@ -38,8 +38,14 @@ editor.frame(4);
 
 // THE HYBRID WITH SHADOWED PROBES: the probe grid captures the room, and each
 // capture instantiates the probe shadow node the cache assigns lamps into.
+// ...and a STATED lit volume, because this scene is a floor with a box on it,
+// which the renderer measures as OPEN — and since the 2026-09-13 probe lane an
+// open scene builds NO probe grid at all (the sky is its reflection). This
+// suite is about the lamp-map cache inside probe captures, so it says where the
+// space is and gets its probes; the open-scene rule itself is gi.probe_open's.
 assert(world.gi({ mode: "vct_pcc_hybrid", quality: "low", probeShadows: true,
-                  pccGrid: { x: 2, y: 1, z: 2 }, updateBudget: 4 }),
+                  pccGrid: { x: 2, y: 1, z: 2 }, updateBudget: 4,
+                  boundsMin: { x: -5, y: -1, z: -5 }, boundsMax: { x: 5, y: 5, z: 5 } }),
        "world.gi(hybrid + probe shadows)");
 editor.frame(60);
 var g = world.giStatus();

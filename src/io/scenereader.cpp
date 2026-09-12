@@ -464,6 +464,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
         // document written before this phase; the toInt/toDouble defaults ARE
         // the constructor's, so an old scene reads exactly as it did.
+        scene->giProbeCaptureSize = qBound(0, sceneObj["giProbeCaptureSize"].toInt(0), 1024);
         scene->giProbeHdr = qBound(-1, sceneObj["giProbeHdr"].toInt(-1), 1);
         scene->giProbeShadows = qBound(-1, sceneObj["giProbeShadows"].toInt(-1), 1);
         scene->giProbeOverlap =

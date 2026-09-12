@@ -80,6 +80,7 @@ protected slots:
     void onAdvancedToggled(bool on);
     void modeChanged(int row);
     void onQualityChanged(int row);
+    void onProbeSizeChanged(int row);
     void onLightChanged(int row);
     void onBouncesChanged(float value);
     void onDdgiToggled(bool on);
@@ -126,6 +127,7 @@ private:
     DragVector3Widget *boundsMin = nullptr;
     DragVector3Widget *boundsMax = nullptr;
     DragVector3Widget *pccGrid = nullptr;
+    ComboBoxWidget *probeSize = nullptr;
     HFloatSliderWidget *updateBudget = nullptr;
     CheckBoxWidget *ddgiToggle = nullptr;
     HFloatSliderWidget *ddgiIntensity = nullptr;

@@ -109,7 +109,14 @@ var lit = probeOf(hero, "reflection_hero_rebound.png");
 assert(dist(lit, h0) > 12, "and it is on screen again");
 
 app.engineErrors(true);   // reset the pump: what follows must add nothing
-assert(world.gi({ mode: "vct_pcc_hybrid" }) === true, "switch the VCT+Probes hybrid ON");
+// ...with a STATED lit volume. Since 2026-09-13 (owner decision Q3) the hybrid
+// measures enclosure and builds NO probe grid in a scene it reads as open,
+// which this two-sphere scene is; this fence is about the env-probe SLOT being
+// fought over, so it says where the space is and gets its probes.
+assert(world.gi({ mode: "vct_pcc_hybrid",
+                  boundsMin: { x: -6, y: -2, z: -6 },
+                  boundsMax: { x: 6, y: 6, z: 6 } }) === true,
+       "switch the VCT+Probes hybrid ON");
 // The hybrid binds over several frames (voxelize, solve, capture the probes),
 // so this waits for the BINDING rather than assuming it landed in one.
 for (var w = 0; w < 12 && world.giStatus().pccBound !== true; ++w) editor.frame(5);

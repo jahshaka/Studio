@@ -39,6 +39,20 @@ const iris::GiMode kGiRows[] = {
     iris::GiMode::VCT, iris::GiMode::VCT_PCC_HYBRID,
 };
 const int kGiRowCount = int(sizeof(kGiRows) / sizeof(kGiRows[0]));
+
+/// Probe capture size combo rows -> pixels (0 = follow the quality dial).
+const int kProbeSizeRows[] = { 0, 128, 256, 512 };
+const int kProbeSizeRowCount = int(sizeof(kProbeSizeRows) / sizeof(kProbeSizeRows[0]));
+int probeSizeRow(int px)
+{
+    for (int i = 0; i < kProbeSizeRowCount; ++i)
+        if (kProbeSizeRows[i] == px) return i;
+    return 0;   // anything a script pinned that is not on the dial reads Automatic
+}
+int probeSizeValue(int row)
+{
+    return (row >= 0 && row < kProbeSizeRowCount) ? kProbeSizeRows[row] : 0;
+}
 int giRowFor(iris::GiMode m)
 {
     for (int i = 0; i < kGiRowCount; ++i)
@@ -81,7 +95,7 @@ void WorldGiPropertyWidget::rebuild()
     rayonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;
     quality = nullptr; lightSelector = nullptr; bounces = nullptr;
     boundsMin = nullptr; boundsMax = nullptr;
-    pccGrid = nullptr; updateBudget = nullptr; ddgiToggle = nullptr;
+    pccGrid = nullptr; probeSize = nullptr; updateBudget = nullptr; ddgiToggle = nullptr;
     ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
     fitBoundsButton = nullptr; advancedButton = nullptr; resetAdvancedButton = nullptr;
     editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
@@ -305,6 +319,29 @@ void WorldGiPropertyWidget::rebuild()
                                                                   qBound(1, qRound(g.y()), 8),
                                                                   qBound(1, qRound(g.z()), 8)));
                          });
+
+            // PROBE CAPTURE SIZE (owner, 2026-09-13: "yes halve it but add it
+            // to the world settings"). A Rayon tier row like Quality above —
+            // editing it PINS it, and the mark says so. It is the grid's
+            // biggest memory lever: six faces and a mip chain per probe, so the
+            // array goes with the SQUARE of this number.
+            probeSize = this->addComboBox(tr("Probe Capture Size") +
+                                          pinMark(scene, "giProbeSize"));
+            probeSize->addItem(tr("Automatic"));
+            probeSize->addItem(tr("128 px"));
+            probeSize->addItem(tr("256 px"));
+            probeSize->addItem(tr("512 px"));
+            probeSize->setCurrentIndex(probeSizeRow(scene->giProbeCaptureSize));
+            probeSize->setToolTip(
+                tr("The pixel size of ONE reflection-probe cube face. A probe is six of them "
+                   "plus a mip chain, so the probe array's video memory goes with the SQUARE "
+                   "of this: at 256 a probe costs 4.0 MB in HDR and a 32-probe room 128 MB; "
+                   "at 512 it is 16.0 MB and 512 MB.\n\n"
+                   "Automatic follows the quality dial — 128 at Low, 256 above — and is the "
+                   "shipped answer, because the roughness blur the renderer convolves into "
+                   "these captures hides the difference on everything but a mirror."));
+            connect(probeSize, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
+                    this, &WorldGiPropertyWidget::onProbeSizeChanged);
         }
 
         // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). On at every voxel tier
@@ -575,6 +612,12 @@ void WorldGiPropertyWidget::onQualityChanged(int row)
         scene->giQuality = static_cast<iris::GiQuality>(quality);
         worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
     });
+}
+
+void WorldGiPropertyWidget::onProbeSizeChanged(int row)
+{
+    if (!scene) return;
+    editRayonRow(QStringLiteral("giProbeSize"), probeSizeValue(row), tr("Rayon Probe Capture Size"));
 }
 
 void WorldGiPropertyWidget::onLightChanged(int row)

@@ -69,24 +69,29 @@ static void testTierTable()
     // (voxel resolution, probe faces/HDR/shadows, the 8192-probe field grid,
     // ddgiSource auto = voxel) follow giQuality / the engine and are pinned
     // by gi.modes, gi.pcc_mirror and gi.ddgi.
-    struct Want { RayonTier tier; int mode, quality, ddgi, bounces; const char *name; };
+    // The fifth column is the PROBE CAPTURE SIZE (owner 2026-09-13 Q4): 0 at
+    // every tier = "follow the engine's quality dial", because the halving that
+    // decision asked for is the engine's default now (High 512 -> 256). The
+    // column exists so a scene can PIN a size, which case 3 gates.
+    struct Want { RayonTier tier; int mode, quality, ddgi, bounces, probeSize; const char *name; };
     const Want wants[] = {
-        { RayonTier::Low,    1, 0, 0, 1, "Low = Instant Radiosity, low quality, no field, 1 bounce" },
-        { RayonTier::Medium, 2, 1, 1, 1, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
-        { RayonTier::High,   3, 2, 1, 1, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
-        { RayonTier::Epic,   3, 2, 1, 3, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces (the FOUR-column table: movers are reflected by SSR + planar, never by a probe re-capture)" },
+        { RayonTier::Low,    1, 0, 0, 1, 0, "Low = Instant Radiosity, low quality, no field, 1 bounce, automatic probe size" },
+        { RayonTier::Medium, 2, 1, 1, 1, 0, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
+        { RayonTier::High,   3, 2, 1, 1, 0, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
+        { RayonTier::Epic,   3, 2, 1, 3, 0, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces (the FOUR-column table: movers are reflected by SSR + planar, never by a probe re-capture)" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setRayon(s, true, w.tier);
         CHECK(giMode(s) == w.mode && giQuality(s) == w.quality && giDdgi(s) == w.ddgi &&
-                  giBounces(s) == w.bounces, w.name);
+                  giBounces(s) == w.bounces && s->giProbeCaptureSize == w.probeSize, w.name);
         // The accessors ARE the table (one owner): what they say per column
         // must be what the tier wrote.
         CHECK(worldmodes::rayonTechnique(w.tier) == w.mode &&
                   worldmodes::rayonQuality(w.tier) == w.quality &&
                   worldmodes::rayonDdgi(w.tier) == w.ddgi &&
-                  worldmodes::rayonBounces(w.tier) == w.bounces,
+                  worldmodes::rayonBounces(w.tier) == w.bounces &&
+                  worldmodes::rayonProbeSize(w.tier) == w.probeSize,
               "the column accessors agree with the write-through");
         CHECK(s->giTier == int(w.tier), "the tier is recorded on the document");
         CHECK(worldmodes::rayonEnabled(s), "and Rayon reads enabled");
@@ -101,18 +106,19 @@ static void testTierTable()
                   qPrintable(QStringLiteral("write-through holds for %1").arg(id)));
         }
     }
-    CHECK(worldmodes::rayonRowIds().size() == 4, "the tier writes exactly four rows through");
-    // 4 x 4: EVERY cell of every rayonTiered row is the table's cell. The rows
+    CHECK(worldmodes::rayonRowIds().size() == 5, "the tier writes exactly five rows through");
+    // 5 x 4: EVERY cell of every rayonTiered row is the table's cell. The rows
     // derive their tier[] from kRayonTable (worldmodes.cpp rayonColumns) and
     // the public readers read the same table one column at a time, so a cell
     // that disagrees here is a second copy of the table — which is exactly what
     // the rayontiers review found (13 of 20 cells untested while hand-copied).
     {
         using Reader = int (*)(RayonTier);
-        const Reader readers[4] = { worldmodes::rayonTechnique, worldmodes::rayonQuality,
-                                    worldmodes::rayonDdgi, worldmodes::rayonBounces };
+        const Reader readers[5] = { worldmodes::rayonTechnique, worldmodes::rayonQuality,
+                                    worldmodes::rayonDdgi, worldmodes::rayonBounces,
+                                    worldmodes::rayonProbeSize };
         const QStringList ids = worldmodes::rayonRowIds();
-        for (int c = 0; c < 4 && c < ids.size(); ++c) {
+        for (int c = 0; c < 5 && c < ids.size(); ++c) {
             const worldmodes::Row *r = worldmodes::row(ids[c]);
             for (int t = 0; t < 4; ++t) {
                 const int want = readers[c](RayonTier(t));
@@ -238,12 +244,26 @@ static void testPins()
     // nothing re-introduces it quietly.
     CHECK(!worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), 4),
           "the retired dynamic-probe row is gone from the registry");
-    CHECK(worldmodes::rayonRowIds().size() == 4 &&
+    CHECK(worldmodes::rayonRowIds().size() == 5 &&
           !worldmodes::rayonRowIds().contains(QStringLiteral("giDynamicProbes")),
-          "Rayon is a FOUR-column table");
+          "Rayon is a FIVE-column table (the probe capture size joined it)");
+    // THE PROBE CAPTURE SIZE ROW (owner 2026-09-13 Q4) — a tier row with a pin
+    // like every other: an explicit size survives a tier switch, is named as a
+    // deviation, and Reset hands it back to Automatic.
+    CHECK(worldmodes::setRowValue(s, QStringLiteral("giProbeSize"), 512),
+          "pin the probe capture size to 512 px");
+    CHECK(s->giProbeCaptureSize == 512 && worldmodes::rayonCustom(s),
+          "a pinned probe size is Custom");
+    CHECK(worldmodes::rayonDeviations(s).contains(QStringLiteral("Rayon Probe Capture Size")),
+          "and the deviation is named");
+    worldmodes::setRayon(s, true, RayonTier::Epic);
+    CHECK(s->giProbeCaptureSize == 512, "a tier switch keeps the pinned probe size");
+    CHECK(!worldmodes::setRowValue(s, QStringLiteral("giProbeSize"), 333),
+          "a size that is not on the dial is refused by the registry");
+    worldmodes::setRayon(s, true, RayonTier::High);
     worldmodes::clearRayonOverrides(s);
-    CHECK(giBounces(s) == 1 && !worldmodes::rayonCustom(s),
-          "and Reset hands the column back to High");
+    CHECK(giBounces(s) == 1 && s->giProbeCaptureSize == 0 && !worldmodes::rayonCustom(s),
+          "and Reset hands both columns back to High");
 }
 
 // ---------------------------------------------------------------------------

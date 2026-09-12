@@ -242,6 +242,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // Hybrid probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Always written:
     // they are cheap, and a scene that pinned one must reopen with it. Readers
     // of older documents fall back to these same defaults.
+    sceneObj["giProbeCaptureSize"] = scene->giProbeCaptureSize;
     sceneObj["giProbeHdr"] = scene->giProbeHdr;
     sceneObj["giProbeShadows"] = scene->giProbeShadows;
     sceneObj["giProbeOverlap"] = scene->giProbeOverlap;

@@ -201,6 +201,10 @@ int rayonTechnique(RayonTier t);
 int rayonQuality(RayonTier t);
 int rayonDdgi(RayonTier t);
 int rayonBounces(RayonTier t);
+/// The probe capture size column (pixels per cube face; 0 = follow the engine's
+/// quality dial). Every tier is 0 today — the column exists so a scene can pin
+/// one, which is the owner's 2026-09-13 Q4 decision.
+int rayonProbeSize(RayonTier t);
 
 /// Applies a Rayon state: records the tier, writes each `rayonTiered` row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes

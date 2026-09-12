@@ -259,7 +259,19 @@ static void hiddenParent(Engine *engine, View *view)
     std::printf("   floor no-model r=%.3f g=%.3f | root shown r=%.3f g=%.3f (ifd converged %d)\n",
                 noModel.r, noModel.g, withModel.r, withModel.g, int(shownSt.ifdConverged));
     const float bounceOn = (withModel.r - withModel.g) - (noModel.r - noModel.g);
-    CHECK(bounceOn > 0.02f, "the shown model's panel bounces red onto the floor");
+    // THRESHOLD MOVED 0.02 -> 0.008 WITH A VERDICT (2026-09-13 reflection-probe
+    // lane, owner decision Q3). This case cannot pin its lit volume — the
+    // assertion four lines below is that the AUTO volume excludes the hidden
+    // pillar — and the hybrid now declines to build a probe grid in a scene it
+    // measures as OPEN, which this floor-and-panel scene is. So the red this
+    // floor gains from the shown model is the DIFFUSE half only (cone tracing
+    // and the irradiance field) where it used to be diffuse plus the probes'
+    // specular. Measured here, same scene, same frame count: 0.015 (r-g gain 0.439-0.424 against a 0.353/0.353 floor),
+    // where the pre-decision reading with the probes alive was 0.180. The
+    // contract is unchanged — showing a model must add its bounce and hiding it
+    // must take it away, which the two assertions after this still pin at the
+    // same strength — only the magnitude the owner's decision left behind is.
+    CHECK(bounceOn > 0.008f, "the shown model's panel bounces red onto the floor");
     CHECK(shownSt.boundsMax.y - shownSt.boundsMin.y < 8.5f,
           "the pillar the user hid is not in the lit volume (y 0..10 would be)");
 
