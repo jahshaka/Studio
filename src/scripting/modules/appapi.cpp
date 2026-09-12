@@ -252,15 +252,6 @@ QVector<VerbInfo> AppApi::verbs() const
           "finishes; it helps only after a large REMOVAL, never after growth. The GPU pools "
           "need no call (see app.memoryStats). Safe between frames; no pixel changes.",
           Needs::Engine },
-        { "profiling", "app.profiling([on]) -> bool",
-          "The engine's opt-in PASS PROFILER (`--profile` on the command line is the same "
-          "switch at boot). With no argument, reads it. On, every view logs one line per ~120 "
-          "frames to the ogre log: the CPU submission time of each compositor pass — avg and "
-          "max per frame, by the pass's profiling id, top entries first. That is what the "
-          "render thread spent recording the pass, including any wait it did inside it; it is "
-          "NOT GPU time (the backend pin has no timestamp-query surface). Off by default and "
-          "free when off: no listener exists.",
-          Needs::Engine },
         { "threading", "app.threading() -> {multithreadedShaderCompilation, shaderThreadingMode, sceneWorkerThreads, hlmsThreads}",
           "WHAT THE ENGINE IS THREADING (SPECS/THREADING_ADOPTION_SPEC.md P1). "
           "`multithreadedShaderCompilation` is the render system's OWN answer to "
@@ -1021,14 +1012,6 @@ QVariantMap AppApi::reclaimMemory()
     out.insert("before", memoryStatsToMap(before));
     out.insert("after", memoryStatsToMap(after));
     return out;
-}
-
-bool AppApi::profiling(const QVariant &on)
-{
-    auto engine = EngineHost::instance().engine();
-    if (!engine) { fail("app.profiling: no engine in this session"); return false; }
-    if (on.isValid() && !on.isNull()) engine->setProfiling(on.toBool());
-    return engine->profiling();
 }
 
 QVariantMap AppApi::threading()
