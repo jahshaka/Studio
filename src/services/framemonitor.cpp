@@ -41,11 +41,9 @@ using namespace jahshaka::engine;
 // ---------------------------------------------------------------------------
 namespace {
 
-/// TRUE ONLY WHILE A CAPTURE RECORDS. Not atomic on purpose: every reader and
-/// the only writer are on the UI thread (Engine.h's thread-affinity contract),
-/// and an atomic here would put a fence in the middle of the frame path to
-/// protect a value nothing else can touch.
-bool gActive = false;
+/// THE flag lives in the header as an inline variable (framemonitor.h
+/// explains why); this is the name the rest of this TU uses for it.
+bool &gActive = framemonitor::detail::gActive;
 
 /// The innermost open host stage, so a nested scope can subtract itself from
 /// its parent and the stages of one frame stay EXCLUSIVE (they sum to the
@@ -225,8 +223,6 @@ constexpr qint64 kDefaultCapBytes = 192ll * 1024 * 1024;
 
 namespace framemonitor {
 
-bool active() { return gActive; }
-
 Stage::Stage(const char *name)
 {
     if (!gActive) return;
@@ -300,6 +296,10 @@ public:
     void writeFrame(const FrameRecord &r);
     void writeEvent(const MonitorEvent &e);
     void writeSnapshot(const EngineSnapshot &s, const QString &file);
+    /// The worst per-frame GPU-sample overflow this capture saw (see
+    /// FrameMonitor::drainOnce) — reported in machine.json's truncation block,
+    /// because incomplete GPU times are a truncation like any other.
+    void noteGpuSamplesTruncated(unsigned n) { mGpuSamplesTruncated = qMax(mGpuSamplesTruncated, n); }
     /// Everything that closes the bundle: the trace's tail, the ogre.log
     /// window, machine.json (which carries the truncation note).
     void close(bool early);
@@ -329,6 +329,7 @@ private:
     unsigned long long mFrameCount = 0, mEventCount = 0;
     unsigned long long mFramesCut = 0, mEventsCut = 0, mTraceCut = 0;
     bool    mOgreCut = false;
+    unsigned mGpuSamplesTruncated = 0;
     QElapsedTimer mWall;
     double  mPlannedSeconds = 0.0, mRequested = 0.0;
     QString mLabel;
@@ -371,6 +372,10 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
             { "instances", int(p.instances) },
             { "triangles", double(p.triangles) },
             { "cpuMs", double(p.cpuMs) },
+            // A pass that never reported its end (a workspace boundary closed
+            // it): its times and counts are UNKNOWN, not zero, and seeing one
+            // is itself the finding (Types.h FramePass::orphaned).
+            { "orphaned", p.orphaned },
             // NEGATIVE means NOT MEASURED, in both of these, and it is written
             // as the negative number rather than dropped: "no GPU timing" and
             // "0 ms on the GPU" are different facts (Types.h).
@@ -393,14 +398,16 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
         });
     }
 
-    // THE REPLAYED-FRAME MARKER (Types.h, FramePass): Ogre REPLAYS a cached
-    // command buffer when a render queue has not changed, and only feeds its
-    // metrics on the build path — so an idle frame's passes legitimately
-    // report zero draws while the picture on screen is complete. A run of
-    // these is "replayed", never "empty", and the bundle says so rather than
-    // leaving every reader to rediscover it. Derived here (the engine does not
-    // expose the RenderQueue's replay decision at this pin): a frame that
-    // executed passes and recorded no draws at all.
+    // THE REPLAYED-FRAME MARKER (Types.h, FramePass). A frame that executed
+    // passes and whose passes counted NO draws at all. Ogre replays a cached
+    // command buffer when a render queue has not changed and only feeds its
+    // metrics on the build path, which is the known reason a complete picture
+    // can count zero — and lane MON-P1a measured a second, configuration-
+    // dependent under-count it deliberately did not guess at. So this flag says
+    // exactly one thing, and the bundle's readers must take it that way: THE
+    // RENDERER COUNTED NOTHING IN THIS FRAME'S PASSES. It never means "nothing
+    // was drawn", and `metricsRecording` below says whether the counters were
+    // even live.
     const bool replayed = !r.passes.empty() && r.draws == 0;
 
     QJsonObject o{
@@ -422,6 +429,13 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
         { "shadowPassesProbe", int(r.shadowPassesProbe) },
         { "planarRenders", int(r.planarRenders) },
         { "shaderCompiles", int(r.shaderCompiles) },
+        // Was the render system COUNTING while this frame rendered? Recording
+        // is off in Ogre until something asks for renderStats(), and a frame
+        // rendered with it off reports zeros for every geometry counter.
+        { "metricsRecording", r.metricsRecording },
+        // Passes closed by a workspace boundary rather than by their own end
+        // callback: non-zero means THIS FRAME'S PASS TREE IS INCOMPLETE.
+        { "orphanedPasses", int(r.orphanedPasses) },
         { "textureWaitMs", double(r.textureWaitMs) },
         { "gpuMs", double(r.gpuMs) },
         { "overheadMs", double(r.overheadMs) },
@@ -736,6 +750,11 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
                                      { "manual", t.manual }, { "pooled", t.pooled },
                                      { "residency", qs(t.residency) } });
     o.insert("textureMemory", textures);
+    // The list is capped (largest first) so a bundle is not dominated by it —
+    // and it says how many there really were and how many were dropped, so a
+    // reader is never silently handed a partial list.
+    o.insert("textureCount", int(s.textureCount));
+    o.insert("texturesTruncated", int(s.texturesTruncated));
 
     QJsonArray lights;
     for (const SnapshotLight &l : s.lights) {
@@ -920,7 +939,9 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         { "eventRecordsDropped", double(mEventsCut) },
         { "traceRecordsDropped", double(mTraceCut) },
         { "ogreLogTruncated", mOgreCut },
-        { "complete", mFramesCut == 0 && mEventsCut == 0 && mTraceCut == 0 && !mOgreCut },
+        { "gpuSamplesTruncated", int(mGpuSamplesTruncated) },
+        { "complete", mFramesCut == 0 && mEventsCut == 0 && mTraceCut == 0 && !mOgreCut
+                          && mGpuSamplesTruncated == 0 },
         { "note", QStringLiteral(
               "Per-file caps: frames.jsonl 50%, trace.json 35%, events.jsonl 10%, "
               "ogre.log 5% of capBytes. A dropped record is counted here and never "
@@ -1038,6 +1059,7 @@ bool FrameMonitor::start(const Request &request, QString *error)
     if (haveSnapshot) mBundle->writeSnapshot(startSnapshot, QStringLiteral("snapshot_start.json"));
 
     mPlannedSeconds = seconds;
+    mGpuSamplesTruncated = 0;
     mPhase = Phase::Recording;
     // FORWARD ONLY, from this instant: the engine starts recording the frames
     // that come after this call, and there is no history behind it.
@@ -1145,6 +1167,16 @@ unsigned FrameMonitor::drainOnce()
 {
     auto eng = engine();
     if (!eng || !mBundle) return 0;
+    // GPU SAMPLES THE QUERY POOL COULD NOT HOLD (MonitorStatus, P1a's review
+    // round). It is a per-frame number, so the capture keeps the worst it ever
+    // saw and machine.json states it: a bundle whose GPU times are incomplete
+    // has to say so rather than let analysis discover that some passes have no
+    // time.
+    const unsigned truncated = eng->monitorStatus().gpuSamplesTruncated;
+    if (truncated > mGpuSamplesTruncated) {
+        mGpuSamplesTruncated = truncated;
+        if (mBundle) mBundle->noteGpuSamplesTruncated(truncated);
+    }
     unsigned moved = 0;
     std::vector<FrameRecord> frames;
     moved += eng->takeFrameRecords(frames);
@@ -1307,8 +1339,10 @@ QVariantMap FrameMonitor::status() const
         gpu["active"] = s.gpuActive;
         gpu["queryPools"] = s.gpuQueryPools;
         gpu["reason"] = qs(s.gpuReason);
+        gpu["samplesTruncated"] = s.gpuSamplesTruncated;
         eng["gpu"] = gpu;
     }
+    out["gpuSamplesTruncated"] = mGpuSamplesTruncated;
     out["engine"] = eng;
     return out;
 }

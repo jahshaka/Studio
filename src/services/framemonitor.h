@@ -61,9 +61,24 @@ namespace jahshaka { namespace engine { class Engine; } }
 
 namespace framemonitor {
 
-/// THE ONE BRANCH ON THE FRAME PATH. True only while a capture is recording.
-/// Read it before doing anything that costs a clock read.
-bool active();
+namespace detail {
+/// THE ONE BRANCH ON THE FRAME PATH, and it lives in the HEADER (an inline
+/// variable) rather than in framemonitor.cpp for a build reason worth stating:
+/// the frame-cause tag in bridge/stableoffscreenrender.h is read by several
+/// test targets that link the engine and Qt but nothing of the shell, and a
+/// call into the service's TU would drag EngineHost, the settings manager and
+/// the session log into each of them. An inline bool costs those targets
+/// nothing and reads identically.
+///
+/// NOT ATOMIC, deliberately: every reader and the only writer are on the UI
+/// thread (Engine.h's thread-affinity contract), and a fence here would sit in
+/// the middle of the frame path guarding a value nothing else can touch.
+inline bool gActive = false;
+}   // namespace detail
+
+/// True only while a capture is recording. Read it before doing anything that
+/// costs a clock read.
+inline bool active() { return detail::gActive; }
 
 /// A host stage, exclusive of its children (the spec's stage tree). Measures
 /// only while a capture runs; otherwise it is a constructor and a destructor
@@ -194,6 +209,8 @@ private:
     /// frames did that capture get" after the writer is gone.
     double  mLastFrames = 0.0, mLastEvents = 0.0;
     double  mPlannedSeconds = 0.0;
+    /// The worst GPU-sample overflow the engine reported during this capture.
+    unsigned mGpuSamplesTruncated = 0;
 
     // ---- what the shell last showed, for the verbs (and their suites) -----
     QString mLastToastTitle, mLastToastText;
