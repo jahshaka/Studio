@@ -880,7 +880,10 @@ add_definitions("-DOGRE_PIN_HASH=\"${OGRE_PIN_HASH}\"")
 # carry the number and the subject, which is what a reader of a bundle wants —
 # and a patch added or renumbered after this configure shows up as a stale
 # string, never as a wrong one, because the app also prints the configure time.
-file(GLOB _ogre_patch_files
+# CONFIGURE_DEPENDS: without it the glob is evaluated once and a patch added
+# later leaves every capture bundle claiming a stale patch stack — provenance
+# that is quietly wrong is worse than none (review item, lane MON-P1b).
+file(GLOB _ogre_patch_files CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-patches/[0-9][0-9][0-9][0-9]-*.patch")
 set(OGRE_PATCH_STACK "")
 foreach(_p ${_ogre_patch_files})

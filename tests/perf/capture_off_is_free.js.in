@@ -47,9 +47,14 @@ assert(perf.mark("nobody is listening") === false,
 assert(perf.stop().stopped === false, "perf.stop answers false rather than throwing");
 
 // ---- the three windows ----------------------------------------------------
+// A FRESH BUNDLE PATH PER RUN: a capture never overwrites an existing bundle
+// (that is asserted below), and this suite's scratch home survives between
+// runs — so the paths carry the run's own stamp, exactly as the default naming
+// does.
+var out = "@JAH_TEST_BUNDLE@-" + Date.now();
 var FRAMES = 60;
 var off1 = windowMs(FRAMES);
-var started = perf.capture({ seconds: 30, out: "@JAH_TEST_BUNDLE@" });
+var started = perf.capture({ seconds: 30, out: out });
 assert(started.started === true, "perf.capture started");
 assert(perf.status().engine.ringCapacity > 0, "the ring is allocated while recording");
 // AFTER a frame, deliberately: the engine rebuilds its attached-listener list
@@ -91,9 +96,16 @@ console.log("recording cost x" + (on / Math.max(1, off1)).toFixed(2) +
 // A capture with a length shorter than a frame still produces a bundle rather
 // than a half-written directory: the auto-stop is a timer, and the drain at the
 // stop is a LOOP over the engine's holding queue (Engine.h takeFrameRecords).
-var quick = perf.capture({ seconds: 0.2, out: "@JAH_TEST_BUNDLE@-quick" });
+// A DIFFERENT directory: a capture never overwrites an existing bundle.
+var quick = perf.capture({ seconds: 0.2, out: out + "-quick" });
 assert(quick.started === true, "a 0.2 s capture starts");
 editor.frame(4);
 var quickStop = perf.stop();
 assert(quickStop.stopped === true, "and stops");
 assert(quickStop.frames > 0, "with frames in it (" + quickStop.frames + ")");
+
+// And the bundle that was just written is not overwritable by the next capture.
+var again = perf.capture({ seconds: 1, out: out + "-quick" });
+assert(again.started === false, "a capture into an existing bundle is refused");
+assert(perf.status().engine.attachedListeners === 0,
+       "a refused capture attaches nothing (the monitor stays off)");

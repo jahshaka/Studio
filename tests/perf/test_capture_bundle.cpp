@@ -110,6 +110,7 @@ int main(int argc, char **argv)
     // the state of a cache rather than the contents of a bundle. This is the
     // "gate red, solo green can be cache state" class (CLAUDE.md, 2026-09-11)
     // closed at the source.
+    QDir(bundle + "-capped").removeRecursively();
     QDir(home + "/.local/share/Jahshaka/shadercache").removeRecursively();
     QDir(home + "/cache").removeRecursively();
 
@@ -118,6 +119,10 @@ int main(int argc, char **argv)
     env.insert("HOME", home);
     env.insert("JAHSHAKA_DATA_ROOT", home + "/.local/share/Jahshaka");
     env.insert("XDG_CACHE_HOME", home + "/cache");
+    // THE CAPTURE ROOT for this run. `out` is confined to it (a capture creates
+    // directories and truncates files in whatever it is pointed at), so a suite
+    // that writes bundles into its own scratch home says where that is.
+    env.insert("JAHSHAKA_PERF_ROOT", QFileInfo(bundle).absolutePath());
     proc.setProcessEnvironment(env);
     proc.setWorkingDirectory(home + "/run");
     proc.setProcessChannelMode(QProcess::MergedChannels);
@@ -323,10 +328,45 @@ int main(int argc, char **argv)
     CHECK(monotonic, "the trace's spans do not overlap on their own track");
     CHECK(haveFrameEvent, "the trace has frame spans");
 
+    // ---- THE CAP IS HONEST (review item, lane MON-P1b) ----------------------
+    // The script also recorded a bundle with a 64 KB ceiling. Everything it
+    // wrote must still be readable, it must COUNT what it cut, and it must say
+    // it is incomplete — the assertion the suite was missing, because `complete`
+    // had only ever been asserted true.
+    {
+        const QString cappedDir = bundle + QStringLiteral("-capped");
+        const QJsonObject cm = readJson(QDir(cappedDir).filePath("machine.json"), &ok).object();
+        CHECK(ok && !cm.isEmpty(), "the capped bundle's machine.json parses");
+        const QJsonObject ct = cm.value("truncation").toObject();
+        CHECK(!ct.value("complete").toBool(true),
+              "the capped bundle says it is NOT complete");
+        const double cut = ct.value("frameRecordsDropped").toDouble()
+                           + ct.value("eventRecordsDropped").toDouble()
+                           + ct.value("traceRecordsDropped").toDouble();
+        CHECK(cut > 0.0,
+              qPrintable(QStringLiteral("...and counts what it cut (%1 records)").arg(cut)));
+        bool linesOk = false;
+        const QList<QJsonObject> cappedFrames =
+            readJsonl(QDir(cappedDir).filePath("frames.jsonl"), &linesOk);
+        CHECK(linesOk, "every line the capped bundle DID write still parses");
+        CHECK(!cappedFrames.isEmpty(), "the capped bundle wrote frames before the cap bit");
+        bool traceOk = false;
+        const QJsonDocument cappedTrace = readJson(QDir(cappedDir).filePath("trace.json"), &traceOk);
+        CHECK(traceOk && cappedTrace.isArray(),
+              "the capped trace.json is still valid JSON (the separator guard)");
+        for (const QString &name : files)
+            CHECK(QFile::exists(QDir(cappedDir).filePath(name)),
+                  qPrintable(QStringLiteral("capped bundle has %1").arg(name)));
+    }
+
     // ---- the two toasts -----------------------------------------------------
+    // TWO PER CAPTURE, and the script records two (the main bundle and the
+    // size-capped one) — the refused captures must show NONE, which is what
+    // makes four the assertion rather than "at least two".
     const QJsonObject lastToast = expect.value("toast").toObject();
-    CHECK(lastToast.value("shown").toInt() == 2,
-          qPrintable(QStringLiteral("the shell showed exactly two toasts (%1)")
+    CHECK(lastToast.value("shown").toInt() == 4,
+          qPrintable(QStringLiteral("the shell showed two toasts per capture and none for a "
+                                    "refusal (%1 for 2 captures + 2 refusals)")
                          .arg(lastToast.value("shown").toInt())));
     CHECK(lastToast.value("text").toString().contains(bundle),
           "the second toast names the bundle's path");

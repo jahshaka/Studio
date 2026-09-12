@@ -161,12 +161,27 @@ public:
     /// The render driver, at the top of a tick: closes the gap since the last
     /// tick ended and splits it into idle (the event loop was blocked, waiting)
     /// and UI (the event loop was busy with something else).
-    void noteTickStart();
-    /// The end of a rendered frame — the render driver's tick, and the
-    /// viewport's scripted `editor.frame` loop, which renders with the driver
-    /// idle. Drains what the engine has published so far and re-arms the gap
-    /// clock (so the "gap" is always the time since anything last rendered).
-    void noteTickEnd();
+    ///
+    /// `willRender` IS LOAD-BEARING, not a hint. The driver keeps ticking while
+    /// nothing is showing (every viewport hidden — the owner pressed Ctrl+F4
+    /// and switched to the Desktop page), and a gap pushed on each of those
+    /// ticks would bank two stage entries and an event per tick for the rest of
+    /// the capture, then hand the lot to the first frame that did render, as
+    /// one enormous record charged to the wrong frame (lane MON-P1b review,
+    /// 2026-09-13). False pushes nothing and does not re-arm the clock, so the
+    /// gap the owner eventually sees is the whole time away, on the frame that
+    /// ends it — which is the interesting number anyway.
+    void noteTickStart(bool willRender);
+    /// The end of a tick — the render driver's, and the viewport's scripted
+    /// `editor.frame` loop, which renders with the driver idle. Drains what the
+    /// engine has published and re-arms the gap clock, so the "gap" is always
+    /// the time since anything last RENDERED.
+    ///
+    /// `rendered` false (the driver skipped the tick because nothing is
+    /// showing) leaves the clock alone: the whole time away then arrives as ONE
+    /// gap stage on the frame that ends it — which is the number worth having,
+    /// and one entry instead of two per skipped tick.
+    void noteTickEnd(bool rendered = true);
     /// The shell, after it really showed a toast this object asked for — so the
     /// event log carries the toast's LIFETIME and analysis knows which frames
     /// it overlapped (owner, 2026-09-12).
@@ -211,8 +226,12 @@ private:
     /// frames did that capture get" after the writer is gone.
     double  mLastFrames = 0.0, mLastEvents = 0.0;
     double  mPlannedSeconds = 0.0;
-    /// The worst GPU-sample overflow the engine reported during this capture.
+    /// The worst GPU-sample overflow the engine reported during this capture,
+    /// and what the ENGINE dropped on its own side (ring records nobody drained
+    /// in time, events past its queue's cap) — all three go into the bundle's
+    /// truncation block and into its `complete` flag.
     unsigned mGpuSamplesTruncated = 0;
+    unsigned long long mEngineFramesDropped = 0, mEngineEventsDropped = 0;
 
     // ---- what the shell last showed, for the verbs (and their suites) -----
     QString mLastToastTitle, mLastToastText;

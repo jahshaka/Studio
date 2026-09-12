@@ -280,6 +280,7 @@ public:
             traceMeta();
         }
         mWall.start();
+        mStartedAt = QDateTime::currentDateTime();
         mOgreLog = JahLog::ogreFilePath();
         mOgreLogStart = mOgreLog.isEmpty() ? -1 : QFileInfo(mOgreLog).size();
     }
@@ -300,6 +301,14 @@ public:
     /// FrameMonitor::drainOnce) — reported in machine.json's truncation block,
     /// because incomplete GPU times are a truncation like any other.
     void noteGpuSamplesTruncated(unsigned n) { mGpuSamplesTruncated = qMax(mGpuSamplesTruncated, n); }
+    /// What the ENGINE dropped: ring records nobody drained in time, and events
+    /// past the event queue's cap. Both are counted on the engine's side of the
+    /// boundary and neither is visible in the files — so a bundle that did not
+    /// write them could certify itself complete while it had holes in it (the
+    /// review's first item, lane MON-P1b). Monotonic counters: the last read
+    /// before the monitor goes off is the capture's total.
+    void noteEngineDrops(unsigned long long frames, unsigned long long events)
+    { mEngineFramesDropped = frames; mEngineEventsDropped = events; }
     /// Everything that closes the bundle: the trace's tail, the ogre.log
     /// window, machine.json (which carries the truncation note).
     void close(bool early);
@@ -330,7 +339,9 @@ private:
     unsigned long long mFramesCut = 0, mEventsCut = 0, mTraceCut = 0;
     bool    mOgreCut = false;
     unsigned mGpuSamplesTruncated = 0;
+    unsigned long long mEngineFramesDropped = 0, mEngineEventsDropped = 0;
     QElapsedTimer mWall;
+    QDateTime mStartedAt;
     double  mPlannedSeconds = 0.0, mRequested = 0.0;
     QString mLabel;
     QString mOgreLog;
@@ -347,9 +358,20 @@ qint64 FrameMonitor::Bundle::bytes() const
 bool FrameMonitor::Bundle::append(QFile &f, qint64 &written, qint64 cap, const QByteArray &data)
 {
     if (written + data.size() > cap) return false;
+    const qint64 before = written;
     const qint64 n = f.write(data);
-    if (n > 0) written += n;
-    return n == data.size();
+    if (n == data.size()) { written += n; return true; }
+    // A SHORT WRITE (a full disk is the realistic one) MUST NOT LEAVE HALF A
+    // LINE BEHIND: a bundle whose last jsonl line does not parse is a bundle
+    // every reader has to special-case. Roll the file back to the last complete
+    // record and count this one as dropped, which is what the caller does with
+    // a false. (Review item, lane MON-P1b: this used to advance `written` by
+    // the partial count AND report the record dropped — the worst of both.)
+    f.flush();
+    f.resize(before);
+    f.seek(before);
+    written = before;
+    return false;
 }
 
 void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
@@ -504,13 +526,20 @@ void FrameMonitor::Bundle::traceFrame(const FrameRecord &r)
     for (const FrameStage &s : r.stages)
         if (s.name.rfind("gap.", 0) == 0) gapUs += double(s.ms) * 1000.0;
     QByteArray out;
+    // ONE GUARD for every entry this function writes: the separator is emitted
+    // only when something precedes it. An unconditional ",\n" on any single
+    // entry writes `[\n,\n{...}` — invalid JSON — whenever everything before it
+    // was refused by the cap (review item, lane MON-P1b).
+    auto emitObj = [&](const QJsonObject &o) {
+        out += (mTraceFirst && out.isEmpty() ? QByteArray() : QByteArray(",\n"))
+               + QJsonDocument(o).toJson(QJsonDocument::Compact);
+    };
     auto emitX = [&](int tid, const QString &name, double tsUs, double durUs,
                      const QJsonObject &args) {
         QJsonObject o{ { "name", name }, { "ph", "X" }, { "pid", 1 }, { "tid", tid },
                        { "ts", tsUs }, { "dur", durUs } };
         if (!args.isEmpty()) o.insert("args", args);
-        out += (mTraceFirst && out.isEmpty() ? QByteArray() : QByteArray(",\n"))
-               + QJsonDocument(o).toJson(QJsonDocument::Compact);
+        emitObj(o);
     };
 
     emitX(1, QStringLiteral("frame %1 (%2)").arg(r.frame).arg(QLatin1String(causeName(r.cause))),
@@ -540,9 +569,8 @@ void FrameMonitor::Bundle::traceFrame(const FrameRecord &r)
                           { "probeCaptures", int(r.probeCaptures) },
                           { "shadowPasses", int(r.shadowPasses + r.shadowPassesReflect
                                                  + r.shadowPassesProbe) } };
-    QJsonObject c{ { "name", "counters" }, { "ph", "C" }, { "pid", 1 }, { "tid", 0 },
-                   { "ts", frameUs }, { "args", counters } };
-    out += QByteArray(",\n") + QJsonDocument(c).toJson(QJsonDocument::Compact);
+    emitObj(QJsonObject{ { "name", "counters" }, { "ph", "C" }, { "pid", 1 },
+                         { "tid", 0 }, { "ts", frameUs }, { "args", counters } });
 
     if (append(mTrace, mTraceBytes, mCap * 35 / 100, out)) mTraceFirst = false;
     else ++mTraceCut;
@@ -922,7 +950,10 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         { "stoppedEarly", early },
         { "framesWritten", double(mFrameCount) },
         { "eventsWritten", double(mEventCount) },
-        { "startedAt", QDateTime::currentDateTime().toString(Qt::ISODate) },
+        // THE CAPTURE'S OWN TIMESTAMP IS WHEN IT STARTED, not when it was
+        // written: this block is composed at the stop, and reading the clock
+        // here dated every bundle by its end (review item, lane MON-P1b).
+        { "startedAt", mStartedAt.toString(Qt::ISODate) },
         { "snapshots", QJsonArray::fromStringList(mSnapshots) },
         { "workspacesAtStart", int(mWorkspacesAtStart) },
     };
@@ -940,8 +971,18 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         { "traceRecordsDropped", double(mTraceCut) },
         { "ogreLogTruncated", mOgreCut },
         { "gpuSamplesTruncated", int(mGpuSamplesTruncated) },
+        // THE ENGINE'S OWN LOSSES, which no file in the bundle could reveal:
+        // frame records the ring overwrote before the host drained them, and
+        // events past the engine's event-queue cap.
+        { "engineFramesDropped", double(mEngineFramesDropped) },
+        { "engineEventsDropped", double(mEngineEventsDropped) },
+        // COMPLETE MEANS COMPLETE. Every way a record can be lost — the
+        // writer's caps, the engine's ring, the engine's event queue, the GPU
+        // query pool and the log window — is ANDed in here. A bundle must never
+        // claim a completeness it cannot prove (review item, lane MON-P1b).
         { "complete", mFramesCut == 0 && mEventsCut == 0 && mTraceCut == 0 && !mOgreCut
-                          && mGpuSamplesTruncated == 0 },
+                          && mGpuSamplesTruncated == 0
+                          && mEngineFramesDropped == 0 && mEngineEventsDropped == 0 },
         { "note", QStringLiteral(
               "Per-file caps: frames.jsonl 50%, trace.json 35%, events.jsonl 10%, "
               "ogre.log 5% of capBytes. A dropped record is counted here and never "
@@ -1038,14 +1079,40 @@ bool FrameMonitor::start(const Request &request, QString *error)
     if (label.isEmpty() && haveSnapshot) label = qs(startSnapshot.scene);
     if (slug(label).isEmpty()) label = QStringLiteral("scene");
 
+    const QDir root(QDir::cleanPath(captureRoot()));
     QString dir = request.outDir;
     if (dir.isEmpty()) {
         const QDateTime now = QDateTime::currentDateTime();
-        dir = QDir(captureRoot())
-                  .filePath(QStringLiteral("%1-%2-%3")
+        // MILLISECONDS in the name, because two scripted captures in the same
+        // second used to land in the same directory and the second one
+        // truncated the first (review item, lane MON-P1b). The uniqueness loop
+        // below covers the rest.
+        dir = root.filePath(QStringLiteral("%1-%2-%3")
                                 .arg(now.toString(QStringLiteral("yyyyMMdd")),
-                                     now.toString(QStringLiteral("HHmmss")), slug(label)));
+                                     now.toString(QStringLiteral("HHmmsszzz")), slug(label)));
+        for (int n = 2; QFile::exists(QDir(dir).filePath(QStringLiteral("machine.json")));
+             ++n)
+            dir = root.filePath(QStringLiteral("%1-%2-%3-%4")
+                                    .arg(now.toString(QStringLiteral("yyyyMMdd")),
+                                         now.toString(QStringLiteral("HHmmsszzz")),
+                                         slug(label), QString::number(n)));
+    } else {
+        // A GIVEN PATH IS CONFINED TO THE CAPTURE ROOT. `out` reaches this from
+        // a script AND from the MCP tool, and it creates directories and
+        // TRUNCATES three files in whatever it is pointed at — a source tree, a
+        // project, someone else's bundle (review item, lane MON-P1b). The root
+        // itself is configurable (JAHSHAKA_PERF_ROOT, `perf/captureRoot`),
+        // which is how a suite writes into its own scratch home.
+        dir = QDir::cleanPath(QDir(dir).isAbsolute() ? dir : root.filePath(dir));
+        const QString rootPath = root.absolutePath();
+        if (!(dir == rootPath || dir.startsWith(rootPath + QLatin1Char('/'))))
+            return fail(QStringLiteral("'out' must be inside the capture root (%1): %2")
+                            .arg(rootPath, dir));
     }
+    // NEVER OVERWRITE A BUNDLE. The three streams open with Truncate, so
+    // pointing a capture at an existing bundle destroyed it silently.
+    if (QFile::exists(QDir(dir).filePath(QStringLiteral("machine.json"))))
+        return fail(QStringLiteral("a capture bundle already exists at %1").arg(dir));
     if (!QDir().mkpath(dir))
         return fail(QStringLiteral("could not create the bundle directory: %1").arg(dir));
 
@@ -1060,6 +1127,7 @@ bool FrameMonitor::start(const Request &request, QString *error)
 
     mPlannedSeconds = seconds;
     mGpuSamplesTruncated = 0;
+    mEngineFramesDropped = mEngineEventsDropped = 0;
     mPhase = Phase::Recording;
     // FORWARD ONLY, from this instant: the engine starts recording the frames
     // that come after this call, and there is no history behind it.
@@ -1172,11 +1240,19 @@ unsigned FrameMonitor::drainOnce()
     // saw and machine.json states it: a bundle whose GPU times are incomplete
     // has to say so rather than let analysis discover that some passes have no
     // time.
-    const unsigned truncated = eng->monitorStatus().gpuSamplesTruncated;
-    if (truncated > mGpuSamplesTruncated) {
-        mGpuSamplesTruncated = truncated;
-        if (mBundle) mBundle->noteGpuSamplesTruncated(truncated);
+    const MonitorStatus st = eng->monitorStatus();
+    if (st.gpuSamplesTruncated > mGpuSamplesTruncated) {
+        mGpuSamplesTruncated = st.gpuSamplesTruncated;
+        mBundle->noteGpuSamplesTruncated(st.gpuSamplesTruncated);
     }
+    // The engine's own losses, sampled on every drain — they are monotonic, and
+    // the LAST read while the monitor is still on is the capture's total (the
+    // status reads zero once the monitor object is gone).
+    if (st.framesDropped || st.eventsDropped) {
+        mEngineFramesDropped = st.framesDropped;
+        mEngineEventsDropped = st.eventsDropped;
+    }
+    mBundle->noteEngineDrops(mEngineFramesDropped, mEngineEventsDropped);
     unsigned moved = 0;
     std::vector<FrameRecord> frames;
     moved += eng->takeFrameRecords(frames);
@@ -1195,9 +1271,13 @@ void FrameMonitor::drain()
         if (!drainOnce()) break;
 }
 
-void FrameMonitor::noteTickStart()
+void FrameMonitor::noteTickStart(bool willRender)
 {
     if (!gActive) return;
+    // NOTHING IS SHOWING: the driver is about to skip this tick. Push nothing,
+    // and leave the gap clock running so the next rendered frame carries the
+    // whole absence as one stage instead of a thousand (see the header).
+    if (!willRender) return;
     auto eng = engine();
     if (!eng) return;
     if (mSinceTickEnd.isValid()) {
@@ -1225,9 +1305,14 @@ void FrameMonitor::noteTickStart()
     mBlockedAt = 0;
 }
 
-void FrameMonitor::noteTickEnd()
+void FrameMonitor::noteTickEnd(bool rendered)
 {
     if (!gActive) return;
+    // A SKIPPED TICK IS NOT THE END OF A FRAME: leave the gap clock where it
+    // is, so the time spent on a page with no viewport lands as one stage on
+    // the frame that comes back (see the header). There is also nothing to
+    // drain — no frame was rendered — but the drain timer still runs.
+    if (!rendered) return;
     drain();
     mSinceTickEnd.restart();
     mBlockedNs = 0;
@@ -1332,6 +1417,7 @@ QVariantMap FrameMonitor::status() const
         eng["pendingEvents"] = s.pendingEvents;
         eng["framesRecorded"] = double(s.framesRecorded);
         eng["framesDropped"] = double(s.framesDropped);
+        eng["eventsDropped"] = double(s.eventsDropped);
         eng["overheadMs"] = double(s.overheadMs);
         QVariantMap gpu;
         gpu["compiled"] = s.gpuCompiled;
@@ -1343,6 +1429,8 @@ QVariantMap FrameMonitor::status() const
         eng["gpu"] = gpu;
     }
     out["gpuSamplesTruncated"] = mGpuSamplesTruncated;
+    out["engineFramesDropped"] = double(mEngineFramesDropped);
+    out["engineEventsDropped"] = double(mEngineEventsDropped);
     out["engine"] = eng;
     return out;
 }

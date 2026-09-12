@@ -49,7 +49,13 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // (blocked in the event loop) and UI (the thread was busy with
         // something that was not a frame) — the difference between "15 fps that
         // feels like 60" and a real stall.
-        FrameMonitor::instance().noteTickStart();
+        // The gap is pushed only for ticks that will actually draw. The flag is
+        // read HERE, before beforeFrame, rather than reusing `anythingToDraw`
+        // below: this call has to happen before the host's own sync stages so
+        // the stage list reads in order. The one frame they can disagree on is
+        // the first after a viewport is shown by beforeFrame itself, which
+        // loses one gap stage and nothing else.
+        FrameMonitor::instance().noteTickStart(mEngine && mEngine->hasEnabledViews());
         if (framemonitor::active() && mEngine)
             mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Driver);
         emit beforeFrame();
@@ -119,8 +125,10 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             if (ms > mStats.worstMs) mStats.worstMs = ms;
         }
         // The monitor drains the engine's ring here, at the one point in the
-        // process where a frame has just finished, and re-arms the gap clock.
-        FrameMonitor::instance().noteTickEnd();
+        // process where a frame has just finished, and re-arms the gap clock —
+        // only for ticks that actually rendered (a skipped tick keeps the clock
+        // running, so an absence arrives as one gap instead of none).
+        FrameMonitor::instance().noteTickEnd(anythingToDraw);
         if (ms >= kSlowFrameMs) {
             ++mStats.slowFrames;
             LoadTimeline::add(QStringLiteral("frame:slow"), ms);

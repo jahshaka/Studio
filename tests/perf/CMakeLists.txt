@@ -126,7 +126,7 @@ set_tests_properties(perf.capture_bundle PROPERTIES
 # (refusals, the early stop, the return to exactly the state it started in).
 # The engine is up: "no listener is attached to any workspace" needs workspaces.
 set(_off_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off)
-set(JAH_TEST_BUNDLE ${_off_home}/bundle)
+set(JAH_TEST_BUNDLE ${_off_home}/perf/bundle)
 configure_file(capture_off_is_free.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js @ONLY)
 file(MAKE_DIRECTORY ${_off_home}/run)
@@ -135,7 +135,10 @@ add_test(NAME perf.capture_off_is_free
                  --script ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js
          WORKING_DIRECTORY ${_off_home}/run)
 set_tests_properties(perf.capture_off_is_free PROPERTIES
-    ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka"
+    # JAHSHAKA_PERF_ROOT: `out` is confined to the capture root (a capture
+    # creates directories and truncates files in whatever it is pointed at), so
+    # the suite says where its own root is.
+    ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_off_home}/perf"
     LABELS "perf"
     # RUN_SERIAL because it MEASURES: the two off windows are compared against
     # each other in the same run, which survives a loaded box far better than an

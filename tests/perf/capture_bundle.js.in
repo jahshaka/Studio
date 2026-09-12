@@ -79,6 +79,28 @@ assert(perf.status().engine.attachedListeners === 0, "every listener detached at
 assert(perf.status().engine.ringCapacity === 0, "the ring is freed at Off");
 assert(perf.status().engine.gpu.queryPools === 0, "no GPU query pool survives a capture");
 
+// ---- THE CAP, EXERCISED (review item, lane MON-P1b) ---------------------
+// Nothing asserted the size cap until now: `complete` was only ever asserted
+// TRUE, so a bundle that lied about being whole would have passed. This one is
+// given 64 KB, which a capture of this scene blows through in a handful of
+// frames — every line it DID write must still parse, the dropped counters must
+// be non-zero, and it must say complete:false.
+var capped = perf.capture({ seconds: 30, out: bundle + "-capped", maxBytes: 65536 });
+assert(capped.started === true, "a size-capped capture starts");
+editor.frame(20);
+var cappedStop = perf.stop();
+assert(cappedStop.stopped === true, "the capped capture stops");
+
+// ---- the two refusals the path rules add --------------------------------
+// `out` is confined to the capture root, because it creates directories and
+// truncates files in whatever it is pointed at.
+var escape = perf.capture({ seconds: 1, out: "/tmp/p1b-should-not-exist" });
+assert(escape.started === false, "an 'out' outside the capture root is refused");
+// And a bundle is never overwritten.
+var overwrite = perf.capture({ seconds: 1, out: bundle });
+assert(overwrite.started === false, "a capture into an existing bundle is refused");
+assert(perf.status().recording === false, "a refused capture leaves the monitor off");
+
 console.log("CAPTUREBUNDLE " + JSON.stringify({
     path: stopped.path,
     frames: stopped.frames,
@@ -86,4 +108,5 @@ console.log("CAPTUREBUNDLE " + JSON.stringify({
     probes: probes,
     draws: stats.draws,
     toast: perf.status().toast,
+    cappedFrames: cappedStop.frames,
 }));
