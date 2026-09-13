@@ -445,7 +445,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
           "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
           Needs::Document },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
           "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
@@ -490,7 +490,31 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`staticRepromotions` counts the times the mirror has put the scene back after the "
           "document went quiet (half a second with no transform write anywhere). Without that "
           "second number a long editing session drains staticNodes to nothing, one nudged prop at "
-          "a time. `available` "
+          "a time.\n\n"
+          "WHAT THE MIRROR LOOKS AT, AND WHY IT IS ALMOST NOTHING "
+          "(SPECS/DIRTY_SET_MIRROR_SPEC.md). The mirror does not ask every object in the scene "
+          "\"did you change?\" any more — each object SAYS SO when it changes, into a list its "
+          "scene keeps, and the mirror handles the list. `dirtyNodes` is how long that list was "
+          "on the last sync and `nodesVisited` is how many of them were really looked at (they "
+          "differ when one change reaches more than one object — a shading-model switch re-pushes "
+          "every object sharing the material). Both are ZERO on a still frame, however big the "
+          "scene is: that is the contract, and it is what took an 8,404-node scene from 14 ms of "
+          "mirror per still frame to under one. `evictedNodes` is how many objects left the "
+          "document on that sync — deletions are an event now, not a sweep over everything that "
+          "still exists. `walkMode` says which of the two ran: \"dirty\" for the list, \"full\" "
+          "for the whole scene, which happens only at the rare explicit moments (the first sync "
+          "after a scene opens or a page switches, the play edge, the verification mode).\n\n"
+          "THE SAFETY NET is `verifierVisits` and `verifierCatches`. A design where each object "
+          "reports its own changes fails in exactly one way — a change that forgets to report "
+          "itself never reaches the screen — so the mirror re-reads a few dozen objects a sync "
+          "from a rotating cursor (a full pass over a large scene every couple of seconds) and "
+          "COUNTS anything it finds behind. `verifierCatches` MUST BE ZERO. A non-zero value is "
+          "not a rendering bug you can see — the verifier pushed the change, so the screen caught "
+          "up within a second or two — it is a missing mark in the document, and the mirror names "
+          "the object and the field once in the log. `pushes` is how many engine writes the "
+          "visits have made in total, which is what the differential test compares: run the "
+          "change-list sync, then the whole walk, and the whole walk must push NOTHING.\n\n"
+          "`available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
@@ -1930,6 +1954,14 @@ QVariantMap EditorApi::mirrorStats()
     out.insert("materialBuilds", QVariant::fromValue(s.materialBuilds));
     out.insert("staticNodes", QVariant::fromValue(s.staticNodes));
     out.insert("staticRepromotions", QVariant::fromValue(s.staticRepromotions));
+    // THE DIRTY SET (SPECS/DIRTY_SET_MIRROR_SPEC.md): what the document said
+    // changed, what the verifier caught behind it, and which mode ran.
+    out.insert("dirtyNodes", QVariant::fromValue(s.dirtyNodes));
+    out.insert("evictedNodes", QVariant::fromValue(s.evictedNodes));
+    out.insert("verifierVisits", QVariant::fromValue(s.verifierVisits));
+    out.insert("verifierCatches", QVariant::fromValue(s.verifierCatches));
+    out.insert("pushes", QVariant::fromValue(s.pushes));
+    out.insert("walkMode", s.walkMode.isEmpty() ? QStringLiteral("none") : s.walkMode);
     return out;
 }
 

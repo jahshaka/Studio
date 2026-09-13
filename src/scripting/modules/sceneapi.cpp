@@ -751,8 +751,14 @@ QString SceneApi::addParticles(const QString &preset, const QVariantMap &options
     // Two convenience rows, applied AFTER the recipe so an explicit value wins:
     // everything else goes through node.setProperty, which reaches every
     // reflected field on the node and needs no duplication here.
-    if (options.contains("rate"))  node->particlesPerSecond = options.value("rate").toFloat();
-    if (options.contains("quota")) node->maxParticles = options.value("quota").toInt();
+    // Through the SETTERS, and marked: this runs AFTER the node joined the
+    // scene, so a raw field write here is a change the mirror never hears about
+    // (SPECS/DIRTY_SET_MIRROR_SPEC.md; lead review R2 #10).
+    if (options.contains("rate"))  node->setPPS(options.value("rate").toFloat());
+    if (options.contains("quota")) {
+        node->maxParticles = options.value("quota").toInt();
+        node->markChanged(iris::NodeChange::Params);
+    }
     QVariantMap rest = options;
     rest.remove("rate");
     rest.remove("quota");

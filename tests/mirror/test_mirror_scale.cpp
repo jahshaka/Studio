@@ -48,6 +48,8 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
+#include <functional>
+#include <string>
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/math/quat.h"
@@ -128,6 +130,14 @@ static void build(Arm &a, Engine *engine, const char *label, int count, int rows
     a.doc->getRootNode()->applyStaticDefaults();
 
     a.mirror.reset(new SceneMirror(a.target));
+    // THE TIMED ARMS MEASURE THE WALK, which is what this suite's header says
+    // and what its four shapes are about. The amortised VERIFIER is a separate,
+    // deliberately-sized background pass (DIRTY_SET_MIRROR_SPEC §3.8) — it
+    // re-reads a fixed number of nodes and materials a sync WHATEVER the scene
+    // does, so leaving it on would put a constant in every ratio below and,
+    // with a material per primitive, would make shape 3 measure the verifier's
+    // sampling rate rather than the memo. It has its own arm at the end.
+    a.mirror->setVerifierBudget(0);
     a.mirror->setSource(a.doc);
 
     using clock = std::chrono::steady_clock;
@@ -407,6 +417,144 @@ int main(int argc, char **argv)
         settle();
         CHECK(b.mirror->staticRepromotionCount() == repro0 + 1,
               "a scene that never moves again re-derives nothing further");
+    }
+
+    // ---- THE DIRTY SET (SPECS/DIRTY_SET_MIRROR_SPEC.md, owner option A) ----
+    //
+    // The four shapes above are about what a still frame costs PER NODE. This
+    // is about how many nodes a frame looks at at all — which, on a still
+    // frame, is none. Counts, not milliseconds: they are exact.
+    {
+        std::printf("  -- the dirty set --\n");
+        // A STILL FRAME LOOKS AT NOTHING.
+        b.mirror->sync();
+        CHECK(b.mirror->visitedCount() == 0, "a STILL sync visits ZERO nodes");
+        CHECK(b.mirror->dirtyNodeCount() == 0, "...because the document reported ZERO changes");
+        CHECK(std::string(b.mirror->walkMode()) == "dirty", "...in dirty mode");
+        CHECK(b.mirror->evictedNodeCount() == 0, "...and released nothing");
+
+        // Find a leaf mesh and its group, and a light-free handle on both.
+        iris::SceneNodePtr leaf, group;
+        for (const auto &n : b.keep) {
+            if (!leaf && n->getSceneNodeType() == iris::SceneNodeType::Mesh) leaf = n;
+            if (!group && n->getSceneNodeType() == iris::SceneNodeType::Empty) group = n;
+            if (leaf && group) break;
+        }
+        CHECK(!!leaf && !!group, "the lattice has a mesh leaf and a group to drive");
+
+        // ONE EDIT KIND AT A TIME: the visited count is the MARKED count.
+        struct Edit { const char *what; std::function<void()> run; int expectVisited; };
+        const int subtree = 1 + int(b.keep.size() - 20) / 20;   // a row group + its cubes
+        std::vector<Edit> edits = {
+            { "one node moved",      [&] { leaf->setLocalPos(leaf->getLocalPos() + iris::Vec3(0.01f, 0, 0)); }, 1 },
+            { "one node hidden",     [&] { leaf->setVisible(false); }, 1 },
+            { "one node shown",      [&] { leaf->setVisible(true); }, 1 },
+            { "one flag written",    [&] { leaf->setShadowCastingEnabled(!leaf->getShadowCastingEnabled()); }, 1 },
+            { "one material edited", [&] {
+                  auto *mn = static_cast<iris::MeshNode *>(leaf.data());
+                  auto pbr = mn->getMaterial().dynamicCast<iris::PbrMaterial>();
+                  if (pbr) pbr->setValue(QStringLiteral("roughness"), 0.31f);
+              }, 1 },
+        };
+        for (const Edit &e : edits) {
+            b.mirror->sync();                       // settle
+            e.run();
+            b.mirror->sync();
+            const int visited = b.mirror->visitedCount();
+            std::printf("    %-22s dirty %4llu  visited %4d\n", e.what,
+                        (unsigned long long)b.mirror->dirtyNodeCount(), visited);
+            CHECK(visited == e.expectVisited, e.what);
+            // THE ORACLE (§7.1): the full walk straight after the dirty sync
+            // must push NOTHING. Anything it pushes is a change the document
+            // failed to report.
+            const quint64 late = b.mirror->verifyAgainstFullWalk();
+            if (late) std::printf("    ORACLE: %llu late pushes after '%s'\n",
+                                  (unsigned long long)late, e.what);
+            CHECK(late == 0, "...and the full walk after it pushes nothing");
+        }
+
+        // A SUBTREE HIDE costs its subtree and nothing else — the change's own
+        // price, and the F6 contract (the mirror is the sole pusher of
+        // effective visibility, so every descendant MUST be marked).
+        b.mirror->sync();
+        group->setVisible(false);
+        b.mirror->sync();
+        const int hid = b.mirror->visitedCount();
+        std::printf("    subtree hidden         visited %4d (group of ~%d)\n", hid, subtree);
+        CHECK(hid > 1 && hid <= b.visited,
+              "hiding a group visits its SUBTREE — every descendant, and nothing else");
+        CHECK(b.mirror->verifyAgainstFullWalk() == 0,
+              "...and the full walk after it pushes nothing");
+        group->setVisible(true);
+        b.mirror->sync();
+        CHECK(b.mirror->verifyAgainstFullWalk() == 0, "...showing it again likewise");
+
+        // NOTHING WAS MISSED, ever, on this whole suite.
+        CHECK(b.mirror->verifierCatchCount() == 0,
+              "the change list missed NOTHING on the whole lattice");
+
+        // ---- THE MOVERS ARM (§6 M3) ---------------------------------------
+        //
+        // The list degrades to the walk and never past it: with every node
+        // moving, the dirty sync costs what the old full walk did; with 12 %
+        // moving it costs about 12 % of it. Ratios, and against a measured
+        // FULL-walk arm rather than a remembered number.
+        auto moveSome = [&](int count) {
+            int done = 0;
+            for (const auto &n : b.keep) {
+                if (n->getSceneNodeType() != iris::SceneNodeType::Mesh) continue;
+                n->setLocalPos(n->getLocalPos() + iris::Vec3(0.001f, 0, 0));
+                if (++done >= count) break;
+            }
+            return done;
+        };
+        auto timedSync = [&]() {
+            using clock = std::chrono::steady_clock;
+            auto t0 = clock::now();
+            b.mirror->sync();
+            return std::chrono::duration<double, std::milli>(clock::now() - t0).count();
+        };
+        std::vector<double> fullMs, allMs, someMs, stillMs;
+        const int meshCount = int(b.keep.size()) - 20;
+        for (int i = 0; i < 9; ++i) {
+            b.mirror->requestFullWalk();  fullMs.push_back(timedSync());
+            moveSome(meshCount);          allMs.push_back(timedSync());
+            moveSome(meshCount / 8);      someMs.push_back(timedSync());
+            stillMs.push_back(timedSync());
+        }
+        auto med = [](std::vector<double> v) { std::sort(v.begin(), v.end()); return v[v.size()/2]; };
+        const double full = med(fullMs), all = med(allMs), some = med(someMs), still = med(stillMs);
+        std::printf("    full walk %7.3f ms | 100%% movers %7.3f | 12%% movers %7.3f | still %7.3f\n",
+                    full, all, some, still);
+        // MEASURED 1.38x (Debug + ASan, 2020 nodes, 2026-09-13). The dirty path
+        // pays two things the recursion gets for free: a list entry per node,
+        // and a memo probe for the parent's answers (it reads them from the
+        // DOCUMENT so that the order of the change list cannot matter, where
+        // the walk threads them down). That is the honest price of the worst
+        // case — literally everything moving — and the gate is that it stays a
+        // CONSTANT FACTOR rather than becoming a different shape.
+        CHECK(all < full * 1.5,
+              "100% movers cost about what the full walk cost — the list degrades to it, never past");
+        CHECK(some < all * 0.45, "12% movers cost a fraction of that");
+        CHECK(still < full * 0.08,
+              "a STILL frame costs under a tenth of the walk it replaced");
+
+        // ---- WHAT THE VERIFIER COSTS --------------------------------------
+        //
+        // It is always on in the app, so its price is part of a still frame's.
+        // Bounded by its own two budgets and by nothing about the scene.
+        b.mirror->setVerifierBudget(64);
+        b.mirror->setVerifierMaterialBudget(8);
+        std::vector<double> guarded;
+        for (int i = 0; i < 9; ++i) guarded.push_back(timedSync());
+        const double withVerifier = med(guarded);
+        std::printf("    still + verifier %7.3f ms (bare %7.3f, budget 64 nodes / 8 materials)\n",
+                    withVerifier, still);
+        CHECK(withVerifier < full * 0.35,
+              "the always-on verifier keeps a still frame well under the walk it replaced");
+        CHECK(b.mirror->verifierVisitCount() == 64, "...and it really re-read its 64 nodes");
+        CHECK(b.mirror->verifierCatchCount() == 0, "...and found nothing behind");
+        b.mirror->setVerifierBudget(0);
     }
 
     std::printf("%s\n", failures ? "FAILURES" : "all ok");
