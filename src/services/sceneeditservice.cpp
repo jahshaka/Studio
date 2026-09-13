@@ -319,7 +319,10 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // to pin into: the emitter renders the shipped file and nothing is saved.
     const ShippedAssets::Pinned image = ShippedAssets::pinTexture(
         IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
-        QStringLiteral("Glowing Particle.jpg"), db, project);
+        QStringLiteral("Glowing Particle.jpg"), db, project,
+        // The user added the emitter and this is the picture it draws: content
+        // the project HAS, and a tray tile like any other image in the scene.
+        ShippedAssets::Ownership::Project);
     if (!image.guid.isEmpty()) setParticleTexture(node, image.guid);
     else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path));
     if (!image.error.isEmpty())
@@ -1181,7 +1184,8 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
         // slot for it exactly as it always did.
         if (slot->isEmpty() || !QFileInfo(*slot).isFile()) continue;
         const ShippedAssets::Pinned pinned =
-            ShippedAssets::pinTexture(*slot, QString(), db, project);
+            ShippedAssets::pinTexture(*slot, QString(), db, project,
+                                      ShippedAssets::Ownership::Project);
         if (!pinned.error.isEmpty()) {
             irisLog("applyMaterialPreset: '" + *slot + "' was not pinned - " + pinned.error);
             continue;

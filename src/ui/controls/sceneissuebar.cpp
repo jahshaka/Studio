@@ -11,11 +11,10 @@ For more information see the LICENSE file
 
 #include "ui/controls/sceneissuebar.h"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QEvent>
-#include <QHBoxLayout>
 #include <QLabel>
-#include <QPushButton>
 
 #include "services/sceneissues.h"
 #include "ui/style/stylesheet.h"
@@ -80,62 +79,65 @@ void SceneIssueBar::refresh()
     // caller, because `changed()` from the store reaches refresh() directly.
     if (!mEditorActive) { hide(); return; }
 
-    const QVector<SceneIssue> visible = SceneIssues::instance().issues(false);
+    // EVERY ISSUE, LINE BY LINE, in the store's stable order (by kind, then by
+    // the object) — never a count, never a "1 of 3". The store sorts; this just
+    // prints. One QLabel per issue and nothing else in the row: no Select, no
+    // dismiss, no layout to hold them (owner, 2026-09-13).
+    const QVector<SceneIssue> visible = SceneIssues::instance().issues();
     if (visible.isEmpty()) { hide(); return; }
 
     const int shown = qMin(int(kMaxRows), visible.size());
     for (int i = 0; i < shown; ++i) {
         const SceneIssue &issue = visible[i];
-        auto *row = new QWidget(this);
-        auto *layout = new QHBoxLayout(row);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(8);
-
         // WHAT IS WRONG, then WHAT TO DO — in that order, both in the user's
         // words. Nothing here is allowed to be a stack trace or a shader name.
+        // The message names the object itself ("Moon" and "Sun" are quoted in
+        // it), which is why no button is needed to point at one.
         auto *text = new QLabel(issue.action.isEmpty()
                                     ? issue.message
                                     : issue.message + QLatin1Char(' ') + issue.action,
-                                row);
+                                this);
+        text->setObjectName(QStringLiteral("SceneIssueLine"));
+        text->setTextInteractionFlags(Qt::NoTextInteraction);
         text->setWordWrap(true);
-        text->setMinimumWidth(320);
-        layout->addWidget(text, 1);
-
-        // NAMES THE OBJECT, SELECTABLY (the rule's first clause): the button
-        // carries the name so the row reads as a sentence about a thing.
-        if (!issue.node.isEmpty()) {
-            auto *select = new QPushButton(tr("Select %1").arg(issue.nodeName.isEmpty()
-                                                                   ? tr("object")
-                                                                   : issue.nodeName),
-                                           row);
-            select->setCursor(Qt::PointingHandCursor);
-            const QString guid = issue.node;
-            connect(select, &QPushButton::clicked, this,
-                    [this, guid]() { emit selectRequested(guid); });
-            layout->addWidget(select, 0);
-        }
-
-        auto *dismiss = new QPushButton(QStringLiteral("×"), row);
-        dismiss->setFixedWidth(28);
-        dismiss->setToolTip(tr("Dismiss. It will not come back until the scene is fixed and "
-                               "broken again."));
-        dismiss->setCursor(Qt::PointingHandCursor);
-        const QString id = issue.id;
-        connect(dismiss, &QPushButton::clicked, this,
-                [id]() { SceneIssues::instance().dismiss(id); });
-        layout->addWidget(dismiss, 0);
-
-        mRows->addWidget(row);
+        // MEASURED, NOT HOPED FOR. A word-wrapped QLabel's height depends on
+        // its width, and letting the layout negotiate that left the bar 35 px
+        // tall with a three-line message clipped inside it the moment the
+        // number of rows CHANGED (rig capture, two issues -> one). Every line
+        // is laid out at one fixed text width and told exactly how tall it is,
+        // so the frame's own size hint is then a plain sum and correct on the
+        // first pass, every time.
+        text->setFixedWidth(kTextWidth);
+        text->setFixedHeight(qMax(text->heightForWidth(kTextWidth),
+                                  text->fontMetrics().height()));
+        mRows->addWidget(text);
     }
     if (visible.size() > shown) {
         auto *more = new QLabel(tr("and %1 more").arg(visible.size() - shown), this);
+        more->setObjectName(QStringLiteral("SceneIssueLine"));
+        more->setFixedWidth(kTextWidth);
+        more->setFixedHeight(more->fontMetrics().height());
         mRows->addWidget(more);
     }
 
+    // Every row now has a fixed size, so the frame's hint is exact.
     adjustSize();
+    resize(sizeHint());
     reposition();
     show();
     raise();
+}
+
+int SceneIssueBar::lineCount() const
+{
+    return mRows ? mRows->count() : 0;
+}
+
+// ZERO BY CONSTRUCTION — and asserted, because "the bar has no buttons" is an
+// owner decision and not a detail of how refresh() happens to build rows today.
+int SceneIssueBar::buttonCount() const
+{
+    return int(findChildren<QAbstractButton *>().size());
 }
 
 bool SceneIssueBar::eventFilter(QObject *watched, QEvent *event)
@@ -162,10 +164,13 @@ void SceneIssueBar::reposition()
     QWidget *anchor = mAnchor ? mAnchor.data() : ownerWindow();
     if (!anchor) return;
     const QRect area(anchor->mapToGlobal(QPoint(0, 0)), anchor->size());
-    const QSize mine = sizeHint().expandedTo(size());
+    // THE SIZE REFRESH JUST SET, not sizeHint(): a bar that has shrunk must be
+    // allowed to shrink (the old `sizeHint().expandedTo(size())` could only
+    // ever grow), and the height for these wrapped rows is computed there.
+    const QSize mine = size();
     QPoint topLeft(area.left() + mMargin, area.top() + mTopInset);
     // Never off the viewport: a long message on a small window would otherwise
-    // push the buttons where nobody can reach them.
+    // push the text where nobody can read it.
     topLeft.setX(qBound(area.left(), topLeft.x(), qMax(area.left(), area.right() - mine.width())));
     topLeft.setY(qBound(area.top(), topLeft.y(), qMax(area.top(), area.bottom() - mine.height())));
     move(topLeft);

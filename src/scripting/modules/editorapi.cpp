@@ -489,18 +489,18 @@ QVector<VerbInfo> EditorApi::verbs() const
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
-        { "issues", "editor.issues(includeDismissed=true) -> [{id, kind, node, nodeName, message, action, dismissed}]",
+        { "issues", "editor.issues() -> [{id, kind, node, nodeName, message, action}]",
           "THE SCENE-ERROR AREA — the things wrong with the OPEN SCENE that the person using the "
-          "editor can fix, shown in the viewport beside the frame-rate readout and listed here. "
+          "editor can fix, listed in the viewport beside the frame-rate readout ONE LINE PER "
+          "ISSUE, and listed here in the same stable order (by kind, then by the object). "
           "The rule that decides what belongs in it: if you can fix it in your scene it is an "
           "issue; if it exists for us to debug the engine it stays in the log (app.engineErrors, "
           "log.tail, and the monitor's capture bundle). So there are never shader compiles, cache "
           "misses or pass counts here. Every issue NAMES the object it is about (`node` is a guid "
           "you can pass straight to editor.select) and says what to DO about it (`action`), and it "
-          "never repeats itself: raising one that is already live changes nothing at all. "
-          "`dismissed` is true for one the user waved away — it stays live, so nothing can nag "
-          "with it again, and it comes back only after the condition has gone and returned. "
-          "Pass false to list only what is actually on screen.",
+          "never repeats itself: raising one that is already live changes nothing at all. Nothing "
+          "is dismissible: an issue leaves when the condition is gone, which the scanner notices "
+          "within a second, and that is the only way it leaves.",
           Needs::Document },
         { "raiseIssue", "editor.raiseIssue({kind, node, message, action, id}) -> id",
           "Raises a scene issue, or does NOTHING and returns the same id when one with that id is "
@@ -510,19 +510,13 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`id` defaults to \"<kind>:<node>\", which is what makes repeats free. Use it for "
           "conditions a user can fix — never for engine diagnostics, which belong in the log.",
           Needs::Document },
-        { "dismissIssue", "editor.dismissIssue(id) -> bool",
-          "Hides a scene issue the way the user's dismiss button does: it stays LIVE, so nothing "
-          "can raise it again, and it is gone from the viewport. False when there is no such "
-          "issue. editor.clearIssue(id) is the other half — \"the condition is gone\" — and after "
-          "it the next occurrence is shown again.",
-          Needs::Document },
         { "clearIssue", "editor.clearIssue(id) -> bool",
           "Forgets a scene issue entirely, which is what \"the scene was fixed\" means: a later "
-          "raise of the same id is a new event and is shown again, dismissed or not. The scanner "
-          "(editor.checkScene) does this for its own kinds by itself. False when there is no such "
-          "issue.",
+          "raise of the same id is a new event and is shown again. The scanner "
+          "(editor.checkScene) does this for its own kinds by itself, which is how a line leaves "
+          "the viewport's error area — there is no dismiss. False when there is no such issue.",
           Needs::Document },
-        { "checkScene", "editor.checkScene() -> {issues, visible, raised:[id], list:[...]}",
+        { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...]}",
           "Runs the scene checker once against the open scene and returns what is live afterwards "
           "— the same thing the editor does on a timer, exposed so a script or a test can drive "
           "it. It knows two conditions today, both of which used to reach nobody: \"sun.tie\", "
@@ -531,16 +525,20 @@ QVector<VerbInfo> EditorApi::verbs() const
           "whose shadows are switched off standing close enough to solid geometry to light "
           "straight through it. Conditions that have been fixed are cleared, so this is safe to "
           "call as often as you like. `raised` names the issues this call raised for the first "
-          "time (empty on a second identical call — the never-repeat rule).",
+          "time (empty on a second identical call — the never-repeat rule), and `list` is every "
+          "live issue in the order the error area lists them.",
           Needs::Document },
-        { "issueBar", "editor.issueBar() -> {editorActive, exists, visible, rows}",
+        { "issueBar", "editor.issueBar() -> {editorActive, exists, visible, rows, lines, buttons}",
           "WHERE THE SCENE-ERROR AREA IS ON SCREEN. The bar is a frameless, "
           "always-on-top window over the EDITOR's viewport, so it must not be showing while the "
           "user is on the Desktop, Assets, Player, Materials or Publish page — it used to, "
           "complete with a Select button that selected in a viewport nobody was looking at. "
           "This verb runs one scan-and-decide pass and then reports: `editorActive` is whether "
           "the editor is the current space, `visible` whether the bar is on screen, `rows` how "
-          "many issues the user can see. Meaningless without a window (every field is false/0 "
+          "many issues the user can see, `lines` how many lines are actually built (one per "
+          "issue, plus a \"+N more\" line past the eighth) and `buttons` how many clickable "
+          "controls the bar has — ZERO, always: it shows the errors and the user fixes them. "
+          "Meaningless without a window (every field is false/0 "
           "in a --headless run); `editor.issues()` is the model half and works everywhere.",
           Needs::Window },
         { "dropPointAt", "editor.dropPointAt(x, y) -> {x, y, z} | null",
@@ -1936,9 +1934,13 @@ QVariantMap EditorApi::mirrorStats()
 // same store and adds nothing. All Needs::Document: an issue is a statement
 // about the document, and a headless run must be able to make and read one (it
 // is how the suite proves the never-repeat rule without a window).
-QVariantList EditorApi::issues(bool includeDismissed)
+//
+// There is no dismiss verb, deliberately (owner, 2026-09-13): the bar shows
+// what is wrong and the user fixes it; `clearIssue` — "the condition is gone" —
+// is the only way a line ever leaves, and the scanner calls it itself.
+QVariantList EditorApi::issues()
 {
-    return SceneIssues::instance().toVariant(includeDismissed);
+    return SceneIssues::instance().toVariant();
 }
 
 QString EditorApi::raiseIssue(const QVariantMap &issue)
@@ -1971,24 +1973,21 @@ QString EditorApi::raiseIssue(const QVariantMap &issue)
     return SceneIssues::instance().raise(out);
 }
 
-bool EditorApi::dismissIssue(const QString &id) { return SceneIssues::instance().dismiss(id); }
-
 bool EditorApi::clearIssue(const QString &id) { return SceneIssues::instance().clear(id); }
 
 QVariantMap EditorApi::checkScene()
 {
     auto &store = SceneIssues::instance();
     QStringList before;
-    for (const auto &i : store.issues(true)) before << i.id;
+    for (const auto &i : store.issues()) before << i.id;
     store.scan((host.services && host.services->sceneEdit)
                    ? host.services->sceneEdit->scene() : iris::ScenePtr());
     QVariantList raised;
-    for (const auto &i : store.issues(true))
+    for (const auto &i : store.issues())
         if (!before.contains(i.id)) raised.append(i.id);
-    return QVariantMap{ { QStringLiteral("issues"), store.issues(true).size() },
-                        { QStringLiteral("visible"), store.visibleCount() },
+    return QVariantMap{ { QStringLiteral("issues"), store.count() },
                         { QStringLiteral("raised"), raised },
-                        { QStringLiteral("list"), store.toVariant(true) } };
+                        { QStringLiteral("list"), store.toVariant() } };
 }
 
 QVariantMap EditorApi::issueBar()
@@ -1999,7 +1998,9 @@ QVariantMap EditorApi::issueBar()
         return QVariantMap{ { QStringLiteral("editorActive"), false },
                             { QStringLiteral("exists"), false },
                             { QStringLiteral("visible"), false },
-                            { QStringLiteral("rows"), 0 } };
+                            { QStringLiteral("rows"), 0 },
+                            { QStringLiteral("lines"), 0 },
+                            { QStringLiteral("buttons"), 0 } };
     }
     // SETTLED, NOT RACED: the shell decides this on a 1 Hz timer, and a script
     // that asked a moment after switching pages would otherwise read the old

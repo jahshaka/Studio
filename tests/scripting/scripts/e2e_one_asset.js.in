@@ -43,10 +43,18 @@ project.create("one asset");
 
 // ---- 1. the tray is one row per closure ----------------------------------
 
-// A fresh project already has rows of its own (the default Ground and its
-// tile texture), so every count below is relative to THIS.
+// A NEW PROJECT'S TRAY IS EMPTY (owner, 2026-09-13, lane BAR-1: "the project
+// asset tray should only show assets and items added to the project"). A fresh
+// project has rows of its own — the default Ground and the shipped checker it
+// stands on — but neither is anything the user added: the Ground is a node's
+// own row and the checker is PLATFORM-owned (services/shippedassets.h), both
+// dropped by the tray's rule 4. Every count below is relative to this.
+var baseRows = assets.list({ scope: "project" }).length;
 var baseTray = assets.list({ scope: "project", tray: true }).length;
-console.log("tray rows before the character: " + baseTray);
+assert(baseRows >= 2 && baseTray === 0,
+       "A NEW PROJECT'S TRAY IS EMPTY, with " + baseRows + " rows behind it (the Ground and "
+       + "its shipped checker): " + JSON.stringify(assets.list({ scope: "project", tray: true })
+           .map(function (r) { return r.type + ":" + r.name; })));
 
 var modelGuid = assets.import(RIG);
 assert(assets.addToProject(modelGuid) === modelGuid, "the model joins the project");
@@ -178,15 +186,29 @@ function companionOf(textureGuid) {
     return "";
 }
 
-// The default scene: the Ground is a built-in's own row, its tile is an asset
-// the scene uses.
+// THE DEFAULT SCENE IS PLATFORM FURNITURE, end to end (owner, 2026-09-13, lane
+// BAR-1): the Ground is a built-in's own row, and the checker it stands on is a
+// shipped file the editor pins by itself — a full library texture (the project
+// archive carries it, `material.reset` finds it) marked PLATFORM-owned, which
+// the tray drops by the same rule that drops the Ground (assettray.h rule 4).
 var groundId = scene.find("Ground");
 var tileRows = assets.list({ scope: "project", type: "texture", query: "Tile.png" });
 assert(groundId && tileRows.length === 1, "the default scene's Ground and its Tile.png row");
-assert(currentTray().indexOf(tileRows[0].guid) >= 0,
-       "THE RULE: the ground's Tile.png is a tile — the scene uses it");
+assert(currentTray().indexOf(tileRows[0].guid) < 0,
+       "the shipped checker is NOT a tile — platform furniture, not something the user added");
 assert(currentTray().indexOf(groundId) < 0,
-       "... and the Ground's own row is not (a built-in primitive is not a library asset)");
+       "... and the Ground's own row is not one either (a built-in is not a library asset)");
+
+// ...AND A FLOOR THE USER TEXTURES SHOWS THAT TEXTURE, ONCE. The platform rule
+// is about the shipped checker, not about the floor: the moment the user puts
+// their own image on it, that image is theirs and is a tile.
+var floorTex = assets.importFile(FIXTURES + "/implane_tall.png");
+assert(material.set(groundId, { baseColorMap: floorTex }) === true,
+       "the user puts their own texture on the floor");
+assert(currentTray().filter(function (g) { return g === floorTex; }).length === 1,
+       "the floor's USER texture is a tile, exactly once");
+assert(currentTray().indexOf(tileRows[0].guid) < 0,
+       "... and the shipped checker is still not one");
 
 // A directly-added image: its tile is the companion material minted for it.
 var tinyTex = assets.importFile(FIXTURES + "/tiny.png");

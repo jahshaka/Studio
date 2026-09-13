@@ -28,23 +28,36 @@ For more information see the LICENSE file
 //      user can go and look at it;
 //   2. says what to DO about it in plain words (`action`), not what went wrong
 //      internally;
-//   3. is dismissible, and never repeats itself while the same condition holds.
+//   3. never repeats itself while the same condition holds, and goes away by
+//      ITSELF when the user has fixed it.
+//
+// NOTHING HERE IS DISMISSIBLE (owner, 2026-09-13: "get rid of the Select
+// button and the button next to it so it just shows the error, let the user fix
+// it"). A message the user can wave away is a message they have to act on
+// twice, and an error area with a close button becomes a thing people close
+// instead of a thing people read. The ONLY way a line leaves the bar is the 1 Hz
+// scanner finding the condition gone — which is the same thing as the scene
+// being right again.
 //
 // WHAT "NEVER REPEATS" MEANS, precisely, because it is the part that is easy to
 // get wrong: an issue has a stable `id` built from its kind and its subject.
 // Raising an id that is already live is a NO-OP — no signal, no second row, no
-// re-notify. Dismissing it hides it but keeps it live, so a scanner that keeps
-// finding the same condition sixty times a second cannot bring it back. Only
-// `clear()` — the condition genuinely going away — forgets it, and the next
-// occurrence is then a new event the user sees again.
+// re-notify. Only `clear()` — the condition genuinely going away — forgets it,
+// and the next occurrence is then a new event the user sees again.
 //
 // This is NOT the transient `Toast` (ui/dialogs/toast.h): a toast is a message
 // that appears and leaves (snap size, "capture saved"). A scene issue stays up
-// until the scene is fixed or the user waves it away, which is why it has its
-// own store, its own verbs and its own widget.
+// until the scene is fixed, which is why it has its own store, its own verbs
+// and its own widget.
+//
+// EVERY LIVE ISSUE IS SHOWN, LINE BY LINE (owner, same conversation: "it should
+// just list all errors in the scene line by line if there are multiple"), in a
+// STABLE ORDER — by kind, then by the object it is about — so a second issue
+// appearing never reshuffles the line the user was reading. `issues()` sorts;
+// the store's insertion order is an implementation detail nobody may depend on.
 //
 // API-FIRST (SCRIPTING_SPEC §2.3): the store is the model, `editor.issues` /
-// `editor.raiseIssue` / `editor.dismissIssue` / `editor.checkScene` are the
+// `editor.raiseIssue` / `editor.clearIssue` / `editor.checkScene` are the
 // verbs, and the viewport's error bar is a view of exactly this and nothing
 // else. Process-wide, like the other message sinks (EngineErrorPump), because
 // there is one editor window and one open scene.
@@ -67,7 +80,6 @@ struct SceneIssue
     QString message;    ///< what is wrong, in the user's words
     QString action;     ///< what to do about it, in the user's words
     qint64  raisedMs = 0;
-    bool    dismissed = false;
 
     QVariantMap toMap() const;
 };
@@ -80,13 +92,9 @@ public:
     static SceneIssues &instance();
 
     /// Raises an issue, or does NOTHING when one with the same id is already
-    /// live (dismissed or not). Returns the id either way, and `raised` says
-    /// which of the two happened.
+    /// live. Returns the id either way, and `raised` says which of the two
+    /// happened.
     QString raise(const SceneIssue &issue, bool *raised = nullptr);
-
-    /// The user waved it away. Stays live (so the scanner cannot re-raise it),
-    /// stops being shown. False when there is no such issue.
-    bool dismiss(const QString &id);
 
     /// The condition is gone. Forgets it, so the NEXT occurrence is shown
     /// again. False when there is no such issue.
@@ -98,13 +106,14 @@ public:
     /// Forgets everything — a scene close, or a test between cases.
     void reset();
 
-    /// Live issues, oldest first. `includeDismissed` false is what the error
-    /// bar shows; true is what `editor.issues()` reports.
-    QVector<SceneIssue> issues(bool includeDismissed = true) const;
-    QVariantList toVariant(bool includeDismissed = true) const;
+    /// Every live issue, in the STABLE order the bar lists them in: by kind,
+    /// then by the object each is about, then by id. There is no second,
+    /// smaller list — everything live is shown.
+    QVector<SceneIssue> issues() const;
+    QVariantList toVariant() const;
 
-    /// How many issues the user can currently see.
-    int visibleCount() const;
+    /// How many issues the user can currently see (= issues().size()).
+    int count() const;
 
     /// THE SCANNER. Walks the open scene for the conditions we know how to
     /// describe, raising what it finds and clearing what has been fixed.
@@ -122,7 +131,7 @@ public:
     int scan(const iris::ScenePtr &scene);
 
 signals:
-    /// Anything changed: raised, dismissed, cleared, reset.
+    /// Anything changed: raised, cleared, reset.
     void changed();
 
 private:

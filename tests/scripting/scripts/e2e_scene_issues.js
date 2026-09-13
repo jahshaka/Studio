@@ -4,13 +4,21 @@
 // THE RULE, which is the whole design: if the person using the editor can fix
 // it in their scene, it is an issue and it is shown over the viewport; if it
 // exists for us to debug the engine, it stays in the log. So every issue here
-// NAMES the object it is about (selectably), says what to DO about it, is
-// dismissible, and NEVER REPEATS while the condition holds.
+// NAMES the object it is about, says what to DO about it, and NEVER REPEATS
+// while the condition holds.
+//
+// AND IT IS READ-ONLY (owner, 2026-09-13, lane BAR-1): "get rid of the Select
+// button and the button next to it so it just shows the error, let the user fix
+// it", and "it should just list all errors in the scene line by line if there
+// are multiple". So there is no dismiss — not a verb, not a button — the bar
+// has NO buttons at all, and every live issue is a line of its own in a stable
+// order. A line leaves when the 1 Hz scanner finds the condition gone, and that
+// is the only way it leaves.
 //
 // API-first: the store and its verbs are the model (editor.issues /
-// raiseIssue / dismissIssue / clearIssue / checkScene); the viewport bar is a
-// view of exactly this and adds nothing. That is why this suite can drive the
-// whole facility without a window.
+// raiseIssue / clearIssue / checkScene); the viewport bar is a view of exactly
+// this and adds nothing. That is why this suite can drive the whole facility
+// without a window.
 //
 // THE TWO FIRST CUSTOMERS, both owner-reported:
 //   sun.tie      two directional lights on the same Forward Shading Priority,
@@ -39,14 +47,18 @@ function issuesOfKind(list, kind) {
 // ---- registry -------------------------------------------------------------
 var editor_ = api.verbs().filter(function (m) { return m.module === "editor"; })[0];
 var names = editor_.verbs.map(function (v) { return v.name; });
-["issues", "raiseIssue", "dismissIssue", "clearIssue", "checkScene"].forEach(function (v) {
+["issues", "raiseIssue", "clearIssue", "checkScene", "issueBar"].forEach(function (v) {
     assert(names.indexOf(v) >= 0, "editor." + v + " is registered");
 });
+// THE DELETED VERB (CRUD law): dismiss is gone from the registry and from the
+// object — an issue is fixed, never waved away.
+assert(names.indexOf("dismissIssue") < 0, "editor.dismissIssue is GONE from the registry");
+assert(typeof editor.dismissIssue === "undefined", "... and off the object too");
 
 var guid = project.create("Scene issues " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
 
-// ---- the facility itself: raise / never repeat / dismiss / clear ----------
+// ---- the facility itself: raise / never repeat / clear --------------------
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 0, z: 0 } });
 editor.clearIssue("demo:" + cube);   // a clean slate whatever ran before
 
@@ -59,7 +71,7 @@ assert(live.length === 1, "the issue is live");
 assert(live[0].node === cube, "...it NAMES the object (a guid a script or a click can select)");
 assert(live[0].nodeName !== "", "...and remembers its name: '" + live[0].nodeName + "'");
 assert(live[0].action !== "", "...and says what to do about it");
-assert(live[0].dismissed === false, "...and is showing");
+assert(live[0].dismissed === undefined, "...and carries no 'dismissed' field any more");
 
 // NEVER REPEATS. This is the property a scanner running every second depends
 // on: raising the same id again changes nothing at all.
@@ -69,26 +81,19 @@ assert(live.length === 1, "raising the same issue again does NOT add a second ro
 assert(live[0].message === "This is a made-up problem.",
        "...and does not overwrite the message that is already up");
 
-// DISMISS hides it but keeps it live, so nothing can nag with it again.
-assert(editor.dismissIssue(id), "dismissIssue");
-assert(issuesOfKind(editor.issues(false), "demo").length === 0, "...it is gone from the viewport");
-assert(issuesOfKind(editor.issues(true), "demo").length === 1, "...but it is still LIVE");
-editor.raiseIssue({ kind: "demo", node: cube, message: "Nagging." });
-assert(issuesOfKind(editor.issues(false), "demo").length === 0,
-       "...so re-raising it cannot bring it back");
-
 // CLEAR forgets it: the condition is gone, and the NEXT occurrence is news.
+// It is the ONLY way an issue leaves — there is nothing to wave it away with.
 assert(editor.clearIssue(id), "clearIssue");
-assert(issuesOfKind(editor.issues(true), "demo").length === 0, "...it is forgotten");
+assert(issuesOfKind(editor.issues(), "demo").length === 0, "...it is forgotten");
 editor.raiseIssue({ kind: "demo", node: cube, message: "Back again." });
-assert(issuesOfKind(editor.issues(false), "demo").length === 1,
+assert(issuesOfKind(editor.issues(), "demo").length === 1,
        "...and the same condition later is shown again");
 editor.clearIssue(id);
 
 // ---- refusals: an issue with nothing to say helps nobody ------------------
 throws(function () { editor.raiseIssue({ message: "no kind" }); }, "raiseIssue needs a kind");
 throws(function () { editor.raiseIssue({ kind: "demo" }); }, "raiseIssue needs a message");
-assert(!editor.dismissIssue("no-such-issue"), "dismissing an unknown id is false, not a throw");
+assert(!editor.clearIssue("no-such-issue"), "clearing an unknown id is false, not a throw");
 
 // ---- customer 1: TWO SUNS -------------------------------------------------
 // The scene starts with one directional light. A second AUTO-SLOTS to priority
@@ -118,8 +123,7 @@ var again = editor.checkScene();
 assert(again.raised.length === 0, "a second scan raises NOTHING new (the never-repeat rule)");
 assert(issuesOfKind(again.list, "sun.tie").length === 1, "...and there is still exactly one row");
 
-// FIX THE SCENE AND IT GOES AWAY — and then comes back if you break it again,
-// dismissed or not.
+// FIX THE SCENE AND IT GOES AWAY — and then comes back if you break it again.
 node.setProperty(second, "forwardShadingPriority", 1);
 var fixed = editor.checkScene();
 assert(issuesOfKind(fixed.list, "sun.tie").length === 0, "fixing the priorities clears the issue");
@@ -152,22 +156,73 @@ node.setProperty(lamp, "shadowMapType", 2);          // 2 = soft
 assert(issuesOfKind(editor.checkScene().list, "shadow.leak").length === 0,
        "turning its shadows back on clears it");
 
-// ---- THE BAR IS AN EDITOR SURFACE (CLEANUP-1 item 3) ----------------------
-// The store is the model and works everywhere; the BAR is a frameless
-// always-on-top window over the editor's viewport, and it used to float over
-// the Desktop, Assets, Player, Materials and Publish pages complete with a
-// Select button that selected in a viewport nobody was looking at. The 1 Hz
-// scanner's comment claimed a space check for a week; there was none.
-//
-// editor.issueBar() runs one scan-and-decide pass and reports, so this is not a
-// race against that timer.
+// ---- EVERY ISSUE IS A LINE, AND THE BAR HAS NO BUTTONS (lane BAR-1) -------
+// The owner's two decisions about the error area, asserted through the shell
+// seam: `lines` is what the widget actually built (one QLabel per issue, plus a
+// "+N more" line past the eighth) and `buttons` is a live walk of the bar's
+// children for QAbstractButton — zero, forever. Select and dismiss are gone:
+// the message quotes both objects by name, so there is nothing to click.
 app.space("editor");
 node.setProperty(lamp, "shadowMapType", 0);          // something for it to say
 var bar = editor.issueBar();
 assert(bar.editorActive === true, "the editor is the active space");
 assert(bar.rows > 0, "there is an issue to show (" + bar.rows + ")");
 assert(bar.visible === true, "the bar is up over the editor viewport");
+assert(bar.buttons === 0, "THE BAR HAS NO BUTTONS — no Select, no dismiss");
+assert(bar.lines === bar.rows, "one line per issue (" + bar.lines + " for " + bar.rows + ")");
 
+// TWO ISSUES AT ONCE = TWO LINES, in the store's stable order (by kind, then by
+// the object): the leak first, the sun tie second, whichever the scanner found
+// first. This is the case that used to collapse into "and 1 more" behind a
+// three-row cap.
+node.setProperty(second, "forwardShadingPriority", 0);   // the sun tie, again
+var both = editor.issueBar();
+var live = editor.issues();
+assert(both.rows === 2 && both.lines === 2,
+       "two simultaneous issues are TWO lines (" + both.lines + ")");
+assert(both.buttons === 0, "... still with no buttons");
+assert(live.length === 2, "editor.issues() lists both");
+assert(live[0].kind === "shadow.leak" && live[1].kind === "sun.tie",
+       "... in a STABLE order, by kind: " + live[0].kind + " then " + live[1].kind);
+var order = editor.issues().map(function (i) { return i.id; }).join("|");
+editor.checkScene();                                     // another pass, same two conditions
+assert(editor.issues().map(function (i) { return i.id; }).join("|") === order,
+       "... and a later scan does not reshuffle them (" + order + ")");
+
+// FIX ONE AND EXACTLY ITS LINE GOES, within one pass of the scanner (which is
+// what editor.issueBar() runs). The other one is untouched and keeps its text.
+var leakId = live[0].id, tieId = live[1].id;
+node.setProperty(second, "forwardShadingPriority", 1);   // fix the sun tie only
+var one = editor.issueBar();
+var rest = editor.issues();
+assert(one.rows === 1 && one.lines === 1, "fixing one issue leaves ONE line");
+assert(rest.length === 1 && rest[0].id === leakId,
+       "... and it is exactly the OTHER one (" + rest[0].kind + ")");
+assert(rest.map(function (i) { return i.id; }).indexOf(tieId) < 0,
+       "... the fixed issue's line is gone");
+
+// MANY ISSUES: a line each up to the cap, then ONE trailing count. The cap is
+// generous (8) because an author with eight broken things wants to see eight,
+// but an error area that can grow without bound would cover the viewport it is
+// reporting on.
+for (var d = 0; d < 10; ++d)
+    editor.raiseIssue({ kind: "demo" + d, node: lamp,
+                        message: "Demo problem " + d + ".", action: "Fix demo " + d + "." });
+var many = editor.issueBar();
+assert(many.rows === 11, "eleven live issues (" + many.rows + ")");
+assert(many.lines === 9, "... shown as 8 lines plus one 'and N more' line (" + many.lines + ")");
+assert(many.buttons === 0, "... and still no buttons");
+for (var d2 = 0; d2 < 10; ++d2) editor.clearIssue("demo" + d2 + ":" + lamp);
+assert(editor.issueBar().lines === 1, "clearing them leaves the one real issue");
+
+// ---- THE BAR IS AN EDITOR SURFACE (CLEANUP-1 item 3) ----------------------
+// The store is the model and works everywhere; the BAR is a frameless
+// always-on-top window over the editor's viewport, and it used to float over
+// the Desktop, Assets, Player, Materials and Publish pages, describing a scene
+// nobody was looking at. The 1 Hz scanner's comment claimed a space check for a
+// week; there was none. editor.issueBar() runs one scan-and-decide pass and
+// reports, so this is not a race against that timer.
+//
 // Two spaces are enough: the rule is "the current space is not the editor", not
 // a list — and the Player page stands a second engine scene up, which is a lot
 // of machinery for a check about one window's visibility.
@@ -190,12 +245,12 @@ editor.checkScene();
 // by any other producer) used to live on across a project open and describe a
 // node that is not in the scene any more. Every BIND resets the store now.
 editor.raiseIssue({ kind: "carryover", node: roof, message: "Raised in the OLD scene." });
-assert(issuesOfKind(editor.issues(true), "carryover").length === 1,
+assert(issuesOfKind(editor.issues(), "carryover").length === 1,
        "an issue of another kind is live in this scene");
 
 // ---- NOT an issue: a scene with no directional light at all ---------------
 project.create("Lamps only " + Date.now());
-assert(issuesOfKind(editor.issues(true), "carryover").length === 0,
+assert(issuesOfKind(editor.issues(), "carryover").length === 0,
        "opening another scene FORGETS it (the store is scene-scoped)");
 scene.nodes().forEach(function (n) {
     if (node.info(n.id).type === "light" && node.property(n.id, "lightType") === 1)

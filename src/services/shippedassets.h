@@ -63,12 +63,39 @@ struct Pinned
     bool ok() const { return error.isEmpty() && !path.isEmpty(); }
 };
 
+/// WHOSE ASSET THIS IS, in the user's eyes. A RULE, not a special case, and
+/// deliberately non-defaulted so the next feature that pins a shipped file has
+/// to answer the question (the same shape as ProjectAssets::AddKind).
+///
+///   Project   — the row is content the project HAS: the emitter's particle
+///               image, a material preset's maps, a sky's faces. It is a tile
+///               in the editor's asset tray like anything else the scene uses.
+///   Platform  — the row is the APP's own furniture, pinned only because a
+///               platform-owned node needs it: the default floor's checker.
+///               The user never added it, so it is not a tray tile (owner,
+///               2026-09-13: "the project asset tray should only show assets
+///               and items added to the project"). The row is still an
+///               ordinary library texture in every other respect — pinned,
+///               stored, carried by a project archive — so the floor's Reset
+///               and the export/import round trip are untouched; the marker
+///               is a `{"type": "platform"}` stamp in the row's properties
+///               that services/assettray.h reads (its rule 4).
+///
+/// The stamp goes on whatever row the checker resolves to, minted here or
+/// reused: identity is the CONTENT, so on a library that already holds those
+/// bytes (a sample scene carries the same tile) the floor pins THAT row, and a
+/// mint-only marker would leave the checker in the tray of every project made
+/// on a real library. A user who imported the same image by hand still gets a
+/// tile for it — the companion material minted for a direct add is the tile
+/// (assettray.h rule 5).
+enum class Ownership { Project, Platform };
+
 /// `sourcePath` — a file the app ships, or any image file — as a LIBRARY
 /// texture pinned into `project`. `displayName` names the row the first time
 /// it is imported (empty = the file's own name); an existing row keeps
 /// whatever it is called. Idempotent: the same bytes answer the same row.
 Pinned pinTexture(const QString &sourcePath, const QString &displayName,
-                  Database *db, Project *project);
+                  Database *db, Project *project, Ownership ownership);
 
 /// The shipped cube-sky presets (app/content/skies/alternative/<dir>/).
 struct SkyPreset
