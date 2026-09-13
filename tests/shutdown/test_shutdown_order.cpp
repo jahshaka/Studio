@@ -113,6 +113,63 @@ int main(int argc, char **argv)
     CHECK(!log.contains("the Engine is STILL referenced"),
           "no shared_ptr<Engine> holder outlived the viewports");
 
+    // ---- THE EARLY QUIT (ledger 150) --------------------------------------
+    // A CLI serving run that cannot do its job — `--mcp-port` on a port the
+    // process may not bind — used to `return 1` straight out of runMcpServe,
+    // skipping EngineHost::shutdown() entirely. The engine was then torn down
+    // from ~EngineHost at STATIC-DESTRUCTION time: after Qt, after the
+    // database, and after the engine library's own function-local statics, one
+    // of which is the texture cache. `TextureCache::save` iterated a destroyed
+    // std::map and the app died of SIGSEGV (fault address 0x20, inside
+    // std::string::find) AFTER printing "[shutdown] step 8/8" — the crash the
+    // rig caught on 2026-09-13.
+    //
+    // Port 1 is the reproduction: a real port number (so the parser accepts
+    // it), never bindable by a non-root process (so the listen always fails),
+    // and never in use by a sibling suite.
+    {
+        std::printf("-- early quit: a doomed --mcp-port must still exit in order\n");
+        QProcess doomed;
+        doomed.setProcessChannelMode(QProcess::MergedChannels);
+        doomed.start(QStringLiteral(JAHSHAKA_BINARY), QStringList{ QStringLiteral("--mcp-port=1") });
+        const bool started = doomed.waitForStarted(15000);
+        CHECK(started, "the doomed run started");
+        const bool finished = started && doomed.waitForFinished(kExitBudgetMs);
+        QByteArray dlog = doomed.readAll();
+        CHECK(finished, "the doomed run exited within the budget");
+        if (!finished) { doomed.kill(); doomed.waitForFinished(5000); }
+
+        CHECK(dlog.contains("cannot listen on 127.0.0.1:1"),
+              "it failed the bind it was meant to fail");
+        // THE POINT: a clean process exit, not a signal, and no backtrace file.
+        CHECK(finished && doomed.exitStatus() == QProcess::NormalExit,
+              "it exited NORMALLY (no SIGSEGV on the way out)");
+        if (finished) std::printf("info: exit code %d\n", doomed.exitCode());
+        CHECK(finished && doomed.exitCode() == 1, "...with the CLI failure code");
+        CHECK(!dlog.contains("Jahshaka crashed"), "no crash backtrace was written");
+
+        // ...and the teardown it skipped now runs, in order. Steps 1-3 belong
+        // to a window CLOSE and never fire on a CLI path; step 4 is
+        // finalizeAppExit and steps 5-8 are ~MainWindow, which is exactly the
+        // ordered tail this case was missing.
+        QVector<int> dsteps;
+        QRegularExpression dre(QStringLiteral(R"(\[shutdown\] step (\d)/8 ([^\n]*))"));
+        auto dit = dre.globalMatch(QString::fromUtf8(dlog));
+        while (dit.hasNext()) dsteps.append(dit.next().captured(1).toInt());
+        std::printf("info: early-quit steps:");
+        for (int st : dsteps) std::printf(" %d", st);
+        std::printf("\n");
+        bool tail = true;
+        const QVector<int> wanted{ 4, 5, 6, 7, 8 };
+        if (dsteps != wanted) tail = false;
+        CHECK(tail, "the early quit records steps 4,5,6,7,8 — the ordered tail — exactly once each");
+        CHECK(!dlog.contains("fired again") && !dlog.contains("fired AFTER step"),
+              "no early-quit step fired twice or out of order");
+        if (!tail || !finished || doomed.exitStatus() != QProcess::NormalExit)
+            std::printf("---- doomed run tail ----\n%s\n-------------------------\n",
+                        dlog.right(4000).constData());
+    }
+
     if (failures) {
         const QByteArray tail = log.right(4000);
         std::printf("---- app output tail ----\n%s\n-------------------------\n", tail.constData());

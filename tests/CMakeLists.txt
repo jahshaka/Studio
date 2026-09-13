@@ -248,6 +248,9 @@ add_subdirectory(openasync)
 add_subdirectory(archiveasync)
 add_subdirectory(avatarasync)
 add_subdirectory(shutdown)
+# The command-line parser's contract (app.cli_options, ledger 150): what the
+# app REFUSES, and why 0 is still a legal --mcp-port.
+add_subdirectory(cli)
 add_subdirectory(ui)
 add_subdirectory(avatar)
 # The shipped sample scenes on a VIRGIN HOME, one test each — the owner's

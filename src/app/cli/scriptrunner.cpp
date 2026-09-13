@@ -135,7 +135,14 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
         QString why;
         if (!window.beginEngineSelftest(why)) {
             std::fprintf(stderr, "mcp: %s\n", qPrintable(why));
-            return 1;
+            // THROUGH THE SAME EXIT AS A SUCCESSFUL RUN (ledger 150). A bare
+            // `return 1` here skipped EngineHost::shutdown() entirely, leaving
+            // the engine to be torn down from ~EngineHost at static-destruction
+            // time — after Qt, after the database, and after this library's own
+            // statics: exactly the shape of the SIGSEGV in TextureCache::save
+            // that a doomed --mcp-port produced. Every way out of this function
+            // is now the ordered one.
+            return finalizeAppExit(1);
         }
         for (int frame = 0; frame < 10; ++frame) {
             app.processEvents(QEventLoop::AllEvents, 50);
@@ -146,7 +153,7 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
     QString error;
     if (!window.startMcpServer(port, &error)) {
         std::fprintf(stderr, "mcp: %s\n", qPrintable(error));
-        return 1;
+        return finalizeAppExit(1);       // ordered teardown, see above
     }
 
     McpServer *mcp = window.mcp();

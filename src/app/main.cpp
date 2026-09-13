@@ -82,6 +82,17 @@ int main(int argc, char *argv[])
     GetGitCommitHash();
 
     const CliOptions cli = CliOptions::parse(argc, argv);
+    // A COMMAND LINE THE APP CANNOT HONOUR STOPS HERE (ledger 150): before
+    // QApplication, before the log, before a window — loudly, on stderr, with a
+    // non-zero exit code. The alternative is what `--mcp-port=8716336` used to
+    // do: get silently truncated to 48, boot the whole editor, fail to bind a
+    // protected port and quit again, which is a worse answer AND was the
+    // trigger for the unordered-teardown SIGSEGV.
+    if (!cli.errors.isEmpty()) {
+        for (const QString &e : cli.errors)
+            std::fprintf(stderr, "Jahshaka: %s\n", qPrintable(e));
+        return 2;
+    }
     cli.applyPlatformPolicy();
 
     // Pin the application identity instead of letting Qt infer it from the

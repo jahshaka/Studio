@@ -14,6 +14,38 @@ For more information see the LICENSE file
 #include <QByteArray>
 #include <QtGlobal>
 
+namespace {
+
+// THE PORT, RANGE-CHECKED AND SAID OUT LOUD (ledger 150). This was
+// `quint16(QByteArray(arg).toUInt())`, which does two silent things: a
+// non-numeric argument becomes 0 (= "pick an ephemeral port", the opposite of
+// an error) and anything above 65535 is TRUNCATED mod 65536. That is not
+// theoretical — `--mcp-port=8716336` became 48, the app tried to bind a
+// PROTECTED port, failed, and quit down an unordered exit path that ended in a
+// SIGSEGV on the way out (the exit path is fixed too; this is the trigger).
+//
+// 0 STAYS LEGAL and still means EPHEMERAL: several driver suites boot the app
+// at once and cannot name a fixed port (TEST_GATE_AUDIT.md §4.1). Everything
+// else must be 1..65535 and must be a number and nothing else.
+void takePort(CliOptions &o, const char *text)
+{
+    o.mcpServe = true;
+    const QByteArray raw = QByteArray(text).trimmed();
+    bool digits = !raw.isEmpty();
+    for (char c : raw) if (c < '0' || c > '9') digits = false;   // no sign, no spaces, no suffix
+    bool ok = false;
+    const qulonglong value = digits ? raw.toULongLong(&ok) : 0ull;
+    if (!digits || !ok || value > 65535ull) {
+        o.errors << QStringLiteral(
+            "--mcp-port: '%1' is not a port number (expected 0 for an ephemeral "
+            "port, or 1-65535)").arg(QString::fromLocal8Bit(raw));
+        return;
+    }
+    o.mcpPort = quint16(value);
+}
+
+}   // namespace
+
 CliOptions CliOptions::parse(int argc, char *argv[])
 {
     CliOptions o;
@@ -24,8 +56,8 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
         // 0 is EPHEMERAL, not "off" — see CliOptions::mcpServe.
-        else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) { o.mcpServe = true; o.mcpPort = quint16(QByteArray(argv[i] + 11).toUInt()); }
-        else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) { o.mcpServe = true; o.mcpPort = quint16(QByteArray(argv[++i]).toUInt()); }
+        else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) takePort(o, argv[i] + 11);
+        else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) takePort(o, argv[++i]);
         else if (qstrcmp(argv[i], "--clear-shader-cache") == 0) o.clearShaderCache = true;
         else if (qstrncmp(argv[i], "--data-root=", 12) == 0) o.dataRoot = QString::fromLocal8Bit(argv[i] + 12);
         else if (qstrcmp(argv[i], "--data-root") == 0 && i + 1 < argc) o.dataRoot = QString::fromLocal8Bit(argv[++i]);

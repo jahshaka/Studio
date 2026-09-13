@@ -1430,6 +1430,150 @@ static void t3_cache_probe(Engine *e, View *v)
     e->destroyScene(r.scene);
 }
 
+// T3x — ONE ATLAS REBUILD FOR ONE EVENT (the "first-lamp atlas hitch",
+// E2 review / ledger 104/121).
+//
+// A rebuild swaps the three shadow-node DEFINITIONS, so every workspace that
+// names one is dropped and recreated: every view, every planar-mirror slot, and
+// every reflection probe — whose GI arm is then built from scratch. It is the
+// most expensive thing this subsystem does.
+//
+// A world that opens with casting lamps used to pay it TWICE for one event: the
+// derived count grew the atlas after its three-frame debounce, and the
+// clear-strategy flip rebuilt it AGAIN a few presented frames later. The two
+// decisions now settle in one rebuild — whichever fires first carries the
+// other's answer — so an open costs exactly one, and a session that goes on
+// rendering the same world costs none.
+//
+// FIRST in the run order, with the engine's atlas still at its birth values:
+// this is the OPEN, and it only happens once per process.
+static void t3x_one_rebuild_per_open(Engine *e, View *v)
+{
+    std::printf("-- T3x: a world that opens with lamps costs ONE atlas rebuild, then none\n");
+    const unsigned before = e->shadowStatus().atlasRebuilds;
+    CHECK(before == 0u, "the engine has not rebuilt its atlas yet (%u)", before);
+    e->setShadowMapBudget(8u);
+    CacheRoom r = buildCacheRoom(e, v, "t3x");     // three casting point lamps
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    // The open: long enough for BOTH decisions (the count's debounce and the
+    // clear flip's presented-frame debounce) to have settled.
+    render(e, 40);
+    const ShadowStatus opened = e->shadowStatus();
+    std::printf("    after the open: %u rebuild(s), %u maps, clears-per-map view cached %d\n",
+                opened.atlasRebuilds, opened.focusedMaps, int(opened.viewCached));
+    CHECK(opened.atlasRebuilds == 1u,
+          "the open cost exactly ONE atlas rebuild (%u)", opened.atlasRebuilds);
+    CHECK(opened.focusedMaps >= 3u && opened.viewCached,
+          "...and it settled on both answers at once: %u maps AND the per-map clears the "
+          "cache needs (viewCached %d)", opened.focusedMaps, int(opened.viewCached));
+
+    // ...and then the world just runs. 600 frames of the same scene, with the
+    // camera moving (the shape of a play session), rebuild nothing.
+    for (int i = 0; i < 600; ++i) {
+        if ((i % 60) == 0) {
+            CameraDesc c;
+            const float a = float(i) * 0.01f;
+            c.position = Vec3(2.0f * std::cos(a), kCamHeight, 2.0f * std::sin(a) + 0.01f);
+            c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);
+            c.fovDegrees = 60.0f;
+            v->setCamera(c);
+        }
+        e->renderOneFrame();
+    }
+    const ShadowStatus played = e->shadowStatus();
+    std::printf("    after 600 more frames: %u rebuild(s)\n", played.atlasRebuilds);
+    CHECK(played.atlasRebuilds == 1u,
+          "600 frames of the open world rebuild nothing (%u total)", played.atlasRebuilds);
+    e->destroyScene(r.scene);
+}
+
+// T3p5 — A FIFTH LAMP DOES NOT UNCACHE EVERY PROBE (E2 review, ledger 104/121).
+//
+// The probe-capture shadow node's focused count is capped at four whatever the
+// main atlas grew to (kProbeShadowMaxFocusedMaps — 32 probes x an R/4 atlas is
+// the VRAM that cap exists to hold). The cache's rule was all-or-nothing —
+// `want.size() <= maps` or nothing is cached — so a room with FIVE cacheable
+// lamps took EVERY probe instance in the scene out of the cache at once: four
+// lamp maps re-rendered on every capture, on every probe, for ever, over one
+// lamp too many. In the Grand Showroom that is 32 instances.
+//
+// A probe's camera never moves (it sits at the probe centre), so its four
+// NEAREST lamps are a stable choice — the same lamps Ogre's own closest-first
+// sort would have picked per frame — and fixing them is that picture at none of
+// the cost. The view and the mirrors keep the v1 rule (T4): their cameras
+// follow the user.
+static void t3p5_probe_over_cap(Engine *e, View *v)
+{
+    std::printf("-- T3p5: a fifth lamp does not take every probe out of the cache\n");
+    e->setShadowMapBudget(8u);
+    CacheRoom r = buildCacheRoom(e, v, "t3p5");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    // Two more lamps, so the scene has FIVE — one more than the probe node's
+    // cap and three fewer than the view's atlas at budget 8.
+    const Vec3 extra[2] = { Vec3(8.0f, 3.0f, 8.0f), Vec3(0.0f, 3.0f, -8.0f) };
+    NodeId more[2] = { 0, 0 };
+    for (int i = 0; i < 2; ++i) {
+        more[i] = r.scene->createNode();
+        r.scene->setLight(more[i], cacheLamp());
+        r.scene->setNodeTransform(more[i], extra[i], Quat(), Vec3(1, 1, 1));
+    }
+    // Let the atlas grow to hold all five in the VIEW (it steps {2,4,8,16} and
+    // never shrinks), so nothing below is the view standing down.
+    for (int i = 0; i < 24 && e->shadowStatus().focusedMaps < 5u; ++i) e->renderOneFrame();
+    CHECK(e->shadowStatus().focusedMaps >= 5u,
+          "the view atlas holds all five lamps (%u maps)", e->shadowStatus().focusedMaps);
+
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    // A STATED SPACE: the hybrid measures enclosure and declines to place
+    // probes in an open scene unless the author pins the lit volume (the same
+    // note T3p carries).
+    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.quality = GiQuality::Low;
+    gi.probeShadows = GiToggle::On;
+    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    gi.updateBudget = 1;
+    r.scene->setGlobalIllumination(gi);
+    e->shadowStatus();
+    for (int i = 0; i < 40; ++i) { e->renderOneFrame(); e->shadowStatus(); }
+    const GiStatus g = r.scene->giStatus();
+    CHECK(g.probeShadows && g.probeCount == 4, "four shadowed probes (%d)", g.probeCount);
+
+    const ShadowStatus st = e->shadowStatus();
+    std::printf("    five lamps: cached instances %u, uncached %u, viewCached %d\n",
+                st.cachedInstances, st.uncachedInstances, int(st.viewCached));
+    // THE MEASUREMENT. Before this change every probe instance was uncached
+    // (uncachedInstances == the probe count) and the view was cached; now
+    // nothing stands down.
+    CHECK(st.uncachedInstances == 0u,
+          "no instance stands down over the fifth lamp (%u uncached)", st.uncachedInstances);
+    CHECK(st.cachedInstances >= 1u + unsigned(g.probeCount),
+          "the view and all four probes cache (%u instances)", st.cachedInstances);
+
+    // ...and the cache is REAL, not just reported: a colour-only edit stales
+    // the grid, every probe re-captures, and not one of those captures
+    // re-renders a lamp map. Uncached, each of the four captures would render
+    // four maps x 8 passes.
+    r.scene->setLight(more[0], cacheLamp(9.0f, Colour(1.0f, 0.9f, 0.6f)));
+    int captures = 0;
+    unsigned lampTotal = 0;
+    for (int i = 0; i < 16; ++i) {
+        e->renderOneFrame();
+        const ShadowStatus f2 = e->shadowStatus();
+        captures += r.scene->giStatus().probeCapturesLastFrame;
+        lampTotal += f2.probeLampPassesLastFrame;
+    }
+    std::printf("    colour-only catch-up: %d captures, probe lamp passes %u\n", captures, lampTotal);
+    CHECK(captures >= 4, "every probe re-captured (%d)", captures);
+    CHECK(lampTotal == 0u,
+          "and every capture reused its four cached lamp maps: 0 lamp passes (%u)", lampTotal);
+
+    Image img;
+    CHECK(v->readPixels(img) && meanLum(img) > 1.0, "the room still renders (%.1f mean)", meanLum(img));
+    e->destroyScene(r.scene);
+}
+
 // T3s — THE COUNTERS TELL THE TRUTH (P8): a view whose shadows are switched
 // off reads 0, not the last number it counted; and the per-pass listener comes
 // off the render path when nobody asks.
@@ -1660,6 +1804,15 @@ int main(int argc, char **argv)
     // (owner decision D4), so the cases that assert a SMALL atlas have to run
     // before the ones that grow it — which is also the honest reading order of
     // the feature: what it was, what it does when it runs out, what it becomes.
+    // T3x RUNS IN ITS OWN PROCESS (ctest `shadow.atlas_rebuilds`) and is NOT in
+    // the all-cases run: what it asserts is what an OPEN costs, which can only
+    // be seen on a VIRGIN atlas — and its three lamps would grow that atlas to
+    // four maps, which the cases below (T0/T2/T4, "the atlas never shrinks")
+    // need not to have happened yet.
+    if (only == "t3x") { t3x_one_rebuild_per_open(engine.get(), v);
+                         engine.reset();
+                         std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
+                         return failures ? 1 : 0; }
     if (only.empty() || only == "t0")  t0_light_path_parity(engine.get(), v);
     if (only.empty() || only == "t2")  t2_two_casters_keep_the_old_atlas(engine.get(), v);
     if (only.empty() || only == "t4")  t4_over_budget(engine.get(), v);
@@ -1678,6 +1831,10 @@ int main(int argc, char **argv)
     // eight maps, and T3u needs an atlas that can still GROW.
     if (only.empty() || only == "t3w") t3w_lamp_arrives_under_probes(engine.get(), v);
     if (only.empty() || only == "t3t") t3t_cache_spots_and_slots(engine.get(), v);
+    // T3p5 BESIDE T3t, for T3t's reason: five lamps take the atlas to eight
+    // maps and the atlas never shrinks (D4), so it must not run before a case
+    // that asserts a smaller one — T3u in particular needs one that can grow.
+    if (only.empty() || only == "t3p5") t3p5_probe_over_cap(engine.get(), v);
     if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
     if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);
     if (only.empty() || only == "t6")  t6_atlas_overlay(engine.get(), v);

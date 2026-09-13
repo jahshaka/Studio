@@ -57,3 +57,12 @@ add_dependencies(test_shadow_maps JahshakaEngineMedia)
 add_test(NAME lights.shadows COMMAND test_shadow_maps
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# shadow.atlas_rebuilds — THE HITCH COUNTER (T3x, E2 review / ledger 104/121).
+# ITS OWN PROCESS on purpose: what it asserts is what an OPEN costs, and an
+# open can only be seen on a VIRGIN atlas — the atlas never shrinks within a
+# session (owner decision D4), so the first case to grow it takes that
+# observation away from every case after it.
+add_test(NAME shadow.atlas_rebuilds COMMAND test_shadow_maps t3x
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 180 LABELS "engine")
