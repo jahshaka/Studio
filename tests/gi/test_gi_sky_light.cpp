@@ -239,7 +239,10 @@ int main(int argc, char **argv)
     // rather than a host-side function over a QImage. The assertion is the
     // same one and it is now end to end — picked colour, uploaded strip,
     // rendered sky, captured cube, integral — which is exactly the chain the
-    // colour-space rule has to hold across.
+    // colour-space rule has to hold across. AT THE ORIGINAL TOLERANCES: the
+    // capture is RGBA16_FLOAT, so the only error left is the cube's quadrature,
+    // not an 8-bit sRGB step (which is ~5e-3 of linear radiance at mid-grey and
+    // rounds differently on different hardware).
     {
         doc->skyColor = QColor(150, 90, 45);
         doc->skyType = iris::SkyType::SINGLE_COLOR;
@@ -249,13 +252,13 @@ int main(int argc, char **argv)
         const iris::LinearColor want = iris::linearOf(QColor(150, 90, 45));
         std::printf("   band0 r=%.4f g=%.4f b=%.4f   linearOf r=%.4f g=%.4f b=%.4f\n",
                     sh[0], sh[1], sh[2], want.r, want.g, want.b);
-        CHECK(std::fabs(sh[0] - want.r) < 4e-3f && std::fabs(sh[1] - want.g) < 4e-3f &&
-                  std::fabs(sh[2] - want.b) < 4e-3f,
+        CHECK(std::fabs(sh[0] - want.r) < 2e-3f && std::fabs(sh[1] - want.g) < 2e-3f &&
+                  std::fabs(sh[2] - want.b) < 2e-3f,
               "5b. band 0 of a uniform sky IS linearOf(the picked colour)");
         float worst = 0.0f;
         for (int i = 3; i < 27; ++i) worst = std::max(worst, std::fabs(sh[i]));
         std::printf("   worst higher band = %.5f\n", worst);
-        CHECK(worst < 4e-3f, "5c. and every higher band is zero (a uniform sky has no direction)");
+        CHECK(worst < 1e-3f, "5c. and every higher band is zero (a uniform sky has no direction)");
     }
 
     // ---- 6. THE SUN DISC IS WHERE THE LIGHT POINTS --------------------------

@@ -367,8 +367,8 @@ int main(int argc, char **argv)
         HFloatSliderWidget *turb = sliderWith(&panel, QStringLiteral("Density"));
         CHECK(turb != nullptr, "sky: the realistic sky's own rows are on the blade");
         const float was = scene->skyRealistic.density;
-        CHECK(drag(turb, 0.4f, 1.2f), "sky: the density row can be dragged");
-        CHECK(qAbs(scene->skyRealistic.density - 1.2f) < 0.05f,
+        CHECK(drag(turb, 0.4f, 0.9f), "sky: the density row can be dragged");
+        CHECK(qAbs(scene->skyRealistic.density - 0.9f) < 0.05f,
               "sky: the drag moved the density live");
         CHECK(stack.index() == before + 1, "sky: as ONE step");
         stack.undo();

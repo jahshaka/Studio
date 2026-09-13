@@ -3329,23 +3329,26 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
     std::printf("    sky toward the sun %d %d %d (%d) vs away %d %d %d (%d)\n",
                 skyAhead.r, skyAhead.g, skyAhead.b, aheadSum,
                 skyBehind.r, skyBehind.g, skyBehind.b, behindSum);
-    CHECK_MSG(aheadSum != behindSum,
+    CHECK_MSG(std::abs(aheadSum - behindSum) > 20,
               "the analytic sky follows the sun direction we push (%d vs %d)", aheadSum, behindSum);
 
     // THE LIGHT IS OURS. AtmosphereNpr::syncToLight() would set the linked
     // light's type, DIRECTION, diffuse and specular colour and power scale from
     // its own model — so if this engine ever linked one, turning the sun around
-    // above would have swung the light with it and the cube's lit face would
-    // have changed by far more than the sky's own bounced contribution. The
-    // component's light link is never armed (OgreSky.cpp's header (1)); this is
-    // the assertion that says so in pixels.
-    const int litSwing = std::abs(litAhead.r - litBehind.r) + std::abs(litAhead.g - litBehind.g) +
-                         std::abs(litAhead.b - litBehind.b);
+    // above would have swung the light with it and this face, which faces the
+    // light, would have fallen to ambient.
+    //
+    // THE ASSERTION IS "IT NEVER LOSES ITS LIGHT", not a tolerance on the
+    // swing: a sky legitimately ADDS to this pixel (it is captured and
+    // convolved into the reflection every material samples, and in half-float
+    // its bright side is genuinely bright), so the number moves — upwards.
+    // Only a rotated LIGHT can take light away.
     std::printf("    cube lit face: no sky %d %d %d, sun ahead %d %d %d, sun behind %d %d %d\n",
                 litBefore.r, litBefore.g, litBefore.b, litAhead.r, litAhead.g, litAhead.b,
                 litBehind.r, litBehind.g, litBehind.b);
-    CHECK_MSG(litSwing < 24, "moving the sky's sun does not move the scene's LIGHT (swing %d)",
-              litSwing);
+    CHECK_MSG(litAhead.r + 2 >= litBefore.r && litBehind.r + 2 >= litBefore.r,
+              "moving the sky's sun does not move the scene's LIGHT (%d, %d against %d with no "
+              "sky at all)", litAhead.r, litBehind.r, litBefore.r);
 
     // ...AND THE SKY LIGHTS THE SCENE. The capture ran (six faces of this very
     // sky, on the GPU), so the engine has an ambient integral for it and nobody
@@ -3354,6 +3357,157 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
     CHECK_MSG(s->skyAmbientSh(sh) && (sh[0] + sh[1] + sh[2]) > 0.0f,
               "the analytic sky is captured and integrated: band0 %.3f %.3f %.3f",
               sh[0], sh[1], sh[2]);
+}
+
+// THE ANALYTIC SKY BRINGS NO FOG WITH IT (round-2 review item 1). Picking the
+// sky CREATES the atmosphere component, and upstream's constructor preset
+// carries fogDensity 1e-4 — 0.7 % of a surface's colour at 100 m and 13 % at
+// the horizon plane, for a fog no scene asked for and no panel row admits to.
+// A far surface under the analytic sky must read exactly what it reads with no
+// sky at all.
+void analytic_sky_brings_no_fog() {
+    Fixture fx;
+    View *v = fx.view("atmo-fog-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("atmo-fog-scene");             REQUIRE(s);
+    buildFogRig(v, s);              // the far cube at ~60 units, the near one at ~3
+    Image img;
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px far0 = px(img, img.width / 2, 6);
+
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[1] = 0.5f;
+    sky.atmosphere.sunDir[2] = -0.87f;
+    // NO setFog CALL AT ALL — which is the case that was broken: the zeroing
+    // lived in setFog's off-branch, so a scene that never touched the fog
+    // inherited upstream's default and kept it.
+    CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px far1 = px(img, img.width / 2, 6);
+    std::printf("    far surface: no sky %d %d %d -> analytic sky %d %d %d\n",
+                far0.r, far0.g, far0.b, far1.r, far1.g, far1.b);
+    // The AMBIENT legitimately changes (the sky lights the scene now), so this
+    // is not a byte comparison — it is "the distance did not eat it": fog at
+    // 1e-4 over ~60 units takes 0.4 %, and the surface only ever gets BRIGHTER
+    // from a sky. A drop is fog and nothing else.
+    CHECK_MSG(far1.g + 1 >= far0.g,
+              "the analytic sky does not fog a far surface (%d vs %d)", far1.g, far0.g);
+}
+
+// THE AERIAL FOG MODE CANNOT OUTLIVE THE SKY IT IS MADE OF (round-2 review
+// item 2). It used to be decided once, at setFog time: turn it on under the
+// analytic sky, switch to a photograph, and the fog went on being coloured by
+// an atmosphere nobody could see.
+void fog_atmosphere_colour_follows_the_sky() {
+    Fixture fx;
+    View *v = fx.view("fog-atmo2-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("fog-atmo2-scene");             REQUIRE(s);
+    buildFogRig(v, s);
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[1] = 0.5f;
+    sky.atmosphere.sunDir[2] = -0.87f;
+    REQUIRE(s->setSky(sky));
+
+    Image img;
+    FogDesc fog;
+    fog.enabled = true;
+    fog.colour = kMagenta;
+    fog.breakFalloff = 0.0f;
+    fog.density = 0.2f;
+    fog.atmosphereColour = true;
+    s->setFog(fog);
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px aerial = px(img, img.width / 2, 6);
+
+    // Leave the analytic sky for an image one, touching NOTHING else.
+    SkyDesc image;
+    const unsigned char grey[4] = { 128, 128, 128, 255 };
+    image.mode = SkyMode::Equirectangular;
+    image.equirect = s->createTexture(1, 1, grey, true);
+    REQUIRE(s->setSky(image));
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px afterLeaving = px(img, img.width / 2, 6);
+
+    // ...and what the authored colour looks like under that same image sky.
+    fog.atmosphereColour = false;
+    s->setFog(fog);
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px authored = px(img, img.width / 2, 6);
+    std::printf("    far surface: aerial under the analytic sky %d %d %d -> after leaving it "
+                "%d %d %d (authored %d %d %d)\n",
+                aerial.r, aerial.g, aerial.b, afterLeaving.r, afterLeaving.g, afterLeaving.b,
+                authored.r, authored.g, authored.b);
+    CHECK_MSG(afterLeaving.r == authored.r && afterLeaving.g == authored.g &&
+                  afterLeaving.b == authored.b,
+              "leaving the analytic sky puts the fog back on the AUTHORED colour "
+              "(%d %d %d vs %d %d %d)", afterLeaving.r, afterLeaving.g, afterLeaving.b,
+              authored.r, authored.g, authored.b);
+}
+
+// THE SUN DISC IS NOT IN THE SKY'S OWN LIGHT (owner pick 4, and the limit of
+// what `inProbes` can reach today — round-2 review item 4).
+//
+// The switch puts kVisibleBit beside the disc's own channel, which is exactly
+// what a capture pass asks for, so the disc CAN be captured. It must not reach
+// the ambient: the sun's energy already arrives through the directional light,
+// and `sunAngle` is a dial a user may take to 170 degrees — an integral that
+// saw the disc would let a decorative sun own the scene's diffuse lighting.
+// The sky capture therefore renders the sky's queue and nothing else.
+//
+// WHAT THIS CASE FOUND, and it is why the queue range is written `0 0`:
+// `rq_last` is INCLUSIVE in this pin, against what our own PCC compositor says
+// about it. With the range at 0..1 the disc landed in the capture the moment
+// the switch was flipped, and the numbers below moved from 0.117 to 1.01 (at a
+// HALF-DEGREE disc) and to 4.30 at 170 degrees — an ambient made mostly of the
+// sun, with a shape that is not even the disc's (the quad's camera ray is wrong
+// off the main chain, which is the open half of ENGINE-6 item 5).
+void sun_disc_stays_out_of_the_skys_ambient() {
+    Fixture fx;
+    View *v = fx.view("disc-ibl-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("disc-ibl-scene");             REQUIRE(s);
+    v->setScene(s);
+    aim(v);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    SkyDesc sky;
+    const unsigned char greyPx[4] = { 96, 96, 96, 255 };
+    sky.mode = SkyMode::Equirectangular;
+    sky.equirect = s->createTexture(1, 1, greyPx, true);
+    sky.sun.enabled = true;
+    sky.sun.dir[0] = 0.0f; sky.sun.dir[1] = 0.4f; sky.sun.dir[2] = 0.92f;
+    sky.sun.colour = Colour(8.0f, 8.0f, 8.0f, 1.0f);
+    sky.sun.inProbes = false;
+    sky.sun.angularDiameterDeg = 0.53f;
+    REQUIRE(s->setSky(sky));
+    render(fx.e, 3);
+    float shOut[27] = { 0.0f };
+    REQUIRE(s->skyAmbientSh(shOut));
+    const float band0Out = shOut[0];
+
+    sky.sun.inProbes = true;
+    REQUIRE(s->setSky(sky));
+    render(fx.e, 3);
+    REQUIRE(s->skyAmbientSh(shOut));
+    const float band0In = shOut[0];
+
+    sky.sun.angularDiameterDeg = 170.0f;
+    REQUIRE(s->setSky(sky));
+    render(fx.e, 3);
+    REQUIRE(s->skyAmbientSh(shOut));
+    const float band0Huge = shOut[0];
+    std::printf("    sky band0: disc out %.6f, 0.53 deg in %.6f, 170 deg in %.6f "
+                "(a 96-grey sky is %.6f)\n",
+                double(band0Out), double(band0In), double(band0Huge),
+                double(0.1172));
+    CHECK_MSG(std::fabs(band0In - band0Out) < 1e-4f,
+              "a half-degree disc in the probes is not in the sky's ambient (%.6f vs %.6f)",
+              double(band0In), double(band0Out));
+    CHECK_MSG(std::fabs(band0Huge - band0Out) < 1e-4f,
+              "and NEITHER IS A 170-DEGREE ONE: the ambient is the sky's, whatever the disc "
+              "is doing (%.6f vs %.6f)", double(band0Huge), double(band0Out));
 }
 
 // The fog's AERIAL PERSPECTIVE mode: the distance fog's colour comes from the
@@ -5475,6 +5629,9 @@ int main(int argc, char **argv) {
         { "analytic_sky_is_the_engines_and_takes_our_sun",
                                                     analytic_sky_is_the_engines_and_takes_our_sun },
         { "fog_atmosphere_colour_is_the_skys",       fog_atmosphere_colour_is_the_skys },
+        { "analytic_sky_brings_no_fog",              analytic_sky_brings_no_fog },
+        { "fog_atmosphere_colour_follows_the_sky",   fog_atmosphere_colour_follows_the_sky },
+        { "sun_disc_stays_out_of_the_skys_ambient",  sun_disc_stays_out_of_the_skys_ambient },
         { "fog_breakthrough_spares_bright_surfaces", fog_breakthrough_spares_bright_surfaces },
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },

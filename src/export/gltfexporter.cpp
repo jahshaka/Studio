@@ -1491,6 +1491,10 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             fog["heightFalloff"] = double(scene->fogHeightFalloff);
             fog["heightLevel"] = double(scene->fogHeightLevel);
         }
+        // AERIAL PERSPECTIVE, for information like the two above it: the
+        // viewer has no atmosphere to take a fog colour from, and saying the
+        // scene asked for one is the honest half of what an archive can do.
+        if (scene->fogAtmosphere) fog["atmosphere"] = true;
         fog["start"] = double(scene->fogStart);
         fog["end"] = double(scene->fogEnd);
         jahScene["fog"] = fog;
