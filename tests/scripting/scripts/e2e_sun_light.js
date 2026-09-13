@@ -304,11 +304,13 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
            "the toggle is settable through the property surface");
     assert(node.property(asun, "followsAtmosphere") === false, "...and it stuck");
     var sunsetOff = litFace("sunset_off");
-    assert(sunsetOn.rb > 1.3,
+    // THE RATIO OF RATIOS, not an absolute bound (round-2 review, item 6): a
+    // surface still takes some colour from the sky whatever the sun does, so
+    // "not following" is not 1.00 but the scene's own baseline (measured 1.18).
+    // What the toggle owns is the DIFFERENCE between the two, and it is large.
+    assert(sunsetOn.rb > sunsetOff.rb * 1.6,
            "a 5-degree sun REDDENS what it lights when it follows the atmosphere (r/b " +
-           sunsetOn.rb.toFixed(2) + ")");
-    assert(sunsetOff.rb < 1.3,
-           "...and does not when it does not (r/b " + sunsetOff.rb.toFixed(2) + ")");
+           sunsetOn.rb.toFixed(2) + " against " + sunsetOff.rb.toFixed(2) + " when it does not)");
     assert(sunsetOn.b < sunsetOff.b * 0.8 && sunsetOn.g < sunsetOff.g,
            "...and it DIMS it, blue first (b " + Math.round(sunsetOn.b) + " vs " +
            Math.round(sunsetOff.b) + ")");
@@ -356,6 +358,41 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
     project.open(atmoGuid);
     assert(node.property(world.sun().light, "followsAtmosphere") === true,
            "...and so does switching it back on");
+}
+
+// ---- AT NIGHT THE SUN IS DARK (round-2 review, item 4) ---------------------
+//
+// Below the horizon the atmosphere's tint is zero to every decimal a frame can
+// hold, so a sun that follows it lights nothing — and the two things that are
+// NOT free must stop with it: the three full-view-frustum PSSM passes a
+// directional caster renders, and the disc, which would be a hole in a night
+// sky. Its own scene, because what it counts is the whole view's shadow work.
+{
+    project.create("Sun At Night " + Date.now());
+    var nsun = world.sun().light;
+    world.sky("realistic", { power: 0.02 });
+    scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+    editor.select("");
+    editor.frame(60, 1 / 60);
+    function passesAt(pitch) {
+        node.transform(nsun, { rotation: { x: pitch, y: 165, z: 0 } });
+        editor.frame(3, 1 / 60);
+        return world.shadowStatus().shadowPassesLastFrame;
+    }
+    var dayPasses = passesAt(-60);              // well above the horizon
+    var nightPasses = passesAt(-95);            // five degrees BELOW it
+    console.log("shadow passes: day " + dayPasses + ", night " + nightPasses);
+    assert(dayPasses > 0, "a sun above the horizon casts (" + dayPasses + " passes)");
+    assert(nightPasses < dayPasses,
+           "...and a sun BELOW it does not (" + nightPasses + ")");
+    assert(world.sunDisc().visible === true, "the disc is still switched ON in the World panel");
+    // ...and it is not a cheat: the same sun, in the same place, with the row
+    // switched off, is back to casting.
+    node.setProperty(nsun, "followsAtmosphere", false);
+    var fixedPasses = passesAt(-96);
+    assert(fixedPasses > nightPasses,
+           "a sun that does NOT follow the atmosphere casts below the horizon as before (" +
+           fixedPasses + ")");
 }
 
 console.log("the sun + sky steering e2e: all checks passed");

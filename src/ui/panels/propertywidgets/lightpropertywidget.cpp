@@ -190,9 +190,11 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     followsAtmosphere->setToolTip(
         tr("With the Realistic sky, the sun's light takes the colour the air gives it: the "
            "colour you picked is its NOON colour, and a low sun arrives redder and dimmer, like "
-           "a real sunset. The sun disc in the sky changes with it, so the two always agree. "
-           "Switch it off to use the colour you picked at every time of day. On any other sky "
-           "this does nothing — a picture of a sky knows nothing about the air."));
+           "a real sunset, and at night the sun is dark — below the horizon it lights nothing, "
+           "draws no disc and casts no shadow. The sun disc in the sky changes with it, so the "
+           "two always agree. Switch it off to use the colour you picked at every time of day. "
+           "On any other sky this does nothing — a picture of a sky knows nothing about the "
+           "air."));
 
     shadowType = this->addComboBox("Shadow Type");
     // "Off (fill light)" rather than "None" (owner decision Q4): the switch is

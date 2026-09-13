@@ -169,6 +169,11 @@ int main(int argc, char **argv)
         CHECK(doc->attachToSocket(sword, character->getGUID(), "hand", &err),
               "the sword is attached to it");
 
+        // AN AUTHORED OFFSET, set before anything mirrors the rider: since D4 a
+        // rider's local IS its offset from the socket, and a zero one cannot
+        // tell a restored offset from a baked world (round-2 review, item 3).
+        sword->setLocalPos(iris::Vec3(0.13f, 0.21f, -0.34f));
+
         SceneMirror mirror(scene);
         mirror.setSource(doc);
         mirror.sync();          // creates the nodes; the rider arms next sync
@@ -200,6 +205,39 @@ int main(int argc, char **argv)
             mirror.sync();
             CHECK(scene->boneAttachment(riderId) == before,
                   "an unchanged socket is not re-armed every frame");
+        }
+
+        // D. A MODEL SWAP — THE RIG GOES AWAY AND COMES BACK (round-2 review,
+        // item 3). While the owner has no engine rig the rider takes the
+        // BIND-POSE FALLBACK, which drives it by writing its WORLD transform
+        // into the very field that means "offset from the socket" (D4). The
+        // authored offset is saved on the way in and restored when a tag can be
+        // armed again — but it used to be saved AFTER releaseRider had already
+        // baked the tag's world into that field, so what came back was a world
+        // transform and the prop rode off the bone.
+        {
+            const iris::Vec3 authored = sword->getLocalPos();
+            const iris::MeshPtr rig = character->getMesh();
+            CHECK(!rig.isNull(), "the character has a rig to lose");
+            character->setMesh(iris::MeshPtr());        // the rig is gone
+            mirror.sync();
+            mirror.sync();
+            mirror.sync();
+            CHECK(!iris::graph::isSocketRider(sword->graphNode()),
+                  "with no rig the rider is off its tag (the fallback drives it)");
+            character->setMesh(rig);                    // ...and it comes back
+            mirror.sync();
+            mirror.sync();
+            const NodeId re = mirror.engineNode(sword.data());
+            CHECK(scene->boneAttachment(re) == mirror.engineNode(character.data()),
+                  "the tag is armed again after the rig returns");
+            const iris::Vec3 back = sword->getLocalPos();
+            std::printf("      authored offset %.3f %.3f %.3f, restored %.3f %.3f %.3f\n",
+                        authored.x(), authored.y(), authored.z(), back.x(), back.y(), back.z());
+            CHECK(std::fabs(back.x() - authored.x()) < 1e-4f &&
+                      std::fabs(back.y() - authored.y()) < 1e-4f &&
+                      std::fabs(back.z() - authored.z()) < 1e-4f,
+                  "...and the rider's AUTHORED offset came back, not the world it was baked to");
         }
 
         // D. THE OWNER'S RENDERABLE IS REBUILT -> the engine frees the tag ->
