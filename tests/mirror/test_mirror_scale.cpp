@@ -38,6 +38,7 @@
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -99,6 +100,11 @@ static void build(Arm &a, Engine *engine, const char *label, int count, int rows
         groups[size_t(i % rows)]->addChild(m);
         a.keep.push_back(m);
     }
+
+    // THE STATIC PASS, as a load runs it (SceneNode::applyStaticDefaults).
+    // Nodes added straight through addChild carry a hint nobody applied; the
+    // app's add funnel and its scene reader both run this, so the suite does.
+    a.doc->getRootNode()->applyStaticDefaults();
 
     a.mirror.reset(new SceneMirror(a.target));
     a.mirror->setSource(a.doc);
@@ -195,6 +201,52 @@ int main(int argc, char **argv)
     // 8,404-node lattice cost 52 ms of mirror per still frame.
     CHECK(b.builds == 0, "a still sync rebuilds NO material description");
     CHECK(c.builds == 0, "...with one shared material too");
+
+    // ---- SCENE_STATIC: the settle half ------------------------------------
+    // Rule 4 demotes a static subtree on the first transform write and nothing
+    // used to put it back, so every prop a user nudged spent the rest of the
+    // session in the renderer's per-frame transform and bounds passes. The
+    // mirror re-derives the classification once the document goes quiet.
+    {
+        // SETTLE FIRST, so the baseline is the steady state: binding a mirror
+        // MIGRATES the document's Ogre nodes into its scene manager and they
+        // are reborn dynamic, so the count right after a bind is a hint replay
+        // and not yet the resolution rule's own answer.
+        for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+        const quint64 settled0 = iris::graph::staticNodeCount();
+        std::printf("    staticNodes before the nudge: %llu\n",
+                    (unsigned long long)settled0);
+        CHECK(settled0 > 0, "the lattices' props are SCENE_STATIC to begin with");
+
+        // Nudge 30 props — a user dragging things around.
+        int nudged = 0;
+        for (const auto &n : b.keep) {
+            if (n->getSceneNodeType() != iris::SceneNodeType::Mesh) continue;
+            n->setLocalPos(n->getLocalPos() + iris::Vec3(0.001f, 0, 0));
+            if (++nudged >= 30) break;
+        }
+        b.mirror->sync();
+        const quint64 afterNudge = iris::graph::staticNodeCount();
+        std::printf("    staticNodes after 30 nudges:  %llu\n",
+                    (unsigned long long)afterNudge);
+        CHECK(afterNudge < settled0, "a nudge DEMOTES the nudged subtrees (rule 4)");
+
+        // Now settle: syncs with no transform write anywhere.
+        const quint64 repro0 = b.mirror->staticRepromotionCount();
+        for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+        const quint64 settled1 = iris::graph::staticNodeCount();
+        std::printf("    staticNodes after the settle: %llu  (re-promotions %llu)\n",
+                    (unsigned long long)settled1,
+                    (unsigned long long)(b.mirror->staticRepromotionCount() - repro0));
+        CHECK(b.mirror->staticRepromotionCount() == repro0 + 1,
+              "the settle re-derived the classification exactly ONCE");
+        CHECK(settled1 == settled0, "…and every nudged prop is static again");
+
+        // A SECOND settle must not run: nothing has written a transform since.
+        for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+        CHECK(b.mirror->staticRepromotionCount() == repro0 + 1,
+              "a scene that never moves again re-derives nothing further");
+    }
 
     std::printf("%s\n", failures ? "FAILURES" : "all ok");
     return failures ? 1 : 0;

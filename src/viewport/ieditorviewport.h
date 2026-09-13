@@ -605,6 +605,26 @@ public:
         /// counters are what the RENDERER recorded, and a disagreement between
         /// the two is a push that did not land.
         quint64 movableNodes = 0;
+        // ---- THE MIRROR'S OWN COST (MIRROR_SCALE lane, 2026-09-13) --------
+        /// How many nodes the last sync walked. The denominator for everything
+        /// else here, and the one number that says how big the document the
+        /// mirror is pushing every frame actually is.
+        quint64 nodesVisited = 0;
+        /// How many MATERIAL DESCRIPTIONS the last sync built (converted from
+        /// the document into the renderer's parameters and texture binds). It
+        /// must be ZERO on a still frame: a scene where it equals the material
+        /// count every frame is the 52 ms-per-still-frame defect the render
+        /// review measured on an 8,404-node lattice.
+        quint64 materialBuilds = 0;
+        /// How many of the document's nodes sit in a SCENE_STATIC memory
+        /// manager, i.e. are OUT of Ogre's per-frame transform and bounds
+        /// passes (iris::graph::staticNodeCount).
+        quint64 staticNodes = 0;
+        /// How many times the mirror has re-derived the scene's static
+        /// classification after the document went quiet. Moving a node demotes
+        /// its subtree for the duration of the gesture; this is what puts it
+        /// back, and without it a session's classification drains to nothing.
+        quint64 staticRepromotions = 0;
     };
     /// How many times the mirror has pushed a NEW global-illumination
     /// configuration into the engine, and how many times it has asked for the
