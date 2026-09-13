@@ -61,7 +61,7 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene);
 /// one place instead of relying on iris::Scene's defaults happening to agree —
 /// no tonemapper and no bloom (so a surface's brightness is exactly what the
 /// materials say), a PINNED exposure if anyone ever turns HDR on here, and GI
-/// OFF at a modest Rayon tier, because HlmsPbs's VCT/PCC binding is
+/// OFF at a modest Photon tier, because HlmsPbs's VCT/PCC binding is
 /// process-wide and a preview that enabled GI would steal it from the editor.
 void pinWorkspaceGrade(const iris::ScenePtr &scene);
 

@@ -106,10 +106,10 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	});
 
 	worldGiPropView = new WorldGiPropertyWidget();
-	// THE OTHER DIRECTION of the same rule (debt L6 item 4, found by the Rayon
-	// lane): the Rayon section writes World Mode registry rows — the technique,
+	// THE OTHER DIRECTION of the same rule (debt L6 item 4, found by the Photon
+	// lane): the Photon section writes World Mode registry rows — the technique,
 	// the quality, the irradiance field, the tier — and the World Mode section
-	// lists every one of them with its pin mark. Without this, a Rayon edit left
+	// lists every one of them with its pin mark. Without this, a Photon edit left
 	// those rows showing the pre-edit values until the world was reselected.
 	connect(worldGiPropView, &WorldGiPropertyWidget::worldSettingsChanged, this, [this]() {
 		auto sc = scene;
@@ -118,12 +118,12 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 		if (worldModesPropView) worldModesPropView->setScene(sc);
 		if (worldPostFxPropView) worldPostFxPropView->setScene(sc);
 	});
-	// RAYON is the product name for realtime global illumination
+	// PHOTON is the product name for realtime global illumination
 	// (GI_UNIFIED_SPEC.md; the naming rule is that it is ALWAYS subtitled, so
 	// nobody reads it as hardware ray tracing). The section is one switch, one
 	// quality dial and the update budget, with everything they consume behind
 	// its own Advanced disclosure.
-	worldGiPropView->setPanelTitle("Rayon — Realtime Global Illumination");
+	worldGiPropView->setPanelTitle("Photon — Realtime Global Illumination");
 	worldGiPropView->expand();
 
 	// POST PROCESS (fix wave 2026-09-07 item 8): every post effect and its

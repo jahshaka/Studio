@@ -287,7 +287,7 @@ var LIGHT_RANGE = 40 * S;
 // authored TWICE the length of the interior they enclose, so the geometry
 // itself spans 24 m in the Showroom and 48 m in Showroom 2).
 //
-// THE TIER, not its columns (lane-rayontiers, 2026-09-09): naming mode /
+// THE TIER, not its columns (lane-photontiers, 2026-09-09): naming mode /
 // quality / bounces here PINNED them, so the archive opened as "Custom" the
 // moment the Epic row moved. Epic IS the hybrid at high quality with the
 // field, three bounces and two dynamic probes; the probe grid is not a tier row
@@ -298,7 +298,7 @@ var LIGHT_RANGE = 40 * S;
 // 32 probes at the same RELATIVE positions. Lane L14 measured a 2x-denser grid
 // (8 x 4 x 8) in the S = 1 room against this one — see its report for the
 // numbers.
-assert(world.rayon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Rayon Epic");
+assert(world.photon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Photon Epic");
 assert(world.gi({ pccGrid: { x: 4, y: 2, z: 4 } }), "GI: the probe grid (the volume is measured)");
 
 // The template's per-metre WORLD settings, scaled with the room (GROW, above).

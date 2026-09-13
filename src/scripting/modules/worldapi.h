@@ -42,9 +42,9 @@ public:
     Q_INVOKABLE bool fog(const QVariantMap &params);
     Q_INVOKABLE bool shadows(const QVariantMap &params);
     Q_INVOKABLE bool gi(const QVariantMap &params);
-    /// RAYON (GI_UNIFIED_SPEC §2 / §9 D6) — the product-named view of the same
+    /// PHOTON (GI_UNIFIED_SPEC §2 / §9 D6) — the product-named view of the same
     /// resolved model world.gi writes. Reads with no argument.
-    Q_INVOKABLE QVariantMap rayon(const QVariantMap &params = QVariantMap());
+    Q_INVOKABLE QVariantMap photon(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap giStatus();
     Q_INVOKABLE bool refreshGi();
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
@@ -110,8 +110,8 @@ public:
     Q_INVOKABLE bool setFog(const QVariantMap &params) { return fog(params); }
     Q_INVOKABLE bool setShadows(const QVariantMap &params) { return shadows(params); }
     Q_INVOKABLE bool setGi(const QVariantMap &params) { return gi(params); }
-    Q_INVOKABLE QVariantMap setRayon(const QVariantMap &params = QVariantMap())
-    { return rayon(params); }
+    Q_INVOKABLE QVariantMap setPhoton(const QVariantMap &params = QVariantMap())
+    { return photon(params); }
     Q_INVOKABLE bool setAmbientFromSky(bool enabled) { return ambientFromSky(enabled); }
     Q_INVOKABLE QString setSunLight(const QVariant &light) { return sunLight(light); }
     Q_INVOKABLE bool setSky(const QString &type, const QVariantMap &params = QVariantMap())
@@ -140,15 +140,15 @@ private:
     static QVariantMap lookState(const QJsonObject &entry);
     /// The index of `id` in `stack`, or -1.
     static int lookIndexOf(const QJsonArray &stack, const QString &id);
-    /// Applies a Rayon state as ONE undoable step (the tier rewrites three
+    /// Applies a Photon state as ONE undoable step (the tier rewrites three
     /// backing fields, exactly like a World Mode rewrites thirteen).
-    void applyRayon(const iris::ScenePtr &scene, bool enabled,
-                    worldmodes::RayonTier tier, const QString &undoText);
+    void applyPhoton(const iris::ScenePtr &scene, bool enabled,
+                    worldmodes::PhotonTier tier, const QString &undoText);
     /// The tier's own table row (technique/quality/ddgi/bounces),
-    /// before any pin — what world.rayon() reports as `row`.
-    static QVariantMap rayonRow(worldmodes::RayonTier tier);
-    /// world.rayon()'s read shape, shared by the reader and the writer path.
-    static QVariantMap rayonState(const iris::ScenePtr &scene);
+    /// before any pin — what world.photon() reports as `row`.
+    static QVariantMap photonRow(worldmodes::PhotonTier tier);
+    /// world.photon()'s read shape, shared by the reader and the writer path.
+    static QVariantMap photonState(const iris::ScenePtr &scene);
 };
 
 #endif // SCRIPTING_WORLDAPI_H

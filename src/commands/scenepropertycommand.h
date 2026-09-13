@@ -33,7 +33,7 @@ For more information see the LICENSE file
 // than inventing a second spelling of `scene->fogDensity`.
 //
 // What it is NOT: it does not carry the World Mode pin map. A row that PINS
-// (msaa, shadow resolution, the Rayon rows, sky detail, ambient-from-sky, the
+// (msaa, shadow resolution, the Photon rows, sky detail, ambient-from-sky, the
 // post-process on/off rows) is a registry row and belongs to WorldModeCommand,
 // which restores the backing field AND the pin — using this class there would
 // undo the value and leave the pin behind.

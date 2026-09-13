@@ -174,12 +174,12 @@ node.setProperty(l2, "distance", LIGHT_RANGE);
 // 100 m ground the trim shrinks without removing, plus this room's own walls,
 // which are authored 18 m long around a 8.5 m interior.
 //
-// THE TIER, not its columns (lane-rayontiers, 2026-09-09): naming mode /
+// THE TIER, not its columns (lane-photontiers, 2026-09-09): naming mode /
 // quality / bounces here PINNED them, so the archive opened as "Custom" the
 // moment the Epic row moved. Epic IS the hybrid at high quality with the
 // field, three bounces and two dynamic probes; the probe grid is not a tier row
 // and stays explicit.
-assert(world.rayon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Rayon Epic");
+assert(world.photon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Photon Epic");
 assert(world.gi({ pccGrid: { x: 3, y: 2, z: 3 } }), "GI: the probe grid (the volume is measured)");
 editor.frame(10);
 console.log("giStatus: " + JSON.stringify(world.giStatus()));

@@ -345,7 +345,7 @@ int main(int argc, char **argv)
 
     // ...and the panel still WORKS: the right blades are on screen for the node
     // that is selected. (Cheap end-to-end sanity, not a UI spec — that is
-    // ui.material_panel's and ui.rayon_panel's job.)
+    // ui.material_panel's and ui.photon_panel's job.)
     panel->setSceneNode(nodes[0]);           // a mesh
     turn();
     int visible = 0;

@@ -1,4 +1,4 @@
-// gi.ddgi_ambient — THE RAYON AMBIENT FIX, end to end.
+// gi.ddgi_ambient — THE PHOTON AMBIENT FIX, end to end.
 //
 // WHAT WAS WRONG, in one paragraph, because the mechanism is three upstream
 // facts stacked on each other (SPECS/OGRE_UPSTREAM_ISSUES.md; GI_UNIFIED_SPEC.md
@@ -325,7 +325,7 @@ int main()
     // the SAME scene as case 1: the isotropic reference keeps ~93% of the raw
     // ambient, the anisotropic one keeps ~4%.
     //
-    // Consequence for the fix, and it is a GOOD one: on the tiers Rayon
+    // Consequence for the fix, and it is a GOOD one: on the tiers Photon
     // actually ships (medium and up), the ambient recovered here is not merely
     // a replacement for the term DDGI removed — it is the first correct ambient
     // those scenes have had. The assertion is therefore against the RAW

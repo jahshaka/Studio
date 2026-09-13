@@ -62,7 +62,7 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
 
     ui->toggle->setIconSize(QSize(24, 24));
 
-    // The section NAME is a row too — "Rayon — Realtime Global Illumination" is
+    // The section NAME is a row too — "Photon — Realtime Global Illumination" is
     // 250 px of text, and a QLabel's minimum width is the whole of it. Elide it
     // like every other label instead of letting the title decide how wide the
     // dock has to be.

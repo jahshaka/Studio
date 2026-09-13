@@ -123,7 +123,7 @@ int main(int argc, char **argv)
     const QJsonObject built = readObject(mcp, QStringLiteral(
         "(function () {"
         "  project.create('ShotAspect');"
-        "  world.rayon({enabled: false});"
+        "  world.photon({enabled: false});"
         "  var cube = scene.addPrimitive('cube', {position: {x: 0, y: 0.5, z: 0}});"
         "  editor.select(cube);"
         "  editor.setCamera({position: {x: 3, y: 2.5, z: 6}, lookAt: {x: 0, y: 0.5, z: 0}});"

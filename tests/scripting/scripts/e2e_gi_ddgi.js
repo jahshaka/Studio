@@ -11,7 +11,7 @@
 //
 // Phase A: the defaults every existing scene holds — off, and therefore
 //          nothing bound. This is the compatibility statement: DDGI is opt-in
-//          until the Rayon tier lands (P2).
+//          until the Photon tier lands (P2).
 // Phase B: on, under plain VCT — bound, converged, probes fitted, batch sane.
 // Phase C: the intensity scalar, including the A/B value 0.
 // Phase D: refusals and the tri-state.
@@ -34,7 +34,7 @@ assert(box.length > 10, "cube added");
 editor.frame(2);
 
 // ---- phase A: the defaults ----------------------------------------------
-// UPDATED BY THE RAYON UNIFICATION (GI_UNIFIED_SPEC §2 / P2, owner decision
+// UPDATED BY THE PHOTON UNIFICATION (GI_UNIFIED_SPEC §2 / P2, owner decision
 // D2). This phase used to assert that the field defaults to the string "auto"
 // and resolves OFF "while there is no quality tier". The tier exists now, new
 // scenes are born on its top rung, and every voxel tier turns the field on
@@ -55,7 +55,7 @@ assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
 // technique whose TIER resolves the field off: since option (b) that is the
 // Low tier (its column is off — Instant Radiosity has no voxel volume) with
 // the technique pinned to VCT, which is exactly the "vct + low" shape gi.tiers
-// derives for a hand-set pre-Rayon document. That the tier alone turns the
+// derives for a hand-set pre-Photon document. That the tier alone turns the
 // field off — no explicit ddgi key anywhere — is itself the write-through
 // statement this phase makes.
 assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1,
@@ -112,7 +112,7 @@ editor.frame(3);
 assert(Math.abs(world.get().gi.ddgiIntensity - 2.5) < 1e-4, "the document echoes intensity 2.5");
 
 // ---- phase C2: the ambient sky-visibility dial ---------------------------
-// The Rayon ambient fix's one knob. The PIXEL contract is gi.ddgi_ambient's
+// The Photon ambient fix's one knob. The PIXEL contract is gi.ddgi_ambient's
 // (recovery on an open scene, invariance in a sealed one); what belongs here is
 // that the verb exists, round-trips through the document, and refuses nonsense
 // — the API-first half.
@@ -153,7 +153,7 @@ assert(threw.indexOf("DDGI") >= 0,
 assert(world.gi({ ddgi: "auto" }), "world.gi({ddgi:\"auto\"}) — back to the tier's answer");
 editor.frame(4);
 // "auto" is an INPUT spelling, not a stored state: it drops the pin and hands
-// the decision back to the Rayon tier, which then WRITES ITS ANSWER THROUGH
+// the decision back to the Photon tier, which then WRITES ITS ANSWER THROUGH
 // (services/worldmodes.h — a backing field is always the resolved value). The
 // scene is on Low here, so the answer is off.
 assert(world.get().gi.ddgi === false,
@@ -221,8 +221,8 @@ for (var ri = 0; ri < rsRes.length; ri++) {
     assert(st.ifdBound === true && st.probeShadows === true,
            "field still bound and shadowed after the rebuild to " + rsRes[ri]);
 }
-assert(world.rayon({ enabled: false }).enabled === false, "GI off: the field's workspace is torn down");
+assert(world.photon({ enabled: false }).enabled === false, "GI off: the field's workspace is torn down");
 editor.frame(5, 1 / 60);
-assert(world.rayon({ enabled: true }).enabled === true, "GI on again");
+assert(world.photon({ enabled: true }).enabled === true, "GI on again");
 editor.frame(5, 1 / 60);
 console.log("raster-shadowed field survived three atlas rebuilds and a teardown");

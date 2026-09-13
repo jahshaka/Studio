@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define ROWUNDO_H
 
 // rowundo — ONE GESTURE, ONE UNDO STEP, for every properties-panel row
-// (debt L6 / N5, the Rayon sliders' pattern generalised).
+// (debt L6 / N5, the Photon sliders' pattern generalised).
 //
 // The rule the panels have to keep is always the same and is easy to get wrong
 // in twelve different ways:

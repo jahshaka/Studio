@@ -250,10 +250,10 @@ add_test(NAME gi.ddgi COMMAND test_gi_ddgi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# RAYON's tier table, pins and migration (GI_UNIFIED_SPEC.md §2 / P2).
+# PHOTON's tier table, pins and migration (GI_UNIFIED_SPEC.md §2 / P2).
 #
 # The odd one out in this directory, deliberately: it links no engine of its
-# own and renders nothing. Rayon's phase-2 subject is RESOLUTION — which
+# own and renders nothing. Photon's phase-2 subject is RESOLUTION — which
 # technique, quality and irradiance-field state a tier and its pins produce —
 # and the renderer's half of that is already gated by gi.modes, gi.pcc_mirror
 # and gi.ddgi, none of which this phase touches. Keeping the resolution suite
@@ -283,7 +283,7 @@ set_tests_properties(gi.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document" TIMEOUT 120)
 jah_no_display(gi.tiers)
 
-# gi.ddgi_ambient — THE RAYON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
+# gi.ddgi_ambient — THE PHOTON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
 # CORRECTION; the upstream mechanism is in SPECS/OGRE_UPSTREAM_ISSUES.md's
 # "Vct_piece_ps.any: volume-local ambient blend commented out" entry). Its own
 # binary for the same process-wide-binding reason as gi.ddgi — and separate from

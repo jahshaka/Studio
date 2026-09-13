@@ -230,7 +230,7 @@ scripting.e2e.planar 7.4
 scripting.e2e.player_verbs 6.7
 scripting.e2e.possession 12.17
 scripting.e2e.presentation_state 7.07
-scripting.e2e.rayon 3.17
+scripting.e2e.photon 3.17
 scripting.e2e.reflection_map 10.95
 scripting.e2e.refusals 2.99
 scripting.e2e.render_stats 7.39
@@ -338,7 +338,7 @@ ui.panel_undo 0.09
 ui.project_tile 0.03
 ui.properties_width 1.04
 ui.property_anim 0.02
-ui.rayon_panel 2.9
+ui.photon_panel 2.9
 ui.selection_cost 3.39
 ui.shot_aspect 10.07
 ui.toast 0.51
