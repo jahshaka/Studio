@@ -1,3 +1,4 @@
+#include <cstring>
 #include "irisgl/core/math/vec.h"
 #include "viewport/gizmooverlay.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -41,13 +42,34 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
             MeshId m = meshFor(src);
             if (m && mTarget->attachMesh(slot.node, m, slot.material)) { slot.mesh = m; slot.source = src; }
         }
-        SceneMirror::pushTransform(mTarget, slot.node, item.transform);
+        // ON CHANGE ONLY, TRANSFORM INCLUDED (ENGINE-4 F5; the colour half is
+        // fps audit F14 below). The gizmo is screen-scaled and follows the
+        // camera, so this transform really does change whenever the camera
+        // does — but a still camera re-pushed the identical matrix sixty times
+        // a second, and an engine transform write is also an input to the
+        // renderer's movement epoch: with a node selected, these four pushes
+        // alone made the GI movement scan and the lamp-map cache's caster walk
+        // run on every frame of a scene nobody was touching (measured at 8,404
+        // nodes: 8,008 item visits a frame, and none once this guard is here).
+        quint64 xk = 1469598103934665603ull;
+        for (int c = 0; c < 4; ++c) {
+            const iris::Vec4 col = item.transform.column(c);
+            for (int rr = 0; rr < 4; ++rr) {
+                float f = col[rr];
+                quint32 bits;
+                std::memcpy(&bits, &f, sizeof bits);
+                xk = (xk ^ bits) * 1099511628211ull;
+            }
+        }
+        if (!slot.transformPushed || slot.transformKey != xk) {
+            SceneMirror::pushTransform(mTarget, slot.node, item.transform);
+            slot.transformKey = xk;
+            slot.transformPushed = true;
+        }
         // COLOUR ON CHANGE ONLY (fps audit F14). setUnlitMaterial schedules a
         // const-buffer write, and this ran for every part of the gizmo on every
         // frame the gizmo was up — while the only thing that ever changes a
-        // part's colour is the mouse moving onto or off it. The transform above
-        // genuinely does change every frame (the gizmo is screen-scaled and
-        // follows the camera), so it stays unconditional.
+        // part's colour is the mouse moving onto or off it.
         if (!slot.colourPushed || slot.colour != item.colour) {
             mTarget->setUnlitMaterial(slot.material, Colour(item.colour.redF(), item.colour.greenF(),
                                                             item.colour.blueF(), 1.0f));
