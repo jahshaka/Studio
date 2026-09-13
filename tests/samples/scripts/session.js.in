@@ -64,4 +64,16 @@ assert(project.open(guids[0]) === true, "reopen the first archive after the whol
 editor.frame(60, 1 / 60);
 errorsClean("first archive reopened last");
 assert(project.close() === true, "final close");
-console.log("samples.session complete: " + SAMPLES.length + " archives in one process");
+// THE CHANGE LIST MISSED NOTHING, across seven real scenes in one process
+// (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8; lead review R2 #4). The mirror handles
+// what the document reports changed and re-reads a few dozen objects a frame
+// behind itself to catch anything that forgot to report — so this counter is
+// the only thing in the program that can see a missing mark. It is a STAT, not
+// a crash and not a pixel: without a line like this one it never turns red on a
+// real scene, only on the synthetic ones the mirror suites build.
+var mirror = editor.mirrorStats();
+assert(mirror.verifierCatches === 0,
+       "the document reported every change these seven scenes made (verifierCatches "
+       + mirror.verifierCatches + ")");
+console.log("samples.session complete: " + SAMPLES.length + " archives in one process"
+            + ", mirror verified " + mirror.verifierVisits + " objects on the last frame");

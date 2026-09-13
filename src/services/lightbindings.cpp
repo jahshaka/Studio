@@ -62,6 +62,7 @@ bool LightBindings::bindProfile(const iris::LightNodePtr &light, const QString &
         light->iesProfileGuid.clear();
         light->iesProfilePath.clear();
         light->iesNormalisation = 1.0f;
+        light->markChanged(iris::NodeChange::Params);
         return true;
     }
     if (!db) {
@@ -96,6 +97,10 @@ bool LightBindings::bindProfile(const iris::LightNodePtr &light, const QString &
     light->iesProfileGuid = guid;
     light->iesProfilePath = path;
     light->iesNormalisation = normalisationFor(guid, db);
+    // THE CHANGE MARK (SPECS/DIRTY_SET_MIRROR_SPEC.md): these are reflected
+    // fields written by hand rather than through setPropertyValue, and the
+    // mirror only looks at what the document says changed.
+    light->markChanged(iris::NodeChange::Params);
     return true;
 }
 
@@ -109,6 +114,7 @@ bool LightBindings::bindTexture(const iris::LightNodePtr &light, const QString &
     if (guid.isEmpty()) {
         light->lightTextureGuid.clear();
         light->lightTexturePath.clear();
+        light->markChanged(iris::NodeChange::Params);
         return true;
     }
     if (!db) {
@@ -139,6 +145,7 @@ bool LightBindings::bindTexture(const iris::LightNodePtr &light, const QString &
 
     light->lightTextureGuid = guid;
     light->lightTexturePath = path;
+    light->markChanged(iris::NodeChange::Params);
     return true;
 }
 
@@ -155,4 +162,5 @@ void LightBindings::resolve(const iris::LightNodePtr &light, Database *db, Proje
     light->lightTexturePath = light->lightTextureGuid.isEmpty()
                                   ? QString()
                                   : resolvePath(light->lightTextureGuid, project);
+    light->markChanged(iris::NodeChange::Params);
 }
