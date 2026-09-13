@@ -48,11 +48,22 @@ For more information see the LICENSE file
 //      project, where rule 1 cannot see them);
 //   3. a model or clip an AVATAR in this project is built from — the avatar is
 //      that character's tile (L2);
-//   4. a scene node's OWN row: the built-in marker the editor writes for the
-//      primitives, the default Ground, image planes and decals, and the row it
-//      mints per particle EMITTER (a ParticleSystem row with no stored
-//      definition — the emitter's recipe lives in the scene, not in the
-//      catalog). A node is not a library asset; what it USES is;
+//   4. a row the EDITOR minted rather than the user — marked by a `type` in
+//      its properties, and there are two of them. A scene node's OWN row: the
+//      `builtin` marker written for the primitives, the default Ground, image
+//      planes and decals, plus the row minted per particle EMITTER (a
+//      ParticleSystem row with no stored definition — the emitter's recipe
+//      lives in the scene, not in the catalog); a node is not a library asset,
+//      what it USES is. And a `platform` row: a file the APP ships that a
+//      platform-owned node needs, pinned into the project behind the user's
+//      back — today exactly one, the default floor's checker
+//      (services/shippedassets.h Ownership::Platform). Owner, 2026-09-13:
+//      "the project asset tray should only show assets and items added to the
+//      project"; the checker is furniture that comes with the floor. It is a
+//      full library texture in every other respect — pinned, stored, carried
+//      by an archive — so nothing about Reset or export changes, and the
+//      marker is written only when the editor MINTS the row: the same image
+//      imported by a user is their asset and stays a tile;
 //   5. a texture added DIRECTLY whose companion material (minted for it at
 //      add time, ImageMaterial's `companionOf` stamp) is in this project and
 //      is the ONLY thing in this project that uses it — the material is that

@@ -47,6 +47,19 @@ iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *til
     // resolve it pin-first — the same round trip as any texture a user
     // imports, and a project export carries it.
     //
+    // PINNED, BUT NOT THE USER'S (owner, 2026-09-13: "the project asset tray
+    // should only show assets and items added to the project"). The pin has to
+    // stay — it is what makes `material.reset` find the checker again and what
+    // puts the bytes in a project archive, so a fresh box importing that
+    // archive still renders a checkered floor — so the row is marked
+    // PLATFORM-owned instead, and the tray drops it by the same rule that
+    // drops the Ground node's own row (services/assettray.h rule 4). Not
+    // pinning it at all was the other option and it fails the archive: the
+    // membership sweep is "the project's rows plus its pins"
+    // (services/projectarchiver.cpp), so an unpinned tile travels with nothing
+    // and the floor arrives untextured on a machine whose library never had
+    // it.
+    //
     // The STARTUP PLACEHOLDER project (Project::createNew: no guid, no folder)
     // never saves, so it renders the shipped file directly and writes nothing
     // to the library.
@@ -55,7 +68,8 @@ iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *til
     if (tileNewlyPinned) *tileNewlyPinned = false;
     if (db && project && !project->getProjectGuid().isEmpty()) {
         const ShippedAssets::Pinned tile =
-            ShippedAssets::pinTexture(tilePath, QStringLiteral("Tile.png"), db, project);
+            ShippedAssets::pinTexture(tilePath, QStringLiteral("Tile.png"), db, project,
+                                      ShippedAssets::Ownership::Platform);
         if (tile.ok() && !tile.guid.isEmpty()) {
             tilePath = tile.path;
             if (tileGuid) *tileGuid = tile.guid;

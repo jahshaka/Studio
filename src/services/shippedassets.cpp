@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
@@ -65,7 +67,7 @@ QString libraryTextureFor(QSqlDatabase conn, const QString &oid, const QString &
 } // namespace
 
 Pinned pinTexture(const QString &sourcePath, const QString &displayName,
-                  Database *db, Project *project)
+                  Database *db, Project *project, Ownership ownership)
 {
     Pinned out;
     if (sourcePath.isEmpty() || !QFileInfo(sourcePath).isFile()) {
@@ -128,6 +130,34 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
             return out;
         }
         guid = result.assetGuid;
+    }
+
+    // PLATFORM FURNITURE IS MARKED (owner, 2026-09-13: "the project asset tray
+    // should only show assets and items added to the project"). The tray shows
+    // what the user put in the project; the default floor's checker is pinned
+    // by the editor itself, behind their back, so the row carries the same
+    // `{"type": ...}` marker the editor writes on the rows it mints for scene
+    // nodes, and the tray drops it by that same rule (services/assettray.h
+    // rule 4).
+    //
+    // ON THE REUSED ROW TOO, not only on the one this call mints — measured,
+    // and it is the whole point: the checker is identified by its CONTENT, so
+    // in a library that already imported a sample scene (which carries the same
+    // tile) the floor pins the SAMPLE's row, and a mint-only marker would leave
+    // "Tile.png" in the tray of every project made on a real library. The cost
+    // is that a user who imports this exact image by hand has that row marked
+    // the first time a floor reuses it; they still get a tile for their add —
+    // adding a texture to a project mints its companion material and THAT is
+    // the tile (rule 5) — so nothing they added disappears from the tray.
+    // One read, and a write only when the marker is missing: this runs when a
+    // scene is built, not per frame.
+    if (ownership == Ownership::Platform && !guid.isEmpty()) {
+        const AssetRecord row = db->fetchAsset(guid);
+        QJsonObject props = QJsonDocument::fromJson(row.properties).object();
+        if (props.value(QStringLiteral("type")).toString().isEmpty()) {
+            props.insert(QStringLiteral("type"), QStringLiteral("platform"));
+            db->updateAssetProperties(guid, QJsonDocument(props).toJson());
+        }
     }
 
     // A BINDING: the scene refers to the image (a material slot, an emitter,
@@ -213,7 +243,8 @@ QStringList pinSkyPreset(const QString &name, Database *db, Project *project,
     const QString prefix = match->name.toLower();
     for (const QString &face : match->faces()) {
         const Pinned pinned = pinTexture(
-            face, prefix + QLatin1Char('_') + QFileInfo(face).fileName(), db, project);
+            face, prefix + QLatin1Char('_') + QFileInfo(face).fileName(), db, project,
+            Ownership::Project);
         if (!pinned.ok() || pinned.guid.isEmpty())
             return fail(QStringLiteral("sky preset '%1': face %2 — %3")
                             .arg(match->name, QFileInfo(face).fileName(),

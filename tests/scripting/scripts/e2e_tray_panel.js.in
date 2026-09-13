@@ -116,11 +116,17 @@ function sceneClosure() {
 
 project.create("tray panel");
 agree("a fresh project");
+// A FRESH PROJECT SHOWS NOTHING (owner, 2026-09-13, lane BAR-1: "the project
+// asset tray should only show assets and items added to the project"). The
+// default scene is platform furniture from end to end: the Ground's own row is
+// a node's row, and the shipped checker it stands on is a PLATFORM-owned
+// library texture the editor pins by itself — both dropped by rule 4.
 var tileRow = assets.list({ scope: "project", type: "texture", query: "Tile.png" })[0];
-assert(tileRow && guidsOf(panelRows()).indexOf(tileRow.guid) >= 0,
-       "the default ground's Tile.png is a tile in the panel");
+assert(tileRow && guidsOf(panelRows()).indexOf(tileRow.guid) < 0,
+       "the default ground's shipped checker is NOT a tile in the panel");
 assert(guidsOf(panelRows()).indexOf(scene.find("Ground")) < 0,
-       "... the Ground itself is not");
+       "... the Ground itself is not either");
+assert(panelRows().length === 0, "... so a fresh project's panel is empty");
 
 var tinyTex = assets.importFile(FIXTURES + "/tiny.png");
 assert(assets.addToProject(tinyTex) === tinyTex, "assets.addToProject(tiny.png) — a VERB's pin");

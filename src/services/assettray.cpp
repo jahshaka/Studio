@@ -97,13 +97,17 @@ Batch gather(Database *db, const QString &projectGuid, const QVector<AssetRecord
     return batch;
 }
 
-/// Rule 4: a row the editor minted FOR a scene node. The built-in marker
-/// (`{"type": "builtin"}` in the properties) is written for the primitives,
-/// the default Ground, image planes and decals; an emitter's row carries no
-/// definition, because the emitter's recipe is the scene node itself — a
-/// library particle system (a .jaf ingest) stores its definition in the asset
-/// column, and that one is a tile.
-bool isNodeOwnRow(const Batch &batch, const AssetRecord &record)
+/// Rule 4: a row the EDITOR minted, not the user. Two markers, one test — a
+/// non-empty `type` in the properties:
+///   "builtin"  a scene node's own row: the primitives, the default Ground,
+///              image planes, decals;
+///   "platform" a file the app ships that a platform-owned node needs and the
+///              editor pinned by itself — the default floor's checker
+///              (services/shippedassets.h Ownership::Platform).
+/// An emitter's row carries no definition, because the emitter's recipe is the
+/// scene node itself — a library particle system (a .jaf ingest) stores its
+/// definition in the asset column, and that one is a tile.
+bool isEditorOwnRow(const Batch &batch, const AssetRecord &record)
 {
     const QJsonObject props = QJsonDocument::fromJson(record.properties).object();
     if (!props.value(QStringLiteral("type")).toString().isEmpty()) return true;
@@ -169,8 +173,9 @@ QStringList hidden(Database *db, const QString &projectGuid, const QVector<Asset
             out.append(record.guid);
             continue;
         }
-        // 4. a scene node's own row.
-        if (isNodeOwnRow(batch, record)) { out.append(record.guid); continue; }
+        // 4. a row the editor minted: a scene node's own, or the platform's
+        //    own furniture (the floor's checker).
+        if (isEditorOwnRow(batch, record)) { out.append(record.guid); continue; }
         // 5. an image whose tile is its companion material.
         if (isType(record, ModelTypes::Texture) && foldedIntoCompanion(batch, projectGuid, record.guid))
             out.append(record.guid);
