@@ -264,12 +264,21 @@ int main(int argc, char **argv)
     // gates: zero scans over a still stretch, exactly one per frame that wrote.
     {
         const unsigned long long stillFrom = escene->giStatus().giScans;
+        const unsigned long long readsFrom = escene->giStatus().giAabbReads;
         frames(20);
         const GiStatus st = escene->giStatus();
-        std::printf("   still: %llu movement scans over 20 still frames (last scan %.1f us)\n",
-                    st.giScans - stillFrom, st.giScanMicros);
+        std::printf("   still: %llu movement scans and %llu world-AABB reads over 20 still "
+                    "frames (last scan %.1f us)\n",
+                    st.giScans - stillFrom, st.giAabbReads - readsFrom, st.giScanMicros);
         CHECK(st.giScans == stillFrom, "still: 20 frames of a still room run ZERO movement scans");
         CHECK(st.giScanMicros == 0.0, "still: ...and a skipped frame reports no scan cost");
+        // THE WHOLE FAMILY, not just the scan: the two signatures the mirror
+        // reads every frame (giEscapeSignature / giGeometrySignature) and the
+        // Forward+ slice walk read the same boxes the same expensive way, and a
+        // still frame must ask Ogre for NONE of them (clean-2 lane).
+        CHECK(st.giAabbReads == readsFrom,
+              "still: ...and NOTHING in the engine's GI code asks for a world AABB at all\n"
+              "          (the movement scan, both mirror signatures, the Forward+ walk)");
 
         const iris::Vec3 home = mirrorCube->getLocalPos();
         const unsigned long long movedFrom = st.giScans;
