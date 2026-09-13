@@ -205,7 +205,14 @@ static void liveTable(Engine *engine, View *view)
         if (comparable)
             CHECK(grew, "adding a cube to a LIVE scene never collapses the lit volume");
         else
-            CHECK(span(b, 0) > 4.0f && span(b, 0) < 20.0f,
+            // THE WINDOW MOVED WITH THE MARGIN (ENGINE-4 item 5), and the
+            // property did not. A SUPPORTING SLAB — the ground here — is now
+            // clipped to the content it supports instead of being morphed back
+            // towards its own 200 m, so the volume around one 1 m cube at
+            // x = -3 measures 3.84 m (the cube, plus the ground between it and
+            // the content core) where it measured 6.25 m before. What this
+            // asserts is still "onto the content": not a speck, not the ground.
+            CHECK(span(b, 0) > 3.0f && span(b, 0) < 20.0f,
                   "the FIRST content object moves the volume onto the content (by design)");
         prev = b;
     }
