@@ -520,6 +520,14 @@ int main(int argc, char **argv)
         input("decal moved", GiStaleReason::Moved,
               [&]() { escene->setNodeTransform(decalNode, Vec3(1.4f, 1.2f, -2.0f), Quat(),
                                                Vec3(1, 1, 1)); }, 12);
+        // HIDDEN AND RE-SHOWN (lane review F2): neither moves the projector box,
+        // so the movement scan reports nothing — yet the wall the probes hold
+        // is wearing a decal that is no longer drawn. The visibility edge is
+        // its own input, exactly as a light's is.
+        input("decal hidden", GiStaleReason::Moved,
+              [&]() { escene->setNodeVisible(decalNode, false); }, 12);
+        input("decal shown again", GiStaleReason::Moved,
+              [&]() { escene->setNodeVisible(decalNode, true); }, 12);
         input("decal removed", GiStaleReason::Moved,
               [&]() { CHECK(escene->removeDecal(decalNode), "decal: removeDecal succeeds"); }, 12);
         escene->removeNode(decalNode);
