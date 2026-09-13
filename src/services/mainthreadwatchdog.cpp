@@ -44,6 +44,12 @@ std::atomic<bool> gDisabled { false };
 std::atomic<int>  gReports { 0 };
 std::atomic<qint64> gLastStallMs { 0 };
 std::atomic<int>  gStallMs { 2000 };
+/// WHEN the last report was made, on the heartbeat's monotonic clock. Reported
+/// by stats() because the COOLDOWN below is otherwise invisible: a caller that
+/// stalls the thread inside it gets no report at all and has no way to tell
+/// that from "the watchdog missed it" (app.watchdog_stall's cold-cache flake —
+/// a boot stall from shader compilation swallowed the suite's own, 2026-09-13).
+std::atomic<qint64> gLastReportAtMs { 0 };
 
 #if JAH_WATCHDOG_ENABLED
 
@@ -111,6 +117,7 @@ void watchdogLoop()
 
         lastReportedTick = tick;
         lastReportAtMs = nowMs;
+        gLastReportAtMs.store(nowMs, std::memory_order_relaxed);
         gLastStallMs.store(stallMs, std::memory_order_relaxed);
         gReports.fetch_add(1, std::memory_order_relaxed);
 
@@ -243,6 +250,17 @@ QVariantMap stats()
     m["stallMs"] = gStallMs.load(std::memory_order_relaxed);
     m["reports"] = gReports.load(std::memory_order_relaxed);
     m["lastStallMs"] = double(gLastStallMs.load(std::memory_order_relaxed));
+    // THE COOLDOWN, VISIBLE. Without these two a caller cannot tell "no stall
+    // happened" from "a stall happened inside the rate limit and was dropped".
+#if JAH_WATCHDOG_ENABLED
+    m["cooldownMs"] = double(kCooldownMs);
+    const qint64 at = gLastReportAtMs.load(std::memory_order_relaxed);
+    m["sinceLastReportMs"] =
+        at > 0 ? double(MainThreadHeartbeat::nowNs() / 1000000 - at) : -1.0;
+#else
+    m["cooldownMs"] = 0.0;
+    m["sinceLastReportMs"] = -1.0;
+#endif
     return m;
 }
 

@@ -210,6 +210,72 @@ int main(int argc, char **argv)
     CHECK(mirror.giRefreshCount() - refreshBeforeDrag == 1,
           "and never again while nothing moves");
 
+    // ---- THE RENDER MONITOR SEES ALL OF IT (ENGINE-5 item 2) ---------------
+    // `CacheKind::Gi` existed in Types.h and NOTHING ever filed one, so a
+    // capture of exactly this gesture showed a GI rebuild as an event and the
+    // light-only ticks not at all: no row, no milliseconds, no reason. The
+    // counters above prove the WORK is right; these prove the capture the lead
+    // reads says so. Same three windows, one monitor capture.
+    {
+        engine->setFrameMonitor(MonitorLevel::Review);
+        std::vector<FrameRecord> recs;
+        const auto giRows = [&](WorkReason *anyReason) {
+            unsigned n = 0;
+            for (const FrameRecord &r : recs)
+                for (const CacheWork &w : r.cacheWork)
+                    if (w.cache == CacheKind::Gi) {
+                        ++n;
+                        if (anyReason) *anyReason = w.reason;
+                    }
+            return n;
+        };
+        // (1) STILL: a scene nobody is touching files no GI work at all.
+        for (int f = 0; f < 20; ++f) frame();
+        recs.clear();
+        engine->takeFrameRecords(recs);
+        const unsigned idleRows = giRows(nullptr);
+        std::printf("   monitor: %zu still frames, %u GI cache rows\n", recs.size(), idleRows);
+        CHECK(!recs.empty(), "the monitor recorded the still frames");
+        CHECK(idleRows == 0, "a still scene files NO GI cache work");
+
+        // (2) THE DRAG: the cheap light-only tick, with `Light` as its reason.
+        // The SAME swing as the gesture above, so the light ends where it
+        // already is and the pixel assertions that follow this block are
+        // looking at exactly the picture they were written for.
+        for (int f = 0; f < 60; ++f) {
+            const float t = float(f + 1) / 60.0f;
+            sun->setLocalRot(iris::Quat::fromEulerAngles(80.0f - 160.0f * t, 0.0f, 0.0f));
+            frame();
+        }
+        recs.clear();
+        engine->takeFrameRecords(recs);
+        unsigned lightTicks = 0, timed = 0;
+        for (const FrameRecord &r : recs)
+            for (const CacheWork &w : r.cacheWork)
+                if (w.cache == CacheKind::Gi) {
+                    if (w.reason == WorkReason::Light) ++lightTicks;
+                    if (w.ms >= 0.0f) ++timed;
+                }
+        std::printf("   monitor: drag filed %u GI rows with reason Light (%u timed)\n",
+                    lightTicks, timed);
+        CHECK(lightTicks >= 1, "the drag's light-only re-injects are FILED, with reason Light");
+        CHECK(timed >= lightTicks, "every GI row carries its own milliseconds");
+
+        // (3) LETTING GO: the settle's full re-solve files its own row too.
+        for (int f = 0; f < 40; ++f) frame();
+        recs.clear();
+        engine->takeFrameRecords(recs);
+        unsigned solveRows = 0;
+        for (const FrameRecord &r : recs)
+            for (const CacheWork &w : r.cacheWork)
+                if (w.cache == CacheKind::Gi &&
+                    (w.detail == "vct.refresh" || w.detail == "vct.rebuild"))
+                    ++solveRows;
+        std::printf("   monitor: the settle filed %u re-solve row(s)\n", solveRows);
+        CHECK(solveRows >= 1, "the settle's re-solve is FILED as GI cache work");
+        engine->setFrameMonitor(MonitorLevel::Off);
+    }
+
     // ---- the picture is right, not merely cheap ----------------------------
     // The light now points away from the wall, so the red bounce on the floor
     // must be gone. A coalescing gate that never fired would leave the OLD

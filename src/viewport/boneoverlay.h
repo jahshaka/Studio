@@ -44,6 +44,7 @@
 // can share the joint markers.
 //
 // Studio code: iris + the engine abstraction, never Ogre.
+#include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QVector>
@@ -93,23 +94,47 @@ public:
     /// Rig markers drawn by updateMarkers.
     int visibleMarkers() const { return mVisibleMarkers; }
 
+    /// WHAT THIS OVERLAY HAS ACTUALLY ASKED THE ENGINE TO DO, cumulative since
+    /// construction (ENGINE-5 item 3). Both are writes a still skeleton must
+    /// not make: a transform push is an input to the renderer's movement epoch,
+    /// and a visibility write walks the node's subtree. They are the only way
+    /// to see the difference — the picture is identical either way — which is
+    /// why they are state and not a printf (avatar.preview S13 asserts them).
+    unsigned long long transformPushes() const { return mTransformPushes; }
+    unsigned long long visibilityWrites() const { return mVisibilityWrites; }
+
 private:
+    /// ONE POOL ENTRY, WITH WHAT IT LAST PUSHED (ENGINE-5 item 3). The overlay
+    /// ran from `avatarpreviewscene.cpp` every frame and re-pushed the identical
+    /// transform and `setNodeVisible(node, true)` for every bone, every joint
+    /// and every rig marker — and on this engine a visibility write is a subtree
+    /// walk AND a transform-write bump, so a preview showing a skeleton could
+    /// never have a still frame: the GI movement scan and the lamp-map caster
+    /// walk ran on every frame of a character standing in T-pose. The guard is
+    /// GizmoOverlay's, which learned the same lesson (gizmooverlay.cpp:45-65).
+    struct Slot {
+        jahshaka::engine::NodeId node = 0;
+        quint64 key = 0;          ///< FNV-1a over the 16 floats last pushed
+        bool    pushed = false;   ///< ...is `key` meaningful yet
+        bool    shown = false;    ///< what the engine was last TOLD, not asked
+    };
     bool ensureAssets();
-    /// Grows `pool` as needed and returns the node for `index`, attaching `mesh`
-    /// the first time. 0 when the engine refuses.
-    jahshaka::engine::NodeId slot(QVector<jahshaka::engine::NodeId> &pool, int index,
-                                  jahshaka::engine::MeshId mesh,
-                                  jahshaka::engine::MaterialId material = 0);
-    static void hideFrom(jahshaka::engine::Scene *scene,
-                         const QVector<jahshaka::engine::NodeId> &pool, int first);
+    /// Grows `pool` as needed and returns the entry for `index`, attaching
+    /// `mesh` the first time. Null when the engine refuses to make a node.
+    Slot *slot(QVector<Slot> &pool, int index, jahshaka::engine::MeshId mesh,
+               jahshaka::engine::MaterialId material = 0);
+    /// Pushes `m` only when it differs from what this slot last pushed, and
+    /// shows the node only if it was not already shown.
+    void place(Slot &s, const iris::Mat4 &m);
+    void hideFrom(QVector<Slot> &pool, int first);
 
     jahshaka::engine::Scene *mTarget = nullptr;
     jahshaka::engine::MeshId mBoneMesh = 0;      ///< unit octahedron, (0,0,0) -> (0,1,0)
     jahshaka::engine::MeshId mMarkerMesh = 0;    ///< unit octahedron centred on the origin
     jahshaka::engine::MaterialId mMaterial = 0;
-    QVector<jahshaka::engine::NodeId> mBoneNodes;    ///< segments, then leaf stubs
-    QVector<jahshaka::engine::NodeId> mJointNodes;
-    QVector<jahshaka::engine::NodeId> mMarkerNodes;   ///< the rig layer's own pool
+    QVector<Slot> mBoneNodes;    ///< segments, then leaf stubs
+    QVector<Slot> mJointNodes;
+    QVector<Slot> mMarkerNodes;   ///< the rig layer's own pool
     jahshaka::engine::MaterialId mMarkerMaterial = 0;
     QColor mMarkerColour = QColor(255, 170, 40);      ///< rig markers, not bone green
     QColor mColour = QColor(60, 255, 90);
@@ -118,6 +143,8 @@ private:
     int mVisibleStubs = 0;
     int mVisibleJoints = 0;
     int mVisibleMarkers = 0;
+    unsigned long long mTransformPushes = 0;
+    unsigned long long mVisibilityWrites = 0;
 };
 
 #endif // BONEOVERLAY_H

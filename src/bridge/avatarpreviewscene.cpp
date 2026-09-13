@@ -92,6 +92,16 @@ void AvatarPreviewScene::setModel(avatar::AvatarPreviewModel *model)
     if (model) frameSubject();
 }
 
+unsigned long long AvatarPreviewScene::overlayTransformPushes() const
+{
+    return mOverlay ? mOverlay->transformPushes() : 0;
+}
+
+unsigned long long AvatarPreviewScene::overlayVisibilityWrites() const
+{
+    return mOverlay ? mOverlay->visibilityWrites() : 0;
+}
+
 int AvatarPreviewScene::overlaySegments() const
 {
     return mOverlay ? mOverlay->visibleSegments() : 0;

@@ -1723,6 +1723,53 @@ void material_and_mesh_lifetime() {
     CHECK(true);
 }
 
+// A SCENE WITH MORE MATERIALS THAN THE SAMPLERBLOCK COUNTER CAN COUNT
+// (ENGINE-5 item 1 — the 8,404-node lattice's exit abort, ledger 189/191).
+//
+// The mirror unbinds every texture slot a material does not use
+// (SceneMirror::syncTextures calls setPbrTexture(mat, slot, 0) for each), and
+// setPbrTexture used to hand Ogre a samplerblock on that call even though the
+// texture was null. Ogre TAKES A REFERENCE on the block named there and parks
+// it in the slot for the datablock's whole life, so every plain PBR material
+// held TEN references to the one shared sampler — and `BasicBlock::mRefCount`
+// is a uint16 guarded only by a debug assert. Past 6,553 materials the count
+// wrapped, the block was freed under 8,000 live datablocks, and the next
+// ~HlmsPbsDatablock threw ItemIdentityException out of a NOEXCEPT destructor:
+// std::terminate, exit 134, at shutdown. Measured on the lattice before the
+// fix: 8,001 datablocks x 10 slots = 80,010 references, counter reading 14,475.
+//
+// The shape, not the scene: materials past the wrap threshold, every empty slot
+// unbound the way the mirror unbinds it, then teardown. On the old code this
+// case ABORTS the suite (the throw escapes a destructor, so no catch can help).
+void many_materials_survive_teardown() {
+    Fixture fx;
+    // A render window must exist before a scene does (the startup contract).
+    View *v = fx.view("manymat-view", 32, 32, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("manymat-scene");             REQUIRE(s);
+    v->setScene(s);
+    // 7,000 > 65,535/10: the count wrapped at 6,554 materials before the fix.
+    const int kMaterials = 7000;
+    const int kSlots = int(PbrTextureSlot::Count);
+    int made = 0, unbound = 0;
+    for (int i = 0; i < kMaterials; ++i) {
+        PbrParams p;
+        p.albedo = Colour(float(i % 7) / 7.0f, 0.5f, 0.5f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        if (!mat) break;
+        ++made;
+        // Exactly what the mirror does to a material with no maps at all.
+        for (int slot = 0; slot < kSlots; ++slot)
+            if (s->setPbrTexture(mat, PbrTextureSlot(slot), 0)) ++unbound;
+    }
+    CHECK_MSG(made == kMaterials, "created %d of %d materials (%s)", made, kMaterials,
+              fx.e->lastError().c_str());
+    CHECK_MSG(unbound == made * kSlots, "every empty slot was unbound: %d of %d",
+              unbound, made * kSlots);
+    // The teardown that used to terminate: ~Fixture destroys the scene, which
+    // destroys every datablock, which releases every samplerblock reference.
+    CHECK(true);
+}
+
 void light_on_node_and_camera_desc() {
     Fixture fx;
     View *v = fx.view("light-view", 96, 96, kBlue); REQUIRE(v);
@@ -5219,6 +5266,7 @@ int main(int argc, char **argv) {
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
+        { "many_materials_survive_teardown",         many_materials_survive_teardown },
         { "light_on_node_and_camera_desc",          light_on_node_and_camera_desc },
         { "area_light_lights_the_wall",             area_light_lights_the_wall },
         { "ies_profile_shapes_a_spot",              ies_profile_shapes_a_spot },

@@ -418,6 +418,10 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
             { "detail", qs(w.detail) },
             { "units", int(w.units) },
             { "ms", double(w.ms) },
+            // NEGATIVE = not measured, the same contract the passes carry. A
+            // GI dispatch is the only GPU time in a capture that is NOT in a
+            // pass (Types.h CacheWork::gpuMs), so this is where it shows.
+            { "gpuMs", double(w.gpuMs) },
         });
     }
 
