@@ -469,3 +469,17 @@ add_dependencies(test_gi_probe_open JahshakaEngineMedia)
 add_test(NAME gi.probe_open COMMAND test_gi_probe_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.probe_open PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# PHOTON-S2 SPIKE (measurement only; deliberately NOT registered with ctest).
+add_executable(test_photon_s2_leak test_photon_s2_leak.cpp)
+set_target_properties(test_photon_s2_leak PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_photon_s2_leak PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_photon_s2_leak PRIVATE JahshakaEngine)
+add_dependencies(test_photon_s2_leak JahshakaEngineMedia)
