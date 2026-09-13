@@ -30,7 +30,35 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <functional>
+#include <vector>
+
+/// A solid TGA of the given size — the smallest thing loadTexture and
+/// loadDecalTexture accept (see decals.engine). `n` is also how this suite
+/// makes a load big enough to still be streaming when the frame that bound it
+/// ends.
+static bool writeSolidTga(const std::string &path, unsigned n,
+                          unsigned char r, unsigned char g, unsigned char b)
+{
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    unsigned char hdr[18];
+    std::memset(hdr, 0, sizeof(hdr));
+    hdr[2] = 2;                                   // uncompressed true-colour
+    hdr[12] = (unsigned char)(n & 0xFF); hdr[13] = (unsigned char)(n >> 8);
+    hdr[14] = (unsigned char)(n & 0xFF); hdr[15] = (unsigned char)(n >> 8);
+    hdr[16] = 32;
+    hdr[17] = 0x28;                               // top-left origin, 8 alpha bits
+    std::fwrite(hdr, 1, sizeof(hdr), f);
+    std::vector<unsigned char> bgra(size_t(n) * n * 4u);
+    for (size_t i = 0; i < size_t(n) * n; ++i) {
+        bgra[i * 4 + 0] = b; bgra[i * 4 + 1] = g; bgra[i * 4 + 2] = r; bgra[i * 4 + 3] = 255;
+    }
+    std::fwrite(bgra.data(), 1, bgra.size(), f);
+    std::fclose(f);
+    return true;
+}
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
@@ -38,6 +66,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
@@ -67,6 +96,7 @@ static const char *reasonName(GiStaleReason r)
     case GiStaleReason::Sky:      return "sky";
     case GiStaleReason::Ambient:  return "ambient";
     case GiStaleReason::Fog:      return "fog";
+    case GiStaleReason::Mobility: return "mobility";
     }
     return "?";
 }
@@ -106,6 +136,9 @@ int main(int argc, char **argv)
     cfg.logFile = "test-gi-probe-inputs-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    // THE HOST'S TRANSFORM-WRITE EPOCH, wired exactly as the app wires it
+    // (EngineHost): it is what lets the GI movement scan skip a still frame.
+    engine->setTransformWriteCounter(&iris::graph::transformWriteCounter());
 
     View *view = engine->createOffscreenView("probe_inputs", 128, 128, Colour(0, 0, 0));
     Scene *escene = engine->createScene("probe_inputs");
@@ -133,8 +166,8 @@ int main(int argc, char **argv)
     slab(doc, "+X wall", pbr(white), iris::Vec3(4.2f, 2.5f, 0.0f),  iris::Vec3(0.4f, 5.0f, 8.8f));
     auto wallMat = pbr(QColor(255, 5, 5));
     slab(doc, "red wall", wallMat, iris::Vec3(0.0f, 2.5f, 4.2f), iris::Vec3(8.8f, 5.0f, 0.4f));
-    slab(doc, "mirror", pbr(QColor(255, 255, 255), 0.0f, 1.0f), iris::Vec3(0.0f, 2.0f, 0.0f),
-         iris::Vec3(1.6f, 1.6f, 1.6f));
+    auto mirrorCube = slab(doc, "mirror", pbr(QColor(255, 255, 255), 0.0f, 1.0f),
+                           iris::Vec3(0.0f, 2.0f, 0.0f), iris::Vec3(1.6f, 1.6f, 1.6f));
 
     auto sun = iris::LightNode::create();
     sun->setName("sun");
@@ -220,6 +253,51 @@ int main(int argc, char **argv)
     const Colour redMirror = mirrorPixel();
     std::printf("   mirror, red wall   r=%.3f g=%.3f b=%.3f\n", redMirror.r, redMirror.g, redMirror.b);
     CHECK(redMirror.r > redMirror.b + 0.3f, "the chrome cube reflects the RED wall (not vacuous)");
+
+    // ---- THE MOVEMENT SCAN RUNS ONLY WHEN SOMETHING MOVED -------------------
+    // (clean-2 lane, 2026-09-13.) Nothing tells the renderer that a DOCUMENT
+    // node moved — the document writes transforms straight into the shared
+    // scene graph — so the probe budget's movement scan walked every item's
+    // updated world AABB on every frame of every probe-lit scene, still or not
+    // (392 / 1961 / 4328 us at 1k / 5k / 10k nodes, lane R2). It reads the
+    // host's transform-write epoch first now, and the walk is what the epoch
+    // gates: zero scans over a still stretch, exactly one per frame that wrote.
+    {
+        const unsigned long long stillFrom = escene->giStatus().giScans;
+        const unsigned long long readsFrom = escene->giStatus().giAabbReads;
+        frames(20);
+        const GiStatus st = escene->giStatus();
+        std::printf("   still: %llu movement scans and %llu world-AABB reads over 20 still "
+                    "frames (last scan %.1f us)\n",
+                    st.giScans - stillFrom, st.giAabbReads - readsFrom, st.giScanMicros);
+        CHECK(st.giScans == stillFrom, "still: 20 frames of a still room run ZERO movement scans");
+        CHECK(st.giScanMicros == 0.0, "still: ...and a skipped frame reports no scan cost");
+        // THE WHOLE FAMILY, not just the scan: the two signatures the mirror
+        // reads every frame (giEscapeSignature / giGeometrySignature) and the
+        // Forward+ slice walk read the same boxes the same expensive way, and a
+        // still frame must ask Ogre for NONE of them (clean-2 lane).
+        CHECK(st.giAabbReads == readsFrom,
+              "still: ...and NOTHING in the engine's GI code asks for a world AABB at all\n"
+              "          (the movement scan, both mirror signatures, the Forward+ walk)");
+
+        const iris::Vec3 home = mirrorCube->getLocalPos();
+        const unsigned long long movedFrom = st.giScans;
+        for (int f = 0; f < 10; ++f) {
+            mirrorCube->setLocalPos(home + iris::Vec3(0.0f, 0.02f * float(f + 1), 0.0f));
+            frame();
+        }
+        const GiStatus moved = escene->giStatus();
+        std::printf("   moving: %llu scans over 10 frames that each moved a node\n",
+                    moved.giScans - movedFrom);
+        CHECK(moved.giScans - movedFrom == 10ull,
+              "moving: a frame with a transform write scans, once — 10 frames, 10 scans");
+        CHECK(moved.lastStaleReason == GiStaleReason::Moved,
+              "moving: ...and the mover stales the grid, as it always did");
+        mirrorCube->setLocalPos(home);
+        frames(40);                       // put it back and let the grid catch up
+        CHECK(escene->giStatus().staleProbes == 0, "moving: the grid caught up again");
+        CHECK(worstOver(20) == 0, "moving: ...and the room is idle once more");
+    }
 
     // ---- a material ALBEDO edit --------------------------------------------
     // The wall the mirror reflects turns blue. Before P7 nothing staled a probe
@@ -415,6 +493,89 @@ int main(int argc, char **argv)
               "freeze: animated content present + idle -> ZERO probe captures, nothing staled");
         escene->removeNode(liveNode);
         frames(40);
+    }
+
+    // ---- A DECAL IS A PROBE INPUT -------------------------------------------
+    // (clean-2 lane, 2026-09-13.) A decal paints a surface the probe faces
+    // capture, and nothing about it reached the cache: `setDecal` staled
+    // nothing and the movement scan walks ITEMS, while a decal is not an Item
+    // and its node usually carries none. So a decal added, moved or removed
+    // left every probe holding a wall without it until something unrelated
+    // staled the grid. The engine now stales on the verb (add/edit/remove) and
+    // tracks decal boxes in the same movement scan as the geometry.
+    {
+        CHECK(writeSolidTga("probe_inputs_decal.tga", 64, 255, 255, 255),
+              "decal: the image is written");
+        const TextureId decalTex = escene->loadDecalTexture("probe_inputs_decal.tga", DecalMap::Diffuse);
+        CHECK(decalTex != 0, "decal: loadDecalTexture accepts it");
+        const NodeId decalNode = escene->createNode();
+        escene->setNodeTransform(decalNode, Vec3(0.0f, 1.2f, -2.0f), Quat(), Vec3(1, 1, 1));
+        DecalDesc dd;
+        dd.diffuse = decalTex;
+        dd.width = 2.0f; dd.depth = 2.0f; dd.height = 2.0f;
+        input("decal added", GiStaleReason::Moved,
+              [&]() { CHECK(escene->setDecal(decalNode, dd), "decal: setDecal succeeds"); }, 12);
+        // MOVED: the scan's decal half. The verb is not called again, so a
+        // stale here can only have come from the movement scan.
+        input("decal moved", GiStaleReason::Moved,
+              [&]() { escene->setNodeTransform(decalNode, Vec3(1.4f, 1.2f, -2.0f), Quat(),
+                                               Vec3(1, 1, 1)); }, 12);
+        // HIDDEN AND RE-SHOWN (lane review F2): neither moves the projector box,
+        // so the movement scan reports nothing — yet the wall the probes hold
+        // is wearing a decal that is no longer drawn. The visibility edge is
+        // its own input, exactly as a light's is.
+        input("decal hidden", GiStaleReason::Moved,
+              [&]() { escene->setNodeVisible(decalNode, false); }, 12);
+        input("decal shown again", GiStaleReason::Moved,
+              [&]() { escene->setNodeVisible(decalNode, true); }, 12);
+        input("decal removed", GiStaleReason::Moved,
+              [&]() { CHECK(escene->removeDecal(decalNode), "decal: removeDecal succeeds"); }, 12);
+        escene->removeNode(decalNode);
+        frames(20);
+    }
+
+    // ---- A TEXTURE THAT ARRIVES LATE IS A LATE PROBE INPUT -------------------
+    // (clean-2 lane, 2026-09-13.) `setPbrTexture` stales the grid when the bind
+    // happens — but loadTexture only SCHEDULES the decode, so what the probes
+    // captured on that frame was a material wearing nothing, and the frame the
+    // pixels actually arrived staled nothing at all. The engine parks such a
+    // material and re-notes it at the frame-head drain, which is the only place
+    // a load becomes visible (Ogre has no per-texture completion callback).
+    {
+        CHECK(writeSolidTga("probe_inputs_late.tga", 1024, 40, 200, 60),
+              "late texture: a 1024x1024 image is written");
+        const MaterialId lateMat = escene->createPbrMaterial(PbrParams());
+        const NodeId lateNode = escene->createNode();
+        const MeshId lateMesh = escene->createMesh(enginetest::unitCubeMesh());
+        CHECK(lateMat && lateNode && lateMesh && escene->attachMesh(lateNode, lateMesh, lateMat),
+              "late texture: a cube to wear it");
+        escene->setNodeTransform(lateNode, Vec3(-2.6f, 1.0f, -2.6f), Quat(), Vec3(1, 1, 1));
+        frames(30);                                   // its arrival stales and catches up
+        const TextureId lateTex = escene->loadTexture("probe_inputs_late.tga", true);
+        CHECK(lateTex != 0, "late texture: loadTexture schedules it");
+        const bool streaming = !engine->texturesDoneStreaming();
+        const unsigned long long atBind = escene->giStatus().staleSerial;
+        CHECK(escene->setPbrTexture(lateMat, PbrTextureSlot::Albedo, lateTex),
+              "late texture: the bind applies");
+        const unsigned long long afterBind = escene->giStatus().staleSerial;
+        CHECK(afterBind > atBind, "late texture: the BIND stales the grid, as it always did");
+        frame();                                      // the frame head drains the load
+        const unsigned long long afterArrival = escene->giStatus().staleSerial;
+        std::printf("   late texture: streaming at bind=%s, serial %llu -> %llu -> %llu\n",
+                    streaming ? "yes" : "no (already resident)", atBind, afterBind, afterArrival);
+        if (streaming) {
+            CHECK(afterArrival > afterBind,
+                  "late texture: ...and its ARRIVAL stales the grid a second time, so the "
+                  "probes\n          re-capture the material with its texture on");
+        } else {
+            std::printf("   (the load completed inside the bind — nothing to re-stale; the "
+                        "re-stale path\n    is exercised whenever it does not, which is what "
+                        "the deadline exists for)\n");
+        }
+        frames(20);
+        CHECK(escene->giStatus().staleProbes == 0, "late texture: the grid caught up");
+        escene->removeNode(lateNode);
+        frames(20);
     }
 
     // =======================================================================

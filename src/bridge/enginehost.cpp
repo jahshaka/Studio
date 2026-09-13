@@ -362,6 +362,16 @@ bool EngineHost::start(QString &error)
     iris::graph::setStagingScene(
         reinterpret_cast<iris::graph::SceneHandle>(mEngine->documentGraphScene()));
 
+    // THE TRANSFORM-WRITE EPOCH, handed over beside the graph itself (clean-2
+    // lane, 2026-09-13). The document writes transforms straight into that
+    // shared scene graph, so nothing tells the renderer when a mesh moves and
+    // its GI movement scan walked every item's world AABB on EVERY frame of
+    // every probe-lit scene to find out (0.4 / 2.0 / 4.3 ms at 1k / 5k / 10k
+    // nodes, still or not). With the counter's address the scan runs only on
+    // frames where something was actually written; the pointer is to a
+    // process-lifetime atomic, read relaxed once a frame.
+    mEngine->setTransformWriteCounter(&iris::graph::transformWriteCounter());
+
     // The DEVICE BLOCK — SESSION_LOG_SPEC §4's two NEW header rows. It is a
     // block of its own, emitted HERE rather than in the startup header, for a
     // reason that is not going away: no render system — and therefore no
