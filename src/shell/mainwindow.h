@@ -405,58 +405,10 @@ public:
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
     void repopulateSceneTree();
 
-    iris::ShadowMapType evalShadowMapType(QString shadowType)
-    {
-        if (shadowType == "hard")
-            return iris::ShadowMapType::Hard;
-        if (shadowType == "soft")
-            return iris::ShadowMapType::Soft;
-        if (shadowType == "softer")
-            return iris::ShadowMapType::VerySoft;
-
-        return iris::ShadowMapType::None;
-    }
-
-    iris::LightType getLightTypeFromName(QString lightType)
-    {
-        if (lightType == "point")       return iris::LightType::Point;
-        if (lightType == "directional") return iris::LightType::Directional;
-        if (lightType == "spot")        return iris::LightType::Spot;
-
-        return iris::LightType::Point;
-    }
-
-    iris::LightNodePtr createLight(QJsonObject& nodeObj)
-    {
-        auto lightNode = iris::LightNode::create();
-
-        lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString()));
-        lightNode->intensity = (float) nodeObj["intensity"].toDouble(1.0f);
-        lightNode->distance = (float) nodeObj["distance"].toDouble(1.0f);
-        lightNode->spotCutOff = (float) nodeObj["spotCutOff"].toDouble(30.0f);
-        lightNode->color = IrisUtils::readColor(nodeObj["color"].toObject());
-        lightNode->setVisible(nodeObj["visible"].toBool(true));
-
-        //shadow data
-        auto shadowMap = lightNode->shadowMap;
-        shadowMap->bias = (float) nodeObj["shadowBias"].toDouble(0.0015f);
-        // ensure shadow map size isnt too big ro too small
-        auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
-        shadowMap->setResolution(res);
-        shadowMap->shadowType = evalShadowMapType(nodeObj["shadowType"].toString());
-
-        //TODO: move this to the sceneview widget or somewhere more appropriate
-        if (lightNode->lightType == iris::LightType::Directional) {
-            lightNode->icon = iris::Texture2D::load(":/icons/light.png");
-        }
-        else {
-            lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
-        }
-
-        lightNode->iconSize = 0.5f;
-
-        return lightNode;
-    }
+    // (evalShadowMapType / getLightTypeFromName / createLight — a SECOND scene
+    // reader that lived here, knew neither Area nor Sky nor the sun rows, and
+    // had no caller anywhere in the tree — are DELETED, SKY_LIGHT_SPEC.md §5
+    // item 5. SceneReader is the one reader.)
 
     /// Rewrites the four read-only Gameplay rows in the Shortcut Registry from
     /// the live InputMap (AVATAR_LOCOMOTION_SPEC §8.2). Called at setup and

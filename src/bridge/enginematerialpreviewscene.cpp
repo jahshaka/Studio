@@ -84,6 +84,12 @@ void EngineMaterialPreviewScene::buildDocument()
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(125, 125, 125));   // SceneWidget's initial clearColor
+    // A PREVIEW HAS NO SUN DISC (SKY_LIGHT_SPEC.md round-2 review item 9). Every
+    // preview document carries a colour sky, which is a REAL sky now — so it
+    // bakes a strip, six reflection faces and an IBL convolution, and would draw
+    // the disc wherever the preview's own light happens to point. A thumbnail is
+    // a photograph of an ASSET, not of a world with a sun in it.
+    mDocument->sunDiscVisible = false;
     // (The dead `setAmbientColor` that stood here is GONE with the field —
     // SKY_LIGHT_SPEC.md §5. This preview lights its ENGINE scene directly
     // through Engine::setAmbient and never calls applyEnvironment, so the

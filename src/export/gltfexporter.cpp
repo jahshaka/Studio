@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "export/gltfexporter.h"
 
+#include "irisgl/core/color.h"
+
 #include "export/walkers/scenewalker.h"
 #include "export/walkers/meshbufferreader.h"
 #include "export/walkers/materialtexturereader.h"
@@ -327,8 +329,11 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // (three's AdditiveBlending is SrcAlpha/One, so alpha scales the glow —
     // matching the engine's Fade-scaled SBT_ADD). Modulate ignores alpha.
     const float alpha = (pbr->alphaMode == 2 || pbr->alphaMode == 4) ? pbr->alpha : 1.0f;
-    mr["baseColorFactor"] = colorArray(float(bc.redF()) * bf, float(bc.greenF()) * bf,
-                                       float(bc.blueF()) * bf, alpha);
+    // glTF's baseColorFactor is LINEAR by spec and a document QColor is sRGB
+    // (SKY_LIGHT_SPEC.md §4), so it is DECODED on the way out — the same decode
+    // the renderer applies, which is what makes the viewer match the editor.
+    const iris::LinearColor bcl = iris::linearOf(bc);
+    mr["baseColorFactor"] = colorArray(bcl.r * bf, bcl.g * bf, bcl.b * bf, alpha);
 
     const QString baseSrc = textureSlotSource(pbr, "u_baseColorMap");
     if (!baseSrc.isEmpty()) {
@@ -441,9 +446,8 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         // metallic-roughness channel to land in (its RGB is a colour), and
         // inventing one would be a lie — the same call the importer used to
         // make in reverse.
-        mr["baseColorFactor"] = colorArray(float(convertedBase.redF()),
-                                           float(convertedBase.greenF()),
-                                           float(convertedBase.blueF()),
+        const iris::LinearColor cbl = iris::linearOf(convertedBase);
+        mr["baseColorFactor"] = colorArray(cbl.r, cbl.g, cbl.b,
                                            float(bc.alphaF()) * pbr->alpha);
         mr["metallicFactor"] = double(convertedMetal);
         mr["roughnessFactor"] = double(convertedRough);
@@ -480,7 +484,8 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     const float ei = pbr->emissiveIntensity;
     const bool emissiveOn = ei > 0.0f && (ec.redF() + ec.greenF() + ec.blueF()) > 0.0;
     if (emissiveOn) {
-        m["emissiveFactor"] = colorArray(float(ec.redF()), float(ec.greenF()), float(ec.blueF()));
+        const iris::LinearColor ecl = iris::linearOf(ec);
+        m["emissiveFactor"] = colorArray(ecl.r, ecl.g, ecl.b);
         if (ei > 1.0f) {
             c.useExtension("KHR_materials_emissive_strength");
             QJsonObject es; es["emissiveStrength"] = double(ei);
@@ -488,8 +493,8 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
             ext["KHR_materials_emissive_strength"] = es;
             m["extensions"] = ext;
         } else if (ei < 1.0f) {
-            m["emissiveFactor"] = colorArray(float(ec.redF()) * ei, float(ec.greenF()) * ei,
-                                             float(ec.blueF()) * ei);
+            const iris::LinearColor eil = iris::linearOf(ec);
+            m["emissiveFactor"] = colorArray(eil.r * ei, eil.g * ei, eil.b * ei);
         }
     }
     const QString emSrc = textureSlotSource(pbr, "u_emissiveMap");
@@ -632,9 +637,8 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         QJsonObject wf;
         wf["workflow"] = QString::fromLatin1(
             iris::PbrMaterial::workflowNames().value(pbr->workflow, "Metallic"));
-        wf["specularColor"] = colorArray(float(pbr->specularColor.redF()),
-                                         float(pbr->specularColor.greenF()),
-                                         float(pbr->specularColor.blueF()));
+        const iris::LinearColor scl = iris::linearOf(pbr->specularColor);
+        wf["specularColor"] = colorArray(scl.r, scl.g, scl.b);
         wf["ior"] = double(pbr->ior);
         wf["useFresnelColor"] = pbr->useFresnelColor;
         wf["fresnelColor"] = colorArray(float(pbr->fresnelColor.redF()),
@@ -685,7 +689,8 @@ int convertDefaultMaterial(Ctx &c, iris::DefaultMaterial *def, iris::FaceCulling
     m["name"] = QStringLiteral("default");
     QJsonObject mr;
     const QColor dc = def->getDiffuseColor();
-    mr["baseColorFactor"] = colorArray(float(dc.redF()), float(dc.greenF()), float(dc.blueF()), 1.0f);
+    const iris::LinearColor dcl = iris::linearOf(dc);
+    mr["baseColorFactor"] = colorArray(dcl.r, dcl.g, dcl.b, 1.0f);
     mr["metallicFactor"] = 0.0;
     const float shin = std::max(0.0f, std::min(def->getShininess(), 128.0f));
     mr["roughnessFactor"] = double(1.0f - std::sqrt(shin / 128.0f) * 0.9f);
@@ -1065,6 +1070,14 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             }
         } else if (kind == NodeKind::Light) {
             auto *light = static_cast<iris::LightNode *>(node.data());
+            // A SKY LIGHT IS NOT A NODE IN A glTF FILE (round-2 review item 3).
+            // It has no position, no direction and no punctual type; it is the
+            // scene's ambient, and it rides in the `jah` scene extras where the
+            // viewer applies it as its own ambient term (writeJahScene). Writing
+            // a transform for it would put an invisible empty at (-4, 4, 0) in
+            // every exported scene, and the punctual switch below would have
+            // made it a point light there.
+            if (light->lightType == iris::LightType::Sky) return -1;
             if (light->lightType == iris::LightType::Area) {
                 // No ratified glTF area-light extension — extras + a viewer-side
                 // RectAreaLight on the orientation shim (audit §1 "Area lights").
@@ -1109,8 +1122,9 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                     l["type"] = "point";
                     break;
                 }
-                l["color"] = colorArray(float(light->color.redF()), float(light->color.greenF()),
-                                        float(light->color.blueF()));
+                // KHR_lights_punctual colours are LINEAR too.
+                const iris::LinearColor lcl = iris::linearOf(light->color);
+                l["color"] = colorArray(lcl.r, lcl.g, lcl.b);
                 l["intensity"] = double(light->intensity * kLightIntensityScale);
                 if (light->lightType != iris::LightType::Directional && light->distance > 0.0f)
                     l["range"] = double(light->distance);

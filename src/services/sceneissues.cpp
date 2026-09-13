@@ -296,7 +296,8 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // ---- clear what the scene no longer justifies -------------------------
     // Only the kinds this scanner owns: an issue raised by a verb or by another
     // producer is not ours to forget.
-    static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak") };
+    static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak"),
+                                       QStringLiteral("sky.duplicate") };
     bool removed = false;
     for (int i = mIssues.size() - 1; i >= 0; --i) {
         if (!kScanned.contains(mIssues[i].kind)) continue;

@@ -194,6 +194,12 @@ void AvatarPreviewModel::buildDocument()
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(28, 30, 36));
+    // A PREVIEW HAS NO SUN DISC (SKY_LIGHT_SPEC.md round-2 review item 9). Every
+    // preview document carries a colour sky, which is a REAL sky now — so it
+    // bakes a strip, six reflection faces and an IBL convolution, and would draw
+    // the disc wherever the preview's own light happens to point. A thumbnail is
+    // a photograph of an ASSET, not of a world with a sun in it.
+    mDocument->sunDiscVisible = false;
     // NOTE: the room's ambient is the ENGINE scene's hemisphere
     // (AvatarPreviewScene::configureScene), not this: a preview host syncs the
     // mirror but never calls applyEnvironment, so a preview document's ambient

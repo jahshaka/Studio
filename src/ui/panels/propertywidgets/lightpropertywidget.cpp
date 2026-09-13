@@ -543,12 +543,17 @@ void LightPropertyWidget::refreshSunRows()
     sunReadout->show();
     forwardShadingPriority->show();
     forwardShadingPriority->setValue(lightNode->forwardShadingPriority);
-    sunAngle->show();
-    sunAngle->setValue(lightNode->sunAngle);
 
     auto scene = lightNode->getScene();
     auto sun = scene ? scene->sunLight() : iris::LightNodePtr();
     const bool isSun = sun && sun.data() == lightNode.data();
+    // SUN ANGLE IS THE SUN'S. A secondary directional draws no disc and casts
+    // no shadow, so a Sun Angle row on one would say nothing true — which is
+    // exactly what lightnode.h promises and what the row did not do (round-2
+    // review item 11). It follows the RESOLVER, like the readout below.
+    sunAngle->setVisible(isSun);
+    sunAngle->setValue(lightNode->sunAngle);
+
     const QString reason = scene ? scene->sunReason() : QStringLiteral("none");
     QString text;
     if (isSun && reason == QLatin1String("pinned"))

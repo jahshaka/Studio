@@ -348,40 +348,31 @@ int main(int argc, char **argv)
     }
 
     // ---- a SKY change --------------------------------------------------------
-    // NOT through input(), and the reason is a finding rather than a detail.
-    // Swapping one sky for another DESTROYS the previous sky's textures (the
-    // equirect or the six reflection faces), and OgreScene::destroyTexture
-    // calls invalidateGiCaches() before every texture dies — Instant Radiosity
-    // caches source images by raw TextureGpu*. So a sky-to-sky change is a
-    // FROM-SCRATCH GI build, not a probe re-capture, and always has been for
-    // the image, gradient and analytic skies. What changed in SKY_LIGHT_SPEC §2
-    // is that a SINGLE_COLOR sky is now a real sky with textures of its own, so
-    // this scene — which starts on a colour sky — takes that path too where it
-    // used to change from "no sky at all".
+    // A SKY CHANGE IS A PROBE INPUT AND NOTHING MORE, which is a thing this
+    // lane had to FIX rather than a thing it found working: swapping one sky
+    // for another destroys the previous sky's textures, and
+    // OgreScene::destroyTexture invalidated the GI caches before every texture
+    // died — so a sky change was a from-scratch GI build, and with a colour sky
+    // becoming a real sky (SKY_LIGHT_SPEC.md §2) every mouse-move on the World
+    // colour picker was one (measured on Showroom 2: 60 rebuilds for a 60-event
+    // drag; 0 after). The invalidation now happens only when the dying texture
+    // was actually BOUND to a material, which no sky texture ever is.
     //
-    // Asserted as what it IS: the grid is re-placed, the placement's own
-    // captures are exempt from the per-frame budget (they are synchronous, by
-    // construction), and the scene still settles to idle afterwards.
+    // The reason reported is `ambient`, not `sky`, and that is correct: the
+    // ambient IS the sky's own integral now, so a sky edit is two inputs in a
+    // row and the ambient is the second one. The assertion below is the one
+    // that matters either way — the probes re-capture and nothing is re-placed.
     {
         const unsigned long long rebuilds = escene->giStatus().rebuilds;
-        doc->skyType = iris::SkyType::GRADIENT;
-        doc->gradientTop = QColor(40, 60, 200);
-        doc->gradientMid = QColor(120, 120, 160);
-        doc->gradientBot = QColor(30, 30, 30);
-        doc->gradientOffset = 0.5f;
-        frame();
-        const GiStatus st = escene->giStatus();
-        std::printf("-- sky: reason=%s stale=%d captured=%d rebuilds %llu -> %llu\n",
-                    reasonName(st.lastStaleReason), st.staleProbes, st.probeCapturesLastFrame,
-                    rebuilds, st.rebuilds);
-        CHECK(st.rebuilds == rebuilds + 1,
-              "sky: swapping one sky for another REBUILDS the GI (the old sky's textures die, "
-              "and IR caches images by texture pointer)");
-        CHECK(st.lastStaleReason == GiStaleReason::Rebuild,
-              "sky: ...and says so — the reason is the rebuild, not the sky");
-        worstOver(12);
-        CHECK(escene->giStatus().staleProbes == 0, "sky: the grid has caught up");
-        CHECK(worstOver(20) == 0, "sky: ...and then the scene IDLES (20 frames, zero captures)");
+        input("sky", GiStaleReason::Sky, [&]() {
+            doc->skyType = iris::SkyType::GRADIENT;
+            doc->gradientTop = QColor(40, 60, 200);
+            doc->gradientMid = QColor(120, 120, 160);
+            doc->gradientBot = QColor(30, 30, 30);
+            doc->gradientOffset = 0.5f;
+        }, 40);
+        CHECK(escene->giStatus().rebuilds == rebuilds,
+              "sky: swapping one sky for another costs NO from-scratch GI build");
     }
 
     // ---- a LIGHT COLOUR change -----------------------------------------------

@@ -159,6 +159,18 @@ int main(int argc, char **argv)
     modulate->setMaterial(modulateMat);
     scene->rootNode->addChild(modulate);
 
+    // A SKY LIGHT: the scene's ambient (SKY_LIGHT_SPEC.md §2). glTF has no such
+    // punctual type, so it must produce NO node and NO punctual light and must
+    // ride in the scene extras instead — the case round-2 review item 3 asked
+    // for, and the bug it names (a Sky Light fell through to `default: "point"`
+    // and became a point light at its node's position).
+    auto skyLight = iris::LightNode::create();
+    skyLight->setName("Sky Light");
+    skyLight->setLightType(iris::LightType::Sky);
+    skyLight->intensity = 1.25f;
+    skyLight->color = QColor(200, 220, 255);
+    scene->rootNode->addChild(skyLight);
+
     // lights: point + spot (+softness) + area
     auto point = iris::LightNode::create();
     point->setName("point");
@@ -244,7 +256,7 @@ int main(int argc, char **argv)
     // nodes: 2 meshes + 2 punctual shims + 2 punctual lights... count explicitly:
     // cube, glass, point(+shim), spot(+shim), area(+shim), camera = 9
     const QJsonArray nodes = root["nodes"].toArray();
-    CHECK(nodes.size() == 12, "12 nodes (9 document + 3 orientation shims)");
+    CHECK(nodes.size() == 12, "12 nodes (9 document + 3 orientation shims) — the SKY LIGHT\n          is NOT among them");
     CHECK(root["meshes"].toArray().size() == 5, "5 meshes");
     CHECK(root["materials"].toArray().size() == 5, "5 materials");
 
@@ -369,7 +381,49 @@ int main(int argc, char **argv)
 
     const QJsonArray lights = root["extensions"].toObject()["KHR_lights_punctual"]
                                   .toObject()["lights"].toArray();
-    CHECK(lights.size() == 2, "2 punctual lights (area rides extras)");
+    CHECK(lights.size() == 2, "2 punctual lights (area rides extras, and so does the SKY LIGHT)");
+    for (const auto &lv : lights)
+        CHECK(lv.toObject()["type"].toString() != "point" ||
+                  lv.toObject()["intensity"].toDouble() > 0.0,
+              "no punctual light is a silent fall-through");
+    // THE SKY LIGHT IS IN THE SCENE EXTRAS, not in the node list.
+    {
+        const QJsonObject jahScene = root["scenes"].toArray()[0].toObject()["extras"]
+                                         .toObject()["jah"].toObject();
+        const QJsonObject sl = jahScene["skyLight"].toObject();
+        CHECK(!sl.isEmpty(), "the Sky Light rides in the scene's jah extras");
+        CHECK(std::abs(sl["intensity"].toDouble() - 1.25) < 1e-6,
+              "...with its strength");
+        CHECK(sl["tint"].toString().compare(QStringLiteral("#c8dcff"), Qt::CaseInsensitive) == 0,
+              "...and its tint");
+        bool skyNode = false;
+        for (const auto &nv : nodes)
+            if (nv.toObject()["name"].toString() == QLatin1String("Sky Light")) skyNode = true;
+        CHECK(!skyNode, "...and NO node is written for it");
+    }
+    // THE COLOUR SPACE, in one number (round-2 review item 3). glTF's
+    // baseColorFactor is LINEAR by spec and a document QColor is sRGB, so the
+    // textured cube's picked (200, 40, 40) exports as (0.5776, 0.0185, 0.0185)
+    // — the same values the renderer shades with, which is what makes the
+    // viewer match the editor. It used to export the raw 0.784.
+    {
+        bool checkedColour = false;
+        for (const auto &mv : root["materials"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            if (m.contains("alphaMode")) continue;          // the opaque one: the cube
+            const QJsonArray bcf = m["pbrMetallicRoughness"].toObject()["baseColorFactor"].toArray();
+            if (bcf.size() != 4) continue;
+            if (std::abs(bcf[0].toDouble() - 1.0) < 1e-6) continue;   // the white ones
+            std::printf("    cube baseColorFactor = %.4f %.4f %.4f (want 0.5776 0.0212 0.0212)\n",
+                        bcf[0].toDouble(), bcf[1].toDouble(), bcf[2].toDouble());
+            // 200 sRGB is 0.5776 linear; 40 sRGB is 0.0212. (The raw values
+            // this replaces were 0.784 and 0.157.)
+            checkedColour = std::abs(bcf[0].toDouble() - 0.5776) < 0.002 &&
+                            std::abs(bcf[1].toDouble() - 0.0212) < 0.002;
+            CHECK(checkedColour, "a picked colour exports LINEAR, as glTF specifies");
+        }
+        CHECK(checkedColour, "the cube's material was found and checked");
+    }
     bool spotOk = false;
     for (const auto &lv : lights) {
         const QJsonObject l = lv.toObject();

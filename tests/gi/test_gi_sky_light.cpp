@@ -327,6 +327,39 @@ int main(int argc, char **argv)
         for (int f = 0; f < 4; ++f) frame();
         CHECK(brightest(ox, oy) > lum(offSun) + 0.25f, "6d. and switching it back restores it");
 
+        // THE DISC SURVIVES A SKY THAT WENT AWAY AND CAME BACK. destroySky()
+        // takes the disc with it (a NoSky description is a full clear), so the
+        // engine has to FORGET what it last pushed — otherwise the next push is
+        // value-equal to a disc that no longer exists and the sun stays missing
+        // until something else moves it. (Round-2 review item 5.)
+        {
+            const auto skyWas = doc->skyType;
+            doc->skyType = iris::SkyType::EQUIRECTANGULAR;   // no texture: NoSky
+            doc->setSkyTexture(iris::Texture2DPtr());
+            for (int f = 0; f < 4; ++f) frame();
+            doc->skyType = skyWas;
+            for (int f = 0; f < 6; ++f) frame();
+            int rx = 0, ry = 0;
+            const float back = brightest(rx, ry);
+            std::printf("   after NoSky and back, brightest %.3f at (%d,%d)\n", back, rx, ry);
+            CHECK(back > lum(offSun) + 0.25f,
+                  "6g. the disc comes back after the sky went away and returned");
+        }
+
+        // A ZERO ANGULAR SIZE IS NOT A DISC (round-2 review item 6): the
+        // shader's edge is a smoothstep between two equal numbers at radius 0.
+        {
+            const float was = sun->sunAngle;
+            sun->sunAngle = 0.0f;
+            for (int f = 0; f < 4; ++f) frame();
+            int zx = 0, zy = 0;
+            const float zero = brightest(zx, zy);
+            CHECK(std::fabs(zero - lum(offSun)) < 0.02f,
+                  "6h. sunAngle 0 draws no disc at all (not a full-screen flash)");
+            sun->sunAngle = was;
+            for (int f = 0; f < 4; ++f) frame();
+        }
+
         // THE DISC AND THE PROBES (owner pick 4, both options). `inProbes`
         // decides whether the disc carries kVisibleBit beside its own channel,
         // and kVisibleBit is exactly what the probe-capture passes ask for.

@@ -64,6 +64,7 @@
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/core/color.h"
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
@@ -247,11 +248,18 @@ int main(int argc, char **argv)
                   "2: KHR_materials_specular imports as Specular-as-Fresnel");
             CHECK(specExt->useFresnelColor,
                   "2: ... with F0 authored directly (specularColorFactor is an F0 tint)");
-            // [1.0, 0.5, 0.25] * specularFactor 0.5 = [0.5, 0.25, 0.125]
-            CHECK(std::abs(specExt->fresnelColor.red() - 128) <= 2 &&
-                  std::abs(specExt->fresnelColor.green() - 64) <= 2 &&
-                  std::abs(specExt->fresnelColor.blue() - 32) <= 2,
-                  "2: ... F0 = specularColorFactor * specularFactor");
+            // [1.0, 0.5, 0.25] * specularFactor 0.5 = [0.5, 0.25, 0.125], and
+            // like every other imported colour that is LINEAR at its source and
+            // sRGB in the document (round-2 review item 2) — so the assertion
+            // is on the round trip, not on the stored byte.
+            const iris::LinearColor f0 = iris::linearOf(specExt->fresnelColor);
+            std::printf("    spec_ext F0 stored %s decodes to %.4f %.4f %.4f "
+                        "(want 0.5 0.25 0.125)\n",
+                        specExt->fresnelColor.name().toUtf8().constData(), f0.r, f0.g, f0.b);
+            CHECK(std::abs(f0.r - 0.5f) < 2.0f / 255.0f &&
+                  std::abs(f0.g - 0.25f) < 2.0f / 255.0f &&
+                  std::abs(f0.b - 0.125f) < 2.0f / 255.0f,
+                  "2: ... F0 = specularColorFactor * specularFactor, and it RENDERS at that");
             CHECK(nearly(specExt->roughnessFactor, 0.3f),
                   "2: ... and the metallic-roughness base's roughness is kept");
         }
@@ -301,8 +309,22 @@ int main(int argc, char **argv)
             CHECK(nearly(mrDefault->metallicFactor, 1.0f),
                   "2: a PRESENT pbrMetallicRoughness block keeps glTF's metallicFactor default 1");
             CHECK(nearly(mrDefault->roughnessFactor, 0.4f), "2: ... and its authored roughness");
-            CHECK(std::abs(mrDefault->baseColor.red() - 204) <= 2,
-                  "2: ... and its authored base colour (0.8 -> 204)");
+            // THE COLOUR SPACE, at the boundary where it matters (round-2
+            // review item 2). glTF's baseColorFactor is LINEAR by spec and a
+            // document QColor is sRGB (SKY_LIGHT_SPEC.md §4), so an authored
+            // 0.8 is STORED as 232 and DECODES back to 0.8 on its way to the
+            // renderer. It used to be stored as 204 and decoded to 0.604 — a
+            // whole gamma of darkening on every flat-coloured import, which no
+            // assertion on the stored byte alone would have caught. Asserted as
+            // the ROUND TRIP, which is the thing that has to hold: whatever the
+            // encoding, the material renders at the value the file authored.
+            const iris::LinearColor mrLinear = iris::linearOf(mrDefault->baseColor);
+            std::printf("    mr_default: stored %s, decodes to %.4f (authored 0.8)\n",
+                        mrDefault->baseColor.name().toUtf8().constData(), mrLinear.r);
+            CHECK(std::abs(mrLinear.r - 0.8f) < 2.0f / 255.0f,
+                  "2: ... and its authored base colour RENDERS at 0.8, whatever it is stored as");
+            CHECK(std::abs(mrDefault->baseColor.red() - 232) <= 2,
+                  "2: ... which means the document stores the sRGB encoding of it (232)");
         }
 
         // --- DEFECT 3: KHR_materials_unlit.
