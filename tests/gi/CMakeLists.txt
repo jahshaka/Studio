@@ -348,6 +348,27 @@ add_test(NAME gi.hidden_volume COMMAND test_gi_hidden_volume
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.hidden_volume PROPERTIES TIMEOUT 180 LABELS "engine")
 
+# gi.volume_edge — THE AMBIENT MUST NOT STEP AT THE EDGE OF THE LIT VOLUME
+# (ledger 177 defect A, the owner's "black rectangle"): a flat scene ambient
+# reaches HlmsPbs through setAmbient's 1/pi scale and reached VctLighting
+# unscaled, so the same setting was pi apart on the two sides of the volume
+# boundary. Its own binary (process-wide HlmsPbs binding) like every GI suite.
+add_executable(test_gi_volume_edge test_gi_volume_edge.cpp)
+set_target_properties(test_gi_volume_edge PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_volume_edge PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_volume_edge PRIVATE JahshakaEngine)
+add_dependencies(test_gi_volume_edge JahshakaEngineMedia)
+add_test(NAME gi.volume_edge COMMAND test_gi_volume_edge
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.volume_edge PROPERTIES TIMEOUT 180 LABELS "engine")
+
 # gi.mobility — MOVERS LEAVE THE STILL-WORLD LAYER (REALTIME_REFLECTIONS_SPEC
 # §3.3, lane R2). A movable object is drawn by the per-frame layers (view,
 # planar mirror, SSR) and casts shadows there in the frame it moves, and is

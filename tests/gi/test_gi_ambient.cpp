@@ -22,10 +22,14 @@
 //   2. The SAME scene, same ambient, with and without VCT, reads within
 //      tolerance. This is the assertion that catches a WRONG ambient as well as
 //      a missing one — in particular the 1/pi trap: `Scene::setAmbient` scales
-//      the flat case by 1/pi to reproduce HlmsPbs' own discrepancy between its
-//      AmbientFixed and AmbientHemisphere paths, and pushing THAT value into
-//      VctLighting (which has no such split) would make a VCT scene pi times
-//      brighter than the same scene without it.
+//      the FLAT case (upper == lower) by 1/pi to reproduce HlmsPbs' own
+//      discrepancy between its AmbientFixed and AmbientHemisphere paths, and
+//      that scale must reach BOTH arms or the same setting means two different
+//      brightnesses in one frame. It used to reach only the SH one, which made
+//      a flat ambient pi times brighter the moment a voxel volume was bound and
+//      printed the volume's footprint on any surface crossing its edge (ledger
+//      177 defect A; the flat case is gi.volume_edge's, this suite's pair is
+//      deliberately a hemisphere one).
 //   3. The shader variant does not flip under a colour drag. `needsAmbientHemi
 //      sphere()` is a memcmp of the two hemispheres and its result is a shader
 //      PROPERTY, so an ambient that happens to be flat for one frame recompiles
