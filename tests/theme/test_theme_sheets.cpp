@@ -202,7 +202,24 @@ int main(int argc, char **argv)
             walkQlementine(mcp, QStringLiteral("dialog ") + name, &themeOwned);
             mcp.runScript(QStringLiteral("app.dialog('%1', false)").arg(name));
             settle(mcp, 300);
+            // AND A SECOND TIME, after the first has painted and closed. The
+            // sample browser rebuilt its content on every open and tore the
+            // old content down with a qDeleteAll over a snapshot of its
+            // children — a double delete once qlementine's focus frames became
+            // children of the window that die with the widget they frame
+            // (owner's crash, 2026-09-13). A dialog that survives one open in
+            // a script proves nothing about the second: the frames attach on
+            // the first paint, which is why four opens inside ONE script never
+            // reproduced it.
+            const QJsonObject again =
+                readObject(mcp, QStringLiteral("app.dialog('%1')").arg(name));
+            CHECK(again.value("open").toBool() && jahshaka.state() == QProcess::Running,
+                  QStringLiteral("dialog %1 opens a SECOND time in the same session").arg(name));
+            settle(mcp, 300);
+            mcp.runScript(QStringLiteral("app.dialog('%1', false)").arg(name));
+            settle(mcp, 300);
         }
+        CHECK(jahshaka.state() == QProcess::Running, "the app survived every dialog opened twice");
         CHECK(themeOwned > 0, "the walk sees the theme's own chrome sheets (it is really walking)");
         const QJsonObject mainSheet = readObject(
             mcp, QStringLiteral("app.styleSheets({window: 'MainWindow'}).sheets"

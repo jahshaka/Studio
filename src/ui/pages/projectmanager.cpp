@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <memory>
 
 #include <QtConcurrent/QtConcurrent>
+#include <QPointer>
 #include <QActionGroup>
 #include <QDebug>
 #include <QDesktopServices>
@@ -952,7 +953,23 @@ QDialog *ProjectManager::prepareSampleBrowser()
     // widgets (invisible while both tabs held the same content; not invisible
     // once a port lands between two opens) and leak a whole tile list. Tear
     // the old content down first.
-    qDeleteAll(sampleDialog.findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly));
+    //
+    // THROUGH GUARDED POINTERS (owner's crash, 2026-09-13 — a SIGSEGV on the
+    // SECOND open of this browser in a session, PC in heap memory). The
+    // snapshot below is not a list of independent objects: since the qlementine
+    // fork's fix of 2026-09-08 every focusable widget's QFocusFrame is a direct
+    // child of the WINDOW (QFocusFrame::setWidget reparents it there) and is
+    // deleted by the widget it frames when that widget dies — so deleting the
+    // tab widget here took its tile lists' frames with it, and the loop then
+    // deleted two entries of its own snapshot a second time. A QPointer is
+    // nulled by ~QObject, so a child that has already gone is simply skipped.
+    // (deleteLater would also survive the cascade, but it defers past the
+    // setLayout below and the old layout must be gone before it.)
+    QList<QPointer<QWidget>> stale;
+    for (QWidget *w : sampleDialog.findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly))
+        stale.append(w);
+    for (const QPointer<QWidget> &w : std::as_const(stale))
+        delete w.data();
     delete sampleDialog.layout();
     sampleDialog.setLayout(layout);
     sampleDialog.setFixedSize(sampleDialog.sizeHint());
