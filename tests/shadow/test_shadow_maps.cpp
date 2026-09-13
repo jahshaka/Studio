@@ -1487,6 +1487,73 @@ static void t3x_one_rebuild_per_open(Engine *e, View *v)
     e->destroyScene(r.scene);
 }
 
+// T3y — A WORLD THAT IS STILL BINDING REBUILDS NOTHING (F1, round 2).
+//
+// The coalescing was ASYMMETRIC. `deriveShadowMapCount` counted lamps from
+// scenesFeedingEnabledViews — which only wants an ENABLED view bound to the
+// scene, no workspace required — and fired after three stable frames, carrying
+// whatever `mShadowClearFlipWanted` said. But the flip publishes that flag only
+// while it is itself PRESENTING (View::framesPresented > 0, which notePresented
+// advances only when the view is enabled AND has a workspace AND a scene). So a
+// view that is bound but has not put pixels on its target yet — the whole of an
+// open, and longer whenever the target is not ready — got a GROWTH rebuild with
+// the old clear strategy, and then the FLIP rebuilt a second time a few
+// presented frames later. Two rebuilds again; and the first one sat inside the
+// pre-present window the sun lane moved the flip OUT of on 2026-09-13 (3-10
+// `VUID-vkCmdDraw-None-09600` image-layout errors per boot, the texture
+// streamer racing the workspace recreate).
+//
+// T3x cannot see it: its view presents on frame 1, so the growth's third
+// debounce frame already has a true flag. This case holds `framesPresented` at
+// zero across the whole debounce window the honest way — `setScene` resets the
+// counter (OgreView::setScene: "a new scene means nothing of it has been drawn
+// yet"), which is exactly the state a binding world is in — and then lets go.
+// ONE rebuild, and it lands after the world is up.
+static void t3y_binding_world_rebuilds_nothing(Engine *e, View *v)
+{
+    std::printf("-- T3y: an atlas rebuild waits for the first present, and then there is only one\n");
+    CHECK(e->shadowStatus().atlasRebuilds == 0u, "the engine has not rebuilt its atlas yet");
+    e->setShadowMapBudget(8u);
+    CacheRoom r = buildCacheRoom(e, v, "t3y");     // three casting point lamps
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+
+    // SIX frames of "still binding": the view stays enabled and bound (so the
+    // derivation counts its lamps every frame) but its presented count is put
+    // back to zero before each one, which is what a world that has not drawn
+    // yet looks like from here. Six is twice the derivation's debounce.
+    for (int i = 0; i < 6; ++i) {
+        v->setScene(nullptr);
+        v->setScene(r.scene);
+        CameraDesc c;
+        c.position = Vec3(0.0f, kCamHeight, 0.01f);
+        c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);
+        c.fovDegrees = 60.0f;
+        v->setCamera(c);
+        v->setShadows(true);
+        e->renderOneFrame();
+    }
+    const unsigned binding = e->shadowStatus().atlasRebuilds;
+    std::printf("    while binding (6 frames, framesPresented reset each): %u rebuild(s)\n", binding);
+    CHECK(binding == 0u, "nothing rebuilds the atlas while the world is still binding (%u)", binding);
+
+    // Now let it be up. Both answers settle together, in ONE rebuild.
+    render(e, 40);
+    const ShadowStatus up = e->shadowStatus();
+    std::printf("    once presenting: %u rebuild(s), %u maps, viewCached %d\n",
+                up.atlasRebuilds, up.focusedMaps, int(up.viewCached));
+    CHECK(up.atlasRebuilds == 1u,
+          "the world coming up costs exactly ONE atlas rebuild (%u)", up.atlasRebuilds);
+    CHECK(up.focusedMaps >= 3u && up.viewCached,
+          "...carrying BOTH answers: %u maps and the per-map clears the cache needs (viewCached %d)",
+          up.focusedMaps, int(up.viewCached));
+    render(e, 120);
+    CHECK(e->shadowStatus().atlasRebuilds == 1u,
+          "and it stays at one (%u)", e->shadowStatus().atlasRebuilds);
+    Image img;
+    CHECK(v->readPixels(img) && meanLum(img) > 1.0, "the room renders (%.1f mean)", meanLum(img));
+    e->destroyScene(r.scene);
+}
+
 // T3p5 — A FIFTH LAMP DOES NOT UNCACHE EVERY PROBE (E2 review, ledger 104/121).
 //
 // The probe-capture shadow node's focused count is capped at four whatever the
@@ -1809,10 +1876,13 @@ int main(int argc, char **argv)
     // be seen on a VIRGIN atlas — and its three lamps would grow that atlas to
     // four maps, which the cases below (T0/T2/T4, "the atlas never shrinks")
     // need not to have happened yet.
-    if (only == "t3x") { t3x_one_rebuild_per_open(engine.get(), v);
-                         engine.reset();
-                         std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
-                         return failures ? 1 : 0; }
+    if (only == "t3x" || only == "t3y") {
+        if (only == "t3x") t3x_one_rebuild_per_open(engine.get(), v);
+        else               t3y_binding_world_rebuilds_nothing(engine.get(), v);
+        engine.reset();
+        std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
+        return failures ? 1 : 0;
+    }
     if (only.empty() || only == "t0")  t0_light_path_parity(engine.get(), v);
     if (only.empty() || only == "t2")  t2_two_casters_keep_the_old_atlas(engine.get(), v);
     if (only.empty() || only == "t4")  t4_over_budget(engine.get(), v);

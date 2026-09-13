@@ -66,3 +66,12 @@ set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")
 add_test(NAME shadow.atlas_rebuilds COMMAND test_shadow_maps t3x
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# shadow.atlas_binding — T3y, the other half of the same contract: nothing
+# rebuilds the atlas while a world is still BINDING (no view has presented), and
+# when it does come up the count and the clear strategy settle in ONE rebuild.
+# Its own process for T3x's reason — a virgin atlas is the only place an open
+# can be observed.
+add_test(NAME shadow.atlas_binding COMMAND test_shadow_maps t3y
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadow.atlas_binding PROPERTIES TIMEOUT 180 LABELS "engine")

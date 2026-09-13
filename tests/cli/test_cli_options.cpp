@@ -94,6 +94,34 @@ int main(int argc, char **argv)
         CHECK(o.errors.size() == 1, "a trailing-garbage port is refused whole");
     }
     {
+        // A SPACE IS A QUOTING MISTAKE, not a value to be salvaged (F4). The
+        // parser used to trim first, so these two were accepted while the code
+        // beside them said "no spaces".
+        const CliOptions o = parsed({ "--mcp-port= 80" });
+        CHECK(o.errors.size() == 1, "a leading space is refused, not trimmed away");
+    }
+    {
+        const CliOptions o = parsed({ "--mcp-port=80 " });
+        CHECK(o.errors.size() == 1, "a trailing space is refused, not trimmed away");
+    }
+    {
+        // A BARE --mcp-port used to be dropped on the floor: the app started,
+        // served nothing, and the caller waited for a token line that never
+        // came (F4).
+        const CliOptions o = parsed({ "--mcp-port" });
+        CHECK(o.errors.size() == 1 && o.mcpServe,
+              "a bare --mcp-port with no value is refused, not ignored (%d error(s), serve=%d)",
+              int(o.errors.size()), int(o.mcpServe));
+        if (!o.errors.isEmpty()) std::printf("info: %s\n", qPrintable(o.errors.first()));
+    }
+    {
+        // ...but a bare --mcp-port as the LAST argument is the only ambiguous
+        // spelling; with a value after it nothing changed.
+        const CliOptions o = parsed({ "--mcp-port", "8639", "--headless" });
+        CHECK(o.errors.isEmpty() && o.mcpPort == 8639 && o.headlessScript,
+              "the two-token spelling still consumes exactly one token");
+    }
+    {
         // THE SEEN-FLAG SURVIVES A REFUSAL on purpose: main() exits on the
         // error, so nothing downstream reads mcpPort — but a future caller that
         // looks at mcpServe first must not be told "MCP was never asked for".

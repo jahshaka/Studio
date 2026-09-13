@@ -30,7 +30,11 @@ namespace {
 void takePort(CliOptions &o, const char *text)
 {
     o.mcpServe = true;
-    const QByteArray raw = QByteArray(text).trimmed();
+    // NO trimmed() (F4, round 2): it would have made " 80" and "80 " legal
+    // while this comment said they were not, and a port with a space in it is a
+    // quoting mistake in the caller's command line — the kind of thing that is
+    // worth a message rather than a guess.
+    const QByteArray raw(text);
     bool digits = !raw.isEmpty();
     for (char c : raw) if (c < '0' || c > '9') digits = false;   // no sign, no spaces, no suffix
     bool ok = false;
@@ -55,9 +59,18 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) o.scriptPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
-        // 0 is EPHEMERAL, not "off" — see CliOptions::mcpServe.
+        // 0 is EPHEMERAL, not "off" — see CliOptions::mcpServe. A bare
+        // `--mcp-port` with nothing after it is REFUSED rather than ignored
+        // (F4, round 2): silently dropping it would start an app the caller
+        // believes is serving MCP, and the caller then waits for a token line
+        // that never comes.
         else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) takePort(o, argv[i] + 11);
-        else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) takePort(o, argv[++i]);
+        else if (qstrcmp(argv[i], "--mcp-port") == 0) {
+            if (i + 1 < argc) takePort(o, argv[++i]);
+            else { o.mcpServe = true;
+                   o.errors << QStringLiteral("--mcp-port: needs a port number after it "
+                                              "(0 for an ephemeral port, or 1-65535)"); }
+        }
         else if (qstrcmp(argv[i], "--clear-shader-cache") == 0) o.clearShaderCache = true;
         else if (qstrncmp(argv[i], "--data-root=", 12) == 0) o.dataRoot = QString::fromLocal8Bit(argv[i] + 12);
         else if (qstrcmp(argv[i], "--data-root") == 0 && i + 1 < argc) o.dataRoot = QString::fromLocal8Bit(argv[++i]);

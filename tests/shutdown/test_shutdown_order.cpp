@@ -20,6 +20,7 @@
 // is the whole point, and steps 4-8 shifted up by one.
 #include "mcpharness.h"
 
+#include <QFile>
 #include <QRegularExpression>
 #include <QThread>
 
@@ -168,6 +169,53 @@ int main(int argc, char **argv)
         if (!tail || !finished || doomed.exitStatus() != QProcess::NormalExit)
             std::printf("---- doomed run tail ----\n%s\n-------------------------\n",
                         dlog.right(4000).constData());
+    }
+
+    // ---- THE OTHER CLI EXITS (ledger 150, round 2) ------------------------
+    // Three more ways out of main() reached the exit-handler chain with a live
+    // engine: --dump-api-docs, an unreadable --script file, and a --script run
+    // whose engine selftest refuses to start. All three go through
+    // finalizeAppExit now, which is what steps 4-8 below assert. The engine
+    // selftest path is not driven here (it needs a broken display to refuse).
+    {
+        const QString docs = QDir(QDir::tempPath()).filePath(
+            QStringLiteral("jah-shutdown-order-api-%1.md").arg(QCoreApplication::applicationPid()));
+        QFile::remove(docs);
+        struct Case { const char *what; QStringList args; int rc; } cases[] = {
+            { "--dump-api-docs", QStringList{ QStringLiteral("--dump-api-docs"), docs }, 0 },
+            { "--script on a file that does not exist",
+              QStringList{ QStringLiteral("--script"),
+                           QStringLiteral("/nonexistent/jahshaka-shutdown-order.js") }, 1 },
+        };
+        for (const Case &c : cases) {
+            std::printf("-- CLI exit: %s must still tear down in order\n", c.what);
+            QProcess p;
+            p.setProcessChannelMode(QProcess::MergedChannels);
+            p.start(QStringLiteral(JAHSHAKA_BINARY), c.args);
+            const bool started = p.waitForStarted(15000);
+            CHECK(started, "the run started");
+            const bool finished = started && p.waitForFinished(kExitBudgetMs);
+            QByteArray out = p.readAll();
+            CHECK(finished, "it exited within the budget");
+            if (!finished) { p.kill(); p.waitForFinished(5000); continue; }
+            if (p.exitStatus() != QProcess::NormalExit || p.exitCode() != c.rc)
+                std::printf("info: status %d code %d\n", int(p.exitStatus()), p.exitCode());
+            CHECK(p.exitStatus() == QProcess::NormalExit, "it exited NORMALLY (no signal)");
+            CHECK(p.exitCode() == c.rc, "...with the expected exit code");
+            CHECK(!out.contains("Jahshaka crashed"), "no crash backtrace was written");
+            QVector<int> st;
+            QRegularExpression re2(QStringLiteral(R"(\[shutdown\] step (\d)/8 ([^\n]*))"));
+            auto it2 = re2.globalMatch(QString::fromUtf8(out));
+            while (it2.hasNext()) st.append(it2.next().captured(1).toInt());
+            std::printf("info: steps:");
+            for (int n : st) std::printf(" %d", n);
+            std::printf("\n");
+            const bool ok = (st == QVector<int>{ 4, 5, 6, 7, 8 });
+            CHECK(ok, "it records the ordered tail 4,5,6,7,8 exactly once each");
+            if (!ok) std::printf("---- tail ----\n%s\n--------------\n",
+                                 out.right(3000).constData());
+        }
+        QFile::remove(docs);
     }
 
     if (failures) {

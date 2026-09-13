@@ -357,19 +357,22 @@ int main(int argc, char *argv[])
     // then survives its own main window (the headless-zombie bug family).
     splash.finish(&window);
 
-    // The two CLI paths that do NOT go through finalizeAppExit get their close
-    // bracket here, so no exit route leaves a file that looks like a crash.
+    // --engine-selftest releases the engine host itself, through the RAII guard
+    // in selftestrunner.cpp, and writes its own close bracket here.
     if (!cli.selftestPng.isEmpty()) {
         const int rc = runEngineSelftest(window, app, cli.selftestPng);
         JahLog::stop(QStringLiteral("engine selftest, exit code %1").arg(rc));
         return rc;
     }
 
-    if (!cli.dumpDocsPath.isEmpty()) {
-        const int rc = runDumpApiDocs(window, cli.dumpDocsPath);
-        JahLog::stop(QStringLiteral("dump-api-docs, exit code %1").arg(rc));
-        return rc;
-    }
+    // --dump-api-docs GOES THROUGH THE ORDERED EXIT (ledger 150, round 2). It
+    // used to return straight out with a live EngineHost, leaving the engine to
+    // be torn down by the exit-handler chain — after Qt, after the database and
+    // after the engine library's own statics, which is the shape that killed a
+    // run in TextureCache::save. finalizeAppExit records step 4, stops the
+    // watchdog and the monitor, releases the host and writes the close bracket.
+    if (!cli.dumpDocsPath.isEmpty())
+        return finalizeAppExit(runDumpApiDocs(window, cli.dumpDocsPath));
 
     if (!cli.scriptPath.isEmpty())
         return runScriptFile(window, app, cli.scriptPath, cli.headlessScript);
