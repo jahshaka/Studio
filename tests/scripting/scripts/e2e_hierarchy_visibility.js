@@ -73,13 +73,13 @@ assert(!hits(0, tall), "a part under the hidden root takes no click");
 var v = vis(tall);
 assert(v.visible === true && v.visibleInScene === false,
        "the part's own flag is untouched; it is not visible in the scene " + J(v));
-// The World panel's Fit button (world.fitGiBounds) agrees with the renderer:
-// a part hidden by its root has no extent to pin a volume to. A refusal
-// writes nothing, so the automatic fit below is untouched.
+// There is no longer any way to pin a volume by hand (owner decision D8:
+// world.fitGiBounds, the panel's Fit button and the bounds keys are deleted) —
+// the reading above IS the whole surface, and it is the renderer's own fit.
 var fitThrew = "";
-try { world.fitGiBounds({ nodes: [tall] }); } catch (e) { fitThrew = String(e); }
-assert(fitThrew.indexOf("fitGiBounds") >= 0,
-       "fitGiBounds refuses a part hidden by its root: " + fitThrew);
+try { world.gi({ boundsMin: { x: 0, y: 0, z: 0 } }); } catch (e) { fitThrew = String(e); }
+assert(fitThrew.indexOf("boundsMin") >= 0,
+       "world.gi refuses a bounds pin by name: " + fitThrew);
 
 // ---- 3. show the ROOT: the parts come back, the one the user hid does not --
 assert(node.setProperty(root, "visible", true), "show the root");

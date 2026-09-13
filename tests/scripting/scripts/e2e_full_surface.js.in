@@ -36,12 +36,21 @@ assert(near(wf.density, 0.05) && near(wf.heightDensity, 0.02) && near(wf.heightF
        "exponential + height fog round-trip");
 assert(near(w.gravity, 12), "gravity round-trips");
 assert(w.gi.mode === "instant_radiosity" && w.gi.quality === "high" && w.gi.bounces === 2, "gi round-trips");
-world.gi({ mode: "vct_pcc_hybrid", pccGrid: { x: 2, y: 1, z: 2 },
-           boundsMin: { x: -5, y: 0, z: -5 }, boundsMax: { x: 5, y: 4, z: 5 } });
+world.gi({ mode: "vct_pcc_hybrid", pccGrid: { x: 2, y: 1, z: 2 } });
 var g = world.get().gi;
 assert(g.mode === "vct_pcc_hybrid" && g.pccGrid.x === 2 && g.pccGrid.y === 1 && g.pccGrid.z === 2,
        "vct hybrid mode + pccGrid round-trip");
-assert(near(g.boundsMin.x, -5) && near(g.boundsMax.y, 4), "gi bounds round-trip");
+// THE LIT VOLUME IS THE RENDERER'S (owner decision D8): the three keys that
+// used to pin and cap it are refused BY NAME, not swallowed as unknown keys.
+var boundsThrew = "";
+try { world.gi({ boundsMin: { x: -5, y: 0, z: -5 } }); } catch (e) { boundsThrew = String(e); }
+assert(boundsThrew.indexOf("boundsMin") >= 0 && boundsThrew.indexOf("AUTOMATIC") >= 0,
+       "world.gi refuses boundsMin by name: " + boundsThrew);
+boundsThrew = "";
+try { world.gi({ autoBoundsMax: 128 }); } catch (e) { boundsThrew = String(e); }
+assert(boundsThrew.indexOf("autoBoundsMax") >= 0, "...and autoBoundsMax: " + boundsThrew);
+assert(g.boundsMin === undefined && g.autoBoundsMax === undefined,
+       "world.get().gi carries no bounds fields at all any more");
 // Back off so the asset/thumbnail churn below runs without GI rebuilds. (The
 // old heap corruption from leaving IR live through churn is fixed — the GI
 // caches are now freed BEFORE a mesh/texture dies, gi.modes churn-asserts it —

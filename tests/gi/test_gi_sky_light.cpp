@@ -470,8 +470,7 @@ int main(int argc, char **argv)
     {
         doc->giMode = iris::GiMode::VCT;
         doc->giQuality = iris::GiQuality::LOW;
-        doc->giBoundsMin = iris::Vec3(-4.0f, -4.0f, -4.0f);
-        doc->giBoundsMax = iris::Vec3(4.0f, 4.0f, 4.0f);
+        // The volume is the renderer's automatic fit (owner decision D8).
         for (int f = 0; f < 10; ++f) frame();
         const Colour lit = shade(108);
         skyLight->intensity = 0.0f;

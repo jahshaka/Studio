@@ -26,6 +26,32 @@ assert(guid.length > 10, "project.create -> " + guid);
 // Something for the voxelizer to chew on: an empty scene voxelizes nothing and
 // rebuildVct returns early ("stay armed"), which would make every reading below
 // a study of the no-geometry path instead of the real one.
+// AN ENCLOSURE, BECAUSE A PROBE GRID NEEDS ONE (owner probe rule, 2026-09-13).
+// The renderer measures the enclosure out of the scene's own LAYOUT and builds
+// no probes at all in a scene it reads as open. This suite used to say where
+// the space was by PINNING the lit volume, and that pin is gone (owner decision
+// D8: the volume is the renderer's automatic fit and nothing else), so the
+// scene has to be a room for real. The default Ground goes with it: a 100 m
+// plane under a 12 m room is the outermost slab on the floor's own axis.
+function buildRoom(half, height) {
+    var ids = scene.nodes();
+    for (var i = 0; i < ids.length; ++i)
+        if (ids[i].name === "Ground") node.setProperty(ids[i].id, "visible", false);
+    function slab(name, px, py, pz, sx, sy, sz) {
+        var id = scene.addPrimitive("cube", { position: { x: px, y: py, z: pz } });
+        node.setProperty(id, "name", name);
+        node.transform(id, { scale: { x: sx / 2, y: sy / 2, z: sz / 2 } });
+        return id;
+    }
+    var w = half * 2;
+    slab("Floor", 0, -0.25, 0, w, 0.5, w);
+    slab("Roof",  0, height + 0.25, 0, w, 0.5, w);
+    slab("WallW", -half, height / 2, 0, 0.5, height, w);
+    slab("WallE",  half, height / 2, 0, 0.5, height, w);
+    slab("WallS", 0, height / 2, -half, w, height, 0.5);
+    slab("WallN", 0, height / 2,  half, w, height, 0.5);
+}
+buildRoom(6, 5);
 var box = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 },
                                        scale: { x: 2, y: 2, z: 2 } });
 assert(box.length > 10, "cube added");
@@ -43,12 +69,7 @@ assert(st.probeCount === 0, "no probes with GI off");
 assert(st.pccBound === false && st.vctBound === false, "nothing bound with GI off");
 
 // ---- phase B: plain VCT --------------------------------------------------
-// Explicit bounds: the auto heuristic unions every lit item (the sample
-// Ground plane included), which is P1a's subject — pinning them here keeps
-// this suite about the STATUS verb and not about bounds policy.
-assert(world.gi({ mode: "vct", quality: "low", bounces: 1,
-                  boundsMin: { x: -6, y: -1, z: -6 },
-                  boundsMax: { x: 6, y: 6, z: 6 } }), "world.gi(vct)");
+assert(world.gi({ mode: "vct", quality: "low", bounces: 1 }), "world.gi(vct)");
 editor.frame(4);
 st = world.giStatus();
 console.log("giStatus(vct) = " + JSON.stringify(st));

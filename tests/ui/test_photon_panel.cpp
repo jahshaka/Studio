@@ -47,6 +47,7 @@ For more information see the LICENSE file
 #include "services/worldmodes.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
+#include "ui/controls/dragvaluewidgets.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
@@ -138,10 +139,14 @@ int main(int argc, char **argv)
         CHECK(sliders.size() == 1, "one slider row (the GI update budget)");
         CHECK(buttonWith(&panel, QStringLiteral("Advanced")) != nullptr,
               "and an Advanced disclosure");
-        // The old panel's rows must be reachable but not visible: the Fit
-        // Bounds button is the cheapest witness that the volume rows are away.
-        CHECK(buttonWith(&panel, QStringLiteral("Fit Bounds")) == nullptr,
-              "the bounds rows are behind the disclosure, not on the surface");
+        // The old panel's rows must be reachable but not visible: the probe
+        // grid is the cheapest witness that the Advanced rows are away. (The
+        // Fit Bounds button used to be that witness; it is DELETED, with the
+        // bounds rows themselves — owner decision D8, 2026-09-13: the lit
+        // volume is the renderer's automatic fit and has no user-facing
+        // control at all. Asserted below, where the disclosure is open.)
+        CHECK(panel.findChildren<DragVector3Widget *>().isEmpty(),
+              "no vector rows on the surface — the probe grid is behind the disclosure");
     }
 
     // ---- 2. THE TIER ROW DRIVES THE DOCUMENT -------------------------------
@@ -186,8 +191,17 @@ int main(int argc, char **argv)
         const auto combos = panel.findChildren<ComboBoxWidget *>();
         CHECK(combos.size() >= 3,
               "opening it reveals the technique and quality pickers alongside the tier");
-        CHECK(buttonWith(&panel, QStringLiteral("Fit Bounds")) != nullptr,
-              "and the bounds rows with their Fit button");
+        // NO VOLUME ROWS, OPEN OR SHUT. The lit volume's Min/Max rows and the
+        // Fit Bounds To Scene button that pinned them are deleted (owner
+        // decision D8, 2026-09-13): the volume is the renderer's own fit, and
+        // world.giStatus() is where it is read. Advanced at the Medium tier
+        // therefore reveals no vector row at all — the only one left in this
+        // section is the hybrid's probe GRID, asserted below once the technique
+        // picker has switched to it.
+        CHECK(buttonWith(&panel, QStringLiteral("Fit Bounds")) == nullptr,
+              "there is no Fit Bounds button anywhere — the volume is automatic");
+        CHECK(panel.findChildren<DragVector3Widget *>().isEmpty(),
+              "and no bounds rows behind the disclosure either");
         CHECK(panel.findChildren<CheckBoxWidget *>().size() == 2,
               "and the irradiance-field toggle");
 
@@ -198,6 +212,8 @@ int main(int argc, char **argv)
         if (technique) technique->setCurrentIndex(3);   // VCT + Probes
         pump();
         CHECK(scene->giMode == iris::GiMode::VCT_PCC_HYBRID, "picking one writes it through");
+        CHECK(panel.findChildren<DragVector3Widget *>().size() == 1,
+              "and the ONE vector row the hybrid adds is the probe grid, not a volume");
         CHECK(scene->worldOverrides.contains(QStringLiteral("giMode")),
               "and PINS it, which is what stops the tier overwriting it");
         CHECK(worldmodes::photonCustom(scene), "so the tier row now reads Custom");

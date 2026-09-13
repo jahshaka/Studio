@@ -280,7 +280,7 @@ var LIGHT_RANGE = 40 * S;
 // probes-clamped 0 are IDENTICAL pinned and unpinned in both variants. What
 // does move is the lit volume and with it the voxel size: Showroom's authored
 // 12 m box becomes a measured 36.6 m one at 0.29 m per voxel instead of 0.09,
-// Showroom 2's 24 m becomes 65 m — the autoBoundsMax ceiling — at 0.51 instead
+// Showroom 2's 24 m becomes 65 m — the renderer's own automatic ceiling — at 0.51 instead
 // of 0.19, and the picture moves by at most 5 levels of 255 in the Showroom and
 // 10 in Showroom 2. The residue is the 100 m default ground, which the outlier
 // trim shrinks but does not remove, plus this room's own walls: they are

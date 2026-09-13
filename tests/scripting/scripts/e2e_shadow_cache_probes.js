@@ -28,24 +28,42 @@ function assert(cond, msg) {
 var guid = project.create("Shadow Cache Probes " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
 
+// AN ENCLOSURE, BECAUSE A PROBE GRID NEEDS ONE (owner probe rule, 2026-09-13).
+// The renderer measures the enclosure out of the scene's own LAYOUT and builds
+// no probes at all in a scene it reads as open. This suite used to say where
+// the space was by PINNING the lit volume, and that pin is gone (owner decision
+// D8: the volume is the renderer's automatic fit and nothing else), so the
+// scene has to be a room for real. The default Ground goes with it: a 100 m
+// plane under a 12 m room is the outermost slab on the floor's own axis.
+function buildRoom(half, height) {
+    var ids = scene.nodes();
+    for (var i = 0; i < ids.length; ++i)
+        if (ids[i].name === "Ground") node.setProperty(ids[i].id, "visible", false);
+    function slab(name, px, py, pz, sx, sy, sz) {
+        var id = scene.addPrimitive("cube", { position: { x: px, y: py, z: pz } });
+        node.setProperty(id, "name", name);
+        node.transform(id, { scale: { x: sx / 2, y: sy / 2, z: sz / 2 } });
+        return id;
+    }
+    var w = half * 2;
+    slab("Floor", 0, -0.25, 0, w, 0.5, w);
+    slab("Roof",  0, height + 0.25, 0, w, 0.5, w);
+    slab("WallW", -half, height / 2, 0, 0.5, height, w);
+    slab("WallE",  half, height / 2, 0, 0.5, height, w);
+    slab("WallS", 0, height / 2, -half, w, height, 0.5);
+    slab("WallN", 0, height / 2,  half, w, height, 0.5);
+}
 // A room the probes can capture and a lamp can shade.
-var floor = scene.addPrimitive("plane", { position: { x: 0, y: 0, z: 0 },
-                                          scale: { x: 8, y: 1, z: 8 } });
+buildRoom(6, 5);
 var box = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 },
                                        scale: { x: 2, y: 2, z: 2 } });
-assert(floor.length > 10 && box.length > 10, "floor and box added");
+assert(box.length > 10, "the room and its box are up");
 editor.frame(4);
 
 // THE HYBRID WITH SHADOWED PROBES: the probe grid captures the room, and each
 // capture instantiates the probe shadow node the cache assigns lamps into.
-// ...and a STATED lit volume, because this scene is a floor with a box on it,
-// which the renderer measures as OPEN — and since the 2026-09-13 probe lane an
-// open scene builds NO probe grid at all (the sky is its reflection). This
-// suite is about the lamp-map cache inside probe captures, so it says where the
-// space is and gets its probes; the open-scene rule itself is gi.probe_open's.
 assert(world.gi({ mode: "vct_pcc_hybrid", quality: "low", probeShadows: true,
-                  pccGrid: { x: 2, y: 1, z: 2 }, updateBudget: 4,
-                  boundsMin: { x: -5, y: -1, z: -5 }, boundsMax: { x: 5, y: 5, z: 5 } }),
+                  pccGrid: { x: 2, y: 1, z: 2 }, updateBudget: 4 }),
        "world.gi(hybrid + probe shadows)");
 editor.frame(60);
 var g = world.giStatus();

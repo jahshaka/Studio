@@ -74,9 +74,9 @@ oneStep("world.gravity", function () { return world.gravity(-4.5); });
 oneStep("world.fog (four keys)", function () {
     return world.fog({ enabled: true, color: "#808080", density: 0.02, heightLevel: 1.5 });
 });
-// Registry rows (bounces PINS) and plain fields (updateBudget, bounds) in one call.
+// Registry rows (bounces PINS) and plain fields (updateBudget) in one call.
 oneStep("world.gi (a pinned row + plain fields)", function () {
-    return world.gi({ bounces: 2, updateBudget: 3, boundsMin: { x: -4, y: 0, z: -4 } });
+    return world.gi({ bounces: 2, updateBudget: 3, rayMarchStepScale: 1.5 });
 });
 oneStep("world.gi (tier + an explicit knob)", function () {
     return world.gi({ tier: "medium", quality: "high" });

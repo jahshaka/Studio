@@ -161,8 +161,9 @@ int main(int argc, char **argv)
     ambientLight->intensity = 0.0f;
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
-    doc->giBoundsMin = iris::Vec3(-4.6f, -0.6f, -4.6f);
-    doc->giBoundsMax = iris::Vec3(4.6f, 5.6f, 4.6f);
+    // NO BOUNDS PIN (owner decision D8, 2026-09-13): the document has no bounds
+    // fields any more and the lit volume is always the renderer's own fit to
+    // this room's content, which for a closed box IS the box plus one voxel.
     const int kProbes = 4, kAllowed = 1;           // budget 1 + dynamic 0
 
     const QColor white(217, 217, 217);

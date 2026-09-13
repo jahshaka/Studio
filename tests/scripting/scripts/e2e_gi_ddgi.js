@@ -58,9 +58,8 @@ assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
 // derives for a hand-set pre-Photon document. That the tier alone turns the
 // field off — no explicit ddgi key anywhere — is itself the write-through
 // statement this phase makes.
-assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1,
-                  boundsMin: { x: -6, y: -1, z: -6 },
-                  boundsMax: { x: 6, y: 6, z: 6 } }), "world.gi(vct pinned at the Low tier)");
+assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1 }),
+       "world.gi(vct at the Low tier)");
 assert(world.get().gi.ddgi === false, "the Low tier resolves the field OFF");
 editor.frame(4);
 var st = world.giStatus();
