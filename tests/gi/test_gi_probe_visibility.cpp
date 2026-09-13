@@ -1,23 +1,29 @@
-// gi.probe_visibility — CHARACTERISATION: a surface takes a probe's picture
-// even when it is not IN that picture (the owner's Q2 leak, measured).
+// gi.probe_visibility — A SURFACE TAKES A PROBE'S PICTURE ONLY IF IT IS IN
+// THAT PICTURE (owner, 2026-09-13, REFLECTION_PROBE_AUDIT Q2: "the engine
+// should not know if there is a room? Isn't it the layout of objects in a scene
+// that matters?").
 //
-// STATUS, stated first because it is the point of this file: the FIX exists and
-// is DEFERRED. `irisgl/thirdparty/ogre-patches/
-// 0029-pcc-probe-visibility-from-captured-depth.patch.DEFERRED` implements the
-// owner's rule — a shading point takes a probe's contribution only if the probe
-// could SEE it, tested against the depth the probe itself captured — and this
-// scene proves it works: with the patch applied the mirror below reads
-// r 0.000 instead of r 1.000. It is NOT in the stack because it also crushed a
-// LEGITIMATE reflection in gi.budget (a mirror in a sealed 2x1x2 room went to
-// r 0.004, with the probe reporting a captured depth of ~10% of the distance to
-// the shading point in that direction — root cause not established). Shipping
-// "the mirror goes black in a sealed room" to fix "the roof shows the room" is
-// the wrong trade, so the patch waits for that diagnosis.
+// The rule, and both of its halves, in one file:
+//   PHASE 1 (the leak)   a reflective box sealed off from a probe by a
+//                        partition must NOT be painted with what that probe
+//                        photographed on the other side of it.
+//   PHASE 2 (the mirror) a reflective box the probe CAN see must keep its
+//                        reflection — the failure mode a naive tightening of
+//                        probe influence produces, and the one that parked this
+//                        work for a day.
 //
-// This suite therefore asserts WHAT THE RENDERER DOES TODAY, loudly, so that
-// (a) the defect is executable rather than anecdotal, and (b) whoever lands the
-// fix has a scene that flips in one obvious place. Flip the two assertions at
-// the bottom when the patch goes into the stack.
+// Shipped by ogre-patch 0029 (the visibility test itself: march from the probe
+// camera towards the shaded point, read the depth the probe recorded that way,
+// and treat "it saw something nearer" as occlusion) standing on ogre-patch 0030
+// (the depth it reads is the TRUE depth: the DepthCompressor multiplied its
+// view->probe-local matrix on the wrong side for GLSL/Vulkan, so every
+// off-centre probe's X and Y depths were encoded against the MIRRORED
+// direction). 0029 without 0030 is exactly the parked failure: phase 1 green,
+// phase 2 black.
+//
+// Measured on this suite's two scenes (RTX 4080S, Debug+ASan, 2026-09-13):
+//     phase 1 metal box   before 0029: r 1.000 g 0.055   after: r 0.000
+//     phase 2 metal box   with 0030:   r 1.000 g 0.055    without: r 0.000
 //
 // THE SYNTHETIC (never the Showroom — not open-to-open deterministic, MESH_BAKE
 // facts). A sealed room split by a full-height partition:
@@ -162,19 +168,86 @@ int main()
     CHECK(st.probeShapeMax.z > 3.8f,
           "the probe's parallax box reaches past the partition (so getProbeFade admits the box)");
 
-    // THE CHARACTERISATION. The camera's half contains nothing red; the probe's
-    // photograph does. The red on this metal is a picture of a place this
+    // THE LEAK IS CLOSED. The camera's half contains nothing red; the probe's
+    // photograph does. Red on this metal would be a picture of a place this
     // surface cannot see — the owner's "why would the outside of a building
-    // show the room inside?" in its smallest reproducible form.
-    //
-    // WHEN PATCH 0029 LANDS these two flip to `< 0.06f` and `< 0.20f`; the
-    // measured post-patch reading is r 0.000 g 0.000 b 0.000.
-    CHECK(on.r - on.g > 0.50f,
-          "TODAY: the metal box in the sealed half is painted with the red wall it cannot see "
-          "(the leak; ogre-patch 0029.DEFERRED removes it — see this file's header)");
-    CHECK(on.r > 0.50f, "TODAY: and it is bright, not a faint bleed");
+    // show the room inside?" in its smallest reproducible form. It read
+    // r 1.000 g 0.055 before ogre-patch 0029 and reads r 0.000 after it.
+    CHECK(on.r - on.g < 0.06f,
+          "the metal box in the sealed half is NOT painted with the red wall it cannot see "
+          "(the leak ogre-patch 0029 closes — it read r 1.000 g 0.055 before)");
+    CHECK(on.r < 0.20f, "...and there is no faint bleed of it either");
 
     engine->destroyScene(s);
+
+    // =====================================================================
+    // THE OTHER HALF OF THE RULE, and the fence on the DEPTH ITSELF: a
+    // surface the probe CAN see keeps its reflection.
+    //
+    // The visibility test is only as good as the distance the probe recorded,
+    // and that distance was WRONG on the X and Y axes for every off-centre
+    // probe until ogre-patch 0030: the DepthCompressor multiplied the
+    // view->probe-local matrix on the wrong side for GLSL/Vulkan, so a texel's
+    // fApproxDist was computed for the MIRRORED direction. Measured here, in
+    // this room, with the probe cube read back texel by texel: probe 0 recorded
+    // the mirror 2.256 m away at 1.058 m (and probe 1 put the same surface, 12.21 m
+    // off, at 31 m -- its encoding saturated). A depth that short reads as "the probe cannot see
+    // this" for everything past a metre, which is exactly how a legitimate
+    // mirror in a sealed room goes black.
+    //
+    // THE SCENE: a LONG sealed room with a 2x1x1 grid, so both probes stand
+    // well off the centre of their own parallax box (the case the bug needs),
+    // and a roughness-0 metal box at the far -X end, 2.2 m from the probe that
+    // owns that end. It faces the camera, so its reflection ray runs back +X
+    // into the only saturated thing in the room -- the red wall. Nothing stands
+    // between the probe and the box: the honest answer is "visible", and the
+    // pixel says so.
+    //     ogre-patch 0030 applied:      r 1.000, probe 0 reads 2.275 m (101%)
+    //     ogre-patch 0030 reverted:     r 0.000, probe 0 reads 1.058 m (47%)
+    Scene *s2 = engine->createScene("vis2");
+    view->setScene(s2);
+    s2->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    // Interior: x in [-10,10], y in [0,5], z in [-4,4].
+    addSlab(s2, white, Vec3(0.0f, -0.2f, 0.0f), Vec3(20.8f, 0.4f, 8.8f));   // floor
+    addSlab(s2, white, Vec3(0.0f,  5.2f, 0.0f), Vec3(20.8f, 0.4f, 8.8f));   // ceiling
+    addSlab(s2, dark,  Vec3(0.0f,  2.5f, -4.2f), Vec3(20.8f, 5.0f, 0.4f));  // -Z wall
+    addSlab(s2, dark,  Vec3(0.0f,  2.5f,  4.2f), Vec3(20.8f, 5.0f, 0.4f));  // +Z wall
+    addSlab(s2, dark,  Vec3(-10.2f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 8.8f));   // -X wall
+    addSlab(s2, red,   Vec3( 10.2f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 8.8f));   // +X: THE red one
+    const NodeId mirror2 = s2->createNode();
+    const MeshId mesh2 = s2->createMesh(enginetest::unitCubeMesh());
+    const MaterialId mat2 = s2->createPbrMaterial(mirrorP);
+    CHECK(mirror2 && mesh2 && mat2 && s2->attachMesh(mirror2, mesh2, mat2),
+          "long room: the metal box attaches");
+    s2->setNodeTransform(mirror2, Vec3(-8.0f, 2.0f, 0.0f), Quat(), Vec3(1.6f, 1.6f, 1.6f));
+    // Travelling +X, so it lights the red wall's inner face head-on.
+    CHECK(enginetest::addDirectionalLight(s2, Vec3(0.993f, -0.12f, 0.0f), 6.0f) != 0,
+          "long room: directional light created");
+    enginetest::testCameraLookAt(view, Vec3(-4.0f, 2.0f, 0.0f), Vec3(-8.0f, 2.0f, 0.0f));
+
+    GiParams gi2;
+    gi2.mode = GiMode::VctPccHybrid;
+    gi2.quality = GiQuality::Medium;
+    gi2.numBounces = 2;
+    gi2.boundsMin = Vec3(-10.6f, -0.6f, -4.6f);
+    gi2.boundsMax = Vec3( 10.6f,  5.6f,  4.6f);
+    gi2.pccProbesX = 2; gi2.pccProbesY = 1; gi2.pccProbesZ = 1;   // both probes off-centre in X
+    const bool ok2 = s2->setGlobalIllumination(gi2);
+    if (!ok2) std::printf("   engine error: %s\n", engine->lastError().c_str());
+    CHECK(ok2, "long room: setGlobalIllumination(VctPccHybrid) succeeds");
+    render(engine.get(), 12);
+    view->readPixels(img);
+    const Colour lit = img.at(mirrorX, mirrorY);
+    show("long room: metal box, VCT + probes", lit);
+    const GiStatus st2 = s2->giStatus();
+    std::printf("   probes=%d pccBound=%s clamped=%d\n", st2.probeCount,
+                st2.pccBound ? "true" : "false", st2.probesClampedToRegion);
+    CHECK(st2.probeCount == 2 && st2.pccBound, "long room: the 2x1x1 grid built and bound");
+    CHECK(lit.r > 0.50f && lit.r - lit.g > 0.40f,
+          "long room: the metal box the probe CAN see still reflects the red wall "
+          "(it reads 0.000 on a tree whose probes record the wrong depth -- ogre-patch 0030)");
+    engine->destroyScene(s2);
+
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall ok\n", failures);
     return failures ? 1 : 0;
 }
