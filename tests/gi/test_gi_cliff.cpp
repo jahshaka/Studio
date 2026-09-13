@@ -252,6 +252,56 @@ static void stillTrimsCase(Engine *engine, View *view)
 }
 
 // ---------------------------------------------------------------------------
+// 3b. NO RATCHET (lane ENGINE-7 item 2). Re-fitting a scene NOBODY TOUCHED must
+//     return the same volume. It did not: the hysteresis floor above keeps
+//     whole anything the previous volume covered, and an outlier the first fit
+//     TRIMMED sits inside the volume that trim produced — so the second fit
+//     kept it whole and the volume grew to hold it. Measured on the shipped
+//     Showroom 2, whose open solves twice: 48.14 m then 56.62 (+17.6%, 0.376 ->
+//     0.442 m per voxel), and it stayed there for the session.
+//
+//     The floor stays for what it is for (case 2's live table: adding an object
+//     may not take light away from what was already lit), and it is armed by a
+//     CONTENT CHANGE. So this asserts both halves: unchanged content re-fits
+//     identically, any number of times, and a MOVED wall still re-fits.
+// ---------------------------------------------------------------------------
+static void noRatchetCase(Engine *engine, View *view)
+{
+    std::printf("-- re-fitting an untouched scene returns the same volume\n");
+    Scene *s = engine->createScene("cliff_ratchet");
+    view->setScene(s);
+    addGround(s);                       // the oversized item the trim acts on
+    for (int i = 0; i < 3; ++i) addCube(s, i);
+    enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
+    const Box first = solve(s);
+    show("ratchet", 0, first);
+    bool same = true;
+    for (int n = 1; n <= 5; ++n) {
+        const Box again = solve(s);
+        for (int ax = 0; ax < 3; ++ax)
+            if (std::fabs(span(again, ax) - span(first, ax)) > 1e-3f) same = false;
+        if (n == 5) show("ratchet", n, again);
+    }
+    CHECK(same, "five re-fits of an UNTOUCHED scene return the first fit, to the millimetre");
+
+    // ...and the floor still does its job: move the ground (a real content
+    // change) and the fit follows it rather than being pinned to the old one.
+    const NodeId far = box(s, Colour(0.2f, 0.4f, 0.8f), Vec3(14.0f, 0.5f, 0.0f), Vec3(1, 1, 1));
+    (void)far;
+    const Box after = solve(s);
+    show("ratchet+", 6, after);
+    CHECK(span(after, 0) > span(first, 0) + 1.0f,
+          "...but a CHANGE to the content still re-fits (the new cube is lit)");
+    const Box held = solve(s);
+    CHECK(std::fabs(span(held, 0) - span(after, 0)) < 1e-3f,
+          "...and the fit it settles on is stable again straight away");
+    GiParams off;
+    s->setGlobalIllumination(off);
+    view->setScene(nullptr);
+    engine->destroyScene(s);
+}
+
+// ---------------------------------------------------------------------------
 // 4. THE ESCAPE SIGNATURE (fix 2, engine half). `giEscapeSignature()` is what
 //    lets the mirror debounce a re-fit; gi.coalesce drives the mirror half.
 // ---------------------------------------------------------------------------
@@ -355,6 +405,7 @@ int main()
     freshTable(engine.get(), view);
     liveTable(engine.get(), view);
     stillTrimsCase(engine.get(), view);
+    noRatchetCase(engine.get(), view);
     escapeSignatureCase(engine.get(), view);
     slabPatchCase(engine.get(), view);
 
