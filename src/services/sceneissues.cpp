@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include <QDateTime>
 #include <QVector>
 
+#include <algorithm>
+
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -71,8 +73,7 @@ QVariantMap SceneIssue::toMap() const
                         { QStringLiteral("node"), node },
                         { QStringLiteral("nodeName"), nodeName },
                         { QStringLiteral("message"), message },
-                        { QStringLiteral("action"), action },
-                        { QStringLiteral("dismissed"), dismissed } };
+                        { QStringLiteral("action"), action } };
 }
 
 SceneIssues &SceneIssues::instance()
@@ -93,28 +94,17 @@ QString SceneIssues::raise(const SceneIssue &issue, bool *raised)
     SceneIssue copy = issue;
     if (copy.id.isEmpty())
         copy.id = copy.node.isEmpty() ? copy.kind : (copy.kind + QLatin1Char(':') + copy.node);
-    // ALREADY LIVE = NOTHING HAPPENS. Not a re-notify, not a move to the front,
-    // not an un-dismiss: a scanner running every second must be unable to nag.
+    // ALREADY LIVE = NOTHING HAPPENS. Not a re-notify, not a move to the front:
+    // a scanner running every second must be unable to nag.
     if (indexOf(copy.id) >= 0) {
         if (raised) *raised = false;
         return copy.id;
     }
     copy.raisedMs = nowMs();
-    copy.dismissed = false;
     mIssues.append(copy);
     if (raised) *raised = true;
     emit changed();
     return copy.id;
-}
-
-bool SceneIssues::dismiss(const QString &id)
-{
-    const int i = indexOf(id);
-    if (i < 0) return false;
-    if (mIssues[i].dismissed) return true;
-    mIssues[i].dismissed = true;
-    emit changed();
-    return true;
 }
 
 bool SceneIssues::clear(const QString &id)
@@ -142,31 +132,39 @@ void SceneIssues::reset()
     emit changed();
 }
 
-QVector<SceneIssue> SceneIssues::issues(bool includeDismissed) const
+// THE ORDER IS PART OF THE CONTRACT (owner, 2026-09-13: every error listed line
+// by line). Sorted on READ — by kind, then by the object, then by id — so that
+// a second issue appearing cannot reshuffle the line the user is reading, and
+// so that the bar, `editor.issues()` and `editor.checkScene().list` are the
+// same list in the same order whatever order the scanner happened to find them
+// in. Raise order is an implementation detail; nothing may depend on it.
+QVector<SceneIssue> SceneIssues::issues() const
 {
-    if (includeDismissed) return mIssues;
-    QVector<SceneIssue> out;
-    for (const auto &i : mIssues)
-        if (!i.dismissed) out.append(i);
+    QVector<SceneIssue> out = mIssues;
+    std::stable_sort(out.begin(), out.end(), [](const SceneIssue &a, const SceneIssue &b) {
+        if (a.kind != b.kind) return a.kind < b.kind;
+        if (a.node != b.node) return a.node < b.node;
+        return a.id < b.id;
+    });
     return out;
 }
 
-QVariantList SceneIssues::toVariant(bool includeDismissed) const
+QVariantList SceneIssues::toVariant() const
 {
     QVariantList out;
-    for (const auto &i : issues(includeDismissed)) out.append(i.toMap());
+    for (const auto &i : issues()) out.append(i.toMap());
     return out;
 }
 
-int SceneIssues::visibleCount() const { return issues(false).size(); }
+int SceneIssues::count() const { return mIssues.size(); }
 
 // ---------------------------------------------------------------------------
 // THE SCANNER
 // ---------------------------------------------------------------------------
 // Two conditions today, both owner-reported, both fixable by the person looking
 // at the scene. Adding a third is: find it, build its id from its subject, and
-// CLEAR the ids of that kind that no longer apply — the clearing half is what
-// makes a dismissed message come back when the user breaks it again, and what
+// CLEAR the ids of that kind that no longer apply — the clearing half is the
+// ONLY way a line ever leaves the bar (nothing is dismissible), and it is what
 // stops a stale row naming a deleted object.
 int SceneIssues::scan(const iris::ScenePtr &scene)
 {

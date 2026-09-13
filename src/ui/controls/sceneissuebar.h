@@ -14,11 +14,19 @@ For more information see the LICENSE file
 
 // SceneIssueBar — the visible half of services/sceneissues.h.
 //
-// A dismissible error area over the viewport, sitting under the frame-rate
+// A READ-ONLY error area over the viewport, sitting under the frame-rate
 // readout (owner, 2026-09-13: "they should give the user an error toast, like
-// where the fps is — we need a user error toast box"). It shows the scene
-// problems the user can fix, names the object each one is about, says what to
-// do, and lets them select it or wave it away.
+// where the fps is — we need a user error toast box"). It lists the scene
+// problems the user can fix, ONE LINE PER ISSUE, names the object each one is
+// about and says what to do about it.
+//
+// NO BUTTONS. Not a Select, not a dismiss (owner, 2026-09-13: "get rid of the
+// Select button and the button next to it so it just shows the error, let the
+// user fix it"). Select was overkill — a message that quotes both lights by
+// name does not need a button to find one of them — and a dismiss turns an
+// error area into something people close instead of read. A line leaves when
+// the 1 Hz scanner finds the condition gone, and only then. The bar is
+// therefore pure output: no input handling, no signals, no state.
 //
 // A FRAMELESS TOP-LEVEL, like Toast, and for the same reason: the viewport is a
 // NATIVE window with WA_PaintOnScreen and a null paint engine, so a Qt child
@@ -26,8 +34,9 @@ For more information see the LICENSE file
 // (STATS_OVERLAY_SPEC's whole rationale). A top-level parented to the main
 // window for ownership only stays above it, moves with it, and paints normally.
 //
-// The stats readout itself is engine-drawn text with no input; this needs two
-// buttons per row, which is exactly why it is Qt and the readout is not.
+// It stays Qt rather than joining the engine-drawn stats rows because it wraps,
+// re-lays out and grows with the number of issues, which the fixed engine text
+// rows cannot do.
 //
 // IT OWNS NO STATE. Everything it shows is SceneIssues::instance(); it is
 // rebuilt from the store on `changed()` and hides itself when nothing is
@@ -66,9 +75,13 @@ public:
     /// what a test asserts about. Null when it is not showing.
     QRect geometryInWindow() const;
 
-signals:
-    /// The user asked to look at the object an issue is about.
-    void selectRequested(const QString &nodeGuid);
+    /// How many LINES are up: one per issue, plus the "+N more" line when
+    /// there are more issues than kMaxRows.
+    int lineCount() const;
+
+    /// How many clickable controls the bar has. ZERO, always — the owner's
+    /// rule, asserted from `editor.issueBar()` so it cannot quietly grow one.
+    int buttonCount() const;
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -82,9 +95,12 @@ private:
     int mTopInset = 24;
     int mMargin = 12;
     bool mEditorActive = true;
-    /// At most this many rows; the rest are counted in a trailing line, because
-    /// an error area that can grow without bound is a second problem.
-    static constexpr int kMaxRows = 3;
+    /// EVERY ISSUE IS A LINE (owner, 2026-09-13), up to this many; beyond it a
+    /// trailing "+N more" line, because an error area that can grow without
+    /// bound would eventually cover the viewport it is reporting on. Generous
+    /// on purpose: a scene with eight things wrong with it is a scene whose
+    /// author wants to see all eight.
+    static constexpr int kMaxRows = 8;
 };
 
 #endif // SCENEISSUEBAR_H

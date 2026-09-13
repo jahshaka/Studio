@@ -98,16 +98,17 @@ public:
     Q_INVOKABLE QVariantMap viewportState();
     Q_INVOKABLE QVariantMap mirrorStats();
     /// THE SCENE-ERROR AREA (services/sceneissues.h). Document verbs: the store
-    /// is a document-side model, so a --headless run can raise, list, dismiss
-    /// and scan exactly as the editor does — the viewport bar is only a view.
-    Q_INVOKABLE QVariantList issues(bool includeDismissed = true);
+    /// is a document-side model, so a --headless run can raise, list, clear and
+    /// scan exactly as the editor does — the viewport bar is only a view. There
+    /// is no dismiss: a line leaves when the scene is fixed, and only then.
+    Q_INVOKABLE QVariantList issues();
     Q_INVOKABLE QString raiseIssue(const QVariantMap &issue);
-    Q_INVOKABLE bool dismissIssue(const QString &id);
     Q_INVOKABLE bool clearIssue(const QString &id);
     Q_INVOKABLE QVariantMap checkScene();
     /// The SHELL half of the error area: whether the viewport's issue bar is on
-    /// screen right now. Runs one scan+decide pass first, so the answer never
-    /// races the 1 Hz timer. Needs::Window — headless has no bar.
+    /// screen right now, how many lines it built and how many buttons it has
+    /// (zero). Runs one scan+decide pass first, so the answer never races the
+    /// 1 Hz timer. Needs::Window — headless has no bar.
     Q_INVOKABLE QVariantMap issueBar();
     Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256,
                                        const QVariantList &probes = QVariantList(),

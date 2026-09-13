@@ -3770,8 +3770,9 @@ void MainWindow::stepSnapSize(int direction)
 // stepSnapSize's tail; the fly-speed wheel needed the identical five lines.
 // THE SCENE-ERROR AREA. The bar is a view of SceneIssues and owns no state;
 // this is the whole of the shell's involvement — build it lazily over the
-// viewport, let its Select button drive the ordinary selection verb, and tick
-// the scanner.
+// viewport and tick the scanner. Nothing is wired INTO the bar: it has no
+// buttons and emits nothing (owner, 2026-09-13 — it shows the errors and the
+// user fixes them in the scene).
 void MainWindow::wireSceneIssues()
 {
     if (sceneIssueTimer) return;
@@ -3787,9 +3788,9 @@ void MainWindow::updateSceneIssues()
 {
     // THE BAR IS AN EDITOR SURFACE, and it is a FRAMELESS TOP-LEVEL WITH
     // WindowStaysOnTopHint (sceneissuebar.cpp) — so without this check it
-    // floated over the Desktop, Assets, Player and Materials pages, offering a
-    // Select button that selects in a viewport nobody is looking at (item 3).
-    // The comment below promised this check for a week; here it is.
+    // floated over the Desktop, Assets, Player and Materials pages, describing
+    // a scene nobody is looking at (item 3). The comment below promised this
+    // check for a week; here it is.
     if (currentSpace != WindowSpaces::EDITOR) {
         if (sceneIssueBar) sceneIssueBar->setEditorActive(false);
         return;
@@ -3799,19 +3800,11 @@ void MainWindow::updateSceneIssues()
     auto scene = sceneEditService->scene();
     if (!scene) { SceneIssues::instance().reset(); return; }
     SceneIssues::instance().scan(scene);
-    if (!sceneIssueBar && SceneIssues::instance().visibleCount() > 0) {
+    if (!sceneIssueBar && SceneIssues::instance().count() > 0) {
         sceneIssueBar = new SceneIssueBar(this);
         // Under the engine-drawn frame-stats rows (three lines plus their
         // inset) so the two never overlap when F3 is on.
         sceneIssueBar->setAnchor(sceneView ? sceneView->asWidget() : nullptr, 96);
-        connect(sceneIssueBar, &SceneIssueBar::selectRequested, this,
-                [this](const QString &guid) {
-                    if (!sceneEditService || !selectionService) return;
-                    auto scene = sceneEditService->scene();
-                    if (!scene) return;
-                    auto node = scene->nodes.value(guid);
-                    if (node) selectionService->select(node);
-                });
         sceneIssueBar->refresh();
     }
 }
@@ -3825,7 +3818,13 @@ QVariantMap MainWindow::sceneIssueBarState() const
     out[QStringLiteral("editorActive")] = (currentSpace == WindowSpaces::EDITOR);
     out[QStringLiteral("exists")] = sceneIssueBar != nullptr;
     out[QStringLiteral("visible")] = sceneIssueBar && sceneIssueBar->isVisible();
-    out[QStringLiteral("rows")] = SceneIssues::instance().visibleCount();
+    out[QStringLiteral("rows")] = SceneIssues::instance().count();
+    // What is actually BUILT: one line per issue (plus the "+N more" line), and
+    // no clickable control anywhere in it. `buttons` is asserted to be zero by
+    // scripting.e2e.scene_issues — the owner's "just show the error" rule, in a
+    // form that cannot rot.
+    out[QStringLiteral("lines")] = sceneIssueBar ? sceneIssueBar->lineCount() : 0;
+    out[QStringLiteral("buttons")] = sceneIssueBar ? sceneIssueBar->buttonCount() : 0;
     return out;
 }
 
