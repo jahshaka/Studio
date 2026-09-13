@@ -213,10 +213,11 @@ static void liveTable(Engine *engine, View *view)
             // The same cube measured 6.25 m before the lane (the ground's
             // morph), 3.84 m when the clip still went to the trim core (which
             // carries the collapsed slab, hence the world origin in the answer)
-            // and 1.12 m now — the cube, plus 5% of itself, plus the volume's
+            // and 2.12 m now — the cube, plus half its smallest extent of
+            // floor on each side (the patch margin), plus the volume's
             // own one-voxel slack. Below 1 m would mean the cube is not even
-            // covered; 3x is "the cube's neighbourhood, not the ground's".
-            CHECK(span(b, 0) >= 1.0f && span(b, 0) < 3.0f,
+            // covered; 4x is "the cube's neighbourhood, not the ground's".
+            CHECK(span(b, 0) >= 1.0f && span(b, 0) < 4.0f,
                   "the FIRST content object moves the volume onto the content (by design)");
         prev = b;
     }
@@ -326,10 +327,16 @@ static void slabPatchCase(Engine *engine, View *view)
     const float best  = std::min(std::min(spans[0], spans[1]), spans[2]);
     CHECK(worst - best < 0.02f * worst,
           "the same crate resolves to the same volume on a 50, 100 and 200 m ground");
-    // ...and it really is the crate's neighbourhood, not the ground's: a 2 m
-    // crate plus the patch margin and the volume's own one-voxel slack.
+    // ...and it really is the crate's NEIGHBOURHOOD: the crate (2 m) plus half
+    // its smallest extent of floor on each side, plus the volume's own
+    // one-voxel slack — 4.25 m, where the ground's own extent is 50, 100 or
+    // 200. The floor patch is what carries the bounce (measured on this scene
+    // through the app: the crate's lit surface reads 83 of 255 with a volume
+    // its own size, which is what GI OFF reads, and 155-162 once the patch
+    // reaches a crate-height past it), so the bound below is "a few times the
+    // crate", not "the crate".
     std::printf("   the 100 m ground's answer: %.2f m\n", spans[1]);
-    CHECK(spans[1] > 2.0f && spans[1] < 4.0f,
+    CHECK(spans[1] > 2.0f && spans[1] < 8.0f,
           "and that volume is the crate's own neighbourhood, not the ground's");
 }
 
