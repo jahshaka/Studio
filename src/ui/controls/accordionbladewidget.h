@@ -99,10 +99,26 @@ public:
     void collapse();
     void expand();
 
+    /// Retires every row in the content pane. `layout` is IGNORED and has
+    /// always been (the pane is the only thing this clears); it stays only
+    /// because every call site passes `this->layout()`.
     void clearPanel(QLayout *layout);
-    /// How many retired rows are still alive (see clearPanel's note on the two
+    /// How many retired rows are still alive (see clearPanel's note on the
     /// generations). A diagnostic, and the thing ui.selection_cost asserts on.
     int retiredRowCount() const;
+    /// THE HEADROOM, STATED EXACTLY. A retired row survives
+    /// kRetiredGenerations top-level clearPanel() calls and is freed by the
+    /// next one. The call that retires it is the FIRST of those, and that call
+    /// is normally the rebuild the row itself asked for — so a row may drive
+    /// `kRetiredGenerations - 1` FURTHER rebuilds from inside its own slot and
+    /// still be readable when they return.
+    ///
+    /// Today's measured maximum from a row's own signal is ZERO further
+    /// rebuilds (one rebuild in total, lead review F3), so three generations is
+    /// two of slack. ui.selection_cost drives the promise at its boundary from
+    /// a genuinely retired row, and one PAST it fails — verified by driving
+    /// kRetiredGenerations from the slot, which loses the row.
+    static constexpr int kRetiredGenerations = 3;
     int minimum_height, stretch;
 
     void stepHeight(int h) {
@@ -125,14 +141,21 @@ private:
     /// (ui/controls/rowfit.h) and then adds it to the content pane — every
     /// add*() helper above goes through here.
     void addRow(QWidget *row);
+    /// clearPanel's actual loop, recursing into nested layouts properly.
+    void drainLayout(QLayout *layout);
 
     Ui::AccordianBladeWidget *ui;
-    /// Rows retired by the last two clearPanel() calls — see that function for
-    /// why two and not one. QPointer because deleteLater() may have collected
-    /// them first (an interactive session turns the event loop; a script run
-    /// does not, which is the whole reason this exists).
-    QList<QPointer<QWidget>> mRetiredRecent;
-    QList<QPointer<QWidget>> mRetiredOlder;
+    /// Rows retired by the last kRetiredGenerations top-level clearPanel()
+    /// calls, newest first — see that function for why a ring and not one list.
+    /// QPointer because deleteLater() may have collected them first (an
+    /// interactive session turns the event loop; a script run does not, which
+    /// is the whole reason this exists).
+    QList<QPointer<QWidget>> mRetired[kRetiredGenerations];
+    /// Re-entrancy depth. The generation shift happens once per TOP-LEVEL call;
+    /// a clear entered from inside another one (the child-layout recursion, or
+    /// a rebuild driven from a row's slot mid-clear) must not consume a
+    /// generation of its own.
+    int mClearDepth = 0;
 };
 
 #endif // ACCORDIANBLADEWIDGET_H

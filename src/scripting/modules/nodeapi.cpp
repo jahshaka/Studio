@@ -1550,7 +1550,10 @@ QVariantMap NodeApi::addSocket(const QString &id, const QVariantMap &params)
         socket.rotation = quatFromJs(params.value(QStringLiteral("rotation")), iris::Quat(), &rotOk);
     if (!rotOk) {
         fail(QStringLiteral("node.addSocket: rotation must be a quaternion {x,y,z,scalar} or "
-                            "euler degrees {x,y,z}"));
+                            "euler degrees {x,y,z} — a fourth number under any other key "
+                            "(\"w\" is the one alias accepted) is refused rather than read as "
+                            "Euler, because a quaternion silently understood as degrees is a "
+                            "pose that collapses"));
         return out;
     }
     socket.scale = vecFromJs(params.value(QStringLiteral("scale")), iris::Vec3(1, 1, 1));

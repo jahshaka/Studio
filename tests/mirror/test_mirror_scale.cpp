@@ -19,9 +19,29 @@
 //      PbrMaterial (SceneEditService::addNodeToScene), so "8000 cubes" is
 //      "8000 materials": a mirror that rebuilds a MaterialSync per material per
 //      frame pays for the scene twice and the memo hides it from shape 2.
-//   4. A still sync allocates NOTHING per node (the counting allocator below).
-//      This is the sharpest of the four and the one that fails first.
+//   4. A still sync BUILDS NO MATERIAL DESCRIPTION (SceneMirror::
+//      materialBuildCount). This is the sharpest of the four and the one that
+//      fails first. (An earlier draft counted heap allocations through a global
+//      operator new; under ASan that fights the sanitizer's own interceptors and
+//      crashed on the first free. The mirror's own counter says the same thing
+//      and says it about the mirror rather than about the process.)
+//
+// ...and a FIFTH, which is what earns the memo the right to exist at all:
+//
+//   5. EVERY AUTHORED PROPERTY OF A MATERIAL MOVES ITS FINGERPRINT. The memo is
+//      keyed on a hash of the document fields the conversion reads, and the
+//      argument for that over a revision counter (see MaterialSync in
+//      scenemirror.h) is only sound if a field the conversion reads can never be
+//      missing from the hash. So the suite walks PbrMaterial's OWN property rows
+//      — the material's authoring surface — writes a different value into each
+//      one through setValue, and asserts the next sync rebuilds that material's
+//      description. A field added to the material and forgotten in the
+//      fingerprint fails here, which is the whole point.
+#include <QColor>
+#include <QDir>
+#include <QImage>
 #include <QGuiApplication>
+#include <QStringList>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -37,6 +57,7 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -177,6 +198,24 @@ int main(int argc, char **argv)
 
     report(a); report(b); report(c);
 
+    // ---- shape 0: THE WALK ACTUALLY HAPPENED -------------------------------
+    // Every ratio below is a division, and a mirror that adopted NOTHING makes
+    // all of them pass: stillMs and firstMs both collapse towards zero, and
+    // materialBuilds is 0 because nothing was ever looked at. So the node
+    // counts and the adopting cost are pinned FIRST, and the suite refuses to
+    // report on a walk that did not take place.
+    CHECK(a.visited == 1020, "walk: the 1000-cube lattice mirrored 1020 nodes");
+    CHECK(b.visited == 2020, "walk: the 2000-cube lattice mirrored 2020 nodes");
+    CHECK(c.visited == 2020, "walk: the shared-material lattice mirrored 2020 nodes");
+    CHECK(a.firstMs > 0.0 && b.firstMs > 0.0 && c.firstMs > 0.0,
+          "walk: every adopting sync took measurable time");
+    CHECK(a.stillMs() > 0.0 && b.stillMs() > 0.0 && c.stillMs() > 0.0,
+          "walk: every still sync took measurable time");
+    if (failures) {   // the ratios below are meaningless without the above
+        std::printf("FAILURES (the walk itself)\n");
+        return 1;
+    }
+
     // ---- shape 1: a still sync is a fraction of the adopting one ----------
     const double ratio = b.stillMs() / (b.firstMs > 0 ? b.firstMs : 1);
     std::printf("    still/first = %.4f\n", ratio);
@@ -202,29 +241,151 @@ int main(int argc, char **argv)
     CHECK(b.builds == 0, "a still sync rebuilds NO material description");
     CHECK(c.builds == 0, "...with one shared material too");
 
+    // ---- shape 5: every authored property moves the FINGERPRINT ------------
+    //
+    // THE CASE THE MEMO'S WHOLE ARGUMENT RESTS ON. `MaterialSync` is reused
+    // across frames whenever a hash of the material's document fields has not
+    // moved, and the reason that was chosen over a revision counter is that a
+    // counter is only as good as the writer that remembers to bump it. The
+    // hash's own failure mode is narrower but real: a field the conversion
+    // READS that nobody remembered to HASH. This is what catches it.
+    //
+    // The subject is PbrMaterial's own property rows — the material's authoring
+    // surface, the list the panel and `material.set` are generated from — so a
+    // row added to the material and forgotten in materialFingerprint fails
+    // here without anyone having to think of it.
+    {
+        auto probeDoc = iris::Scene::create();
+        Scene *probeTarget = engine->createScene("fingerprint");
+        auto probeMesh = iris::MeshNode::create();
+        probeMesh->setMesh(iris::Mesh::loadMesh(":assets/models/cube.obj"));
+        auto probeMat = iris::PbrMaterial::create();
+        probeMesh->setMaterial(probeMat);
+        probeDoc->getRootNode()->addChild(probeMesh);
+        SceneMirror probe(probeTarget);
+        probe.setSource(probeDoc);
+        probe.sync();
+        probe.sync();
+        CHECK(probe.materialBuildCount() == 0, "fingerprint: the probe material settles first");
+
+        // A REAL IMAGE ON DISK for the texture rows. A missing file loads as a
+        // NULL texture and `set*Map(null)` clears the slot (PbrMaterial::
+        // loadTexture), so a bogus path on an empty slot is a genuine no-op —
+        // the memo is RIGHT to stand, and a probe that used one would be
+        // testing nothing. (It is also how the first draft of this case read as
+        // eleven fingerprint misses that were not there.)
+        const QString probePng = QDir::current().filePath(QStringLiteral("fingerprint-probe.png"));
+        {
+            QImage img(4, 4, QImage::Format_RGBA8888);
+            img.fill(QColor(200, 80, 40));
+            CHECK(img.save(probePng), "fingerprint: a real 4x4 texture is on disk for the map rows");
+        }
+
+        // Rows the ENGINE BOUNDARY genuinely does not read, named one by one so
+        // that adding a row the mirror ignores is a decision and not a
+        // shrug. `name` is the material's label; the two custom-piece paths are
+        // bound once at material creation (HLMS_ADOPTION P5) and deliberately
+        // not re-pushed per frame.
+        const QStringList notPushedPerFrame = {
+            QStringLiteral("name"),
+            QStringLiteral("customPiecePixel"), QStringLiteral("customPieceVertex"),
+        };
+
+        // PbrMaterial's rows are OWNED by the material (Material::properties,
+        // built at construction and rewritten by setValue) — copied by pointer
+        // here and never deleted.
+        const QList<iris::Property *> rows = probeMat->properties;
+        int covered = 0, skipped = 0, missed = 0;
+        for (iris::Property *row : rows) {
+            if (!row) continue;
+            const QString name = row->name;
+            const QVariant before = row->getValue();
+            // A DIFFERENT value for each type. Nothing here has to be sensible
+            // — it has to be different, and it has to arrive through the
+            // material's own setValue, which is the funnel every panel, script
+            // and reader writes through.
+            QVariant after;
+            switch (row->type) {
+            case iris::PropertyType::Bool:  after = !before.toBool(); break;
+            case iris::PropertyType::Int:
+            case iris::PropertyType::List:  after = before.toInt() + 1; break;
+            case iris::PropertyType::Float: after = before.toFloat() + 0.371f; break;
+            case iris::PropertyType::Color: {
+                const QColor c = before.value<QColor>();
+                after = QColor(c.red() ^ 0x5A, c.green() ^ 0x3C, c.blue() ^ 0x27, 255);
+                break;
+            }
+            case iris::PropertyType::Texture:
+            case iris::PropertyType::File:
+                after = probePng;
+                break;
+            default: after = QVariant(); break;
+            }
+            if (!after.isValid()) { ++skipped; continue; }
+
+            probeMat->setValue(name, after);
+            probe.sync();
+            const bool moved = probe.materialBuildCount() == 1;
+            if (notPushedPerFrame.contains(name)) {
+                ++skipped;
+            } else if (moved) {
+                ++covered;
+            } else {
+                ++missed;
+                std::printf("    FINGERPRINT MISS: '%s' (type %d) changed and the memo stood\n",
+                            qPrintable(name), int(row->type));
+            }
+            // Settle again so the next row starts from a clean count.
+            probe.sync();
+        }
+        std::printf("    fingerprint coverage: %d of %d rows move it, %d deliberately not pushed\n",
+                    covered, covered + missed, skipped);
+        CHECK(covered > 20, "fingerprint: the material's authoring surface is really being walked");
+        CHECK(missed == 0,
+              "fingerprint: EVERY authored property of a material moves its fingerprint");
+        probe.setSource(iris::ScenePtr());
+    }
+
     // ---- SCENE_STATIC: the settle half ------------------------------------
     // Rule 4 demotes a static subtree on the first transform write and nothing
     // used to put it back, so every prop a user nudged spent the rest of the
     // session in the renderer's per-frame transform and bounds passes. The
     // mirror re-derives the classification once the document goes quiet.
     {
-        // SETTLE FIRST, so the baseline is the steady state: binding a mirror
-        // MIGRATES the document's Ogre nodes into its scene manager and they
-        // are reborn dynamic, so the count right after a bind is a hint replay
-        // and not yet the resolution rule's own answer.
-        for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+        // ONE WARM-UP CYCLE FIRST, so the baseline is the steady state.
+        // Binding a mirror MIGRATES the document's Ogre nodes into its scene
+        // manager and they are reborn dynamic; the hints are replayed, and the
+        // count right after that is a replay rather than the resolution rule's
+        // own answer. A nudge-and-settle puts the tree where the rule says it
+        // belongs, and everything below compares against THAT.
+        auto nudge = [&](int count) {
+            int done = 0;
+            for (const auto &n : b.keep) {
+                if (n->getSceneNodeType() != iris::SceneNodeType::Mesh) continue;
+                n->setLocalPos(n->getLocalPos() + iris::Vec3(0.001f, 0, 0));
+                if (++done >= count) break;
+            }
+        };
+        auto settle = [&]() {
+            for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+        };
+        nudge(1); b.mirror->sync(); settle();
         const quint64 settled0 = iris::graph::staticNodeCount();
+
+        // THE SETTLE IS GATED ON A REAL DEMOTION (lead review F4). A quiet
+        // spell that follows no demotion — a camera move, an undo, a scene open
+        // — must not buy a whole-tree re-derivation, so a second settle with
+        // nothing dragged in between costs nothing at all.
+        const quint64 idleRepro = b.mirror->staticRepromotionCount();
+        settle();
+        CHECK(b.mirror->staticRepromotionCount() == idleRepro,
+              "settle: a quiet spell with NO demotion re-derives nothing");
         std::printf("    staticNodes before the nudge: %llu\n",
                     (unsigned long long)settled0);
         CHECK(settled0 > 0, "the lattices' props are SCENE_STATIC to begin with");
 
         // Nudge 30 props — a user dragging things around.
-        int nudged = 0;
-        for (const auto &n : b.keep) {
-            if (n->getSceneNodeType() != iris::SceneNodeType::Mesh) continue;
-            n->setLocalPos(n->getLocalPos() + iris::Vec3(0.001f, 0, 0));
-            if (++nudged >= 30) break;
-        }
+        nudge(30);
         b.mirror->sync();
         const quint64 afterNudge = iris::graph::staticNodeCount();
         std::printf("    staticNodes after 30 nudges:  %llu\n",
@@ -233,7 +394,7 @@ int main(int argc, char **argv)
 
         // Now settle: syncs with no transform write anywhere.
         const quint64 repro0 = b.mirror->staticRepromotionCount();
-        for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+        settle();
         const quint64 settled1 = iris::graph::staticNodeCount();
         std::printf("    staticNodes after the settle: %llu  (re-promotions %llu)\n",
                     (unsigned long long)settled1,
@@ -243,7 +404,7 @@ int main(int argc, char **argv)
         CHECK(settled1 == settled0, "…and every nudged prop is static again");
 
         // A SECOND settle must not run: nothing has written a transform since.
-        for (quint32 i = 0; i < SceneMirror::kStaticSettleFrames + 2; ++i) b.mirror->sync();
+        settle();
         CHECK(b.mirror->staticRepromotionCount() == repro0 + 1,
               "a scene that never moves again re-derives nothing further");
     }

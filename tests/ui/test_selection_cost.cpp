@@ -397,16 +397,99 @@ int main(int argc, char **argv)
         // adding 30 primitives produces (each add rebuilds the blade twice).
         for (int i = 0; i < 60; ++i) panel->setSceneNode(nodes[i % 5]);
         const double noTurnMs = double(noTurn.elapsed());
-        const int afterMany = retiredRows();
-        std::printf("  no-event-loop rebuilds: retired rows %d after 1, %d after 60"
-                    "  (%.0f ms for the 60)\n", afterOne, afterMany, noTurnMs);
-        CHECK(afterMany <= 3 * afterOne + 8,
-              "script shape: retired rows stay BOUNDED across 60 rebuilds with no event-loop turn");
+        const int after60 = retiredRows();
+        // ...and THREE TIMES AS MANY, which is what makes this a shape and not
+        // a magic number: the retired population is bounded by the generation
+        // ring (AccordianBladeWidget::kRetiredGenerations), so it must not
+        // depend on how many rebuilds happened. Before the fix it was one
+        // generation PER REBUILD — 180 rows at 60 rebuilds, 540 at 180.
+        for (int i = 0; i < 120; ++i) panel->setSceneNode(nodes[i % 5]);
+        const int after180 = retiredRows();
+        std::printf("  no-event-loop rebuilds: retired rows %d after 1, %d after 60, %d after 180"
+                    "  (%.0f ms for the first 60)\n", afterOne, after60, after180, noTurnMs);
+        CHECK(after180 <= after60,
+              "script shape: the retired population does not grow with the NUMBER of rebuilds");
+        // A ceiling too, so "bounded" cannot be satisfied by a constant leak of
+        // thousands: at most one generation ring of one blade's rows.
+        CHECK(after180 <= AccordianBladeWidget::kRetiredGenerations * 8,
+              "script shape: ...and it is one generation ring of rows, not a pile");
+        const int afterMany = after180;
         turn();
         CHECK(retiredRows() <= afterMany,
               "script shape: ...and a turn of the loop does not leave more behind");
         panel->setSceneNode(nodes[0]);
         turn();
+
+        // ---- THE HEADROOM, DRIVEN AT ITS BOUNDARY (lead review F3) --------
+        //
+        // The retired generations are freed by CALL COUNT, not by anything Qt
+        // enforces, so the safety property is a number: a row may drive
+        // AccordianBladeWidget::kRetiredGenerations rebuilds from inside its
+        // OWN slot before its memory is reclaimed under it. Today's measured
+        // maximum from a row's own signal is ONE, so three is two of slack.
+        // This drives the promise exactly, at its boundary.
+        //
+        // The vehicle is a real Qt signal of a real live ROW —
+        // objectNameChanged, which every QObject has — so the rebuilds happen
+        // INSIDE the row's own emission, with the row on the stack, and
+        // setObjectName goes on touching the row after the lambda returns.
+        // Under ASan (the gate's configuration) a generation too few is a
+        // use-after-free here instead of a mystery crash in a session.
+        {
+            // FINDING A REAL ROW, and not a piece of the blade's own
+            // scaffolding — which is what any "pick a visible child" heuristic
+            // lands on, and which is never retired, so the whole case would
+            // pass while testing nothing. Rows are identified by what happens
+            // TO them: a rebuild HIDES the generation it retires and leaves the
+            // scaffolding visible, so the widgets that were visible before a
+            // rebuild and are hidden after it are exactly the retired rows.
+            //
+            // Driving from an already-retired row is not a contrivance either —
+            // it is the real shape. A row that asks the panel to rebuild is
+            // retired by the rebuild it asked for, and everything it does after
+            // that call returns, it does while retired.
+            auto deepRows = [&]() {
+                QList<QWidget *> out;
+                for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+                    for (QWidget *w : b->findChildren<QWidget *>())
+                        if (!qobject_cast<AccordianBladeWidget *>(w)) out.append(w);
+                return out;
+            };
+            panel->setSceneNode(nodes[0]);
+            turn();
+            QList<QPointer<QWidget>> wereVisible;
+            for (QWidget *w : deepRows()) if (w->isVisible()) wereVisible.append(w);
+            panel->setSceneNode(nodes[1]);          // shift 1: they are retired now
+            QPointer<QWidget> victim;
+            for (const QPointer<QWidget> &w : wereVisible)
+                if (w && w->isHidden()) { victim = w; break; }
+            CHECK(!victim.isNull(), "headroom: a row that a rebuild really RETIRED was found");
+
+            if (victim) {
+                int drove = 0;
+                auto conn = QObject::connect(victim.data(), &QObject::objectNameChanged,
+                                             victim.data(), [&](const QString &) {
+                    // One shift is already spent (the rebuild that retired it),
+                    // so the promise leaves kRetiredGenerations - 1 here.
+                    for (int i = 0; i < AccordianBladeWidget::kRetiredGenerations - 1; ++i) {
+                        panel->setSceneNode(nodes[(i + 2) % 5]);
+                        ++drove;
+                    }
+                });
+                victim->setObjectName(QStringLiteral("selection-cost-headroom-probe"));
+                QObject::disconnect(conn);
+                // The row is on the stack here: reading it is what a real slot
+                // does after asking the panel to rebuild.
+                const bool stillThere = !victim.isNull();
+                const QString readBack = stillThere ? victim->objectName() : QString();
+                CHECK(drove == AccordianBladeWidget::kRetiredGenerations - 1,
+                      "headroom: the retired row's own slot drove the promised rebuilds");
+                CHECK(readBack == QStringLiteral("selection-cost-headroom-probe"),
+                      "headroom: ...and it is still readable afterwards (no use-after-free)");
+            }
+            panel->setSceneNode(nodes[0]);
+            turn();
+        }
     }
 
     // PIXELS. Hiding blades instead of orphaning them is a LIFETIME change, and

@@ -476,8 +476,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "where it equals the material count every frame is the defect that made an 8,404-node "
           "lattice cost 52 ms of mirror per STILL frame — the editor gives every primitive its own "
           "material, so \"one description per material\" and \"one per node\" are the same number. "
-          "`staticNodes` is how many of the scene's nodes sit in a SCENE_STATIC memory manager, "
-          "i.e. are OUT of the renderer's per-frame transform and bounds passes; moving a node "
+          "`staticNodes` is how many SCENE GRAPH nodes sit in a SCENE_STATIC memory manager, "
+          "i.e. are OUT of the renderer's per-frame transform and bounds passes — graph nodes and "
+          "not document ones, so the engine's own helpers (a light's -Y adapter, a decal's "
+          "projector box, the helper wires) are in it too and it reads slightly HIGHER than "
+          "nodesVisited rather than being a share of it; moving a node "
           "takes its whole subtree out of that set for the duration of the gesture, and "
           "`staticRepromotions` counts the times the mirror has put the scene back after the "
           "document went quiet (half a second with no transform write anywhere). Without that "
@@ -1311,7 +1314,9 @@ QVariantMap EditorApi::setCamera(const QVariant &poseArg)
                                               cam->getLocalRot(), &ok);
         if (!ok) {
             fail("editor.setCamera: rotation must be {x,y,z,scalar} (a quaternion, as editor.camera() "
-                 "returns) or {x,y,z} Euler degrees");
+                 "returns) or {x,y,z} Euler degrees — a fourth number under any other key "
+                 "(\"w\" is the one alias accepted) is refused rather than read as Euler, "
+                 "because a quaternion silently understood as degrees is a pose that collapses");
             return out;
         }
         pose.hasRotation = true;

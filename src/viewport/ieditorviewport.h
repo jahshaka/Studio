@@ -616,9 +616,16 @@ public:
         /// count every frame is the 52 ms-per-still-frame defect the render
         /// review measured on an 8,404-node lattice.
         quint64 materialBuilds = 0;
-        /// How many of the document's nodes sit in a SCENE_STATIC memory
-        /// manager, i.e. are OUT of Ogre's per-frame transform and bounds
-        /// passes (iris::graph::staticNodeCount).
+        /// How many nodes sit in a SCENE_STATIC memory manager, i.e. are OUT of
+        /// Ogre's per-frame transform and bounds passes
+        /// (iris::graph::staticNodeCount).
+        ///
+        /// IT IS A COUNT OF GRAPH NODES, NOT OF DOCUMENT NODES, and the two
+        /// differ: the graph also holds nodes the ENGINE owns (a light's -Y
+        /// adapter, a decal's projector box, helper wires) and they are counted
+        /// too. On an 8,404-node lattice this reads 8,422 against a
+        /// `nodesVisited` of 8,403. Read it as "how much of the scene graph is
+        /// out of the per-frame passes", never as a share of nodesVisited.
         quint64 staticNodes = 0;
         /// How many times the mirror has re-derived the scene's static
         /// classification after the document went quiet. Moving a node demotes

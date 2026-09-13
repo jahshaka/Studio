@@ -77,6 +77,39 @@ refuses(function () { node.addSocket(cube, { name: "head", bone: "jointTip" }); 
         "a socket on an UNRIGGED mesh is refused");
 refuses(function () { node.addSocket(lamp, { name: "head", bone: "jointTip" }); },
         "a socket on a LIGHT is refused (it is not a mesh at all)");
+// A QUATERNION WHOSE FOURTH KEY WE DO NOT KNOW IS REFUSED (lead review F6,
+// 2026-09-13). The rotation parser tells a quaternion from Euler DEGREES by the
+// presence of `scalar` or `w`, so a quaternion serialised with any other fourth
+// key — `s`, `W`, `qw`, a typo — used to fall through to the Euler branch and
+// be read as degrees, silently and with ok=true: {x:0, y:0.994, z:0.110, s:0}
+// became a one-degree rotation. That is exactly the "the saved pose collapses
+// to identity" shape, and nothing could see it. Three components is Euler;
+// three components AND another number is a quaternion whose fourth term we
+// could not find.
+assert(node.addSocket(rig, { name: "q_scalar", bone: "jointTip",
+                             rotation: { x: 0, y: 0.994, z: 0.110, scalar: 0 } }).name
+       === "q_scalar", "a {x,y,z,scalar} rotation is accepted");
+assert(node.addSocket(rig, { name: "q_w", bone: "jointTip",
+                             rotation: { x: 0, y: 0.994, z: 0.110, w: 0 } }).name
+       === "q_w", "…and so is the 'w' alias");
+assert(node.addSocket(rig, { name: "q_euler", bone: "jointTip",
+                             rotation: { x: 10, y: 20, z: 30 } }).name
+       === "q_euler", "…and plain {x,y,z} is still Euler degrees");
+assert(node.addSocket(rig, { name: "q_labelled", bone: "jointTip",
+                             rotation: { x: 10, y: 20, z: 30, note: "pitch/yaw/roll" } }).name
+       === "q_labelled", "…and a NON-numeric extra key is a label, not a lost fourth term");
+refuses(function () {
+    node.addSocket(rig, { name: "q_bad_s", bone: "jointTip",
+                          rotation: { x: 0, y: 0.994, z: 0.110, s: 0 } });
+}, "a fourth NUMBER under 's' is refused, not read as a 1-degree Euler rotation");
+refuses(function () {
+    node.addSocket(rig, { name: "q_bad_qw", bone: "jointTip",
+                          rotation: { x: 0, y: 0.994, z: 0.110, qw: 1 } });
+}, "…and so is 'qw'");
+assert(node.removeSocket(rig, "q_scalar") && node.removeSocket(rig, "q_w") &&
+       node.removeSocket(rig, "q_euler") && node.removeSocket(rig, "q_labelled"),
+       "the rotation probes are cleaned up so the counts below are unchanged");
+
 refuses(function () { node.addSocket(rig, { name: "hand", bone: "mixamorig:Head" }); },
         "a bone the rig does not have is refused");
 refuses(function () { node.addSocket(rig, { name: "head", bone: "jointRoot" }); },
