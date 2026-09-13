@@ -1773,6 +1773,13 @@ bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
     return view()->scene()->nodePlanarReflector(id);
 }
 
+QString EngineSceneViewport::spikeCommand(const QString &cmd)
+{
+    // SPIKE PHOTON-S1 ONLY — never merged.
+    if (!view() || !view()->scene()) return QStringLiteral("{\"error\":\"no scene\"}");
+    return QString::fromStdString(view()->scene()->spikeCommand(cmd.toStdString()));
+}
+
 IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
 {
     GiStatusInfo out;

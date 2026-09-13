@@ -531,6 +531,10 @@ public:
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
+    /// SPIKE PHOTON-S1 ONLY — never merged. A string command channel to the
+    /// engine scene's measurement hooks (irisgl/engine/src/PhotonS1Spike.cpp).
+    virtual QString spikeCommand(const QString &) { return QStringLiteral("{\"error\":\"no engine viewport\"}"); }
+
     /// WHAT THE SHADOW ATLAS IS, as opposed to what the scene asked for
     /// (SPECS/SHADOW_TOOLING_SPEC.md §7) — the same reading as giStatus() and
     /// for the same reason: the renderer has a FIXED number of point/spot

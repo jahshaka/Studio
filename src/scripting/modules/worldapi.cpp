@@ -280,6 +280,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           "The ambient gap epic used to have — the field replacing the cone diffuse also removed the only live ambient term inside the voxel volume, reading as a 15-25% darker mid-ground on OPEN scenes — is CLOSED: the renderer rebuilds that term from the field's own depth probes. world.gi's 'ddgiAmbient' is the strength, and 0 restores the old behaviour if a scene wants it. "
           "Writes are undoable as one step, exactly like world.mode.",
           Needs::Document },
+        { "spike", "world.spike(cmd) -> string",
+          "SPIKE PHOTON-S1 ONLY (never merged): a string command channel into the engine's VCT arm.",
+          Needs::Engine },
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
@@ -1056,6 +1059,12 @@ QVariantMap WorldApi::giStatus()
                         { QStringLiteral("lastMobilityMiss"), st.lastMobilityMiss },
                         { QStringLiteral("mobilityRebuilds"), double(st.mobilityRebuilds) },
                         { QStringLiteral("live"), true } };
+}
+
+QString WorldApi::spike(const QString &cmd)
+{
+    if (!host.isEngineReady() || !host.viewport) return QStringLiteral("{\"error\":\"no engine\"}");
+    return host.viewport->spikeCommand(cmd);
 }
 
 bool WorldApi::refreshGi()

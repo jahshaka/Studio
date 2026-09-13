@@ -47,6 +47,8 @@ public:
     Q_INVOKABLE QVariantMap photon(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap giStatus();
     Q_INVOKABLE bool refreshGi();
+    /// SPIKE PHOTON-S1 ONLY — never merged (see PhotonS1Spike.cpp).
+    Q_INVOKABLE QString spike(const QString &cmd);
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
     Q_INVOKABLE bool refreshShadows();
     /// What the shadow atlas ACHIEVED (SHADOW_TOOLING_SPEC.md §7).

@@ -189,6 +189,8 @@ public:
     int activePlanarReflectors() const override
     { return (view() && view()->scene()) ? view()->scene()->activePlanarReflectors() : 0; }
     GiStatusInfo giStatus() const override;
+    /// SPIKE PHOTON-S1 ONLY — never merged.
+    QString spikeCommand(const QString &cmd) override;
     ShadowStatusInfo shadowStatus() const override;
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
