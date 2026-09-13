@@ -832,13 +832,13 @@ assert(imported.objects >= wantObjects,
 // 2. OPEN and check the content is the content.
 assert(project.open(imported.guid) === true, "project.open");
 
-// THE RAYON TIER THE SAMPLE WAS AUTHORED AT (push #17 gate finding, 2026-09-13):
+// THE PHOTON TIER THE SAMPLE WAS AUTHORED AT (push #17 gate finding, 2026-09-13):
 // nothing in this suite asserted it, so the reader change that deleted the P2
 // migration had no safety net here — the gate had to check the eight samples by
 // hand. A sample must open at its own tier with NO deviations: `custom` true (or
 // a non-empty deviation list) means a pin or a stale override is dragging the
 // dial off the table, which is exactly what that migration used to paper over.
-var ray = world.rayon();
+var ray = world.photon();
 assert(ray.tier === want.tier,
        SAMPLE + " opens at its authored tier (" + ray.tier + " === " + want.tier + ")");
 assert(ray.custom === false && (!ray.deviations || ray.deviations.length === 0),

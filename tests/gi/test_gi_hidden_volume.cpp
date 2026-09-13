@@ -163,7 +163,7 @@ static void hiddenGeometry(Engine *engine, View *view)
 // visible, re-drawing a child the user had hidden himself.
 //
 // Run at the Epic tier's GI (hybrid, High, three bounces, the irradiance field
-// on, two dynamic probes a frame — worldmodes.cpp kRayonTable), because that is
+// on, two dynamic probes a frame — worldmodes.cpp kPhotonTable), because that is
 // what a new project renders with.
 // ---------------------------------------------------------------------------
 static NodeId addCubeUnder(Scene *s, NodeId parent, const Colour &albedo)

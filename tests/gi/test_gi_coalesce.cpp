@@ -478,7 +478,7 @@ int main(int argc, char **argv)
         for (int f = 0; f < 30; ++f) frame();
     }
 
-    // ---- Instant Radiosity (Rayon Low) re-traces on a MATERIAL edit ----------
+    // ---- Instant Radiosity (Photon Low) re-traces on a MATERIAL edit ----------
     // (code review 2026-09-12, item 7). IR's trace reads the same diffuse
     // colours VCT converts, and nothing re-traced it on an albedo edit: the
     // material generation now covers IR too, through the mirror's own

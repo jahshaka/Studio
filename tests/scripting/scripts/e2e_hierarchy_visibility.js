@@ -24,7 +24,7 @@ function J(x) { return JSON.stringify(x); }
 
 var guid = project.create("Hierarchy Visibility " + Date.now());
 assert(guid.length > 10, "project.create");
-var r = world.rayon();
+var r = world.photon();
 assert(r.tier === "epic" && r.technique === "vct_pcc_hybrid",
        "the scene renders at Epic (" + r.tier + ", " + r.technique + ")");
 
