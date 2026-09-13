@@ -445,7 +445,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
           "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
           Needs::Document },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
           "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
@@ -459,7 +459,12 @@ QVector<VerbInfo> EditorApi::verbs() const
           "no longer re-solves at all, it re-injects the lights into the voxels that are already "
           "there every few frames and waits for the drag to stop before the real re-solve. So "
           "during a drag this is the counter that moves and `giRefreshes` is the one that must "
-          "NOT.\n\n"
+          "NOT. `giLightRefreshesAtRest` is the subset of those taken once the motion STOPPED: "
+          "the injection is cheap while something moves (one bounce, a coarser ray march) and "
+          "must be the scene's full bounce count on the frame the movement ends, so one of these "
+          "follows every burst of movement — and for a lamp the author marked Movable it is the "
+          "only thing that ever runs the full count again, because that path deliberately arms "
+          "no re-solve at all.\n\n"
           "MOBILITY (SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3): `movableNodes` is how many of the "
           "scene's objects THE DOCUMENT resolved as MOVING on the last sync — physics bodies, "
           "characters, socket riders, animated objects, particle emitters, and everything "
@@ -1915,6 +1920,7 @@ QVariantMap EditorApi::mirrorStats()
     out.insert("giPushes", QVariant::fromValue(s.giPushes));
     out.insert("giRefreshes", QVariant::fromValue(s.giRefreshes));
     out.insert("giLightRefreshes", QVariant::fromValue(s.giLightRefreshes));
+    out.insert("giLightRefreshesAtRest", QVariant::fromValue(s.giLightRefreshesAtRest));
     // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): "how many things in this scene
     // does the DOCUMENT say move?". The renderer's side of it is on
     // world.giStatus() (§3.3.4), where R2's counters live.

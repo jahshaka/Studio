@@ -171,6 +171,14 @@ add_script_e2e(gi_status e2e_gi_status.js)
 # editor.mirrorStats() and world.giStatus() are measurements of the renderer.
 add_script_e2e(mobility_play e2e_mobility_play.js)
 
+# A MOVABLE LAMP THAT STOPS MOVING GETS ITS BOUNCES BACK (round-2 review F1 of
+# lane ENGINE-4). The engine's light-only injection is deliberately cheap while
+# something moves (one bounce, coarse march) and must be the full count on the
+# frame the motion ends — and for a MOVABLE lamp the mirror is the only thing
+# that can say when that is, because this path arms no settle at all. Engine UP:
+# the assertion is a picture.
+add_script_e2e(movable_lamp_rest e2e_movable_lamp_rest.js)
+
 # THE LAMP-MAP CACHE UNDER REFLECTION PROBES, ON A COLD SHADER CACHE
 # (ENGINE_CACHE_POLICY_SPEC P2/P4, ogre-patch 0025). The home is WIPED before
 # the run — that is the point of the case: the defect it guards only shows while

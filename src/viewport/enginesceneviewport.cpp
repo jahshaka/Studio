@@ -1964,6 +1964,7 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.giPushes = mMirror->giPushCount();
     s.giRefreshes = mMirror->giRefreshCount();
     s.giLightRefreshes = mMirror->giLightRefreshCount();
+    s.giLightRefreshesAtRest = mMirror->giLightRefreshAtRestCount();
     // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): what the DOCUMENT resolved.
     // The renderer's own records — and the play-time misses — are reported by
     // world.giStatus(), beside the probe and rebuild counters they belong with.

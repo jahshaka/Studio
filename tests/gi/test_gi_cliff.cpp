@@ -205,14 +205,18 @@ static void liveTable(Engine *engine, View *view)
         if (comparable)
             CHECK(grew, "adding a cube to a LIVE scene never collapses the lit volume");
         else
-            // THE WINDOW MOVED WITH THE MARGIN (ENGINE-4 item 5), and the
-            // property did not. A SUPPORTING SLAB — the ground here — is now
-            // clipped to the content it supports instead of being morphed back
-            // towards its own 200 m, so the volume around one 1 m cube at
-            // x = -3 measures 3.84 m (the cube, plus the ground between it and
-            // the content core) where it measured 6.25 m before. What this
-            // asserts is still "onto the content": not a speck, not the ground.
-            CHECK(span(b, 0) > 3.0f && span(b, 0) < 20.0f,
+            // THE WINDOW IS THE CONTENT'S OWN SIZE NOW, and that is the whole
+            // statement of ENGINE-4 item 5: a SUPPORTING SLAB is clipped to
+            // the content it supports (plus a small content-relative margin)
+            // instead of being morphed back towards its own 200 m, so the
+            // first content object's volume is that object's neighbourhood.
+            // The same cube measured 6.25 m before the lane (the ground's
+            // morph), 3.84 m when the clip still went to the trim core (which
+            // carries the collapsed slab, hence the world origin in the answer)
+            // and 1.12 m now — the cube, plus 5% of itself, plus the volume's
+            // own one-voxel slack. Below 1 m would mean the cube is not even
+            // covered; 3x is "the cube's neighbourhood, not the ground's".
+            CHECK(span(b, 0) >= 1.0f && span(b, 0) < 3.0f,
                   "the FIRST content object moves the volume onto the content (by design)");
         prev = b;
     }
@@ -288,6 +292,47 @@ static void escapeSignatureCase(Engine *engine, View *view)
     engine->destroyScene(s);
 }
 
+
+// ---------------------------------------------------------------------------
+// 5. THE SUPPORTING SLAB is clipped to the CONTENT, and to nothing about
+//    ITSELF (ENGINE-4 item 5, round-2 review F2). A ground plane is scenery:
+//    the lit volume must cover what stands on it, not the acres it lies on —
+//    and the answer must be the same whatever size that ground happens to be,
+//    which is the property the first build of this did NOT have (the clip went
+//    to a box derived from the trim core, and the core carries the collapsed
+//    slab: the same crate on a 50 m ground resolved to 15 m of volume and on a
+//    200 m one to 2 m).
+// ---------------------------------------------------------------------------
+static void slabPatchCase(Engine *engine, View *view)
+{
+    std::printf("-- the ground's size does not decide the volume; the content does\n");
+    const float grounds[3] = { 50.0f, 100.0f, 200.0f };
+    float spans[3] = { 0.0f, 0.0f, 0.0f };
+    for (int g = 0; g < 3; ++g) {
+        Scene *s = engine->createScene(("cliff_patch" + std::to_string(g)).c_str());
+        view->setScene(s);
+        // The same content every time: one 2 m crate at the origin.
+        box(s, Colour(0.7f, 0.7f, 0.7f), Vec3(0.0f, -0.1f, 0.0f),
+            Vec3(grounds[g], 0.2f, grounds[g]));
+        box(s, Colour(0.8f, 0.3f, 0.2f), Vec3(0.0f, 1.0f, 0.0f), Vec3(2.0f, 2.0f, 2.0f));
+        enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
+        const Box b = solve(s);
+        spans[g] = span(b, 0);
+        std::printf("   ground %6.0f m -> volume %6.2f m   (x %.2f..%.2f)\n",
+                    grounds[g], spans[g], b.mn.x, b.mx.x);
+        engine->destroyScene(s);
+    }
+    const float worst = std::max(std::max(spans[0], spans[1]), spans[2]);
+    const float best  = std::min(std::min(spans[0], spans[1]), spans[2]);
+    CHECK(worst - best < 0.02f * worst,
+          "the same crate resolves to the same volume on a 50, 100 and 200 m ground");
+    // ...and it really is the crate's neighbourhood, not the ground's: a 2 m
+    // crate plus the patch margin and the volume's own one-voxel slack.
+    std::printf("   the 100 m ground's answer: %.2f m\n", spans[1]);
+    CHECK(spans[1] > 2.0f && spans[1] < 4.0f,
+          "and that volume is the crate's own neighbourhood, not the ground's");
+}
+
 int main()
 {
     std::string err;
@@ -304,6 +349,7 @@ int main()
     liveTable(engine.get(), view);
     stillTrimsCase(engine.get(), view);
     escapeSignatureCase(engine.get(), view);
+    slabPatchCase(engine.get(), view);
 
     engine.reset();
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
