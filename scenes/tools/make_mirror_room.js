@@ -157,17 +157,30 @@ node.setProperty(l2, "intensity", 1.1);
 node.setProperty(l2, "distance", LIGHT_RANGE);
 
 // ---- global illumination ---------------------------------------------------
-// Bounds pinned to the ROOM: auto-fit spreads the probes over inflated bounds
-// (reflections P4), and a mis-placed probe is exactly what this sample shows.
+// NO BOUNDS ARE AUTHORED HERE (owner, 2026-09-13: "we need to get rid of the
+// boundaries for GI — a room built from zero must never carry a room size").
+// This sample used to pin the lit volume to the room it had just built, because
+// an early automatic fit spread the probes over inflated bounds (reflections
+// P4) and a mis-placed probe is exactly what this sample shows. That reason is
+// gone: the fit is re-measured on every rebuild AND on every reuse-arm refresh,
+// it is centred on the scene's CONTENT with the outlier trim taking the empty
+// acres off the default 100 m ground, and the probe REGION is a separate,
+// tighter reading of this room's own walls. Measured by lane UNPIN-1 on this
+// sample: 18 probes, the same probe region (-4.25, 0, -4.25)..(4.25, 3.75,
+// 4.25), 3 enclosed axes and 0 probes clamped, pinned and unpinned alike — the
+// reflections are placed by the LAYOUT, not by the volume. The volume itself
+// goes from the authored 9.2 m box to a measured 41.3 m one (0.07 -> 0.32 m per
+// voxel) and the picture moves by at most 8 levels of 255: the residue is the
+// 100 m ground the trim shrinks without removing, plus this room's own walls,
+// which are authored 18 m long around a 8.5 m interior.
+//
 // THE TIER, not its columns (lane-rayontiers, 2026-09-09): naming mode /
 // quality / bounces here PINNED them, so the archive opened as "Custom" the
 // moment the Epic row moved. Epic IS the hybrid at high quality with the
-// field, three bounces and two dynamic probes; bounds and the probe grid are
-// not tier rows and stay explicit.
+// field, three bounces and two dynamic probes; the probe grid is not a tier row
+// and stays explicit.
 assert(world.rayon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Rayon Epic");
-assert(world.gi({ boundsMin: sv({ x: -4.6, y: -0.6, z: -4.6 }),
-                  boundsMax: sv({ x: 4.6, y: 4.6, z: 4.6 }),
-                  pccGrid: { x: 3, y: 2, z: 3 } }), "GI: room bounds + probe grid");
+assert(world.gi({ pccGrid: { x: 3, y: 2, z: 3 } }), "GI: the probe grid (the volume is measured)");
 editor.frame(10);
 console.log("giStatus: " + JSON.stringify(world.giStatus()));
 

@@ -264,31 +264,42 @@ var LIGHT_RANGE = 40 * S;
 });
 
 // ---- global illumination ---------------------------------------------------
-// The hybrid at high quality (HDR + shadowed probes ride 'high'), with bounds
-// pinned to the ROOM: auto-fit spreads probes over inflated bounds, and
-// explicit bounds are the current correct move (reflections P4).
+// The hybrid at high quality (HDR + shadowed probes ride 'high'), over a lit
+// volume the RENDERER MEASURES.
+//
+// NO BOUNDS ARE AUTHORED HERE (owner, 2026-09-13: "we need to get rid of the
+// boundaries for GI — a room built from zero must never carry a room size").
+// This sample used to pin the volume to the room it had just built, because an
+// early automatic fit spread the probes over inflated bounds (reflections P4).
+// That reason is gone: the fit is re-measured on every rebuild AND on every
+// reuse-arm refresh, it is centred on the scene's CONTENT with the outlier trim
+// taking the empty acres off the default 100 m ground, and the probe REGION is
+// a separate and tighter reading of the room's own walls — so the reflections,
+// which is what this sample is for, are placed by the layout either way
+// (measured by lane UNPIN-1: probe count 32, probe region, enclosed axes 3 and
+// probes-clamped 0 are IDENTICAL pinned and unpinned in both variants. What
+// does move is the lit volume and with it the voxel size: Showroom's authored
+// 12 m box becomes a measured 36.6 m one at 0.29 m per voxel instead of 0.09,
+// Showroom 2's 24 m becomes 65 m — the autoBoundsMax ceiling — at 0.51 instead
+// of 0.19, and the picture moves by at most 5 levels of 255 in the Showroom and
+// 10 in Showroom 2. The residue is the 100 m default ground, which the outlier
+// trim shrinks but does not remove, plus this room's own walls: they are
+// authored TWICE the length of the interior they enclose, so the geometry
+// itself spans 24 m in the Showroom and 48 m in Showroom 2).
+//
 // THE TIER, not its columns (lane-rayontiers, 2026-09-09): naming mode /
 // quality / bounces here PINNED them, so the archive opened as "Custom" the
 // moment the Epic row moved. Epic IS the hybrid at high quality with the
-// field, three bounces and two dynamic probes; bounds and the probe grid are
-// not tier rows and stay explicit.
+// field, three bounces and two dynamic probes; the probe grid is not a tier row
+// and stays explicit.
 //
-// THE BOUNDS TOP CLEARS THE CEILING SLAB (lane L14, 2026-09-12). The slab
-// spans y 6.75 .. 7.75 (original units); the top used to be 7.6, INSIDE it, so
-// the voxel volume and the irradiance field ended mid-slab and the field's
-// last probe layer sat in solid ceiling — one of the two ingredients of the
-// interior colour bleeding out onto the roof (the other, the field's cage never
-// clamping at the volume edge, is an engine fix: ENGINE_CACHE_POLICY_SPEC P9).
-// 8.0 puts the whole slab inside the volume with a quarter-unit margin.
-//
-// THE PROBE GRID IS A COUNT, NOT A SPACING: 4 x 2 x 4 over bounds that ride S
-// is a spacing that rides S, so both variants place their 32 probes at the
-// same RELATIVE positions. Lane L14 measured a 2x-denser grid (8 x 4 x 8) in
-// the S = 1 room against this one — see its report for the numbers.
+// THE PROBE GRID IS A COUNT, NOT A SPACING: 4 x 2 x 4 over a region that is the
+// room's own interior is a spacing that rides S, so both variants place their
+// 32 probes at the same RELATIVE positions. Lane L14 measured a 2x-denser grid
+// (8 x 4 x 8) in the S = 1 room against this one — see its report for the
+// numbers.
 assert(world.rayon({ enabled: true, tier: "epic" }).tier === "epic", "GI: Rayon Epic");
-assert(world.gi({ boundsMin: sv({ x: -12, y: -0.6, z: -12 }),
-                  boundsMax: sv({ x: 12, y: 8.0, z: 12 }),
-                  pccGrid: { x: 4, y: 2, z: 4 } }), "GI: room bounds + probe grid");
+assert(world.gi({ pccGrid: { x: 4, y: 2, z: 4 } }), "GI: the probe grid (the volume is measured)");
 
 // The template's per-metre WORLD settings, scaled with the room (GROW, above).
 // FOG is exponential per world unit, so a room twice as deep is twice as foggy
