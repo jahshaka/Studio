@@ -50,7 +50,7 @@ For more information see the LICENSE file
 /// The world properties a panel row can write, by name.
 ///
 /// Keys are the document's own field names (`fogDensity`, `fogColor`,
-/// `giBoundsMin`, ...) with two composites that only make sense whole:
+/// `giPccGrid`, ...) with two composites that only make sense whole:
 ///   * `postFx.<id>`  — one worldmodes::postFxParam (exposure, bloomKnee, ...);
 ///                      the registry owns the clamp and the setter.
 ///   * `sky`          — the sky block (type, per-type blobs, the live colour /

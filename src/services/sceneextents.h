@@ -3,13 +3,13 @@
 // 2026-09-09). One implementation, two callers: the `scene.bounds` verb and the
 // samples.cleanstart suites that read it.
 //
-// WHY NOT gibounds::fit. That one unions bounding SPHERES on purpose — a pinned
-// GI volume that clipped its own subject is the worse failure, so it is
-// deliberately generous. It is useless for measuring a ROOM: the Showroom's
-// 24 x 0.5 x 24 floor slab has a 17 m bounding sphere, so a sphere union
-// reports a 34 m tall scene for a 3.4 m ceiling. This one transforms each
-// mesh's LOCAL AABB (iris::Mesh::aabb) by the node's global matrix and unions
-// the eight corners, which is the number a human means by "how big is it".
+// It transforms each mesh's LOCAL AABB (iris::Mesh::aabb) by the node's global
+// matrix and unions the eight corners, which is the number a human means by
+// "how big is it" — never a bounding SPHERE, whose radius is half the model's
+// diagonal (the Showroom's 24 x 0.5 x 24 floor slab has a 17 m bounding sphere,
+// so a sphere union reports a 34 m tall scene for a 3.4 m ceiling). The GI
+// bounds helper that did union spheres is deleted: the lit volume is the
+// renderer's own fit now (owner decision D8, 2026-09-13).
 //
 // The transformed box is the AABB of the ROTATED box, so a rotated node reads
 // slightly larger than its own geometry — the standard, honest approximation;

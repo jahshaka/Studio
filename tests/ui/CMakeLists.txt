@@ -233,7 +233,6 @@ add_executable(test_photon_panel
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
@@ -374,7 +373,6 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
@@ -486,7 +484,6 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
@@ -608,7 +605,6 @@ add_executable(test_properties_width
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp

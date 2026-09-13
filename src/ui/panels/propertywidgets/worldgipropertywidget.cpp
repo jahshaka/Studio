@@ -22,7 +22,6 @@ For more information see the LICENSE file
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
 #include "ui/controls/dragvaluewidgets.h"
-#include "services/gibounds.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -109,11 +108,10 @@ void WorldGiPropertyWidget::rebuild()
     // them, and refreshPins() dereferences whichever this build leaves set.
     photonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;
     quality = nullptr; lightSelector = nullptr; bounces = nullptr;
-    boundsMin = nullptr; boundsMax = nullptr;
     pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr; reflectionsText.clear();
     updateBudget = nullptr; ddgiToggle = nullptr;
     ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
-    fitBoundsButton = nullptr; advancedButton = nullptr; resetAdvancedButton = nullptr;
+    advancedButton = nullptr; resetAdvancedButton = nullptr;
     editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
     if (!scene) return;
 
@@ -340,23 +338,24 @@ void WorldGiPropertyWidget::rebuild()
                                "sees them too. Epic sets 3; the other tiers 1."));
         wirePhotonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Photon Light Bounces"));
 
-        // COMPACT, SCRUBBABLE ROWS (owner report 2026-09-07). These were
-        // addVector3Widget — three full-width QDoubleSpinBoxes and NO label at
-        // all (that helper ignores its name argument), which is why the section
-        // pushed the dock wider than the panel and why a caption row above each
-        // pair was needed to say what they were. DragVector3Widget is the
-        // transform editor's row: named, shrinkable, and scrubbed by dragging
-        // left/right (ui/controls/dragvaluewidgets.h).
-        this->addLabel(tr("Bounds"), tr("Corners of the lit area; zeros = fit the scene"));
-        boundsMin = this->addDragVector3(tr("Min"), scene->giBoundsMin);
-        boundsMax = this->addDragVector3(tr("Max"), scene->giBoundsMax);
-        wirePlainRow(boundsMin, QStringLiteral("giBoundsMin"), tr("Photon Bounds"));
-        wirePlainRow(boundsMax, QStringLiteral("giBoundsMax"), tr("Photon Bounds"));
+        // NO BOUNDS ROWS (owner decision D8, 2026-09-13): the lit volume is the
+        // renderer's own fit to the scene's content, always, and there is
+        // nothing here for a user to type. What the fit DECIDED is a reading,
+        // and it is reported by world.giStatus().
 
         if (scene->giMode == iris::GiMode::VCT_PCC_HYBRID) {
-            this->addLabel(tr("Reflection Probes"), tr("Probe counts along each axis of the bounds"));
+            this->addLabel(tr("Reflection Probes"),
+                           tr("Probe counts along each axis of the lit volume"));
             // Counts, not lengths: whole numbers, a coarse scrub, and a range
             // that cannot ask for a probe grid nobody could afford.
+            //
+            // COMPACT, SCRUBBABLE (owner report 2026-09-07): this was an
+            // addVector3Widget — three full-width QDoubleSpinBoxes and NO label
+            // at all (that helper ignores its name argument), which is why the
+            // section pushed the dock wider than the panel and why the caption
+            // row above exists at all. DragVector3Widget is the transform
+            // editor's row: named, shrinkable, and scrubbed by dragging left
+            // and right (ui/controls/dragvaluewidgets.h).
             pccGrid = this->addDragVector3(tr("Grid"), scene->giPccGrid, 1.0, 16.0, 0.05, 0);
             // Counts: whole numbers in 1..8, clamped on the way to the document.
             wirePlainRow(pccGrid, QStringLiteral("giPccGrid"), tr("Photon Probe Grid"),
@@ -459,20 +458,6 @@ void WorldGiPropertyWidget::rebuild()
                          [](const QVariant &row) { return QVariant(qBound(-1, row.toInt() - 1, 1)); });
         }
 
-        // P1a.3, adapted: the spec asked for "fit to SELECTION", but this panel
-        // only ever appears while the WORLD is the selection (the properties
-        // panel swaps the whole stack, scenenodepropertieswidget.cpp), so a
-        // selection-driven button here would be permanently empty. What is
-        // useful at this moment is pinning the volume to the scene's contents
-        // and then nudging the rows. The selection-driven form lives where it
-        // can work: the world.fitGiBounds({nodes}) verb.
-        fitBoundsButton = new QPushButton(tr("Fit Bounds To Scene"));
-        fitBoundsButton->setToolTip(tr("Pin the bounds above to everything in the scene. Leaving "
-                                       "them at zero lets the renderer fit them automatically, "
-                                       "which also ignores outsized objects like a ground plane; "
-                                       "pin them when you want a volume of your own."));
-        connect(fitBoundsButton, &QPushButton::clicked, this, &WorldGiPropertyWidget::onFitBoundsClicked);
-        this->addWidgetToContent(fitBoundsButton);
         break;
     }
     }
@@ -764,34 +749,6 @@ void WorldGiPropertyWidget::onDdgiToggled(bool on)
 void WorldGiPropertyWidget::onDdgiSourceChanged(int index)
 {
     Q_UNUSED(index)   // wired through wirePlainRow (giDdgiSource)
-}
-
-void WorldGiPropertyWidget::onFitBoundsClicked()
-{
-    if (!scene || scene->getRootNode().isNull()) return;
-    iris::Vec3 mn, mx;
-    if (!gibounds::fit(scene->getRootNode()->children(), 0.0f, mn, mx)) return;
-    // TWO fields, one gesture: the pair is the volume, and an undo that put
-    // back one corner would leave a box nobody asked for. Recorded as one step
-    // whose apply half is the same assignment the button just made.
-    const iris::Vec3 oldMin = scene->giBoundsMin;
-    const iris::Vec3 oldMax = scene->giBoundsMax;
-    auto apply = [this](const iris::Vec3 &lo, const iris::Vec3 &hi) {
-        if (!scene) return;
-        scene->giBoundsMin = lo;
-        scene->giBoundsMax = hi;
-    };
-    apply(mn, mx);
-    QPointer<WorldGiPropertyWidget> self(this);
-    panelundo::pushEdit(services, tr("Fit Photon Bounds"),
-                        [apply, mn, mx]() { apply(mn, mx); },
-                        [self, apply, oldMin, oldMax]() {
-                            apply(oldMin, oldMax);
-                            if (self) self->rebuild();
-                        });
-    // The rows are spin boxes holding the OLD numbers; rebuild so the panel
-    // shows what it just wrote.
-    rebuild();
 }
 
 void WorldGiPropertyWidget::onResetAdvancedClicked()

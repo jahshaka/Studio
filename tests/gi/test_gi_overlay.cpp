@@ -10,14 +10,23 @@
 // acceptance is made measurable without a world-to-screen verb: the engine's
 // camera helper puts its lookAt TARGET at the centre pixel, so aiming at a
 // world point and reading the middle of the frame answers "is the wire HERE?"
-// exactly. The GI bounds are typed explicitly and placed over EMPTY SPACE, so
-// nothing but the overlay can be in that part of the picture:
+// exactly.
+//
+// THE VOLUME IS THE RENDERER'S AUTOMATIC FIT (owner decision D8, 2026-09-13:
+// the document's bounds pin, its rows, the Fit button and world.fitGiBounds are
+// deleted — the fit is the only behaviour left). So the box is not typed here;
+// it is MEASURED out of `giStatus()` after the first solve, and the scene is
+// laid out to make the two probes below legible: THREE separate cubes, each
+// owning one axis of the union's max face, standing off to +X over empty space.
+// Nothing solid is therefore at the (maxX, maxY, maxZ) corner or at the
+// volume's centre, which is what makes "the wire is HERE" mean the wire.
 //
 //   * aim at the volume's max corner  -> the wire is there;
 //   * aim at the volume's centre      -> nothing (the box is hollow, and its
 //                                        far face's EDGES are not on axis);
-//   * move the bounds, re-aim         -> the wire moved with them, and the old
-//                                        corner is empty;
+//   * move the geometry and re-solve  -> the box FOLLOWED the scene: the wire
+//                                        is at the new corner and the old one
+//                                        is empty;
 //   * turn the overlay off            -> the corner is empty again;
 //   * turn GI off with the overlay on -> nothing is drawn at all (it describes
 //                                        GI, it is not decoration).
@@ -80,37 +89,30 @@ int main(int argc, char **argv)
     // here (ambientColor black + ambientFromSky off) were spelling out.
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
-    // EXPLICIT bounds, over empty space off to +X: the overlay is then the only
-    // thing that can be in the part of the frame this suite looks at.
-    const iris::Vec3 boundsMin(6.0f, -1.0f, -6.0f), boundsMax(10.0f, 3.0f, -2.0f);
-    doc->giBoundsMin = boundsMin;
-    doc->giBoundsMax = boundsMax;
-
-    auto cube = iris::MeshNode::create();
-    cube->setName("cube");
-    cube->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"));
-    cube->setLocalPos(iris::Vec3(0.0f, 0.5f, 0.0f));
     auto mat = iris::PbrMaterial::create();
     mat->setBaseColor(QColor(200, 200, 200));
-    cube->setMaterial(mat);
-    doc->getRootNode()->addChild(cube);
-
-    // A SECOND cube, INSIDE the explicit GI region. Not decoration: measured
-    // this lane, `VctVoxelizer::build` over a region containing no geometry at
+    const auto cubeAt = [&](const char *name, const iris::Vec3 &pos) {
+        auto n = iris::MeshNode::create();
+        n->setName(QString::fromLatin1(name));
+        n->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"));
+        n->setLocalPos(pos);
+        n->setMaterial(mat);
+        doc->getRootNode()->addChild(n);
+        return n;
+    };
+    // THE SCENE IS THE VOLUME. Three unit cubes off to +X over empty space, one
+    // per axis of the union's max face: cubeX owns max X, cubeY owns max Y,
+    // cubeZ owns max Z. Their union is x [6,10], y [-1,3], z [-6,-2] — the box
+    // this suite used to TYPE — and no cube is anywhere near its (10, 3, -2)
+    // corner or its (8, 1, -4) centre, which are the two points probed below.
+    // (Three cubes rather than one also keeps the voxelizer fed: measured on
+    // this pin, `VctVoxelizer::build` over a region containing no geometry at
     // all leaves its AabbWorldSpace compute job with no thread groups set and
-    // throws ("Shader or C++ must set threads_per_group_x..."), so the whole GI
-    // arm silently fails to build and there is no volume to draw. Upstream
-    // behaviour; recorded here rather than worked around, because a user CAN
-    // type such a box and the honest answer is a panel warning, not a fudge.
-    auto inner = iris::MeshNode::create();
-    inner->setName("inner");
-    inner->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"));
-    // Tucked into the region's far upper corner and half size, so it is nowhere
-    // near the camera rays this suite fires at the box's near corners.
-    inner->setLocalPos(iris::Vec3(6.5f, 2.5f, -5.5f));
-    inner->setLocalScale(iris::Vec3(0.5f, 0.5f, 0.5f));
-    inner->setMaterial(mat);
-    doc->getRootNode()->addChild(inner);
+    // throws, so the whole GI arm silently fails to build and there is no
+    // volume to draw at all.)
+    auto cubeX = cubeAt("cubeX", iris::Vec3(9.5f, -0.5f, -5.5f));
+    cubeAt("cubeY", iris::Vec3(6.5f, 2.5f, -5.5f));
+    cubeAt("cubeZ", iris::Vec3(6.5f, -0.5f, -2.5f));
 
     auto sun = iris::LightNode::create();
     sun->setName("sun");
@@ -164,14 +166,53 @@ int main(int argc, char **argv)
     // wrong). Straight down -Z the image centre is the middle of a FACE at both
     // ends of the box, which is exactly what "hollow" means.
     const iris::Vec3 farEye(8.0f, 1.0f, 12.0f);
-    const iris::Vec3 corner(boundsMax.x(), boundsMax.y(), boundsMax.z());
-    // The volume's CENTRE: the box is a wireframe, so a ray through its middle
-    // enters and leaves through the middle of two FACES and crosses no edge.
-    // That is what makes "the wire is at the corner" mean the corner and not
-    // "the wire is somewhere in that direction".
-    const iris::Vec3 centre((boundsMin.x() + boundsMax.x()) * 0.5f,
-                            (boundsMin.y() + boundsMax.y()) * 0.5f,
-                            (boundsMin.z() + boundsMax.z()) * 0.5f);
+
+    // THE BOX IS READ, NEVER ASSUMED: one settle, then the resolved volume out
+    // of giStatus is what every aim below is derived from. `maxCorner` is the
+    // (maxX, maxY, maxZ) corner; `midPoint` the volume's CENTRE — the box is a
+    // wireframe, so a ray through its middle enters and leaves through the
+    // middle of two FACES and crosses no edge, which is what makes "the wire is
+    // at the corner" mean the corner and not "somewhere in that direction".
+    const auto settle = [&](int frames) {
+        for (int f = 0; f < frames; ++f) {
+            doc->refresh();
+            mirror.sync();
+            mirror.applySky(view);
+            mirror.applyEnvironment(view, engine.get());
+            mirror.applyCamera(cam, view);
+            engine->renderOneFrame();
+        }
+    };
+    const auto maxCorner = [&] {
+        const GiStatus st = escene->giStatus();
+        return iris::Vec3(st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);
+    };
+    const auto midPoint = [&] {
+        const GiStatus st = escene->giStatus();
+        return iris::Vec3((st.boundsMin.x + st.boundsMax.x) * 0.5f,
+                          (st.boundsMin.y + st.boundsMax.y) * 0.5f,
+                          (st.boundsMin.z + st.boundsMax.z) * 0.5f);
+    };
+    cam->setLocalPos(farEye);
+    cam->lookAt(iris::Vec3(8.0f, 1.0f, -4.0f));
+    cam->update(0.0f);
+    settle(30);
+    {
+        const GiStatus st = escene->giStatus();
+        std::printf("   the AUTOMATIC volume: %.2f %.2f %.2f .. %.2f %.2f %.2f\n",
+                    st.boundsMin.x, st.boundsMin.y, st.boundsMin.z,
+                    st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);
+        // cube.obj is TWO units across, so the three cubes' union is
+        // x [5.5, 10.5], y [-1.5, 3.5], z [-6.5, -1.5]; one voxel of margin on
+        // a 5 m box at Low (32^3) is 0.156. The fit must land within a fifth of
+        // a metre of that.
+        CHECK(std::fabs(st.boundsMax.x - 10.66f) < 0.2f &&
+              std::fabs(st.boundsMax.y -  3.66f) < 0.2f &&
+              std::fabs(st.boundsMax.z + 1.34f) < 0.2f,
+              "the automatic fit is the three cubes' union plus one voxel");
+    }
+    const iris::Vec3 corner = maxCorner();
+    const iris::Vec3 centre = midPoint();
 
     // ---- off by default ----------------------------------------------------
     CHECK(!mirror.giVolumeOverlay(), "the overlay is OFF by default (it is a diagnostic)");
@@ -189,28 +230,23 @@ int main(int argc, char **argv)
     CHECK(cornerOn > 0.10f, "the wire box's max CORNER is exactly at giStatus's boundsMax");
     CHECK(centreOn < 0.02f, "...and the box is HOLLOW: nothing through its centre");
 
-    // Cross-check the numbers the overlay is drawing from.
-    {
-        const GiStatus st = escene->giStatus();
-        std::printf("   giStatus bounds: %.2f %.2f %.2f .. %.2f %.2f %.2f\n",
-                    st.boundsMin.x, st.boundsMin.y, st.boundsMin.z,
-                    st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);
-        CHECK(std::fabs(st.boundsMax.x - boundsMax.x()) < 0.01f &&
-              std::fabs(st.boundsMax.y - boundsMax.y()) < 0.01f &&
-              std::fabs(st.boundsMax.z - boundsMax.z()) < 0.01f,
-              "giStatus reports the typed bounds (so the corner above IS boundsMax)");
-    }
-
-    // ---- move the bounds: the box must follow -------------------------------
-    const iris::Vec3 newMin(6.0f, -1.0f, -6.0f), newMax(9.0f, 2.0f, -3.0f);
-    doc->giBoundsMin = newMin;
-    doc->giBoundsMax = newMax;
-    const iris::Vec3 newCorner(newMax.x(), newMax.y(), newMax.z());
+    // ---- move the GEOMETRY: the box must follow it ---------------------------
+    // The volume has no dial any more, so the way to move it is to move what it
+    // is fitted to. cubeX owned max X; bring it 2.5 m in and re-solve (the same
+    // re-solve world.refreshGi() asks for — an object moving INWARD escapes
+    // nothing, so nothing would invalidate the volume on its own).
+    cubeX->setLocalPos(iris::Vec3(7.0f, -0.5f, -5.5f));
+    ++doc->giRefreshSerial;
+    settle(30);
+    const iris::Vec3 newCorner = maxCorner();
+    std::printf("   after moving cubeX in: new corner %.2f %.2f %.2f\n",
+                newCorner.x(), newCorner.y(), newCorner.z());
+    CHECK(newCorner.x() < corner.x() - 2.0f, "the automatic volume SHRANK with the scene");
     const float oldCornerAfter = lookAndSample(farEye, corner);
     const float newCornerAfter = lookAndSample(farEye, newCorner);
-    std::printf("   after moving the bounds:  old corner %.3f   new corner %.3f\n",
+    std::printf("   after moving the geometry:  old corner %.3f   new corner %.3f\n",
                 oldCornerAfter, newCornerAfter);
-    CHECK(newCornerAfter > 0.10f, "the box MOVED to the new bounds");
+    CHECK(newCornerAfter > 0.10f, "the box MOVED with the volume the renderer re-fitted");
     CHECK(oldCornerAfter < 0.02f, "...and left the old corner empty");
 
     // ---- GI off: the overlay describes GI, it is not decoration -------------

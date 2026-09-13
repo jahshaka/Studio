@@ -80,6 +80,10 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     doc->giMode = iris::GiMode::VCT;
     doc->giQuality = iris::GiQuality::MEDIUM;
+    // Pinned to what "auto" RESOLVED to at this quality, so the hybrid section
+    // below captures exactly what it used to.
+    doc->giProbeHdr = 0;
+    doc->giProbeShadows = 0;
     doc->giUpdateBudget = 1;
     doc->giNumBounces = 2;
     // Zero ambient, like gi.modes: the red on the floor has to be BOUNCE and
@@ -90,10 +94,9 @@ int main(int argc, char **argv)
     // here (ambientColor black + ambientFromSky off) were spelling out.
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
-    // Pinned bounds: the auto fit is P1a's subject and would make this suite's
-    // numbers move when that heuristic changes. Nothing here is about bounds.
-    doc->giBoundsMin = iris::Vec3(-7.2f, -0.3f, -7.2f);
-    doc->giBoundsMax = iris::Vec3(7.2f, 6.5f, 7.2f);
+    // NO BOUNDS PIN (owner decision D8, 2026-09-13): the document has no bounds
+    // fields any more and the lit volume is always the renderer's own fit to
+    // this room's content, which for a closed box IS the box plus one voxel.
 
     // Geometry and light copied from gi.modes (tests/gi/test_gi.cpp), which is
     // the construction already proven to produce a measurable red bounce: a big
@@ -105,7 +108,19 @@ int main(int argc, char **argv)
     floor->setName("floor");
     floor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"));
     floor->setLocalPos(iris::Vec3(0.0f, -0.05f, 0.0f));
-    floor->setLocalScale(iris::Vec3(14.0f, 0.1f, 14.0f));
+    // THE SCENE IS THE SIZE OF THE VOLUME IT USED TO PIN (owner decision D8,
+    // 2026-09-13). The lit volume is the renderer's fit to the geometry now, so
+    // a floor and a wall running far past the box this suite typed no longer
+    // cost nothing: at the old 28 m span the fitted volume was twice the box
+    // this suite used to type, i.e. half the voxel resolution, and the cheap
+    // light-only re-inject and the full re-solve stopped agreeing to within a
+    // hundredth (measured 0.035 apart, then 0.016 at an intermediate size).
+    // The floor and the wall are therefore authored at the extent the pin used
+    // to CLIP them to: a 14 x 14 floor and a 14 x 6.4 x 1.8 wall, whose union
+    // plus one voxel of margin is +-7.22 by -0.32 .. 6.48 — the box the pin
+    // typed, to within two centimetres. Same voxelized scene, same metres per
+    // voxel, said in geometry instead of in a number nobody could see.
+    floor->setLocalScale(iris::Vec3(7.0f, 0.1f, 7.0f));
     auto floorMat = iris::PbrMaterial::create();
     floorMat->setBaseColor(QColor(255, 255, 255));
     floorMat->setRoughnessFactor(0.9f);
@@ -116,8 +131,8 @@ int main(int argc, char **argv)
     auto wall = iris::MeshNode::create();
     wall->setName("red wall");
     wall->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"));
-    wall->setLocalPos(iris::Vec3(0.0f, 3.0f, -3.0f));
-    wall->setLocalScale(iris::Vec3(12.0f, 6.0f, 0.9f));
+    wall->setLocalPos(iris::Vec3(0.0f, 3.08f, -3.0f));
+    wall->setLocalScale(iris::Vec3(7.0f, 3.18f, 0.9f));
     auto wallMat = iris::PbrMaterial::create();
     wallMat->setBaseColor(QColor(255, 13, 13));
     wallMat->setRoughnessFactor(0.9f);
@@ -336,13 +351,8 @@ int main(int argc, char **argv)
     // has, because it rides the same debounce: continuous movement costs ZERO
     // rebuilds, and letting go costs exactly ONE.
     //
-    // Auto bounds for this section — the suite above pins them on purpose, and
-    // an escape from a hand-typed box is not a thing (a typed box is the user's
-    // statement about where GI happens, so giEscapeSignature returns 0 for it).
     doc->giUpdateBudget = 1;
-    doc->giBoundsMin = iris::Vec3(0, 0, 0);
-    doc->giBoundsMax = iris::Vec3(0, 0, 0);
-    frame();                       // the bounds change is a param change: one push
+    frame();
     for (int f = 0; f < 25; ++f) frame();
 
     auto flyer = iris::MeshNode::create();
@@ -399,11 +409,36 @@ int main(int argc, char **argv)
     // re-solve STALES the grid and the budget spreads the captures, so no frame
     // captures more than budget + dynamic probes. Counters, not milliseconds.
     std::printf("-- hybrid: the probe cache under a re-solve\n");
+    // FIRST, AN ENCLOSURE. A reflection probe is a photograph of an enclosure
+    // and the renderer MEASURES that enclosure out of the scene's own layout
+    // (owner probe rule, 2026-09-13): a floor with one wall on it reads as OPEN
+    // and the hybrid builds no grid at all. This suite used to state where the
+    // space was by PINNING the lit volume, and that pin is deleted (owner
+    // decision D8), so it closes the room for real — at the footprint the fit
+    // already has, so the volume barely moves. The walls arrive here rather
+    // than at scene build because everything above is plain VCT and is about a
+    // light moving over a floor, not about a room.
+    {
+        const auto box = [&](const char *name, const iris::Vec3 &pos, const iris::Vec3 &scale) {
+            auto n = iris::MeshNode::create();
+            n->setName(QString::fromLatin1(name));
+            n->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"));
+            n->setLocalPos(pos);
+            n->setLocalScale(scale);
+            n->setMaterial(floorMat);
+            doc->getRootNode()->addChild(n);
+        };
+        // Sized to the FLOOR this room already has (28 m across, 12 m tall at
+        // the red wall), so the enclosure really covers the faces it closes and
+        // the fitted volume does not move when they arrive.
+        box("ceiling", iris::Vec3(0.0f, 6.4f, 0.0f),  iris::Vec3(7.2f, 0.1f, 7.2f));
+        box("-X wall", iris::Vec3(-7.1f, 3.1f, 0.0f),  iris::Vec3(0.1f, 3.4f, 7.2f));
+        box("+X wall", iris::Vec3(7.1f, 3.1f, 0.0f),   iris::Vec3(0.1f, 3.4f, 7.2f));
+        box("+Z wall", iris::Vec3(0.0f, 3.1f, 7.1f),   iris::Vec3(7.2f, 3.4f, 0.1f));
+    }
     doc->giMode = iris::GiMode::VCT_PCC_HYBRID;
     doc->giPccGrid = iris::Vec3(2, 1, 2);             // 4 probes
     doc->giUpdateBudget = 1;
-    doc->giBoundsMin = iris::Vec3(-7.2f, -0.3f, -7.2f);
-    doc->giBoundsMax = iris::Vec3(7.2f, 6.5f, 7.2f);
     flyer->setLocalPos(iris::Vec3(0.0f, 0.6f, 1.0f));
     for (int f = 0; f < 40; ++f) frame();             // push, build, sweep, settle
     const int kHybridProbes = 4;

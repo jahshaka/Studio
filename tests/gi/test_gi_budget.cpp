@@ -118,7 +118,19 @@ int main(int argc, char **argv)
     // therefore a direct read of "what do the probes currently hold".
     auto doc = iris::Scene::create();
     doc->giMode = iris::GiMode::VCT_PCC_HYBRID;
-    doc->giQuality = iris::GiQuality::MEDIUM;
+    // ONE QUALITY STEP UP, TO HOLD THE VOXEL SIZE WHERE THE PIN HELD IT (owner
+    // decision D8, 2026-09-13). The lit volume is the renderer's fit to this
+    // scene's own geometry now, and this room's slabs are authored about twice
+    // the interior they enclose (the shipped Showroom samples are the same
+    // shape), so the fitted volume is ~2x the box this suite used to type —
+    // which at a FIXED voxel resolution is half the resolution, and everything
+    // measured below is a study of the voxels. 128^3 over the fitted volume is
+    // the same metres per voxel the pin gave at 64^3, so the numbers mean what
+    // they meant. The probe toggles are pinned to what "auto" RESOLVED to at
+    // medium (both off), so the quality step moves nothing else.
+    doc->giQuality = iris::GiQuality::HIGH;
+    doc->giProbeHdr = 0;
+    doc->giProbeShadows = 0;
     doc->giNumBounces = 2;
     doc->giPccGrid = iris::Vec3(2, 1, 2);          // 4 probes: a short sweep
     doc->giUpdateBudget = 0;                       // phase C first; raised below
@@ -128,10 +140,9 @@ int main(int argc, char **argv)
     // here (ambientColor black + ambientFromSky off) were spelling out.
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
-    // Pinned bounds, like every suite in this directory that is not about the
-    // auto fit: probe placement must not move when P1a's heuristic does.
-    doc->giBoundsMin = iris::Vec3(-4.6f, -0.6f, -4.6f);
-    doc->giBoundsMax = iris::Vec3(4.6f, 5.6f, 4.6f);
+    // NO BOUNDS PIN (owner decision D8, 2026-09-13): the document has no bounds
+    // fields any more and the lit volume is always the renderer's own fit to
+    // this room's content, which for a closed box IS the box plus one voxel.
     const int kProbes = 4;
 
     const QColor white(217, 217, 217), red(255, 5, 5), green(5, 255, 5);
@@ -196,6 +207,11 @@ int main(int argc, char **argv)
         const GiStatus st = escene->giStatus();
         std::printf("   giStatus: probes=%d pccBound=%s updates/frame=%d\n",
                     st.probeCount, st.pccBound ? "true" : "false", st.probeUpdatesPerFrame);
+        std::printf("   volume %.2f %.2f %.2f .. %.2f %.2f %.2f   region %.2f %.2f %.2f .. %.2f %.2f %.2f\n",
+                    st.boundsMin.x, st.boundsMin.y, st.boundsMin.z,
+                    st.boundsMax.x, st.boundsMax.y, st.boundsMax.z,
+                    st.probeRegionMin.x, st.probeRegionMin.y, st.probeRegionMin.z,
+                    st.probeRegionMax.x, st.probeRegionMax.y, st.probeRegionMax.z);
         CHECK(st.probeCount == kProbes && st.pccBound, "the 2x1x2 probe grid built and bound");
         CHECK(st.probeUpdatesPerFrame == 0, "budget 0 spends nothing");
     }

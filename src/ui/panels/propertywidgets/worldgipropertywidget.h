@@ -92,7 +92,6 @@ protected slots:
     void onBouncesChanged(float value);
     void onDdgiToggled(bool on);
     void onDdgiSourceChanged(int index);
-    void onFitBoundsClicked();
     void onResetAdvancedClicked();
 
 private:
@@ -148,8 +147,6 @@ private:
     ComboBoxWidget *quality = nullptr;
     ComboBoxWidget *lightSelector = nullptr;
     HFloatSliderWidget *bounces = nullptr;
-    DragVector3Widget *boundsMin = nullptr;
-    DragVector3Widget *boundsMax = nullptr;
     DragVector3Widget *pccGrid = nullptr;
     ComboBoxWidget *probeSize = nullptr;
     LabelWidget *reflectionsRow = nullptr;
@@ -163,7 +160,6 @@ private:
     HFloatSliderWidget *ddgiIntensity = nullptr;
     HFloatSliderWidget *ddgiAmbient = nullptr;
     ComboBoxWidget *ddgiSource = nullptr;
-    QPushButton *fitBoundsButton = nullptr;
     QPushButton *advancedButton = nullptr;
     QPushButton *resetAdvancedButton = nullptr;
     /// Disclosure state, per session (the panel is rebuilt on every edit).
