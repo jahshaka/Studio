@@ -194,6 +194,8 @@ public:
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
     MirrorStats mirrorStats() const override;
+    /// PHOTON-S3 (SPIKE, never merge): Engine::rayQueryProbe on the live view.
+    QVariantMap rayQuerySpike(const QVariantMap &options) override;
     RigStatsInfo rigStats() const override;
     QString dumpMaterial(const QString &nodeGuid) const override;
 

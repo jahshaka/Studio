@@ -13,6 +13,8 @@ For more information see the LICENSE file
 
 #include "data/project.h"
 #include "services/framemonitor.h"
+#include "viewport/ieditorviewport.h"
+#include "scripting/scripthost.h"
 
 QVector<VerbInfo> PerfApi::verbs() const
 {
@@ -56,7 +58,28 @@ QVector<VerbInfo> PerfApi::verbs() const
           "before/after. False when no capture is running: a mark nobody records would be a lie, "
           "not a no-op.",
           Needs::Document },
+        { "rayQuery", "perf.rayQuery({width, height, mode, tmax, sunX, sunY, sunZ, copyGeometry, "
+                      "refit, probeX, probeY, probeZ, raysPerProbe, probeCx, probeCy, probeCz, "
+                      "probeHalf, out}?) -> {supported, blasCount, triangles, blasBuildMsGpu, ...}",
+          "PHOTON-S3 SPIKE, NEVER MERGE. Builds hardware acceleration structures from the live "
+          "editor scene, traces one inline ray query per pixel (and optionally one per probe "
+          "direction), reports every number and frees everything. Needs ogre-patches 0034/0035 "
+          "and a device with VK_KHR_ray_query; answers {supported:false} anywhere else. It "
+          "stalls the GPU several times - a measurement, not a render path.",
+          Needs::Engine },
     };
+}
+
+QVariantMap PerfApi::rayQuery(const QVariantMap &options)
+{
+    if (!requireEngine()) return QVariantMap();
+    if (!host.viewport) {
+        QVariantMap m;
+        m.insert(QStringLiteral("supported"), false);
+        m.insert(QStringLiteral("note"), QStringLiteral("no viewport"));
+        return m;
+    }
+    return host.viewport->rayQuerySpike(options);
 }
 
 QVariantMap PerfApi::capture(const QVariantMap &options)

@@ -22,6 +22,7 @@
 #include <QSize>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 #include <QVector>
 #include <QVector3D>
 #include "irisgl/irisglfwd.h"
@@ -593,6 +594,15 @@ public:
     /// ask, so callers do not report a failure they cannot see.
     virtual bool planarReflectorAccepted(iris::SceneNodePtr node) const
     { Q_UNUSED(node); return true; }
+
+    /// PHOTON-S3 (SPIKE, never merge): runs the hardware ray-query tier on this
+    /// viewport's live scene and returns every number it measured. Options and
+    /// answers ride as a QVariantMap so this header stays free of engine types;
+    /// the engine-side contract is RayQueryDesc / RayQueryStats. Default: "no
+    /// engine here", which is the honest answer from a document-only viewport.
+    virtual QVariantMap rayQuerySpike(const QVariantMap &options)
+    { Q_UNUSED(options); QVariantMap m; m.insert("supported", false);
+      m.insert("note", QStringLiteral("this viewport has no engine")); return m; }
 
     /// The viewport's document→engine mirror, as counters (see mirrorStats).
     /// `available` false means this viewport has no mirror to ask — the

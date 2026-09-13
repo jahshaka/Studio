@@ -39,6 +39,8 @@ public:
     Q_INVOKABLE QVariantMap stop();
     Q_INVOKABLE QVariantMap status();
     Q_INVOKABLE bool mark(const QString &label);
+    /// PHOTON-S3 (SPIKE, NEVER MERGE).
+    Q_INVOKABLE QVariantMap rayQuery(const QVariantMap &options = QVariantMap());
 };
 
 #endif // SCRIPTING_PERFAPI_H

@@ -2747,3 +2747,80 @@ bool EngineSceneViewport::snapNodeToFloor(const iris::SceneNodePtr &node)
     }
     return true;
 }
+
+// ---------------------------------------------------------------------------
+// PHOTON-S3 (SPIKE, NEVER MERGE). The one Studio-side seam the hardware
+// ray-query measurement needs: a verb has to be able to point the tier at the
+// live editor scene, because the two subjects the brief names — a copy of
+// Showroom 2 and the 8,404-node lattice — only exist inside the running app.
+// Everything here is transport: options in, numbers out, and the traced picture
+// written as a PNG so the lead can look at it.
+QVariantMap EngineSceneViewport::rayQuerySpike(const QVariantMap &options)
+{
+    QVariantMap out;
+    jahshaka::engine::View *v = view();
+    if (!mEngine || !v) {
+        out.insert("supported", false);
+        out.insert("note", QStringLiteral("no engine view"));
+        return out;
+    }
+
+    jahshaka::engine::RayQueryDesc desc;
+    desc.width = options.value("width", 1920).toUInt();
+    desc.height = options.value("height", 1080).toUInt();
+    desc.mode = options.value("mode", 1).toUInt();
+    desc.tmax = float(options.value("tmax", 5000.0).toDouble());
+    desc.sunX = float(options.value("sunX", 0.0).toDouble());
+    desc.sunY = float(options.value("sunY", 0.0).toDouble());
+    desc.sunZ = float(options.value("sunZ", 0.0).toDouble());
+    desc.copyGeometry = options.value("copyGeometry", false).toBool();
+    desc.measureRefit = options.value("refit", true).toBool();
+    desc.probeGridX = options.value("probeX", 0).toUInt();
+    desc.probeGridY = options.value("probeY", 0).toUInt();
+    desc.probeGridZ = options.value("probeZ", 0).toUInt();
+    desc.raysPerProbe = options.value("raysPerProbe", 0).toUInt();
+    desc.probeCentreX = float(options.value("probeCx", 0.0).toDouble());
+    desc.probeCentreY = float(options.value("probeCy", 0.0).toDouble());
+    desc.probeCentreZ = float(options.value("probeCz", 0.0).toDouble());
+    desc.probeBoundsHalfSize = float(options.value("probeHalf", 0.0).toDouble());
+
+    jahshaka::engine::RayQueryStats st;
+    const bool ok = mEngine->rayQueryProbe(v, desc, st);
+    out.insert("ok", ok);
+    out.insert("supported", st.supported);
+    out.insert("note", QString::fromStdString(st.note.empty() ? mEngine->lastError() : st.note));
+    out.insert("blasCount", st.blasCount);
+    out.insert("triangles", st.triangleCount);
+    out.insert("blasBuildMsGpu", st.blasBuildMsGpu);
+    out.insert("blasBuildMsCpu", st.blasBuildMsCpu);
+    out.insert("blasBytes", QVariant::fromValue(st.blasBytes));
+    out.insert("blasScratchBytes", QVariant::fromValue(st.blasScratchBytes));
+    out.insert("geometryCopyBytes", QVariant::fromValue(st.geometryCopyBytes));
+    out.insert("instances", st.instanceCount);
+    out.insert("tlasBuildMsGpu", st.tlasBuildMsGpu);
+    out.insert("tlasBuildMsCpu", st.tlasBuildMsCpu);
+    out.insert("tlasRefitMsGpu", st.tlasRefitMsGpu);
+    out.insert("tlasRefitMsCpu", st.tlasRefitMsCpu);
+    out.insert("tlasBytes", QVariant::fromValue(st.tlasBytes));
+    out.insert("tlasScratchBytes", QVariant::fromValue(st.tlasScratchBytes));
+    out.insert("totalAsBytes", QVariant::fromValue(st.totalAsBytes));
+    out.insert("traceMsGpu", st.traceMsGpu);
+    out.insert("traceMsCpu", st.traceMsCpu);
+    out.insert("width", st.width);
+    out.insert("height", st.height);
+    out.insert("hits", st.hits);
+    out.insert("misses", st.misses);
+    out.insert("probeTraceMsGpu", st.probeTraceMsGpu);
+    out.insert("probeRays", QVariant::fromValue(st.probeRays));
+    out.insert("probeHits", QVariant::fromValue(st.probeHits));
+
+    const QString path = options.value("out").toString();
+    if (!path.isEmpty() && st.width && st.height &&
+        st.pixels.size() == size_t(st.width) * st.height * 4u) {
+        QImage img(st.width, st.height, QImage::Format_RGBA8888);
+        memcpy(img.bits(), st.pixels.data(), st.pixels.size());
+        out.insert("png", img.save(path));
+        out.insert("pngPath", path);
+    }
+    return out;
+}
