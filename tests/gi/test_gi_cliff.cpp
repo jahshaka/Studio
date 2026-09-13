@@ -302,6 +302,66 @@ static void noRatchetCase(Engine *engine, View *view)
 }
 
 // ---------------------------------------------------------------------------
+// 3c. THE FLOOR SURVIVES THE SOLVE IT WAS ARMED BY (round-2 review, item 1).
+//     Arming the hysteresis floor on the CONTENT CHANGE alone is not enough: a
+//     re-solve with unchanged content (a light move, a material edit) would then
+//     find no floor and re-derive the trimmed answer, so the volume oscillates —
+//     grows on the frame the cube arrives, shrinks back on the next solve — and
+//     the light the floor promised an already-lit object is taken away one solve
+//     late. What the fit owes is "unchanged content returns the answer that was
+//     ADOPTED for it", which is the memo giItemBounds keeps.
+//
+//     The scene needs an outlier the floor can actually act on: one that is
+//     TRIMMED by the ramp and whose whole box is INSIDE the volume the previous
+//     fit produced (Showroom 2's own shape — a room inside its own lit volume).
+// ---------------------------------------------------------------------------
+static void floorSurvivesCase(Engine *engine, View *view)
+{
+    std::printf("-- the floor holds across re-solves of unchanged content\n");
+    Scene *s = engine->createScene("cliff_floor_holds");
+    view->setScene(s);
+    addGround(s);
+    // The content: small props spread WIDE, which is what sets both the scale
+    // the ramp measures against and the volume the floor remembers.
+    for (int i = 0; i < 9; ++i)
+        box(s, Colour(0.8f, 0.3f, 0.2f), Vec3(-18.0f + 4.5f * float(i), 0.5f, 0.0f), Vec3(1, 1, 1));
+    // ...and some of it high up, so the volume is as TALL as the wall is: an
+    // outlier that escapes in one axis is not covered, and the floor is about
+    // the ones that are.
+    for (int i = 0; i < 3; ++i)
+        box(s, Colour(0.8f, 0.3f, 0.2f), Vec3(0.0f, 3.5f + 3.5f * float(i), -3.0f), Vec3(1, 1, 1));
+    // The OUTLIER the floor is for: a room-sized wall, far bigger than the props
+    // (so the ramp trims it) and small enough to sit INSIDE the volume they
+    // produce (so the floor can keep it whole) — Showroom 2's own shape.
+    box(s, Colour(0.6f, 0.6f, 0.6f), Vec3(0.0f, 4.0f, -10.0f), Vec3(24.0f, 8.0f, 0.6f));
+    enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
+
+    const Box first = solve(s);
+    show("floor", 0, first);
+    // A CONTENT CHANGE arms the floor: whatever the previous volume covered
+    // whole stays whole, so this may only grow.
+    box(s, Colour(0.2f, 0.4f, 0.8f), Vec3(3.0f, 0.5f, 3.0f), Vec3(1, 1, 1));
+    const Box armed = solve(s);
+    show("floor", 1, armed);
+    CHECK(span(armed, 0) >= span(first, 0) - 1e-3f,
+          "adding an object never shrinks the lit volume (the floor's own promise)");
+    // ...AND THE SOLVES AFTER IT KEEP IT. Nothing changed, so nothing may move:
+    // this is the oscillation the round-2 review found (48 -> 56 -> 48).
+    bool held = true;
+    for (int n = 2; n <= 4; ++n) {
+        const Box again = solve(s);
+        show("floor", n, again);
+        for (int ax = 0; ax < 3; ++ax)
+            if (std::fabs(span(again, ax) - span(armed, ax)) > 1e-3f) held = false;
+    }
+    CHECK(held, "three more re-solves of the SAME content return the volume it adopted");
+    GiParams off;
+    s->setGlobalIllumination(off);
+    view->setScene(nullptr);
+    engine->destroyScene(s);
+}
+
+// ---------------------------------------------------------------------------
 // 4. THE ESCAPE SIGNATURE (fix 2, engine half). `giEscapeSignature()` is what
 //    lets the mirror debounce a re-fit; gi.coalesce drives the mirror half.
 // ---------------------------------------------------------------------------
@@ -406,6 +466,7 @@ int main()
     liveTable(engine.get(), view);
     stillTrimsCase(engine.get(), view);
     noRatchetCase(engine.get(), view);
+    floorSurvivesCase(engine.get(), view);
     escapeSignatureCase(engine.get(), view);
     slabPatchCase(engine.get(), view);
 
