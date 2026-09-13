@@ -55,6 +55,7 @@ AREA_RULES = [
       "cameras", "mirror", "samples", "reopen", "export", "meshbake", "*headless-scripts"],
      []),
     (r"^irisgl/core/", ["document", "math", "input", "gizmo", "cameras", "*headless-scripts"], []),
+    (r"^irisgl/docs/", [], []),                                   # documentation: no suite at all
     (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name
@@ -229,6 +230,10 @@ def cmake_src_refs():
 # to MERGE in one day for exactly this). Anything else in the file (a flag, a target,
 # a find_package, a condition) still falls back, loudly.
 _LIST_ENTRY = re.compile(r'^"?[\w${}./+\-]+\.(?:cpp|cc|cxx|c|h|hh|hpp|ui|qrc|mm|js|js\.in|sh)"?\)?$')
+# A one-line `add_subdirectory(<dir>)` in tests/CMakeLists.txt REGISTERS a suite whose own
+# files are in the same diff and scope it precisely (2026-09-13 audit: three of the last
+# five lanes ran the full MERGE tier for exactly this one line).
+_SUBDIR_ENTRY = re.compile(r'^add_subdirectory\(\s*[\w\-]+\s*\)$')
 
 
 def _changed_lines(diff_text):
@@ -251,7 +256,9 @@ def cmake_list_only(rng, relpath):
         text = sh(f"git diff -U0 {rng} -- {relpath}")
     lines = [l for l in _changed_lines(text)]
     if not lines: return False
-    return all(l == "" or l.startswith("#") or _LIST_ENTRY.match(l) for l in lines)
+    subdir_ok = relpath == "tests/CMakeLists.txt"
+    return all(l == "" or l.startswith("#") or _LIST_ENTRY.match(l)
+               or (subdir_ok and _SUBDIR_ENTRY.match(l)) for l in lines)
 
 
 def main():
