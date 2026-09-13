@@ -4281,6 +4281,7 @@ void MainWindow::toggleImmersiveFullscreen()
     QWidget *editorDocks[kImmersiveDockCount] = { sceneHierarchyDock, sceneNodePropertiesDock,
                                                   presetsDock, assetDock, animationDock, toolBar };
     immersiveFullscreen = true;
+    enteringFullscreen = true;      // until the window manager says we are there
     preFullscreenMaximized = isMaximized();
     preFullscreenWidgets.clear();
     if (currentSpace == WindowSpaces::EDITOR) {
@@ -4299,6 +4300,7 @@ void MainWindow::leaveImmersiveFullscreen(bool restoreWindow)
     // FIRST, so that the showNormal()/showMaximized() below — and any state
     // change somebody else made — cannot re-enter through changeEvent.
     immersiveFullscreen = false;
+    enteringFullscreen = false;
     if (preFullscreenWidgets.size() == kImmersiveDockCount) {
         for (int i = 0; i < preFullscreenWidgets.size(); ++i)
             if (editorDocks[i]) editorDocks[i]->setVisible(preFullscreenWidgets[i]);
@@ -4320,9 +4322,18 @@ void MainWindow::changeEvent(QEvent *event)
 {
     QMainWindow::changeEvent(event);
     if (event->type() != QEvent::WindowStateChange) return;
+    if (!immersiveFullscreen) return;
+    // ARRIVED: from here a state change that is not fullscreen is a departure.
+    if (isFullScreen()) { enteringFullscreen = false; return; }
+    // STILL ON THE WAY IN (round-2 review, item 5). showFullScreen() is a
+    // request, and a window manager may answer a maximized window with an
+    // intermediate state that carries neither flag; restoring the docks there
+    // would put the whole editor chrome back INSIDE a window that is about to
+    // go fullscreen.
+    if (enteringFullscreen) return;
     // A MINIMISED fullscreen window is still fullscreen (Qt ORs the minimise
     // bit in), so isFullScreen() stays true and this does not fire for it.
-    if (immersiveFullscreen && !isFullScreen()) leaveImmersiveFullscreen(false);
+    leaveImmersiveFullscreen(false);
 }
 
 void MainWindow::toggleDebugDrawer(bool state)

@@ -878,6 +878,16 @@ private:
     void stepSnapSize(int direction);
     // F11 immersive fullscreen restore state (EDITOR_SHORTCUTS_SPEC §3)
     bool immersiveFullscreen = false;
+    /// ENTERING, and not there yet (round-2 review, item 5). `showFullScreen()`
+    /// is a REQUEST: a window manager answers it with its own sequence, and a
+    /// maximized window can be handed an intermediate state that does not carry
+    /// the fullscreen flag — which changeEvent would read as "somebody took us
+    /// out of fullscreen" and restore every dock INSIDE the fullscreen window.
+    /// The latch is set when the toggle asks and cleared by the first state
+    /// change that reports fullscreen; until then a non-fullscreen state is the
+    /// transition, not a departure.
+    bool enteringFullscreen = false;
+
     bool preFullscreenMaximized = false;
     QVector<bool> preFullscreenWidgets;
 
