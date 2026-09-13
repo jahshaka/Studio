@@ -62,7 +62,6 @@ int main(int argc, char **argv)
     CHECK(before.value("supported").toBool(), "the watchdog is supported in this build");
     CHECK(before.value("running").toBool(),
           "the watchdog started itself with the window (no script had to ask)");
-    const int baseline = before.value("reports").toInt();
 
     // The heartbeat is its input and must be running without anyone starting
     // it — the watchdog does that itself.
@@ -110,6 +109,15 @@ int main(int argc, char **argv)
     // run and not only on the runs that happen to be slow. Everything after it
     // must behave exactly as if it had not happened.
     waitOutCooldown("before the unattributed stall");
+    // THE BASELINE IS TAKEN HERE, not with `before` at the top (ENGINE-5
+    // review, ledger §208). A boot stall can be reported DURING the wait above
+    // — that is exactly the cold-cache case this block exists for — and a
+    // baseline read before the wait would then already be one behind, so the
+    // `>` below could be satisfied by the boot stall rather than by the
+    // deliberate one. Read after the cooldown, nothing can land between it and
+    // the block that follows.
+    const int baseline = mcp.runScript(QStringLiteral("app.watchdogStats()"))
+                             .value("result").toObject().value("reports").toInt();
     mcp.runScript(QStringLiteral("app.blockUiThread(3000)"));
     QThread::msleep(300);
     log += jahshaka.readAll();
