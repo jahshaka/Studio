@@ -515,6 +515,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "call as often as you like. `raised` names the issues this call raised for the first "
           "time (empty on a second identical call — the never-repeat rule).",
           Needs::Document },
+        { "issueBar", "editor.issueBar() -> {editorActive, exists, visible, rows}",
+          "WHERE THE SCENE-ERROR AREA IS ON SCREEN. The bar is a frameless, "
+          "always-on-top window over the EDITOR's viewport, so it must not be showing while the "
+          "user is on the Desktop, Assets, Player, Materials or Publish page — it used to, "
+          "complete with a Select button that selected in a viewport nobody was looking at. "
+          "This verb runs one scan-and-decide pass and then reports: `editorActive` is whether "
+          "the editor is the current space, `visible` whether the bar is on screen, `rows` how "
+          "many issues the user can see. Meaningless without a window (every field is false/0 "
+          "in a --headless run); `editor.issues()` is the model half and works everywhere.",
+          Needs::Window },
         { "dropPointAt", "editor.dropPointAt(x, y) -> {x, y, z} | null",
           "WHERE A DROP AT THIS VIEWPORT PIXEL LANDS, in world space: the surface under the "
           "cursor when the ray hits one, else the y=0 ground plane. `x`/`y` are viewport pixels "
@@ -1954,6 +1964,23 @@ QVariantMap EditorApi::checkScene()
                         { QStringLiteral("list"), store.toVariant(true) } };
 }
 
+QVariantMap EditorApi::issueBar()
+{
+    if (!host.mainWindow) {
+        // Not a failure: a headless session simply has no bar, and the store
+        // verbs are the half that works everywhere.
+        return QVariantMap{ { QStringLiteral("editorActive"), false },
+                            { QStringLiteral("exists"), false },
+                            { QStringLiteral("visible"), false },
+                            { QStringLiteral("rows"), 0 } };
+    }
+    // SETTLED, NOT RACED: the shell decides this on a 1 Hz timer, and a script
+    // that asked a moment after switching pages would otherwise read the old
+    // answer. One pass, then report.
+    host.mainWindow->updateSceneIssues();
+    return host.mainWindow->sceneIssueBarState();
+}
+
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
                                   const QVariantList &probes, const QVariant &grade)
 {
@@ -1974,19 +2001,13 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
         if (g.typeId() == QMetaType::Bool) {
             mode = g.toBool() ? IEditorViewport::ScreenshotGrade::Viewport
                               : IEditorViewport::ScreenshotGrade::Plain;
-        } else {
-            const QString word = g.toString().trimmed().toLower();
-            if (word == QLatin1String("plain") || word == QLatin1String("raw"))
-                mode = IEditorViewport::ScreenshotGrade::Plain;
-            else if (word == QLatin1String("tonemap"))  mode = IEditorViewport::ScreenshotGrade::Tonemap;
-            else if (word == QLatin1String("scene"))    mode = IEditorViewport::ScreenshotGrade::Scene;
-            else if (word == QLatin1String("viewport")) mode = IEditorViewport::ScreenshotGrade::Viewport;
-            else {
-                fail(QStringLiteral("editor.screenshot: unknown grade '%1' "
-                                    "(plain | raw | tonemap | scene | viewport, or a boolean)")
-                         .arg(g.toString()));
-                return out;
-            }
+        } else if (!IEditorViewport::gradeFromString(g.toString(), &mode)) {
+            // ONE PARSER for all four verbs (item 5) — a verb whose spellings
+            // are narrower than its documentation is how player.screenshot's
+            // `scene` branch once shipped unreachable.
+            fail(QStringLiteral("editor.screenshot: unknown grade '%1' (%2, or a boolean)")
+                     .arg(g.toString(), IEditorViewport::gradeWords()));
+            return out;
         }
     }
 

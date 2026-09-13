@@ -698,6 +698,20 @@ void MainWindow::shutdownBackgroundWork()
     // STEP 2 of the shutdown order (see ~MainWindow / shell/shutdownorder.h).
     JAH_SHUTDOWN_STEP(ShutdownOrder::BackgroundWork, "shutdownBackgroundWork: workers joined");
 
+    // A RUNNING CAPTURE IS FINISHED AND WRITTEN FIRST, before anything below
+    // touches the engine (CLEANUP-1 item 1). The owner presses Ctrl+F4, sees
+    // the problem, and closes the window — and until this line the bundle was
+    // simply thrown away: finish() never ran, so there was no machine.json, the
+    // trace kept its open bracket, and the engine's ring (which holds the last
+    // frames of every capture) was never drained. finalizeAppExit stops the
+    // monitor too, but it runs after this function, after the modules are down
+    // and after a forced exit can already have taken the process — which is
+    // precisely the quit the owner is recording when something is wrong.
+    //
+    // Idempotent and free when idle: stop() returns false with no capture
+    // running and the second call at finalizeAppExit then does nothing.
+    FrameMonitor::instance().stop();
+
     // The main-thread watchdog goes FIRST. A teardown that takes two seconds
     // is normal — the joins below are bounded at 3 s each on purpose — and a
     // watchdog left running would photograph a perfectly healthy shutdown and
@@ -721,6 +735,14 @@ void MainWindow::shutdownBackgroundWork()
     // flight writes into its own QTemporaryDir and is discarded on arrival
     // (its completion hop is a no-op once cancelled).
     MeshBakeStore::cancelPendingBakes();
+
+    // EVERY MODULE IS TOLD TO STOP FIRST (item 2). Module workers ride the same
+    // global pool the wait below joins, and shutdownModules() — where a
+    // module's own abort used to live — runs AFTER that wait and after the
+    // forced exit behind it. Nothing here joins: abort, flush, return, and let
+    // the one pool wait below do the joining for all of them.
+    for (auto *module : modules)
+        if (module) module->abortBackgroundWork();
 
     // Import pipeline: abort batches, join workers (bounded), close the
     // progress dialogs, drop viewer-tail queues.
@@ -1246,6 +1268,9 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
     }
 
 	updateTopMenuStates(space);
+	// The scene-issue bar belongs to the EDITOR and is a top-level window that
+	// stays on top: it has to go NOW, not on the scanner's next tick (item 3).
+	updateSceneIssues();
 }
 
 void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
@@ -1757,6 +1782,14 @@ void MainWindow::refreshThumbnail(QListWidgetItem *item)
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
+    // EVERY BIND CLEARS THE ISSUE STORE (CLEANUP-1 item 7). The scanner only
+    // forgets the two kinds it owns, so an `editor.raiseIssue` of any other
+    // kind used to survive a project switch and describe a node that is no
+    // longer in the scene — the store is scene-scoped, and this is where the
+    // scene changes. (The scanner's own null-scene reset stays: that is the
+    // close path, and this one is the open path.)
+    SceneIssues::instance().reset();
+
     this->scene = scene;
     //this->sceneView->context()->setShareContext(loadingContext);
     { LoadTimeline::Accumulate a(QStringLiteral("setScene:viewport")); this->sceneView->setScene(scene); }
@@ -3744,30 +3777,56 @@ void MainWindow::wireSceneIssues()
     if (sceneIssueTimer) return;
     sceneIssueTimer = new QTimer(this);
     sceneIssueTimer->setInterval(1000);
-    connect(sceneIssueTimer, &QTimer::timeout, this, [this]() {
-        // Only while the editor is what the user is looking at: the scanner
-        // talks about the open scene, and the other spaces have their own.
-        if (!sceneEditService) return;
-        auto scene = sceneEditService->scene();
-        if (!scene) { SceneIssues::instance().reset(); return; }
-        SceneIssues::instance().scan(scene);
-        if (!sceneIssueBar && SceneIssues::instance().visibleCount() > 0) {
-            sceneIssueBar = new SceneIssueBar(this);
-            // Under the engine-drawn frame-stats rows (three lines plus their
-            // inset) so the two never overlap when F3 is on.
-            sceneIssueBar->setAnchor(sceneView ? sceneView->asWidget() : nullptr, 96);
-            connect(sceneIssueBar, &SceneIssueBar::selectRequested, this,
-                    [this](const QString &guid) {
-                        if (!sceneEditService || !selectionService) return;
-                        auto scene = sceneEditService->scene();
-                        if (!scene) return;
-                        auto node = scene->nodes.value(guid);
-                        if (node) selectionService->select(node);
-                    });
-            sceneIssueBar->refresh();
-        }
-    });
+    connect(sceneIssueTimer, &QTimer::timeout, this, [this]() { updateSceneIssues(); });
     sceneIssueTimer->start();
+}
+
+// ONE PASS: scan the open scene, and decide whether the bar may be on screen.
+// Driven by the 1 Hz timer and by every space switch.
+void MainWindow::updateSceneIssues()
+{
+    // THE BAR IS AN EDITOR SURFACE, and it is a FRAMELESS TOP-LEVEL WITH
+    // WindowStaysOnTopHint (sceneissuebar.cpp) — so without this check it
+    // floated over the Desktop, Assets, Player and Materials pages, offering a
+    // Select button that selects in a viewport nobody is looking at (item 3).
+    // The comment below promised this check for a week; here it is.
+    if (currentSpace != WindowSpaces::EDITOR) {
+        if (sceneIssueBar) sceneIssueBar->setEditorActive(false);
+        return;
+    }
+    if (sceneIssueBar) sceneIssueBar->setEditorActive(true);
+    if (!sceneEditService) return;
+    auto scene = sceneEditService->scene();
+    if (!scene) { SceneIssues::instance().reset(); return; }
+    SceneIssues::instance().scan(scene);
+    if (!sceneIssueBar && SceneIssues::instance().visibleCount() > 0) {
+        sceneIssueBar = new SceneIssueBar(this);
+        // Under the engine-drawn frame-stats rows (three lines plus their
+        // inset) so the two never overlap when F3 is on.
+        sceneIssueBar->setAnchor(sceneView ? sceneView->asWidget() : nullptr, 96);
+        connect(sceneIssueBar, &SceneIssueBar::selectRequested, this,
+                [this](const QString &guid) {
+                    if (!sceneEditService || !selectionService) return;
+                    auto scene = sceneEditService->scene();
+                    if (!scene) return;
+                    auto node = scene->nodes.value(guid);
+                    if (node) selectionService->select(node);
+                });
+        sceneIssueBar->refresh();
+    }
+}
+
+// What the bar is showing, for `editor.issueBar()` — the seam the shell's half
+// of the error area is tested through (item 3's case in
+// scripting.e2e.scene_issues).
+QVariantMap MainWindow::sceneIssueBarState() const
+{
+    QVariantMap out;
+    out[QStringLiteral("editorActive")] = (currentSpace == WindowSpaces::EDITOR);
+    out[QStringLiteral("exists")] = sceneIssueBar != nullptr;
+    out[QStringLiteral("visible")] = sceneIssueBar && sceneIssueBar->isVisible();
+    out[QStringLiteral("rows")] = SceneIssues::instance().visibleCount();
+    return out;
 }
 
 void MainWindow::showViewportToast(const QString &title, const QString &text)

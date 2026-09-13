@@ -28,6 +28,7 @@ For more information see the LICENSE file
 
 #include "bridge/enginehost.h"
 #include "data/settingsmanager.h"
+#include "services/apppaths.h"
 #include "services/jahlog.h"
 #include "services/sessionheader.h"
 #include "viewport/enginerenderdriver.h"
@@ -1051,10 +1052,69 @@ QString FrameMonitor::captureRoot()
     if (!env.isEmpty()) return QString::fromLocal8Bit(env);
     if (auto *settings = SettingsManager::getDefaultManager()) {
         const QString stored =
-            settings->getValue(QStringLiteral("perf/captureRoot"), QString()).toString();
+            settings->getValue(QStringLiteral("perf/captureRoot"), QString()).toString().trimmed();
         if (!stored.isEmpty()) return stored;
     }
-    return QDir(QDir::homePath()).filePath(QStringLiteral("Developer/spikes/perf"));
+    // THE DEFAULT IS THIS RUN'S DATA DIRECTORY (CLEANUP-1 item 11). It used to
+    // be a compiled-in `~/Developer/spikes/perf` — one developer's workspace
+    // path, in shipping code, which on a user's machine is a folder that does
+    // not exist and on a test rig is outside the run's own sandbox. It follows
+    // `--data-root` / JAHSHAKA_DATA_ROOT like the library, the asset store and
+    // the shader cache do, so a hermetic run's captures land inside its
+    // scratch. The developer path is still one line of Preferences (or
+    // $JAHSHAKA_PERF_ROOT) away.
+    return QDir(AppPaths::dataRoot()).filePath(QStringLiteral("perf"));
+}
+
+double FrameMonitor::defaultKeepDays() { return 14.0; }
+qint64 FrameMonitor::defaultKeepBytes() { return qint64(2) * 1024 * 1024 * 1024; }
+
+// THE SWEEP (item 11). Captures used to accumulate forever in a directory
+// nothing ever looked at — a 20 s bundle of a busy scene is tens of megabytes,
+// and the owner is asked to press Ctrl+F4 whenever something feels wrong. Run
+// once per capture START (never on the frame path), oldest first, and NEVER on
+// a directory it did not write: only children that carry a machine.json are
+// considered, so a mis-set root cannot take a user's folder with it.
+int FrameMonitor::sweepOldBundles(const QString &rootPath, double keepDays, qint64 keepBytes)
+{
+    QDir root(rootPath);
+    if (!root.exists()) return 0;
+    struct Bundle { QString path; QDateTime when; qint64 bytes; };
+    QVector<Bundle> bundles;
+    const QFileInfoList children =
+        root.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::NoSort);
+    for (const QFileInfo &info : children) {
+        const QString machine = QDir(info.absoluteFilePath()).filePath(QStringLiteral("machine.json"));
+        if (!QFile::exists(machine)) continue;   // not ours: leave it entirely alone
+        qint64 bytes = 0;
+        const QFileInfoList files = QDir(info.absoluteFilePath())
+                                        .entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+        for (const QFileInfo &f : files) bytes += f.size();
+        bundles.append({ info.absoluteFilePath(), QFileInfo(machine).lastModified(), bytes });
+    }
+    std::sort(bundles.begin(), bundles.end(),
+              [](const Bundle &a, const Bundle &b) { return a.when > b.when; });   // newest first
+
+    const QDateTime cutoff = QDateTime::currentDateTime().addSecs(qint64(-keepDays * 86400.0));
+    qint64 running = 0;
+    int removed = 0;
+    for (int i = 0; i < bundles.size(); ++i) {
+        running += bundles[i].bytes;
+        // THE NEWEST BUNDLE IS NEVER SWEPT, whatever the rules say: the one the
+        // owner just took is the one they are about to be asked for.
+        const bool tooOld = i > 0 && bundles[i].when.isValid() && bundles[i].when < cutoff;
+        const bool overCap = i > 0 && keepBytes > 0 && running > keepBytes;
+        if (!tooOld && !overCap) continue;
+        if (QDir(bundles[i].path).removeRecursively()) {
+            ++removed;
+            running -= bundles[i].bytes;
+        }
+    }
+    if (removed)
+        JAH_LOG(JahLog::perf, Display,
+                QStringLiteral("[perf] swept %1 old capture bundle(s) from %2")
+                    .arg(removed).arg(rootPath));
+    return removed;
 }
 
 bool FrameMonitor::start(const Request &request, QString *error)
@@ -1080,6 +1140,20 @@ bool FrameMonitor::start(const Request &request, QString *error)
     if (slug(label).isEmpty()) label = QStringLiteral("scene");
 
     const QDir root(QDir::cleanPath(captureRoot()));
+    // THE SWEEP, before this capture takes its own space (item 11). Once per
+    // capture, never on the frame path, and only over directories that carry a
+    // machine.json.
+    {
+        double keepDays = defaultKeepDays();
+        qint64 keepBytes = defaultKeepBytes();
+        if (auto *settings = SettingsManager::getDefaultManager()) {
+            keepDays = qBound(0.0, settings->getValue(QStringLiteral("perf/keepDays"),
+                                                      keepDays).toDouble(), 3650.0);
+            keepBytes = qMax(qint64(0), settings->getValue(QStringLiteral("perf/keepBytes"),
+                                                           QVariant::fromValue(keepBytes)).toLongLong());
+        }
+        sweepOldBundles(root.absolutePath(), keepDays, keepBytes);
+    }
     QString dir = request.outDir;
     if (dir.isEmpty()) {
         const QDateTime now = QDateTime::currentDateTime();
@@ -1151,7 +1225,7 @@ bool FrameMonitor::start(const Request &request, QString *error)
         // every frame. This one exists so a capture in which the loop stalls
         // (or never ticks — a page with no viewport) still moves its records
         // out of the engine's ring before the ring overwrites them.
-        connect(mDrainTimer, &QTimer::timeout, this, [this] { drain(); });
+        connect(mDrainTimer, &QTimer::timeout, this, [this] { drainAndCharge(); });
     }
     mDrainTimer->start(250);
 
@@ -1168,6 +1242,16 @@ bool FrameMonitor::start(const Request &request, QString *error)
                         tr("Recording %1 s…").arg(seconds, 0, 'g', 3), 0);
     JAH_LOG(JahLog::perf, Display,
             QStringLiteral("[perf] capture started: %1 s -> %2").arg(seconds).arg(dir));
+    // THE CAPTURE'S OWN START COST, measured and TAGGED (item 6). Everything
+    // after mSinceTickEnd.start() above — arming two timers, connecting the
+    // dispatcher, and the START TOAST, which the shell really does show from
+    // that signal — happens inside the first gap, so the first frame of every
+    // capture carried it as anonymous `gap.ui` and could trip the >=16 ms Host
+    // event as if the application had stalled. It is now its own named stage on
+    // that frame, subtracted from the gap, and the frame carries
+    // `host.capture_start` so an analyser can exclude it outright.
+    mStartWorkNs = mSinceTickEnd.isValid() ? mSinceTickEnd.nsecsElapsed() : 0;
+    mTagStartFrame = true;
     return true;
 }
 
@@ -1271,6 +1355,26 @@ void FrameMonitor::drain()
         if (!drainOnce()) break;
 }
 
+// THE MONITOR'S OWN HOST COST (item 6). Draining is two JSON records per pass
+// per frame plus three file writes, on the UI thread, every frame of a capture
+// — and it used to be charged to NOBODY: it happens after the frame ends and
+// before the gap clock is re-armed, so it appeared in neither `totalMs` nor
+// `gap.*`, and the one instrument that exists to find host cost could not see
+// its own. It is now the `host.monitor` stage.
+//
+// It lands on the NEXT frame's record, like every stage that ends outside a
+// frame (framemonitor.h's contract) — the drain of frame N is bookkeeping for
+// frame N, charged where the host can see it, and an analyser summing a capture
+// gets the right total either way.
+void FrameMonitor::drainAndCharge()
+{
+    QElapsedTimer clock;
+    clock.start();
+    drain();
+    if (auto eng = engine())
+        eng->noteHostStage(std::string("host.monitor"), float(double(clock.nsecsElapsed()) / 1.0e6));
+}
+
 void FrameMonitor::noteTickStart(bool willRender)
 {
     if (!gActive) return;
@@ -1286,13 +1390,24 @@ void FrameMonitor::noteTickStart(bool willRender)
         // work (idle), anything else in the gap = the UI thread doing something
         // that is not a frame (a panel rebuild, an offscreen render, a script).
         const double idleMs = qBound(0.0, double(mBlockedNs) / 1.0e6, gapMs);
-        const double uiMs = gapMs - idleMs;
+        double uiMs = gapMs - idleMs;
+        // THE CAPTURE'S OWN START (item 6): its own stage, carved out of the
+        // gap rather than hidden in it, and a tag on this one frame.
+        const bool startFrame = mTagStartFrame;
+        if (startFrame) {
+            mTagStartFrame = false;
+            const double startMs = qBound(0.0, double(mStartWorkNs) / 1.0e6, uiMs);
+            eng->noteHostStage(std::string("host.capture_start"), float(startMs));
+            uiMs -= startMs;
+        }
         eng->noteHostStage(std::string("gap.idle"), float(idleMs));
         eng->noteHostStage(std::string("gap.ui"), float(uiMs));
         // A LONG UI GAP IS AN EVENT, not only a stage: it is the "15 fps that
         // feels like 15" case the monitor exists to tell apart, and analysis
-        // should find it without summing stages.
-        if (uiMs >= 16.0) {
+        // should find it without summing stages. NOT on the capture's own first
+        // frame: what is left of that gap is this object's setup, and an event
+        // blaming the app for it is a lie the owner would be asked about.
+        if (uiMs >= 16.0 && !startFrame) {
             MonitorEvent gap;
             gap.kind = MonitorEventKind::Host;
             gap.label = "gap.ui";
@@ -1313,7 +1428,7 @@ void FrameMonitor::noteTickEnd(bool rendered)
     // the frame that comes back (see the header). There is also nothing to
     // drain — no frame was rendered — but the drain timer still runs.
     if (!rendered) return;
-    drain();
+    drainAndCharge();
     mSinceTickEnd.restart();
     mBlockedNs = 0;
     mBlockedAt = 0;

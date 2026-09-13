@@ -153,9 +153,21 @@ public:
     static double preferredSeconds();
     static void setPreferredSeconds(double seconds);
     /// Where bundles are written: $JAHSHAKA_PERF_ROOT, else the `perf/captureRoot`
-    /// preference, else ~/Developer/spikes/perf (the workspace's spikes tree —
-    /// real disk, never /tmp, per the scratch law).
+    /// preference, else `<AppPaths::dataRoot()>/perf` — so captures follow
+    /// `--data-root` exactly as the library, the asset store and the shader
+    /// cache do. Real disk, never /tmp, per the scratch law.
     static QString captureRoot();
+
+    /// THE SWEEP, run once at the start of every capture: bundles older than
+    /// `keepDays`, and the oldest bundles past a `keepBytes` total, are
+    /// removed. Only directories that contain a machine.json are touched (a
+    /// mis-set root cannot eat a user's folder), and the NEWEST bundle is never
+    /// swept. Returns how many went. Public because it is also the seam the
+    /// suite drives.
+    static int sweepOldBundles(const QString &root, double keepDays, qint64 keepBytes);
+    /// The sweep's defaults (`perf/keepDays`, `perf/keepBytes`).
+    static double defaultKeepDays();
+    static qint64 defaultKeepBytes();
 
     // ---- the host's hooks (all no-ops unless a capture is running) --------
     /// The render driver, at the top of a tick: closes the gap since the last
@@ -211,6 +223,9 @@ private:
     /// drains) and in a LOOP at stop — the engine's holding queue hands back
     /// its tail AFTER the monitor goes off (Engine.h takeFrameRecords).
     void drain();
+    /// drain(), timed, published as the `host.monitor` stage — the monitor's
+    /// own cost on the UI thread, which nothing could see before (item 6).
+    void drainAndCharge();
     /// One pass over the engine's two queues; returns how many records moved.
     unsigned drainOnce();
     void finish(bool early);
@@ -240,6 +255,12 @@ private:
 
     // ---- the gap between ticks (§4.2 gap.idle / gap.ui) -------------------
     QElapsedTimer mSinceTickEnd;
+    /// What start() itself cost after the gap clock armed (timers, the
+    /// dispatcher hook, the start toast the shell really shows), and whether
+    /// the next frame is the capture's first — it carries that cost as
+    /// `host.capture_start` instead of as anonymous `gap.ui`.
+    qint64 mStartWorkNs = 0;
+    bool   mTagStartFrame = false;
     qint64 mBlockedNs = 0;       ///< time the event dispatcher spent blocked
     qint64 mBlockedAt = 0;
     bool   mDispatcherConnected = false;

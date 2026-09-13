@@ -3650,21 +3650,17 @@ QStringList Database::hasMultipleDependers(const QString &guid)
 
 bool Database::hasDependencies(const QString &guid)
 {
+    // ONE EXEC, not two. This ran the COUNT twice — executeAndCheckQuery execs
+    // it, and then `if (query.exec())` execed the very same prepared statement
+    // again (the pattern SMALL-ITEMS B removed from fetchAsset). The second run
+    // is what produced the answer, so the first was pure cost on a path the
+    // asset panels call per item while populating a drawer.
     QSqlQuery query;
     query.prepare("SELECT COUNT(*) FROM dependencies WHERE depender = ?");
     query.addBindValue(guid);
-    executeAndCheckQuery(query, "HasDependencies");
-
-    if (query.exec()) {
-        if (query.first()) {
-            return query.value(0).toBool();
-        }
-    }
-    else {
-        irisLog("There was an error getting the dependency count! " + query.lastError().text());
-    }
-
-    return false;
+    if (!executeAndCheckQuery(query, "HasDependencies")) return false;
+    if (!query.first()) return false;
+    return query.value(0).toBool();
 }
 
 bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids)

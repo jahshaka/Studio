@@ -86,6 +86,24 @@ public:
     /// on the scripting engine exactly as the built-in domains do.
     virtual void registerApi(ScriptEngine &) {}
 
+    /// STOP, DO NOT JOIN — the first thing the shell asks of every module when
+    /// the window closes (CLEANUP-1 item 2, MainWindow::shutdownBackgroundWork).
+    ///
+    /// A module's workers run on the SAME global thread pool the shell waits
+    /// on, and that wait is bounded at 3 s with `std::_Exit(0)` behind it. A
+    /// module whose abort lives in shutdown() — which runs AFTER that wait — is
+    /// therefore never asked to stop before the process can be taken away from
+    /// it: the avatar module's import runner kept parsing for twelve seconds
+    /// while the shell counted to three, and a definition edit still inside its
+    /// 250 ms write-coalescing window was simply lost.
+    ///
+    /// So this hook must (a) FLUSH anything unsaved, right now, synchronously;
+    /// (b) ask every worker it owns to stop; and (c) RETURN — the joining is
+    /// the shell's pool wait, a few lines later, and a module that blocks here
+    /// has only moved the problem. shutdown() still does the ordered teardown.
+    /// Default: nothing, for a module with no background work.
+    virtual void abortBackgroundWork() {}
+
     virtual void shutdown() = 0;
 };
 

@@ -312,16 +312,6 @@ public:
     virtual void setShowPerspeciveLabel(bool value) = 0;
     virtual QImage takeScreenshot(int width = 1920, int height = 1080) = 0;
     virtual QImage takeScreenshot(QSize dimension) = 0;
-    /// A screenshot that looks like the VIEWPORT rather than like a thumbnail
-    /// (POST_CHAIN_SPEC.md §7.3). Screenshots render through a throwaway
-    /// OFFSCREEN view, and offscreen views deliberately skip the post chain — so
-    /// by default a screenshot of an HDR scene comes back ungraded and does not
-    /// match what the user is looking at. `postFx` true opts that one view in.
-    /// Default implementation ignores it (headless viewports have no chain).
-    virtual QImage takeScreenshot(int width, int height, bool postFx) {
-        (void)postFx; return takeScreenshot(width, height);
-    }
-
     /// HOW A SCREENSHOT IS DEVELOPED — ONE FUNCTION, AN EXPLICIT MODE
     /// (owner, 2026-09-13: "match the screenshot to the scene properly", and
     /// "your pixel tests can have their own screenshot ... use the same
@@ -364,12 +354,34 @@ public:
         /// converge, so this one grades at its seed. Script word "viewport".
         Viewport,
     };
-    /// Default maps onto the boolean overload, so a viewport that has no chain
-    /// (headless) needs no new code.
+    /// A viewport with no post chain (the headless stand-ins) has one picture
+    /// and every grade is it. The boolean overload this used to delegate to is
+    /// GONE (CLEANUP-1 item 5): there were three screenshot doors and two
+    /// exposures, and a bool cannot name four grades.
     virtual QImage takeScreenshot(int width, int height, ScreenshotGrade grade) {
-        return takeScreenshot(width, height, grade == ScreenshotGrade::Viewport ||
-                                             grade == ScreenshotGrade::Scene);
+        (void)grade; return takeScreenshot(width, height);
     }
+
+    /// THE SCRIPT SPELLINGS, in ONE place — "plain" (and "raw", the spelling
+    /// the pixel suites were written with), "tonemap", "scene", "viewport".
+    /// Every verb that takes a `grade` parses it through here, so a verb whose
+    /// parser is narrower than its documentation cannot happen again (it did:
+    /// player.screenshot's whole `scene` branch shipped unreachable once).
+    /// False on an unknown word, with `grade` untouched.
+    static bool gradeFromString(const QString &word, ScreenshotGrade *grade) {
+        const QString w = word.trimmed().toLower();
+        if (w == QLatin1String("plain") || w == QLatin1String("raw"))
+            { if (grade) *grade = ScreenshotGrade::Plain; return true; }
+        if (w == QLatin1String("tonemap"))
+            { if (grade) *grade = ScreenshotGrade::Tonemap; return true; }
+        if (w == QLatin1String("scene"))
+            { if (grade) *grade = ScreenshotGrade::Scene; return true; }
+        if (w == QLatin1String("viewport"))
+            { if (grade) *grade = ScreenshotGrade::Viewport; return true; }
+        return false;
+    }
+    /// The four words, for a verb's own error message and its docs.
+    static QString gradeWords() { return QStringLiteral("plain | raw | tonemap | scene | viewport"); }
 
     /// The ACHIEVED anti-aliasing (MSAA) sample count of the viewport's render
     /// target — the driver may clamp what scene->antiAliasing requested. Only

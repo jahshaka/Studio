@@ -158,7 +158,8 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     lightChannels->setDescription(
         tr("This light only lights objects that share a channel with it. Shadows are NOT "
            "filtered: an object this light does not light still casts a shadow from it. Turn "
-           "off Cast Shadow on the object itself to stop that."));
+           "off Cast Shadow on the object itself - the row of that name on its Mesh blade - "
+           "to stop that."));
     this->addWidgetToContent(lightChannels);
     connect(lightChannels, &LightChannelsWidget::maskChanged,
             this, &LightPropertyWidget::lightChannelsChanged);

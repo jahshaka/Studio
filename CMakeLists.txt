@@ -248,6 +248,7 @@ set(SRCS
     src/ui/windows/claudechatwindow.cpp
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/ui/dialogs/preferences/cachesettingswidget.cpp
+    src/ui/dialogs/preferences/perfsettingswidget.cpp
     src/ui/dialogs/preferences/assetssettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/import/assetimportservice.cpp
@@ -540,6 +541,7 @@ set(HEADERS
     src/ui/windows/claudechatwindow.h
     src/ui/dialogs/preferences/mcpsettingswidget.h
     src/ui/dialogs/preferences/cachesettingswidget.h
+    src/ui/dialogs/preferences/perfsettingswidget.h
     src/ui/dialogs/preferences/assetssettingswidget.h
     src/services/services.h
     src/services/assetimporter.h

@@ -68,6 +68,9 @@ public:
 	/// The Cache page (SHADER_CACHE_SPEC §4.5): shader-cache size, location and
 	/// the confirm-guarded rebuild button. Reads the verbs, never the directory.
 	CacheSettingsWidget* cacheSettings = nullptr;
+	/// The Performance page (CLEANUP-1 item 11): the render monitor's capture
+	/// length, where its recordings are written, and how long they are kept.
+	class PerfSettingsWidget* perfSettings = nullptr;
 	Database *db;
 
 protected:

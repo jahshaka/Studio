@@ -56,6 +56,13 @@ private:
     /// an uninitialised member pointer is a crash waiting for the first reader.
     FilePickerWidget* meshPicker = nullptr;
 	ComboBoxWidget* faceCullMode;
+    /// "Cast Shadow" — the per-object shadow switch. The verb
+    /// node.setCastShadow (and node.setProperty(id, 'castShadow', …)) has
+    /// existed since the scripting engine shipped, and the LIGHT panel's
+    /// Lighting Channels row told users to "turn off Cast Shadow on the object
+    /// itself" — pointing at a control that did not exist anywhere in the UI
+    /// (CLEANUP-1 item 4). This is that control.
+    CheckBoxWidget* castShadow = nullptr;
     CheckBoxWidget* planarReflector = nullptr;
     /// Lighting channels, object side — "which lights may light this".
     LightChannelsWidget* lightChannels = nullptr;

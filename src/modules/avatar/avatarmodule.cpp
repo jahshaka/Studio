@@ -128,6 +128,13 @@ void AvatarModule::registerApi(ScriptEngine &engine)
     engine.addModule(mApi);
 }
 
+void AvatarModule::abortBackgroundWork()
+{
+    // The shell calls this at the TOP of its teardown, before it waits on the
+    // global thread pool — which is where this module's import worker lives.
+    if (mApi) mApi->abortBackgroundWork();
+}
+
 void AvatarModule::shutdown()
 {
     // The page (and with it the preview widget) belongs to the stacked widget;

@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 #include "ui/dialogs/preferences/mcpsettingswidget.h"
 #include "ui/dialogs/preferences/cachesettingswidget.h"
+#include "ui/dialogs/preferences/perfsettingswidget.h"
 #include "ui/dialogs/preferences/assetssettingswidget.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
@@ -51,6 +52,7 @@ void PreferencesDialog::setupPages()
     assetsSettings = new AssetsSettingsWidget(settings, db);
     mcpSettings = new McpSettingsWidget(settings);
     cacheSettings = new CacheSettingsWidget(settings);
+    perfSettings = new PerfSettingsWidget(settings);
 
     auto *tabs = new QTabWidget(this);
     // The dark theme: a bare QTabWidget renders the platform-light pane over
@@ -60,6 +62,7 @@ void PreferencesDialog::setupPages()
     tabs->addTab(worldSettings, "General");
     tabs->addTab(assetsSettings, "Assets");
     tabs->addTab(cacheSettings, "Cache");
+    tabs->addTab(perfSettings, "Performance");
     tabs->addTab(mcpSettings, "Claude / MCP");
     ui->worldLayout->addWidget(tabs);
 }
@@ -70,6 +73,7 @@ void PreferencesDialog::saveSettings()
 	if (assetsSettings) assetsSettings->saveSettings();
 	if (mcpSettings) mcpSettings->saveSettings();
 	if (cacheSettings) cacheSettings->saveSettings();
+	if (perfSettings) perfSettings->saveSettings();
 	close();
 }
 

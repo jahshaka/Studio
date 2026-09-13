@@ -42,6 +42,9 @@ public:
     void initialize(ModuleHost &host) override;
     QWidget *createPage() override;
     void registerApi(ScriptEngine &engine) override;
+    /// StudioModule's quit hook: flush the pending definition write and tell
+    /// the import runner to stop, without joining (CLEANUP-1 item 2).
+    void abortBackgroundWork() override;
     void shutdown() override;
 
     /// The live page, for the shell's direct calls (page-switch refresh).
