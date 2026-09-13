@@ -150,10 +150,15 @@ int main(int argc, char **argv)
     doc->giNumBounces = 2;
     doc->giPccGrid = iris::Vec3(2, 1, 2);          // 4 probes
     doc->giUpdateBudget = 1;
-    // ZERO AMBIENT is now "no Sky Light in the document" (SKY_LIGHT_SPEC.md §6):
-    // ambient is the skylight and nothing else, so a scene with no Sky Light
-    // pushes 27 zeros — which is exactly what the two lines that used to stand
-    // here (ambientColor black + ambientFromSky off) were spelling out.
+    // ZERO AMBIENT is now a SKY LIGHT AT ZERO (SKY_LIGHT_SPEC.md §6): ambient is
+    // the skylight and nothing else, so this pushes 27 zeros — exactly what the
+    // two lines that used to stand here (ambientColor black + ambientFromSky
+    // off) were spelling out. The node exists from the START rather than being
+    // added for the ambient case below, because ADDING a node is itself a probe
+    // input ("moved") and would land in the middle of the case it precedes.
+    auto ambientLight = iris::LightNode::create();
+    ambientLight->setLightType(iris::LightType::Sky);
+    ambientLight->intensity = 0.0f;
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
     doc->giBoundsMin = iris::Vec3(-4.6f, -0.6f, -4.6f);
@@ -179,6 +184,7 @@ int main(int argc, char **argv)
     sun->setLocalPos(iris::Vec3(0.0f, 4.0f, -4.0f));
     sun->setLocalRot(iris::Quat::fromEulerAngles(83.0f, 180.0f, 0.0f));
     doc->getRootNode()->addChild(sun);
+    doc->getRootNode()->addChild(ambientLight);
 
     SceneMirror mirror(escene);
     mirror.setSource(doc);
@@ -342,13 +348,41 @@ int main(int argc, char **argv)
     }
 
     // ---- a SKY change --------------------------------------------------------
-    input("sky", GiStaleReason::Sky, [&]() {
+    // NOT through input(), and the reason is a finding rather than a detail.
+    // Swapping one sky for another DESTROYS the previous sky's textures (the
+    // equirect or the six reflection faces), and OgreScene::destroyTexture
+    // calls invalidateGiCaches() before every texture dies — Instant Radiosity
+    // caches source images by raw TextureGpu*. So a sky-to-sky change is a
+    // FROM-SCRATCH GI build, not a probe re-capture, and always has been for
+    // the image, gradient and analytic skies. What changed in SKY_LIGHT_SPEC §2
+    // is that a SINGLE_COLOR sky is now a real sky with textures of its own, so
+    // this scene — which starts on a colour sky — takes that path too where it
+    // used to change from "no sky at all".
+    //
+    // Asserted as what it IS: the grid is re-placed, the placement's own
+    // captures are exempt from the per-frame budget (they are synchronous, by
+    // construction), and the scene still settles to idle afterwards.
+    {
+        const unsigned long long rebuilds = escene->giStatus().rebuilds;
         doc->skyType = iris::SkyType::GRADIENT;
         doc->gradientTop = QColor(40, 60, 200);
         doc->gradientMid = QColor(120, 120, 160);
         doc->gradientBot = QColor(30, 30, 30);
         doc->gradientOffset = 0.5f;
-    }, 12);
+        frame();
+        const GiStatus st = escene->giStatus();
+        std::printf("-- sky: reason=%s stale=%d captured=%d rebuilds %llu -> %llu\n",
+                    reasonName(st.lastStaleReason), st.staleProbes, st.probeCapturesLastFrame,
+                    rebuilds, st.rebuilds);
+        CHECK(st.rebuilds == rebuilds + 1,
+              "sky: swapping one sky for another REBUILDS the GI (the old sky's textures die, "
+              "and IR caches images by texture pointer)");
+        CHECK(st.lastStaleReason == GiStaleReason::Rebuild,
+              "sky: ...and says so — the reason is the rebuild, not the sky");
+        worstOver(12);
+        CHECK(escene->giStatus().staleProbes == 0, "sky: the grid has caught up");
+        CHECK(worstOver(20) == 0, "sky: ...and then the scene IDLES (20 frames, zero captures)");
+    }
 
     // ---- a LIGHT COLOUR change -----------------------------------------------
     // Engine half: setLight stales the probes. Mirror half: the GI signature
@@ -365,15 +399,13 @@ int main(int argc, char **argv)
     // Ambient IS the Sky Light (SKY_LIGHT_SPEC.md §2), so the ambient input the
     // probes key on is that light's strength: 0 -> 0.1 is the same
     // GiStaleReason::Ambient the flat colour used to raise.
-    {
-        auto skyLight = iris::LightNode::create();
-        skyLight->setLightType(iris::LightType::Sky);
-        skyLight->intensity = 0.0f;
-        doc->rootNode->addChild(skyLight);
-        mirror.sync();
-        input("ambient", GiStaleReason::Ambient,
-              [&]() { skyLight->intensity = 0.1f; }, 12);
-    }
+    // 40 frames, like the light-colour case above and for the same reason: the
+    // ambient IS a light now (SKY_LIGHT_SPEC.md §2), so its strength is in the
+    // mirror's GI light signature and a change to it coalesces into exactly one
+    // voxel re-solve on settle — which re-stales the probes once, well after the
+    // first catch-up has finished.
+    input("ambient", GiStaleReason::Ambient,
+          [&]() { ambientLight->intensity = 0.1f; }, 40);
 
     const auto lum = [](const Colour &c) { return c.r + c.g + c.b; };
 

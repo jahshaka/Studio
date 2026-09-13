@@ -334,11 +334,16 @@ int main(int argc, char **argv)
         meshNode2->setMaterial(flat);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("converted Flat builtin (unlit)", img);
-        // Colour components are 0..1 here. #00cc22 is (0, 0.8, 0.13); an UNLIT
-        // surface renders it as authored, so the green is at full strength
-        // rather than scaled down by a light.
-        CHECK(centre(img).r < 0.15f && centre(img).g > 0.7f && centre(img).b < 0.3f,
-              "Flat renders its AUTHORED colour, unshaded");
+        // Colour components are 0..1 here, and this readback is LINEAR. #00cc22
+        // is (0, 204, 34) sRGB, which is (0, 0.604, 0.033) linear — a colour a
+        // user PICKED goes through iris::linearOf like every other one
+        // (SKY_LIGHT_SPEC.md §4), unlit included. RE-BASELINED from 0.8: the
+        // assertion is still "it renders as AUTHORED, unshaded", it is just
+        // that the authored colour finally means the same thing a texture of
+        // that colour means.
+        CHECK(centre(img).r < 0.05f && centre(img).g > 0.55f && centre(img).g < 0.66f &&
+                  centre(img).b < 0.08f,
+              "Flat renders its AUTHORED colour, unshaded (decoded, like a texture)");
 
         meshNode2->setMaterial(legacy);
     }
@@ -1028,7 +1033,12 @@ int main(int argc, char **argv)
     mirror.applySky(view);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("document sky colour", img);
-    CHECK(corner(img).r > 0.6f && corner(img).b > 0.6f && corner(img).g < 0.3f, "document sky colour is the clear colour");
+    // A SINGLE_COLOR sky is a real sky now (SKY_LIGHT_SPEC.md §2) and its strip
+    // is decoded like every other colour a user picks (§4), so 200,30,200 lands
+    // at (0.577, 0.012, 0.577) of radiance in this linear readback rather than
+    // at the raw 0.78. RE-BASELINED; the assertion is unchanged in kind.
+    CHECK(corner(img).r > 0.45f && corner(img).b > 0.45f && corner(img).g < 0.1f,
+          "document sky colour is what the frame shows where there is no geometry");
 
     // ---- cubemap sky from six document face images (createCubeMap keeps the faces) ----
     {
@@ -1177,6 +1187,18 @@ int main(int argc, char **argv)
 
         // Sky Detail: the bake honours the document's requested width, and the
         // signature carries it (a detail change alone must re-bake).
+        //
+        // WITH A SUN IN THE SCENE (SKY_LIGHT_SPEC.md §3): the analytic sky's sun
+        // is the scene's directional light, and this block runs where the
+        // earlier cases removed theirs — so without one the bake would be the
+        // model's own night and the two detail levels would agree at black,
+        // which is not the assertion.
+        auto detailSun = iris::LightNode::create();
+        detailSun->setName("sun");
+        detailSun->lightType = iris::LightType::Directional;
+        detailSun->setLocalRot(iris::Quat::fromEulerAngles(-50.0f, 180.0f, 0.0f));
+        doc->getRootNode()->addChild(detailSun);
+        mirror.sync();
         doc->skyType = iris::SkyType::REALISTIC;
         doc->skyRealistic = iris::SkyRealistic::defaults();
         doc->skyBakeResolution = 256;
@@ -1215,6 +1237,8 @@ int main(int argc, char **argv)
                                          qRed(dpx) + qGreen(dpx) + qBlue(dpx),
                   "a realistic sky with no directional light bakes the model's night");
         }
+        doc->getRootNode()->removeChild(detailSun);
+        mirror.sync();
         doc->skyBakeResolution = 256;
     }
 
@@ -1374,18 +1398,20 @@ int main(int argc, char **argv)
         CHECK(mirror.engineNode(meshNode.data()) != 0, "the chrome cube is mirrored");
         CHECK(c.g > 0.25f && c.g > c.r * 1.5f && c.g > c.b * 1.5f,
               "a metal cube reflects the equirect sky's colour (IBL)");
-        // Control: clear the sky — the reflections go with it, and the same cube
-        // pixel must fall dark (ambient 0.02). Proves the green above was the
-        // cube's IBL, not the sky showing through where a cube failed to mirror.
+        // Control: SWAP the sky — the reflections follow it. A colour sky is a
+        // REAL sky now (SKY_LIGHT_SPEC.md §2) with a uniform environment of its
+        // own, so "clear the sky" is not a thing a colour sky does any more;
+        // what proves the green above was the cube's IBL is that changing the
+        // sky to a BLUE one turns the same cube pixel blue.
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         doc->skyColor = QColor(0, 0, 255);
         doc->setSkyTexture(iris::Texture2DPtr());
         mirror.applySky(view);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("metal cube, no sky (control)", img);
-        const Colour dark = centre(img);
-        CHECK(dark.g < 0.15f && dark.b < 0.15f,
-              "clearing the sky clears the reflections (the cube goes dark)");
+        view->readPixels(img); show("metal cube, blue colour sky", img);
+        const Colour swapped = centre(img);
+        CHECK(swapped.b > 0.25f && swapped.b > swapped.g * 1.5f && swapped.b > swapped.r * 1.5f,
+              "a colour sky is a real environment: the metal cube reflects IT now");
         meshNode->setMaterial(legacyOrange);
         doc->getRootNode()->removeChild(meshNode);
         QFile::remove(eqPath);

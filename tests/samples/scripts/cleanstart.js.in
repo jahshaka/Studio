@@ -53,13 +53,18 @@ function J(x) { return JSON.stringify(x); }
 // ---------------------------------------------------------------------------
 // What each sample is supposed to BE. Node counts are minima (a sample may
 // grow), names are the ones the sample's design promises.
+// EVERY SAMPLE GAINED A SKY LIGHT (SKY_LIGHT_SPEC.md §2 / scenes/tools/
+// add_sky_light.js): ambient is a light now, so a sample without one would open
+// with no ambient at all. +1 node and +1 light each, at intensity 1.0 — except
+// World Background, whose cubemap environment rides at 0.53 (the old 0.376 x
+// 1.4 gain, preserved).
 var EXPECTED = {
-    "Matcaps": { tier: "medium", nodes: 5, names: ["StanfordDragon", "Ground", "Directional Light"],
-                 types: { mesh: 2, light: 2 } },
-    "Particles": { tier: "medium", nodes: 10, names: ["Fire Pit", "Ground", "Sphere"],
+    "Matcaps": { tier: "medium", nodes: 6, names: ["StanfordDragon", "Ground", "Directional Light", "Sky Light"],
+                 types: { mesh: 2, light: 3 } },
+    "Particles": { tier: "medium", nodes: 11, names: ["Fire Pit", "Ground", "Sphere", "Sky Light"],
                    types: { mesh: 3, particles: 4 } },
-    "Physics": { tier: "medium", nodes: 16, names: ["Teapot", "ball", "pipe", "Ground"],
-                 types: { mesh: 13, light: 2 } },
+    "Physics": { tier: "medium", nodes: 17, names: ["Teapot", "ball", "pipe", "Ground", "Sky Light"],
+                 types: { mesh: 13, light: 3 } },
     // The GRAND SHOWROOM (2026-09-07) replaced the old 241-node import: a
     // sealed hall of primitives — 6 room slabs, 4 columns, a 4-sphere metal
     // roughness ladder, a torus and a teapot — under VCT + probes. 23 nodes,
@@ -67,29 +72,29 @@ var EXPECTED = {
     // world it replaced was not.
     // ONE FLOOR since lane L13 (owner, 2026-09-12): the gallery stands on the
     // default floor (the Ground), and the slab it used to lay over it is gone.
-    "Showroom": { tier: "epic", nodes: 22, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot"],
-                  types: { mesh: 16, light: 5 } },
+    "Showroom": { tier: "epic", nodes: 23, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Sky Light"],
+                  types: { mesh: 16, light: 6 } },
     // SHOWROOM 2 (lane L14, owner 2026-09-12): the same generator at twice the
     // size. 20 nodes — the Showroom's 22 without the new-scene template's
     // Directional Light and Point Light, which a sealed room cannot use (the
     // generator removes them). Its three lights are ALL the room has.
-    "Showroom 2": { tier: "epic", nodes: 20, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0"],
-                    types: { mesh: 16, light: 3 }, lightsExactly: 3,
+    "Showroom 2": { tier: "epic", nodes: 21, names: ["Ground", "Sphere_r0", "GoldTorus", "GreenTeapot", "Light0", "Sky Light"],
+                    types: { mesh: 16, light: 4 }, lightsExactly: 4,
                     absent: ["Directional Light", "Point Light"] },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
     // 14 since a799312a removed the two stray default-scene lights the resize
     // pass had left behind (the expectation lagged the re-stage — three lanes
     // independently flagged it).
     // 13 since lane L13: one floor, the default one (the Floor slab is gone).
-    "Mirror Room": { tier: "epic", nodes: 13, names: ["Ground", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
-                     types: { mesh: 10, light: 2 } },
-    "Skeletal Animation": { tier: "medium", nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
-                            types: { mesh: 4, light: 2 } },
+    "Mirror Room": { tier: "epic", nodes: 14, names: ["Ground", "RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus", "Sky Light"],
+                     types: { mesh: 10, light: 3 } },
+    "Skeletal Animation": { tier: "medium", nodes: 71, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground", "Sky Light"],
+                            types: { mesh: 4, light: 3 } },
     // The three dragons became Dragon / Dragon2 / Dragon3 on 2026-09-09: they
     // were all "SceneNode24" (an importer leftover) and the first had no guid
     // at all, so no by-name or by-id verb could tell them apart.
-    "World Background": { tier: "medium", nodes: 7, names: ["Dragon", "Dragon3", "Ground"],
-                          types: { mesh: 4, light: 2 } }
+    "World Background": { tier: "medium", nodes: 8, names: ["Dragon", "Dragon3", "Ground", "Sky Light"],
+                          types: { mesh: 4, light: 3 } }
 };
 
 // ENGINE ERRORS THE SUITE TOLERATES, each with the reason it is not this

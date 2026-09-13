@@ -301,10 +301,13 @@ int main(int argc, char **argv)
 
         QUndoStack stack;
         CHECK(scene->sunLight() == sun, "sun pin: the lowest priority IS the sun to start with");
+        // The panel's own shape: APPLY, then record what changed (the command's
+        // first redo() is a no-op for exactly that reason).
+        const QVariant before = sceneprops::get(scene, QStringLiteral("sunLight"));
+        sceneprops::set(scene, QStringLiteral("sunLight"), QVariant(second->getGUID()));
         stack.push(new ScenePropertyCommand(QStringLiteral("Pin Sun Light"), scene,
-                                            QStringLiteral("sunLight"),
-                                            sceneprops::get(scene, QStringLiteral("sunLight")),
-                                            QVariant(second->getGUID())));
+                                            QStringLiteral("sunLight"), before,
+                                            sceneprops::get(scene, QStringLiteral("sunLight"))));
         CHECK(stack.count() == 1, "sun pin: pinning is ONE undo step");
         CHECK(scene->sunLightGuid == second->getGUID(), "sun pin: the scene names the light");
         CHECK(scene->sunLight() == second, "sun pin: ...and it resolves as the sun");

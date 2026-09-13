@@ -335,8 +335,19 @@ int main(int argc, char **argv)
     light->setLightType(iris::LightType::Directional);
     light->setName("sun");
     light->color = QColor(255, 255, 255);
-    light->intensity = 1.0f;
-    light->setLocalRot(iris::Quat::fromEulerAngles(-60, 30, 0));
+    // RE-BASELINED (SKY_LIGHT_SPEC.md §2 and §4): this scene's ambient used to
+    // be a flat 140 grey, which lit the red cube's every face. It is now the
+    // SKY, and this scene's sky is PURE BLUE — a blue sky has no red in it to
+    // give a red cube, whatever the skylight's strength. So the cube is lit by
+    // the SUN, which is what a cube in a scene with a sun should be lit by, and
+    // the sun is raised to carry the whole of it (the colour-space fix also
+    // takes the albedo from 0.80 raw to 0.60 linear).
+    // AND AIMED AT THE CAMERA-FACING SIDE. The old rotation lit the far side of
+    // the cube, which did not matter while a flat grey ambient lit every face;
+    // a sky-lit scene has no such free light, so the sun has to actually fall on
+    // the face the assertions read.
+    light->intensity = 3.0f;
+    light->setLocalRot(iris::Quat::fromEulerAngles(60, 20, 0));
     doc->getRootNode()->addChild(light);
 
     auto cube = iris::MeshNode::create();
