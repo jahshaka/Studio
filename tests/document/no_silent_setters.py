@@ -43,6 +43,9 @@ ALLOWED = {
     "_setGraphNode": "iris::graph's own migration hook; the adoption guard sees it",
     "_setFolderPath": "marks (listed for completeness)",
     "_clearStaticHint": "the GRAPH class only; no mirror latch reads it",
+    "_setCountsAsMovement": "the transform-write EPOCH's exemption (nodegraph.h): read by "
+                            "iris::graph on the write path, never by a mirror latch, and "
+                            "written once — by CameraNode's constructor",
     "_setDirtySet": "installs the collector itself",
     "_setSoftMovable": "marks (listed for completeness)",
     "_setMobility": "marks (listed for completeness)",
