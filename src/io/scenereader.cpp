@@ -350,18 +350,22 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 
 			// Per-key defaults are the *model's* working values (VISUAL_PARITY
 			// item 1), matching iris::Scene's constructor: a key missing from an
-			// older document lands on something the Preetham bake can use rather
+			// older document lands on something the analytic sky can use rather
 			// than the legacy panel's degenerate corner.
 			{
 				const iris::SkyRealistic d = iris::SkyRealistic::defaults();
-				scene->skyRealistic.luminance		= realisticDefinition["luminance"].toDouble(d.luminance);
-				scene->skyRealistic.reileigh		= realisticDefinition["reileigh"].toDouble(d.reileigh);
-				scene->skyRealistic.mieCoefficient	= realisticDefinition["mieCoefficient"].toDouble(d.mieCoefficient);
-				scene->skyRealistic.mieDirectionalG = realisticDefinition["mieDirectionalG"].toDouble(d.mieDirectionalG);
-				scene->skyRealistic.turbidity		= realisticDefinition["turbidity"].toDouble(d.turbidity);
-				// The sky's own sunPosX/Y/Z are GONE (D15). An old file's keys
-				// are simply not read: its sun comes from its directional
-				// light, like every other scene's. No migration exists.
+				scene->skyRealistic.density   = realisticDefinition["density"].toDouble(d.density);
+				scene->skyRealistic.diffusion = realisticDefinition["diffusion"].toDouble(d.diffusion);
+				scene->skyRealistic.horizon   = realisticDefinition["horizon"].toDouble(d.horizon);
+				scene->skyRealistic.power     = realisticDefinition["power"].toDouble(d.power);
+				const QJsonObject skyColObj = realisticDefinition["skyColour"].toObject();
+				scene->skyRealistic.skyColour =
+					skyColObj.isEmpty() ? d.skyColour : readColor(skyColObj);
+				// The sky's own sunPosX/Y/Z are GONE (D15) and so are the five
+				// Preetham dials (SKY-GPU: the CPU bake they described does not
+				// exist — the sky is the engine's own analytic model). An old
+				// file's keys are simply not read; it opens at the defaults.
+				// No migration exists.
 			}
 			break;
 		}
@@ -447,6 +451,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogDensity = sceneObj.value("fogDensity").toDouble(
         double(iris::Scene::fogDensityFromLinear(scene->fogStart, scene->fogEnd)));
     scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(0.0);
+    scene->fogAtmosphere = sceneObj.value("fogAtmosphere").toBool(false);
     scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(0.1);
     scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(0.0);
     scene->fogBreakMinBrightness = sceneObj.value("fogBreakMinBrightness").toDouble(0.25);
@@ -669,11 +674,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // document's own rows are what it renders, and a sample that comes
             // up at the wrong tier is re-authored, never patched by the reader.
         }
-    }
-    // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.
-    {
-        const int sb = sceneObj.value("skyBakeResolution").toInt(256);
-        scene->skyBakeResolution = sb >= 1024 ? 1024 : sb >= 512 ? 512 : 256;
     }
 	scene->setWorldGravity(sceneObj.value("gravity").toDouble(Constants::GRAVITY));
 

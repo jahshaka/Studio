@@ -260,21 +260,21 @@ int main(int argc, char **argv)
             assets.setSubject(iris::SceneNodePtr(), false, true);   // sky only
 
             // A sky asset's blob is the same per-type block the scene format
-            // stores. Realistic: the FIVE Preetham keys — the three sun-position
-            // keys are gone with the sky's own sun (SKY_LIGHT_SPEC.md §3), and a
-            // preset that still carries them is simply not read.
+            // stores. Realistic: the analytic sky's OWN dials (SKY-GPU) — the
+            // five Preetham keys went with the CPU bake, and a preset that
+            // still carries them (or the older sun-position keys) is simply not
+            // read: it opens at the defaults, like any other absent key.
             QJsonObject realistic;
-            realistic["luminance"] = 1.1;
-            realistic["reileigh"] = 2.0;
-            realistic["mieCoefficient"] = 0.005;
-            realistic["mieDirectionalG"] = 0.8;
-            realistic["turbidity"] = 4.0;
+            realistic["density"] = 0.8;
+            realistic["diffusion"] = 1.5;
+            realistic["horizon"] = 0.05;
+            realistic["power"] = 1.2;
             CHECK(skyassets::applyToScene(doc, iris::SkyType::REALISTIC, realistic,
                                           [](const QString &) { return QString(); }),
                   "sky asset: a REALISTIC definition applies to the preview document");
             CHECK(doc->skyType == iris::SkyType::REALISTIC &&
-                  std::fabs(doc->skyRealistic.turbidity - 4.0f) < 1e-4f &&
-                  std::fabs(doc->skyRealistic.luminance - 1.1f) < 1e-4f,
+                  std::fabs(doc->skyRealistic.density - 0.8f) < 1e-4f &&
+                  std::fabs(doc->skyRealistic.power - 1.2f) < 1e-4f,
                   "sky asset: the realistic keys land on the document");
             // The preview's own sun: the sky takes its direction from the
             // scene's first directional light and from nowhere else.

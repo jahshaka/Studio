@@ -234,12 +234,21 @@ int main(int argc, char **argv)
     // sky's texels take, so a uniform sky's irradiance is exactly the decoded
     // colour with every higher band at zero. This is the assertion that makes
     // "a picked colour and a painted colour are the same colour" true.
+    // SINCE SKY-GPU the integral is the ENGINE's: it captures the sky it drew
+    // into a cubemap and integrates that, so this reads Scene::skyAmbientSh
+    // rather than a host-side function over a QImage. The assertion is the
+    // same one and it is now end to end — picked colour, uploaded strip,
+    // rendered sky, captured cube, integral — which is exactly the chain the
+    // colour-space rule has to hold across. AT THE ORIGINAL TOLERANCES: the
+    // capture is RGBA16_FLOAT, so the only error left is the cube's quadrature,
+    // not an 8-bit sRGB step (which is ~5e-3 of linear radiance at mid-grey and
+    // rounds differently on different hardware).
     {
-        QImage strip(64, 32, QImage::Format_RGBA8888);
-        strip.fill(QColor(150, 90, 45, 255));
+        doc->skyColor = QColor(150, 90, 45);
+        doc->skyType = iris::SkyType::SINGLE_COLOR;
+        for (int f = 0; f < 4; ++f) frame();
         float sh[27] = { 0.0f };
-        CHECK(SceneMirror::integrateSkyAmbientSh(strip, sh),
-              "5a. the uniform strip integrates");
+        CHECK(escene->skyAmbientSh(sh), "5a. the engine integrated the sky it drew");
         const iris::LinearColor want = iris::linearOf(QColor(150, 90, 45));
         std::printf("   band0 r=%.4f g=%.4f b=%.4f   linearOf r=%.4f g=%.4f b=%.4f\n",
                     sh[0], sh[1], sh[2], want.r, want.g, want.b);

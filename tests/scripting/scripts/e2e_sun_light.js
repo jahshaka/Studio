@@ -113,7 +113,7 @@ throws(function () { world.sunLight(lamp); }, "sunLight rejects a POINT light (o
 assert(world.sunLight() === sun, "a refused pin changes nothing");
 
 // ---- THE SUN DRIVES THE SKY (D15), and the old dials are REFUSED ----------
-world.sky("realistic", { turbidity: 4 });
+world.sky("realistic", { density: 0.5 });
 throws(function () { world.sky("realistic", { azimuth: 90 }); },
        "world.sky refuses 'azimuth' by name");
 throws(function () { world.sky("realistic", { elevation: 60 }); },
@@ -125,10 +125,17 @@ throws(function () { world.sky("realistic", { sunPosY: 450000 }); },
 assert(world.get().sky.drivesSun === undefined, "world.get() no longer reports a steering");
 assert(world.sun().skyDriven === undefined, "...nor does world.sun()");
 
-// ROTATING THE LIGHT MOVES THE SKY. The sky is a CPU bake keyed on the sun's
-// direction, so the proof is in pixels: with the sun ahead of the camera the
-// picture is brighter than with the sun behind it, and nothing but the light's
-// rotation changed between the two shots.
+// ROTATING THE LIGHT MOVES THE SKY. The sky is the engine's analytic model now
+// (SKY-GPU), keyed on the sun direction we push it, so the proof is in pixels:
+// with the sun ahead of the camera the picture differs from the same picture
+// with the sun behind it, and nothing but the light's rotation changed.
+//
+// A LOW SUN, and that is a re-baselining this lane owes an explanation: the sky
+// is only ASYMMETRIC in azimuth near the horizon. High up, both models are
+// close to a dome that looks the same whichever way you turn — the old bake's
+// forward-scattering lobe carried the difference at the 20-degree sun this case
+// used to use, and the engine's does not. 70 degrees puts the sun low, where a
+// sky has a bright side and a dark one.
 world.sunDisc({ visible: false });          // measure the SKY, not the disc on it
 // LOOK AT THE SKY, and at a band well above the horizon: the default camera
 // frames the ground, and the ground is lit by the very light being rotated —
@@ -136,12 +143,11 @@ world.sunDisc({ visible: false });          // measure the SKY, not the disc on 
 editor.setCamera({ position: { x: 0, y: 2, z: 0 }, lookAt: { x: 0, y: 14, z: -6 } });
 function skyBand(tag, rx, ry, rz) {
     node.transform(sun, { rotation: { x: rx, y: ry, z: rz } });
-    // The realistic bake is DEBOUNCED at 150 ms, so a frame count alone can
-    // measure the PREVIOUS sun twice. Two long runs with a screenshot between
-    // them (which costs real time) clear it.
-    editor.frame(60, 1 / 60);
-    editor.screenshot("sun_light_settle_" + tag + ".png", 64, 64);
-    editor.frame(60, 1 / 60);
+    // NO DEBOUNCE ANY MORE: the sky is a shader, so the sun's direction is a
+    // const-buffer write and the next frame already shows it. (This used to
+    // spend two 60-frame runs and a throwaway screenshot clearing a 150 ms
+    // bake debounce.)
+    editor.frame(4, 1 / 60);
     var s = editor.screenshot("sun_light_" + tag + ".png", 128, 128,
                               [[0.5, 0.2], [0.2, 0.3], [0.8, 0.3]], "plain");
     var sum = 0;
@@ -149,8 +155,8 @@ function skyBand(tag, rx, ry, rz) {
     console.log("sky band [" + tag + "] " + Math.round(sum));
     return sum;
 }
-var aheadLum = skyBand("ahead", -20, 0, 0);     // the sun low, in front of the camera
-var behindLum = skyBand("behind", -20, 180, 0); // ...and turned right around
+var aheadLum = skyBand("ahead", -70, 0, 0);     // the sun low, in front of the camera
+var behindLum = skyBand("behind", -70, 180, 0); // ...and turned right around
 console.log("sky with the sun ahead " + Math.round(aheadLum) +
             " vs behind " + Math.round(behindLum));
 assert(Math.abs(aheadLum - behindLum) > 8,
@@ -159,7 +165,7 @@ assert(Math.abs(aheadLum - behindLum) > 8,
 // A HAND-SET ROTATION IS NEVER OVERWRITTEN. The old coupling rewrote it from
 // the sky every frame; nothing does now.
 node.transform(sun, { rotation: { x: -33, y: 12, z: 0 } });
-world.sky("realistic", { turbidity: 9 });
+world.sky("realistic", { density: 0.9 });
 editor.frame(10, 1 / 60);
 near(node.info(sun).rotation.x, -33, 0.01, "a sky edit never moves the sun light");
 world.sunDisc({ visible: true });
@@ -208,7 +214,7 @@ assert(world.sunLight() === "", "world.sunLight() answers empty, not an error");
 assert(world.shadowStatus().sun === "", "world.shadowStatus().sun is empty too");
 // A REALISTIC SKY WITH NO SUN is legal: the model bakes its own night and
 // nothing warns (the analytic sky has no sun-less daylight).
-world.sky("realistic", { turbidity: 3 });
+world.sky("realistic", { density: 0.4 });
 assert(world.sun().light === "", "a realistic sky in a sunless scene still has no sun");
 // And it is NOT an issue: nothing to fix here.
 var checked = editor.checkScene();

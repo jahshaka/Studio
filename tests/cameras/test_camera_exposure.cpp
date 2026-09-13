@@ -451,6 +451,17 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
     mirror.applySky(view);
     mirror.applyEnvironment(view);
     mirror.applyCamera(camera, view);
+    // ...AND THE ENVIRONMENT AGAIN, ONE FRAME LATER (SKY-GPU). The sky's own
+    // light is the engine's now: it captures the sky it drew into a cubemap
+    // inside the next rendered frame and integrates THAT, so the ambient a host
+    // reads is the sky of the frame before — exactly like the IBL convolution,
+    // which has always landed a frame late. Every real host calls
+    // applyEnvironment once per frame and never notices; this fixture pushes
+    // once and then renders hundreds of frames, so without these two lines the
+    // FIRST shot of the run is the only one taken before the sky's light
+    // arrives, and every later one is 2.5x brighter than it.
+    gEngine->renderOneFrame();
+    mirror.applyEnvironment(view);
     if (optIn) {
         PostFxDesc fx = view->postFx();
         fx.allowOffscreen = true;

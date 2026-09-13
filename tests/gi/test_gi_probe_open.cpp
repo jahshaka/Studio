@@ -618,24 +618,34 @@ int main()
         CHECK(withoutDisc < 0.25f && mirrorPx().b > 0.5f,
               "13: with inProbes FALSE the disc is not in the reflection (the bare sky is)");
 
-        // THE INCLUSION IS A MEASURED DEFECT, NOT AN ASSERTION — ENGINE-6 item
-        // 5, reported to the lead rather than fenced, because the fix is in
-        // OgreSky.cpp, which another lane owns this round.
+        // THE INCLUSION IS STILL A MEASURED DEFECT, NOT AN ASSERTION (ENGINE-6
+        // item 5), and SKY-GPU narrowed it without closing it. `inProbes` true
+        // changes nothing in a probe capture — measured at 20 degrees and again
+        // at 170, a disc covering nearly the whole sky.
         //
-        // `inProbes` true changes NOTHING in a probe capture. Measured here at
-        // 20 degrees and again at 170 (a disc covering nearly the whole sky,
-        // which saturates the VIEW at the same moment): the mirror pixel stays
-        // the bare sky, to four decimals, in both. The capture is live (the red
-        // control above), the mask is right (kVisibleBit = 1 is exactly the
-        // probe pass's `visibility_mask 0x1`, and its rq range 0..200 contains
-        // the disc's queue 1), and the disc draws perfectly in any ordinary
-        // camera. What is left is the quad itself: it is a Rectangle2D whose
-        // geometry is NDC (-1,-1)..(1,1) with identity view AND projection
-        // turned OFF, attached to the static root — so its world AABB is a 2x2
-        // box at the world ORIGIN, and a cube face looking UP from a probe at
-        // y = 2 cannot contain it. The screen-filling quad is culled out of
-        // exactly the faces the sky is in. An infinite local AABB on that
-        // object is the shape of the fix.
+        // WHAT IT IS NOT (all measured in the SKY-GPU lane, so the next reader
+        // does not spend the afternoon again):
+        //   * NOT the world AABB, which was ENGINE-6's hypothesis and is wrong:
+        //     printed at probe-capture time it is Aabb::BOX_INFINITE (centre 0,
+        //     half-size inf), because that is what Rectangle2D's constructor
+        //     sets and setGeometry never touches it.
+        //   * NOT the visibility mask: printed with `inProbes` on, the quad
+        //     carries 0x41 (kSunDiscBit|kVisibleBit) against this pass's 0x1,
+        //     and it is `visible`.
+        //   * NOT the render queue: the quad is at 1, inside this pass's
+        //     rq_first 0 / rq_last 200, and moving it to 0 (beside the sky,
+        //     which IS captured) changes nothing.
+        //   * NOT the depth test: `depth_check off` on the material changes
+        //     nothing either.
+        //   * NOT a stale probe capture. That WAS a real bug and is fixed in
+        //     this lane — a change to the disc while it is in the captures now
+        //     invalidates the probe grid (OgreSky.cpp, setSky) — but the pixels
+        //     did not move, so it was not the whole story.
+        // What is left is the quad not reaching this pass's draw at all, or
+        // reaching it with a direction that finds no sun; the SKY quad beside
+        // it (a low-level material on the same kind of Rectangle2D, in the same
+        // queue range) IS captured, so the difference is in the disc's own
+        // material or in how a non-identity-view Rectangle2D is submitted here.
         //
         // When it lands, this print becomes `CHECK(withDisc > withoutDisc +
         // 0.25f, ...)` and the note goes.

@@ -81,6 +81,16 @@ FogPropertyWidget::FogPropertyWidget()
         "How sharply bright pixels break through. 0 switches breakthrough off, leaving plain "
         "exponential fog."));
 
+    // AERIAL PERSPECTIVE (SKY-GPU). Off by default and off in every scene
+    // authored before it existed: the fog colour above is a colour a person
+    // picked, and no scene's look changes unasked.
+    fogAtmosphere = this->addCheckBox("Sky Colour (Aerial)", false);
+    fogAtmosphere->setToolTip(QStringLiteral(
+        "Takes the distance fog's colour from the REALISTIC sky itself — the scattering in the "
+        "direction each surface is seen from — so far things fade into the sky behind them and "
+        "the haze follows the sun, with nothing to author. Needs the Realistic sky; with any "
+        "other sky the Fog Colour above is used. The height layer always uses Fog Colour."));
+
     shadowEnabled   = this->addCheckBox("Enable Shadows", true);
 
     // The rows, bound to their world properties. A row's LIVE write and its
@@ -93,6 +103,7 @@ FogPropertyWidget::FogPropertyWidget()
     rowundo::bind(fogBreakBrightness,rows(QStringLiteral("fogBreakMinBrightness"), tr("Breakthrough Brightness")));
     rowundo::bind(fogBreakFalloff,   rows(QStringLiteral("fogBreakFalloff"), tr("Breakthrough Falloff")));
     rowundo::bind(fogEnabled,        rows(QStringLiteral("fogEnabled"), tr("Fog Enabled")));
+    rowundo::bind(fogAtmosphere,     rows(QStringLiteral("fogAtmosphere"), tr("Sky Colour (Aerial)")));
     rowundo::bind(shadowEnabled,     rows(QStringLiteral("shadowEnabled"), tr("Enable Shadows")));
 }
 
@@ -122,6 +133,7 @@ void FogPropertyWidget::refreshRows()
     fogBreakBrightness->setValue(scene->fogBreakMinBrightness);
     fogBreakFalloff->setValue(scene->fogBreakFalloff);
     fogEnabled->setValue(scene->fogEnabled);
+    fogAtmosphere->setValue(scene->fogAtmosphere);
     shadowEnabled->setValue(scene->shadowEnabled);
     loading = false;
 }

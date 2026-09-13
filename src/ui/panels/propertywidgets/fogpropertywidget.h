@@ -61,6 +61,7 @@ private:
     panelundo::SceneRows rows;
 
     CheckBoxWidget* fogEnabled;
+    CheckBoxWidget* fogAtmosphere;           // aerial perspective (SKY-GPU)
     CheckBoxWidget* shadowEnabled;
     HFloatSliderWidget* fogDensity;
     HFloatSliderWidget* fogStart;            // disabled: linear-fog leftover

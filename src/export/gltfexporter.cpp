@@ -853,15 +853,21 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c)
         break;
     }
     case iris::SkyType::REALISTIC: {
-        // Parameters ride in extras: three.js's SkyMesh is the same zz85
-        // Preetham model with the same parameter names (audit §1).
+        // THE TWO MODELS ARE NOT THE SAME MODEL ANY MORE (SKY-GPU). The editor's
+        // realistic sky is the engine's own analytic atmosphere (Ogre's
+        // AtmosphereNpr, a GPU shader); the viewer has three.js's zz85 Preetham
+        // SkyMesh. The parameters below are exported under their own names so
+        // the archive describes the scene truthfully, but the viewer does NOT
+        // invent a Preetham fit for them — it draws its own sky with the SUN
+        // where this scene's sun is, which is the part a viewer can honour. A
+        // scene whose exact sky matters exports an equirect or cubemap sky.
         const iris::SkyRealistic &s = scene->skyRealistic;
         sky["type"] = "realistic";
-        sky["luminance"] = double(s.luminance);
-        sky["rayleigh"] = double(s.reileigh);
-        sky["mieCoefficient"] = double(s.mieCoefficient);
-        sky["mieDirectionalG"] = double(s.mieDirectionalG);
-        sky["turbidity"] = double(s.turbidity);
+        sky["density"] = double(s.density);
+        sky["diffusion"] = double(s.diffusion);
+        sky["horizon"] = double(s.horizon);
+        sky["power"] = double(s.power);
+        sky["skyColour"] = s.skyColour.name();
         // THE SKY HAS NO SUN OF ITS OWN (SKY_LIGHT_SPEC.md §3): the analytic
         // sky's sun is the scene's SUN LIGHT. Export the DIRECTION the light
         // travels — the viewer places its own sun from it (viewer.js) — rather
@@ -1485,6 +1491,10 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             fog["heightFalloff"] = double(scene->fogHeightFalloff);
             fog["heightLevel"] = double(scene->fogHeightLevel);
         }
+        // AERIAL PERSPECTIVE, for information like the two above it: the
+        // viewer has no atmosphere to take a fog colour from, and saying the
+        // scene asked for one is the honest half of what an archive can do.
+        if (scene->fogAtmosphere) fog["atmosphere"] = true;
         fog["start"] = double(scene->fogStart);
         fog["end"] = double(scene->fogEnd);
         jahScene["fog"] = fog;

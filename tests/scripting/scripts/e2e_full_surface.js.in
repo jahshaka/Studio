@@ -68,13 +68,20 @@ try { world.sky("volumetric"); } catch (e) { thrown = true; }
 assert(thrown, "unknown sky type refused");
 
 // ---- the realistic sky, whose SUN is the scene's directional light (D15) ----
-world.sky("realistic", { turbidity: 6, detail: 512 });
+world.sky("realistic", { density: 0.6, power: 1.2 });
 sky = world.get().sky;
 assert(sky.type === "Realistic", "realistic sky type set");
-assert(near(sky.data.turbidity, 6), "turbidity reaches skyData (save-safe)");
-assert(sky.detail === 512, "Sky Detail (bake width) round-trips");
+assert(near(sky.data.density, 0.6), "density reaches skyData (save-safe)");
+assert(near(sky.data.power, 1.2), "power reaches skyData (save-safe)");
 assert(sky.azimuth === undefined && sky.elevation === undefined,
        "the sky has no sun dials of its own any more");
+// The CPU bake's dials are GONE (SKY-GPU) and saying so is the verb's job.
+var refused = false;
+try { world.sky("realistic", { turbidity: 6 }); } catch (e) { refused = true; }
+assert(refused, "the retired Preetham dials are refused by name");
+refused = false;
+try { world.sky("realistic", { detail: 512 }); } catch (e) { refused = true; }
+assert(refused, "and so is the bake width, which nothing bakes any more");
 
 // ---- the sun disc, a WORLD setting (SKY_LIGHT_SPEC.md §3, owner pick 4) ----
 assert(world.sunDisc().visible === true, "the sun disc is on by default");
@@ -234,8 +241,8 @@ assert(world.antiAliasing() === 4, "reloaded scene achieves 4x again");
 // The VISUAL_PARITY_SPEC lane-A fields ride the same serializer block.
 var reloaded = world.get();
 assert(reloaded.shadowResolution === 2048, "shadowResolution round-trips through save/load");
-assert(reloaded.sky.type === "Realistic" && reloaded.sky.detail === 512,
-       "realistic sky + Sky Detail round-trip through save/load");
+assert(reloaded.sky.type === "Realistic" && near(reloaded.sky.data.density, 0.6),
+       "the realistic sky and its dials round-trip through save/load");
 assert(reloaded.skyLight.light !== "" && near(reloaded.skyLight.intensity, 1.4, 0.001),
        "the Sky Light and its strength round-trip through save/load");
 assert(world.shadowResolution() === 2048, "the reloaded scene drives the renderer's atlas");
