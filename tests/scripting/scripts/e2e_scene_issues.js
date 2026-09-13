@@ -201,6 +201,20 @@ assert(rest.length === 1 && rest[0].id === leakId,
 assert(rest.map(function (i) { return i.id; }).indexOf(tieId) < 0,
        "... the fixed issue's line is gone");
 
+// MANY ISSUES: a line each up to the cap, then ONE trailing count. The cap is
+// generous (8) because an author with eight broken things wants to see eight,
+// but an error area that can grow without bound would cover the viewport it is
+// reporting on.
+for (var d = 0; d < 10; ++d)
+    editor.raiseIssue({ kind: "demo" + d, node: lamp,
+                        message: "Demo problem " + d + ".", action: "Fix demo " + d + "." });
+var many = editor.issueBar();
+assert(many.rows === 11, "eleven live issues (" + many.rows + ")");
+assert(many.lines === 9, "... shown as 8 lines plus one 'and N more' line (" + many.lines + ")");
+assert(many.buttons === 0, "... and still no buttons");
+for (var d2 = 0; d2 < 10; ++d2) editor.clearIssue("demo" + d2 + ":" + lamp);
+assert(editor.issueBar().lines === 1, "clearing them leaves the one real issue");
+
 // ---- THE BAR IS AN EDITOR SURFACE (CLEANUP-1 item 3) ----------------------
 // The store is the model and works everywhere; the BAR is a frameless
 // always-on-top window over the editor's viewport, and it used to float over

@@ -100,16 +100,29 @@ void SceneIssueBar::refresh()
         text->setObjectName(QStringLiteral("SceneIssueLine"));
         text->setTextInteractionFlags(Qt::NoTextInteraction);
         text->setWordWrap(true);
-        text->setMinimumWidth(360);
+        // MEASURED, NOT HOPED FOR. A word-wrapped QLabel's height depends on
+        // its width, and letting the layout negotiate that left the bar 35 px
+        // tall with a three-line message clipped inside it the moment the
+        // number of rows CHANGED (rig capture, two issues -> one). Every line
+        // is laid out at one fixed text width and told exactly how tall it is,
+        // so the frame's own size hint is then a plain sum and correct on the
+        // first pass, every time.
+        text->setFixedWidth(kTextWidth);
+        text->setFixedHeight(qMax(text->heightForWidth(kTextWidth),
+                                  text->fontMetrics().height()));
         mRows->addWidget(text);
     }
     if (visible.size() > shown) {
         auto *more = new QLabel(tr("and %1 more").arg(visible.size() - shown), this);
         more->setObjectName(QStringLiteral("SceneIssueLine"));
+        more->setFixedWidth(kTextWidth);
+        more->setFixedHeight(more->fontMetrics().height());
         mRows->addWidget(more);
     }
 
+    // Every row now has a fixed size, so the frame's hint is exact.
     adjustSize();
+    resize(sizeHint());
     reposition();
     show();
     raise();
@@ -151,7 +164,10 @@ void SceneIssueBar::reposition()
     QWidget *anchor = mAnchor ? mAnchor.data() : ownerWindow();
     if (!anchor) return;
     const QRect area(anchor->mapToGlobal(QPoint(0, 0)), anchor->size());
-    const QSize mine = sizeHint().expandedTo(size());
+    // THE SIZE REFRESH JUST SET, not sizeHint(): a bar that has shrunk must be
+    // allowed to shrink (the old `sizeHint().expandedTo(size())` could only
+    // ever grow), and the height for these wrapped rows is computed there.
+    const QSize mine = size();
     QPoint topLeft(area.left() + mMargin, area.top() + mTopInset);
     // Never off the viewport: a long message on a small window would otherwise
     // push the text where nobody can read it.

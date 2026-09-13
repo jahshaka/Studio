@@ -101,6 +101,11 @@ private:
     /// on purpose: a scene with eight things wrong with it is a scene whose
     /// author wants to see all eight.
     static constexpr int kMaxRows = 8;
+    /// The width every line is laid out at. Fixed on purpose: a wrapped
+    /// label's height follows from its width, and measuring it ourselves at
+    /// one known width is what makes the bar's size right on the first pass
+    /// whether it grew or shrank.
+    static constexpr int kTextWidth = 360;
 };
 
 #endif // SCENEISSUEBAR_H
