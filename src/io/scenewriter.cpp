@@ -250,6 +250,15 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
     sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;
     sceneObj["giRayMarchStepScale"] = scene->giRayMarchStepScale;   // FIX WAVE B5
+    // PHOTON cascades. The flag always; the table only when a scene PINNED one,
+    // so a document that leaves the tier in charge carries no empty array.
+    sceneObj["giCascades"] = scene->giCascades;
+    if (!scene->giCascadeSet.isEmpty()) {
+        QJsonArray set;
+        for (const iris::Vec3 &c : scene->giCascadeSet)
+            set.append(QJsonArray{ double(c.x()), double(c.y()), double(c.z()) });
+        sceneObj["giCascadeSet"] = set;
+    }
     // DDGI (GI_UNIFIED_SPEC.md §4 P1). Tri-state toggle + our intensity scalar,
     // written like the probe knobs above: always, and read back onto the same
     // defaults, so a document that never touched them reopens identical.

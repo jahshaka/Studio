@@ -528,6 +528,28 @@ public:
         quint64 mobilityMisses = 0;
         QString lastMobilityMiss;
         quint64 mobilityRebuilds = 0;
+        /// PHOTON (SPECS/PHOTON_SPEC.md P0) — the live cascade chain, innermost
+        /// first, empty in the single-volume arm. Per cascade: the half-extent
+        /// and resolution it was built at, the metres per voxel that resolves
+        /// to, the metres of camera travel between re-centres, the world centre
+        /// it currently sits on, how many times it has been re-voxelised, how
+        /// many rebuilds it owes, and the CPU cost of its last one.
+        struct CascadeInfo {
+            float     halfSize = 0.0f;
+            int       resolution = 0;
+            float     cell = 0.0f;
+            float     step = 0.0f;
+            QVector3D centre;
+            quint64   rebuilds = 0;
+            int       pending = 0;
+            float     lastCpuMs = -1.0f;
+        };
+        QVector<CascadeInfo> cascades;
+        /// Whole-chain rebuilds the teleport guards forced, and cascade
+        /// rebuilds deferred because the frame's one-rebuild budget was spent.
+        quint64 cascadeFullRebuilds = 0;
+        quint64 cascadeDeferrals = 0;
+        quint64 cascadeDirtyMajority = 0;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
