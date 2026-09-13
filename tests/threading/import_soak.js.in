@@ -43,7 +43,7 @@ var kIterationBudgetMs = 30000;
 function fail(msg) { throw new Error("import_soak: " + msg); }
 
 project.create("import_soak_" + Math.floor(Math.random() * 1e9));
-world.rayon({ enabled: false });
+world.photon({ enabled: false });
 
 var requestsBefore = app.textureStreaming().loadRequests;
 var worstMs = 0, worstIdx = -1, totalMs = 0;

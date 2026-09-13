@@ -19,7 +19,7 @@ LabelWidget::LabelWidget(QWidget* parent) : QWidget(parent), ui(new Ui::LabelWid
     // PROSE CANNOT DRIVE THE DOCK WIDTH (root cause of "the World panel shows
     // no controls", 2026-09-08). A QLabel does not wrap by default, so its
     // MINIMUM width is the full width of its text — and this row's display
-    // label carries whatever a panel hands it, including the Rayon section's
+    // label carries whatever a panel hands it, including the Photon section's
     // 700-character explanation of the GI update budget. That single row asked
     // for 3674 px, the panel's minimum became 3815 px, and because the dock's
     // scroll area is widgetResizable with the horizontal scrollbar OFF, every

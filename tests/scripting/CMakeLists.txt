@@ -741,18 +741,18 @@ set_tests_properties(scripting.e2e.looks PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
-# RAYON (GI_UNIFIED_SPEC.md §2 / P2): the one GI switch and its quality tier —
+# PHOTON (GI_UNIFIED_SPEC.md §2 / P2): the one GI switch and its quality tier —
 # the new-scene default (Epic), the tier table seen through the verbs, an
-# Advanced pin surviving a tier switch, world.rayon round-tripping through
+# Advanced pin surviving a tier switch, world.photon round-tripping through
 # save/open, and the registry saying which dial owns which row. Document verbs
 # only -> --headless; the pixel half is gi.modes/gi.ddgi and the resolution half
 # is the gi.tiers suite.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-rayon)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon)
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.rayon
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_rayon.js --headless
+add_test(NAME scripting.e2e.photon
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js --headless
          WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.rayon PROPERTIES
+set_tests_properties(scripting.e2e.photon PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 120)
@@ -1075,7 +1075,7 @@ jah_no_display(
     scripting.e2e.shipped_assets
     scripting.e2e.world_modes
     scripting.e2e.looks
-    scripting.e2e.rayon
+    scripting.e2e.photon
     scripting.e2e.fitsize
     scripting.e2e.folders)
 

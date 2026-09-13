@@ -436,7 +436,7 @@ int main(int argc, char **argv)
               "the re-converge takes EXACTLY ceil(probes / batch) frames");
     }
 
-    // ---- 5b. EPIC'S BOUNCES COLUMN (the Rayon tier table, option (b)) ------
+    // ---- 5b. EPIC'S BOUNCES COLUMN (the Photon tier table, option (b)) ------
     // Epic differs from High by `numBounces` 3 against 1 — the only column
     // left between them since R2 deleted the dynamic-probe reservation.
     // Bounces are VctLighting's extra

@@ -19,7 +19,7 @@ WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene
     Snapshot snap;
     if (!scene) return snap;
     snap.worldMode = scene->worldMode;
-    snap.rayonTier = scene->giTier;
+    snap.photonTier = scene->giTier;
     snap.overrides = scene->worldOverrides;
     for (const worldmodes::Row &r : worldmodes::rows())
         if (r.get) snap.rowValues.insert(r.id, r.get(scene));
@@ -28,7 +28,7 @@ WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene
 
 bool WorldModeCommand::same(const Snapshot &a, const Snapshot &b)
 {
-    return a.worldMode == b.worldMode && a.rayonTier == b.rayonTier &&
+    return a.worldMode == b.worldMode && a.photonTier == b.photonTier &&
            a.overrides == b.overrides && a.rowValues == b.rowValues;
 }
 
@@ -56,10 +56,10 @@ void WorldModeCommand::apply(const Snapshot &snap)
     // had none, and a row with no backing field pins itself unconditionally.
     scene->worldOverrides = snap.overrides;
     scene->worldMode = snap.worldMode;
-    // The Rayon tier last: the `rayon` row's setter writes it too, but only
-    // when the row is ON — an undo back into "Rayon off" would otherwise lose
+    // The Photon tier last: the `photon` row's setter writes it too, but only
+    // when the row is ON — an undo back into "Photon off" would otherwise lose
     // which quality the scene comes back at.
-    scene->giTier = snap.rayonTier;
+    scene->giTier = snap.photonTier;
     if (mRefresh) mRefresh();
 }
 
