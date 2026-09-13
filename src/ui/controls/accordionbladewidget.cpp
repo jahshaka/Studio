@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <utility>
 #include "ui/controls/accordionbladewidget.h"
 #include "ui_accordionbladewidget.h"
 
@@ -91,6 +92,40 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
 {
     if (ui->contentpane->layout() == nullptr) return;
 
+    // THE GENERATION BEFORE LAST GOES NOW (MIRROR_SCALE lane, 2026-09-13).
+    //
+    // These rows used to be retired with deleteLater() alone, and that is a
+    // trap in any run that rebuilds a blade many times without returning to the
+    // event loop — which is EVERY script- or MCP-driven scene build, since a
+    // script run is one call that never yields. Nothing collects a
+    // DeferredDelete until the loop turns, so both the blade's child list and
+    // Qt's GLOBAL posted-event list grow by a row per row per rebuild, and Qt
+    // scans that list on every widget construction (QApplicationPrivate::
+    // compressEvent) and every widget destruction (QCoreApplication::
+    // removePostedEvents). The result is quadratic: measured on this tree,
+    // `scene.addPrimitive` in a loop cost 68 ms per cube at 35 nodes and 311 ms
+    // at 155 — each add rebuilds the material blade, and each rebuild made the
+    // next one slower. The app then spent MINUTES in ~MainWindow destroying the
+    // thousands of orphaned rows, each one scanning the same list again.
+    //
+    // WHY TWO GENERATIONS AND NOT ONE. A rebuild is very often triggered BY one
+    // of the rows being retired (a combo box's activation handler asks the
+    // panel to rebuild), so the generation this call is retiring can be sitting
+    // on the stack and must not be deleted here — that is what deleteLater is
+    // for and it stays. The generation before it cannot be: its handler
+    // returned before this rebuild was asked for. So each call frees the older
+    // list and keeps the newer, and at most two generations of retired rows are
+    // ever alive.
+    //
+    // (`deleteLater` is kept ON TOP of this, so a run that DOES turn the event
+    // loop — every interactive session — still collects them at the first
+    // turn. The pointers are guarded, so a row Qt has already deleted is simply
+    // dropped from the list.)
+    for (const QPointer<QWidget> &w : std::as_const(mRetiredOlder))
+        if (w) delete w.data();
+    mRetiredOlder = mRetiredRecent;
+    mRetiredRecent.clear();
+
     while (auto item = ui->contentpane->layout()->takeAt(0)) {
         if (auto widget = item->widget()) {
             // HIDE, THEN retire. deleteLater() defers the destruction to the
@@ -104,6 +139,7 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
             // selection-cost fix; this is the row-level twin of it.
             widget->hide();
             widget->deleteLater();
+            mRetiredRecent.append(widget);
         }
 
         if (auto childLayout = item->layout()) {
@@ -112,6 +148,17 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
 
         delete item;
     }
+}
+
+/// How many retired rows this blade is still holding. Two generations at most
+/// (see clearPanel); ui.selection_cost asserts it does not grow with the number
+/// of rebuilds, which is the shape the quadratic defect had.
+int AccordianBladeWidget::retiredRowCount() const
+{
+    int n = 0;
+    for (const QPointer<QWidget> &w : mRetiredOlder)  if (w) ++n;
+    for (const QPointer<QWidget> &w : mRetiredRecent) if (w) ++n;
+    return n;
 }
 
 void AccordianBladeWidget::onPanelToggled()

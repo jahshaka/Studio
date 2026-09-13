@@ -35,6 +35,7 @@ class DragVector3Widget;
 #include "modules/materials/propertywidgets/propertywidgetbase.h"
 
 #include <QLayout>
+#include <QPointer>
 
 class Project;
 
@@ -99,6 +100,9 @@ public:
     void expand();
 
     void clearPanel(QLayout *layout);
+    /// How many retired rows are still alive (see clearPanel's note on the two
+    /// generations). A diagnostic, and the thing ui.selection_cost asserts on.
+    int retiredRowCount() const;
     int minimum_height, stretch;
 
     void stepHeight(int h) {
@@ -123,6 +127,12 @@ private:
     void addRow(QWidget *row);
 
     Ui::AccordianBladeWidget *ui;
+    /// Rows retired by the last two clearPanel() calls — see that function for
+    /// why two and not one. QPointer because deleteLater() may have collected
+    /// them first (an interactive session turns the event loop; a script run
+    /// does not, which is the whole reason this exists).
+    QList<QPointer<QWidget>> mRetiredRecent;
+    QList<QPointer<QWidget>> mRetiredOlder;
 };
 
 #endif // ACCORDIANBLADEWIDGET_H

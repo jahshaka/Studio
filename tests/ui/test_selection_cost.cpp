@@ -46,6 +46,7 @@ For more information see the LICENSE file
 // widget's FIRST PAINT.
 
 #include <QApplication>
+#include "ui/controls/accordionbladewidget.h"
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QFocusFrame>
@@ -362,6 +363,51 @@ int main(int argc, char **argv)
     }
     CHECK(lightVisible >= 2 && lightVisible < visible,
           "panel: selecting a light swaps the blades instead of stacking them");
+
+    // ---- THE SCRIPT SHAPE: rebuilds with NO event-loop turn ----------------
+    //
+    // Everything above turns the event loop between switches, and that is what
+    // an interactive session does. A SCRIPT does not: a `--script` or MCP run is
+    // one call that never yields, so every deleteLater() it produces stays in
+    // Qt's global posted-event list for the whole run.
+    //
+    // AccordianBladeWidget::clearPanel retires its rows with deleteLater()
+    // alone, and that made a scripted scene build QUADRATIC (MIRROR_SCALE lane,
+    // 2026-09-13): each rebuild left ~100 rows alive as children of the blade
+    // AND ~100 DeferredDelete events in the posted list, and Qt scans that list
+    // on every widget construction (compressEvent) and every widget destruction
+    // (removePostedEvents). Measured through the app: scene.addPrimitive in a
+    // loop cost 92 ms per cube at 55 nodes and 2,076 ms at 405, and the process
+    // then spent MINUTES in ~MainWindow. Fixed, the same run is 57 -> 92 ms.
+    //
+    // The assertion is a SHAPE, not a millisecond budget: the retired-row
+    // population is bounded however many rebuilds happen without a turn.
+    {
+        panel->setSceneNode(nodes[0]);       // a mesh: the material blade is up
+        turn();
+        auto retiredRows = [&]() {
+            int n = 0;
+            for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+                n += b->retiredRowCount();
+            return n;
+        };
+        const int afterOne = retiredRows();
+        QElapsedTimer noTurn; noTurn.start();
+        // NO turn() in this loop, on purpose. 60 rebuilds is what a script
+        // adding 30 primitives produces (each add rebuilds the blade twice).
+        for (int i = 0; i < 60; ++i) panel->setSceneNode(nodes[i % 5]);
+        const double noTurnMs = double(noTurn.elapsed());
+        const int afterMany = retiredRows();
+        std::printf("  no-event-loop rebuilds: retired rows %d after 1, %d after 60"
+                    "  (%.0f ms for the 60)\n", afterOne, afterMany, noTurnMs);
+        CHECK(afterMany <= 3 * afterOne + 8,
+              "script shape: retired rows stay BOUNDED across 60 rebuilds with no event-loop turn");
+        turn();
+        CHECK(retiredRows() <= afterMany,
+              "script shape: ...and a turn of the loop does not leave more behind");
+        panel->setSceneNode(nodes[0]);
+        turn();
+    }
 
     // PIXELS. Hiding blades instead of orphaning them is a LIFETIME change, and
     // a lifetime change must not be a LOOK change: these two grabs are the
