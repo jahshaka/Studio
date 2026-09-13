@@ -257,7 +257,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
     sceneObj["giDdgiAmbient"] = scene->giDdgiAmbient;
     sceneObj["giDdgiSource"] = scene->giDdgiSource;
-    // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
+    // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
     // and spelled out here for the same reason (this file must not pull the
     // services layer into a dozen headless test targets): an ordinal would
     // silently re-point if a tier were ever inserted. Its PRESENCE is also what

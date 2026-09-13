@@ -207,7 +207,7 @@ add_test(NAME ui.drag_owner COMMAND test_drag_owner
 set_tests_properties(ui.drag_owner PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
 
-# ui.rayon_panel — the World panel's Rayon section (GI_UNIFIED_SPEC.md §2 / P2).
+# ui.photon_panel — the World panel's Photon section (GI_UNIFIED_SPEC.md §2 / P2).
 #
 # The unification's promise is a UI one ("one switch, engine picks the
 # techniques, hide the settings it consumes"), so it is asserted on the REAL
@@ -215,8 +215,8 @@ set_tests_properties(ui.drag_owner PROPERTIES
 # hides the rest, and that every gesture writes through services/worldmodes
 # into the document instead of inventing panel state. Offscreen, no display.
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
-add_executable(test_rayon_panel
-    test_rayon_panel.cpp
+add_executable(test_photon_panel
+    test_photon_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     # ieditorviewport.h is listed as a SOURCE so AUTOMOC generates the moc for
     # EditorViewportEvents: the Reflections-row case drives the panel from a
@@ -269,28 +269,28 @@ add_executable(test_rayon_panel
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp
     test_stubs.cpp)
-set_target_properties(test_rayon_panel PROPERTIES
+set_target_properties(test_photon_panel PROPERTIES
     AUTOMOC ON
     AUTOUIC ON
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_property(TARGET test_rayon_panel PROPERTY AUTOUIC_SEARCH_PATHS
+set_property(TARGET test_photon_panel PROPERTY AUTOUIC_SEARCH_PATHS
     ${CMAKE_SOURCE_DIR}/src/ui/controls
     ${CMAKE_SOURCE_DIR}/src/ui/panels
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
-target_include_directories(test_rayon_panel PRIVATE
+target_include_directories(test_photon_panel PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_rayon_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+target_link_libraries(test_photon_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 # A document node is an engine node (SCENEGRAPH_SPEC D2): the headless graph.
-jah_document_graph(test_rayon_panel)
-add_test(NAME ui.rayon_panel COMMAND test_rayon_panel
+jah_document_graph(test_photon_panel)
+add_test(NAME ui.photon_panel COMMAND test_photon_panel
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ui.rayon_panel PROPERTIES
+set_tests_properties(ui.photon_panel PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
-jah_no_display(ui.rayon_panel)
+jah_no_display(ui.photon_panel)
 
 # ui.selection_cost — a selection change costs the same at switch 200 as at
 # switch 1 (the 1 fps / 2-7 s stall regression, owner session 2026-09-08).

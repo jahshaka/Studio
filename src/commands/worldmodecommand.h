@@ -44,11 +44,11 @@ public:
     struct Snapshot
     {
         int worldMode = -1;
-        /// RAYON's remembered quality tier (GI_UNIFIED_SPEC §2). It is NOT
-        /// derivable from the rows: while Rayon is off the `rayon` row reads
-        /// "off" and carries no tier, so an undo of "turn Rayon off" would come
+        /// PHOTON's remembered quality tier (GI_UNIFIED_SPEC §2). It is NOT
+        /// derivable from the rows: while Photon is off the `photon` row reads
+        /// "off" and carries no tier, so an undo of "turn Photon off" would come
         /// back at whatever tier the scene happened to hold.
-        int rayonTier = 3;
+        int photonTier = 3;
         QJsonObject overrides;
         QHash<QString, int> rowValues;   ///< rowId -> backing-field value
     };
@@ -62,7 +62,7 @@ public:
                      QUndoCommand *parent = nullptr);
 
     /// True when the two snapshots describe the same registry state (tier,
-    /// Rayon tier, pins and every row's value) — "did this edit change it".
+    /// Photon tier, pins and every row's value) — "did this edit change it".
     static bool same(const Snapshot &a, const Snapshot &b);
 
     void undo() override;

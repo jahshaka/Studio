@@ -240,7 +240,7 @@ settle();
 // Epic's rows, on a polished floor: what the diagnosis found missing.
 console.log("---- phase D: the chain is in the shot ----");
 ["hdr", "ssao", "ssr", "smaa", "bloom"].forEach(function (id) { world.clearOverride({ id: id }); });
-assert(world.rayon({ tier: "epic" }).tier === "epic", "the world is at the Epic tier");
+assert(world.photon({ tier: "epic" }).tier === "epic", "the world is at the Epic tier");
 var rows = world.settings();
 assert(rows.ssr.valueId !== "off", "Epic has screen-space reflections on: " + rows.ssr.valueId);
 assert(rows.ssao.valueId !== "off", "Epic has ambient occlusion on: " + rows.ssao.valueId);

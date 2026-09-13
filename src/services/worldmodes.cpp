@@ -39,14 +39,14 @@ int planarBudgetOf(const iris::ScenePtr &s)
     return (m >= 0 && m <= 3) ? kPlanarTier[m] : 0;
 }
 
-/// THE RAYON TIER TABLE (worldmodes.h's comment is the readable form). Per
+/// THE PHOTON TIER TABLE (worldmodes.h's comment is the readable form). Per
 /// tier: technique (GiMode ordinal), quality (GiQuality ordinal), ddgi (0/1),
 /// bounces (total, 1..4). Owner option (b), 2026-09-09; the fifth column
 /// (dynamic probes) was deleted with the feature by lane R2, 2026-09-12.
 ///
-/// ONE SOURCE. The four `rayonTiered` rows buildRows() declares take their
-/// `tier[]` columns FROM this table (rayonColumns below) and the public
-/// per-column readers (rayonTechnique .. rayonBounces) read it too, so
+/// ONE SOURCE. The four `photonTiered` rows buildRows() declares take their
+/// `tier[]` columns FROM this table (photonColumns below) and the public
+/// per-column readers (photonTechnique .. photonBounces) read it too, so
 /// there is no second copy to drift — gi.tiers asserts the rows against the
 /// readers cell by cell (the review found 13 of the 20 cells were untested
 /// while they were hand-copied).
@@ -56,16 +56,16 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// writes today: the halving that decision asked for lives in the engine
 /// (High 512 -> 256, OgreGi.cpp buildPcc), so no tier needs a number here and
 /// the column exists so an author can pin one per scene.
-struct RayonRow { int technique, quality, ddgi, bounces, probeSize; };
-const RayonRow kRayonTable[4] = {
+struct PhotonRow { int technique, quality, ddgi, bounces, probeSize; };
+const PhotonRow kPhotonTable[4] = {
     /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
     /* Medium */ { 2, 1, 1, 1, 0 },   // VCT 64^3, DDGI-fed (voxel source)
     /* High   */ { 3, 2, 1, 1, 0 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
     /* Epic   */ { 3, 2, 1, 3, 0 },   // ... plus 3 bounces
 };
-/// The rayonTiered row ids, in kRayonTable column order.
-const int kRayonRowCount = 5;
-int rayonColumn(const RayonRow &r, int i) {
+/// The photonTiered row ids, in kPhotonTable column order.
+const int kPhotonRowCount = 5;
+int photonColumn(const PhotonRow &r, int i) {
     switch (i) {
     case 0: return r.technique;
     case 1: return r.quality;
@@ -74,10 +74,10 @@ int rayonColumn(const RayonRow &r, int i) {
     default: return r.probeSize;
     }
 }
-/// Fills a rayonTiered row's four tier cells from the table's column `column`.
-void rayonColumns(Row &r, int column)
+/// Fills a photonTiered row's four tier cells from the table's column `column`.
+void photonColumns(Row &r, int column)
 {
-    for (int t = 0; t < 4; ++t) r.tier[t] = rayonColumn(kRayonTable[t], column);
+    for (int t = 0; t < 4; ++t) r.tier[t] = photonColumn(kPhotonTable[t], column);
 }
 
 /// The four tier columns, in order: Low, Medium, High, Epic.
@@ -400,16 +400,16 @@ QVector<Row> buildRows()
         out.append(r);
     }
 
-    // ---- Global illumination = RAYON (GI_UNIFIED_SPEC.md §2) ---------------
+    // ---- Global illumination = PHOTON (GI_UNIFIED_SPEC.md §2) ---------------
     // ONE row is the dial the World Mode drives; the five below it are the
-    // machinery that dial consumes, and they are `rayonTiered` — resolved by
-    // the RAYON tier, not by the World Mode, because two dials must never own
-    // one backing field. THE TABLE ITSELF is kRayonTable above; each row's
-    // tier[] columns are READ from it (rayonColumns), never copied.
+    // machinery that dial consumes, and they are `photonTiered` — resolved by
+    // the PHOTON tier, not by the World Mode, because two dials must never own
+    // one backing field. THE TABLE ITSELF is kPhotonTable above; each row's
+    // tier[] columns are READ from it (photonColumns), never copied.
     {
         Row r;
-        r.id = QStringLiteral("rayon");
-        r.label = QStringLiteral("Rayon (realtime GI)");
+        r.id = QStringLiteral("photon");
+        r.label = QStringLiteral("Photon (realtime GI)");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
         r.options = { { QStringLiteral("off"),    QStringLiteral("Off"),    0 },
@@ -417,17 +417,17 @@ QVector<Row> buildRows()
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 2 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   3 },
                       { QStringLiteral("epic"),   QStringLiteral("Epic"),   4 } };
-        // THE WORLD MODE'S OPINION ABOUT RAYON, and it is the OLD table read
+        // THE WORLD MODE'S OPINION ABOUT PHOTON, and it is the OLD table read
         // through the new dial — deliberately, so that switching a scene's
         // World Mode keeps doing what it did:
-        //   Low/Medium had GI off             -> Rayon off
-        //   High had Instant Radiosity + low  -> Rayon Low (the same two fields)
-        //   Epic had the hybrid               -> Rayon Epic
+        //   Low/Medium had GI off             -> Photon off
+        //   High had Instant Radiosity + low  -> Photon Low (the same two fields)
+        //   Epic had the hybrid               -> Photon Epic
         // Epic is the one column that MOVES, and moving it is the point of this
         // phase (owner decision D2: a new scene is born Realtime-Epic, which is
         // hybrid + high + DDGI where it used to be hybrid + medium).
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 4;
-        r.cost = QStringLiteral("Rayon — realtime global illumination: light that bounces off "
+        r.cost = QStringLiteral("Photon — realtime global illumination: light that bounces off "
                                 "surfaces and colours everything it lands on, recomputed live "
                                 "instead of baked. The quality tier picks the techniques for you: "
                                 "Low bounces one light off the scene (cheapest, no voxels); Medium "
@@ -445,33 +445,33 @@ QVector<Row> buildRows()
         r.set = [](const iris::ScenePtr &s, int v) {
             if (!s) return;
             const bool on = v > 0;
-            const RayonTier t = on ? RayonTier(qBound(0, v - 1, 3)) : rayonTier(s);
-            setRayon(s, on, t);
+            const PhotonTier t = on ? PhotonTier(qBound(0, v - 1, 3)) : photonTier(s);
+            setPhoton(s, on, t);
         };
         out.append(r);
     }
     {
         Row r;
         r.id = QStringLiteral("giMode");
-        r.label = QStringLiteral("Rayon Technique");
+        r.label = QStringLiteral("Photon Technique");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.rayonTiered = true;
+        r.photonTiered = true;
         r.options = { { QStringLiteral("off"),              QStringLiteral("Off"),               0 },
                       { QStringLiteral("instant_radiosity"), QStringLiteral("Instant Radiosity"), 1 },
                       { QStringLiteral("vct"),              QStringLiteral("VCT"),               2 },
                       { QStringLiteral("vct_pcc_hybrid"),   QStringLiteral("VCT + Probes"),      3 } };
-        // RAYON columns (Low, Medium, High, Epic) — not world-mode ones —
-        // read from kRayonTable. Low keeps Instant Radiosity (spec §9 D1: "low
+        // PHOTON columns (Low, Medium, High, Epic) — not world-mode ones —
+        // read from kPhotonTable. Low keeps Instant Radiosity (spec §9 D1: "low
         // is really low"); the top two tiers are the hybrid and differ in the
         // giBounces row below, not here.
-        rayonColumns(r, 0);
-        r.cost = QStringLiteral("Which technique Rayon uses. Instant Radiosity re-traces on light "
+        photonColumns(r, 0);
+        r.cost = QStringLiteral("Which technique Photon uses. Instant Radiosity re-traces on light "
                                 "moves and sees only the driving light; VCT re-voxelizes on "
                                 "geometry edits (editing latency, not frame time) and lights from "
                                 "everything; VCT + Probes adds sharp reflections near geometry — "
                                 "six renders per reflection probe on every re-solve (18 probes by "
-                                "default), HDR and shadowed at High quality. Normally the Rayon "
+                                "default), HDR and shadowed at High quality. Normally the Photon "
                                 "quality tier picks this; setting it here PINS it.");
         r.get = [](const iris::ScenePtr &s) { return int(s->giMode); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giMode = iris::GiMode(v); };
@@ -480,14 +480,14 @@ QVector<Row> buildRows()
     {
         Row r;
         r.id = QStringLiteral("giQuality");
-        r.label = QStringLiteral("Rayon Voxel/Probe Quality");
+        r.label = QStringLiteral("Photon Voxel/Probe Quality");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.rayonTiered = true;
+        r.photonTiered = true;
         r.options = { { QStringLiteral("low"),    QStringLiteral("Low"),    0 },
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 1 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   2 } };
-        rayonColumns(r, 1);
+        photonColumns(r, 1);
         r.cost = QStringLiteral("Ray/voxel budget: 32/64/128 voxels per axis and 128/256/512 pixel "
                                 "probe faces. In VCT + Probes it ALSO turns on HDR and shadowed "
                                 "probe captures at High (world.gi's probeHdr/probeShadows pin "
@@ -500,16 +500,16 @@ QVector<Row> buildRows()
     {
         Row r;
         r.id = QStringLiteral("giDdgi");
-        r.label = QStringLiteral("Rayon Irradiance Field (DDGI)");
+        r.label = QStringLiteral("Photon Irradiance Field (DDGI)");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.rayonTiered = true;
+        r.photonTiered = true;
         r.options = { { QStringLiteral("off"), QStringLiteral("Off"), 0 },
                       { QStringLiteral("on"),  QStringLiteral("On"),  1 } };
         // Owner option (b), 2026-09-09: every voxel tier feeds the field — it
         // is the one diffuse arm that is right in both open and sealed scenes
         // (rayon2 S1-S3). Low has no voxel volume to feed it from.
-        rayonColumns(r, 2);
+        photonColumns(r, 2);
         r.cost = QStringLiteral("The irradiance field: a grid of probes over the lit volume storing "
                                 "the bounced light arriving from every direction, plus a depth map "
                                 "that decides what each probe can actually see. It is the LEAK FIX "
@@ -532,21 +532,21 @@ QVector<Row> buildRows()
     // quality dial is untouched (it is the RESOLUTION dial, and Epic changes
     // no resolution).
     // THE PROBE CAPTURE SIZE (owner decision 2026-09-13 Q4: "yes halve it but
-    // add it to the world settings"). A rayonTiered row like the four above, so
+    // add it to the world settings"). A photonTiered row like the four above, so
     // an edit PINS it; every tier's column is 0 = "follow the quality dial",
     // because the halving itself is the engine's default now.
     {
         Row r;
         r.id = QStringLiteral("giProbeSize");
-        r.label = QStringLiteral("Rayon Probe Capture Size");
+        r.label = QStringLiteral("Photon Probe Capture Size");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.rayonTiered = true;
+        r.photonTiered = true;
         r.options = { { QStringLiteral("auto"), QStringLiteral("Automatic"), 0 },
                       { QStringLiteral("128"),  QStringLiteral("128 px"),  128 },
                       { QStringLiteral("256"),  QStringLiteral("256 px"),  256 },
                       { QStringLiteral("512"),  QStringLiteral("512 px"),  512 } };
-        rayonColumns(r, 4);
+        photonColumns(r, 4);
         r.cost = QStringLiteral("The pixel size of ONE reflection-probe cube face. A probe is six "
                                 "of them plus a mip chain, so the grid's video memory goes with "
                                 "the SQUARE of this: at 256 a probe is 4.0 MB in HDR and a "
@@ -562,12 +562,12 @@ QVector<Row> buildRows()
     {
         Row r;
         r.id = QStringLiteral("giBounces");
-        r.label = QStringLiteral("Rayon Light Bounces");
+        r.label = QStringLiteral("Photon Light Bounces");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Int;
-        r.rayonTiered = true;
+        r.photonTiered = true;
         r.minValue = 1; r.maxValue = 4;
-        rayonColumns(r, 3);
+        photonColumns(r, 3);
         r.cost = QStringLiteral("Total light bounces, 1-4. Each bounce past the first is another "
                                 "light-propagation pass over the whole voxel volume on every "
                                 "re-solve (128^3 at High/Epic), and the irradiance field is fed "
@@ -816,19 +816,19 @@ const QStringList &postFxRowIds()
 }
 
 // ---------------------------------------------------------------------------
-// RAYON (GI_UNIFIED_SPEC.md §2 / P2) — the unified realtime-GI dial.
+// PHOTON (GI_UNIFIED_SPEC.md §2 / P2) — the unified realtime-GI dial.
 //
 // Everything below manipulates the three backing fields DIRECTLY rather than
 // going through setRowValue(), for two reasons: applying a tier must not record
 // pins (setMode's rule, and the bug the panel's `*` marker made visible), and
-// the `rayon` row's own set() runs from inside the registry — reaching back
+// the `photon` row's own set() runs from inside the registry — reaching back
 // into rows() from there is a re-entrancy nobody should have to reason about.
 // The tier table itself lives ABOVE buildRows (the rows derive their columns
 // from it); what follows is the bookkeeping that reads it.
 
 namespace {
 
-int tierIndex(RayonTier t) { return qBound(0, int(t), 3); }
+int tierIndex(PhotonTier t) { return qBound(0, int(t), 3); }
 
 bool pinned(const iris::ScenePtr &s, const char *id)
 {
@@ -837,59 +837,59 @@ bool pinned(const iris::ScenePtr &s, const char *id)
 
 }   // namespace
 
-QString rayonRowId() { return QStringLiteral("rayon"); }
+QString photonRowId() { return QStringLiteral("photon"); }
 
-QStringList rayonRowIds()
+QStringList photonRowIds()
 {
     return { QStringLiteral("giMode"), QStringLiteral("giQuality"),
              QStringLiteral("giDdgi"), QStringLiteral("giBounces"),
              QStringLiteral("giProbeSize") };
 }
 
-QString rayonTierName(RayonTier t)
+QString photonTierName(PhotonTier t)
 {
     static const char *names[4] = { "low", "medium", "high", "epic" };
     return QString::fromLatin1(names[tierIndex(t)]);
 }
 
-RayonTier rayonTierFromName(const QString &name, bool *ok)
+PhotonTier photonTierFromName(const QString &name, bool *ok)
 {
     const QString n = name.trimmed().toLower();
     if (ok) *ok = true;
-    if (n == QLatin1String("low"))    return RayonTier::Low;
-    if (n == QLatin1String("medium")) return RayonTier::Medium;
-    if (n == QLatin1String("high"))   return RayonTier::High;
-    if (n == QLatin1String("epic"))   return RayonTier::Epic;
+    if (n == QLatin1String("low"))    return PhotonTier::Low;
+    if (n == QLatin1String("medium")) return PhotonTier::Medium;
+    if (n == QLatin1String("high"))   return PhotonTier::High;
+    if (n == QLatin1String("epic"))   return PhotonTier::Epic;
     if (ok) *ok = false;
-    return RayonTier::Epic;
+    return PhotonTier::Epic;
 }
 
-QStringList rayonTierNames()
+QStringList photonTierNames()
 {
     return { QStringLiteral("low"), QStringLiteral("medium"),
              QStringLiteral("high"), QStringLiteral("epic") };
 }
 
-RayonTier rayonTier(const iris::ScenePtr &scene)
+PhotonTier photonTier(const iris::ScenePtr &scene)
 {
-    if (!scene) return RayonTier::Epic;
-    return RayonTier(qBound(0, scene->giTier, 3));
+    if (!scene) return PhotonTier::Epic;
+    return PhotonTier(qBound(0, scene->giTier, 3));
 }
 
-bool rayonEnabled(const iris::ScenePtr &scene)
+bool photonEnabled(const iris::ScenePtr &scene)
 {
     return scene && scene->giMode != iris::GiMode::OFF;
 }
 
-int rayonTechnique(RayonTier t) { return kRayonTable[tierIndex(t)].technique; }
-int rayonQuality(RayonTier t)   { return kRayonTable[tierIndex(t)].quality; }
-int rayonDdgi(RayonTier t)      { return kRayonTable[tierIndex(t)].ddgi; }
-int rayonBounces(RayonTier t)   { return kRayonTable[tierIndex(t)].bounces; }
-int rayonProbeSize(RayonTier t) { return kRayonTable[tierIndex(t)].probeSize; }
+int photonTechnique(PhotonTier t) { return kPhotonTable[tierIndex(t)].technique; }
+int photonQuality(PhotonTier t)   { return kPhotonTable[tierIndex(t)].quality; }
+int photonDdgi(PhotonTier t)      { return kPhotonTable[tierIndex(t)].ddgi; }
+int photonBounces(PhotonTier t)   { return kPhotonTable[tierIndex(t)].bounces; }
+int photonProbeSize(PhotonTier t) { return kPhotonTable[tierIndex(t)].probeSize; }
 
 namespace {
-/// The four values a scene RENDERS, in kRayonTable column order.
-void rayonHave(const iris::ScenePtr &s, int have[kRayonRowCount])
+/// The four values a scene RENDERS, in kPhotonTable column order.
+void photonHave(const iris::ScenePtr &s, int have[kPhotonRowCount])
 {
     have[0] = int(s->giMode);
     have[1] = int(s->giQuality);
@@ -899,10 +899,10 @@ void rayonHave(const iris::ScenePtr &s, int have[kRayonRowCount])
 }
 }   // namespace
 
-void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier)
+void setPhoton(const iris::ScenePtr &scene, bool enabled, PhotonTier tier)
 {
     if (!scene) return;
-    const RayonRow &row = kRayonTable[tierIndex(tier)];
+    const PhotonRow &row = kPhotonTable[tierIndex(tier)];
     scene->giTier = tierIndex(tier);
 
     if (!enabled) {
@@ -910,7 +910,7 @@ void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier)
         // switch (there is no second flag to disagree with the renderer), so a
         // pinned technique cannot survive an off — "off, but pinned to VCT" is
         // a state nothing can render, and the pin would silently un-switch
-        // Rayon at the next tier application. The machinery rows are left
+        // Photon at the next tier application. The machinery rows are left
         // alone: writing a tier's quality into a scene that renders no GI would
         // be churn in the document and in every diff of it, and re-enabling
         // applies the tier anyway.
@@ -926,43 +926,43 @@ void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier)
     if (!pinned(scene, "giMode")) scene->giMode = iris::GiMode(qBound(1, row.technique, 3));
     else if (scene->giMode == iris::GiMode::OFF) {
         // A pin of "off" is what an Advanced technique picker set to Off would
-        // record; turning Rayon on means the tier's technique, so the pin goes.
+        // record; turning Photon on means the tier's technique, so the pin goes.
         scene->worldOverrides.remove(QStringLiteral("giMode"));
         scene->giMode = iris::GiMode(qBound(1, row.technique, 3));
     }
 }
 
-bool rayonCustom(const iris::ScenePtr &scene)
+bool photonCustom(const iris::ScenePtr &scene)
 {
-    return !rayonDeviations(scene).isEmpty();
+    return !photonDeviations(scene).isEmpty();
 }
 
-QStringList rayonDeviations(const iris::ScenePtr &scene)
+QStringList photonDeviations(const iris::ScenePtr &scene)
 {
     QStringList out;
-    // With Rayon off there is nothing to deviate FROM: the picture is "no GI"
+    // With Photon off there is nothing to deviate FROM: the picture is "no GI"
     // whatever the machinery rows say, so the tier row reads Off, not Custom.
-    if (!scene || !rayonEnabled(scene)) return out;
-    const RayonRow &want = kRayonTable[tierIndex(rayonTier(scene))];
-    int have[kRayonRowCount];
-    rayonHave(scene, have);
-    const QStringList ids = rayonRowIds();
-    for (int i = 0; i < kRayonRowCount; ++i) {
-        if (have[i] == rayonColumn(want, i)) continue;
+    if (!scene || !photonEnabled(scene)) return out;
+    const PhotonRow &want = kPhotonTable[tierIndex(photonTier(scene))];
+    int have[kPhotonRowCount];
+    photonHave(scene, have);
+    const QStringList ids = photonRowIds();
+    for (int i = 0; i < kPhotonRowCount; ++i) {
+        if (have[i] == photonColumn(want, i)) continue;
         const Row *r = row(ids[i]);
         out << (r ? r->label : ids[i]);
     }
     return out;
 }
 
-void clearRayonOverrides(const iris::ScenePtr &scene)
+void clearPhotonOverrides(const iris::ScenePtr &scene)
 {
     if (!scene) return;
-    for (const QString &id : rayonRowIds()) scene->worldOverrides.remove(id);
-    setRayon(scene, rayonEnabled(scene), rayonTier(scene));
+    for (const QString &id : photonRowIds()) scene->worldOverrides.remove(id);
+    setPhoton(scene, photonEnabled(scene), photonTier(scene));
 }
 
-void deriveRayonFromDocument(const iris::ScenePtr &scene)
+void derivePhotonFromDocument(const iris::ScenePtr &scene)
 {
     if (!scene) return;
     // WHAT THE DOCUMENT RENDERS, read before anything is written.
@@ -976,18 +976,18 @@ void deriveRayonFromDocument(const iris::ScenePtr &scene)
     // derives High, never Epic: Epic's column (three bounces) did not exist
     // before the tier table, so no pre-tier document rendered it — a P1-era
     // explicit field opt-in IS the new High row.
-    RayonTier tier = RayonTier::Medium;
+    PhotonTier tier = PhotonTier::Medium;
     if (enabled) {
-        tier = technique == 1 ? RayonTier::Low
-             : technique == 2 ? RayonTier::Medium
-                              : RayonTier::High;
+        tier = technique == 1 ? PhotonTier::Low
+             : technique == 2 ? PhotonTier::Medium
+                              : PhotonTier::High;
     } else {
-        tier = quality == 0 ? RayonTier::Low
-             : quality == 1 ? RayonTier::Medium
-                            : RayonTier::High;
+        tier = quality == 0 ? PhotonTier::Low
+             : quality == 1 ? PhotonTier::Medium
+                            : PhotonTier::High;
     }
     scene->giTier = tierIndex(tier);
-    const RayonRow &want = kRayonTable[tierIndex(tier)];
+    const PhotonRow &want = kPhotonTable[tierIndex(tier)];
 
     // THE FIELD'S TRI-STATE. -1 in a pre-tier document means the author never
     // touched it — "the tier decides" — and the tier now decides ON at Medium
@@ -1000,30 +1000,30 @@ void deriveRayonFromDocument(const iris::ScenePtr &scene)
     // PIN WHAT DEVIATES, DROP WHAT DOES NOT. A pin whose value is the tier's
     // own is noise: it would freeze that field through every future tier switch
     // and make the dial look broken, and dropping it changes no value at all.
-    int have[kRayonRowCount];
-    rayonHave(scene, have);
-    const QStringList ids = rayonRowIds();
-    for (int i = 0; i < kRayonRowCount; ++i) {
-        // The technique is never pinned while Rayon is off: OFF is the enable
-        // state, not a deviation (setRayon owns that field then).
+    int have[kPhotonRowCount];
+    photonHave(scene, have);
+    const QStringList ids = photonRowIds();
+    for (int i = 0; i < kPhotonRowCount; ++i) {
+        // The technique is never pinned while Photon is off: OFF is the enable
+        // state, not a deviation (setPhoton owns that field then).
         const bool skip = (i == 0 && !enabled);
-        if (!skip && have[i] != rayonColumn(want, i)) scene->worldOverrides.insert(ids[i], have[i]);
+        if (!skip && have[i] != photonColumn(want, i)) scene->worldOverrides.insert(ids[i], have[i]);
         else                                          scene->worldOverrides.remove(ids[i]);
     }
 
-    // AND THE TIER ROW ITSELF. A scene whose World Mode would resolve Rayon to
+    // AND THE TIER ROW ITSELF. A scene whose World Mode would resolve Photon to
     // something else must pin the dial, or the next mode switch (or a reader
     // that re-applies the tier) would silently change how it renders.
-    const int rayonValue = enabled ? tierIndex(tier) + 1 : 0;
+    const int photonValue = enabled ? tierIndex(tier) + 1 : 0;
     // (A scene on Custom has no tier to clobber it, so it needs no pin: it
-    // behaves exactly as it did before Rayon existed, including the first time
+    // behaves exactly as it did before Photon existed, including the first time
     // somebody puts it on a World Mode.)
-    const Row *r = row(rayonRowId());
+    const Row *r = row(photonRowId());
     const Mode m = mode(scene);
-    if (r && m != Mode::Custom && r->tier[int(m)] != rayonValue)
-        scene->worldOverrides.insert(rayonRowId(), rayonValue);
+    if (r && m != Mode::Custom && r->tier[int(m)] != photonValue)
+        scene->worldOverrides.insert(photonRowId(), photonValue);
     else
-        scene->worldOverrides.remove(rayonRowId());
+        scene->worldOverrides.remove(photonRowId());
 }
 
 QString modeName(Mode m)
@@ -1066,10 +1066,10 @@ Mode mode(const iris::ScenePtr &scene)
 
 int tierValue(const Row &r, Mode m, const iris::ScenePtr &scene)
 {
-    // A Rayon-tiered row answers in the RAYON tier space: its columns are the
+    // A Photon-tiered row answers in the PHOTON tier space: its columns are the
     // GI dial's tiers, and the World Mode has nothing to say about it directly
-    // (it drives the `rayon` row, which drives this one).
-    if (r.rayonTiered) return r.tier[int(rayonTier(scene))];
+    // (it drives the `photon` row, which drives this one).
+    if (r.photonTiered) return r.tier[int(photonTier(scene))];
     if (m == Mode::Custom) return resolved(scene, r);
     return r.tier[int(m)];
 }
@@ -1129,10 +1129,10 @@ void setMode(const iris::ScenePtr &scene, Mode m)
     scene->worldMode = int(m);
     if (m == Mode::Custom) return;   // no tier to write through
     for (const Row &r : rows()) {
-        // A Rayon-tiered row is written by the `rayon` row (which IS in this
+        // A Photon-tiered row is written by the `photon` row (which IS in this
         // loop and honours the same pins) — never twice, and never from the
         // world tier's columns, which are not this row's tier space at all.
-        if (r.rayonTiered) continue;
+        if (r.photonTiered) continue;
         if (scene->worldOverrides.contains(r.id)) continue;   // pinned: survives the switch
         writeField(scene, r, r.tier[int(m)]);
     }
@@ -1172,12 +1172,12 @@ bool clearOverride(const iris::ScenePtr &scene, const QString &id)
     scene->worldOverrides.remove(id);
     const Row *r = row(id);
     const Mode m = mode(scene);
-    // A Rayon-tiered row falls back through the RAYON tier, and it does so via
-    // setRayon rather than a bare field write: the technique row doubles as the
+    // A Photon-tiered row falls back through the PHOTON tier, and it does so via
+    // setPhoton rather than a bare field write: the technique row doubles as the
     // on/off switch, so writing its tier value directly would switch GI back on
     // for a scene that has it off.
-    if (r && r->rayonTiered) {
-        setRayon(scene, rayonEnabled(scene), rayonTier(scene));
+    if (r && r->photonTiered) {
+        setPhoton(scene, photonEnabled(scene), photonTier(scene));
         return true;
     }
     // Fall back to the tier value. In Custom mode there is no tier, so the

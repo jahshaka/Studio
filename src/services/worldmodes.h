@@ -72,18 +72,18 @@ struct Row {
     int      tier[4] = { 0, 0, 0, 0 };  ///< Low, Medium, High, Epic
     QString  cost;                     ///< one line, shown as the row tooltip
     bool     available = true;         ///< false = declared but not yet implemented
-    /// TIER SPACE (GI_UNIFIED_SPEC.md §2 — the Rayon unification). A row is
-    /// resolved by the WORLD mode by default; a `rayonTiered` row is resolved by
-    /// the scene's RAYON tier instead, and its `tier[]` columns are the Rayon
+    /// TIER SPACE (GI_UNIFIED_SPEC.md §2 — the Photon unification). A row is
+    /// resolved by the WORLD mode by default; a `photonTiered` row is resolved by
+    /// the scene's PHOTON tier instead, and its `tier[]` columns are the Photon
     /// tiers (Low/Medium/High/Epic of the GI dial), not the world's.
     ///
-    /// It exists because two dials must never own one backing field. Rayon's
+    /// It exists because two dials must never own one backing field. Photon's
     /// technique, quality and DDGI rows used to be world-mode rows; the world
-    /// mode now drives the single `rayon` row, and THAT row writes the five
-    /// Rayon rows (technique, quality, field, bounces, dynamic probes) through.
-    /// setMode() therefore skips them (the rayon row already wrote them,
-    /// honouring their pins) and tierValue() reads their Rayon column.
-    bool     rayonTiered = false;
+    /// mode now drives the single `photon` row, and THAT row writes the five
+    /// Photon rows (technique, quality, field, bounces, dynamic probes) through.
+    /// setMode() therefore skips them (the photon row already wrote them,
+    /// honouring their pins) and tierValue() reads their Photon column.
+    bool     photonTiered = false;
 
     /// The backing field. Both are null for a row with no backing field yet
     /// (`available == false`): its value lives only in worldOverrides.
@@ -131,14 +131,14 @@ const QVector<Row> &rows();
 const Row *row(const QString &id);
 
 // ---------------------------------------------------------------------------
-// RAYON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
+// PHOTON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
 //
 // ONE dial where there were five: the World panel shows an on/off toggle, a
 // quality tier and the update budget, and everything the tier consumes moves
-// under an Advanced disclosure. NOTHING new was invented to do it — a Rayon
-// tier is a registry row (`rayon`) whose write-through targets are four other
+// under an Advanced disclosure. NOTHING new was invented to do it — a Photon
+// tier is a registry row (`photon`) whose write-through targets are four other
 // registry rows (`giMode`, `giQuality`, `giDdgi`, `giBounces`, all
-// `rayonTiered`). The invariant is the same one line as
+// `photonTiered`). The invariant is the same one line as
 // everywhere else in this file:
 //
 //     a backing field is ALWAYS the resolved value.
@@ -146,7 +146,7 @@ const Row *row(const QString &id);
 // THE TABLE (spec §2; owner decision 2026-09-09 night, option (b): Medium and
 // High are DDGI-fed — the field is the only diffuse arm that is right in both
 // open and sealed scenes (rayon2 S1-S3) — and Epic has a column of its own so
-// it no longer collapses onto High). ONE table, ONE owner: `kRayonTable` in
+// it no longer collapses onto High). ONE table, ONE owner: `kPhotonTable` in
 // worldmodes.cpp; the engine's GiQuality stays three-valued (it is the
 // RESOLUTION dial — voxels, probe faces — and Epic changes no resolution), so
 // Epic's two extra columns are ordinary document fields the engine already
@@ -176,54 +176,54 @@ const Row *row(const QString &id);
 // this keep up" control, not a "how much machinery" one, and it stays a visible
 // row of its own (owner decision D5).
 //
-// WHETHER RAYON IS ON is `scene->giMode != OFF` — there is no second flag.
+// WHETHER PHOTON IS ON is `scene->giMode != OFF` — there is no second flag.
 // `scene->giTier` remembers the quality across an off/on trip.
-enum class RayonTier { Low = 0, Medium = 1, High = 2, Epic = 3 };
+enum class PhotonTier { Low = 0, Medium = 1, High = 2, Epic = 3 };
 
 /// The registry id of the tier row, and of the four rows it writes through
 /// (giMode, giQuality, giDdgi, giBounces — in that order).
-QString     rayonRowId();
-QStringList rayonRowIds();
+QString     photonRowId();
+QStringList photonRowIds();
 
-QString     rayonTierName(RayonTier t);        ///< "low" | "medium" | "high" | "epic"
-RayonTier   rayonTierFromName(const QString &name, bool *ok = nullptr);
-QStringList rayonTierNames();
+QString     photonTierName(PhotonTier t);        ///< "low" | "medium" | "high" | "epic"
+PhotonTier   photonTierFromName(const QString &name, bool *ok = nullptr);
+QStringList photonTierNames();
 
-/// The scene's Rayon tier (what quality it comes back at), whether GI is on or
+/// The scene's Photon tier (what quality it comes back at), whether GI is on or
 /// off; and whether GI is on at all.
-RayonTier rayonTier(const iris::ScenePtr &scene);
-bool      rayonEnabled(const iris::ScenePtr &scene);
+PhotonTier photonTier(const iris::ScenePtr &scene);
+bool      photonEnabled(const iris::ScenePtr &scene);
 
 /// What the tier resolves each of its rows to — THE TABLE, read one column at
 /// a time. `technique` is a GiMode ordinal, `quality` a GiQuality ordinal,
 /// `ddgi` 0/1, `bounces` the total light bounces (1..4).
-int rayonTechnique(RayonTier t);
-int rayonQuality(RayonTier t);
-int rayonDdgi(RayonTier t);
-int rayonBounces(RayonTier t);
+int photonTechnique(PhotonTier t);
+int photonQuality(PhotonTier t);
+int photonDdgi(PhotonTier t);
+int photonBounces(PhotonTier t);
 /// The probe capture size column (pixels per cube face; 0 = follow the engine's
 /// quality dial). Every tier is 0 today — the column exists so a scene can pin
 /// one, which is the owner's 2026-09-13 Q4 decision.
-int rayonProbeSize(RayonTier t);
+int photonProbeSize(PhotonTier t);
 
-/// Applies a Rayon state: records the tier, writes each `rayonTiered` row's
+/// Applies a Photon state: records the tier, writes each `photonTiered` row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes
 /// giMode (OFF when disabled, the resolved technique when enabled).
 ///
-/// Turning Rayon OFF drops a pinned TECHNIQUE (`giMode`): the pin and the
+/// Turning Photon OFF drops a pinned TECHNIQUE (`giMode`): the pin and the
 /// enable share one field, and remembering "off, but pinned to VCT" would be a
 /// state nothing can render. Everything else — a pinned quality, a pinned DDGI
 /// — survives the trip, which is what makes the toggle non-destructive.
-void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier);
+void setPhoton(const iris::ScenePtr &scene, bool enabled, PhotonTier tier);
 
-/// True when a `rayonTiered` row RESOLVES to something other than the tier's
-/// value — the honest "Custom" indicator for the tier row. False whenever Rayon
+/// True when a `photonTiered` row RESOLVES to something other than the tier's
+/// value — the honest "Custom" indicator for the tier row. False whenever Photon
 /// is off (there is nothing to deviate from: the picture is no GI either way).
-bool rayonCustom(const iris::ScenePtr &scene);
+bool photonCustom(const iris::ScenePtr &scene);
 /// The labels of the deviating rows, for the tier row's tooltip.
-QStringList rayonDeviations(const iris::ScenePtr &scene);
-/// Drops the pins on the `rayonTiered` rows and re-applies the tier.
-void clearRayonOverrides(const iris::ScenePtr &scene);
+QStringList photonDeviations(const iris::ScenePtr &scene);
+/// Drops the pins on the `photonTiered` rows and re-applies the tier.
+void clearPhotonOverrides(const iris::ScenePtr &scene);
 
 /// MIGRATION (spec §2's table), for a document written before the tier existed:
 /// derives the tier its serialized GI settings correspond to, PINS every field
@@ -238,7 +238,7 @@ void clearRayonOverrides(const iris::ScenePtr &scene);
 /// Redundant pins (a pinned value that IS the derived tier's) are dropped, so a
 /// migrated scene reads as its tier and not as "Custom". Epic is never
 /// derived: no pre-tier document could have rendered its columns.
-void deriveRayonFromDocument(const iris::ScenePtr &scene);
+void derivePhotonFromDocument(const iris::ScenePtr &scene);
 
 QString    modeName(Mode m);            ///< "custom" | "low" | "medium" | "high" | "epic"
 Mode       modeFromName(const QString &name, bool *ok = nullptr);

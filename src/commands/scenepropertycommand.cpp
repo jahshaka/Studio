@@ -126,7 +126,7 @@ QVector<sceneprops::Field> buildFields()
     add("shadowEnabled", [](const ScenePtr &s) { return QVariant(s->shadowEnabled); },
         [](const ScenePtr &s, const QVariant &v) { s->shadowEnabled = v.toBool(); });
 
-    // ---- Rayon (the rows the tier does NOT own) ---------------------------
+    // ---- Photon (the rows the tier does NOT own) ---------------------------
     add("giLightGuid", [](const ScenePtr &s) { return QVariant(s->giLightGuid); },
         [](const ScenePtr &s, const QVariant &v) { s->giLightGuid = v.toString(); });
     add("giBoundsMin", [](const ScenePtr &s) { return vec(s->giBoundsMin); },

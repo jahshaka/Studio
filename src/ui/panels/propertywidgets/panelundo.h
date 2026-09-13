@@ -26,7 +26,7 @@ For more information see the LICENSE file
 //     own reflection — the same call node.setProperty makes, so the panel and
 //     the verb are one code path;
 //   * a QUALITY-REGISTRY row (msaa, shadow resolution, sky detail, ambient
-//     from sky, the Rayon rows, the post-process on/off rows) ->
+//     from sky, the Photon rows, the post-process on/off rows) ->
 //     WorldModeCommand, because those rows write a backing field AND pin
 //     themselves against the tier, and an undo that restored the value without
 //     the pin would leave the scene lying about what the tier owns.

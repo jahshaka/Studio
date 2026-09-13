@@ -5,7 +5,7 @@
 // ProjectService::saveInitialScene -> viewport->takeScreenshot ->
 // SceneMirror::applyEnvironment -> OgreScene::setGlobalIllumination ->
 // rebuildVct -> buildPcc -> PccPerPixelGridPlacement::buildStart. New scenes
-// are born at the epic Rayon tier, so pushing the environment into the
+// are born at the epic Photon tier, so pushing the environment into the
 // thumbnail's shot view was the first thing in the process to build a voxel
 // volume and a per-pixel reflection-probe grid — synchronously, for a 256-pixel
 // tile in which not one probe is visible. saveInitialScene now parks GI at OFF
@@ -38,9 +38,9 @@ function fail(msg) { throw new Error("newproject_stall: " + msg); }
 // re-uses the arm the first one paid for and would measure nothing at all (it
 // lands at ~650 ms with the defect fully present — measured, which is how this
 // suite nearly shipped as a no-op).
-var born = world.rayon();
+var born = world.photon();
 if (!born.enabled || born.tier !== "epic")
-    fail("a new scene should be born epic with Rayon on, got enabled=" + born.enabled +
+    fail("a new scene should be born epic with Photon on, got enabled=" + born.enabled +
          " tier=" + born.tier + " — this suite would be measuring nothing");
 
 var t0 = Date.now();
@@ -70,7 +70,7 @@ if (!gi.live || !gi.vctBound || !gi.probeGridRefused || gi.pccBound)
          " probeEnclosedAxes=" + gi.probeEnclosedAxes +
          ") — the initial thumbnail's GI park did not restore");
 
-var after = world.rayon();
+var after = world.photon();
 if (!after.enabled || after.tier !== "epic")
     fail("GI was not restored after the initial thumbnail: enabled=" + after.enabled +
          " tier=" + after.tier);

@@ -30,9 +30,9 @@ class QTimer;
 struct StudioServices;
 
 /**
- * World-panel "Global Illumination" section — RAYON (GI_UNIFIED_SPEC.md §2).
+ * World-panel "Global Illumination" section — PHOTON (GI_UNIFIED_SPEC.md §2).
  *
- * THREE VISIBLE ROWS and nothing else: the Rayon switch, the quality tier, and
+ * THREE VISIBLE ROWS and nothing else: the Photon switch, the quality tier, and
  * the GI update budget. Everything the tier consumes — the technique picker,
  * the voxel/probe quality, bounces, the lit volume, the probe grid, the
  * irradiance field and its intensity — moves under an "Advanced" disclosure,
@@ -42,7 +42,7 @@ struct StudioServices;
  *
  * Nothing was deleted to get here. The tier is a registry row like every other
  * quality row, so this panel writes through worldmodes and the same state is
- * reachable from world.rayon, world.gi, world.settings and world.override.
+ * reachable from world.photon, world.gi, world.settings and world.override.
  *
  * UNDO (rayontiers review follow-up, 2026-09-10): the Epic-column slider
  * (Light Bounces) is undoable through WorldModeCommand, ONE
@@ -63,9 +63,9 @@ signals:
     /// This section wrote a field the SIBLING World sections display — the
     /// technique, the quality, the irradiance field and the tier are World Mode
     /// registry rows, and the World Mode section shows every one of them with
-    /// its pin mark. The gap this closes (debt L6 item 4, found by the Rayon
+    /// its pin mark. The gap this closes (debt L6 item 4, found by the Photon
     /// lane): the World Mode panel raises this signal when IT writes through,
-    /// the GI panel did not, so a Rayon edit left the World Mode rows showing
+    /// the GI panel did not, so a Photon edit left the World Mode rows showing
     /// the pre-edit values until the user reselected the world.
     void worldSettingsChanged();
 
@@ -82,7 +82,7 @@ public:
     void setSceneView(IEditorViewport *sceneView) { this->sceneView = sceneView; }
 
 protected slots:
-    void onRayonToggled(bool on);
+    void onPhotonToggled(bool on);
     void onTierChanged(int row);
     void onAdvancedToggled(bool on);
     void modeChanged(int row);
@@ -102,13 +102,13 @@ private:
     /// and followed by a rebuild — these rows change which OTHER rows exist.
     void editRegistry(const QString &text, const std::function<void()> &edit);
 
-    /// One Rayon-tiered Int row edit: write-through + pin, in-place refresh,
+    /// One Photon-tiered Int row edit: write-through + pin, in-place refresh,
     /// and — when no drag/typing session brackets it — its own undo step.
-    void editRayonRow(const QString &id, int value, const QString &text);
-    void beginRayonEdit();
-    void endRayonEdit(const QString &text);
-    /// Wires a rayonTiered slider: start/tick/end -> snapshot/write/push.
-    void wireRayonSlider(HFloatSliderWidget *slider,
+    void editPhotonRow(const QString &id, int value, const QString &text);
+    void beginPhotonEdit();
+    void endPhotonEdit(const QString &text);
+    /// Wires a photonTiered slider: start/tick/end -> snapshot/write/push.
+    void wirePhotonSlider(HFloatSliderWidget *slider,
                          void (WorldGiPropertyWidget::*tick)(float), const QString &text);
     /// Wires one of the rows the TIER DOES NOT OWN (the volume, the probe grid,
     /// the update budget, the field's intensity and source): a plain world
@@ -142,7 +142,7 @@ private:
     IEditorViewport *sceneView = nullptr;
     WorldModeCommand::Snapshot editBefore;
     bool editing = false;
-    CheckBoxWidget *rayonSwitch = nullptr;
+    CheckBoxWidget *photonSwitch = nullptr;
     ComboBoxWidget *tierSelector = nullptr;
     ComboBoxWidget *modeSelector = nullptr;
     ComboBoxWidget *quality = nullptr;

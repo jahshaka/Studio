@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-// ui.rayon_panel — the World panel's Rayon section IS one switch, one dial and
+// ui.photon_panel — the World panel's Photon section IS one switch, one dial and
 // one budget (SPECS/GI_UNIFIED_SPEC.md §2, owner decisions D3/D5).
 //
 // The product ask this phase answers is a UI claim ("hide the settings it
@@ -22,7 +22,7 @@ For more information see the LICENSE file
 // It also pins the two properties that make the disclosure safe:
 //   * an Advanced edit PINS its row (the tier stops overwriting it), and
 //   * the panel never invents state of its own — every gesture goes through
-//     services/worldmodes, which is what makes the panel, world.rayon,
+//     services/worldmodes, which is what makes the panel, world.photon,
 //     world.gi and world.override the same model.
 //
 // Offscreen QPA, no display, no rendering (the section is widgets and a
@@ -115,7 +115,7 @@ public:
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
-    enginetest::DocumentGraph graph("ui-rayon-panel-ogre.log");
+    enginetest::DocumentGraph graph("ui-photon-panel-ogre.log");
     if (!graph.require()) return 1;
 
     auto scene = iris::Scene::create();
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
         const auto checks = panel.findChildren<CheckBoxWidget *>();
         const auto combos = panel.findChildren<ComboBoxWidget *>();
         const auto sliders = panel.findChildren<HFloatSliderWidget *>();
-        CHECK(checks.size() == 1, "one switch row (Rayon) and nothing else checkable");
+        CHECK(checks.size() == 1, "one switch row (Photon) and nothing else checkable");
         CHECK(combos.size() == 1, "one combo row (the quality tier) — the technique picker "
                                   "and the voxel/probe quality are NOT on the visible surface");
         CHECK(sliders.size() == 1, "one slider row (the GI update budget)");
@@ -155,18 +155,18 @@ int main(int argc, char **argv)
         CHECK(scene->giMode == iris::GiMode::VCT && int(scene->giQuality) == 1 &&
                   scene->giDdgi == 1 && scene->giNumBounces == 1,
               "picking Medium wrote the technique, the quality (DDGI-fed) and the bounces through");
-        CHECK(scene->giTier == int(worldmodes::RayonTier::Medium),
+        CHECK(scene->giTier == int(worldmodes::PhotonTier::Medium),
               "and recorded the tier on the document");
     }
 
     // ---- 3. THE SWITCH ------------------------------------------------------
     {
         auto *sw = box(panel.findChildren<CheckBoxWidget *>().value(0));
-        CHECK(sw && sw->isChecked(), "the switch shows Rayon on");
+        CHECK(sw && sw->isChecked(), "the switch shows Photon on");
         if (sw) sw->setChecked(false);
         pump();
         CHECK(scene->giMode == iris::GiMode::OFF, "unchecking it turns GI off");
-        CHECK(scene->giTier == int(worldmodes::RayonTier::Medium),
+        CHECK(scene->giTier == int(worldmodes::PhotonTier::Medium),
               "and the tier is remembered while off");
         // The panel rebuilt itself, so the control is a NEW widget.
         auto *sw2 = box(panel.findChildren<CheckBoxWidget *>().value(0));
@@ -200,7 +200,7 @@ int main(int argc, char **argv)
         CHECK(scene->giMode == iris::GiMode::VCT_PCC_HYBRID, "picking one writes it through");
         CHECK(scene->worldOverrides.contains(QStringLiteral("giMode")),
               "and PINS it, which is what stops the tier overwriting it");
-        CHECK(worldmodes::rayonCustom(scene), "so the tier row now reads Custom");
+        CHECK(worldmodes::photonCustom(scene), "so the tier row now reads Custom");
 
         // ... and the pin survives a tier switch made from the visible row.
         auto *tierCombo = panel.findChildren<ComboBoxWidget *>().value(0)->getWidget();
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
               "the tier row grows a (non-pickable) Custom entry while a pin deviates");
         if (tierCombo) tierCombo->setCurrentIndex(0);   // Low
         pump();
-        CHECK(scene->giTier == int(worldmodes::RayonTier::Low), "the tier moved to Low");
+        CHECK(scene->giTier == int(worldmodes::PhotonTier::Low), "the tier moved to Low");
         CHECK(scene->giMode == iris::GiMode::VCT_PCC_HYBRID,
               "and the pinned technique SURVIVED it");
 
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
         services.undo = &undo;
         panel.setServices(&services);
 
-        worldmodes::setRayon(scene, true, worldmodes::RayonTier::Epic);
+        worldmodes::setPhoton(scene, true, worldmodes::PhotonTier::Epic);
         panel.setScene(scene);   // rebuild at Epic (Advanced is still open)
         pump();
         CHECK(scene->giNumBounces == 3 && !scene->worldOverrides.contains(QStringLiteral("giBounces")),
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
                   "and the tier row reads Custom in place");
             emit bar->sliderReleased();         // valueChangeEnd
             CHECK(stack.count() == before + 1, "release pushed exactly ONE undo step");
-            CHECK(stack.count() > 0 && stack.text(stack.count() - 1) == QStringLiteral("Rayon Light Bounces"),
+            CHECK(stack.count() > 0 && stack.text(stack.count() - 1) == QStringLiteral("Photon Light Bounces"),
                   "named for the row");
 
             // A press-and-release that moved nothing is not an edit.

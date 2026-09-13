@@ -474,7 +474,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             sceneObj.contains("giUpdateBudget")
                 ? qBound(0, sceneObj.value("giUpdateBudget").toInt(1), 512)
                 : (sceneObj.value("giAutoRefresh").toBool(true) ? 1 : 0);
-        // (`giDynamicProbes` — Rayon Epic's old fifth column — is READ BY
+        // (`giDynamicProbes` — Photon Epic's old fifth column — is READ BY
         // NOTHING. The feature is deleted, R2 2026-09-12: a moving object is not
         // in a probe capture at all any more, so there is nothing to reserve
         // captures for. An old file may carry the key; it is simply ignored,
@@ -504,7 +504,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             float(qBound(1.0, sceneObj.value("giRayMarchStepScale").toDouble(1.0), 8.0));
         // DDGI (GI_UNIFIED_SPEC.md §4 P1). Absent in every document written
         // before this phase, and the fallbacks ARE the constructor's values —
-        // -1 (auto, which resolves OFF while there is no Rayon tier) is what
+        // -1 (auto, which resolves OFF while there is no Photon tier) is what
         // makes those documents render exactly as they always did.
         scene->giDdgi = qBound(-1, sceneObj.value("giDdgi").toInt(-1), 1);
         // The probe source (rayon2 S3): absent in every document written
@@ -512,19 +512,19 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giDdgiSource = qBound(-1, sceneObj.value("giDdgiSource").toInt(-1), 1);
         scene->giDdgiIntensity =
             float(qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(1.0), 64.0));
-        // The ambient sky-visibility strength (the Rayon ambient fix). Absent
+        // The ambient sky-visibility strength (the Photon ambient fix). Absent
         // in every document written before it: the fallback 1.0 turns the fix
         // ON for them, deliberately — it corrects a term those documents were
         // MISSING, and the sealed-room invariance gate is what says that is
         // safe for the scenes it cannot change.
         scene->giDdgiAmbient =
             float(qBound(0.0, sceneObj.value("giDdgiAmbient").toDouble(1.0), 8.0));
-        // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
+        // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
         // document written before the unification — those are DERIVED from the
         // fields above, below, once the World Mode is known.
         if (sceneObj.contains("giTier")) {
             bool ok = false;
-            const auto t = worldmodes::rayonTierFromName(sceneObj.value("giTier").toString(), &ok);
+            const auto t = worldmodes::photonTierFromName(sceneObj.value("giTier").toString(), &ok);
             scene->giTier = ok ? int(t) : 3;
         }
     }
@@ -615,11 +615,22 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
         scene->worldOverrides = sceneObj.value("worldOverrides").toObject();
         // A PIN OF A ROW THAT NO LONGER EXISTS is dropped on the way in (CRUD).
-        // `giDynamicProbes` was Rayon's fifth column until R2 deleted the
+        // `giDynamicProbes` was Photon's fifth column until R2 deleted the
         // feature; a scene the user had pinned it on (the shipped Showroom was
         // one) would otherwise carry the dead key through every save for ever,
         // and the World panel would have nothing to show for it.
         scene->worldOverrides.remove(QStringLiteral("giDynamicProbes"));
+        // THE PRODUCT RENAME (owner 2026-09-13): the GI dial's row was `rayon`
+        // and is `photon`. Nothing else about the row changed, so a pin written
+        // under the old spelling is carried over rather than dropped — the ONE
+        // thing tolerated here, read-only and never written back. No shipped
+        // sample carries it; a scene the owner pinned the dial on does.
+        if (scene->worldOverrides.contains(QStringLiteral("rayon"))) {
+            const QJsonValue pin = scene->worldOverrides.value(QStringLiteral("rayon"));
+            scene->worldOverrides.remove(QStringLiteral("rayon"));
+            if (!scene->worldOverrides.contains(worldmodes::photonRowId()))
+                scene->worldOverrides.insert(worldmodes::photonRowId(), pin);
+        }
         if (m.isEmpty()) {
             // A document written before World Modes existed — the shipped sample
             // scenes, and nothing else. §12 decision 8: it reads as EPIC, and the
@@ -636,7 +647,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // resolved values; no tier is re-applied, so a pinned row and a
             // hand-edited field both survive a round trip untouched.
 
-            // RAYON MIGRATION (GI_UNIFIED_SPEC §2 / P2). A document written
+            // PHOTON MIGRATION (GI_UNIFIED_SPEC §2 / P2). A document written
             // before the GI dial existed carries no `giTier`: derive which tier
             // its settings correspond to and pin whatever deviates, so the
             // scene renders IDENTICALLY and the panel still has an honest tier
@@ -648,7 +659,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // NOT derive: it applies the Epic tier wholesale, which is what it
             // has always done, and preserving its old GI settings as pins would
             // pin every row of every old document for ever.
-            if (!sceneObj.contains("giTier")) worldmodes::deriveRayonFromDocument(scene);
+            if (!sceneObj.contains("giTier")) worldmodes::derivePhotonFromDocument(scene);
             // (THE TIER TABLE'S OPTION-(b) BUMP LIVED HERE and is DELETED,
             // 2026-09-12.) It re-applied the tier to any document that carried
             // a `giTier` but no `giDynamicProbes` — the one-day P2 table's

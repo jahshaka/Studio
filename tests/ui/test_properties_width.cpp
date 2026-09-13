@@ -32,7 +32,7 @@ For more information see the LICENSE file
 //     as the presets panel on the main screen").
 //
 // Every selection the panel has a shape for is measured: the world root (the
-// blades the owner was looking at — Rayon, Post Process, Shadows), a mesh with
+// blades the owner was looking at — Photon, Post Process, Shadows), a mesh with
 // a material, a light, a camera, a particle emitter and an empty.
 //
 // The real widget, the real blades, the real Qlementine style (its metrics are

@@ -47,10 +47,10 @@ assert(world.override({ id: "msaa", value: 2 }), "world.override(msaa) accepted"
 assert(world.settings()["msaa"].source === "override", "and PINNED the row");
 assert(pushes() === beforeRow + 1, "a quality-row edit is ONE step (value AND pin)");
 
-// The Rayon dial, through the verb that records one (world.rayon -> applyRayon).
+// The Photon dial, through the verb that records one (world.photon -> applyPhoton).
 var beforeTier = pushes();
-assert(world.rayon({ tier: "high" }).tier === "high", "world.rayon(tier) accepted");
-assert(pushes() === beforeTier + 1, "a Rayon tier switch is ONE step");
+assert(world.photon({ tier: "high" }).tier === "high", "world.photon(tier) accepted");
+assert(pushes() === beforeTier + 1, "a Photon tier switch is ONE step");
 
 // THE WORLD VERBS (smoke L10 item 5, closing the gap debt L6 recorded here):
 // world.sunDisc / gravity / fog / gi / sky write the same fields the World

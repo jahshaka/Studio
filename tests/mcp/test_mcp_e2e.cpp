@@ -872,7 +872,7 @@ int main(int argc, char **argv)
             { "world.gi (pinned row + plain field)", "world.gi({bounces: 1, updateBudget: 7})",
               "JSON.stringify({gi: world.get().gi, pin: world.settings().giBounces.source})" },
             { "world.gi (tier)", "world.gi({tier: 'low'})",
-              "JSON.stringify({gi: world.get().gi, tier: world.rayon().tier})" },
+              "JSON.stringify({gi: world.get().gi, tier: world.photon().tier})" },
             { "world.sky", "world.sky('gradient', {top: '#123456', offset: 0.3})",
               "JSON.stringify(world.get().sky)" },
         };
