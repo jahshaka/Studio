@@ -386,7 +386,7 @@ int main(int argc, char **argv)
         // A light MOVE on this budget: re-injects the voxels and re-arms the
         // field's convergence, which is the path that actually dispatches
         // batches. It must run to convergence without aborting.
-        r.scene->refreshGiLighting();
+        r.scene->refreshGiLighting(true);      // in motion: the drag cadence's own call
         render(e, 40);
         st = r.scene->giStatus();
         CHECK(st.ifdBound, ("a re-converge at budget " + std::to_string(b) +
@@ -421,7 +421,7 @@ int main(int argc, char **argv)
         const int probes = st.ifdProbes;
         const int expected = (probes + batch - 1) / batch;
         CHECK(st.ifdConverged, "converged before the light moves");
-        CHECK(r.scene->refreshGiLighting(), "refreshGiLighting (the light-only cheap path)");
+        CHECK(r.scene->refreshGiLighting(true), "refreshGiLighting (the light-only cheap path)");
         st = r.scene->giStatus();
         CHECK(!st.ifdConverged, "the cheap path re-arms convergence (reset, not rebuild)");
         int frames = 0;

@@ -1925,6 +1925,7 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     out.viewCached = st.viewCached;
     out.mapsDirtiedLastFrame = int(st.mapsDirtiedLastFrame);
     out.atlasRebuilds = int(st.atlasRebuilds);
+    out.casterWalkItems = st.casterWalkItems;
     // The engine speaks NodeIds; the panel and the verb speak guids. The map is
     // built from the scene's own light list rather than from a second index in
     // the mirror: a scene has a handful of lights, this runs on a readback, and
@@ -1963,6 +1964,7 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.giPushes = mMirror->giPushCount();
     s.giRefreshes = mMirror->giRefreshCount();
     s.giLightRefreshes = mMirror->giLightRefreshCount();
+    s.giLightRefreshesAtRest = mMirror->giLightRefreshAtRestCount();
     // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): what the DOCUMENT resolved.
     // The renderer's own records — and the play-time misses — are reported by
     // world.giStatus(), beside the probe and rebuild counters they belong with.

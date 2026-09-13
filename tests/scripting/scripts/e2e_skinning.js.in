@@ -117,9 +117,21 @@ console.log("fixed-dt runs: " + identical + " identical probes, " + differing + 
 assert(differing === 0,
        "editor.frame(n, dt) gives the SAME play-mode pose twice (F3: it did not without dt)");
 // ...and it is a pose that actually moved, so the check is not "two blanks".
-var movedProbes = 0;
-for (var v = 0; v < probes.length; ++v)
-    if (Math.abs(bind.probes[v].r - runA.probes[v].r) > 8) ++movedProbes;
+// THE SAME READING AS THE CHECK ABOVE, and for the same reason (round-2 review
+// F3): the largest move over the THREE channels, against the same threshold of
+// 8. Comparing one channel with a lowered bar would have been a weakened
+// assertion dressed up as a re-calibration — the honest answer is to measure
+// the signal the way the earlier check does, which is also why this compares
+// the 20-step run against the bind pose rather than a single channel of it.
+var movedProbes = 0, worstMove = 0;
+for (var v = 0; v < probes.length; ++v) {
+    var pv = bind.probes[v], qv = runA.probes[v];
+    var d = Math.max(Math.abs(pv.r - qv.r), Math.abs(pv.g - qv.g), Math.abs(pv.b - qv.b));
+    if (d > worstMove) worstMove = d;
+    if (d > 8) ++movedProbes;
+}
+console.log("bind -> played: " + movedProbes + " probes moved by more than 8, worst " +
+            worstMove + "/255");
 assert(movedProbes >= 2, "the fixed-dt run really advanced the clip");
 
 // ---- THE FBX PIVOT RIG, through the import pipeline ---------------------
