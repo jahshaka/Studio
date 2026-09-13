@@ -77,11 +77,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "The heartbeat probe's readings (see app.heartbeat). maxGapMs is the longest the UI thread went "
           "without servicing its event loop since the probe started.",
           Needs::Window },
-        { "watchdogStats", "app.watchdogStats() -> {supported, running, enabled, stallMs, reports, lastStallMs}",
+        { "watchdogStats", "app.watchdogStats() -> {supported, running, enabled, stallMs, reports, lastStallMs, cooldownMs, sinceLastReportMs}",
           "The main-thread watchdog (services/mainthreadwatchdog.h): a thread of our own that polls the "
           "heartbeat's last-tick atomic and, when the UI thread has not ticked for stallMs, makes THAT thread "
           "print its own backtrace (a watchdog thread calling backtrace() would photograph itself). 'reports' "
-          "counts the stalls this session reported — at most one per stall, capped and cooled down. A "
+          "counts the stalls this session reported — at most one per stall, capped and cooled down. THE COOLDOWN IS "
+          "REPORTED, because it is otherwise invisible: 'cooldownMs' is the rate limit and 'sinceLastReportMs' "
+          "how long ago the last report was (-1 = none yet), so a caller that stalls the thread WITHIN the "
+          "cooldown can tell a dropped report from a missed one — which is exactly what made app.watchdog_stall "
+          "flake on a cold cache, where a boot stall from shader compilation swallowed the suite's own. A "
           "DEVELOPMENT-BUILD feature: 'supported' is false in a release build, and a dev build can still turn "
           "it off with the watchdog_enabled preference or --watchdog=off.",
           Needs::Window },

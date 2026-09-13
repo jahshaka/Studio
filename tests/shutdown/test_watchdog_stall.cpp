@@ -70,8 +70,63 @@ int main(int argc, char **argv)
                                .value("result").toObject();
     CHECK(hb.value("running").toBool(), "the heartbeat probe is running as the watchdog's input");
 
+    // ---- THE COOLDOWN IS PART OF THE CONTRACT (ENGINE-5 item 4) -----------
+    //
+    // The watchdog rate-limits itself: after a report it drops everything for
+    // kCooldownMs (5 s), because "a UI thread ticking once every three seconds
+    // is one pathology, not fifty incidents". That is correct behaviour and
+    // the reason this suite went red on every COLD-CACHE gate: booting with an
+    // empty shader cache under load stalls the UI thread past the 2 s
+    // threshold (measured: `lastStallMs 2075, reports 1` at rest), and the
+    // deliberate 3 s block that follows a second later lands INSIDE that
+    // cooldown and is dropped — `stall warnings: 1 -> 1`. Nothing about the
+    // watchdog was wrong; the suite was measuring the rate limit.
+    //
+    // So the window is opened properly: wait until the cooldown has expired,
+    // then take the baseline. `sinceLastReportMs`/`cooldownMs` exist on
+    // app.watchdogStats() for exactly this — before them a caller could not
+    // tell a DROPPED report from a MISSED one.
+    const auto waitOutCooldown = [&](const char *why) {
+        QElapsedTimer t; t.start();
+        while (t.elapsed() < 30000) {
+            const QJsonObject st = mcp.runScript(QStringLiteral("app.watchdogStats()"))
+                                       .value("result").toObject();
+            const double since = st.value("sinceLastReportMs").toDouble();
+            const double cool = st.value("cooldownMs").toDouble();
+            if (since < 0.0 || since >= cool) return;
+            const int waitMs = int(cool - since) + 400;
+            std::printf("info: %s — a report landed %.0f ms ago, waiting %d ms out of the "
+                        "watchdog's %.0f ms cooldown\n", why, since, waitMs, cool);
+            QThread::msleep(unsigned(waitMs));
+        }
+        std::printf("FAIL: the watchdog never left its cooldown\n");
+        ++failures;
+    };
+    CHECK(before.contains("cooldownMs") && before.contains("sinceLastReportMs"),
+          "app.watchdogStats() reports its cooldown");
+
+    // A STALL THE SUITE DID NOT ASK FOR, before the measured window — the cold
+    // gate's boot stall, made deliberate so that the case is covered on every
+    // run and not only on the runs that happen to be slow. Everything after it
+    // must behave exactly as if it had not happened.
+    waitOutCooldown("before the unattributed stall");
+    mcp.runScript(QStringLiteral("app.blockUiThread(3000)"));
+    QThread::msleep(300);
+    log += jahshaka.readAll();
+    const QJsonObject unattributed = mcp.runScript(QStringLiteral("app.watchdogStats()"))
+                                         .value("result").toObject();
+    std::printf("info: after the unattributed stall: reports %d\n",
+                unattributed.value("reports").toInt());
+    CHECK(unattributed.value("reports").toInt() > baseline,
+          "the unattributed stall WAS reported (the measured window starts dirty, on purpose)");
+    waitOutCooldown("before the measured window");
+
+    // THE MEASURED WINDOW. Both counts are taken here, immediately before the
+    // block: never the absolute number, always the delta across this window.
     log += jahshaka.readAll();
     const int warnsBefore = countOf(log, "[watchdog] UI thread stalled");
+    const int reportsBefore = mcp.runScript(QStringLiteral("app.watchdogStats()"))
+                                  .value("result").toObject().value("reports").toInt();
 
     // ---- 1. a 3 s block: one warn, one real stack -------------------------
     // The verb does not return until the freeze is over, which is the point:
@@ -98,8 +153,8 @@ int main(int argc, char **argv)
                                   .value("result").toObject();
     std::printf("info: watchdog after the stall: %s\n",
                 QJsonDocument(after).toJson(QJsonDocument::Compact).constData());
-    CHECK(after.value("reports").toInt() - baseline == 1,
-          "the verb agrees: exactly one report");
+    CHECK(after.value("reports").toInt() - reportsBefore == 1,
+          "the verb agrees: exactly one report IN THIS WINDOW");
     CHECK(after.value("lastStallMs").toDouble() >= 2000.0,
           "the reported stall is at least the threshold");
 
