@@ -38,6 +38,7 @@
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
@@ -178,6 +179,90 @@ int main(int argc, char **argv)
     for (int f = 0; f < 20; ++f) frame();
     CHECK(mirror.giRefreshCount() == refresh0 && mirror.giLightRefreshCount() == light0,
           "20 idle frames cost nothing at all (the pre-existing debounce still holds)");
+
+    // ---- THE VIEWER AND THE FURNITURE (lane ENGINE-7 item 1) ---------------
+    //
+    // The same "idle frames cost nothing" promise, for the two things that are
+    // NOT idle on a real editor frame and are not scene movement either: the
+    // camera, and the editor furniture that follows it. The gizmo is
+    // screen-scaled, so it re-pushes four transforms on every frame the camera
+    // moves; before this lane those four writes moved the movement epoch and
+    // re-ran every scan hanging off it — measured at 9.7 ms per frame of the
+    // mirror's GI push alone, on an 8,404-node lattice.
+    //
+    // `giAabbReads` is the instrument: it counts world-AABB reads, i.e. exactly
+    // the per-item work the epoch exists to skip.
+    {
+        // THE COUNTER IS WIRED FOR THIS BLOCK ONLY. The rest of the suite runs
+        // WITHOUT one on purpose — that is the "no epoch, no skipping" half of
+        // the contract (giEscapeSignature says so by name), and every drag
+        // assertion below depends on the walks running unconditionally. Here
+        // the epoch IS the subject, so it is armed exactly as the app arms it
+        // (EngineHost) and handed back before the drag.
+        engine->setTransformWriteCounter(&iris::graph::transformWriteCounter());
+        const auto reads = [&]() { return escene->giStatus().giAabbReads; };
+        // A GIZMO-SHAPED node: an engine-owned node carrying an UNLIT, on-top
+        // (depth-test off) item, which is what createUnlitMaterial(_, false)
+        // and the overlay queue mean. The suite builds one rather than driving
+        // the real gizmo because the RULE is about the node, not about Studio.
+        const NodeId furniture = escene->createNode();
+        const MaterialId furnMat = escene->createUnlitMaterial(Colour(1, 1, 0, 1), false);
+        const MeshId furnMesh = escene->createLineMesh(
+            { Vec3(0, 0, 0), Vec3(0, 1, 0), Vec3(1, 0, 0) }, true);
+        CHECK(furniture && furnMat && furnMesh && escene->attachMesh(furniture, furnMesh, furnMat),
+              "an editor-furniture node (unlit, drawn on top) exists");
+        // Arming the counter and adding the node are themselves changes: the
+        // walks are on demand, so they run once more and then settle. THAT is
+        // the baseline this measures from.
+        for (int f = 0; f < 5; ++f) { mirror.applyCamera(cam, view); frame(); }
+
+        const unsigned long long r0 = reads();
+        const unsigned long long w0 = iris::graph::transformWrites();
+        for (int f = 0; f < 30; ++f) {
+            cam->setLocalPos(iris::Vec3(std::sin(float(f) * 0.2f) * 6.0f, 4.0f, 6.0f));
+            cam->update(0.0f);
+            mirror.applyCamera(cam, view);
+            frame();
+        }
+        const unsigned long long flew = reads() - r0;
+        std::printf("   30 flying frames cost %llu item-box reads (one walk of this scene is 4;"
+                    " before this lane it was one walk per frame per signature)\n",
+                    (unsigned long long)flew);
+        CHECK(iris::graph::transformWrites() == w0,
+              "30 frames of flying the camera are ZERO document transform writes");
+        // AT MOST ONE WALK, not one per frame. The scene keeps four items, and
+        // a probe catching up with the camera legitimately buys a single
+        // on-demand walk somewhere in the window; what this catches is the old
+        // behaviour, where every flying frame re-walked every item TWICE (both
+        // signatures) plus the movement scan — ~300 reads for these 30 frames.
+        CHECK(flew <= 8,
+              "30 frames of FLYING THE CAMERA cost at most one walk (the viewer is not the viewed)");
+
+        const unsigned long long r1 = reads();
+        for (int f = 0; f < 30; ++f) {
+            escene->setNodeTransform(furniture, Vec3(float(f) * 0.01f, 0, 0), Quat(),
+                                     Vec3(1.0f + float(f) * 0.01f, 1, 1));
+            frame();
+        }
+        CHECK(reads() == r1,
+              "...and neither do 30 frames of the FURNITURE being re-placed with it");
+
+        // ...but the scene itself still costs exactly what it always did: one
+        // walk on the frame something real moves. (The walks are on demand, so
+        // the count grows by the scene's items, not by a fixed number.)
+        const unsigned long long r2 = reads();
+        floor->setLocalPos(iris::Vec3(0.0f, -0.06f, 0.0f));
+        frame();
+        CHECK(reads() > r2, "a MOVED OBJECT still runs the walk");
+        const unsigned long long r3 = reads();
+        frame();
+        CHECK(reads() == r3, "...once, and the frame after it is free again");
+        floor->setLocalPos(iris::Vec3(0.0f, -0.05f, 0.0f));
+        frame();
+        frame();
+        engine->setTransformWriteCounter(nullptr);
+    }
+
     const Colour before = floorPixel();
     std::printf("   floor, light at start   r=%.3f g=%.3f b=%.3f\n", before.r, before.g, before.b);
 
