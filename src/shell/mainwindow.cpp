@@ -462,6 +462,12 @@ iris::ScenePtr MainWindow::createDefaultScene()
     skylight->setLightType(iris::LightType::Sky);
     scene->rootNode->addChild(skylight);
     skylight->setName("Sky Light");
+    // WHERE THE POINT LIGHT STOOD. A Sky Light has no position — it is the sky —
+    // but its ICON does, and an icon at the world origin sits exactly where the
+    // default camera looks and on top of whatever a user drops there first. The
+    // old template's second light stood at (-4, 4, 0); the marker for the light
+    // that replaces it stands in the same place.
+    skylight->setLocalPos(iris::Vec3(-4, 4, 0));
     skylight->intensity = 1.0f;
     skylight->color = QColor(255, 255, 255);
     skylight->icon = iris::Texture2D::load(":/icons/light.png");

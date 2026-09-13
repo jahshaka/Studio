@@ -22,7 +22,8 @@ world.gravity(12);
 world.gi({ mode: "instant_radiosity", quality: "high", bounces: 2 });
 world.shadows({ enabled: true });
 var w = world.get();
-assert(w.ambient === "#404040", "ambient round-trips");
+assert(w.skyLight.light !== "" && near(w.skyLight.intensity, 1.4, 0.001),
+       "the Sky Light and its strength round-trip through world.get()");
 assert(w.fog.enabled === true && near(w.fog.start, 50) && near(w.fog.end, 150), "fog round-trips");
 // Fog is exponential: `end` is kept as the linear pair's convenience and SETS the
 // density (4.32/end = the distance where the old linear fog was total).

@@ -3,6 +3,8 @@
 #include "bridge/secondarysurfacetonemap.h"
 #include "bridge/enginethumbnailrenderer.h"
 
+#include "irisgl/core/color.h"
+
 #include <QColor>
 #include <QtMath>
 #include <cstring>
@@ -48,8 +50,13 @@ EngineThumbnailRenderer::~EngineThumbnailRenderer()
 
 Colour EngineThumbnailRenderer::backgroundColour()
 {
-    // The legacy generator cleared to (25, 25, 25).
-    return Colour(25 / 255.0f, 25 / 255.0f, 25 / 255.0f, 1.0f);
+    // The legacy generator cleared to (25, 25, 25) — a COLOUR, so it enters the
+    // renderer linear like every other one (SKY_LIGHT_SPEC.md §4). It has to:
+    // the preview document carries the same 25 grey as its SKY, the sky now
+    // draws a real quad, and a raw clear behind a decoded sky quad would show a
+    // seam wherever the quad did not cover.
+    const iris::LinearColor c = iris::linearOf(QColor(25, 25, 25));
+    return Colour(c.r, c.g, c.b, 1.0f);
 }
 
 void EngineThumbnailRenderer::configureScene(Scene *scene)
