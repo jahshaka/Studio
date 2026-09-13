@@ -1925,6 +1925,7 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     out.viewCached = st.viewCached;
     out.mapsDirtiedLastFrame = int(st.mapsDirtiedLastFrame);
     out.atlasRebuilds = int(st.atlasRebuilds);
+    out.casterWalkItems = st.casterWalkItems;
     // The engine speaks NodeIds; the panel and the verb speak guids. The map is
     // built from the scene's own light list rather than from a second index in
     // the mirror: a scene has a handful of lights, this runs on a readback, and

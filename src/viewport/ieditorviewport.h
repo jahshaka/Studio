@@ -575,6 +575,11 @@ public:
         /// Cumulative atlas rebuilds (ShadowStatus::atlasRebuilds) — the hitch
         /// counter `world.shadowStatus().atlasRebuilds` reports.
         int atlasRebuilds = 0;
+        /// Cumulative item visits by the lamp-map cache's caster walk
+        /// (ShadowStatus::casterWalkItems) — the still-frame counter
+        /// `world.shadowStatus().casterWalkItems` reports: it must not move on
+        /// a scene nobody is touching.
+        unsigned long long casterWalkItems = 0;
     };
     virtual ShadowStatusInfo shadowStatus() const { return {}; }
 
