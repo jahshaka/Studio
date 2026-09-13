@@ -253,4 +253,109 @@ assert(node.setProperty(sun, "forwardShadingPriority", -7) === true,
 assert(node.property(sun, "forwardShadingPriority") === 0, "...and CLAMPED to 0, not stored");
 assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the sun slot");
 
+// ---- FOLLOWS ATMOSPHERE (SUN_FOLLOWS_ATMOSPHERE, lane ENGINE-7 item 6) -----
+//
+// With the Realistic sky the sun's DIRECT light is tinted by what the air does
+// to it at the sun's own elevation: the colour the user picked is the NOON
+// colour, and a low sun arrives reddened and dimmed — Unreal's Sun Sky does the
+// same. Off is the old behaviour (the picked colour at every elevation), and on
+// any other sky the toggle is inert, because a picture of a sky knows nothing
+// about air.
+//
+// MEASURED ON A LIT SURFACE, never on the sky: the sky is drawn by the same
+// model either way, so only a surface can show what reached the ground. The sky
+// is turned right down (power 0.02) so that what the probe reads is the SUN and
+// not the sunset's own glow reflected off the surface.
+{
+    var atmoGuid = project.create("Sun Atmosphere " + Date.now());
+    assert(atmoGuid.length > 10, "a scene for the atmosphere tint");
+    var asun = world.sun().light;
+    assert(asun !== "", "...with a sun");
+    assert(node.property(asun, "followsAtmosphere") === true,
+           "Follows Atmosphere is ON by default (the owner's decision)");
+    world.skyLight({ intensity: 0 });           // the sun alone lights the wall
+    world.sky("realistic", { power: 0.02 });
+    world.sunDisc({ visible: false });
+    var wall = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+    editor.select("");                          // no gizmo over the probes
+    editor.frame(60, 1 / 60);                   // the primitive's mesh arrives
+    editor.setCamera({ position: { x: 0, y: 1, z: 4 }, lookAt: { x: 0, y: 1, z: 0 } });
+    node.setProperty(asun, "intensity", 0.6);
+
+    function litFace(tag) {
+        editor.frame(8, 1 / 60);
+        var s = editor.screenshot("sun_atmo_" + tag + ".png", 320, 240,
+                                  [{ x: 0.45, y: 0.5 }, { x: 0.55, y: 0.5 },
+                                   { x: 0.5, y: 0.45 }], "plain");
+        var r = 0, g = 0, b = 0;
+        for (var i = 0; i < s.probes.length; i++) {
+            r += s.probes[i].r; g += s.probes[i].g; b += s.probes[i].b;
+        }
+        r /= 3; g /= 3; b /= 3;
+        console.log("lit face [" + tag + "] r=" + Math.round(r) + " g=" + Math.round(g) +
+                    " b=" + Math.round(b) + "  r/b " + (r / Math.max(1, b)).toFixed(2));
+        return { r: r, g: g, b: b, rb: r / Math.max(1, b) };
+    }
+
+    // A SUNSET: the sun about 5 degrees above the horizon, behind the camera.
+    node.transform(asun, { rotation: { x: -85, y: 180, z: 0 } });
+    var sunsetOn = litFace("sunset_on");
+    assert(node.setProperty(asun, "followsAtmosphere", false) === true,
+           "the toggle is settable through the property surface");
+    assert(node.property(asun, "followsAtmosphere") === false, "...and it stuck");
+    var sunsetOff = litFace("sunset_off");
+    assert(sunsetOn.rb > 1.3,
+           "a 5-degree sun REDDENS what it lights when it follows the atmosphere (r/b " +
+           sunsetOn.rb.toFixed(2) + ")");
+    assert(sunsetOff.rb < 1.3,
+           "...and does not when it does not (r/b " + sunsetOff.rb.toFixed(2) + ")");
+    assert(sunsetOn.b < sunsetOff.b * 0.8 && sunsetOn.g < sunsetOff.g,
+           "...and it DIMS it, blue first (b " + Math.round(sunsetOn.b) + " vs " +
+           Math.round(sunsetOff.b) + ")");
+
+    // NOON IS THE COLOUR THE USER PICKED: straight down, the tint is 1,1,1, so
+    // the two states are the same picture.
+    node.transform(asun, { rotation: { x: 0, y: 0, z: 0 } });
+    editor.setCamera({ position: { x: 0, y: 5, z: 0.02 }, lookAt: { x: 0, y: 1, z: 0 } });
+    var noonOff = litFace("noon_off");
+    assert(node.setProperty(asun, "followsAtmosphere", true) === true, "following again");
+    var noonOn = litFace("noon_on");
+    assert(Math.abs(noonOn.r - noonOff.r) <= 2 && Math.abs(noonOn.g - noonOff.g) <= 2 &&
+           Math.abs(noonOn.b - noonOff.b) <= 2,
+           "at NOON the two states are the same picture: the picked colour IS the noon colour");
+
+    // INERT ON ANY OTHER SKY: a colour sky has no atmosphere to ask.
+    world.sky("color", { color: "#404060" });
+    node.transform(asun, { rotation: { x: -85, y: 180, z: 0 } });
+    editor.setCamera({ position: { x: 0, y: 1, z: 4 }, lookAt: { x: 0, y: 1, z: 0 } });
+    // A NEW SKY MOVES THE EXPOSURE, and the eye adapts over frames rather than
+    // instantly (the lesson cameras.exposure is named for: count frames, and
+    // read only once the picture holds still). The COLOUR is what this case is
+    // about, so it is the colour that is compared — the tint is a hue, and an
+    // inert tint cannot move one.
+    editor.frame(90, 1 / 60);
+    var plainOn = litFace("colorsky_on");
+    node.setProperty(asun, "followsAtmosphere", false);
+    editor.frame(30, 1 / 60);
+    var plainOff = litFace("colorsky_off");
+    assert(Math.abs(plainOn.rb - plainOff.rb) < 0.05,
+           "on a COLOUR sky the toggle tints nothing — it is inert (r/b " +
+           plainOn.rb.toFixed(2) + " vs " + plainOff.rb.toFixed(2) + ")");
+    assert(Math.abs(plainOn.r - plainOn.g) < 4 && Math.abs(plainOff.r - plainOff.g) < 4,
+           "...and neither picture is red-shifted at all");
+
+    // IT SURVIVES A SAVE AND A REOPEN, and the default is written by ABSENCE:
+    // a document that never heard of this row reads TRUE.
+    node.setProperty(asun, "followsAtmosphere", false);
+    project.save();
+    project.open(atmoGuid);
+    assert(node.property(world.sun().light, "followsAtmosphere") === false,
+           "the switch survives a save and a reopen");
+    node.setProperty(world.sun().light, "followsAtmosphere", true);
+    project.save();
+    project.open(atmoGuid);
+    assert(node.property(world.sun().light, "followsAtmosphere") === true,
+           "...and so does switching it back on");
+}
+
 console.log("the sun + sky steering e2e: all checks passed");

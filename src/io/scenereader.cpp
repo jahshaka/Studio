@@ -1357,6 +1357,10 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // THE SUN'S ANGULAR DIAMETER: absent = the real sun's 0.53 degrees.
     lightNode->sunAngle =
         float(qBound(0.0, nodeObj.value("sunAngle").toDouble(0.53), 20.0));
+    // FOLLOWS ATMOSPHERE: absent = ON, which is the constructor's default too
+    // (the two must agree — this file's own header records what happens when
+    // they do not).
+    lightNode->followsAtmosphere = nodeObj.value("followsAtmosphere").toBool(true);
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional ||

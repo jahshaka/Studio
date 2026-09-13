@@ -1066,6 +1066,13 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     if (lightNode->lightType == iris::LightType::Directional &&
         lightNode->sunAngle != 0.53f)
         sceneNodeObject["sunAngle"] = lightNode->sunAngle;
+    // FOLLOWS ATMOSPHERE (directional lights only, default ON). Same rule
+    // again, and the direction matters: the key is written only when the user
+    // switched it OFF, so an absent key is `true` — which is what the reader's
+    // fallback answers and what the constructor holds (the reader-defaults trap
+    // SceneReader's header records).
+    if (lightNode->lightType == iris::LightType::Directional && !lightNode->followsAtmosphere)
+        sceneNodeObject["followsAtmosphere"] = false;
     // Asset BINDINGS travel as guids; the resolved path and the profile's
     // photometric scale are runtime state the reader re-derives from the store.
     sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;

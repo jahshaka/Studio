@@ -408,6 +408,11 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
     // THE SUN'S ANGULAR SIZE (degrees) — the disc's size; directional only.
     if (light->lightType == iris::LightType::Directional)
         m["sunAngle"] = light->sunAngle;
+    // FOLLOWS ATMOSPHERE — the sun's direct light tinted by the air at its own
+    // elevation while the analytic sky is the sky (lightnode.h). Directional
+    // only, like the row above.
+    if (light->lightType == iris::LightType::Directional)
+        m["followsAtmosphere"] = light->followsAtmosphere;
     if (light->lightType == iris::LightType::Spot) {
         m["spotCutOff"] = light->spotCutOff;
         m["spotCutOffSoftness"] = light->spotCutOffSoftness;

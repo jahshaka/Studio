@@ -141,6 +141,9 @@ private:
     class LabelWidget*      sunReadout = nullptr;
     class DragFloatWidget*  forwardShadingPriority = nullptr;
     DragFloatWidget *sunAngle = nullptr;          // the sun's angular size (spec 3)
+    /// FOLLOWS ATMOSPHERE — the sun's row, shown beside Sun Angle and only on
+    /// the resolver's sun (lightnode.h says what it does).
+    CheckBoxWidget *followsAtmosphere = nullptr;
     /// Re-reads the scene's sun and re-labels the two rows above.
     void refreshSunRows();
 

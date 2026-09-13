@@ -366,7 +366,13 @@ QVector<VerbInfo> WorldApi::verbs() const
           "used to be decided by engine creation order, silently and differently across reloads. "
           "`direction` is the world direction it travels (the realistic sky and the sun disc are "
           "both placed from it — the sky has no sun dials of its own); `nextPriority` is the "
-          "number the next directional light added to this scene will take.",
+          "number the next directional light added to this scene will take. "
+          "TWO ROWS LIVE ON THE SUN ITSELF rather than here, because they describe the light: "
+          "`sunAngle` (its angular size in degrees, which sets the disc's size) and "
+          "`followsAtmosphere` (default true) — with the Realistic sky, the sun's direct light "
+          "takes the colour the air gives it, so the colour you picked is its NOON colour and a "
+          "low sun arrives redder and dimmer; the disc follows the same value. On any other sky "
+          "it is inert. Both are read and written with node.property / node.setProperty.",
           Needs::Document },
         { "get", "world.get() -> {skyLight, sunDisc, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",

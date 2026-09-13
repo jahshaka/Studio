@@ -184,6 +184,16 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
            "degree — and that is the default. It sets the size of the sun disc drawn in the sky "
            "where this light points; the disc itself is switched on and off in the World panel."));
 
+    // FOLLOWS ATMOSPHERE (SUN_FOLLOWS_ATMOSPHERE). The sun's own row, beside
+    // Sun Angle, and shown on the sun alone for the same reason.
+    followsAtmosphere = this->addCheckBox(tr("Follows Atmosphere"));
+    followsAtmosphere->setToolTip(
+        tr("With the Realistic sky, the sun's light takes the colour the air gives it: the "
+           "colour you picked is its NOON colour, and a low sun arrives redder and dimmer, like "
+           "a real sunset. The sun disc in the sky changes with it, so the two always agree. "
+           "Switch it off to use the colour you picked at every time of day. On any other sky "
+           "this does nothing — a picture of a sky knows nothing about the air."));
+
     shadowType = this->addComboBox("Shadow Type");
     // "Off (fill light)" rather than "None" (owner decision Q4): the switch is
     // named for what it is FOR — a light you deliberately add for fill and do
@@ -258,6 +268,7 @@ void LightPropertyWidget::wireRows()
     }));
     rowundo::bind(forwardShadingPriority, rows(QStringLiteral("forwardShadingPriority")));
     rowundo::bind(sunAngle, rows(QStringLiteral("sunAngle")));
+    rowundo::bind(followsAtmosphere, rows(QStringLiteral("followsAtmosphere")));
 
     // Accurate (LTC) area lights ignore the mask entirely — say so the moment
     // the user flips the switch, not the next time the panel is rebuilt. (The
@@ -533,11 +544,12 @@ void LightPropertyWidget::clearMask()
 // nothing true, so they are not shown at all rather than shown disabled.
 void LightPropertyWidget::refreshSunRows()
 {
-    if (!sunReadout || !forwardShadingPriority || !sunAngle) return;
+    if (!sunReadout || !forwardShadingPriority || !sunAngle || !followsAtmosphere) return;
     if (!lightNode || lightNode->lightType != iris::LightType::Directional) {
         sunReadout->hide();
         forwardShadingPriority->hide();
         sunAngle->hide();
+        followsAtmosphere->hide();
         return;
     }
     sunReadout->show();
@@ -553,6 +565,10 @@ void LightPropertyWidget::refreshSunRows()
     // review item 11). It follows the RESOLVER, like the readout below.
     sunAngle->setVisible(isSun);
     sunAngle->setValue(lightNode->sunAngle);
+    // ...and so is Follows Atmosphere: it tints THE SUN's direct light, and a
+    // secondary directional is not the sun.
+    followsAtmosphere->setVisible(isSun);
+    followsAtmosphere->setValue(lightNode->followsAtmosphere);
 
     const QString reason = scene ? scene->sunReason() : QStringLiteral("none");
     QString text;
