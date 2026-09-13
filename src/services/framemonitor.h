@@ -127,6 +127,19 @@ public:
         QString label;              ///< names the bundle directory; "" = the scene's name
         QString outDir;             ///< "" = <capture root>/<date>-<time>-<label>
         qint64  maxBytes = 0;       ///< 0 = the default cap (§4.8 "size-capped")
+        /// WRITE trace.json? OFF BY DEFAULT since lane ENGINE-7 item 3.
+        ///
+        /// The timeline is a RECONSTRUCTION of what frames.jsonl already holds
+        /// (traceFrame says so in its own header: the records carry exclusive
+        /// milliseconds, not timestamps, so the strips are laid end to end),
+        /// and it is the most expensive thing a capture does on the UI thread:
+        /// one QJsonDocument per stage and per pass per frame, measured at
+        /// 0.54-0.60 ms of the monitor's 1.11-1.14 ms per frame on an
+        /// 8,404-node scene. Both rigs that have ever read a bundle — the
+        /// render review's and RR2's — delete trace.json before archiving.
+        /// So it is asked for when it is wanted, and machine.json says whether
+        /// a bundle has one.
+        bool    trace = false;
     };
 
     // ---- the state machine ------------------------------------------------

@@ -123,6 +123,7 @@ int main(int argc, char **argv)
     // "gate red, solo green can be cache state" class (CLAUDE.md, 2026-09-11)
     // closed at the source.
     QDir(bundle + "-capped").removeRecursively();
+    QDir(bundle + "-plain").removeRecursively();
     QDir(home + "/.local/share/Jahshaka/shadercache").removeRecursively();
     QDir(home + "/cache").removeRecursively();
 
@@ -371,17 +372,42 @@ int main(int argc, char **argv)
                   qPrintable(QStringLiteral("capped bundle has %1").arg(name)));
     }
 
+    // ---- THE DEFAULT BUNDLE HAS NO TIMELINE, AND SAYS SO --------------------
+    // (lane ENGINE-7 item 3.) trace.json is opt-in because writing it is the
+    // most expensive thing a capture does on the UI thread — measured at
+    // 0.54-0.60 ms of the monitor's own 1.11-1.14 ms per frame on an
+    // 8,404-node scene, which the monitor then charges to the frame it is
+    // measuring — and it reconstructs what frames.jsonl already holds. Both
+    // rigs that have read a bundle delete it before archiving.
+    {
+        const QString plainDir = bundle + QStringLiteral("-plain");
+        const QJsonObject pm = readJson(QDir(plainDir).filePath("machine.json"), &ok).object();
+        CHECK(ok && !pm.isEmpty(), "the default bundle's machine.json parses");
+        CHECK(!pm.value("capture").toObject().value("trace").toBool(true),
+              "...and states that no timeline was asked for (capture.trace false)");
+        CHECK(!QFile::exists(QDir(plainDir).filePath(QStringLiteral("trace.json"))),
+              "a default capture writes NO trace.json");
+        bool plainOk = false;
+        const QList<QJsonObject> plainFrames =
+            readJsonl(QDir(plainDir).filePath("frames.jsonl"), &plainOk);
+        CHECK(plainOk && !plainFrames.isEmpty(),
+              "...and everything else is there: frames.jsonl parses and holds records");
+        CHECK(pm.value("truncation").toObject().value("complete").toBool(false),
+              "...and the bundle is complete (a missing timeline is not a truncation)");
+    }
+
     // ---- the two toasts -----------------------------------------------------
-    // TWO PER CAPTURE, and the script records two (the main bundle and the
-    // size-capped one) — the refused captures must show NONE, which is what
-    // makes four the assertion rather than "at least two".
+    // TWO PER CAPTURE, and the script records three (the main bundle, the
+    // size-capped one and the default no-trace one) — the refused captures must
+    // show NONE, which is what makes six the assertion rather than "at least
+    // two".
     const QJsonObject lastToast = expect.value("toast").toObject();
-    CHECK(lastToast.value("shown").toInt() == 4,
+    CHECK(lastToast.value("shown").toInt() == 6,
           qPrintable(QStringLiteral("the shell showed two toasts per capture and none for a "
-                                    "refusal (%1 for 2 captures + 2 refusals)")
+                                    "refusal (%1 for 3 captures + 2 refusals)")
                          .arg(lastToast.value("shown").toInt())));
     CHECK(lastToast.value("text").toString().contains(bundle),
-          "the second toast names the bundle's path");
+          "the last toast names the bundle's path");
 
     // ---- PHASE 2: THE WINDOW CLOSES WHILE A CAPTURE IS RUNNING -------------
     {
@@ -428,7 +454,7 @@ int main(int argc, char **argv)
             // LONG, so the capture cannot possibly have auto-stopped on its own:
             // the only thing that can write this bundle is the close path.
             const QJsonObject started = mcp.runScript(
-                QStringLiteral("perf.capture({seconds: 300, out: '%1', label: 'quit'})")
+                QStringLiteral("perf.capture({seconds: 300, out: '%1', label: 'quit', trace: true})")
                     .arg(quitBundle));
             CHECK(started.value("result").toObject().value("started").toBool(),
                   "phase 2: a 300 s capture is running");
