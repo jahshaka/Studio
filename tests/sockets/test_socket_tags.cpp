@@ -346,6 +346,40 @@ int main(int argc, char **argv)
               "with no engine rig the rider still lands on the bind-pose socket");
         CHECK(!iris::graph::isSocketRider(rider->graphNode()),
               "...and no tag point was armed");
+
+        // ---- AND A STILL RIDER MARKS NOTHING (lane ENGINE-7 item 4) -------
+        //
+        // The fallback PLACES the rider by writing its world transform through
+        // the document's marking setters, and it did so on every sync — so a
+        // still scene holding a socketed prop on an unrigged owner bumped
+        // iris::graph's transform-write epoch sixty times a second, and every
+        // O(scene) walk that reads that epoch (the GI movement scan, the
+        // shadow-caster walk, both GI signatures) ran on every frame of a scene
+        // nobody was touching. A rider that has not moved must cost nothing.
+        {
+            const unsigned long long before = iris::graph::transformWrites();
+            for (int f = 0; f < 30; ++f) mirror.sync();
+            CHECK(iris::graph::transformWrites() == before,
+                  "30 syncs of a STILL rider are zero transform writes");
+            const iris::Mat4 held = rider->getGlobalTransform();
+            CHECK(std::fabs(held(1, 3) - 1.0f) < 1e-3f,
+                  "...and it is still sitting on the socket");
+
+            // A POSED owner still moves it: the socket's world changed, so the
+            // push happens — once.
+            character->setLocalPos(iris::Vec3(0.0f, 2.0f, 0.0f));
+            const unsigned long long beforeMove = iris::graph::transformWrites();
+            mirror.sync();
+            CHECK(iris::graph::transformWrites() > beforeMove,
+                  "a MOVED owner writes the rider again");
+            const iris::Mat4 moved = rider->getGlobalTransform();
+            CHECK(std::fabs(moved(1, 3) - 3.0f) < 1e-3f,
+                  "...and the rider followed it (y 1 -> 3)");
+            const unsigned long long afterMove = iris::graph::transformWrites();
+            for (int f = 0; f < 10; ++f) mirror.sync();
+            CHECK(iris::graph::transformWrites() == afterMove,
+                  "...and the syncs after it are free again");
+        }
         mirror.setSource(nullptr);
         dg.engine()->destroyScene(scene);
     }
