@@ -398,13 +398,14 @@ int main(int argc, char **argv)
 
     // ---- the two toasts -----------------------------------------------------
     // TWO PER CAPTURE, and the script records three (the main bundle, the
-    // size-capped one and the default no-trace one) — the refused captures must
-    // show NONE, which is what makes six the assertion rather than "at least
-    // two".
+    // size-capped one and the default no-trace one) — the THREE refused
+    // captures (a second one while the first runs, an `out` outside the capture
+    // root, and one into a bundle that already exists) must show NONE, which is
+    // what makes six the assertion rather than "at least two".
     const QJsonObject lastToast = expect.value("toast").toObject();
     CHECK(lastToast.value("shown").toInt() == 6,
           qPrintable(QStringLiteral("the shell showed two toasts per capture and none for a "
-                                    "refusal (%1 for 3 captures + 2 refusals)")
+                                    "refusal (%1 for 3 captures + 3 refusals)")
                          .arg(lastToast.value("shown").toInt())));
     CHECK(lastToast.value("text").toString().contains(bundle),
           "the last toast names the bundle's path");
