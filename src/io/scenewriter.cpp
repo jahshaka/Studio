@@ -232,8 +232,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     static const char *giQualityNames[] = { "low", "medium", "high" };
     sceneObj["giMode"] = giModeNames[qBound(0, static_cast<int>(scene->giMode), 3)];
     sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 2)];
-    sceneObj["giBoundsMin"] = jsonVector3(scene->giBoundsMin);
-    sceneObj["giBoundsMax"] = jsonVector3(scene->giBoundsMax);
     sceneObj["giLight"] = scene->giLightGuid;
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giUpdateBudget"] = scene->giUpdateBudget;   // FIX WAVE B1
@@ -245,7 +243,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giProbeHdr"] = scene->giProbeHdr;
     sceneObj["giProbeShadows"] = scene->giProbeShadows;
     sceneObj["giProbeOverlap"] = scene->giProbeOverlap;
-    sceneObj["giAutoBoundsMax"] = scene->giAutoBoundsMax;
     sceneObj["giProbeSnapDeviation"] = scene->giProbeSnapDeviation;
     sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
     sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;

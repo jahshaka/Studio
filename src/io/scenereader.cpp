@@ -463,8 +463,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         if (giQuality == "low") scene->giQuality = iris::GiQuality::LOW;
         else if (giQuality == "high") scene->giQuality = iris::GiQuality::HIGH;
         else scene->giQuality = iris::GiQuality::MEDIUM;
-        scene->giBoundsMin = readVector3(sceneObj.value("giBoundsMin").toObject());
-        scene->giBoundsMax = readVector3(sceneObj.value("giBoundsMax").toObject());
+        // THE LIT VOLUME IS THE RENDERER'S (owner decision D8, 2026-09-13). The
+        // reader no longer looks at `giBoundsMin`/`giBoundsMax`/`giAutoBoundsMax`:
+        // a scene that pinned a volume OPENS UNPINNED, with the automatic fit,
+        // which is the only behaviour left. Deliberately no tolerance and no
+        // migration — there is nothing the pin could be migrated to.
         scene->giLightGuid = sceneObj.value("giLight").toString();
         scene->giNumBounces = qBound(1, sceneObj.value("giNumBounces").toInt(1), 4);
         // THE GI UPDATE BUDGET (FIX WAVE B1), with the legacy mapping: a
@@ -489,11 +492,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giProbeShadows = qBound(-1, sceneObj.value("giProbeShadows").toInt(-1), 1);
         scene->giProbeOverlap =
             float(qBound(0.01, sceneObj.value("giProbeOverlap").toDouble(1.25), 8.0));
-        // The automatic volume's ceiling in metres (SMOKE_FIX S14). A scene
-        // written before it existed reads the default, which is the behaviour
-        // it will get from now on — there is nothing to migrate.
-        scene->giAutoBoundsMax =
-            float(qBound(0.0, sceneObj.value("giAutoBoundsMax").toDouble(64.0), 100000.0));
         scene->giProbeSnapDeviation =
             float(qMax(0.0, sceneObj.value("giProbeSnapDeviation").toDouble(0.05)));
         scene->giProbeSnapSidesMin =

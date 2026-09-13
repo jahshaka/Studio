@@ -129,10 +129,6 @@ QVector<sceneprops::Field> buildFields()
     // ---- Photon (the rows the tier does NOT own) ---------------------------
     add("giLightGuid", [](const ScenePtr &s) { return QVariant(s->giLightGuid); },
         [](const ScenePtr &s, const QVariant &v) { s->giLightGuid = v.toString(); });
-    add("giBoundsMin", [](const ScenePtr &s) { return vec(s->giBoundsMin); },
-        [](const ScenePtr &s, const QVariant &v) { s->giBoundsMin = vec(v); });
-    add("giBoundsMax", [](const ScenePtr &s) { return vec(s->giBoundsMax); },
-        [](const ScenePtr &s, const QVariant &v) { s->giBoundsMax = vec(v); });
     add("giPccGrid", [](const ScenePtr &s) { return vec(s->giPccGrid); },
         [](const ScenePtr &s, const QVariant &v) { s->giPccGrid = vec(v); });
     add("giUpdateBudget", [](const ScenePtr &s) { return QVariant(s->giUpdateBudget); },
@@ -145,8 +141,6 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giDdgiSource = v.toInt(); });
     // Verb-only integrator knobs (world.gi): no panel row, but the verb's one
     // undo step records them through this table like every other world field.
-    add("giAutoBoundsMax", [](const ScenePtr &s) { return QVariant(s->giAutoBoundsMax); },
-        [](const ScenePtr &s, const QVariant &v) { s->giAutoBoundsMax = v.toFloat(); });
     add("giRayMarchStepScale", [](const ScenePtr &s) { return QVariant(s->giRayMarchStepScale); },
         [](const ScenePtr &s, const QVariant &v) { s->giRayMarchStepScale = v.toFloat(); });
     add("giProbeCaptureSize", [](const ScenePtr &s) { return QVariant(s->giProbeCaptureSize); },

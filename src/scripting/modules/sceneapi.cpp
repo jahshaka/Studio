@@ -187,8 +187,7 @@ QVector<VerbInfo> SceneApi::verbs() const
           "each one's global position as a degenerate point: 'how big is the room' and 'how far out "
           "does the rig reach' are different questions and the caller has to say which one it asked. "
           "A rotated node reads as the AABB of its rotated box, which is the standard approximation; "
-          "nothing here inflates by a bounding radius (world.fitGiBounds does, deliberately, and is "
-          "the wrong tool for measuring a room: a 24 x 0.5 x 24 floor slab has a 17 m bounding sphere).\n\n"
+          "nothing here inflates by a bounding radius.\n\n"
           "Returns null-ish (an empty object) when nothing in the selection has geometry. THE SCENE-SCALE "
           "CONVENTION (owner 2026-09-08) reads 1 unit = 1 metre, and this is the verb that measures it.",
           Needs::Document },

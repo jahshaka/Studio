@@ -198,11 +198,12 @@ set_tests_properties(scripting.e2e.shadow_cache_probes PROPERTIES
     ENVIRONMENT "HOME=${_scHome};JAHSHAKA_DATA_ROOT=${_scHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED shadowCacheProbesFreshHome
     LABELS "scripting" TIMEOUT 240)
-# REFLECTIONS_ADOPTION_SPEC P1a/P1d: the GI BOUNDS surface — the resolved
-# volumes world.giStatus() now reports (there was no way to see what the
-# automatic fit decided), the per-node exclude flag, world.fitGiBounds and
-# world.refreshGi. Engine UP for the same reason as gi_status: the interesting
-# numbers are the renderer's, not the document's.
+# THE LIT VOLUME (REFLECTIONS_ADOPTION_SPEC P1a/P1d, re-scoped by owner decision
+# D8 2026-09-13): the AUTOMATIC fit and the volumes world.giStatus() reports —
+# the only surface left, now that the bounds rows, the Fit button and
+# world.fitGiBounds are deleted — plus the per-node exclude flag, the three
+# retired keys refused by name, and world.refreshGi. Engine UP for the same
+# reason as gi_status: the interesting numbers are the renderer's.
 add_script_e2e(gi_bounds e2e_gi_bounds.js)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
 # editor -> player -> editor, whose own GI build takes the process-wide HlmsPbs

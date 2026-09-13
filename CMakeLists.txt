@@ -310,7 +310,6 @@ set(SRCS
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
     src/services/shortcutregistry.cpp
-    src/services/gibounds.cpp
     src/services/sceneextents.cpp
     src/services/sceneissues.cpp
     src/ui/controls/sceneissuebar.cpp

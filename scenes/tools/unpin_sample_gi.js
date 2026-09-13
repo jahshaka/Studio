@@ -1,5 +1,13 @@
-// Takes the PINNED GI VOLUME out of the three shipped samples that carried one,
-// re-authors their archives and re-shoots their previews.
+// RE-AUTHORS three shipped samples' archives and re-shoots their previews,
+// around whatever world-level change is being applied to them.
+//
+// AS OF OWNER DECISION D8 (2026-09-13) THE UNPIN STEP ITSELF IS A NO-OP: the
+// document carries no GI bounds at all any more (the World panel's Min/Max
+// rows, its Fit button, world.fitGiBounds and world.gi's boundsMin/boundsMax/
+// autoBoundsMax keys are deleted under the CRUD law), so there is nothing left
+// to clear and an old scene with a pin opens unpinned by itself. The tool is
+// KEPT for its pattern — open, measure, save, preview, export, re-import,
+// verify — which is what re-authoring a shipped sample looks like.
 //
 // Run it, do not hand-edit the archives:
 //
@@ -17,10 +25,10 @@
 // NOT --headless: giStatus's fit is a RENDERER measurement and the previews are
 // real frames.
 //
-// WHY (owner, 2026-09-13): "we need to get rid of the boundaries for GI — a room
-// built from zero must never carry a room size". Mirror Room, Showroom and
-// Showroom 2 each shipped with world.gi({boundsMin, boundsMax}) pinned to the
-// room their generator had just built. A pin is a promise about a scene that
+// WHY IT WAS WRITTEN (owner, 2026-09-13): "we need to get rid of the boundaries
+// for GI — a room built from zero must never carry a room size". Mirror Room,
+// Showroom and Showroom 2 each shipped with world.gi({boundsMin, boundsMax})
+// pinned to the room their generator had just built. A pin is a promise about a scene that
 // only holds while nothing moves: build a wall outside it and the wall is
 // unlit, drag the room and the lighting stays behind, and — the reason the pins
 // were written in the first place — an early automatic fit spread the probes
@@ -56,7 +64,7 @@ var SAMPLES = [
 var PROBES = [{ x: 0.5, y: 0.5 }, { x: 0.25, y: 0.25 }, { x: 0.75, y: 0.25 },
               { x: 0.25, y: 0.75 }, { x: 0.75, y: 0.75 }];
 
-var ZERO = { x: 0, y: 0, z: 0 };
+
 
 function log(m) { console.log("[unpin] " + m); }
 function fail(m) { throw new Error("unpin: " + m); }
@@ -108,8 +116,7 @@ for (var i = 0; i < SAMPLES.length; i++) {
     editor.gameView(true);
     editor.frame(120, 1.0 / 60.0);
 
-    var pin = world.get().gi;
-    giLine(S.name + " PINNED " + vec(pin.boundsMin) + ".." + vec(pin.boundsMax), world.giStatus());
+    giLine(S.name + " AS SHIPPED", world.giStatus());
     shoot(S.name, "pinned-1");
     editor.frame(60, 1.0 / 60.0);
     // The second shot of the SAME state: these samples are not open-to-open
@@ -117,15 +124,14 @@ for (var i = 0; i < SAMPLES.length; i++) {
     // churn the unpinned pair has to be read against.
     shoot(S.name, "pinned-2");
 
-    // ---- the unpin ---------------------------------------------------------
-    // boundsMin == boundsMax IS the automatic fit (scene.cpp:121), so this is
-    // the document saying "measure it" rather than carrying a room size.
-    if (world.gi({ boundsMin: ZERO, boundsMax: ZERO }) !== true) fail(S.name + ": world.gi failed");
-    var now = world.get().gi;
-    if (now.boundsMin.x !== 0 || now.boundsMax.x !== 0 ||
-        now.boundsMin.y !== 0 || now.boundsMax.y !== 0 ||
-        now.boundsMin.z !== 0 || now.boundsMax.z !== 0)
-        fail(S.name + ": the pin did not clear (" + J(now.boundsMin) + " .. " + J(now.boundsMax) + ")");
+    // ---- the unpin: A NO-OP SINCE OWNER DECISION D8 (2026-09-13) -------------
+    // The document has no bounds fields left to clear — the user-facing bounds
+    // controls (the World panel rows, the Fit button, world.fitGiBounds and
+    // world.gi's boundsMin/boundsMax/autoBoundsMax keys) are DELETED, an old
+    // scene with a pin opens unpinned, and every scene's lit volume is the
+    // renderer's automatic fit. The step stays here, empty, because the rest of
+    // this tool is the RE-AUTHORING PATTERN (open -> measure -> save -> preview
+    // -> export -> re-import -> verify) and that is what it is kept for.
     editor.frame(120, 1.0 / 60.0);
     giLine(S.name + " AUTOMATIC", world.giStatus());
     shoot(S.name, "auto-1");
@@ -161,11 +167,6 @@ for (var i = 0; i < SAMPLES.length; i++) {
     var back = project.importArchive(zip);
     if (!back || !back.guid) fail(S.name + ": re-import failed");
     if (project.open(back.guid) !== true) fail(S.name + ": re-open failed");
-    var g = world.get().gi;
-    if (g.boundsMin.x !== g.boundsMax.x || g.boundsMin.y !== g.boundsMax.y ||
-        g.boundsMin.z !== g.boundsMax.z)
-        fail(S.name + ": the re-exported archive carries a pin again (" +
-             J(g.boundsMin) + " .. " + J(g.boundsMax) + ")");
     editor.frame(120, 1.0 / 60.0);
     giLine(S.name + " REOPENED", world.giStatus());
     if (project.close() !== true) fail(S.name + ": close (after re-import) failed");

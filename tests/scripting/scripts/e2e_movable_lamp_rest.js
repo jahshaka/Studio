@@ -15,8 +15,8 @@
 // ways — jumped there and fully re-solved (the reference), and TRAVELLED there
 // over 60 frames and left to rest — must give the same picture.
 //
-// VCT without probes and pinned bounds, so the only thing that can differ
-// between the two runs is the injection itself.
+// VCT without probes, over one sealed room that never changes shape, so the
+// only thing that can differ between the two runs is the injection itself.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -67,10 +67,8 @@ scene.nodes().forEach(function (n) {
     if (n.id === lamp) return;
     node.remove(n.id);
 });
-assert(world.gi({ mode: "vct", quality: "medium", bounces: 4,
-                  boundsMin: { x: -6.5, y: -0.6, z: -6.5 },
-                  boundsMax: { x:  6.5, y:  6.6, z:  6.5 } }) === true,
-       "VCT at the full bounce count, over a pinned volume");
+assert(world.gi({ mode: "vct", quality: "medium", bounces: 4 }) === true,
+       "VCT at the full bounce count, over the renderer's fit to this sealed room");
 editor.setCamera({ position: { x: 0, y: 3, z: 5 }, lookAt: { x: 0, y: 1, z: -1 } });
 editor.frame(90);
 
