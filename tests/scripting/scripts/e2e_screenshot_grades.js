@@ -354,4 +354,52 @@ assert(maxDelta(tm, vp) > 2,
 assert(maxDelta(shoot("scene"), tm) > 2,
        "\"scene\" is not the thumbnail picture either");
 
+// ---------------------------------------------------------------------------
+// PHASE H — THE SAME FOUR WORDS ON camera.screenshot (CLEANUP-1 item 5).
+//
+// There were three screenshot doors and two exposures between them: the shell
+// button asked for `scene`, editor.screenshot and player.screenshot took the
+// four words, and camera.screenshot still took a BOOLEAN — so the MCP tool,
+// which renders a scene camera through it with postFx:true, was handing back
+// the `viewport` grade (the whole chain with its adaptive exposure RE-SEEDED,
+// in an offscreen view about two frames long that cannot converge) while its
+// description promised what the user sees. The word list now lives once, in
+// IEditorViewport::gradeFromString, and this is the verb that did not have it.
+console.log("---- phase H: camera.screenshot takes the grade too ----");
+var camId = scene.addCamera({ position: { x: 0, y: 2, z: 6 }, name: "Grade Cam" });
+editor.frame(2);
+
+function camShot(options) {
+    options.width = W;
+    options.height = H;
+    options.probes = PROBES;
+    return camera.screenshot(camId, "cam-shot-" + (++SHOTS) + ".png", options);
+}
+
+var camPlain = camShot({ grade: "plain" });
+assert(camPlain.width === W && camPlain.probes.length === PROBES.length,
+       "camera.screenshot({grade:'plain'}) renders and probes like the other doors");
+// EVERY documented spelling parses — a verb whose parser is narrower than its
+// own documentation is how player.screenshot's `scene` branch once shipped
+// unreachable.
+["raw", "tonemap", "scene", "viewport"].forEach(function (word) {
+    var shot = camShot({ grade: word });
+    assert(shot.width === W, "camera.screenshot accepts grade \"" + word + "\"");
+});
+var camRaw = camShot({ grade: "raw" });
+assert(maxDelta(camPlain, camRaw) === 0, "\"raw\" and \"plain\" are the same picture");
+var camScene = camShot({ grade: "scene" });
+assert(maxDelta(camPlain, camScene) > 2,
+       "\"scene\" through a scene camera is a GRADED picture (delta " +
+       maxDelta(camPlain, camScene) + ")");
+// The older boolean spelling still means what it always meant: false = plain,
+// true = viewport. The pixel suites pass it that way.
+assert(maxDelta(camShot({ postFx: false }), camPlain) === 0,
+       "postFx:false is still the exact readback");
+assert(maxDelta(camShot({ postFx: true }), camShot({ grade: "viewport" })) === 0,
+       "postFx:true is still the \"viewport\" grade");
+var refused = false;
+try { camShot({ grade: "gorgeous" }); } catch (e) { refused = true; }
+assert(refused, "an unknown grade is refused, catchably, rather than guessed at");
+
 console.log("PASS: every screenshot grade is a picture of what it says it is");
