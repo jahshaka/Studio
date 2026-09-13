@@ -296,7 +296,7 @@ QStringList SceneReader::collectMeshSources(const QJsonObject &projectObj)
         for (const auto &child : children) walk(child.toObject());
     };
     const QJsonObject sceneObj = projectObj["scene"].toObject();
-    const QJsonArray roots = sceneObj["rootNode"].toObject()["children"].toArray();
+    const QJsonArray roots = sceneObj.value("rootNode").toObject()["children"].toArray();
     for (const auto &child : roots) walk(child.toObject());
     return out;
 }
@@ -306,8 +306,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     auto scene = iris::Scene::create();
 
     //scene already contains root node, so just add children
-    auto sceneObj = projectObj["scene"].toObject();
-	scene->skyGuid = sceneObj["skyGuid"].toString();
+    // CONST, and read through value() throughout: QJsonObject::operator[] on a
+    // NON-const object INSERTS a null value for a key that is not there, so a
+    // plain `sceneObj["x"]` read makes every later contains("x") in this
+    // function true (the giUpdateBudget / giPccGrid / giTier branches below all
+    // ask). const makes that impossible rather than merely unfashionable.
+    const QJsonObject sceneObj = projectObj["scene"].toObject();
+	scene->skyGuid = sceneObj.value("skyGuid").toString();
 	// Sun coupling (re-audit F5); absent in every document written before it,
 	// which reads as "nothing is driven" — the default.
 	scene->sunLightGuid = sceneObj.value("sunLight").toString();
@@ -317,8 +322,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// them; new files write the boolean.
 	scene->skyDrivesSun =
 		sceneObj.value("skyDrivesSun").toBool(!scene->sunLightGuid.isEmpty());
-	scene->ambientMusicGuid = sceneObj["ambientMusicGuid"].toString();
-	auto volume = sceneObj["ambientMusicVolume"].toDouble(50);
+	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
+	auto volume = sceneObj.value("ambientMusicVolume").toDouble(50);
 	scene->setAmbientMusicVolume(volume);
 	const QString ambientMusicPath = resolveAssetPath(scene->ambientMusicGuid);
 	if (!ambientMusicPath.isEmpty()) {
@@ -326,10 +331,15 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		scene->startPlayingAmbientMusic();
 	}
 
-	scene->skyType = static_cast<iris::SkyType>(sceneObj["skyType"].toInt());
-    scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
+	scene->skyType = static_cast<iris::SkyType>(sceneObj.value("skyType").toInt());
+    // Same rule as fogColor below: absent reads as the constructor's (96,96,96),
+    // never as an invalid colour.
+    {
+        const QColor ambientColor = this->readColor(sceneObj.value("ambientColor").toObject());
+        if (ambientColor.isValid()) scene->setAmbientColor(ambientColor);
+    }
 
-	QJsonObject skyDataDef = sceneObj["skyData"].toObject();
+	QJsonObject skyDataDef = sceneObj.value("skyData").toObject();
 	for (const auto &key : skyDataDef.keys()) {
 		scene->skyData.insert(key, skyDataDef.value(key).toObject());
 	}
@@ -423,164 +433,182 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     }
 
 
-    scene->fogColor = this->readColor(sceneObj["fogColor"].toObject());
-    scene->fogStart = sceneObj["fogStart"].toDouble(100);
-    scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
-    scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
+    // readColor returns an INVALID QColor for an absent object, and an invalid
+    // colour is not the constructor's (250,250,250) — so an absent key keeps
+    // what the Scene was born with instead of blanking it.
+    {
+        const QColor fogColor = this->readColor(sceneObj.value("fogColor").toObject());
+        if (fogColor.isValid()) scene->fogColor = fogColor;
+    }
+    scene->fogStart = sceneObj.value("fogStart").toDouble(100);
+    // 180, the constructor's (scene.cpp:100). It read 120 here, and since the
+    // fog went exponential this pair is what derives fogDensity for a document
+    // that carries neither key — i.e. the disagreement was a different fog.
+    scene->fogEnd = sceneObj.value("fogEnd").toDouble(180);
+    scene->fogEnabled = sceneObj.value("fogEnabled").toBool(true);
     // Fog became EXPONENTIAL. No migration pass exists and none is needed: a scene
     // written before the change has no fogDensity key, and its old linear pair is
     // exactly what the default derives from.
-    scene->fogDensity = sceneObj["fogDensity"].toDouble(
+    scene->fogDensity = sceneObj.value("fogDensity").toDouble(
         double(iris::Scene::fogDensityFromLinear(scene->fogStart, scene->fogEnd)));
-    scene->fogHeightDensity = sceneObj["fogHeightDensity"].toDouble(0.0);
-    scene->fogHeightFalloff = sceneObj["fogHeightFalloff"].toDouble(0.1);
-    scene->fogHeightLevel = sceneObj["fogHeightLevel"].toDouble(0.0);
-    scene->fogBreakMinBrightness = sceneObj["fogBreakMinBrightness"].toDouble(0.25);
-    scene->fogBreakFalloff = sceneObj["fogBreakFalloff"].toDouble(0.1);
+    scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(0.0);
+    scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(0.1);
+    scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(0.0);
+    scene->fogBreakMinBrightness = sceneObj.value("fogBreakMinBrightness").toDouble(0.25);
+    scene->fogBreakFalloff = sceneObj.value("fogBreakFalloff").toDouble(0.1);
 
     // Global illumination: absent (older scenes) or unknown values mean OFF.
     {
-        const QString giMode = sceneObj["giMode"].toString("off");
+        const QString giMode = sceneObj.value("giMode").toString("off");
         if (giMode == "instant_radiosity") scene->giMode = iris::GiMode::INSTANT_RADIOSITY;
         else if (giMode == "vct") scene->giMode = iris::GiMode::VCT;
         else if (giMode == "vct_pcc_hybrid") scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
         else scene->giMode = iris::GiMode::OFF;
-        const QString giQuality = sceneObj["giQuality"].toString("medium");
+        const QString giQuality = sceneObj.value("giQuality").toString("medium");
         if (giQuality == "low") scene->giQuality = iris::GiQuality::LOW;
         else if (giQuality == "high") scene->giQuality = iris::GiQuality::HIGH;
         else scene->giQuality = iris::GiQuality::MEDIUM;
-        scene->giBoundsMin = readVector3(sceneObj["giBoundsMin"].toObject());
-        scene->giBoundsMax = readVector3(sceneObj["giBoundsMax"].toObject());
-        scene->giLightGuid = sceneObj["giLight"].toString();
-        scene->giNumBounces = qBound(1, sceneObj["giNumBounces"].toInt(1), 4);
+        scene->giBoundsMin = readVector3(sceneObj.value("giBoundsMin").toObject());
+        scene->giBoundsMax = readVector3(sceneObj.value("giBoundsMax").toObject());
+        scene->giLightGuid = sceneObj.value("giLight").toString();
+        scene->giNumBounces = qBound(1, sceneObj.value("giNumBounces").toInt(1), 4);
         // THE GI UPDATE BUDGET (FIX WAVE B1), with the legacy mapping: a
         // document written before the fix wave carries the giAutoRefresh bool
         // and nothing else, and false meant exactly what budget 0 means.
         scene->giUpdateBudget =
             sceneObj.contains("giUpdateBudget")
-                ? qBound(0, sceneObj["giUpdateBudget"].toInt(1), 512)
-                : (sceneObj["giAutoRefresh"].toBool(true) ? 1 : 0);
+                ? qBound(0, sceneObj.value("giUpdateBudget").toInt(1), 512)
+                : (sceneObj.value("giAutoRefresh").toBool(true) ? 1 : 0);
         // (`giDynamicProbes` — Rayon Epic's old fifth column — is READ BY
         // NOTHING. The feature is deleted, R2 2026-09-12: a moving object is not
         // in a probe capture at all any more, so there is nothing to reserve
         // captures for. An old file may carry the key; it is simply ignored,
         // and the pin it may have left in worldOverrides is dropped below.)
         if (sceneObj.contains("giPccGrid"))   // pre-hybrid documents keep the 3x2x3 default
-            scene->giPccGrid = readVector3(sceneObj["giPccGrid"].toObject());
+            scene->giPccGrid = readVector3(sceneObj.value("giPccGrid").toObject());
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
         // document written before this phase; the toInt/toDouble defaults ARE
         // the constructor's, so an old scene reads exactly as it did.
-        scene->giProbeCaptureSize = qBound(0, sceneObj["giProbeCaptureSize"].toInt(0), 1024);
-        scene->giProbeHdr = qBound(-1, sceneObj["giProbeHdr"].toInt(-1), 1);
-        scene->giProbeShadows = qBound(-1, sceneObj["giProbeShadows"].toInt(-1), 1);
+        scene->giProbeCaptureSize = qBound(0, sceneObj.value("giProbeCaptureSize").toInt(0), 1024);
+        scene->giProbeHdr = qBound(-1, sceneObj.value("giProbeHdr").toInt(-1), 1);
+        scene->giProbeShadows = qBound(-1, sceneObj.value("giProbeShadows").toInt(-1), 1);
         scene->giProbeOverlap =
-            float(qBound(0.01, sceneObj["giProbeOverlap"].toDouble(1.25), 8.0));
+            float(qBound(0.01, sceneObj.value("giProbeOverlap").toDouble(1.25), 8.0));
         // The automatic volume's ceiling in metres (SMOKE_FIX S14). A scene
         // written before it existed reads the default, which is the behaviour
         // it will get from now on — there is nothing to migrate.
         scene->giAutoBoundsMax =
-            float(qBound(0.0, sceneObj["giAutoBoundsMax"].toDouble(64.0), 100000.0));
+            float(qBound(0.0, sceneObj.value("giAutoBoundsMax").toDouble(64.0), 100000.0));
         scene->giProbeSnapDeviation =
-            float(qMax(0.0, sceneObj["giProbeSnapDeviation"].toDouble(0.05)));
+            float(qMax(0.0, sceneObj.value("giProbeSnapDeviation").toDouble(0.05)));
         scene->giProbeSnapSidesMin =
-            float(qMax(0.0, sceneObj["giProbeSnapSidesMin"].toDouble(0.25)));
+            float(qMax(0.0, sceneObj.value("giProbeSnapSidesMin").toDouble(0.25)));
         scene->giProbeSnapSidesMax =
-            float(qMax(0.0, sceneObj["giProbeSnapSidesMax"].toDouble(0.25)));
+            float(qMax(0.0, sceneObj.value("giProbeSnapSidesMax").toDouble(0.25)));
         scene->giRayMarchStepScale =
-            float(qBound(1.0, sceneObj["giRayMarchStepScale"].toDouble(1.0), 8.0));
+            float(qBound(1.0, sceneObj.value("giRayMarchStepScale").toDouble(1.0), 8.0));
         // DDGI (GI_UNIFIED_SPEC.md §4 P1). Absent in every document written
         // before this phase, and the fallbacks ARE the constructor's values —
         // -1 (auto, which resolves OFF while there is no Rayon tier) is what
         // makes those documents render exactly as they always did.
-        scene->giDdgi = qBound(-1, sceneObj["giDdgi"].toInt(-1), 1);
+        scene->giDdgi = qBound(-1, sceneObj.value("giDdgi").toInt(-1), 1);
         // The probe source (rayon2 S3): absent in every document written
         // before it, and -1 (auto = voxel) is exactly what those rendered.
-        scene->giDdgiSource = qBound(-1, sceneObj["giDdgiSource"].toInt(-1), 1);
+        scene->giDdgiSource = qBound(-1, sceneObj.value("giDdgiSource").toInt(-1), 1);
         scene->giDdgiIntensity =
-            float(qBound(0.0, sceneObj["giDdgiIntensity"].toDouble(1.0), 64.0));
+            float(qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(1.0), 64.0));
         // The ambient sky-visibility strength (the Rayon ambient fix). Absent
         // in every document written before it: the fallback 1.0 turns the fix
         // ON for them, deliberately — it corrects a term those documents were
         // MISSING, and the sealed-room invariance gate is what says that is
         // safe for the scenes it cannot change.
         scene->giDdgiAmbient =
-            float(qBound(0.0, sceneObj["giDdgiAmbient"].toDouble(1.0), 8.0));
+            float(qBound(0.0, sceneObj.value("giDdgiAmbient").toDouble(1.0), 8.0));
         // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
         // document written before the unification — those are DERIVED from the
         // fields above, below, once the World Mode is known.
         if (sceneObj.contains("giTier")) {
             bool ok = false;
-            const auto t = worldmodes::rayonTierFromName(sceneObj["giTier"].toString(), &ok);
+            const auto t = worldmodes::rayonTierFromName(sceneObj.value("giTier").toString(), &ok);
             scene->giTier = ok ? int(t) : 3;
         }
     }
-    scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
+    scene->shadowEnabled = sceneObj.value("shadowEnabled").toBool(true);
     // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd
     // is rounded down to the nearest supported step (1/2/4/8).
     {
-        const int aa = sceneObj["antiAliasing"].toInt(1);
+        const int aa = sceneObj.value("antiAliasing").toInt(1);
         scene->antiAliasing = aa >= 8 ? 8 : aa >= 4 ? 4 : aa >= 2 ? 2 : 1;
     }
     // Shadow-map resolution: absent or <= 0 means Auto (derive from the lights);
     // anything else is clamped to the engine's own [256, 8192] window.
     {
-        const int sr = sceneObj["shadowResolution"].toInt(0);
+        const int sr = sceneObj.value("shadowResolution").toInt(0);
         scene->shadowResolution = sr <= 0 ? 0 : qBound(256, sr, 8192);
     }
     // Shadow-map BUDGET: absent (every scene written before shadow tooling)
     // means Auto, i.e. follow the World Mode tier.
     {
-        const int sb = sceneObj["shadowMapBudget"].toInt(0);
+        const int sb = sceneObj.value("shadowMapBudget").toInt(0);
         scene->shadowMapBudget = sb <= 0 ? 0 : qBound(2, sb, 16);
     }
     // Shadow FILTER quality: absent means Auto (-1); otherwise 0/1/2.
     {
-        const int sf = sceneObj["shadowFilterTier"].toInt(-1);
+        const int sf = sceneObj.value("shadowFilterTier").toInt(-1);
         scene->shadowFilterTier = (sf >= 0 && sf <= 2) ? sf : -1;
         // Absent in every scene written before the ParticleFX2 adoption: 1 = real time.
-        scene->particleTimeScale = std::max(0.0, sceneObj["particleTimeScale"].toDouble(1.0));
+        scene->particleTimeScale = std::max(0.0, sceneObj.value("particleTimeScale").toDouble(1.0));
     }
     // Post-processing chain (POST_CHAIN_SPEC §§3-7). Absent = off, which is what
     // every document written before the chain existed means.
-    scene->hdrEnabled = sceneObj["hdrEnabled"].toBool(false);
-    scene->exposure = float(sceneObj["exposure"].toDouble(0.0));
+    scene->hdrEnabled = sceneObj.value("hdrEnabled").toBool(false);
+    // EVERY FALLBACK IN THIS BLOCK IS THE CONSTRUCTOR'S VALUE, verbatim
+    // (irisgl/document/scenegraph/scene.cpp) — a key a file does not carry must
+    // read as what a scene that was never saved holds, or "absent" and "fresh"
+    // mean two different scenes. `exposure` disagreed until now: the
+    // constructor says +0.6 = ln(1.8) (the amount that puts mid-grey back where
+    // it was for 8-bit content; the reasoning is written out at scene.cpp:161)
+    // and this line said 0.0, which lands the filmic curve at about 0.31 —
+    // every document without the key opened two stops dark. Same defect class
+    // as the shadow key SUN1 fixed.
+    scene->exposure = float(sceneObj.value("exposure").toDouble(0.6));
     // The adaptation window. Absent = the engine's historical hard-coded pair,
     // so an older document grades exactly as it did.
-    scene->exposureMin = float(qBound(-8.0, sceneObj["exposureMin"].toDouble(-2.5), 8.0));
+    scene->exposureMin = float(qBound(-8.0, sceneObj.value("exposureMin").toDouble(-2.5), 8.0));
     scene->exposureMax = float(qBound(double(scene->exposureMin),
-                                      sceneObj["exposureMax"].toDouble(2.5), 8.0));
-    scene->bloomEnabled = sceneObj["bloomEnabled"].toBool(false);
-    scene->bloomThreshold = float(sceneObj["bloomThreshold"].toDouble(5.0));
-    scene->bloomKnee = float(sceneObj["bloomKnee"].toDouble(2.0));   // absent = the old hard-coded width
-    scene->ssaoEnabled = sceneObj["ssaoEnabled"].toBool(false);
-    scene->ssaoScale = float(qBound(0.25, sceneObj["ssaoScale"].toDouble(1.0), 1.0));
-    scene->ssaoPower = float(qBound(0.1, sceneObj["ssaoPower"].toDouble(1.5), 8.0));
-    scene->ssaoRadius = float(qBound(0.05, sceneObj["ssaoRadius"].toDouble(2.0), 64.0));
-    scene->smaaPreset = qBound(-1, sceneObj["smaaPreset"].toInt(-1), 3);
-    scene->ssrMode = qBound(0, sceneObj["ssrMode"].toInt(0), 2);
-    scene->refractionsMode = qBound(0, sceneObj["refractionsMode"].toInt(0), 2);
+                                      sceneObj.value("exposureMax").toDouble(2.5), 8.0));
+    scene->bloomEnabled = sceneObj.value("bloomEnabled").toBool(false);
+    scene->bloomThreshold = float(sceneObj.value("bloomThreshold").toDouble(5.0));
+    scene->bloomKnee = float(sceneObj.value("bloomKnee").toDouble(2.0));   // absent = the old hard-coded width
+    scene->ssaoEnabled = sceneObj.value("ssaoEnabled").toBool(false);
+    scene->ssaoScale = float(qBound(0.25, sceneObj.value("ssaoScale").toDouble(1.0), 1.0));
+    scene->ssaoPower = float(qBound(0.1, sceneObj.value("ssaoPower").toDouble(1.5), 8.0));
+    scene->ssaoRadius = float(qBound(0.05, sceneObj.value("ssaoRadius").toDouble(2.0), 64.0));
+    scene->smaaPreset = qBound(-1, sceneObj.value("smaaPreset").toInt(-1), 3);
+    scene->ssrMode = qBound(0, sceneObj.value("ssrMode").toInt(0), 2);
+    scene->refractionsMode = qBound(0, sceneObj.value("refractionsMode").toInt(0), 2);
     // Distortion: absent = AUTO, which is what a document written before the
     // feature existed means (it holds no distortion material, so auto costs it
     // nothing and a user who adds one later sees it work).
-    scene->distortionMode = qBound(0, sceneObj["distortionMode"].toInt(1), 2);
+    scene->distortionMode = qBound(0, sceneObj.value("distortionMode").toInt(1), 2);
     scene->distortionStrength =
-        float(qBound(0.0, sceneObj["distortionStrength"].toDouble(1.0), 8.0));
+        float(qBound(0.0, sceneObj.value("distortionStrength").toDouble(1.0), 8.0));
     // The looks stack. Absent = empty = the renderer's behaviour before this
     // feature existed, byte for byte. Everything a file can get wrong — an
     // unknown look id (a document from a newer build), the same look twice, a
     // parameter out of range or missing — is handled in ONE place, the
     // document's own validator, which every write path also goes through.
-    scene->looks = iris::normalizeLookStack(sceneObj["looks"].toArray());
+    scene->looks = iris::normalizeLookStack(sceneObj.value("looks").toArray());
 
     // Planar reflections: absent means "follow the world mode" on all three
     // (-1 / 0 / -1), which is what every document written before this feature
     // says by omission. Explicit values are clamped to what the engine accepts.
     {
-        const int pb = sceneObj["planarReflectionBudget"].toInt(-1);
+        const int pb = sceneObj.value("planarReflectionBudget").toInt(-1);
         scene->planarReflectionBudget = pb < 0 ? -1 : qBound(0, pb, 8);
-        const int pres = sceneObj["planarReflectionResolution"].toInt(0);
+        const int pres = sceneObj.value("planarReflectionResolution").toInt(0);
         scene->planarReflectionResolution = pres <= 0 ? 0 : qBound(256, pres, 2048);
-        const int ps = sceneObj["planarReflectionShadows"].toInt(-1);
+        const int ps = sceneObj.value("planarReflectionShadows").toInt(-1);
         scene->planarReflectionShadows = (ps == 0 || ps == 1) ? ps : -1;
     }
     // World Mode (POST_CHAIN_SPEC §9). Absent reads as "custom": the fields
@@ -589,8 +617,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // as Epic; that would silently switch VCT GI, 4x MSAA and a 4096 shadow
     // atlas on for every existing scene — left to the owner.)
     {
-        const QString m = sceneObj["worldMode"].toString().trimmed().toLower();
-        scene->worldOverrides = sceneObj["worldOverrides"].toObject();
+        const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
+        scene->worldOverrides = sceneObj.value("worldOverrides").toObject();
         // A PIN OF A ROW THAT NO LONGER EXISTS is dropped on the way in (CRUD).
         // `giDynamicProbes` was Rayon's fifth column until R2 deleted the
         // feature; a scene the user had pinned it on (the shipped Showroom was
@@ -640,13 +668,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     }
     // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.
     {
-        const int sb = sceneObj["skyBakeResolution"].toInt(256);
+        const int sb = sceneObj.value("skyBakeResolution").toInt(256);
         scene->skyBakeResolution = sb >= 1024 ? 1024 : sb >= 512 ? 512 : 256;
     }
-    scene->ambientFromSky = sceneObj["ambientFromSky"].toBool(true);
-	scene->setWorldGravity(sceneObj["gravity"].toDouble(Constants::GRAVITY));
+    scene->ambientFromSky = sceneObj.value("ambientFromSky").toBool(true);
+	scene->setWorldGravity(sceneObj.value("gravity").toDouble(Constants::GRAVITY));
 
-    auto rootNode = sceneObj["rootNode"].toObject();
+    auto rootNode = sceneObj.value("rootNode").toObject();
 
     // The World node's OWN identity. The writer has always serialized the root
     // like any other node (guid, name, animations, transform); the reader read
@@ -704,7 +732,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // hand out of the file, or a scene from a build where the guid meant
     // something else — falls back to the free viewer instead of arming play
     // with a camera that does not exist.
-    scene->setActiveCamera(sceneObj["activeCamera"].toString());
+    scene->setActiveCamera(sceneObj.value("activeCamera").toString());
 
     // The play mode (AVATAR_LOCOMOTION_SPEC §8.5). Tolerant by design: a key
     // that is absent (every scene older than Stage 3) or that names a mode this
@@ -712,7 +740,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // scenes already had — rather than refusing to open the file.
     {
         iris::ScenePlayMode mode = iris::ScenePlayMode::Explorer;
-        if (iris::playModeFromName(sceneObj["playMode"].toString(), mode))
+        if (iris::playModeFromName(sceneObj.value("playMode").toString(), mode))
             scene->setPlayMode(mode);
     }
 
