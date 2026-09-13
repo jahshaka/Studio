@@ -24,8 +24,8 @@ For more information see the LICENSE file
 // single consumer of this file.
 //
 // STORAGE IS WRITE-THROUGH. The per-scene fields that already existed
-// (antiAliasing, shadowResolution, shadowFilterTier, giMode, giQuality,
-// skyBakeResolution) stay the backing store and the single
+// (antiAliasing, shadowResolution, shadowFilterTier, giMode, giQuality)
+// stay the backing store and the single
 // source of truth for SceneMirror, the serializer and every existing panel.
 // setMode() writes the tier value into each backing field EXCEPT rows the user
 // pinned in Scene::worldOverrides. The invariant is one line and one test:

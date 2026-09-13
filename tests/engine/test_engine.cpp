@@ -3223,6 +3223,123 @@ void fog_transmittance_is_exponential() {
               far3.r, far3.g, far3.b, far0.r, far0.g, far0.b);
 }
 
+// ---------------------------------------------------------------------------
+// THE ANALYTIC SKY AND THE AERIAL FOG (SKY-GPU)
+// ---------------------------------------------------------------------------
+// SkyMode::Atmosphere is Ogre's AtmosphereNpr, adopted as the "realistic" sky.
+// What this case gates is the three things the adoption had to REFUSE — the
+// component's light override, its own sun disc and its fog — plus the one thing
+// it had to add: the sky follows the sun WE give it.
+void analytic_sky_is_the_engines_and_takes_our_sun() {
+    Fixture fx;
+    View *v = fx.view("atmo-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("atmo-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);       // one directional light, pointing (-0.5,-0.7,-0.5)
+    aim(v);
+
+    Image img;
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px litBefore = centre(img);
+
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[0] = 0.0f;
+    sky.atmosphere.sunDir[1] = 0.35f;
+    sky.atmosphere.sunDir[2] = -1.0f;   // towards -Z: ahead of the camera
+    CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px skyAhead = px(img, 4, 4);           // a corner: sky, not the cube
+    const Px litAhead = centre(img);
+
+    // THE SUN MOVES THE SKY — and nothing else. Same dials, sun turned around:
+    // the sky the camera looks at is now the side AWAY from the sun.
+    sky.atmosphere.sunDir[2] = 1.0f;
+    CHECK_MSG(s->setSky(sky), "the sky takes a new sun direction: %s", fx.e->lastError().c_str());
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px skyBehind = px(img, 4, 4);
+    const Px litBehind = centre(img);
+    const int aheadSum = skyAhead.r + skyAhead.g + skyAhead.b;
+    const int behindSum = skyBehind.r + skyBehind.g + skyBehind.b;
+    std::printf("    sky toward the sun %d %d %d (%d) vs away %d %d %d (%d)\n",
+                skyAhead.r, skyAhead.g, skyAhead.b, aheadSum,
+                skyBehind.r, skyBehind.g, skyBehind.b, behindSum);
+    CHECK_MSG(aheadSum != behindSum,
+              "the analytic sky follows the sun direction we push (%d vs %d)", aheadSum, behindSum);
+
+    // THE LIGHT IS OURS. AtmosphereNpr::syncToLight() would set the linked
+    // light's type, DIRECTION, diffuse and specular colour and power scale from
+    // its own model — so if this engine ever linked one, turning the sun around
+    // above would have swung the light with it and the cube's lit face would
+    // have changed by far more than the sky's own bounced contribution. The
+    // component's light link is never armed (OgreSky.cpp's header (1)); this is
+    // the assertion that says so in pixels.
+    const int litSwing = std::abs(litAhead.r - litBehind.r) + std::abs(litAhead.g - litBehind.g) +
+                         std::abs(litAhead.b - litBehind.b);
+    std::printf("    cube lit face: no sky %d %d %d, sun ahead %d %d %d, sun behind %d %d %d\n",
+                litBefore.r, litBefore.g, litBefore.b, litAhead.r, litAhead.g, litAhead.b,
+                litBehind.r, litBehind.g, litBehind.b);
+    CHECK_MSG(litSwing < 24, "moving the sky's sun does not move the scene's LIGHT (swing %d)",
+              litSwing);
+
+    // ...AND THE SKY LIGHTS THE SCENE. The capture ran (six faces of this very
+    // sky, on the GPU), so the engine has an ambient integral for it and nobody
+    // had to bake an image.
+    float sh[27] = { 0.0f };
+    CHECK_MSG(s->skyAmbientSh(sh) && (sh[0] + sh[1] + sh[2]) > 0.0f,
+              "the analytic sky is captured and integrated: band0 %.3f %.3f %.3f",
+              sh[0], sh[1], sh[2]);
+}
+
+// The fog's AERIAL PERSPECTIVE mode: the distance fog's colour comes from the
+// analytic sky instead of the authored one. Off must stay exactly off — the
+// authored colour, to the byte — and on must visibly differ.
+void fog_atmosphere_colour_is_the_skys() {
+    Fixture fx;
+    View *v = fx.view("fog-atmo-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("fog-atmo-scene");             REQUIRE(s);
+    buildFogRig(v, s);
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[1] = 0.5f;
+    sky.atmosphere.sunDir[2] = -0.87f;
+    REQUIRE(s->setSky(sky));
+
+    Image img;
+    FogDesc fog;
+    fog.enabled = true;
+    fog.colour = kMagenta;
+    fog.breakFalloff = 0.0f;
+    fog.density = 0.2f;
+    s->setFog(fog);
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px authored = px(img, img.width / 2, 6);
+
+    fog.atmosphereColour = true;
+    s->setFog(fog);
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px aerial = px(img, img.width / 2, 6);
+    std::printf("    far surface: authored fog %d %d %d -> aerial %d %d %d\n",
+                authored.r, authored.g, authored.b, aerial.r, aerial.g, aerial.b);
+    // Magenta has no green at all, so the sky's own scattering shows up as
+    // green where the authored colour could never put any.
+    CHECK_MSG(aerial.g > authored.g + 8,
+              "the aerial mode fogs into the SKY's colour, not the authored one (%d vs %d)",
+              aerial.g, authored.g);
+
+    // ...and back off is back to the authored colour EXACTLY: the property is
+    // part of the pass hash, so the shader is rebuilt, not reused.
+    fog.atmosphereColour = false;
+    s->setFog(fog);
+    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
+    const Px back = px(img, img.width / 2, 6);
+    CHECK_MSG(back.r == authored.r && back.g == authored.g && back.b == authored.b,
+              "turning the aerial colour off restores the authored fog exactly: %d %d %d vs %d %d %d",
+              back.r, back.g, back.b, authored.r, authored.g, authored.b);
+}
+
 void fog_height_layer() {
     Fixture fx;
     View *v = fx.view("fog-h-view", 96, 96, kBlue); REQUIRE(v);
@@ -5290,6 +5407,9 @@ int main(int argc, char **argv) {
         { "unlit_refuses_rigged_meshes",            unlit_refuses_rigged_meshes },
         { "fog_transmittance_is_exponential",        fog_transmittance_is_exponential },
         { "fog_height_layer",                        fog_height_layer },
+        { "analytic_sky_is_the_engines_and_takes_our_sun",
+                                                    analytic_sky_is_the_engines_and_takes_our_sun },
+        { "fog_atmosphere_colour_is_the_skys",       fog_atmosphere_colour_is_the_skys },
         { "fog_breakthrough_spares_bright_surfaces", fog_breakthrough_spares_bright_surfaces },
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },

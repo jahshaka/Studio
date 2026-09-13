@@ -234,22 +234,28 @@ int main(int argc, char **argv)
     // sky's texels take, so a uniform sky's irradiance is exactly the decoded
     // colour with every higher band at zero. This is the assertion that makes
     // "a picked colour and a painted colour are the same colour" true.
+    // SINCE SKY-GPU the integral is the ENGINE's: it captures the sky it drew
+    // into a cubemap and integrates that, so this reads Scene::skyAmbientSh
+    // rather than a host-side function over a QImage. The assertion is the
+    // same one and it is now end to end — picked colour, uploaded strip,
+    // rendered sky, captured cube, integral — which is exactly the chain the
+    // colour-space rule has to hold across.
     {
-        QImage strip(64, 32, QImage::Format_RGBA8888);
-        strip.fill(QColor(150, 90, 45, 255));
+        doc->skyColor = QColor(150, 90, 45);
+        doc->skyType = iris::SkyType::SINGLE_COLOR;
+        for (int f = 0; f < 4; ++f) frame();
         float sh[27] = { 0.0f };
-        CHECK(SceneMirror::integrateSkyAmbientSh(strip, sh),
-              "5a. the uniform strip integrates");
+        CHECK(escene->skyAmbientSh(sh), "5a. the engine integrated the sky it drew");
         const iris::LinearColor want = iris::linearOf(QColor(150, 90, 45));
         std::printf("   band0 r=%.4f g=%.4f b=%.4f   linearOf r=%.4f g=%.4f b=%.4f\n",
                     sh[0], sh[1], sh[2], want.r, want.g, want.b);
-        CHECK(std::fabs(sh[0] - want.r) < 2e-3f && std::fabs(sh[1] - want.g) < 2e-3f &&
-                  std::fabs(sh[2] - want.b) < 2e-3f,
+        CHECK(std::fabs(sh[0] - want.r) < 4e-3f && std::fabs(sh[1] - want.g) < 4e-3f &&
+                  std::fabs(sh[2] - want.b) < 4e-3f,
               "5b. band 0 of a uniform sky IS linearOf(the picked colour)");
         float worst = 0.0f;
         for (int i = 3; i < 27; ++i) worst = std::max(worst, std::fabs(sh[i]));
         std::printf("   worst higher band = %.5f\n", worst);
-        CHECK(worst < 1e-3f, "5c. and every higher band is zero (a uniform sky has no direction)");
+        CHECK(worst < 4e-3f, "5c. and every higher band is zero (a uniform sky has no direction)");
     }
 
     // ---- 6. THE SUN DISC IS WHERE THE LIGHT POINTS --------------------------

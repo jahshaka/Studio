@@ -60,11 +60,12 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
         // (SKY_LIGHT_SPEC §3): a preset's sun is the scene's sun light.
         const iris::SkyRealistic d = iris::SkyRealistic::defaults();
         iris::SkyRealistic r;
-        r.luminance       = float(skyData.value("luminance").toDouble(d.luminance));
-        r.reileigh        = float(skyData.value("reileigh").toDouble(d.reileigh));
-        r.mieCoefficient  = float(skyData.value("mieCoefficient").toDouble(d.mieCoefficient));
-        r.mieDirectionalG = float(skyData.value("mieDirectionalG").toDouble(d.mieDirectionalG));
-        r.turbidity       = float(skyData.value("turbidity").toDouble(d.turbidity));
+        r.density   = float(skyData.value("density").toDouble(d.density));
+        r.diffusion = float(skyData.value("diffusion").toDouble(d.diffusion));
+        r.horizon   = float(skyData.value("horizon").toDouble(d.horizon));
+        r.power     = float(skyData.value("power").toDouble(d.power));
+        const QJsonObject skyColObj = skyData.value("skyColour").toObject();
+        r.skyColour = skyColObj.isEmpty() ? d.skyColour : AssetIOBase::readColor(skyColObj);
         scene->skyRealistic = r;
         return true;
     }

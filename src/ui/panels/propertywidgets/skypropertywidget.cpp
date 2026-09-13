@@ -225,83 +225,68 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::REALISTIC: {
-			// Ranges are the MODEL's, not the legacy panel's (VISUAL_PARITY_SPEC
-			// item 1). The old rows — Sun Height -0.99..10, Strafe X/Z 0..1,
-			// Turbidity 0..1 — sat in a corner where the analytic sky cannot
-			// react: its sunfade divides sunPosY by 450000 and Preetham's
-			// turbidity band is 1..20. The sun is a polar control now (the three
-			// stored sunPos floats remain the truth, at the model's radius), and
-			// every scattering dial spans the range the bake actually uses.
+			// THE DIALS ARE THE ENGINE'S (SKY-GPU, owner pick 5). The five
+			// Preetham sliders that stood here — Turbidity, Rayleigh, Mie
+			// Coefficient, Mie Directional G, Exposure — described a CPU bake
+			// that no longer exists; the sky is Ogre's own analytic atmosphere,
+			// a fragment shader over the camera ray, and these are ITS
+			// parameters. An old document's Realistic block has none of them
+			// and opens at the defaults (no migrations, ever).
 			const iris::SkyRealistic defaults = iris::SkyRealistic::defaults();
 			iris::SkyRealistic loaded = defaults;
 			if (!skyDefinition.isEmpty()) {
-				loaded.luminance       = skyDefinition.value("luminance").toDouble(defaults.luminance);
-				loaded.reileigh        = skyDefinition.value("reileigh").toDouble(defaults.reileigh);
-				loaded.mieCoefficient  = skyDefinition.value("mieCoefficient").toDouble(defaults.mieCoefficient);
-				loaded.mieDirectionalG = skyDefinition.value("mieDirectionalG").toDouble(defaults.mieDirectionalG);
-				loaded.turbidity       = skyDefinition.value("turbidity").toDouble(defaults.turbidity);
+				loaded.density   = skyDefinition.value("density").toDouble(defaults.density);
+				loaded.diffusion = skyDefinition.value("diffusion").toDouble(defaults.diffusion);
+				loaded.horizon   = skyDefinition.value("horizon").toDouble(defaults.horizon);
+				loaded.power     = skyDefinition.value("power").toDouble(defaults.power);
+				const QJsonObject colObj = skyDefinition.value("skyColour").toObject();
+				loaded.skyColour = colObj.isEmpty() ? defaults.skyColour
+				                                    : SceneReader::readColor(colObj);
 			}
-			// Legacy documents hold values outside the model's ranges (turbidity
-			// .32 against Preetham's 1..20 was the panel default for years). The
-			// sliders would clamp the DISPLAY and silently disagree with the
-			// document, so clamp the document instead: an old scene migrates to
-			// the nearest value its dials can actually express. (The ASSET panel
-			// never did this — one of the divergences the dedup closes.)
-			loaded.turbidity       = qBound(1.0f,  loaded.turbidity,       20.0f);
-			loaded.reileigh        = qBound(0.0f,  loaded.reileigh,         4.0f);
-			loaded.mieCoefficient  = qBound(0.0f,  loaded.mieCoefficient,   0.1f);
-			loaded.mieDirectionalG = qBound(0.0f,  loaded.mieDirectionalG, 0.99f);
-			loaded.luminance       = qBound(0.01f, loaded.luminance,        2.0f);
+			// The sliders' ranges are the model's own working bands: density
+			// past ~2 is a night sky at noon, diffusion past ~4 flattens the
+			// gradient into a wall, and the horizon limit is a fraction of the
+			// sphere. Clamp the DOCUMENT rather than only the display, so a
+			// value a dial cannot express cannot survive a visit to the panel.
+			loaded.density   = qBound(0.01f, loaded.density,   1.0f);
+			loaded.diffusion = qBound(0.0f,  loaded.diffusion, 4.0f);
+			loaded.horizon   = qBound(0.0f,  loaded.horizon,   0.5f);
+			loaded.power     = qBound(0.0f,  loaded.power,     4.0f);
 			if (auto live = liveScene()) live->skyRealistic = loaded;
 
 			// NO SUN DIALS (SKY_LIGHT_SPEC.md §3, owner decision D15). The sky's
 			// sun IS the scene's sun light: rotate the light and the sky moves.
-			// The two sliders that used to stand here steered the sky's own idea
-			// of a sun and then pushed the light around from it — backwards.
-			turbidity = addFloatValueSlider("Turbidity", 1.f, 20.f, defaults.turbidity);
-			reileigh = addFloatValueSlider("Rayleigh Scattering", 0.f, 4.f, defaults.reileigh);
-			mieCoefficient = addFloatValueSlider("Mie Coefficient", 0.f, .1f, defaults.mieCoefficient);
-			mieDirectionalG = addFloatValueSlider("Mie Directional G", 0.f, .99f, defaults.mieDirectionalG);
-			luminance = addFloatValueSlider("Exposure", .01f, 2.f, defaults.luminance);
-			if (binding == Binding::Scene) {
-				skyDetail = this->addComboBox("Sky Detail");
-				skyDetail->addItem("Normal (256)");
-				skyDetail->addItem("High (512)");
-				skyDetail->addItem("Ultra (1024)");
-				skyDetail->setToolTip(QStringLiteral(
-					"Width of the equirectangular image the sky is baked into. Higher is a sharper "
-					"sun disc on a big display, at the cost of a longer bake on every change."));
-				skyDetail->setCurrentIndex(scene->skyBakeResolution >= 1024 ? 2
-										 : scene->skyBakeResolution >= 512  ? 1 : 0);
-				connect(skyDetail, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
-						this, &SkyPropertyWidget::onSkyDetailChanged);
-			}
+			skyDensity   = addFloatValueSlider("Density", 0.01f, 1.f, defaults.density);
+			skyDiffusion = addFloatValueSlider("Diffusion", 0.f, 4.f, defaults.diffusion);
+			skyHorizon   = addFloatValueSlider("Horizon", 0.f, .5f, defaults.horizon);
+			skyPower     = addFloatValueSlider("Sky Power", 0.f, 4.f, defaults.power);
+			skyColour    = this->addColorPicker("Sky Colour");
 			addSunReadoutRow();
 
-			turbidity->setValue(loaded.turbidity);
-			reileigh->setValue(loaded.reileigh);
-			mieCoefficient->setValue(loaded.mieCoefficient);
-			mieDirectionalG->setValue(loaded.mieDirectionalG);
-			luminance->setValue(loaded.luminance);
+			skyDensity->setValue(loaded.density);
+			skyDiffusion->setValue(loaded.diffusion);
+			skyHorizon->setValue(loaded.horizon);
+			skyPower->setValue(loaded.power);
+			skyColour->setColorValue(loaded.skyColour);
 
 			// Each dial writes THROUGH its binding (never a second, direct
 			// connect) and each drag is ONE undo step in a scene.
-			wireSkyRow(luminance, tr("Sky Exposure"),
-			           [this](const QVariant &v) { onLuminanceChanged(v.toFloat()); });
-			wireSkyRow(reileigh, tr("Rayleigh Scattering"),
-			           [this](const QVariant &v) { onReileighChanged(v.toFloat()); });
-			wireSkyRow(mieCoefficient, tr("Mie Coefficient"),
-			           [this](const QVariant &v) { onMieCoeffGChanged(v.toFloat()); });
-			wireSkyRow(mieDirectionalG, tr("Mie Directional G"),
-			           [this](const QVariant &v) { onMieDireChanged(v.toFloat()); });
-			wireSkyRow(turbidity, tr("Turbidity"),
-			           [this](const QVariant &v) { onTurbidityChanged(v.toFloat()); });
+			wireSkyRow(skyDensity, tr("Sky Density"),
+			           [this](const QVariant &v) { onSkyDensityChanged(v.toFloat()); });
+			wireSkyRow(skyDiffusion, tr("Sky Diffusion"),
+			           [this](const QVariant &v) { onSkyDiffusionChanged(v.toFloat()); });
+			wireSkyRow(skyHorizon, tr("Sky Horizon"),
+			           [this](const QVariant &v) { onSkyHorizonChanged(v.toFloat()); });
+			wireSkyRow(skyPower, tr("Sky Power"),
+			           [this](const QVariant &v) { onSkyPowerChanged(v.toFloat()); });
+			wireSkyRow(skyColour->getPicker(), tr("Sky Colour"),
+			           [this](const QVariant &v) { onSkyColourChanged(v.value<QColor>()); });
 
-			realisticDefinition.insert("luminance", double(loaded.luminance));
-			realisticDefinition.insert("reileigh", double(loaded.reileigh));
-			realisticDefinition.insert("mieCoefficient", double(loaded.mieCoefficient));
-			realisticDefinition.insert("mieDirectionalG", double(loaded.mieDirectionalG));
-			realisticDefinition.insert("turbidity", double(loaded.turbidity));
+			realisticDefinition.insert("density", double(loaded.density));
+			realisticDefinition.insert("diffusion", double(loaded.diffusion));
+			realisticDefinition.insert("horizon", double(loaded.horizon));
+			realisticDefinition.insert("power", double(loaded.power));
+			realisticDefinition.insert("skyColour", SceneWriter::jsonColor(loaded.skyColour));
 			updateAssetAndKeys();
 
 			break;
@@ -463,24 +448,6 @@ void SkyPropertyWidget::addSunReadoutRow()
 		"no directional light has no sun, and the analytic sky bakes its own night."));
 }
 
-void SkyPropertyWidget::onSkyDetailChanged(int row)
-{
-	if (loading || !scene || binding != Binding::Scene) return;
-	// Not a sky *parameter* (it never enters skyData): a scene render setting,
-	// serialized beside antiAliasing, and a World Mode registry row — so the
-	// edit carries the value and the pin. SceneMirror re-bakes when it changes.
-	const int resolution = row >= 2 ? 1024 : row >= 1 ? 512 : 256;
-	panelundo::runWorldModeEdit(services, scene, tr("Sky Detail"), [this, resolution]() {
-		worldmodes::setRowValue(scene, QStringLiteral("skyBakeResolution"), resolution);
-	}, [this]() {
-		if (skyDetail && scene) {
-			QSignalBlocker quiet(skyDetail->getWidget());
-			skyDetail->setCurrentIndex(scene->skyBakeResolution >= 1024 ? 2
-									 : scene->skyBakeResolution >= 512  ? 1 : 0);
-		}
-	});
-}
-
 void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 {
 	if (!db || !project) return;
@@ -627,38 +594,38 @@ void SkyPropertyWidget::onEquiTextureChanged(QString guid)
 	updateAssetAndKeys();
 }
 
-void SkyPropertyWidget::onReileighChanged(float val)
+void SkyPropertyWidget::onSkyDensityChanged(float val)
 {
-	realisticDefinition.insert("reileigh", val);
-	if (auto live = liveScene()) live->skyRealistic.reileigh = val;
+	realisticDefinition.insert("density", val);
+	if (auto live = liveScene()) live->skyRealistic.density = val;
 	updateAssetAndKeys();
 }
 
-void SkyPropertyWidget::onLuminanceChanged(float val)
+void SkyPropertyWidget::onSkyDiffusionChanged(float val)
 {
-	realisticDefinition.insert("luminance", val);
-	if (auto live = liveScene()) live->skyRealistic.luminance = val;
+	realisticDefinition.insert("diffusion", val);
+	if (auto live = liveScene()) live->skyRealistic.diffusion = val;
 	updateAssetAndKeys();
 }
 
-void SkyPropertyWidget::onTurbidityChanged(float val)
+void SkyPropertyWidget::onSkyHorizonChanged(float val)
 {
-	realisticDefinition.insert("turbidity", val);
-	if (auto live = liveScene()) live->skyRealistic.turbidity = val;
+	realisticDefinition.insert("horizon", val);
+	if (auto live = liveScene()) live->skyRealistic.horizon = val;
 	updateAssetAndKeys();
 }
 
-void SkyPropertyWidget::onMieCoeffGChanged(float val)
+void SkyPropertyWidget::onSkyPowerChanged(float val)
 {
-	realisticDefinition.insert("mieCoefficient", val);
-	if (auto live = liveScene()) live->skyRealistic.mieCoefficient = val;
+	realisticDefinition.insert("power", val);
+	if (auto live = liveScene()) live->skyRealistic.power = val;
 	updateAssetAndKeys();
 }
 
-void SkyPropertyWidget::onMieDireChanged(float val)
+void SkyPropertyWidget::onSkyColourChanged(QColor colour)
 {
-	realisticDefinition.insert("mieDirectionalG", val);
-	if (auto live = liveScene()) live->skyRealistic.mieDirectionalG = val;
+	realisticDefinition.insert("skyColour", SceneWriter::jsonColor(colour));
+	if (auto live = liveScene()) live->skyRealistic.skyColour = colour;
 	updateAssetAndKeys();
 }
 

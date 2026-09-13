@@ -192,7 +192,8 @@ const QStringList &fogKeys()
         QStringLiteral("fogEnabled"), QStringLiteral("fogColor"), QStringLiteral("fogStart"),
         QStringLiteral("fogEnd"), QStringLiteral("fogDensity"), QStringLiteral("fogHeightDensity"),
         QStringLiteral("fogHeightFalloff"), QStringLiteral("fogHeightLevel"),
-        QStringLiteral("fogBreakMinBrightness"), QStringLiteral("fogBreakFalloff")
+        QStringLiteral("fogBreakMinBrightness"), QStringLiteral("fogBreakFalloff"),
+        QStringLiteral("fogAtmosphere")
     };
     return keys;
 }
@@ -221,12 +222,17 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "gravity", "world.gravity(value) -> bool",
           "Sets world gravity (drives the physics world too). One undo step — the World panel's own.",
           Needs::Document },
-        { "fog", "world.fog({enabled, color, density, heightDensity, heightFalloff, heightLevel, breakMinBrightness, breakFalloff, end, start}) -> bool",
+        { "fog", "world.fog({enabled, color, density, heightDensity, heightFalloff, heightLevel, breakMinBrightness, breakFalloff, atmosphere, end, start}) -> bool",
           "Sets any subset of the fog settings. Fog is EXPONENTIAL: transmittance = 2^(-distance * density), "
           "so density is the loss per world unit (a surface 1/density away keeps half its colour). "
           "heightDensity > 0 adds a second layer of the same colour whose density falls off with world Y "
           "(density(y) = heightDensity * 2^(-(y - heightLevel) * heightFalloff)). breakMinBrightness/"
           "breakFalloff let bright pixels resist the fog (breakFalloff 0 = pure exponential). "
+          "atmosphere (default false) takes the DISTANCE fog's colour from the realistic sky's own "
+          "scattering for the direction each surface is seen from — aerial perspective: a far hill "
+          "fades into the sky behind it and follows the sun, at no authoring cost. It needs the "
+          "realistic sky (it is that sky's model); with any other sky the authored colour is kept, "
+          "and the height layer always uses the authored colour. "
           "`end` is the retired linear \"fully fogged\" distance, kept as a convenience: setting it "
           "re-derives the density from the start/end pair (density = 2/(start+end), the distance where "
           "both curves are half fogged). `start` no longer affects rendering on its own. "
@@ -323,7 +329,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
-          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. THE SKY HAS NO SUN OF ITS OWN: the realistic sky's sun position, its haze and the sun disc are taken from the scene's SUN — the first directional light — so you place the sun by rotating that light, never with sky dials. The old azimuth/elevation/sunPosX/Y/Z/drivesSun parameters are gone and are refused by name. turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024). A sky with no directional light in the scene bakes the model's own night. Every sky now LIGHTS the scene through the Sky Light (world.skyLight), the single-colour sky included. One call is one undo step (the sky block, a pinned detail, the texture it bound); a refused call changes nothing.",
+          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {density, diffusion, horizon, skyColour, power}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. THE SKY HAS NO SUN OF ITS OWN: the realistic sky's sun position and its haze are taken from the scene's SUN — the first directional light — so you place the sun by rotating that light, never with sky dials; the sun DISC is world.sunDisc. The old azimuth/elevation/sunPosX/Y/Z/drivesSun parameters are gone and are refused by name. THE REALISTIC SKY IS THE ENGINE'S OWN ANALYTIC SKY, drawn on the GPU: density is how much atmosphere the ray crosses (the blue's depth), diffusion how fast the colour changes with altitude, horizon the lowest point it is drawn at, skyColour its own colour before absorption, power an HDR multiplier. There is no CPU bake any more, so the old luminance/reileigh/mieCoefficient/mieDirectionalG/turbidity dials and the 'detail' bake width are gone and refused by name. A sky with no directional light in the scene draws the model's own night. Every sky LIGHTS the scene through the Sky Light (world.skyLight), the single-colour sky included. One call is one undo step (the sky block, the texture it bound); a refused call changes nothing.",
           Needs::Document },
         { "skyPresets", "world.skyPresets() -> [name]",
           "The shipped cube skies — the Presets panel's Skyboxes tab — by name, in the panel's order (Cove, Hamarikyu, Bay, Field, Creek, Space). Needs no project.",
@@ -468,7 +474,8 @@ bool WorldApi::fog(const QVariantMap &params)
         QStringLiteral("start"),         QStringLiteral("end"),
         QStringLiteral("density"),       QStringLiteral("heightDensity"),
         QStringLiteral("heightFalloff"), QStringLiteral("heightLevel"),
-        QStringLiteral("breakMinBrightness"), QStringLiteral("breakFalloff")
+        QStringLiteral("breakMinBrightness"), QStringLiteral("breakFalloff"),
+        QStringLiteral("atmosphere")
     };
     const QString refusal = refuseUnknownKeys(QStringLiteral("world.fog"), params, known);
     if (!refusal.isEmpty()) return fail(refusal);
@@ -496,6 +503,7 @@ bool WorldApi::fog(const QVariantMap &params)
     if (params.contains("breakMinBrightness"))
         scene->fogBreakMinBrightness = params.value("breakMinBrightness").toFloat();
     if (params.contains("breakFalloff")) scene->fogBreakFalloff = params.value("breakFalloff").toFloat();
+    if (params.contains("atmosphere")) scene->fogAtmosphere = params.value("atmosphere").toBool();
     edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Fog"));
     return true;
 }
@@ -1557,6 +1565,19 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
             "Rotate the sun light instead: node.transform(world.sun().light, {rotation: {...}}).")
                         .arg(QLatin1String(gone)));
     }
+    // ...AND THE PREETHAM DIALS ARE GONE TOO (SKY-GPU). The realistic sky is
+    // the engine's own analytic model, evaluated per pixel on the GPU; the five
+    // parameters that described the CPU bake, and the bake WIDTH that only a
+    // CPU bake could have, have no counterpart in it. Refused by name rather
+    // than silently ignored, for the same reason as above.
+    for (const char *gone : { "luminance", "reileigh", "mieCoefficient",
+                              "mieDirectionalG", "turbidity", "detail" }) {
+        if (!params.contains(QLatin1String(gone))) continue;
+        return fail(QStringLiteral(
+            "world.sky: '%1' is gone — the realistic sky is the engine's own analytic sky now "
+            "(no CPU bake, no bake width). Its dials are density, diffusion, horizon, skyColour "
+            "and power.").arg(QLatin1String(gone)));
+    }
 
     // Contract per SkyPropertyWidget: set the live fields AND rebuild
     // scene->skyData[<key>] (SceneWriter serializes only skyData), then
@@ -1606,23 +1627,24 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         auto take = [&params](const char *key, float current) {
             return params.contains(key) ? params.value(key).toFloat() : current;
         };
-        r.luminance = take("luminance", r.luminance);
-        r.reileigh = take("reileigh", r.reileigh);
-        r.mieCoefficient = take("mieCoefficient", r.mieCoefficient);
-        r.mieDirectionalG = take("mieDirectionalG", r.mieDirectionalG);
-        r.turbidity = take("turbidity", r.turbidity);
-        if (params.contains("detail")) {
-            const int d = params.value("detail").toInt();
-            scene->skyBakeResolution = d >= 1024 ? 1024 : d >= 512 ? 512 : 256;
-            worldmodes::pinRowValue(scene, QStringLiteral("skyBakeResolution"),
-                                    scene->skyBakeResolution);
+        r.density   = take("density", r.density);
+        r.diffusion = take("diffusion", r.diffusion);
+        r.horizon   = take("horizon", r.horizon);
+        r.power     = take("power", r.power);
+        if (params.contains("skyColour") || params.contains("skyColor")) {
+            const QVariant given = params.contains("skyColour") ? params.value("skyColour")
+                                                                : params.value("skyColor");
+            bool ok = false;
+            const QColor c = colorFromJs(given, r.skyColour, &ok);
+            if (!ok) return fail(QStringLiteral("world.sky: %1 (skyColour)").arg(colorHelp(given)));
+            r.skyColour = c;
         }
         QJsonObject def;
-        def.insert("luminance", double(r.luminance));
-        def.insert("reileigh", double(r.reileigh));
-        def.insert("mieCoefficient", double(r.mieCoefficient));
-        def.insert("mieDirectionalG", double(r.mieDirectionalG));
-        def.insert("turbidity", double(r.turbidity));
+        def.insert("density", double(r.density));
+        def.insert("diffusion", double(r.diffusion));
+        def.insert("horizon", double(r.horizon));
+        def.insert("power", double(r.power));
+        def.insert("skyColour", SceneWriter::jsonColor(r.skyColour));
         scene->skyData.insert("Realistic", def);
         scene->skyType = iris::SkyType::REALISTIC;
     } else if (t == "equirectangular" || t == "equirect") {
@@ -1748,6 +1770,7 @@ QVariantMap WorldApi::get()
                               { "heightLevel", scene->fogHeightLevel },
                               { "breakMinBrightness", scene->fogBreakMinBrightness },
                               { "breakFalloff", scene->fogBreakFalloff },
+                              { "atmosphere", scene->fogAtmosphere },
                               { "start", scene->fogStart },
                               { "end", scene->fogEnd } };
     static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
@@ -1784,7 +1807,6 @@ QVariantMap WorldApi::get()
     sky["type"] = scene->skyTypeToStr.at(typeIndex);
     sky["data"] = scene->skyData.value(scene->skyTypeToStr.at(typeIndex)).toVariantMap();
     if (scene->skyType == iris::SkyType::SINGLE_COLOR) sky["color"] = colorToJs(scene->skyColor);
-    sky["detail"] = scene->skyBakeResolution;
     // The sun PIN (which directional light is the sun), empty = automatic. The
     // sky's own sun dials and its steering switch are gone (D15) — world.sun()
     // is where the sun's direction is read now.

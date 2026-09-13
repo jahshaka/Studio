@@ -157,6 +157,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["fogDensity"] = scene->fogDensity;
     sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
+    sceneObj["fogAtmosphere"] = scene->fogAtmosphere;
     sceneObj["fogHeightFalloff"] = scene->fogHeightFalloff;
     sceneObj["fogHeightLevel"] = scene->fogHeightLevel;
     sceneObj["fogBreakMinBrightness"] = scene->fogBreakMinBrightness;
@@ -224,7 +225,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // Realistic-sky bake width (VISUAL_PARITY item 1): a scene-wide render
     // setting, not a sky *parameter*, so it lives beside antiAliasing rather
     // than inside skyData.
-    sceneObj["skyBakeResolution"] = scene->skyBakeResolution;
 
     // Global illumination (world panel). Mode/quality are written as stable
     // strings — the enum ints must stay free to be reordered.

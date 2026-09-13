@@ -1090,14 +1090,14 @@ int main(int argc, char **argv)
         CHECK(centre(img).b > 0.7f && centre(img).g < 0.35f, "gradient sky nadir is the bottom colour");
     }
 
-    // ---- realistic sky: the legacy Preetham shader CPU-baked to an equirect ----
+    // ---- the analytic sky: the ENGINE's, drawn on the GPU (SKY-GPU) --------
+    // There is no CPU bake to call any more: the "realistic" sky is Ogre's
+    // AtmosphereNpr, five numbers and a sun direction pushed into a shader. So
+    // every assertion below is a PIXEL of the rendered sky — which is what the
+    // bake's pixels were a proxy for.
     {
         doc->skyType = iris::SkyType::REALISTIC;
-        doc->skyRealistic.luminance = 1.0f;               // the legacy demo defaults
-        doc->skyRealistic.reileigh = 2.0f;
-        doc->skyRealistic.mieCoefficient = 0.005f;
-        doc->skyRealistic.mieDirectionalG = 0.8f;
-        doc->skyRealistic.turbidity = 10.0f;
+        doc->skyRealistic = iris::SkyRealistic::defaults();
         // THE SKY'S SUN IS THE SCENE'S SUN LIGHT (SKY_LIGHT_SPEC.md §3, D15).
         // A directional light pointing straight DOWN puts the sun overhead: a
         // blue day sky. There are no sky sun dials to set any more.
@@ -1112,134 +1112,56 @@ int main(int argc, char **argv)
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 25.0f));
         mirror.applyCamera(cam, view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("realistic sky", img);
+        view->readPixels(img); show("analytic sky", img);
         const Colour day = centre(img);
-        CHECK(day.b > 0.15f && day.b > day.r, "realistic sky bakes sky-like blue-dominant pixels");
-        // The bake tracks its inputs (debounced ~150 ms): pull the SUN LIGHT down
-        // to the horizon and the same view must change colour once the debounce
-        // passes. This is D15's whole assertion — the light drives the sky.
+        CHECK(day.b > 0.15f && day.b > day.r, "the analytic sky draws sky-like blue-dominant pixels");
+        // NO DEBOUNCE ANY MORE, and that is the headline: the sky is a shader,
+        // so moving the sun is a const-buffer write. Pull the SUN LIGHT down to
+        // the horizon and the same view changes colour in the NEXT frame.
         skySun->setLocalRot(iris::Quat::fromEulerAngles(-89.0f, 0.0f, 0.0f));
-        QThread::msleep(180);
         mirror.sync();
         mirror.applySky(view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("realistic sky, sunset", img);
+        view->readPixels(img); show("analytic sky, sunset", img);
         const Colour dusk = centre(img);
         const float delta = std::fabs(dusk.r - day.r) + std::fabs(dusk.g - day.g) + std::fabs(dusk.b - day.b);
-        std::printf("    parameter change moved the same pixel by %.3f\n", delta);
-        CHECK(delta > 0.05f, "moving the SUN LIGHT re-bakes the realistic sky (D15)");
-        doc->getRootNode()->removeChild(skySun);
-        mirror.sync();
-    }
+        std::printf("    moving the sun moved the same pixel by %.3f\n", delta);
+        CHECK(delta > 0.05f, "moving the SUN LIGHT moves the analytic sky, in one frame (D15)");
 
-    // ---- the model's own ranges, driven by the SUN LIGHT's direction -------
-    // The old panel offered "Sun Height -0.99..10" against a model whose sunfade
-    // divides by 450000 and whose turbidity band is 1..20, so every dial sat in
-    // a degenerate corner. These assertions are impossible to satisfy with the
-    // legacy ranges, which is the point.
-    //
-    // THE SUN DIALS ARE GONE (SKY_LIGHT_SPEC.md §3): the azimuth/elevation
-    // round-trip case that used to open this block was asserting a lossless view
-    // of three stored floats that no longer exist — the bake takes a DIRECTION
-    // from the scene's sun light. The elevation cases below drive that direction
-    // directly, which is the same physics with one fewer indirection.
-    {
-        // A unit direction TOWARDS the sun at azimuth 0 (+Z) and the given
-        // elevation — exactly what `-sunLight->getLightDir()` produces.
-        const auto towardsSun = [](float elevationDeg) {
-            const float el = elevationDeg * 3.14159265f / 180.0f;
-            return iris::Vec3(0.0f, std::sin(el), std::cos(el));
-        };
-
-        // Sun at azimuth 0 (+Z). RE-BASELINED with the Ogre-native sky: the bake
-        // now uses Ogre's own lat-long mapping (u = (atan2(x,-z)+PI)/2PI), which
-        // puts +Z at column 0 and -Z — the default camera's forward — at the
-        // middle of the image. The retired sky sphere put +Z at 0.75*W. The
-        // horizon is still row H/2. Low sun -> warm horizon, high sun -> blue
-        // horizon: the Preetham behaviour the old dials hid.
-        const int W = 256, H = 128;
-        const int col = 0, row = H / 2 - 1;
-        auto horizonAt = [&](float elevation) {
-            iris::SkyRealistic sk = iris::SkyRealistic::defaults();
-            sk.turbidity = 4.0f;
-            const QImage baked =
-                SceneMirror::bakeRealisticSky(sk, W, H, false, towardsSun(elevation), true);
-            const QRgb px = baked.isNull() ? qRgb(0, 0, 0) : baked.pixel(col, row);
-            std::printf("    horizon toward the sun at %5.1f deg: %3d %3d %3d\n",
-                        double(elevation), qRed(px), qGreen(px), qBlue(px));
-            return px;
-        };
-        const QRgb low = horizonAt(5.0f), high = horizonAt(60.0f);
-        CHECK(qRed(low) > qBlue(low), "a 5 deg sun makes the horizon warm (red over blue)");
-        CHECK(qBlue(high) > qRed(high), "a 60 deg sun makes the horizon blue (blue over red)");
-
-        // Turbidity is a real dial now: haze at 20 is not haze at 1.
-        iris::SkyRealistic clear = iris::SkyRealistic::defaults();
-        iris::SkyRealistic hazy = clear; clear.turbidity = 1.0f; hazy.turbidity = 20.0f;
-        const iris::Vec3 sun20 = towardsSun(20.0f);
-        const QRgb cpx = SceneMirror::bakeRealisticSky(clear, W, H, false, sun20, true).pixel(col, row);
-        const QRgb hpx = SceneMirror::bakeRealisticSky(hazy, W, H, false, sun20, true).pixel(col, row);
-        const int turbDelta = std::abs(qRed(cpx) - qRed(hpx)) + std::abs(qGreen(cpx) - qGreen(hpx)) +
-                              std::abs(qBlue(cpx) - qBlue(hpx));
-        std::printf("    turbidity 1 vs 20 at the horizon: %d %d %d vs %d %d %d (delta %d)\n",
-                    qRed(cpx), qGreen(cpx), qBlue(cpx), qRed(hpx), qGreen(hpx), qBlue(hpx), turbDelta);
-        CHECK(turbDelta > 20, "turbidity visibly changes the sky over Preetham's 1..20 range");
-
-        // Sky Detail: the bake honours the document's requested width, and the
-        // signature carries it (a detail change alone must re-bake).
-        //
-        // WITH A SUN IN THE SCENE (SKY_LIGHT_SPEC.md §3): the analytic sky's sun
-        // is the scene's directional light, and this block runs where the
-        // earlier cases removed theirs — so without one the bake would be the
-        // model's own night and the two detail levels would agree at black,
-        // which is not the assertion.
-        auto detailSun = iris::LightNode::create();
-        detailSun->setName("sun");
-        detailSun->lightType = iris::LightType::Directional;
-        detailSun->setLocalRot(iris::Quat::fromEulerAngles(-50.0f, 180.0f, 0.0f));
-        doc->getRootNode()->addChild(detailSun);
-        mirror.sync();
-        doc->skyType = iris::SkyType::REALISTIC;
-        doc->skyRealistic = iris::SkyRealistic::defaults();
-        doc->skyBakeResolution = 256;
-        QThread::msleep(180);
-        mirror.applySky(view);
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
-        view->readPixels(img);
-        const Colour at256 = centre(img);
-        doc->skyBakeResolution = 1024;
-        QThread::msleep(180);
-        mirror.applySky(view);
+        // THE DIALS ARE REAL DIALS. Density is how much atmosphere the ray
+        // crosses: at the bottom of its range the horizon is pale, at the top
+        // it is deep. One parameter, one visible answer, through the document.
+        cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 5.0f));
+        mirror.applyCamera(cam, view);
+        skySun->setLocalRot(iris::Quat::fromEulerAngles(-40.0f, 0.0f, 0.0f));
+        doc->skyRealistic.density = 0.2f;
+        mirror.sync(); mirror.applySky(view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("realistic sky @1024", img);
-        const Colour at1024 = centre(img);
-        // Same parameters, finer bake: the sky must still be a sky (not black,
-        // not a failed texture) and stay within a hair of the coarse version.
-        const float d = std::fabs(at1024.r - at256.r) + std::fabs(at1024.g - at256.g) +
-                        std::fabs(at1024.b - at256.b);
-        std::printf("    detail 256 vs 1024 moved the pixel by %.3f\n", d);
-        CHECK(at1024.r + at1024.g + at1024.b > 0.05f && d < 0.25f,
-              "Sky Detail re-bakes at the requested width without changing the sky");
-        CHECK(SceneMirror::bakeRealisticSky(iris::SkyRealistic::defaults(), 1024, 512, false,
-                                            towardsSun(40.0f), true).width() == 1024,
-              "the bake honours a 1024-wide request");
-        // A SKY WITH NO SUN is the model's own night, not a crash and not black
-        // pixels (§3): a scene with no directional light is legal and shipped.
-        {
-            const QImage night = SceneMirror::bakeRealisticSky(iris::SkyRealistic::defaults(), W, H,
-                                                               false, iris::Vec3(0, 1, 0), false);
-            const QRgb npx = night.pixel(col, row);
-            const QRgb dpx = SceneMirror::bakeRealisticSky(iris::SkyRealistic::defaults(), W, H,
-                                                           false, towardsSun(40.0f), true).pixel(col, row);
-            std::printf("    no sun: %3d %3d %3d   vs a 40 deg sun: %3d %3d %3d\n",
-                        qRed(npx), qGreen(npx), qBlue(npx), qRed(dpx), qGreen(dpx), qBlue(dpx));
-            CHECK(!night.isNull() && qRed(npx) + qGreen(npx) + qBlue(npx) <
-                                         qRed(dpx) + qGreen(dpx) + qBlue(dpx),
-                  "a realistic sky with no directional light bakes the model's night");
-        }
-        doc->getRootNode()->removeChild(detailSun);
+        view->readPixels(img);
+        const Colour thin = centre(img);
+        doc->skyRealistic.density = 0.8f;
+        mirror.sync(); mirror.applySky(view);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("analytic sky, dense", img);
+        const Colour dense = centre(img);
+        const float densityDelta = std::fabs(dense.r - thin.r) + std::fabs(dense.g - thin.g) +
+                                   std::fabs(dense.b - thin.b);
+        std::printf("    density 0.2 vs 0.8 moved the horizon by %.3f\n", densityDelta);
+        CHECK(densityDelta > 0.05f, "the Density dial visibly changes the sky");
+        doc->skyRealistic = iris::SkyRealistic::defaults();
+
+        // A SKY WITH NO SUN is the model's own night, not a crash and not a
+        // failed texture (§3): a scene with no directional light is legal.
+        doc->getRootNode()->removeChild(skySun);
+        mirror.sync(); mirror.applySky(view);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("analytic sky, no sun", img);
+        const Colour night = centre(img);
+        std::printf("    no sun: %.3f %.3f %.3f   vs a 40 deg sun: %.3f %.3f %.3f\n",
+                    night.r, night.g, night.b, dense.r, dense.g, dense.b);
+        CHECK(night.r + night.g + night.b < dense.r + dense.g + dense.b,
+              "an analytic sky with no directional light draws the model's night");
         mirror.sync();
-        doc->skyBakeResolution = 256;
     }
 
     // ---- sky-driven ambient / diffuse IBL (VISUAL_PARITY_SPEC item 3b) -----
@@ -1263,9 +1185,12 @@ int main(int argc, char **argv)
             }
             eq.save(flipSkyPath);
         }
-        // The integral is now 9 SH bands; evaluate them for +Y and -Y (the basis
-        // is {1, y, z, x, ...}, so a normal along +-Y is the constant band plus
-        // or minus the y band, plus what band 2 says at z = 0).
+        // THE INTEGRAL IS THE ENGINE'S NOW (SKY-GPU): it captures the sky it
+        // drew into a cubemap and integrates that, so the assertion is made
+        // where the answer lives — Scene::skyAmbientSh, after the sky has been
+        // pushed and a frame has rendered (the capture runs inside a frame,
+        // like the IBL convolution). Evaluate the 9 bands for +Y and -Y (the
+        // basis is {1, y, z, x, ...}).
         const auto evalSh = [](const float sh[27], float x, float y, float z, int c) {
             const float b[9] = { 1.0f, y, z, x, x * y, y * z, 3.0f * z * z - 1.0f, z * x,
                                  x * x - y * y };
@@ -1273,19 +1198,26 @@ int main(int argc, char **argv)
             for (int i = 0; i < 9; ++i) sum += sh[i * 3 + c] * b[i];
             return sum;
         };
+        const auto skyShOf = [&](const QString &path, float sh[27]) {
+            doc->setSkyTexture(iris::Texture2D::load(path));
+            doc->skyType = iris::SkyType::EQUIRECTANGULAR;
+            mirror.applySky(view);
+            for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            return target->skyAmbientSh(sh);
+        };
         float sh[27] = { 0.0f };
-        CHECK(SceneMirror::integrateSkyAmbientSh(QImage(redSkyPath), sh),
-              "a sky image integrates to spherical harmonics");
+        CHECK(skyShOf(redSkyPath, sh), "the engine integrates the sky it drew");
         const float upR = evalSh(sh, 0, 1, 0, 0), upG = evalSh(sh, 0, 1, 0, 1),
                     upB = evalSh(sh, 0, 1, 0, 2), loR = evalSh(sh, 0, -1, 0, 0);
         std::printf("    sky ambient SH: up %.3f %.3f %.3f   down(r) %.3f\n", upR, upG, upB, loR);
         CHECK(upR > 0.5f && upG < 0.05f && upB < 0.05f, "a normal facing up sees red");
         CHECK(loR < 0.05f, "a normal facing down stays dark (the split is oriented correctly)");
         // Row 0 of an equirect is the ZENITH: flipping the image must swap the
-        // two hemispheres, not leave them alone.
+        // two hemispheres, not leave them alone. This is also the check that the
+        // captured cube's faces are oriented the way the integral assumes —
+        // upside down, it would answer exactly backwards.
         float fsh[27] = { 0.0f };
-        CHECK(SceneMirror::integrateSkyAmbientSh(QImage(flipSkyPath), fsh),
-              "the flipped sky integrates too");
+        CHECK(skyShOf(flipSkyPath, fsh), "the flipped sky integrates too");
         const float fupR = evalSh(fsh, 0, 1, 0, 0), floR = evalSh(fsh, 0, -1, 0, 0);
         std::printf("    flipped sky ambient SH: up(r) %.3f   down(r) %.3f\n", fupR, floR);
         CHECK(fupR < 0.05f && floR > 0.5f,
@@ -1298,6 +1230,7 @@ int main(int argc, char **argv)
         // and compare against a flat grey Ambient Color, neither of which exists).
         doc->setSkyTexture(iris::Texture2D::load(redSkyPath));
         doc->skyType = iris::SkyType::EQUIRECTANGULAR;
+        mirror.applySky(view);
         auto docSkyLight = iris::LightNode::create();
         docSkyLight->setName("Sky Light");
         docSkyLight->lightType = iris::LightType::Sky;
@@ -1316,14 +1249,23 @@ int main(int argc, char **argv)
         mirror.applyCamera(cam, view);
         mirror.applySky(view);
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        // THE ENVIRONMENT LANDS ONE FRAME AFTER THE SKY (SKY-GPU), exactly like
+        // the IBL convolution: the capture runs inside a rendered frame, so the
+        // ambient a host reads is the sky of the frame before. Hosts push it
+        // every frame (applyEnvironment is per-frame work); a test that pushes
+        // once and renders would be reading the PREVIOUS sky's light.
+        const auto settleEnv = [&](int frames) {
+            for (int i = 0; i < frames; ++i) {
+                mirror.applyEnvironment(view, engine.get());
+                engine->renderOneFrame();
+            }
+        };
+        settleEnv(3);
         view->readPixels(img); show("matte cube, sky light ON", img);
         const Colour skyLit = centre(img);
         docSkyLight->setVisible(false);
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        settleEnv(3);
         view->readPixels(img); show("matte cube, sky light HIDDEN", img);
         const Colour noAmbient = centre(img);
         docSkyLight->setVisible(true);
@@ -1344,8 +1286,7 @@ int main(int argc, char **argv)
         doc->setSkyTexture(iris::Texture2D::load(flipSkyPath));
         mirror.applySky(view);
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        settleEnv(3);
         view->readPixels(img); show("matte cube, red BELOW", img);
         const Colour fromBelow = centre(img);
         std::printf("    cube top with the red under it: %.3f %.3f %.3f\n",
@@ -1464,13 +1405,21 @@ int main(int argc, char **argv)
         show("gradient sky + chrome cube (settled)", before);
         const SkyDesc settled = target->sky();
         const unsigned ws0 = view->workspaceGeneration();
-        std::printf("    sky desc: mode=%d equirect=%u reflections=%d faces[0]=%u  ws gen %u\n",
-                    int(settled.mode), settled.equirect, settled.reflections ? 1 : 0,
-                    settled.reflectionFaces[0], ws0);
+        float settledSh[27] = { 0.0f };
+        std::printf("    sky desc: mode=%d equirect=%u  sky SH band0 %.3f %.3f %.3f  ws gen %u\n",
+                    int(settled.mode), settled.equirect,
+                    target->skyAmbientSh(settledSh) ? settledSh[0] : -1.0f, settledSh[1],
+                    settledSh[2], ws0);
         CHECK(settled.mode == SkyMode::Equirectangular && settled.equirect != 0,
               "a gradient sky bakes to an equirect image the engine holds");
-        CHECK(settled.reflections && settled.reflectionFaces[0] != 0,
-              "...and to six reflection faces (the IBL a cubemap sky gets for free)");
+        // THE HOST NO LONGER RESAMPLES ANYTHING (SKY-GPU): the reflection half
+        // of the description is empty because the ENGINE captures the sky it
+        // drew into a cubemap and convolves that. The proof is the chrome cube
+        // below (and the metal cube above), plus the integral being non-zero.
+        CHECK(!settled.reflections && settled.reflectionFaces[0] == 0,
+              "...and the host pushes no reflection faces: the engine captures its own sky");
+        CHECK(target->skyAmbientSh(settledSh) && settledSh[0] > 0.0f,
+              "...which it also integrates for the ambient");
         for (int i = 0; i < 5; ++i) {
             mirror.applySky(view);
             mirror.applyEnvironment(view, engine.get());

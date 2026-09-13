@@ -42,11 +42,11 @@ QVariant captureSky(const ScenePtr &s)
     m["gradientMid"] = s->gradientMid;
     m["gradientBot"] = s->gradientBot;
     m["gradientOffset"] = s->gradientOffset;
-    m["luminance"] = s->skyRealistic.luminance;
-    m["reileigh"] = s->skyRealistic.reileigh;
-    m["mieCoefficient"] = s->skyRealistic.mieCoefficient;
-    m["mieDirectionalG"] = s->skyRealistic.mieDirectionalG;
-    m["turbidity"] = s->skyRealistic.turbidity;
+    m["density"] = s->skyRealistic.density;
+    m["diffusion"] = s->skyRealistic.diffusion;
+    m["horizon"] = s->skyRealistic.horizon;
+    m["power"] = s->skyRealistic.power;
+    m["skyColour"] = s->skyRealistic.skyColour;
     return m;
 }
 
@@ -64,11 +64,11 @@ void applySky(const ScenePtr &s, const QVariant &value)
     s->gradientMid = m.value("gradientMid").value<QColor>();
     s->gradientBot = m.value("gradientBot").value<QColor>();
     s->gradientOffset = m.value("gradientOffset").toFloat();
-    s->skyRealistic.luminance = m.value("luminance").toFloat();
-    s->skyRealistic.reileigh = m.value("reileigh").toFloat();
-    s->skyRealistic.mieCoefficient = m.value("mieCoefficient").toFloat();
-    s->skyRealistic.mieDirectionalG = m.value("mieDirectionalG").toFloat();
-    s->skyRealistic.turbidity = m.value("turbidity").toFloat();
+    s->skyRealistic.density = m.value("density").toFloat();
+    s->skyRealistic.diffusion = m.value("diffusion").toFloat();
+    s->skyRealistic.horizon = m.value("horizon").toFloat();
+    s->skyRealistic.power = m.value("power").toFloat();
+    s->skyRealistic.skyColour = m.value("skyColour").value<QColor>();
 }
 
 QVector<sceneprops::Field> buildFields()
@@ -108,6 +108,8 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->fogDensity = v.toFloat(); });
     add("fogHeightDensity", [](const ScenePtr &s) { return QVariant(s->fogHeightDensity); },
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightDensity = v.toFloat(); });
+    add("fogAtmosphere", [](const ScenePtr &s) { return QVariant(s->fogAtmosphere); },
+        [](const ScenePtr &s, const QVariant &v) { s->fogAtmosphere = v.toBool(); });
     add("fogHeightFalloff", [](const ScenePtr &s) { return QVariant(s->fogHeightFalloff); },
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightFalloff = v.toFloat(); });
     add("fogHeightLevel", [](const ScenePtr &s) { return QVariant(s->fogHeightLevel); },

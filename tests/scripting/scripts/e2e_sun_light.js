@@ -113,7 +113,7 @@ throws(function () { world.sunLight(lamp); }, "sunLight rejects a POINT light (o
 assert(world.sunLight() === sun, "a refused pin changes nothing");
 
 // ---- THE SUN DRIVES THE SKY (D15), and the old dials are REFUSED ----------
-world.sky("realistic", { turbidity: 4 });
+world.sky("realistic", { density: 0.5 });
 throws(function () { world.sky("realistic", { azimuth: 90 }); },
        "world.sky refuses 'azimuth' by name");
 throws(function () { world.sky("realistic", { elevation: 60 }); },
@@ -159,7 +159,7 @@ assert(Math.abs(aheadLum - behindLum) > 8,
 // A HAND-SET ROTATION IS NEVER OVERWRITTEN. The old coupling rewrote it from
 // the sky every frame; nothing does now.
 node.transform(sun, { rotation: { x: -33, y: 12, z: 0 } });
-world.sky("realistic", { turbidity: 9 });
+world.sky("realistic", { density: 0.9 });
 editor.frame(10, 1 / 60);
 near(node.info(sun).rotation.x, -33, 0.01, "a sky edit never moves the sun light");
 world.sunDisc({ visible: true });
@@ -208,7 +208,7 @@ assert(world.sunLight() === "", "world.sunLight() answers empty, not an error");
 assert(world.shadowStatus().sun === "", "world.shadowStatus().sun is empty too");
 // A REALISTIC SKY WITH NO SUN is legal: the model bakes its own night and
 // nothing warns (the analytic sky has no sun-less daylight).
-world.sky("realistic", { turbidity: 3 });
+world.sky("realistic", { density: 0.4 });
 assert(world.sun().light === "", "a realistic sky in a sunless scene still has no sun");
 // And it is NOT an issue: nothing to fix here.
 var checked = editor.checkScene();

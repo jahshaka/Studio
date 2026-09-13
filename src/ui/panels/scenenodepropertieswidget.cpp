@@ -86,13 +86,12 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	//
 	// DEFECT, owner-reported 2026-09-06 and fixed here: this list used to stop
 	// at Anti-Aliasing / Shadows / Global Illumination — and the SKY section
-	// displays two World Mode rows of its own, "Sky Detail"
-	// (scene->skyBakeResolution) and "Ambient From Sky"
-	// (scene->ambientFromSky). Both are written through by setMode(), neither
-	// was refreshed, so switching Epic -> High changed the document and left
-	// the Sky rows showing the OLD tier. The panel was the only way to see what
-	// a mode did, and for those two rows it was lying. Anything that grows a
-	// world-mode-backed row belongs in this list.
+	// displayed two World Mode rows of its own, "Sky Detail" and "Ambient From
+	// Sky". Both were written through by setMode(), neither was refreshed, so
+	// switching Epic -> High changed the document and left the Sky rows showing
+	// the OLD tier. (Both rows are gone now — the ambient one with D14, the
+	// detail one with the CPU sky bake — but the rule stands: anything that
+	// grows a world-mode-backed row belongs in this list.)
 	connect(worldModesPropView, &WorldModesPropertyWidget::worldSettingsChanged,
 	        this, [this]() {
 		auto sc = scene;
