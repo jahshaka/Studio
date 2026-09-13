@@ -451,6 +451,16 @@ private:
     void setScene(QSharedPointer<iris::Scene> scene);
     void updateGizmoTransform();    // @TODO - move this into updateSceneSettings
 
+    /// IMMERSIVE FULLSCREEN IS TWO THINGS — a window state and a set of hidden
+    /// docks — and the window state can be left without this class being asked
+    /// (RR2, 2026-09-14): `app.resizeWindow()` calls showNormal() before it
+    /// resizes, and a window manager's own control does the same. The flag then
+    /// said "fullscreen" while the window was not, so the next F11 (and
+    /// `editor.fullscreen(true)`, which is idempotent against the flag) did
+    /// nothing at all — F11 was dead until it was pressed twice. This watches
+    /// the state it does not own and puts the chrome back.
+    void changeEvent(QEvent *event) override;
+
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -600,6 +610,11 @@ public slots:
     void toggleLightWires(bool state);
     void toggleGrid(bool state);
     void toggleImmersiveFullscreen();
+    /// The LEAVE half of the toggle above, callable on its own. `restoreWindow`
+    /// is false when the window state has already been changed by somebody else
+    /// (changeEvent's case): the docks and the flag come back, the window is
+    /// left exactly as it was found.
+    void leaveImmersiveFullscreen(bool restoreWindow);
     void toggleDebugDrawer(bool state);
     void showProjectManagerInternal();
 
