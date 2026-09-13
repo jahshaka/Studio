@@ -87,15 +87,37 @@ int main(int argc, char **argv)
         CHECK(writes() == before, "200 camera writes move the epoch by ZERO");
     }
 
-    // 3. THE EXCEPTION. A camera that carries something moves that something.
+    // 3. THE ENGINE'S OWN CHILDREN ARE NOT CONTENT (round-2 review, item 2).
+    //    The two trees are one, and the mirror hangs a WIRE NODE off every
+    //    non-view camera with a visible body (and a -Y adapter off every light,
+    //    and a projector box off every decal). Those carry no document node,
+    //    nothing scans them, and they move only because we moved them — so a
+    //    camera that has them is still the viewer. Counting Ogre's children
+    //    instead of the document's un-exempted the play-mode subject and every
+    //    cinematic camera, which is the whole of the cost this removes.
+    {
+        const iris::graph::NodeHandle wire =
+            iris::graph::createNode(iris::graph::sceneOf(cam->graphNode()), cam->graphNode(),
+                                    nullptr);
+        CHECK(wire != nullptr, "an ENGINE child (a camera body wire) hangs off the camera");
+        CHECK(iris::graph::childCount(cam->graphNode()) == 1u, "...and Ogre sees it as a child");
+        const unsigned long long before = writes();
+        for (int i = 0; i < 50; ++i) fly(cam, float(i));
+        CHECK(writes() == before,
+              "a camera with the ENGINE's own child is still not scene movement");
+        iris::graph::destroyNode(wire);
+    }
+
+    // 4. THE EXCEPTION. A camera that carries something of the DOCUMENT's moves
+    //    that something.
     {
         auto carried = iris::MeshNode::create();
         cam->addChild(carried);
         const unsigned long long before = writes();
         fly(cam, 7.0f);
-        CHECK(writes() > before, "a camera WITH A CHILD counts again (it moves the child)");
+        CHECK(writes() > before, "a camera WITH A DOCUMENT CHILD counts again (it moves the child)");
 
-        // 4. ...and the moment the child goes, the camera is free again.
+        // 5. ...and the moment the child goes, the camera is free again.
         carried->removeFromParent();
         const unsigned long long after = writes();
         for (int i = 0; i < 50; ++i) fly(cam, float(i));
