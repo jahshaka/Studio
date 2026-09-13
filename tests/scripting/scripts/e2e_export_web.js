@@ -65,6 +65,20 @@ assert(r.extensions.indexOf("KHR_materials_transmission") >= 0,
 assert(r.extensions.indexOf("KHR_materials_ior") >= 0,
        "refractive glass carries an index of refraction");
 
+// ---- the SKY LIGHT is not a punctual light (SKY_LIGHT_SPEC.md §2) ----------
+// KHR_lights_punctual has three types and none of them is a sky, so the scene's
+// skylight must produce NO node and NO punctual light and must arrive in the
+// scene extras instead. This scene HAS one — every scene does — so the counts
+// above already ran with it present; this reads the file to say so outright.
+var sky = world.skyLight();
+assert(sky.light !== "", "the scene carries a Sky Light");
+var lightsBefore = r.lights, nodesBefore = r.nodes;
+node.setProperty(sky.light, "intensity", 1.75);
+var rSky = project.exportWeb(r.dir + "-skylight");
+assert(rSky.lights === lightsBefore,
+       "a Sky Light adds no punctual light to the export (" + rSky.lights + ")");
+assert(rSky.nodes === nodesBefore, "...and no node either (" + rSky.nodes + ")");
+
 // ---- publish.state() after an export at the conventional path ----
 // exportWeb with no argument writes <project>/exports/web — the SAME path the
 // Publish page owns — so the record's backfill (a publish older than the

@@ -290,6 +290,10 @@ void WorldGiPropertyWidget::rebuild()
         int row = 0, current = 0;
         for (const auto &light : scene->lights) {
             if (light.isNull()) continue;
+            // NOT a Sky Light: it has no position to bounce FROM — it is the
+            // ambient (SKY_LIGHT_SPEC.md §2), and the mirror's resolver skips
+            // it too. Offering it would be a row that does nothing.
+            if (light->lightType == iris::LightType::Sky) continue;
             lightSelector->addItem(light->getName(), light->getGUID());
             ++row;
             if (!scene->giLightGuid.isEmpty() && light->getGUID() == scene->giLightGuid)

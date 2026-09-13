@@ -122,8 +122,10 @@ int main(int argc, char **argv)
     doc->giNumBounces = 2;
     doc->giPccGrid = iris::Vec3(2, 1, 2);          // 4 probes: a short sweep
     doc->giUpdateBudget = 0;                       // phase C first; raised below
-    doc->ambientColor = QColor(0, 0, 0);
-    doc->ambientFromSky = false;
+    // ZERO AMBIENT is now "no Sky Light in the document" (SKY_LIGHT_SPEC.md §6):
+    // ambient is the skylight and nothing else, so a scene with no Sky Light
+    // pushes 27 zeros — which is exactly what the two lines that used to stand
+    // here (ambientColor black + ambientFromSky off) were spelling out.
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
     // Pinned bounds, like every suite in this directory that is not about the

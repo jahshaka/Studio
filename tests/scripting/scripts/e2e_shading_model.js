@@ -73,7 +73,7 @@ function faceColour(name) {
 }
 var lit = faceColour("shading_lit.png");
 console.log("    " + show("LIT", lit));
-assert(!(near(lit.r, 0, 12) && near(lit.g, 204, 12) && near(lit.b, 34, 12)),
+assert(!(near(lit.r, 0, 12) && near(lit.g, 154, 12) && near(lit.b, 8, 12)),
        "the LIT control is SHADED, not the raw authored colour " + show("", lit));
 
 var pushesBefore = editor.undoState().pushes;
@@ -86,8 +86,13 @@ assert(editor.undoState().pushes === pushesBefore + 1,
 
 var unlit = faceColour("shading_unlit.png");
 console.log("    " + show("UNLIT", unlit));
-assert(near(unlit.g, 204, 10) && unlit.r < 40 && unlit.b < 70,
-       "an unlit surface renders its AUTHORED colour " + show("", unlit));
+// RE-BASELINED (SKY_LIGHT_SPEC.md §4): 204 was the raw 8-bit value. A colour a
+// user PICKED is sRGB and enters the renderer linear now, unlit included, so
+// 204 arrives as 0.604 — 154 in this linear readback. The assertion is the same
+// one: unshaded, and the colour the author picked rather than a lit version of
+// it.
+assert(near(unlit.g, 154, 10) && unlit.r < 40 && unlit.b < 70,
+       "an unlit surface renders its AUTHORED colour, decoded " + show("", unlit));
 assert(Math.abs(unlit.g - lit.g) > 10 || Math.abs(unlit.r - lit.r) > 10,
        "...and it is visibly not the shaded image");
 
@@ -103,7 +108,7 @@ assert(near(kept.roughness, 0.17) && near(kept.metallic, 0.83) && near(kept.norm
        near(kept.clearCoat, 0.62) && kept.brdf === 1 && kept.receiveShadows === false,
        "every ignored value is stored verbatim while the model is Unlit");
 var stillUnlit = faceColour("shading_unlit2.png");
-assert(near(stillUnlit.g, 204, 10) && stillUnlit.r < 40,
+assert(near(stillUnlit.g, 154, 10) && stillUnlit.r < 40,
        "...and none of them changed what an unlit surface draws " + show("", stillUnlit));
 
 // ---- 6. save / close / open ----
@@ -123,7 +128,7 @@ assert(near(after.roughness, 0.17) && near(after.clearCoat, 0.62) && after.brdf 
 cube = reopened;
 var reopenedShot = faceColour("shading_unlit3.png");
 console.log("    " + show("UNLIT after reopen", reopenedShot));
-assert(near(reopenedShot.g, 204, 12) && reopenedShot.r < 40,
+assert(near(reopenedShot.g, 154, 12) && reopenedShot.r < 40,
        "a reopened project builds the material in the Unlit family DIRECTLY " +
        show("", reopenedShot));
 
@@ -131,7 +136,7 @@ assert(near(reopenedShot.g, 204, 12) && reopenedShot.r < 40,
 assert(material.set(reopened, { shadingModel: 0 }), "material.set back to Lit");
 var relit = faceColour("shading_relit.png");
 console.log("    " + show("RELIT", relit));
-assert(!(near(relit.g, 204, 10) && relit.r < 40),
+assert(!(near(relit.g, 154, 10) && relit.r < 40),
        "back on Lit the surface is shaded again " + show("", relit));
 var end = material.get(reopened);
 assert(near(end.roughness, 0.17) && near(end.metallic, 0.83) && near(end.clearCoat, 0.62) &&

@@ -194,13 +194,18 @@ void AvatarPreviewModel::buildDocument()
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(28, 30, 36));
+    // A PREVIEW HAS NO SUN DISC (SKY_LIGHT_SPEC.md round-2 review item 9). Every
+    // preview document carries a colour sky, which is a REAL sky now — so it
+    // bakes a strip, six reflection faces and an IBL convolution, and would draw
+    // the disc wherever the preview's own light happens to point. A thumbnail is
+    // a photograph of an ASSET, not of a world with a sun in it.
+    mDocument->sunDiscVisible = false;
     // NOTE: the room's ambient is the ENGINE scene's hemisphere
     // (AvatarPreviewScene::configureScene), not this: a preview host syncs the
-    // mirror but never calls applyEnvironment, so the World-panel ambient of a
-    // preview document reaches nothing. Kept as the document's own value for
-    // anything that reads the document (and measured as dead for the picture,
-    // smoke S10).
-    mDocument->setAmbientColor(QColor(70, 70, 78));
+    // mirror but never calls applyEnvironment, so a preview document's ambient
+    // reaches nothing. The dead `setAmbientColor` write that used to stand here
+    // is GONE with the field (SKY_LIGHT_SPEC.md §5) — it was measured as dead
+    // for the picture (smoke S10) and there is nothing to keep.
     mDocument->fogEnabled = false;
 
     // THE PAGE'S GRADE, pinned on its own document (smoke S10, avatarspace.h):

@@ -47,9 +47,6 @@ QVariant captureSky(const ScenePtr &s)
     m["mieCoefficient"] = s->skyRealistic.mieCoefficient;
     m["mieDirectionalG"] = s->skyRealistic.mieDirectionalG;
     m["turbidity"] = s->skyRealistic.turbidity;
-    m["sunPosX"] = s->skyRealistic.sunPosX;
-    m["sunPosY"] = s->skyRealistic.sunPosY;
-    m["sunPosZ"] = s->skyRealistic.sunPosZ;
     return m;
 }
 
@@ -72,9 +69,6 @@ void applySky(const ScenePtr &s, const QVariant &value)
     s->skyRealistic.mieCoefficient = m.value("mieCoefficient").toFloat();
     s->skyRealistic.mieDirectionalG = m.value("mieDirectionalG").toFloat();
     s->skyRealistic.turbidity = m.value("turbidity").toFloat();
-    s->skyRealistic.sunPosX = m.value("sunPosX").toFloat();
-    s->skyRealistic.sunPosY = m.value("sunPosY").toFloat();
-    s->skyRealistic.sunPosZ = m.value("sunPosZ").toFloat();
 }
 
 QVector<sceneprops::Field> buildFields()
@@ -85,8 +79,16 @@ QVector<sceneprops::Field> buildFields()
     };
 
     // ---- World section ----------------------------------------------------
-    add("ambientColor", [](const ScenePtr &s) { return QVariant(s->ambientColor); },
-        [](const ScenePtr &s, const QVariant &v) { s->setAmbientColor(v.value<QColor>()); });
+    // (`ambientColor` is GONE, SKY_LIGHT_SPEC §5: ambient is the Sky Light's
+    // intensity and tint, which are LIGHT-NODE properties and go through
+    // SetNodePropertyCommand like every other light's rows.)
+    // THE SUN PIN and THE SUN DISC — scene-level rows the World panel writes.
+    add("sunLight", [](const ScenePtr &s) { return QVariant(s->sunLightGuid); },
+        [](const ScenePtr &s, const QVariant &v) { s->sunLightGuid = v.toString(); });
+    add("sunDiscVisible", [](const ScenePtr &s) { return QVariant(s->sunDiscVisible); },
+        [](const ScenePtr &s, const QVariant &v) { s->sunDiscVisible = v.toBool(); });
+    add("sunDiscInProbes", [](const ScenePtr &s) { return QVariant(s->sunDiscInProbes); },
+        [](const ScenePtr &s, const QVariant &v) { s->sunDiscInProbes = v.toBool(); });
     // setWorldGravity, never the raw field: it drives the Bullet world too.
     add("gravity", [](const ScenePtr &s) { return QVariant(s->gravity); },
         [](const ScenePtr &s, const QVariant &v) { s->setWorldGravity(v.toFloat()); });

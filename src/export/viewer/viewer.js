@@ -110,7 +110,14 @@
             skyMesh.rayleigh.value = sky.rayleigh !== undefined ? sky.rayleigh : 1;
             skyMesh.mieCoefficient.value = sky.mieCoefficient !== undefined ? sky.mieCoefficient : 0.005;
             skyMesh.mieDirectionalG.value = sky.mieDirectionalG !== undefined ? sky.mieDirectionalG : 0.8;
-            if (sky.sunPosition) skyMesh.sunPosition.value.set(sky.sunPosition[0], sky.sunPosition[1], sky.sunPosition[2]);
+            // THE SKY FOLLOWS THE SUN LIGHT (SKY_LIGHT_SPEC.md §3): the
+            // exporter writes the direction the scene's sun TRAVELS, and the
+            // sun's position is the reverse of it, out at the model's radius.
+            if (sky.sunDirection) {
+                skyMesh.sunPosition.value.set(-sky.sunDirection[0] * 450000,
+                                              -sky.sunDirection[1] * 450000,
+                                              -sky.sunDirection[2] * 450000);
+            }
             scene.add(skyMesh);
         } else {
             scene.background = new THREE.Color(sky.color || "#3498db");
@@ -120,6 +127,16 @@
     function buildFromUserData(root, sceneUserData) {
         var jah = sceneUserData && sceneUserData.jah ? sceneUserData.jah : {};
         applySky(jah);
+        // THE SKY LIGHT (SKY_LIGHT_SPEC.md §2). KHR_lights_punctual has no sky
+        // type, so the editor's skylight rides in the `jah` extras and lands
+        // here as three's ambient term — the closest thing in the viewer to
+        // "the sky lights everything". No Sky Light in the scene = no ambient,
+        // exactly as in the editor.
+        if (jah.skyLight) {
+            var tint = new THREE.Color(jah.skyLight.tint || "#ffffff");
+            scene.add(new THREE.AmbientLight(tint,
+                jah.skyLight.intensity !== undefined ? jah.skyLight.intensity : 1));
+        }
         if (jah.fog) {
             // Exponential fog, like the editor. exp2Density is the exporter's
             // conversion of the editor's 2^(-density*d) into three's

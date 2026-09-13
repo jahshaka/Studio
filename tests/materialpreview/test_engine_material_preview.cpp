@@ -40,7 +40,11 @@ static int failures = 0;
 // The preview's default background is the legacy grey (125,125,125): no hue.
 static bool isGrey(const Colour &c)
 {
-    return std::fabs(c.r - c.g) < 0.05f && std::fabs(c.g - c.b) < 0.05f && c.r > 0.3f && c.r < 0.7f;
+    // RE-BASELINED (SKY_LIGHT_SPEC.md §4): the preview's 125-grey sky is a
+    // COLOUR a user could have picked and is decoded sRGB->linear like every
+    // other one, so it reaches this linear readback at 0.202 rather than 0.49.
+    // Still "a neutral grey backdrop", at the value it now has.
+    return std::fabs(c.r - c.g) < 0.05f && std::fabs(c.g - c.b) < 0.05f && c.r > 0.12f && c.r < 0.32f;
 }
 static bool isRed(const Colour &c)   { return c.r > 0.12f && c.r > c.b * 1.5f && c.r > c.g * 1.5f; }
 static bool isGreen(const Colour &c) { return c.g > 0.12f && c.g > c.r * 1.5f && c.g > c.b * 1.5f; }

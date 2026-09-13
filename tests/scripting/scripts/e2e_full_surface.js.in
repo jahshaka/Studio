@@ -12,13 +12,18 @@ var guid = project.create("Full Surface " + Date.now());
 assert(guid.length > 10, "project created");
 
 // ---- world.* ----
-world.ambient("#404040");
+// Ambient is a SKY LIGHT (SKY_LIGHT_SPEC.md §2): world.ambient is gone, and the
+// strength/tint are ordinary light properties on the node the scene ships with.
+var skyLight0 = world.skyLight();
+assert(skyLight0.light !== "", "a new scene ships with a Sky Light");
+node.setProperty(skyLight0.light, "intensity", 1.4);
 world.fog({ enabled: true, color: "#a0a0a0", start: 50, end: 150 });
 world.gravity(12);
 world.gi({ mode: "instant_radiosity", quality: "high", bounces: 2 });
 world.shadows({ enabled: true });
 var w = world.get();
-assert(w.ambient === "#404040", "ambient round-trips");
+assert(w.skyLight.light !== "" && near(w.skyLight.intensity, 1.4, 0.001),
+       "the Sky Light and its strength round-trip through world.get()");
 assert(w.fog.enabled === true && near(w.fog.start, 50) && near(w.fog.end, 150), "fog round-trips");
 // Fog is exponential: `end` is kept as the linear pair's convenience and SETS the
 // density (4.32/end = the distance where the old linear fog was total).
@@ -53,22 +58,18 @@ var thrown = false;
 try { world.sky("volumetric"); } catch (e) { thrown = true; }
 assert(thrown, "unknown sky type refused");
 
-// ---- realistic sky by azimuth/elevation (VISUAL_PARITY_SPEC item 1) ----
-world.sky("realistic", { azimuth: 217.5, elevation: 12.5, turbidity: 6, detail: 512 });
+// ---- the realistic sky, whose SUN is the scene's directional light (D15) ----
+world.sky("realistic", { turbidity: 6, detail: 512 });
 sky = world.get().sky;
 assert(sky.type === "Realistic", "realistic sky type set");
-assert(near(sky.azimuth, 217.5, 0.05) && near(sky.elevation, 12.5, 0.05),
-       "sun azimuth/elevation round-trip (" + sky.azimuth + ", " + sky.elevation + ")");
 assert(near(sky.data.turbidity, 6), "turbidity reaches skyData (save-safe)");
 assert(sky.detail === 512, "Sky Detail (bake width) round-trips");
-// The stored truth is still the sun VECTOR, on the model's 450000 scale.
-assert(Math.abs(sky.data.sunPosY) > 90000, "elevation wrote sunPosY on the model's scale");
+assert(sky.azimuth === undefined && sky.elevation === undefined,
+       "the sky has no sun dials of its own any more");
 
-// ---- sky-driven ambient (VISUAL_PARITY_SPEC item 3b) ----
-assert(world.get().ambientFromSky === true, "sky-driven ambient is on by default");
-world.ambientFromSky(false);
-assert(world.get().ambientFromSky === false, "ambientFromSky can be turned off");
-world.ambientFromSky(true);
+// ---- the sun disc, a WORLD setting (SKY_LIGHT_SPEC.md §3, owner pick 4) ----
+assert(world.sunDisc().visible === true, "the sun disc is on by default");
+assert(world.sunDisc().inProbes === false, "...and out of the probe captures");
 
 // ---- world anti-aliasing (WORLD_AA_SPEC.md phase 1) ----
 // A new scene starts on the Epic World Mode (POST_CHAIN_SPEC §12 decision 8),
@@ -224,12 +225,10 @@ assert(world.antiAliasing() === 4, "reloaded scene achieves 4x again");
 // The VISUAL_PARITY_SPEC lane-A fields ride the same serializer block.
 var reloaded = world.get();
 assert(reloaded.shadowResolution === 2048, "shadowResolution round-trips through save/load");
-assert(reloaded.ambientFromSky === true, "ambientFromSky round-trips through save/load");
 assert(reloaded.sky.type === "Realistic" && reloaded.sky.detail === 512,
        "realistic sky + Sky Detail round-trip through save/load");
-assert(near(reloaded.sky.azimuth, 217.5, 0.05) && near(reloaded.sky.elevation, 12.5, 0.05),
-       "sun azimuth/elevation survive save/load (" + reloaded.sky.azimuth + ", " +
-       reloaded.sky.elevation + ")");
+assert(reloaded.skyLight.light !== "" && near(reloaded.skyLight.intensity, 1.4, 0.001),
+       "the Sky Light and its strength round-trip through save/load");
 assert(world.shadowResolution() === 2048, "the reloaded scene drives the renderer's atlas");
 world.setAntiAliasing(1);   // leave the scratch project the way defaults expect
 world.setShadowResolution(0);

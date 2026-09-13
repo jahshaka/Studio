@@ -40,7 +40,7 @@
 #include "commands/setnodepropertycommand.h"
 #include "commands/staticstate.h"
 #include "commands/structuralundo.h"
-#include "commands/sunlightlinkcommand.h"
+#include "commands/scenepropertycommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
@@ -281,85 +281,41 @@ int main(int argc, char **argv)
               "reinstate: a matching, detached live node is usable");
     }
 
-    // ---- SunLightLinkCommand: the sun coupling is ONE undo step (F5) --------
-    // Two decisions since the sun lane (SUN_AND_LIGHT_DEFAULTS Q1/Q1e), and the
-    // command carries both: WHICH directional light is the sun (the pin), and
-    // whether the realistic sky's dials STEER it. They used to be one field, so
-    // picking a sun and letting the sky aim it could not be told apart.
-    //
-    // The STEERING is what moves a light, so it is the half with the rotation
-    // in it: an undo has to put back the switch AND the rotation the light had
-    // before it was driven, or "turning it off restores manual control"
-    // restores the control and leaves the light pointing wherever the sun last
-    // put it.
+    // ---- THE SUN PIN is ONE undo step, through the ordinary world row ------
+    // SunLightLinkCommand is DELETED (SKY_LIGHT_SPEC.md §5). It existed because
+    // the pin and the sky's STEERING were one edit that also moved a light's
+    // rotation; with the steering gone (D15 — the sky follows the sun, never the
+    // other way round) the pin is a plain scene field and goes through the same
+    // ScenePropertyCommand every other World-panel row writes.
     {
         auto scene = iris::Scene::create();
-        scene->skyType = iris::SkyType::REALISTIC;
-        scene->skyRealistic = iris::SkyRealistic::defaults();
-        scene->skyRealistic.setSunAngles(0.0f, 20.0f);
-
         auto sun = iris::LightNode::create();
         sun->setName(QStringLiteral("Sun"));
         sun->lightType = iris::LightType::Directional;
-        const iris::Quat authored = iris::Quat::fromEulerAngles(-12.0f, 33.0f, 0.0f);
-        sun->setLocalRot(authored);
         scene->getRootNode()->addChild(sun);
-
-        auto sameRot = [](const iris::Quat &a, const iris::Quat &b) {
-            const float dot = std::fabs(a.x() * b.x() + a.y() * b.y()
-                                      + a.z() * b.z() + a.scalar() * b.scalar());
-            return dot > 0.9999f;
-        };
-
-        QUndoStack stack;
-        CHECK(!scene->skyDrivesSun, "sun link: the sky steers nothing to start with");
-        CHECK(scene->sunLight() == sun, "sun link: the scene's one directional IS its sun");
-
-        stack.push(new SunLightLinkCommand(QStringLiteral("Sky Steers the Sun"), scene, true));
-        CHECK(stack.count() == 1, "sun link: turning the steering on is ONE undo step");
-        CHECK(scene->skyDrivesSun, "sun link: the scene says the sky steers");
-        CHECK(!sameRot(sun->getGlobalRotation(), authored),
-              "sun link: the light left its authored rotation");
-        const iris::Quat driven = sun->getGlobalRotation();
-
-        stack.undo();
-        CHECK(!scene->skyDrivesSun, "sun link: undo turns the steering off");
-        CHECK(sameRot(sun->getGlobalRotation(), authored),
-              "sun link: undo gives the light its authored rotation back");
-
-        stack.redo();
-        CHECK(scene->skyDrivesSun, "sun link: redo steers again");
-        CHECK(sameRot(sun->getGlobalRotation(), driven), "sun link: redo re-aims the light");
-
-        // Turning it off is its own step, and it does NOT snap the light
-        // anywhere: the user gets manual control of it where the sun left it.
-        stack.push(new SunLightLinkCommand(QStringLiteral("Sky Stops Steering the Sun"),
-                                           scene, false));
-        CHECK(!scene->skyDrivesSun, "sun unlink: the steering is off");
-        CHECK(sameRot(sun->getGlobalRotation(), driven),
-              "sun unlink: the light stays where the sun left it");
-        scene->skyRealistic.setSunAngles(180.0f, 70.0f);
-        CHECK(!scene->applySunCoupling(), "sun unlink: the sun no longer drives it");
-        CHECK(sameRot(sun->getGlobalRotation(), driven), "sun unlink: manual control really is manual");
-
-        stack.undo();
-        CHECK(scene->skyDrivesSun, "sun unlink: undo restores the steering");
-
-        // THE PIN is the other half, and it is a SEPARATE step that does not
-        // touch the steering: this is exactly what one field could not express.
         auto second = iris::LightNode::create();
         second->setName(QStringLiteral("Moon"));
         second->lightType = iris::LightType::Directional;
         second->forwardShadingPriority = 1;
         scene->getRootNode()->addChild(second);
-        stack.push(new SunLightLinkCommand(QStringLiteral("Pin Sun Light"), scene,
-                                           second->getGUID()));
+
+        QUndoStack stack;
+        CHECK(scene->sunLight() == sun, "sun pin: the lowest priority IS the sun to start with");
+        // The panel's own shape: APPLY, then record what changed (the command's
+        // first redo() is a no-op for exactly that reason).
+        const QVariant before = sceneprops::get(scene, QStringLiteral("sunLight"));
+        sceneprops::set(scene, QStringLiteral("sunLight"), QVariant(second->getGUID()));
+        stack.push(new ScenePropertyCommand(QStringLiteral("Pin Sun Light"), scene,
+                                            QStringLiteral("sunLight"), before,
+                                            sceneprops::get(scene, QStringLiteral("sunLight"))));
+        CHECK(stack.count() == 1, "sun pin: pinning is ONE undo step");
         CHECK(scene->sunLightGuid == second->getGUID(), "sun pin: the scene names the light");
         CHECK(scene->sunLight() == second, "sun pin: ...and it resolves as the sun");
-        CHECK(scene->skyDrivesSun, "sun pin: the steering is untouched by the pin");
         stack.undo();
         CHECK(scene->sunLightGuid.isEmpty(), "sun pin: undo drops the pin");
         CHECK(scene->sunLight() == sun, "sun pin: ...and the priority order decides again");
+        stack.redo();
+        CHECK(scene->sunLight() == second, "sun pin: redo pins it again");
     }
 
     if (failures) printf("\n%d of %d checks FAILED\n", failures, checks);

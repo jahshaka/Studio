@@ -43,7 +43,6 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "commands/worldmodecommand.h"
 #include "commands/scenepropertycommand.h"
-#include "commands/sunlightlinkcommand.h"
 #include "services/jahlog.h"
 #include "services/shippedassets.h"
 
@@ -220,9 +219,6 @@ const QStringList &giPlainKeys()
 QVector<VerbInfo> WorldApi::verbs() const
 {
     return {
-        { "ambient", "world.ambient(color) -> bool",
-          "Sets the ambient light colour (\"#rrggbb\" or {r,g,b}). One undo step — the World panel's own.",
-          Needs::Document },
         { "gravity", "world.gravity(value) -> bool",
           "Sets world gravity (drives the physics world too). One undo step — the World panel's own.",
           Needs::Document },
@@ -318,8 +314,11 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "setShadowResolution", "world.setShadowResolution(pixels) -> int",
           "Sets the scene's shadow-map atlas base resolution: 0 = Auto (derive from the largest per-light Shadow Size), otherwise 256..8192 pixels. There is ONE atlas for every light in the scene, sized R x 3.5R at 32-bit depth: 1024 costs ~14 MB, 2048 ~56 MB, 4096 ~224 MB, 8192 ~896 MB of VRAM. Returns the applied value after clamping.",
           Needs::Document },
-        { "ambientFromSky", "world.ambientFromSky(enabled) -> bool",
-          "Sky-driven ambient light: when on (the default), the ambient hemisphere colours are integrated from the live sky (equirect, gradient, realistic or cubemap) instead of being the flat Ambient Color; the Ambient Color then becomes the per-channel strength/tint of that sky ambient (white = full strength, black = none). Single-colour skies always use the flat colour.",
+        { "skyLight", "world.skyLight() -> {light, name, intensity, tint, reason, skyType, count}",
+          "THE SCENE'S SKYLIGHT — the light that reads the World sky and fills the scene with its diffuse ambient. There is no flat \"ambient colour\" any more: ambient IS a Sky Light, a light node of type \"sky\" (scene.addLight(\"sky\")), and a scene with no Sky Light has no ambient at all. `light`/`name` are the resolved one (the FIRST VISIBLE Sky Light in creation order) and `reason` says how it was chosen: \"first\", \"allHidden\" (every Sky Light in the scene is hidden — hiding one is how you switch the skylight off without deleting it) or \"none\". `intensity` is its strength (1.0 = the sky at full physical strength) and `tint` its colour, which multiplies the sky's own integral per channel. `skyType` is the sky it is reading and `count` how many Sky Lights the scene holds — more than one raises the `sky.duplicate` scene issue, because only the first lights anything. Both rows are ordinary light properties: node.property(id, \"intensity\", 2) doubles the skylight and is keyable.",
+          Needs::Document },
+        { "sunDisc", "world.sunDisc({visible, inProbes}) -> {visible, inProbes}",
+          "THE SUN DISC — the bright disc drawn in the sky where the scene's sun light points. It is the SUN's, not the sky's: one mechanism, drawn over EVERY sky type (colour, gradient, realistic, equirect, cubemap) at the angular size the sun light's Sun Angle row sets, and it moves when the light is rotated. `visible` (default true) is the scene-level switch. NOTE for image skies: an equirect or cubemap sky usually has a sun PAINTED into it, and the disc will only line up with it if you aim the sun light at it — otherwise the scene shows two suns, so either align the light or turn the disc off here. `inProbes` (default FALSE) says whether reflection-probe captures contain it: off, because the sun's energy already reaches glossy surfaces through the directional light's own specular highlight, and capturing the disc as well paints a SECOND sun on everything the probes light. Turn it on if you want probe-lit mirrors to show the disc. Called with no argument it reads. One undo step.",
           Needs::Document },
         { "planarReflections", "world.planarReflections() -> {enabled, budget, resolution, shadows, activeActors}",
           "Reads the scene's planar-reflection settings. 'budget' is how many mirror planes may render (the resolved value: a scene that never set one follows its World Mode). 'resolution' and 'shadows' are the per-plane render-target size and whether shadows are drawn inside the reflections; both report the value in force, derived from the budget when the scene has not pinned them. 'activeActors' is how many planes ACTUALLY rendered in the last frame — planes off screen are culled — and is 0 without a live engine viewport. Individual objects become mirror planes through node.setPlanarReflector.",
@@ -328,7 +327,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
-          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024). One call is one undo step (the sky block, a pinned detail, the texture it bound); a refused call changes nothing.",
+          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. THE SKY HAS NO SUN OF ITS OWN: the realistic sky's sun position, its haze and the sun disc are taken from the scene's SUN — the first directional light — so you place the sun by rotating that light, never with sky dials. The old azimuth/elevation/sunPosX/Y/Z/drivesSun parameters are gone and are refused by name. turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024). A sky with no directional light in the scene bakes the model's own night. Every sky now LIGHTS the scene through the Sky Light (world.skyLight), the single-colour sky included. One call is one undo step (the sky block, a pinned detail, the texture it bound); a refused call changes nothing.",
           Needs::Document },
         { "skyPresets", "world.skyPresets() -> [name]",
           "The shipped cube skies — the Presets panel's Skyboxes tab — by name, in the panel's order (Cove, Hamarikyu, Bay, Field, Creek, Space). Needs no project.",
@@ -348,11 +347,12 @@ QVector<VerbInfo> WorldApi::verbs() const
           "directional light) — not the pin, which most scenes leave empty. Given a node id it "
           "PINS that light as the sun, overriding the priority order; it must be a directional "
           "light. Given null, \"\" or \"auto\" it drops the pin and the priority order decides "
-          "again. One undo step either way. world.sun() is the same answer with its reasoning, the "
-          "secondaries and the sky link attached; the sky's Azimuth/Elevation dials steer the sun "
-          "only while world.sky(..., {drivesSun: true}).",
+          "again. One undo step either way. world.sun() is the same answer with its reasoning and "
+          "its secondaries attached. THE SKY FOLLOWS THIS LIGHT: the realistic sky's sun position, "
+          "its haze and the sun disc are all taken from wherever it points — rotate the light "
+          "(node.transform) and the sky moves with it.",
           Needs::Document },
-        { "sun", "world.sun() -> {light, name, explicit, reason, priority, castsShadows, skyDriven, secondaries, nextPriority}",
+        { "sun", "world.sun() -> {light, name, explicit, reason, priority, castsShadows, direction, secondaries, nextPriority}",
           "WHAT THE SUN IS AND WHY. `light`/`name` are the resolved primary directional light "
           "(empty when the scene has none, which is normal and not a warning); `explicit` says "
           "whether an author pinned it and `reason` how it was chosen — \"pinned\", \"priority\" "
@@ -362,10 +362,11 @@ QVector<VerbInfo> WorldApi::verbs() const
           "one: the renderer has a single directional shadow slot, so `secondaries` (every other "
           "directional, with its name and priority) light the scene fully and cast nothing. That "
           "used to be decided by engine creation order, silently and differently across reloads. "
-          "`skyDriven` is whether the realistic sky's sun dials aim it; `nextPriority` is the "
+          "`direction` is the world direction it travels (the realistic sky and the sun disc are "
+          "both placed from it — the sky has no sun dials of its own); `nextPriority` is the "
           "number the next directional light added to this scene will take.",
           Needs::Document },
-        { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
+        { "get", "world.get() -> {skyLight, sunDisc, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
@@ -413,8 +414,6 @@ QVector<VerbInfo> WorldApi::verbs() const
         // the noun; these exist so the obvious guess works. Each doc string
         // points at its twin and nowhere else — the arguments are documented
         // once, on the verb that implements them.
-        { "setAmbient", "world.setAmbient(color) -> bool",
-          "Alias of world.ambient — same arguments, same result.", Needs::Document },
         { "setGravity", "world.setGravity(value) -> bool",
           "Alias of world.gravity — same arguments, same result.", Needs::Document },
         { "setFog", "world.setFog({enabled, color, density, ...}) -> bool",
@@ -425,8 +424,6 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Alias of world.gi — same arguments, same result.", Needs::Document },
         { "setPhoton", "world.setPhoton({enabled, tier}) -> object",
           "Alias of world.photon — same arguments, same result.", Needs::Document },
-        { "setAmbientFromSky", "world.setAmbientFromSky(enabled) -> bool",
-          "Alias of world.ambientFromSky — same arguments, same result.", Needs::Document },
         { "setSky", "world.setSky(type, {...}) -> bool",
           "Alias of world.sky — same arguments, same result.", Needs::Document },
         { "setSunLight", "world.setSunLight(id|null) -> id",
@@ -449,22 +446,6 @@ iris::ScenePtr WorldApi::sceneOrFail(const QString &verb)
 // F8 (AI_SURFACE_AUDIT): every colour argument on this module used to keep the
 // scene's old value and answer `true` when it could not be parsed. They refuse
 // now — one shared sentence (scriptmod::colorHelp) says what IS accepted.
-bool WorldApi::ambient(const QVariant &color)
-{
-    auto scene = sceneOrFail(QStringLiteral("world.ambient"));
-    if (!scene) return false;
-    // An ABSENT argument keeps the current colour, as it always has — only a
-    // value that was GIVEN and not understood is refused.
-    if (!color.isValid() || color.isNull()) return true;
-    bool ok = false;
-    const QColor c = colorFromJs(color, scene->ambientColor, &ok);
-    if (!ok) return fail(QStringLiteral("world.ambient: %1").arg(colorHelp(color)));
-    WorldEdit edit(scene, { QStringLiteral("ambientColor") });
-    sceneprops::set(scene, QStringLiteral("ambientColor"), c);   // the panel row's own setter
-    edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Ambient"));
-    return true;
-}
-
 bool WorldApi::gravity(double value)
 {
     auto scene = sceneOrFail(QStringLiteral("world.gravity"));
@@ -1236,13 +1217,13 @@ QString WorldApi::sunLight(const QVariant &light)
     const QString id = light.isNull() ? QString() : light.toString();
     if (id.compare(QLatin1String("auto"), Qt::CaseInsensitive) == 0) {
         if (!scene->sunLightGuid.isEmpty())
-            pushSunLinkUndo(QStringLiteral("Automatic Sun"), scene, QString());
+            pushSunPinUndo(QStringLiteral("Automatic Sun"), scene, QString());
         auto sun = scene->sunLight();
         return sun ? sun->getGUID() : QString();
     }
     if (id.isEmpty()) {
         if (!scene->sunLightGuid.isEmpty())
-            pushSunLinkUndo(QStringLiteral("Unpin Sun Light"), scene, QString());
+            pushSunPinUndo(QStringLiteral("Unpin Sun Light"), scene, QString());
         auto sun = scene->sunLight();
         return sun ? sun->getGUID() : QString();
     }
@@ -1264,7 +1245,7 @@ QString WorldApi::sunLight(const QVariant &light)
     }
 
     if (scene->sunLightGuid != id)
-        pushSunLinkUndo(QStringLiteral("Pin Sun Light"), scene, id);
+        pushSunPinUndo(QStringLiteral("Pin Sun Light"), scene, id);
     return scene->sunLightGuid;
 }
 
@@ -1282,7 +1263,14 @@ QVariantMap WorldApi::sun()
     out[QStringLiteral("priority")] = sun ? sun->forwardShadingPriority : -1;
     out[QStringLiteral("castsShadows")] =
         sun && sun->shadowMap && sun->shadowMap->shadowType != iris::ShadowMapType::None;
-    out[QStringLiteral("skyDriven")] = scene->skyDrivesSun;
+    // The direction the sun TRAVELS, in world space — what the realistic sky's
+    // bake and the sun disc are both placed from (D15).
+    if (sun) {
+        const iris::Vec3 d = sun->getLightDir().normalized();
+        out[QStringLiteral("direction")] = QVariantMap{ { QStringLiteral("x"), double(d.x()) },
+                                                        { QStringLiteral("y"), double(d.y()) },
+                                                        { QStringLiteral("z"), double(d.z()) } };
+    }
     QVariantList secondaries;
     for (const auto &l : scene->secondaryDirectionals())
         secondaries.append(QVariantMap{ { QStringLiteral("light"), l->getGUID() },
@@ -1293,14 +1281,59 @@ QVariantMap WorldApi::sun()
     return out;
 }
 
-void WorldApi::pushSunLinkUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid)
+// THE SUN PIN, through the ordinary world-row undo path. SunLightLinkCommand
+// existed because the pin and the sky's STEERING were one edit that also moved
+// a light's rotation; with the steering gone (D15) the pin is a plain scene
+// field like every other World-panel row, and it goes through the same
+// ScenePropertyCommand the panel writes (the command file is deleted, §5).
+void WorldApi::pushSunPinUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid)
 {
-    // The command IS the edit (its redo() writes the guid), so a session with
-    // no undo stack — headless, tests — applies it once by hand instead.
-    auto *cmd = new SunLightLinkCommand(text, scene, guid);
-    if (host.services && host.services->undo) { host.services->undo->push(cmd); return; }
-    cmd->redo();
-    delete cmd;
+    WorldEdit edit(scene, { QStringLiteral("sunLight") });
+    sceneprops::set(scene, QStringLiteral("sunLight"), guid);
+    edit.commit(host.services ? host.services->undo : nullptr, text);
+}
+
+// ---------------------------------------------------------------------------
+// THE SKY LIGHT (SKY_LIGHT_SPEC.md §2) and THE SUN DISC (§3)
+// ---------------------------------------------------------------------------
+
+QVariantMap WorldApi::skyLight()
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.skyLight"));
+    if (!scene) return out;
+    const auto light = scene->skyLight();
+    out[QStringLiteral("light")] = light ? light->getGUID() : QString();
+    out[QStringLiteral("name")] = light ? light->getName() : QString();
+    out[QStringLiteral("intensity")] = light ? double(light->intensity) : 0.0;
+    out[QStringLiteral("tint")] = light ? colorToJs(light->color) : QVariant();
+    out[QStringLiteral("reason")] = scene->skyLightReason();
+    const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
+    out[QStringLiteral("skyType")] = scene->skyTypeToStr.at(typeIndex);
+    out[QStringLiteral("count")] = scene->skyLights().size();
+    return out;
+}
+
+QVariantMap WorldApi::sunDisc(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.sunDisc"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        WorldEdit edit(scene, { QStringLiteral("sunDiscVisible"),
+                                QStringLiteral("sunDiscInProbes") });
+        if (params.contains(QStringLiteral("visible")))
+            sceneprops::set(scene, QStringLiteral("sunDiscVisible"),
+                            params.value(QStringLiteral("visible")).toBool());
+        if (params.contains(QStringLiteral("inProbes")))
+            sceneprops::set(scene, QStringLiteral("sunDiscInProbes"),
+                            params.value(QStringLiteral("inProbes")).toBool());
+        edit.commit(host.services ? host.services->undo : nullptr,
+                    QStringLiteral("Sun Disc"));
+    }
+    out[QStringLiteral("visible")] = scene->sunDiscVisible;
+    out[QStringLiteral("inProbes")] = scene->sunDiscInProbes;
+    return out;
 }
 
 int WorldApi::antiAliasing()
@@ -1393,15 +1426,6 @@ int WorldApi::setShadowResolution(int pixels)
         if (scene->shadowResolution > 0 && live > 0) return live;
     }
     return scene->shadowResolution;
-}
-
-bool WorldApi::ambientFromSky(bool enabled)
-{
-    auto scene = sceneOrFail(QStringLiteral("world.ambientFromSky"));
-    if (!scene) return false;
-    scene->ambientFromSky = enabled;
-    worldmodes::pinRowValue(scene, QStringLiteral("ambientFromSky"), enabled ? 1 : 0);
-    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1561,14 +1585,18 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
     // part-way rolls every write back.
     WorldEdit edit(scene, { QStringLiteral("sky") }, WorldEdit::Registry | WorldEdit::SkyTexture);
 
-    // THE SKY STEERS THE SUN (SUN_AND_LIGHT_DEFAULTS Q1/Q1e). A boolean on the
-    // scene, not a light guid: "which directional light is the sun" is
-    // world.sunLight's question and has ONE answer (iris::Scene::sunLight), and
-    // this is the separate decision to let the Azimuth/Elevation dials aim it.
-    // Accepted for every sky type — only the analytic sky HAS a sun, so a
-    // colour sky simply stops driving and resumes when it comes back.
-    if (params.contains(QStringLiteral("drivesSun")))
-        scene->skyDrivesSun = params.value(QStringLiteral("drivesSun")).toBool();
+    // THE SKY HAS NO SUN OF ITS OWN (SKY_LIGHT_SPEC.md §3, D15). The four
+    // parameters that used to place it are refused BY NAME rather than ignored:
+    // a script that still passes them is asking for something this renderer no
+    // longer does, and saying so is the only way its author finds out.
+    for (const char *gone : { "drivesSun", "azimuth", "elevation",
+                              "sunPosX", "sunPosY", "sunPosZ" }) {
+        if (!params.contains(QLatin1String(gone))) continue;
+        return fail(QStringLiteral(
+            "world.sky: '%1' is gone — the SKY follows the SUN now, not the other way round. "
+            "Rotate the sun light instead: node.transform(world.sun().light, {rotation: {...}}).")
+                        .arg(QLatin1String(gone)));
+    }
 
     // Contract per SkyPropertyWidget: set the live fields AND rebuild
     // scene->skyData[<key>] (SceneWriter serializes only skyData), then
@@ -1623,13 +1651,6 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         r.mieCoefficient = take("mieCoefficient", r.mieCoefficient);
         r.mieDirectionalG = take("mieDirectionalG", r.mieDirectionalG);
         r.turbidity = take("turbidity", r.turbidity);
-        r.sunPosX = take("sunPosX", r.sunPosX);
-        r.sunPosY = take("sunPosY", r.sunPosY);
-        r.sunPosZ = take("sunPosZ", r.sunPosZ);
-        // azimuth/elevation are the readable spelling of the same three floats
-        // and win over raw sunPos* when both are given (VISUAL_PARITY item 1).
-        if (params.contains("azimuth") || params.contains("elevation"))
-            r.setSunAngles(take("azimuth", r.sunAzimuth()), take("elevation", r.sunElevation()));
         if (params.contains("detail")) {
             const int d = params.value("detail").toInt();
             scene->skyBakeResolution = d >= 1024 ? 1024 : d >= 512 ? 512 : 256;
@@ -1642,15 +1663,8 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         def.insert("mieCoefficient", double(r.mieCoefficient));
         def.insert("mieDirectionalG", double(r.mieDirectionalG));
         def.insert("turbidity", double(r.turbidity));
-        def.insert("sunPosX", double(r.sunPosX));
-        def.insert("sunPosY", double(r.sunPosY));
-        def.insert("sunPosZ", double(r.sunPosZ));
         scene->skyData.insert("Realistic", def);
         scene->skyType = iris::SkyType::REALISTIC;
-        // Sun coupling (re-audit F5): the sun follows the sky HERE and not only
-        // on the next Scene::update, so a headless script sees the new rotation
-        // the moment this call returns.
-        scene->applySunCoupling();
     } else if (t == "equirectangular" || t == "equirect") {
         if (!requireProject()) return false;   // texture resolution needs the project's pins
         QString guid, path;
@@ -1747,13 +1761,13 @@ QVariantMap WorldApi::get()
     auto scene = sceneOrFail(QStringLiteral("world.get"));
     if (!scene) return out;
 
-    out["ambient"] = colorToJs(scene->ambientColor);
+    out["skyLight"] = skyLight();
+    out["sunDisc"] = sunDisc(QVariantMap());
     out["gravity"] = scene->gravity;
     out["shadows"] = scene->shadowEnabled;
     out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
     out["shadowResolution"] = scene->shadowResolution;   // 0 = Auto; the verb reads the applied value
     out["shadowMapBudget"] = scene->shadowMapBudget;     // 0 = Auto (the World Mode tier's value)
-    out["ambientFromSky"] = scene->ambientFromSky;
     // Resolved, not raw: the three document fields carry "follow" sentinels and
     // a caller reading world.get() wants what the renderer will do.
     out["planarReflections"] = planarReflections();
@@ -1813,16 +1827,11 @@ QVariantMap WorldApi::get()
     sky["type"] = scene->skyTypeToStr.at(typeIndex);
     sky["data"] = scene->skyData.value(scene->skyTypeToStr.at(typeIndex)).toVariantMap();
     if (scene->skyType == iris::SkyType::SINGLE_COLOR) sky["color"] = colorToJs(scene->skyColor);
-    if (scene->skyType == iris::SkyType::REALISTIC) {
-        // The panel's spelling of the same stored floats, so a script can read
-        // back what it set with {azimuth, elevation} (VISUAL_PARITY item 1).
-        sky["azimuth"] = scene->skyRealistic.sunAzimuth();
-        sky["elevation"] = scene->skyRealistic.sunElevation();
-    }
     sky["detail"] = scene->skyBakeResolution;
-    // The light the sun drives, if any (re-audit F5) — empty string = none.
+    // The sun PIN (which directional light is the sun), empty = automatic. The
+    // sky's own sun dials and its steering switch are gone (D15) — world.sun()
+    // is where the sun's direction is read now.
     sky["sunLight"] = scene->sunLightGuid;
-    sky["drivesSun"] = scene->skyDrivesSun;
     out["sky"] = sky;
     return out;
 }

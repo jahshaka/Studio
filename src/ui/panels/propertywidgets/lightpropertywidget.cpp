@@ -175,6 +175,14 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
            "the whole world; every further one slots into the next free number automatically and "
            "is a SECONDARY light — it lights the scene fully but casts no shadow, because the "
            "renderer has exactly one directional shadow slot. Lower wins."));
+    // THE SUN'S ANGULAR SIZE (SKY_LIGHT_SPEC.md §3). Directional only, beside
+    // the priority row, because it describes the SUN and not the disc: it sizes
+    // the disc today and is the row a soft-shadow penumbra would read.
+    sunAngle = this->addDragFloat(tr("Sun Angle"), 0.53, 0.0, 20.0, 0.01, 2);
+    sunAngle->setToolTip(
+        tr("How wide the sun is in the sky, in degrees. The real sun is 0.53 — about half a "
+           "degree — and that is the default. It sets the size of the sun disc drawn in the sky "
+           "where this light points; the disc itself is switched on and off in the World panel."));
 
     shadowType = this->addComboBox("Shadow Type");
     // "Off (fill light)" rather than "None" (owner decision Q4): the switch is
@@ -249,6 +257,7 @@ void LightPropertyWidget::wireRows()
         return QVariant(shadowSize->getWidget()->itemText(row.toInt()).toInt());
     }));
     rowundo::bind(forwardShadingPriority, rows(QStringLiteral("forwardShadingPriority")));
+    rowundo::bind(sunAngle, rows(QStringLiteral("sunAngle")));
 
     // Accurate (LTC) area lights ignore the mask entirely — say so the moment
     // the user flips the switch, not the next time the panel is rebuilt. (The
@@ -285,6 +294,14 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         // cannot write its own value back into it.
         lightChannels->setMask(lightNode->getLightMask());
 
+        // A SKY LIGHT HAS TWO ROWS (SKY_LIGHT_SPEC.md §2): Color, which is a
+        // TINT on the sky's own light, and Intensity, which is the strength.
+        // Everything else on this blade describes a light that has a PLACE in
+        // the world, which this one does not — it is the sky.
+        const bool isSky = lightNode->getLightType() == iris::LightType::Sky;
+        lightColor->setLabel(isSky ? tr("Tint") : tr("Color"));
+        distance->setVisible(!isSky);
+        lightChannels->setVisible(!isSky);
         if (lightNode->getLightType()==iris::LightType::Spot) {
             spotCutOff->show();
             spotCutOffSoftness->show();
@@ -321,8 +338,10 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 
         // Point lights: legacy never shadowed them (controls hidden); the engine
         // does, so engine mode keeps Shadow Type/Size. Tint stays per-backend.
-        if (lightNode->getLightType()==iris::LightType::Area) {
-            // Ogre-Next cannot shadow area lights: hide every shadow control.
+        if (isSky ||
+            lightNode->getLightType()==iris::LightType::Area) {
+            // Neither can shadow: an area light because Ogre-Next cannot, a Sky
+            // Light because it has no place to cast from. Hide every control.
             shadowSize->hide();
             shadowType->hide();
             shadowColor->hide();
@@ -514,10 +533,11 @@ void LightPropertyWidget::clearMask()
 // nothing true, so they are not shown at all rather than shown disabled.
 void LightPropertyWidget::refreshSunRows()
 {
-    if (!sunReadout || !forwardShadingPriority) return;
+    if (!sunReadout || !forwardShadingPriority || !sunAngle) return;
     if (!lightNode || lightNode->lightType != iris::LightType::Directional) {
         sunReadout->hide();
         forwardShadingPriority->hide();
+        sunAngle->hide();
         return;
     }
     sunReadout->show();
@@ -527,6 +547,13 @@ void LightPropertyWidget::refreshSunRows()
     auto scene = lightNode->getScene();
     auto sun = scene ? scene->sunLight() : iris::LightNodePtr();
     const bool isSun = sun && sun.data() == lightNode.data();
+    // SUN ANGLE IS THE SUN'S. A secondary directional draws no disc and casts
+    // no shadow, so a Sun Angle row on one would say nothing true — which is
+    // exactly what lightnode.h promises and what the row did not do (round-2
+    // review item 11). It follows the RESOLVER, like the readout below.
+    sunAngle->setVisible(isSun);
+    sunAngle->setValue(lightNode->sunAngle);
+
     const QString reason = scene ? scene->sunReason() : QStringLiteral("none");
     QString text;
     if (isSun && reason == QLatin1String("pinned"))

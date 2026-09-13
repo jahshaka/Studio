@@ -75,7 +75,6 @@ The rows, with their value spellings:
 | Global Illumination | `giMode` | `off`, `instant_radiosity`, `vct`, `vct_pcc_hybrid` |
 | Global Illumination | `giQuality` | `low`, `medium`, `high` |
 | Sky | `skyBakeResolution` | `256`, `512`, `1024` |
-| Sky | `ambientFromSky` | `on` / `off` |
 | Reflections | `planarBudget` | how many mirror planes may render |
 
 Values may be given as the id spelling (`"4x"`, `"vct"`, `"off"`) or as the raw

@@ -140,6 +140,7 @@ private:
     /// decides it. Both hidden on every other light type.
     class LabelWidget*      sunReadout = nullptr;
     class DragFloatWidget*  forwardShadingPriority = nullptr;
+    DragFloatWidget *sunAngle = nullptr;          // the sun's angular size (spec 3)
     /// Re-reads the scene's sun and re-labels the two rows above.
     void refreshSunRows();
 

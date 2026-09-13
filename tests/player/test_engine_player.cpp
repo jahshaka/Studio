@@ -318,18 +318,36 @@ int main(int argc, char **argv)
     // The DOCUMENT's ambient is what lights this scene now: the player pushes
     // applyEnvironment, so the engine scene's hardcoded startup hemisphere is
     // overwritten on the first step (it used to survive, because the player
-    // never pushed the world settings — the editor/player parity defect). 90
-    // grey, the value this test used while the hardcoded hemisphere was in
-    // force, leaves the cube at 30/255 red: still plainly the material, but
-    // under isMaterial's floor. 140 restores the brightness the assertions were
-    // written against, and is now an honest statement about the document.
-    doc->setAmbientColor(QColor(140, 140, 140));
+    // never pushed the world settings — the editor/player parity defect).
+    //
+    // Ambient IS a Sky Light since SKY_LIGHT_SPEC.md §2: a white one over the
+    // scene's own sky, at the intensity that keeps the cube above isMaterial's
+    // floor (the flat 140-grey this used to set is not a thing any more).
+    {
+        auto skyLight = iris::LightNode::create();
+        skyLight->setLightType(iris::LightType::Sky);
+        skyLight->setName("Sky Light");
+        skyLight->color = QColor(255, 255, 255);
+        skyLight->intensity = 2.0f;
+        doc->getRootNode()->addChild(skyLight);
+    }
     auto light = iris::LightNode::create();
     light->setLightType(iris::LightType::Directional);
     light->setName("sun");
     light->color = QColor(255, 255, 255);
-    light->intensity = 1.0f;
-    light->setLocalRot(iris::Quat::fromEulerAngles(-60, 30, 0));
+    // RE-BASELINED (SKY_LIGHT_SPEC.md §2 and §4): this scene's ambient used to
+    // be a flat 140 grey, which lit the red cube's every face. It is now the
+    // SKY, and this scene's sky is PURE BLUE — a blue sky has no red in it to
+    // give a red cube, whatever the skylight's strength. So the cube is lit by
+    // the SUN, which is what a cube in a scene with a sun should be lit by, and
+    // the sun is raised to carry the whole of it (the colour-space fix also
+    // takes the albedo from 0.80 raw to 0.60 linear).
+    // AND AIMED AT THE CAMERA-FACING SIDE. The old rotation lit the far side of
+    // the cube, which did not matter while a flat grey ambient lit every face;
+    // a sky-lit scene has no such free light, so the sun has to actually fall on
+    // the face the assertions read.
+    light->intensity = 3.0f;
+    light->setLocalRot(iris::Quat::fromEulerAngles(60, 20, 0));
     doc->getRootNode()->addChild(light);
 
     auto cube = iris::MeshNode::create();

@@ -74,8 +74,10 @@ int main(int argc, char **argv)
     doc->giQuality = iris::GiQuality::LOW;
     doc->giUpdateBudget = 1;
     doc->giNumBounces = 1;
-    doc->ambientColor = QColor(0, 0, 0);
-    doc->ambientFromSky = false;
+    // ZERO AMBIENT is now "no Sky Light in the document" (SKY_LIGHT_SPEC.md §6):
+    // ambient is the skylight and nothing else, so a scene with no Sky Light
+    // pushes 27 zeros — which is exactly what the two lines that used to stand
+    // here (ambientColor black + ambientFromSky off) were spelling out.
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
     // EXPLICIT bounds, over empty space off to +X: the overlay is then the only

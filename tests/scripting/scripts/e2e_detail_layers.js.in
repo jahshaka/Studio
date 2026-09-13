@@ -51,11 +51,17 @@ assert(marbleRough.length > 10, "MRAMOR-bump.jpg imported");
 // A DETERMINISTIC, WELL-LIT world. The default scene's lighting leaves a
 // sphere's centre pixel near black, where a detail map's contribution is
 // unmeasurable — the first version of this suite probed luma 2 and could not
-// tell 5x tiling from 1x. One directional light, no sky, GI off, and the
+// tell 5x tiling from 1x. One directional light, a flat sky, GI off, and the
 // assertions below read a 3x3 REGION rather than one pixel.
-assert(world.setSky("color", { color: "#000000" }) === true, "a flat black sky");
+//
+// A GREY SKY, not a black one (SKY_LIGHT_SPEC.md §2): ambient is the SKY LIGHT
+// reading the sky, so a black sky delivers exactly zero ambient at any
+// intensity and this scene's fill would vanish. The old flat 0x808080 ambient
+// becomes a 0x808080 SKY at skylight 1.0 — the same grey, said once.
+assert(world.setSky("color", { color: "#808080" }) === true, "a flat grey sky");
 assert(world.gi({ mode: "off" }) === true, "GI OFF");
-world.setAmbient("#808080");
+var sl = world.skyLight();
+if (sl.light !== "") node.setProperty(sl.light, "intensity", 1.0);
 var sun = scene.addLight("directional", { position: { x: 0, y: 6, z: 6 } });
 node.setProperty(sun, "intensity", 12.0);
 node.setProperty(sun, "lightColor", "#ffffff");

@@ -207,6 +207,39 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         }
     }
 
+    // ---- sky.duplicate: a second Sky Light (SKY_LIGHT_SPEC.md §2) ---------
+    // A scene's ambient is the FIRST VISIBLE Sky Light and nothing else, so a
+    // second one is inert: it sits in the outliner, it has an intensity the
+    // user can drag, and it does nothing at all. That is exactly the class of
+    // thing this bar exists for — a scene the person looking at it can fix, in
+    // one action, once they are told. (Duplicating the Sky Light is how it
+    // happens; the fix is to delete or hide one.)
+    {
+        const auto skies = scene->skyLights();
+        if (skies.size() >= 2) {
+            const auto theSkylight = scene->skyLight();
+            for (const auto &light : skies) {
+                if (light == theSkylight) continue;
+                if (!light->isVisibleInScene()) continue;   // hidden is the fix
+                SceneIssue issue;
+                issue.kind = QStringLiteral("sky.duplicate");
+                issue.node = light->getGUID();
+                issue.nodeName = light->getName();
+                issue.message =
+                    tr("\"%1\" is a second Sky Light. Only \"%2\" lights the scene — a scene "
+                       "has one skylight.")
+                        .arg(light->getName(),
+                             theSkylight ? theSkylight->getName() : tr("the first one"));
+                issue.action = tr("Delete this Sky Light, or hide it. A hidden Sky Light does "
+                                  "nothing, which is how you keep one around without it "
+                                  "competing.");
+                issue.id = issue.kind + QLatin1Char(':') + issue.node;
+                raise(issue);
+                live << issue.id;
+            }
+        }
+    }
+
     // ---- shadow.leak: an unshadowed lamp reaching through something -------
     // The Showroom's lamp above a sealed roof lit the floor through it, and
     // nothing in the editor ever said so (SUN_AND_LIGHT_DEFAULTS §0). This is a
@@ -263,7 +296,8 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // ---- clear what the scene no longer justifies -------------------------
     // Only the kinds this scanner owns: an issue raised by a verb or by another
     // producer is not ours to forget.
-    static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak") };
+    static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak"),
+                                       QStringLiteral("sky.duplicate") };
     bool removed = false;
     for (int i = mIssues.size() - 1; i >= 0; --i) {
         if (!kScanned.contains(mIssues[i].kind)) continue;

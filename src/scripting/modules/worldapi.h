@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef SCRIPTING_WORLDAPI_H
 #define SCRIPTING_WORLDAPI_H
 
-// world.* — sky, fog, GI, ambient, gravity, shadows (SCRIPTING_SPEC §1.5).
+// world.* — sky, fog, GI, the sky light, gravity, shadows (SCRIPTING_SPEC §1.5).
 //
 // The document fields are the API (SceneMirror polls them per frame); the one
 // non-trivial contract is the sky: a change must ALSO rebuild the matching
@@ -37,7 +37,6 @@ public:
     QString jsName() const override { return QStringLiteral("world"); }
     QVector<VerbInfo> verbs() const override;
 
-    Q_INVOKABLE bool ambient(const QVariant &color);
     Q_INVOKABLE bool gravity(double value);
     Q_INVOKABLE bool fog(const QVariantMap &params);
     Q_INVOKABLE bool shadows(const QVariantMap &params);
@@ -56,7 +55,10 @@ public:
     Q_INVOKABLE int setAntiAliasing(int samples);
     Q_INVOKABLE int shadowResolution();
     Q_INVOKABLE int setShadowResolution(int pixels);
-    Q_INVOKABLE bool ambientFromSky(bool enabled);
+    /// THE SCENE'S SKYLIGHT, resolved (SKY_LIGHT_SPEC.md §2).
+    Q_INVOKABLE QVariantMap skyLight();
+    /// THE SUN DISC, a scene-level switch pair (§3, owner picks 2 and 4).
+    Q_INVOKABLE QVariantMap sunDisc(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap planarReflections();
     Q_INVOKABLE QVariantMap setPlanarReflections(const QVariantMap &params);
     Q_INVOKABLE bool sky(const QString &type, const QVariantMap &params = QVariantMap());
@@ -105,14 +107,12 @@ public:
     // names its twin so api_docs does not read as eighteen unrelated verbs.
     // Both spellings are supported forever: the nouns are what every existing
     // script and skill already calls.
-    Q_INVOKABLE bool setAmbient(const QVariant &color) { return ambient(color); }
     Q_INVOKABLE bool setGravity(double value) { return gravity(value); }
     Q_INVOKABLE bool setFog(const QVariantMap &params) { return fog(params); }
     Q_INVOKABLE bool setShadows(const QVariantMap &params) { return shadows(params); }
     Q_INVOKABLE bool setGi(const QVariantMap &params) { return gi(params); }
     Q_INVOKABLE QVariantMap setPhoton(const QVariantMap &params = QVariantMap())
     { return photon(params); }
-    Q_INVOKABLE bool setAmbientFromSky(bool enabled) { return ambientFromSky(enabled); }
     Q_INVOKABLE QString setSunLight(const QVariant &light) { return sunLight(light); }
     Q_INVOKABLE bool setSky(const QString &type, const QVariantMap &params = QVariantMap())
     { return sky(type, params); }
@@ -130,7 +130,7 @@ private:
     /// One undo step for one World Mode gesture. See WorldModeCommand — a tier
     /// switch is thirteen field writes, so the command snapshots the state
     /// rather than inventing thirteen inverses.
-    void pushSunLinkUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid);
+    void pushSunPinUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid);
     void pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
                            const WorldModeCommand::Snapshot &before);
     /// One undo step for one looks-stack edit; `before` is the array as it was.

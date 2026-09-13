@@ -271,8 +271,9 @@ assert(rowsByName(material.properties(cubeId).rows).metallic.value > 0.24,
 // ---- #10: the nine world set* aliases ---------------------------------------
 // Each alias must move the SAME field its noun-setter does — the assertion that
 // catches a delegation wired to the wrong twin.
-world.setAmbient("#204060");
-assert(world.get().ambient === "#204060", "world.setAmbient moves the ambient colour");
+// (world.setAmbient and world.setAmbientFromSky are GONE with the flat ambient,
+// SKY_LIGHT_SPEC.md §5: ambient is a Sky Light node now, and its two rows are
+// ordinary light properties — node.setProperty(skyLight, "intensity", ...).)
 world.setGravity(3.5);
 assert(Math.abs(world.get().gravity - 3.5) < 0.001, "world.setGravity moves gravity");
 world.setFog({ enabled: true, density: 0.25 });
@@ -281,8 +282,6 @@ world.setShadows({ enabled: false });
 assert(world.get().shadows === false, "world.setShadows moves the shadow flag");
 world.setGi({ mode: "instant_radiosity" });
 assert(world.get().gi.mode === "instant_radiosity", "world.setGi moves the GI mode");
-world.setAmbientFromSky(false);
-assert(world.get().ambientFromSky === false, "world.setAmbientFromSky moves the sky-ambient flag");
 world.setSky("color", { color: "#112233" });
 assert(world.get().sky.color === "#112233", "world.setSky moves the sky");
 assert(world.setMode({ mode: "high" }) === "high", "world.setMode applies a tier");

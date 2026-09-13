@@ -53,10 +53,11 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
         return true;
 
     case iris::SkyType::REALISTIC: {
-        // The same eight keys, with the same per-key defaults, that
+        // The same keys, with the same per-key defaults, that
         // SceneReader::readScene reads for a project scene: a definition
         // written before a key existed lands on the model's working value
-        // rather than on zero (VISUAL_PARITY item 1).
+        // rather than on zero (VISUAL_PARITY item 1). The sun keys are GONE
+        // (SKY_LIGHT_SPEC §3): a preset's sun is the scene's sun light.
         const iris::SkyRealistic d = iris::SkyRealistic::defaults();
         iris::SkyRealistic r;
         r.luminance       = float(skyData.value("luminance").toDouble(d.luminance));
@@ -64,9 +65,6 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
         r.mieCoefficient  = float(skyData.value("mieCoefficient").toDouble(d.mieCoefficient));
         r.mieDirectionalG = float(skyData.value("mieDirectionalG").toDouble(d.mieDirectionalG));
         r.turbidity       = float(skyData.value("turbidity").toDouble(d.turbidity));
-        r.sunPosX         = float(skyData.value("sunPosX").toDouble(d.sunPosX));
-        r.sunPosY         = float(skyData.value("sunPosY").toDouble(d.sunPosY));
-        r.sunPosZ         = float(skyData.value("sunPosZ").toDouble(d.sunPosZ));
         scene->skyRealistic = r;
         return true;
     }

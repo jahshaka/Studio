@@ -123,6 +123,10 @@ public:
     void addSpotLight();
     void addDirectionalLight();
     void addAreaLight();
+    /// THE SKY LIGHT (SKY_LIGHT_SPEC.md §2): the light that reads the World sky
+    /// and fills the scene with its diffuse ambient. One per scene — a second
+    /// raises the `sky.duplicate` scene issue and lights nothing.
+    void addSkyLight();
 
     void addEmpty();
     /// Adds a scene-graph CAMERA (CAMERAS_SPEC §3) — a real node that saves,

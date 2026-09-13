@@ -378,6 +378,27 @@ struct Doc {
         meshNode->setMaterial(iris::PbrMaterial::create());
         scene->getRootNode()->addChild(meshNode);
 
+        // RE-BASELINED for SKY_LIGHT_SPEC.md §2 and §4, and the two halves are
+        // separate numbers on purpose.
+        //
+        // THE BACKDROP. Most of this frame is sky, and a picked colour is
+        // decoded now: the document's default grey used to reach the frame raw
+        // at 0.376 of radiance and would arrive at 0.117, taking the whole
+        // picture from 78 to 13 and the bloom's dynamic range with it (B2
+        // measures bloom on vs off against a 2.0 threshold). 163 grey decodes to
+        // 0.376 — the same backdrop radiance this fixture always had, said in
+        // the colour space the renderer now speaks.
+        scene->skyColor = QColor(163, 163, 163);
+        // THE AMBIENT. It is a LIGHT now, and without one this fixture would
+        // have none at all. 0.31 over that 0.376 sky is 0.117 of ambient
+        // radiance — the level the flat 96-grey ambient it replaces carried
+        // (0.376 through HlmsPbs' 1/pi split).
+        auto skyLight = iris::LightNode::create();
+        skyLight->setName("Sky Light");
+        skyLight->setLightType(iris::LightType::Sky);
+        skyLight->intensity = 0.31f;
+        scene->getRootNode()->addChild(skyLight);
+
         auto light = iris::LightNode::create();
         light->setName("sun");
         light->intensity = 6.0f;
@@ -422,6 +443,12 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
              const char *label = nullptr)
 {
     mirror.sync();
+    // applySky BEFORE applyEnvironment, as every real host does. It is not
+    // optional any more: the ambient is the SKY LIGHT reading the sky's own
+    // integral (SKY_LIGHT_SPEC.md §2), and the integral is applySky's — a
+    // fixture that skipped it used to get the flat World colour and now gets no
+    // ambient at all.
+    mirror.applySky(view);
     mirror.applyEnvironment(view);
     mirror.applyCamera(camera, view);
     if (optIn) {

@@ -1,5 +1,5 @@
 // scripting.e2e.sun_light — THE SUN (SPECS/SUN_AND_LIGHT_DEFAULTS_SPEC.md,
-// owner decisions Q1/Q1d/Q1e) and the sky's steering of it.
+// owner decisions Q1/Q1d/Q1e) and the sky it drives (SKY_LIGHT_SPEC.md §3, D15).
 //
 // THE RULE this suite pins, end to end through the verbs the panels call:
 //   * the FIRST directional light in a scene IS the sun; further ones are
@@ -9,10 +9,11 @@
 //     lamps alone — so "no directional light" answers cleanly everywhere and
 //     never warns;
 //   * only the sun casts a shadow among directionals (one directional slot);
-//   * the SKY'S STEERING is a separate switch from the sun itself. It used to
-//     be the same field, so choosing which light was the sun and letting the
-//     sky aim it could not be told apart — world.sunLight is the first
-//     question, world.sky({drivesSun}) the second.
+//   * THE SUN DRIVES THE SKY, and never the other way round. The realistic
+//     sky's sun position, its haze and the sun disc all come from this light's
+//     rotation; the sky's own azimuth/elevation dials and the `drivesSun`
+//     switch that let the sky push the light around are DELETED, and the verb
+//     refuses them by name.
 //
 // Shadows-on-by-default is asserted here too, at the level only an end-to-end
 // run can reach: a light born through the verb casts, and it still casts after
@@ -46,7 +47,7 @@ assert(startSun.reason === "priority", "...chosen by priority, not pinned");
 assert(startSun.priority === 0, "...at priority 0");
 assert(startSun.castsShadows, "...and it casts shadows (the default)");
 assert(startSun.secondaries.length === 0, "...with no secondary directionals");
-assert(!startSun.skyDriven, "...and the sky is not steering it");
+assert(typeof startSun.direction === "object", "...and reports the direction it travels");
 assert(startSun.nextPriority === 1, "the next directional added would take priority 1");
 
 // SHADOWS ON BY DEFAULT, at the top level: every light in a brand-new scene
@@ -111,65 +112,80 @@ throws(function () { world.sunLight(cube); }, "sunLight rejects a non-light node
 throws(function () { world.sunLight(lamp); }, "sunLight rejects a POINT light (only a directional can be the sun)");
 assert(world.sunLight() === sun, "a refused pin changes nothing");
 
-// ---- the sky's steering is a SEPARATE switch ------------------------------
-world.sky("realistic", { azimuth: 90, elevation: 60, turbidity: 4 });
-assert(world.get().sky.drivesSun === false, "the sky steers nothing by default");
-var authored = node.info(sun).rotation;
+// ---- THE SUN DRIVES THE SKY (D15), and the old dials are REFUSED ----------
+world.sky("realistic", { turbidity: 4 });
+throws(function () { world.sky("realistic", { azimuth: 90 }); },
+       "world.sky refuses 'azimuth' by name");
+throws(function () { world.sky("realistic", { elevation: 60 }); },
+       "world.sky refuses 'elevation' by name");
+throws(function () { world.sky("realistic", { drivesSun: true }); },
+       "world.sky refuses 'drivesSun' by name");
+throws(function () { world.sky("realistic", { sunPosY: 450000 }); },
+       "world.sky refuses the raw sun position too");
+assert(world.get().sky.drivesSun === undefined, "world.get() no longer reports a steering");
+assert(world.sun().skyDriven === undefined, "...nor does world.sun()");
 
-world.sky("realistic", { drivesSun: true });
-assert(world.get().sky.drivesSun === true, "world.sky({drivesSun:true}) turns the steering on");
-assert(world.sun().skyDriven === true, "...and world.sun() reports it");
-var steered = node.info(sun).rotation;
-assert(steered.x !== authored.x || steered.y !== authored.y || steered.z !== authored.z,
-       "turning the steering on aimed the sun");
-
-// ---- follow: moving the sky's sun moves the SUN LIGHT ---------------------
-// A light emits down its local -Y, so elevation 90 (sun straight up) is the
-// identity rotation and elevation 0 lays it on its side: the light's PITCH has
-// to track the sun's elevation one-for-one.
-function pitchFor(elevation, azimuth) {
-    world.sky("realistic", { elevation: elevation, azimuth: azimuth });
-    return node.info(sun).rotation;
+// ROTATING THE LIGHT MOVES THE SKY. The sky is a CPU bake keyed on the sun's
+// direction, so the proof is in pixels: with the sun ahead of the camera the
+// picture is brighter than with the sun behind it, and nothing but the light's
+// rotation changed between the two shots.
+world.sunDisc({ visible: false });          // measure the SKY, not the disc on it
+// LOOK AT THE SKY, and at a band well above the horizon: the default camera
+// frames the ground, and the ground is lit by the very light being rotated —
+// which would make this a statement about shading rather than about the bake.
+editor.setCamera({ position: { x: 0, y: 2, z: 0 }, lookAt: { x: 0, y: 14, z: -6 } });
+function skyBand(tag, rx, ry, rz) {
+    node.transform(sun, { rotation: { x: rx, y: ry, z: rz } });
+    // The realistic bake is DEBOUNCED at 150 ms, so a frame count alone can
+    // measure the PREVIOUS sun twice. Two long runs with a screenshot between
+    // them (which costs real time) clear it.
+    editor.frame(60, 1 / 60);
+    editor.screenshot("sun_light_settle_" + tag + ".png", 64, 64);
+    editor.frame(60, 1 / 60);
+    var s = editor.screenshot("sun_light_" + tag + ".png", 128, 128,
+                              [[0.5, 0.2], [0.2, 0.3], [0.8, 0.3]], "plain");
+    var sum = 0;
+    for (var i = 0; i < s.probes.length; i++) sum += s.probes[i].r + s.probes[i].g + s.probes[i].b;
+    console.log("sky band [" + tag + "] " + Math.round(sum));
+    return sum;
 }
-var overhead = pitchFor(89, 0);
-var horizon = pitchFor(1, 0);
-assert(Math.abs(overhead.x) < 2.0, "sun overhead -> light is (nearly) unrotated: x=" + overhead.x);
-near(Math.abs(horizon.x), 89, 2.0, "sun on the horizon -> light pitched ~90 degrees");
+var aheadLum = skyBand("ahead", -20, 0, 0);     // the sun low, in front of the camera
+var behindLum = skyBand("behind", -20, 180, 0); // ...and turned right around
+console.log("sky with the sun ahead " + Math.round(aheadLum) +
+            " vs behind " + Math.round(behindLum));
+assert(Math.abs(aheadLum - behindLum) > 8,
+       "rotating the SUN LIGHT re-bakes the realistic sky (D15)");
 
-var compass = [0, 90, 180, 270].map(function (a) {
-    var r = pitchFor(20, a);
-    return { a: a, r: r, key: r.x.toFixed(2) + "/" + r.y.toFixed(2) + "/" + r.z.toFixed(2) };
-});
-for (var i = 0; i < compass.length; ++i) {
-    for (var j = i + 1; j < compass.length; ++j) {
-        assert(compass[i].key !== compass[j].key,
-               "azimuth " + compass[i].a + " and " + compass[j].a + " aim the light differently");
-    }
-}
-
-// THE STEERING FOLLOWS THE SUN, not a remembered light: pinning a different sun
-// hands the dials to the new one. (This is the thing one field could not do.)
-world.sky("realistic", { elevation: 45, azimuth: 30 });
-var otherBefore = node.info(startSun.light).rotation;
-world.sunLight(startSun.light);
-world.sky("realistic", { elevation: 20, azimuth: 200 });
-var otherAfter = node.info(startSun.light).rotation;
-assert(Math.abs(otherAfter.x - otherBefore.x) > 1.0 || Math.abs(otherAfter.y - otherBefore.y) > 1.0,
-       "pinning a new sun hands it the sky's dials");
-world.sunLight("auto");
-
-// ---- turning the steering off gives manual control back -------------------
-world.sky("realistic", { elevation: 45, azimuth: 30 });
-var driven = node.info(sun).rotation;
-world.sky("realistic", { drivesSun: false });
-assert(world.get().sky.drivesSun === false, "the steering is off again");
-var afterOff = node.info(sun).rotation;
-near(afterOff.x, driven.x, 0.01, "the light stays where the sun left it");
-world.sky("realistic", { elevation: 5, azimuth: 200 });
-near(node.info(sun).rotation.x, driven.x, 0.01, "an unsteered light ignores the sky (x)");
+// A HAND-SET ROTATION IS NEVER OVERWRITTEN. The old coupling rewrote it from
+// the sky every frame; nothing does now.
 node.transform(sun, { rotation: { x: -33, y: 12, z: 0 } });
-world.sky("realistic", { elevation: 70, azimuth: 15 });
-near(node.info(sun).rotation.x, -33, 0.01, "a hand-set rotation survives a sun move");
+world.sky("realistic", { turbidity: 9 });
+editor.frame(10, 1 / 60);
+near(node.info(sun).rotation.x, -33, 0.01, "a sky edit never moves the sun light");
+world.sunDisc({ visible: true });
+
+// ---- THE SUN DISC is a WORLD setting (owner pick 4 / ledger 193a) ----------
+var disc = world.sunDisc();
+assert(disc.visible === true, "the sun disc is on by default");
+assert(disc.inProbes === false, "...and out of the reflection probes by default");
+assert(world.sunDisc({ visible: false }).visible === false, "world.sunDisc turns it off");
+assert(world.sunDisc({ inProbes: true }).inProbes === true, "...and can put it in the probes");
+world.sunDisc({ visible: true, inProbes: false });
+assert(node.property(sun, "sunAngle") > 0, "the sun's ANGULAR SIZE is a row on the light");
+assert(node.setProperty(sun, "sunAngle", 2.5) === true, "...and it is settable");
+near(node.property(sun, "sunAngle"), 2.5, 0.01, "...and the set stuck");
+node.setProperty(sun, "sunAngle", 0.53);
+
+// ---- THE SKY LIGHT (D14): ambient is a light --------------------------------
+assert(names.indexOf("skyLight") >= 0, "world.skyLight is registered");
+assert(names.indexOf("sunDisc") >= 0, "world.sunDisc is registered");
+assert(names.indexOf("ambient") < 0, "world.ambient is GONE");
+assert(names.indexOf("ambientFromSky") < 0, "world.ambientFromSky is GONE");
+var sky = world.skyLight();
+assert(sky.light !== "", "a new scene ships with a Sky Light");
+assert(sky.reason === "first", "...and it is THE skylight");
+near(sky.intensity, 1.0, 0.001, "...at intensity 1.0");
+assert(sky.count === 1, "...and it is the only one");
 
 // Save before leaving: the reopen at the end asserts what this scene stored.
 project.save();
@@ -190,10 +206,10 @@ assert(none.secondaries.length === 0, "...and no secondaries");
 assert(none.nextPriority === 0, "...and the next directional would take 0");
 assert(world.sunLight() === "", "world.sunLight() answers empty, not an error");
 assert(world.shadowStatus().sun === "", "world.shadowStatus().sun is empty too");
-// The sky's steering refuses rather than pretending.
-world.sky("realistic", { drivesSun: true });
-assert(world.sun().skyDriven === true || world.sun().light === "",
-       "asking the sky to steer a scene with no sun does not break anything");
+// A REALISTIC SKY WITH NO SUN is legal: the model bakes its own night and
+// nothing warns (the analytic sky has no sun-less daylight).
+world.sky("realistic", { turbidity: 3 });
+assert(world.sun().light === "", "a realistic sky in a sunless scene still has no sun");
 // And it is NOT an issue: nothing to fix here.
 var checked = editor.checkScene();
 var sunIssues = checked.list.filter(function (i) { return i.kind === "sun.tie"; });

@@ -133,6 +133,44 @@ assert(issuesOfKind(broken.list, "sun.tie").length === 1, "...and breaking it ag
 node.setProperty(second, "forwardShadingPriority", 1);
 editor.checkScene();
 
+// ---- sky.duplicate: a SECOND Sky Light (SKY_LIGHT_SPEC.md §2) --------------
+// A scene's ambient is the FIRST VISIBLE Sky Light; a second one is inert — it
+// sits in the outliner with an intensity the user can drag and does nothing at
+// all. That is exactly what this bar is for, and it has to CLEAR by itself both
+// ways the user can fix it.
+var skyOne = world.skyLight();
+assert(skyOne.light !== "", "the scene ships with a Sky Light");
+assert(issuesOfKind(editor.checkScene().list, "sky.duplicate").length === 0,
+       "one Sky Light is not an issue");
+
+var skyTwo = scene.addLight("sky", { name: "Sky Light 2" });
+var dup = editor.checkScene();
+var dups = issuesOfKind(dup.list, "sky.duplicate");
+assert(dups.length === 1, "a SECOND Sky Light raises ONE issue");
+assert(dups[0].node === skyTwo, "...naming the inert one, not the live one");
+assert(dups[0].message.indexOf("Sky Light") >= 0, "...and saying what it is");
+assert(dups[0].action.toLowerCase().indexOf("hide") >= 0,
+       "...and offering the two fixes: " + dups[0].action);
+assert(issuesOfKind(editor.checkScene().list, "sky.duplicate").length === 1,
+       "a second scan raises nothing new and still shows the one row");
+
+// FIX 1: HIDE IT. A hidden Sky Light does not light, so it does not compete.
+assert(node.setProperty(skyTwo, "visible", false), "hide the second Sky Light");
+assert(issuesOfKind(editor.checkScene().list, "sky.duplicate").length === 0,
+       "hiding it clears the issue");
+assert(world.skyLight().light === skyOne.light, "...and the first one is still the skylight");
+
+// ...and it comes back when the user shows it again.
+assert(node.setProperty(skyTwo, "visible", true), "show it again");
+assert(issuesOfKind(editor.checkScene().list, "sky.duplicate").length === 1,
+       "showing it raises the issue anew");
+
+// FIX 2: DELETE IT.
+assert(node.remove(skyTwo), "delete the second Sky Light");
+assert(issuesOfKind(editor.checkScene().list, "sky.duplicate").length === 0,
+       "deleting it clears the issue too");
+assert(world.skyLight().count === 1, "...and the scene has exactly one Sky Light again");
+
 // ---- customer 2: A LIGHT THAT SHINES THROUGH SOMETHING --------------------
 // The owner's Showroom: a lamp above a sealed roof lit the floor through it,
 // and nothing in the editor ever said so.

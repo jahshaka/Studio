@@ -24,7 +24,7 @@
 //     rename answers the sibling-unique name; undo restores the old one)
 //   - lane D #14: a scripted node.physics write is UNDOABLE too (the only
 //     place undo is observable — a --script run's macro never closes)
-//   - smoke L10 #5: world.ambient/gravity/fog/gi/sky are UNDOABLE (value, and
+//   - smoke L10 #5: world.sunDisc/gravity/fog/gi/sky are UNDOABLE (value, and
 //     the pin of a quality-registry row)
 //   - F6: run_script timeoutMs interrupts a runaway loop, the app survives,
 //     and the NEXT request is served (the setInterrupted reset)
@@ -677,7 +677,7 @@ int main(int argc, char **argv)
               "include lights: the light row carries its parameters");
         CHECK(meshRow.value("visible").toBool() && meshRow.value("visibleInScene").toBool(),
               "include visibility: visible + visibleInScene");
-        CHECK(rich.value("world").toObject().contains("ambient")
+        CHECK(rich.value("world").toObject().contains("skyLight")
                   && rich.value("world").toObject().contains("fog"),
               "include world: the scene-level settings arrive beside the nodes");
 
@@ -851,7 +851,7 @@ int main(int argc, char **argv)
     }
 
     // ---- smoke L10 item 5: the WORLD verbs are UNDOABLE -------------------
-    // world.ambient / gravity / fog / gi / sky used to write the document and
+    // world.sunDisc / gravity / fog / gi / sky used to write the document and
     // record nothing while the World panels' rows over the same fields had
     // become undoable (debt L6) — the API-first inversion pointing the wrong
     // way. They now push the panels' own commands (ScenePropertyCommand, and
@@ -861,8 +861,11 @@ int main(int argc, char **argv)
     {
         struct Case { const char *label; const char *write; const char *read; };
         const Case cases[] = {
-            { "world.ambient", "world.ambient('#0a141e')",
-              "JSON.stringify(world.get().ambient)" },
+            // (world.ambient is GONE — ambient is a Sky Light node,
+            // SKY_LIGHT_SPEC.md §5. The world-level switch that replaces it in
+            // this table is the sun disc, which goes through the same row path.)
+            { "world.sunDisc", "world.sunDisc({visible: false})",
+              "JSON.stringify(world.sunDisc())" },
             { "world.gravity", "world.gravity(-2.25)", "String(world.get().gravity)" },
             { "world.fog", "world.fog({enabled: true, density: 0.125, heightLevel: 3})",
               "JSON.stringify(world.get().fog)" },

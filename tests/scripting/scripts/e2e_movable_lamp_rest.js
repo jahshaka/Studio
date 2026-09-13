@@ -50,7 +50,23 @@ node.setProperty(lamp, "intensity", 0.15);
 assert(node.setProperty(lamp, "mobility", "movable") === true, "the lamp is marked Movable");
 assert(node.mobility(lamp).resolved === "movable", "...and the renderer holds it as a mover");
 
-world.ambient("#000000");                       // bounce light or nothing
+// BOUNCE LIGHT OR NOTHING, and it now takes two statements instead of one
+// (SKY_LIGHT_SPEC.md §2). Ambient is the SKY LIGHT, so "no ambient" is "no Sky
+// Light in the scene"; and a colour sky is a REAL sky now, with an environment
+// cubemap every glossy surface in this sealed room would reflect — which is a
+// second light source this suite's 1/255 determinism check cannot afford (it
+// measured 9/255 of drift with one). A BLACK sky is the old "a colour sky is
+// not an environment" behaviour, said out loud.
+world.sky("color", { color: "#000000" });
+// ...and the ROOM IS LIT BY THE TORCH AND NOTHING ELSE. The default scene's own
+// lights were never this suite's subject; they were simply left in place, and
+// what they happened to be changed under it (the template's Point Light became
+// a Sky Light, §5). Say it outright instead: every light but the Torch goes.
+scene.nodes().forEach(function (n) {
+    if (node.info(n.id).type !== "light") return;
+    if (n.id === lamp) return;
+    node.remove(n.id);
+});
 assert(world.gi({ mode: "vct", quality: "medium", bounces: 4,
                   boundsMin: { x: -6.5, y: -0.6, z: -6.5 },
                   boundsMax: { x:  6.5, y:  6.6, z:  6.5 } }) === true,

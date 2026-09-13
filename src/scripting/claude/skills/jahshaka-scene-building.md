@@ -184,7 +184,14 @@ Enums travel as NAMES, never ordinals, and a bad name is refused loudly.
 ## World settings
 
 ```js
-world.ambient("#334455");                     // world.setAmbient is the same verb
+// AMBIENT IS A LIGHT. The scene's ambient fill is a Sky Light node — it reads
+// the World sky and diffuses it — so you change its strength and tint like any
+// other light's, and a scene with no Sky Light has no ambient at all.
+var skylight = world.skyLight().light;        // the one the scene ships with
+node.setProperty(skylight, "intensity", 1.5); // strength (1.0 = the sky as it is)
+node.setProperty(skylight, "lightColor", "#ffeedd");   // a tint on the sky's light
+scene.addLight("sky");                        // ...or add one to a scene without
+world.sunDisc({ visible: true });             // the disc drawn where the sun points
 world.fog({ enabled: true, color: "#aabbcc", start: 20, end: 120 });
 world.shadows({ enabled: true });
 world.sky("gradient", { top: "#2a4d6e", mid: "#87a5c0", bottom: "#d8c8a8" });

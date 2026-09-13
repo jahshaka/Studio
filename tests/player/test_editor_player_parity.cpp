@@ -109,8 +109,18 @@ int main(int argc, char **argv)
     // so that a path which skips applyEnvironment cannot accidentally agree.
     auto doc = iris::Scene::create();
     doc->setSkyColor(QColor(30, 40, 70));
-    doc->setAmbientColor(QColor(220, 60, 40));    // strongly tinted: flat-ambient parity
-    doc->ambientFromSky = false;                  // single-colour sky has nothing to integrate
+    // STRONGLY TINTED AMBIENT, which is now a Sky Light (SKY_LIGHT_SPEC.md §2):
+    // the tint multiplies the sky's own integral, so a red-tinted skylight over
+    // a blue sky is still a value applyEnvironment owns and a path that skips
+    // applyEnvironment still cannot agree by accident.
+    {
+        auto skyLight = iris::LightNode::create();
+        skyLight->setLightType(iris::LightType::Sky);
+        skyLight->setName("Sky Light");
+        skyLight->color = QColor(220, 60, 40);
+        skyLight->intensity = 2.0f;
+        doc->rootNode->addChild(skyLight);
+    }
     doc->shadowEnabled  = true;
     doc->fogEnabled     = true;                   // fog is applyEnvironment's, not applySky's
     doc->fogColor       = QColor(40, 220, 120);

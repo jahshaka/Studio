@@ -379,6 +379,7 @@ inline QString lightTypeName(iris::LightType type)
     case iris::LightType::Directional: return QStringLiteral("directional");
     case iris::LightType::Spot:        return QStringLiteral("spot");
     case iris::LightType::Area:        return QStringLiteral("area");
+    case iris::LightType::Sky:         return QStringLiteral("sky");
     }
     return QStringLiteral("unknown");
 }
@@ -395,10 +396,18 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
     m["lightType"] = lightTypeName(light->lightType);
     m["color"] = colorToJs(light->color);
     m["intensity"] = light->intensity;
+    // THE SKY LIGHT HAS TWO ROWS AND NO OTHERS (SKY_LIGHT_SPEC.md §2): colour
+    // is the tint, intensity the strength, and every other LightNode field is
+    // meaningless on it. Reporting them anyway teaches a model to set fields
+    // that do nothing — the same reason a point light has no spot cone here.
+    if (light->lightType == iris::LightType::Sky) return m;
     m["shadowAlpha"] = light->shadowAlpha;
     m["shadowColor"] = colorToJs(light->shadowColor);
     if (light->lightType != iris::LightType::Directional)
         m["distance"] = light->distance;
+    // THE SUN'S ANGULAR SIZE (degrees) — the disc's size; directional only.
+    if (light->lightType == iris::LightType::Directional)
+        m["sunAngle"] = light->sunAngle;
     if (light->lightType == iris::LightType::Spot) {
         m["spotCutOff"] = light->spotCutOff;
         m["spotCutOffSoftness"] = light->spotCutOffSoftness;

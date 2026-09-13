@@ -180,6 +180,13 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     lightMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addAreaLight()));
 
+    // THE SKY LIGHT (SKY_LIGHT_SPEC.md §2): the light that reads the World sky
+    // and fills the scene with its ambient. A scene has one; a second raises a
+    // scene issue rather than being refused here (the user may be replacing it).
+    action = new QAction("Sky Light", this);
+    lightMenu->addAction(action);
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addSkyLight()));
+
     // Decal (DECALS_SPEC): a top-level entry, not under Light — it is its own
     // object kind. It spawns without an image; the Decal panel's picker (or a
     // drop from the asset bin) binds one.

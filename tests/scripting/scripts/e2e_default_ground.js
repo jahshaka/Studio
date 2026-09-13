@@ -247,14 +247,35 @@ for (var d = 0; d < corners2.length; d++)
     assert(corners2[d] < 64, "...and so did the horizon, corner " + d + " (" + corners2[d] + ")");
 
 // ---- 5. no floor, no horizon ------------------------------------------------
-// Hiding the floor takes its horizon with it: what is left is sky.
+// Hiding the floor takes its horizon with it: what is left is SKY, and a
+// single-colour sky is UNIFORM — the same value in every corner, which is the
+// discriminator here and not a brightness band.
+//
+// RE-BASELINED (SKY_LIGHT_SPEC.md §2 and §4): the old test asked the bare sky to
+// read BRIGHTER than 64 because the sky colour reached the frame raw. It is
+// decoded now (96 grey is 0.117 of radiance, i.e. 30 in this linear readback),
+// so the sky is DARKER than the lit ground rather than brighter — the horizon is
+// still plainly gone, it just goes the other way.
 assert(node.setProperty(floor2, "visible", false), "hide the floor");
 editor.frame(30, 1 / 60);
 var hidden = editor.screenshot("ground_hidden.png", 960, 540, CORNERS, "raw");
 var hc = hidden.probes.map(function (p) { return Math.round(lum(p)); });
 console.log("oblique corners, floor hidden: " + J(hc));
-for (var h = 0; h < hc.length; h++)
-    assert(hc[h] >= 64, "a hidden floor has no horizon either, corner " + h + " (" + hc[h] + ")");
+var skyLo = Math.min.apply(null, hc), skyHi = Math.max.apply(null, hc);
+assert(skyHi - skyLo <= 1,
+       "a hidden floor leaves nothing but the uniform sky: every corner reads the same (" +
+       J(hc) + ")");
+var withFloor = 0, withoutFloor = 0;
+for (var h = 0; h < hc.length; h++) {
+    withFloor += Math.round(lum(obl2.probes[h]));
+    withoutFloor += hc[h];
+    assert(hc[h] <= Math.round(lum(obl2.probes[h])),
+           "...no corner got BRIGHTER when the ground went away, corner " + h +
+           " (" + hc[h] + " <= " + Math.round(lum(obl2.probes[h])) + ")");
+}
+assert(withoutFloor < withFloor,
+       "...and the frame as a whole lost the lit ground (" + withoutFloor + " < " +
+       withFloor + " over " + hc.length + " corners)");
 assert(node.setProperty(floor2, "visible", true), "show it again");
 editor.frame(30, 1 / 60);
 var shown = editor.screenshot("ground_shown.png", 960, 540, CORNERS, "raw");
