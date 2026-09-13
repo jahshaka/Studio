@@ -1856,6 +1856,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         ci.centre     = q(c.centre);
         ci.rebuilds   = quint64(c.rebuilds);
         ci.pending    = c.pending;
+        ci.items      = c.items;
         ci.lastCpuMs  = c.lastCpuMs;
         out.cascades.append(ci);
     }

@@ -294,6 +294,42 @@ int main()
         std::printf("   every cascade re-centred on the new position\n");
     }
 
+    // =====================================================================
+    // CASE 6 — a cascade standing in EMPTY SPACE
+    // =====================================================================
+    // `VctVoxelizer::build` sizes its instance-to-world job from the instances
+    // that survive the region cull, and Ogre refuses a compute job whose thread
+    // groups multiply to zero — so a region containing nothing THROWS
+    // (measured on an 8,404-node lattice, where it left a chain of cascades
+    // holding nothing and a scene rendering with no GI and no visible error).
+    // For a CAMERA-CENTRED volume that is not a corner case: fly off the edge
+    // of a scene and the inner cascade is empty by definition.
+    std::printf("\n== case 6: a cascade in empty space ==\n");
+    {
+        GiParams tiny = cascadeGi();
+        tiny.cascadeCount = 2;
+        tiny.cascadeSet[0] = GiParams::GiCascadeDesc{ 1.0f, 128, 0.0f };
+        tiny.cascadeSet[1] = GiParams::GiCascadeDesc{ 4.0f, 64, 0.0f };
+        // 80 m above the ground: nothing at all reaches either cascade.
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 80.0f, 0.0f),
+                                                         Vec3(0.0f, 80.0f, -20.0f)));
+        render(e, 2);
+        CHECK(scene->setGlobalIllumination(tiny), "a chain whose cascades contain nothing builds");
+        render(e, 6);
+        st = scene->giStatus();
+        CHECK(st.cascades.size() == 2, "and it is a whole chain, not a half-built one");
+        CHECK(st.vctBound, "and it is bound");
+        Image img; view->readPixels(img);
+        CHECK(groundLum(img) >= 0.0f, "and the frame renders");
+        // ...and it recovers when the camera comes back down to the geometry.
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
+                                                         Vec3(0.0f, 1.0f, 0.0f)));
+        render(e, 8);
+        st = scene->giStatus();
+        CHECK(st.cascades.size() == 2 && st.cascades[0].rebuilds > 0,
+              "and the cascades re-fill when the camera returns to the geometry");
+    }
+
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
     GiParams off; off.mode = GiMode::Off;

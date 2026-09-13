@@ -542,6 +542,7 @@ public:
             QVector3D centre;
             quint64   rebuilds = 0;
             int       pending = 0;
+            int       items = 0;
             float     lastCpuMs = -1.0f;
         };
         QVector<CascadeInfo> cascades;
