@@ -449,8 +449,14 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->setName("Directional Light");
     dlight->setLocalPos(iris::Vec3(4, 4, 0));
     dlight->setLocalRot(iris::Quat::fromEulerAngles(15, 0, 0));
-    dlight->intensity = 1;
+    // Through the funnel: these run AFTER addChild, so the node is already in
+    // the scene and a raw field write is a change nothing reports
+    // (SPECS/DIRTY_SET_MIRROR_SPEC.md; lead review R2 #10). The first sync of a
+    // new scene is a full walk, so nothing depends on it today — which is
+    // exactly why it would rot silently.
+    dlight->setPropertyValue(QStringLiteral("intensity"), 1.0f);
     dlight->icon = iris::Texture2D::load(":/icons/light.png");
+    dlight->markChanged(iris::NodeChange::Params);
 
     // THE SKY LIGHT (SKY_LIGHT_SPEC.md §2, owner decision §188d). A NEW SCENE IS
     // TWO LIGHTS: the sun above, and the sky's own fill. Delete both and the
@@ -468,9 +474,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // old template's second light stood at (-4, 4, 0); the marker for the light
     // that replaces it stands in the same place.
     skylight->setLocalPos(iris::Vec3(-4, 4, 0));
-    skylight->intensity = 1.0f;
-    skylight->color = QColor(255, 255, 255);
+    skylight->setPropertyValue(QStringLiteral("intensity"), 1.0f);
+    skylight->setPropertyValue(QStringLiteral("lightColor"), QColor(255, 255, 255));
     skylight->icon = iris::Texture2D::load(":/icons/light.png");
+    skylight->markChanged(iris::NodeChange::Params);
 
     // THE DEFAULT SKY AND FOG: 96 grey, not 72 (owner pick 1, SKY_LIGHT_SPEC
     // §9.1 option ii). The old flat World ambient was 96,96,96 pushed RAW,

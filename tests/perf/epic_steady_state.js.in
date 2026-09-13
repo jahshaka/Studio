@@ -248,6 +248,21 @@ assert(b.mirror.giRefreshes - a.mirror.giRefreshes === 0,
        a.mirror.giRefreshes + " -> " + b.mirror.giRefreshes + ")");
 console.log("gi pushes over the same window: " + a.mirror.giPushes + " -> " + b.mirror.giPushes);
 
+// 6b. THE MIRROR LOOKED AT NOTHING, and missed nothing while it did
+//     (SPECS/DIRTY_SET_MIRROR_SPEC.md; lead review R2 #4). An idle Epic scene
+//     reports no changes, so the mirror visits no objects — and the background
+//     verifier, which re-reads a few dozen a frame to catch a change nobody
+//     reported, has found none. verifierCatches is a STAT: nothing else in the
+//     program can turn it red on a REAL scene, which is why this line is here
+//     and not only in the mirror suites' synthetic ones.
+assert(b.mirror.nodesVisited === 0,
+       "idle: the mirror visited NO objects on the last frame (" + b.mirror.nodesVisited + ")");
+assert(b.mirror.verifierCatches === 0,
+       "idle: the change list missed NOTHING (verifierCatches " +
+       b.mirror.verifierCatches + ")");
+console.log("mirror over the same window: walkMode=" + b.mirror.walkMode +
+            " dirty=" + b.mirror.dirtyNodes + " verified=" + b.mirror.verifierVisits);
+
 // 7. COST. The one inequality, and the only noisy number in the suite — which
 //    is why it carries a floor and an absolute slack on top of the ratio. Both
 //    exist so that a box under load turns a 0.4 ms frame into a 0.6 ms frame

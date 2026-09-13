@@ -134,3 +134,21 @@ add_test(NAME document.dirty_list COMMAND test_dirty_list
 set_tests_properties(document.dirty_list PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.dirty_list)
+
+# document.no_silent_setters — the STATIC half of the dirty-set law
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like theme.no_raw_sheets.
+# Since the mirror only looks at a node the DOCUMENT says changed, a setter that
+# writes a reflected field and reports nothing is a change that never reaches
+# the screen — not a crash, not visible in any pixel test, and healed a second
+# or two later by the background verifier, so the only symptom is lateness. This
+# greps every `void set*()` under irisgl/document/{scenegraph,materials} for a
+# body that assigns a member and never reaches notifyChanged / markedParams /
+# touch. It caught thirteen emitter setters and the whole camera lens surface.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME document.no_silent_setters
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/no_silent_setters.py
+                     ${CMAKE_SOURCE_DIR})
+    set_tests_properties(document.no_silent_setters PROPERTIES LABELS "document" TIMEOUT 60)
+    jah_no_display(document.no_silent_setters)
+endif()
