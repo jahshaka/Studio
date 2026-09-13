@@ -266,17 +266,35 @@ int main(int argc, char **argv)
         }
         recs.clear();
         engine->takeFrameRecords(recs);
-        unsigned lightTicks = 0, timed = 0;
+        unsigned lightTicks = 0, lightRowsNamed = 0, untimed = 0;
         for (const FrameRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
-                if (w.cache == CacheKind::Gi) {
-                    if (w.reason == WorkReason::Light) ++lightTicks;
-                    if (w.ms >= 0.0f) ++timed;
+                if (w.cache == CacheKind::Gi && w.reason == WorkReason::Light) {
+                    ++lightTicks;
+                    // The light-only tick's own details, and nothing else's: a
+                    // full re-solve filed under Light would be the coalescing
+                    // gate failing, and would read as a cheap tick here.
+                    if (w.detail == "vct.light" || w.detail == "vct.light.moving" ||
+                        w.detail == "ifd.converge.inline")
+                        ++lightRowsNamed;
+                    if (!(w.ms > 0.0f)) ++untimed;
                 }
-        std::printf("   monitor: drag filed %u GI rows with reason Light (%u timed)\n",
-                    lightTicks, timed);
+        std::printf("   monitor: drag filed %u GI rows with reason Light (%u named, %u untimed)"
+                    " over %zu frames\n", lightTicks, lightRowsNamed, untimed, recs.size());
         CHECK(lightTicks >= 1, "the drag's light-only re-injects are FILED, with reason Light");
-        CHECK(timed >= lightTicks, "every GI row carries its own milliseconds");
+        // THE THREE THINGS THAT CAN ACTUALLY FAIL (ENGINE-5 review, ledger §208).
+        // The old assertion here was `timed >= lightTicks` over ALL GI rows,
+        // which a CacheScope cannot fail: it times itself from a steady_clock
+        // and files unconditionally. What is worth pinning is the CADENCE (the
+        // cheap path runs every kGiLightOnlyEveryN = 10 frames, so a 60-frame
+        // drag files a handful of rows and NOT one per frame — a gate that
+        // stopped coalescing would show ~60), that every Light row is one of
+        // the light-only paths by NAME, and that each carries real time.
+        CHECK(lightTicks <= recs.size() / 4,
+              "...on a CADENCE: far fewer rows than frames, which is the gate working");
+        CHECK(lightRowsNamed == lightTicks,
+              "...and every Light row is a light-only path by name, never a full re-solve");
+        CHECK(untimed == 0, "...each carrying its own milliseconds");
 
         // (3) LETTING GO: the settle's full re-solve files its own row too.
         for (int f = 0; f < 40; ++f) frame();

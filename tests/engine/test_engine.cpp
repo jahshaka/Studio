@@ -1770,6 +1770,70 @@ void many_materials_survive_teardown() {
     CHECK(true);
 }
 
+// THE SAME CEILING REACHED HONESTLY: 14,000 TEXTURED MATERIALS
+// (ENGINE-6 item 2 — the review finding F2 the case above left open).
+//
+// The fix above removed the references an EMPTY slot used to take, which is
+// what made 6,554 plain materials enough to wrap the counter. It cannot help a
+// material that really has maps: five real slots (albedo, normal, roughness,
+// metalness, emissive) take five references each on the ONE samplerblock every
+// material with default filtering shares, so 13,108 textured materials reach
+// `BasicBlock::mRefCount`'s uint16 ceiling — and its only guard is an assert
+// compiled out of every build we ship. Past it the block is freed under live
+// datablocks and the next ~HlmsPbsDatablock throws out of a noexcept
+// destructor: std::terminate, exit 134, at shutdown, exactly as before.
+//
+// 14,000 materials x 5 maps = 70,000 references against a 65,535 ceiling. All
+// of them share ONE 2x2 texture, because the texture is not what is being
+// counted — the SAMPLER is, and one is what every one of these materials asks
+// for. The assertion is the whole run: on unguarded code this case does not
+// fail, it ABORTS the suite from a destructor no catch can reach.
+void many_textured_materials_survive_teardown() {
+    Fixture fx;
+    View *v = fx.view("texmat-view", 32, 32, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("texmat-scene");             REQUIRE(s);
+    v->setScene(s); aim(v);
+    std::vector<unsigned char> pix(2 * 2 * 4, 200);
+    const TextureId tex = s->createTexture(2, 2, pix.data(), true);
+    CHECK_MSG(tex != 0, "%s", fx.e->lastError().c_str());
+    // The five slots a real PBR material fills. Reflection is excluded on
+    // purpose: it is bound through reflectionTexFor and takes no sampler here.
+    const PbrTextureSlot slots[5] = { PbrTextureSlot::Albedo, PbrTextureSlot::Normal,
+                                      PbrTextureSlot::Roughness, PbrTextureSlot::Metalness,
+                                      PbrTextureSlot::Emissive };
+    const int kMaterials = 14000;
+    int made = 0, bound = 0;
+    for (int i = 0; i < kMaterials; ++i) {
+        PbrParams p;
+        p.albedo = Colour(float(i % 5) / 5.0f, 0.5f, 0.5f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        if (!mat) break;
+        ++made;
+        for (PbrTextureSlot slot : slots)
+            if (s->setPbrTexture(mat, slot, tex)) ++bound;
+    }
+    CHECK_MSG(made == kMaterials, "created %d of %d textured materials (%s)", made, kMaterials,
+              fx.e->lastError().c_str());
+    CHECK_MSG(bound == made * 5, "every map bound: %d of %d", bound, made * 5);
+    // It still RENDERS: the guard hands out a second samplerblock with the same
+    // filtering, so a material bound through it must draw exactly like one bound
+    // through the first. The last material made is the one past the ceiling.
+    PbrParams lastP; lastP.albedo = Colour(1.0f, 1.0f, 1.0f);
+    const MaterialId last = s->createPbrMaterial(lastP);
+    CHECK(s->setPbrTexture(last, PbrTextureSlot::Albedo, tex));
+    const NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, s->createMesh(unitCubeData()), last));
+    s->setNodeTransform(n, Vec3(0, 0, 0), Quat(), Vec3(1.4f, 1.4f, 1.4f));
+    enginetest::addDirectionalLight(s, Vec3(-0.4f, -0.7f, -0.5f), 3.14159f);
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    const Px px = centre(img);
+    std::printf("    the 14,001st material draws: %d %d %d\n", px.r, px.g, px.b);
+    CHECK(px.r > 30 && px.g > 30 && px.b > 30);
+    // And the teardown that terminates on an unguarded counter.
+    CHECK(true);
+}
+
 void light_on_node_and_camera_desc() {
     Fixture fx;
     View *v = fx.view("light-view", 96, 96, kBlue); REQUIRE(v);
@@ -5267,6 +5331,7 @@ int main(int argc, char **argv) {
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
         { "many_materials_survive_teardown",         many_materials_survive_teardown },
+        { "many_textured_materials_survive_teardown", many_textured_materials_survive_teardown },
         { "light_on_node_and_camera_desc",          light_on_node_and_camera_desc },
         { "area_light_lights_the_wall",             area_light_lights_the_wall },
         { "ies_profile_shapes_a_spot",              ies_profile_shapes_a_spot },
