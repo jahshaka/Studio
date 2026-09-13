@@ -484,6 +484,172 @@ int main()
         engine->destroyScene(s);
     }
 
+    // ---- 13. THE SUN DISC AND THE PROBES, IN PIXELS ------------------------
+    // gi.sky_light's 6e/6f verify `SunDisc::inProbes` by MASK — the disc
+    // carries kVisibleBit beside its own channel, and kVisibleBit is what a
+    // probe capture asks for — and then assert that the VIEW's picture does not
+    // change. Nothing anywhere read the other end of it: what a REFLECTION
+    // actually shows (LIGHTS-2 review 12, ENGINE-6 item 5).
+    //
+    // THE SCENE has to do two things at once, which is why it lives here rather
+    // than in gi.sky_light: hold a probe grid (so the glossy surface is
+    // probe-lit at all) and let those probes SEE THE SKY (so there is something
+    // for a disc to be in). Case 1's room does both — four walls and no roof,
+    // so X and Z enclose and the sky is straight up — with a mirror cube in the
+    // middle, the camera above it looking down, and the sun overhead and BEHIND
+    // the camera, so the disc is nowhere in the frame: the only way it can
+    // reach this picture is through the probe the mirror samples.
+    //
+    // THREE THINGS THIS CASE HAD TO ESTABLISH BEFORE IT COULD MEASURE ANYTHING,
+    // all of them measured in this lane and all worth knowing:
+    //   * `updateBudget` 0 — which every other case here uses for determinism —
+    //     makes a mirror in a probe room render BLACK. At 0 the renderer does
+    //     not trust the probes for reflections and the pixel falls back to the
+    //     voxel cone, which above a wall has nothing in it. So this case runs
+    //     at budget 1 and spins enough frames for four probes to catch up.
+    //   * the TWO-TONED sky separates the two possible sources: the visible sky
+    //     is blue and the IBL cubemap is green, and a probe grid unbinds that
+    //     cubemap from every datablock, so a BLUE mirror is a photograph and a
+    //     green one is the sky texture. This case asserts blue.
+    //   * turning the sky red re-captures the probes and turns the mirror red —
+    //     the positive control that says the capture in front of us is live.
+    {
+        Scene *s = engine->createScene("sundisc");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f);
+        addMirror(s, Vec3(0.0f, 1.4f, 0.0f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 7.0f, 6.0f), Vec3(0.0f, 1.4f, 0.0f));
+
+        // The sky in two tones (as bindTwoTonedSky, plus a disc), and the sun
+        // overhead. 20 degrees across, because what is being read is one 256 px
+        // probe cube face reflected off a 1.8 m cube into a 128 px picture.
+        SkyDesc sky;
+        const unsigned char bluePx[4] = { 12, 30, 255, 255 };
+        sky.mode = SkyMode::Equirectangular;
+        sky.equirect = s->createTexture(1, 1, bluePx, true);
+        const unsigned char greenPx[4] = { 20, 255, 40, 255 };
+        sky.reflections = true;
+        for (int f = 0; f < 6; ++f) sky.reflectionFaces[f] = s->createTexture(1, 1, greenPx, true);
+        sky.sun.enabled = true;
+        sky.sun.dir[0] = 0.0f; sky.sun.dir[1] = 0.70f; sky.sun.dir[2] = 0.71f;
+        sky.sun.angularDiameterDeg = 20.0f;
+        sky.sun.colour = Colour(8.0f, 8.0f, 8.0f, 1.0f);
+        sky.sun.inProbes = false;
+        s->setSky(sky);
+
+        GiParams gi;
+        gi.mode = GiMode::VctPccHybrid;
+        gi.quality = GiQuality::Medium;
+        gi.numBounces = 1;
+        gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+        gi.updateBudget = 1;                  // see the header: 0 renders the mirror black
+        gi.boundsMin = Vec3(-5.5f, -0.5f, -5.5f);
+        gi.boundsMax = Vec3( 5.5f,  5.0f,  5.5f);
+        CHECK(s->setGlobalIllumination(gi), "13: the hybrid builds over the roofless room");
+        render(engine.get(), 20);
+        {
+            const GiStatus st = s->giStatus();
+            std::printf("-- 13. a roofless room, a mirror cube, a sun disc overhead\n"
+                        "   enclosedAxes=%d refused=%s probes=%d\n", st.probeEnclosedAxes,
+                        st.probeGridRefused ? "true" : "false", st.probeCount);
+            CHECK(st.probeEnclosedAxes >= 2 && !st.probeGridRefused && st.probeCount == 4,
+                  "13: the room holds a probe grid (so the mirror is PROBE-lit)");
+        }
+
+        Image img;
+        // The mirror pixel: the cube's top face, which reflects the camera's own
+        // direction back up into the open sky.
+        const auto mirrorPx = [&]() { view->readPixels(img); return img.at(56, 54); };
+        // ...and the WHITEST pixel over the whole cube, wherever the parallax
+        // correction puts the disc. The whitest, not the brightest: the sky
+        // this mirror shows is saturated BLUE, so a brightest-channel reading
+        // is pinned at 1.0 before the disc is even switched on and could not
+        // move. The disc's radiance is white, so the smallest channel is what
+        // separates them — the bare sky reads 0.004 there.
+        const auto whitestOnCube = [&]() {
+            view->readPixels(img);
+            float best = 0.0f;
+            for (unsigned y = 50; y < 61; ++y)
+                for (unsigned x = 52; x < 73; ++x) {
+                    const Colour c = img.at(x, y);
+                    best = std::max(best, std::min(c.r, std::min(c.g, c.b)));
+                }
+            return best;
+        };
+        const Colour blue = mirrorPx();
+        show("mirror, disc out of the probes", blue);
+        CHECK(blue.b > 0.5f && blue.b > blue.g + 0.3f && blue.b > blue.r + 0.3f,
+              "13: the mirror shows the BLUE sky a probe photographed, not the green IBL cube");
+
+        // THE POSITIVE CONTROL: the capture is live and re-captures on a sky
+        // change. Without this, "nothing happened" below could mean "nothing
+        // was re-captured" instead of what it does mean.
+        {
+            SkyDesc red = sky;
+            const unsigned char redPx[4] = { 255, 20, 20, 255 };
+            red.equirect = s->createTexture(1, 1, redPx, true);
+            s->setSky(red);
+            render(engine.get(), 20);
+            const Colour r = mirrorPx();
+            show("mirror, sky turned red", r);
+            CHECK(r.r > 0.5f && r.r > r.b + 0.3f,
+                  "13: a sky change re-captures the probes and the mirror follows it");
+            s->setSky(sky);
+            render(engine.get(), 20);
+        }
+
+        const float withoutDisc = whitestOnCube();
+        // THE ONE VARIABLE. Nothing else moves: same scene, same probes, same
+        // sky — only which visibility channels the disc carries.
+        sky.sun.inProbes = true;
+        s->setSky(sky);
+        render(engine.get(), 20);
+        const float withDisc = whitestOnCube();
+        std::printf("   whitest pixel on the mirror: disc out %.4f, disc IN %.4f\n",
+                    double(withoutDisc), double(withDisc));
+
+        // THE EXCLUSION, IN PIXELS — which is what this case was asked for, and
+        // it holds: with `inProbes` false the reflection is the bare sky and
+        // carries no highlight at all (a 20-degree disc at radiance 8 would own
+        // the whole cube face).
+        CHECK(withoutDisc < 0.25f && mirrorPx().b > 0.5f,
+              "13: with inProbes FALSE the disc is not in the reflection (the bare sky is)");
+
+        // THE INCLUSION IS A MEASURED DEFECT, NOT AN ASSERTION — ENGINE-6 item
+        // 5, reported to the lead rather than fenced, because the fix is in
+        // OgreSky.cpp, which another lane owns this round.
+        //
+        // `inProbes` true changes NOTHING in a probe capture. Measured here at
+        // 20 degrees and again at 170 (a disc covering nearly the whole sky,
+        // which saturates the VIEW at the same moment): the mirror pixel stays
+        // the bare sky, to four decimals, in both. The capture is live (the red
+        // control above), the mask is right (kVisibleBit = 1 is exactly the
+        // probe pass's `visibility_mask 0x1`, and its rq range 0..200 contains
+        // the disc's queue 1), and the disc draws perfectly in any ordinary
+        // camera. What is left is the quad itself: it is a Rectangle2D whose
+        // geometry is NDC (-1,-1)..(1,1) with identity view AND projection
+        // turned OFF, attached to the static root — so its world AABB is a 2x2
+        // box at the world ORIGIN, and a cube face looking UP from a probe at
+        // y = 2 cannot contain it. The screen-filling quad is culled out of
+        // exactly the faces the sky is in. An infinite local AABB on that
+        // object is the shape of the fix.
+        //
+        // When it lands, this print becomes `CHECK(withDisc > withoutDisc +
+        // 0.25f, ...)` and the note goes.
+        if (!(withDisc > withoutDisc + 0.25f))
+            std::printf("   DEFECT (ENGINE-6 item 5): SunDisc::inProbes = true puts NOTHING in a "
+                        "probe capture (%.4f vs %.4f) — the disc's screen quad is culled by its "
+                        "origin-sized world AABB in the cube faces that see the sky\n",
+                        double(withDisc), double(withoutDisc));
+        sky.sun.inProbes = false;
+        s->setSky(sky);
+        render(engine.get(), 20);
+        engine->destroyScene(s);
+    }
+
     // ---- THE ESCAPE HATCH --------------------------------------------------
     // A scene that has TYPED its lit volume has stated where the space is, and
     // the measurement stands down — the documented remedy for the one case it

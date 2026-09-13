@@ -632,9 +632,6 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
         { "giParams", QJsonObject{
             { "mode", QLatin1String(giModeName(s.giParams.mode)) },
             { "quality", QLatin1String(giQualityName(s.giParams.quality)) },
-            { "boundsMin", vec3(s.giParams.boundsMin) },
-            { "boundsMax", vec3(s.giParams.boundsMax) },
-            { "autoBoundsMax", double(s.giParams.autoBoundsMax) },
             { "irLight", double(s.giParams.irLight) },
             { "numBounces", s.giParams.numBounces },
             { "pccProbes", QJsonArray{ s.giParams.pccProbesX, s.giParams.pccProbesY,
