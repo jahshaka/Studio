@@ -643,6 +643,29 @@ public:
         /// its subtree for the duration of the gesture; this is what puts it
         /// back, and without it a session's classification drains to nothing.
         quint64 staticRepromotions = 0;
+        // ---- THE DIRTY SET (SPECS/DIRTY_SET_MIRROR_SPEC.md) ---------------
+        /// How many nodes the document reported as CHANGED on the last sync —
+        /// the size of the change list, before the visit. ZERO on a still
+        /// frame however big the scene is, which is the whole contract: the
+        /// mirror handles what moved, not what exists.
+        quint64 dirtyNodes = 0;
+        /// How many entries the last sync released because their nodes left
+        /// the document (what replaced the per-frame stamp sweep).
+        quint64 evictedNodes = 0;
+        /// How many nodes the amortised VERIFIER re-checked on the last sync —
+        /// the slow rotating re-read that catches a change the document failed
+        /// to report (64 a sync by default, a full pass every ~2.2 s at 60 Hz).
+        quint64 verifierVisits = 0;
+        /// How many times it has FOUND one, ever. IT MUST BE ZERO: every catch
+        /// is a missing mark in the document, named once in the log, and the
+        /// screen is only right because the verifier healed it.
+        quint64 verifierCatches = 0;
+        /// How many engine pushes the node visits have made, ever.
+        quint64 pushes = 0;
+        /// "dirty" or "full" — which mode the last sync ran in. A full walk is
+        /// the rare, explicit answer (a bind, a page switch, the play edge,
+        /// JAH_MIRROR_VERIFY=full); "dirty" every other frame.
+        QString walkMode;
     };
     /// How many times the mirror has pushed a NEW global-illumination
     /// configuration into the engine, and how many times it has asked for the

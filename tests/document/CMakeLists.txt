@@ -114,3 +114,41 @@ add_test(NAME document.light_defaults COMMAND test_light_defaults
 set_tests_properties(document.light_defaults PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.light_defaults)
+
+# document.dirty_list — THE DOCUMENT'S HALF of the dirty-set mirror
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.3): dedupe, the three kinds that cascade
+# over a subtree, eviction (including a node marked and then freed before the
+# list was read), scene membership, the overflow valve, and the material
+# revision that carries what the node list cannot. Document only: NULL render
+# system, no display, no engine.
+add_executable(test_dirty_list test_dirty_list.cpp)
+set_target_properties(test_dirty_list PROPERTIES AUTOMOC OFF)
+target_include_directories(test_dirty_list PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_dirty_list PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_dirty_list)
+add_test(NAME document.dirty_list COMMAND test_dirty_list
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.dirty_list PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.dirty_list)
+
+# document.no_silent_setters — the STATIC half of the dirty-set law
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like theme.no_raw_sheets.
+# Since the mirror only looks at a node the DOCUMENT says changed, a setter that
+# writes a reflected field and reports nothing is a change that never reaches
+# the screen — not a crash, not visible in any pixel test, and healed a second
+# or two later by the background verifier, so the only symptom is lateness. This
+# greps every `void set*()` under irisgl/document/{scenegraph,materials} for a
+# body that assigns a member and never reaches notifyChanged / markedParams /
+# touch. It caught thirteen emitter setters and the whole camera lens surface.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME document.no_silent_setters
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/no_silent_setters.py
+                     ${CMAKE_SOURCE_DIR})
+    set_tests_properties(document.no_silent_setters PROPERTIES LABELS "document" TIMEOUT 60)
+    jah_no_display(document.no_silent_setters)
+endif()

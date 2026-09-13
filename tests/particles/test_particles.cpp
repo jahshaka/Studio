@@ -302,12 +302,12 @@ int main(int argc, char **argv)
         CHECK(countBright(img) > 100, "and turning it back on refills the plume");
 
         // Visibility follows the document node, and kills particles in flight.
-        ps->visible = false;
+        ps->setVisible(false);
         mirror.sync();
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
         CHECK(countBright(img) == 0, "hidden emitter renders nothing");
-        ps->visible = true;
+        ps->setVisible(true);
         mirror.sync();
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
