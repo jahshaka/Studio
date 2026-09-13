@@ -14,7 +14,10 @@
 //     editor.trayAssets() reads the WIDGET);
 //   * a pin made through a verb left the panel stale until a click (section 1);
 //   * the samples shipped junk rows the old filter happened to hide, and two
-//     shipped Tile.png rows with no bytes (section 3 — the sample CRUD).
+//     shipped Tile.png rows with no bytes (section 3 — the sample CRUD);
+//   * the samples' checker row was not marked as the PLATFORM's, so an opened
+//     sample showed a tile for a texture the user never added (section 3, the
+//     Tile.png assertions — CONTENT-1 re-exported the archives with the stamp).
 //
 // SECTION 3 IS THE OWNER'S QUESTION, per shipped sample: import it the way the
 // sample dialog does, open it, and the tray must be EXACTLY the scene's asset
@@ -79,11 +82,29 @@ function sceneClosure() {
     var tops = scene.nodes({ depth: 1 }).filter(function (r) { return r.id !== root; });
     var trees = tops.map(function (t) { return node.serialize(t.id).node; });
 
-    // Pass 1: the nodes whose own row is the NODE (not an asset).
-    var nodeOnly = {};
+    // Pass 1: the nodes whose own row is the NODE (not an asset), and the
+    // PLATFORM FURNITURE they stand on. The DEFAULT FLOOR's shipped checker is
+    // a real library texture the scene really uses, but the editor pinned it by
+    // itself for a node the user never added, so its row is stamped
+    // `{"type": "platform"}` and the tray drops it by rule 4
+    // (services/shippedassets.h Ownership::Platform, services/assettray.h); the
+    // shipped archives carry that stamp since CONTENT-1 re-exported them, which
+    // is why six of the eight samples now show nothing at all.
+    //
+    // THE STAMP IS NOT IN THE DOCUMENT — it is a property of the catalog row —
+    // so this closure, which is deliberately computed from the document alone,
+    // names the one row the platform pins: the project's "Tile.png", and only
+    // when the scene's default floor actually wears it. A floor wearing a
+    // texture the user chose (World Background's metal plate) is an ordinary
+    // dependency and stays in the closure, exactly as the tray keeps it.
+    var checker = assets.list({ scope: "project", type: "texture", query: "Tile.png" })[0];
+    var nodeOnly = {}, platform = {};
     function mark(n) {
         var builtinMesh = n.type === "mesh" && typeof n.mesh === "string" && n.mesh.charAt(0) === ":";
         if (n.type !== "mesh" || builtinMesh) nodeOnly[n.guid] = true;
+        if (n.defaultFloor === true && n.material && n.material.values && checker
+            && n.material.values.baseColorMap === checker.guid)
+            platform[checker.guid] = true;
         (n.children || []).forEach(mark);
     }
     trees.forEach(mark);
@@ -92,7 +113,7 @@ function sceneClosure() {
     var used = {};
     function use(guid) {
         var row = byGuid[guid];
-        if (!row || nodeOnly[guid]) return;
+        if (!row || nodeOnly[guid] || platform[guid]) return;
         if (row.type === "mesh") { if (meshOwner[guid]) used[meshOwner[guid]] = true; return; }
         used[guid] = true;
     }
@@ -171,7 +192,21 @@ for (var i = 0; i < SAMPLES.length; ++i) {
            J(minus(got, want).map(function (g) { return nameOf[g]; })) + ")");
     assert(tray.filter(function (r) { return r.type === "mesh"; }).length === 0,
            name + ": no mesh row is a tile");
-    assert(want.length > 0, name + ": the scene uses at least one asset (its ground's tile)");
+    // THE SHIPPED CHECKER IS NOT A TILE (BAR-1's rule, reaching the archives in
+    // CONTENT-1): the sample's own Tile.png row carries the platform stamp, so
+    // an opened sample never shows it — while the floor still WEARS it, on a
+    // library that has never seen this scene before (this suite's home is
+    // fresh and every sample is imported into it).
+    assert(tray.filter(function (r) {
+               return ("" + r.name).toLowerCase() === "tile.png";
+           }).length === 0,
+           name + ": the shipped checker is not a tray tile");
+    var floor = scene.find("Ground");
+    if (floor) {
+        var floorMap = "" + material.get(floor).baseColorMap;
+        assert(floorMap.length > 0 && floorMap.indexOf("objects/") >= 0,
+               name + ": ... and the ground still wears it from the store (" + floorMap + ")");
+    }
     agree(name);
     var folders = editor.trayAssets().filter(function (t) { return t.folder; });
     assert(folders.length === 0,
