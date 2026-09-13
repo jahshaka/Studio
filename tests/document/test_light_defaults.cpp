@@ -217,26 +217,31 @@ int main(int argc, char **argv)
                                       "directional can be the sun)");
     }
 
-    // ---- 8. the sky steers the sun, and that is a separate switch ---------
+    // ---- 8. THE SKY LIGHT, and it resolves like the sun does ---------------
+    // The steering case that used to stand here is GONE with `skyDrivesSun`
+    // (SKY_LIGHT_SPEC.md §3, owner decision D15): the sky follows the sun light
+    // now, so there is no switch and no coupling to no-op. What replaces it is
+    // the OTHER resolver this file exists to pin.
     {
-        printf("-- the sky's steering is its own switch\n");
+        printf("-- the skylight resolver\n");
         auto scene = iris::Scene::create();
-        auto sun = addLight(scene, iris::LightType::Directional, "Sun");
-        scene->skyType = iris::SkyType::REALISTIC;
-        CHECK(!scene->skyDrivesSun, "a fresh scene's sky steers nothing");
-        CHECK(!scene->applySunCoupling(), "...so the coupling is a no-op");
-        const iris::Quat authored = sun->getGlobalRotation();
-        scene->skyDrivesSun = true;
-        CHECK(scene->applySunCoupling(), "turning the steering on aims the SUN");
-        CHECK(sun->getGlobalRotation() != authored, "...and the light really moved");
-        // ...and it aims whichever light IS the sun, not a light named in a
-        // second field (the whole reason the two were split).
-        auto other = addLight(scene, iris::LightType::Directional, "Other");
-        other->forwardShadingPriority = -1;   // deliberately below the first
-        const iris::Quat otherBefore = other->getGlobalRotation();
-        scene->applySunCoupling();
-        CHECK(other->getGlobalRotation() != otherBefore,
-              "the steering follows the sun when the sun changes");
+        CHECK(!scene->skyLight(), "a scene with no Sky Light has no skylight");
+        CHECK(scene->skyLightReason() == QLatin1String("none"), "...and says so");
+
+        auto first = addLight(scene, iris::LightType::Sky, "Sky Light");
+        CHECK(scene->skyLight() == first, "the first Sky Light is THE skylight");
+        CHECK(scene->skyLightReason() == QLatin1String("first"), "...for that reason");
+
+        auto second = addLight(scene, iris::LightType::Sky, "Sky Light 2");
+        CHECK(scene->skyLights().size() == 2, "both are in the scene");
+        CHECK(scene->skyLight() == first, "a SECOND Sky Light does not take the role");
+
+        first->setVisible(false);
+        CHECK(scene->skyLight() == second,
+              "hiding the first hands the role to the second (the duplicate issue's fix)");
+        second->setVisible(false);
+        CHECK(!scene->skyLight(), "hiding every Sky Light leaves the scene with no ambient");
+        CHECK(scene->skyLightReason() == QLatin1String("allHidden"), "...and says which way");
     }
 
     printf(failures ? "document.light_defaults: %d FAILURES\n"

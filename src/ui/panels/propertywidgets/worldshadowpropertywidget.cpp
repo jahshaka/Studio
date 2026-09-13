@@ -72,7 +72,9 @@ int WorldShadowPropertyWidget::derivedFromLights() const
     // ask, and the largest remaining request wins.
     int best = 0;
     for (const auto &l : scene->lights) {
-        if (l.isNull() || l->lightType == iris::LightType::Area) continue;
+        // A Sky Light cannot cast either — it has no place to cast FROM.
+        if (l.isNull() || l->lightType == iris::LightType::Area ||
+            l->lightType == iris::LightType::Sky) continue;
         if (!l->shadowMap || l->shadowMap->shadowType == iris::ShadowMapType::None) continue;
         best = std::max(best, l->shadowMap->resolution);
     }

@@ -595,20 +595,6 @@ QVector<Row> buildRows()
         r.set = [](const iris::ScenePtr &s, int v) { s->skyBakeResolution = v; };
         out.append(r);
     }
-    {
-        Row r;
-        r.id = QStringLiteral("ambientFromSky");
-        r.label = QStringLiteral("Sky Ambient");
-        r.group = QStringLiteral("Sky");
-        r.type = RowType::Bool;
-        r.tier[0] = 1; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
-        r.cost = QStringLiteral("Ambient light integrated from the live sky instead of the flat "
-                                "Ambient Color. One CPU integral per sky change — cheap in every "
-                                "tier; it is a row for discoverability, not for performance.");
-        r.get = [](const iris::ScenePtr &s) { return s->ambientFromSky ? 1 : 0; };
-        r.set = [](const iris::ScenePtr &s, int v) { s->ambientFromSky = v != 0; };
-        out.append(r);
-    }
 
     // ---- Reflections -------------------------------------------------------
     // This row was declared here with `available = false` before the engine

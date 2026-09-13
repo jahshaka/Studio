@@ -50,7 +50,12 @@ node.setProperty(lamp, "intensity", 0.15);
 assert(node.setProperty(lamp, "mobility", "movable") === true, "the lamp is marked Movable");
 assert(node.mobility(lamp).resolved === "movable", "...and the renderer holds it as a mover");
 
-world.ambient("#000000");                       // bounce light or nothing
+// BOUNCE LIGHT OR NOTHING: ambient is the Sky Light (SKY_LIGHT_SPEC.md §2), so
+// "no ambient" is "no Sky Light in the scene" — not a black colour on a panel.
+scene.nodes().forEach(function (n) {
+    if (node.info(n.id).type === "light" && node.property(n.id, "lightType") === 4)
+        node.remove(n.id);
+});
 assert(world.gi({ mode: "vct", quality: "medium", bounces: 4,
                   boundsMin: { x: -6.5, y: -0.6, z: -6.5 },
                   boundsMax: { x:  6.5, y:  6.6, z:  6.5 } }) === true,

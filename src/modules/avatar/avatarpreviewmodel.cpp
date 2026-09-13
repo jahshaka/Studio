@@ -196,11 +196,10 @@ void AvatarPreviewModel::buildDocument()
     mDocument->setSkyColor(QColor(28, 30, 36));
     // NOTE: the room's ambient is the ENGINE scene's hemisphere
     // (AvatarPreviewScene::configureScene), not this: a preview host syncs the
-    // mirror but never calls applyEnvironment, so the World-panel ambient of a
-    // preview document reaches nothing. Kept as the document's own value for
-    // anything that reads the document (and measured as dead for the picture,
-    // smoke S10).
-    mDocument->setAmbientColor(QColor(70, 70, 78));
+    // mirror but never calls applyEnvironment, so a preview document's ambient
+    // reaches nothing. The dead `setAmbientColor` write that used to stand here
+    // is GONE with the field (SKY_LIGHT_SPEC.md §5) — it was measured as dead
+    // for the picture (smoke S10) and there is nothing to keep.
     mDocument->fogEnabled = false;
 
     // THE PAGE'S GRADE, pinned on its own document (smoke S10, avatarspace.h):

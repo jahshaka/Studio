@@ -33,7 +33,7 @@ For more information see the LICENSE file
 // than inventing a second spelling of `scene->fogDensity`.
 //
 // What it is NOT: it does not carry the World Mode pin map. A row that PINS
-// (msaa, shadow resolution, the Rayon rows, sky detail, ambient-from-sky, the
+// (msaa, shadow resolution, the Photon rows, sky detail, the
 // post-process on/off rows) is a registry row and belongs to WorldModeCommand,
 // which restores the backing field AND the pin — using this class there would
 // undo the value and leave the pin behind.
@@ -49,7 +49,7 @@ For more information see the LICENSE file
 
 /// The world properties a panel row can write, by name.
 ///
-/// Keys are the document's own field names (`fogDensity`, `ambientColor`,
+/// Keys are the document's own field names (`fogDensity`, `fogColor`,
 /// `giBoundsMin`, ...) with two composites that only make sense whole:
 ///   * `postFx.<id>`  — one worldmodes::postFxParam (exposure, bloomKnee, ...);
 ///                      the registry owns the clamp and the setter.

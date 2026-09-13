@@ -84,7 +84,10 @@ void EngineMaterialPreviewScene::buildDocument()
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(125, 125, 125));   // SceneWidget's initial clearColor
-    mDocument->setAmbientColor(QColor(190, 190, 190));
+    // (The dead `setAmbientColor` that stood here is GONE with the field —
+    // SKY_LIGHT_SPEC.md §5. This preview lights its ENGINE scene directly
+    // through Engine::setAmbient and never calls applyEnvironment, so the
+    // document write reached nothing and always had.)
     mDocument->fogEnabled = false;
 
     mCamera->update(0);

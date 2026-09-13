@@ -172,7 +172,7 @@ QJsonArray McpTools::listTools() const
               "= the whole tree) or point `subtree` at a node id to go deeper in one place. "
               "`include` adds blocks: \"materials\" (a material summary on mesh nodes), \"lights\" "
               "(the parameters of each light), \"visibility\" (each node's own flag plus whether "
-              "an ancestor hides it) and \"world\" (the scene-level settings — ambient, fog, sky, "
+              "an ancestor hides it) and \"world\" (the scene-level settings — the sky light, fog, sky, "
               "shadows, GI, post-fx — as one object beside the nodes).\n"
               "Every field comes from a registry verb: scene.nodes({subtree, depth, include}) and "
               "world.get(). run_script can call them directly.")

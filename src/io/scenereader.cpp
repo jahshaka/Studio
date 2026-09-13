@@ -313,15 +313,17 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // ask). const makes that impossible rather than merely unfashionable.
     const QJsonObject sceneObj = projectObj["scene"].toObject();
 	scene->skyGuid = sceneObj.value("skyGuid").toString();
-	// Sun coupling (re-audit F5); absent in every document written before it,
-	// which reads as "nothing is driven" — the default.
+	// THE SUN PIN (SUN_AND_LIGHT_DEFAULTS Q1): which directional light is the
+	// sun. Empty = automatic. The `skyDrivesSun` key beside it is GONE (D15):
+	// the sky follows the sun, never the other way round, so an old file's
+	// steering switch is simply not read and its sky takes its sun from the
+	// same directional light the pin names.
 	scene->sunLightGuid = sceneObj.value("sunLight").toString();
-	// THE SKY STEERS THE SUN — a separate switch since the sun lane. Every
-	// document written before it carried a non-empty `sunLight` guid to mean
-	// exactly "driven", so those files keep driving and nothing changes for
-	// them; new files write the boolean.
-	scene->skyDrivesSun =
-		sceneObj.value("skyDrivesSun").toBool(!scene->sunLightGuid.isEmpty());
+	// THE SUN DISC (SKY_LIGHT_SPEC §3): visible by default, excluded from probe
+	// captures by default. Absent keys read as those defaults, so a file written
+	// before the disc existed gets the shipped behaviour.
+	scene->sunDiscVisible = sceneObj.value("sunDiscVisible").toBool(true);
+	scene->sunDiscInProbes = sceneObj.value("sunDiscInProbes").toBool(false);
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
 	auto volume = sceneObj.value("ambientMusicVolume").toDouble(50);
 	scene->setAmbientMusicVolume(volume);
@@ -332,13 +334,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	}
 
 	scene->skyType = static_cast<iris::SkyType>(sceneObj.value("skyType").toInt());
-    // Same rule as fogColor below: absent reads as the constructor's (96,96,96),
-    // never as an invalid colour.
-    {
-        const QColor ambientColor = this->readColor(sceneObj.value("ambientColor").toObject());
-        if (ambientColor.isValid()) scene->setAmbientColor(ambientColor);
-    }
-
 	QJsonObject skyDataDef = sceneObj.value("skyData").toObject();
 	for (const auto &key : skyDataDef.keys()) {
 		scene->skyData.insert(key, skyDataDef.value(key).toObject());
@@ -364,9 +359,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 				scene->skyRealistic.mieCoefficient	= realisticDefinition["mieCoefficient"].toDouble(d.mieCoefficient);
 				scene->skyRealistic.mieDirectionalG = realisticDefinition["mieDirectionalG"].toDouble(d.mieDirectionalG);
 				scene->skyRealistic.turbidity		= realisticDefinition["turbidity"].toDouble(d.turbidity);
-				scene->skyRealistic.sunPosX			= realisticDefinition["sunPosX"].toDouble(d.sunPosX);
-				scene->skyRealistic.sunPosY			= realisticDefinition["sunPosY"].toDouble(d.sunPosY);
-				scene->skyRealistic.sunPosZ			= realisticDefinition["sunPosZ"].toDouble(d.sunPosZ);
+				// The sky's own sunPosX/Y/Z are GONE (D15). An old file's keys
+				// are simply not read: its sun comes from its directional
+				// light, like every other scene's. No migration exists.
 			}
 			break;
 		}
@@ -671,7 +666,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int sb = sceneObj.value("skyBakeResolution").toInt(256);
         scene->skyBakeResolution = sb >= 1024 ? 1024 : sb >= 512 ? 512 : 256;
     }
-    scene->ambientFromSky = sceneObj.value("ambientFromSky").toBool(true);
 	scene->setWorldGravity(sceneObj.value("gravity").toDouble(Constants::GRAVITY));
 
     auto rootNode = sceneObj.value("rootNode").toObject();
@@ -1351,9 +1345,13 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // it is non-zero).
     lightNode->forwardShadingPriority =
         qMax(0, nodeObj.value("forwardShadingPriority").toInt(0));
+    // THE SUN'S ANGULAR DIAMETER: absent = the real sun's 0.53 degrees.
+    lightNode->sunAngle =
+        float(qBound(0.0, nodeObj.value("sunAngle").toDouble(0.53), 20.0));
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
-    if (lightNode->lightType == iris::LightType::Directional) {
+    if (lightNode->lightType == iris::LightType::Directional ||
+        lightNode->lightType == iris::LightType::Sky) {
         lightNode->icon = iris::Texture2D::load(":/icons/light.png");      // the sun glyph
     } else if (lightNode->lightType == iris::LightType::Spot) {
         lightNode->icon = iris::Texture2D::load(":/icons/spotlight.png");
@@ -1580,6 +1578,7 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
     if (lightType == "directional") return iris::LightType::Directional;
     if (lightType == "spot")        return iris::LightType::Spot;
     if (lightType == "area")        return iris::LightType::Area;
+    if (lightType == "sky")         return iris::LightType::Sky;
 
     return iris::LightType::Point;
 }

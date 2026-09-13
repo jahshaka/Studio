@@ -318,12 +318,19 @@ int main(int argc, char **argv)
     // The DOCUMENT's ambient is what lights this scene now: the player pushes
     // applyEnvironment, so the engine scene's hardcoded startup hemisphere is
     // overwritten on the first step (it used to survive, because the player
-    // never pushed the world settings — the editor/player parity defect). 90
-    // grey, the value this test used while the hardcoded hemisphere was in
-    // force, leaves the cube at 30/255 red: still plainly the material, but
-    // under isMaterial's floor. 140 restores the brightness the assertions were
-    // written against, and is now an honest statement about the document.
-    doc->setAmbientColor(QColor(140, 140, 140));
+    // never pushed the world settings — the editor/player parity defect).
+    //
+    // Ambient IS a Sky Light since SKY_LIGHT_SPEC.md §2: a white one over the
+    // scene's own sky, at the intensity that keeps the cube above isMaterial's
+    // floor (the flat 140-grey this used to set is not a thing any more).
+    {
+        auto skyLight = iris::LightNode::create();
+        skyLight->setLightType(iris::LightType::Sky);
+        skyLight->setName("Sky Light");
+        skyLight->color = QColor(255, 255, 255);
+        skyLight->intensity = 2.0f;
+        doc->getRootNode()->addChild(skyLight);
+    }
     auto light = iris::LightNode::create();
     light->setLightType(iris::LightType::Directional);
     light->setName("sun");

@@ -51,7 +51,16 @@ public:
     {
         mDocument = iris::Scene::create();
         mDocument->setSkyColor(QColor(20, 20, 20));
-        mDocument->setAmbientColor(QColor(190, 190, 190));
+        // Ambient is a Sky Light now (SKY_LIGHT_SPEC.md §2). This preview lights
+        // its ENGINE scene directly, so the document value was always dead here
+        // — but a Sky Light is what the document would carry.
+        {
+            auto skyLight = iris::LightNode::create();
+            skyLight->setLightType(iris::LightType::Sky);
+            skyLight->setName("Sky Light");
+            skyLight->intensity = 1.0f;
+            mDocument->getRootNode()->addChild(skyLight);
+        }
         mDocument->shadowEnabled = false;
 
         auto light = iris::LightNode::create();

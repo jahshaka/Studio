@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "ui/controls/colorvaluewidget.h"
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/controls/texturepickerwidget.h"
+#include "ui/controls/labelwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/checkboxwidget.h"
@@ -36,7 +37,6 @@ For more information see the LICENSE file
 #include "services/worldmodes.h"
 #include "services/services.h"
 #include "services/selectionservice.h"
-#include "services/sunlink.h"
 #include <QPointer>
 #include <QSignalBlocker>
 #include <QSqlDatabase>
@@ -240,9 +240,6 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 				loaded.mieCoefficient  = skyDefinition.value("mieCoefficient").toDouble(defaults.mieCoefficient);
 				loaded.mieDirectionalG = skyDefinition.value("mieDirectionalG").toDouble(defaults.mieDirectionalG);
 				loaded.turbidity       = skyDefinition.value("turbidity").toDouble(defaults.turbidity);
-				loaded.sunPosX         = skyDefinition.value("sunPosX").toDouble(defaults.sunPosX);
-				loaded.sunPosY         = skyDefinition.value("sunPosY").toDouble(defaults.sunPosY);
-				loaded.sunPosZ         = skyDefinition.value("sunPosZ").toDouble(defaults.sunPosZ);
 			}
 			// Legacy documents hold values outside the model's ranges (turbidity
 			// .32 against Preetham's 1..20 was the panel default for years). The
@@ -255,11 +252,12 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			loaded.mieCoefficient  = qBound(0.0f,  loaded.mieCoefficient,   0.1f);
 			loaded.mieDirectionalG = qBound(0.0f,  loaded.mieDirectionalG, 0.99f);
 			loaded.luminance       = qBound(0.01f, loaded.luminance,        2.0f);
-			loaded.setSunAngles(loaded.sunAzimuth(), qBound(-10.0f, loaded.sunElevation(), 90.0f));
 			if (auto live = liveScene()) live->skyRealistic = loaded;
 
-			sunAzimuth = addFloatValueSlider("Sun Azimuth", 0.f, 360.f, defaults.sunAzimuth());
-			sunElevation = addFloatValueSlider("Sun Elevation", -10.f, 90.f, defaults.sunElevation());
+			// NO SUN DIALS (SKY_LIGHT_SPEC.md §3, owner decision D15). The sky's
+			// sun IS the scene's sun light: rotate the light and the sky moves.
+			// The two sliders that used to stand here steered the sky's own idea
+			// of a sun and then pushed the light around from it — backwards.
 			turbidity = addFloatValueSlider("Turbidity", 1.f, 20.f, defaults.turbidity);
 			reileigh = addFloatValueSlider("Rayleigh Scattering", 0.f, 4.f, defaults.reileigh);
 			mieCoefficient = addFloatValueSlider("Mie Coefficient", 0.f, .1f, defaults.mieCoefficient);
@@ -278,10 +276,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 				connect(skyDetail, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
 						this, &SkyPropertyWidget::onSkyDetailChanged);
 			}
-			addSunLinkRow();
+			addSunReadoutRow();
 
-			sunAzimuth->setValue(loaded.sunAzimuth());
-			sunElevation->setValue(loaded.sunElevation());
 			turbidity->setValue(loaded.turbidity);
 			reileigh->setValue(loaded.reileigh);
 			mieCoefficient->setValue(loaded.mieCoefficient);
@@ -300,20 +296,12 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			           [this](const QVariant &v) { onMieDireChanged(v.toFloat()); });
 			wireSkyRow(turbidity, tr("Turbidity"),
 			           [this](const QVariant &v) { onTurbidityChanged(v.toFloat()); });
-			wireSkyRow(sunAzimuth, tr("Sun Azimuth"),
-			           [this](const QVariant &v) { onSunAzimuthChanged(v.toFloat()); });
-			wireSkyRow(sunElevation, tr("Sun Elevation"),
-			           [this](const QVariant &v) { onSunElevationChanged(v.toFloat()); });
 
-			// The stored blob is still sunPos*: azimuth/elevation are a view of it.
 			realisticDefinition.insert("luminance", double(loaded.luminance));
 			realisticDefinition.insert("reileigh", double(loaded.reileigh));
 			realisticDefinition.insert("mieCoefficient", double(loaded.mieCoefficient));
 			realisticDefinition.insert("mieDirectionalG", double(loaded.mieDirectionalG));
 			realisticDefinition.insert("turbidity", double(loaded.turbidity));
-			realisticDefinition.insert("sunPosX", double(loaded.sunPosX));
-			realisticDefinition.insert("sunPosY", double(loaded.sunPosY));
-			realisticDefinition.insert("sunPosZ", double(loaded.sunPosZ));
 			updateAssetAndKeys();
 
 			break;
@@ -409,7 +397,6 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 	}
 
-	addAmbientFromSkyRow();
 	loading = false;
 }
 
@@ -454,88 +441,26 @@ void SkyPropertyWidget::commitSky(const QVariant &before, const QString &text)
                              });
 }
 
-void SkyPropertyWidget::addAmbientFromSkyRow()
+// THE SUN READOUT (SKY_LIGHT_SPEC.md §3). Not a control — the analytic sky has
+// no dial of its own any more. It names the light the sky is taking its sun
+// from, so a user who rotates the wrong light (or has no directional light at
+// all, which bakes the model's night) is told where the sun actually comes from.
+void SkyPropertyWidget::addSunReadoutRow()
 {
-	// VISUAL_PARITY_SPEC item 3b. Only offered where there is a sky to
-	// integrate: a single-colour sky has no hemispheres, so it always falls back
-	// to the flat World > Ambient Color. Scene binding only — it is a world
-	// setting, not a property of a sky in the library.
-	if (binding != Binding::Scene || !scene || scene->skyType == iris::SkyType::SINGLE_COLOR) {
-		ambientFromSky = nullptr;
-		return;
-	}
-	ambientFromSky = this->addCheckBox("Ambient From Sky", scene->ambientFromSky);
-	// DEFECT (pre-existing, accordionbladewidget.cpp:216): addCheckBox drops its
-	// `value` argument on the floor — every caller has to set it afterwards.
-	ambientFromSky->setValue(scene->ambientFromSky);
-	ambientFromSky->setToolTip(QStringLiteral(
-		"Light the scene's ambient with the sky itself: the upper and lower hemisphere colours "
-		"are integrated from the sky image, so a red sky reddens what it lights. World > Ambient "
-		"Color then sets the strength and tint of that instead of being the ambient itself."));
-	connect(ambientFromSky, &CheckBoxWidget::valueChanged,
-			this, &SkyPropertyWidget::onAmbientFromSkyChanged);
-}
-
-void SkyPropertyWidget::addSunLinkRow()
-{
-	// Sun coupling (re-audit F5). Realistic sky only: it is the one sky that
-	// HAS a sun, so the row is built inside that case and nowhere else — and,
-	// in Asset binding, only while the asset IS the open scene's sky (a library
-	// sky has no scene and therefore no light to drive).
-	sunDrivesLight = nullptr;
+	sunReadout = nullptr;
 	auto live = liveScene();
 	if (!live) return;
-	// IT STEERS THE SUN, and it no longer PICKS a light (SUN_AND_LIGHT_DEFAULTS
-	// Q1/Q1e). This row used to write the scene's sunLight guid, which meant
-	// one field answered two different questions — "which directional light is
-	// the sun" and "does the sky aim it" — and you could not have one without
-	// the other. Which light is the sun is now the World panel's Sun row and
-	// the light's own Forward Shading Priority; this is only the steering.
-	sunDrivesLight = this->addCheckBox("The Sky's Sun Steers the Sun Light",
-									   live->skyDrivesSun);
-	// addCheckBox drops its `value` argument (accordionbladewidget.cpp:216) —
-	// the same pre-existing defect the Ambient From Sky row works around.
-	sunDrivesLight->setValue(live->skyDrivesSun);
-	sunDrivesLight->setToolTip(QStringLiteral(
-		"Aim this scene's SUN — its primary directional light — down the sky's sun: the Sun "
-		"Azimuth and Sun Elevation dials then drive its rotation, so the shadows and the lighting "
-		"follow the sky. The sun is the directional light with the lowest Forward Shading "
-		"Priority (the World panel's Sun row says which one, and lets you pin another). In a "
-		"scene with no directional light there is nothing to steer and this does nothing. "
-		"Turning it off gives the light back the rotation it had before."));
-	connect(sunDrivesLight, &CheckBoxWidget::valueChanged,
-			this, &SkyPropertyWidget::onSunDrivesLightChanged);
-}
-
-void SkyPropertyWidget::onSunDrivesLightChanged(bool on)
-{
-	auto live = liveScene();
-	if (loading || !live) return;
-	// sunlink::setDriven records its OWN undo step (SunLightLinkCommand) — the
-	// same one world.sky's `drivesSun` parameter pushes. It no longer takes the
-	// selection: the sun is resolved by the scene, not by what is highlighted.
-	const QString linked = sunlink::setDriven(live, services, on);
-	// A scene with no directional light has no sun to steer: put the box back
-	// rather than leaving it showing a coupling that does not exist.
-	if (on && linked.isEmpty() && sunDrivesLight) {
-		QSignalBlocker block(sunDrivesLight);
-		sunDrivesLight->setValue(false);
-	}
-}
-
-void SkyPropertyWidget::onAmbientFromSkyChanged(bool on)
-{
-	if (loading || !scene || binding != Binding::Scene) return;
-	// A direct edit of a backing field is a World Mode PIN (POST_CHAIN_SPEC
-	// §9.1), so this row is a registry edit: value AND pin, one command.
-	panelundo::runWorldModeEdit(services, scene, tr("Ambient From Sky"), [this, on]() {
-		worldmodes::setRowValue(scene, QStringLiteral("ambientFromSky"), on ? 1 : 0);
-	}, [this]() {
-		if (ambientFromSky && scene) {
-			QSignalBlocker quiet(ambientFromSky);
-			ambientFromSky->setValue(scene->ambientFromSky);
-		}
-	});
+	const auto sun = live->sunLight();
+	sunReadout = this->addLabel(
+		"Sun",
+		sun ? tr("%1 — rotate it to move the sun").arg(sun->getName())
+		    : tr("none — add a directional light"));
+	if (!sunReadout) return;
+	sunReadout->setToolTip(QStringLiteral(
+		"The sky's sun is the scene's SUN — its primary directional light (the lowest Forward "
+		"Shading Priority; the World panel's Sun row says which one and lets you pin another). "
+		"Rotate that light and this sky's sun, its haze and the sun disc all follow. A scene with "
+		"no directional light has no sun, and the analytic sky bakes its own night."));
 }
 
 void SkyPropertyWidget::onSkyDetailChanged(int row)
@@ -736,24 +661,6 @@ void SkyPropertyWidget::onMieDireChanged(float val)
 	if (auto live = liveScene()) live->skyRealistic.mieDirectionalG = val;
 	updateAssetAndKeys();
 }
-
-// Azimuth/elevation are a lossless view of the three stored sunPos floats — the
-// panel edits the angles, the document (and the saved blob) keeps the vector.
-void SkyPropertyWidget::writeSunAngles()
-{
-	if (!sunAzimuth || !sunElevation) return;
-	iris::SkyRealistic sun;
-	if (auto live = liveScene()) sun = live->skyRealistic;
-	sun.setSunAngles(sunAzimuth->getValue(), sunElevation->getValue());
-	realisticDefinition.insert("sunPosX", double(sun.sunPosX));
-	realisticDefinition.insert("sunPosY", double(sun.sunPosY));
-	realisticDefinition.insert("sunPosZ", double(sun.sunPosZ));
-	if (auto live = liveScene()) live->skyRealistic = sun;
-	updateAssetAndKeys();
-}
-
-void SkyPropertyWidget::onSunAzimuthChanged(float)   { writeSunAngles(); }
-void SkyPropertyWidget::onSunElevationChanged(float) { writeSunAngles(); }
 
 void SkyPropertyWidget::onGradientTopColorChanged(QColor color)
 {

@@ -84,8 +84,10 @@ int main(int argc, char **argv)
     doc->giNumBounces = 2;
     // Zero ambient, like gi.modes: the red on the floor has to be BOUNCE and
     // nothing else, or the assertion is a study of the ambient term.
-    doc->ambientColor = QColor(0, 0, 0);
-    doc->ambientFromSky = false;
+    // ZERO AMBIENT is now "no Sky Light in the document" (SKY_LIGHT_SPEC.md §6):
+    // ambient is the skylight and nothing else, so a scene with no Sky Light
+    // pushes 27 zeros — which is exactly what the two lines that used to stand
+    // here (ambientColor black + ambientFromSky off) were spelling out.
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
     // Pinned bounds: the auto fit is P1a's subject and would make this suite's

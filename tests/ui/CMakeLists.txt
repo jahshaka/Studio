@@ -356,10 +356,8 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/particlerampwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/sunlink.cpp
     ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/sunlightlinkcommand.cpp
     # Headers whose Q_OBJECT classes have no .cpp of their own in this target:
     # AUTOMOC only pairs a header with a source of the same name, so the two
     # signal-only classes the panels connect to have to be named here.
@@ -470,10 +468,8 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/particlerampwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/sunlink.cpp
     ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/sunlightlinkcommand.cpp
     # Headers whose Q_OBJECT classes have no .cpp of their own in this target:
     # AUTOMOC only pairs a header with a source of the same name, so the two
     # signal-only classes the panels connect to have to be named here.
@@ -594,10 +590,8 @@ add_executable(test_properties_width
     ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/particlerampwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/sunlink.cpp
     ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/sunlightlinkcommand.cpp
     # Headers whose Q_OBJECT classes have no .cpp of their own in this target:
     # AUTOMOC only pairs a header with a source of the same name, so the two
     # signal-only classes the panels connect to have to be named here.

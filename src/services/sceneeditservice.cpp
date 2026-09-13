@@ -238,6 +238,20 @@ void SceneEditService::addAreaLight()
     addNodeToScene(node);
 }
 
+void SceneEditService::addSkyLight()
+{
+    // A light with no place and no direction: the scene's ambient, read from
+    // the World sky. `color` is a TINT and `intensity` the strength; the panel
+    // hides every other row and the mirror never gives it an Ogre::Light.
+    auto node = iris::LightNode::create();
+    node->setLightType(iris::LightType::Sky);
+    node->icon = iris::Texture2D::load(":/icons/light.png");
+    node->setName("Sky Light");
+    node->intensity = 1.0f;
+    node->color = QColor(255, 255, 255);
+    addNodeToScene(node);
+}
+
 void SceneEditService::addEmpty()
 {
     auto node = iris::SceneNode::create();

@@ -314,7 +314,6 @@ set(SRCS
     src/services/sceneextents.cpp
     src/services/sceneissues.cpp
     src/ui/controls/sceneissuebar.cpp
-    src/services/sunlink.cpp
     src/services/looks.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
@@ -402,7 +401,6 @@ set(SRCS
     src/commands/deletescenenodecommand.cpp
     src/commands/reparentscenenodecommand.cpp
     src/commands/scenefoldercommand.cpp
-    src/commands/sunlightlinkcommand.cpp
     src/commands/scenelookscommand.cpp
     src/commands/worldmodecommand.cpp
     src/commands/setnodepropertycommand.cpp
@@ -576,7 +574,6 @@ set(HEADERS
     src/services/undoservice.h
     src/services/selectionservice.h
     src/services/shortcutregistry.h
-    src/services/sunlink.h
     src/services/worldmodes.h
     src/services/scenefolders.h
     src/services/planarreflectors.h
@@ -669,7 +666,6 @@ set(HEADERS
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h
     src/commands/scenefoldercommand.h
-    src/commands/sunlightlinkcommand.h
     src/commands/worldmodecommand.h
     src/commands/setnodepropertycommand.h
     src/commands/scenepropertycommand.h

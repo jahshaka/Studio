@@ -32,8 +32,9 @@ var guid = project.create("Sky IBL churn " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
 
 world.mode({ mode: "epic" });
-world.sky("realistic", { turbidity: 3, azimuth: 205, elevation: 12, detail: 256 });
-world.ambientFromSky(true);
+// The sky has no sun dials (SKY_LIGHT_SPEC.md §3): its sun is the scene's
+// directional light, and ambient is the Sky Light the default scene ships with.
+world.sky("realistic", { turbidity: 3, detail: 256 });
 editor.frame(4);
 
 // Two reflectors: a glossy floor and a mirror panel.
@@ -71,8 +72,7 @@ assert(world.planarReflections().activeActors > 0,
 // old one freed) and then an offscreen post-fx readback.
 var sizes = [[320, 180], [400, 400], [256, 144]];
 for (var k = 0; k < 6; k++) {
-    world.sky("realistic", { turbidity: 2.2 + k * 0.6, azimuth: 205 + k * 7,
-                             elevation: 12, detail: 256 });
+    world.sky("realistic", { turbidity: 2.2 + k * 0.6, detail: 256 });
     editor.frame(6);
     var d = sizes[k % sizes.length];
     var shot = editor.screenshot("sky_ibl_churn_" + k + ".png", d[0], d[1], [], true);

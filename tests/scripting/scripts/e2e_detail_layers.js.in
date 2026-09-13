@@ -55,7 +55,10 @@ assert(marbleRough.length > 10, "MRAMOR-bump.jpg imported");
 // assertions below read a 3x3 REGION rather than one pixel.
 assert(world.setSky("color", { color: "#000000" }) === true, "a flat black sky");
 assert(world.gi({ mode: "off" }) === true, "GI OFF");
-world.setAmbient("#808080");
+// Ambient is the Sky Light (SKY_LIGHT_SPEC.md §2): dim it there instead of
+// setting a flat colour that no longer exists.
+var sl = world.skyLight();
+if (sl.light !== "") node.setProperty(sl.light, "intensity", 0.5);
 var sun = scene.addLight("directional", { position: { x: 0, y: 6, z: 6 } });
 node.setProperty(sun, "intensity", 12.0);
 node.setProperty(sun, "lightColor", "#ffffff");

@@ -91,7 +91,8 @@ QVector<VerbInfo> SceneApi::verbs() const
           "undo macro.",
           Needs::Document },
         { "addLight", "scene.addLight(type, {position, ...}) -> id",
-          "Adds a light: point, spot, directional or area. "
+          "Adds a light: point, spot, directional, area or SKY. "
+          "A SKY LIGHT is the scene's ambient: it reads the World sky and fills the scene with its diffuse light, at the strength its Intensity row sets and through the tint its Color row sets. It has no position, no direction, no range and casts no shadow, and a scene with no Sky Light has no ambient at all. One per scene — a second raises the `sky.duplicate` scene issue and lights nothing (world.skyLight reports which one is live). "
           "IT CASTS SHADOWS — every new light of every type is born casting soft shadows, and "
           "the way to have one that does not is to set its Shadow Type to \"Off (fill light)\" "
           "(node.setProperty(id, \"shadowMapType\", 0)), which is a deliberate choice a fill "
@@ -540,8 +541,9 @@ QString SceneApi::addLight(const QString &type, const QVariantMap &options)
     else if (t == "spot")        host.services->sceneEdit->addSpotLight();
     else if (t == "directional") host.services->sceneEdit->addDirectionalLight();
     else if (t == "area")        host.services->sceneEdit->addAreaLight();
+    else if (t == "sky")         host.services->sceneEdit->addSkyLight();
     else {
-        fail(QStringLiteral("scene.addLight: unknown type '%1' (point, spot, directional, area)").arg(type));
+        fail(QStringLiteral("scene.addLight: unknown type '%1' (point, spot, directional, area, sky)").arg(type));
         return QString();
     }
     return finishAdd(options, QStringLiteral("scene.addLight"));

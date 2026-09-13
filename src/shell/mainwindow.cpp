@@ -452,22 +452,29 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
-    auto plight = iris::LightNode::create();
-    plight->setLightType(iris::LightType::Point);
-    scene->rootNode->addChild(plight);
-    plight->setName("Point Light");
-    plight->setLocalPos(iris::Vec3(-4, 4, 0));
-    plight->intensity = 1;
-    plight->icon = iris::Texture2D::load(":/icons/bulb.png");
-	// SHADOWS ARE ON BY DEFAULT (owner decision 1, SUN_AND_LIGHT_DEFAULTS §3.1).
-	// This line used to force the new scene's point light to cast nothing, so
-	// the ONE place a user meets the default said the opposite of the document's
-	// own default (ShadowMap's constructor has been Soft/2048 for years). It is
-	// also the class of bug behind the owner's Showroom: a lamp above a sealed
-	// roof lit the floor through it, and nothing said why.
+    // THE SKY LIGHT (SKY_LIGHT_SPEC.md §2, owner decision §188d). A NEW SCENE IS
+    // TWO LIGHTS: the sun above, and the sky's own fill. Delete both and the
+    // scene is black — which is the whole point of ambient being a light.
+    // (The "Point Light" that used to stand here is GONE, §5: it was a second
+    // key light in a scene that needed a skylight, and it is exactly what made
+    // "ambient" look like a thing a scene did not need.)
+    auto skylight = iris::LightNode::create();
+    skylight->setLightType(iris::LightType::Sky);
+    scene->rootNode->addChild(skylight);
+    skylight->setName("Sky Light");
+    skylight->intensity = 1.0f;
+    skylight->color = QColor(255, 255, 255);
+    skylight->icon = iris::Texture2D::load(":/icons/light.png");
 
-    // fog params
-    scene->fogColor = QColor(72, 72, 72);
+    // THE DEFAULT SKY AND FOG: 96 grey, not 72 (owner pick 1, SKY_LIGHT_SPEC
+    // §9.1 option ii). The old flat World ambient was 96,96,96 pushed RAW,
+    // which is 0.120 of radiance after the pi split; a 96-grey SKY decoded
+    // sRGB->linear and integrated over the hemisphere is 0.117 — the owner's
+    // ambient number becomes the sky, the Sky Light's default stays an honest
+    // 1.0, and the level the samples were authored against is preserved. The
+    // visible backdrop brightens one step, which is the whole cost.
+    scene->skyColor = QColor(96, 96, 96);
+    scene->fogColor = QColor(96, 96, 96);
     scene->shadowEnabled = true;
 
     sceneNodeSelected(scene->rootNode);
@@ -1951,6 +1958,11 @@ void MainWindow::addDirectionalLight()
 void MainWindow::addAreaLight()
 {
     sceneEditService->addAreaLight();
+}
+
+void MainWindow::addSkyLight()
+{
+    sceneEditService->addSkyLight();
 }
 
 void MainWindow::addDecal()

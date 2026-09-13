@@ -857,8 +857,15 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c)
         sky["mieCoefficient"] = double(s.mieCoefficient);
         sky["mieDirectionalG"] = double(s.mieDirectionalG);
         sky["turbidity"] = double(s.turbidity);
-        QJsonArray sun; sun.append(double(s.sunPosX)); sun.append(double(s.sunPosY)); sun.append(double(s.sunPosZ));
-        sky["sunPosition"] = sun;
+        // THE SKY HAS NO SUN OF ITS OWN (SKY_LIGHT_SPEC.md §3): the analytic
+        // sky's sun is the scene's SUN LIGHT. Export the DIRECTION the light
+        // travels — the viewer places its own sun from it (viewer.js) — rather
+        // than the sky's old position triple, which no longer exists.
+        if (const auto sunLight = scene->sunLight()) {
+            const iris::Vec3 d = sunLight->getLightDir().normalized();
+            QJsonArray dir; dir.append(double(d.x())); dir.append(double(d.y())); dir.append(double(d.z()));
+            sky["sunDirection"] = dir;
+        }
         break;
     }
     case iris::SkyType::MATERIAL:
@@ -1091,7 +1098,16 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 switch (light->lightType) {
                 case iris::LightType::Directional: l["type"] = "directional"; break;
                 case iris::LightType::Spot:        l["type"] = "spot"; break;
-                default:                           l["type"] = "point"; break;
+                case iris::LightType::Point:       l["type"] = "point"; break;
+                default:
+                    // NO SILENT DEFAULT (SKY_LIGHT_SPEC.md §2). This used to
+                    // fall through to "point" for every type it did not know,
+                    // which would have exported a SKY LIGHT — a light with no
+                    // position at all — as a point light at the origin. Area
+                    // lights never reach here (they take the shim branch
+                    // above), and a Sky Light is handled before this switch.
+                    l["type"] = "point";
+                    break;
                 }
                 l["color"] = colorArray(float(light->color.redF()), float(light->color.greenF()),
                                         float(light->color.blueF()));
@@ -1490,7 +1506,18 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         post["looks"] = looks;
         jahScene["post"] = post;
     }
-    jahScene["ambientColor"] = scene->ambientColor.name();
+    // THE SKY LIGHT (SKY_LIGHT_SPEC.md §2). KHR_lights_punctual has no sky
+    // type — it is a THREE-type extension (directional, point, spot) — so the
+    // skylight cannot be a glTF light and must not be forced into one. It rides
+    // in the `jah` scene extras as what it is, and the viewer applies it as its
+    // ambient/hemisphere term (three.js: an AmbientLight of tint x intensity,
+    // or a HemisphereLight when the exported sky gives it a ground colour).
+    if (const auto sky = scene->skyLight()) {
+        QJsonObject skyLight;
+        skyLight["intensity"] = double(sky->intensity);
+        skyLight["tint"] = sky->color.name();
+        jahScene["skyLight"] = skyLight;
+    }
     jahScene["antiAliasing"] = scene->antiAliasing;
     if (scene->giMode != iris::GiMode::OFF)
         jahScene["gi"] = QStringLiteral("engine-only (mode %1)").arg(int(scene->giMode));

@@ -8,7 +8,7 @@
 //   F7  material.set took four legacy CustomMaterial texture keys on a PBR
 //       material and no-oped them.
 //   F8  an unreadable colour string kept the OLD value and reported success
-//       (moduleshared colorFromJs) — reached through world.ambient, world.fog,
+//       (moduleshared colorFromJs) — reached through world.fog,
 //       world.sky, node.setProperty and anim.keyframe.
 //   F9  world.sky cubemap silently DROPPED a face it could not resolve.
 //
@@ -46,7 +46,6 @@ assert(e.indexOf("#rrggbb") >= 0, "the error says what IS accepted: " + e);
 assert(node.property(lamp, "lightColor") === "#20a0ff",
        "and the old value is untouched (it used to be kept AND reported as success)");
 
-refuses(function () { world.ambient("not a colour"); }, "F8: world.ambient refuses one too");
 refuses(function () { world.fog({ color: "###" }); }, "F8: world.fog refuses one too");
 refuses(function () { world.sky("color", { color: "puce-ish" }); },
         "F8: world.sky(color) refuses one too");

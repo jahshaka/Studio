@@ -106,11 +106,7 @@ protected slots:
     void onTurbidityChanged(float val);
     void onMieCoeffGChanged(float val);
     void onMieDireChanged(float val);
-    void onSunAzimuthChanged(float val);
-    void onSunElevationChanged(float val);
     void onSkyDetailChanged(int row);
-    void onAmbientFromSkyChanged(bool on);
-    void onSunDrivesLightChanged(bool on);
 
 	void onGradientTopColorChanged(QColor color);
 	void onGradientMidColorChanged(QColor color);
@@ -133,13 +129,12 @@ private:
     void updateAssetAndKeys();
     /// Adds the "Drive Selected Directional Light" row (realistic sky only —
     /// no other sky has a sun).
-    void addSunLinkRow();
+    /// A read-only row naming the light the sky's sun comes from (§3).
+    void addSunReadoutRow();
     /// Adds the "Ambient From Sky" row for sky types that have something to
     /// integrate; single-colour skies always use the flat Ambient Color.
-    void addAmbientFromSkyRow();
 	/// Pushes the two angle sliders into the sun vector and the serialized blob
 	/// (they are one and the same three floats).
-	void writeSunAngles();
     /// Wires one sky row: `write` is the ONLY path from the control to the
     /// document (a second, direct connect would write before the gesture could
     /// snapshot), and a gesture becomes ONE undo step over the whole sky block
@@ -176,11 +171,8 @@ private:
     HFloatSliderWidget *turbidity = nullptr;
     // The sun is a polar control (VISUAL_PARITY_SPEC item 1): the document
     // still stores sunPosX/Y/Z, these two are the readable view of them.
-    HFloatSliderWidget *sunAzimuth = nullptr;
-    HFloatSliderWidget *sunElevation = nullptr;
     ComboBoxWidget *skyDetail = nullptr;          // realistic-sky bake width
-    CheckBoxWidget *sunDrivesLight = nullptr;     // sun coupling (re-audit F5)
-    CheckBoxWidget *ambientFromSky = nullptr;     // sky-driven ambient (item 3b)
+    LabelWidget *sunReadout = nullptr;            // which light the sky's sun is (§3)
 
 	QJsonObject singleColorDefinition;
 	QJsonObject cubeMapDefinition;

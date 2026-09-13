@@ -53,7 +53,7 @@ assert(world.rayon({ tier: "high" }).tier === "high", "world.rayon(tier) accepte
 assert(pushes() === beforeTier + 1, "a Rayon tier switch is ONE step");
 
 // THE WORLD VERBS (smoke L10 item 5, closing the gap debt L6 recorded here):
-// world.ambient / gravity / fog / gi / sky write the same fields the World
+// world.sunDisc / gravity / fog / gi / sky write the same fields the World
 // panels write, and they now record through the same commands — one call, ONE
 // step, whatever mix of plain fields and quality-registry rows it touched.
 // (Undoing one is proven where a run boundary exists: mcp.e2e, "world verbs".)
@@ -63,7 +63,13 @@ function oneStep(label, call) {
     assert(pushes() === before + 1, label + " recorded exactly ONE step (" +
            before + " -> " + pushes() + ")");
 }
-oneStep("world.ambient", function () { return world.ambient("#336699"); });
+// The SKY LIGHT's strength is a light-node row, so it goes through
+// SetNodePropertyCommand like every other light's (SKY_LIGHT_SPEC.md §2), and
+// the world-level sun-disc switch through the world-row path.
+var skyLightId = world.skyLight().light;
+oneStep("node.setProperty(skyLight, intensity)",
+        function () { return node.setProperty(skyLightId, "intensity", 1.7); });
+oneStep("world.sunDisc", function () { return world.sunDisc({ visible: false }).visible === false; });
 oneStep("world.gravity", function () { return world.gravity(-4.5); });
 oneStep("world.fog (four keys)", function () {
     return world.fog({ enabled: true, color: "#808080", density: 0.02, heightLevel: 1.5 });

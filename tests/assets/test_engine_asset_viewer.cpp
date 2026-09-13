@@ -20,6 +20,8 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/core/math/quat.h"
 #include "jahshaka/engine/Engine.h"
 #include "bridge/engineassetscene.h"
 #include "viewport/previewframing.h"
@@ -258,27 +260,31 @@ int main(int argc, char **argv)
             assets.setSubject(iris::SceneNodePtr(), false, true);   // sky only
 
             // A sky asset's blob is the same per-type block the scene format
-            // stores. Realistic: the eight Preetham keys.
+            // stores. Realistic: the FIVE Preetham keys — the three sun-position
+            // keys are gone with the sky's own sun (SKY_LIGHT_SPEC.md §3), and a
+            // preset that still carries them is simply not read.
             QJsonObject realistic;
             realistic["luminance"] = 1.1;
             realistic["reileigh"] = 2.0;
             realistic["mieCoefficient"] = 0.005;
             realistic["mieDirectionalG"] = 0.8;
             realistic["turbidity"] = 4.0;
-            {
-                iris::SkyRealistic sun = iris::SkyRealistic::defaults();
-                sun.setSunAngles(180.0f, 25.0f);   // in front of the framing camera
-                realistic["sunPosX"] = double(sun.sunPosX);
-                realistic["sunPosY"] = double(sun.sunPosY);
-                realistic["sunPosZ"] = double(sun.sunPosZ);
-            }
             CHECK(skyassets::applyToScene(doc, iris::SkyType::REALISTIC, realistic,
                                           [](const QString &) { return QString(); }),
                   "sky asset: a REALISTIC definition applies to the preview document");
             CHECK(doc->skyType == iris::SkyType::REALISTIC &&
                   std::fabs(doc->skyRealistic.turbidity - 4.0f) < 1e-4f &&
-                  std::fabs(doc->skyRealistic.sunElevation() - 25.0f) < 0.5f,
-                  "sky asset: the eight realistic keys land on the document");
+                  std::fabs(doc->skyRealistic.luminance - 1.1f) < 1e-4f,
+                  "sky asset: the realistic keys land on the document");
+            // The preview's own sun: the sky takes its direction from the
+            // scene's first directional light and from nowhere else.
+            {
+                auto previewSun = iris::LightNode::create();
+                previewSun->setLightType(iris::LightType::Directional);
+                previewSun->setName("sun");
+                previewSun->setLocalRot(iris::Quat::fromEulerAngles(-65.0f, 180.0f, 0.0f));
+                doc->getRootNode()->addChild(previewSun);
+            }
 
             Image sky = render(assets, *engine, view, 4);
             show("realistic sky asset", sky, W / 2, 4);

@@ -150,8 +150,10 @@ int main(int argc, char **argv)
     doc->giNumBounces = 2;
     doc->giPccGrid = iris::Vec3(2, 1, 2);          // 4 probes
     doc->giUpdateBudget = 1;
-    doc->ambientColor = QColor(0, 0, 0);
-    doc->ambientFromSky = false;
+    // ZERO AMBIENT is now "no Sky Light in the document" (SKY_LIGHT_SPEC.md §6):
+    // ambient is the skylight and nothing else, so a scene with no Sky Light
+    // pushes 27 zeros — which is exactly what the two lines that used to stand
+    // here (ambientColor black + ambientFromSky off) were spelling out.
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(0, 0, 0);
     doc->giBoundsMin = iris::Vec3(-4.6f, -0.6f, -4.6f);
@@ -360,8 +362,18 @@ int main(int argc, char **argv)
           "light colour: exactly ONE settle re-solve (it used to be none)");
 
     // ---- an AMBIENT change ----------------------------------------------------
-    input("ambient", GiStaleReason::Ambient,
-          [&]() { doc->ambientColor = QColor(25, 25, 25); }, 12);
+    // Ambient IS the Sky Light (SKY_LIGHT_SPEC.md §2), so the ambient input the
+    // probes key on is that light's strength: 0 -> 0.1 is the same
+    // GiStaleReason::Ambient the flat colour used to raise.
+    {
+        auto skyLight = iris::LightNode::create();
+        skyLight->setLightType(iris::LightType::Sky);
+        skyLight->intensity = 0.0f;
+        doc->rootNode->addChild(skyLight);
+        mirror.sync();
+        input("ambient", GiStaleReason::Ambient,
+              [&]() { skyLight->intensity = 0.1f; }, 12);
+    }
 
     const auto lum = [](const Colour &c) { return c.r + c.g + c.b; };
 

@@ -139,15 +139,14 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 
 	sceneObj["skyType"] = static_cast<int>(scene->skyType);
     sceneObj["skyGuid"] = scene->skyGuid;
-    // The directional light the realistic sky's sun drives; empty = none
-    // (VISUAL_PARITY re-audit F5).
+    // THE SUN PIN: which directional light is the sun; empty = automatic.
     sceneObj["sunLight"] = scene->sunLightGuid;
-    sceneObj["skyDrivesSun"] = scene->skyDrivesSun;
+    sceneObj["sunDiscVisible"] = scene->sunDiscVisible;
+    sceneObj["sunDiscInProbes"] = scene->sunDiscInProbes;
     sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;
-    sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
     // fogStart/fogEnd are the RETIRED linear pair: written so a scene still opens
@@ -222,11 +221,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
                                 ? QString::fromLatin1(worldModeNames[scene->worldMode])
                                 : QStringLiteral("custom");
     sceneObj["worldOverrides"] = scene->worldOverrides;
-    // Realistic-sky bake width (VISUAL_PARITY item 1) and sky-driven ambient
-    // (item 3b). Both are scene-wide render settings, not sky *parameters*, so
-    // they live beside antiAliasing rather than inside skyData.
+    // Realistic-sky bake width (VISUAL_PARITY item 1): a scene-wide render
+    // setting, not a sky *parameter*, so it lives beside antiAliasing rather
+    // than inside skyData.
     sceneObj["skyBakeResolution"] = scene->skyBakeResolution;
-    sceneObj["ambientFromSky"] = scene->ambientFromSky;
 
     // Global illumination (world panel). Mode/quality are written as stable
     // strings — the enum ints must stay free to be reordered.
@@ -1066,6 +1064,11 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     if (lightNode->lightType == iris::LightType::Directional &&
         lightNode->forwardShadingPriority != 0)
         sceneNodeObject["forwardShadingPriority"] = lightNode->forwardShadingPriority;
+    // THE SUN'S ANGULAR DIAMETER (directional lights only; 0.53 deg = the real
+    // sun). Same rule: written only when it is not the default.
+    if (lightNode->lightType == iris::LightType::Directional &&
+        lightNode->sunAngle != 0.53f)
+        sceneNodeObject["sunAngle"] = lightNode->sunAngle;
     // Asset BINDINGS travel as guids; the resolved path and the profile's
     // photometric scale are runtime state the reader re-derives from the store.
     sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;
@@ -1200,6 +1203,8 @@ QString SceneWriter::getLightNodeTypeName(iris::LightType lightType)
             return "spot";
         case iris::LightType::Area:
             return "area";
+        case iris::LightType::Sky:
+            return "sky";
         default:
             return "none";
     }
