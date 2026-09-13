@@ -130,14 +130,29 @@ assert(world.sun().skyDriven === undefined, "...nor does world.sun()");
 // picture is brighter than with the sun behind it, and nothing but the light's
 // rotation changed between the two shots.
 world.sunDisc({ visible: false });          // measure the SKY, not the disc on it
-node.transform(sun, { rotation: { x: -20, y: 0, z: 0 } });   // sun ahead, low
-editor.frame(30, 1 / 60);
-var ahead = editor.screenshot("sun_light_ahead.png", 128, 128).center;
-node.transform(sun, { rotation: { x: -20, y: 180, z: 0 } }); // sun behind
-editor.frame(30, 1 / 60);
-var behind = editor.screenshot("sun_light_behind.png", 128, 128).center;
-var aheadLum = ahead.r + ahead.g + ahead.b, behindLum = behind.r + behind.g + behind.b;
-console.log("sky with the sun ahead " + aheadLum + " vs behind " + behindLum);
+// LOOK AT THE SKY, and at a band well above the horizon: the default camera
+// frames the ground, and the ground is lit by the very light being rotated —
+// which would make this a statement about shading rather than about the bake.
+editor.setCamera({ position: { x: 0, y: 2, z: 0 }, lookAt: { x: 0, y: 14, z: -6 } });
+function skyBand(tag, rx, ry, rz) {
+    node.transform(sun, { rotation: { x: rx, y: ry, z: rz } });
+    // The realistic bake is DEBOUNCED at 150 ms, so a frame count alone can
+    // measure the PREVIOUS sun twice. Two long runs with a screenshot between
+    // them (which costs real time) clear it.
+    editor.frame(60, 1 / 60);
+    editor.screenshot("sun_light_settle_" + tag + ".png", 64, 64);
+    editor.frame(60, 1 / 60);
+    var s = editor.screenshot("sun_light_" + tag + ".png", 128, 128,
+                              [[0.5, 0.2], [0.2, 0.3], [0.8, 0.3]], "plain");
+    var sum = 0;
+    for (var i = 0; i < s.probes.length; i++) sum += s.probes[i].r + s.probes[i].g + s.probes[i].b;
+    console.log("sky band [" + tag + "] " + Math.round(sum));
+    return sum;
+}
+var aheadLum = skyBand("ahead", -20, 0, 0);     // the sun low, in front of the camera
+var behindLum = skyBand("behind", -20, 180, 0); // ...and turned right around
+console.log("sky with the sun ahead " + Math.round(aheadLum) +
+            " vs behind " + Math.round(behindLum));
 assert(Math.abs(aheadLum - behindLum) > 8,
        "rotating the SUN LIGHT re-bakes the realistic sky (D15)");
 
