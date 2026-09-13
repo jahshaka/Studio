@@ -34,7 +34,7 @@ assert(guid.length > 10, "project.create -> " + guid);
 world.mode({ mode: "epic" });
 // The sky has no sun dials (SKY_LIGHT_SPEC.md §3): its sun is the scene's
 // directional light, and ambient is the Sky Light the default scene ships with.
-world.sky("realistic", { turbidity: 3, detail: 256 });
+world.sky("realistic", { density: 0.5 });
 editor.frame(4);
 
 // Two reflectors: a glossy floor and a mirror panel.
@@ -68,11 +68,12 @@ assert(world.planarReflections().activeActors > 0,
        "planar reflections are actually rendering (" +
        world.planarReflections().activeActors + " active)");
 
-// The loop. Each turn: a fresh Preetham bake (new sky + new IBL cubemap, the
-// old one freed) and then an offscreen post-fx readback.
+// The loop. Each turn: a new sky (a const-buffer write since SKY-GPU) plus a
+// fresh GPU CAPTURE of it and a new IBL cubemap convolved from that capture,
+// the old one freed — then an offscreen post-fx readback.
 var sizes = [[320, 180], [400, 400], [256, 144]];
 for (var k = 0; k < 6; k++) {
-    world.sky("realistic", { turbidity: 2.2 + k * 0.6, detail: 256 });
+    world.sky("realistic", { density: 0.30 + k * 0.12 });
     editor.frame(6);
     var d = sizes[k % sizes.length];
     var shot = editor.screenshot("sky_ibl_churn_" + k + ".png", d[0], d[1], [], true);

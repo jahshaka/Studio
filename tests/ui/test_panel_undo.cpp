@@ -357,22 +357,23 @@ int main(int argc, char **argv)
 
         // THE SUN DIALS ARE GONE (SKY_LIGHT_SPEC.md §3): the realistic sky's
         // sun is the scene's sun LIGHT, so Azimuth and Elevation are not rows
-        // any more. Turbidity takes the role this case was written for — it is
-        // the same binding through the same `sky` sceneprops row, which is what
-        // is actually being gated (one drag, one undo step, the live field AND
+        // any more. DENSITY takes the role this case was written for (the
+        // Preetham dials went with the CPU bake, SKY-GPU) — it is the same
+        // binding through the same `sky` sceneprops row, which is what is
+        // actually being gated (one drag, one undo step, the live field AND
         // the serialized blob travelling together).
         CHECK(sliderWith(&panel, QStringLiteral("Sun Azimuth")) == nullptr,
               "sky: the sun dials are gone from the blade (the sky follows the sun light)");
-        HFloatSliderWidget *turb = sliderWith(&panel, QStringLiteral("Turbidity"));
+        HFloatSliderWidget *turb = sliderWith(&panel, QStringLiteral("Density"));
         CHECK(turb != nullptr, "sky: the realistic sky's own rows are on the blade");
-        const float was = scene->skyRealistic.turbidity;
-        CHECK(drag(turb, 4.0f, 12.0f), "sky: the turbidity row can be dragged");
-        CHECK(qAbs(scene->skyRealistic.turbidity - 12.0f) < 0.5f,
-              "sky: the drag moved the haze live");
+        const float was = scene->skyRealistic.density;
+        CHECK(drag(turb, 0.4f, 0.9f), "sky: the density row can be dragged");
+        CHECK(qAbs(scene->skyRealistic.density - 0.9f) < 0.05f,
+              "sky: the drag moved the density live");
         CHECK(stack.index() == before + 1, "sky: as ONE step");
         stack.undo();
         pump();
-        CHECK(qAbs(scene->skyRealistic.turbidity - was) < 0.5f,
+        CHECK(qAbs(scene->skyRealistic.density - was) < 0.05f,
               "sky: undo restored it (the whole sky block travels together)");
         // AN UNBRACKETED TICK IS ITS OWN STEP. A keyboard arrow or a typed
         // value arrives as a bare valueChanged, and the row's write must run
@@ -383,13 +384,13 @@ int main(int argc, char **argv)
         // The undo above REPAINTED the section (the rows are the sky), so the
         // slider from before it is gone — ask for the row again, which is also
         // the cheapest proof that the repaint happened.
-        HFloatSliderWidget *turb2 = sliderWith(&panel, QStringLiteral("Turbidity"));
+        HFloatSliderWidget *turb2 = sliderWith(&panel, QStringLiteral("Density"));
         CHECK(turb2 != nullptr && turb2 != turb, "sky: an undo rebuilt the section's rows");
         if (turb2) {
             const int steps = stack.index();
-            turb2->setValue(6.0f);
+            turb2->setValue(0.6f);
             pump();
-            CHECK(qAbs(scene->skyRealistic.turbidity - 6.0f) < 0.5f,
+            CHECK(qAbs(scene->skyRealistic.density - 0.6f) < 0.05f,
                   "sky: an unbracketed tick writes through");
             CHECK(stack.index() == steps + 1, "sky: and is its own one-step edit");
             stack.undo();
@@ -399,8 +400,8 @@ int main(int argc, char **argv)
         // The blob the scene SAVES carries the same value: an undo that put back
         // the live field and not the blob would reappear on the next open.
         const QJsonObject stored = scene->skyData.value(QStringLiteral("Realistic"));
-        CHECK(qAbs(stored.value(QStringLiteral("turbidity")).toDouble()
-                       - double(scene->skyRealistic.turbidity)) < 0.01,
+        CHECK(qAbs(stored.value(QStringLiteral("density")).toDouble()
+                       - double(scene->skyRealistic.density)) < 0.01,
               "sky: and the serialized blob agrees with the live field");
     }
 

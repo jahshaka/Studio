@@ -103,13 +103,14 @@
                 scene.environment = tex;   // IBL (audit §1 "IBL from sky")
             });
         } else if (sky.type === "realistic") {
-            // Same zz85 Preetham model, same parameter names (audit §1).
+            // A DIFFERENT MODEL, DELIBERATELY (SKY-GPU): the editor's realistic
+            // sky is the engine's own analytic atmosphere, and three.js has the
+            // zz85 Preetham SkyMesh. Its parameters (density/diffusion/horizon/
+            // power, in sky.*) do not convert, so this draws SkyMesh at its own
+            // defaults and honours the one thing that does convert — where the
+            // sun is. A scene whose exact sky matters exports an image sky.
             var skyMesh = new THREE.SkyMesh();
             skyMesh.scale.setScalar(450000);
-            skyMesh.turbidity.value = sky.turbidity !== undefined ? sky.turbidity : 2;
-            skyMesh.rayleigh.value = sky.rayleigh !== undefined ? sky.rayleigh : 1;
-            skyMesh.mieCoefficient.value = sky.mieCoefficient !== undefined ? sky.mieCoefficient : 0.005;
-            skyMesh.mieDirectionalG.value = sky.mieDirectionalG !== undefined ? sky.mieDirectionalG : 0.8;
             // THE SKY FOLLOWS THE SUN LIGHT (SKY_LIGHT_SPEC.md §3): the
             // exporter writes the direction the scene's sun TRAVELS, and the
             // sun's position is the reverse of it, out at the model's radius.

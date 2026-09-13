@@ -30,8 +30,9 @@ For more information see the LICENSE file
 //     fields AND its per-type `skyData` blob, every edit is undoable
 //     (ScenePropertyCommand over the whole sky block — a sky edit writes the
 //     blob and the live field, and undoing half of that leaves the panel
-//     showing a sky the renderer is not drawing), and the section carries the
-//     two world rows a sky has: Sky Detail and Ambient From Sky.
+//     showing a sky the renderer is not drawing). It carries no world-mode
+//     rows any anymore: "Ambient From Sky" went with D14 and "Sky Detail" with
+//     the CPU sky bake (SKY-GPU).
 //
 //   Binding::Asset — a sky in the library. Rows write the asset's JSON blob,
 //     which is flushed to the database when the panel is hidden, and are
@@ -101,12 +102,11 @@ protected slots:
     void onSingleSkyColorChanged(QColor color);
     void onEquiTextureChanged(QString guid);
 
-    void onReileighChanged(float val);
-    void onLuminanceChanged(float val);
-    void onTurbidityChanged(float val);
-    void onMieCoeffGChanged(float val);
-    void onMieDireChanged(float val);
-    void onSkyDetailChanged(int row);
+    void onSkyDensityChanged(float val);
+    void onSkyDiffusionChanged(float val);
+    void onSkyHorizonChanged(float val);
+    void onSkyPowerChanged(float val);
+    void onSkyColourChanged(QColor colour);
 
 	void onGradientTopColorChanged(QColor color);
 	void onGradientMidColorChanged(QColor color);
@@ -164,14 +164,14 @@ private:
     ColorValueWidget *colorBot = nullptr;
     HFloatSliderWidget *offset = nullptr;
 
-    HFloatSliderWidget *luminance = nullptr;
-    HFloatSliderWidget *reileigh = nullptr;
-    HFloatSliderWidget *mieCoefficient = nullptr;
-    HFloatSliderWidget *mieDirectionalG = nullptr;
-    HFloatSliderWidget *turbidity = nullptr;
-    // The sun is a polar control (VISUAL_PARITY_SPEC item 1): the document
-    // still stores sunPosX/Y/Z, these two are the readable view of them.
-    ComboBoxWidget *skyDetail = nullptr;          // realistic-sky bake width
+    // The analytic sky's own dials (SKY-GPU): the ENGINE's parameters, not the
+    // retired CPU bake's. "Sky Detail" went with the bake — there is nothing
+    // to be detailed about a shader.
+    HFloatSliderWidget *skyDensity = nullptr;
+    HFloatSliderWidget *skyDiffusion = nullptr;
+    HFloatSliderWidget *skyHorizon = nullptr;
+    HFloatSliderWidget *skyPower = nullptr;
+    ColorValueWidget   *skyColour = nullptr;
     LabelWidget *sunReadout = nullptr;            // which light the sky's sun is (§3)
 
 	QJsonObject singleColorDefinition;

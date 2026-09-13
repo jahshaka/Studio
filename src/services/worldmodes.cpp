@@ -579,22 +579,10 @@ QVector<Row> buildRows()
         out.append(r);
     }
     // ---- Sky ---------------------------------------------------------------
-    {
-        Row r;
-        r.id = QStringLiteral("skyBakeResolution");
-        r.label = QStringLiteral("Sky Detail");
-        r.group = QStringLiteral("Sky");
-        r.type = RowType::Enum;
-        r.options = { { QStringLiteral("256"),  QStringLiteral("256"),  256 },
-                      { QStringLiteral("512"),  QStringLiteral("512"),  512 },
-                      { QStringLiteral("1024"), QStringLiteral("1024"), 1024 } };
-        r.tier[0] = 256; r.tier[1] = 256; r.tier[2] = 512; r.tier[3] = 1024;
-        r.cost = QStringLiteral("Equirect width the analytic sky is CPU-baked at. Costs bake time "
-                                "when the sky changes, never frame time.");
-        r.get = [](const iris::ScenePtr &s) { return s->skyBakeResolution; };
-        r.set = [](const iris::ScenePtr &s, int v) { s->skyBakeResolution = v; };
-        out.append(r);
-    }
+    // THE "Sky Detail" ROW IS GONE (SKY-GPU, 2026-09-13). It was the width the
+    // analytic sky was CPU-BAKED at, and there is no bake: the sky is a shader.
+    // Nothing replaced it — a tier row has to buy something, and this one now
+    // buys nothing.
 
     // ---- Reflections -------------------------------------------------------
     // This row was declared here with `available = false` before the engine
