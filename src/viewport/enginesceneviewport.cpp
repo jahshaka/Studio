@@ -1966,6 +1966,10 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     // The renderer's own records — and the play-time misses — are reported by
     // world.giStatus(), beside the probe and rebuild counters they belong with.
     s.movableNodes = mMirror->movableNodeCount();
+    s.nodesVisited = quint64(mMirror->visitedCount());
+    s.materialBuilds = mMirror->materialBuildCount();
+    s.staticNodes = mMirror->staticNodeCount();
+    s.staticRepromotions = mMirror->staticRepromotionCount();
     return s;
 }
 

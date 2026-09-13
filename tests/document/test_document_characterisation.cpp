@@ -436,6 +436,11 @@ int main(int argc, char **argv)
         auto worldPos = [](const iris::SceneNodePtr &n) {
             return n->getGlobalTransform().column(3).toVector3D();
         };
+        // q and -q are the same rotation, so the compare has to allow the sign.
+        auto approxQuat = [](const iris::Quat &a, const iris::Quat &b) {
+            const float d = a.x() * b.x() + a.y() * b.y() + a.z() * b.z() + a.scalar() * b.scalar();
+            return std::fabs(std::fabs(d) - 1.0f) < 1e-4f;
+        };
 
         auto tScene = iris::Scene::create();
         auto tRoot  = tScene->getRootNode();
@@ -618,6 +623,47 @@ int main(int argc, char **argv)
               "invalidation: setGlobalRot() on a parentless node");
         tRoot->setLocalRot(iris::Quat());
         tRoot->setLocalPos(iris::Vec3());
+
+        // setGlobalPosRot — the physics write-back's one-call form (MIRROR_SCALE
+        // lane). It resolves the parent ONCE where the two setters resolved it
+        // twice, and takes a no-inverse fast path when the parent is at
+        // identity; it must land on exactly the same pose either way.
+        {
+            const iris::Vec3 wantPos(3.5f, -2.25f, 11.0f);
+            const iris::Quat wantRot = iris::Quat::fromEulerAngles(15.0f, -40.0f, 5.0f);
+            // (a) a parent at identity — the fast path.
+            leaf->setGlobalPosRot(wantPos, wantRot);
+            tScene->refresh();
+            CHECK(approx(worldPos(leaf), wantPos), "setGlobalPosRot: position, parent at identity");
+            CHECK(approxQuat(leaf->getGlobalRotation(), wantRot),
+                  "setGlobalPosRot: rotation, parent at identity");
+            // (b) a parent that is moved, turned AND scaled — the inverse path,
+            // checked against the two setters it replaces.
+            tRoot->setLocalPos(iris::Vec3(4, -1, 2));
+            tRoot->setLocalRot(iris::Quat::fromEulerAngles(0, 35, 0));
+            tRoot->setLocalScale(iris::Vec3(2, 2, 2));
+            tScene->refresh();
+            leaf->setGlobalPos(wantPos);
+            leaf->setGlobalRot(wantRot);
+            tScene->refresh();
+            const iris::Vec3 twoStepPos = leaf->getLocalPos();
+            const iris::Quat twoStepRot = leaf->getLocalRot();
+            leaf->setLocalPos(iris::Vec3()); leaf->setLocalRot(iris::Quat());
+            tScene->refresh();
+            leaf->setGlobalPosRot(wantPos, wantRot);
+            tScene->refresh();
+            CHECK(approx(leaf->getLocalPos(), twoStepPos),
+                  "setGlobalPosRot: the LOCAL position matches setGlobalPos under a moved, "
+                  "turned and scaled parent");
+            CHECK(approxQuat(leaf->getLocalRot(), twoStepRot),
+                  "setGlobalPosRot: ...and the local rotation matches setGlobalRot");
+            CHECK(approx(worldPos(leaf), wantPos), "setGlobalPosRot: the world pose is what was asked");
+            tRoot->setLocalRot(iris::Quat());
+            tRoot->setLocalPos(iris::Vec3());
+            tRoot->setLocalScale(iris::Vec3(1, 1, 1));
+            leaf->setLocalPos(iris::Vec3()); leaf->setLocalRot(iris::Quat());
+            tScene->refresh();
+        }
 
         // Reparenting: the world transform changes even when the local one does
         // not, and insertChild's keepTransform branch re-expresses the world

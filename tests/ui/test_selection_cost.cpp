@@ -46,6 +46,7 @@ For more information see the LICENSE file
 // widget's FIRST PAINT.
 
 #include <QApplication>
+#include "ui/controls/accordionbladewidget.h"
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QFocusFrame>
@@ -362,6 +363,134 @@ int main(int argc, char **argv)
     }
     CHECK(lightVisible >= 2 && lightVisible < visible,
           "panel: selecting a light swaps the blades instead of stacking them");
+
+    // ---- THE SCRIPT SHAPE: rebuilds with NO event-loop turn ----------------
+    //
+    // Everything above turns the event loop between switches, and that is what
+    // an interactive session does. A SCRIPT does not: a `--script` or MCP run is
+    // one call that never yields, so every deleteLater() it produces stays in
+    // Qt's global posted-event list for the whole run.
+    //
+    // AccordianBladeWidget::clearPanel retires its rows with deleteLater()
+    // alone, and that made a scripted scene build QUADRATIC (MIRROR_SCALE lane,
+    // 2026-09-13): each rebuild left ~100 rows alive as children of the blade
+    // AND ~100 DeferredDelete events in the posted list, and Qt scans that list
+    // on every widget construction (compressEvent) and every widget destruction
+    // (removePostedEvents). Measured through the app: scene.addPrimitive in a
+    // loop cost 92 ms per cube at 55 nodes and 2,076 ms at 405, and the process
+    // then spent MINUTES in ~MainWindow. Fixed, the same run is 57 -> 92 ms.
+    //
+    // The assertion is a SHAPE, not a millisecond budget: the retired-row
+    // population is bounded however many rebuilds happen without a turn.
+    {
+        panel->setSceneNode(nodes[0]);       // a mesh: the material blade is up
+        turn();
+        auto retiredRows = [&]() {
+            int n = 0;
+            for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+                n += b->retiredRowCount();
+            return n;
+        };
+        const int afterOne = retiredRows();
+        QElapsedTimer noTurn; noTurn.start();
+        // NO turn() in this loop, on purpose. 60 rebuilds is what a script
+        // adding 30 primitives produces (each add rebuilds the blade twice).
+        for (int i = 0; i < 60; ++i) panel->setSceneNode(nodes[i % 5]);
+        const double noTurnMs = double(noTurn.elapsed());
+        const int after60 = retiredRows();
+        // ...and THREE TIMES AS MANY, which is what makes this a shape and not
+        // a magic number: the retired population is bounded by the generation
+        // ring (AccordianBladeWidget::kRetiredGenerations), so it must not
+        // depend on how many rebuilds happened. Before the fix it was one
+        // generation PER REBUILD — 180 rows at 60 rebuilds, 540 at 180.
+        for (int i = 0; i < 120; ++i) panel->setSceneNode(nodes[i % 5]);
+        const int after180 = retiredRows();
+        std::printf("  no-event-loop rebuilds: retired rows %d after 1, %d after 60, %d after 180"
+                    "  (%.0f ms for the first 60)\n", afterOne, after60, after180, noTurnMs);
+        CHECK(after180 <= after60,
+              "script shape: the retired population does not grow with the NUMBER of rebuilds");
+        // A ceiling too, so "bounded" cannot be satisfied by a constant leak of
+        // thousands: at most one generation ring of one blade's rows.
+        CHECK(after180 <= AccordianBladeWidget::kRetiredGenerations * 8,
+              "script shape: ...and it is one generation ring of rows, not a pile");
+        const int afterMany = after180;
+        turn();
+        CHECK(retiredRows() <= afterMany,
+              "script shape: ...and a turn of the loop does not leave more behind");
+        panel->setSceneNode(nodes[0]);
+        turn();
+
+        // ---- THE HEADROOM, DRIVEN AT ITS BOUNDARY (lead review F3) --------
+        //
+        // The retired generations are freed by CALL COUNT, not by anything Qt
+        // enforces, so the safety property is a number: a row may drive
+        // AccordianBladeWidget::kRetiredGenerations rebuilds from inside its
+        // OWN slot before its memory is reclaimed under it. Today's measured
+        // maximum from a row's own signal is ONE, so three is two of slack.
+        // This drives the promise exactly, at its boundary.
+        //
+        // The vehicle is a real Qt signal of a real live ROW —
+        // objectNameChanged, which every QObject has — so the rebuilds happen
+        // INSIDE the row's own emission, with the row on the stack, and
+        // setObjectName goes on touching the row after the lambda returns.
+        // Under ASan (the gate's configuration) a generation too few is a
+        // use-after-free here instead of a mystery crash in a session.
+        {
+            // FINDING A REAL ROW, and not a piece of the blade's own
+            // scaffolding — which is what any "pick a visible child" heuristic
+            // lands on, and which is never retired, so the whole case would
+            // pass while testing nothing. Rows are identified by what happens
+            // TO them: a rebuild HIDES the generation it retires and leaves the
+            // scaffolding visible, so the widgets that were visible before a
+            // rebuild and are hidden after it are exactly the retired rows.
+            //
+            // Driving from an already-retired row is not a contrivance either —
+            // it is the real shape. A row that asks the panel to rebuild is
+            // retired by the rebuild it asked for, and everything it does after
+            // that call returns, it does while retired.
+            auto deepRows = [&]() {
+                QList<QWidget *> out;
+                for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+                    for (QWidget *w : b->findChildren<QWidget *>())
+                        if (!qobject_cast<AccordianBladeWidget *>(w)) out.append(w);
+                return out;
+            };
+            panel->setSceneNode(nodes[0]);
+            turn();
+            QList<QPointer<QWidget>> wereVisible;
+            for (QWidget *w : deepRows()) if (w->isVisible()) wereVisible.append(w);
+            panel->setSceneNode(nodes[1]);          // shift 1: they are retired now
+            QPointer<QWidget> victim;
+            for (const QPointer<QWidget> &w : wereVisible)
+                if (w && w->isHidden()) { victim = w; break; }
+            CHECK(!victim.isNull(), "headroom: a row that a rebuild really RETIRED was found");
+
+            if (victim) {
+                int drove = 0;
+                auto conn = QObject::connect(victim.data(), &QObject::objectNameChanged,
+                                             victim.data(), [&](const QString &) {
+                    // One shift is already spent (the rebuild that retired it),
+                    // so the promise leaves kRetiredGenerations - 1 here.
+                    for (int i = 0; i < AccordianBladeWidget::kRetiredGenerations - 1; ++i) {
+                        panel->setSceneNode(nodes[(i + 2) % 5]);
+                        ++drove;
+                    }
+                });
+                victim->setObjectName(QStringLiteral("selection-cost-headroom-probe"));
+                QObject::disconnect(conn);
+                // The row is on the stack here: reading it is what a real slot
+                // does after asking the panel to rebuild.
+                const bool stillThere = !victim.isNull();
+                const QString readBack = stillThere ? victim->objectName() : QString();
+                CHECK(drove == AccordianBladeWidget::kRetiredGenerations - 1,
+                      "headroom: the retired row's own slot drove the promised rebuilds");
+                CHECK(readBack == QStringLiteral("selection-cost-headroom-probe"),
+                      "headroom: ...and it is still readable afterwards (no use-after-free)");
+            }
+            panel->setSceneNode(nodes[0]);
+            turn();
+        }
+    }
 
     // PIXELS. Hiding blades instead of orphaning them is a LIFETIME change, and
     // a lifetime change must not be a LOOK change: these two grabs are the
