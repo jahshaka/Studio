@@ -575,6 +575,11 @@ public:
         /// Cumulative atlas rebuilds (ShadowStatus::atlasRebuilds) — the hitch
         /// counter `world.shadowStatus().atlasRebuilds` reports.
         int atlasRebuilds = 0;
+        /// Cumulative item visits by the lamp-map cache's caster walk
+        /// (ShadowStatus::casterWalkItems) — the still-frame counter
+        /// `world.shadowStatus().casterWalkItems` reports: it must not move on
+        /// a scene nobody is touching.
+        unsigned long long casterWalkItems = 0;
     };
     virtual ShadowStatusInfo shadowStatus() const { return {}; }
 
@@ -601,6 +606,9 @@ public:
         /// that run while a light is being dragged, instead of the full
         /// re-solves the drag used to cost (REFLECTIONS_ADOPTION_SPEC.md P2).
         quint64 giLightRefreshes = 0;
+        /// ...of which the ones taken AT REST — the tick that ends a movable
+        /// lamp's travel and runs the scene's full bounce count (F1).
+        quint64 giLightRefreshesAtRest = 0;
         // ---- MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3, lane R1) -----------
         /// How many of the document's nodes resolved MOVABLE on the last sync —
         /// the mirror's own count, which is why it lives here and not in

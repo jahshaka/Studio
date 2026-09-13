@@ -500,6 +500,106 @@ static void sectionB(Engine *engine)
     engine->destroyView(view);
 }
 
+
+// ===========================================================================
+// SECTION C — A LAMP THAT STOPS MOVING GETS ITS BOUNCES BACK
+// (round-2 review F1). `Scene::refreshGiLighting` is the cheap path a MOVING
+// light rides: it re-injects the lights into the voxels and skips the
+// re-voxelize. While the lamp moves it runs ONE bounce and the coarse ray march
+// — the drag economy — and the frame that ends the motion must run the scene's
+// full count instead, because nothing else ever will: a movable lamp arms no
+// settle (O2), so before this the room stayed lit at one bounce for good.
+//
+// Measured in three readings of the same pixel: the full solve (the reference),
+// the in-motion injection (visibly different — the economy is real, and a test
+// that could not tell them apart would prove nothing), and the at-rest
+// injection, which must be the reference again.
+// ===========================================================================
+static void sectionC(Engine *engine)
+{
+    std::printf("-- a movable lamp at rest is re-injected at the scene's full bounce count\n");
+    View *v = engine->createOffscreenView("mobility_bounce", 128, 128, Colour(0, 0, 0));
+    Scene *s = engine->createScene("mobility_bounce");
+    v->setScene(s);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));          // bounce light or nothing
+
+    // A closed white box: every extra bounce is another round of light off its
+    // walls, which is what makes the three readings separable at all.
+    const Colour kWhite(0.97f, 0.97f, 0.97f);      // a bright room: every bounce counts
+    box(s, Vec3(0.0f, -0.25f, 0.0f), Vec3(12.0f, 0.5f, 12.0f), kWhite, 0.0f, 0.9f);
+    box(s, Vec3(0.0f, 6.25f, 0.0f), Vec3(12.0f, 0.5f, 12.0f), kWhite, 0.0f, 0.9f);
+    box(s, Vec3(-6.0f, 3.0f, 0.0f), Vec3(0.5f, 6.0f, 12.0f), kWhite, 0.0f, 0.9f);
+    box(s, Vec3(6.0f, 3.0f, 0.0f), Vec3(0.5f, 6.0f, 12.0f), kWhite, 0.0f, 0.9f);
+    box(s, Vec3(0.0f, 3.0f, -6.0f), Vec3(12.0f, 6.0f, 0.5f), kWhite, 0.0f, 0.9f);
+    box(s, Vec3(0.0f, 3.0f, 6.0f), Vec3(12.0f, 6.0f, 0.5f), kWhite, 0.0f, 0.9f);
+    const NodeId lamp = s->createNode();
+    LightDesc d;
+    d.type = LightType::Point;
+    d.colour = Colour(1.0f, 1.0f, 1.0f);
+    d.intensity = 0.15f;
+    d.range = 24.0f;
+    d.castShadows = false;
+    s->setNodeTransform(lamp, Vec3(0.0f, 4.5f, 0.0f), Quat(), Vec3(1, 1, 1));
+    s->setLight(lamp, d);
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 3.0f, 5.0f), Vec3(0.0f, 1.0f, -1.0f));
+
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::Low;          // isotropic: the bounces are readable
+    gi.numBounces = 4;          // the engine's ceiling: the widest gap to measure
+    gi.boundsMin = Vec3(-6.5f, -0.6f, -6.5f);
+    gi.boundsMax = Vec3(6.5f, 6.6f, 6.5f);
+    CHECK(s->setGlobalIllumination(gi), "VCT at the full bounce count");
+    for (int i = 0; i < 6; ++i) engine->renderOneFrame();
+    Image img;
+    v->readPixels(img);
+    // WHOLE-IMAGE readings, not one pixel: the difference between one bounce
+    // and four in a white room is a couple of 8-bit steps spread over the
+    // picture, so "how many pixels moved, and by how much" is the honest
+    // measurement (and the at-rest one is exact, which a single pixel could not
+    // show).
+    Image reference = img;
+    const auto compare = [](const Image &a, const Image &b, unsigned &changed, float &worst) {
+        changed = 0; worst = 0.0f;
+        for (unsigned y = 0; y < a.height; ++y)
+            for (unsigned x = 0; x < a.width; ++x) {
+                const Colour ca = a.at(x, y), cb = b.at(x, y);
+                const float d = 255.0f * std::max(std::max(std::fabs(ca.r - cb.r),
+                                                           std::fabs(ca.g - cb.g)),
+                                                  std::fabs(ca.b - cb.b));
+                if (d >= 0.5f) ++changed;
+                if (d > worst) worst = d;
+            }
+    };
+
+    // IN MOTION: one bounce, whatever the scene asks for.
+    CHECK(s->refreshGiLighting(true), "the in-motion re-inject runs");
+    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    Image moving;
+    v->readPixels(moving);
+    unsigned movedPixels = 0; float movedWorst = 0.0f;
+    compare(reference, moving, movedPixels, movedWorst);
+
+    // AT REST: the scene's own count, and the frame the user is left with.
+    CHECK(s->refreshGiLighting(false), "the at-rest re-inject runs");
+    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    Image rested;
+    v->readPixels(rested);
+    unsigned restedPixels = 0; float restedWorst = 0.0f;
+    compare(reference, rested, restedPixels, restedWorst);
+
+    std::printf("   against the full-count reference: in motion %u px differ (worst %.1f/255), "
+                "at rest %u px (worst %.1f/255)\n",
+                movedPixels, movedWorst, restedPixels, restedWorst);
+    CHECK(movedPixels > 200u,
+          "the in-motion injection really is a cheaper picture (the economy is measurable)");
+    CHECK(restedWorst <= 1.0f,
+          "and the at-rest injection is the full-count picture again, within 1/255");
+
+    engine->destroyView(v);
+    engine->destroyScene(s);
+}
+
 int main()
 {
     std::string err;
@@ -514,6 +614,8 @@ int main()
     sectionA(engine.get());
     std::printf("== SECTION B: the moving layer\n");
     sectionB(engine.get());
+    std::printf("== SECTION C: a movable lamp at rest\n");
+    sectionC(engine.get());
 
     std::printf(failures ? "FAILED (%d)\n" : "PASSED (%d failures)\n", failures);
     return failures ? 1 : 0;

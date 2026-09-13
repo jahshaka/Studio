@@ -24,6 +24,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -1854,6 +1855,89 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
     e->destroyScene(a.scene);
 }
 
+
+// ---------------------------------------------------------------------------
+// T3z — A STILL FRAME WALKS NOTHING, and every caster input still lands in the
+// frame it happens (ENGINE-4 F5). The caster walk is the lamp-map cache's eyes:
+// it reads every item's world box, channels, render queue, pose epoch and
+// cast-shadow flag once a frame. It used to do that on EVERY frame of every
+// drawn scene with a cacheable lamp — the GI half got a movement-epoch gate and
+// this half was left out, because a pose, a rebuilt Item or a Cast Shadow flag
+// is not a transform write and no epoch carried them. They are pushed events,
+// they are now counted at their own seams, and the gate reads the sum.
+//
+// `ShadowStatus::casterWalkItems` is the instrument: cumulative item visits by
+// that walk. The assertions are a PAIR, and neither is worth anything alone —
+// "it never walks" would be a cache that never notices anything, and "it always
+// walks" is what this fixes.
+static void t3z_still_frame_walk(Engine *e, View *v)
+{
+    std::printf("-- T3z: a still frame costs the caster walk NOTHING, and every input still lands\n");
+    ensureRoomForThreeLamps(e, v);
+    CacheRoom r = buildCacheRoom(e, v, "t3z");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    int p[3];
+    for (int i = 0; i < 6; ++i) frame(e, p, r);     // the scene settles, the walk primes
+
+    const auto walked = [&]() { return e->shadowStatus().casterWalkItems; };
+    unsigned long long before = walked();
+    for (int i = 0; i < 30; ++i) frame(e, p, r);
+    const unsigned long long rest = walked() - before;
+    std::printf("    30 frames at rest: caster item visits %llu\n", (unsigned long long)rest);
+    CHECK(rest == 0ull, "30 still frames visit ZERO items in the caster walk (%llu)",
+          (unsigned long long)rest);
+
+    // EACH INPUT KIND, one at a time: the walk must run in that frame AND the
+    // lamp whose reach holds the caster must re-render its map.
+    const auto oneEvent = [&](const char *what, size_t lamp) {
+        const unsigned long long visits = walked() - before;
+        std::printf("    %-26s caster item visits %llu, lamp passes %d/%d/%d\n",
+                    what, (unsigned long long)visits, p[0], p[1], p[2]);
+        CHECK(visits > 0ull, "%s makes the frame's walk run (%llu visits)", what,
+              (unsigned long long)visits);
+        const std::vector<int> passes(p, p + 3);
+        CHECK(onlyLamp(passes, lamp, kPointMapPasses),
+              "%s re-renders exactly lamp %zu's map that frame (%d/%d/%d)", what, lamp,
+              p[0], p[1], p[2]);
+        settle(e, 2);
+        before = walked();
+        for (int i = 0; i < 4; ++i) frame(e, p, r);
+        CHECK(walked() == before, "...and the frames after it are still again");
+        before = walked();
+    };
+
+    // (1) A MOVE (the transform half of the epoch).
+    r.scene->setNodeTransform(r.mover, Vec3(-6.5f, 0.5f, -6.0f), Quat(), Vec3(1, 1, 1));
+    frame(e, p, r);
+    oneEvent("a caster moves", 0);
+
+    // (2) THE PER-OBJECT CAST SHADOW FLAG (a pushed event that moves nothing).
+    r.scene->setNodeCastShadow(r.mover, false);
+    frame(e, p, r);
+    oneEvent("a caster stops casting", 0);
+    r.scene->setNodeCastShadow(r.mover, true);
+    frame(e, p, r);
+    oneEvent("...and casts again", 0);
+
+    // (3) A MATERIAL SWAP, which rebuilds the Item at the same address with the
+    //     same bounds (T3n's case, here as an epoch statement).
+    PbrParams cut;
+    cut.albedo = Colour(0.9f, 0.2f, 0.2f);
+    cut.roughness = 0.8f;
+    const MaterialId other = r.scene->createPbrMaterial(cut);
+    CHECK(r.scene->attachMesh(r.mover, r.mesh, other), "the mover takes another material");
+    frame(e, p, r);
+    oneEvent("a material swap", 0);
+
+    // (4) HIDING IT.
+    r.scene->setNodeVisible(r.mover, false);
+    frame(e, p, r);
+    oneEvent("a caster is hidden", 0);
+    r.scene->setNodeVisible(r.mover, true);
+    frame(e, p, r);
+    oneEvent("...and shown again", 0);
+}
+
 int main(int argc, char **argv)
 {
     const std::string only = argc > 1 ? argv[1] : std::string();
@@ -1864,6 +1948,15 @@ int main(int argc, char **argv)
     cfg.logFile = "test-shadow-maps-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    // THE HOST'S TRANSFORM COUNTER (ENGINE-4 F5, and the same reason
+    // test_shadow_spike's scancost mode installs one): this suite writes every
+    // transform through the ENGINE, never through a document graph, so the
+    // host half of the movement epoch is a counter that never moves — and a
+    // host that says so is what lets the GI scan and the caster walk skip a
+    // still frame at all. Without it both walk every frame, as they always did,
+    // and T3z's statement could not be made.
+    static std::atomic<unsigned long long> noHostWrites{ 0 };
+    engine->setTransformWriteCounter(&noHostWrites);
     View *v = engine->createOffscreenView("shadowmaps", 200, 200, Colour(0, 0, 0));
     if (!v) { std::printf("FAIL: offscreen view\n"); return 1; }
 
@@ -1908,6 +2001,13 @@ int main(int argc, char **argv)
     if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
     if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);
     if (only.empty() || only == "t6")  t6_atlas_overlay(engine.get(), v);
+    // T3z LAST, by the ordering rule at the top of this function: it builds one
+    // more three-lamp room and drives ~120 polled frames through it, and every
+    // case that asserts a SMALL atlas or a fresh planar/probe arm has to have
+    // run first (measured: placed before T3v it took nine assertions in T3v,
+    // T3r, T3p and T3s down with it — all of them "nothing rendered" readings
+    // from a grown atlas, none of them about the caster walk).
+    if (only.empty() || only == "t3z") t3z_still_frame_walk(engine.get(), v);
 
     engine.reset();
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
