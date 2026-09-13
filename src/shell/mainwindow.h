@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include <QMenu>
 #include <QHash>
 #include <QPointer>
+#include <QVariantMap>
 #include <memory>
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/meshprewarm.h"
@@ -462,6 +463,16 @@ public:
     /// again whenever `input.bind` changes a binding — public for that one
     /// caller; everything else goes through the registry's own API.
     void refreshGameplayShortcutRows();
+
+    /// One pass of the scene-issue scanner plus the show/hide decision for the
+    /// viewport's error bar. Driven by the 1 Hz timer and by every space switch;
+    /// PUBLIC because `editor.issueBar()` runs it before reporting, so a script
+    /// reads a settled answer instead of racing the timer.
+    void updateSceneIssues();
+    /// What the error bar is currently showing, for that verb: whether it
+    /// exists, whether the editor is the active space, whether it is on screen
+    /// and how many rows it has.
+    QVariantMap sceneIssueBarState() const;
 
 private:
 

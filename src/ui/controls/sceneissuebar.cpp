@@ -58,6 +58,14 @@ QWidget *SceneIssueBar::ownerWindow() const
     return QApplication::activeWindow();
 }
 
+void SceneIssueBar::setEditorActive(bool active)
+{
+    if (mEditorActive == active) return;
+    mEditorActive = active;
+    if (!active) hide();
+    else refresh();
+}
+
 // Rebuilt from the store, wholesale. The rows are cheap (a handful of labels)
 // and the alternative — diffing them — would be a second copy of the store's
 // rules, which is the mistake this whole facility exists to avoid.
@@ -67,6 +75,10 @@ void SceneIssueBar::refresh()
         if (QWidget *w = item->widget()) w->deleteLater();
         delete item;
     }
+
+    // NOT THE EDITOR'S PAGE, NOT ON SCREEN — checked here and not only at the
+    // caller, because `changed()` from the store reaches refresh() directly.
+    if (!mEditorActive) { hide(); return; }
 
     const QVector<SceneIssue> visible = SceneIssues::instance().issues(false);
     if (visible.isEmpty()) { hide(); return; }

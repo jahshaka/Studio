@@ -458,7 +458,7 @@ QVector<VerbInfo> CameraApi::verbs() const
           "or below the camera points it straight up or down with its current heading kept at "
           "the top (looking down) or bottom (looking up) of the frame. Undoable.",
           Needs::Document },
-        { "screenshot", "camera.screenshot(id, path, {width?, height?, probes?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
+        { "screenshot", "camera.screenshot(id, path, {width?, height?, probes?, grade?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
           "Renders what THIS SCENE CAMERA sees to a PNG — the AI hook of CAMERAS_SPEC \u00a75. It "
           "goes through the same throwaway OFFSCREEN view editor.screenshot uses, so the user's "
           "viewport does not move and is not disturbed: an agent can look through an avatar's "
@@ -466,10 +466,19 @@ QVector<VerbInfo> CameraApi::verbs() const
           "SIZE comes from the CAMERA unless you override it: `height` defaults to the camera's "
           "outputHeight and `width` to height x aspectRatio (both clamped to 16..4096). "
           "`probes` are {x,y} points in normalized 0..1 image coordinates, returned as 5x5 "
-          "averaged colours exactly as editor.screenshot returns them; `postFx` (default false) "
-          "opts the shot into the scene's post chain so it looks like the viewport instead of "
-          "like a neutral readback. A camera riding a SOCKET is resolved on the next synced "
-          "frame, so a script that moves the rig should step editor.frame(1) before shooting.",
+          "averaged colours exactly as editor.screenshot returns them. `grade` says HOW THE "
+          "PICTURE IS DEVELOPED and takes the same four words editor.screenshot and "
+          "player.screenshot take: \"plain\" (also \"raw\") is the exact ungraded readback and "
+          "is the default, because this verb is also a measuring instrument; \"tonemap\" is the "
+          "deterministic filmic grade with nothing else; \"scene\" is the scene's whole post "
+          "chain at the exposure the on-screen viewport has converged on — the picture a user "
+          "sees; \"viewport\" is that chain with its own adaptive exposure re-seeded from the "
+          "world's value, which is the only grade that reads a PIPPED camera's own exposure "
+          "(there is no on-screen view measuring that camera, so an offscreen view a couple of "
+          "frames long grades at the seed). `postFx` is the older boolean spelling and still "
+          "works: false is \"plain\", true is \"viewport\". A camera riding a SOCKET is resolved "
+          "on the next synced frame, so a script that moves the rig should step editor.frame(1) "
+          "before shooting.",
           Needs::Engine },
     };
 }
@@ -1078,7 +1087,7 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
     if (!requireEngine()) return out;
     if (path.isEmpty()) { fail("camera.screenshot: a file path is required"); return out; }
 
-    static const QStringList known = { "width", "height", "probes", "postFx" };
+    static const QStringList known = { "width", "height", "probes", "postFx", "grade" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
         if (!known.contains(it.key())) {
             fail(QStringLiteral("camera.screenshot: unknown option '%1' — known options are %2")
@@ -1094,7 +1103,25 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
     const int height = qBound(16, options.value(QStringLiteral("height"), camHeight).toInt(), 4096);
     const int width = qBound(16,
         options.value(QStringLiteral("width"), qRound(float(height) * aspect)).toInt(), 4096);
-    const bool postFx = options.value(QStringLiteral("postFx"), false).toBool();
+    // THE GRADE (IEditorViewport::ScreenshotGrade — each answer documented
+    // there). `postFx` is the boolean spelling this verb shipped with and keeps
+    // meaning exactly what it meant: false = Plain, true = Viewport, which is
+    // the door a pipped camera's OWN exposure reaches a shot through. `grade`
+    // is the four-word form editor.screenshot and player.screenshot take, and
+    // all three parse it through the one function (item 5: three screenshot
+    // doors used to offer two exposures between them).
+    IEditorViewport::ScreenshotGrade grade =
+        options.value(QStringLiteral("postFx"), false).toBool()
+            ? IEditorViewport::ScreenshotGrade::Viewport
+            : IEditorViewport::ScreenshotGrade::Plain;
+    if (options.contains(QStringLiteral("grade"))) {
+        const QString word = options.value(QStringLiteral("grade")).toString();
+        if (!IEditorViewport::gradeFromString(word, &grade)) {
+            fail(QStringLiteral("camera.screenshot: unknown grade '%1' (%2)")
+                     .arg(word, IEditorViewport::gradeWords()));
+            return out;
+        }
+    }
 
     auto saved = host.viewport->editorCamera();
     if (!saved) {
@@ -1127,7 +1154,7 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
     // the roll assertions in sockets.e2e and cameras.e2e.pilot are what keep it
     // from needing to come back.
     host.viewport->setEditorCamera(cam);
-    const QImage img = host.viewport->takeScreenshot(width, height, postFx);
+    const QImage img = host.viewport->takeScreenshot(width, height, grade);
     host.viewport->setEditorCamera(saved);
     if (substituting) scene->setActiveCamera(savedActive);
 

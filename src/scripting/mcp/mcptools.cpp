@@ -244,7 +244,11 @@ QJsonArray McpTools::listTools() const
                 { "postFx", QJsonObject{ { "type", "boolean" },
                     { "description", "Apply the scene's post-processing chain so the image "
                                      "matches the viewport (default true); false renders "
-                                     "neutrally." } } } } } } } });
+                                     "neutrally. True is the scripting verbs' \"scene\" grade "
+                                     "in every one of the three views — the whole chain at the "
+                                     "exposure the on-screen view has converged on — and false "
+                                     "is their \"plain\" grade, the exact ungraded readback the "
+                                     "pixel suites assert." } } } } } } } });
 
     tools.append(QJsonObject{
         { "name", "browse_assets" },
@@ -542,13 +546,17 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
         if (!scratch.isValid())
             return textResult(QStringLiteral("screenshot: could not create a scratch directory"), true);
         const QString file = scratch.filePath(QStringLiteral("player.png"));
+        // `scene`, not `postFx: true` (= `viewport`): the same grade the editor
+        // branch takes, for the same reason — the player HAS an on-screen view
+        // whose exposure has converged, and this tool promises the picture the
+        // user is looking at (item 5).
         const bool playerPostFx = args.value(QLatin1String("postFx")).toBool(true);
         const QByteArray quoted = QJsonDocument(QJsonArray{ file }).toJson(QJsonDocument::Compact);
         const QString expr =
-            QStringLiteral("player.screenshot(%1[0], {width: %2, height: %3, postFx: %4})")
+            QStringLiteral("player.screenshot(%1[0], {width: %2, height: %3, grade: \"%4\"})")
                 .arg(QString::fromUtf8(quoted))
                 .arg(width).arg(height)
-                .arg(playerPostFx ? QStringLiteral("true") : QStringLiteral("false"));
+                .arg(playerPostFx ? QStringLiteral("scene") : QStringLiteral("plain"));
         const ScriptResult shot = mEngine->evaluate(expr, QStringLiteral("<screenshot>"), false);
         if (!shot.ok)
             return textResult(QStringLiteral("screenshot: %1").arg(shot.error), true);
@@ -588,13 +596,20 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
         if (!scratch.isValid())
             return textResult(QStringLiteral("screenshot: could not create a scratch directory"), true);
         const QString file = scratch.filePath(QStringLiteral("camera.png"));
+        // THE SAME GRADE THE EDITOR BRANCH USES (item 5). This asked for
+        // `postFx: true`, which is the VIEWPORT grade — the scene's whole chain
+        // with its adaptive exposure RE-SEEDED, in an offscreen view about two
+        // frames long that cannot converge, so it graded at the seed while this
+        // tool's description promised "what the user sees". `scene` carries the
+        // exposure the on-screen viewport HAS converged on, which is what that
+        // sentence means. `postFx: false` still means the exact readback.
         const bool postFxShot = args.value(QLatin1String("postFx")).toBool(true);
         const QByteArray quoted =
             QJsonDocument(QJsonArray{ cameraId, file }).toJson(QJsonDocument::Compact);
-        const QString expr = QStringLiteral("camera.screenshot(%1[0], %1[1], {width: %2, height: %3, postFx: %4})")
+        const QString expr = QStringLiteral("camera.screenshot(%1[0], %1[1], {width: %2, height: %3, grade: \"%4\"})")
                                  .arg(QString::fromUtf8(quoted))
                                  .arg(width).arg(height)
-                                 .arg(postFxShot ? QStringLiteral("true") : QStringLiteral("false"));
+                                 .arg(postFxShot ? QStringLiteral("scene") : QStringLiteral("plain"));
         // The deterministic frame FIRST: a socketed camera is placed by the
         // mirror's socket pass, which only runs inside a sync.
         host.viewport->renderFrames(2);

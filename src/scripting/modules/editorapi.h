@@ -105,6 +105,10 @@ public:
     Q_INVOKABLE bool dismissIssue(const QString &id);
     Q_INVOKABLE bool clearIssue(const QString &id);
     Q_INVOKABLE QVariantMap checkScene();
+    /// The SHELL half of the error area: whether the viewport's issue bar is on
+    /// screen right now. Runs one scan+decide pass first, so the answer never
+    /// races the 1 Hz timer. Needs::Window — headless has no bar.
+    Q_INVOKABLE QVariantMap issueBar();
     Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256,
                                        const QVariantList &probes = QVariantList(),
                                        const QVariant &grade = QVariant());

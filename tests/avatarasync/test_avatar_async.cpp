@@ -54,6 +54,7 @@
 #include <QNetworkRequest>
 #include <QProcess>
 #include <QTcpServer>
+#include <QRegularExpression>
 #include <QThread>
 #include <cstdio>
 
@@ -482,9 +483,11 @@ int main(int argc, char **argv)
     {
         mcp.runScript(QStringLiteral("avatar.open('%1')").arg(syncAvatar));
         const QJsonObject raced = mcp.runScript(
-            QStringLiteral("avatar.open('%1', {async: true});"
+            QStringLiteral("var parsesBefore = avatar.progress().parsesFinished;"
+                           "avatar.open('%1', {async: true});"
                            "var sync = avatar.open('%2');"
                            "({guid: sync.guid, running: avatar.progress().running,"
+                           "  parses: parsesBefore,"
                            "  preview: avatar.preview().name});").arg(asyncAvatar, syncAvatar))
                 .value("result").toObject();
         std::printf("info: sync open during an async one: %s\n",
@@ -493,8 +496,33 @@ int main(int argc, char **argv)
               "the synchronous open wins the definition");
         CHECK(!raced.value("running").toBool(),
               "... and ends the job it superseded (the dialog cannot hang)");
-        // Give the abandoned parse time to land; it must change nothing.
-        QThread::msleep(3000);
+        // WAIT FOR THE ABANDONED PARSE, do not sleep at it (CLEANUP-1 item 9).
+        // This was `QThread::msleep(3000)` and then the assertion — and a parse
+        // that was still running (12 s on this box before the fix, and any
+        // amount under a -j4 gate) made the assertion pass because NOTHING had
+        // landed yet, which is precisely the defect the case exists to catch.
+        // A superseded parse never returns to `running`, so the seam is
+        // progress().parsesFinished: it counts completions whether or not the
+        // result was applied. The baseline is read INSIDE the script, before
+        // the async open starts — reading it afterwards would race the very
+        // completion this waits for.
+        const int parsesBefore = raced.value("parses").toInt();
+        bool parseLanded = false;
+        {
+            QElapsedTimer waiting;
+            waiting.start();
+            while (waiting.elapsed() < kOpBudgetMs) {
+                if (mcp.integer(QStringLiteral("avatar.progress().parsesFinished")) > parsesBefore) {
+                    parseLanded = true;
+                    break;
+                }
+                QThread::msleep(50);
+            }
+            std::printf("info: the abandoned parse completed after %lld ms (parses %d -> %d)\n",
+                        static_cast<long long>(waiting.elapsed()), parsesBefore,
+                        mcp.integer(QStringLiteral("avatar.progress().parsesFinished")));
+        }
+        CHECK(parseLanded, "the superseded parse really did finish (so the assertions below mean something)");
         CHECK(mcp.string(QStringLiteral("avatar.asset().guid")) == syncAvatar,
               "the superseded parse did not move the open definition");
         const QString previewName = mcp.string(QStringLiteral("avatar.preview().name"));
@@ -506,13 +534,29 @@ int main(int argc, char **argv)
     }
 
     // ---- 6. quitting with an import IN FLIGHT -----------------------------
-    mcp.runScript(QStringLiteral("avatar.importAvatar('%1', {async: true})").arg(rig));
-    mcp.runScript(QStringLiteral("app.quit()"));
+    //
+    // AND WITH AN UNSAVED DEFINITION EDIT INSIDE ITS COALESCING WINDOW
+    // (CLEANUP-1 item 2). The three statements below are ONE script on purpose:
+    // the definition edit arms a 250 ms single-shot, the import starts on the
+    // global thread pool, and the quit is posted — with no round trip between
+    // them, so the window is open, with certainty, when the close runs.
+    //
+    // What this used to do: the shell aborted the Assets page's runners and
+    // then waited 3 s on the pool, while the avatar module's abort lived in
+    // AvatarApi::detachModel, reached only from shutdownModules() — AFTER that
+    // wait, and after the std::_Exit(0) behind it. So a parse over three
+    // seconds took the process out from under the module: no ordered shutdown,
+    // and the pending write simply gone. Both halves are asserted here.
+    mcp.runScript(QStringLiteral("avatar.open('%1')").arg(asyncAvatar));
+    mcp.runScript(QStringLiteral("avatar.setClipOptions('%1', {looping: true});"
+                                 "avatar.importAvatar('%2', {async: true});"
+                                 "app.quit();").arg(clip, rig));
     QElapsedTimer exitTimer;
     exitTimer.start();
     const bool exited = jahshaka.waitForFinished(kExitBudgetMs);
     std::printf("info: exit after %lld ms\n", static_cast<long long>(exitTimer.elapsed()));
     CHECK(exited, "process terminated within the exit budget with an avatar import in flight");
+    const QByteArray quitLog = jahshaka.readAll();
     if (!exited) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
     else {
         const bool clean = jahshaka.exitStatus() == QProcess::NormalExit && jahshaka.exitCode() == 0;
@@ -520,10 +564,28 @@ int main(int argc, char **argv)
             std::printf("info: exitStatus=%s exitCode=%d\n",
                         jahshaka.exitStatus() == QProcess::CrashExit ? "CrashExit" : "NormalExit",
                         jahshaka.exitCode());
-            const QByteArray tail = jahshaka.readAll().right(3000);
-            std::printf("---- app output tail ----\n%s\n-------------------------\n", tail.constData());
+            std::printf("---- app output tail ----\n%s\n-------------------------\n",
+                        quitLog.right(3000).constData());
         }
         CHECK(clean, "process exited normally with code 0");
+    }
+
+    // THE ORDERED SHUTDOWN RAN, all eight steps (src/shell/shutdownorder.h) —
+    // the thing a forced exit skips. app.shutdown_order asserts the ORDER on a
+    // quiet app; this asserts that the sequence happens AT ALL with a module's
+    // background job in flight, which is the case that used to lose it.
+    {
+        QVector<int> steps;
+        QRegularExpression re(QStringLiteral(R"(\[shutdown\] step (\d)/8)"));
+        auto it = re.globalMatch(QString::fromUtf8(quitLog));
+        while (it.hasNext()) steps.append(it.next().captured(1).toInt());
+        std::printf("info: shutdown steps recorded during the quit: %d\n", int(steps.size()));
+        bool ordered = steps.size() == 8;
+        for (int i = 0; i < steps.size(); ++i) if (steps.at(i) != i + 1) ordered = false;
+        CHECK(ordered,
+              "all eight shutdown steps ran, in order, with an avatar import in flight");
+        CHECK(!quitLog.contains("background workers did not stop in time"),
+              "... and the shell never had to force the exit");
     }
 
     // ---- 5b. ... AND SURVIVES A RESTART -----------------------------------
@@ -553,8 +615,15 @@ int main(int argc, char **argv)
             restarted.runScript(QStringLiteral("avatar.asset().definition.clips.filter("
                                                "function(c){return c.name === '%1'})[0]").arg(clip))
                 .value("result").toObject();
-        CHECK(entry.value("looping").toBool() == false && entry.value("rootMotion").toBool() == true,
-              "... with the per-clip settings it was given");
+        // `looping` is TRUE here, and that is the point (item 2): it was set
+        // false in section 5, and flipped to true by the same script that
+        // started the import and quit — inside the 250 ms write-coalescing
+        // window. Reading true after a restart is the proof that the quit path
+        // FLUSHES the pending definition write before anything can take the
+        // process away. `rootMotion` is section 5's, unchanged, so the row is
+        // the same row and not a fresh default.
+        CHECK(entry.value("looping").toBool() == true && entry.value("rootMotion").toBool() == true,
+              "the definition edit made inside the coalescing window SURVIVED the quit");
         CHECK(restarted.string(QStringLiteral("avatar.asset().definition.defaultClip")) == clip,
               "... and it is still the default clip");
         restarted.runScript(QStringLiteral("app.quit()"));

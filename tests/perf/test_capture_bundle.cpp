@@ -40,6 +40,17 @@ For more information see the LICENSE file
 //
 // The app half is capture_bundle.js. The two are split because the scripting
 // engine has no file access, on purpose.
+//
+// PHASE 2 (CLEANUP-1 item 1): A WINDOW CLOSE MID-CAPTURE STILL WRITES THE
+// BUNDLE. The owner's whole workflow is "press Ctrl+F4, do the thing that feels
+// wrong, tell the lead where the bundle is" — and closing the window was a way
+// to lose it: FrameMonitor::stop() was called from exactly two places (the
+// --script runner and the Ctrl+F4 toggle) and MainWindow::shutdownBackgroundWork
+// was not one of them, so finish() never ran on the path a user actually takes.
+// This phase spawns the real binary over MCP, starts a long capture, and quits
+// through app.quit() — the ordinary close — then reads the bundle the same way
+// phase 1 does.
+#include "mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -49,6 +60,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QThread>
 #include <cstdio>
 
 static int failures = 0;
@@ -370,6 +382,184 @@ int main(int argc, char **argv)
                          .arg(lastToast.value("shown").toInt())));
     CHECK(lastToast.value("text").toString().contains(bundle),
           "the second toast names the bundle's path");
+
+    // ---- PHASE 2: THE WINDOW CLOSES WHILE A CAPTURE IS RUNNING -------------
+    {
+        using namespace shutdownharness;
+        const QString quitHome =
+            QDir::current().absoluteFilePath(QStringLiteral("e2e-home-capture_quit"));
+        const QString quitRoot = quitHome + QStringLiteral("/perf");
+        const QString quitBundle = quitRoot + QStringLiteral("/quit");
+        QDir(quitRoot).removeRecursively();
+        QDir().mkpath(quitHome + "/run");
+        QDir().mkpath(quitRoot);
+
+        // The spawned app's settings file follows JAHSHAKA_DATA_ROOT, and
+        // seedSettingsForSpawnedApp mirrors that precedence from OUR
+        // environment — so the variable goes into this process too, or the
+        // auto_save key lands in a file the child will never read and the quit
+        // stops on a modal prompt.
+        qputenv("JAHSHAKA_DATA_ROOT", (quitHome + "/.local/share/Jahshaka").toUtf8());
+        QDir().mkpath(quitHome + "/.local/share/Jahshaka");
+        seedSettings(QStringLiteral(JAHSHAKA_BINARY));
+
+        QProcess app2;
+        QProcessEnvironment env2 = QProcessEnvironment::systemEnvironment();
+        env2.insert("HOME", quitHome);
+        env2.insert("JAHSHAKA_DATA_ROOT", quitHome + "/.local/share/Jahshaka");
+        env2.insert("XDG_CACHE_HOME", quitHome + "/cache");
+        env2.insert("JAHSHAKA_PERF_ROOT", quitRoot);
+        app2.setProcessEnvironment(env2);
+        app2.setWorkingDirectory(quitHome + "/run");
+
+        QString token;
+        QByteArray log;
+        const quint16 port = freePort();
+        const bool booted = spawn(app2, port, &token, &log);
+        CHECK(booted && !token.isEmpty(), "phase 2: the app booted with an MCP endpoint");
+        if (booted && !token.isEmpty()) {
+            McpClient mcp;
+            mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
+            mcp.token = token;
+            mcp.initialize();
+
+            mcp.runScript(QStringLiteral("project.create('CaptureQuit')"));
+            mcp.runScript(QStringLiteral("scene.addPrimitive('cube', {position:{x:0,y:1,z:0}})"));
+            // LONG, so the capture cannot possibly have auto-stopped on its own:
+            // the only thing that can write this bundle is the close path.
+            const QJsonObject started = mcp.runScript(
+                QStringLiteral("perf.capture({seconds: 300, out: '%1', label: 'quit'})")
+                    .arg(quitBundle));
+            CHECK(started.value("result").toObject().value("started").toBool(),
+                  "phase 2: a 300 s capture is running");
+            mcp.runScript(QStringLiteral("editor.frame(8)"));
+            CHECK(mcp.runScript(QStringLiteral("perf.status()"))
+                      .value("result").toObject().value("recording").toBool(),
+                  "phase 2: ...and still recording when the window closes");
+
+            mcp.runScript(QStringLiteral("app.quit()"));
+            const bool exited = app2.waitForFinished(60000);
+            log += app2.readAll();
+            CHECK(exited, "phase 2: the app exited through the normal close path");
+            if (!exited) { app2.kill(); app2.waitForFinished(5000); }
+
+            // AND IT WAS WRITTEN WHILE THE APP WAS STILL WHOLE — which is the
+            // actual contract, and the one that was broken. The only stop() on
+            // this path used to be the one in finalizeAppExit, which runs after
+            // app.exec() RETURNS: after the background-work step, after the
+            // modules are down, and — this is the part that loses bundles —
+            // after the two forced exits that step can take (the 3 s pool wait
+            // and the 20 s teardown watchdog, mainwindow.cpp). Measured on the
+            // binary without the fix: "[perf] capture written" lands after
+            // "[shutdown] step 4/8"; with it, before step 3.
+            const int writtenAt = log.indexOf("[perf] capture written");
+            const int modulesAt = log.indexOf("[shutdown] step 3/8");
+            std::printf("info: 'capture written' at %d, 'step 3/8' at %d\n", writtenAt, modulesAt);
+            CHECK(writtenAt >= 0, "phase 2: the app logged that it wrote the capture");
+            CHECK(writtenAt >= 0 && modulesAt >= 0 && writtenAt < modulesAt,
+                  "phase 2: the capture was written INSIDE the background-work step, before the "
+                  "modules and the engine went down");
+
+            // THE BUNDLE IS WHOLE. Before the fix there was no machine.json at
+            // all here, and trace.json kept its open bracket.
+            bool qok = false;
+            const QJsonObject qm = readJson(QDir(quitBundle).filePath("machine.json"), &qok).object();
+            CHECK(qok && !qm.isEmpty(), "phase 2: machine.json exists and parses after the quit");
+            const QJsonObject qcapture = qm.value("capture").toObject();
+            CHECK(qcapture.value("framesWritten").toDouble() > 0.0,
+                  "phase 2: the capture kept the frames it had recorded");
+            CHECK(qcapture.value("stoppedEarly").toBool(),
+                  "phase 2: ...and records that it was stopped early");
+            CHECK(qm.value("truncation").toObject().value("complete").toBool(false),
+                  "phase 2: the bundle says it is COMPLETE");
+            bool qtok = false;
+            const QJsonDocument qtrace = readJson(QDir(quitBundle).filePath("trace.json"), &qtok);
+            CHECK(qtok && qtrace.isArray(),
+                  "phase 2: trace.json parses (its closing bracket was written)");
+            bool qframesOk = false;
+            const QList<QJsonObject> qframes =
+                readJsonl(QDir(quitBundle).filePath("frames.jsonl"), &qframesOk);
+            CHECK(qframesOk && !qframes.isEmpty(), "phase 2: frames.jsonl parses and has records");
+
+            // ---- THE MONITOR'S OWN HOST COST (item 6) ----------------------
+            // `host.monitor` is the drain — two JSON records per pass per frame
+            // plus three file writes, on the UI thread — which used to be
+            // charged to nobody at all: it runs after a frame ends and before
+            // the gap clock is re-armed, so it appeared in neither totalMs nor
+            // gap.*. It lands on the FOLLOWING frame's record (the stage
+            // contract), so the first frame of a capture cannot carry one.
+            //
+            // AND NEITHER CAN AN `offscreen` FRAME, which is why the count
+            // below filters them out rather than asserting over everything: a
+            // thumbnail, a preview or a screenshot renders THROUGH A THROWAWAY
+            // VIEW, outside the render driver's tick entirely — there is no
+            // noteTickStart/noteTickEnd around it, so there is no drain to
+            // charge to it. (The quit path takes exactly such a frame: the
+            // project's preview tile is re-rendered on the way out. Measured on
+            // this capture: 10 driver/scripted frames and 2 offscreen ones.)
+            int withMonitor = 0, withStartTag = 0, considered = 0, offscreen = 0;
+            for (int i = 0; i < qframes.size(); ++i) {
+                bool monitor = false, startTag = false;
+                for (const QJsonValue &sv : qframes[i].value("stages").toArray()) {
+                    const QString name = sv.toObject().value("name").toString();
+                    if (name == QLatin1String("host.monitor")) monitor = true;
+                    if (name == QLatin1String("host.capture_start")) startTag = true;
+                }
+                if (startTag) ++withStartTag;
+                if (qframes[i].value("cause").toString() == QLatin1String("offscreen")) {
+                    ++offscreen;
+                    continue;
+                }
+                if (i == 0) continue;              // nothing has drained before it
+                ++considered;
+                if (monitor) ++withMonitor;
+            }
+            std::printf("info: %d frames, %d of them offscreen\n", int(qframes.size()), offscreen);
+            CHECK(considered > 0 && withMonitor == considered,
+                  qPrintable(QStringLiteral("phase 2: every DRIVEN frame after the first carries "
+                                            "the host.monitor stage (%1 of %2)")
+                                 .arg(withMonitor).arg(considered)));
+            CHECK(withStartTag == 1,
+                  qPrintable(QStringLiteral("phase 2: exactly one frame is tagged "
+                                            "host.capture_start (%1)").arg(withStartTag)));
+
+            // ---- THE CAPTURE ROOT FOLLOWS THE DATA ROOT (item 11) ----------
+            // Asserted on a SECOND app, because this one's root came from
+            // $JAHSHAKA_PERF_ROOT — the question is what the DEFAULT resolves to
+            // when only --data-root is set. It used to be a compiled-in
+            // ~/Developer/spikes/perf.
+        }
+
+        QProcess app3;
+        QProcessEnvironment env3 = QProcessEnvironment::systemEnvironment();
+        env3.insert("HOME", quitHome);
+        env3.insert("JAHSHAKA_DATA_ROOT", quitHome + "/.local/share/Jahshaka");
+        env3.insert("XDG_CACHE_HOME", quitHome + "/cache");
+        env3.remove("JAHSHAKA_PERF_ROOT");
+        app3.setProcessEnvironment(env3);
+        app3.setWorkingDirectory(quitHome + "/run");
+        QString token3;
+        QByteArray log3;
+        const quint16 port3 = freePort();
+        if (spawn(app3, port3, &token3, &log3) && !token3.isEmpty()) {
+            McpClient mcp3;
+            mcp3.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port3));
+            mcp3.token = token3;
+            mcp3.initialize();
+            const QString root = mcp3.runScript(QStringLiteral("perf.status()"))
+                                     .value("result").toObject().value("root").toString();
+            std::printf("info: default capture root = %s\n", qPrintable(root));
+            const QString expected =
+                QDir::cleanPath(quitHome + "/.local/share/Jahshaka/perf");
+            CHECK(QDir::cleanPath(root) == expected,
+                  qPrintable(QStringLiteral("the default capture root follows --data-root "
+                                            "(%1)").arg(root)));
+            mcp3.runScript(QStringLiteral("app.quit()"));
+            if (!app3.waitForFinished(60000)) { app3.kill(); app3.waitForFinished(5000); }
+        } else {
+            CHECK(false, "the second app booted for the capture-root check");
+        }
+    }
 
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall checks passed (%d failures)\n", failures);
     return failures ? 1 : 0;

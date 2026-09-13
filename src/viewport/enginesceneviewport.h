@@ -171,7 +171,6 @@ public:
     void setShowPerspeciveLabel(bool) override {}
     QImage takeScreenshot(int width = 1920, int height = 1080) override;
     QImage takeScreenshot(QSize dimension) override;
-    QImage takeScreenshot(int width, int height, bool postFx) override;
     QImage takeScreenshot(int width, int height, ScreenshotGrade grade) override;
     int sampleCount() const override
     { return view() ? int(view()->sampleCount()) : 1; }

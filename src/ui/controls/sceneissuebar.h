@@ -54,6 +54,14 @@ public:
     /// to call at any time.
     void refresh();
 
+    /// WHETHER THE EDITOR IS THE SPACE THE USER IS LOOKING AT. False hides the
+    /// bar and keeps it hidden however the store changes — this is a top-level
+    /// WindowStaysOnTop frame, so without it the store's `changed()` signal
+    /// alone puts an editor message over the Desktop, Assets or Player page
+    /// (CLEANUP-1 item 3). True re-reads the store and shows what is left.
+    void setEditorActive(bool active);
+    bool isEditorActive() const { return mEditorActive; }
+
     /// The rectangle the bar occupies in its OWNER WINDOW's coordinates —
     /// what a test asserts about. Null when it is not showing.
     QRect geometryInWindow() const;
@@ -73,6 +81,7 @@ private:
     QPointer<QWidget> mAnchor;
     int mTopInset = 24;
     int mMargin = 12;
+    bool mEditorActive = true;
     /// At most this many rows; the rest are counted in a trailing line, because
     /// an error area that can grow without bound is a second problem.
     static constexpr int kMaxRows = 3;

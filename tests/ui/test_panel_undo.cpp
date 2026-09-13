@@ -61,6 +61,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
 #include "ui/panels/propertywidgets/lightpropertywidget.h"
+#include "ui/panels/propertywidgets/meshpropertywidget.h"
 #include "ui/panels/propertywidgets/mobilitypropertywidget.h"
 #include "ui/panels/propertywidgets/physicspropertywidget.h"
 #include "ui/panels/propertywidgets/skypropertywidget.h"
@@ -489,6 +490,54 @@ int main(int argc, char **argv)
               "movement: ...and the result line explains what drives it");
         node->isPhysicsBody = false;
         node->removeFromParent();
+    }
+
+    // ---- 6c. THE CAST SHADOW ROW (CLEANUP-1 item 4) ------------------------
+    // A control the UI promised and did not have. The light panel's Lighting
+    // Channels row has told authors since it shipped to "turn off Cast Shadow
+    // on the object itself" — and there was no Cast Shadow row anywhere in
+    // src/ui: the only door was node.setCastShadow from a script, which is the
+    // API-first rule inverted. Same reflected key (`castShadow`), so the row,
+    // node.setProperty and node.setCastShadow are one code path and one step.
+    {
+        auto mesh = iris::MeshNode::create();
+        scene->getRootNode()->addChild(mesh, false);
+        MeshPropertyWidget panel;
+        panel.setServices(&services);
+        const int before = stack.index();
+        panel.setSceneNode(mesh);        // SELECTING a node is not an edit
+        pump();
+        CHECK(stack.index() == before, "cast shadow: selecting a mesh records nothing");
+        CHECK(mesh->getShadowCastingEnabled(),
+              "cast shadow: ...and did not write the row's value back into it");
+
+        CheckBoxWidget *row = checkWith(&panel, QStringLiteral("Cast Shadow"));
+        CHECK(row != nullptr, "cast shadow: THE ROW EXISTS on the mesh blade");
+        CHECK(row && row->getValue(),
+              "cast shadow: the row REFLECTS the document (a new mesh casts shadows)");
+
+        if (auto *b = box(row)) b->setChecked(false);
+        CHECK(!mesh->getShadowCastingEnabled(),
+              "cast shadow: unticking it wrote through to the document");
+        CHECK(stack.index() == before + 1, "cast shadow: as ONE undo step");
+        stack.undo();
+        pump();
+        CHECK(mesh->getShadowCastingEnabled(), "cast shadow: undone");
+        stack.redo();
+        pump();
+        CHECK(!mesh->getShadowCastingEnabled(), "cast shadow: redone");
+        stack.undo();
+        pump();
+
+        // AND THE ROW FOLLOWS A NODE THAT ALREADY HAS IT OFF: the panel is
+        // where an author discovers the state, not only where they change it.
+        mesh->setShadowCastingEnabled(false);
+        panel.setSceneNode(mesh);
+        pump();
+        CHECK(row && !row->getValue(), "cast shadow: the row shows a node that is already off");
+        CHECK(stack.index() == before, "cast shadow: ...and re-selecting still records nothing");
+        mesh->setShadowCastingEnabled(true);
+        mesh->removeFromParent();
     }
 
     // ---- 7. THE PHYSICS SECTION (a struct, not a reflected property) -------

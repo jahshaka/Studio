@@ -2482,8 +2482,24 @@ void AvatarApi::abandonPreviewLoad()
     stale->disconnect(this);           // our completion lambda is bound to `this`
     // The parse itself cannot be interrupted (assimp) and its result is inert;
     // the watcher just has to outlive it and then go.
-    if (stale->isFinished()) stale->deleteLater();
-    else connect(stale, &QFutureWatcherBase::finished, stale, &QObject::deleteLater);
+    //
+    // IT STILL HAS TO BE COUNTED, though (CLEANUP-1 item 9): an abandoned parse
+    // never returns to `running`, so progress().parsesFinished is the only
+    // moment anything outside can observe that it is over — and a suite that
+    // wants to assert "the superseded parse changed nothing" has to be able to
+    // wait for it instead of sleeping a guessed number of seconds. The context
+    // object is the WATCHER, deliberately: the disconnect above is by `this`,
+    // and a connection bound to `this` would be cut by it. The watcher is a
+    // child of this object, so it can never outlive the captured pointer.
+    if (stale->isFinished()) {
+        ++mPreviewParsesFinished;
+        stale->deleteLater();
+    } else {
+        connect(stale, &QFutureWatcherBase::finished, stale, [this, stale]() {
+            ++mPreviewParsesFinished;
+            stale->deleteLater();
+        });
+    }
 }
 
 bool AvatarApi::startImport(const QString &path, AvatarAssets::Scope scope, int drawerId,
@@ -2612,6 +2628,14 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     const quint64 epoch = mLoadEpoch;
     connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, epoch]() {
         watcher->deleteLater();
+        // COUNTED BEFORE THE GUARDS, always: this is the only observable moment
+        // an ABANDONED parse has (it applies nothing by design), and a test
+        // that wants to assert "the superseded parse changed nothing" has to be
+        // able to wait for it rather than sleep a guessed number of seconds
+        // (CLEANUP-1 item 9 — the old fixed 3 s passed for the wrong reason
+        // whenever the parse was still running). Reported as
+        // avatar.progress().parsesFinished.
+        ++mPreviewParsesFinished;
         // TWO guards, and the epoch is the load-bearing one: the watcher
         // pointer only catches a REPLACED parse, while the epoch also catches
         // a SYNCHRONOUS open that landed while this one was parsing (which
@@ -2657,6 +2681,10 @@ QVariantMap AvatarApi::progress()
     out["cancelled"] = mJob.cancelled;
     out["error"] = mJob.error;
     out["result"] = mJob.result;
+    // HOW MANY PREVIEW PARSES HAVE COMPLETED in this session, counted whether
+    // or not their result was applied. Monotonic; the seam a test waits on for
+    // a parse that was superseded and will therefore never be `running` again.
+    out["parsesFinished"] = double(mPreviewParsesFinished);
     return out;
 }
 
@@ -2667,10 +2695,33 @@ bool AvatarApi::cancelImport()
     return true;
 }
 
+void AvatarApi::abortBackgroundWork()
+{
+    // (a) NOTHING UNSAVED IS EVER DROPPED, and this is the first thing, because
+    // everything after it can be taken away: the shell's pool wait is bounded
+    // at 3 s with std::_Exit(0) behind it, and a definition edit inside its
+    // 250 ms coalescing window used to be lost to exactly that exit.
+    flushPersist("avatar.quit");
+    // (b) Nothing an in-flight parse produces may be applied from here on: the
+    // model is about to go, and the epoch is the guard startPreviewLoad's
+    // completion lambda tests.
+    ++mLoadEpoch;
+    // (c) ASK the import worker to stop — and do NOT wait for it. The runner
+    // lives on the global pool, which is exactly what the shell joins a few
+    // lines later; blocking here would only move the same 3 s wait earlier.
+    // (The preview parse is assimp and cannot be interrupted at all — that is
+    // stated at startPreviewLoad — so the shell may still spend its budget on
+    // one. The point of this hook is that the flush and the abort now happen
+    // BEFORE that budget is spent, not after it has already been lost.)
+    if (mImportRunner) mImportRunner->requestAbort();
+}
+
 void AvatarApi::detachModel()
 {
     // A coalesced write still in its window would die with the module: flush
-    // before anything else (this is the app-quit path).
+    // before anything else (this is the app-quit path). abortBackgroundWork()
+    // has normally already done it at the top of the shutdown; this covers the
+    // paths that reach detachModel without a quit.
     flushPersist("avatar");
     // Order matters: stop the import worker (it may still queue a commit onto
     // this thread), then the preview parse, then forget the model. mOpenWatcher

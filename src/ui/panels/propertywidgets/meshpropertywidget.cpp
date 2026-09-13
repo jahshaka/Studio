@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "ui/panels/propertywidgets/rowundo.h"
 
+#include <QCheckBox>
 #include <QMessageBox>
 
 // The three rows here are all node properties (debt L6): the cull mode and the
@@ -66,6 +67,25 @@ MeshPropertyWidget::MeshPropertyWidget()
 		return QVariant(int(iris::FaceCullingMode::DefinedInMaterial));
 	}));
 
+    // CAST SHADOW — the object half of the shadow switch (item 4). The light
+    // panel has told authors to "turn off Cast Shadow on the object itself"
+    // since the lighting-channels row landed, and there was no such row: the
+    // only door was node.setCastShadow from a script. Same reflected key
+    // (`castShadow`), so the row, node.setProperty and node.setCastShadow are
+    // one code path and one undo step.
+    castShadow = this->addCheckBox("Cast Shadow", true);
+    if (QCheckBox *box = castShadow->findChild<QCheckBox *>()) {
+        box->setToolTip(tr(
+            "Does this object cast a shadow?\n\n"
+            "On by default. Turn it off for something that should be lit but never darken "
+            "anything else - a glass pane, a light fitting's own housing, a backdrop. It has no "
+            "effect on whether the object is LIT: that is the Lighting Channels row.\n\n"
+            "This is also the answer when a light's channels exclude an object and it still "
+            "casts a shadow from that light - shadows are not channel-filtered, and this row is "
+            "what stops them."));
+    }
+    rowundo::bind(castShadow, rows(QStringLiteral("castShadow")));
+
     // A TOP-LEVEL row, not a buried "Reflections" section: marking a flat
     // surface is the ONLY way a user gets a mirror, and an author cannot be
     // expected to hunt for it (PLANAR_REFLECTIONS_SPEC.md §7). How many of the
@@ -79,7 +99,8 @@ MeshPropertyWidget::MeshPropertyWidget()
     lightChannels = new LightChannelsWidget(this);
     lightChannels->setDescription(
         tr("Only lights that share a channel with this object light it. Shadows are NOT "
-           "filtered: an unlit object still casts a shadow from that light."));
+           "filtered: an unlit object still casts a shadow from that light - switch Cast "
+           "Shadow off above to stop that."));
     this->addWidgetToContent(lightChannels);
     connect(lightChannels, &LightChannelsWidget::maskChanged,
             this, &MeshPropertyWidget::onLightChannelsChanged);
@@ -148,6 +169,9 @@ void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
         loading = true;
+        // `loading` is rowundo's guard, so setValue() here cannot look like a
+        // user edit (CheckBoxWidget::setValue emits valueChanged).
+        castShadow->setValue(meshNode->getShadowCastingEnabled());
         planarReflector->blockSignals(true);
         planarReflector->setValue(meshNode->getPlanarReflector());
         planarReflector->blockSignals(false);

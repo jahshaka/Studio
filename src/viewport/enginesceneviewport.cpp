@@ -2008,12 +2008,6 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height)
     return takeScreenshot(width, height, ScreenshotGrade::Tonemap);
 }
 
-QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
-{
-    return takeScreenshot(width, height,
-                          postFx ? ScreenshotGrade::Viewport : ScreenshotGrade::Plain);
-}
-
 // ---- DOES A USER'S SCREENSHOT CONTAIN THE EDITOR'S HELPERS? ---------------
 //
 // NO — OWNER, 2026-09-13. A user's screenshot is a picture of the SCENE, so the

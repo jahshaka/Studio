@@ -91,7 +91,6 @@ QVariantMap PerfApi::capture(const QVariantMap &options)
 QVariantMap PerfApi::stop()
 {
     QVariantMap out;
-    const QVariantMap before = FrameMonitor::instance().status();
     QString error;
     if (!FrameMonitor::instance().stop(&error)) {
         out["stopped"] = false;
@@ -101,10 +100,11 @@ QVariantMap PerfApi::stop()
     const QVariantMap after = FrameMonitor::instance().status();
     out["stopped"] = true;
     out["path"] = after.value(QStringLiteral("lastBundle"));
-    // The counts come from the state BEFORE the stop only for the bundle's
-    // name; the frames and events are counted by the bundle itself as it
-    // writes, so they are read back from the closed capture's totals.
-    Q_UNUSED(before);
+    // Everything is read from the state AFTER the stop: the frames and events
+    // are counted by the bundle itself as it writes, and the closed capture's
+    // totals survive it (FrameMonitor::mLastFrames). A `before` snapshot used
+    // to be taken here and Q_UNUSED'd — a whole status() (engine query
+    // included) computed and thrown away on every perf.stop.
     out["frames"] = after.value(QStringLiteral("frames"));
     out["events"] = after.value(QStringLiteral("events"));
     return out;

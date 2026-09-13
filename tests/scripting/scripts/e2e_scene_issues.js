@@ -152,8 +152,51 @@ node.setProperty(lamp, "shadowMapType", 2);          // 2 = soft
 assert(issuesOfKind(editor.checkScene().list, "shadow.leak").length === 0,
        "turning its shadows back on clears it");
 
+// ---- THE BAR IS AN EDITOR SURFACE (CLEANUP-1 item 3) ----------------------
+// The store is the model and works everywhere; the BAR is a frameless
+// always-on-top window over the editor's viewport, and it used to float over
+// the Desktop, Assets, Player, Materials and Publish pages complete with a
+// Select button that selected in a viewport nobody was looking at. The 1 Hz
+// scanner's comment claimed a space check for a week; there was none.
+//
+// editor.issueBar() runs one scan-and-decide pass and reports, so this is not a
+// race against that timer.
+app.space("editor");
+node.setProperty(lamp, "shadowMapType", 0);          // something for it to say
+var bar = editor.issueBar();
+assert(bar.editorActive === true, "the editor is the active space");
+assert(bar.rows > 0, "there is an issue to show (" + bar.rows + ")");
+assert(bar.visible === true, "the bar is up over the editor viewport");
+
+// Two spaces are enough: the rule is "the current space is not the editor", not
+// a list — and the Player page stands a second engine scene up, which is a lot
+// of machinery for a check about one window's visibility.
+["desktop", "assets"].forEach(function (space) {
+    app.space(space);
+    var away = editor.issueBar();
+    assert(away.editorActive === false, "on the " + space + " page the editor is not active");
+    assert(away.visible === false, "...and the scene-issue bar is NOT on screen");
+});
+
+app.space("editor");
+var back = editor.issueBar();
+assert(back.editorActive === true, "back on the editor page");
+assert(back.rows > 0 && back.visible === true, "...and the bar comes back with the issue");
+node.setProperty(lamp, "shadowMapType", 2);
+editor.checkScene();
+
+// ---- ISSUES DO NOT SURVIVE A SCENE CHANGE (CLEANUP-1 item 7) --------------
+// `scan` only forgets the two kinds IT owns, so an issue raised by a verb (or
+// by any other producer) used to live on across a project open and describe a
+// node that is not in the scene any more. Every BIND resets the store now.
+editor.raiseIssue({ kind: "carryover", node: roof, message: "Raised in the OLD scene." });
+assert(issuesOfKind(editor.issues(true), "carryover").length === 1,
+       "an issue of another kind is live in this scene");
+
 // ---- NOT an issue: a scene with no directional light at all ---------------
 project.create("Lamps only " + Date.now());
+assert(issuesOfKind(editor.issues(true), "carryover").length === 0,
+       "opening another scene FORGETS it (the store is scene-scoped)");
 scene.nodes().forEach(function (n) {
     if (node.info(n.id).type === "light" && node.property(n.id, "lightType") === 1)
         node.remove(n.id);

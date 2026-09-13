@@ -173,6 +173,14 @@ public:
     /// background job, then forget the model. Without it a worker's completion
     /// would re-enter a freed AvatarPreviewModel.
     void detachModel();
+    /// THE QUIT IS STARTING (StudioModule::abortBackgroundWork, CLEANUP-1 item
+    /// 2). Flush the coalesced definition write, move the load epoch so no
+    /// in-flight parse can apply anything, and tell the import runner to stop —
+    /// then RETURN, without joining: the shell's own bounded pool wait is what
+    /// joins, a few lines later, and it is the wait that used to time out at
+    /// three seconds while this module had not yet been asked to stop at all.
+    /// Idempotent; detachModel() still does the ordered teardown afterwards.
+    void abortBackgroundWork();
     Q_INVOKABLE QVariantMap asset();
     Q_INVOKABLE QVariantMap save();
     Q_INVOKABLE QVariantMap saveToLibrary(const QString &guid = QString());
@@ -251,6 +259,10 @@ private:
     /// (sync or async) and by detachModel; a parse applies its result only when
     /// the epoch it started in is still current.
     quint64 mLoadEpoch = 0;
+    /// Preview parses that have COMPLETED, applied or abandoned. Reported by
+    /// progress() as `parsesFinished` — an abandoned parse never returns to
+    /// `running`, so this is the only thing a caller can wait on.
+    quint64 mPreviewParsesFinished = 0;
     /// Starts (or chains) the two async jobs; both report through mJob.
     /// A DEFINITION EDIT IS REFUSED WHILE A JOB RUNS (lead review, AV1 round 2
     /// — a data-corruption class, not a nicety): between an async open's
