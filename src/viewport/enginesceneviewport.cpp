@@ -1973,6 +1973,15 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.materialBuilds = mMirror->materialBuildCount();
     s.staticNodes = mMirror->staticNodeCount();
     s.staticRepromotions = mMirror->staticRepromotionCount();
+    // THE DIRTY SET (DIRTY_SET_MIRROR_SPEC): what the document reported, what
+    // the verifier re-read behind it, and whether this frame's sync was the
+    // change list or the whole walk.
+    s.dirtyNodes = mMirror->dirtyNodeCount();
+    s.evictedNodes = mMirror->evictedNodeCount();
+    s.verifierVisits = mMirror->verifierVisitCount();
+    s.verifierCatches = mMirror->verifierCatchCount();
+    s.pushes = mMirror->visitPushCount();
+    s.walkMode = QString::fromLatin1(mMirror->walkMode());
     return s;
 }
 

@@ -980,7 +980,13 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     std::function<void(const iris::SceneNodePtr &)> clearFloor =
         [&clearFloor](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Mesh)
-                n.staticCast<iris::MeshNode>()->defaultFloor = false;
+            {
+                const iris::MeshNodePtr floor = n.staticCast<iris::MeshNode>();
+                floor->defaultFloor = false;
+                // The mirror reads `defaultFloor` to find the horizon plate's
+                // subject; a hand-written reflected field has to say so.
+                floor->markChanged(iris::NodeChange::Params);
+            }
             for (const auto &child : n->children()) clearFloor(child);
         };
     clearFloor(node);

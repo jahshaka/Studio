@@ -71,3 +71,28 @@ add_test(NAME mirror.scale COMMAND test_mirror_scale WORKING_DIRECTORY "${CMAKE_
 # Vulkan gates measures the scheduler, not the walk.
 set_tests_properties(mirror.scale PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 RUN_SERIAL TRUE LABELS "mirror")
+
+# mirror.dirty_equals_full — THE DIFFERENTIAL TEST of the dirty-set mirror
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.1). For every class of mutation the
+# document supports: make the change, run the DIRTY sync that ships, then run
+# the WHOLE WALK behind it as an oracle and demand it pushes nothing. A single
+# push is a change the document failed to report — the one way this design can
+# fail, and the one no pixel test would catch.
+add_executable(test_dirty_mirror test_dirty_mirror.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_dirty_mirror PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_dirty_mirror PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_dirty_mirror PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_dirty_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_dirty_mirror JahshakaEngineMedia)
+add_test(NAME mirror.dirty_equals_full COMMAND test_dirty_mirror
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.dirty_equals_full PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "mirror")

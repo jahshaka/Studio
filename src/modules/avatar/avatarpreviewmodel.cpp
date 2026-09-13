@@ -351,6 +351,9 @@ void AvatarPreviewModel::rescaleSpace()
         mPanelLight->setLocalPos(iris::Vec3(0, 3.8f * s, 0));
         mPanelLight->rectWidth = 7.5f * s;
         mPanelLight->rectHeight = 7.5f * s;
+        // Reflected fields written by hand: the mirror looks at what the
+        // document says changed (SPECS/DIRTY_SET_MIRROR_SPEC.md).
+        mPanelLight->markChanged(iris::NodeChange::Params);
         // Range must scale too — at a Mixamo rig's ~94x the character stands
         // hundreds of units from the panel; an unscaled range lights nothing
         // (the silhouette capture, 2026-09-05).

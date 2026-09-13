@@ -108,7 +108,7 @@ int main(int argc, char **argv)
     // ---- mirror + render ----
     SceneMirror mirror(target);
     mirror.setSource(doc);
-    int n = mirror.sync();
+    const int n = mirror.sync();
     CHECK(n == 3, "sync mirrored 3 document nodes (parent, cube, light)");
     CHECK(mirror.engineNode(meshNode.data()) != 0, "cube has an engine node");
     for (int i = 0; i < 3; ++i) engine->renderOneFrame();
@@ -131,11 +131,11 @@ int main(int argc, char **argv)
     CHECK(isMaterial(centre(img)), "cube is back");
 
     // ---- visibility ----
-    meshNode->visible = false;
+    meshNode->setVisible(false);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("hidden", img);
     CHECK(isBlue(centre(img)), "hidden node renders nothing");
-    meshNode->visible = true;
+    meshNode->setVisible(true);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("shown", img);
     CHECK(isMaterial(centre(img)), "shown again");
@@ -161,30 +161,30 @@ int main(int argc, char **argv)
         };
 
         // (a) the parent hides its child, on screen AND to picking.
-        parent->visible = false;
+        parent->setVisible(false);
         step("parent hidden");
         CHECK(isBlue(centre(img)), "hiding the PARENT hides its child");
         CHECK(meshNode->isVisible() && !meshNode->isVisibleInScene(),
               "the child's own flag is untouched; it is not visible IN THE SCENE");
         CHECK(!picksCube(), "a child hidden by its parent is not pickable");
         CHECK(iris::picking::lastUsedEngineBroadPhase(), "...through the engine broad phase");
-        parent->visible = true;
+        parent->setVisible(true);
         step("parent shown");
         CHECK(isMaterial(centre(img)), "showing the parent shows the child again");
         CHECK(picksCube(), "...and makes it pickable again");
 
         // (b) a child the user hid ITSELF survives its parent's hide/show.
-        meshNode->visible = false;
+        meshNode->setVisible(false);
         step("child hidden itself");
-        parent->visible = false;
+        parent->setVisible(false);
         step("...then parent hidden");
-        parent->visible = true;
+        parent->setVisible(true);
         step("...then parent shown");
         CHECK(isBlue(centre(img)),
               "a child the user hid itself STAYS hidden when its parent is shown again");
         CHECK(!meshNode->isVisible(), "...its own flag still says hidden");
         CHECK(!picksCube(), "...and it is still not pickable");
-        meshNode->visible = true;
+        meshNode->setVisible(true);
         step("child shown itself");
         CHECK(isMaterial(centre(img)), "showing the child itself brings it back");
 
@@ -193,7 +193,7 @@ int main(int argc, char **argv)
         // shows. (Ogre's cascade never saw this; the effective push does.)
         auto hiddenGroup = iris::SceneNode::create();
         hiddenGroup->setName("hidden-group");
-        hiddenGroup->visible = false;
+        hiddenGroup->setVisible(false);
         doc->getRootNode()->addChild(hiddenGroup);
         parent->removeChild(meshNode);
         hiddenGroup->addChild(meshNode, false);
@@ -226,8 +226,11 @@ int main(int argc, char **argv)
 
     // ---- remove from the document ----
     other->removeChild(meshNode);
-    n = mirror.sync();
-    CHECK(n == 3, "3 nodes remain (parent, other, light)");
+    mirror.sync();
+    // mirroredNodeCount(), not sync()'s return: since the dirty set the sync
+    // VISITS what changed, not what exists — "how many nodes are still
+    // mirrored" is the entry map, which is what this line always meant.
+    CHECK(mirror.mirroredNodeCount() == 3, "3 nodes remain (parent, other, light)");
     CHECK(mirror.engineNode(meshNode.data()) == 0, "removed node has no engine node");
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("removed", img);
@@ -1607,7 +1610,8 @@ int main(int argc, char **argv)
         // Clearing the mesh detaches: the node stays, the geometry goes.
         subject->setMesh(iris::MeshPtr());
         CHECK(!subject->getMesh(), "mesh detach: the document node has no mesh");
-        const int stillMirrored = mirror.sync();
+        mirror.sync();
+        const quint64 stillMirrored = mirror.mirroredNodeCount();
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("subject = no mesh", img);
         CHECK(stillMirrored == 2, "mesh detach: the node is still mirrored (light + subject)");

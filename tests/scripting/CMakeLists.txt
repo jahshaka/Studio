@@ -171,6 +171,17 @@ add_script_e2e(gi_status e2e_gi_status.js)
 # editor.mirrorStats() and world.giStatus() are measurements of the renderer.
 add_script_e2e(mobility_play e2e_mobility_play.js)
 
+# WHAT THE MIRROR LOOKS AT, THROUGH THE REAL APP
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md, owner option A). The C++ suites prove the two
+# halves in isolation — document.dirty_list that the change list behaves,
+# mirror.dirty_equals_full that what it carries is ENOUGH. This one proves it in
+# the shipped path: the editor viewport's own mirror, driven by the same verbs a
+# user's actions go through. A still scene visits ZERO objects; one move is a
+# list of one; hiding a group is its subtree (the F6 contract); a material edit
+# reaches the object that draws it without that object having changed; and the
+# always-on verifier finds NOTHING behind any of it.
+add_script_e2e(dirty_mirror e2e_dirty_mirror.js)
+
 # A MOVABLE LAMP THAT STOPS MOVING GETS ITS BOUNCES BACK (round-2 review F1 of
 # lane ENGINE-4). The engine's light-only injection is deliberately cheap while
 # something moves (one bounce, coarse march) and must be the full count on the
