@@ -738,8 +738,17 @@ var FIDELITY = {
         assertFireIsFire(shoot("particles_plume", firePlumeProbePoints()), "");
     },
     "Skeletal Animation": function () {
+        // #a4e1f5 SINCE CONTENT-1 (2026-09-13), and it is the SAME BLUE: the
+        // character's colour came from capoeira.dae's own material, and the
+        // importer wrote the file's LINEAR factor straight into the QColor.
+        // Since LIGHTS-2 a document QColor is sRGB and is decoded on its way to
+        // the renderer, so that raw spelling rendered a gamma too dark;
+        // scenes/tools/reauthor_samples.js re-encoded it to what today's
+        // importer produces for that file. The renderer receives 0.371/0.753/
+        // 0.913 where the pre-lane build sent 0.369/0.749/0.906 — the same
+        // blue, within a step of 8-bit quantisation.
         var limb = material.get(meshesByName("Beta_HighLimbsGeoMesh")[0].id);
-        assert(limb.baseColor === "#5ebfe7",
+        assert(limb.baseColor === "#a4e1f5",
                "Skeletal: character keeps its blue colour (" + limb.baseColor + ")");
         var p = shoot("skeletal", [ { x: 0.458, y: 0.363 }, { x: 0.2, y: 0.9 } ]);
         assert(p[0].b > 60 && p[0].b > p[0].r + 20, "Skeletal: character torso is blue " + fmt(p[0]));
