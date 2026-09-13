@@ -7,6 +7,7 @@
 #include <QSet>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 #include "irisgl/mirror/scenemirror.h"
@@ -138,21 +139,65 @@ bool BoneOverlay::ensureAssets()
     return mBoneMesh && mMaterial;
 }
 
-NodeId BoneOverlay::slot(QVector<NodeId> &pool, int index, MeshId mesh, MaterialId material)
+BoneOverlay::Slot *BoneOverlay::slot(QVector<Slot> &pool, int index, MeshId mesh,
+                                     MaterialId material)
 {
-    while (pool.size() <= index) pool.append(NodeId(0));
-    if (!pool[index]) {
-        const NodeId node = mTarget->createNode();
-        if (node) mTarget->attachMesh(node, mesh, material ? material : mMaterial);
-        pool[index] = node;
+    while (pool.size() <= index) pool.append(Slot());
+    Slot &s = pool[index];
+    if (!s.node) {
+        s.node = mTarget->createNode();
+        if (s.node) mTarget->attachMesh(s.node, mesh, material ? material : mMaterial);
     }
-    return pool[index];
+    return s.node ? &s : nullptr;
 }
 
-void BoneOverlay::hideFrom(Scene *scene, const QVector<NodeId> &pool, int first)
+/// FNV-1a over the sixteen floats — GizmoOverlay's key, for the same reason:
+/// the comparison has to be over what the engine will actually be handed, and
+/// a matrix compare is sixteen branches where this is sixteen multiplies.
+static quint64 transformKey(const iris::Mat4 &m)
 {
-    for (int i = first; i < pool.size(); ++i)
-        if (pool[i]) scene->setNodeVisible(pool[i], false);
+    quint64 k = 1469598103934665603ull;
+    for (int c = 0; c < 4; ++c) {
+        const iris::Vec4 col = m.column(c);
+        for (int r = 0; r < 4; ++r) {
+            float f = col[r];
+            quint32 bits;
+            std::memcpy(&bits, &f, sizeof bits);
+            k = (k ^ bits) * 1099511628211ull;
+        }
+    }
+    return k;
+}
+
+void BoneOverlay::place(Slot &s, const iris::Mat4 &m)
+{
+    // ON CHANGE ONLY, BOTH HALVES. A transform write is an input to the
+    // renderer's movement epoch and a visibility write walks the subtree, so a
+    // skeleton standing still must cost the engine nothing at all.
+    const quint64 key = transformKey(m);
+    if (!s.pushed || s.key != key) {
+        SceneMirror::pushTransform(mTarget, s.node, m);
+        ++mTransformPushes;
+        s.key = key;
+        s.pushed = true;
+    }
+    if (!s.shown) {
+        mTarget->setNodeVisible(s.node, true);
+        ++mVisibilityWrites;
+        s.shown = true;
+    }
+}
+
+void BoneOverlay::hideFrom(QVector<Slot> &pool, int first)
+{
+    for (int i = first; i < pool.size(); ++i) {
+        Slot &s = pool[i];
+        if (s.node && s.shown) {
+            mTarget->setNodeVisible(s.node, false);
+            ++mVisibilityWrites;
+            s.shown = false;
+        }
+    }
 }
 
 void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visible)
@@ -162,8 +207,8 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
     const bool draw = visible && !segments.isEmpty();
     if (draw && !ensureAssets()) return;
     if (!draw) {
-        hideFrom(mTarget, mBoneNodes, 0);
-        hideFrom(mTarget, mJointNodes, 0);
+        hideFrom(mBoneNodes, 0);
+        hideFrom(mJointNodes, 0);
         return;
     }
 
@@ -194,9 +239,8 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
         const iris::Vec3 dir = len > 1e-6f ? delta / len : iris::Vec3(0, 1, 0);
         const float girth = qBound(girthMin, len * kGirthRatio, girthMax);
 
-        if (const NodeId node = slot(mBoneNodes, bone, mBoneMesh)) {
-            SceneMirror::pushTransform(mTarget, node, boneTransform(seg.from, dir, len, girth));
-            mTarget->setNodeVisible(node, true);
+        if (Slot *s = slot(mBoneNodes, bone, mBoneMesh)) {
+            place(*s, boneTransform(seg.from, dir, len, girth));
             ++bone;
             ++mVisibleSegments;
         }
@@ -218,31 +262,29 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
         const float stub = qMin(len * kStubRatio, stubMax);
         if (stub <= 1e-6f) continue;
         const float girth = qBound(girthMin, stub * kGirthRatio, girthMax);
-        if (const NodeId node = slot(mBoneNodes, bone, mBoneMesh)) {
-            SceneMirror::pushTransform(mTarget, node, boneTransform(seg.to, dir, stub, girth));
-            mTarget->setNodeVisible(node, true);
+        if (Slot *s = slot(mBoneNodes, bone, mBoneMesh)) {
+            place(*s, boneTransform(seg.to, dir, stub, girth));
             ++bone;
             ++mVisibleStubs;
         }
     }
-    hideFrom(mTarget, mBoneNodes, bone);
+    hideFrom(mBoneNodes, bone);
 
     const float marker = mMarkerScale > 0.0f && mMarkerMesh ? scale * mMarkerScale : 0.0f;
     int drawn = 0;
     if (marker > 0.0f) {
         for (const iris::Vec3 &joint : joints) {
-            const NodeId node = slot(mJointNodes, drawn, mMarkerMesh);
-            if (!node) continue;
+            Slot *s = slot(mJointNodes, drawn, mMarkerMesh);
+            if (!s) continue;
             iris::Mat4 m;
             m.translate(joint);
             m.scale(marker, marker, marker);
-            SceneMirror::pushTransform(mTarget, node, m);
-            mTarget->setNodeVisible(node, true);
+            place(*s, m);
             ++drawn;
         }
     }
     mVisibleJoints = drawn;
-    hideFrom(mTarget, mJointNodes, drawn);
+    hideFrom(mJointNodes, drawn);
 }
 
 void BoneOverlay::updateMarkers(const QVector<iris::Vec3> &points, float size, bool visible)
@@ -250,7 +292,7 @@ void BoneOverlay::updateMarkers(const QVector<iris::Vec3> &points, float size, b
     mVisibleMarkers = 0;
     if (!mTarget) return;
     const bool draw = visible && !points.isEmpty() && size > 0.0f;
-    if (!draw) { hideFrom(mTarget, mMarkerNodes, 0); return; }
+    if (!draw) { hideFrom(mMarkerNodes, 0); return; }
     if (!ensureAssets()) return;
     if (!mMarkerMaterial)
         mMarkerMaterial = mTarget->createUnlitMaterial(
@@ -260,17 +302,16 @@ void BoneOverlay::updateMarkers(const QVector<iris::Vec3> &points, float size, b
 
     int drawn = 0;
     for (const iris::Vec3 &point : points) {
-        const NodeId node = slot(mMarkerNodes, drawn, mMarkerMesh, mMarkerMaterial);
-        if (!node) continue;
+        Slot *s = slot(mMarkerNodes, drawn, mMarkerMesh, mMarkerMaterial);
+        if (!s) continue;
         iris::Mat4 m;
         m.translate(point);
         m.scale(size, size, size);
-        SceneMirror::pushTransform(mTarget, node, m);
-        mTarget->setNodeVisible(node, true);
+        place(*s, m);
         ++drawn;
     }
     mVisibleMarkers = drawn;
-    hideFrom(mTarget, mMarkerNodes, drawn);
+    hideFrom(mMarkerNodes, drawn);
 }
 
 void BoneOverlay::clear()
@@ -282,9 +323,9 @@ void BoneOverlay::clear()
         mVisibleSegments = mVisibleStubs = mVisibleJoints = mVisibleMarkers = 0;
         return;
     }
-    for (NodeId n : mBoneNodes) if (n) mTarget->removeNode(n);
-    for (NodeId n : mJointNodes) if (n) mTarget->removeNode(n);
-    for (NodeId n : mMarkerNodes) if (n) mTarget->removeNode(n);
+    for (const Slot &s : mBoneNodes) if (s.node) mTarget->removeNode(s.node);
+    for (const Slot &s : mJointNodes) if (s.node) mTarget->removeNode(s.node);
+    for (const Slot &s : mMarkerNodes) if (s.node) mTarget->removeNode(s.node);
     mBoneNodes.clear();
     mJointNodes.clear();
     mMarkerNodes.clear();

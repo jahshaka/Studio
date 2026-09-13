@@ -555,6 +555,57 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- S13: A SKELETON STANDING STILL COSTS THE ENGINE NOTHING ----------
+    // (ENGINE-5 item 3.) The overlay ran from AvatarPreviewScene::step every
+    // frame and re-pushed the identical transform and setNodeVisible(node,
+    // true) for every bone, stub, joint and rig marker. A transform push is an
+    // input to the renderer's movement epoch and a visibility write walks the
+    // node's subtree, so the preview could never have a still frame: with the
+    // skeleton shown, the caches that exist to skip unchanged work (the GI
+    // movement scan, the lamp-map caster walk) were handed a moving scene on
+    // every frame of a character standing in T-pose.
+    //
+    // The picture is IDENTICAL either way — which is exactly why the assertion
+    // is on the writes and not on pixels. Measured here before the guard: 4
+    // transform pushes and 4 visibility writes on EVERY one of 60 still frames
+    // (one per bone, stub, joint marker); after it, none at all.
+    {
+        model.setMeshVisible(true);
+        model.setSkeletonVisible(true);
+        model.setTime(0.0f);
+        render(scene, *engine, view, 3);          // the pose settles, the overlay draws it
+        const unsigned long long pushBefore = scene.overlayTransformPushes();
+        const unsigned long long showBefore = scene.overlayVisibilityWrites();
+        CHECK(pushBefore > 0, "S13: the overlay did push the skeleton it is drawing");
+        for (int f = 0; f < 60; ++f) {
+            scene.step(0.0f, int(view->width()), int(view->height()));
+            engine->renderOneFrame();
+        }
+        const unsigned long long pushStill = scene.overlayTransformPushes() - pushBefore;
+        const unsigned long long showStill = scene.overlayVisibilityWrites() - showBefore;
+        std::printf("    S13: 60 still frames with the skeleton shown — %llu transform pushes, "
+                    "%llu visibility writes\n",
+                    (unsigned long long)pushStill, (unsigned long long)showStill);
+        CHECK(pushStill == 0, "S13: a still skeleton pushes NO transform in 60 frames");
+        CHECK(showStill == 0, "S13: ...and writes NO visibility either");
+        // The skeleton is still on screen after all that stillness.
+        Image stillImg = render(scene, *engine, view, 1);
+        CHECK(count(stillImg, isOverlay) > 10, "S13: the skeleton is still drawn");
+
+        // ...AND THE GUARD IS NOT A MUTE BUTTON: a pose change is pushed. Three
+        // frames, like S7: a bone's world transform is resolved by the engine's
+        // scene-graph update, so the overlay reads the new pose on the frame
+        // AFTER the one that posed the skeleton (AvatarPreviewScene::resolvePose).
+        model.setTime(0.5f);
+        render(scene, *engine, view, 3);
+        const unsigned long long pushMoved =
+            scene.overlayTransformPushes() - pushBefore - pushStill;
+        std::printf("    S13: after a pose change — %llu transform pushes\n",
+                    (unsigned long long)pushMoved);
+        CHECK(pushMoved > 0, "S13: ...but a bone that MOVED is pushed (the guard is on CHANGE)");
+        model.setTime(0.0f);
+    }
+
     // ---- teardown in the documented order ----
     scene.release();
     engine->destroyView(view);

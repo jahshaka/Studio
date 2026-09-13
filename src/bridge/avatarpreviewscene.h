@@ -78,6 +78,11 @@ public:
     int overlayJoints() const;
     /// Rig markers drawn this frame (the third toggle, S9).
     int overlayMarkers() const;
+    /// The engine writes the bone overlay has made since it was created —
+    /// transform pushes and visibility writes (BoneOverlay's header). A
+    /// skeleton standing still must make neither (avatar.preview S13).
+    unsigned long long overlayTransformPushes() const;
+    unsigned long long overlayVisibilityWrites() const;
 
 protected:
     void configureScene(jahshaka::engine::Scene *scene) override;
