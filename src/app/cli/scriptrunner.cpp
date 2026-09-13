@@ -80,7 +80,12 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         std::fprintf(stderr, "script: cannot open %s\n", qPrintable(path));
-        return 1;
+        // THROUGH THE ORDERED EXIT, like every other way out of this file
+        // (ledger 150, round 2): MainWindow's constructor has already started
+        // the engine, so a bare `return 1` here left it to the exit-handler
+        // chain — the unordered teardown that ended in a SIGSEGV inside
+        // TextureCache::save.
+        return finalizeAppExit(1);
     }
     const QString source = QString::fromUtf8(file.readAll());
 
@@ -91,7 +96,7 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
         QString why;
         if (!window.beginEngineSelftest(why)) {
             std::fprintf(stderr, "script: %s\n", qPrintable(why));
-            return 1;
+            return finalizeAppExit(1);      // ordered teardown, see above
         }
         // Let the engine settle (swapchain, first frames) like the selftest does.
         for (int frame = 0; frame < 10; ++frame) {
@@ -135,7 +140,14 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
         QString why;
         if (!window.beginEngineSelftest(why)) {
             std::fprintf(stderr, "mcp: %s\n", qPrintable(why));
-            return 1;
+            // THROUGH THE SAME EXIT AS A SUCCESSFUL RUN (ledger 150). A bare
+            // `return 1` here skipped EngineHost::shutdown() entirely, leaving
+            // the engine to be torn down from ~EngineHost at static-destruction
+            // time — after Qt, after the database, and after this library's own
+            // statics: exactly the shape of the SIGSEGV in TextureCache::save
+            // that a doomed --mcp-port produced. Every way out of this function
+            // is now the ordered one.
+            return finalizeAppExit(1);
         }
         for (int frame = 0; frame < 10; ++frame) {
             app.processEvents(QEventLoop::AllEvents, 50);
@@ -146,7 +158,7 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
     QString error;
     if (!window.startMcpServer(port, &error)) {
         std::fprintf(stderr, "mcp: %s\n", qPrintable(error));
-        return 1;
+        return finalizeAppExit(1);       // ordered teardown, see above
     }
 
     McpServer *mcp = window.mcp();

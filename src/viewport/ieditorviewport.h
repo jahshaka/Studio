@@ -572,6 +572,9 @@ public:
         int uncachedInstances = 0;
         bool viewCached = false;
         int mapsDirtiedLastFrame = 0;
+        /// Cumulative atlas rebuilds (ShadowStatus::atlasRebuilds) — the hitch
+        /// counter `world.shadowStatus().atlasRebuilds` reports.
+        int atlasRebuilds = 0;
     };
     virtual ShadowStatusInfo shadowStatus() const { return {}; }
 

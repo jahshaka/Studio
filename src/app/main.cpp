@@ -82,6 +82,17 @@ int main(int argc, char *argv[])
     GetGitCommitHash();
 
     const CliOptions cli = CliOptions::parse(argc, argv);
+    // A COMMAND LINE THE APP CANNOT HONOUR STOPS HERE (ledger 150): before
+    // QApplication, before the log, before a window — loudly, on stderr, with a
+    // non-zero exit code. The alternative is what `--mcp-port=8716336` used to
+    // do: get silently truncated to 48, boot the whole editor, fail to bind a
+    // protected port and quit again, which is a worse answer AND was the
+    // trigger for the unordered-teardown SIGSEGV.
+    if (!cli.errors.isEmpty()) {
+        for (const QString &e : cli.errors)
+            std::fprintf(stderr, "Jahshaka: %s\n", qPrintable(e));
+        return 2;
+    }
     cli.applyPlatformPolicy();
 
     // Pin the application identity instead of letting Qt infer it from the
@@ -346,19 +357,22 @@ int main(int argc, char *argv[])
     // then survives its own main window (the headless-zombie bug family).
     splash.finish(&window);
 
-    // The two CLI paths that do NOT go through finalizeAppExit get their close
-    // bracket here, so no exit route leaves a file that looks like a crash.
+    // --engine-selftest releases the engine host itself, through the RAII guard
+    // in selftestrunner.cpp, and writes its own close bracket here.
     if (!cli.selftestPng.isEmpty()) {
         const int rc = runEngineSelftest(window, app, cli.selftestPng);
         JahLog::stop(QStringLiteral("engine selftest, exit code %1").arg(rc));
         return rc;
     }
 
-    if (!cli.dumpDocsPath.isEmpty()) {
-        const int rc = runDumpApiDocs(window, cli.dumpDocsPath);
-        JahLog::stop(QStringLiteral("dump-api-docs, exit code %1").arg(rc));
-        return rc;
-    }
+    // --dump-api-docs GOES THROUGH THE ORDERED EXIT (ledger 150, round 2). It
+    // used to return straight out with a live EngineHost, leaving the engine to
+    // be torn down by the exit-handler chain — after Qt, after the database and
+    // after the engine library's own statics, which is the shape that killed a
+    // run in TextureCache::save. finalizeAppExit records step 4, stops the
+    // watchdog and the monitor, releases the host and writes the close bracket.
+    if (!cli.dumpDocsPath.isEmpty())
+        return finalizeAppExit(runDumpApiDocs(window, cli.dumpDocsPath));
 
     if (!cli.scriptPath.isEmpty())
         return runScriptFile(window, app, cli.scriptPath, cli.headlessScript);

@@ -41,6 +41,13 @@ struct CliOptions
     /// made a -j4 gate unsafe (TEST_GATE_AUDIT.md §4.1).
     bool mcpServe = false;
     quint16 mcpPort = 0;
+    /// What the parser REFUSED, one line each, empty on a good command line.
+    /// main() prints these and exits non-zero before a window exists — an
+    /// argument the app cannot honour is a CLI error, not something to paper
+    /// over (ledger 150: `--mcp-port=8716336` was silently truncated by the
+    /// quint16 cast to 48, a protected port, and the failed bind then took the
+    /// app down an unordered exit path that ended in a SIGSEGV).
+    QStringList errors;
     /// --data-root <dir>: THE hermetic-run flag (WINDOWS_BUILD_SPEC §6.2 W9,
     /// ENGINEERING_DEBT_SPEC ADDENDUM 6). Redirects the library database, the
     /// asset store, the shader cache AND the settings file under one directory.
