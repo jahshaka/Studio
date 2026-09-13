@@ -40,7 +40,34 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
+#include <vector>
+
+/// A solid 64x64 TGA, the smallest thing loadDecalTexture accepts (decal images
+/// are ordinary Texture assets read from a path — see decals.engine).
+static bool writeSolidTga(const std::string &path, unsigned char r, unsigned char g,
+                          unsigned char b, unsigned char a = 255)
+{
+    const unsigned n = 64;
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    unsigned char hdr[18];
+    std::memset(hdr, 0, sizeof(hdr));
+    hdr[2] = 2;                                   // uncompressed true-colour
+    hdr[12] = (unsigned char)(n & 0xFF); hdr[13] = (unsigned char)(n >> 8);
+    hdr[14] = (unsigned char)(n & 0xFF); hdr[15] = (unsigned char)(n >> 8);
+    hdr[16] = 32;                                 // bits per pixel
+    hdr[17] = 0x28;                               // top-left origin, 8 alpha bits
+    std::fwrite(hdr, 1, sizeof(hdr), f);
+    std::vector<unsigned char> bgra(size_t(n) * n * 4u);
+    for (size_t i = 0; i < size_t(n) * n; ++i) {
+        bgra[i * 4 + 0] = b; bgra[i * 4 + 1] = g; bgra[i * 4 + 2] = r; bgra[i * 4 + 3] = a;
+    }
+    std::fwrite(bgra.data(), 1, bgra.size(), f);
+    std::fclose(f);
+    return true;
+}
 
 using namespace jahshaka::engine;
 
@@ -416,6 +443,111 @@ int main()
               "          is arithmetically free");
         CHECK(ungatedCoated.r < 0.01f && ungatedCoated.g < 0.01f && ungatedCoated.b < 0.01f,
               "(g) ...and it is still black: no environment term of any kind reaches it");
+    }
+
+    // ---- (h) A DIFFUSE DECAL BREAKS THE EXACTNESS ARGUMENT ----------------
+    // (clean-2 lane, 2026-09-13 — the defect the round-3 patch left behind.)
+    //
+    // The gate's whole justification is that `pixelData.specular = material.kS`,
+    // so a black-kS datablock multiplies every environment term by zero. Under
+    // a DIFFUSE DECAL that is false: the decal piece REWRITES the terms after
+    // the material has set them —
+    //     pixelData.specular = lerp( pixelData.specular.xyz, decalF0, decalMask )
+    //     pixelData.F0       = lerp( pixelData.F0, decalMetalness, decalMask )
+    // (ForwardPlus_DecalsCubemaps_piece_ps.any:92-100) — so a decal laid on a
+    // matte floor IS reflective where it covers, and a gated shader has no
+    // probe loop to show it with. Jahshaka feeds diffuse decals, so this is the
+    // shipped path, not a corner.
+    //
+    // The gate is per DATABLOCK and a decal is per PIXEL, so the fix is the
+    // only one available at hash time: `hlms_decals_diffuse` set on the pass
+    // suspends the gate, exactly as `cubemaps_as_diffuse_gi` does.
+    //
+    // THE DECAL IS A MIRROR: white, metalness 1 (which zeroes its own diffuse
+    // contribution — `decalDiffuse -= decalDiffuse * decalMetalness` — and
+    // makes decalF0 white), so the pixels under it are pure environment
+    // specular. On this panel, whose albedo is black and whose kS is zero,
+    // there is nothing else they could be.
+    {
+        // Put the panel back the way (g) found it: black kS, no authored F0.
+        CHECK(s->setPbrMaterial(zeroedMat, zeroed), "(h) the zeroed panel is re-gated");
+        render(engine.get(), 6);
+        view->readPixels(img);
+        const Colour gated = img.at(zeroX, zeroY);
+        show("zeroed panel, no decal", gated);
+        CHECK(std::fabs(gated.r - gated.g) < 0.002f && gated.r < 0.01f,
+              "(h) ...and shows nothing at all, as it did before");
+
+        CHECK(writeSolidTga("gate_decal_white.tga", 255, 255, 255), "(h) the decal image is written");
+        const TextureId decalTex = s->loadDecalTexture("gate_decal_white.tga", DecalMap::Diffuse);
+        CHECK(decalTex != 0, "(h) loadDecalTexture accepts it");
+        const NodeId decalNode = s->createNode();
+        // The projector's LOCAL Y is the projection axis and a surface takes the
+        // decal where its normal points ALONG it; this panel faces +Z, so the
+        // node is pitched +90 degrees about X (local Y -> world +Z).
+        const float a90 = 45.0f * 3.14159265358979f / 180.0f;   // half of 90
+        s->setNodeTransform(decalNode, Vec3(-2.0f, 1.8f, -3.6f),
+                            Quat{ std::sin(a90), 0.0f, 0.0f, std::cos(a90) }, Vec3(1, 1, 1));
+        DecalDesc dd;
+        dd.diffuse = decalTex;
+        dd.width = 3.2f;      // local X  -> world X
+        dd.depth = 1.2f;      // local Y  -> world Z (the projection thickness)
+        dd.height = 3.2f;     // local Z  -> world Y
+        dd.metalness = 1.0f;
+        dd.roughness = 0.05f;
+        CHECK(s->setDecal(decalNode, dd), "(h) the decal projects onto the zeroed panel");
+        render(engine.get(), 8);
+        view->readPixels(img);
+        const Colour decaled = img.at(zeroX, zeroY);
+        show("zeroed panel, under a mirror decal", decaled);
+        std::printf("   decal region (r-g) = %+.4f  (no decal %+.4f)\n",
+                    decaled.r - decaled.g, gated.r - gated.g);
+        CHECK(decaled.r - decaled.g > 0.01f,
+              "(h) THE FIX: the decal region REFLECTS the room (the red wall behind the\n"
+              "          camera) — a diffuse decal suspends the gate, because it rewrites\n"
+              "          pixelData.specular downstream of the material's kS");
+        CHECK(decaled.r > gated.r + 0.02f,
+              "(h) ...and the panel is no longer black where the decal covers it");
+
+        // AND IT RENDERS LIKE A MATERIAL THE GATE CANNOT TOUCH. Pushing an F0
+        // of 5e-4 — above the predicate's epsilon, 1/2000th of a reflection,
+        // and nothing else about the material or its shader properties changes
+        // — takes the datablock out of the gate's reach; the two readings must
+        // agree.
+        //
+        // WHAT THIS CAN AND CANNOT SEE, stated as plainly as the rest of this
+        // suite (measured in-lane, clean-2 2026-09-13). The room is a VCT
+        // HYBRID, and cone-traced specular reads `pixelData.specular` too — so
+        // the decal region is reflective either way and the probe loop's
+        // arrival SWAPS one reflection of this white sealed room for another
+        // that agrees with it to well under 1/255 here. The engine-side flip
+        // was measured directly instead, by logging the gate's own decision at
+        // the use site: with a decal bound the zero-kS datablock reports
+        // `zeroSpec=1 pcc=1 decalsDiffuse=1 -> gated=false`, where before the
+        // fix it reported `gated=true` and had no probe loop at all. The
+        // correctness argument is the shader's, not the picture's: the decal
+        // piece rewrites pixelData.specular AFTER the material set it, so
+        // "kS multiplies every environment term away" is simply not true under
+        // one, whatever this particular room's two reflections happen to
+        // agree on.
+        // The un-gating push differs in the PREDICATE ONLY: mFresnelR above the
+        // epsilon, same workflow, same separateFresnel, so every other shader
+        // property (fresnel_scalar included, which the decal piece branches on)
+        // is identical. 5e-4 of F0 is 1/2000th of a reflection — far below the
+        // 1/255 the frame is quantised to.
+        PbrParams ungated = zeroed;
+        ungated.fresnelColour = Colour(0.0005f, 0.0005f, 0.0005f);
+        CHECK(s->setPbrMaterial(zeroedMat, ungated), "(h) the un-gating F0 applies");
+        render(engine.get(), 8);
+        view->readPixels(img);
+        const Colour decaledUngated = img.at(zeroX, zeroY);
+        show("decal region, material out of the gate", decaledUngated);
+        std::printf("   decal region gated %.4f/%.4f/%.4f vs ungated %.4f/%.4f/%.4f (delta %.4f)\n",
+                    decaled.r, decaled.g, decaled.b, decaledUngated.r, decaledUngated.g,
+                    decaledUngated.b, delta(decaled, decaledUngated));
+        CHECK(delta(decaled, decaledUngated) < 0.02f,
+              "(h) ...and it renders like a material the gate cannot touch (the residual is\n"
+              "          the F0 push's own, not a missing environment term)");
     }
 
     engine->destroyScene(s);

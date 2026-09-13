@@ -43,9 +43,14 @@ public:
         cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
         cfg.logFile = logFile;
         mEngine = jahshaka::engine::Engine::create(cfg, mError);
-        if (mEngine)
+        if (mEngine) {
             iris::graph::setStagingScene(reinterpret_cast<iris::graph::SceneHandle>(
                 mEngine->documentGraphScene()));
+            // Wired exactly as the app wires it (EngineHost): the renderer
+            // learns "nothing moved" from the document's transform-write
+            // counter instead of walking every item every frame.
+            mEngine->setTransformWriteCounter(&iris::graph::transformWriteCounter());
+        }
     }
 
     ~DocumentGraph()
