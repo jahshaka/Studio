@@ -45,3 +45,29 @@ add_dependencies(test_skinned_outline JahshakaEngineMedia)
 add_test(NAME mirror.skinned_outline COMMAND test_skinned_outline WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.skinned_outline PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+
+# mirror.scale — the SHAPE of a still frame's mirror cost at scale (MIRROR_SCALE
+# lane, 2026-09-13). The render review measured `host.mirror` at 52 ms per STILL
+# frame on an 8,404-node lattice; this suite is the regression gate, asserting
+# ratios and allocation counts rather than milliseconds (a wall-clock budget on
+# a shared box is a flake generator).
+add_executable(test_mirror_scale test_mirror_scale.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_mirror_scale PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_mirror_scale PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_mirror_scale PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_mirror_scale PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_mirror_scale JahshakaEngineMedia)
+add_test(NAME mirror.scale COMMAND test_mirror_scale WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL: it is a TIMING suite. The ratios are load-tolerant by construction
+# (every arm pays the same contention) but a suite sharing a core with four
+# Vulkan gates measures the scheduler, not the walk.
+set_tests_properties(mirror.scale PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 RUN_SERIAL TRUE LABELS "mirror")

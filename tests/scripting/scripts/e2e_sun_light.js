@@ -212,4 +212,23 @@ scene.nodes().forEach(function (n) {
            "'" + info.name + "' still casts shadows after a reopen (no key, no surprise)");
 });
 
+// ---- API-FIRST: the row a model has to be able to FIND -------------------
+// node.property/node.setProperty have carried forwardShadingPriority since it
+// landed, but node.properties(id) never LISTED it — so the one row that decides
+// which directional is the sun was unreachable to anything discovering the
+// surface rather than being told about it (MIRROR_SCALE lane, 2026-09-13).
+var listed = node.properties(sun).filter(function (p) {
+    return p.name === "forwardShadingPriority";
+});
+assert(listed.length === 1, "forwardShadingPriority is LISTED by node.properties()");
+assert(listed[0].value === node.property(sun, "forwardShadingPriority"),
+       "...and the listed value is the one node.property() reports");
+assert(node.setProperty(sun, "forwardShadingPriority", 2) === true,
+       "...and it is settable through the same reflected name");
+assert(node.property(sun, "forwardShadingPriority") === 2, "...and the set stuck");
+assert(node.setProperty(sun, "forwardShadingPriority", -7) === true,
+       "a negative slot is accepted by the verb");
+assert(node.property(sun, "forwardShadingPriority") === 0, "...and CLAMPED to 0, not stored");
+assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the sun slot");
+
 console.log("the sun + sky steering e2e: all checks passed");

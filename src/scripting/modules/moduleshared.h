@@ -110,7 +110,10 @@ inline iris::Vec3 vecFromJs(const QVariant &raw, const iris::Vec3 &fallback = ir
 ///   {x,y,z}         Euler degrees (pitch, yaw, roll) — what node.info() and
 ///                   node.transform() report — and [x,y,z] arrays likewise.
 /// `ok` reports whether the value was UNDERSTOOD (the F8 rule: a rotation a
-/// verb cannot parse must fail loudly, never silently keep the old one).
+/// verb cannot parse must fail loudly, never silently keep the old one) — and
+/// that includes {x,y,z} plus a fourth NUMBER whose key is neither `scalar` nor
+/// `w`: see the refusal in the body for why that cannot be allowed to read as
+/// Euler.
 inline iris::Quat quatFromJs(const QVariant &raw, const iris::Quat &fallback = iris::Quat(),
                              bool *ok = nullptr)
 {
@@ -119,6 +122,27 @@ inline iris::Quat quatFromJs(const QVariant &raw, const iris::Quat &fallback = i
     if (value.typeId() == QMetaType::QVariantMap) {
         const auto m = value.toMap();
         const bool quaternion = m.contains(QStringLiteral("scalar")) || m.contains(QStringLiteral("w"));
+        // A FOURTH NUMBER WITH NO NAME WE KNOW IS A REFUSAL, NOT EULER (lead
+        // review F6). The two spellings below are told apart by the presence of
+        // `scalar`/`w`, so a quaternion serialised with any OTHER fourth key —
+        // `s`, `W`, `qw`, a typo — fell through to the Euler branch and was read
+        // as DEGREES: {x:0, y:0.994, z:0.110, s:0} became a 1-degree rotation,
+        // silently, with ok=true. That is precisely the "the saved pose
+        // collapses to identity" shape, and the caller had no way to see it.
+        // Three components is Euler; three components and something else is a
+        // quaternion whose fourth term we could not find.
+        if (!quaternion) {
+            for (auto it = m.constBegin(); it != m.constEnd(); ++it) {
+                const QString &k = it.key();
+                if (k == QLatin1String("x") || k == QLatin1String("y") || k == QLatin1String("z"))
+                    continue;
+                bool numeric = false;
+                it.value().toDouble(&numeric);
+                if (!numeric) continue;          // a label, a comment, a name: harmless
+                if (ok) *ok = false;
+                return fallback;
+            }
+        }
         if (quaternion) {
             const QVariant w = m.contains(QStringLiteral("scalar")) ? m.value(QStringLiteral("scalar"))
                                                                     : m.value(QStringLiteral("w"));

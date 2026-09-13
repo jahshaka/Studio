@@ -40,6 +40,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <fstream>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -548,9 +549,51 @@ int main()
         CHECK(delta(decaled, decaledUngated) < 0.02f,
               "(h) ...and it renders like a material the gate cannot touch (the residual is\n"
               "          the F0 push's own, not a missing environment term)");
+        // AND IT IS NOT BLACK. Said separately from the A/B above because this
+        // is the permutation that did not COMPILE until ogre-patch 0031 (see
+        // (i)): a diffuse decal on a material in the NON-separate Fresnel
+        // workflow — which is exactly what the F0 push three lines up makes
+        // this panel.
+        CHECK(decaledUngated.r > gated.r + 0.02f && decaledUngated.r - decaledUngated.g > 0.01f,
+              "(h) ...and the un-gated decal pixel is a REFLECTION, not black "
+              "(the fresnel_workflow + hlms_decals_diffuse permutation renders)");
     }
 
     engine->destroyScene(s);
+
+    // ---- (i) NOT ONE SHADER FAILED TO COMPILE ----------------------------
+    // The suite that found this was this one, and it passed while eight PBS
+    // permutations were failing to compile: `ERROR: 'xyz' : vector swizzle
+    // selection out of range`, from the decal piece writing `pixelData.F0.xyz`
+    // at a permutation where `float_fresnel` is a SCALAR (fresnel_workflow
+    // without fresnel_scalar — an ordinary authored F0). A permutation that
+    // does not compile renders BLACK, silently, and no pixel assertion in this
+    // file happened to read one of those pixels.
+    //
+    // So the log is an assertion now. It is the cheapest possible fence and it
+    // covers every case above, not just the ones with a probe in them: the
+    // scene here runs matte, metallic, clear-coated, decalled, gated and
+    // un-gated materials past the same shader generator.
+    engine.reset();                       // flush and close the Ogre log
+    {
+        std::ifstream log("test-gi-probe-gate-ogre.log");
+        CHECK(log.good(), "(i) the Ogre log is readable");
+        int compileErrors = 0, shown = 0;
+        std::string line;
+        while (std::getline(log, line)) {
+            if (line.find("compiler error") == std::string::npos &&
+                line.find("failed to compile") == std::string::npos &&
+                line.find("ERROR: 0:") == std::string::npos)
+                continue;
+            ++compileErrors;
+            if (shown++ < 6) std::printf("   %s\n", line.c_str());
+        }
+        std::printf("   shader compile errors in the Ogre log: %d\n", compileErrors);
+        CHECK(compileErrors == 0,
+              "(i) EVERY shader permutation this scene generates COMPILES "
+              "(ogre-patch 0031 — eight failed here before it)");
+    }
+
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall ok\n", failures);
     return failures ? 1 : 0;
 }

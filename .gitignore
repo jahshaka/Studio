@@ -32,3 +32,4 @@ jahshaka-ogre.log
 build-web/
 /.claude/worktrees/
 /.claude/scratch/
+__pycache__/

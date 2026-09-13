@@ -445,7 +445,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
           "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
           Needs::Document },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, movableNodes}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
           "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
@@ -467,7 +467,25 @@ QVector<VerbInfo> EditorApi::verbs() const
           "RENDERER made of it — movableItems, movableLights, the play-time mobilityMisses and "
           "mobilityRebuilds — is reported by world.giStatus(), beside the probe and rebuild "
           "counters it belongs with; the two counts agreeing is how you know the classification "
-          "reached the renderer at all. `available` "
+          "reached the renderer at all.\n\n"
+          "WHAT THE MIRROR ITSELF COSTS. `nodesVisited` is how many document nodes the last sync "
+          "walked — the mirror runs this walk every frame, for every node, forever, so it is the "
+          "denominator for the other two. `materialBuilds` is how many MATERIAL DESCRIPTIONS that "
+          "walk had to build (convert a document material into the renderer's parameters and "
+          "texture binds): it must be ZERO on a frame where nobody edited a material, and a scene "
+          "where it equals the material count every frame is the defect that made an 8,404-node "
+          "lattice cost 52 ms of mirror per STILL frame — the editor gives every primitive its own "
+          "material, so \"one description per material\" and \"one per node\" are the same number. "
+          "`staticNodes` is how many SCENE GRAPH nodes sit in a SCENE_STATIC memory manager, "
+          "i.e. are OUT of the renderer's per-frame transform and bounds passes — graph nodes and "
+          "not document ones, so the engine's own helpers (a light's -Y adapter, a decal's "
+          "projector box, the helper wires) are in it too and it reads slightly HIGHER than "
+          "nodesVisited rather than being a share of it; moving a node "
+          "takes its whole subtree out of that set for the duration of the gesture, and "
+          "`staticRepromotions` counts the times the mirror has put the scene back after the "
+          "document went quiet (half a second with no transform write anywhere). Without that "
+          "second number a long editing session drains staticNodes to nothing, one nudged prop at "
+          "a time. `available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
@@ -1296,7 +1314,9 @@ QVariantMap EditorApi::setCamera(const QVariant &poseArg)
                                               cam->getLocalRot(), &ok);
         if (!ok) {
             fail("editor.setCamera: rotation must be {x,y,z,scalar} (a quaternion, as editor.camera() "
-                 "returns) or {x,y,z} Euler degrees");
+                 "returns) or {x,y,z} Euler degrees — a fourth number under any other key "
+                 "(\"w\" is the one alias accepted) is refused rather than read as Euler, "
+                 "because a quaternion silently understood as degrees is a pose that collapses");
             return out;
         }
         pose.hasRotation = true;
@@ -1899,6 +1919,13 @@ QVariantMap EditorApi::mirrorStats()
     // does the DOCUMENT say move?". The renderer's side of it is on
     // world.giStatus() (§3.3.4), where R2's counters live.
     out.insert("movableNodes", QVariant::fromValue(s.movableNodes));
+    // WHAT THE MIRROR COSTS (MIRROR_SCALE lane): how big the walk is, whether
+    // it is rebuilding material descriptions it did not have to, and how much
+    // of the scene is out of the renderer's per-frame transform pass.
+    out.insert("nodesVisited", QVariant::fromValue(s.nodesVisited));
+    out.insert("materialBuilds", QVariant::fromValue(s.materialBuilds));
+    out.insert("staticNodes", QVariant::fromValue(s.staticNodes));
+    out.insert("staticRepromotions", QVariant::fromValue(s.staticRepromotions));
     return out;
 }
 
