@@ -21,10 +21,14 @@
 //   run 4       : --clear-shader-cache makes a warm launch cold again, and the
 //                 run still succeeds. Our r.InvalidateCachedShaders.
 //   run 5       : THE SAVE UNDER CHURN. Every World post row through every
-//                 value, the player in and out, a save after each step — the
-//                 path that crashed three instances on 2026-09-14. Asserts the
-//                 process survives it AND that ogre-patch 0035's guard never
-//                 had to fire.
+//                 value, the player in and out, 300 SKY CHANGES, a save after
+//                 each step — the path that crashed three instances on
+//                 2026-09-14. Asserts the process survives it AND that neither
+//                 ogre-patch 0035's guard nor its pass-cache overflow warning
+//                 ever had to fire. The sky phase is the one that makes this
+//                 run a REGRESSION test rather than a hope: before the fix
+//                 (lane shadercache-2) those 300 captures minted 300 permanent
+//                 Hlms pass-cache entries and the warning fired at 256.
 #include <QCoreApplication>
 #include <QDir>
 #include <QJsonDocument>
@@ -191,16 +195,23 @@ int main(int argc, char **argv)
     // CHURN — new material/mesh permutations, new pass property sets, and every
     // World post row is a compositor rebuild that produces some.
     //
-    // The script drives that churn and saves after every step. This run asserts
-    // the two things a green run can honestly claim:
+    // THE CAUSE IS KNOWN SINCE 2026-09-14 (lane shadercache-2) and this run is
+    // the regression test for it. It was never a renderable-cache reset: the
+    // PASS index has eight bits, `HlmsPbs::preparePassHash` puts the cube
+    // render target's NAME in the pass properties (`target_envprobe_map`), and
+    // this engine gave every sky capture a fresh name — one permanent pass-cache
+    // entry per capture, 1847 of them in the owner's session, and past 256 the
+    // pass index spills into the renderable field so copyFrom subscripts
+    // mRenderableCache out of range.
+    //
+    // The script drives that churn — the post rows, the player, and 300 sky
+    // changes — and saves after every step. This run asserts:
     //   * the process SURVIVES it (before 0035 an out-of-range index was a
-    //     SIGSEGV, not a skipped entry), and
-    //   * the guard never had to fire. A "skipping shader cache entry" line in
-    //     this run's output would mean the indices really do go out of range in
-    //     ordinary churn, which is the diagnosis the lane could not obtain — so
-    //     the day this assertion fails is the day the cause is known, and the
-    //     log line carries the hash, both indices, both sizes and the Hlms type
-    //     the hash claims.
+    //     SIGSEGV, not a skipped entry),
+    //   * the guard never had to fire, and
+    //   * the pass cache stayed inside its eight bits. That last one is the
+    //     regression: with the capture cube named uniquely again, 300 sky
+    //     changes cross 256 and the warning fires (measured, A/B).
     const QJsonObject churn = runApp(home, scripts + "e2e_shader_cache_churn.js", {}, &rc);
     CHECK(rc == 0, "run 5 survived the churn and exited cleanly");
     CHECK(!churn.isEmpty(), "run 5 reported its cache state after the churn");
