@@ -45,6 +45,9 @@ public:
     /// resolved model world.gi writes. Reads with no argument.
     Q_INVOKABLE QVariantMap photon(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap giStatus();
+    /// THE NO-RAYS SWITCH (SPECS/PHOTON_SPEC.md §7 R1). Read with no argument,
+    /// write with "auto" or "off".
+    Q_INVOKABLE QVariantMap rayTracing(const QString &mode = QString());
     Q_INVOKABLE bool refreshGi();
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
     Q_INVOKABLE bool refreshShadows();

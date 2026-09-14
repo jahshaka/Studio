@@ -84,6 +84,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrncmp(argv[i], "--log-dir=", 10) == 0) o.logDir = QString::fromLocal8Bit(argv[i] + 10);
         else if (qstrcmp(argv[i], "--log-dir") == 0 && i + 1 < argc) o.logDir = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--no-log") == 0) o.noLog = true;
+        else if (qstrcmp(argv[i], "--no-ray-query") == 0) o.noRayQuery = true;
         else if (qstrncmp(argv[i], "--viewport", 10) == 0) {
             // Accepted for compatibility; the engine viewport is the only
             // renderer since the legacy GL viewport was deleted (step 14).

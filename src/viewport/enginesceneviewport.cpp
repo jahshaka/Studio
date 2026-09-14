@@ -1949,7 +1949,36 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);
     out.cascadeDeferrals    = quint64(st.cascadeDeferrals);
     out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
+    // THE RAY-QUERY TIER (PHOTON_SPEC §7 R1). A separate engine reading, not a
+    // member of GiStatus: the tier is a geometry service, and GI is only its
+    // first consumer.
+    {
+        const jahshaka::engine::RayQueryStatus rq = view()->scene()->rayQueryStatus();
+        out.rayQuery.available    = rq.available;
+        out.rayQuery.enabled      = rq.enabled;
+        out.rayQuery.blasCount    = rq.blasCount;
+        out.rayQuery.instances    = rq.instances;
+        out.rayQuery.triangles    = rq.triangles;
+        out.rayQuery.blasBytes    = quint64(rq.blasBytes);
+        out.rayQuery.tlasBytes    = quint64(rq.tlasBytes);
+        out.rayQuery.tlasMs       = rq.tlasMs;
+        out.rayQuery.blasMs       = rq.blasMs;
+        out.rayQuery.gatherMs     = rq.gatherMs;
+        out.rayQuery.lastWasRefit = rq.lastWasRefit;
+        out.rayQuery.tlasBuilds   = quint64(rq.tlasBuilds);
+        out.rayQuery.tlasRefits   = quint64(rq.tlasRefits);
+        out.rayQuery.blasBuilds   = quint64(rq.blasBuilds);
+    }
     return out;
+}
+
+void EngineSceneViewport::setRayTracing(bool on)
+{
+    // The switch is on the ENGINE, not the scene: the acceleration structures
+    // are per scene but the device, the pipeline and the descriptor pool are
+    // process-wide, and "this machine has no ray tracing" is not a per-scene
+    // fact. Off drops every structure; on lets the next frame rebuild them.
+    if (mEngine) mEngine->setRayTracing(on);
 }
 
 void EngineSceneViewport::renderFrames(int n)

@@ -126,6 +126,9 @@ if(JAHSHAKA_ASAN)
     # (LIGHTING_FIX fix 10), so this copy depends on the same custom target
     # rather than baking a second, configure-time value.
     add_dependencies(JahshakaEngineAsan JahshakaEngineBuildId)
+    # The ray-query tier is NEW code, so the sanitised twin must carry it too
+    # (PHOTON_SPEC §7 R1's gate: test_engine and test_engine_asan both green).
+    jahshaka_engine_ray_query(JahshakaEngineAsan)
     target_compile_definitions(JahshakaEngineAsan PRIVATE
         JAHSHAKA_OGRE_PATCH_SERIES="${JAHSHAKA_OGRE_PATCH_SERIES}")
     set_target_properties(JahshakaEngineAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)

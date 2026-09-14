@@ -180,6 +180,14 @@ int main(int argc, char *argv[])
         // write(2) into the log but may never CALL into it.
         crashHandlerSetSessionLog(qPrintable(JahLog::sessionFilePath()), JahLog::rawFd());
     }
+    // THE NO-RAYS SWITCH (SPECS/PHOTON_SPEC.md §7 R1), before any engine exists.
+    // --no-ray-query is applied by SETTING the environment variable the engine
+    // already reads, rather than by threading a second bool down to every
+    // EngineConfig: that makes the flag and the variable literally one switch
+    // instead of two that can disagree, and it reaches the preview, thumbnail
+    // and player engines for free. An exported JAHSHAKA_NO_RAY_QUERY is never
+    // cleared here — a runner that set it meant it.
+    if (cli.noRayQuery) qputenv("JAHSHAKA_NO_RAY_QUERY", "1");
     // The funnel is what makes the ~61 existing qDebug/qWarning call sites land
     // in the file with zero edits to any of them — LoadTimeline's open profile,
     // the slow-frame warning, the watchdog's stall line, SceneMirror's skeleton
