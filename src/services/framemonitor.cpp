@@ -264,16 +264,16 @@ Stage::~Stage() { end(); }
 class FrameMonitor::Bundle
 {
 public:
-    Bundle(const QString &dir, qint64 capBytes)
-        : mDir(dir), mCap(capBytes > 0 ? capBytes : kDefaultCapBytes)
+    Bundle(const QString &dir, qint64 capBytes, bool trace)
+        : mDir(dir), mCap(capBytes > 0 ? capBytes : kDefaultCapBytes), mWantTrace(trace)
     {
         mFrames.setFileName(QDir(dir).filePath(QStringLiteral("frames.jsonl")));
         mEvents.setFileName(QDir(dir).filePath(QStringLiteral("events.jsonl")));
         mTrace.setFileName(QDir(dir).filePath(QStringLiteral("trace.json")));
         mOk = mFrames.open(QIODevice::WriteOnly | QIODevice::Truncate)
               && mEvents.open(QIODevice::WriteOnly | QIODevice::Truncate)
-              && mTrace.open(QIODevice::WriteOnly | QIODevice::Truncate);
-        if (mOk) {
+              && (!mWantTrace || mTrace.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        if (mOk && mWantTrace) {
             // Chrome Trace Event Format, array form — Perfetto and
             // chrome://tracing both open it as is.
             mTrace.write("[\n");
@@ -329,6 +329,8 @@ private:
     QString mDir;
     qint64  mCap;
     QFile   mFrames, mEvents, mTrace;
+    /// Chrome-trace timeline requested? (Request::trace — off by default.)
+    bool    mWantTrace = false;
     qint64  mFrameBytes = 0, mEventBytes = 0, mTraceBytes = 0, mOgreBytes = 0;
     bool    mOk = false;
     bool    mTraceFirst = true;
@@ -472,7 +474,7 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
     };
     if (append(mFrames, mFrameBytes, mCap / 2, line(o))) ++mFrameCount;
     else ++mFramesCut;
-    traceFrame(r);
+    if (mWantTrace) traceFrame(r);
 }
 
 void FrameMonitor::Bundle::writeEvent(const MonitorEvent &e)
@@ -489,7 +491,7 @@ void FrameMonitor::Bundle::writeEvent(const MonitorEvent &e)
     };
     if (append(mEvents, mEventBytes, mCap / 10, line(o))) ++mEventCount;
     else ++mEventsCut;
-    traceEvent(e);
+    if (mWantTrace) traceEvent(e);
 }
 
 void FrameMonitor::Bundle::traceMeta()
@@ -958,6 +960,14 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         { "startedAt", mStartedAt.toString(Qt::ISODate) },
         { "snapshots", QJsonArray::fromStringList(mSnapshots) },
         { "workspacesAtStart", int(mWorkspacesAtStart) },
+        // DOES THIS BUNDLE HAVE A TIMELINE? (lane ENGINE-7 item 3.) trace.json
+        // is opt-in — `perf.capture({trace:true})` — because writing it is the
+        // most expensive thing a capture does on the UI thread (0.54-0.60 ms
+        // of the monitor's 1.11-1.14 ms per frame on an 8,404-node scene) and
+        // it reconstructs what frames.jsonl already holds. A reader must be
+        // able to tell "no timeline was asked for" from "the timeline is
+        // missing", so the bundle says which.
+        { "trace", mWantTrace },
     };
     machine.insert("capture", capture);
 
@@ -1191,7 +1201,7 @@ bool FrameMonitor::start(const Request &request, QString *error)
     if (!QDir().mkpath(dir))
         return fail(QStringLiteral("could not create the bundle directory: %1").arg(dir));
 
-    mBundle.reset(new Bundle(dir, request.maxBytes));
+    mBundle.reset(new Bundle(dir, request.maxBytes, request.trace));
     if (!mBundle->ok()) {
         mBundle.reset();
         return fail(QStringLiteral("could not open the bundle's files in %1").arg(dir));

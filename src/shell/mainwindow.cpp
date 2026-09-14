@@ -4266,33 +4266,74 @@ void MainWindow::toggleGrid(bool state)
 // F11: immersive fullscreen — the window goes fullscreen and (in the editor
 // space) the docks and toolbar hide; a second F11 restores exactly what was
 // visible before (EDITOR_SHORTCUTS_SPEC §3).
+namespace {
+/// The widgets immersive fullscreen hides, in one place: the toggle and the
+/// leave-by-somebody-else path must hide and restore exactly the same list.
+/// The script console is a TAB of assetDock (smoke S1), so hiding the tray
+/// hides it with everything else in the bottom area — it is not a dock of its
+/// own to list here any more.
+constexpr int kImmersiveDockCount = 6;
+}   // namespace
+
 void MainWindow::toggleImmersiveFullscreen()
 {
-    // The script console is a TAB of assetDock now (smoke S1), so hiding the
-    // tray hides it with everything else in the bottom area — it is not a dock
-    // of its own to list here any more.
-    QWidget *editorDocks[] = { sceneHierarchyDock, sceneNodePropertiesDock, presetsDock,
-                               assetDock, animationDock, toolBar };
-    if (!immersiveFullscreen) {
-        immersiveFullscreen = true;
-        preFullscreenMaximized = isMaximized();
-        preFullscreenWidgets.clear();
-        if (currentSpace == WindowSpaces::EDITOR) {
-            for (QWidget *w : editorDocks) {
-                preFullscreenWidgets.append(w && w->isVisible());
-                if (w) w->hide();
-            }
+    if (immersiveFullscreen) { leaveImmersiveFullscreen(true); return; }
+    QWidget *editorDocks[kImmersiveDockCount] = { sceneHierarchyDock, sceneNodePropertiesDock,
+                                                  presetsDock, assetDock, animationDock, toolBar };
+    immersiveFullscreen = true;
+    enteringFullscreen = true;      // until the window manager says we are there
+    preFullscreenMaximized = isMaximized();
+    preFullscreenWidgets.clear();
+    if (currentSpace == WindowSpaces::EDITOR) {
+        for (QWidget *w : editorDocks) {
+            preFullscreenWidgets.append(w && w->isVisible());
+            if (w) w->hide();
         }
-        showFullScreen();
-    } else {
-        immersiveFullscreen = false;
-        if (preFullscreenWidgets.size() == int(sizeof(editorDocks) / sizeof(editorDocks[0]))) {
-            for (int i = 0; i < preFullscreenWidgets.size(); ++i)
-                if (editorDocks[i]) editorDocks[i]->setVisible(preFullscreenWidgets[i]);
-        }
-        preFullscreenWidgets.clear();
-        preFullscreenMaximized ? showMaximized() : showNormal();
     }
+    showFullScreen();
+}
+
+void MainWindow::leaveImmersiveFullscreen(bool restoreWindow)
+{
+    QWidget *editorDocks[kImmersiveDockCount] = { sceneHierarchyDock, sceneNodePropertiesDock,
+                                                  presetsDock, assetDock, animationDock, toolBar };
+    // FIRST, so that the showNormal()/showMaximized() below — and any state
+    // change somebody else made — cannot re-enter through changeEvent.
+    immersiveFullscreen = false;
+    enteringFullscreen = false;
+    if (preFullscreenWidgets.size() == kImmersiveDockCount) {
+        for (int i = 0; i < preFullscreenWidgets.size(); ++i)
+            if (editorDocks[i]) editorDocks[i]->setVisible(preFullscreenWidgets[i]);
+    }
+    preFullscreenWidgets.clear();
+    if (restoreWindow) preFullscreenMaximized ? showMaximized() : showNormal();
+}
+
+// THE WINDOW STATE THIS CLASS DOES NOT OWN (RR2's finding, lane ENGINE-7 item
+// 5). Immersive fullscreen is a window state PLUS a set of hidden docks, and
+// anything can take the window out of that state without telling us:
+// `app.resizeWindow()` calls showNormal() before resizing, a window manager
+// offers its own control, and a desktop environment may un-fullscreen a window
+// on a workspace change. The flag then claimed fullscreen while the window was
+// windowed with its docks still hidden — and `setImmersiveFullscreen(true)`,
+// which is idempotent against the flag, did NOTHING, so F11 was dead until it
+// was pressed twice.
+void MainWindow::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() != QEvent::WindowStateChange) return;
+    if (!immersiveFullscreen) return;
+    // ARRIVED: from here a state change that is not fullscreen is a departure.
+    if (isFullScreen()) { enteringFullscreen = false; return; }
+    // STILL ON THE WAY IN (round-2 review, item 5). showFullScreen() is a
+    // request, and a window manager may answer a maximized window with an
+    // intermediate state that carries neither flag; restoring the docks there
+    // would put the whole editor chrome back INSIDE a window that is about to
+    // go fullscreen.
+    if (enteringFullscreen) return;
+    // A MINIMISED fullscreen window is still fullscreen (Qt ORs the minimise
+    // bit in), so isFullScreen() stays true and this does not fire for it.
+    leaveImmersiveFullscreen(false);
 }
 
 void MainWindow::toggleDebugDrawer(bool state)

@@ -135,6 +135,28 @@ set_tests_properties(document.dirty_list PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.dirty_list)
 
+# document.movement_epoch — THE VIEWER IS NOT THE VIEWED (nodegraph.h's
+# transform-write epoch, lane ENGINE-7 item 1). Four O(scene) walks and three
+# mirror gates hang off `iris::graph::transformWrites()`; a CAMERA used to bump
+# it, so flying re-ran every one of them on every frame (RR2 measured 10.28 ms
+# of the mirror's GI push on 92% of flying frames on an 8,404-node lattice,
+# against 0.024 ms still). Asserts the rule, the camera exemption through every
+# setter a camera is flown with, and the exception — a camera with CHILDREN
+# moves them, so it counts again. Document only: NULL render system, no display.
+add_executable(test_movement_epoch test_movement_epoch.cpp)
+set_target_properties(test_movement_epoch PROPERTIES AUTOMOC OFF)
+target_include_directories(test_movement_epoch PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_movement_epoch PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_movement_epoch)
+add_test(NAME document.movement_epoch COMMAND test_movement_epoch
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.movement_epoch PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.movement_epoch)
+
 # document.no_silent_setters — the STATIC half of the dirty-set law
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like theme.no_raw_sheets.
 # Since the mirror only looks at a node the DOCUMENT says changed, a setter that

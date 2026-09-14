@@ -33,7 +33,12 @@ console.log("viewport state: " + st.state);
 scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 editor.frame(4);
 
-var started = perf.capture({ seconds: 30, out: bundle, label: "capture-bundle" });
+// TRACE:TRUE, deliberately. trace.json is opt-in since lane ENGINE-7 item 3
+// (writing it is 0.54-0.60 ms of UI thread per frame and it reconstructs what
+// frames.jsonl already holds), and this suite is the one that asserts the
+// timeline's shape — so it asks for it. The DEFAULT bundle's "no trace, and it
+// says so" is asserted on the capped capture below.
+var started = perf.capture({ seconds: 30, out: bundle, label: "capture-bundle", trace: true });
 assert(started.started === true, "perf.capture started -> " + JSON.stringify(started));
 assert(perf.status().recording === true, "perf.status() says recording");
 assert(perf.status().engine.level === "review", "the engine's monitor is at Review");
@@ -85,7 +90,7 @@ assert(perf.status().engine.gpu.queryPools === 0, "no GPU query pool survives a 
 // given 64 KB, which a capture of this scene blows through in a handful of
 // frames — every line it DID write must still parse, the dropped counters must
 // be non-zero, and it must say complete:false.
-var capped = perf.capture({ seconds: 30, out: bundle + "-capped", maxBytes: 65536 });
+var capped = perf.capture({ seconds: 30, out: bundle + "-capped", maxBytes: 65536, trace: true });
 assert(capped.started === true, "a size-capped capture starts");
 editor.frame(20);
 var cappedStop = perf.stop();
@@ -100,6 +105,18 @@ assert(escape.started === false, "an 'out' outside the capture root is refused")
 var overwrite = perf.capture({ seconds: 1, out: bundle });
 assert(overwrite.started === false, "a capture into an existing bundle is refused");
 assert(perf.status().recording === false, "a refused capture leaves the monitor off");
+
+// ---- A DEFAULT BUNDLE (lane ENGINE-7 item 3) ----------------------------
+// No `trace` key: this is what Ctrl+F4 and every unadorned perf.capture()
+// write. The C++ half asserts it has no trace.json and SAYS so in
+// machine.json — "no timeline was asked for" has to be distinguishable from
+// "the timeline is missing".
+var plain = perf.capture({ seconds: 30, out: bundle + "-plain", label: "plain" });
+assert(plain.started === true, "a default (no-trace) capture starts -> " + JSON.stringify(plain));
+editor.frame(6);
+var plainStop = perf.stop();
+assert(plainStop.stopped === true, "...and stops");
+assert(plainStop.frames > 0, "...with frames in it (" + plainStop.frames + ")");
 
 console.log("CAPTUREBUNDLE " + JSON.stringify({
     path: stopped.path,

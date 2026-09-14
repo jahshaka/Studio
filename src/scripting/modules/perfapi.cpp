@@ -17,7 +17,7 @@ For more information see the LICENSE file
 QVector<VerbInfo> PerfApi::verbs() const
 {
     return {
-        { "capture", "perf.capture({seconds, label, out, maxBytes}?) -> {started, path, seconds}",
+        { "capture", "perf.capture({seconds, label, out, maxBytes, trace}?) -> {started, path, seconds}",
           "Records the NEXT `seconds` of the render loop into a capture bundle — the monitor's "
           "whole point, and what Ctrl+F4 does. FORWARD ONLY: nothing is recorded before this call, "
           "there is no history to look back at, and the monitor is completely off until it. "
@@ -31,7 +31,13 @@ QVector<VerbInfo> PerfApi::verbs() const
           "snapshot_start.json, snapshot_end.json, frames.jsonl (one record per frame: every "
           "stage, every pass with its workspace and draw counts, each cache's work AND its "
           "reason), events.jsonl (GI rebuilds, shader compiles, texture loads, UI gaps, marks — "
-          "each with its cause), trace.json (Chrome/Perfetto) and ogre.log (the window). Refused "
+          "each with its cause) and ogre.log (the window) — plus trace.json (Chrome/Perfetto) when "
+          "`trace:true` is asked for. THE TIMELINE IS OPT-IN because writing it is the most "
+          "expensive thing a capture does on the UI thread — 0.54-0.60 ms of the monitor's "
+          "1.11-1.14 ms per frame on an 8,404-node scene — and it is a RECONSTRUCTION of what "
+          "frames.jsonl already holds (the records carry exclusive milliseconds per stage and "
+          "per pass, not timestamps, so the timeline lays them end to end). machine.json's "
+          "capture block says whether the bundle has one. Refused "
           "while a capture is already running.",
           Needs::Engine },
         { "stop", "perf.stop() -> {stopped, path, frames, events}",
@@ -72,6 +78,7 @@ QVariantMap PerfApi::capture(const QVariantMap &options)
     if (request.label.isEmpty() && host.project) request.label = host.project->getProjectName();
     request.outDir = options.value(QStringLiteral("out")).toString();
     request.maxBytes = options.value(QStringLiteral("maxBytes"), 0).toLongLong();
+    request.trace = options.value(QStringLiteral("trace"), false).toBool();
 
     QString error;
     if (!FrameMonitor::instance().start(request, &error)) {

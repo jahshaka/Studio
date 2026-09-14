@@ -581,6 +581,28 @@ try { editor.fullscreen("yes"); } catch (e) { badFullscreen = true; }
 assert(badFullscreen, "a non-boolean is refused (it is not a read either)");
 assert(editor.fullscreen() === false, "the refusal changed nothing");
 
+// ---- ...AND THE STATE IS NOT OURS ALONE (RR2, lane ENGINE-7 item 5) ----
+// Immersive fullscreen is a window state PLUS a set of hidden docks, and
+// anything can take the window out of the state without telling the editor:
+// app.resizeWindow() calls showNormal() before it resizes, and a window
+// manager offers its own control. The flag used to keep saying "fullscreen"
+// afterwards — and editor.fullscreen(true), which is idempotent against that
+// flag, then did NOTHING, so F11 was dead until it was pressed twice.
+assert(editor.fullscreen(true) === true, "fullscreen again, to be left by somebody else");
+editor.frame(2);
+assert(app.window().fullScreen === true, "the WINDOW agrees it is fullscreen");
+var resized = app.resizeWindow(1100, 700);
+editor.frame(2);
+assert(resized.fullScreen === false, "app.resizeWindow left fullscreen at the window level");
+assert(editor.fullscreen() === false,
+       "...and the editor's own state followed it (it used to read true forever)");
+assert(editor.fullscreen(true) === true,
+       "...so entering again WORKS instead of being a no-op against a stale flag");
+editor.frame(2);
+assert(app.window().fullScreen === true, "the window really went fullscreen the second time");
+assert(editor.fullscreen(false) === false, "and back out");
+editor.frame(2);
+
 console.log("editor_controls: gizmo space + fullscreen verified");
 
 // ---- faceCullingMode travels as a NAME (F18) ----

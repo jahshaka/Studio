@@ -451,6 +451,16 @@ private:
     void setScene(QSharedPointer<iris::Scene> scene);
     void updateGizmoTransform();    // @TODO - move this into updateSceneSettings
 
+    /// IMMERSIVE FULLSCREEN IS TWO THINGS — a window state and a set of hidden
+    /// docks — and the window state can be left without this class being asked
+    /// (RR2, 2026-09-14): `app.resizeWindow()` calls showNormal() before it
+    /// resizes, and a window manager's own control does the same. The flag then
+    /// said "fullscreen" while the window was not, so the next F11 (and
+    /// `editor.fullscreen(true)`, which is idempotent against the flag) did
+    /// nothing at all — F11 was dead until it was pressed twice. This watches
+    /// the state it does not own and puts the chrome back.
+    void changeEvent(QEvent *event) override;
+
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -600,6 +610,11 @@ public slots:
     void toggleLightWires(bool state);
     void toggleGrid(bool state);
     void toggleImmersiveFullscreen();
+    /// The LEAVE half of the toggle above, callable on its own. `restoreWindow`
+    /// is false when the window state has already been changed by somebody else
+    /// (changeEvent's case): the docks and the flag come back, the window is
+    /// left exactly as it was found.
+    void leaveImmersiveFullscreen(bool restoreWindow);
     void toggleDebugDrawer(bool state);
     void showProjectManagerInternal();
 
@@ -863,6 +878,16 @@ private:
     void stepSnapSize(int direction);
     // F11 immersive fullscreen restore state (EDITOR_SHORTCUTS_SPEC §3)
     bool immersiveFullscreen = false;
+    /// ENTERING, and not there yet (round-2 review, item 5). `showFullScreen()`
+    /// is a REQUEST: a window manager answers it with its own sequence, and a
+    /// maximized window can be handed an intermediate state that does not carry
+    /// the fullscreen flag — which changeEvent would read as "somebody took us
+    /// out of fullscreen" and restore every dock INSIDE the fullscreen window.
+    /// The latch is set when the toggle asks and cleared by the first state
+    /// change that reports fullscreen; until then a non-fullscreen state is the
+    /// transition, not a departure.
+    bool enteringFullscreen = false;
+
     bool preFullscreenMaximized = false;
     QVector<bool> preFullscreenWidgets;
 

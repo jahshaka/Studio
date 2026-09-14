@@ -3359,6 +3359,83 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
               sh[0], sh[1], sh[2]);
 }
 
+// THE SUN FOLLOWS THE ATMOSPHERE (SUN_FOLLOWS_ATMOSPHERE, lane ENGINE-7 item
+// 6). The engine's half: Scene::atmosphereSunTint, the scattering model's own
+// colour looking at the sun over its colour with the sun at the zenith.
+//
+// White at noon (the user's picked colour IS the noon value), red-shifted and
+// dimmer at a low sun, and exactly white for every sky that is not the
+// atmosphere — a picture knows nothing about what the air does to sunlight.
+void atmosphere_sun_tint_reddens_a_low_sun() {
+    Fixture fx;
+    View *v = fx.view("atmo-tint-view", 64, 64, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("atmo-tint-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+
+    // NO ATMOSPHERE YET: white, whatever is asked.
+    const Colour noSky = s->atmosphereSunTint(Vec3(0.0f, 0.1f, -1.0f));
+    CHECK_MSG(noSky.r == 1.0f && noSky.g == 1.0f && noSky.b == 1.0f,
+              "with no analytic sky the tint is exactly white (%.3f %.3f %.3f)",
+              noSky.r, noSky.g, noSky.b);
+
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[0] = 0.0f;
+    sky.atmosphere.sunDir[1] = 1.0f;
+    sky.atmosphere.sunDir[2] = 0.0f;
+    CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
+    render(fx.e);
+
+    const Colour noon = s->atmosphereSunTint(Vec3(0.0f, 1.0f, 0.0f));
+    std::printf("    tint at the zenith  %.3f %.3f %.3f\n", noon.r, noon.g, noon.b);
+    CHECK_MSG(std::fabs(noon.r - 1.0f) < 1e-3f && std::fabs(noon.g - 1.0f) < 1e-3f &&
+                  std::fabs(noon.b - 1.0f) < 1e-3f,
+              "at the zenith the tint is 1,1,1 — the picked colour IS the noon colour");
+
+    // ~5 degrees above the horizon.
+    const float elev = std::sin(5.0f * 3.14159265f / 180.0f);
+    const float flat = std::cos(5.0f * 3.14159265f / 180.0f);
+    const Colour low = s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
+    std::printf("    tint at 5 degrees   %.3f %.3f %.3f   (r/b %.2f)\n",
+                low.r, low.g, low.b, low.b > 1e-6f ? low.r / low.b : 0.0f);
+    CHECK_MSG(low.r > low.b * 1.3f,
+              "a 5-degree sun is RED-SHIFTED (r %.3f vs b %.3f)", low.r, low.b);
+    CHECK_MSG(low.r <= 1.0f && low.g < noon.g && low.b < noon.b,
+              "...and DIMMER than noon in every channel (%.3f %.3f %.3f)", low.r, low.g, low.b);
+
+    // MONOTONE between them, which is what makes a sunset a sunset rather than
+    // a switch: 30 degrees sits between the two.
+    const float e30 = std::sin(30.0f * 3.14159265f / 180.0f);
+    const float f30 = std::cos(30.0f * 3.14159265f / 180.0f);
+    const Colour mid = s->atmosphereSunTint(Vec3(0.0f, e30, -f30));
+    std::printf("    tint at 30 degrees  %.3f %.3f %.3f\n", mid.r, mid.g, mid.b);
+    CHECK_MSG(mid.b > low.b && mid.b <= noon.b,
+              "30 degrees sits between the horizon and the zenith (b %.3f)", mid.b);
+
+    // THE SKY IS UNDISTURBED BY THE QUESTION. The component is stateful and the
+    // query has to push, read and put back; if it did not, asking would MOVE
+    // the sun. The pixels either side of a query must be identical.
+    Image before, after;
+    render(fx.e); REQUIRE(v->readPixels(before));
+    (void)s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
+    (void)s->atmosphereSunTint(Vec3(0.0f, 1.0f, 0.0f));
+    render(fx.e); REQUIRE(v->readPixels(after));
+    const Px b0 = px(before, 4, 4), a0 = px(after, 4, 4);
+    CHECK_MSG(b0.r == a0.r && b0.g == a0.g && b0.b == a0.b,
+              "asking for the tint does not move the sky (%d %d %d vs %d %d %d)",
+              b0.r, b0.g, b0.b, a0.r, a0.g, a0.b);
+
+    // A PICTURE SKY HAS NO OPINION: back to white.
+    SkyDesc none;
+    CHECK_MSG(s->setSky(none), "the sky goes away: %s", fx.e->lastError().c_str());
+    const Colour off = s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
+    CHECK_MSG(off.r == 1.0f && off.g == 1.0f && off.b == 1.0f,
+              "without the analytic sky the tint is white again");
+}
+
 // THE ANALYTIC SKY BRINGS NO FOG WITH IT (round-2 review item 1). Picking the
 // sky CREATES the atmosphere component, and upstream's constructor preset
 // carries fogDensity 1e-4 — 0.7 % of a surface's colour at 100 m and 13 % at
@@ -5628,6 +5705,7 @@ int main(int argc, char **argv) {
         { "fog_height_layer",                        fog_height_layer },
         { "analytic_sky_is_the_engines_and_takes_our_sun",
                                                     analytic_sky_is_the_engines_and_takes_our_sun },
+        { "atmosphere_sun_tint_reddens_a_low_sun",  atmosphere_sun_tint_reddens_a_low_sun },
         { "fog_atmosphere_colour_is_the_skys",       fog_atmosphere_colour_is_the_skys },
         { "analytic_sky_brings_no_fog",              analytic_sky_brings_no_fog },
         { "fog_atmosphere_colour_follows_the_sky",   fog_atmosphere_colour_follows_the_sky },
