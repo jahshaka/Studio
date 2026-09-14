@@ -1578,10 +1578,10 @@ int main()
     // screen-space trace overrule".
     //
     // MEASURED ON THE BASE MEDIA (irisgl c4f7af5, the SSR-1 lane's base), this
-    // section is RED: footprint 3.9 %, isolated 0.42 %. With the lane's
+    // section is RED: **37.996 %** of the sphere overruled. With the lane's
     // confidence terms (arrival angle, thickness margin, ray coherence, the
     // borrow quorum — JahSsrRayMarch_ps.glsl and JahSsrResolve_ps.glsl) it is
-    // green. The live proof at editor resolution is in
+    // green at 0.000 %. The live proof at editor resolution is in
     // spikes/ssr-1/FINDINGS.md: on the Mirror Room's sphere, 5.70 % of the
     // region differed from the SSR-off picture by more than 32/255 before and
     // 0.50 % after, with the gold torus going 1.61 % -> 0.001 %.
@@ -1732,12 +1732,13 @@ int main()
     // whatever the confidence was. So the assertion is a ratio, and it needs no
     // knowledge of w, of the tonemap or of the fixture's absolute brightness.
     //
-    // MEASURED on this fixture: 0.299 with patch 0036 against 0.753 without it
+    // MEASURED on this fixture: 0.314 with patch 0036 against 0.753 without it
     // — and the budget is halfway between them. The unpatched figure is not the
-    // 1.0 the arithmetic of `+=` implies because the numbers are read off a
-    // TONEMAPPED picture, whose curve compresses the brighter (doubled) pixel
-    // more than the dimmer one; the raw radiance ratio is 1.0 by construction
-    // and the tonemap is what the owner meters too.
+    // 1.0 the arithmetic of `+=` implies because the numbers are read off the
+    // view's 8-BIT sRGB-ENCODED readback (this fixture has HDR off, so there is
+    // no film curve): the encode compresses the brighter (doubled) pixel more
+    // than the dimmer one and the result clips at 1.0. The raw radiance ratio is
+    // 1.0 by construction.
     {
         Scene *vs = engine->createScene("ssr-energy");
         View  *vv = engine->createOffscreenView("ssr-energy", 256, 256, Colour(0.0f, 0.0f, 0.0f));
