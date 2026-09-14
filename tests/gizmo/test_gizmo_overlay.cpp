@@ -13,6 +13,9 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/vertexbuffer.h"
+#include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "viewport/translationgizmo.h"
 #include "viewport/rotationgizmo.h"
@@ -34,6 +37,25 @@ static bool hasColour(const Image &img, float r, float g, float b) {
     }
     return false;
 }
+
+// ONE ITEM, ANY COLOUR (GIZMO-2 item 4). The overlay's contract is a list of
+// GizmoDrawItems; this is the smallest thing that can produce one, so the alpha
+// path can be driven without a real gizmo's geometry in the way.
+class OneItemGizmo : public Gizmo
+{
+public:
+    GizmoDrawItem item;
+    bool isDragging() override { return false; }
+    void startDragging(iris::Vec3, iris::Vec3, iris::Vec3) override {}
+    void endDragging() override {}
+    void drag(iris::Vec3, iris::Vec3, iris::Vec3) override {}
+    QVector<GizmoDrawItem> drawItems(iris::Vec3, iris::Vec3, iris::Vec3) override
+    {
+        QVector<GizmoDrawItem> out;
+        out.append(item);
+        return out;
+    }
+};
 
 int main(int argc, char **argv)
 {
@@ -368,6 +390,95 @@ int main(int argc, char **argv)
         dragOverlay.clear();
         mirror.applyCamera(cam, view);
         engine->destroyView(big);
+    }
+
+    // ------------------------------------------------------------------
+    // OVERLAY TRANSPARENCY, BUILT IN (GIZMO-2 item 4; owner §369: "can the
+    // gizmos have transparency? not needed now, but built in it is useful for
+    // later polish").
+    //
+    // A GizmoDrawItem's colour has always been a QColor, alpha included, and the
+    // overlay used to drop it: it handed the engine a hard 1.0. It passes the
+    // alpha now, and the engine turns the material blended (or back) when the
+    // alpha crosses 1. Asserted the only way that means anything — one helper
+    // drawn at half alpha over a KNOWN background, read back as the composite —
+    // plus the claim that matters for every existing suite: the opaque path is
+    // byte-identical across the round trip.
+    {
+        View *blend = engine->createOffscreenView("gizmo-alpha", 256, 256,
+                                                  Colour(0.1f, 0.1f, 0.1f));
+        blend->setScene(target);
+        mirror.applyCamera(cam, blend);
+        GizmoOverlay alphaOverlay(target);
+
+        OneItemGizmo one;
+        // ONE FLAT QUAD, facing this camera (it looks down -Z) — and one LAYER,
+        // which is the point: every mesh in gizmomeshes.cpp is a closed or
+        // double-sided surface, and an overlay material is CULL_NONE, so a
+        // half-alpha disc would blend twice (measured: 0.776 where one layer
+        // predicts 0.551, and 0.502 + 0.498*0.551 is exactly 0.776). A single
+        // quad composites once, which is what the claim is about.
+        {
+            const float pos[] = { -1,-1,0,  1,-1,0,  1,1,0,  -1,-1,0,  1,1,0,  -1,1,0 };
+            const float nrm[] = {  0,0,1,   0,0,1,   0,0,1,   0,0,1,   0,0,1,   0,0,1  };
+            auto quad = iris::Mesh::create();
+            iris::VertexLayout posLayout;
+            posLayout.addAttrib(iris::VertexAttribUsage::Position, iris::AttribTypeFloat, 3,
+                                sizeof(float) * 3);
+            auto pb = iris::VertexBuffer::create(posLayout);
+            pb->setData((void *)pos, sizeof pos);
+            quad->addVertexBuffer(pb);
+            iris::VertexLayout nrmLayout;
+            nrmLayout.addAttrib(iris::VertexAttribUsage::Normal, iris::AttribTypeFloat, 3,
+                                sizeof(float) * 3);
+            auto nb2 = iris::VertexBuffer::create(nrmLayout);
+            nb2->setData((void *)nrm, sizeof nrm);
+            quad->addVertexBuffer(nb2);
+            quad->setPrimitiveMode(iris::PrimitiveMode::Triangles);
+            quad->setVertexCount(6);
+            one.item.mesh = quad;
+        }
+        one.item.transform.setToIdentity();
+
+        const iris::Vec3 eye = cam->getGlobalPosition();
+        const iris::Vec3 fwd(0, 0, -1);
+        Image bg, opaque, half, opaqueAgain;
+        alphaOverlay.update(nullptr, eye, fwd, fwd);
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        blend->readPixels(bg);
+        const Colour back = bg.at(128, 128);
+
+        one.item.colour = QColor(255, 255, 255, 255);
+        alphaOverlay.update(&one, eye, fwd, fwd);
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        blend->readPixels(opaque);
+        const Colour full = opaque.at(128, 128);
+
+        one.item.colour = QColor(255, 255, 255, 128);          // alphaF() = 0.502
+        alphaOverlay.update(&one, eye, fwd, fwd);
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        blend->readPixels(half);
+        const Colour mixed = half.at(128, 128);
+
+        const float a = 128.0f / 255.0f;
+        const float expect = a * full.r + (1.0f - a) * back.r;
+        std::printf("    alpha: background %.3f, opaque %.3f, half-alpha %.3f (a 50/50 "
+                    "composite predicts %.3f)\n", back.r, full.r, mixed.r, expect);
+        CHECK(full.r > 0.9f && back.r < 0.2f, "the helper is opaque over a known background");
+        CHECK(std::abs(mixed.r - expect) < 0.02f,
+              "a helper at alpha 0.5 reads back as the 50/50 composite of the two");
+
+        // ...and back to opaque: the same material, the same pixels as before.
+        one.item.colour = QColor(255, 255, 255, 255);
+        alphaOverlay.update(&one, eye, fwd, fwd);
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        blend->readPixels(opaqueAgain);
+        CHECK(opaqueAgain.rgba == opaque.rgba,
+              "and the OPAQUE path is byte-identical across the round trip");
+
+        alphaOverlay.clear();
+        mirror.applyCamera(cam, view);
+        engine->destroyView(blend);
     }
 
     mirror.setSource(nullptr);
