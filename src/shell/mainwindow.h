@@ -289,6 +289,13 @@ public:
     /// null before the editor is built. editor.trayAssets reads it.
     AssetWidget *assetTray() const { return assetWidget; }
 
+    /// One toast, reused, for every transient viewport readout (snap size, fly
+    /// speed) — and for a gesture the viewport has to REFUSE: a material or an
+    /// image dropped on a LOCKED node (lane SPACE-2 item 5), which is why the
+    /// viewport calls it and it lives out here with the rest of the shell's
+    /// public surface.
+    void showViewportToast(const QString &title, const QString &text);
+
     // ---- the editor's BOTTOM AREA (owner, 2026-09-14, lane SPACE-2) --------
     // ONE tab bar along the bottom of the editor: "Assets" (the asset browser),
     // "Timeline" (the keyframe panel) and "Console" (the script console) when
@@ -945,9 +952,6 @@ private:
     /// Owned by the toolbar; held to keep it in sync with FlySpeedSettings,
     /// which the verb and the scroll wheel can both change behind its back.
     class QComboBox *flySpeedCombo = nullptr;
-    /// One toast, reused, for every transient viewport readout (snap size, fly
-    /// speed). Positioned over the viewport by showViewportToast.
-    void showViewportToast(const QString &title, const QString &text);
     /// "The 3D view could not be created" — the respecced Failed state
     /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
     class Toast *viewErrorToast = nullptr;

@@ -282,9 +282,13 @@ public:
     iris::SceneNodePtr pickAt(const QPointF &point, bool selectRootObject = true,
                               iris::Vec3 *hitPoint = nullptr, bool forcePickable = false);
     /// What a drop at this viewport pixel APPLIES TO: the node under the
-    /// cursor, pickable or not (the default floor is not selectable but is
-    /// very much a drop target). Null when the ray hits nothing.
-    iris::SceneNodePtr dropTargetAt(const QPointF &point) override;
+    /// cursor, locked or not — `locked` (optional) says which, and a locked
+    /// node refuses the drop by name rather than swallowing it. Null when the
+    /// ray hits nothing.
+    iris::SceneNodePtr dropTargetAt(const QPointF &point, bool *locked = nullptr) override;
+    /// Toasts "<node> is locked — unlock it to apply <what>" and answers true
+    /// when the drop must stop there.
+    bool refuseDropOnLocked(const iris::SceneNodePtr &node, const QString &what);
     /// Where a dragged asset would land: the picked surface, else the ground plane.
     iris::Vec3 dropPositionAt(const QPointF &point);
     /// IEditorViewport: the same answer, for `editor.dropPointAt` and anything

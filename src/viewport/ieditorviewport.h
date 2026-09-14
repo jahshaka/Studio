@@ -156,10 +156,14 @@ public:
     /// viewport has no camera (a headless stand-in never answers).
     virtual bool dropPointAt(const QPointF &, iris::Vec3 *) { return false; }
     /// The node a drop at that pixel would APPLY TO — the material and texture
-    /// drops' target, which is not the same question as "what does a click
-    /// select" (the default floor is a drop target and is not selectable).
-    /// Null in the document-only stand-ins.
-    virtual iris::SceneNodePtr dropTargetAt(const QPointF &) { return iris::SceneNodePtr(); }
+    /// drops' target. `locked` (optional) receives whether that node is LOCKED
+    /// (the hierarchy's lock icon, i.e. `pickable` false — the default floor
+    /// ships that way): a locked node is under the cursor like any other and
+    /// refuses the drop by name. Null in the document-only stand-ins.
+    virtual iris::SceneNodePtr dropTargetAt(const QPointF &, bool * = nullptr)
+    {
+        return iris::SceneNodePtr();
+    }
 
     /// F: frames the current selection (no-op without one). Only the engine
     /// viewport implements it (EDITOR_SHORTCUTS_SPEC §2).

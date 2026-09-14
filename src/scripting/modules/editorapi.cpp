@@ -591,14 +591,17 @@ QVector<VerbInfo> EditorApi::verbs() const
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
           Needs::Engine },
-        { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name} | null",
+        { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name, locked} | null",
           "WHAT A DROP AT THIS VIEWPORT PIXEL APPLIES TO — the node a dragged MATERIAL or IMAGE "
-          "would land on, which is not the same question as what a click selects: the default "
-          "Ground is deliberately unselectable and is very much a drop target (owner report, "
-          "2026-09-14 — a material dragged onto the floor did nothing at all, and an image "
-          "spawned a floating plane instead of retexturing it). Null when the ray hits nothing, "
-          "which is the case that still spawns an image plane for a dropped picture. Same pixels "
-          "as editor.dropPointAt, which answers WHERE the same drop would place a new object.",
+          "would land on. `locked` is the hierarchy's lock (the node's `pickable` flag, which is "
+          "the same thing): a LOCKED node takes no drop and no click, and the drop says so by "
+          "name instead of vanishing — the default Ground ships locked, which is why a material "
+          "dragged onto it used to do nothing at all and an image spawned a floating plane "
+          "instead of retexturing it (owner, 2026-09-14/15). Unlock the node "
+          "(node.setProperty(id, \"pickable\", true), or the lock icon in the hierarchy) and both "
+          "work like any other object's. Null when the ray hits NOTHING, which is the only case "
+          "that spawns an image plane for a dropped picture. Same pixels as editor.dropPointAt, "
+          "which answers WHERE the same drop would place a new object.",
           Needs::Engine },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
@@ -1987,11 +1990,16 @@ QVariant EditorApi::dropPointAt(double x, double y)
 QVariant EditorApi::dropTargetAt(double x, double y)
 {
     if (!requireEngine()) return QVariant();
-    const iris::SceneNodePtr node = host.viewport->dropTargetAt(QPointF(x, y));
+    bool locked = false;
+    const iris::SceneNodePtr node = host.viewport->dropTargetAt(QPointF(x, y), &locked);
     if (!node) return QVariant();
     QVariantMap out;
     out.insert("id", node->getGUID());
     out.insert("name", node->getName());
+    // A LOCKED node is reported, not hidden (owner correction, 2026-09-15):
+    // "there is something here and it will refuse you" is a different answer
+    // from "there is nothing here", and only one of them spawns an image plane.
+    out.insert("locked", locked);
     return out;
 }
 
