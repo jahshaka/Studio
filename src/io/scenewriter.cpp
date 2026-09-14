@@ -143,6 +143,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["sunLight"] = scene->sunLightGuid;
     sceneObj["sunDiscVisible"] = scene->sunDiscVisible;
     sceneObj["sunDiscInProbes"] = scene->sunDiscInProbes;
+    sceneObj["sunDiscSize"] = scene->sunDiscSize;
     sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
@@ -1070,11 +1071,6 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     if (lightNode->lightType == iris::LightType::Directional &&
         lightNode->forwardShadingPriority != 0)
         sceneNodeObject["forwardShadingPriority"] = lightNode->forwardShadingPriority;
-    // THE SUN'S ANGULAR DIAMETER (directional lights only; 0.53 deg = the real
-    // sun). Same rule: written only when it is not the default.
-    if (lightNode->lightType == iris::LightType::Directional &&
-        lightNode->sunAngle != 0.53f)
-        sceneNodeObject["sunAngle"] = lightNode->sunAngle;
     // FOLLOWS ATMOSPHERE (directional lights only, default ON). Same rule
     // again, and the direction matters: the key is written only when the user
     // switched it OFF, so an absent key is `true` — which is what the reader's

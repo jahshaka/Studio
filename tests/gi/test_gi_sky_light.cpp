@@ -278,9 +278,11 @@ int main(int argc, char **argv)
         // itself is at -Z, dead ahead in the frame (measured, not assumed: the
         // opposite sign puts it behind the camera and the disc never appears).
         // The angular size is raised to 6 degrees so the disc is tens of pixels
-        // across and the scan below is not measuring one texel.
+        // across and the scan below is not measuring one texel. It is a WORLD
+        // row (Scene::sunDiscSize) since lane SUN-DISC-1, not a light row.
         sun->setLocalRot(iris::Quat::fromEulerAngles(-90.0f, 0.0f, 0.0f));
-        sun->sunAngle = 6.0f;
+        const float shippedDiscSize = doc->sunDiscSize;
+        doc->sunDiscSize = 6.0f;
         doc->getRootNode()->addChild(sun);
         for (int f = 0; f < 4; ++f) frame();
 
@@ -358,15 +360,122 @@ int main(int argc, char **argv)
         // A ZERO ANGULAR SIZE IS NOT A DISC (round-2 review item 6): the
         // shader's edge is a smoothstep between two equal numbers at radius 0.
         {
-            const float was = sun->sunAngle;
-            sun->sunAngle = 0.0f;
+            const float was = doc->sunDiscSize;
+            doc->sunDiscSize = 0.0f;   // the field directly: the dial clamps at 0.1
             for (int f = 0; f < 4; ++f) frame();
             int zx = 0, zy = 0;
             const float zero = brightest(zx, zy);
             CHECK(std::fabs(zero - lum(offSun)) < 0.02f,
-                  "6h. sunAngle 0 draws no disc at all (not a full-screen flash)");
-            sun->sunAngle = was;
+                  "6h. a size of 0 draws no disc at all (not a full-screen flash)");
+            doc->sunDiscSize = was;
             for (int f = 0; f < 4; ++f) frame();
+        }
+
+        // ---- 6i. THE DISC'S SIZE IS A WORLD DIAL THAT COSTS NO LIGHT ------
+        // (Lane SUN-DISC-1; owner 2026-09-14: "the sun disc is too small — make
+        // it about 4x larger".) Two statements, both in pixels:
+        //
+        //   the disc's DIAMETER on screen is proportional to the dial, and
+        //   the ENERGY it puts in the frame does not depend on the dial at all.
+        //
+        // The second is the one that matters: radiance times solid angle is
+        // irradiance, so a disc drawn four times wider at the same radiance
+        // would put SIXTEEN times the energy into the bloom pass and into an
+        // `inProbes` capture. The mirror divides the radiance by the solid
+        // angle the dial asked for; this measures that it really did.
+        {
+            // AN UNCLIPPED DISC. The shipped disc saturates on purpose (it is
+            // the sun), and a clipped pixel cannot be summed — so the sun's
+            // intensity is dropped until the brightest pixel of the SMALLER
+            // disc is still inside the 8-bit range, and put back afterwards.
+            const float intensityWas = sun->intensity;
+            const float sizeWas = doc->sunDiscSize;
+            sun->intensity = 0.13f;
+            const Colour sky = img.at(4, 4);
+
+            // The disc's footprint and the light it adds over the bare sky.
+            // Everything above the sky by a threshold that a uniform colour
+            // sky cannot produce on its own (it is flat to the bit).
+            struct Shot { int pixels; double excess; float peak; };
+            const auto measure = [&](float sizeDeg) {
+                doc->sunDiscSize = sizeDeg;
+                for (int f = 0; f < 4; ++f) frame();
+                view->readPixels(img);
+                Shot sh { 0, 0.0, 0.0f };
+                for (int y = 0; y < 256; ++y)
+                    for (int x = 0; x < 256; ++x) {
+                        const Colour c = img.at(x, y);
+                        const float over = lum(c) - lum(sky);
+                        if (over > 0.02f) { ++sh.pixels; sh.excess += double(over); }
+                        // PER CHANNEL: an 8-bit readback clips each channel on
+                        // its own, and a clipped channel is a lost measurement.
+                        sh.peak = std::max(sh.peak, std::max(c.r, std::max(c.g, c.b)));
+                    }
+                return sh;
+            };
+            const Shot small = measure(3.0f);
+            const Shot big   = measure(6.0f);
+            const double diaRatio = small.pixels > 0
+                ? std::sqrt(double(big.pixels) / double(small.pixels)) : 0.0;
+            const double energyRatio = small.excess > 0.0 ? big.excess / small.excess : 0.0;
+            std::printf("   disc 3 deg: %d px, sum %.1f, peak %.3f | 6 deg: %d px, sum %.1f, "
+                        "peak %.3f | diameter x%.3f, energy x%.4f\n",
+                        small.pixels, small.excess, small.peak,
+                        big.pixels, big.excess, big.peak, diaRatio, energyRatio);
+            CHECK(small.peak < 0.98f && big.peak < 0.98f,
+                  "6i0. both discs are measured UNCLIPPED (a clipped sum means nothing)");
+            CHECK(diaRatio > 1.85 && diaRatio < 2.15,
+                  "6i. doubling the dial doubles the disc's DIAMETER on screen");
+            CHECK(std::fabs(energyRatio - 1.0) < 0.02,
+                  "6i2. ...and puts the SAME total light in the frame (within 2%)");
+
+            // AND THE FOUR TIMES THE OWNER ASKED FOR, at the shipped values:
+            // the physical sun against the default disc.
+            const Shot physical = measure(iris::kPhysicalSunDiscSize);
+            const Shot shipped  = measure(iris::kDefaultSunDiscSize);
+            const double shippedRatio = physical.pixels > 0
+                ? std::sqrt(double(shipped.pixels) / double(physical.pixels)) : 0.0;
+            std::printf("   physical 0.53 deg: %d px | shipped %.2f deg: %d px | diameter x%.2f\n",
+                        physical.pixels, double(iris::kDefaultSunDiscSize), shipped.pixels,
+                        shippedRatio);
+            // A 0.53-degree disc is FOUR PIXELS of a 256-pixel frame, so this
+            // ratio is quantised to about a quarter of itself — it is evidence
+            // that the shipped disc really is several times the real sun on
+            // screen, not a measurement of the number 4 (6i above measures the
+            // law, on discs big enough to count).
+            CHECK(shippedRatio > 3.0 && shippedRatio < 6.0,
+                  "6i3. the shipped disc is about FOUR TIMES the real sun's width on screen");
+
+            sun->intensity = intensityWas;
+            doc->sunDiscSize = sizeWas;
+            for (int f = 0; f < 4; ++f) frame();
+        }
+
+        // ---- 6j. THE ENGINE IS TOLD THE SIZE, AND THE HOST NORMALISES -----
+        // The value side of 6i, exactly rather than within a tolerance: the
+        // description the mirror pushes carries the dial's degrees, and its
+        // radiance scales as 1/size^2 around the default.
+        {
+            const float sizeWas = doc->sunDiscSize;
+            doc->sunDiscSize = iris::kDefaultSunDiscSize;
+            for (int f = 0; f < 2; ++f) frame();
+            const SunDisc atDefault = escene->sky().sun;
+            doc->sunDiscSize = 2.0f * iris::kDefaultSunDiscSize;
+            for (int f = 0; f < 2; ++f) frame();
+            const SunDisc atDouble = escene->sky().sun;
+            std::printf("   pushed: %.3f deg at radiance %.4f -> %.3f deg at %.4f\n",
+                        atDefault.angularDiameterDeg, atDefault.colour.r,
+                        atDouble.angularDiameterDeg, atDouble.colour.r);
+            CHECK(std::fabs(atDefault.angularDiameterDeg - iris::kDefaultSunDiscSize) < 1e-4f &&
+                      std::fabs(atDouble.angularDiameterDeg
+                                - 2.0f * iris::kDefaultSunDiscSize) < 1e-4f,
+                  "6j. the World row's degrees reach the engine unchanged");
+            CHECK(atDefault.colour.r > 1e-4f &&
+                      std::fabs(atDouble.colour.r * 4.0f - atDefault.colour.r)
+                          < 1e-3f * atDefault.colour.r,
+                  "6j2. ...and twice the size arrives at a QUARTER of the radiance");
+            doc->sunDiscSize = sizeWas;
+            for (int f = 0; f < 2; ++f) frame();
         }
 
         // THE DISC AND THE PROBES (owner pick 4, both options). `inProbes`
@@ -409,6 +518,159 @@ int main(int argc, char **argv)
                     lum(aheadBright), lum(aheadDim));
         CHECK(lum(aheadBright) > lum(aheadDim) * 1.2f,
               "7. the realistic sky's bake follows the SUN LIGHT's rotation (D15)");
+
+        // ---- 7b. THE HORIZON CROSSING IS CONTINUOUS ------------------------
+        // (Lane SUN-DISC-1, from the rig's smoke capture of 2026-09-14: between
+        // sun pitches 86 and 90 the picture jumped in one step from bright and
+        // warm to a deep blue sky with red-lit objects, and the sun's shadow
+        // pass vanished in the same frame.)
+        //
+        // WHAT WAS ACTUALLY WRONG, and it is not the reddening. The scattering
+        // model has NO ANSWER BELOW THE HORIZON — its time-of-day input clamps
+        // at zero — so the tint FROZE at its horizon value and stayed there for
+        // every elevation down to -90: a sun that had set went on lighting the
+        // scene, drawing its disc and casting its shadow at a constant fraction
+        // of noon, and the only thing that stopped it was a magic threshold
+        // (kSunNightTint) deciding when night began. On the shipped sky that
+        // frozen value is 0.0006 of noon, which is invisible and made the
+        // threshold look harmless; dial the sky's density down to 0.1 and it is
+        // 0.20 of noon — a fifth of the noon sun arriving from below the
+        // ground. OgreScene::atmosphereSunTint now multiplies the model by the
+        // EARTH: a smoothstep from 1 to 0 across the sun's own disc setting
+        // through the refracted horizon (geometric elevation -0.305 to -0.835).
+        //
+        // So the assertion is not "no step" — a real sunset IS steep, the last
+        // degree of elevation is where the air mass runs away — but "the three
+        // things the sun does (light, disc, shadow) ride ONE number, that
+        // number reaches zero continuously, and nothing switches off while the
+        // scene can still see it".
+        {
+            doc->skyType = iris::SkyType::REALISTIC;
+            struct Step { float pitch; float elevDeg; float tintMax; float mean; bool disc; };
+            // THE SWEEP, TWICE. Once with the sun's own picture in the frame
+            // (its disc, and a sphere it lights) and once with neither — so the
+            // difference between the two runs IS the sun's contribution to the
+            // picture, separated from the SKY's, which is drawn by the
+            // atmosphere model itself and is not this lane's to move.
+            const auto sweepOver = [&](bool withSun) {
+                doc->sunDiscVisible = withSun;
+                // The lit object, OFF CENTRE when it is in: the disc is drawn
+                // where the sun points, which is the middle of this frame, and
+                // a sphere at the origin would stand in front of it.
+                sphere->setLocalPos(withSun ? iris::Vec3(-1.5f, 0.0f, 0.0f)
+                                            : iris::Vec3(0.0f, -40.0f, 0.0f));
+                std::vector<Step> out;
+                for (int p = -84; p >= -92; --p) {
+                    sun->setLocalRot(iris::Quat::fromEulerAngles(float(p), 0.0f, 0.0f));
+                    settle();
+                    view->readPixels(img);
+                    double sum = 0.0;
+                    for (int y = 0; y < 256; ++y)
+                        for (int x = 0; x < 256; ++x) sum += double(lum(img.at(x, y)));
+                    const iris::Vec3 toSun = -sun->getLightDir().normalized();
+                    const Colour tint = escene->atmosphereSunTint(
+                        Vec3(toSun.x(), toSun.y(), toSun.z()));
+                    Step st;
+                    st.pitch = float(p);
+                    st.elevDeg = float(std::asin(std::max(-1.0f, std::min(1.0f, toSun.y())))
+                                       * 180.0 / M_PI);
+                    st.tintMax = std::max(tint.r, std::max(tint.g, tint.b));
+                    st.mean = float(sum / (256.0 * 256.0));
+                    st.disc = escene->sky().sun.enabled;
+                    out.push_back(st);
+                }
+                return out;
+            };
+            const std::vector<Step> sweep = sweepOver(true);
+            const std::vector<Step> bare  = sweepOver(false);
+            for (size_t i = 0; i < sweep.size(); ++i)
+                std::printf("   pitch %.0f (elev %+5.2f deg): tint %.6f  frame mean %.4f  "
+                            "sky alone %.4f  the sun's picture %+.4f  disc %s\n",
+                            sweep[i].pitch, sweep[i].elevDeg, sweep[i].tintMax, sweep[i].mean,
+                            bare[i].mean, sweep[i].mean - bare[i].mean,
+                            sweep[i].disc ? "on" : "off");
+            // (a) THE SUN'S OWN CONTRIBUTION IS MONOTONE. One number drives the
+            // light, the disc and the shadow, and it only ever falls as the sun
+            // goes down — no step back up, no plateau, and it ENDS at zero.
+            bool monotone = true;
+            for (size_t i = 1; i < sweep.size(); ++i)
+                if (sweep[i].tintMax > sweep[i - 1].tintMax + 1e-7f) monotone = false;
+            CHECK(monotone, "7b. the sun's tint falls monotonically through the horizon");
+            CHECK(sweep.back().tintMax == 0.0f,
+                  "7b2. ...and REACHES ZERO below it (the model's frozen plateau is gone)");
+            // (b) NOTHING SWITCHES OFF WHILE IT IS STILL VISIBLE. The frame the
+            // disc (and with it the sun's shadow) leaves is a frame in which
+            // the sun's own light is already under one 8-bit step of noon.
+            float tintWhenDiscLeft = -1.0f;
+            for (size_t i = 1; i < sweep.size(); ++i)
+                if (sweep[i - 1].disc && !sweep[i].disc) tintWhenDiscLeft = sweep[i].tintMax;
+            std::printf("   the disc left at tint %.6f (one 8-bit step of noon = %.6f)\n",
+                        tintWhenDiscLeft, 1.0f / 255.0f);
+            CHECK(tintWhenDiscLeft >= 0.0f && tintWhenDiscLeft < 1.0f / 255.0f,
+                  "7b3. the disc and the sun's shadow leave only once the sun is invisible");
+            // (c) NO SINGLE-STEP JUMP IN WHAT THE SUN PUTS IN THE PICTURE.
+            // "The sun's picture" is the frame mean MINUS the same frame with
+            // no disc and nothing for the sun to light. Its absolute value is
+            // negative here and means nothing (a dark sphere in front of a
+            // bright sky lowers the mean); what is measured is how much it
+            // MOVES from one degree to the next, which is exactly the disc
+            // appearing or disappearing and the light on the sphere changing,
+            // with the sky divided out. 5% of the frame mean is the bound: the
+            // whole of the sun's picture here is about 3% of the frame, so a
+            // hard flip that took the disc and the sun's light out in one step
+            // could not pass it, and 0.7% is what a continuous fade measures.
+            //
+            // THE FRAME AS A WHOLE IS NOT BOUNDED HERE, and the number printed
+            // above says why: the SKY's own single-degree step at the crossing
+            // is ~48%. That is Ogre's AtmosphereNpr, not ours — its
+            // `lightDensity = densityCoeff / max(sunHeight, 0.0035)^0.75` with
+            // `sunHeight = sin(normalizedTimeOfDay * PI)` and a time-of-day
+            // clamped at zero gives the model no twilight at all: the sky
+            // collapses inside the last degree of elevation and then stays at
+            // that value all night. Reported as an upstream finding rather than
+            // patched under a lane about the disc's size.
+            float worstSun = 0.0f, worstAt = 0.0f, worstSky = 0.0f;
+            for (size_t i = 1; i < sweep.size(); ++i) {
+                const float shareNow  = sweep[i].mean - bare[i].mean;
+                const float sharePrev = sweep[i - 1].mean - bare[i - 1].mean;
+                const float step = std::fabs(shareNow - sharePrev)
+                                   / std::max(1e-4f, sweep[i - 1].mean);
+                if (step > worstSun) { worstSun = step; worstAt = sweep[i].pitch; }
+                worstSky = std::max(worstSky, std::fabs(bare[i].mean - bare[i - 1].mean)
+                                                  / std::max(1e-4f, bare[i - 1].mean));
+            }
+            std::printf("   largest single-degree step: the SUN's share %.1f%% (at pitch %.0f), "
+                        "the SKY alone %.1f%%\n",
+                        worstSun * 100.0f, worstAt, worstSky * 100.0f);
+            CHECK(worstSun < 0.05f,
+                  "7b4. one degree of sun never moves the sun's share of the picture by 5%");
+
+            // (d) THE THIN-SKY CASE, which is what the frozen plateau really
+            // cost: with the density dialled down, a sun 30 degrees UNDER the
+            // ground used to light the scene at a fifth of noon for ever.
+            {
+                const float densityWas = doc->skyRealistic.density;
+                doc->sunDiscVisible = true;   // the second sweep left it off
+                doc->skyRealistic.density = 0.1f;
+                sun->setLocalRot(iris::Quat::fromEulerAngles(-120.0f, 0.0f, 0.0f));  // 30 deg under
+                settle();
+                const iris::Vec3 toSun = -sun->getLightDir().normalized();
+                const Colour tint = escene->atmosphereSunTint(
+                    Vec3(toSun.x(), toSun.y(), toSun.z()));
+                std::printf("   thin sky (density 0.1), sun 30 deg BELOW: tint %.4f %.4f %.4f, "
+                            "disc %s\n", tint.r, tint.g, tint.b,
+                            escene->sky().sun.enabled ? "on" : "off");
+                CHECK(tint.r == 0.0f && tint.g == 0.0f && tint.b == 0.0f,
+                      "7b5. a set sun lights nothing, at any sky density");
+                CHECK(!escene->sky().sun.enabled,
+                      "7b6. ...and draws no disc under the ground");
+                doc->skyRealistic.density = densityWas;
+            }
+            sun->setLocalRot(iris::Quat::fromEulerAngles(-70.0f, 0.0f, 0.0f));
+            sphere->setLocalPos(iris::Vec3(0.0f, -40.0f, 0.0f));
+            settle();
+        }
+
         doc->sunDiscVisible = true;
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         doc->getRootNode()->removeChild(sun);
