@@ -108,13 +108,13 @@ not a gate.
 ## 5. Why the full gate cost 25 minutes, and what the cleanup changed
 
 **CURRENT COUNTS (2026-09-13, the last three PUSH-tier gates — ledger §211/§214/§219):
-362 suites REGISTERED, 358 of them RUN in the MERGE/PUSH tier (the four excluded are
+363 suites REGISTERED, 359 of them RUN in the MERGE/PUSH tier (the four excluded are
 the two `benchmark`/`shadercache-attack` labels and `gi.ddgi_raster`, all nightly), in
 488-680 s at -j4.** The spread is load, not content: 488 s on a quiet box (push #24,
 353/353 — one suite has been added since), 672 s with a sibling lane compiling at -j10
 beside it (push #26, 354/354), 680 s on push #25, whose two reds — open.responsive and
 archive.responsive — were the documented UI-thread contention class and 3/3 solo green,
-i.e. 354/354 effective. Zero retries on #24, #26, #27, #29 and #30 (508-579 s quiet, 674 s beside RR2 + two lanes); 362/358 since ENGINE-6 (push #29). Re-count with `ctest -N` and
+i.e. 354/354 effective. Zero retries on #24, #26, #27, #29 and #30 (508-579 s quiet, 674 s beside RR2 + two lanes); 362/358 since ENGINE-6 (push #29), 363/359 since ENGINE-7 (push #31, 497 s quiet, zero retries). Re-count with `ctest -N` and
 `ctest -N -LE "^(benchmark|shadercache-attack)$" -E "^gi\.ddgi_raster$"` rather than
 trusting any number written here; suites are added most weeks.
 
