@@ -214,6 +214,56 @@ public:
     /// Drop the session registrations and sidecars of deletes that have now
     /// committed. Safe to call with an empty list.
     void applyAssetScrubs(const QVector<PendingAssetScrub> &pending);
+
+    // ---- DEFERRED ASSET DELETES (CLOSE-1) ---------------------------------
+    //
+    // A delete that nobody is waiting for, off the disk and off the hot path.
+    //
+    // THE INCIDENT (owner session 2026-09-14): closing the project blocked the
+    // UI thread for 33,156 ms. DeleteSceneNodeCommand's DESTRUCTOR finalises
+    // the asset row of a delete no undo can reach any more, and
+    // QUndoStack::clear() destroys the whole stack in one go — so a session of
+    // scripted spheres (64 per run, deleted and undone several times) turned
+    // one mouse click into hundreds of deleteAsset() calls, each one its own
+    // transaction, each transaction its own fdatasync. The stack was
+    //     ~DeleteSceneNodeCommand -> deleteAsset -> deleteAssetRow
+    //         -> DbTransaction::commit -> sqlite3PagerCommitPhaseOne -> fdatasync
+    // repeated once per command.
+    //
+    // THE RULE THIS ENCODES: a destructor must never do synchronous disk I/O,
+    // and clearing an undo stack must cost O(n) MEMORY, not O(n) syncs. The
+    // command now only ENQUEUES its guid here — an append to a QVector, no
+    // statement, no transaction, no sync — and one flush applies the whole
+    // batch inside ONE transaction, i.e. one commit and one sync for the lot.
+    //
+    // WHY A QUEUE AND NOT A SCOPE (the begin/endScrub alternative): a command
+    // dies at sites nobody can wrap — QUndoStack chopping the redo branch on
+    // the next push, the undo limit evicting the oldest command, ~QUndoStack
+    // itself. A scope would only cover the call site that opens it; a queue
+    // makes "this destructor touches no disk" a property of the DESTRUCTOR.
+    //
+    // SAFE TO DEFER, by nature: the row describes a scene node that is already
+    // gone from the document and from the user's view (the built-in
+    // primitives' Object rows), nothing reads it, and the flush points below
+    // cover every way the session can end. Worst case after a hard kill, the
+    // row outlives its node until the next delete flush — an invisible row,
+    // never a wrong answer.
+    //
+    // FLUSH POINTS (all of them, deliberately few): UndoService::clear() —
+    // the mass-death site, i.e. project close and new project — and
+    // closeDatabase(), which every exit path runs while the connection is
+    // still open (~MainWindow drains the stack itself, step 5 of the shutdown
+    // order, and the flush there is explicit as well).
+
+    /// Queue an asset row for deletion. Touches no disk: append only.
+    void enqueueAssetDelete(const QString &guid, bool force = false);
+    /// How many deletes are waiting (editor.undoState().pendingAssetDeletes).
+    int  pendingAssetDeleteCount() const { return pendingAssetDeletes.size(); }
+    /// Apply every queued delete in ONE transaction — one commit, one sync.
+    /// Returns the number of rows the flush processed. A closed connection or
+    /// an already-open outer transaction is not an error: nothing is applied,
+    /// the queue is KEPT and the next flush point takes it.
+    int  flushPendingAssetDeletes();
     /// Library visibility, written directly (the unlist half of the above and
     /// the re-list an import performs). False on an unknown guid.
     bool setAssetListed(const QString &guid, bool listed);
@@ -502,6 +552,15 @@ private:
 	QString version080SchemaDowngrade;
 
     QSqlDatabase db;
+
+    /// The deferred-delete queue (see enqueueAssetDelete). Guid + the hard
+    /// delete flag, in the order the commands died.
+    struct PendingAssetDelete
+    {
+        QString guid;
+        bool    force = false;
+    };
+    QVector<PendingAssetDelete> pendingAssetDeletes;
 };
 
 #endif // DATABASE_H

@@ -1060,6 +1060,13 @@ void MainWindow::setupServices()
     undoService->setStackMovedHook([this]() {
         if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->refreshFromDocument();
     });
+    // THE DEFERRED DATABASE WORK OF THE COMMANDS A CLEAR DESTROYS (CLOSE-1).
+    // A command's destructor queues its asset-row cleanup instead of writing
+    // it — one transaction for the whole stack, here, instead of one
+    // transaction and one fdatasync per command on the UI thread.
+    undoService->setDeferredFlushHook([this]() {
+        if (db) db->flushPendingAssetDeletes();
+    });
     if (sceneView) { sceneView->setServices(services); sceneView->setProject(project); }
     if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
     ThumbnailGenerator::getSingleton()->setProject(project);
@@ -5103,14 +5110,21 @@ MainWindow::~MainWindow()
 {
     JAH_SHUTDOWN_STEP(ShutdownOrder::WindowBody, "~MainWindow body");
 
-    // ORDER IS LOAD-BEARING. Undo commands write to the database when they die
+    // ORDER IS LOAD-BEARING. Undo commands owe the database work when they die
     // (DeleteSceneNodeCommand finalises the asset row once no undo can reach
     // the delete any more), and undoStack is parented to this window — so it
     // used to be destroyed AFTER this body, i.e. after closeDatabase(), and
     // every pending asset delete failed against a closed connection. Silently:
     // the SQLite driver's only complaint was "Parameter count mismatch" at
     // [info] level. Drain the stack here, while the connection is still open.
+    //
+    // Since CLOSE-1 the destructors only QUEUE that work (the quit path is the
+    // same freeze as the project close: hundreds of commands, hundreds of
+    // syncs), so the drain is followed by the one flush that applies it.
+    // closeDatabase() flushes too — this call is what makes the order above
+    // say what it means.
     if (undoStack) undoStack->clear();
+    if (db) db->flushPendingAssetDeletes();
 
     // The modules. They are plain heap objects the shell news up in
     // setupViewPort() and nothing ever deleted them (deep audit 2026-09,

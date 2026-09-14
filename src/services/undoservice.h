@@ -56,8 +56,23 @@ public:
     /// hook here rather than every command carrying a refresh of its own. Null
     /// in headless hosts and tests, where nothing is on screen to repaint.
     void setStackMovedHook(std::function<void()> hook) { mStackMoved = std::move(hook); }
+    /// What to run once the stack has been emptied, to apply the database
+    /// work the dying commands QUEUED instead of writing (CLOSE-1 —
+    /// Database::enqueueAssetDelete). A hook rather than a Database pointer
+    /// for the reason this whole class is QObject-free: nothing here may drag
+    /// Qt Sql and the data layer into the suites that compile it. Optional;
+    /// unset in headless hosts, which have no library to scrub.
+    void setDeferredFlushHook(std::function<void()> hook) { mDeferredFlush = std::move(hook); }
+
     /// Clears the stack — unless a script run's macro is open (the guard that
     /// used to be UiManager::scriptMacroOpen + clearUndoStack).
+    ///
+    /// THE COST OF A CLEAR IS MEMORY, NOT SYNCS (CLOSE-1): every command the
+    /// stack destroys here queues whatever database work its destructor owes
+    /// (Database::enqueueAssetDelete), and this function applies the whole
+    /// queue afterwards in ONE transaction. 300 delete commands used to cost
+    /// 300 transactions and 300 fdatasyncs on the UI thread — 33 s of frozen
+    /// window on the owner's session when a project was closed.
     void clear();
 
     bool isDirty() const;
@@ -135,6 +150,7 @@ private:
     int  mSavedCount = 0;
     bool mContentRepaired = false;
     std::function<void()> mStackMoved;
+    std::function<void()> mDeferredFlush;
 };
 
 #endif // UNDOSERVICE_H

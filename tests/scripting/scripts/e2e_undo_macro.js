@@ -106,4 +106,21 @@ assert(refusedGi, "world.gi with an unknown quality is refused");
 assert(pushes() === beforeRefused, "...records no step");
 assert(world.get().gi.updateBudget === budgetBefore, "...and rolled back the budget it had written");
 
+// ---- WHAT THE STACK OWES THE LIBRARY (CLOSE-1) -----------------------------
+//
+// A delete command finalises its asset row when it DIES, and it used to do that
+// with one transaction and one fdatasync each — closing the owner's project
+// froze the UI thread for 33,156 ms inside QUndoStack::clear(). The command now
+// queues the row and one flush applies the batch (the timing half is the
+// commands.undo_clear_cost suite). `editor.undoState().pendingAssetDeletes` is
+// that queue, and the rule it reports is the one a user can feel: a delete that
+// can still be UNDONE owes nothing at all.
+var owed = scene.addPrimitive("cube");
+var owedId = (typeof owed === "string") ? owed : owed.id;
+assert(editor.undoState().pendingAssetDeletes === 0,
+       "nothing is owed to the library before a delete");
+assert(node.remove(owedId), "the primitive is deleted");
+assert(editor.undoState().pendingAssetDeletes === 0,
+       "a delete that is still UNDOABLE queues nothing (its command is alive)");
+
 console.log("e2e_undo_macro: ALL OK");
