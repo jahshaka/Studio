@@ -1,0 +1,38 @@
+{
+  "framerate": 60,
+  "num_frames": 25,
+  "frame_activity": [
+    {
+      "frame_id": 0,
+      "camera_pos": [
+        0.0,
+        11.0,
+        11.0
+      ],
+      "camera_rot": [
+        0.92388,
+        -0.382683,
+        -0.0,
+        -0.0
+      ],
+      "fov_y_degrees": 45.0,
+      "screenshot_render_window": false
+    },
+    {
+      "frame_id": 20,
+      "camera_pos": [
+        0.0,
+        11.0,
+        11.0
+      ],
+      "camera_rot": [
+        0.92388,
+        -0.382683,
+        -0.0,
+        -0.0
+      ],
+      "fov_y_degrees": 45.0,
+      "screenshot_render_window": true
+    }
+  ]
+}

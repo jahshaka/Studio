@@ -74,12 +74,15 @@ var OGRE_ROOM_MATERIALS = {
     Cream: { baseColor: "#ffffff" }
 };
 
-function ogreRoomMaterial(id, which) {
+/// Their roughness is 0.65 in LocalCubemaps and 0.02 in ScreenSpaceReflections —
+/// the SAME room, polished, because a screen-space reflection needs a mirror to
+/// be visible in. It is the only material difference between those two samples.
+function ogreRoomMaterial(id, which, roughness) {
     var m = OGRE_ROOM_MATERIALS[which];
     return material.set(id, {
         baseColor: m.baseColor,
         workflow: "Specular",
-        roughness: 0.65,
+        roughness: roughness === undefined ? 0.65 : roughness,
         useFresnelColor: true,
         separateFresnel: false,
         fresnelColor: srgbHex(0.1, 0.1, 0.1) });
@@ -91,7 +94,7 @@ function ogreRoomMaterial(id, which) {
 /// in the room ever moves, so each carries mobility "static" — which is the
 /// classification the renderer reads to keep a room's stored lighting
 /// (REALTIME_REFLECTIONS_SPEC §3.3) and the honest answer for a wall.
-function ogreRoom() {
+function ogreRoom(roughness) {
     var ids = [];
     for (var i = 0; i < OGRE_ROOM_BOXES.length; ++i) {
         var b = OGRE_ROOM_BOXES[i];
@@ -101,7 +104,7 @@ function ogreRoom() {
             rotation: e,
             scale: { x: b.s[0], y: b.s[1], z: b.s[2] } });
         node.rename(id, "Room" + (i < 10 ? "0" : "") + i + "_" + b.m);
-        assert(ogreRoomMaterial(id, b.m), "room box " + i + ": " + b.m);
+        assert(ogreRoomMaterial(id, b.m, roughness), "room box " + i + ": " + b.m);
         node.setProperty(id, "mobility", "static");
         ids.push(id);
     }

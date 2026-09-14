@@ -1,0 +1,17 @@
+# compare_ogre.sh reads this: <SampleName>TAB<the divergence the contact sheet must caption>.
+# One line per port, and it is the SAME sentence the tile carries in src/services/ogresamples.cpp
+# (spec §3 "tile label"). A picture with no caption is how a known, accepted divergence becomes
+# a bug report.
+PbsMaterials	3 of their 6 BRDF names exist here; their palette reflects a cubemap from their media, ours reflects the sky; their grid spins, a saved scene stands still.
+LocalCubemaps	Probe placement is grid-only, and probes are REFUSED in this room today (our enclosure rule reads a wall of four panels as open). Their camera pose is inside the far wall, so the port saves the pose their source carries commented out.
+Refractions	Nothing structural. Their render-queue ordering has no verb here and needs none.
+Hdr	Their four exposure presets are a keyboard cycle; this port IS the first one (bright sunny day). Their HDR sky colour is above 1.0, which a picked colour cannot be, so the port uses the realistic sky.
+AreaApproxLights	Area lights never cast shadows, on either side. Their emitter quads are not drawn here; the mask is ours, not their generated one.
+IesProfiles	Their three profiles are Ogre's media; these three are ours (narrow beam, wide flood, batwing). Binding a profile re-calibrates by peak candela here, so the four lights differ in SHAPE only, and the port photographs the wall rather than their eye-level pose.
+ShadowMapFromCode	Our shadow node is fixed; theirs is authored per sample. Their PCF/ESM kernel names are our softness vocabulary (PCF -> Soft).
+PlanarReflections	Their perfect mirror is an unlit datablock sampling the reflection RTT; ours is a lit, fresnel-weighted PBR surface, so it is less mirror-perfect at grazing angles.
+ScreenSpaceReflections	Their live roughness keys are a material row here. The room's probes are refused (see Local Cubemaps); SSR is screen-space and needs none.
+Tutorial_SSAO	Their SSAO uniforms are compositor-side; ours are two scene numbers (reach and power) plus an on/half/off row.
+Tutorial_SMAA	Offscreen screenshots here are 1x MSAA BY DESIGN, so our tile is the un-antialiased frame SMAA is there to rescue. Compare on-screen against on-screen, never across.
+Decals	Their decal images are their media; ours are our brick maps. Their wire AABB is drawn only on selection here.
+ImageVoxelizer	A TECHNIQUE COMPARISON, NOT A PICTURE ONE: their sample voxelizes imported Ogre meshes, which we deliberately cannot read. The port puts a primitive Cornell box in the shared room under voxel cone tracing, so what lines up is the bounce, not the geometry.

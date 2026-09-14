@@ -32,7 +32,6 @@
 var TREE = "@TREE@";
 var ARCHIVE = TREE + "/scenes/ogre/Refractions.zip";
 var PREVIEW = TREE + "/scenes/ogre/preview/refractions.png";
-var BUMP = TREE + "/app/content/materials/presets/stone/Stone_04_UV_H_CM_1_NRM.png";
 
 assert(project.create("Refractions").length > 0, "created the project");
 
@@ -50,7 +49,7 @@ assert(world.override({ id: "refractions", value: "on" }).valueId === "on",
 // The one texture this port imports: a normal map for the glass wall, so the
 // refraction has something to bend (their comment: "assign a normal map so the
 // refractions are much more visually pleasing (and obvious)").
-var bump = assets.importFile(BUMP);
+var bump = ogreTex("stone_normal");
 assert(bump && bump.length > 10, "imported the wall's normal map -> " + bump);
 
 // ---- the refractive wall --------------------------------------------------

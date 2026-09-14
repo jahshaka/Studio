@@ -1,0 +1,14 @@
+IESNA:LM-63-1995
+[TEST] Jahshaka synthetic photometry - batwing
+[TESTLAB] none - this file is authored, not measured
+[MANUFAC] Jahshaka
+[LUMCAT] JAH-BATWING-55
+[DESCRIPTION] A batwing: dark straight down, peaking at 50-60 degrees off axis.
+[MORE] The shape that lights a wall evenly instead of burning a pool at the foot
+[MORE] of the pole - the reason IES profiles exist. Authored, not measured.
+TILT=NONE
+1 1000 1 19 1 1 2 0 0 0
+1 1 60
+0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180
+0
+120 150 260 470 760 1000 980 700 300 40 0 0 0 0 0 0 0 0 0
