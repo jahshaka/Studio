@@ -27,9 +27,7 @@
 // engine, and the contract is the pair.
 #include <QGuiApplication>
 #include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <thread>
 #include <cstdio>
 
 #include "irisgl/core/math/quat.h"
@@ -603,11 +601,21 @@ int main(int argc, char **argv)
               "intensity: the grid catches up, then idles");
     }
 
-    // ---- a drag that PAUSES for 250 ms (P6, scenemirror.h kGiStableMs) ---------
-    // The stability window fires on 15 still frames OR 250 ms of stillness,
-    // whichever comes first, so a user who stops moving for a quarter of a
-    // second mid-gesture gets a full re-solve mid-drag. That re-solve used to
-    // capture the whole grid in one frame; now it is spread like any other.
+    // ---- a drag that PAUSES mid-gesture (P6, scenemirror.h kGiStableFrames) ---
+    // The stability window fires on kGiStableFrames still frames, so a user who
+    // stops moving mid-gesture for that long gets a full re-solve mid-drag. That
+    // re-solve used to capture the whole grid in one frame; now it is spread
+    // like any other.
+    //
+    // THE PAUSE IS COUNTED IN FRAMES, NOT MILLISECONDS (COLDGI-1, 2026-09-15).
+    // This case used to sleep 120 ms between five frames so that the settle's
+    // OTHER arm — a 250 ms wall clock — was what fired, and that is exactly the
+    // arm that has been deleted: it made the NUMBER of GI re-solves, and
+    // therefore the picture, a function of how fast the machine rendered
+    // (threading.mode_pixels caught it as two halves of one comparison running
+    // different GI histories). The claim this case protects is unchanged and is
+    // still measured: a re-solve that fires MID-DRAG is spread over the budget
+    // instead of capturing the whole grid in one frame.
     {
         const quint64 before = mirror.giRefreshCount();
         int worst = 0;
@@ -620,11 +628,11 @@ int main(int argc, char **argv)
         };
         dragFrames(10, 0.0f);
         const quint64 beforePause = mirror.giRefreshCount();
-        // THE PAUSE: the object holds still and frames keep coming, slowly —
-        // 120 ms apart, so the 250 ms clock (not the 15-frame count) is what
-        // fires the re-solve.
-        for (int f = 0; f < 5; ++f) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(120));
+        // THE PAUSE: the object holds still while frames keep coming. Long
+        // enough to cross the stability window (15) and no longer, so exactly
+        // one re-solve fires and the drag below is genuinely a SECOND gesture
+        // rather than a continuation of a settle that never fired.
+        for (int f = 0; f < 16; ++f) {
             frame();
             worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
         }
@@ -637,7 +645,7 @@ int main(int argc, char **argv)
         std::printf("   paused drag: re-solves in the pause = %llu, total = %llu, worst frame "
                     "captured %d\n", (unsigned long long)pauseSolves,
                     (unsigned long long)(mirror.giRefreshCount() - before), worst);
-        CHECK(pauseSolves == 1, "paused drag: the 250 ms pause fires one mid-drag re-solve");
+        CHECK(pauseSolves == 1, "paused drag: the still frames fire one mid-drag re-solve");
         CHECK(worst <= kAllowed,
               "paused drag: no frame of the gesture captures more than budget + dynamic probes");
         CHECK(escene->giStatus().staleProbes == 0 && worstCaptures(20) == 0,
