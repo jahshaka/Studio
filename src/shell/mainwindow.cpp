@@ -2547,8 +2547,8 @@ void MainWindow::setupDockWidgets()
     // AND THE EDITOR OPENS ON ASSETS. tabifyDockWidget leaves the dock it
     // inserted LAST in front, which would hand a fresh profile the Timeline —
     // a panel most sessions never touch — in front of the asset browser every
-    // session starts in. (A restored layout carries the user's own front tab
-    // and is applied after this.)
+    // session starts in. (The restored layout below carries the user's LAST
+    // front tab; it is raised again after that restore — see there.)
     assetDock->raise();
 
     // ...and the USER's layout on top of it, if there is one. The docks belong
@@ -2562,6 +2562,13 @@ void MainWindow::setupDockWidgets()
     // A saved dock layout carries the dock-area CORNERS: restoring one saved
     // before the corner rule would put the default corner back. Re-assert it.
     viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
+    // EVERY SESSION STARTS IN THE ASSET BROWSER (owner, 2026-09-15, ledger
+    // §351). The restored blob carries whichever bottom tab was in front when
+    // the last session ended — the Timeline, or the Console after a Ctrl+` —
+    // and which tab is in front is SESSION state, not a preference: within a
+    // session it still persists across space switches (SPACE-2), but a launch
+    // raises Assets over whatever the blob remembered.
+    assetDock->raise();
     // A dock closed from its own title bar is a dock the user closed: the
     // Close event goes into `widgetStates` (see eventFilter), so the panel
     // stays closed across space switches and the Toggle Widgets dialog agrees.

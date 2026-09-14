@@ -301,7 +301,7 @@ static void testWorldModeOwnership()
     worldmodes::setMode(s, worldmodes::Mode::Low);
     CHECK(giMode(s) == 2 && giQuality(s) == 1,
           "and World Low did NOT switch it off — the pin won");
-    CHECK(s->antiAliasing == 1 && s->shadowResolution == 512,
+    CHECK(s->antiAliasing == 2 && s->shadowResolution == 512,
           "while the unpinned world rows followed Low");
 }
 

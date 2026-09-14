@@ -86,8 +86,9 @@ void photonColumns(Row &r, int column)
 
 /// The four tier columns, in order: Low, Medium, High, Epic.
 /// Values and reasons come from POST_CHAIN_SPEC.md §9.3, with two documented
-/// departures: hardware MSAA is 1x in every tier (it cannot be combined with the
-/// post chain — see that row), and screen-space reflections are DECLARED but not
+/// departures: hardware MSAA is 2x in every tier (the scene under the post chain
+/// renders at 1x regardless — see that row — so 2x buys the helpers' and the
+/// chain-off scenes' edges for a cost below measurement), and screen-space reflections are DECLARED but not
 /// yet served, the same contract shape planar reflections used before its lane
 /// landed. A row that silently does nothing is worse than a row that says so.
 ///
@@ -114,18 +115,23 @@ QVector<Row> buildRows()
                       { QStringLiteral("2x"),  QStringLiteral("2x"),  2 },
                       { QStringLiteral("4x"),  QStringLiteral("4x"),  4 },
                       { QStringLiteral("8x"),  QStringLiteral("8x"),  8 } };
-        // 1x in every tier, and that is a FORCED choice, not a taste one: with
-        // the post chain on, hardware MSAA either crashes the driver (HDR) or
-        // renders black (ambient occlusion) — both reproduced in tests/engine.
-        // The chain renders at 1x regardless of what is asked here, so a tier
-        // that asked for 4x would be paying for a multisampled window that does
-        // nothing. Anti-aliasing comes from SMAA instead; MSAA stays available
-        // as a row for scenes that run with the chain off.
-        r.tier[0] = 1; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
+        // 2x in every tier (owner, 2026-09-15, ledger §339, on DEFAULTS-1's
+        // measurement). What the number CAN and CANNOT do: with the post chain
+        // on, hardware MSAA either crashes the driver (HDR) or renders black
+        // (ambient occlusion) — both reproduced in tests/engine — so the chain
+        // renders the SCENE at 1x regardless of what is asked here and SMAA
+        // smooths its edges. What a multisampled window still anti-aliases is
+        // everything drawn INTO the window outside the chain: the gizmos, the
+        // light wires and the helpers (measured: 1x vs 2x at Epic moves only
+        // the helper-wire pixels), and the whole scene at Low, which runs with
+        // the chain off and had no anti-aliasing at all at 1x. 2x costs below
+        // the rig's noise on the target GPU; 4x/8x stay a user's choice.
+        r.tier[0] = 2; r.tier[1] = 2; r.tier[2] = 2; r.tier[3] = 2;
         r.cost = QStringLiteral("Hardware edge smoothing. Costs render-target memory and "
                                 "bandwidth in proportion to the sample count, and the driver may "
-                                "clamp the request. IGNORED while HDR or ambient occlusion is on "
-                                "— those use SMAA instead.");
+                                "clamp the request. While HDR or ambient occlusion is on the "
+                                "scene itself renders at 1x and SMAA smooths it; the gizmos, "
+                                "light wires and helpers still get this sample count.");
         r.get = [](const iris::ScenePtr &s) { return s->antiAliasing; };
         r.set = [](const iris::ScenePtr &s, int v) { s->antiAliasing = v; };
         out.append(r);

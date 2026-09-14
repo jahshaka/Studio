@@ -58,7 +58,7 @@ assert(fresh.hdr.value === 1, "Epic turns HDR on");
 // Hardware MSAA is 1x in EVERY tier: with the post chain on it either crashes
 // the driver (HDR) or renders black (ambient occlusion), both reproduced in
 // tests/engine. SMAA does the anti-aliasing instead.
-assert(fresh.msaa.value === 1, "Epic leaves hardware MSAA off: " + fresh.msaa.valueId);
+assert(fresh.msaa.value === 2, "Epic asks for 2x MSAA (the helpers' edges; the chain renders the scene at 1x): " + fresh.msaa.valueId);
 // AND THAT 1 IS THE TIER'S, NOT THE DOCUMENT'S. iris::Scene's own default is 2x
 // MSAA (owner 2026-09-15) — what a scene renders at when no tier has decided,
 // which is the chainless case where hardware MSAA is the only anti-aliasing
@@ -81,7 +81,7 @@ assert(fresh.refractions.valueId === "auto", "Epic sets refractions to Auto");
 // ---- applying a tier writes THROUGH to the backing fields -------------------
 assert(world.mode({ mode: "low" }) === "low", "world.mode({mode:'low'})");
 var s = world.settings();
-assert(s.msaa.value === 1, "Low sets MSAA off: " + s.msaa.valueId);
+assert(s.msaa.value === 2, "Low sets MSAA to 2x (the chain is off there — real anti-aliasing): " + s.msaa.valueId);
 assert(s.hdr.value === 0, "Low turns HDR off");
 assert(s.ssao.valueId === "off", "Low turns ambient occlusion off");
 assert(s.refractions.valueId === "off", "Low turns refractions off");
@@ -95,7 +95,7 @@ assert(world.get().shadowResolution === 512, "world.get().shadowResolution follo
 
 assert(world.mode({ mode: "epic" }) === "epic", "world.mode({mode:'epic'})");
 s = world.settings();
-assert(s.msaa.value === 1, "Epic leaves hardware MSAA off: " + s.msaa.valueId);
+assert(s.msaa.value === 2, "Epic asks for 2x MSAA again: " + s.msaa.valueId);
 // EPIC'S RETUNED ROWS (fps audit F6, perf wave 2026-09-06): the three
 // heavyweights that were not earning their cost. Everything else about Epic is
 // unchanged, which is what the assertions around these pin.
@@ -110,14 +110,14 @@ assert(world.get().antiAliasing === 1, "the backing field followed Epic too (MSA
 assert(world.get().shadowResolution === 2048, "and Epic's shadow atlas landed in the field");
 
 // ---- a pin survives a mode switch -------------------------------------------
-var pinned = world.override({ id: "msaa", value: "2x" });
-assert(pinned.value === 2 && pinned.source === "override", "world.override pins MSAA to 2x");
+var pinned = world.override({ id: "msaa", value: "4x" });
+assert(pinned.value === 4 && pinned.source === "override", "world.override pins MSAA to 4x");
 assert(world.get().antiAliasing === 2, "the pin wrote through to the backing field");
-assert(pinned.tierValue === 1, "the row still reports what Epic would give it");
+assert(pinned.tierValue === 2, "the row still reports what Epic would give it");
 
 world.mode({ mode: "low" });
 s = world.settings();
-assert(s.msaa.value === 2, "the pin SURVIVED the switch to Low: " + s.msaa.valueId);
+assert(s.msaa.value === 4, "the pin SURVIVED the switch to Low: " + s.msaa.valueId);
 assert(s.msaa.source === "override", "and still reports itself as pinned");
 assert(s.shadowResolution.value === 512, "unpinned rows still follow the new tier");
 
