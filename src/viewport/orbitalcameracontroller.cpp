@@ -39,11 +39,6 @@ OrbitalCameraController::OrbitalCameraController(IEditorViewport* sceneWidget)
 	this->sceneWidget = sceneWidget;
 }
 
-iris::CameraNodePtr OrbitalCameraController::getCamera()
-{
-    return camera;
-}
-
 /**
  * Adopts a camera: derives the pivot and the (yaw, pitch) the arcball steers
  * with. DECOMPOSE ONLY, never write — see EditorCameraController::setCamera for
@@ -54,7 +49,9 @@ iris::CameraNodePtr OrbitalCameraController::getCamera()
  */
 void OrbitalCameraController::setCamera(iris::CameraNodePtr  cam)
 {
-    this->camera = cam;
+    // One `camera`, the base's — this class shadowed it too (see
+    // EditorCameraController::setCamera for what that cost).
+    CameraControllerBase::setCamera(cam);
 
     // The pivot and the (yaw, pitch) the arcball steers with — the SHARED
     // decomposition every preview surface uses too (viewport/previeworbit.h).
@@ -96,16 +93,16 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		navigated = true;
 	}
 	else if (!previewMode && !locked && altOrbit && leftMouseDown) {
-		// Alt+LMB orbit: the arcball already orbits — just route Alt+LMB
-		// into the same branch, around the pivot the viewport handed us
-		// (the selection's centre).
-		yaw = targetYaw;
-		pitch = targetPitch;
-		this->yaw   += x * rotationSpeed;
-		this->pitch += y * rotationSpeed;
-		targetYaw = yaw;
-		targetPitch = pitch;
-		navigated = true;
+		// ALT+LMB ORBITS THE POINT UNDER THE CURSOR (§353), and that is NOT a
+		// pose the arcball can express: its camera always looks exactly AT its
+		// pivot, so routing the gesture into its own orbit re-placed the camera
+		// on a sphere and centred the pivot on the first frame — the jump the
+		// owner reported. The shared rotation is used instead (it turns the
+		// camera's current offset by the drag's delta, leaving the picked point
+		// at the same pixel), and the arcball's state is re-derived from the
+		// resulting pose when the drag ends — see setAltOrbit below.
+		applyAltOrbit(x * rotationSpeed, y * rotationSpeed);
+		return;   // never also pan on the same drag, and never applyPose()
 	}
 	else if (!previewMode && !locked && rightMouseDown) {
 		// in case lerping is still in progress, match the values with their targets
@@ -141,13 +138,25 @@ void OrbitalCameraController::setAltOrbit(bool active, const iris::Vec3 &newPivo
 	// visibly TELEPORTED the camera on the following pan (caught by
 	// input.axis_view_lock, 2026-09-08). altOrbit itself stays armed, which is
 	// what keeps the same drag from falling through to the LMB pan.
-	if (!active || !camera || rotationLocked) return;
-	// Orbit around the requested point, keeping the camera where it is: the
-	// distance is re-derived so the first drag frame cannot jump.
-	pivot = newPivot;
-	distFromPivot = camera->getGlobalPosition().distanceToPoint(newPivot);
-	yaw = targetYaw;
-	pitch = targetPitch;
+	if (!camera || rotationLocked) return;
+	if (active) {
+		// The arcball's OWN state is left alone for the length of the drag: the
+		// orbit below writes the camera directly, and any pending lerp would
+		// fight it from update().
+		navPending = false;
+		return;
+	}
+	// THE DRAG IS OVER. The pose the orbit left is generally not one the
+	// arcball can describe (the camera no longer looks at its pivot), so its
+	// state is re-derived from that pose: the pivot moves onto the view ray at
+	// the distance the user was just orbiting at — the scale their next dolly
+	// and pan should work in — and yaw/pitch are read off the node.
+	// orbitmath::decompose is a pure READ, so nothing moves here.
+	distFromPivot = qMax(0.1f, camera->getGlobalPosition().distanceToPoint(altOrbitPivot));
+	orbitmath::decompose(camera, distFromPivot, pivot, pitch, yaw);
+	targetYaw = yaw;
+	targetPitch = pitch;
+	navPending = false;
 }
 
 bool OrbitalCameraController::canLeftMouseDrag()

@@ -35,9 +35,18 @@ DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, ir
 DeleteSceneNodeCommand::~DeleteSceneNodeCommand()
 {
     // The delete became permanent (no undo can reach it any more): now the
-    // asset row can go too.
+    // asset row can go too — QUEUED, never written here.
+    //
+    // A DESTRUCTOR MUST NOT TOUCH THE DISK (CLOSE-1, owner session
+    // 2026-09-14). This line used to call Database::deleteAsset, which is one
+    // transaction and therefore one fdatasync per command; QUndoStack::clear()
+    // destroys every command in one go, so closing a project after a session
+    // of scripted spheres froze the UI thread for 33,156 ms inside
+    // sqlite3PagerCommitPhaseOne. Enqueuing is an append to a vector, and
+    // UndoService::clear() applies the whole batch in ONE transaction
+    // afterwards (Database::enqueueAssetDelete explains the flush points).
     if (nodeDeleted && db && !assetGuid.isEmpty())
-        db->deleteAsset(assetGuid);
+        db->enqueueAssetDelete(assetGuid);
 }
 
 // `services` is null-checked (the headless-safe contract): scripts push these

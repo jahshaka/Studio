@@ -38,11 +38,6 @@ EditorCameraController::EditorCameraController(IEditorViewport* sceneWidget):
 	this->sceneWidget = sceneWidget;
 }
 
-CameraNodePtr EditorCameraController::getCamera()
-{
-    return camera;
-}
-
 /**
  * Adopts a camera: DECOMPOSE ONLY, never write.
  *
@@ -133,22 +128,22 @@ void EditorCameraController::pan(float angle)
  */
 void EditorCameraController::onMouseMove(int x,int y)
 {
-    // Alt+LMB orbit (Maya/Unreal): turn yaw/pitch like a look, then put the
-    // camera back on the orbit sphere so the pivot stays put on screen. The
-    // free camera keeps its own orientation model — this is a temporary
-    // orbit for the duration of the drag only.
+    // Alt+LMB orbit (Maya/Unreal), and it is a ROTATION of the camera's
+    // current offset from the pivot — never a re-placement on a sphere
+    // (cameracontrollerbase.h's setAltOrbit carries the maths and the owner
+    // report §353 it answers). The free camera keeps its own orientation
+    // model; this is a temporary orbit for the duration of the drag only.
     // THE AXIS-VIEW LOCK, gesture 1 of 2 (Alt+LMB orbit). Ignored outright in
     // an axis view: the drag turns nothing and pans nothing (canLeftMouseDrag
     // refuses while Alt is orbiting), which is Unreal's and Maya's answer.
     if (altOrbit && leftMouseDown && rotationLocked) return;
     if (altOrbit && leftMouseDown && camera) {
-        this->yaw += x / 10.0f;
-        this->pitch += y / 10.0f;
-        pitch = (pitch < -89.0f ? -89.0f : (pitch > 89.0f ? 89.0f : pitch));
-        const iris::Quat rot = iris::Quat::fromEulerAngles(pitch, yaw, 0);
-        camera->setLocalPos(altOrbitPivot + rot.rotatedVector(iris::Vec3(0, 0, 1)) * altOrbitDistance);
-        camera->setLocalRot(rot);
-        camera->update(0);
+        applyAltOrbit(x / 10.0f, y / 10.0f);
+        // The fly and the look continue from the pose the orbit left, so the
+        // controller's own (yaw, pitch) are re-read off the node — the same
+        // decomposition setCamera does, and just as read-only.
+        float roll = 0.0f;
+        camera->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
         return;   // never also pan/look on the same drag
     }
 
@@ -192,18 +187,6 @@ void EditorCameraController::onMouseMove(int x,int y)
     if (rightMouseDown && !rotationLocked) updateCameraRot();
 }
 
-void EditorCameraController::setAltOrbit(bool active, const iris::Vec3 &pivot)
-{
-	CameraControllerBase::setAltOrbit(active, pivot);
-	// LOCKED (an axis view): ignored, set-up included — see the arcball's
-	// setAltOrbit for why the SET-UP is the part that could still be felt.
-	if (!active || !camera || rotationLocked) return;
-	// Capture the orbit radius at drag start so the first frame cannot jump;
-	// a camera sitting exactly on the pivot gets a sane default distance.
-	altOrbitDistance = camera->getGlobalPosition().distanceToPoint(pivot);
-	if (altOrbitDistance < 0.001f) altOrbitDistance = 5.0f;
-}
-
 bool EditorCameraController::canLeftMouseDrag()
 {
 	// Alt+LMB orbits; it must not also pan in jahshaka mouse mode.
@@ -245,6 +228,39 @@ void EditorCameraController::onMouseWheel(int delta)
 		if (orthoZoom <= 0.1f) orthoZoom = 0.1f;
 		camera->setOrthagonalZoom(orthoZoom);
 	}
+}
+
+// THE HELD SET LIVES EXACTLY AS LONG AS THE RIGHT BUTTON (owner report
+// 2026-09-15, ledger §356: "the arrows stop flying after a console script run").
+//
+// THE DEFECT, measured by the rig: `heldKeys` was cleared in exactly ONE place —
+// the viewport's focusOutEvent — so a key that went in and never came out stayed
+// in for the rest of the session. It does not come out when Qt's XCB auto-repeat
+// classification misfires, and that classification is a LOOKAHEAD HEURISTIC over
+// the X queue which misfires in both directions once the UI thread stalls long
+// enough to back the queue up: a console script run of 3-20 seconds is exactly
+// that. Measured 1 stuck key in ~30 attempts. The symptom is silent — Left and
+// Right both in the set cancel to `move.isNull()` and no movement at all — and a
+// click INSIDE the viewport cures nothing (it is already focused, so there is no
+// focus event); only a click on another widget and back did.
+//
+// The cure is not to trust the classification more (that is the part that cannot
+// be trusted) but to bound the set's lifetime by the gesture that reads it:
+// update() looks at `heldKeys` only while the right button is down, so dropping
+// it on the button's way down AND on its way up is behaviour-neutral and leaves
+// no window in which a stale key can survive. The one corner it changes: a key
+// already physically held when the right button goes down is not flown until it
+// is pressed again — which is the correct reading of "the fly starts now".
+void EditorCameraController::onMouseDown(Qt::MouseButton button)
+{
+	CameraControllerBase::onMouseDown(button);
+	if (button == Qt::RightButton) clearKeys();
+}
+
+void EditorCameraController::onMouseUp(Qt::MouseButton button)
+{
+	CameraControllerBase::onMouseUp(button);
+	if (button == Qt::RightButton) clearKeys();
 }
 
 void EditorCameraController::onKeyPressed(Qt::Key key)
@@ -331,6 +347,17 @@ void EditorCameraController::updateCameraRot()
 void EditorCameraController::update(float dt)
 {
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
+
+    // NO SINGLE FLY STEP IS LONGER THAN kMaxFlyStep (ledger §356's collateral
+    // defect, measured on the rig): the host charges the WALL CLOCK of the
+    // frame just gone, and a UI-thread block — a console script run — hands the
+    // whole stall over as one dt. A fly key held across a 13 second block moved
+    // the camera 110 units in a single frame. The clamp lives here rather than
+    // at the call site because it is this controller's invariant and it has to
+    // hold for every caller of update(); the DOCUMENT clock still gets the real
+    // dt, so nothing else is slowed. The cost is stated: below 15 fps the fly
+    // moves at 15 fps's rate.
+    dt = qMin(dt, flystep::kMaxFlyStep);
 
     const iris::Quat rot = camera->getLocalRot();
     const iris::Vec3 forward = rot.rotatedVector(iris::Vec3(0, 0, -1));

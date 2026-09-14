@@ -260,6 +260,12 @@ bool Database::initializeDatabase(const QString &pathToBlob)
 
 void Database::closeDatabase()
 {
+    // LAST CHANCE for the deferred asset deletes (CLOSE-1): every exit path
+    // ends here with the connection still open — ~MainWindow drains the undo
+    // stack at step 5 and the CLI exits destroy the Database — and a queued
+    // row can only be written while there is a connection to write it with.
+    flushPendingAssetDeletes();
+
     // ORDER IS LOAD-BEARING. This used to read the name AFTER invalidating the
     // handle:
     //     db = QSqlDatabase();
@@ -1369,6 +1375,64 @@ bool Database::deleteAsset(const QString &guid, bool force)
     // The un-nested case: this call owns its transaction, so it also owns the
     // scrub (deleteAssetRow does it inline).
     return deleteAssetRow(guid, force, nullptr);
+}
+
+void Database::enqueueAssetDelete(const QString &guid, bool force)
+{
+    // NO DISK I/O HERE. This is called from a destructor (CLOSE-1 — see the
+    // header): an append to a vector is the whole of it, and the rows go at
+    // the next flush point in ONE transaction.
+    if (guid.isEmpty()) return;
+    pendingAssetDeletes.append(PendingAssetDelete{ guid, force });
+}
+
+int Database::flushPendingAssetDeletes()
+{
+    if (pendingAssetDeletes.isEmpty()) return 0;
+
+    // A closed connection cannot delete anything — and must not look like it
+    // did. Keep the queue: the only caller after a close is a later reopen,
+    // and a lost queue is a row that outlives its node for ever.
+    if (!db.isOpen()) {
+        iris::Logger::getSingleton()->warn(
+            QString("%1 deferred asset delete(s) could not be flushed: the database "
+                    "connection is CLOSED. The rows remain.")
+                .arg(pendingAssetDeletes.size()));
+        return 0;
+    }
+
+    // THE ONE TRANSACTION. Every queued row goes inside it, so the batch costs
+    // one commit and one fdatasync however long the queue is. Nested inside
+    // somebody else's transaction the guard degrades to a no-op — and riding a
+    // commit we do not control would apply the scrubs over rows an outer
+    // rollback could bring back, so we simply wait for the next flush point.
+    DbTransaction tx(db);
+    if (!tx.isActive()) return 0;
+
+    // Taken out of the member first: nothing below appends, but a failed
+    // commit has to put the whole batch back untouched.
+    QVector<PendingAssetDelete> batch;
+    batch.swap(pendingAssetDeletes);
+
+    QVector<PendingAssetScrub> scrubs;
+    int done = 0;
+    for (const PendingAssetDelete &item : batch)
+        if (deleteAssetRow(item.guid, item.force, &scrubs)) ++done;
+
+    if (!tx.commit()) {
+        // The guard rolled back: no row went, so no sidecar and no session
+        // registration may go either. Requeue and try at the next flush.
+        iris::Logger::getSingleton()->warn(
+            QString("The deferred asset-delete flush FAILED to commit — %1 row(s) kept.")
+                .arg(batch.size()));
+        pendingAssetDeletes = batch + pendingAssetDeletes;
+        return 0;
+    }
+
+    // Now the rows are durable — the only moment the in-memory catalog and the
+    // store may be scrubbed (the same rule the nested deletes follow).
+    applyAssetScrubs(scrubs);
+    return done;
 }
 
 void Database::applyAssetScrubs(const QVector<PendingAssetScrub> &pending)

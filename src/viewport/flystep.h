@@ -48,6 +48,14 @@ struct Keys
 /// Shift's multiplier on the fly speed (the editor's, shared).
 inline constexpr float kBoost = 3.0f;
 
+/// THE LONGEST STEP A FLY KEY MAY TAKE IN ONE FRAME, in seconds (ledger §356).
+/// The host charges the wall clock of the frame just gone, so a UI-thread block
+/// — a console script run of several seconds — arrives as a single enormous dt:
+/// measured, a key held across a 13 second block moved the camera 110 units in
+/// one frame. 1/15 s is the cap; the cost, stated, is that a viewport running
+/// below 15 fps flies at 15 fps's rate.
+inline constexpr float kMaxFlyStep = 1.0f / 15.0f;
+
 /// The world-space direction the held keys mean for a camera at `rot`, or a
 /// null vector when nothing is held. NORMALISED (diagonals do not go faster).
 inline iris::Vec3 direction(const iris::Quat &rot, const Keys &keys)

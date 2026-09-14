@@ -31,7 +31,7 @@ assert(view.width > 100 && view.height > 100,
 var corner = editor.gizmoHitTest(1, 1);
 assert(corner.tolerancePx > 0, "gizmoHitTest reports the pick tolerance (" +
        corner.tolerancePx + " px)");
-assert(corner.ring === null, "a viewport corner hits no ring (an explicit null, not undefined)");
+assert(corner.handle === null, "a viewport corner hits no ring (an explicit null, not undefined)");
 assert(corner.distancePx > corner.tolerancePx,
        "and reports how far the nearest ring is (" + corner.distancePx.toFixed(1) + " px)");
 
@@ -68,17 +68,22 @@ function ringsFrom(name, pos) {
     for (var y = cy - half; y <= cy + half; y += 6) {
         for (var x = cx - half; x <= cx + half; x += 6) {
             var r = editor.gizmoHitTest(x, y);
-            if (r.ring === null) continue;
+            if (r.handle === null) continue;
             hits++;
             if (r.distancePx > r.tolerancePx) overTolerance++;
-            found[r.ring] = (found[r.ring] || 0) + 1;
+            found[r.handle] = (found[r.handle] || 0) + 1;
         }
     }
     console.log("   " + name + ": x=" + (found.x || 0) + " y=" + (found.y || 0) +
-                " z=" + (found.z || 0) + " pixels (" + hits + " hits)");
+                " z=" + (found.z || 0) + " screen=" + (found.screen || 0) +
+                " pixels (" + hits + " hits)");
     assert(overTolerance === 0, name + ": every reported hit is inside the tolerance");
     assert((found.x || 0) > 5 && (found.y || 0) > 5 && (found.z || 0) > 5,
            name + ": ALL THREE rings are clickable");
+    // THE OUTER GREY RING IS A HANDLE TOO (GIZMO-1 item 2): it frames the
+    // three and turns the node about the view direction, and it answers from
+    // every camera — it is the one ring that is never edge-on.
+    assert((found.screen || 0) > 5, name + ": the outer screen ring is clickable");
 }
 
 // front / top / right each put two of the three rings EDGE-ON to the camera —
@@ -89,14 +94,42 @@ ringsFrom("right  (Y and Z edge-on)", { x: 9, y: 0, z: 0 });
 ringsFrom("ground (Y nearly edge-on)", { x: 7, y: 0.35, z: 7 });
 ringsFrom("iso",                       { x: 6, y: 6, z: 6 });
 
-// ---- the verb only speaks for the gizmo that picks this way ---------------
+// ---- THE TRANSLATE GIZMO'S PLANE HANDLES, in the real viewport ------------
+//
+// GIZMO-1 item 3 (owner report §346: "it helps with the spatial connection for
+// the user"). Three squares in the corners between the arrows, picked in pixels
+// like the rings. Same sweep, from an iso camera where all three face the
+// camera well enough to be drawn.
 assert(editor.setGizmoMode("translate"), "back to the translate gizmo");
-var translateProbe = editor.gizmoHitTest(view.width / 2, view.height / 2);
-assert(translateProbe.ring === null && translateProbe.distancePx < 0,
-       "gizmoHitTest answers null while the rotate gizmo is not the active one");
+assert(editor.setCamera({ position: { x: 6, y: 6, z: 6 }, lookAt: { x: 0, y: 0, z: 0 } }),
+       "iso camera for the plane handles");
+editor.frame(2);
+var planes = {}, planeHits = 0, planeOver = 0;
+var phalf = Math.min(view.width, view.height) * 0.45;
+for (var py = view.height / 2 - phalf; py <= view.height / 2 + phalf; py += 4) {
+    for (var px = view.width / 2 - phalf; px <= view.width / 2 + phalf; px += 4) {
+        var t = editor.gizmoHitTest(px, py);
+        if (t.handle === null) continue;
+        planeHits++;
+        if (t.distancePx > t.tolerancePx) planeOver++;
+        planes[t.handle] = (planes[t.handle] || 0) + 1;
+    }
+}
+console.log("   translate: xy=" + (planes.xy || 0) + " yz=" + (planes.yz || 0) +
+            " xz=" + (planes.xz || 0) + " x=" + (planes.x || 0) + " y=" + (planes.y || 0) +
+            " z=" + (planes.z || 0) + " center=" + (planes.center || 0) +
+            " (" + planeHits + " hits)");
+assert(planeOver === 0, "every reported plane hit is inside the tolerance");
+assert((planes.xy || 0) > 5 && (planes.yz || 0) > 5 && (planes.xz || 0) > 5,
+       "ALL THREE plane handles are clickable");
+assert((planes.x || 0) > 0 && (planes.y || 0) > 0 && (planes.z || 0) > 0,
+       "and the three arrows still answer beside them");
+var translateCorner = editor.gizmoHitTest(1, 1);
+assert(translateCorner.handle === null, "a viewport corner grabs no translate handle either");
+
 assert(editor.setGizmoMode("rotate"), "rotate gizmo back");
 editor.select(null);
 var noSelection = editor.gizmoHitTest(view.width / 2, view.height / 2);
-assert(noSelection.ring === null, "and null with nothing selected (no gizmo is drawn)");
+assert(noSelection.handle === null, "and null with nothing selected (no gizmo is drawn)");
 
 console.log("PASSED");

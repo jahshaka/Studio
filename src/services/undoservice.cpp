@@ -75,6 +75,11 @@ void UndoService::clear()
     // step instead, which is the scripting contract anyway.
     if (mScriptMacroOpen) return;
     mStack->clear();
+    // Every command that just died appended its asset-row cleanup instead of
+    // writing it (CLOSE-1). One transaction for the lot, here, where the
+    // clear's cost is already being paid — and where a failure has somewhere
+    // to be reported from.
+    if (mDeferredFlush) mDeferredFlush();
 }
 
 bool UndoService::isDirty() const
