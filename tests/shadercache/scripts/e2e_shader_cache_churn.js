@@ -51,6 +51,36 @@ for (var round = 0; round < 3; ++round) {
 world.clearOverrides();
 editor.frame(5, 1.0 / 60.0);
 step("cleared");
+
+// THE CHURN THAT ACTUALLY CROSSED THE LINE (lane shadercache-2, 2026-09-14).
+//
+// The rows above were the suspicion; the SKY is the measurement. Every sky
+// change re-captures the environment into a cube render target, and
+// HlmsPbs::preparePassHash hashes that target's NAME into the pass properties
+// (`target_envprobe_map`, OgreHlmsPbs.cpp:1813) — so a capture into a
+// FRESHLY NAMED cube mints a permanent entry in Hlms::mPassCache. Measured in a
+// live editor with the pass cache instrumented: one sky change, one entry,
+// every time. The owner's evening session reached 1847 of them, seven times
+// what the EIGHT BITS of the shader hash can address; past 256 the pass index
+// spills into the renderable field beside it and HlmsDiskCache::copyFrom
+// subscripts mRenderableCache out of range — the crash ogre-patch 0035 turned
+// into a skipped entry and a log line.
+//
+// 300 changes therefore crosses 256 on its own. A/B on this exact script:
+// before the fix (the capture cube named with processUniqueName) the engine
+// logs "has more than 256 distinct pass property combinations"; after it (a
+// RECYCLED name — irisgl EnginePrivate.h recycledName) it does not, and the
+// two assertions the driver makes about this run's output are what say so.
+var t0 = Date.now();
+for (var sky = 0; sky < 300; ++sky) {
+    world.sky("color", { color: { r: (sky * 7) % 255, g: (sky * 13) % 255,
+                                  b: (sky * 29) % 255 } });
+    editor.frame(2, 1.0 / 60.0);
+    if (sky % 100 === 99) step("sky " + sky);
+}
+console.log("CHURN sky captures 300 in " + (Date.now() - t0) + " ms");
+step("sky churn");
+
 console.log("CHURN steps " + steps);
 console.log("SHADERCACHE " + JSON.stringify(app.shaderCache()));
 app.quit();
