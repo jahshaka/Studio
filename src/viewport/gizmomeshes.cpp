@@ -301,7 +301,7 @@ iris::MeshPtr planeHandle(GizmoAxis axis)
 // ---- the drag marker (GIZMO-2 item 3) --------------------------------------
 // In handle-local units, where the axis ring is the unit circle: the hub is a
 // filled disc of kDragHubRadius in the ring's own plane, the arrow a thin shaft
-// from the hub's edge to kDragArrowHead ending in a cone that stops exactly ON
+// from the hub's edge to kDragHead ending in a cone that stops exactly ON
 // the ring. The shaft is the rings' own thickness so the marker reads as part
 // of the same drawing.
 namespace {
