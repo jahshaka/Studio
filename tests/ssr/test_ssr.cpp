@@ -1549,6 +1549,292 @@ int main()
 
     }
 
+    // ---- 14. A CURVED MIRROR FADES OUT WHERE THE TRACE CANNOT BE TRUSTED ---
+    //
+    // The owner's push #34 smoke, defect A: the Mirror Room's chrome sphere
+    // reflected the teapot as green shards and dots while SSR was on, and the
+    // same sphere with SSR OFF showed a clean parallax-corrected probe
+    // reflection. A screen-space trace has nothing useful to say about most of
+    // a sphere — the rays leave in every direction, most of them ask about
+    // geometry that is off screen, behind something, or seen edge-on — and the
+    // march used to hand every hit it got back at full confidence.
+    //
+    // THE FIXTURE is the smallest thing that reproduces it: a mirror SPHERE on
+    // a floor with three coloured emissive blocks around it, so the sphere's
+    // rays have both something to find and plenty of directions in which to
+    // find nothing. The measurement is the sphere's OWN disc, compared between
+    // SSR off and SSR on:
+    //
+    //   footprint   pixels where the two differ by more than 0.25 (of 1). This
+    //               is the shards: on a curved mirror the honest answer is the
+    //               probe/sky the surface already had, so a big footprint means
+    //               the screen overruled it with something it could not verify.
+    //   isolated    of those, the ones whose eight neighbours did NOT move.
+    //               A coherent reflection appearing is a patch; a shard is a
+    //               dot. This is the number the owner photographed.
+    //
+    // Both are asserted against the SAME scene rendered with SSR off, so the
+    // tolerance is not a picture taste — it is "how much of the sphere did the
+    // screen-space trace overrule".
+    //
+    // MEASURED ON THE BASE MEDIA (irisgl c4f7af5, the SSR-1 lane's base), this
+    // section is RED: **37.996 %** of the sphere overruled. With the lane's
+    // confidence terms (arrival angle, thickness margin, ray coherence, the
+    // borrow quorum — JahSsrRayMarch_ps.glsl and JahSsrResolve_ps.glsl) it is
+    // green at 0.000 %. The live proof at editor resolution is in
+    // spikes/ssr-1/FINDINGS.md: on the Mirror Room's sphere, 5.70 % of the
+    // region differed from the SSR-off picture by more than 32/255 before and
+    // 0.50 % after, with the gold torus going 1.61 % -> 0.001 %.
+    {
+        Scene *cs = engine->createScene("ssr-curved");
+        View  *cv = engine->createOffscreenView("ssr-curved", 256, 256, Colour(0.05f, 0.05f, 0.08f));
+        CHECK(cs && cv, "the curved-mirror fixture's scene and view exist");
+        if (cs && cv) {
+        cv->setScene(cs);
+        // AN ENVIRONMENT FOR THE SPHERE TO FALL BACK ON, and it has to be a real
+        // one: without it "SSR faded out" and "SSR was never there" are the same
+        // picture and the section measures nothing. The scene ambient is not
+        // enough — it is added AFTER the SSR composite (upstream's
+        // DoAmbientLighting) and a mirror with no reflection source renders
+        // BLACK, measured. The analytic sky is one line and binds a real IBL
+        // cubemap, which is exactly what the Mirror Room's sphere falls back to.
+        cs->setAmbient(Colour(0.30f, 0.30f, 0.35f), Colour(0.18f, 0.18f, 0.22f));
+        {
+            SkyDesc sky;
+            sky.mode = SkyMode::Atmosphere;
+            CHECK(cs->setSky(sky), "the curved fixture has a sky to fall back to");
+        }
+
+        PbrParams gp;
+        gp.albedo = Colour(0.55f, 0.55f, 0.55f);
+        gp.metalness = 0.1f;
+        gp.roughness = 0.6f;                      // matte: SSR cannot touch the floor itself
+        const NodeId gfloor = cs->createNode();
+        cs->attachMesh(gfloor, cs->createMesh(enginetest::unitCubeMesh()), cs->createPbrMaterial(gp));
+        enginetest::setNodeScale(cs, gfloor, Vec3(16.0f, 0.2f, 16.0f));
+        enginetest::setNodePosition(cs, gfloor, Vec3(0.0f, -0.1f, 0.0f));
+
+        PbrParams mp;
+        mp.albedo = Colour(1.0f, 1.0f, 1.0f);
+        mp.metalness = 1.0f;
+        mp.roughness = 0.03f;                     // the Mirror Room's own chrome ball
+        const NodeId ball = cs->createNode();
+        cs->attachMesh(ball, cs->createMesh(unitSphereMesh()), cs->createPbrMaterial(mp));
+        enginetest::setNodeScale(cs, ball, Vec3(3.0f, 3.0f, 3.0f));
+        enginetest::setNodePosition(cs, ball, Vec3(0.0f, 1.5f, 0.0f));
+
+        const Vec3 blockPos[3] = { Vec3(-2.6f, 0.8f, 2.2f), Vec3(2.6f, 0.9f, 1.4f),
+                                   Vec3(0.2f, 0.6f, 3.4f) };
+        const Colour blockCol[3] = { Colour(0.0f, 2.5f, 0.0f), Colour(2.5f, 0.0f, 0.0f),
+                                     Colour(0.0f, 0.0f, 2.5f) };
+        for (int i = 0; i < 3; ++i) {
+            PbrParams bp;
+            bp.albedo = Colour(0.05f, 0.05f, 0.05f);
+            bp.emissive = blockCol[i];
+            bp.roughness = 0.5f;
+            const NodeId b = cs->createNode();
+            cs->attachMesh(b, cs->createMesh(enginetest::unitCubeMesh()), cs->createPbrMaterial(bp));
+            enginetest::setNodeScale(cs, b, Vec3(1.1f, 1.1f, 1.1f));
+            enginetest::setNodePosition(cs, b, blockPos[i]);
+        }
+        enginetest::addDirectionalLight(cs, Vec3(-0.4f, -1.0f, -0.3f), 2.5f);
+        enginetest::testCameraLookAt(cv, Vec3(0.0f, 2.4f, 6.5f), Vec3(0.0f, 1.5f, 0.0f));
+
+        Image curvedOff, curvedOn;
+        PostFxDesc cfx;
+        cfx.allowOffscreen = true;
+        cv->setPostFx(cfx);                        // ssr == 0
+        render(engine.get(), 6);
+        CHECK(cv->readPixels(curvedOff), "curved fixture renders with SSR off");
+        cfx.ssr = 2;                               // full-resolution rays, the owner's row
+        cv->setPostFx(cfx);
+        render(engine.get(), 8);                   // the history needs a frame; give it several
+        CHECK(cv->readPixels(curvedOn), "curved fixture renders with SSR on");
+        if (envOn("JAH_SSR_DUMP")) {
+            writePpm(curvedOff, "ssr-curved-off.ppm");
+            writePpm(curvedOn, "ssr-curved-on.ppm");
+        }
+
+        // THE SPHERE'S DISC, in pixels, from where it was placed: centre (0,1.5,0)
+        // at radius 1.5 seen from (0,2.4,6.5). Measured rather than derived —
+        // the assertions below only need a window that is sphere and not floor.
+        const unsigned sx0 = 78, sx1 = 178, sy0 = 74, sy1 = 174;
+        unsigned moved = 0, isolated = 0, total = 0;
+        const auto delta = [&](unsigned x, unsigned y) {
+            const Colour a = curvedOff.at(x, y), b = curvedOn.at(x, y);
+            return std::max(std::max(std::fabs(a.r - b.r), std::fabs(a.g - b.g)),
+                            std::fabs(a.b - b.b));
+        };
+        for (unsigned y = sy0; y <= sy1; ++y)
+            for (unsigned x = sx0; x <= sx1; ++x) {
+                ++total;
+                if (delta(x, y) <= 0.25f) continue;
+                ++moved;
+                float nbr = 0.0f;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx)
+                        if (dx || dy) nbr = std::max(nbr, delta(x + dx, y + dy));
+                if (nbr <= 0.10f) ++isolated;       // a dot, not a patch
+            }
+        const float footprint = 100.0f * float(moved) / float(total);
+        const float isoPct    = 100.0f * float(isolated) / float(total);
+        std::printf("   curved mirror: footprint %.3f %% (%u px), isolated %.3f %% (%u px)\n",
+                    footprint, moved, isoPct, isolated);
+        CHECK_MSG(footprint < 1.5f,
+                  "a curved mirror keeps its probe reflection where the trace cannot be "
+                  "trusted (SSR overruled %.3f %% of the sphere, budget 1.5 %%)", footprint);
+        CHECK_MSG(isoPct < 0.10f,
+                  "no shards: SSR paints no isolated dots on a curved mirror "
+                  "(%.3f %%, budget 0.10 %%)", isoPct);
+
+        cv->setPostFx(PostFxDesc());
+        render(engine.get(), 2);
+        engine->destroyView(cv);
+        engine->destroyScene(cs);
+        }
+    }
+
+    // ---- 15. THE REFLECTION REPLACES THE ENVIRONMENT TERM, NEVER ADDS ------
+    //
+    // Defect C of the same smoke: "SSR roughly DOUBLES a mirror floor's metered
+    // brightness". The mechanism is upstream's composite, which chooses between
+    // two spellings on a DATABLOCK property (800.PixelShader_piece_ps.any,
+    // `hlms_use_ssr`):
+    //
+    //     @property( use_envprobe_map )   envColourS = lerp( envColourS, ssr, w )
+    //     @else                           envColourS += ssr * w
+    //
+    // The lerp is the physics — the probe and the screen are two estimates of
+    // ONE integral and `w` says how much of it the screen answered — and the
+    // add is a second copy of the same lobe. `use_envprobe_map` is raised only
+    // by a reflection cubemap or parallax-corrected probes, while the voxel
+    // cone's specular, the irradiance field and irradiance volumes all write
+    // envColourS without raising it. ogre-patch 0036 makes the composite the
+    // lerp unconditionally.
+    //
+    // THE FIXTURE is exactly that configuration: VCT global illumination, NO
+    // sky and NO probe grid, so the mirror floor's environment term is the
+    // voxel cone's specular and the material takes the second branch on
+    // unpatched media.
+    //
+    // THE MEASUREMENT IS A FOUR-WAY A/B, because no single picture can tell
+    // "the reflection arrived" from "the reflection arrived twice". Render the
+    // floor with VCT off and on, and each of those with SSR off and on:
+    //
+    //     vctAlone    = mean(VCT on,  SSR off) - mean(VCT off, SSR off)
+    //     vctWithSsr  = mean(VCT on,  SSR on)  - mean(VCT off, SSR on)
+    //
+    // `vctAlone` is what the voxel cone puts on the mirror. `vctWithSsr` is what
+    // it still puts there once the screen has answered for the same directions.
+    // REPLACE means the second is a fraction of the first — the part of the
+    // integral the screen could not answer, (1 - w). ADD means they are EQUAL,
+    // because the add branch lays the whole cone term on top of the reflection
+    // whatever the confidence was. So the assertion is a ratio, and it needs no
+    // knowledge of w, of the tonemap or of the fixture's absolute brightness.
+    //
+    // MEASURED on this fixture: 0.314 with patch 0036 against 0.753 without it
+    // — and the budget is halfway between them. The unpatched figure is not the
+    // 1.0 the arithmetic of `+=` implies because the numbers are read off the
+    // view's 8-BIT sRGB-ENCODED readback (this fixture has HDR off, so there is
+    // no film curve): the encode compresses the brighter (doubled) pixel more
+    // than the dimmer one and the result clips at 1.0. The raw radiance ratio is
+    // 1.0 by construction.
+    {
+        Scene *vs = engine->createScene("ssr-energy");
+        View  *vv = engine->createOffscreenView("ssr-energy", 256, 256, Colour(0.0f, 0.0f, 0.0f));
+        CHECK(vs && vv, "the energy fixture's scene and view exist");
+        if (vs && vv) {
+        vv->setScene(vs);
+        // NO SKY, deliberately: a sky binds an IBL cubemap, which raises
+        // use_envprobe_map and puts the material on the lerp branch — the very
+        // thing this section exists to measure the absence of.
+        vs->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.05f, 0.05f, 0.05f));
+
+        PbrParams fp;
+        fp.albedo = Colour(1.0f, 1.0f, 1.0f);
+        fp.metalness = 1.0f;
+        fp.roughness = 0.0f;
+        const NodeId efloor = vs->createNode();
+        vs->attachMesh(efloor, vs->createMesh(enginetest::unitCubeMesh()), vs->createPbrMaterial(fp));
+        enginetest::setNodeScale(vs, efloor, Vec3(12.0f, 0.2f, 12.0f));
+        enginetest::setNodePosition(vs, efloor, Vec3(0.0f, -0.1f, 0.0f));
+
+        PbrParams ep;
+        ep.albedo = Colour(0.05f, 0.05f, 0.05f);
+        ep.emissive = Colour(4.0f, 0.0f, 0.0f);
+        ep.roughness = 0.5f;
+        const NodeId eemit = vs->createNode();
+        vs->attachMesh(eemit, vs->createMesh(enginetest::unitCubeMesh()), vs->createPbrMaterial(ep));
+        enginetest::setNodeScale(vs, eemit, Vec3(1.5f, 1.5f, 1.5f));
+        enginetest::setNodePosition(vs, eemit, Vec3(0.0f, 2.2f, 0.0f));
+
+        enginetest::addDirectionalLight(vs, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+        enginetest::testCameraLookAt(vv, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
+
+        GiParams vct;
+        vct.mode = GiMode::Vct;
+        vct.quality = GiQuality::Medium;
+        vct.numBounces = 1;
+        const GiParams giOff;                      // mode Off
+
+        const auto shoot = [&](bool withVct, bool withSsr, Image &out, const char *what) {
+            CHECK(vs->setGlobalIllumination(withVct ? vct : giOff), what);
+            PostFxDesc d;
+            d.allowOffscreen = true;
+            d.ssr = withSsr ? 2 : 0;               // full-resolution rays, the owner's row
+            vv->setPostFx(d);
+            render(engine.get(), 10);              // the history needs several frames
+            CHECK(vv->readPixels(out), "readPixels");
+        };
+        Image noVctNoSsr, vctNoSsr, noVctSsr, vctSsr;
+        shoot(false, false, noVctNoSsr, "GI off, SSR off");
+        shoot(true,  false, vctNoSsr,   "VCT on, SSR off");
+        shoot(false, true,  noVctSsr,   "GI off, SSR on");
+        shoot(true,  true,  vctSsr,     "VCT on, SSR on");
+        if (envOn("JAH_SSR_DUMP")) {
+            writePpm(vctNoSsr, "ssr-energy-vct.ppm");
+            writePpm(vctSsr, "ssr-energy-vct-ssr.ppm");
+        }
+
+        // THE POPULATION: the floor pixels the SCREEN's reflection reached (the
+        // SSR-on/GI-off picture's own red footprint). Measuring anywhere else
+        // would be asking about pixels where SSR has no opinion and the two
+        // composites agree by construction.
+        double vctAlone = 0.0, vctWithSsr = 0.0;
+        unsigned n = 0;
+        for (unsigned y = noVctSsr.height / 2; y < noVctSsr.height; ++y)
+            for (unsigned x = 0; x < noVctSsr.width; ++x) {
+                const Colour a = noVctSsr.at(x, y), b = noVctNoSsr.at(x, y);
+                const float ssrRed = (a.r - std::max(a.g, a.b)) - (b.r - std::max(b.g, b.b));
+                if (ssrRed < 0.08f) continue;      // the screen reflects nothing here
+                const auto lum = [](const Colour &c) { return (c.r + c.g + c.b) / 3.0f; };
+                vctAlone   += lum(vctNoSsr.at(x, y)) - lum(noVctNoSsr.at(x, y));
+                vctWithSsr += lum(vctSsr.at(x, y))   - lum(noVctSsr.at(x, y));
+                ++n;
+            }
+        CHECK_MSG(n > 200u, "the screen's reflection has a measurable footprint (%u px)", n);
+        if (n > 200u) {
+            const float alone = float(vctAlone / n), with = float(vctWithSsr / n);
+            const float ratio = float(with / std::max(alone, 1e-6f));
+            std::printf("   energy: %u px; the voxel cone puts %.4f on the mirror alone, "
+                        "%.4f once SSR answered -> ratio %.3f\n", n, alone, with, ratio);
+            CHECK_MSG(alone > 0.01f,
+                      "the voxel cone really does light this mirror (%.4f), so the ratio "
+                      "below measures something", alone);
+            CHECK_MSG(ratio < 0.50f,
+                      "the reflection REPLACES the voxel-cone environment term rather than "
+                      "adding to it (%.3f of the cone's term survives where the screen "
+                      "answered; unpatched media measures 0.753 here)", ratio);
+        }
+
+        CHECK(vs->setGlobalIllumination(giOff), "GI off again for the teardown");
+        vv->setPostFx(PostFxDesc());
+        render(engine.get(), 2);
+        engine->destroyView(vv);
+        engine->destroyScene(vs);
+        }
+    }
+
     // ---- teardown with the chain live --------------------------------------
     // The ASan copy of this suite is what would catch a texture or node
     // definition the SSR shape leaks across a rebuild.
