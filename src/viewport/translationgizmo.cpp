@@ -33,7 +33,22 @@ For more information see the LICENSE file
 #include <QLineF>
 #include <cmath>
 
-#define CENTER_CIRCLE_RADIUS (0.015f)
+// THE CENTRE BALL'S PICK RADIUS, in units of gizmoScale — the ball is DRAWN at
+// kCoreSphere * handleScale = 0.10 * 0.05 = 0.005 of it, so this is twice its
+// drawn size (about a 19-pixel disc for a 9-pixel ball at the sizes
+// Gizmo::updateSize holds).
+//
+// It was 0.015 — THREE times the drawn ball — and GIZMO-2 item 1 made that
+// untenable: the plane frames' inner corner is the gizmo's ORIGIN now, so the
+// ball's sphere sits inside all three squares, and a ray cast at a square whose
+// diagonal runs towards the camera (the ground square from any 3/4 view is the
+// worst case: only 0.577 of its length survives the projection) passed within
+// 0.015 of the origin as far out as 0.52 of the square's 0.71 diagonal — the
+// ball swallowed most of every plane handle. At 0.010 the ball keeps the pixels
+// a user aims at its ball and the frames keep the rest of their area; the
+// crossover, and what it costs the worst-placed square, are printed by
+// gizmo.plane_handles section F.
+#define CENTER_CIRCLE_RADIUS (0.010f)
 
 TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 {
@@ -141,13 +156,16 @@ bool TranslationHandle::planeDistance(const QPointF& cursor, float& distancePx) 
 	const float scale = handleScale * gizmo->getGizmoScale();
 	if (!(scale > 0.0f)) return false;
 
-	// THE SQUARE AS IT IS DRAWN: gizmomeshes::planeHandle builds it from the
-	// same two axes and the same two offsets, under the same transform.
+	// THE SQUARE THE FRAME OUTLINES: gizmomeshes::planeHandle draws its four
+	// sides from the same two axes over the same [0, span], under the same
+	// transform — so the area measured here is the area the frame encloses,
+	// and a cursor INSIDE the frame is a hit at 0 px (GIZMO-2 item 1: "the
+	// frame is what is drawn, the plane is what is picked").
 	const iris::Mat4 t = gizmo->getTransform();
-	const float n = GizmoMeshes::kPlaneHandleNear, f = GizmoMeshes::kPlaneHandleFar;
+	const float f = GizmoMeshes::kPlaneHandleSpan;
 	const iris::Vec3 corners[4] = {
-		planeU * n + planeV * n, planeU * f + planeV * n,
-		planeU * f + planeV * f, planeU * n + planeV * f,
+		iris::Vec3(0, 0, 0),         planeU * f,
+		planeU * f + planeV * f,     planeV * f,
 	};
 	QPointF px[4];
 	for (int i = 0; i < 4; ++i)
@@ -454,10 +472,16 @@ bool TranslationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 // WHAT A PRESS GRABS, in three passes with an explicit precedence.
 //
 // CENTRE first (it always did: the smallest target, and it sits under
-// everything). Then the PLANE handles (GIZMO-1 item 3): a plane square is drawn
-// on top of the inner stretch of the two arrows it lies between, so a pixel
-// inside one is unambiguous — reaching for the square and getting an arrow is
-// the mistake this ordering prevents. Then the arrows, nearest first.
+// everything) — and since GIZMO-2 item 1 that matters more than it did: the
+// plane frames' inner corner is AT the origin, so the ball's pick sphere
+// (CENTER_CIRCLE_RADIUS * gizmoScale = 0.015, three times its drawn 0.005
+// radius) sits INSIDE all three squares and wins there, which is what keeps a
+// click on the white ball a click on the ball.
+//
+// Then the PLANE handles: each square spans [0, kPlaneHandleSpan] on its two
+// axes, so it now COVERS the inner quarter of the two arrows it lies between —
+// a press there grabs the plane, and each arrow keeps the outer 74 % of its
+// length (0.50..1.90 of 1.90) to itself. Then the arrows, nearest first.
 //
 // The arrows' pass also fixes a stale read that was there since 2016: `dist`
 // was measured from `hitPos`, the caller's OUT parameter, before this call had

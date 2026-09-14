@@ -1,6 +1,7 @@
 // Gizmo overlay through the engine: the translation gizmo draws on top, no GL, no window.
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
+#include <QPointF>
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -13,6 +14,7 @@
 #include "viewport/translationgizmo.h"
 #include "viewport/rotationgizmo.h"
 #include "viewport/scalegizmo.h"
+#include "viewport/gizmomeshes.h"
 #include "viewport/gizmooverlay.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
@@ -92,7 +94,15 @@ int main(int argc, char **argv)
     // picks no rotation rings. Given one, the three squares join the picture,
     // and the two that are EDGE-ON to this head-on camera stay out of it.
     {
-        gizmo.setPickView(cam, 128.0f, 128.0f);
+        // A BIGGER VIEW FOR THIS ONE CHECK (GIZMO-2 item 1): the plane handle is
+        // an OUTLINE now — four tubes drawn one pixel wide, like the rotation
+        // rings — so at 128x128, where the whole gizmo covers 28 pixels, the
+        // frame lands under half a pixel and blends away. 512 is the same
+        // picture with enough pixels in it to name a colour.
+        View *big = engine->createOffscreenView("gizmo-planes", 512, 512, Colour(0.1f, 0.1f, 0.1f));
+        big->setScene(target);
+        mirror.applyCamera(cam, big);
+        gizmo.setPickView(cam, 512.0f, 512.0f);
         gizmo.updateSize(cam);
         auto withPlanes = gizmo.drawItems(cam->getGlobalPosition(), iris::Vec3(0, 0, -1),
                                           iris::Vec3(0, 0, -1));
@@ -102,10 +112,31 @@ int main(int argc, char **argv)
                                       "squares are withheld");
         overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
         CHECK(overlay.visibleItems() == 5, "and the overlay shows all five");
+        Image bigImg;
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
-        view->readPixels(img);
-        CHECK(hasColour(img, 179/255.f, 135/255.f, 55/255.f),
+        big->readPixels(bigImg);
+        CHECK(hasColour(bigImg, 179/255.f, 135/255.f, 55/255.f),
               "the XY plane handle is on screen, in its two axes' mixed colour");
+        // AN OUTLINE, NOT A FILLED QUAD (owner §368): the middle of the square
+        // shows the scene behind it. The square spans [0, span] on x and y at
+        // this camera (which looks down -Z), so its centre projects to the
+        // pixel half a span out on each axis — inside the frame, and nothing of
+        // the gizmo is drawn there.
+        {
+            const float scale = gizmo.getGizmoScale() * 0.05f;
+            const iris::Vec3 mid(0.5f * GizmoMeshes::kPlaneHandleSpan * scale,
+                                 0.5f * GizmoMeshes::kPlaneHandleSpan * scale, 0.0f);
+            QPointF px;
+            const bool projected = gizmo.projectToPixel(mid, px);
+            const Colour c = projected ? bigImg.at(unsigned(px.x()), unsigned(px.y()))
+                                       : Colour(1, 1, 1);
+            std::printf("    the middle of the XY square reads %.0f %.0f %.0f (background is "
+                        "26 26 26)\n", c.r * 255, c.g * 255, c.b * 255);
+            CHECK(projected && isBg(c), "and it is an OUTLINE: the middle of the square is "
+                                        "the background, not the handle's colour");
+        }
+        mirror.applyCamera(cam, view);
+        engine->destroyView(big);
         // Back to the state the rest of the suite expects.
         gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
         overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
