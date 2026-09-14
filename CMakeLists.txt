@@ -326,6 +326,7 @@ set(SRCS
     src/ui/controls/dragspinbox.cpp 
     src/ui/controls/dragvaluewidgets.cpp
     src/ui/controls/rowfit.cpp
+    src/ui/controls/propertiestabstrip.cpp
     src/ui/panels/scenehierarchywidget.cpp 
     src/ui/panels/scenetreewidget.cpp
     src/viewport/cameracontrollerbase.cpp 

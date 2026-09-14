@@ -131,8 +131,6 @@ public:
 
     QTreeWidget *getWidget();
 
-	void selectNode(QString nodeId);
-
     /// Rebuilds the whole tree from the document. Public for the undo commands
     /// (reparent, folder edits) that change the document behind the widget's back.
     void repopulateTree();
@@ -168,6 +166,9 @@ public:
     /// Selects a SET of rows (service -> tree), current row = the primary
     /// (`nodes` first), scrolled into view, under the suppress guard.
     void setSelectedSet(const QList<iris::SceneNodePtr> &nodes);
+    /// Paint a set in the tree WITHOUT recording it as the editor's selection —
+    /// for this panel's own gestures, which paint first and announce after.
+    void paintSelection(const QList<iris::SceneNodePtr> &nodes);
 
     /// The visible rows, in draw order, node rows only (folder rows and the
     /// rows under a collapsed parent are not in it). The order the owner's
@@ -198,7 +199,26 @@ protected slots:
 	void attachAllChildren();
 	void detachFromParent();
 
-private:
+public:
+    /// WHAT A DROP OF `dragged` AT `pos` WOULD DO, and on which row. PUBLIC
+    /// because it is a pure query — the widget paints it (the drop indicator),
+    /// acts on it (the Drop handler) and ui.hierarchy_root asserts it. A drop
+    /// on the tree's empty area with no row answers Reparent (to the scene
+    /// root) for a nested node and ToRoot (leave the folder) for a filed
+    /// root-level one — the two duties the World row used to carry.
+    ///
+    /// The dragged set is a PARAMETER and not the member on purpose: the drop
+    /// handler has to take its own copy and clear the member before it does
+    /// anything else (a drop that repopulates the tree must not leave a stale
+    /// selection behind), and reading the member here silently answered "None"
+    /// for every drop — caught on the Xvfb rig, 2026-09-06, by a folder drop
+    /// that changed nothing.
+    SceneTreeWidget::DropHint dropHintAt(const QList<iris::SceneNodePtr> &dragged,
+                                         const QPoint &pos,
+                                         QTreeWidgetItem **rowOut = nullptr,
+                                         QString *folderOut = nullptr) const;
+
+protected:
     // ---- folders ----------------------------------------------------------
     iris::ScenePtr documentScene() const { return scene; }
     /// Applies `fn` (a folder edit on the scene) as ONE undo step and rebuilds.
@@ -214,18 +234,6 @@ private:
     /// Can this node be FILED at all? Folders organise the root level, so only
     /// a direct child of the world root can be in one (§6b, Unreal semantics).
     bool isFolderable(const iris::SceneNodePtr &node) const;
-    /// What a drop of `dragged` at `pos` would do, and on which row.
-    ///
-    /// The dragged set is a PARAMETER and not the member on purpose: the drop
-    /// handler has to take its own copy and clear the member before it does
-    /// anything else (a drop that repopulates the tree must not leave a stale
-    /// selection behind), and reading the member here silently answered "None"
-    /// for every drop — caught on the Xvfb rig, 2026-09-06, by a folder drop
-    /// that changed nothing.
-    SceneTreeWidget::DropHint dropHintAt(const QList<iris::SceneNodePtr> &dragged,
-                                         const QPoint &pos, QTreeWidgetItem **rowOut,
-                                         QString *folderOut) const;
-
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
     QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
@@ -254,11 +262,23 @@ private:
     bool announcingOwnSelection = false;
     /// Folder rows that were collapsed, so a repopulate does not expand them all.
     QStringList collapsedFolders;
-    /// The last set this panel announced (node ids, primary first). The tree's
-    /// selectionChanged fires for reasons that are not selection changes
-    /// (setCurrentItem, a rebuild, a row edit); without this the panel
-    /// re-announced the same set and every consumer rebuilt for nothing.
-    QList<qint64> lastAnnouncedSet;
+    /// THE SELECTION THIS PANEL BELIEVES THE EDITOR HOLDS (node ids, primary
+    /// first) — written by every leg, outbound AND inbound.
+    ///
+    /// It exists because one click on a row reaches announceSet() TWICE: Qt
+    /// fires itemSelectionChanged on the press (-> treeSelectionChanged) and
+    /// itemClicked on the release (-> treeItemSelected -> treeSelectionChanged),
+    /// and SelectionService re-emits on every replace, so an un-deduplicated
+    /// second announce rebuilds the whole properties column for nothing.
+    ///
+    /// It used to be written ONLY by announceSet ("the last set we announced"),
+    /// which made it LIE about any selection made anywhere else: after a
+    /// viewport pick, a script verb or a service call, the row this tree had
+    /// last announced was still in here, so clicking that row was swallowed as
+    /// a duplicate and the selection did not move — one, two, three clicks
+    /// (SPACE-3 diagnosis, 2026-09-15). The inbound legs (setSelectedNode,
+    /// setSelectedSet) now record what they were given, which is the truth.
+    QList<qint64> knownSelection;
 
 	void setItemVisible(QTreeWidgetItem *item, bool visible);
 	void lockItemAndChildren(QTreeWidgetItem* item);
@@ -298,12 +318,6 @@ private:
     /// Emits the set (or the single node) if it differs from the last one
     /// announced. THE panel's one exit toward the selection service.
     void announceSet(const QList<iris::SceneNodePtr> &nodes);
-    /// The World row's node (D6: never a member of a multi). Asked of THIS
-    /// panel's scene rather than of the node — SceneNode::isRootNode() answers
-    /// through the node's scene back-pointer, which a detached or
-    /// test-constructed document need not carry.
-    bool isWorldRoot(const iris::SceneNodePtr &node) const;
-
 public:
 
 signals:

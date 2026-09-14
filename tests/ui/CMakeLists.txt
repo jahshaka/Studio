@@ -534,8 +534,11 @@ jah_no_display(ui.panel_undo)
 #
 # Same slice, stubs and style as ui.selection_cost (the row minimums ARE style
 # metrics, so the theme has to be the real one). Offscreen, no display.
-add_executable(test_properties_width
-    test_properties_width.cpp
+# THE PROPERTIES PANEL'S SOURCE SET, shared by the two suites that build the
+# real panel offscreen (ui.properties_width measures its width, ui.properties_tabs
+# drives its World | Selection tabs). One list, so a new blade never makes one of
+# them link and the other not.
+set(JAH_PROPERTIES_PANEL_SOURCES
     test_stubs.cpp
     test_selection_stubs.cpp
     # The row-undo spine (debt L6): every panel row's gesture and the command it
@@ -571,6 +574,7 @@ add_executable(test_properties_width
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/propertiestabstrip.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
@@ -616,6 +620,10 @@ add_executable(test_properties_width
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+
+add_executable(test_properties_width
+    test_properties_width.cpp
+    ${JAH_PROPERTIES_PANEL_SOURCES})
 set_target_properties(test_properties_width PROPERTIES
     AUTOMOC ON
     AUTOUIC ON
@@ -638,6 +646,37 @@ add_test(NAME ui.properties_width COMMAND test_properties_width
 set_tests_properties(ui.properties_width PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.properties_width)
+
+# ui.properties_tabs — THE RIGHT COLUMN IS TWO TABS (lane RIGHT-TABS-1,
+# PROPERTY_FILTER_SPEC §2): World holds the eight world sections permanently and
+# Selection holds the selected object's, instead of one panel that changed shape
+# by whether the selected node was the root. The real panel, the real strip and
+# the real blades offscreen — the ui.properties_width shape, same source set.
+add_executable(test_properties_tabs
+    test_properties_tabs.cpp
+    ${JAH_PROPERTIES_PANEL_SOURCES})
+set_target_properties(test_properties_tabs PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_properties_tabs PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_properties_tabs PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_properties_tabs
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+jah_document_graph(test_properties_tabs)
+add_test(NAME ui.properties_tabs COMMAND test_properties_tabs
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.properties_tabs PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.properties_tabs)
 
 
 # ui.project_tile — THE OPEN PROJECT'S DARK BLUE CAPTION BAR (owner request
@@ -812,6 +851,99 @@ add_test(NAME ui.tree_scroll COMMAND test_tree_scroll
 set_tests_properties(ui.tree_scroll PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.tree_scroll)
+
+# ui.tree_reselect — THE ROW THE TREE LAST ANNOUNCED IS STILL CLICKABLE after a
+# selection made anywhere else (lane RIGHT-TABS-1, SPACE-3 diagnosis /
+# MASTER_QUEUE §311: "clicking an item often needs two or three clicks"). Same
+# widget, same stubs and the same offscreen QTest clicks as ui.tree_scroll; what
+# it pins is announceSet's deduplication cache — one announce per click, and the
+# cache written by the INBOUND legs so it can never go stale.
+add_executable(test_tree_reselect
+    test_tree_reselect.cpp
+    test_tree_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/reparentscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/scenefoldercommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_tree_reselect PROPERTIES
+    AUTOMOC ON AUTOUIC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_tree_reselect PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_tree_reselect PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_tree_reselect
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)
+jah_document_graph(test_tree_reselect)
+add_test(NAME ui.tree_reselect COMMAND test_tree_reselect
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.tree_reselect PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.tree_reselect)
+
+# ui.hierarchy_root — THE WORLD ROW IS GONE FROM THE OUTLINER (lane
+# RIGHT-TABS-1, PROPERTY_FILTER_SPEC §4): the tree's top level is the scene's
+# root level, the root's drop and menu duties moved to the tree's empty area,
+# and the accidental "unlock everything" lock click died with the row. Same
+# widget, stubs and offscreen QTest clicks as ui.tree_scroll.
+add_executable(test_hierarchy_root
+    test_hierarchy_root.cpp
+    test_tree_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/reparentscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/scenefoldercommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_hierarchy_root PROPERTIES
+    AUTOMOC ON AUTOUIC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_hierarchy_root PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_hierarchy_root PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_hierarchy_root
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)
+jah_document_graph(test_hierarchy_root)
+add_test(NAME ui.hierarchy_root COMMAND test_hierarchy_root
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.hierarchy_root PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.hierarchy_root)
 
 # ui.column_law — S1: every page's columns are the editor's columns, and the
 # console is a TAB of the editor's bottom tray. Spawns the REAL binary and

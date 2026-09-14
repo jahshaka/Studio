@@ -121,6 +121,38 @@ int main(int argc, char **argv)
     CHECK(sameLeft, "every page's LEFT column is the same width");
     CHECK(sameRight, "every page's RIGHT column is the same width");
 
+    // ---- 1b. the right column's TAB BAR (lane RIGHT-TABS-1) ----------------
+    //
+    // The Properties dock carries a World | Selection tab bar above its scroll
+    // area (PROPERTY_FILTER_SPEC §2). It is a SIBLING of the scroll area, so it
+    // counts against the column's width — which is why the width assertions
+    // above are the tab bar's law too: a bar that could not shrink would show
+    // up there as a right column that no longer opens at rightColumnWidth or no
+    // longer floors at rightColumnMin. What is left to assert is that the bar
+    // is really there and really switches, on the laid-out window.
+    mcp.runScript(QStringLiteral("app.space('editor')"));
+    settle(mcp);
+    {
+        const QJsonObject world =
+            readObject(mcp, QStringLiteral("editor.propertiesTab({tab:'world'})"));
+        CHECK(world.value("tab").toString() == QLatin1String("world"),
+              "the right column's World tab comes to the front on request");
+        const QJsonObject selection =
+            readObject(mcp, QStringLiteral("editor.propertiesTab({tab:'selection'})"));
+        CHECK(selection.value("tab").toString() == QLatin1String("selection"),
+              "…and the Selection tab does");
+        const QJsonObject read = readObject(mcp, QStringLiteral("editor.propertiesTab()"));
+        CHECK(read.value("tab").toString() == QLatin1String("selection"),
+              "…and reading it back gives the tab that is showing");
+        // A PICK raises Selection; naming the ROOT raises World — the rule the
+        // World row in the Hierarchy used to carry.
+        mcp.runScript(QStringLiteral("editor.propertiesTab({tab:'selection'})"));
+        const QJsonObject rootPick = readObject(mcp,
+            QStringLiteral("(function(){editor.select(scene.root());return editor.propertiesTab();})()"));
+        CHECK(rootPick.value("tab").toString() == QLatin1String("world"),
+              "editor.select(scene.root()) brings the World tab to the front");
+    }
+
     // ---- 2. the bottom tray's tabs -----------------------------------------
     mcp.runScript(QStringLiteral("app.space('editor')"));
     settle(mcp);
