@@ -237,6 +237,32 @@ int main(int argc, char **argv)
               qPrintable(QStringLiteral("%1 carries the shadow setup").arg(name)));
         CHECK(snap.value("lights").toArray().size() > 0,
               qPrintable(QStringLiteral("%1 carries the light list").arg(name)));
+        // THE GI CACHE'S HISTORY, not just its shape (PHOTON E0 / audit D6).
+        // The snapshot described what the GI arm IS and never what it had been
+        // DOING, so a bundle could not answer the question the cache policy
+        // exists for. These are the counters a reader needs, plus Photon's
+        // chain (an empty array in the single-volume arm, which is what every
+        // scene that ships today builds).
+        const QJsonObject gi = snap.value("gi").toObject();
+        const QStringList giKeys{ QStringLiteral("rebuilds"), QStringLiteral("giScans"),
+                                  QStringLiteral("giScanMicros"), QStringLiteral("giAabbReads"),
+                                  QStringLiteral("staleProbes"),
+                                  QStringLiteral("probeCapturesLastFrame"),
+                                  QStringLiteral("cascades"),
+                                  QStringLiteral("cascadesAwaitingCamera"),
+                                  QStringLiteral("cascadeFullRebuilds"),
+                                  QStringLiteral("cascadeDeferrals"),
+                                  QStringLiteral("cascadeDirtyMajority") };
+        QStringList missing;
+        for (const QString &k : giKeys)
+            if (!gi.contains(k)) missing << k;
+        CHECK(missing.isEmpty(),
+              qPrintable(QStringLiteral("%1's gi block carries the cache counters and the "
+                                        "cascade chain (missing: %2)")
+                             .arg(name, missing.isEmpty() ? QStringLiteral("none")
+                                                          : missing.join(QLatin1Char(',')))));
+        CHECK(gi.value("cascades").isArray(),
+              qPrintable(QStringLiteral("%1's gi.cascades is an array").arg(name)));
     }
 
     // ---- frames.jsonl -------------------------------------------------------
@@ -249,6 +275,22 @@ int main(int argc, char **argv)
 
     int sumsChecked = 0, replayed = 0, scripted = 0, withStages = 0, withHostStage = 0;
     bool everyPassNamed = true, everySumRight = true, everyFrameHasReason = true;
+    // PHOTON: every frame states how many cascades it re-voxelised, and the
+    // scheduler's whole contract is that it is never more than one.
+    int framesWithCascadeCount = 0, worstCascadeRebuilds = 0;
+    for (const QJsonObject &f : frames) {
+        if (f.contains(QStringLiteral("cascadeRebuilds"))) {
+            ++framesWithCascadeCount;
+            worstCascadeRebuilds = qMax(worstCascadeRebuilds,
+                                        f.value(QStringLiteral("cascadeRebuilds")).toInt());
+        }
+    }
+    CHECK(framesWithCascadeCount == frames.size(),
+          qPrintable(QStringLiteral("every frame record carries cascadeRebuilds (%1 of %2)")
+                         .arg(framesWithCascadeCount).arg(frames.size())));
+    CHECK(worstCascadeRebuilds <= 1,
+          qPrintable(QStringLiteral("no frame re-voxelised more than one cascade (worst %1)")
+                         .arg(worstCascadeRebuilds)));
     for (const QJsonObject &f : frames) {
         const QJsonArray passes = f.value("passes").toArray();
         int draws = 0;

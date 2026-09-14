@@ -548,6 +548,9 @@ public:
         QVector<CascadeInfo> cascades;
         /// Whole-chain rebuilds the teleport guards forced, and cascade
         /// rebuilds deferred because the frame's one-rebuild budget was spent.
+        /// The chain is wanted but no view has tracked a camera yet, so there is
+        /// nowhere honest to put it — `cascades` is empty for a REASON.
+        bool    cascadesAwaitingCamera = false;
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;

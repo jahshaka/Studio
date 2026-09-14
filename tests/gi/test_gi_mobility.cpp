@@ -54,6 +54,7 @@ static const char *reasonName(GiStaleReason r)
     case GiStaleReason::Ambient:  return "ambient";
     case GiStaleReason::Fog:      return "fog";
     case GiStaleReason::Mobility: return "mobility";
+    case GiStaleReason::Camera:   return "camera";
     }
     return "?";
 }
@@ -600,6 +601,87 @@ static void sectionC(Engine *engine)
     engine->destroyScene(s);
 }
 
+// ===========================================================================
+// SECTION D — A MOVER UNDER PHOTON'S CASCADE CHAIN
+// (SPECS/PHOTON_SPEC.md §7 E0 / audit D2.) The single-volume arm's deal for a
+// play-time Soft promotion is a GHOST: the object's bounce light stays in the
+// voxels where it stood, and nothing is rebuilt (owner decision O3). A cascade
+// chain re-voxelises for its own reason — the camera walked — and each cascade
+// was given the GI item set ONCE, so the promoted object stayed in every
+// voxeliser and was re-voxelised AT ITS LIVE POSE on every scroll: not a ghost
+// and not a mover, but a live-tracked voxel that a still camera freezes and a
+// walking one follows. The rule is that an object leaving the GI geometry
+// channel leaves every cascade's set — at that cascade's next rebuild, which
+// costs nothing now.
+// ===========================================================================
+static void sectionD(Engine *engine)
+{
+    std::printf("-- a soft-promoted mover leaves the cascade chain's item set\n");
+    View *v = engine->createOffscreenView("mobility_cascades", 128, 128, Colour(0, 0, 0));
+    Scene *s = engine->createScene("mobility_cascades");
+    if (!v || !s) { std::printf("FAIL: view/scene\n"); ++failures; return; }
+    v->setScene(s);
+    s->setAmbient(Colour(0.2f, 0.2f, 0.2f), Colour(0.2f, 0.2f, 0.2f));
+    const Colour white(0.85f, 0.85f, 0.85f);
+    box(s, Vec3(0.0f, -0.25f, 0.0f), Vec3(80.0f, 0.5f, 80.0f), white, 0.0f, 0.9f);   // ground
+    const NodeId keeper = box(s, Vec3(-2.5f, 0.7f, 0.0f), Vec3(1.2f, 1.2f, 1.2f),
+                              Colour(0.8f, 0.1f, 0.1f), 0.0f, 0.7f);
+    const NodeId mover  = box(s, Vec3(2.5f, 0.7f, 0.0f), Vec3(1.2f, 1.2f, 1.2f),
+                              Colour(0.1f, 0.1f, 0.8f), 0.0f, 0.7f);
+    CHECK(keeper && mover, "the twins exist");
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 3.0f, 9.0f), Vec3(0.0f, 0.5f, 0.0f));
+    const auto frames = [&](int n) { for (int i = 0; i < n; ++i) engine->renderOneFrame(); };
+
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.ddgi = GiToggle::Off;
+    gi.updateBudget = 0;
+    gi.cascades = true;
+    // A PINNED TABLE, so the walk below stays well inside the inner cascade and
+    // `items` can only move because the SET changed — not because an object
+    // left the box.
+    gi.cascadeCount = 2;
+    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 64, 0.0f };
+    gi.cascadeSet[1] = GiParams::GiCascadeDesc{ 60.0f, 64, 0.0f };
+    CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the room");
+    frames(8);
+    GiStatus st = s->giStatus();
+    if (st.cascades.empty()) { CHECK(false, "the chain exists"); return; }
+    const int items0 = st.cascades[0].items;
+    const unsigned long long rebuilds0 = st.rebuilds;
+    const unsigned long long c0rebuilds = st.cascades[0].rebuilds;
+    std::printf("   the chain voxelises %d items in cascade 0 (ground + 2 props)\n", items0);
+    CHECK(items0 == 3, "ground and both props are in the inner cascade (%d)", items0);
+
+    // The play-time promotion: no rebuild, exactly as in the single arm (O3).
+    s->setNodeMovable(mover, true, MobilityChange::Soft);
+    frames(4);
+    st = s->giStatus();
+    CHECK(st.rebuilds == rebuilds0, "a SOFT promotion under cascades costs no rebuild at all");
+    CHECK(st.cascades[0].rebuilds == c0rebuilds, "...and no cascade re-voxelisation either");
+    CHECK(st.cascades[0].items == items0,
+          "...and the set it holds is unchanged until it next rebuilds anyway");
+
+    // Now WALK. Crossing cascade 0's step re-centres and re-voxelises it — and
+    // the promoted mover must not be in what it voxelises.
+    const float step0 = st.cascades[0].step;
+    for (int f = 1; f <= 12; ++f) {
+        const float x = float(f) * step0 * 0.15f;
+        enginetest::testCameraLookAt(v, Vec3(x, 3.0f, 9.0f), Vec3(x, 0.5f, 0.0f));
+        frames(1);
+    }
+    st = s->giStatus();
+    std::printf("   after %.1f m of walking: cascade 0 rebuilt %llu time(s), items %d\n",
+                12.0f * step0 * 0.15f, st.cascades[0].rebuilds - c0rebuilds, st.cascades[0].items);
+    CHECK(st.cascades[0].rebuilds > c0rebuilds, "the walk re-voxelised cascade 0");
+    CHECK(st.cascades[0].items == items0 - 1,
+          "AND THE PROMOTED MOVER IS NOT IN IT: a mover is never re-voxelised by a scroll (%d)",
+          st.cascades[0].items);
+    CHECK(s->giStatus().rebuilds == rebuilds0, "...at no cost in from-scratch rebuilds");
+}
+
 int main()
 {
     std::string err;
@@ -616,6 +698,8 @@ int main()
     sectionB(engine.get());
     std::printf("== SECTION C: a movable lamp at rest\n");
     sectionC(engine.get());
+    std::printf("== SECTION D: a mover under Photon's cascade chain\n");
+    sectionD(engine.get());
 
     std::printf(failures ? "FAILED (%d)\n" : "PASSED (%d failures)\n", failures);
     return failures ? 1 : 0;

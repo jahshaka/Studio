@@ -213,4 +213,30 @@ assert(byId["giBounces"].tiers.epic.value === 3 && byId["giBounces"].tiers.high.
 assert(byId["giMode"].tiers.epic.valueId === "vct_pcc_hybrid",
        "the Photon columns are the Photon tiers: " + byId["giMode"].tiers.epic.valueId);
 
+// ---- 7. the cascade table is validated, and refused WHOLE -------------------
+// PHOTON's chain hands the ray march from each cascade to the coarser one
+// behind it, and Ogre derives the hand-over LOD from the ratio of their cells —
+// so a table that does not grow outward is not a request the renderer can
+// honour halfway (audit B10). The engine falls back to the tier's table; the
+// verb refuses by name, which is what a user gets to see.
+var threwTable = false;
+try {
+    world.gi({ cascadeSet: [ { halfSize: 5, resolution: 128 },
+                             { halfSize: 4, resolution: 128 } ] });
+} catch (e) { threwTable = true; }
+assert(threwTable, "world.gi refuses a cascadeSet that does not grow outward");
+
+threwTable = false;
+try {
+    // same halfSize growth but a FINER outer cascade: the cell must grow too
+    world.gi({ cascadeSet: [ { halfSize: 5, resolution: 64 },
+                             { halfSize: 10, resolution: 256 } ] });
+} catch (e) { threwTable = true; }
+assert(threwTable, "...and one whose outer cascade is FINER than the inner");
+
+var good = world.gi({ cascadeSet: [ { halfSize: 5, resolution: 128 },
+                                    { halfSize: 20, resolution: 64 } ] });
+assert(!!good, "a table that grows outward is accepted");
+world.gi({ cascadeSet: [] });
+
 console.log("e2e_photon: ALL OK");

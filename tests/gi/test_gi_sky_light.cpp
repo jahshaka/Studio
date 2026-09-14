@@ -491,6 +491,41 @@ int main(int argc, char **argv)
         skyLight->intensity = 1.0f;
     }
 
+    // ---- 11. A SKY LIGHT EDIT COSTS NO GI RE-SOLVE -------------------------
+    // (Audit A F3, fixed in PHOTON E0.) The mirror hashes every document light
+    // into the VCT light signature, and that signature arms the settle: a
+    // re-solve is a teardown, a re-voxelisation of the whole volume — under
+    // Photon's cascades, of the whole chain — and every probe re-captured
+    // twice. The Sky Light's only dials are colour, intensity and visibility,
+    // all three of which already reach the renderer the cheap way (the ambient
+    // SH into every voxel volume, plus one probe-grid stale with its own
+    // reason), so hashing it bought a full re-solve for a change that was
+    // already applied. It is never an Ogre::Light at all.
+    {
+        for (int f = 0; f < 20; ++f) frame();      // let anything already owed settle
+        const quint64 refreshes = mirror.giRefreshCount();
+        const unsigned long long rebuilds = escene->giStatus().rebuilds;
+        const Colour before = shade(108);
+        skyLight->intensity = 0.3f;
+        // WELL PAST THE SETTLE WINDOW (15 stable frames / 250 ms): before the
+        // fix this is exactly where the re-solve landed.
+        for (int f = 0; f < 40; ++f) frame();
+        const Colour dim = shade(108);
+        std::printf("   sky light 1.0 -> 0.3: %.3f -> %.3f, re-solves %llu, rebuilds %llu\n",
+                    lum(before), lum(dim),
+                    (unsigned long long)(mirror.giRefreshCount() - refreshes),
+                    escene->giStatus().rebuilds - rebuilds);
+        CHECK(lum(dim) < lum(before) * 0.6f, "11a. the intensity edit reaches the picture");
+        CHECK(mirror.giRefreshCount() == refreshes,
+              "11b. ...and costs NO full GI re-solve (it is not a voxel light)");
+        CHECK(escene->giStatus().rebuilds == rebuilds,
+              "11c. ...and no from-scratch rebuild of the arm");
+        skyLight->intensity = 1.0f;
+        for (int f = 0; f < 25; ++f) frame();
+        CHECK(mirror.giRefreshCount() == refreshes && escene->giStatus().rebuilds == rebuilds,
+              "11d. and neither does putting it back");
+    }
+
     mirror.setSource(iris::ScenePtr());
     std::printf(failures == 0 ? "gi.sky_light: PASS\n" : "gi.sky_light: %d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;
