@@ -1845,6 +1845,24 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     case jahshaka::engine::GiStaleReason::Fog:      out.lastStaleReason = QStringLiteral("fog"); break;
     case jahshaka::engine::GiStaleReason::Mobility: out.lastStaleReason = QStringLiteral("mobility"); break;
     }
+    out.cascades.clear();
+    out.cascades.reserve(int(st.cascades.size()));
+    for (const auto &c : st.cascades) {
+        GiStatusInfo::CascadeInfo ci;
+        ci.halfSize   = c.halfSize;
+        ci.resolution = c.resolution;
+        ci.cell       = c.cell;
+        ci.step       = c.step;
+        ci.centre     = q(c.centre);
+        ci.rebuilds   = quint64(c.rebuilds);
+        ci.pending    = c.pending;
+        ci.items      = c.items;
+        ci.lastCpuMs  = c.lastCpuMs;
+        out.cascades.append(ci);
+    }
+    out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);
+    out.cascadeDeferrals    = quint64(st.cascadeDeferrals);
+    out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
     return out;
 }
 

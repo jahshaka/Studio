@@ -505,6 +505,18 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             float(qMax(0.0, sceneObj.value("giProbeSnapSidesMax").toDouble(0.25)));
         scene->giRayMarchStepScale =
             float(qBound(1.0, sceneObj.value("giRayMarchStepScale").toDouble(1.0), 8.0));
+        // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
+        // written before the flag existed, and the default is the arm those
+        // documents were authored against — there is nothing to migrate.
+        scene->giCascades = sceneObj.value("giCascades").toBool(false);
+        scene->giCascadeSet.clear();
+        for (const QJsonValue &v : sceneObj.value("giCascadeSet").toArray()) {
+            const QJsonArray row = v.toArray();
+            if (row.size() < 3) continue;
+            scene->giCascadeSet.append(iris::Vec3(float(row.at(0).toDouble()),
+                                                  float(row.at(1).toDouble()),
+                                                  float(row.at(2).toDouble())));
+        }
         // DDGI (GI_UNIFIED_SPEC.md §4 P1). Absent in every document written
         // before this phase, and the fallbacks ARE the constructor's values —
         // -1 (auto, which resolves OFF while there is no Photon tier) is what
