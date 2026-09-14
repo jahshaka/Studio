@@ -852,5 +852,51 @@ var dp2 = node.transform(dropped2).position;
 assert(Math.abs(dp2.x - dp.x) > 1.0,
     "a second drop at another pixel lands somewhere else (no stacking at the origin)");
 
+// ---------------------------------------------------------------------------
+// A DROP APPLIES TO WHAT IS UNDER IT — INCLUDING THE FLOOR (owner report via
+// the rig, 2026-09-14: a MATERIAL dragged onto the default Ground was silently
+// discarded, and a TEXTURE spawned a floating image plane instead of
+// retexturing it).
+//
+// The cause was the target resolution, not the apply: the default Ground is
+// setPickable(false) BY DESIGN (clicking the floor selects nothing), and the
+// material/texture drops resolved their target with an ordinary pick, so the
+// floor simply was not there. editor.dropTargetAt is that resolution — the
+// same function the two drop branches call — and it forces pickability the way
+// the object drops always have.
+var target = editor.dropTargetAt(vp.width * 0.30, vp.height * 0.70);
+assert(target != null, "editor.dropTargetAt over the ground answers with a node");
+assert(node.property(target.id, "defaultFloor") === true,
+    "...and it is the DEFAULT FLOOR — an unselectable node is still a drop target ("
+    + target.name + ")");
+// …and a drop that hits NOTHING still has no target — the case that spawns an
+// image plane for a dropped picture. Aimed deliberately: the camera is put on
+// the horizon and asked about a pixel above it, because "the top of the
+// viewport" is only sky for a camera that happens to be level.
+var wasPose = editor.camera();
+editor.setCamera({ position: { x: 0, y: 2, z: 12 }, lookAt: { x: 0, y: 2, z: 0 } });
+editor.frame(2);
+// `== null`, not `=== null`: a verb that answers "nothing" answers with an
+// invalid QVariant, which reaches a script as `undefined`.
+var sky = editor.dropTargetAt(vp.width * 0.5, 4);
+assert(sky == null,
+    "a drop against the sky has no target (that is the case that spawns an image plane), got "
+    + JSON.stringify(sky));
+editor.setCamera({ position: wasPose.position, rotation: wasPose.rotation });
+editor.frame(2);
+
+// AN OBJECT IN FRONT OF THE FLOOR TAKES THE DROP. The S2 section above left a
+// cube standing at `left`, so the same pixel that answered "the floor" a moment
+// ago answers "that cube" once something is standing on it — the target is the
+// surface under the cursor, and forcing pickability did not turn every drop
+// into a floor drop.
+var onFloor = scene.addPrimitive("cube", { position: right, onSurface: true });
+editor.frame(2);
+var cubeTarget = editor.dropTargetAt(vp.width * 0.70, vp.height * 0.70);
+assert(cubeTarget != null && node.property(cubeTarget.id, "defaultFloor") === false,
+    "with a cube under the cursor, the drop targets the CUBE and not the floor ("
+    + JSON.stringify(cubeTarget) + ")");
+node.remove(onFloor);
+
 console.log("editor_controls: fly speed, post-fx params, screenshot grades, the "
-          + "new-scene defaults and the drop point verified");
+          + "new-scene defaults, the drop point and the drop TARGET verified");

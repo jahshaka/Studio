@@ -125,6 +125,11 @@ public:
     /// placement and a user's drop agree by construction. False when the
     /// viewport has no camera (a headless stand-in never answers).
     virtual bool dropPointAt(const QPointF &, iris::Vec3 *) { return false; }
+    /// The node a drop at that pixel would APPLY TO — the material and texture
+    /// drops' target, which is not the same question as "what does a click
+    /// select" (the default floor is a drop target and is not selectable).
+    /// Null in the document-only stand-ins.
+    virtual iris::SceneNodePtr dropTargetAt(const QPointF &) { return iris::SceneNodePtr(); }
 
     /// F: frames the current selection (no-op without one). Only the engine
     /// viewport implements it (EDITOR_SHORTCUTS_SPEC §2).

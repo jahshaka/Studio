@@ -697,6 +697,36 @@ iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool select
     return ScenePicker::resolveRootSelection(best.node, mSelectedSet, selectRootObject);
 }
 
+// WHAT A DROP AT THIS PIXEL LANDS ON (lane SPACE-2 item 5, 2026-09-14).
+//
+// `forcePickable`, and that is the whole fix: a drop target is not a
+// SELECTION. The default Ground is setPickable(false) BY DESIGN — clicking the
+// floor selects nothing (services/defaultfloor.cpp) — and the material and
+// texture drops resolved their target with an ordinary pick, so the floor was
+// not there: a material dragged onto it set no preview node and its drop did
+// NOTHING, silently, and a texture fell into the "empty space" branch and
+// spawned a floating image plane instead of retexturing the floor. The object
+// drops have always forced it (dropPositionAt, below), which is why dropping a
+// cube on the floor worked all along.
+//
+// `selectRootObject` stays FALSE: a drop applies to the surface under the
+// cursor, not to the whole imported asset it belongs to.
+iris::SceneNodePtr EngineSceneViewport::dropTargetAt(const QPointF &point)
+{
+    const iris::CameraNodePtr cam = viewCamera();
+    if (!mScene || !cam) return iris::SceneNodePtr();
+    iris::Vec3 a, b;
+    pictureSegment(cam, point, a, b);
+    // NO ICONS IN THE WAY, either: a material and an image both need a SURFACE,
+    // so a light's icon, a camera's body and a decal's box — none of which can
+    // wear one — must not swallow a drop meant for the wall behind them.
+    const auto hits = ScenePicker::pickAll(mScene, a, b, cam->getGlobalPosition(),
+                                           /*forcePickable*/ true, /*includeLights*/ false,
+                                           /*includeDecals*/ false, /*refreshTransforms*/ true,
+                                           /*includeCameras*/ false);
+    return ScenePicker::nearest(hits).node;
+}
+
 iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
 {
     iris::Vec3 hit;
@@ -776,7 +806,10 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
     const int type = role.value(0).toInt();
     if (type == static_cast<int>(ModelTypes::Material)) {
         // Hover preview: temporarily apply the dragged material to the mesh under the pointer.
-        iris::SceneNodePtr node = pickAt(event->position(), false);
+        // dropTargetAt, not pickAt: the floor is a drop target even though it
+        // is not selectable (lane SPACE-2 item 5) — and the preview is how the
+        // user SEES that it is the target.
+        iris::SceneNodePtr node = dropTargetAt(event->position());
         if (node && node->getSceneNodeType() != iris::SceneNodeType::Mesh) node.reset();
         if (mDragPreviewNode && mDragPreviewNode != node) {
             mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
@@ -869,7 +902,11 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // IMAGE_PLANE_SPEC §2: on a mesh the image retextures it; on empty
         // space it spawns an image plane at the tracked drop point.
         const QString textureGuid = role.value(3).toString();
-        iris::SceneNodePtr node = pickAt(event->position(), false);
+        // The same drop-target rule as the material branch: an image dropped on
+        // the FLOOR retextures the floor (lane SPACE-2 item 5). Only a drop
+        // that hits NOTHING — the sky, past the edge of the ground — spawns an
+        // image plane, which is what the else below still does.
+        iris::SceneNodePtr node = dropTargetAt(event->position());
         if (node && node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             auto meshNode = node.staticCast<iris::MeshNode>();
             // Bytes resolve pin-first through the CAS — the flat

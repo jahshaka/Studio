@@ -590,6 +590,15 @@ QVector<VerbInfo> EditorApi::verbs() const
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
           Needs::Engine },
+        { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name} | null",
+          "WHAT A DROP AT THIS VIEWPORT PIXEL APPLIES TO — the node a dragged MATERIAL or IMAGE "
+          "would land on, which is not the same question as what a click selects: the default "
+          "Ground is deliberately unselectable and is very much a drop target (owner report, "
+          "2026-09-14 — a material dragged onto the floor did nothing at all, and an image "
+          "spawned a floating plane instead of retexturing it). Null when the ray hits nothing, "
+          "which is the case that still spawns an image plane for a dropped picture. Same pixels "
+          "as editor.dropPointAt, which answers WHERE the same drop would place a new object.",
+          Needs::Engine },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
           "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
@@ -1949,6 +1958,17 @@ QVariant EditorApi::dropPointAt(double x, double y)
     out.insert("x", point.x());
     out.insert("y", point.y());
     out.insert("z", point.z());
+    return out;
+}
+
+QVariant EditorApi::dropTargetAt(double x, double y)
+{
+    if (!requireEngine()) return QVariant();
+    const iris::SceneNodePtr node = host.viewport->dropTargetAt(QPointF(x, y));
+    if (!node) return QVariant();
+    QVariantMap out;
+    out.insert("id", node->getGUID());
+    out.insert("name", node->getName());
     return out;
 }
 

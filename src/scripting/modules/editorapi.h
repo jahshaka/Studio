@@ -96,6 +96,7 @@ public:
     Q_INVOKABLE bool frame(int n = 1, double dt = -1.0);
     Q_INVOKABLE QVariantMap warmUpShaders();
     Q_INVOKABLE QVariant dropPointAt(double x, double y);
+    Q_INVOKABLE QVariant dropTargetAt(double x, double y);
     Q_INVOKABLE QVariantMap viewportState();
     Q_INVOKABLE QVariantMap mirrorStats();
     /// THE SCENE-ERROR AREA (services/sceneissues.h). Document verbs: the store
