@@ -625,6 +625,245 @@ int main()
         CHECK(st.cascades[0].pending == 0, "...and owes nothing");
     }
 
+    // =====================================================================
+    // CASE 7 — AN EDIT IS NOT A CHAIN REBUILD (PHOTON_SPEC G1)
+    // =====================================================================
+    // THE DEFECT THIS CLOSES, in one line: until the per-cascade dirty path,
+    // every settle re-solve, material edit, spawn, hide, delete and mobility
+    // flip took `refreshVctFast` (which refuses under cascades) straight to
+    // `rebuildVct` -> `teardownVct` + `buildCascadeArm` — N voxelisers destroyed
+    // and rebuilt FROM SCRATCH IN ONE FRAME, with every mesh buffer re-derived
+    // and re-uploaded because `removeAllItems` clears the voxeliser's mesh
+    // bookkeeping. Cases 2, 3 and 5 all measure a still or walking CAMERA and
+    // never touch the scene, so the whole class was invisible to this suite
+    // (audit B2's own note).
+    //
+    // What is asserted, for every kind of edit, is the same three things:
+    //   * ZERO whole-chain builds — `GiStatus::rebuilds` (bumped by every
+    //     `rebuildVct`) does not move;
+    //   * never more than ONE cascade re-voxelised in any single frame;
+    //   * and no cascade is left owing a rebuild once the queue has drained.
+    //
+    // The camera stands still throughout, so every rebuild counted here was
+    // paid for by the EDIT and by nothing else.
+    std::printf("\n== case 7: edits under the chain ==\n");
+    {
+        CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the edit cases");
+        render(e, 8);
+        const size_t nCascades = scene->giStatus().cascades.size();
+
+        const auto chainRebuilds = [&]() {
+            unsigned long long t = 0;
+            for (const auto &c : scene->giStatus().cascades) t += c.rebuilds;
+            return t;
+        };
+        const auto pendingCount = [&]() {
+            int n = 0;
+            for (const auto &c : scene->giStatus().cascades) n += c.pending ? 1 : 0;
+            return n;
+        };
+        // Runs `frames` frames one at a time after an edit and reports the worst
+        // single-frame cascade-rebuild count and the total. `arm0` is the
+        // whole-chain build count sampled BEFORE the edit — and it has to be,
+        // because `refreshGlobalIllumination()` is synchronous: on the base
+        // engine the chain build lands inside that call, not inside the frames
+        // that follow it.
+        const auto measure = [&](const char *what, unsigned long long arm0, int frames,
+                                 unsigned long long &outTotal, int &outWorst) {
+            unsigned long long prev = chainRebuilds();
+            const unsigned long long first = prev;
+            int worst = 0;
+            for (int i = 0; i < frames; ++i) {
+                render(e, 1);
+                const unsigned long long now = chainRebuilds();
+                worst = std::max(worst, int(now - prev));
+                prev = now;
+            }
+            outTotal = prev - first;
+            outWorst = worst;
+            const unsigned long long arm1 = scene->giStatus().rebuilds;
+            std::printf("   %-22s chain builds %llu -> %llu, cascade rebuilds %llu "
+                        "(worst frame %d), pending left %d\n",
+                        what, arm0, arm1, outTotal, worst, pendingCount());
+            char msg[256];
+            std::snprintf(msg, sizeof(msg), "%s: ZERO whole-chain builds", what);
+            CHECK(arm1 == arm0, msg);
+            std::snprintf(msg, sizeof(msg), "%s: never two cascades in one frame", what);
+            CHECK(worst <= 1, msg);
+            std::snprintf(msg, sizeof(msg), "%s: the queue drained", what);
+            CHECK(pendingCount() == 0, msg);
+        };
+        unsigned long long total = 0; int worst = 0;
+
+        // ---- (a) a box dragged and RELEASED (the settle's re-solve) ---------
+        // The drag itself must cost nothing at all, and the release must cost
+        // the cascades that can SEE the box — not the chain.
+        const NodeId dragged = enginetest::addTestCube(scene, Colour(0.2f, 0.8f, 0.2f), 0.0f, 0.8f);
+        enginetest::setNodePosition(scene, dragged, Vec3(1.0f, 0.5f, 1.0f));
+        render(e, 8);                                    // the spawn's own work drains
+        {
+            const unsigned long long arm0 = scene->giStatus().rebuilds;
+            unsigned long long prev = chainRebuilds();
+            int worstDrag = 0;
+            for (int i = 0; i < 20; ++i) {               // the gesture: no settle asked for
+                enginetest::setNodePosition(scene, dragged,
+                                            Vec3(1.0f + 0.05f * float(i), 0.5f, 1.0f));
+                render(e, 1);
+                const unsigned long long now = chainRebuilds();
+                worstDrag = std::max(worstDrag, int(now - prev));
+                prev = now;
+            }
+            std::printf("   the drag itself: chain builds %llu -> %llu, worst frame %d\n",
+                        arm0, scene->giStatus().rebuilds, worstDrag);
+            CHECK(scene->giStatus().rebuilds == arm0 && worstDrag == 0,
+                  "a drag in flight re-voxelises NOTHING (the host has not settled it)");
+        }
+        const unsigned long long armDrag = scene->giStatus().rebuilds;
+        scene->refreshGlobalIllumination();              // the settle, as the mirror fires it
+        measure("a box released", armDrag, 12, total, worst);
+        CHECK(total >= 1 && total <= (unsigned long long)nCascades,
+              "...and the cascades that can see it DID re-voxelise, one per frame");
+
+        // ---- (b) a LIGHT edit: a re-injection, never a re-voxelisation ------
+        const NodeId lamp = enginetest::addDirectionalLight(scene, Vec3(0.2f, -1.0f, -0.4f), 2.0f);
+        render(e, 12);
+        {
+            LightDesc d;
+            d.type = LightType::Directional;
+            d.colour = Colour(1.0f, 0.4f, 0.2f);
+            d.intensity = 3.0f;
+            const unsigned long long arm0 = scene->giStatus().rebuilds;
+            scene->setLight(lamp, d);
+            scene->refreshGlobalIllumination();
+            measure("a light edit", arm0, 12, total, worst);
+            CHECK(total == 0,
+                  "...and NOT ONE VOXEL was re-written: a light is a re-injection");
+        }
+
+        // ---- (c) a MATERIAL PARAMETER edit ---------------------------------
+        // The voxeliser's VctMaterial cached that datablock's colour by pointer,
+        // so this one really does need fresh voxels — but a REPLACEMENT
+        // voxeliser per cascade, one per frame, with the chain's lighting
+        // objects (and their raw `mExtraCascades` pointers) untouched.
+        {
+            const MeshId m = scene->createMesh(enginetest::unitCubeMesh());
+            PbrParams pp; pp.albedo = Colour(0.1f, 0.1f, 0.9f); pp.roughness = 0.7f;
+            const MaterialId mat = scene->createPbrMaterial(pp);
+            const NodeId painted = scene->createNode();
+            scene->attachMesh(painted, m, mat);
+            enginetest::setNodePosition(scene, painted, Vec3(-1.5f, 0.5f, 1.0f));
+            render(e, 16);
+            pp.albedo = Colour(0.9f, 0.9f, 0.1f);
+            const unsigned long long armMat = scene->giStatus().rebuilds;
+            CHECK(scene->setPbrMaterial(mat, pp), "a material parameter is edited");
+            scene->refreshGlobalIllumination();
+            measure("a material edit", armMat, 16, total, worst);
+            CHECK(total == (unsigned long long)nCascades,
+                  "...and EVERY cascade got fresh voxels — one cascade per frame");
+            CHECK(scene->giStatus().vctBound,
+                  "...with the chain still bound after every voxeliser was replaced");
+
+            // ---- (d) a PRESET APPLY: the datablock itself is destroyed ------
+            // The churn rig's case, and the one the reuse arm could never take:
+            // a shading-model change destroys the datablock and builds another,
+            // so a recycled address would make every voxeliser's VctMaterial
+            // cache paint the new material with the old one's colour. Answered
+            // the same way a parameter edit is — a replacement voxeliser per
+            // cascade, one cascade per frame.
+            const unsigned long long armPre = scene->giStatus().rebuilds;
+            CHECK(scene->setShadingModel(mat, ShadingModel::Unlit),
+                  "a preset apply destroys the datablock (the item leaves GI)");
+            measure("a preset apply", armPre, 16, total, worst);
+            const unsigned long long armPre2 = scene->giStatus().rebuilds;
+            CHECK(scene->setShadingModel(mat, ShadingModel::Lit),
+                  "...and another preset puts it back");
+            measure("a preset undone", armPre2, 16, total, worst);
+            CHECK(total >= 1 && total <= (unsigned long long)nCascades,
+                  "...with fresh voxels spread one cascade per frame");
+            CHECK(scene->giStatus().vctBound, "...and the chain still bound");
+        }
+
+        // ---- (e) a SPAWN ---------------------------------------------------
+        {
+            unsigned long long arm0 = scene->giStatus().rebuilds;
+            const NodeId spawned =
+                enginetest::addTestCube(scene, Colour(0.8f, 0.8f, 0.2f), 0.0f, 0.6f);
+            enginetest::setNodePosition(scene, spawned, Vec3(0.0f, 0.5f, 2.0f));
+            measure("a spawn", arm0, 16, total, worst);
+
+            // ---- (f) a HIDE ------------------------------------------------
+            arm0 = scene->giStatus().rebuilds;
+            scene->setNodeVisible(spawned, false);
+            measure("a hide", arm0, 16, total, worst);
+            scene->setNodeVisible(spawned, true);
+            render(e, 16);
+
+            // ---- (g) an AUTHORING MOBILITY FLIP ----------------------------
+            // Its own cube, so the DELETE below still deletes GI geometry: a
+            // mover carries no kGiGeometryBit, and deleting one correctly costs
+            // the voxels nothing at all.
+            const NodeId promoted =
+                enginetest::addTestCube(scene, Colour(0.3f, 0.3f, 0.9f), 0.0f, 0.6f);
+            enginetest::setNodePosition(scene, promoted, Vec3(2.0f, 0.5f, 2.0f));
+            render(e, 16);
+            arm0 = scene->giStatus().rebuilds;
+            scene->setNodeMovable(promoted, true, MobilityChange::Authoring);
+            measure("an authoring flip", arm0, 16, total, worst);
+
+            // ---- (h) a DELETE of LIT geometry -------------------------------
+            arm0 = scene->giStatus().rebuilds;
+            scene->removeNode(spawned);
+            measure("a delete", arm0, 16, total, worst);
+            CHECK(total >= 1, "...and the cascades that held it DID re-voxelise");
+        }
+
+        // ---- (j) THE BOX TEST DISCRIMINATES --------------------------------
+        // The whole point of recording WHERE an edit happened: a change 40 m
+        // away is outside the inner cascades' boxes, and they must not spend a
+        // frame on it. (The tier table is 5 / 10 / 15 / 60 m half-sizes around
+        // the camera, which stands at the origin throughout this case.)
+        {
+            render(e, 16);
+            const NodeId faraway =
+                enginetest::addTestCube(scene, Colour(0.9f, 0.3f, 0.3f), 0.0f, 0.6f);
+            enginetest::setNodePosition(scene, faraway, Vec3(40.0f, 0.5f, 0.0f));
+            render(e, 16);                                   // its arrival drains
+            enginetest::setNodePosition(scene, faraway, Vec3(41.0f, 0.5f, 0.0f));
+            render(e, 2);
+            scene->refreshGlobalIllumination();
+            std::vector<unsigned long long> before;
+            for (const auto &c : scene->giStatus().cascades) before.push_back(c.rebuilds);
+            render(e, 12);
+            std::vector<unsigned long long> after;
+            for (const auto &c : scene->giStatus().cascades) after.push_back(c.rebuilds);
+            unsigned long long inner = 0, outer = 0;
+            for (size_t i = 0; i < after.size(); ++i) {
+                std::printf("   c%zu rebuilds +%llu (half %.1f m)\n", i, after[i] - before[i],
+                            scene->giStatus().cascades[i].halfSize);
+                if (scene->giStatus().cascades[i].halfSize < 39.0f) inner += after[i] - before[i];
+                else outer += after[i] - before[i];
+            }
+            CHECK(inner == 0,
+                  "an edit 40 m away costs the cascades that cannot see it NOTHING");
+            CHECK(outer >= 1, "...and the one that can see it re-voxelises");
+            scene->removeNode(faraway);
+            render(e, 12);
+        }
+
+        // ---- (i) the picture still works -----------------------------------
+        // Every one of the edits above kept objects, textures and buffers that a
+        // from-scratch chain would have thrown away; the assertion that they are
+        // still the RIGHT ones is a rendered frame that is not black.
+        render(e, 4);
+        Image shot;
+        CHECK(view->readPixels(shot), "the chain renders after every edit");
+        CHECK(groundLum(shot) > 0.01f, "...and the ground is still lit");
+
+        GiParams down; down.mode = GiMode::Off;
+        CHECK(scene->setGlobalIllumination(down), "the edited chain comes down");
+        render(e, 2);
+    }
+
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
     GiParams off; off.mode = GiMode::Off;

@@ -520,3 +520,27 @@ add_test(NAME gi.cascades COMMAND test_gi_cascades
 # (the VRAM-contention class, CLAUDE.md) and the teleport case renders and reads
 # back a frame at a time.
 set_tests_properties(gi.cascades PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# A SHADOW-ATLAS REBUILD IS NOT A GI REBUILD (PHOTON_SPEC gate G2, audit C
+# finding 2): the atlas change drops only the WORKSPACES that instantiate the
+# probe shadow node, never the voxels — so the 3rd casting lamp in a scene, or a
+# Shadow Quality change, costs the voxel arm (and, under Photon, the whole
+# cascade chain) exactly nothing.
+# Its own binary for the same process-wide-binding reason as every GI suite.
+add_executable(test_gi_atlas_voxels test_gi_atlas_voxels.cpp)
+set_target_properties(test_gi_atlas_voxels PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_atlas_voxels PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_atlas_voxels PRIVATE JahshakaEngine)
+add_dependencies(test_gi_atlas_voxels JahshakaEngineMedia)
+add_test(NAME gi.atlas_keeps_voxels COMMAND test_gi_atlas_voxels
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL like gi.cascades: it holds the cascade chain AND a shadowed probe
+# grid at once, which is the VRAM-contention class (CLAUDE.md).
+set_tests_properties(gi.atlas_keeps_voxels PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
