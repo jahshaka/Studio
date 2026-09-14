@@ -130,7 +130,9 @@ int main(int argc, char **argv)
           "the tray opens on the Assets tab");
     CHECK(tray.value("consoleVisible").toBool() == false,
           "…and there is no Console tab until the console is asked for");
-    CHECK(tray.value("tabs").toArray().size() == 1, "one tab in the bar to begin with");
+    CHECK(tray.value("tabs").toArray().size() == 2,
+          "…and the bar begins with the two panels the bottom area is made of "
+          "(Assets and the Timeline — lane SPACE-2)");
     // THE CORNER (owner, 2026-09-12): the right column runs to the bottom of the
     // editor and the tray stops at its edge instead of running under it.
     std::printf("    corner: trayRight=%d rightColumnLeft=%d rightColumnBottom=%d areaBottom=%d\n",
@@ -173,22 +175,23 @@ int main(int argc, char **argv)
               "…and the Presets panel follows it onto the same line at both heights");
     }
     tray = readObject(mcp, QStringLiteral("editor.trayState()"));
-    // ONE TAB BAR PER CONCEPT (smoke L10 item 6). The tray's dock sits tabbed
-    // with the Timeline, so Qt draws a SECOND tab bar at the bottom out of the
-    // two docks' titles — which read "Timeline | Asset Browser" under a tray
-    // whose own tabs already said "Assets | Console". The bottom bar names the
-    // two DOCKS, so the tray's dock is called what it is.
-    CHECK(tray.value("title").toString() == QLatin1String("Tray"),
-          qPrintable(QStringLiteral("the tray's dock is titled \"Tray\" (the bottom bar reads "
-                                    "\"Timeline | Tray\"), got \"%1\"")
+    // ONE TAB BAR, AND EACH TAB IS A PANEL (lane SPACE-2). The bottom area's
+    // three docks share one bar drawn from their TITLES, and there is no second
+    // bar nested inside the tray any more — so the asset browser's dock is
+    // called what the user calls it. (It was renamed "Tray" at smoke L10 item 6
+    // precisely because the nested bar already said "Assets".)
+    CHECK(tray.value("title").toString() == QLatin1String("Assets"),
+          qPrintable(QStringLiteral("the asset browser's dock is titled \"Assets\" (the bar "
+                                    "reads \"Assets | Timeline\"), got \"%1\"")
                          .arg(tray.value("title").toString())));
 
     tray = readObject(mcp, QStringLiteral("editor.tray({tab: 'console'})"));
     CHECK(tray.value("consoleVisible").toBool(), "asking for the console ADDS the Console tab");
     CHECK(tray.value("tab").toString() == QLatin1String("console"),
-          "…and brings it to the front of the same tray widget");
-    CHECK(tray.value("tabs").toArray().size() == 2,
-          "…beside Assets — the two share one widget, they do not split the area");
+          "…and brings it to the front of the same tab bar");
+    CHECK(tray.value("tabs").toArray().size() == 3,
+          "…beside Assets and the Timeline — the three share one area, the console does not "
+          "split it (the objection that retired the console dock at smoke S1)");
     CHECK(tray.value("consoleFocused").toBool(),
           "…and the keyboard is in the console input (what Ctrl+` promises)");
     CHECK(tray.value("visible").toBool(), "the tray itself is on screen");
@@ -202,7 +205,19 @@ int main(int argc, char **argv)
     tray = readObject(mcp, QStringLiteral("editor.tray({console: false})"));
     CHECK(!tray.value("consoleVisible").toBool(), "turning the console off removes its tab");
     CHECK(tray.value("tab").toString() == QLatin1String("assets"),
-          "…and the tray returns to Assets");
+          "…and the tab the user was on before it is the one in front again");
+    CHECK(tray.value("tabs").toArray().size() == 2,
+          "…with the other two tabs untouched");
+
+    // THE TIMELINE IS A TAB OF THIS BAR (owner report, 2026-09-14: "the
+    // timeline widget was in the bottom where Assets is and is gone").
+    tray = readObject(mcp, QStringLiteral("editor.tray({tab: 'timeline'})"));
+    CHECK(tray.value("tab").toString() == QLatin1String("timeline"),
+          "the Timeline is a tab of the same bar, and it comes to the front when picked");
+    CHECK(qAbs(tray.value("presetsTop").toInt() - tray.value("trayTop").toInt()) <= 2,
+          "…and the Presets line follows the AREA, not the asset browser's own parked "
+          "rectangle (the three tabs share one)");
+    tray = readObject(mcp, QStringLiteral("editor.tray({tab: 'assets'})"));
 
     const QJsonObject bogus = mcp.runScript(QStringLiteral("editor.tray({tab: 'nope'})"));
     CHECK(!bogus.value("ok").toBool(), "an unknown tab name is refused, not guessed at");

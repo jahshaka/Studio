@@ -81,6 +81,7 @@ public:
     Q_INVOKABLE QVariantMap trayState();
     Q_INVOKABLE QVariantList trayAssets();
     Q_INVOKABLE QVariantMap tray(const QVariantMap &change = QVariantMap());
+    Q_INVOKABLE QVariantMap panel(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantMap snapSize();
     Q_INVOKABLE QVariantMap setSnapSize(const QVariant &size);
     Q_INVOKABLE bool snapToFloor();

@@ -67,6 +67,7 @@ For more information see the LICENSE file
 #include <QHashIterator>
 #include <QDirIterator>
 #include <QDockWidget>
+#include <QTabBar>
 #include <QFileDialog>
 #include <QTemporaryDir>
 
@@ -312,16 +313,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	registerStudioModules(*scriptEngine);
 	for (auto *module : modules) module->registerApi(*scriptEngine);
 
-	// THE CONSOLE IS A TAB OF THE BOTTOM TRAY (owner, 2026-09-11, smoke S1),
-	// not a dock of its own: setupDockWidgets has already built the tray, so
-	// the console joins it here as a tab that stays hidden until Ctrl+` (or
-	// editor.tray) asks for it.
+	// THE CONSOLE IS THE BOTTOM AREA'S THIRD TAB (owner, 2026-09-14, lane
+	// SPACE-2). Its DOCK is built in setupDockWidgets — it has to exist before
+	// the saved layout is restored there, or a blob that names it leaves Qt
+	// guessing at the whole bottom area — and the console widget, which needs
+	// the script engine, arrives here. The dock is closed until Ctrl+` (or
+	// editor.tray) asks for it, and it is tabified with Assets and the
+	// Timeline, so asking for it adds a tab rather than splitting the area
+	// (the thing the owner rejected at smoke S1).
 	scriptConsole = new ScriptConsole(scriptEngine);
-	if (bottomTray) {
-		consoleTabIndex = bottomTray->addTab(scriptConsole, tr("Console"));
-		bottomTray->setTabVisible(consoleTabIndex, false);
-		bottomTray->setCurrentIndex(kAssetsTrayTab);
-	}
+	if (scriptConsoleDock) scriptConsoleDock->setWidget(scriptConsole);
 
 	// MCP endpoint (CLAUDE_EDITOR_SPEC.md phase 1): OFF by default — total
 	// lockdown, the scripting engine is the only capability surface. Started
@@ -606,8 +607,19 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         else if (obj == presetsDock)             widgetStates[(int) Widget::PRESETS]    = false;
         else if (obj == assetDock)               widgetStates[(int) Widget::ASSETS]     = false;
         else if (obj == animationDock)           widgetStates[(int) Widget::TIMELINE]   = false;
+        else if (obj == scriptConsoleDock)       widgetStates[(int) Widget::CONSOLE]    = false;
     }
-    if (obj == assetDock && event->type() == QEvent::Resize && !presetsAlignQueued) {
+    // THE PRESETS LINE FOLLOWS THE BOTTOM AREA, however it moves (lane
+    // SPACE-2). A RESIZE of the tray was the only trigger, and the area's top
+    // also moves without one: the group's tab bar appears when a second panel
+    // opens there and disappears when the last one closes, which shifts the
+    // whole area's top edge by the bar's height (15 px, measured) — and it
+    // happens AFTER the queued alignment pass has run, so the boot layout was
+    // left a tab bar's height out of line. A MOVE of any of the three is the
+    // same event for this purpose.
+    if ((obj == assetDock || obj == animationDock || obj == scriptConsoleDock)
+        && (event->type() == QEvent::Resize || event->type() == QEvent::Move)
+        && !presetsAlignQueued) {
         presetsAlignQueued = true;
         QTimer::singleShot(0, this, [this]() { presetsAlignQueued = false; alignPresetsWithTray(); });
     }
@@ -1205,7 +1217,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			
 			ui->stackedWidget->setCurrentIndex(0);
 
-            toggleWidgets(false);
+            hideEditorPanels();
             ui->actionClose->setDisabled(true);
             break;
         }
@@ -1253,7 +1265,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
         case WindowSpaces::PLAYER: {
             ui->stackedWidget->setCurrentIndex(4);
-            toggleWidgets(false);
+            hideEditorPanels();
             toolBar->setVisible(false);
 
 			this->sceneView->setWindowSpace(space);
@@ -1270,7 +1282,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
             ui->stackedWidget->setCurrentIndex(2);
             ui->stackedWidget->currentWidget()->setFocus();
 			static_cast<AssetView*>(ui->stackedWidget->currentWidget())->spaceSplits();
-    		toggleWidgets(false);
+    		hideEditorPanels();
     		toolBar->setVisible(false);
 			if (projectService->isSceneOpen()) {
 				playSceneBtn->hide();
@@ -1298,7 +1310,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
 		case WindowSpaces::PUBLISH: {
 			ui->stackedWidget->setCurrentIndex(5);
-			toggleWidgets(false);
+			hideEditorPanels();
 			toolBar->setVisible(false);
 			if (projectService->isSceneOpen()) playSceneBtn->hide();
 			break;
@@ -1307,7 +1319,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 		case WindowSpaces::AVATAR: {
 			ui->stackedWidget->setCurrentIndex(6);
 			ui->stackedWidget->currentWidget()->setFocus();
-			toggleWidgets(false);
+			hideEditorPanels();
 			toolBar->setVisible(false);
 			if (projectService->isSceneOpen()) playSceneBtn->hide();
 			break;
@@ -2399,12 +2411,13 @@ void MainWindow::setupDockWidgets()
     presetsLayout->addWidget(presetsTabWidget);
     presetsDock->setWidget(presetDockContents);
 
-    // Asset Dock — titled "Tray" (smoke L10 item 6): it sits tabbed with the
-    // Timeline, and Qt draws that pairing as a second tab bar at the bottom
-    // made of the two DOCKS' titles. "Timeline | Asset Browser" under a tray
-    // whose own tabs read "Assets | Console" named one concept twice; the
-    // bottom bar now reads "Timeline | Tray".
-    assetDock = new QDockWidget(tr("Tray"), viewPort);
+    // Asset Dock — titled "Assets" again (lane SPACE-2). It was renamed "Tray"
+    // at smoke L10 item 6 because the dock tab bar read "Timeline | Asset
+    // Browser" under a tray whose OWN tabs already said "Assets | Console" —
+    // one concept named twice. That second tab bar is gone: the dock's title is
+    // now the only name the bottom area shows for the asset browser, and it is
+    // what the owner calls it.
+    assetDock = new QDockWidget(tr("Assets"), viewPort);
     assetDock->setObjectName(QStringLiteral("assetDock"));
     assetWidget = new AssetWidget(db, viewPort);
     assetWidget->setMainWindow(this);
@@ -2428,25 +2441,27 @@ void MainWindow::setupDockWidgets()
     assetsLayout->addWidget(assetWidget);
     assetsLayout->setContentsMargins(0, 0, 0, 0);
 
-    // THE BOTTOM TRAY IS A TABBED HOST (owner, 2026-09-11, smoke S1): "the
-    // editor's bottom asset-tray widget gets TABS at its top, Unreal style —
-    // turning the console on adds a Console tab beside Assets and the two share
-    // that widget". The script console used to be a bottom dock of its own, so
-    // opening it SPLIT the bottom area and shrank the viewport; now it is a tab
-    // of the tray that is already there, and Ctrl+` picks the tab.
+    // THE BOTTOM AREA IS ONE TAB GROUP (owner, 2026-09-14, lane SPACE-2):
+    // "Assets and Timeline as tabs, and the script Console (Ctrl+`) as a third
+    // tab when it is turned on".
     //
-    // The Console tab is added where the console itself is built (further up
-    // the constructor, with the script engine) and kept in the tab bar but
-    // HIDDEN until it is asked
-    // for — `setTabVisible` rather than add/remove, so the console widget keeps
-    // one parent for the life of the window and nothing can reparent it into a
-    // stray top-level.
-    bottomTray = new QTabWidget(viewPort);
-    bottomTray->setObjectName(QStringLiteral("bottomTray"));
-    bottomTray->setTabPosition(QTabWidget::North);
-    bottomTray->setDocumentMode(true);
-    bottomTray->addTab(assetDockContents, tr("Assets"));
-    assetDock->setWidget(bottomTray);
+    // It used to be TWO tab bars. The tray's widget was a QTabWidget carrying
+    // "Assets" and "Console" at the top (smoke S1), while the Timeline — a dock
+    // tabified with the tray since the phase-3 refactor — could only be reached
+    // through Qt's OWN dock tab bar, which for a bottom dock area is drawn at
+    // the very BOTTOM edge of the window, a ~20 px strip under the tray (rig
+    // measurement 2026-09-14: the Timeline dock sat at x=-1239, Qt's off-screen
+    // parking spot for a tab that is not in front, and its only handle was that
+    // strip). The editor therefore read as a single "Assets" panel and the
+    // Timeline as GONE — the owner's report.
+    //
+    // So: the nested QTabWidget is deleted (the tray holds the asset browser
+    // directly), the console goes back to being a dock, and the ONE tab bar the
+    // three share is moved to the TOP of the area, which is where the tray's
+    // own bar used to be and where a user looks for tabs. Tabified docks do NOT
+    // split the area, so the objection that retired the console dock at smoke
+    // S1 (opening it shrank the viewport) does not apply to this shape.
+    assetDock->setWidget(assetDockContents);
     // The Presets line follows the Tray (owner 2026-09-12): a Tray resize —
     // a drag of its top edge, a layout restore — re-aligns the right column.
     assetDock->installEventFilter(this);
@@ -2467,6 +2482,15 @@ void MainWindow::setupDockWidgets()
 
     animationDock->setWidget(animationDockContents);
 
+    // Script Console Dock — the bottom area's third tab (lane SPACE-2). The
+    // DOCK is built here, empty: it must exist before DockState::restore below,
+    // because a layout blob that names a dock the window does not have leaves
+    // Qt guessing at the whole area (the reason kVersion went to 2 when the
+    // console STOPPED being a dock). Its widget is the ScriptConsole, which
+    // needs the script engine and is handed over where that is built.
+    scriptConsoleDock = new QDockWidget(tr("Console"), viewPort);
+    scriptConsoleDock->setObjectName(QStringLiteral("scriptConsoleDock"));
+
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
@@ -2484,7 +2508,29 @@ void MainWindow::setupDockWidgets()
     viewPort->splitDockWidget(sceneNodePropertiesDock, presetsDock, Qt::Vertical);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, assetDock);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
-    viewPort->tabifyDockWidget(animationDock, assetDock);
+    viewPort->addDockWidget(Qt::BottomDockWidgetArea, scriptConsoleDock);
+    // ONE GROUP, IN THE ORDER THE TABS READ (lane SPACE-2): Assets, Timeline,
+    // Console. tabifyDockWidget(a, b) puts b AFTER a, so the pair of calls is
+    // the tab order — the old single call read "Timeline | Tray", which put the
+    // panel the user opens on the right of the panel they rarely open.
+    viewPort->tabifyDockWidget(assetDock, animationDock);
+    viewPort->tabifyDockWidget(animationDock, scriptConsoleDock);
+    // AND THE BAR GOES AT THE TOP. Qt's default for a bottom dock area is
+    // QTabWidget::South: a tab strip along the very bottom edge of the window,
+    // which is where the Timeline's only handle was hiding (owner report,
+    // 2026-09-14) and the first thing a window a few pixels too tall for the
+    // screen loses. North puts it where the tray's own tab bar used to be.
+    viewPort->setTabPosition(Qt::BottomDockWidgetArea, QTabWidget::North);
+    // The console is CLOSED until Ctrl+` asks for it — a hidden dock has no
+    // tab, which is exactly "a third tab when it is turned on". Hidden before
+    // any layout is restored, so a blob that recorded it open can say so.
+    scriptConsoleDock->hide();
+    // AND THE EDITOR OPENS ON ASSETS. tabifyDockWidget leaves the dock it
+    // inserted LAST in front, which would hand a fresh profile the Timeline —
+    // a panel most sessions never touch — in front of the asset browser every
+    // session starts in. (A restored layout carries the user's own front tab
+    // and is applied after this.)
+    assetDock->raise();
 
     // ...and the USER's layout on top of it, if there is one. The docks belong
     // to this nested QMainWindow, so MainWindow's own restoreState (which the
@@ -2501,7 +2547,7 @@ void MainWindow::setupDockWidgets()
     // Close event goes into `widgetStates` (see eventFilter), so the panel
     // stays closed across space switches and the Toggle Widgets dialog agrees.
     for (QDockWidget *dock : { sceneHierarchyDock, sceneNodePropertiesDock, presetsDock,
-                               assetDock, animationDock })
+                               assetDock, animationDock, scriptConsoleDock })
         dock->installEventFilter(this);
     // WHICH PANELS ARE OPEN IS `widgetStates`, FROM NOW ON (lane SPACE-1).
     // A restored layout says which docks the user had closed, and until this
@@ -2510,12 +2556,26 @@ void MainWindow::setupDockWidgets()
     // own record from the blob is what makes a closed panel stay closed — and
     // it is the same record applyDockVisibilityForSpace reads, so the layout
     // and the space can no longer disagree.
+    //
+    // `isHidden()`, AND IT HAS TO BE (lane SPACE-2, measured). A tabified dock
+    // that is not the front tab is NOT hidden by Qt: it stays shown and is
+    // parked off-screen (a negative x — the rig read the Timeline at x=-1239),
+    // which is why isHidden() is the predicate that answers "did the user close
+    // this panel" for a tab as well as for a lone dock. The obvious
+    // alternatives are both WRONG here: `isVisible()` is false for every one of
+    // these docks while their page is not on screen, and
+    // `toggleViewAction()->isChecked()` is false for ALL of them until the
+    // window is first shown — this runs in the constructor. A standalone Qt
+    // 6.10 probe of the three readings is in the lane's spike directory.
     if (restoredViewportDocks) {
         widgetStates[(int) Widget::HIERARCHY]  = !sceneHierarchyDock->isHidden();
         widgetStates[(int) Widget::PROPERTIES] = !sceneNodePropertiesDock->isHidden();
         widgetStates[(int) Widget::PRESETS]    = !presetsDock->isHidden();
         widgetStates[(int) Widget::ASSETS]     = !assetDock->isHidden();
         widgetStates[(int) Widget::TIMELINE]   = !animationDock->isHidden();
+        // The console comes back the way the user left it: a session that
+        // quit with the Console tab open opens with it (owner, 2026-09-14).
+        widgetStates[(int) Widget::CONSOLE]    = !scriptConsoleDock->isHidden();
     }
 
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
@@ -2606,14 +2666,14 @@ void MainWindow::applyColumnWidthsOnce()
 // Presets panel's top is set to the Tray's top: Presets gets the Tray's height
 // and Properties the rest of the column. Skipped when either panel is hidden or
 // floating — there is no shared line to meet then.
-void MainWindow::alignPresetsWithTray()
+void MainWindow::alignPresetsWithTray(int retries)
 {
     if (!viewPort || !assetDock || !presetsDock || !sceneNodePropertiesDock) return;
     if (!assetDock->isVisible() || !presetsDock->isVisible() || !sceneNodePropertiesDock->isVisible())
         return;
     if (assetDock->isFloating() || presetsDock->isFloating() || sceneNodePropertiesDock->isFloating())
         return;
-    const int trayTop = assetDock->geometry().top();
+    const int trayTop = bottomAreaTop();
     const int columnTop = sceneNodePropertiesDock->geometry().top();
     const int columnBottom = presetsDock->geometry().bottom();
     if (trayTop <= columnTop || columnBottom <= trayTop) return;
@@ -2622,18 +2682,31 @@ void MainWindow::alignPresetsWithTray()
     int presetsH = columnBottom - trayTop + 1;
     for (int pass = 0; pass < 2; ++pass) {
         const int delta = presetsDock->geometry().top() - trayTop;
-        if (qAbs(delta) <= 1) return;                       // on the line
+        if (qAbs(delta) <= 1) break;                        // on the line
         if (pass == 1) presetsH += delta;                   // the separator's share
         const int propsH = qMax(1, (columnBottom - columnTop + 1) - presetsH);
         viewPort->resizeDocks({ sceneNodePropertiesDock, presetsDock }, { propsH, presetsH }, Qt::Vertical);
         if (QLayout *l = viewPort->layout()) l->activate();
     }
+    // AND THEN LOOK AGAIN, ONCE THE LAYOUT HAS SETTLED (lane SPACE-2). The two
+    // passes above measure what the dock area reports in THIS turn, and that is
+    // not always where things end up: the bottom area's tab bar appears a turn
+    // later (a second panel opening there) and takes its height off the top of
+    // the area, and the right column follows — so the pass that ran at boot
+    // reported itself exactly on the line and the user saw it 15 px below.
+    // Bounded, and a no-op the moment the two edges agree.
+    if (retries <= 0) return;
+    QTimer::singleShot(0, this, [this, retries]() {
+        if (!presetsDock || !presetsDock->isVisible() || presetsDock->isFloating()) return;
+        if (qAbs(presetsDock->geometry().top() - bottomAreaTop()) <= 1) return;
+        alignPresetsWithTray(retries - 1);
+    });
 }
 
 bool MainWindow::setTrayHeight(int height)
 {
     if (!viewPort || !assetDock || height < 40) return false;
-    viewPort->resizeDocks({ assetDock }, { height }, Qt::Vertical);
+    viewPort->resizeDocks({ bottomFrontDock() }, { height }, Qt::Vertical);
     QCoreApplication::processEvents();
     alignPresetsWithTray();
     return true;
@@ -2684,7 +2757,7 @@ QVariantList MainWindow::dockReport() const
 {
     QVariantList out;
     const QDockWidget *docks[] = { sceneHierarchyDock, sceneNodePropertiesDock, presetsDock,
-                                   assetDock, animationDock };
+                                   assetDock, animationDock, scriptConsoleDock };
     for (const QDockWidget *d : docks) {
         if (!d) continue;
         QVariantMap m;
@@ -2698,6 +2771,17 @@ QVariantList MainWindow::dockReport() const
         m.insert("visible", d->isVisible());
         m.insert("shown", viewPort ? d->isVisibleTo(viewPort) : d->isVisible());
         m.insert("floating", d->isFloating());
+        // TABS ARE A THIRD THING (lane SPACE-2, owner report: "the timeline
+        // widget is gone"). A dock can be open AND unreachable: tabified docks
+        // share one space and Qt parks the ones that are not in front
+        // off-screen, so `shown` says true for a panel the user cannot see a
+        // pixel of. `tabbed` is whether it shares a tab bar with anything, and
+        // `current` whether it is the tab in FRONT — the two numbers that tell
+        // "behind another tab" from "closed".
+        m.insert("tabbed", viewPort ? !viewPort->tabifiedDockWidgets(
+                                           const_cast<QDockWidget *>(d)).isEmpty()
+                                    : false);
+        m.insert("current", isFrontTab(d));
         m.insert("width", d->width());
         m.insert("height", d->height());
         // WHERE IT IS, in the window's own coordinates: what a rig driving
@@ -2719,17 +2803,94 @@ QVariantList MainWindow::dockReport() const
 // showing" means, and both the Ctrl+` chord and the editor.tray verb come
 // through it.
 
+// WHICH TAB IS IN FRONT, without a QTabBar to ask (lane SPACE-2). Qt gives a
+// tabified QDockWidget no "am I the current tab" accessor, and the tab bar
+// itself is a private child of the dock area — but it gives the docks a
+// reading that IS the answer and that QDockWidget's own code uses for exactly
+// this: a tab that is not in front is shown and parked OFF-SCREEN, so
+// `geometry().right() < 0` (qdockwidget.cpp emits visibilityChanged(geometry()
+// .right() >= 0) on Show for this reason). Measured on the rig: the front tab
+// at x=0, the other at x=-1239.
+//
+// A dock that is not tabbed at all trivially passes, which is what we want:
+// with the Timeline and the Console closed, the Assets dock IS the front tab.
+bool MainWindow::isFrontTab(const QDockWidget *dock)
+{
+    return dock && !dock->isHidden() && dock->geometry().right() >= 0;
+}
+
+// The bottom area's docks in tab-bar order, and the name each answers to.
+QVector<QPair<QString, QDockWidget *>> MainWindow::bottomAreaTabs() const
+{
+    QVector<QPair<QString, QDockWidget *>> tabs;
+    if (assetDock)        tabs.append({ QStringLiteral("assets"), assetDock });
+    if (animationDock)    tabs.append({ QStringLiteral("timeline"), animationDock });
+    if (scriptConsoleDock) tabs.append({ QStringLiteral("console"), scriptConsoleDock });
+    return tabs;
+}
+
+// The bottom area's geometry belongs to whichever tab is in FRONT: the other
+// two are parked off-screen, so reading the asset browser's own rectangle while
+// the Timeline is up answers with Qt's parking spot (x=-836 on the rig) instead
+// of the area every one of them fills. Everything that measures "the tray" —
+// the Presets line, the height verb, trayState's geometry — reads it here.
+QDockWidget *MainWindow::bottomFrontDock() const
+{
+    for (const auto &tab : bottomAreaTabs())
+        if (isFrontTab(tab.second)) return tab.second;
+    return assetDock;
+}
+
+// WHERE THE BOTTOM AREA STARTS ON SCREEN — the line the Presets panel is
+// supposed to meet (owner, 2026-09-12: "the bottom drawer … needs to start at
+// the same horizontal line as the asset module").
+//
+// That is NOT the dock's own top any more: the group's tab bar sits ABOVE the
+// dock (setTabPosition(North), lane SPACE-2) and is part of what the user sees
+// as the bottom panel, so aligning to the dock left the Presets panel a tab
+// bar's height (27 px, measured) below the line. Qt keeps that bar private —
+// it is a QTabBar child of the dock area, not reachable through any dock API —
+// so it is found by GEOMETRY: the visible tab bar sitting directly on top of
+// the front dock, in the same horizontal span.
+int MainWindow::bottomAreaTop() const
+{
+    const QDockWidget *dock = bottomFrontDock();
+    if (!dock || !viewPort) return 0;
+    const QRect area = dock->geometry();
+    int top = area.top();
+    for (const QTabBar *bar : viewPort->findChildren<QTabBar *>()) {
+        if (!bar->isVisible() || bar->parentWidget() == dock) continue;
+        QRect g = bar->geometry();
+        if (bar->parentWidget() && bar->parentWidget() != viewPort)
+            g.moveTopLeft(bar->parentWidget()->mapTo(viewPort, g.topLeft()));
+        if (g.bottom() > area.top() || g.bottom() < area.top() - 8) continue;   // not on top of it
+        if (g.right() < area.left() || g.left() > area.right()) continue;       // not over it
+        top = std::min(top, g.top());
+    }
+    return top;
+}
+
 QString MainWindow::trayTab() const
 {
-    if (!bottomTray) return QString();
-    return (consoleTabIndex >= 0 && bottomTray->currentIndex() == consoleTabIndex)
-               ? QStringLiteral("console")
-               : QStringLiteral("assets");
+    if (!assetDock) return QString();
+    for (const auto &tab : bottomAreaTabs())
+        if (isFrontTab(tab.second)) return tab.first;
+    // Nothing in the bottom area is on screen (every panel there is closed, or
+    // the editor page is not up): no tab is in front, but the area exists.
+    return QStringLiteral("assets");
+}
+
+QStringList MainWindow::trayTabs() const
+{
+    QStringList names;
+    for (const auto &tab : bottomAreaTabs())
+        if (!tab.second->isHidden()) names << tab.first;
+    return names;
 }
 
 bool MainWindow::isConsoleTabVisible() const
 {
-    return bottomTray && consoleTabIndex >= 0 && bottomTray->isTabVisible(consoleTabIndex);
+    return scriptConsoleDock && !scriptConsoleDock->isHidden();
 }
 
 bool MainWindow::isTrayVisible() const
@@ -2742,44 +2903,63 @@ bool MainWindow::isConsoleInputFocused() const
     return scriptConsole && scriptConsole->inputHasFocus();
 }
 
+// THE CONSOLE TAB IS THE CONSOLE DOCK (lane SPACE-2). Showing it adds a tab to
+// the bottom area's one tab bar and brings it to the front; hiding it takes the
+// tab away and leaves the other two exactly as they were. `widgetStates` is
+// updated with it, like every other panel, so a space switch and a restart
+// carry the answer (applyDockVisibilityForSpace is the only other writer).
+//
+// The old implementation had to un-hide the TRAY to show the console, because
+// the console lived inside the tray's widget — and then put it back, which is
+// what `trayForcedVisible` was for. A dock of its own needs none of that: the
+// console can be open with the asset browser closed.
 void MainWindow::setConsoleTabVisible(bool visible, bool focusInput)
 {
-    if (!bottomTray || consoleTabIndex < 0) return;
+    if (!scriptConsoleDock) return;
     if (visible) {
-        // The tray may be closed (the View menu's Assets toggle) or sitting
-        // behind the Timeline in the bottom area's own tab group. Asking for
-        // the console asks for the widget it lives in.
-        if (assetDock && !assetDock->isVisible()) {
-            trayForcedVisible = true;
-            assetDock->setVisible(true);
-        }
-        if (assetDock) assetDock->raise();
-        bottomTray->setTabVisible(consoleTabIndex, true);
-        bottomTray->setCurrentIndex(consoleTabIndex);
-        if (focusInput && scriptConsole) scriptConsole->focusInput();
-    } else {
-        bottomTray->setCurrentIndex(kAssetsTrayTab);
-        bottomTray->setTabVisible(consoleTabIndex, false);
-        // Put the tray back the way it was found: a console opened over a
-        // closed tray closes the tray with it.
-        if (trayForcedVisible && assetDock) assetDock->setVisible(false);
-        trayForcedVisible = false;
+        // WHAT CTRL+` INTERRUPTED, so the second press can put it back. Qt
+        // picks the NEIGHBOURING tab when the current one disappears, which
+        // handed the bottom area to the Timeline every time the console was
+        // closed (app.input_keys caught it) — the console is a visitor, and a
+        // visitor leaves the room the way it found it.
+        for (const auto &tab : bottomAreaTabs())
+            if (tab.first != QLatin1String("console") && isFrontTab(tab.second)) {
+                bottomReturnTab = tab.first;
+                break;
+            }
     }
+    widgetStates[(int) Widget::CONSOLE] = visible;
+    scriptConsoleDock->setVisible(visible);
+    if (!visible) {
+        bottomFrontTab = bottomReturnTab;
+        raiseBottomFrontTab();
+        return;
+    }
+    bottomFrontTab = QStringLiteral("console");
+    scriptConsoleDock->raise();
+    if (focusInput && scriptConsole) scriptConsole->focusInput();
 }
 
 bool MainWindow::setTrayTab(const QString &tab, bool focusConsoleInput)
 {
-    if (!bottomTray) return false;
+    if (!assetDock) return false;
     const QString wanted = tab.trimmed().toLower();
     if (wanted == QLatin1String("console")) {
         setConsoleTabVisible(true, focusConsoleInput);
         return true;
     }
-    if (wanted == QLatin1String("assets")) {
-        // Selecting Assets does NOT close the console: the tab stays in the bar
-        // (that is what a tab bar is for) — Ctrl+` is what removes it.
-        if (assetDock) assetDock->raise();
-        bottomTray->setCurrentIndex(kAssetsTrayTab);
+    // Selecting a tab does NOT close any other: the tabs stay in the bar (that
+    // is what a tab bar is for) — the title-bar X and Ctrl+` are what remove
+    // one. A panel the user closed cannot be raised, though: naming a closed
+    // tab OPENS it, which is what "show me this tab" means from a script.
+    for (const auto &entry : bottomAreaTabs()) {
+        if (entry.first != wanted) continue;
+        if (entry.second->isHidden()) {
+            entry.second->setVisible(true);
+            if (entry.second == assetDock)     widgetStates[(int) Widget::ASSETS]   = true;
+            if (entry.second == animationDock) widgetStates[(int) Widget::TIMELINE] = true;
+        }
+        entry.second->raise();
         return true;
     }
     return false;
@@ -2787,13 +2967,11 @@ bool MainWindow::setTrayTab(const QString &tab, bool focusConsoleInput)
 
 void MainWindow::toggleScriptConsole()
 {
-    if (!bottomTray || consoleTabIndex < 0) return;
-    // "Showing" means all three: the tab exists, it is the tab in front, and
-    // the tray is on screen. Anything less and Ctrl+` brings it forward rather
-    // than closing something the user cannot see.
-    const bool showing = isConsoleTabVisible() && isTrayVisible()
-                         && bottomTray->currentIndex() == consoleTabIndex;
-    setConsoleTabVisible(!showing);
+    if (!scriptConsoleDock) return;
+    // "Showing" means both: the tab is in the bar AND it is the tab in front.
+    // Anything less and Ctrl+` brings it forward rather than closing something
+    // the user cannot see.
+    setConsoleTabVisible(!(isConsoleTabVisible() && isFrontTab(scriptConsoleDock)));
 }
 
 void MainWindow::setupViewPort()
@@ -3344,17 +3522,20 @@ void MainWindow::setupViewPort()
 
     connect(playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
-	// WHICH EDITOR PANELS ARE OPEN. These are the defaults — all five — and a
+	// WHICH EDITOR PANELS ARE OPEN. These are the defaults — all five panels
+	// open, the script console closed — and a
 	// restored dock layout overwrites them in setupDockWidgets, which runs
 	// after this. (The commented-out `widgets` QSettings key that used to sit
 	// here was dead for years: nothing ever wrote it. The dock layout itself
 	// carries the answer now. Lane SPACE-1, CRUD.)
-	widgetStates = QVector<bool>(5);
+	widgetStates = QVector<bool>(6);
 	widgetStates[static_cast<int>(Widget::HIERARCHY)]	= true;
 	widgetStates[static_cast<int>(Widget::PROPERTIES)]	= true;
 	widgetStates[static_cast<int>(Widget::ASSETS)]		= true;
 	widgetStates[static_cast<int>(Widget::TIMELINE)]	= true;
 	widgetStates[static_cast<int>(Widget::PRESETS)]		= true;
+	// …and the console CLOSED: Ctrl+` is what opens it (lane SPACE-2).
+	widgetStates[static_cast<int>(Widget::CONSOLE)]		= false;
 }
 
 void MainWindow::setupDesktop()
@@ -4068,37 +4249,27 @@ void MainWindow::toggleDockWidgets()
 	cl->addWidget(restoreAll);
 	dl->addWidget(cw);
 
-	connect(hierarchy, &QPushButton::toggled, [&](bool set) {
-		sceneHierarchyDock->setVisible(set);
-		widgetStates[(int)Widget::HIERARCHY] = set;
-	});
-
-	connect(properties, &QPushButton::toggled, [this](bool set) {
-		sceneNodePropertiesDock->setVisible(set);
-		widgetStates[(int)Widget::PROPERTIES] = set;
-	});
-
-	connect(presets, &QPushButton::toggled, [this](bool set) {
-		presetsDock->setVisible(set);
-		widgetStates[(int)Widget::PRESETS] = set;
-	});
-
-	connect(timeline, &QPushButton::toggled, [this](bool set) {
-		animationDock->setVisible(set);
-		widgetStates[(int)Widget::TIMELINE] = set;
-	});
-
-	connect(assets, &QPushButton::toggled, [this](bool set) {
-		assetDock->setVisible(set);
-		widgetStates[(int)Widget::ASSETS] = set;
-	});
+	// EVERY BUTTON IS `setPanelOpen` (lane SPACE-2). The five toggles used to
+	// call setVisible and write `widgetStates` themselves, five copies of the
+	// two lines, and Close All used close() instead — so "closed from the
+	// dialog" and "closed from the X" were two different states of the same
+	// panel. One function, one meaning, and the same one the `editor.panel`
+	// verb and the tests drive. (The script console is deliberately not among
+	// these: Ctrl+` is its switch, and "Restore All" is about the panels the
+	// editor is made of.)
+	static const QStringList kDialogPanels = { QStringLiteral("hierarchy"),
+											   QStringLiteral("properties"),
+											   QStringLiteral("presets"),
+											   QStringLiteral("timeline"),
+											   QStringLiteral("assets") };
+	connect(hierarchy,  &QPushButton::toggled, [this](bool set) { setPanelOpen("hierarchy", set); });
+	connect(properties, &QPushButton::toggled, [this](bool set) { setPanelOpen("properties", set); });
+	connect(presets,    &QPushButton::toggled, [this](bool set) { setPanelOpen("presets", set); });
+	connect(timeline,   &QPushButton::toggled, [this](bool set) { setPanelOpen("timeline", set); });
+	connect(assets,     &QPushButton::toggled, [this](bool set) { setPanelOpen("assets", set); });
 
 	connect(closeAll,	&QPushButton::pressed,	[&]() {
-		sceneHierarchyDock->close();
-		sceneNodePropertiesDock->close();
-		presetsDock->close();
-		assetDock->close();
-		animationDock->close();
+		for (const QString &panel : kDialogPanels) setPanelOpen(panel, false);
 
 		hierarchy->setChecked(false);
 		properties->setChecked(false);
@@ -4108,11 +4279,7 @@ void MainWindow::toggleDockWidgets()
 	});
 
 	connect(restoreAll, &QPushButton::pressed,	[&]() {
-		sceneHierarchyDock->show();
-		sceneNodePropertiesDock->show();
-		presetsDock->show();
-		assetDock->show();
-		animationDock->show();
+		for (const QString &panel : kDialogPanels) setPanelOpen(panel, true);
 
 		hierarchy->setChecked(true);
 		properties->setChecked(true);
@@ -4353,17 +4520,17 @@ void MainWindow::toggleGrid(bool state)
 namespace {
 /// The widgets immersive fullscreen hides, in one place: the toggle and the
 /// leave-by-somebody-else path must hide and restore exactly the same list.
-/// The script console is a TAB of assetDock (smoke S1), so hiding the tray
-/// hides it with everything else in the bottom area — it is not a dock of its
-/// own to list here any more.
-constexpr int kImmersiveDockCount = 6;
+/// The script console is a dock of the bottom area again (lane SPACE-2), so it
+/// is back on the list — hiding the tray no longer hides it.
+constexpr int kImmersiveDockCount = 7;
 }   // namespace
 
 void MainWindow::toggleImmersiveFullscreen()
 {
     if (immersiveFullscreen) { leaveImmersiveFullscreen(true); return; }
     QWidget *editorDocks[kImmersiveDockCount] = { sceneHierarchyDock, sceneNodePropertiesDock,
-                                                  presetsDock, assetDock, animationDock, toolBar };
+                                                  presetsDock, assetDock, animationDock,
+                                                  scriptConsoleDock, toolBar };
     immersiveFullscreen = true;
     enteringFullscreen = true;      // until the window manager says we are there
     // The layout the editor has WITH its chrome, before the next two lines
@@ -4384,7 +4551,8 @@ void MainWindow::toggleImmersiveFullscreen()
 void MainWindow::leaveImmersiveFullscreen(bool restoreWindow)
 {
     QWidget *editorDocks[kImmersiveDockCount] = { sceneHierarchyDock, sceneNodePropertiesDock,
-                                                  presetsDock, assetDock, animationDock, toolBar };
+                                                  presetsDock, assetDock, animationDock,
+                                                  scriptConsoleDock, toolBar };
     // FIRST, so that the showNormal()/showMaximized() below — and any state
     // change somebody else made — cannot re-enter through changeEvent.
     immersiveFullscreen = false;
@@ -4429,14 +4597,24 @@ void MainWindow::toggleDebugDrawer(bool state)
 	sceneView->setShowDebugDrawFlags(state);
 }
 
-void MainWindow::toggleWidgets(bool state)
+// EVERY PAGE THAT IS NOT THE EDITOR TAKES THE EDITOR'S CHROME DOWN, and it does
+// it through the ONE function that knows what "the editor's panels" are (lane
+// SPACE-2).
+//
+// This used to be a toggle taking a bool, which hid FIVE docks by name — and all
+// five call sites passed `false`, so the other half had been dead for years
+// (CRUD). Naming the docks is what made it wrong the moment the bottom area
+// grew a third one: the script console stayed on screen over the Desktop, the
+// Player and the Materials page, and — because closeEvent stores the layout of
+// a window that still has a visible dock in it — a session that quit from the
+// Player saved "the console, alone" as the editor's whole layout. The next
+// launch restored exactly that: an editor with one panel, the console.
+// applyDockVisibilityForSpace reads the page, so it hides all of them here and
+// shows the right ones when the editor comes back.
+void MainWindow::hideEditorPanels()
 {
-    sceneHierarchyDock->setVisible(state);
-    sceneNodePropertiesDock->setVisible(state);
-    presetsDock->setVisible(state);
-    assetDock->setVisible(state);
-    animationDock->setVisible(state);
-    playerControls->setVisible(!state);
+    applyDockVisibilityForSpace();
+    playerControls->setVisible(true);
 }
 
 // THE DOCKS FOLLOW THE PAGE ON SCREEN, FROM ONE PLACE (lane SPACE-1,
@@ -4468,11 +4646,99 @@ void MainWindow::applyDockVisibilityForSpace()
 {
     if (!sceneHierarchyDock || !ui || !ui->stackedWidget) return;
     const bool editor = ui->stackedWidget->currentIndex() == 1 && !immersiveFullscreen;
+    // WHICH TAB IS IN FRONT SURVIVES THE ROUND TRIP (lane SPACE-2). Showing a
+    // tabified dock RAISES it, so the loop below would hand the front tab to
+    // whichever dock it shows last — a trip to the Player and back came home on
+    // the Timeline no matter what the user was doing. Remember the front tab
+    // while it is still readable, restore it once they are all back.
+    for (const auto &tab : bottomAreaTabs()) {
+        if (!isFrontTab(tab.second)) continue;
+        bottomFrontTab = tab.first;
+        break;
+    }
     sceneHierarchyDock->setVisible(editor && widgetStates[(int) Widget::HIERARCHY]);
     sceneNodePropertiesDock->setVisible(editor && widgetStates[(int) Widget::PROPERTIES]);
     presetsDock->setVisible(editor && widgetStates[(int) Widget::PRESETS]);
-    assetDock->setVisible(editor && widgetStates[(int) Widget::ASSETS]);
-    animationDock->setVisible(editor && widgetStates[(int) Widget::TIMELINE]);
+    // THE BOTTOM AREA'S THREE, AND THE FRONT TAB GOES LAST (lane SPACE-2).
+    // Showing a tabified dock RAISES it, so the order these are shown in IS
+    // which tab comes up in front — and a raise() afterwards does not stick:
+    // the dock area's layout pass runs later and leaves the last dock it
+    // inserted in front (measured on the rig — every trip home landed on the
+    // Timeline, and so did the boot). Ordering the calls needs no timer and
+    // cannot flip a tab in front of the user.
+    auto wanted = [&](const QDockWidget *dock) {
+        if (dock == assetDock)     return editor && widgetStates[(int) Widget::ASSETS];
+        if (dock == animationDock) return editor && widgetStates[(int) Widget::TIMELINE];
+        return editor && widgetStates[(int) Widget::CONSOLE];
+    };
+    const QVector<QPair<QString, QDockWidget *>> bottom = bottomAreaTabs();
+    for (const auto &tab : bottom)
+        if (tab.first != bottomFrontTab) tab.second->setVisible(wanted(tab.second));
+    for (const auto &tab : bottom)
+        if (tab.first == bottomFrontTab) tab.second->setVisible(wanted(tab.second));
+    // A dock that was ALREADY visible is not re-shown by the line above (Qt
+    // returns early), so an ordinary raise covers the case where nothing about
+    // the bottom area's visibility changed and only the front tab is wrong.
+    if (editor) raiseBottomFrontTab();
+}
+
+// OPEN OR CLOSE AN EDITOR PANEL, IN ONE PLACE (lane SPACE-2, API-first).
+//
+// Closing is `close()` and not `setVisible(false)` ON PURPOSE: the title-bar X
+// is close(), the Close event is what writes `widgetStates` (see eventFilter),
+// and a panel that two gestures close by two different routes is how the Toggle
+// Widgets dialog and the X came to disagree in the first place. Opening shows
+// the dock AND raises it — in the bottom area's tab group, a panel the user
+// asked for that comes back behind another tab has not come back.
+//
+// `name` is the panel's script name; the empty QString answer means "no such
+// panel", which is what the verb reports back.
+QDockWidget *MainWindow::panelDock(const QString &name) const
+{
+    const QString wanted = name.trimmed().toLower();
+    if (wanted == QLatin1String("hierarchy"))  return sceneHierarchyDock;
+    if (wanted == QLatin1String("properties")) return sceneNodePropertiesDock;
+    if (wanted == QLatin1String("presets"))    return presetsDock;
+    if (wanted == QLatin1String("assets"))     return assetDock;
+    if (wanted == QLatin1String("timeline"))   return animationDock;
+    if (wanted == QLatin1String("console"))    return scriptConsoleDock;
+    return nullptr;
+}
+
+bool MainWindow::setPanelOpen(const QString &name, bool open)
+{
+    QDockWidget *dock = panelDock(name);
+    if (!dock) return false;
+    if (!open) {
+        dock->close();                       // the X's own gesture: see eventFilter
+        return true;
+    }
+    // The record first: showing a dock whose page is not up would be undone by
+    // the next applyDockVisibilityForSpace, and the user's answer is the bit.
+    const QString wanted = name.trimmed().toLower();
+    if      (dock == sceneHierarchyDock)      widgetStates[(int) Widget::HIERARCHY]  = true;
+    else if (dock == sceneNodePropertiesDock) widgetStates[(int) Widget::PROPERTIES] = true;
+    else if (dock == presetsDock)             widgetStates[(int) Widget::PRESETS]    = true;
+    else if (dock == assetDock)               widgetStates[(int) Widget::ASSETS]     = true;
+    else if (dock == animationDock)           widgetStates[(int) Widget::TIMELINE]   = true;
+    else if (dock == scriptConsoleDock)       widgetStates[(int) Widget::CONSOLE]    = true;
+    dock->show();
+    dock->raise();
+    for (const auto &tab : bottomAreaTabs())
+        if (tab.second == dock) bottomFrontTab = tab.first;
+    return true;
+}
+
+bool MainWindow::isPanelOpen(const QString &name) const
+{
+    const QDockWidget *dock = panelDock(name);
+    return dock && !dock->isHidden();
+}
+
+void MainWindow::raiseBottomFrontTab()
+{
+    for (const auto &tab : bottomAreaTabs())
+        if (tab.first == bottomFrontTab && !tab.second->isHidden()) { tab.second->raise(); return; }
 }
 
 // THE LAYOUT THE EDITOR LAST HAD (lane SPACE-1). Called on the way out of the

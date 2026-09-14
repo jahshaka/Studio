@@ -45,7 +45,9 @@ For more information see the LICENSE file
 #include <QApplication>
 #include <QDockWidget>
 #include <QMainWindow>
+#include <QAction>
 #include <QSettings>
+#include <QTabWidget>
 #include <QTemporaryDir>
 #include <cstdio>
 
@@ -61,8 +63,10 @@ static int failures = 0;
 namespace {
 
 /// The editor's dock arrangement, as shell/mainwindow.cpp builds it: Hierarchy
-/// on the left, Properties on the right with Presets split under it, the Asset
-/// Browser and the Timeline tabbed along the bottom.
+/// on the left, Properties on the right with Presets split under it, and the
+/// bottom area's THREE — Assets, the Timeline and the script console — in one
+/// tab group whose bar sits at the TOP (lane SPACE-2), the console closed until
+/// Ctrl+` asks for it.
 struct Shell {
     QMainWindow window;
     QDockWidget *hierarchy;
@@ -70,6 +74,7 @@ struct Shell {
     QDockWidget *presets;
     QDockWidget *assets;
     QDockWidget *timeline;
+    QDockWidget *console;
 
     QDockWidget *makeDock(const char *name, const char *title)
     {
@@ -86,14 +91,20 @@ struct Shell {
         hierarchy  = makeDock("sceneHierarchyDock", "Hierarchy");
         properties = makeDock("sceneNodePropertiesDock", "Properties");
         presets    = makeDock("presetsDock", "Presets");
-        assets     = makeDock("assetDock", "Tray");
+        assets     = makeDock("assetDock", "Assets");
         timeline   = makeDock("animationDock", "Timeline");
+        console    = makeDock("scriptConsoleDock", "Console");
         window.addDockWidget(Qt::LeftDockWidgetArea, hierarchy);
         window.addDockWidget(Qt::RightDockWidgetArea, properties);
         window.splitDockWidget(properties, presets, Qt::Vertical);
         window.addDockWidget(Qt::BottomDockWidgetArea, assets);
         window.addDockWidget(Qt::BottomDockWidgetArea, timeline);
-        window.tabifyDockWidget(timeline, assets);
+        window.addDockWidget(Qt::BottomDockWidgetArea, console);
+        window.tabifyDockWidget(assets, timeline);
+        window.tabifyDockWidget(timeline, console);
+        window.setTabPosition(Qt::BottomDockWidgetArea, QTabWidget::North);
+        console->hide();
+        assets->raise();
         window.resize(1600, 900);
     }
 };
@@ -118,8 +129,15 @@ int main(int argc, char **argv)
         CHECK(shell.window.dockWidgetArea(shell.hierarchy) == Qt::LeftDockWidgetArea,
               "default: Hierarchy is on the left");
         CHECK(shell.window.dockWidgetArea(shell.assets) == Qt::BottomDockWidgetArea &&
-                  shell.window.dockWidgetArea(shell.timeline) == Qt::BottomDockWidgetArea,
-              "default: the Tray and the Timeline share the bottom area");
+                  shell.window.dockWidgetArea(shell.timeline) == Qt::BottomDockWidgetArea &&
+                  shell.window.dockWidgetArea(shell.console) == Qt::BottomDockWidgetArea,
+              "default: Assets, the Timeline and the Console share the bottom area");
+        CHECK(shell.window.tabifiedDockWidgets(shell.assets).contains(shell.timeline),
+              "default: ...as TABS of one group, not as a split (lane SPACE-2)");
+        CHECK(shell.window.tabPosition(Qt::BottomDockWidgetArea) == QTabWidget::North,
+              "default: ...whose tab bar is at the TOP of the area, not Qt's bottom edge");
+        CHECK(shell.console->isHidden(),
+              "default: the console is CLOSED — a hidden dock has no tab");
     }
 
     // ---- 2. nothing stored: restore refuses, and says so --------------------
@@ -194,7 +212,7 @@ int main(int argc, char **argv)
         app.processEvents();
         for (QDockWidget *d : { saver.hierarchy, saver.properties, saver.presets,
                                 saver.assets, saver.timeline })
-            d->setVisible(false);               // MainWindow::toggleWidgets(false)
+            d->setVisible(false);               // MainWindow::hideEditorPanels()
         app.processEvents();
         DockState::save(&saver.window, &settings, "viewportDockState");
         settings.sync();
@@ -267,6 +285,56 @@ int main(int argc, char **argv)
         settings.sync();
         CHECK(settings.value("viewportDockState").toByteArray() == before,
               "a session with nothing to say (an empty snapshot) leaves the stored layout alone");
+    }
+
+    // ---- 8. A TAB THAT IS NOT IN FRONT IS NOT A CLOSED PANEL ---------------
+    // The owner's 2026-09-14 report ("the timeline widget … is gone") and the
+    // reading the shell's seed depends on, pinned at the Qt level so a Qt
+    // upgrade that changes it fails HERE and not in the editor.
+    //
+    // MainWindow seeds `widgetStates` — which panels are open — from
+    // `!dock->isHidden()` after restoring the saved layout. For a TABIFIED dock
+    // that is not the front tab, Qt keeps the dock SHOWN and parks it
+    // off-screen (a negative geometry) rather than hiding it, so isHidden() is
+    // the right question and the off-screen x is what "is it the front tab"
+    // means (QDockWidget emits visibilityChanged(geometry().right() >= 0) for
+    // exactly this reason). The two obvious alternatives are asserted WRONG
+    // below, because both were proposed: isVisible() and the toggleViewAction.
+    {
+        QSettings settings(scratch.filePath("tabbed.ini"), QSettings::IniFormat);
+        Shell saver;
+        saver.window.show();
+        app.processEvents();
+        saver.assets->raise();                       // Assets is the front tab
+        app.processEvents();
+        CHECK(!saver.timeline->isHidden(),
+              "tabs: the Timeline behind the Assets tab is NOT hidden");
+        CHECK(saver.timeline->geometry().right() < 0 && saver.assets->geometry().right() >= 0,
+              "tabs: ...it is parked off-screen, which is how the front tab is told apart");
+        DockState::save(&saver.window, &settings, "viewportDockState");
+        settings.sync();
+
+        Shell relaunched;
+        CHECK(!relaunched.timeline->isHidden() && !relaunched.assets->isHidden(),
+              "tabs: BEFORE the window is shown, neither tab reads as closed (the seed runs "
+              "in the constructor, where isVisible() is false for every dock)");
+        CHECK(!relaunched.assets->toggleViewAction()->isChecked(),
+              "tabs: ...and toggleViewAction() is false for an OPEN dock there — not a "
+              "substitute for isHidden()");
+        CHECK(DockState::restore(&relaunched.window, &settings, "viewportDockState"),
+              "tabs: the layout restores");
+        CHECK(!relaunched.timeline->isHidden(),
+              "tabs: and the Timeline is still OPEN after the restore — the seed reads it as "
+              "a panel the user never closed (the owner's missing Timeline)");
+        relaunched.window.show();
+        app.processEvents();
+        CHECK(!relaunched.timeline->isHidden() && !relaunched.assets->isHidden(),
+              "tabs: ...on screen too — one of them is in front, neither is closed");
+        // …and a REAL close still reads as closed, through the same predicate.
+        relaunched.timeline->close();
+        app.processEvents();
+        CHECK(relaunched.timeline->isHidden(),
+              "tabs: a tab closed from its X IS hidden — the predicate tells the two apart");
     }
 
     std::printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
