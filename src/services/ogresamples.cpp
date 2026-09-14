@@ -42,11 +42,22 @@ namespace {
 const QVector<Entry> &table()
 {
     static const QVector<Entry> t = {
+        // The notes are what the PORT CANNOT SHOW, and they are re-checked
+        // against the engine each time a port is authored — the sky row here
+        // used to say "ours is a Preetham bake", which stopped being true when
+        // the realistic sky moved onto Ogre's own AtmosphereNpr (SKY-GPU,
+        // 2026-09-14): both samples now ask the same sky model, so what is
+        // left to say is about the materials.
         { QStringLiteral("PbsMaterials"), QStringLiteral("PBS Materials"),
-          QStringLiteral("Their sky is Ogre's AtmosphereNpr; ours is a Preetham bake. "
-                         "3 of their 6 BRDF names exist here.") },
+          QStringLiteral("3 of their 6 BRDF names exist here. Their palette reflects a "
+                         "cubemap from their media; ours reflects the sky. Their grid spins; "
+                         "a saved scene stands still.") },
         { QStringLiteral("LocalCubemaps"), QStringLiteral("Local Cubemaps"),
-          QStringLiteral("Probe placement is grid-only.") },
+          QStringLiteral("Probe placement is grid-only. Reflection probes are REFUSED in this "
+                         "room today: the enclosure rule measures wall coverage one slab at a "
+                         "time and this room's left wall is four panels with light slots "
+                         "between them, so the room reads as open on that axis. It is lit by "
+                         "voxel GI meanwhile.") },
         { QStringLiteral("Refractions"), QStringLiteral("Refractions"),
           QString() },
         { QStringLiteral("Hdr"), QStringLiteral("HDR"),
