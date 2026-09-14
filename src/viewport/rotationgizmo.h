@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmomeshes.h"
 
 #include <QPointF>
 #include <QString>
@@ -39,7 +40,10 @@ public:
 
 	GizmoAxis axis;
 	iris::Vec3 plane;// the ring's own plane: its NORMAL in gizmo space
-	float handleScale = 0.08f;
+	/// THE ROTATION GIZMO'S SIZE, from the one constant that derives it from
+	/// the translate/scale gizmos' reach (GIZMO-2 item 2, owner §366). It was
+	/// a bare 0.08 here.
+	float handleScale = GizmoMeshes::kRotationHandleScale;
 	float handleRadius = 1.0f;
 	/// The ring's radius in handle-local units: 1 for the three axis rings,
 	/// GizmoMeshes::kScreenRingRadius for the outer screen-facing one — the

@@ -59,6 +59,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "viewport/freecamerapolicy.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmomeshes.h"
 #include "viewport/rotationgizmo.h"
 
 static int failures = 0;
@@ -195,7 +196,7 @@ int main(int argc, char **argv)
         gizmo.updateSize(cam);
         gizmo.setPickView(cam, kWidth, kHeight);
 
-        const float scale = gizmo.getGizmoScale() * 0.08f;   // handleScale
+        const float scale = gizmo.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
         const iris::Mat4 gizmoTransform = gizmo.getTransform();
         const iris::Vec3 centre = gizmoTransform.column(3).toVector3D();
         const iris::Vec3 forward =
@@ -325,7 +326,7 @@ int main(int argc, char **argv)
             place(cam, c);
             gizmo.updateSize(cam);
             gizmo.setPickView(cam, kWidth, kHeight);
-            const float scale = gizmo.getGizmoScale() * 0.08f;
+            const float scale = gizmo.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
             const iris::Vec3 centre = gizmo.getTransform().column(3).toVector3D();
             const iris::Vec3 forward =
                 cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
@@ -452,7 +453,7 @@ int main(int argc, char **argv)
             place(cam, c);
             gizmo.updateSize(cam);
             gizmo.setPickView(cam, kWidth, kHeight);
-            const float scale = gizmo.getGizmoScale() * 0.08f;
+            const float scale = gizmo.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
             const iris::Vec3 centre = gizmo.getTransform().column(3).toVector3D();
             for (const Ring &ring : kRings) {
                 int own = 0, here = 0;
@@ -492,7 +493,7 @@ int main(int argc, char **argv)
         place(cam, { "front", 0.0f, 0.0f, 9.0f });
         gizmo.updateSize(cam);
         gizmo.setPickView(cam, kWidth, kHeight);
-        const float scale = gizmo.getGizmoScale() * 0.08f;
+        const float scale = gizmo.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
         const iris::Mat4 t = gizmo.getTransform();
         const iris::Vec3 centre = t.column(3).toVector3D();
         const auto dir = [&t](const iris::Vec3 &d) {

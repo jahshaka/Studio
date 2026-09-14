@@ -48,6 +48,36 @@ namespace GizmoMeshes
     constexpr float kTranslateReach  = kTranslateEnd * kHandleScale;   // 0.0950
     constexpr float kScaleReach      = kScaleEnd * kHandleScale;       // 0.0730
 
+    /// THE ROTATION GIZMO'S SIZE (GIZMO-2 item 2, owner §366: "the rotation
+    /// gizmo is TOO LARGE — the same size as translate and scale, just a little
+    /// bigger, not the current radius").
+    ///
+    /// ONE constant. The rotation gizmo's OUTER extent — the grey screen ring,
+    /// its largest drawn feature — is the SCALE gizmo's reach times this ratio,
+    /// and the three axis rings sit inside it at the fixed kScreenRingRadius
+    /// proportion, so the whole gizmo scales from one number.
+    ///
+    /// WHY THE SCALE GIZMO'S REACH IS THE REFERENCE, measured rather than
+    /// assumed (spikes/gizmo-2, one pose, one cube): the translate gizmo's
+    /// arrow tip and the rotation gizmo's outer ring were ALREADY the same
+    /// distance from the pivot — 180 px and 185 px in a 900 px frame — so
+    /// "1.15 x the translate gizmo's reach" would have GROWN the rings 15 %,
+    /// the opposite of the report. What makes the rotation gizmo read as the
+    /// larger object is that a circle occupies its whole diameter (370 px)
+    /// where three arrows occupy one quadrant; and GIZMO-1's new outer ring had
+    /// just pushed the gizmo's extent 18 % past the axis rings it used to end
+    /// at. Against the more compact of the other two gizmos — the scale
+    /// handles' 1.46 reach — 1.15 puts the outer ring back at 0.0839 of
+    /// gizmoScale, within 5 % of the 0.08 the gizmo ended at before GIZMO-1,
+    /// and takes 11 % off the whole thing. Retune here, nowhere else.
+    constexpr float kRotationExtentRatio = 1.15f;
+    /// The rotation gizmo's outer extent, per unit of gizmoScale (0.0839).
+    constexpr float kRotationOuterExtent = kScaleReach * kRotationExtentRatio;
+    /// ...and therefore the rotation handles' handleScale: the axis rings are
+    /// the unit circle of rotationRing(), the screen ring kScreenRingRadius of
+    /// it (0.0711).
+    constexpr float kRotationHandleScale = kRotationOuterExtent / kScreenRingRadius;
+
     /// THE PLANE HANDLES' SQUARE, in the same handle-local units the arrows'
     /// 1.9 reach is in (GIZMO-2 item 1, owner §366/§368): its inner corner is
     /// AT the gizmo's origin — inside the white centre ball — and its two sides
