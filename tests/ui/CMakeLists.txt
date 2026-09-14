@@ -766,6 +766,53 @@ set_tests_properties(ui.tree_multiselect PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.tree_multiselect)
 
+# ui.tree_scroll — A CLICK IN THE OUTLINER NEVER MOVES THE OUTLINER (lane
+# SPACE-1, owner report 2026-09-14: "when the list grows beyond the widget the
+# clicks become broken, it jumps items"). Same widget, same stub set and the
+# same offscreen QTest clicks as ui.tree_multiselect; what it adds is the
+# SHELL'S RETURN LEG — the announced selection handed straight back to
+# setSelectedNode, which is where the re-centring scroll lived.
+add_executable(test_tree_scroll
+    test_tree_scroll.cpp
+    test_tree_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/reparentscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/scenefoldercommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_tree_scroll PROPERTIES
+    AUTOMOC ON AUTOUIC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_tree_scroll PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_tree_scroll PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_tree_scroll
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)
+jah_document_graph(test_tree_scroll)
+add_test(NAME ui.tree_scroll COMMAND test_tree_scroll
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.tree_scroll PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.tree_scroll)
+
 # ui.column_law — S1: every page's columns are the editor's columns, and the
 # console is a TAB of the editor's bottom tray. Spawns the REAL binary and
 # drives it over MCP (the shutdown suites' harness): these widths come out of a
@@ -791,6 +838,30 @@ set_tests_properties(ui.column_law PROPERTIES
     TIMEOUT 300 LABELS "ui")
 jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
 jah_lsan_blocked(ui.column_law)   # spawns the app
+
+# ui.space_docks — THE EDITOR COMES BACK WITH ITS PANELS (lane SPACE-1, owner
+# report 2026-09-14). Same harness as ui.column_law, and for the same reason —
+# these are LAYOUT facts, only visible in a shown window with the loop turning
+# between the switch and the measurement — plus one thing no single-process
+# suite can do: it quits the app FROM THE PLAYER SPACE and boots it again in the
+# same data root, which is the only way to see what closeEvent really stored.
+add_executable(test_space_docks test_space_docks.cpp)
+set_target_properties(test_space_docks PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_space_docks PRIVATE Qt6::Core Qt6::Network)
+target_include_directories(test_space_docks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_space_docks PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_space_docks_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks)
+file(MAKE_DIRECTORY ${_space_docks_home}/run)
+add_test(NAME ui.space_docks COMMAND test_space_docks
+         WORKING_DIRECTORY ${_space_docks_home}/run)
+set_tests_properties(ui.space_docks PROPERTIES
+    ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
+    TIMEOUT 600 LABELS "ui")
+jah_tsan_blocked(ui.space_docks)   # spawns the app
+jah_lsan_blocked(ui.space_docks)   # spawns the app
 
 # ui.window_minimum — plan item 15: the main window fits a 1366x768 laptop in
 # every space (its floor <= 1366x640) and, put at 1366x680, keeps both columns
