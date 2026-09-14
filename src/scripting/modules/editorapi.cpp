@@ -135,18 +135,25 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "setGizmoMode", "editor.setGizmoMode(\"translate\"|\"rotate\"|\"scale\") -> bool",
           "Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons.",
           Needs::Engine },
-        { "gizmoHitTest", "editor.gizmoHitTest(x, y) -> {ring, distancePx, tolerancePx}",
-          "WHICH ROTATION RING A VIEWPORT PIXEL HITS, and how far the cursor is from it in "
+        { "gizmoHitTest", "editor.gizmoHitTest(x, y) -> {handle, distancePx, tolerancePx}",
+          "WHICH GIZMO HANDLE A VIEWPORT PIXEL HITS, and how far the cursor is from it in "
           "pixels. `x`/`y` are viewport pixels with the origin top-left, exactly as a mouse "
-          "event carries them. `ring` is \"x\", \"y\" or \"z\" when the pixel is inside the pick "
-          "tolerance of that ring's projected circle, and null when it is not; `distancePx` is "
-          "the distance to the NEAREST ring either way, and `tolerancePx` the threshold the "
-          "pick used. The rotation gizmo picks in SCREEN SPACE (smoke S15) — a ring seen "
-          "edge-on projects to a line, which is still clickable, where the old 3D annulus test "
-          "made whichever ring the camera looked along unclickable everywhere. This is the very "
-          "function a click takes, so what the verb reports is what the mouse would do. `ring` "
-          "is null (and `distancePx` -1) when the rotate gizmo is not the active one, when "
-          "nothing is selected, or when this session's viewport has no camera.",
+          "event carries them, and the answer comes from the very call a mouse press takes — "
+          "so what the verb reports is what a click would do. `handle` is null when the pixel "
+          "grabs nothing.\n\nROTATE: \"x\", \"y\", \"z\" or \"screen\" (the outer grey ring, which "
+          "turns the node about the view direction) when the pixel is inside the pick tolerance "
+          "of that ring's projected circle; `distancePx` is the distance to the NEAREST ring "
+          "either way, and `tolerancePx` the threshold the pick used. The rotation gizmo picks "
+          "in SCREEN SPACE (smoke S15) — a ring seen edge-on projects to a line, which is still "
+          "clickable, where the old 3D annulus test made whichever ring the camera looked along "
+          "unclickable everywhere.\n\nTRANSLATE: \"xy\", \"yz\" or \"xz\" for the three plane "
+          "handles, which are picked in pixels too (`distancePx` is 0 inside the square and the "
+          "distance to its border outside, and a plane within 10 degrees of edge-on is neither "
+          "drawn nor pickable); \"center\", \"x\", \"y\" or \"z\" for the ball and the three "
+          "arrows, which are picked against their own geometry in 3D and therefore report no "
+          "pixel distance (-1).\n\n`handle` is null (and `distancePx` -1) when the SCALE gizmo "
+          "is the active one, when nothing is selected, or when this session's viewport has no "
+          "camera.",
           Needs::Engine },
         { "focusSelection", "editor.focusSelection() -> bool",
           "Frames the selection in the editor camera (the F key): bounds-aware distance, current view direction kept. "
@@ -464,8 +471,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "many this call compiled; on a warm shader cache it is 0 and the call is nearly free. "
           "Synchronous by design: the caller holds its cover up until it returns.",
           Needs::Engine },
-        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
+        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, heldKeys, flying}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
           Needs::Document },
         { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
@@ -1005,14 +1012,16 @@ QVariantMap EditorApi::gizmoHitTest(double x, double y)
 {
     QVariantMap out;
     // An explicit JS `null`, not an absent key: an invalid QVariant inside a
-    // map reaches a script as `undefined`, and `r.ring === null` is how a
-    // caller asks "did this pixel miss".
-    out.insert("ring", QVariant::fromValue(nullptr));
+    // map reaches a script as `undefined`, and `r.handle === null` is how a
+    // caller asks "did this pixel miss". (The key was `ring` until GIZMO-1
+    // item 3 — the verb answers for the translate gizmo's plane handles and
+    // arrows now, and none of those is a ring.)
+    out.insert("handle", QVariant::fromValue(nullptr));
     out.insert("distancePx", -1.0);
     out.insert("tolerancePx", 0.0);
     if (!requireEngine()) return out;
     const IEditorViewport::GizmoPickResult pick = host.viewport->gizmoHitTest(QPointF(x, y));
-    if (!pick.handle.isEmpty()) out.insert("ring", pick.handle);
+    if (!pick.handle.isEmpty()) out.insert("handle", pick.handle);
     out.insert("distancePx", double(pick.distancePx));
     out.insert("tolerancePx", double(pick.tolerancePx));
     return out;
@@ -2059,6 +2068,11 @@ QVariantMap EditorApi::viewportState()
     out.insert("width", qMax(0, target.width()));
     out.insert("height", qMax(0, target.height()));
     out.insert("offscreen", host.viewport->isOffscreen());
+    // THE FLY'S STATE (ledger §356). A key stuck in the held set moves nothing
+    // and logs nothing — Left and Right in it together cancel — so "the arrows
+    // are dead" had no reading anywhere. These two make it one.
+    out.insert("heldKeys", host.viewport->heldFlyKeys());
+    out.insert("flying", host.viewport->flying());
     return out;
 }
 

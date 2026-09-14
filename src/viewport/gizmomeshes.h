@@ -31,6 +31,20 @@ For more information see the LICENSE file
 
 namespace GizmoMeshes
 {
+    /// The outer (screen-facing) rotation ring's radius, in the same handle-local
+    /// units the axis rings' 1.0 is in. PUBLIC because that ring is a HANDLE now
+    /// (GIZMO-1 item 2): the circle picking projects has to be the circle the
+    /// mesh draws, so both read this one number.
+    constexpr float kScreenRingRadius = 1.18f;
+
+    /// THE PLANE HANDLES' SQUARE, in the same handle-local units the arrows'
+    /// 1.9 reach is in: it spans [near, far] along each of the two axes it
+    /// lies in, so it sits in the corner between them the way Unreal's does.
+    /// PUBLIC because the quad is picked in PIXELS (project these four corners)
+    /// — the square the cursor is tested against IS the square drawn.
+    constexpr float kPlaneHandleNear = 0.45f;
+    constexpr float kPlaneHandleFar  = 1.05f;
+
     /// Thin shaft ending in a small cone along +axis (translate handle).
     iris::MeshPtr translateHandle(GizmoAxis axis);
     /// Thin shaft ending in a small cube along +axis (scale handle).
@@ -44,6 +58,10 @@ namespace GizmoMeshes
     /// Slightly larger thin ring in the XY plane; the rotation gizmo orients it
     /// to face the camera each frame (the screen-space outer ring).
     iris::MeshPtr screenRing();
+    /// A small filled square in the plane spanned by a plane axis's two axes
+    /// (XYPlane / YZPlane / XZPlane), offset from the origin into the corner
+    /// between them. DOUBLE SIDED: a plane handle is looked at from both sides.
+    iris::MeshPtr planeHandle(GizmoAxis axis);
 }
 
 #endif // GIZMOMESHES_H

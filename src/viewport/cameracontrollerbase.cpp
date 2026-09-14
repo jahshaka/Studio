@@ -9,9 +9,12 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/cameracontrollerbase.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include "data/settingsmanager.h"
+#include <QtGlobal>
 
 
 CameraControllerBase::CameraControllerBase()
@@ -120,7 +123,42 @@ void CameraControllerBase::resetMouseStates()
 void CameraControllerBase::setAltOrbit(bool active, const iris::Vec3 &pivot)
 {
     altOrbit = active;
-    if (active) altOrbitPivot = pivot;
+    if (!active) return;
+    altOrbitPivot = pivot;
+    altOrbitYaw = altOrbitPitch = 0.0f;
+    if (!camera) return;
+    // The pose the drag differences against. Local, not global: the editor's
+    // explorer camera is a child of the scene root and every write below is a
+    // setLocalPos/setLocalRot, so one space throughout is the only way the two
+    // ends can agree.
+    altOrbitStartPos = camera->getLocalPos();
+    altOrbitStartRot = camera->getLocalRot().normalized();
+    float roll = 0.0f;
+    camera->getLocalRot().getEulerAngles(&altOrbitStartPitch, &altOrbitStartYaw, &roll);
+}
+
+void CameraControllerBase::applyAltOrbit(float yawDegrees, float pitchDegrees)
+{
+    if (!altOrbit || !camera) return;
+    altOrbitYaw += yawDegrees;
+    altOrbitPitch += pitchDegrees;
+    // NOTHING DRAGGED, NOTHING WRITTEN. The owner's report is about the frame
+    // BEFORE any movement, so the no-movement case is answered by not touching
+    // the node at all rather than by writing a value that is merely close.
+    if (altOrbitYaw == 0.0f && altOrbitPitch == 0.0f) return;
+    // The pole guard is the free camera's, applied to the ACCUMULATOR itself so
+    // the orbit stops at the pole instead of turning over AND answers the reverse
+    // drag at once — clamping only the derived value let the accumulator wind up
+    // past the pole, and a drag back did nothing until the overshoot unwound
+    // (second reader, GIZMO-1).
+    altOrbitPitch = qBound(-89.0f - altOrbitStartPitch, altOrbitPitch, 89.0f - altOrbitStartPitch);
+    const float pitch = altOrbitStartPitch + altOrbitPitch;
+    const iris::Quat now = iris::Quat::fromEulerAngles(pitch, altOrbitStartYaw + altOrbitYaw, 0);
+    const iris::Quat was = iris::Quat::fromEulerAngles(altOrbitStartPitch, altOrbitStartYaw, 0);
+    const iris::Quat turn = (now * was.conjugated()).normalized();
+    camera->setLocalPos(altOrbitPivot + turn.rotatedVector(altOrbitStartPos - altOrbitPivot));
+    camera->setLocalRot((turn * altOrbitStartRot).normalized());
+    camera->update(0);
 }
 
 void CameraControllerBase::update(float dt)

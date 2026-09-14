@@ -89,3 +89,50 @@ add_test(NAME gizmo.group_transform COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_g
 set_tests_properties(gizmo.group_transform PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "document")
 jah_no_display(gizmo.group_transform)
+
+# gizmo.drag_frame — THE ROTATION GIZMO'S FRAME IS FROZEN FOR THE LENGTH OF A
+# DRAG (owner report 2026-09-15, ledger §345: "they seem to move on their own
+# with the asset"). Drives a real drag through the very calls a mouse press and
+# move make and asserts the drawn AND picked frame is bit-identical from press
+# to release, that the grabbed ring stays under the cursor, that the node still
+# turns, and — inline, as a number — how far the frame the gizmo used to draw
+# ran away. Document-only, like gizmo.ring_pick: no display, no GPU, no pixels.
+add_executable(test_gizmo_drag_frame test_gizmo_drag_frame.cpp test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+set_target_properties(test_gizmo_drag_frame PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_gizmo_drag_frame PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_gizmo_drag_frame PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+jah_document_graph(test_gizmo_drag_frame)
+add_test(NAME gizmo.drag_frame COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_drag_frame
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(gizmo.drag_frame PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "document")
+jah_no_display(gizmo.drag_frame)
+
+# gizmo.plane_handles — THE TRANSLATE GIZMO'S THREE PLANE HANDLES (owner report
+# 2026-09-15, ledger §346: "it helps with the spatial connection for the user").
+# Picks each square by pixel, drags it and asserts the node moves in exactly the
+# two axes it spans and tracks the cursor, that an edge-on square is neither
+# drawn nor pickable, that the group delta applies, and that the arrows and the
+# centre ball still answer beside them. Document-only: no display, no GPU.
+add_executable(test_gizmo_planes test_gizmo_planes.cpp test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+set_target_properties(test_gizmo_planes PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_gizmo_planes PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_gizmo_planes PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+jah_document_graph(test_gizmo_planes)
+add_test(NAME gizmo.plane_handles COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_planes
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(gizmo.plane_handles PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "document")
+jah_no_display(gizmo.plane_handles)

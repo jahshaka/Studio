@@ -41,8 +41,22 @@ public:
 	iris::Vec3 plane;// the ring's own plane: its NORMAL in gizmo space
 	float handleScale = 0.08f;
 	float handleRadius = 1.0f;
+	/// The ring's radius in handle-local units: 1 for the three axis rings,
+	/// GizmoMeshes::kScreenRingRadius for the outer screen-facing one — the
+	/// same number the mesh is built with, so the circle picked IS the circle
+	/// drawn.
+	float ringRadius = 1.0f;
+	/// THE VIEW AXIS, for the Screen handle only, in WORLD space: the direction
+	/// the camera looks. Written by RotationGizmo::refreshFrame(), which means
+	/// it is FROZEN for the length of a drag exactly like the gizmo's frame.
+	iris::Vec3 screenAxis;
 
 	RotationHandle(Gizmo* gizmo, GizmoAxis axis);
+
+	/// The frame this ring is drawn and picked in, relative to the gizmo's own
+	/// frozen frame: identity for an axis ring, the camera-facing turn for the
+	/// screen ring. Unit scale — callers apply gizmoScale * handleScale.
+	iris::Mat4 ringFrame() const;
 
 	/// HOW FAR THE CURSOR IS FROM THIS RING, ON SCREEN (smoke S15).
 	///
@@ -71,24 +85,45 @@ public:
 	/// plane — the drag half of the same defect the hit test had.
 	bool getHitAngle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& angle);
 
-	/// "x" | "y" | "z" — the verb surface's name for this ring.
+	/// "x" | "y" | "z" | "screen" — the verb surface's name for this ring.
 	QString axisName() const;
 };
 
 class RotationGizmo : public Gizmo
 {
-	iris::MeshPtr screenRingMesh;   // camera-facing outer ring (visual only)
 	QVector<iris::MeshPtr> handleMeshes;
 
-
-	RotationHandle* handles[3];
+	/// X, Y, Z and — since GIZMO-1 item 2 — SCREEN: the outer grey ring is a
+	/// fourth handle, not decoration. It is last on purpose: it is drawn last
+	/// (on top of the three axis rings) and it LOSES a pick tie to any of
+	/// them, so grabbing an axis ring where the two cross still gets the axis.
+	static constexpr int kScreenHandle = 3;
+	RotationHandle* handles[4];
 
 	float startAngle;
 	iris::Quat nodeStartRot;
 	RotationHandle* draggedHandle;
 
+	/// THE GIZMO'S OWN FRAME, and it is FROZEN FOR THE LENGTH OF A DRAG
+	/// (owner report 2026-09-15, §345: "they seem to move on their own with
+	/// the asset").
+	///
+	/// In LOCAL space the gizmo is drawn from the node's CURRENT rotation, so
+	/// a drag on the X ring turned the object about its local X and the ring
+	/// turned with it — the ring ran away from under the cursor while the
+	/// VALUE was right (the drag maths has always differenced against the
+	/// frame captured at startDragging). Unreal and Blender freeze the picture
+	/// for the length of the drag and re-orient at release, and so do we: this
+	/// member is refreshed by refreshFrame(), which does nothing while
+	/// `dragging`, and every drawn item and every pick reads it through
+	/// getTransform().
 	iris::Mat4 trans;
 	bool dragging;
+
+	/// Re-reads the gizmo's frame from the node — UNLESS a drag is running, in
+	/// which case the frame captured at startDragging stands. Called at the top
+	/// of everything that draws or picks.
+	void refreshFrame();
 public:
 	RotationGizmo();
 
@@ -111,7 +146,7 @@ public:
 	/// this question asked from a script, and a picking test must be able to
 	/// ask it without synthesizing mouse events.
 	RotationHandle* ringAtPixel(const QPointF& cursor, float& distancePx);
-	/// The same answer as a name: "x" | "y" | "z", or an empty string.
+	/// The same answer as a name: "x" | "y" | "z" | "screen", or an empty string.
 	QString ringNameAtPixel(const QPointF& cursor, float& distancePx);
 
 	iris::Mat4 getTransform() override;

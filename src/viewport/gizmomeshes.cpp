@@ -34,7 +34,7 @@ const float kScaleEnd      = 1.46f;   // same reach as the old scale handle
 const float kCoreSphere    = 0.10f;
 const float kCoreCubeHalf  = 0.12f;
 const float kRingMinor     = 0.01f;   // thin rotation circles (halved 2026-08-30; old rings were flat fat bands)
-const float kScreenRingR   = 1.18f;   // just outside the axis rings
+// the outer ring's radius lives in the header: picking projects the same circle
 const float kScreenRingMinor = 0.007f;  // halved 2026-08-30 (was 0.014)
 const int   kSegments      = 20;      // round sections
 const int   kRingSegments  = 64;      // ring smoothness
@@ -87,6 +87,17 @@ struct Builder
         return mesh;
     }
 };
+
+/// The two axes a PLANE handle lies in (XYPlane -> X and Y, and so on).
+bool planeAxes(GizmoAxis axis, iris::Vec3 &U, iris::Vec3 &V)
+{
+    switch (axis) {
+    case GizmoAxis::XYPlane: U = iris::Vec3(1, 0, 0); V = iris::Vec3(0, 1, 0); return true;
+    case GizmoAxis::YZPlane: U = iris::Vec3(0, 1, 0); V = iris::Vec3(0, 0, 1); return true;
+    case GizmoAxis::XZPlane: U = iris::Vec3(1, 0, 0); V = iris::Vec3(0, 0, 1); return true;
+    default: return false;
+    }
+}
 
 /// Orthonormal frame for an axis: A is the handle direction, U/V span its cross section.
 void axisFrame(GizmoAxis axis, iris::Vec3 &A, iris::Vec3 &U, iris::Vec3 &V)
@@ -236,11 +247,27 @@ iris::MeshPtr rotationRing(GizmoAxis axis)
     return b.build();
 }
 
+iris::MeshPtr planeHandle(GizmoAxis axis)
+{
+    iris::Vec3 U, V;
+    Builder b;
+    if (!planeAxes(axis, U, V)) return b.build();
+    const float n = kPlaneHandleNear, f = kPlaneHandleFar;
+    const iris::Vec3 a = U * n + V * n, bb = U * f + V * n;
+    const iris::Vec3 c = U * f + V * f, d = U * n + V * f;
+    const iris::Vec3 nrm = iris::Vec3::crossProduct(U, V).normalized();
+    // BOTH SIDES: the handle is reached for from wherever the camera happens
+    // to be, and an unlit gizmo part with one winding vanishes from behind.
+    b.quad(a, bb, c, d, nrm, nrm, nrm, nrm);
+    b.quad(a, d, c, bb, -nrm, -nrm, -nrm, -nrm);
+    return b.build();
+}
+
 iris::MeshPtr screenRing()
 {
     Builder b;
     addTorus(b, iris::Vec3(0, 0, 1), iris::Vec3(1, 0, 0), iris::Vec3(0, 1, 0),
-             kScreenRingR, kScreenRingMinor, kRingSegments, kRingSides);
+             GizmoMeshes::kScreenRingRadius, kScreenRingMinor, kRingSegments, kRingSides);
     return b.build();
 }
 

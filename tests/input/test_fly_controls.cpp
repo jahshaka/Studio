@@ -67,6 +67,13 @@ iris::CameraNodePtr freshCamera()
 }
 
 /// One second of flight with `keys` held, and where it ended up.
+///
+/// IN FRAMES, not in one step: no single fly step may be longer than
+/// flystep::kMaxFlyStep (ledger §356 — a UI-thread block used to arrive as one
+/// enormous dt and move the camera 110 units in a frame), so "one second of
+/// flight" is the seconds the editor would really have flown them in. The total
+/// distance is the same to the last float, which is what every assertion below
+/// measures.
 iris::Vec3 editorFly(const QVector<Qt::Key> &keys, float dt = 1.0f)
 {
     EditorCameraController c(nullptr);
@@ -74,7 +81,11 @@ iris::Vec3 editorFly(const QVector<Qt::Key> &keys, float dt = 1.0f)
     c.setCamera(cam);
     c.onMouseDown(Qt::RightButton);           // the fly only runs while RMB is held
     for (Qt::Key k : keys) c.onKeyPressed(k);
-    c.update(dt);
+    for (float remaining = dt; remaining > 0.0f; ) {
+        const float step = qMin(remaining, flystep::kMaxFlyStep);
+        c.update(step);
+        remaining -= step;
+    }
     return cam->getLocalPos();
 }
 
@@ -222,9 +233,12 @@ int main(int argc, char **argv)
         CHECK(near(FlySpeedSettings::speed(FlySpeedSettings::Editor), 8.0f),
               "speed = base * multiplier");
 
-        const float atOne = editorFly({ Qt::Key_W }).z();
+        // AN ARROW, not W: the editor's fly moved to the arrow cluster on
+        // 2026-09-09 and the letters do nothing, so this pair measured 0.000
+        // against 0.000 and passed vacuously (found by GIZMO-1, 2026-09-15).
+        const float atOne = editorFly({ Qt::Key_Up }).z();
         FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, 4.0f);
-        const float atFour = editorFly({ Qt::Key_W }).z();
+        const float atFour = editorFly({ Qt::Key_Up }).z();
         std::printf("    one second at 1x -> %.3f, at 4x -> %.3f\n", atOne, atFour);
         CHECK(near(atFour, atOne * 4.0f, 1e-3f),
               "FOUR TIMES the multiplier is FOUR TIMES the distance, exactly");
@@ -284,6 +298,80 @@ int main(int argc, char **argv)
         c.update(1.0f);
         CHECK(near(cam->getLocalPos().z(), 0.0f),
               "an arrow key alone does NOT fly — the Unreal rule is unchanged by the aliases");
+    }
+
+    // ---- THE STUCK FLY KEY (owner report 2026-09-15, ledger §356) ---------
+    //
+    // "The arrows stop flying after a console script run." Diagnosed on the rig:
+    // a key goes into the held set and never comes out, because Qt's XCB
+    // auto-repeat classification is a lookahead heuristic over the X queue and
+    // misfires in both directions once the UI thread stalls long enough to back
+    // the queue up — a console script run of 3 to 20 seconds is exactly that
+    // (1 stuck key in ~30 attempts). The set was cleared in ONE place, the
+    // viewport's focusOutEvent, so a click INSIDE the viewport cured nothing.
+    //
+    // The symptom is SILENT, which is what made it expensive: with both Left
+    // and Right in the set the movement cancels to nothing at all.
+    {
+        EditorCameraController c(nullptr);
+        auto cam = freshCamera();
+        c.setCamera(cam);
+        c.onMouseDown(Qt::RightButton);
+        c.onKeyPressed(Qt::Key_Left);
+        c.onKeyPressed(Qt::Key_Right);
+        c.update(flystep::kMaxFlyStep);
+        std::printf("    Left and Right both held -> (%.3f %.3f %.3f)\n",
+                    cam->getLocalPos().x(), cam->getLocalPos().y(), cam->getLocalPos().z());
+        CHECK(cam->getLocalPos().isNull(),
+              "the symptom, reproduced: a stuck Left cancels a real Right and the camera does "
+              "not move at all — no drift, nothing in any log");
+    }
+    {
+        EditorCameraController c(nullptr);
+        auto cam = freshCamera();
+        c.setCamera(cam);
+        // A key that went down and never came up, during some earlier gesture.
+        c.onKeyPressed(Qt::Key_Left);
+        CHECK(c.heldKeyCodes().contains(int(Qt::Key_Left)),
+              "a press really does put the key in the held set (heldKeyCodes reports it, which "
+              "is what editor.viewportState() now shows)");
+        c.onMouseDown(Qt::RightButton);
+        CHECK(c.heldKeyCodes().isEmpty(),
+              "…and the RIGHT BUTTON GOING DOWN drops the whole set: a stuck key cannot outlive "
+              "the gesture that reads it");
+        c.onKeyPressed(Qt::Key_Right);
+        for (int i = 0; i < 15; ++i) c.update(flystep::kMaxFlyStep);
+        std::printf("    after the clear, one second of Right -> (%.3f %.3f %.3f)\n",
+                    cam->getLocalPos().x(), cam->getLocalPos().y(), cam->getLocalPos().z());
+        CHECK(cam->getLocalPos().x() > 7.0f,
+              "and the fly works: a full second of Right strafes the full distance");
+        c.onKeyPressed(Qt::Key_Up);
+        c.onMouseUp(Qt::RightButton);
+        CHECK(c.heldKeyCodes().isEmpty(), "the button going UP drops it too — there is no window "
+                                          "left in which a key can be stranded");
+        CHECK(!c.isFlying(), "and isFlying() follows the button (editor.viewportState().flying)");
+    }
+
+    // ---- THE FLY BANKS NO MORE THAN ONE FRAME (§356's collateral defect) ---
+    //
+    // Measured on the rig: a fly key held across a ~13 second UI-thread block
+    // charged the whole wall clock as ONE dt and moved the camera 110 units in
+    // a single frame (x 22.48 -> 132.07).
+    {
+        EditorCameraController c(nullptr);
+        auto cam = freshCamera();
+        c.setCamera(cam);
+        c.onMouseDown(Qt::RightButton);
+        c.onKeyPressed(Qt::Key_Up);
+        c.update(13.0f);                       // the stall, as one frame
+        const float travelled = cam->getLocalPos().length();
+        const float cap = FlySpeedSettings::speed(FlySpeedSettings::Editor) * flystep::kMaxFlyStep;
+        std::printf("    a 13-second frame moved the camera %.3f units (the cap is %.3f; "
+                    "unclamped it was 104)\n", travelled, cap);
+        CHECK(travelled > 0.0f, "a long frame still flies");
+        CHECK(travelled <= cap + 1e-3f,
+              "…but by at most ONE clamped step — a 13-second block can no longer throw the "
+              "camera across the scene");
     }
 
     // ---- THE ASSETS PREVIEW'S FLY (smoke S7, 2026-09-11) ------------------

@@ -84,6 +84,35 @@ int main(int argc, char **argv)
     CHECK(hasColour(img, 122/255.f, 204/255.f, 44/255.f), "Y handle is green");
 
     // ------------------------------------------------------------------
+    // THE PLANE HANDLES, THROUGH THE ENGINE (GIZMO-1 item 3, 2026-09-15).
+    //
+    // They are picked in PIXELS, so they need a PICK VIEW to exist at all —
+    // which is why every check above still counts four handles: a gizmo that
+    // has never been shown in a viewport draws no plane squares, exactly as it
+    // picks no rotation rings. Given one, the three squares join the picture,
+    // and the two that are EDGE-ON to this head-on camera stay out of it.
+    {
+        gizmo.setPickView(cam, 128.0f, 128.0f);
+        gizmo.updateSize(cam);
+        auto withPlanes = gizmo.drawItems(cam->getGlobalPosition(), iris::Vec3(0, 0, -1),
+                                          iris::Vec3(0, 0, -1));
+        std::printf("    with a pick view: %d draw items (4 handles + the XY square; the YZ and "
+                    "XZ squares are edge-on to this camera)\n", withPlanes.size());
+        CHECK(withPlanes.size() == 5, "the XY plane handle joins the four, and the two edge-on "
+                                      "squares are withheld");
+        overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
+        CHECK(overlay.visibleItems() == 5, "and the overlay shows all five");
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(hasColour(img, 179/255.f, 135/255.f, 55/255.f),
+              "the XY plane handle is on screen, in its two axes' mixed colour");
+        // Back to the state the rest of the suite expects.
+        gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
+        overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    }
+
+    // ------------------------------------------------------------------
     // THE FOV SWEEP (fix wave 2026-09-07). updateSize used to feed DEGREES to
     // qTan and then DIVIDE by the result: at fov 75 that is tan(37.5 rad) =
     // -0.199, so gizmoScale went negative — every handle transform mirrored

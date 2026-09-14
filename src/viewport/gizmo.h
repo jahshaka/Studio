@@ -29,7 +29,20 @@ enum class GizmoAxis
 	Center,
 	X,
 	Y,
-	Z
+	Z,
+	/// THE VIEW DIRECTION (GIZMO-1 item 2, owner report §345). The rotation
+	/// gizmo's outer grey ring is a real handle: it turns the node about the
+	/// axis the camera looks along, and its angle is simply the cursor's angle
+	/// around the circle on screen — well conditioned everywhere, because it
+	/// is a 2D quantity.
+	Screen,
+	/// THE TRANSLATE GIZMO'S PLANE HANDLES (GIZMO-1 item 3, owner report §346:
+	/// "it helps with the spatial connection for the user"). Each is a small
+	/// square drawn IN the plane its two axes span, and dragging it slides the
+	/// node across that plane.
+	XYPlane,
+	YZPlane,
+	XZPlane
 };
 
 enum class AxisHandle

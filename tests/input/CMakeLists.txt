@@ -85,3 +85,33 @@ add_test(NAME input.axis_view_lock COMMAND test_axis_view_lock
 set_tests_properties(input.axis_view_lock PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "document")
 jah_no_display(input.axis_view_lock)
+
+# input.alt_orbit — THE ALT+DRAG ORBIT DOES NOT JUMP (owner report 2026-09-15,
+# ledger §353: "it seems to jump the viewport like an F focus on the point").
+# Drives both editor controllers at the gesture level and asserts a zero-length
+# drag is bit-identical, that the picked point stays at the same pixel, that the
+# radius is preserved, that roll survives, that the pole guard holds, and that
+# the arcball ends the drag in a state consistent with the pose it left.
+#
+# Same link shape as input.axis_view_lock: the controllers plus the settings
+# they read, no engine view, no display, no GPU.
+add_executable(test_alt_orbit test_alt_orbit.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/editorcameracontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/orbitalcameracontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/flyspeedsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
+set_target_properties(test_alt_orbit PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_alt_orbit PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_alt_orbit PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
+jah_document_graph(test_alt_orbit)
+add_test(NAME input.alt_orbit COMMAND test_alt_orbit
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(input.alt_orbit PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "document")
+jah_no_display(input.alt_orbit)
