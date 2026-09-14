@@ -135,7 +135,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "HARDWARE RAY TRACING for this MACHINE (SPECS/PHOTON_SPEC.md §7 R1) — an application preference, persisted, the same one Preferences > Rendering shows. Called with no argument it reads; called with \"auto\" or \"off\" it sets, applies it to the running engine, and reads back. "
           "IT IS DELIBERATELY NOT A DOCUMENT SETTING. Ray tracing is a capability of the GPU in the machine, not a property of the scene, and a picture that changed depending on which file was open would be a second authoring path. The same project opened on a ray-capable desktop and on a Mac is the same project; only the machine differs. "
           "The renderer keeps a ray-traceable copy of the scene — one acceleration structure per mesh and one over the instances — built from the same vertex and index buffers the raster draws, wherever the driver advertises Vulkan ray queries. It is a GEOMETRY service, not a lighting setting: it answers \"what does this ray hit\", and the lighting stages that consume it (probe visibility, hard sun contact, traced reflections) each land in their own round, so turning it on or off does not change today's picture. "
-          "\"auto\" (the default) uses the hardware wherever it exists; \"off\" drops every structure and renders exactly what a machine WITHOUT ray-tracing hardware renders. That fallback is the path a Mac takes (MoltenVK exposes no ray queries) and the one every ray-consuming test runs beside the traced one, so it is proved on every push rather than assumed. "
+          "\"auto\" (the default) uses the hardware wherever it exists; \"off\" drops every structure and renders exactly what a machine WITHOUT ray-tracing hardware renders — literally: a session that boots with the preference Off creates its Vulkan device with none of the ray extensions asked for, so it is the same device such a machine would have. That fallback is the path a Mac takes (MoltenVK exposes no ray queries) and the one every ray-consuming test runs beside the traced one, so it is proved on every push rather than assumed. "
           "'available' is the DEVICE's answer and nothing here can move it; 'enabled' is whether we are using it; 'mode' is derived from the preference. Setting it is a SESSION-and-preference change, not a document edit: it is not undoable and does not dirty the project. --no-ray-query sets the same thing for one run without writing the preference. What the tier is HOLDING is world.giStatus().rayQuery.",
           Needs::Engine },
         { "clearShaderCache", "app.clearShaderCache() -> bool",
@@ -486,7 +486,14 @@ QVariantMap AppApi::rayTracing(const QString &mode)
         // PERSISTED, because it is a property of this machine and must survive
         // the session that discovered it — the same shape as the shadow-mesh
         // preference next door.
-        SettingsManager::getDefaultManager()->setValue(QStringLiteral("hardware_ray_tracing"), want);
+        SettingsManager *sm = SettingsManager::getDefaultManager();
+        sm->setValue(QStringLiteral("hardware_ray_tracing"), want);
+        // SYNC, because this one has to survive the process that set it. A
+        // preference read at ENGINE INIT is worthless if it only reaches the
+        // file when QSettings happens to flush: a `--script` run that sets it
+        // exits without the write landing, and the next launch reads the old
+        // answer. (Measured: the key was simply absent from jahsettings.ini.)
+        if (sm->settings) sm->settings->sync();
         if (live) host.viewport->setRayTracing(want);
     }
     if (live) rq = host.viewport->giStatus().rayQuery;

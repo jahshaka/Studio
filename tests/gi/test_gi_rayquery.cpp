@@ -49,6 +49,18 @@
 //      guard waits half as long as it claims and a scratch arena is freed
 //      while the build that reads it is still queued (round 2, finding 3).
 //
+//   9. AN ALPHA-TEST FLIP MOVES THE TRACED SET ON A STILL SCENE. Alpha-tested
+//      items are kept OUT of the structure, and the material edit that makes an
+//      item cut-out changes no transform and no render queue — so without an
+//      explicit epoch bump a still scene kept tracing the old set indefinitely
+//      (round 3, finding 3).
+//
+//  10. A PARKED SCENE'S COMPACTION SLOTS ARE NOT STOLEN. A scene that drew,
+//      queued compaction size queries and was then hidden before reading them
+//      holds those slots; the ring must route around them rather than reset and
+//      rewrite them, which would make the reader return another structure's
+//      size and compact into a buffer sized for it (round 3, finding 1).
+//
 //   8. A DESTROYED SCENE TAKES ITS STRUCTURES WITH IT. Without this the tier
 //      held every preview scene's BLASes — and the MeshPtrs under them — for
 //      the process's life, and a recycled OgreScene address inherited a dead
@@ -79,6 +91,15 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
+/// CHECK with the measurement in the line, so a failure says what it saw.
+#define CHECK_MSG(cond, ...)                                                    \
+    do {                                                                        \
+        std::printf((cond) ? "ok: " : "FAIL: ");                                 \
+        std::printf(__VA_ARGS__);                                                \
+        std::printf("\n");                                                       \
+        if (!(cond)) ++failures;                                                 \
+    } while (0)
+
 static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
@@ -107,6 +128,30 @@ static Hit hitAt(const std::vector<float> &hits, size_t i)
 {
     return Hit{ hits[i * 4 + 0], int(hits[i * 4 + 1]), int(hits[i * 4 + 2]),
                 hits[i * 4 + 3] > 0.5f };
+}
+
+/// A subdivided grid, `n` quads a side, lying in the XZ plane with its top at
+/// y = +0.5 — thousands of triangles rather than a cube's twelve. Case 10 needs
+/// meshes whose COMPACTED SIZES differ by orders of magnitude: if every mesh in
+/// the scene is the same cube, a compaction slot read from the wrong structure
+/// returns a numerically identical answer and the defect it is meant to catch
+/// passes unnoticed.
+static MeshData gridMesh(unsigned n)
+{
+    MeshData d;
+    for (unsigned z = 0; z <= n; ++z)
+        for (unsigned x = 0; x <= n; ++x) {
+            const float fx = float(x) / float(n) - 0.5f;
+            const float fz = float(z) / float(n) - 0.5f;
+            d.positions.insert(d.positions.end(), { fx, 0.5f, fz });
+            d.normals.insert(d.normals.end(), { 0.0f, 1.0f, 0.0f });
+        }
+    for (unsigned z = 0; z < n; ++z)
+        for (unsigned x = 0; x < n; ++x) {
+            const unsigned a = z * (n + 1) + x, b = a + 1, c = a + n + 1, e2 = c + 1;
+            d.indices.insert(d.indices.end(), { a, c, b, b, c, e2 });
+        }
+    return d;
 }
 
 static bool imagesEqual(const Image &a, const Image &b)
@@ -156,7 +201,17 @@ int main()
 
     // A UNIT cube scaled to 2 m, centred at (0, 1, 0): its +X face is the plane
     // x = 1, its top y = 2. Every distance below is read off those two numbers.
-    const NodeId box = enginetest::addTestCube(scene, Colour(0.8f, 0.2f, 0.2f), 0.0f, 0.6f);
+    // Built through the real verbs rather than the helper, because case 9 needs
+    // to EDIT this material and the helper keeps its MaterialId to itself.
+    const NodeId box = scene->createNode();
+    const MeshId boxMesh = scene->createMesh(enginetest::unitCubeMesh());
+    PbrParams boxParams;
+    boxParams.albedo = Colour(0.8f, 0.2f, 0.2f);
+    boxParams.metalness = 0.0f;
+    boxParams.roughness = 0.6f;
+    const MaterialId boxMaterial = scene->createPbrMaterial(boxParams);
+    CHECK(box && boxMesh && boxMaterial && scene->attachMesh(box, boxMesh, boxMaterial),
+          "the target box exists with a material of its own");
     enginetest::setNodePosition(scene, box, Vec3(0.0f, 1.0f, 0.0f));
     enginetest::setNodeScale(scene, box, Vec3(2.0f, 2.0f, 2.0f));
 
@@ -444,9 +499,10 @@ int main()
             // A ray into each still answers for the right world.
             std::vector<float> r, h;
             pushRay(r, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
-            if (scene->traceRays(r, h) && h.size() == 4u)
-                CHECK(hitAt(h, 0).hit && std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
-                      "the editor scene's ray still answers 9 m with a second scene alive");
+            const bool traced = scene->traceRays(r, h) && h.size() == 4u;
+            CHECK(traced, "the editor scene still traces with a second scene alive");
+            CHECK(traced && hitAt(h, 0).hit && std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
+                  "...and its ray still answers 9 m");
 
             // =================================================================
             // CASE 8 — destroying it takes the structures with it
@@ -466,6 +522,166 @@ int main()
             CHECK(scene->traceRays(r2, h2) && h2.size() == 4u && hitAt(h2, 0).hit &&
                       std::fabs(hitAt(h2, 0).distance - 9.0f) < 0.001f,
                   "...and the editor scene still answers 9 m");
+            if (pv) e->destroyView(pv);
+            render(e, 3);
+        }
+    }
+
+    // =====================================================================
+    // CASE 9 — an alpha-test flip moves the traced set on a STILL scene
+    // =====================================================================
+    std::printf("\n== case 9: an alpha-test flip ==\n");
+    {
+        render(e, 6);
+        const int before = scene->rayQueryStatus().instances;
+        // The box's own material turns cut-out. Nothing moves, no render queue
+        // changes, no node is touched — only the datablock's alpha test, in
+        // place. An alpha-tested item cannot be in the structure (every BLAS is
+        // opaque and there is no any-hit shader), so the set must shrink on the
+        // very next frame rather than whenever something unrelated moves.
+        PbrParams cut;
+        cut.albedo = Colour(0.8f, 0.2f, 0.2f);
+        cut.metalness = 0.0f;
+        cut.roughness = 0.6f;
+        cut.alphaMode = PbrAlphaMode::Cutout;
+        cut.alphaCutoff = 0.5f;
+        CHECK(scene->setPbrMaterial(boxMaterial, cut), "the box's material turns cut-out");
+        render(e, 2);
+        const int after = scene->rayQueryStatus().instances;
+        std::printf("   instances %d -> %d after the alpha-test flip\n", before, after);
+        CHECK(after == before - 1,
+              "a CUT-OUT item leaves the traced set on the next frame, with nothing moving");
+
+        PbrParams solid = cut;
+        solid.alphaMode = PbrAlphaMode::Opaque;
+        CHECK(scene->setPbrMaterial(boxMaterial, solid), "...and back to opaque");
+        render(e, 2);
+        CHECK(scene->rayQueryStatus().instances == before,
+              "...which puts it back, again with nothing moving");
+        std::vector<float> r, h;
+        pushRay(r, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+        CHECK(scene->traceRays(r, h) && h.size() == 4u && hitAt(h, 0).hit &&
+                  std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
+              "...and the ray finds it again at 9 m");
+    }
+
+    // =====================================================================
+    // CASE 10 — a parked scene's compaction slots survive the editor's churn
+    // =====================================================================
+    std::printf("\n== case 10: a parked scene ==\n");
+    {
+        // A scene that draws once — queueing compaction size queries for its
+        // meshes — and is then parked before those answers are read. Its slots
+        // are owed and must not be handed to anyone else.
+        View *pv = e->createOffscreenView("rayquery-parked", 64, 64, Colour(0, 0, 0));
+        Scene *ps = e->createScene("rayquery-parked");
+        CHECK(pv && ps, "a parked view and scene exist");
+        if (pv && ps) {
+            pv->setScene(ps);
+            ps->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+            PbrParams heavy;
+            heavy.albedo = Colour(0.3f, 0.6f, 0.9f);
+            heavy.metalness = 0.0f;
+            heavy.roughness = 0.5f;
+            const MaterialId heavyMat = ps->createPbrMaterial(heavy);
+            for (int i = 0; i < 6; ++i) {
+                // 24x24 .. 34x34 quads: 1,152 to 2,312 triangles each, against
+                // the editor's twelve-triangle cubes. A compaction answer taken
+                // from the wrong structure is then wrong by orders of magnitude,
+                // which is what makes the copy land in an undersized buffer
+                // instead of quietly working.
+                const NodeId c = ps->createNode();
+                const MeshId m = ps->createMesh(gridMesh(24u + unsigned(i) * 2u));
+                ps->attachMesh(c, m, heavyMat);
+                enginetest::setNodePosition(ps, c, Vec3(float(i) * 2.0f, 0.0f, 0.0f));
+            }
+            pv->setCamera(enginetest::testCameraDescLookAt(Vec3(0, 3, 10), Vec3(0, 0, 0)));
+            render(e, 1);                       // build its BLASes, queue the size queries
+            const RayQueryStatus parked = ps->rayQueryStatus();
+            std::printf("   parked scene holds %d blas\n", parked.blasCount);
+            pv->setScene(nullptr);              // PARKED: it never draws again
+
+            // Now churn the editor scene hard enough to want many compaction
+            // slots. Every new mesh is a new bottom-level structure.
+            for (int i = 0; i < 60; ++i) {
+                const NodeId c = enginetest::addTestCube(scene, Colour(0.5f, 0.5f, 0.5f), 0.0f, 0.8f);
+                enginetest::setNodePosition(scene, c, Vec3(100.0f + float(i), 0.0f, 0.0f));
+                enginetest::setNodeScale(scene, c, Vec3(0.5f, 0.5f, 0.5f));
+                if ((i % 10) == 9) render(e, 2);
+            }
+            render(e, 12);
+
+            // The editor scene must still be CORRECT — that is what a stolen
+            // slot would break, by compacting one structure into a buffer
+            // sized for another.
+            std::vector<float> r, h;
+            pushRay(r, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+            const bool ok = scene->traceRays(r, h) && h.size() == 4u;
+            CHECK(ok, "the editor scene still traces after 60 new meshes beside a parked scene");
+            CHECK(ok && hitAt(h, 0).hit && std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
+                  "...and still answers 9 m");
+            std::printf("   editor now holds %d blas / %d instances\n",
+                        scene->rayQueryStatus().blasCount, scene->rayQueryStatus().instances);
+
+            // UN-PARK IT. This is the half that makes the case bite: the parked
+            // scene now runs runCompaction and READS the size queries it queued
+            // before it was hidden. If the ring handed those slots to the
+            // editor's churn, it reads another structure's compacted size and
+            // copies into a buffer sized for it — an undersized COMPACT copy,
+            // which is a device loss or silently wrong geometry.
+            pv->setScene(ps);
+            render(e, 12);
+            const RayQueryStatus back = ps->rayQueryStatus();
+            std::printf("   un-parked: %d blas / %d instances / %d tris, %llu blasBytes, enabled=%d\n",
+                        back.blasCount, back.instances, back.triangles,
+                        (unsigned long long)back.blasBytes, int(back.enabled));
+            CHECK(back.enabled && back.instances == 6,
+                  "the UN-PARKED scene reads its own compaction answers and still holds its set");
+            // AND THEY ARE ITS OWN ANSWERS. This is the assertion that actually
+            // catches a stolen slot, and it is a SIZE one because on this driver
+            // the corruption is silent: an 86 KB structure compacted into a
+            // 1,152-byte buffer neither crashes nor renders visibly wrong, it
+            // just records an impossible size. A compacted bottom-level
+            // structure runs about 25.7 bytes per triangle on Ada (NVIDIA's
+            // published figure; measured here at 22.9), and a scene that read
+            // another structure's answers reports far less — measured at 13.9
+            // with the previous cursor-and-count ring, which handed this scene's
+            // slots to the editor's churn. Eighteen sits between them with room
+            // on both sides and means something physically: no real compaction
+            // fits a triangle into eighteen bytes.
+            CHECK_MSG(back.triangles > 0 &&
+                          back.blasBytes >= (unsigned long long)(back.triangles) * 18ull,
+                  "...and those answers are its OWN: %llu bytes for %d triangles (%.1f B/tri)",
+                  (unsigned long long)back.blasBytes, back.triangles,
+                  back.triangles ? double(back.blasBytes) / double(back.triangles) : 0.0);
+            {
+                std::vector<float> pr, ph;
+                // Straight down onto the first grid, whose surface is y = 0.5.
+                pushRay(pr, Vec3(0.0f, 10.0f, 0.0f), Vec3(0.0f, -1.0f, 0.0f), 0.001f, 100.0f);
+                CHECK(ps->traceRays(pr, ph) && ph.size() == 4u && hitAt(ph, 0).hit &&
+                          std::fabs(hitAt(ph, 0).distance - 9.5f) < 0.01f,
+                      "...and its geometry is intact after compaction (hit at 9.5 m)");
+            }
+            // The editor scene is still right too.
+            {
+                std::vector<float> er, eh;
+                pushRay(er, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+                CHECK(scene->traceRays(er, eh) && eh.size() == 4u && hitAt(eh, 0).hit &&
+                          std::fabs(hitAt(eh, 0).distance - 9.0f) < 0.001f,
+                      "...and the editor scene is unharmed");
+            }
+            pv->setScene(nullptr);
+
+            // Destroying the parked scene hands its slots back, and everything
+            // keeps working.
+            e->destroyScene(ps);
+            ps = nullptr;
+            render(e, 6);
+            std::vector<float> r2, h2;
+            pushRay(r2, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+            CHECK(scene->traceRays(r2, h2) && h2.size() == 4u && hitAt(h2, 0).hit &&
+                      std::fabs(hitAt(h2, 0).distance - 9.0f) < 0.001f,
+                  "...and after the parked scene is destroyed");
             if (pv) e->destroyView(pv);
             render(e, 3);
         }

@@ -245,6 +245,10 @@ void WorldSettingsWidget::rayTracingChanged(int index)
 {
 	const bool on = (index == 0);
 	settings->setValue("hardware_ray_tracing", on);
+	// Durable now, not whenever QSettings flushes: this preference is read at
+	// ENGINE INIT on the next launch, and an unsynced write is a setting the
+	// user chose and the app then ignored.
+	if (settings->settings) settings->settings->sync();
 	// The SAME capability the app.rayTracing verb calls (SCRIPTING_SPEC §2.3:
 	// the page calls the verb's path, it does not reimplement it). Scenes drawn
 	// after this rebuild or drop their structures; the device itself is only
