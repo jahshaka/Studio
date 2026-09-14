@@ -87,8 +87,26 @@ class RotationGizmo : public Gizmo
 	iris::Quat nodeStartRot;
 	RotationHandle* draggedHandle;
 
+	/// THE GIZMO'S OWN FRAME, and it is FROZEN FOR THE LENGTH OF A DRAG
+	/// (owner report 2026-09-15, §345: "they seem to move on their own with
+	/// the asset").
+	///
+	/// In LOCAL space the gizmo is drawn from the node's CURRENT rotation, so
+	/// a drag on the X ring turned the object about its local X and the ring
+	/// turned with it — the ring ran away from under the cursor while the
+	/// VALUE was right (the drag maths has always differenced against the
+	/// frame captured at startDragging). Unreal and Blender freeze the picture
+	/// for the length of the drag and re-orient at release, and so do we: this
+	/// member is refreshed by refreshFrame(), which does nothing while
+	/// `dragging`, and every drawn item and every pick reads it through
+	/// getTransform().
 	iris::Mat4 trans;
 	bool dragging;
+
+	/// Re-reads the gizmo's frame from the node — UNLESS a drag is running, in
+	/// which case the frame captured at startDragging stands. Called at the top
+	/// of everything that draws or picks.
+	void refreshFrame();
 public:
 	RotationGizmo();
 

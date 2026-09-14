@@ -234,6 +234,7 @@ bool RotationGizmo::isDragging()
 
 void RotationGizmo::startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
+	dragging = false;                 // so the hit test below still refreshes
 	trans = Gizmo::getTransform();
 	//qDebug() << "drag starting";
 	draggedHandle = getHitHandle(rayPos, rayDir, startAngle);
@@ -249,12 +250,17 @@ void RotationGizmo::startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Ve
 
 void RotationGizmo::endDragging()
 {
+	// RE-ORIENT AT RELEASE (§345): the frozen frame is dropped here, so the
+	// rings snap to the node's new rotation the moment the button comes up.
 	dragging = false;
 	draggedHandle = nullptr;
-	trans = Gizmo::getTransform();
 
 	// undo-redo
 	createUndoAction();
+	// AFTER the undo action, never before: createUndoAction puts the node back
+	// to where the drag started and re-applies the new transform through the
+	// command stack, so the node's FINAL rotation only exists once it returns.
+	refreshFrame();
 }
 
 void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
@@ -330,7 +336,7 @@ RotationHandle* RotationGizmo::ringAtPixel(const QPointF& cursor, float& distanc
 	distancePx = -1.0f;
 	if (!selectedNode) return nullptr;
 	if (!pickView().isValid()) return nullptr;
-	trans = Gizmo::getTransform();
+	refreshFrame();
 
 	RotationHandle* nearest = nullptr;
 	float nearestDist = -1.0f, nearestFacing = -1.0f;
@@ -364,7 +370,7 @@ bool RotationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 
 RotationHandle* RotationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& hitAngle)
 {
-	trans = Gizmo::getTransform();
+	refreshFrame();
 	QPointF cursor;
 	if (!rayPixel(rayPos, rayDir, trans.column(3).toVector3D(), cursor)) return nullptr;
 	float distancePx = -1.0f;
@@ -373,33 +379,45 @@ RotationHandle* RotationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir
 	return handle;
 }
 
+// THE ONE FRAME EVERYTHING READS. Drawing and picking both go through
+// getTransform(), and getTransform() answers `trans` — which refreshFrame()
+// refuses to move while a drag is running. That is the whole of the freeze:
+// there is no second path that could read the live node mid-drag (there were
+// two before §345 — drawItems called Gizmo::getTransform() directly, and both
+// pick entry points re-read it on every mouse move).
+void RotationGizmo::refreshFrame()
+{
+	if (dragging) return;
+	trans = Gizmo::getTransform();
+}
+
 iris::Mat4 RotationGizmo::getTransform()
 {
 	return trans;
-	//return Gizmo::getTransform();
 }
 
 void RotationGizmo::setTransformSpace(GizmoTransformSpace transformSpace)
 {
 	this->transformSpace = transformSpace;
-	trans = Gizmo::getTransform();
+	refreshFrame();
 }
 
 void RotationGizmo::setSelectedNode(iris::SceneNodePtr node)
 {
 	selectedNode = node;
-	trans = Gizmo::getTransform();
+	refreshFrame();
 }
 
 QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
+	refreshFrame();
 	const QColor highlight(255, 255, 0);
 	if (dragging) {
 		for (int i = 0; i < 3; i++) {
 			if (handles[i] != draggedHandle) continue;
-			auto transform = Gizmo::getTransform();
+			auto transform = getTransform();
 			transform.scale(getGizmoScale() * handles[i]->handleScale);
 			items.append({ handleMeshes[i], transform, highlight });
 		}
@@ -408,7 +426,7 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 	float hitAngle = 0.0f;
 	auto hitHandle = getHitHandle(rayPos, rayDir, hitAngle);
 	for (int i = 0; i < 3; i++) {
-		auto transform = Gizmo::getTransform();
+		auto transform = getTransform();
 		transform.scale(getGizmoScale() * handles[i]->handleScale);
 		items.append({ handleMeshes[i], transform, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor() });
 	}
@@ -416,7 +434,7 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 	// (there is no fourth handle behind it), always oriented at the camera.
 	if (screenRingMesh) {
 		iris::Mat4 t;
-		t.translate(Gizmo::getTransform().column(3).toVector3D());
+		t.translate(getTransform().column(3).toVector3D());
 		if (!viewDir.isNull())
 			t.rotate(iris::Quat::rotationTo(iris::Vec3(0, 0, 1), -viewDir.normalized()));
 		t.scale(getGizmoScale() * handles[0]->handleScale);
