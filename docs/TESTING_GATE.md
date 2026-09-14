@@ -114,7 +114,7 @@ the two `benchmark`/`shadercache-attack` labels and `gi.ddgi_raster`, all nightl
 353/353 — one suite has been added since), 672 s with a sibling lane compiling at -j10
 beside it (push #26, 354/354), 680 s on push #25, whose two reds — open.responsive and
 archive.responsive — were the documented UI-thread contention class and 3/3 solo green,
-i.e. 354/354 effective. Zero retries on #24, #26, #27, #29 and #30 (508-579 s quiet, 674 s beside RR2 + two lanes); 362/358 since ENGINE-6 (push #29), 363/359 since ENGINE-7 (push #31, 497 s quiet, zero retries), 364/360 since P0 (push #32, 498 s, zero retries), 366/362 since the Ogre-samples ports (push #33, 603 s, one solo retry), 368/364 since the smoke batch (push #34, 521 s, zero retries). Re-count with `ctest -N` and
+i.e. 354/354 effective. Zero retries on #24, #26, #27, #29 and #30 (508-579 s quiet, 674 s beside RR2 + two lanes); 362/358 since ENGINE-6 (push #29), 363/359 since ENGINE-7 (push #31, 497 s quiet, zero retries), 364/360 since P0 (push #32, 498 s, zero retries), 366/362 since the Ogre-samples ports (push #33, 603 s, one solo retry), 368/364 since the smoke batch (push #34, 521 s, zero retries; #35 529 s, zero retries — the ASan cache attack 572 → 184 s after SHADERCACHE-2). Re-count with `ctest -N` and
 `ctest -N -LE "^(benchmark|shadercache-attack)$" -E "^gi\.ddgi_raster$"` rather than
 trusting any number written here; suites are added most weeks.
 
