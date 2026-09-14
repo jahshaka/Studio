@@ -42,6 +42,18 @@
 //   6. A MOVER MOVES ITS HIT. The point of a per-frame structure: move the box,
 //      and the same ray reports the new distance.
 //
+//   7. TWO DRAWN SCENES IN ONE FRAME — the ordinary product case (the editor
+//      plus a material-preview or thumbnail scene). Each must keep its own
+//      structures and its own timings; the tier's frame accounting must not
+//      count a per-SCENE call as a frame, or every "wait N frames in flight"
+//      guard waits half as long as it claims and a scratch arena is freed
+//      while the build that reads it is still queued (round 2, finding 3).
+//
+//   8. A DESTROYED SCENE TAKES ITS STRUCTURES WITH IT. Without this the tier
+//      held every preview scene's BLASes — and the MeshPtrs under them — for
+//      the process's life, and a recycled OgreScene address inherited a dead
+//      scene's structures (round 2, finding 2).
+//
 // SKIPPED, NOT FAILED, without ray-query hardware: a device that does not
 // advertise VK_KHR_ray_query is a supported platform (every Mac is one), and a
 // suite that went red there would be asserting the driver, not the code.
@@ -114,8 +126,12 @@ int main()
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-gi-rayquery-norays-ogre.log"
-                                                  : "test-gi-rayquery-ogre.log";
+    // A LOG PER RUN. Three ctest entries share this binary and this working
+    // directory (rays on, rays off, and the sanitised twin); one log name would
+    // have them clobbering each other's evidence whenever two run at once.
+    cfg.logFile = getenv("JAHSHAKA_NO_RAY_QUERY")
+                      ? "test-gi-rayquery-" JAH_RQ_LOG_TAG "-norays-ogre.log"
+                      : "test-gi-rayquery-" JAH_RQ_LOG_TAG "-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -384,6 +400,75 @@ int main()
         CHECK(scene->traceRays(r2, h2) && h2.size() == 4u && hitAt(h2, 0).hit &&
                   std::fabs(hitAt(h2, 0).distance - 9.0f) < 0.001f,
               "...and the same ray gives the same 9 m it gave before it was switched off");
+    }
+
+    // =====================================================================
+    // CASE 7 — two drawn scenes in one frame
+    // =====================================================================
+    std::printf("\n== case 7: a second scene ==\n");
+    {
+        // A preview-sized offscreen view and its own scene, exactly like the
+        // material preview and the thumbnail renderer: both are drawn every
+        // frame the editor is, and both reach the tier through the same call.
+        View *pv = e->createOffscreenView("rayquery-preview", 64, 64, Colour(0, 0, 0));
+        Scene *ps = e->createScene("rayquery-preview");
+        CHECK(pv && ps, "a second view and scene exist");
+        if (pv && ps) {
+            pv->setScene(ps);
+            ps->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+            const NodeId a = enginetest::addTestCube(ps, Colour(0.2f, 0.4f, 0.9f), 0.0f, 0.5f);
+            enginetest::setNodePosition(ps, a, Vec3(0.0f, 0.0f, 0.0f));
+            pv->setCamera(enginetest::testCameraDescLookAt(Vec3(0, 1, 4), Vec3(0, 0, 0)));
+            render(e, 6);
+
+            const RayQueryStatus editorSt = scene->rayQueryStatus();
+            const RayQueryStatus previewSt = ps->rayQueryStatus();
+            std::printf("   editor: %d instances / %d blas   preview: %d instances / %d blas\n",
+                        editorSt.instances, editorSt.blasCount,
+                        previewSt.instances, previewSt.blasCount);
+            CHECK(previewSt.enabled && previewSt.instances == 1,
+                  "the second scene has its OWN structure, with its own one instance");
+            CHECK(editorSt.instances == 2,
+                  "...and the editor scene's is untouched by it");
+
+            // AND BOTH STILL GO QUIET. If the frame accounting counted calls
+            // rather than frames, the guards below would be the thing that
+            // broke first — and silently.
+            render(e, 5);
+            const RayQueryStatus e0 = scene->rayQueryStatus(), p0 = ps->rayQueryStatus();
+            render(e, 30);
+            const RayQueryStatus e1 = scene->rayQueryStatus(), p1 = ps->rayQueryStatus();
+            CHECK(e1.tlasBuilds == e0.tlasBuilds && p1.tlasBuilds == p0.tlasBuilds,
+                  "TWO still scenes rebuild nothing over 30 frames");
+
+            // A ray into each still answers for the right world.
+            std::vector<float> r, h;
+            pushRay(r, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+            if (scene->traceRays(r, h) && h.size() == 4u)
+                CHECK(hitAt(h, 0).hit && std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
+                      "the editor scene's ray still answers 9 m with a second scene alive");
+
+            // =================================================================
+            // CASE 8 — destroying it takes the structures with it
+            // =================================================================
+            std::printf("\n== case 8: a destroyed scene ==\n");
+            const int blasBefore = scene->rayQueryStatus().blasCount;
+            pv->setScene(nullptr);
+            e->destroyScene(ps);
+            ps = nullptr;
+            render(e, 6);
+            CHECK(scene->rayQueryStatus().blasCount == blasBefore,
+                  "destroying the second scene leaves the editor's structures alone");
+            // The editor scene still traces correctly afterwards — the honest
+            // proof that nothing of the dead scene's state leaked into it.
+            std::vector<float> r2, h2;
+            pushRay(r2, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+            CHECK(scene->traceRays(r2, h2) && h2.size() == 4u && hitAt(h2, 0).hit &&
+                      std::fabs(hitAt(h2, 0).distance - 9.0f) < 0.001f,
+                  "...and the editor scene still answers 9 m");
+            if (pv) e->destroyView(pv);
+            render(e, 3);
+        }
     }
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,

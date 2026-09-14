@@ -18,6 +18,13 @@
 #include <QStandardPaths>
 #include <cstring>
 
+namespace {
+bool gCliNoRayQuery = false;
+}
+void setCliNoRayQuery(bool on) { gCliNoRayQuery = on; }
+bool cliNoRayQuery() { return gCliNoRayQuery; }
+
+
 using namespace jahshaka::engine;
 
 EngineHost &EngineHost::instance()
@@ -172,6 +179,16 @@ EngineConfig EngineHost::resolveConfig()
     // changes straight to the live Engine.
     cfg.optimizeShadowMeshes =
         SettingsManager::getDefaultManager()->getValue("shadow_mesh_optimization", true).toBool();
+
+    // HARDWARE RAY TRACING (SPECS/PHOTON_SPEC.md §7 R1) — an APPLICATION
+    // preference, not a document setting: it is a property of the GPU in this
+    // machine, and a picture that changed with the file open would be a second
+    // authoring path. Preferences > Rendering writes it, app.rayTracing reads
+    // and sets it, and --no-ray-query forces it off for one run without
+    // touching what the user chose.
+    cfg.rayTracing =
+        SettingsManager::getDefaultManager()->getValue("hardware_ray_tracing", true).toBool() &&
+        !cliNoRayQuery();
 
     // ---- Persistent shader cache (SHADER_CACHE_SPEC.md §4.1) ----
     // AppDataLocation/shadercache: the same root the library DB and the asset

@@ -241,6 +241,18 @@ void WorldSettingsWidget::shadowMeshOptimizationChanged(bool on)
 		engine->setShadowMeshOptimization(on);
 }
 
+void WorldSettingsWidget::rayTracingChanged(int index)
+{
+	const bool on = (index == 0);
+	settings->setValue("hardware_ray_tracing", on);
+	// The SAME capability the app.rayTracing verb calls (SCRIPTING_SPEC §2.3:
+	// the page calls the verb's path, it does not reimplement it). Scenes drawn
+	// after this rebuild or drop their structures; the device itself is only
+	// re-created at the next launch, which is why "Off" here is the preference
+	// and --no-ray-query is the one-run override that also reaches vkCreateDevice.
+	if (editorViewport) editorViewport->setRayTracing(on);
+}
+
 void WorldSettingsWidget::enableOpenInPlayer(bool state)
 {
 	settings->setValue("open_in_player", openInPlayer = state);
@@ -317,6 +329,8 @@ void WorldSettingsWidget::configureViewport()
 	// cannot honestly be a per-scene (World Mode) row — a mesh built while it was
 	// on keeps its optimized shadow buffers in every scene that uses it.
 	auto optimizeShadowMeshes = new QLabel("Optimize Shadow Meshes :");
+	auto rayTracingLabel = new QLabel("Hardware Ray Tracing :");
+	setSizePolicyForWidgets(rayTracingLabel);
 
 	setSizePolicyForWidgets(selectionOutlineColor);
 	setSizePolicyForWidgets(primaryOutlineColor);
@@ -345,6 +359,27 @@ void WorldSettingsWidget::configureViewport()
 	checkboxLayout->addStretch();
 	checkboxLayout->addWidget(checkbox);
 
+	// HARDWARE RAY TRACING (SPECS/PHOTON_SPEC.md §7 R1) — an APPLICATION
+	// preference and not a scene setting, because ray tracing is a capability of
+	// the GPU in this machine: the same project opened on a ray-capable desktop
+	// and on a Mac is the same project, and a picture that changed with the file
+	// open would be a second authoring path.
+	auto rayTracingCombo = new QComboBox;
+	rayTracingCombo->addItem("Auto");
+	rayTracingCombo->addItem("Off");
+	rayTracingCombo->setToolTip(
+		"Use the GPU's ray-tracing hardware where it exists. The renderer keeps a "
+		"ray-traceable copy of the scene, built from the same geometry it draws; the "
+		"lighting stages that consume it arrive in their own updates, so today this "
+		"changes no picture. Off renders exactly what a machine without ray-tracing "
+		"hardware renders — which is also what a Mac does, and what the tests use to "
+		"prove that fallback. Takes effect for scenes drawn after the change.");
+
+	auto rayTracingLayout = new QHBoxLayout;
+	rayTracingLayout->setContentsMargins(0, 0, 0, 0);
+	rayTracingLayout->addStretch();
+	rayTracingLayout->addWidget(rayTracingCombo);
+
 	auto shadowMeshLayout = new QHBoxLayout;
 	shadowMeshLayout->setContentsMargins(0, 0, 0, 0);
 	shadowMeshLayout->addStretch();
@@ -352,7 +387,7 @@ void WorldSettingsWidget::configureViewport()
 
 	StyleSheet::setStyle({ selectionOutlineColor,primaryOutlineColor,selectionOutlineWidth,
 	                       enableAutoSave,optimizeShadowMeshes,spinbox,checkbox,
-	                       shadowMeshCheckbox });
+	                       shadowMeshCheckbox,rayTracingLabel,rayTracingCombo });
 
 	layout->addWidget(selectionOutlineWidth, 0, 0);
 	layout->addWidget(spinbox, 0, 2);
@@ -364,6 +399,8 @@ void WorldSettingsWidget::configureViewport()
 	layout->addLayout(checkboxLayout, 3, 2);
 	layout->addWidget(optimizeShadowMeshes, 4, 0);
 	layout->addLayout(shadowMeshLayout, 4, 2);
+	layout->addWidget(rayTracingLabel, 5, 0);
+	layout->addLayout(rayTracingLayout, 5, 2);
 
 	// ---- the camera preview inset (CAMERAS_SPEC D3) ----------------------
 	// Two rows, both persisted, both written through IEditorViewport — which
@@ -528,6 +565,8 @@ void WorldSettingsWidget::configureViewport()
 	primaryColorPicker->setColor(outlinesettings::primaryColor());
 	checkbox->setChecked(settings->getValue("auto_save", true).toBool());
 	shadowMeshCheckbox->setChecked(settings->getValue("shadow_mesh_optimization", true).toBool());
+	rayTracingCombo->setCurrentIndex(
+		settings->getValue("hardware_ray_tracing", true).toBool() ? 0 : 1);
 
 	connect(spinbox, SIGNAL(valueChanged(double)), this, SLOT(outlineWidthChanged(double)));
 	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QColor)));
@@ -535,6 +574,7 @@ void WorldSettingsWidget::configureViewport()
 	        this, SLOT(outlinePrimaryColorChanged(QColor)));
 	connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(enableAutoSave(bool)));
 	connect(shadowMeshCheckbox, SIGNAL(toggled(bool)), this, SLOT(shadowMeshOptimizationChanged(bool)));
+	connect(rayTracingCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(rayTracingChanged(int)));
 
 }
 

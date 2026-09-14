@@ -58,17 +58,7 @@ if(JAHSHAKA_ASAN)
     # Leak detection off for the same reason the engine suite turns it off: the
     # only leaks are libdbus allocations behind the Vulkan loader.
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES
-    # THE ASan TWIN BOOTS WITH THE RAY TIER OFF (PHOTON_SPEC §7 R1). MEASURED,
-    # not assumed: on NVIDIA 595.84 `vkCreateDevice` returns
-    # VK_ERROR_INITIALIZATION_FAILED when ogre-patch 0038's ray-query features
-    # are enabled UNDER AddressSanitizer, on the very GPU where the same call
-    # succeeds without it, and the validation layer reports nothing — the driver
-    # simply refuses. JAHSHAKA_NO_RAY_QUERY makes patch 0038 inert, so this
-    # suite runs on EXACTLY the device it had before the ray tier existed and
-    # keeps testing what it was written to test. It is a driver limit, recorded
-    # here rather than worked around: the non-ASan build of the same code
-    # creates the device and traces correctly (gi.rayquery).
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0;JAHSHAKA_NO_RAY_QUERY=1"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;${JAH_ASAN_ENGINE_OPTIONS}"
         TIMEOUT 120 LABELS "particles")
 endif()
 

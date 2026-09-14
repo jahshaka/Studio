@@ -42,15 +42,5 @@ if(JAHSHAKA_ASAN)
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
     set_tests_properties(distortion.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
 
-    # THE ASan TWIN BOOTS WITH THE RAY TIER OFF (PHOTON_SPEC §7 R1). MEASURED,
-    # not assumed: on NVIDIA 595.84 `vkCreateDevice` returns
-    # VK_ERROR_INITIALIZATION_FAILED when ogre-patch 0038's ray-query features
-    # are enabled UNDER AddressSanitizer, on the very GPU where the same call
-    # succeeds without it, and the validation layer reports nothing — the driver
-    # simply refuses. JAHSHAKA_NO_RAY_QUERY makes patch 0038 inert, so this
-    # suite runs on EXACTLY the device it had before the ray tier existed and
-    # keeps testing what it was written to test. It is a driver limit, recorded
-    # here rather than worked around: the non-ASan build of the same code
-    # creates the device and traces correctly (gi.rayquery).
-                         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0;JAHSHAKA_NO_RAY_QUERY=1")
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

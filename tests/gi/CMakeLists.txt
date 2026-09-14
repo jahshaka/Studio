@@ -574,17 +574,7 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # use-after-free detection is the point and stays on.
     set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 600 LABELS "engine"
         RUN_SERIAL ON
-    # THE ASan TWIN BOOTS WITH THE RAY TIER OFF (PHOTON_SPEC §7 R1). MEASURED,
-    # not assumed: on NVIDIA 595.84 `vkCreateDevice` returns
-    # VK_ERROR_INITIALIZATION_FAILED when ogre-patch 0038's ray-query features
-    # are enabled UNDER AddressSanitizer, on the very GPU where the same call
-    # succeeds without it, and the validation layer reports nothing — the driver
-    # simply refuses. JAHSHAKA_NO_RAY_QUERY makes patch 0038 inert, so this
-    # suite runs on EXACTLY the device it had before the ray tier existed and
-    # keeps testing what it was written to test. It is a driver limit, recorded
-    # here rather than worked around: the non-ASan build of the same code
-    # creates the device and traces correctly (gi.rayquery).
-        ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0;JAHSHAKA_NO_RAY_QUERY=1")
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
 # THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1). Its own binary for
@@ -601,7 +591,8 @@ set_target_properties(test_gi_rayquery PROPERTIES
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_compile_definitions(test_gi_rayquery PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    JAH_RQ_LOG_TAG="plain")
 target_link_libraries(test_gi_rayquery PRIVATE JahshakaEngine)
 add_dependencies(test_gi_rayquery JahshakaEngineMedia)
 add_test(NAME gi.rayquery COMMAND test_gi_rayquery
@@ -618,3 +609,32 @@ add_test(NAME gi.rayquery_norays COMMAND test_gi_rayquery
 set_tests_properties(gi.rayquery_norays PROPERTIES
     TIMEOUT 120 LABELS "engine"
     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
+# THE SANITISED TWIN, WITH THE RAYS ON (PHOTON_SPEC §7 R1). The tier is the
+# newest code in the engine and it hand-manages Vulkan memory, so it is exactly
+# what a sanitizer is for. It runs at all only because `protect_shadow_gap=0`
+# (tests/CMakeLists.txt) lets the driver create a ray-tracing device under ASan;
+# the first cut of this lane booted every ASan suite with the tier OFF, which
+# bought a green gate by never sanitising the new code.
+if(JAHSHAKA_ASAN)
+    add_executable(test_gi_rayquery_asan test_gi_rayquery.cpp)
+    set_target_properties(test_gi_rayquery_asan PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_gi_rayquery_asan PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+        JAH_RQ_LOG_TAG="asan")
+    target_link_libraries(test_gi_rayquery_asan PRIVATE JahshakaEngineAsan)
+    add_dependencies(test_gi_rayquery_asan JahshakaEngineMedia)
+    target_compile_options(test_gi_rayquery_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
+    add_test(NAME gi.rayquery_asan COMMAND test_gi_rayquery_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 300 LABELS "engine"
+        RUN_SERIAL ON
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+endif()
