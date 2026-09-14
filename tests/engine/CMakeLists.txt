@@ -126,6 +126,9 @@ if(JAHSHAKA_ASAN)
     # (LIGHTING_FIX fix 10), so this copy depends on the same custom target
     # rather than baking a second, configure-time value.
     add_dependencies(JahshakaEngineAsan JahshakaEngineBuildId)
+    # The ray-query tier is NEW code, so the sanitised twin must carry it too
+    # (PHOTON_SPEC §7 R1's gate: test_engine and test_engine_asan both green).
+    jahshaka_engine_ray_query(JahshakaEngineAsan)
     target_compile_definitions(JahshakaEngineAsan PRIVATE
         JAHSHAKA_OGRE_PATCH_SERIES="${JAHSHAKA_OGRE_PATCH_SERIES}")
     set_target_properties(JahshakaEngineAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
@@ -137,7 +140,8 @@ if(JAHSHAKA_ASAN)
     # LeakSanitizer is OFF: the only leaks it finds (6 allocations, ~4 KB) are inside
     # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.
     # Use-after-free / overflow detection is the point here and stays on.
-    set_tests_properties(test_engine_asan PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    set_tests_properties(test_engine_asan PROPERTIES
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()

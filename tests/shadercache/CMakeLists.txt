@@ -54,7 +54,7 @@ if(JAHSHAKA_ASAN)
     # of real product contract — down with the 572 s twin. This row is the only
     # one that costs minutes, so it is the only one that carries the label.
     set_tests_properties(shadercache.container_asan PROPERTIES
-        ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}"
         TIMEOUT 1500 LABELS "shadercache;shadercache-attack")
 endif()
 

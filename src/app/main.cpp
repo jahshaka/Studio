@@ -180,6 +180,16 @@ int main(int argc, char *argv[])
         // write(2) into the log but may never CALL into it.
         crashHandlerSetSessionLog(qPrintable(JahLog::sessionFilePath()), JahLog::rawFd());
     }
+    // THE --no-ray-query OVERRIDE (SPECS/PHOTON_SPEC.md §7 R1), before any
+    // engine exists. It sets the ENGINE CONFIG for this run through a process
+    // latch EngineHost::resolveConfig reads — not the persisted preference,
+    // which is the user's and which a test run must not rewrite. It also sets
+    // the environment variable, because ogre-patch 0038 honours the switch at
+    // vkCreateDevice and the pin cannot see our config.
+    if (cli.noRayQuery) {
+        setCliNoRayQuery(true);
+        qputenv("JAHSHAKA_NO_RAY_QUERY", "1");
+    }
     // The funnel is what makes the ~61 existing qDebug/qWarning call sites land
     // in the file with zero edits to any of them — LoadTimeline's open profile,
     // the slow-frame warning, the watchdog's stall line, SceneMirror's skeleton

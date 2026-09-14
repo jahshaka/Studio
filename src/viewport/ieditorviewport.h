@@ -595,8 +595,45 @@ public:
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;
+        /// THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1) — what the
+        /// renderer HOLDS, reported here because it is read beside the GI
+        /// figures and by the same "what it achieved, not what was asked for"
+        /// contract. It is NOT global illumination: it is a geometry service
+        /// (one acceleration structure over the scene's traceable Items) that
+        /// GI's later stages are the first consumers of.
+        ///
+        /// `available` is the DEVICE's answer and nothing in the document can
+        /// move it; `enabled` is ours — false with `available` true is the
+        /// no-rays switch in force, which is how this machine renders the
+        /// picture a machine without ray tracing gets.
+        struct RayQueryInfo {
+            bool    available = false;
+            bool    enabled = false;
+            int     blasCount = 0;   ///< bottom-level structures = unique traced meshes
+            int     instances = 0;   ///< the traced set: NOT the scene's Item count
+            int     triangles = 0;   ///< unique geometry, not instanced
+            quint64 blasBytes = 0;
+            quint64 tlasBytes = 0;
+            float   tlasMs = -1.0f;  ///< GPU ms of the last top-level build/refit
+            float   blasMs = -1.0f;  ///< GPU ms of the last bottom-level batch
+            float   gatherMs = -1.0f;///< CPU ms of the last instance gather
+            bool    lastWasRefit = false;
+            quint64 tlasBuilds = 0;
+            quint64 tlasRefits = 0;
+            quint64 blasBuilds = 0;
+        };
+        RayQueryInfo rayQuery;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
+
+    /// THE NO-RAYS SWITCH (SPECS/PHOTON_SPEC.md §7 R1). Turning it off tears the
+    /// acceleration structures down and renders the picture a machine WITHOUT
+    /// ray-tracing hardware renders — which is the point: the fallback is not a
+    /// second authoring path, it is the same scene with one term computed
+    /// differently, and every ray-consuming suite runs both on this GPU.
+    /// A no-op where the device has no rays; read the result back through
+    /// giStatus().rayQuery, never from what was asked for.
+    virtual void setRayTracing(bool) {}
 
     /// WHAT THE SHADOW ATLAS IS, as opposed to what the scene asked for
     /// (SPECS/SHADOW_TOOLING_SPEC.md §7) — the same reading as giStatus() and

@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "services/outlinesettings.h"
 #include "services/undoservice.h"
 #include "bridge/enginehost.h"
+#include "data/database/database.h"
 #include "data/settingsmanager.h"
 
 using namespace scriptmod;
@@ -422,14 +423,18 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "snapToFloor", "editor.snapToFloor() -> bool",
           "Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable.",
           Needs::Engine },
-        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes}",
+        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes, pendingAssetDeletes}",
           "The undo stack, for scripts that need to assert that an action was RECORDED rather "
           "than merely performed. `count`/`index` are the stack's own; `macroOpen` is true inside "
           "a script run. Read `pushes` — the total number of commands ever pushed — to bracket an "
           "action: a script run is ONE open macro, so editor.undo() cannot reach anything the run "
           "did AND `count` does not move while it is open (pushed commands become children of the "
           "macro). `pushes` is the only honest answer to \"did that record an undo step?\" from "
-          "inside a script.",
+          "inside a script. `pendingAssetDeletes` is the library work the stack still OWES: a "
+          "delete command queues its asset row instead of writing it when it dies, and the queue "
+          "is applied in one transaction when the stack is cleared (project close, quit), so this "
+          "reads non-zero only between those two moments — it is how a test proves the rows were "
+          "scrubbed after a close without one fdatasync per command on the UI thread.",
           Needs::Document },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
@@ -1897,6 +1902,9 @@ QVariantMap EditorApi::undoState()
     // explains why editor.undo() cannot reach the run's own steps.
     out["macroOpen"] = host.services->undo->isScriptMacroOpen();
     out["pushes"]    = QVariant::fromValue(qulonglong(host.services->undo->pushCount()));
+    // The deferred library work the dying commands queued (CLOSE-1). Zero
+    // after every clear; a database-less host reports zero too.
+    out["pendingAssetDeletes"] = host.db ? host.db->pendingAssetDeleteCount() : 0;
     return out;
 }
 
