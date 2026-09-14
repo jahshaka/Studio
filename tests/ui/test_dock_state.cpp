@@ -30,7 +30,17 @@ For more information see the LICENSE file
 //     (applyColumnWidthsOnce), so a first run and a restored run differ;
 //   * a blob written at a different layout VERSION is refused rather than
 //     half-applied, which is how a future default layout reaches users who
-//     already have a saved one.
+//     already have a saved one;
+//   * A LAYOUT WITH NO PANELS AT ALL IS REFUSED (lane SPACE-1, 2026-09-14).
+//     The editor's docks are hidden whenever another space is showing, and the
+//     exit path stored whatever they were doing — so quitting from the Player
+//     saved "every panel closed" as the editor's layout, and the next launch
+//     restored an editor with nothing but the 3D view. The helper now puts the
+//     window back exactly as it was and answers false, which is the caller's
+//     existing signal to use the default layout. The two shell rules that go
+//     with it are modelled at the end of this file: the snapshot is taken while
+//     the docks are UP (on the way out of the editor space), and an empty blob
+//     stores nothing rather than overwriting a good one.
 
 #include <QApplication>
 #include <QDockWidget>
@@ -171,6 +181,92 @@ int main(int argc, char **argv)
               "version: a blob from a different layout version is refused, not half-applied");
         CHECK(fresh.window.dockWidgetArea(fresh.presets) == Qt::RightDockWidgetArea,
               "version: ...and the default layout is untouched by the refusal");
+    }
+
+    // ---- 5. a layout with NO PANELS is refused ------------------------------
+    // The owner's 2026-09-14 report, at the helper: an editor that opens with
+    // nothing but the 3D view. The stored blob is what the shell used to write
+    // when the app was quit from the Player space (every dock hidden).
+    {
+        QSettings settings(scratch.filePath("empty-layout.ini"), QSettings::IniFormat);
+        Shell saver;
+        saver.window.show();
+        app.processEvents();
+        for (QDockWidget *d : { saver.hierarchy, saver.properties, saver.presets,
+                                saver.assets, saver.timeline })
+            d->setVisible(false);               // MainWindow::toggleWidgets(false)
+        app.processEvents();
+        DockState::save(&saver.window, &settings, "viewportDockState");
+        settings.sync();
+        CHECK(!DockState::hasVisibleDock(&saver.window),
+              "empty layout: the saved window really has no dock on screen");
+
+        Shell relaunched;
+        relaunched.window.show();
+        app.processEvents();
+        CHECK(!DockState::restore(&relaunched.window, &settings, "viewportDockState"),
+              "empty layout: restore() REFUSES it (the caller then applies the default)");
+        CHECK(relaunched.hierarchy->isVisible() && relaunched.properties->isVisible()
+                  && relaunched.presets->isVisible() && relaunched.assets->isVisible(),
+              "empty layout: ...and the window keeps the layout it had — panels and all");
+        CHECK(relaunched.window.dockWidgetArea(relaunched.presets) == Qt::RightDockWidgetArea,
+              "empty layout: the refusal leaves the DEFAULT arrangement untouched");
+    }
+
+    // ---- 6. one closed dock is not an empty layout --------------------------
+    // The rule has to be "no panels at all", not "any panel closed": a user who
+    // closes the Timeline must still get their layout back.
+    {
+        QSettings settings(scratch.filePath("one-closed.ini"), QSettings::IniFormat);
+        Shell saver;
+        saver.window.show();
+        app.processEvents();
+        saver.timeline->setVisible(false);
+        app.processEvents();
+        DockState::save(&saver.window, &settings, "viewportDockState");
+        settings.sync();
+
+        Shell relaunched;
+        relaunched.window.show();
+        app.processEvents();
+        CHECK(DockState::restore(&relaunched.window, &settings, "viewportDockState"),
+              "one closed dock: the layout is still restored");
+        CHECK(!relaunched.timeline->isVisible() && relaunched.hierarchy->isVisible(),
+              "one closed dock: ...with that dock closed and the rest open");
+    }
+
+    // ---- 7. the shell's two save-side rules ---------------------------------
+    // MainWindow::captureEditorDockState() snapshots while the docks are UP —
+    // on the way out of the editor space and before immersive fullscreen hides
+    // them — and closeEvent stores THAT, not the live state of whatever page
+    // the user quit from. store() of an empty blob leaves the stored layout
+    // alone, which is what a session that never opened the editor must do.
+    {
+        QSettings settings(scratch.filePath("quit-from-player.ini"), QSettings::IniFormat);
+        Shell shell;
+        shell.window.show();
+        app.processEvents();
+        const QByteArray captured = DockState::snapshot(&shell.window);   // leaving the editor
+        for (QDockWidget *d : { shell.hierarchy, shell.properties, shell.presets,
+                                shell.assets, shell.timeline })
+            d->setVisible(false);                                         // the player space
+        app.processEvents();
+        DockState::store(&settings, "viewportDockState", captured);       // closeEvent
+        settings.sync();
+
+        Shell relaunched;
+        relaunched.window.show();
+        app.processEvents();
+        CHECK(DockState::restore(&relaunched.window, &settings, "viewportDockState"),
+              "quit from the player: what was stored is the EDITOR's layout, and it restores");
+        CHECK(relaunched.hierarchy->isVisible() && relaunched.assets->isVisible(),
+              "quit from the player: ...with the panels the editor had");
+
+        const QByteArray before = settings.value("viewportDockState").toByteArray();
+        DockState::store(&settings, "viewportDockState", QByteArray());
+        settings.sync();
+        CHECK(settings.value("viewportDockState").toByteArray() == before,
+              "a session with nothing to say (an empty snapshot) leaves the stored layout alone");
     }
 
     std::printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);

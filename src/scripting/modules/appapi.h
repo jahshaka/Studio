@@ -60,6 +60,7 @@ public:
     Q_INVOKABLE QVariantMap window();
     Q_INVOKABLE QVariantMap resizeWindow(int width, int height);
     Q_INVOKABLE QVariantMap columns();
+    Q_INVOKABLE QVariantList docks();
     Q_INVOKABLE QVariant lastError();
     Q_INVOKABLE QVariantMap theme();
     Q_INVOKABLE QVariantMap styleSheets(const QVariantMap &options = QVariantMap());

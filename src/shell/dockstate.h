@@ -33,6 +33,8 @@ For more information see the LICENSE file
 // exactly what a first run does.
 
 #include <QByteArray>
+#include <QDockWidget>
+#include <QList>
 #include <QMainWindow>
 #include <QSettings>
 #include <QString>
@@ -49,27 +51,83 @@ namespace DockState {
 /// longer exists. A version-1 blob names it, and a blob that names a dock the
 /// window does not have leaves Qt guessing at the bottom area — the bump makes
 /// every existing layout fall back to the new default exactly once.
-constexpr int kVersion = 2;
+///
+/// 3 (lane SPACE-1, 2026-09-14): the Hierarchy dock's objectName was
+/// `sceneHierarchyWidget` — a leftover second setObjectName() that overwrote
+/// `sceneHierarchyDock` one line after it was set, so every saved layout named
+/// the left column after the widget inside it. The name is the dock's now, and
+/// the bump is what stops a version-2 blob from restoring a left column Qt can
+/// no longer match. It also retires every layout written by the builds that
+/// saved the PLAYER's hidden docks as the editor's (the defect this lane
+/// fixed), which is worth one free fall-back to the default.
+constexpr int kVersion = 3;
+
+/// `window`'s dock layout, at this layout version. The one place saveState's
+/// version argument is supplied, so a snapshot taken to be kept in memory (the
+/// editor's last layout, held across a space switch) cannot drift from the one
+/// written to settings.
+inline QByteArray snapshot(const QMainWindow *window)
+{
+    return window ? window->saveState(kVersion) : QByteArray();
+}
+
+/// Writes a layout blob under `key`. An empty blob writes nothing: a session
+/// with nothing to say about the layout must leave the stored one alone.
+inline void store(QSettings *settings, const QString &key, const QByteArray &blob)
+{
+    if (!settings || blob.isEmpty()) return;
+    settings->setValue(key, blob);
+}
 
 /// Writes `window`'s dock layout under `key`. Cheap and unconditional — the
 /// caller decides when (on close, for the editor).
 inline void save(const QMainWindow *window, QSettings *settings, const QString &key)
 {
-    if (!window || !settings) return;
-    settings->setValue(key, window->saveState(kVersion));
+    store(settings, key, snapshot(window));
+}
+
+/// Is any dock of `window` asking to be on screen? Deliberately isHidden() and
+/// not isVisible(): these docks live on a page of a stacked widget, so while
+/// another space is showing, every one of them is invisible without any of them
+/// being closed. isHidden() is the dock's OWN state — what the editor page will
+/// show when it comes back — which is the only thing a saved layout can carry.
+inline bool hasVisibleDock(const QMainWindow *window)
+{
+    if (!window) return false;
+    const QList<QDockWidget *> docks = window->findChildren<QDockWidget *>();
+    for (const QDockWidget *d : docks)
+        if (!d->isHidden()) return true;
+    return docks.isEmpty();   // no docks at all: nothing to lose, nothing to refuse
 }
 
 /// Restores the layout stored under `key`. Returns false — leaving `window`
-/// exactly as it was — when there is nothing stored, or when Qt refuses the
-/// blob (wrong version, unknown docks). "False" is the caller's signal to
-/// apply the DEFAULT layout, so a first run and a rejected blob behave the
-/// same way.
+/// exactly as it was — when there is nothing stored, when Qt refuses the blob
+/// (wrong version, unknown docks), or when the blob describes a window with
+/// NO PANELS AT ALL. "False" is the caller's signal to apply the DEFAULT
+/// layout, so a first run, a rejected blob and an empty one behave the same way.
+///
+/// THE EMPTY-LAYOUT RULE (lane SPACE-1, 2026-09-14, owner report). The editor's
+/// docks are hidden whenever another space is showing, and the exit path saved
+/// whatever the docks were doing at that moment — so quitting from the Player
+/// (or from immersive fullscreen) stored a layout in which every panel is
+/// closed. Restoring it produced an editor with nothing but the 3D view and no
+/// way to ask for the panels back except by switching space. A layout that
+/// records no panels is not a layout: it is refused here, the window is put
+/// back exactly as it was, and the caller applies the default.
 inline bool restore(QMainWindow *window, QSettings *settings, const QString &key)
 {
     if (!window || !settings) return false;
     const QByteArray blob = settings->value(key).toByteArray();
     if (blob.isEmpty()) return false;
-    return window->restoreState(blob, kVersion);
+    // The window as it stands — the default layout on the first restore, the
+    // user's on the second (applyColumnWidthsOnce re-applies the blob once the
+    // window has its real size). Either way it is the layout we keep if the
+    // stored one turns out to be empty.
+    const QByteArray lastGood = window->saveState(kVersion);
+    if (!window->restoreState(blob, kVersion)) return false;
+    if (hasVisibleDock(window)) return true;
+    window->restoreState(lastGood, kVersion);
+    return false;
 }
 
 }   // namespace DockState

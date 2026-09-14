@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include <QMenu>
 #include <QHash>
 #include <QPointer>
+#include <QVariantList>
 #include <QVariantMap>
 #include <memory>
 #include "irisgl/irisglfwd.h"
@@ -326,6 +327,15 @@ public:
         int rightMin = 0;
     };
     ColumnMetrics activeColumns() const;
+
+    /// THE EDITOR'S DOCKS, MEASURED (lane SPACE-1, 2026-09-14). One entry per
+    /// dock of the nested `viewPort` QMainWindow — the name restoreState
+    /// matches on, whether it is on screen, and the rectangle it occupies —
+    /// so `app.docks` can assert "the editor came back with its panels"
+    /// instead of a human looking at the window. A dock reports visible only
+    /// while the editor page is the page on screen, which is the honest
+    /// reading: a dock on a hidden page is not on screen.
+    QVariantList dockReport() const;
 
     /// THE APP'S DIALOGS, BY NAME (theme sweep, lane 16 — shell/mainwindowdialogs.cpp):
     /// what app.dialogs / app.dialog open for a script. The theme walk
@@ -805,6 +815,25 @@ private:
     /// settings — the once-per-session default column width then stands down
     /// (shell/dockstate.h).
     bool restoredViewportDocks = false;
+    /// THE EDITOR'S DOCKS, AS THE EDITOR LAST HAD THEM (lane SPACE-1). Every
+    /// space but the editor hides them, so the layout live at exit is the
+    /// layout of whatever page the user quit from — an editor with no panels,
+    /// stored as the editor's own. This is the last one the EDITOR had, taken
+    /// on the way out of that space (and before immersive fullscreen hides the
+    /// chrome), and it is what closeEvent writes.
+    QByteArray editorDockState;
+    /// Takes that snapshot. A no-op while the docks are hidden, which is what
+    /// makes it safe to call from anywhere on the way out.
+    void captureEditorDockState();
+    /// Shows or hides the editor's five docks for the space that is on screen:
+    /// the editor shows the ones `widgetStates` says are open, every other
+    /// space shows none. The ONE place dock visibility follows a space, so the
+    /// space switch and the queued layout pass cannot disagree about it.
+    void applyDockVisibilityForSpace();
+    /// Is any shown dock narrower than it can usefully be? A restored layout
+    /// can put a panel back at a width that shows nothing but icons, which
+    /// from the user's chair is a missing panel (owner screenshot 2026-09-14).
+    bool restoredDocksAreDegenerate() const;
     QTabWidget *presetsTabWidget;
 
     /// The bottom tray's dock. Its widget is `bottomTray`, whose first tab is

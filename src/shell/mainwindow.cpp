@@ -699,7 +699,20 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	settings->setValue("windowState", saveState());
 	// ...and the EDITOR DOCKS, which live in the nested `viewPort` QMainWindow
 	// and are therefore not in the line above (shell/dockstate.h).
-	DockState::save(viewPort, settings->settings, kViewportDockStateKey);
+	//
+	// THE EDITOR'S LAYOUT, NOT THIS PAGE'S (lane SPACE-1, 2026-09-14). Every
+	// space but the editor hides the editor's docks, and immersive fullscreen
+	// hides them inside it — so saving the live state was saving "no panels"
+	// for anyone who quit from the Player, from the Materials page or from
+	// F11, and that is what the next launch restored. captureEditorDockState()
+	// takes the live layout when the editor is the page on screen and does
+	// nothing when it is not; the snapshot taken on the way out of the editor
+	// then stands. With neither — a session that never opened a scene — the
+	// stored layout is left exactly as it was, because this session has
+	// nothing better to say about it.
+	captureEditorDockState();
+	DockState::store(settings->settings, QString::fromLatin1(kViewportDockStateKey),
+	                 editorDockState);
 
     // Orderly teardown BEFORE the window disappears: dialogs close with a
     // window still on screen, and a mid-flight import batch is aborted and
@@ -1153,6 +1166,11 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 		playerView->end();
 		break;
 	case WindowSpaces::EDITOR:
+		// THE LAYOUT THE EDITOR HAD, taken before the next space hides its
+		// docks (lane SPACE-1). Everything below this line is a page that
+		// shows no panels, and saving THAT at exit is what left the owner
+		// with an editor that opened empty.
+		captureEditorDockState();
 		sceneView->end();
 		break;
     default:
@@ -1179,12 +1197,8 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
         case WindowSpaces::EDITOR: {
             ui->stackedWidget->setCurrentIndex(1);
-            
-			sceneHierarchyDock->setVisible(widgetStates[(int) Widget::HIERARCHY]);
-			sceneNodePropertiesDock->setVisible(widgetStates[(int)Widget::PROPERTIES]);
-			presetsDock->setVisible(widgetStates[(int)Widget::PRESETS]);
-			assetDock->setVisible(widgetStates[(int)Widget::ASSETS]);
-			animationDock->setVisible(widgetStates[(int)Widget::TIMELINE]);
+
+			applyDockVisibilityForSpace();
 			playerControls->setVisible(false);
 
 			applyColumnWidthsOnce();
@@ -2269,9 +2283,12 @@ void MainWindow::setupDockWidgets()
 {
     // Hierarchy Dock
     sceneHierarchyDock = new QDockWidget("Hierarchy", viewPort);
+    // The NAME restoreState matches this dock on. (It used to be overwritten
+    // one line below with the WIDGET's name — a leftover that made every saved
+    // layout call the left column `sceneHierarchyWidget`; DockState::kVersion
+    // 3 retires those blobs. Lane SPACE-1.)
     sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
     sceneHierarchyWidget = new SceneHierarchyWidget;
-    sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
     sceneHierarchyDock->setWidget(sceneHierarchyWidget);
     // THE LEFT COLUMN IS ONE COLUMN, on every page (ui/style/panelmetrics.h).
     // The editor's left column is the one the other pages copy, so it is sized
@@ -2465,6 +2482,20 @@ void MainWindow::setupDockWidgets()
     // A saved dock layout carries the dock-area CORNERS: restoring one saved
     // before the corner rule would put the default corner back. Re-assert it.
     viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
+    // WHICH PANELS ARE OPEN IS `widgetStates`, FROM NOW ON (lane SPACE-1).
+    // A restored layout says which docks the user had closed, and until this
+    // line that answer survived exactly until the first space switch, which
+    // re-showed everything from the compiled-in defaults. Seeding the session's
+    // own record from the blob is what makes a closed panel stay closed — and
+    // it is the same record applyDockVisibilityForSpace reads, so the layout
+    // and the space can no longer disagree.
+    if (restoredViewportDocks) {
+        widgetStates[(int) Widget::HIERARCHY]  = !sceneHierarchyDock->isHidden();
+        widgetStates[(int) Widget::PROPERTIES] = !sceneNodePropertiesDock->isHidden();
+        widgetStates[(int) Widget::PRESETS]    = !presetsDock->isHidden();
+        widgetStates[(int) Widget::ASSETS]     = !assetDock->isHidden();
+        widgetStates[(int) Widget::TIMELINE]   = !animationDock->isHidden();
+    }
 
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
@@ -2522,8 +2553,20 @@ void MainWindow::applyColumnWidthsOnce()
         if (restoredViewportDocks) {
             if (settings) DockState::restore(viewPort, settings->settings, kViewportDockStateKey);
             viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);   // see setupDockWidgets
-            alignPresetsWithTray();
-            return;
+            // THE BLOB DOES NOT DECIDE WHICH PANELS ARE OPEN (lane SPACE-1).
+            // It carries each dock's visibility, and applying it here — after
+            // switchSpace(EDITOR) has just shown the panels — is what closed
+            // them again one event-loop turn after the editor opened. The
+            // space owns visibility; this pass owns sizes.
+            applyDockVisibilityForSpace();
+            // ...AND A LAYOUT TOO NARROW TO USE IS NO LAYOUT. If what came
+            // back puts a shown panel under its own minimum, the compiled-in
+            // widths are applied instead, exactly as on a first run.
+            if (!restoredDocksAreDegenerate()) {
+                alignPresetsWithTray();
+                return;
+            }
+            restoredViewportDocks = false;
         }
         // BOTH docks in the right column, from the one constant. Presets sits
         // under Properties in the default layout now, and a horizontal
@@ -2613,6 +2656,41 @@ MainWindow::ColumnMetrics MainWindow::activeColumns() const
     if (left)  { m.leftWidth  = left->width();  m.leftMin  = effectiveMin(left); }
     if (right) { m.rightWidth = right->width(); m.rightMin = effectiveMin(right); }
     return m;
+}
+
+// THE EDITOR'S DOCKS, MEASURED (lane SPACE-1, 2026-09-14). The panels the
+// owner reported missing after a player -> editor switch were not always
+// hidden: a restored layout can also bring them back at a degenerate WIDTH
+// (the 2026-09-14 screenshot: a left column 20 px wide showing nothing but the
+// hierarchy rows' lock icons), which looks exactly the same from the user's
+// chair. "Is the panel there" is therefore two numbers, not one, and this is
+// where a script reads both.
+QVariantList MainWindow::dockReport() const
+{
+    QVariantList out;
+    const QDockWidget *docks[] = { sceneHierarchyDock, sceneNodePropertiesDock, presetsDock,
+                                   assetDock, animationDock };
+    for (const QDockWidget *d : docks) {
+        if (!d) continue;
+        QVariantMap m;
+        m.insert("name", d->objectName());
+        m.insert("title", d->windowTitle());
+        // isVisible() is false for every dock while another page is on screen
+        // (they are children of the editor page): the honest reading of "on
+        // screen". isVisibleTo(viewPort) is the dock's OWN state — what the
+        // editor will show when its page comes back — and the two together are
+        // what tells a space-switch defect from a page-switch.
+        m.insert("visible", d->isVisible());
+        m.insert("shown", viewPort ? d->isVisibleTo(viewPort) : d->isVisible());
+        m.insert("floating", d->isFloating());
+        m.insert("width", d->width());
+        m.insert("height", d->height());
+        m.insert("minWidth", qMax(d->minimumWidth(), d->minimumSizeHint().width()));
+        m.insert("area", viewPort ? int(viewPort->dockWidgetArea(const_cast<QDockWidget *>(d)))
+                                  : 0);
+        out.append(m);
+    }
+    return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -3245,17 +3323,17 @@ void MainWindow::setupViewPort()
 
     connect(playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
+	// WHICH EDITOR PANELS ARE OPEN. These are the defaults — all five — and a
+	// restored dock layout overwrites them in setupDockWidgets, which runs
+	// after this. (The commented-out `widgets` QSettings key that used to sit
+	// here was dead for years: nothing ever wrote it. The dock layout itself
+	// carries the answer now. Lane SPACE-1, CRUD.)
 	widgetStates = QVector<bool>(5);
-
-	//auto values = settings->getValue("widgets", { /* empty */ }).value<QVector<bool>>();
-
-	//if (!values.isEmpty()) {
-		widgetStates[static_cast<int>(Widget::HIERARCHY)]	= true;
-		widgetStates[static_cast<int>(Widget::PROPERTIES)]	= true;
-		widgetStates[static_cast<int>(Widget::ASSETS)]		= true;
-		widgetStates[static_cast<int>(Widget::TIMELINE)]	= true;
-		widgetStates[static_cast<int>(Widget::PRESETS)]		= true;
-	//}
+	widgetStates[static_cast<int>(Widget::HIERARCHY)]	= true;
+	widgetStates[static_cast<int>(Widget::PROPERTIES)]	= true;
+	widgetStates[static_cast<int>(Widget::ASSETS)]		= true;
+	widgetStates[static_cast<int>(Widget::TIMELINE)]	= true;
+	widgetStates[static_cast<int>(Widget::PRESETS)]		= true;
 }
 
 void MainWindow::setupDesktop()
@@ -3957,26 +4035,16 @@ void MainWindow::toggleDockWidgets()
 	dl->addWidget(timeline);
 	dl->addWidget(assets);
 
-	QPushButton *saveLayout = new QPushButton("Save");
-	
-	connect(saveLayout, &QPushButton::pressed, [=]() {
-		//widgetStates[(int) Widget::HIERARCHY]	= hierarchy->isChecked() || !sceneHierarchyDock->isVisible();
-		//widgetStates[(int) Widget::PROPERTIES]	= properties->isChecked() || !sceneNodePropertiesDock->isVisible();
-		//widgetStates[(int) Widget::ASSETS]		= assets->isChecked() || !assetDock->isVisible();
-		//widgetStates[(int) Widget::TIMELINE]	= timeline->isChecked() || !animationDock->isVisible();
-		//widgetStates[(int) Widget::PRESETS]		= presets->isChecked() || !presetsDock->isVisible();
-
-		//// saveState and saveGeometry don't seem to work if visibility is altered so do this instead
-		//settings->setValue("widgets", QVariant::fromValue(widgetStates));
-	});
-
+	// (A dead "Save" button lived here — built, connected to a body that was
+	// entirely commented out, and never added to the layout. The panels the
+	// user leaves open are saved with the rest of the dock layout at exit now.
+	// Lane SPACE-1, CRUD.)
 	QWidget *cw = new QWidget;
 	QHBoxLayout *cl = new QHBoxLayout;
     cl->setContentsMargins(0, 0, 0, 0);
 	cw->setLayout(cl);
 	cl->addWidget(closeAll);
 	cl->addWidget(restoreAll);
-	//cl->addWidget(saveLayout);
 	dl->addWidget(cw);
 
 	connect(hierarchy, &QPushButton::toggled, [&](bool set) {
@@ -4282,6 +4350,10 @@ void MainWindow::toggleImmersiveFullscreen()
                                                   presetsDock, assetDock, animationDock, toolBar };
     immersiveFullscreen = true;
     enteringFullscreen = true;      // until the window manager says we are there
+    // The layout the editor has WITH its chrome, before the next two lines
+    // take it away: a quit from immersive fullscreen must not store an editor
+    // with no panels (lane SPACE-1).
+    captureEditorDockState();
     preFullscreenMaximized = isMaximized();
     preFullscreenWidgets.clear();
     if (currentSpace == WindowSpaces::EDITOR) {
@@ -4349,6 +4421,55 @@ void MainWindow::toggleWidgets(bool state)
     assetDock->setVisible(state);
     animationDock->setVisible(state);
     playerControls->setVisible(!state);
+}
+
+// THE DOCKS FOLLOW THE SPACE, FROM ONE PLACE (lane SPACE-1, 2026-09-14).
+//
+// The editor shows the panels `widgetStates` says are open; every other space
+// shows none, because they are the editor page's and that page is not on
+// screen. Both the space switch and the queued layout pass (applyColumnWidths-
+// Once, which re-applies the saved blob once the window has its real size) end
+// by calling this, so a restored layout can no longer undo the visibility the
+// space just asked for — which is exactly what made the editor open empty
+// after a restart, and stay empty until the user visited another page and came
+// back (owner report, 2026-09-14).
+void MainWindow::applyDockVisibilityForSpace()
+{
+    if (!sceneHierarchyDock) return;
+    const bool editor = currentSpace == WindowSpaces::EDITOR;
+    sceneHierarchyDock->setVisible(editor && widgetStates[(int) Widget::HIERARCHY]);
+    sceneNodePropertiesDock->setVisible(editor && widgetStates[(int) Widget::PROPERTIES]);
+    presetsDock->setVisible(editor && widgetStates[(int) Widget::PRESETS]);
+    assetDock->setVisible(editor && widgetStates[(int) Widget::ASSETS]);
+    animationDock->setVisible(editor && widgetStates[(int) Widget::TIMELINE]);
+}
+
+// THE LAYOUT THE EDITOR LAST HAD (lane SPACE-1). Called on the way out of the
+// editor space and before immersive fullscreen hides the chrome; a no-op once
+// the docks are down, so the caller never has to think about ordering. What it
+// holds is what closeEvent writes — never the Player's empty one.
+void MainWindow::captureEditorDockState()
+{
+    if (!viewPort || !DockState::hasVisibleDock(viewPort)) return;
+    editorDockState = DockState::snapshot(viewPort);
+}
+
+// A PANEL THAT IS THERE BUT TOO NARROW TO READ IS A MISSING PANEL (owner
+// screenshot 2026-09-14: a left column 20 px wide showing nothing but the
+// hierarchy rows' lock icons). Qt clamps docks to their minimums when it can,
+// but a restored layout is applied against a window that may not have had its
+// real size yet, and what comes back can sit under them. Measured on the docks
+// that are actually shown, once the window is up.
+bool MainWindow::restoredDocksAreDegenerate() const
+{
+    const QDockWidget *docks[] = { sceneHierarchyDock, sceneNodePropertiesDock, presetsDock,
+                                   assetDock, animationDock };
+    for (const QDockWidget *d : docks) {
+        if (!d || d->isHidden() || d->isFloating()) continue;
+        const int floor = qMax(d->minimumWidth(), d->minimumSizeHint().width());
+        if (floor > 0 && d->width() < floor) return true;
+    }
+    return false;
 }
 
 void MainWindow::showProjectManagerInternal()

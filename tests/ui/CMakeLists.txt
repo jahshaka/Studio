@@ -792,6 +792,30 @@ set_tests_properties(ui.column_law PROPERTIES
 jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
 jah_lsan_blocked(ui.column_law)   # spawns the app
 
+# ui.space_docks — THE EDITOR COMES BACK WITH ITS PANELS (lane SPACE-1, owner
+# report 2026-09-14). Same harness as ui.column_law, and for the same reason —
+# these are LAYOUT facts, only visible in a shown window with the loop turning
+# between the switch and the measurement — plus one thing no single-process
+# suite can do: it quits the app FROM THE PLAYER SPACE and boots it again in the
+# same data root, which is the only way to see what closeEvent really stored.
+add_executable(test_space_docks test_space_docks.cpp)
+set_target_properties(test_space_docks PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_space_docks PRIVATE Qt6::Core Qt6::Network)
+target_include_directories(test_space_docks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_space_docks PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_space_docks_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks)
+file(MAKE_DIRECTORY ${_space_docks_home}/run)
+add_test(NAME ui.space_docks COMMAND test_space_docks
+         WORKING_DIRECTORY ${_space_docks_home}/run)
+set_tests_properties(ui.space_docks PROPERTIES
+    ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
+    TIMEOUT 600 LABELS "ui")
+jah_tsan_blocked(ui.space_docks)   # spawns the app
+jah_lsan_blocked(ui.space_docks)   # spawns the app
+
 # ui.window_minimum — plan item 15: the main window fits a 1366x768 laptop in
 # every space (its floor <= 1366x640) and, put at 1366x680, keeps both columns
 # at or above their minimums with >= 400 px for the viewport. Same harness and
