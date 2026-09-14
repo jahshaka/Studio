@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #ifndef ICAMERACONTROLLER_H
 #define ICAMERACONTROLLER_H
+#include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QKeyEvent>
 #include <Qt>
@@ -68,12 +69,27 @@ public:
     /// release. `pivot` is the point to orbit around — the selection's
     /// centre, else the last focus point / world origin.
     ///
-    /// The arcball simply routes Alt+LMB into its existing orbit; the free
-    /// camera gains a TEMPORARY orbit for the duration of the drag (it
-    /// captures its distance to the pivot here and restores plain fly
-    /// behaviour when the drag ends). Held-modifier input: deliberately NOT
-    /// a ShortcutRegistry entry — the Shortcuts page lists it read-only with
-    /// the other held keys.
+    /// THE ORBIT THAT CANNOT JUMP (owner report 2026-09-15, ledger §353: "it
+    /// seems to jump the viewport like an F focus on the point — hard to
+    /// navigate"). Both controllers used to RE-PLACE the camera on a sphere
+    /// around the pivot at their own yaw/pitch — `pos = pivot + rot·(0,0,1)·d`
+    /// — so unless the camera already looked straight at the pivot, the FIRST
+    /// frame of the drag moved it to centre the pivot. That was the jump, and
+    /// it happened before the user had dragged anything at all.
+    ///
+    /// The orbit is a ROTATION now, not a placement: the camera's CURRENT
+    /// offset from the pivot is turned by the drag's delta and its orientation
+    /// is turned by the same delta,
+    ///
+    ///     offset' = R·(pos − pivot)      rot' = R·rot
+    ///
+    /// which leaves the pivot at exactly the same PIXEL (its position in
+    /// camera space is R⁻¹R(pivot − pos) = pivot − pos, invariant) and is the
+    /// identity for a zero-length drag — so nothing can move until the mouse
+    /// does. Roll survives too, which the yaw/pitch rebuild destroyed.
+    ///
+    /// The pose is captured HERE, at the press, so the whole drag differences
+    /// against one frame the way a gizmo drag does.
     virtual void setAltOrbit(bool active, const iris::Vec3 &pivot);
     bool isAltOrbiting() const { return altOrbit; }
 
@@ -100,8 +116,21 @@ public:
     bool isRotationLocked() const { return rotationLocked; }
 
 protected:
+    /// Accumulates the drag's turn and writes the camera — see setAltOrbit for
+    /// the maths and the reason. A no-op while the gesture is not armed, while
+    /// there is no camera, and (to the bit) before the drag has moved.
+    void applyAltOrbit(float yawDegrees, float pitchDegrees);
+
     bool altOrbit = false;
     iris::Vec3 altOrbitPivot;
+    /// The pose the Alt+drag started from, and the yaw/pitch it decomposes to:
+    /// the whole drag is differenced against these, so it cannot drift and a
+    /// zero-length drag writes nothing at all.
+    iris::Vec3 altOrbitStartPos;
+    iris::Quat altOrbitStartRot;
+    float altOrbitStartYaw = 0.0f, altOrbitStartPitch = 0.0f;
+    /// Degrees dragged so far, cumulative.
+    float altOrbitYaw = 0.0f, altOrbitPitch = 0.0f;
     bool rotationLocked = false;
 
     QSharedPointer<iris::CameraNode> camera;

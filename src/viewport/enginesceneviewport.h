@@ -68,7 +68,9 @@ public:
     /// The point Alt+LMB orbits around: the selection's world bounding-box
     /// centre (its origin when it has no meshes), else the last focus point,
     /// else the world origin.
-    iris::Vec3 orbitPivot() const;
+    /// Where an Alt+drag starting at this pixel orbits around: the point under
+    /// the cursor, else the view ray at the current working distance (§353).
+    iris::Vec3 altOrbitPivotAt(const QPointF &point);
     /// Hands the gizmo the D5-reduced selection set (empty for a single node).
     void pushGizmoGroup();
     /// The union of the selection set's world bounds (a member with no meshes
@@ -465,8 +467,11 @@ private:
     /// — while the outline, the gizmo's group transform and the focus/orbit/
     /// floor unions read this.
     QList<iris::SceneNodePtr> mSelectedSet;
-    /// Alt+LMB orbit pivot when nothing is selected: the last focus point
-    /// (F on a node), else the world origin.
+    /// THE LAST POINT F FRAMED (world origin until something is framed). Since
+    /// §353 an Alt+drag orbits the point UNDER THE CURSOR, so this is no longer
+    /// a pivot — it is the fallback DISTANCE: with nothing under the cursor the
+    /// pivot is taken on the view ray at the camera's distance to this point,
+    /// i.e. at the scale the user is already working in.
     iris::Vec3 mLastOrbitPivot;
     iris::CameraNodePtr mEditorCam;
     /// THE CAMERA THIS VIEWPORT IS DRIVING (CAMERAS_SPEC D8). The explorer,

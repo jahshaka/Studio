@@ -50,11 +50,9 @@ public:
     iris::Vec3 pivot;
     float distFromPivot;
 
-	iris::CameraNodePtr camera;
 
     OrbitalCameraController(IEditorViewport* sceneWidget);
 
-    iris::CameraNodePtr  getCamera();
     void setRotationSpeed(float rotationSpeed);
     void setCamera(iris::CameraNodePtr  cam) override;
 

@@ -26,8 +26,6 @@ namespace iris
 class IEditorViewport;
 class EditorCameraController : public CameraControllerBase
 {
-    QSharedPointer<iris::CameraNode> camera;
-
     float lookSpeed;
     float linearSpeed;   // fly speed in units/second (EDITOR_SHORTCUTS_SPEC §2)
 
@@ -35,9 +33,6 @@ class EditorCameraController : public CameraControllerBase
     float pitch;
 
 	float orthoZoom;
-
-	/// Distance to the Alt-orbit pivot, captured when the drag starts.
-	float altOrbitDistance = 0.0f;
 
 	IEditorViewport* sceneWidget;
 
@@ -48,7 +43,6 @@ class EditorCameraController : public CameraControllerBase
 public:
     EditorCameraController(IEditorViewport* sceneWidget);
 
-	iris::CameraNodePtr getCamera();
     void setCamera(iris::CameraNodePtr cam) override;
 
     iris::Vec3 getPos();
@@ -80,12 +74,6 @@ public:
     void update(float dt) override;
 
 	bool canLeftMouseDrag();
-
-	/// Alt+LMB orbit: the free camera has no pivot of its own, so it gains a
-	/// TEMPORARY one for the drag — the distance to the pivot is captured
-	/// here and the camera is re-placed on the orbit sphere as the drag turns
-	/// yaw/pitch. Plain fly behaviour returns when the drag ends.
-	void setAltOrbit(bool active, const iris::Vec3 &pivot) override;
 
 	/// True while the fly keys should own the arrow cluster (RMB held) — the
 	/// viewport uses this to withhold Up/Down/Left/Right/PageUp/PageDown from

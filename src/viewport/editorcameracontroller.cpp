@@ -38,11 +38,6 @@ EditorCameraController::EditorCameraController(IEditorViewport* sceneWidget):
 	this->sceneWidget = sceneWidget;
 }
 
-CameraNodePtr EditorCameraController::getCamera()
-{
-    return camera;
-}
-
 /**
  * Adopts a camera: DECOMPOSE ONLY, never write.
  *
@@ -133,22 +128,22 @@ void EditorCameraController::pan(float angle)
  */
 void EditorCameraController::onMouseMove(int x,int y)
 {
-    // Alt+LMB orbit (Maya/Unreal): turn yaw/pitch like a look, then put the
-    // camera back on the orbit sphere so the pivot stays put on screen. The
-    // free camera keeps its own orientation model — this is a temporary
-    // orbit for the duration of the drag only.
+    // Alt+LMB orbit (Maya/Unreal), and it is a ROTATION of the camera's
+    // current offset from the pivot — never a re-placement on a sphere
+    // (cameracontrollerbase.h's setAltOrbit carries the maths and the owner
+    // report §353 it answers). The free camera keeps its own orientation
+    // model; this is a temporary orbit for the duration of the drag only.
     // THE AXIS-VIEW LOCK, gesture 1 of 2 (Alt+LMB orbit). Ignored outright in
     // an axis view: the drag turns nothing and pans nothing (canLeftMouseDrag
     // refuses while Alt is orbiting), which is Unreal's and Maya's answer.
     if (altOrbit && leftMouseDown && rotationLocked) return;
     if (altOrbit && leftMouseDown && camera) {
-        this->yaw += x / 10.0f;
-        this->pitch += y / 10.0f;
-        pitch = (pitch < -89.0f ? -89.0f : (pitch > 89.0f ? 89.0f : pitch));
-        const iris::Quat rot = iris::Quat::fromEulerAngles(pitch, yaw, 0);
-        camera->setLocalPos(altOrbitPivot + rot.rotatedVector(iris::Vec3(0, 0, 1)) * altOrbitDistance);
-        camera->setLocalRot(rot);
-        camera->update(0);
+        applyAltOrbit(x / 10.0f, y / 10.0f);
+        // The fly and the look continue from the pose the orbit left, so the
+        // controller's own (yaw, pitch) are re-read off the node — the same
+        // decomposition setCamera does, and just as read-only.
+        float roll = 0.0f;
+        camera->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
         return;   // never also pan/look on the same drag
     }
 
@@ -190,18 +185,6 @@ void EditorCameraController::onMouseMove(int x,int y)
     // (pitch, yaw, 0) and levelled any roll it had. The pan branch above
     // already moved the camera and called update(0); its rotation is unchanged.
     if (rightMouseDown && !rotationLocked) updateCameraRot();
-}
-
-void EditorCameraController::setAltOrbit(bool active, const iris::Vec3 &pivot)
-{
-	CameraControllerBase::setAltOrbit(active, pivot);
-	// LOCKED (an axis view): ignored, set-up included — see the arcball's
-	// setAltOrbit for why the SET-UP is the part that could still be felt.
-	if (!active || !camera || rotationLocked) return;
-	// Capture the orbit radius at drag start so the first frame cannot jump;
-	// a camera sitting exactly on the pivot gets a sane default distance.
-	altOrbitDistance = camera->getGlobalPosition().distanceToPoint(pivot);
-	if (altOrbitDistance < 0.001f) altOrbitDistance = 5.0f;
 }
 
 bool EditorCameraController::canLeftMouseDrag()

@@ -529,7 +529,7 @@ bool EngineSceneViewport::frameNode(iris::SceneNodePtr sceneNode, const EditorFr
     // setCamera() re-derive the pivot, which lands back on `target` exactly
     // (the pose above is already the controller's own orbit formula).
     resyncCameraController(dist);
-    mLastOrbitPivot = target;   // a following Alt+drag orbits what we framed
+    mLastOrbitPivot = target;   // the working distance a later Alt+drag falls back to
     return true;
 }
 
@@ -1064,11 +1064,13 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
             }
             mGizmo->startDragging(rayPos, rayDir, viewDir);
         } else if (e->modifiers() & Qt::AltModifier) {
-            // Alt+LMB anywhere BUT the gizmo orbits around the selection
-            // (Maya/Unreal). The gizmo hit-test above ran first on purpose:
-            // Alt ON the gizmo keeps meaning duplicate-while-transforming.
-            // Orbiting must not re-pick, so the selection is left alone.
-            if (mCamController) mCamController->setAltOrbit(true, orbitPivot());
+            // Alt+LMB anywhere BUT the gizmo orbits around THE POINT UNDER THE
+            // CURSOR (Maya/Unreal; owner report §353). The gizmo hit-test above
+            // ran first on purpose: Alt ON the gizmo keeps meaning
+            // duplicate-while-transforming. Orbiting must not re-pick the
+            // SELECTION, so the selection is left alone — the pick below only
+            // answers "what is under the cursor", it selects nothing.
+            if (mCamController) mCamController->setAltOrbit(true, altOrbitPivotAt(e->position()));
         } else {
             iris::SceneNodePtr picked = pickAt(e->position(), true);
             // Ctrl TOGGLES, Shift ADDS (D3 b — Unreal's viewport rule). Both
@@ -1503,7 +1505,6 @@ void EngineSceneViewport::focusOnSelection()
 {
     if (mSelectedSet.size() <= 1) {
         if (mSelectedNode) focusOnNode(mSelectedNode);
-        if (mSelectedNode) mLastOrbitPivot = orbitPivot();
         return;
     }
     iris::AABB unionBounds;
@@ -1511,7 +1512,6 @@ void EngineSceneViewport::focusOnSelection()
     focusOnTarget(unionBounds.getCenter(),
                   qMax(0.05f, unionBounds.getSize().length() * 0.5f),
                   iris::SceneNodePtr());
-    mLastOrbitPivot = orbitPivot();
 }
 
 /// The union of the selection's world bounds. A member with no meshes
@@ -1534,24 +1534,31 @@ bool EngineSceneViewport::selectionBounds(iris::AABB &out) const
     return any;
 }
 
-iris::Vec3 EngineSceneViewport::orbitPivot() const
+// WHAT AN ALT+DRAG ORBITS AROUND (owner report 2026-09-15, ledger §353: "it
+// should not refocus but rotate around the point of the empty Alt+click").
+//
+// THE POINT UNDER THE CURSOR, by an ordinary scene pick — the thing the user
+// pointed at, which is the only pivot that makes an orbit feel like turning an
+// object in your hand. It used to be the SELECTION's centre, so orbiting while
+// looking somewhere else swung the whole view across the screen.
+//
+// With nothing under the cursor there is still a point to orbit: the one on the
+// view ray at the distance the camera is already working at — the last thing F
+// framed, else the world origin, floored so a camera sitting on its own pivot
+// still has a radius. The pick is forcePickable so a LOCKED node (the default
+// floor) is a surface to orbit around like any other; nothing is selected by it.
+iris::Vec3 EngineSceneViewport::altOrbitPivotAt(const QPointF &point)
 {
-    // Alt+LMB orbits around the SELECTION's centre (its world bounding-box
-    // centre when it has meshes, else its origin). With nothing selected we
-    // fall back to the last focus point, and finally to the world origin.
-    if (mSelectedSet.size() > 1) {
-        iris::AABB unionBounds;
-        if (const_cast<EngineSceneViewport *>(this)->selectionBounds(unionBounds))
-            return unionBounds.getCenter();   // orbit the SET's centre
-    }
-    if (mSelectedNode) {
-        mSelectedNode->update(0.0f);
-        const iris::AABB bounds = preview::worldBoundingBox(mSelectedNode);
-        if (bounds.getMin().x() <= bounds.getMax().x())   // non-empty (meshes exist)
-            return bounds.getCenter();
-        return mSelectedNode->getGlobalPosition();
-    }
-    return mLastOrbitPivot;
+    iris::Vec3 hit;
+    if (pickAt(point, false, &hit, true)) return hit;
+    const iris::CameraNodePtr cam = viewCamera();
+    if (!cam) return mLastOrbitPivot;
+    iris::Vec3 a, b;
+    pictureSegment(cam, point, a, b);
+    const iris::Vec3 eye = cam->getGlobalPosition();
+    float distance = eye.distanceToPoint(mLastOrbitPivot);
+    if (!(distance > 0.01f)) distance = 15.0f;
+    return eye + (b - a).normalized() * distance;
 }
 
 QString EngineSceneViewport::gizmoMode() const
