@@ -140,7 +140,6 @@ private:
     /// decides it. Both hidden on every other light type.
     class LabelWidget*      sunReadout = nullptr;
     class DragFloatWidget*  forwardShadingPriority = nullptr;
-    DragFloatWidget *sunAngle = nullptr;          // the sun's angular size (spec 3)
     /// FOLLOWS ATMOSPHERE — the sun's row, shown beside Sun Angle and only on
     /// the resolver's sun (lightnode.h says what it does).
     CheckBoxWidget *followsAtmosphere = nullptr;

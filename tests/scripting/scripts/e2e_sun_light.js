@@ -177,10 +177,20 @@ assert(disc.inProbes === false, "...and out of the reflection probes by default"
 assert(world.sunDisc({ visible: false }).visible === false, "world.sunDisc turns it off");
 assert(world.sunDisc({ inProbes: true }).inProbes === true, "...and can put it in the probes");
 world.sunDisc({ visible: true, inProbes: false });
-assert(node.property(sun, "sunAngle") > 0, "the sun's ANGULAR SIZE is a row on the light");
-assert(node.setProperty(sun, "sunAngle", 2.5) === true, "...and it is settable");
-near(node.property(sun, "sunAngle"), 2.5, 0.01, "...and the set stuck");
-node.setProperty(sun, "sunAngle", 0.53);
+// THE DISC'S SIZE IS A WORLD ROW (lane SUN-DISC-1). It used to be `sunAngle` on
+// the light; the drawn disc is a PICTURE of the sun (the default is four times
+// the sun's real 0.53 degrees, because glare is what a photographed sun looks
+// like), so it sits beside the two rows that say where the picture is shown.
+near(disc.size, 2.12, 0.001, "the disc is 2.12 degrees across by default (4x the real sun)");
+near(world.sunDisc({ size: 5 }).size, 5, 0.001, "world.sunDisc sets the size");
+near(world.sunDisc({ size: 40 }).size, 10, 0.001, "...clamped at 10 degrees");
+near(world.sunDisc({ size: 0 }).size, 0.1, 0.001, "...and at 0.1 (the off switch is `visible`)");
+world.sunDisc({ size: 2.12 });
+(function () {
+    var rows = node.properties(sun), had = false;
+    for (var i = 0; i < rows.length; i++) if (rows[i].name === "sunAngle") had = true;
+    assert(!had, "the light's old sunAngle row is GONE, not a second size");
+})();
 
 // ---- THE SKY LIGHT (D14): ambient is a light --------------------------------
 assert(names.indexOf("skyLight") >= 0, "world.skyLight is registered");
