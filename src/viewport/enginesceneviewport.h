@@ -53,6 +53,13 @@ public:
 
     void setScene(iris::ScenePtr scene) override;
     iris::ScenePtr getScene() override { return mScene; }
+    /// The ONE engine scene and the ONE mirror (IEditorViewport's note): the
+    /// Player page draws through these, as a second view.
+    jahshaka::engine::Scene *engineScene() override { return mEngineScene; }
+    SceneMirror *sceneMirror() override { return mMirror.get(); }
+    float measuredExposureScale() const override {
+        return view() ? view()->measuredExposureScale() : 0.0f;
+    }
     void setSelectedNode(iris::SceneNodePtr sceneNode) override;
     void setSelectedSet(const QList<iris::SceneNodePtr> &nodes) override;
     void clearSelectedNode() override;

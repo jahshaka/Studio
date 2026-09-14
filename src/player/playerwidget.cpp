@@ -99,6 +99,16 @@ void PlayerWidget::showPlaying(bool playing)
 	playBtn->setToolTip(playing ? "Stop the scene" : "Play the scene");
 }
 
+void PlayerWidget::playScene()
+{
+    if (!playerView) return;
+    if (!playerView->isScenePlaying()) {
+        playerView->playScene();
+        playerView->asWidget()->setFocus();
+    }
+    showPlaying(playerView->isScenePlaying());
+}
+
 void PlayerWidget::onPlayScene()
 {
     if (!playerView) return;

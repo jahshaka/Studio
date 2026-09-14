@@ -33,7 +33,29 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
         const GizmoDrawItem &item = items[i];
         if (i >= mSlots.size()) mSlots.append(Slot());
         Slot &slot = mSlots[i];
-        if (!slot.node) slot.node = mTarget->createNode();
+        if (!slot.node) {
+            slot.node = mTarget->createNode();
+            // EDITOR FURNITURE, in the engine's sense (EnginePrivate.h's bit
+            // scheme, Scene::setNodeHelper): kHelperBit instead of kVisibleBit.
+            //
+            // It was missing, and until now nothing depended on it: a gizmo
+            // part's material is created with depthTest false, which puts it on
+            // the on-top queue (kOverlayRenderQueue, 210), and every capture in
+            // this engine stops below that — the planar reflection pass covers
+            // RQ 0..199 and the probe faces rq_last 200. So the RENDER QUEUE
+            // was already keeping the gizmo out of every capture, and the flag
+            // changes no pixel of any existing view.
+            //
+            // It is required NOW because the Player page is a second VIEW on
+            // this scene (lane PLAYER-1): "not the editor's furniture" became a
+            // visibility CHANNEL instead of a second scene, and an unmarked
+            // gizmo would be drawn in the Player.
+            //
+            // Marked at CREATION rather than after attachMesh because the slots
+            // are POOLED and re-attached to different meshes — the same trap
+            // the selection shells and the light icons record.
+            if (slot.node) mTarget->setNodeHelper(slot.node, true);
+        }
         if (!slot.material)
             slot.material = mTarget->createUnlitMaterial(Colour(1, 1, 1), false);   // on top
         if (!slot.node || !slot.material) continue;

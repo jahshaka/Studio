@@ -52,6 +52,11 @@ public:
     /// camera and PlayBack falls back to the shared document through it).
     /// Wired by the shell; null in headless runs. Was UiManager::sceneViewWidget.
     void setEditorViewport(IEditorViewport *viewport);
+    /// Hands the EDITOR'S engine Scene and SceneMirror to the player scene
+    /// (lane PLAYER-1: there is one of each). Idempotent, cheap, and called at
+    /// every edge that can precede a frame — the viewport may not have built
+    /// them yet when this view is wired up.
+    void adoptEditorScene();
 
     /// Steps the player and pushes document -> engine. Called before every frame.
     void syncFrame();

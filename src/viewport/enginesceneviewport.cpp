@@ -2232,10 +2232,14 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
 void EngineSceneViewport::begin()
 {
     mActive = true;
-    // Coming back from the player space, which drives its own engine scene
-    // through its own mirror: re-push the world settings whose backend state is
-    // process-wide (the HlmsPbs GI binding) instead of trusting a debounce that
-    // was last true while a different scene owned the screen.
+    // Coming back from another space. ONE SCENE since lane PLAYER-1 — the
+    // Player page is a second VIEW on this scene, drawn by this very mirror —
+    // so there is no binding to take back. What there IS: the post chain, MSAA,
+    // the shadow flag and the background are pushed PER VIEW, and the mirror's
+    // latches say "already pushed" about the view that has just handed the
+    // screen over. Dropping them is what gives THIS view its own chain again.
+    // (The GI half is a binding re-assert, never a rebuild — see
+    // SceneMirror::invalidateEnvironment.)
     if (mMirror) mMirror->invalidateEnvironment();
     if (view()) view()->setEnabled(true);
     refreshOverlay();

@@ -34,56 +34,56 @@ EnginePlayerScene::~EnginePlayerScene()
     delete mPlayback;
 }
 
-bool EnginePlayerScene::ensureScene()
+void EnginePlayerScene::setEditorScene(Scene *scene, SceneMirror *mirror)
 {
-    auto engine = mEngine.lock();
-    if (!engine) return false;
-    if (mScene) return true;
-    // On-screen and watched at frame rate, exactly like the editor scene
-    // (fps audit F3, bridge/sceneworkerthreads.h).
-    mScene = engine->createScene("player-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
-                                 sceneworkers::count(sceneworkers::Tier::Primary));
-    if (!mScene) return false;
-    mScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
-    mMirror.reset(new SceneMirror(mScene));
-    mMirror->setLightWires(false);           // the player never shows editor wires
-    if (mDocument) mMirror->setSource(mDocument);
-    return true;
+    if (mScene == scene && mMirror == mirror) return;
+    // The view is bound to the OLD scene; drop that binding before the pointer
+    // goes (a View left pointing at a destroyed Scene is the crash this class
+    // used to have on the other side of the switch).
+    if (mView && mScene && mView->scene() == mScene) mView->setScene(nullptr);
+    mScene = scene;
+    mMirror = mirror;
+    if (mView && mScene) attach(mView);
 }
 
 bool EnginePlayerScene::attach(View *view)
 {
     auto engine = mEngine.lock();
-    if (!engine || !view) return false;
-    if (mScene && mView == view) return true;
-    if (mScene && mView != view) {
+    if (!engine || !view || !mScene) return false;
+    // IDEMPOTENT AND CHEAP: syncFrame calls this on every frame the page is up,
+    // and the work below (a chain rebuild, dropping the mirror's debounce
+    // latches) must happen on the BIND, not sixty times a second.
+    if (mView == view && view->scene() == mScene) return true;
+    if (mView && mView != view && mView->scene() == mScene) {
         // Re-bound to another view (the widget's native window was recreated).
-        if (mView) mView->setScene(nullptr);
-    } else if (!mScene) {
-        if (!ensureScene()) return false;
+        mView->setScene(nullptr);
     }
     mView = view;
-    mView->setScene(mScene);
-    // Shadows, ambient, fog, MSAA, GI and the post chain all come from the
-    // document, through applyEnvironment in step() — exactly as they do for the
-    // editor viewport. Hardcoding any of them here is what made the player and
-    // the editor render the same scene differently.
+    // THE PLAYER IS A VIEW WITHOUT THE EDITOR'S FURNITURE (ChainDesc::helpers).
+    // Set BEFORE the scene bind so the workspace is built once, in its final
+    // shape, rather than built and immediately rebuilt.
+    mView->setHelpersVisible(false);
+    // ONE CONVENTION for the shadow flag (audit F8): the editor viewport sets
+    // it true before its first push, and this used to leave it false until
+    // applyEnvironment arrived on frame 1 — one guaranteed workspace rebuild per
+    // player page, every time. The document's own value follows immediately
+    // through applyEnvironment either way.
+    mView->setShadows(true);
+    if (mView->scene() != mScene) mView->setScene(mScene);
+    // Some of what applyEnvironment pushes is PER VIEW (the whole post chain,
+    // MSAA, the shadow flag), and the mirror debounces on "already pushed" —
+    // which is true, of the OTHER view. Dropping the latches is what makes the
+    // player's own chain get built at all.
     if (mMirror) mMirror->invalidateEnvironment();
     return true;
 }
 
 void EnginePlayerScene::release()
 {
+    // The Scene and the mirror belong to the editor viewport: this object
+    // created neither and destroys neither. Only the view binding is ours.
     auto engine = mEngine.lock();
-    if (mMirror) {
-        if (engine && mScene) mMirror->setSource(nullptr);
-        mMirror.reset();
-    }
-    if (engine && mScene) {
-        if (mView && mView->scene() == mScene) mView->setScene(nullptr);
-        engine->destroyScene(mScene);
-    }
-    mScene = nullptr;
+    if (engine && mView && mScene && mView->scene() == mScene) mView->setScene(nullptr);
     mView = nullptr;
 }
 
@@ -91,7 +91,11 @@ void EnginePlayerScene::setDocument(iris::ScenePtr scene, iris::CameraNodePtr ca
 {
     mDocument = scene;
     if (mDocument && camera) mDocument->setCamera(camera);
-    if (mMirror) mMirror->setSource(mDocument);
+    // NO mirror bind: there is one mirror and the editor viewport owns it, with
+    // this very document already bound. Binding it a second time is what used
+    // to migrate the document's graph between two scene managers on every page
+    // switch (the whole of audit F1).
+    //
     // PlayBack hands the document's camera to its controllers here, so the camera
     // must be settled first (above).
     if (mDocument && mDocument->getCamera()) mPlayback->setScene(mDocument);
@@ -104,9 +108,10 @@ iris::CameraNodePtr EnginePlayerScene::camera() const
 
 void EnginePlayerScene::begin()
 {
-    // Taking the screen back from the editor: some of what applyEnvironment
-    // pushes is process-wide in the backend (the HlmsPbs GI binding), so the
-    // debounce has to be reset or the editor's binding survives into the player.
+    // Taking the screen back from the editor. One scene now, so there is no
+    // binding to fight over — but the post chain, MSAA and the shadow flag are
+    // pushed PER VIEW and the mirror's latches say "already pushed" about the
+    // editor's view. Dropping them is what gives this view its own chain.
     if (mMirror) mMirror->invalidateEnvironment();
     auto cam = camera();
     if (!cam) return;
@@ -130,7 +135,13 @@ void EnginePlayerScene::end()
 
 void EnginePlayerScene::step(float dt, int width, int height)
 {
-    if (!mDocument || !mView) return;
+    if (!mDocument || !mView || !mScene) return;
+    // THE MIRROR IS THE EDITOR'S AND IT HOLDS THE DOCUMENT. A frame where the
+    // two disagree is a frame between a project open and the host's push of the
+    // new document: stepping it would drive this view from a camera whose graph
+    // node lives in a scene manager that has just been destroyed. Wait one
+    // frame instead — EnginePlayerView::setScene is the push.
+    if (mMirror && mMirror->source() != mDocument) return;
     auto cam = camera();
     if (!cam) return;
 
@@ -219,9 +230,9 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
     auto engine = mEngine.lock();
     if (!engine || width <= 0 || height <= 0) return QImage();
     // A screenshot can be the FIRST thing asked of the player — before the page
-    // has ever been shown, so before attach() ran. The engine Scene and its
-    // mirror need no window (only the on-screen View does), so build them here
-    // rather than answering "no player" to a perfectly answerable question.
+    // has ever been shown, so before attach() ran. It needs no window and no
+    // player view: the scene is the editor's and it already exists, so the shot
+    // is answerable whether or not the page has been up.
     if (!ensureScene()) return QImage();
     auto cam = camera();
     if (!cam) return QImage();
@@ -231,6 +242,10 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
                                              unsigned(width), unsigned(height),
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
+    // A PICTURE OF THE PLAYER, so it hides what the player hides: the grid, the
+    // wires and icons, the gizmo, the selection shell (ChainDesc::helpers).
+    // Before setScene, so the workspace is built once in its final shape.
+    shot->setHelpersVisible(false);
     shot->setScene(mScene);
     if (mMirror) {
         mMirror->sync();
@@ -274,5 +289,11 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
             memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
     }
     engine->destroyView(shot);
+    // The mirror's per-view latches were just satisfied by a view that no longer
+    // exists (applyEnvironment/applySky above). Drop them so the next on-screen
+    // frame — this page's, or the editor's — pushes its own chain again. Cheap:
+    // every value below it is idempotent in the engine, and the GI half is a
+    // binding re-assert, never a rebuild (SceneMirror::invalidateEnvironment).
+    if (mMirror) mMirror->invalidateEnvironment();
     return result;
 }
