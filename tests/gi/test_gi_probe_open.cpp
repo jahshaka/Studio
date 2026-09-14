@@ -688,7 +688,20 @@ int main()
         CHECK(st.probeEnclosedAxes < 2, "pinned: the geometry still measures OPEN");
         CHECK(!st.probeGridRefused && st.probeCount == 4,
               "pinned: ...and the grid is built anyway — typed bounds stand the rule down");
-        CHECK(st.probeCaptureSize == 256, "pinned: Medium and High both capture at 256 px");
+        CHECK(st.probeCaptureSize == 256, "pinned: Medium captures at 256 px");
+        // ...AND HIGH CAPTURES AT 512 (owner, 2026-09-15, ledger §324 — the
+        // 2026-09-13 halving of High reversed after the rig measured both ends
+        // of the trade: +85 % strong reflection edges on the Mirror Room's
+        // chrome sphere for +152 MB and +2.5 ms of still-frame GPU). The line
+        // above used to assert that Medium and High were the same number; they
+        // are two numbers now, so both are asserted, on one scene, from the
+        // dial the engine resolves them with (OgreGi.cpp buildPcc). Epic shares
+        // GiQuality::High and is therefore this same row.
+        gi.quality = GiQuality::High;
+        CHECK(s->setGlobalIllumination(gi), "pinned: the hybrid rebuilds at High");
+        render(engine.get(), 10);
+        CHECK(s->giStatus().probeCaptureSize == 512,
+              "pinned: High (and Epic, which shares the quality) captures at 512 px");
         engine->destroyScene(s);
     }
 

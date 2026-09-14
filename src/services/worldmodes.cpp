@@ -53,9 +53,13 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// The fifth column, probeSize, is the REFLECTION-PROBE CAPTURE SIZE in pixels
 /// per cube face (owner, 2026-09-13 Q4: "yes halve it but add it to the world
 /// settings"). 0 = follow the engine's quality dial, which is what every tier
-/// writes today: the halving that decision asked for lives in the engine
-/// (High 512 -> 256, OgreGi.cpp buildPcc), so no tier needs a number here and
-/// the column exists so an author can pin one per scene.
+/// writes today, and the dial is where the sizes themselves live
+/// (OgreGi.cpp buildPcc: 128 at Low, 256 at Medium, 512 at High and Epic —
+/// the 2026-09-13 halving of High was REVERSED by the owner on 2026-09-15,
+/// ledger §324). A number here instead of 0 would move only scenes authored
+/// after the change and would make every scene already saved read as Custom,
+/// since its stored 0 would no longer match the tier — so the column stays 0
+/// and exists for an AUTHOR to pin a size per scene.
 struct PhotonRow { int technique, quality, ddgi, bounces, probeSize; };
 const PhotonRow kPhotonTable[4] = {
     /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
