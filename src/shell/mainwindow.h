@@ -351,7 +351,7 @@ public:
     /// Orderly teardown of every background worker the window owns (import
     /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
     /// at most once; called from closeEvent and wired to aboutToQuit so the
-    /// exitApp()/QApplication::exit path is covered too. Bounded: a worker
+    /// QApplication::exit/quit path is covered too. Bounded: a worker
     /// that will not die is abandoned (the process-level force-exit guard in
     /// main() has the final word).
     void shutdownBackgroundWork();
@@ -543,7 +543,6 @@ public slots:
 
 	void toggleDockWidgets();
     void showPreferences();
-    void exitApp();
     void newScene();
 
     void newProject(const QString&, const QString&);
@@ -830,10 +829,7 @@ private:
     /// space shows none. The ONE place dock visibility follows a space, so the
     /// space switch and the queued layout pass cannot disagree about it.
     void applyDockVisibilityForSpace();
-    /// Is any shown dock narrower than it can usefully be? A restored layout
-    /// can put a panel back at a width that shows nothing but icons, which
-    /// from the user's chair is a missing panel (owner screenshot 2026-09-14).
-    bool restoredDocksAreDegenerate() const;
+
     QTabWidget *presetsTabWidget;
 
     /// The bottom tray's dock. Its widget is `bottomTray`, whose first tab is

@@ -62,8 +62,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "instead of trusted. `metrics` is what PanelMetrics says those numbers should be. A "
           "space with no columns (desktop, player) answers {space} alone.",
           Needs::Window },
-        { "docks", "app.docks() -> [{name, title, visible, shown, floating, width, height, "
-                   "minWidth, area}]",
+        { "docks", "app.docks() -> [{name, title, visible, shown, floating, x, y, width, "
+                   "height, minWidth, area}]",
           "THE EDITOR'S PANELS, MEASURED: one entry per dock of the editor page (Hierarchy, "
           "Properties, Presets, Tray, Timeline). `visible` is whether the dock is on screen "
           "RIGHT NOW — false for every one of them while another space is showing, because they "
@@ -73,7 +73,9 @@ QVector<VerbInfo> AppApi::verbs() const
           "showing nothing but icons), which from the user's chair is indistinguishable from a "
           "panel that is gone, and `minWidth` is the width below which that is what has "
           "happened. The verb exists because \"the editor came back with its panels\" was "
-          "otherwise only checkable by looking at the window (lane SPACE-1).",
+          "otherwise only checkable by looking at the window (lane SPACE-1). `x`/`y` are the "
+          "dock's top-left corner in the WINDOW's coordinates, for a rig that has to put a "
+          "real pointer on a real panel.",
           Needs::Window },
         { "openTimings", "app.openTimings() -> [{stage, ms, items?, label?}]",
           "The millisecond ledger of the most recent scene open (services/loadtimeline.h): one entry per stage, "

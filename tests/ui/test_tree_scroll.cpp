@@ -109,13 +109,25 @@ void run()
     bar->setValue(bar->maximum() / 2);
     QApplication::processEvents();
 
-    const int rowsVisible = tree->viewport()->height() / qMax(1, tree->visualItemRect(
-                                tree->itemAt(QPoint(4, 4))).height());
-    std::printf("    %d rows visible, scroll %d/%d\n", rowsVisible, bar->value(), bar->maximum());
-
-    struct Probe { const char *name; QPoint point; };
     const int h = tree->viewport()->height();
-    const QPoint probes[3] = { QPoint(40, 4), QPoint(40, h / 2), QPoint(40, h - 6) };
+    const int rowHeight = qMax(1, tree->visualItemRect(tree->itemAt(QPoint(4, 4))).height());
+    std::printf("    %d rows visible, scroll %d/%d\n", h / rowHeight, bar->value(), bar->maximum());
+
+    // THE PROBES ARE ROW CENTRES, and the bottom one is the last FULLY visible
+    // row (round-2 review). A point near the bottom EDGE can land on a row Qt
+    // has clipped, and Qt's own autoScroll moves a partly visible current row
+    // into view whatever this panel does — so probing the edge would assert
+    // something about the font's row height rather than about the panel.
+    auto rowCentre = [tree](QTreeWidgetItem *item) { return tree->visualItemRect(item).center(); };
+    QTreeWidgetItem *lastWhole = nullptr;
+    for (int y = h - 1; y >= 0; --y) {
+        QTreeWidgetItem *candidate = tree->itemAt(QPoint(40, y));
+        if (!candidate) continue;
+        if (tree->visualItemRect(candidate).bottom() <= h - 1) { lastWhole = candidate; break; }
+    }
+    const QPoint probes[3] = { rowCentre(tree->itemAt(QPoint(40, 4))),
+                               rowCentre(tree->itemAt(QPoint(40, h / 2))),
+                               lastWhole ? rowCentre(lastWhole) : QPoint(40, h - rowHeight) };
     const char *where[3] = { "top", "middle", "bottom" };
 
     for (int i = 0; i < 3; ++i) {

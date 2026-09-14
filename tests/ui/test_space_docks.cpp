@@ -155,6 +155,28 @@ int main(int argc, char **argv)
         settle(mcp);
         expectEditorPanels(mcp, "materials -> editor");
 
+        // ---- immersive fullscreen keeps its chrome off ---------------------
+        // F11 hides the docks INSIDE the editor space (EDITOR_SHORTCUTS_SPEC
+        // §3), so a space round trip taken while it is on must not put them
+        // back on top of it — and leaving fullscreen must still bring back
+        // exactly what was there before.
+        mcp.runScript(QStringLiteral("editor.fullscreen(true)"));
+        settle(mcp);
+        const DockReading fullscreen = readDocks(mcp);
+        std::printf("info: F11 on -> %s\n", qUtf8Printable(fullscreen.detail));
+        CHECK(fullscreen.shown == 0, "immersive fullscreen hides the editor's panels");
+        mcp.runScript(QStringLiteral("app.space('player')"));
+        settle(mcp);
+        mcp.runScript(QStringLiteral("app.space('editor')"));
+        settle(mcp);
+        const DockReading backInside = readDocks(mcp);
+        std::printf("info: player -> editor inside F11 -> %s\n", qUtf8Printable(backInside.detail));
+        CHECK(backInside.shown == 0,
+              "a space round trip INSIDE fullscreen leaves the chrome off");
+        mcp.runScript(QStringLiteral("editor.fullscreen(false)"));
+        settle(mcp);
+        expectEditorPanels(mcp, "leaving fullscreen");
+
         // ---- quit FROM THE PLAYER: the exit that wrote "no panels" ---------
         mcp.runScript(QStringLiteral("app.space('player')"));
         settle(mcp);
@@ -178,6 +200,15 @@ int main(int argc, char **argv)
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
         mcp.token = token;
         mcp.initialize();
+
+        // THE BOOT STATE, BEFORE ANY SPACE SWITCH (round-2 review). The
+        // scripted/MCP boot shows the editor page directly (beginEngineSelftest)
+        // and never calls switchSpace, so this reading is the one a script or an
+        // MCP client sees — and it is the one a visibility rule keyed on
+        // `currentSpace` (still DESKTOP here) got wrong, hiding all five docks
+        // one event-loop turn into every session that had a stored layout.
+        settle(mcp);
+        expectEditorPanels(mcp, "the scripted boot, before any project or space switch");
 
         mcp.runScript(QStringLiteral("project.create('SpaceDocks2')"));
         mcp.runScript(QStringLiteral("app.space('editor')"));
