@@ -573,7 +573,18 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
     set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 600 LABELS "engine"
-        RUN_SERIAL ON ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+        RUN_SERIAL ON
+    # THE ASan TWIN BOOTS WITH THE RAY TIER OFF (PHOTON_SPEC §7 R1). MEASURED,
+    # not assumed: on NVIDIA 595.84 `vkCreateDevice` returns
+    # VK_ERROR_INITIALIZATION_FAILED when ogre-patch 0038's ray-query features
+    # are enabled UNDER AddressSanitizer, on the very GPU where the same call
+    # succeeds without it, and the validation layer reports nothing — the driver
+    # simply refuses. JAHSHAKA_NO_RAY_QUERY makes patch 0038 inert, so this
+    # suite runs on EXACTLY the device it had before the ray tier existed and
+    # keeps testing what it was written to test. It is a driver limit, recorded
+    # here rather than worked around: the non-ASan build of the same code
+    # creates the device and traces correctly (gi.rayquery).
+        ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0;JAHSHAKA_NO_RAY_QUERY=1")
 endif()
 
 # THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1). Its own binary for
@@ -599,8 +610,9 @@ set_tests_properties(gi.rayquery PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # THE SAME SUITE WITH THE RAYS OFF (PHOTON_SPEC §7 R1's no-rays switch). It is
 # the whole point of the switch that this GPU can render BOTH pictures, so the
-# fallback is proved on every push rather than assumed — and on this run the
-# suite's own case 6 is the trivial one while cases 1-5 take the skip.
+# fallback is proved on every push rather than assumed. The binary takes its own
+# no-rays branch and asserts the FALLBACK contract — no device extensions, no
+# structures, no memory, a trace that refuses, and the scene still rendering.
 add_test(NAME gi.rayquery_norays COMMAND test_gi_rayquery
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rayquery_norays PROPERTIES

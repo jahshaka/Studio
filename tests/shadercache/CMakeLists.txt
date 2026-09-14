@@ -54,7 +54,17 @@ if(JAHSHAKA_ASAN)
     # of real product contract — down with the 572 s twin. This row is the only
     # one that costs minutes, so it is the only one that carries the label.
     set_tests_properties(shadercache.container_asan PROPERTIES
-        ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
+    # THE ASan TWIN BOOTS WITH THE RAY TIER OFF (PHOTON_SPEC §7 R1). MEASURED,
+    # not assumed: on NVIDIA 595.84 `vkCreateDevice` returns
+    # VK_ERROR_INITIALIZATION_FAILED when ogre-patch 0038's ray-query features
+    # are enabled UNDER AddressSanitizer, on the very GPU where the same call
+    # succeeds without it, and the validation layer reports nothing — the driver
+    # simply refuses. JAHSHAKA_NO_RAY_QUERY makes patch 0038 inert, so this
+    # suite runs on EXACTLY the device it had before the ray tier existed and
+    # keeps testing what it was written to test. It is a driver limit, recorded
+    # here rather than worked around: the non-ASan build of the same code
+    # creates the device and traces correctly (gi.rayquery).
+        ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0;JAHSHAKA_NO_RAY_QUERY=1"
         TIMEOUT 1500 LABELS "shadercache;shadercache-attack")
 endif()
 

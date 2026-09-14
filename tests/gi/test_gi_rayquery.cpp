@@ -114,7 +114,8 @@ int main()
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-rayquery-ogre.log";
+    cfg.logFile = getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-gi-rayquery-norays-ogre.log"
+                                                  : "test-gi-rayquery-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -145,6 +146,48 @@ int main()
 
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(5.0f, 3.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f)));
     render(e, 6);
+
+    // =====================================================================
+    // THE NO-RAYS RUN (JAHSHAKA_NO_RAY_QUERY=1, which is what --no-ray-query
+    // sets). This is the whole point of the switch: this GPU renders the
+    // picture a machine WITHOUT ray-tracing hardware renders, so the fallback
+    // every later ray-consuming suite depends on is PROVED on every push
+    // instead of assumed.
+    //
+    // It is a DIFFERENT contract from the traced one, not a subset, so it gets
+    // its own assertions and stops here — the cases below would otherwise
+    // switch the tier back on at runtime and test nothing the traced run does
+    // not already cover.
+    //
+    // With the switch set the patch does not even ask the driver for the
+    // extensions, so `available` is false too: the process is on exactly the
+    // device it would have had before the ray tier existed.
+    // =====================================================================
+    if (!e->rayTracing()) {
+        std::printf("\n== the no-rays run (JAHSHAKA_NO_RAY_QUERY) ==\n");
+        const RayQueryStatus st = scene->rayQueryStatus();
+        CHECK(!st.available, "the DEVICE was built without ray queries — the switch reaches it");
+        CHECK(!st.enabled, "...and the tier is off");
+        CHECK(st.blasCount == 0 && st.instances == 0 && st.triangles == 0,
+              "no acceleration structure exists at all");
+        CHECK(st.blasBytes == 0 && st.tlasBytes == 0, "...and it costs no memory");
+        CHECK(st.tlasBuilds == 0 && st.tlasRefits == 0 && st.blasBuilds == 0,
+              "...and no frame ever built one");
+        std::vector<float> rays, hits;
+        pushRay(rays, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
+        CHECK(!scene->traceRays(rays, hits),
+              "a trace REFUSES rather than answering wrongly");
+        CHECK(hits.empty(), "...leaving no answers behind");
+        CHECK(!e->rayQueryAvailable(), "the engine agrees the device has none");
+        // AND THE SCENE STILL RENDERS. The fallback is the same picture with
+        // one term computed differently — never a degraded or missing one.
+        Image img;
+        CHECK(view->readPixels(img) && img.width == kSize && img.height == kSize,
+              "and the scene renders exactly as it always did");
+        std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
+                    failures == 1 ? "" : "s");
+        return failures ? 1 : 0;
+    }
 
     if (!e->rayQueryAvailable()) {
         // NOT A FAILURE. macOS, a pre-RTX GPU and a software rasteriser without
