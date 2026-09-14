@@ -3436,6 +3436,113 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
               "without the analytic sky the tint is white again");
 }
 
+// ---------------------------------------------------------------------------
+// THE SKY AT A MID-AFTERNOON SUN IS BLUE-WHITE, NOT GOLDEN (lane SKY-TUNE-1)
+// ---------------------------------------------------------------------------
+// AtmosphereNpr's SHIPPED preset (densityCoeff 0.47, densityDiffusion 2.0) is
+// tuned for sunsets: it turned the whole horizon ring golden from a sun 24
+// degrees up and read 107,000 K at the zenith, so a 36-degree sun — mid
+// afternoon — rendered as evening. The defaults were refitted (density 0.25,
+// skyPower 1.5; irisgl/document/scenegraph/scene.cpp carries the derivation and
+// spikes/sky-tune-1/FINDINGS.md the sweep) to PREETHAM'S ANALYTIC DAYLIGHT MODEL
+// (SIGGRAPH 1999) at turbidity 2.5.
+//
+// This case is the gate on that fit, at the three directions that decide what a
+// picture looks like. The reference numbers below are Preetham evaluated at the
+// EXACT directions aimed at here, in CIE u'v' — the chromaticity plane, because
+// the sky's absolute level is a skyPower/exposure question and its HUE is not:
+//
+//   direction (world)                     Preetham u'v'      shipped-preset u'v' error
+//   near zenith  (0, 0.9997, 0.0250)      0.1760, 0.4041     0.0301   <- FAILS
+//   45 deg up, 90 deg from the sun        0.1756, 0.4072     0.0091
+//   10 deg up, 90 deg from the sun        0.1861, 0.4394     0.0285   <- FAILS
+//
+// The tolerance is 0.020: a just-noticeable u'v' shift on a large field is about
+// 0.010, and the MEASURED floor of this three-parameter model at a 36-degree sun
+// — the preset minimising the worst probe over density 0.02..0.80 x diffusion
+// 0.1..4.0 — is 0.0169, so 0.020 is that floor plus a margin and not a number
+// picked to fit. The fitted preset measures 0.0092 / 0.0089 / 0.0146.
+//
+// Read off a bare scene: the sky quad is unlit, so no light, no cube and no
+// ground can move these pixels. The readback is linear radiance x 255 (the
+// "plain" grade's contract), verified against this same model in
+// spikes/sky-tune-1/rig/REPLICA_CHECK.txt at a mean of 1.26/255 over 220
+// samples.
+void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
+    Fixture fx;
+    View *v = fx.view("atmo-tune-view", 64, 64, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("atmo-tune-scene");             REQUIRE(s);
+    v->setScene(s);
+
+    // THE DEFAULTS AS SHIPPED — this case asserts the document's own numbers,
+    // so it must not name them: AtmosphereSky's member initialisers are them
+    // (Types.h says so, and says they track iris::SkyRealistic::defaults()).
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[0] = 0.0f;
+    sky.atmosphere.sunDir[1] = 0.587785f;     // 36 degrees up...
+    sky.atmosphere.sunDir[2] = -0.809017f;    // ...in the -Z azimuth
+    CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
+
+    struct Probe { const char *name; Vec3 dir; float refU; float refV; float minCct; };
+    const Probe probes[] = {
+        { "near zenith",            Vec3(0.0f,      40.0f,  1.0f), 0.1760f, 0.4041f, 8000.0f },
+        { "45 up, 90 from the sun", Vec3(1.0f,       1.0f,  0.0f), 0.1756f, 0.4072f, 8000.0f },
+        { "10 up, 90 from the sun", Vec3(0.984808f, 0.173648f, 0.0f), 0.1861f, 0.4394f, 8000.0f },
+    };
+    const float kTolUv = 0.020f;
+
+    for (const Probe &p : probes) {
+        enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 0.0f),
+                                     Vec3(p.dir.x * 100.0f, p.dir.y * 100.0f, p.dir.z * 100.0f));
+        Image img;
+        render(fx.e); REQUIRE(v->readPixels(img));
+        const Px c = centre(img);
+        // 8-bit LINEAR radiance -> CIE XYZ -> u'v' and McCamy's CCT.
+        const double r = c.r / 255.0, g = c.g / 255.0, b = c.b / 255.0;
+        const double X = 0.4124564*r + 0.3575761*g + 0.1804375*b;
+        const double Y = 0.2126729*r + 0.7151522*g + 0.0721750*b;
+        const double Z = 0.0193339*r + 0.1191920*g + 0.9503041*b;
+        const double d = X + 15.0*Y + 3.0*Z;
+        REQUIRE(d > 1e-9);
+        const double up = 4.0*X/d, vp = 9.0*Y/d;
+        const double sum = X + Y + Z;
+        const double cx = X/sum, cy = Y/sum;
+        const double n = (cx - 0.3320) / (0.1858 - cy);
+        const double cct = 449.0*n*n*n + 3525.0*n*n + 6823.3*n + 5520.33;
+        const double duv = std::sqrt((up - p.refU)*(up - p.refU) + (vp - p.refV)*(vp - p.refV));
+        std::printf("    %-24s %3d %3d %3d  u'v' %.4f %.4f (ref %.4f %.4f, du'v' %.4f)  %.0f K\n",
+                    p.name, c.r, c.g, c.b, up, vp, double(p.refU), double(p.refV), duv, cct);
+        CHECK_MSG(duv <= kTolUv,
+                  "%s is within %.3f of the Preetham reference in u'v' (%.4f)",
+                  p.name, double(kTolUv), duv);
+        CHECK_MSG(cct >= p.minCct,
+                  "%s reads blue-white at a 36-degree sun: %.0f K (>= %.0f)",
+                  p.name, cct, double(p.minCct));
+    }
+
+    // ...AND THE SUNLIGHT IS NEAR WHITE AT THE SAME SUN. The tint is the same
+    // preset's own transmittance (atmosphereSunTint); the shipped preset took
+    // 15% of the blue out of a 36-degree sun, which is the other half of
+    // "warmer". Rayleigh physics for this elevation is 0.95 / 0.93 / 0.86.
+    const Colour tint = s->atmosphereSunTint(Vec3(0.0f, 0.587785f, -0.809017f));
+    std::printf("    sun tint at 36 degrees  %.3f %.3f %.3f\n", tint.r, tint.g, tint.b);
+    CHECK_MSG(tint.r >= 0.90f && tint.g >= 0.90f && tint.b >= 0.90f,
+              "a 36-degree sun is near white (%.3f %.3f %.3f)", tint.r, tint.g, tint.b);
+    const float spread = std::max(tint.r, std::max(tint.g, tint.b)) -
+                         std::min(tint.r, std::min(tint.g, tint.b));
+    CHECK_MSG(spread <= 0.08f, "...and barely reddened (spread %.3f)", spread);
+
+    // THE SUNSET IS STILL THERE, which is what stops the fit from simply
+    // deleting the atmosphere: 5 degrees up is unmistakably warm.
+    const float e5 = std::sin(5.0f * 3.14159265f / 180.0f);
+    const float f5 = std::cos(5.0f * 3.14159265f / 180.0f);
+    const Colour low = s->atmosphereSunTint(Vec3(0.0f, e5, -f5));
+    std::printf("    sun tint at  5 degrees  %.3f %.3f %.3f\n", low.r, low.g, low.b);
+    CHECK_MSG(low.r > low.b * 1.5f, "a 5-degree sun is warm (r %.3f vs b %.3f)", low.r, low.b);
+}
+
 // THE ANALYTIC SKY BRINGS NO FOG WITH IT (round-2 review item 1). Picking the
 // sky CREATES the atmosphere component, and upstream's constructor preset
 // carries fogDensity 1e-4 — 0.7 % of a surface's colour at 100 m and 13 % at
@@ -5706,6 +5813,8 @@ int main(int argc, char **argv) {
         { "analytic_sky_is_the_engines_and_takes_our_sun",
                                                     analytic_sky_is_the_engines_and_takes_our_sun },
         { "atmosphere_sun_tint_reddens_a_low_sun",  atmosphere_sun_tint_reddens_a_low_sun },
+        { "analytic_sky_is_blue_white_at_a_mid_afternoon_sun",
+                                                    analytic_sky_is_blue_white_at_a_mid_afternoon_sun },
         { "fog_atmosphere_colour_is_the_skys",       fog_atmosphere_colour_is_the_skys },
         { "analytic_sky_brings_no_fog",              analytic_sky_brings_no_fog },
         { "fog_atmosphere_colour_follows_the_sky",   fog_atmosphere_colour_follows_the_sky },

@@ -316,9 +316,27 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
     var sunsetOff = litFace("sunset_off");
     // THE RATIO OF RATIOS, not an absolute bound (round-2 review, item 6): a
     // surface still takes some colour from the sky whatever the sun does, so
-    // "not following" is not 1.00 but the scene's own baseline (measured 1.18).
+    // "not following" is not 1.00 but the scene's own baseline (measured 1.06).
     // What the toggle owns is the DIFFERENCE between the two, and it is large.
-    assert(sunsetOn.rb > sunsetOff.rb * 1.6,
+    //
+    // THE BAR WAS 1.6 AND IS 1.3 (lane SKY-TUNE-1, 2026-09-14) — a deliberate
+    // re-base with a verdict, not a test bent to fit a change. 1.6 was measured
+    // against OGRE'S SHIPPED SKY PRESET (densityCoeff 0.47), which is tuned for
+    // sunsets; the realistic sky's defaults were refitted to a clear-sky
+    // reference (density 0.25) and `atmosphereSunTint` reads that same dial, so
+    // a thinner atmosphere reddens a low sun LESS by construction: the model's
+    // 5-degree tint goes from r/b 3.11 to 1.83 and this probe from 1.46x the
+    // baseline... which is still large and still unambiguous (1.55 against
+    // 1.06 — an inert toggle reads 1.00). 1.3 leaves that measurement 12%
+    // of headroom.
+    //
+    // It is a bar worth RAISING again later, and the reason is recorded in
+    // OgreSky.cpp: densityCoeff is doing two jobs. It sets the sky's look AND
+    // the sunlight's transmittance, and the physical answer for the second —
+    // Rayleigh optical depth at Kasten-Young airmass — is r/b 4.1 at 5 degrees,
+    // above even the old preset. Separate the two and this assertion can ask
+    // for far more than 1.6.
+    assert(sunsetOn.rb > sunsetOff.rb * 1.3,
            "a 5-degree sun REDDENS what it lights when it follows the atmosphere (r/b " +
            sunsetOn.rb.toFixed(2) + " against " + sunsetOff.rb.toFixed(2) + " when it does not)");
     assert(sunsetOn.b < sunsetOff.b * 0.8 && sunsetOn.g < sunsetOff.g,
