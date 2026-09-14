@@ -453,6 +453,10 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
         { "triangles", double(r.triangles) },
         { "passDraws", int(passDraws) },
         { "probeCaptures", int(r.probeCaptures) },
+        // PHOTON: cascade re-voxelisations in this frame. The scheduler's whole
+        // contract is "at most one", so it is a first-class frame counter and
+        // not something a reader has to reconstruct from the cacheWork rows.
+        { "cascadeRebuilds", int(r.cascadeRebuilds) },
         { "shadowPasses", int(r.shadowPasses) },
         { "shadowPassesReflect", int(r.shadowPassesReflect) },
         { "shadowPassesProbe", int(r.shadowPassesProbe) },
@@ -619,6 +623,20 @@ void FrameMonitor::Bundle::traceEvent(const MonitorEvent &e)
 
 void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString &file)
 {
+    // PHOTON's chain, built before the object literal below because a
+    // QJsonArray cannot be built inside one.
+    QJsonArray cascades;
+    for (const auto &c : s.gi.cascades)
+        cascades.append(QJsonObject{
+            { "halfSize", double(c.halfSize) },
+            { "resolution", c.resolution },
+            { "cell", double(c.cell) },
+            { "step", double(c.step) },
+            { "centre", vec3(c.centre) },
+            { "rebuilds", double(c.rebuilds) },
+            { "pending", c.pending },
+            { "items", c.items },
+            { "lastCpuMs", double(c.lastCpuMs) } });
     QJsonObject o{
         { "live", s.live },
         { "label", qs(s.label) },
@@ -665,7 +683,24 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "reusedLastRefresh", s.gi.reusedLastRefresh },
             { "ifdBound", s.gi.ifdBound },
             { "ifdProbes", s.gi.ifdProbes },
-            { "ifdConverged", s.gi.ifdConverged } } },
+            { "ifdConverged", s.gi.ifdConverged },
+            // THE CACHE'S OWN HISTORY (audit D6). The snapshot described what
+            // the GI arm IS and never what it has been DOING, so a bundle could
+            // not answer the one question the cache policy exists for: how much
+            // work did this scene's GI do, and why. All additive keys — the
+            // snapshot is an object and `machine.json`'s format does not move.
+            { "rebuilds", double(s.gi.rebuilds) },
+            { "giScans", double(s.gi.giScans) },
+            { "giScanMicros", double(s.gi.giScanMicros) },
+            { "giAabbReads", double(s.gi.giAabbReads) },
+            { "staleProbes", s.gi.staleProbes },
+            { "probeCapturesLastFrame", s.gi.probeCapturesLastFrame },
+            { "probeGateCrossings", double(s.gi.probeGateCrossings) },
+            // ...and the Photon chain as BUILT (empty in the single-volume arm).
+            { "cascades", cascades },
+            { "cascadeFullRebuilds", double(s.gi.cascadeFullRebuilds) },
+            { "cascadeDeferrals", double(s.gi.cascadeDeferrals) },
+            { "cascadeDirtyMajority", double(s.gi.cascadeDirtyMajority) } } },
         { "shaderCache", QJsonObject{
             { "enabled", s.shaderCache.enabled },
             { "dir", qs(s.shaderCache.dir) },

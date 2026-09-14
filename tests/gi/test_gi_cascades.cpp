@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -108,6 +109,49 @@ int main()
     const NodeId wall = enginetest::addTestCube(scene, Colour(0.9f, 0.05f, 0.05f), 0.0f, 0.9f);
     enginetest::setNodePosition(scene, wall, Vec3(0.0f, 3.0f, -6.0f));
     enginetest::setNodeScale(scene, wall, Vec3(12.0f, 6.0f, 0.2f));
+    // =====================================================================
+    // CASE 0 — THE OPEN: the chain is built WHERE THE CAMERA IS
+    // =====================================================================
+    // A scene is opened and the document pushes its GI before the first frame
+    // has rendered: nothing has tracked a camera yet. A camera-centred arm
+    // built at that moment is built around the ORIGIN, and the first tracked
+    // frame then finds every cascade a teleport away from the camera and
+    // re-centres all of them, one per frame — N counted full rebuilds on every
+    // open, the whole chain voxelised twice (audit B3).
+    //
+    // The rule is that there is nothing to build until a camera is known: the
+    // arm waits, and the first tracked camera builds it once, in the right
+    // place. Measured here as the rebuild total after an open: N, not 2N.
+    std::printf("\n== case 0: the open ==\n");
+    {
+        // 200 m from the origin, so a chain built at the origin cannot overlap
+        // a single one of its cascades — the honest form of the defect.
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(200.0f, 2.0f, 206.0f),
+                                                         Vec3(200.0f, 1.0f, 200.0f)));
+        CHECK(scene->setGlobalIllumination(cascadeGi()),
+              "the cascade arm accepts before any frame has rendered");
+        render(e, 24);
+        const GiStatus o = scene->giStatus();
+        unsigned long long total = 0;
+        for (const auto &c : o.cascades) total += c.rebuilds;
+        std::printf("   after the open: %zu cascades, %llu rebuilds in total, "
+                    "%llu full rebuilds, %llu deferrals\n",
+                    o.cascades.size(), total, o.cascadeFullRebuilds, o.cascadeDeferrals);
+        CHECK(!o.cascades.empty() && o.vctBound,
+              "the chain is up and bound once a camera has been tracked");
+        CHECK(total == (unsigned long long)o.cascades.size(),
+              "EVERY CASCADE IS VOXELISED EXACTLY ONCE ON AN OPEN (not twice: origin, then camera)");
+        CHECK(o.cascadeFullRebuilds == 0,
+              "...and no cascade was dragged in from the origin by the teleport guard");
+        for (const auto &c : o.cascades)
+            if (std::fabs(c.centre.x - 200.0f) > c.halfSize) {
+                CHECK(false, "every cascade was placed around the camera");
+                break;
+            }
+        GiParams down; down.mode = GiMode::Off;
+        CHECK(scene->setGlobalIllumination(down), "and it comes down again");
+    }
+
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f)));
     render(e, 4);
 
@@ -328,6 +372,163 @@ int main()
         st = scene->giStatus();
         CHECK(st.cascades.size() == 2 && st.cascades[0].rebuilds > 0,
               "and the cascades re-fill when the camera returns to the geometry");
+    }
+
+    // =====================================================================
+    // CASE 7 — THE SPECULAR AMBIENT SURVIVES THE CHAIN (ogre-patch 0033)
+    // =====================================================================
+    // The chain's cone walk is run TWICE per pixel — once for the diffuse
+    // cones and once for the specular one — and patch 0033 originally fixed
+    // only the first. The specular continuation kept `irrLight.alpha +=
+    // newRes.alpha` (the opacity the call already returns as a running total,
+    // so adding it doubles it per hop) and re-applied no self-occlusion bias at
+    // the new cascade's entry, so `specAlpha = 1 - min(1, alpha/0.95)` reached
+    // 0 after one hop and the ambient term in rough reflections — the sky in a
+    // mirror — vanished at 2+ cascades (audit B5).
+    //
+    // Measured on a SMOOTH METAL plate whose albedo is black: it has no diffuse
+    // term at all, so what it renders is the specular cone plus the ambient the
+    // escape weight lets through. Far from the scene's wall, pointed at open
+    // space, so the ambient is what dominates it.
+    std::printf("\n== case 7: the specular ambient under a chain ==\n");
+    {
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(40.0f, 2.0f, 47.0f),
+                                                         Vec3(40.0f, 0.55f, 40.0f)));
+        Image img;
+        const float roughs[4] = { 0.15f, 0.35f, 0.55f, 0.75f };
+        for (int r = 0; r < 4; ++r) {
+            const NodeId plate = enginetest::addTestCube(scene, Colour(0.95f, 0.95f, 0.95f),
+                                                         1.0f /*metal*/, roughs[r]);
+            enginetest::setNodePosition(scene, plate, Vec3(40.0f, 0.5f, 40.0f));
+            enginetest::setNodeScale(scene, plate, Vec3(10.0f, 0.2f, 10.0f));
+            render(e, 2);
+            const auto plateLum = [&](int n) {
+                GiParams p = cascadeGi();
+                p.cascadeCount = n;
+                const float halves[4] = { 5.0f, 10.0f, 15.0f, 60.0f };
+                const int   ress[4]   = { 128, 128, 64, 64 };
+                for (int i = 0; i < n; ++i)
+                    p.cascadeSet[i] = GiParams::GiCascadeDesc{ halves[i], ress[i], 0.0f };
+                scene->setGlobalIllumination(p);
+                render(e, 8);
+                view->readPixels(img);
+                return groundLum(img);
+            };
+            const float l1 = plateLum(1), l2 = plateLum(2), l4 = plateLum(4);
+            std::printf("   roughness %.2f: 1 cascade %.4f | 2 %.4f (%.2fx) | 4 %.4f (%.2fx)\n",
+                        roughs[r], l1, l2, l2 / std::max(l1, 1e-6f), l4, l4 / std::max(l1, 1e-6f));
+            // THE ASSERTION IS ON THE SMOOTHEST PLATE, and the rest of the sweep
+            // is printed as evidence rather than pinned: a wide cone from a
+            // plate lying on a ground plane is LEGITIMATELY occluded (half of
+            // it points into the floor), so at roughness 0.55 the term is a few
+            // thousandths either way and a ratio over it is noise. At 0.15 the
+            // reflection is of open space, the ambient is the whole reading,
+            // and the defect was unmistakable: 1.00 / 0.56 / 0.00 before the
+            // amendment to ogre-patch 0033, 1.00 / 0.85 / 0.85 after. The
+            // residual 0.85 is the same march-distance restart the diffuse half
+            // leaves at 0.51 (the patch header; OGRE_UPSTREAM_ISSUES).
+            if (r == 0) {
+                CHECK(l1 > 0.02f, "a chain of ONE lights the plate through the ambient (reference)");
+                CHECK(l2 > 0.70f * l1,
+                      "TWO cascades keep the ambient in the reflection (it was lost after ONE hop)");
+                CHECK(l4 > 0.70f * l1, "...and FOUR still do (it was black)");
+            }
+            scene->removeNode(plate);
+            render(e, 2);
+        }
+    }
+
+    // =====================================================================
+    // CASE 8 — A PINNED TABLE THAT CANNOT BE HONOURED IS REFUSED WHOLE
+    // =====================================================================
+    // The same rule the mirror states for a half-specified row (audit B10): a
+    // request the renderer cannot honour is not honoured halfway. A table whose
+    // cascades do not grow outward gives Ogre a NEGATIVE `cascadeMaxLod` and
+    // the march never hands over; a pinned step below one cell re-centres every
+    // frame, and one above half the resolution lets the camera leave the box.
+    std::printf("\n== case 8: pinned tables are validated ==\n");
+    {
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
+                                                         Vec3(0.0f, 1.0f, 0.0f)));
+        GiParams bad = cascadeGi();
+        bad.cascadeCount = 3;
+        bad.cascadeSet[0] = GiParams::GiCascadeDesc{  5.0f, 128, 0.0f };
+        bad.cascadeSet[1] = GiParams::GiCascadeDesc{ 10.0f, 128, 0.0f };
+        bad.cascadeSet[2] = GiParams::GiCascadeDesc{  8.0f, 128, 0.0f };   // SMALLER
+        CHECK(scene->setGlobalIllumination(bad), "the arm accepts the call");
+        render(e, 6);
+        st = scene->giStatus();
+        std::printf("   non-monotonic table -> %zu cascades (outermost half %.1f m)\n",
+                    st.cascades.size(), st.cascades.empty() ? 0.0f : st.cascades.back().halfSize);
+        CHECK(st.cascades.size() == 4 && std::fabs(st.cascades.back().halfSize - 60.0f) < 0.01f,
+              "a table that does not grow outward is dropped WHOLE and the tier's is used");
+
+        GiParams steps = cascadeGi();
+        steps.cascadeCount = 2;
+        steps.cascadeSet[0] = GiParams::GiCascadeDesc{  5.0f, 128,    0.2f };   // below a cell
+        steps.cascadeSet[1] = GiParams::GiCascadeDesc{ 20.0f,  64, 10000.0f };  // runaway
+        CHECK(scene->setGlobalIllumination(steps), "a table with out-of-range steps is accepted");
+        render(e, 6);
+        st = scene->giStatus();
+        std::printf("   pinned steps -> c0 step %.4f m (cell %.4f), c1 step %.3f m (cell %.3f)\n",
+                    st.cascades[0].step, st.cascades[0].cell,
+                    st.cascades[1].step, st.cascades[1].cell);
+        CHECK(st.cascades.size() == 2, "the table itself is honoured");
+        CHECK(std::fabs(st.cascades[0].step - st.cascades[0].cell) < 1e-4f,
+              "a step below one cell is floored at one cell");
+        CHECK(std::fabs(st.cascades[1].step - st.cascades[1].cell * 32.0f) < 1e-3f,
+              "and a step beyond half the resolution is capped there");
+    }
+
+    // =====================================================================
+    // CASE 9 — WHAT THE MONITOR SEES: the camera's own work, one row a frame
+    // =====================================================================
+    // A scroll rebuild used to be filed under `mLastStaleReason` — whatever
+    // last staled the PROBE grid, possibly an edit from minutes ago — so a
+    // capture said a walk was "material" or "light" work (audit B12/D5). The
+    // reason a camera-following cache re-does work is the CAMERA, and it is the
+    // number the cadence gate needs: how much of a session's GI cost is
+    // exploring, and how much is editing.
+    std::printf("\n== case 9: the monitor's rows ==\n");
+    {
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
+                                                         Vec3(0.0f, 1.0f, 0.0f)));
+        CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the walk");
+        render(e, 8);
+        e->setFrameMonitor(MonitorLevel::Review);
+        const float step = scene->giStatus().cascades[0].step;
+        for (int f = 1; f <= 40; ++f) {
+            const float x = float(f) * step / 4.0f;
+            view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
+                                                             Vec3(x, 1.0f, 0.0f)));
+            render(e, 1);
+        }
+        std::vector<FrameRecord> recs;
+        e->takeFrameRecords(recs);
+        unsigned rows = 0, camera = 0, other = 0, worstPerFrame = 0, counterTotal = 0;
+        for (const FrameRecord &r : recs) {
+            unsigned inFrame = 0;
+            for (const CacheWork &w : r.cacheWork) {
+                if (w.cache != CacheKind::Gi) continue;
+                if (std::string(w.detail).rfind("vct.cascade", 0) != 0) continue;
+                ++rows; ++inFrame;
+                if (w.reason == WorkReason::Camera) ++camera; else ++other;
+            }
+            worstPerFrame = std::max(worstPerFrame, inFrame);
+            counterTotal += r.cascadeRebuilds;
+            if (r.cascadeRebuilds > 1)
+                CHECK(false, "a frame reported more than one cascade rebuild");
+        }
+        e->setFrameMonitor(MonitorLevel::Off);
+        std::printf("   %zu frames: %u cascade rows (%u Camera, %u other), worst frame %u, "
+                    "frame counter total %u\n",
+                    recs.size(), rows, camera, other, worstPerFrame, counterTotal);
+        CHECK(rows > 0, "the walk filed cascade rebuild rows");
+        CHECK(other == 0 && camera == rows,
+              "EVERY SCROLL REBUILD IS FILED UNDER `Camera`, not under the last probe reason");
+        CHECK(worstPerFrame <= 1, "...at most one row per frame");
+        CHECK(counterTotal == rows,
+              "...and FrameRecord::cascadeRebuilds counts exactly them");
     }
 
     // The arm must come down cleanly — the chain's extra cascades are owned by

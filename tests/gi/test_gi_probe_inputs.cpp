@@ -97,6 +97,7 @@ static const char *reasonName(GiStaleReason r)
     case GiStaleReason::Ambient:  return "ambient";
     case GiStaleReason::Fog:      return "fog";
     case GiStaleReason::Mobility: return "mobility";
+    case GiStaleReason::Camera:   return "camera";
     }
     return "?";
 }
