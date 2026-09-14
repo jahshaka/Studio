@@ -573,5 +573,68 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
     set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 600 LABELS "engine"
-        RUN_SERIAL ON ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+        RUN_SERIAL ON
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+endif()
+
+# THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1). Its own binary for
+# the usual reason — an Ogre::Root per process — and because it switches the
+# tier off and on again, which is device-wide state no other suite should share.
+# It SKIPS (exit 0) on a device with no VK_KHR_ray_query: the no-rays path is a
+# supported picture, not a failure.
+add_executable(test_gi_rayquery test_gi_rayquery.cpp)
+set_target_properties(test_gi_rayquery PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_rayquery PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    JAH_RQ_LOG_TAG="plain")
+target_link_libraries(test_gi_rayquery PRIVATE JahshakaEngine)
+add_dependencies(test_gi_rayquery JahshakaEngineMedia)
+add_test(NAME gi.rayquery COMMAND test_gi_rayquery
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rayquery PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# THE SAME SUITE WITH THE RAYS OFF (PHOTON_SPEC §7 R1's no-rays switch). It is
+# the whole point of the switch that this GPU can render BOTH pictures, so the
+# fallback is proved on every push rather than assumed. The binary takes its own
+# no-rays branch and asserts the FALLBACK contract — no device extensions, no
+# structures, no memory, a trace that refuses, and the scene still rendering.
+add_test(NAME gi.rayquery_norays COMMAND test_gi_rayquery
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rayquery_norays PROPERTIES
+    TIMEOUT 120 LABELS "engine"
+    ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
+# THE SANITISED TWIN, WITH THE RAYS ON (PHOTON_SPEC §7 R1). The tier is the
+# newest code in the engine and it hand-manages Vulkan memory, so it is exactly
+# what a sanitizer is for. It runs at all only because `protect_shadow_gap=0`
+# (tests/CMakeLists.txt) lets the driver create a ray-tracing device under ASan;
+# the first cut of this lane booted every ASan suite with the tier OFF, which
+# bought a green gate by never sanitising the new code.
+if(JAHSHAKA_ASAN)
+    add_executable(test_gi_rayquery_asan test_gi_rayquery.cpp)
+    set_target_properties(test_gi_rayquery_asan PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_gi_rayquery_asan PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+        JAH_RQ_LOG_TAG="asan")
+    target_link_libraries(test_gi_rayquery_asan PRIVATE JahshakaEngineAsan)
+    add_dependencies(test_gi_rayquery_asan JahshakaEngineMedia)
+    target_compile_options(test_gi_rayquery_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
+    add_test(NAME gi.rayquery_asan COMMAND test_gi_rayquery_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 300 LABELS "engine"
+        RUN_SERIAL ON
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

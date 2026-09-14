@@ -58,7 +58,7 @@ if(JAHSHAKA_ASAN)
     # Leak detection off for the same reason the engine suite turns it off: the
     # only leaks are libdbus allocations behind the Vulkan loader.
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;${JAH_ASAN_ENGINE_OPTIONS}"
         TIMEOUT 120 LABELS "particles")
 endif()
 

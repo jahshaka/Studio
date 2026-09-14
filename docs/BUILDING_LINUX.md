@@ -326,3 +326,26 @@ core tells you why.
 | Configure fails with `PATCH DOES NOT APPLY` | An assimp patch no longer applies (upstream moved, or the submodule tree is dirty) — see `irisgl/thirdparty/assimp-patches/README.md` |
 | The app crashed but there is no core file | Expected — see §7. `crash-*.log` is written regardless; cores need the `core_pattern` change first |
 | Crash-log frames are bare `Jahshaka(+0x…)` offsets | The binary was linked without `-rdynamic` (an old build dir). Re-configure; `scripts/debug-crash.sh` decodes them either way |
+
+## Relocating a build: the Vulkan render-system plugin is a LINK dependency
+
+`RenderSystem_Vulkan.so` is not only `dlopen`-ed at runtime any more. Since the hardware ray-query tier
+(`irisgl/engine/src/OgreRayQuery.cpp`, PHOTON_SPEC §7 R1) the engine library LINKS against it — it needs the
+render system's own types to reach the `VkDevice`, the queue and the buffer interfaces — so the plugin is a
+`DT_NEEDED` entry of `bin/Jahshaka` and of every engine test binary:
+
+```
+$ ldd build-linux/bin/Jahshaka | grep RenderSystem_Vulkan
+RenderSystem_Vulkan.so.4.0 => .../irisgl/thirdparty/ogre-next-install/lib/OGRE-Next/RenderSystem_Vulkan.so.4.0
+```
+
+The build bakes the install's plugin directory into the binary's RPATH, so a build tree just works. **Anything
+that MOVES or copies the binaries must carry `lib/OGRE-Next/` with them and keep it on the RPATH** (or set
+`LD_LIBRARY_PATH`) — otherwise the app fails at *load* time with
+`error while loading shared libraries: RenderSystem_Vulkan.so.4.0`, before `main()`, rather than falling back
+to a no-rays picture. This is new: before the ray tier, a missing plugin was a runtime `Root::loadPlugin`
+error the app could report.
+
+A platform without the plugin or the Vulkan headers compiles the tier out entirely and takes the no-rays path
+(the configure log says which: `Jahshaka: hardware ray-query tier COMPILED IN/OUT`). That is a supported
+build, not a degraded one — it is what macOS does.

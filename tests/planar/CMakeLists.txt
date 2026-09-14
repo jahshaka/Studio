@@ -37,5 +37,6 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
     set_tests_properties(engine.planar_asan PROPERTIES TIMEOUT 120 LABELS "engine"
-                         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

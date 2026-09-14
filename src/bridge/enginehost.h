@@ -106,6 +106,14 @@ private:
     int      mQuietTicks = 0;
 };
 
+/// THE --no-ray-query LATCH (SPECS/PHOTON_SPEC.md §7 R1). main() sets it from
+/// the command line before any engine exists; EngineHost::resolveConfig ANDs it
+/// with the persisted preference. It is deliberately a one-run override and
+/// never writes the preference: a suite that forces the fallback must not
+/// change what the user chose.
+void setCliNoRayQuery(bool on);
+bool cliNoRayQuery();
+
 /// Factory for the engine-backed editor viewport (defined in
 /// src/widgets/enginesceneviewport.cpp so MainWindow never names that class).
 class IEditorViewport;

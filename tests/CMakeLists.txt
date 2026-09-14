@@ -21,6 +21,27 @@ else()
     set(JAH_TEST_DISPLAY_ENV "DISPLAY=${JAH_TEST_DISPLAY};")
 endif()
 
+# THE ASan ENGINE SUITES' OPTIONS, in one place (PHOTON_SPEC §7 R1).
+#
+# `protect_shadow_gap=0` is LOAD-BEARING and was MEASURED, not guessed. With the
+# hardware ray-query tier enabled (ogre-patches 0038/0039), `vkCreateDevice`
+# returns VK_ERROR_INITIALIZATION_FAILED under AddressSanitizer on NVIDIA
+# 595.84 — on the very GPU where the same call succeeds without ASan, and with
+# no validation error: the driver simply refuses. The cause is not the tier but
+# ASan's SHADOW GAP: the driver's ray-tracing library maps at fixed addresses
+# that fall inside the range ASan protects, exactly as CUDA does (the documented
+# CUDA-under-ASan workaround is the same option). Turning the gap protection off
+# lets the device come up and every ASan engine suite passes WITH the tier live,
+# which is what gives the ray TU its sanitizer coverage.
+#
+# The alternative — booting these suites with JAHSHAKA_NO_RAY_QUERY=1 — was what
+# this lane shipped first, and it is strictly worse: it buys the same green by
+# making sure the new code is the one thing the sanitizer never sees.
+#
+# The cost is a real but narrow loss of coverage: ASan no longer traps a wild
+# pointer that happens to land in the shadow gap. Every other check is unchanged.
+set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
+
 # THE SANITIZER LANES (deep audit 2026-09, area 3 finding 4: "no sanitizer has
 # ever seen the app"). Two ctest LABELS, no duplicate test registrations and no
 # second copy of any suite — `scripts/sanitize.sh <lsan|tsan>` supplies the
