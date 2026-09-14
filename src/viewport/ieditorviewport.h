@@ -819,6 +819,15 @@ public:
     /// close/open reuses the engine scene, so the engine's own counter does
     /// not restart there.
     virtual qulonglong framesPresented() const { return 0; }
+    /// THE FLY'S HELD-KEY SET, by name ("Left", "PageUp", "Shift" …), sorted
+    /// (ledger §356). A key stuck in it is otherwise INVISIBLE: Left and Right
+    /// held together cancel to no movement at all, which reads as "the arrows
+    /// are dead" with nothing in any log to say why. `editor.viewportState()`
+    /// reports this and `flying` beside it so the state can be read from a
+    /// script instead of inferred from the camera not moving.
+    virtual QStringList heldFlyKeys() const { return QStringList(); }
+    /// True while the fly keys are armed — the right mouse button is held.
+    virtual bool flying() const { return false; }
     /// "A world is about to be loaded into me": raises the loading cover and
     /// PRESENTS it before returning, so it is on screen before the load blocks
     /// the thread. `title` names the world (shown under the message). A no-op

@@ -230,6 +230,39 @@ void EditorCameraController::onMouseWheel(int delta)
 	}
 }
 
+// THE HELD SET LIVES EXACTLY AS LONG AS THE RIGHT BUTTON (owner report
+// 2026-09-15, ledger §356: "the arrows stop flying after a console script run").
+//
+// THE DEFECT, measured by the rig: `heldKeys` was cleared in exactly ONE place —
+// the viewport's focusOutEvent — so a key that went in and never came out stayed
+// in for the rest of the session. It does not come out when Qt's XCB auto-repeat
+// classification misfires, and that classification is a LOOKAHEAD HEURISTIC over
+// the X queue which misfires in both directions once the UI thread stalls long
+// enough to back the queue up: a console script run of 3-20 seconds is exactly
+// that. Measured 1 stuck key in ~30 attempts. The symptom is silent — Left and
+// Right both in the set cancel to `move.isNull()` and no movement at all — and a
+// click INSIDE the viewport cures nothing (it is already focused, so there is no
+// focus event); only a click on another widget and back did.
+//
+// The cure is not to trust the classification more (that is the part that cannot
+// be trusted) but to bound the set's lifetime by the gesture that reads it:
+// update() looks at `heldKeys` only while the right button is down, so dropping
+// it on the button's way down AND on its way up is behaviour-neutral and leaves
+// no window in which a stale key can survive. The one corner it changes: a key
+// already physically held when the right button goes down is not flown until it
+// is pressed again — which is the correct reading of "the fly starts now".
+void EditorCameraController::onMouseDown(Qt::MouseButton button)
+{
+	CameraControllerBase::onMouseDown(button);
+	if (button == Qt::RightButton) clearKeys();
+}
+
+void EditorCameraController::onMouseUp(Qt::MouseButton button)
+{
+	CameraControllerBase::onMouseUp(button);
+	if (button == Qt::RightButton) clearKeys();
+}
+
 void EditorCameraController::onKeyPressed(Qt::Key key)
 {
 	heldKeys.insert(int(key));
@@ -314,6 +347,17 @@ void EditorCameraController::updateCameraRot()
 void EditorCameraController::update(float dt)
 {
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
+
+    // NO SINGLE FLY STEP IS LONGER THAN kMaxFlyStep (ledger §356's collateral
+    // defect, measured on the rig): the host charges the WALL CLOCK of the
+    // frame just gone, and a UI-thread block — a console script run — hands the
+    // whole stall over as one dt. A fly key held across a 13 second block moved
+    // the camera 110 units in a single frame. The clamp lives here rather than
+    // at the call site because it is this controller's invariant and it has to
+    // hold for every caller of update(); the DOCUMENT clock still gets the real
+    // dt, so nothing else is slowed. The cost is stated: below 15 fps the fly
+    // moves at 15 fps's rate.
+    dt = qMin(dt, flystep::kMaxFlyStep);
 
     const iris::Quat rot = camera->getLocalRot();
     const iris::Vec3 forward = rot.rotatedVector(iris::Vec3(0, 0, -1));

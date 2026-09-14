@@ -220,6 +220,9 @@ public:
     // order, no input region, no Qt clock.
     QString presentationState() const override;
     qulonglong framesPresented() const override;
+    /// The active camera controller's held-key set, by name, sorted (§356).
+    QStringList heldFlyKeys() const override;
+    bool flying() const override;
     /// Bridges EngineViewWidget's own (non-virtual, and on the OTHER base) copy
     /// onto the interface — C++ does not override across hierarchies, and the
     /// shell holds an IEditorViewport*.

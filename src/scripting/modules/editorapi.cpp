@@ -471,8 +471,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "many this call compiled; on a warm shader cache it is 0 and the call is nearly free. "
           "Synchronous by design: the caller holds its cover up until it returns.",
           Needs::Engine },
-        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
+        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, heldKeys, flying}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
           Needs::Document },
         { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
@@ -2068,6 +2068,11 @@ QVariantMap EditorApi::viewportState()
     out.insert("width", qMax(0, target.width()));
     out.insert("height", qMax(0, target.height()));
     out.insert("offscreen", host.viewport->isOffscreen());
+    // THE FLY'S STATE (ledger §356). A key stuck in the held set moves nothing
+    // and logs nothing — Left and Right in it together cancel — so "the arrows
+    // are dead" had no reading anywhere. These two make it one.
+    out.insert("heldKeys", host.viewport->heldFlyKeys());
+    out.insert("flying", host.viewport->flying());
     return out;
 }
 

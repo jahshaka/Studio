@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include "viewport/editorcameracontroller.h"
 #include "viewport/orbitalcameracontroller.h"
 #include "viewport/flyspeedsettings.h"
+#include "viewport/flystep.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { \
@@ -225,7 +226,14 @@ int main(int argc, char **argv)
             const iris::Quat rot0 = r.cam->getLocalRot();
             r.c.onMouseDown(Qt::RightButton);          // the fly only runs while RMB is held
             for (Qt::Key k : keys) r.c.onKeyPressed(k);
-            r.c.update(1.0f);
+            // ONE SECOND, IN FRAMES: no single fly step may be longer than
+            // flystep::kMaxFlyStep (ledger §356 — a UI-thread block used to
+            // arrive as one enormous dt). The distance is the same.
+            for (float remaining = 1.0f; remaining > 0.0f; ) {
+                const float step = qMin(remaining, flystep::kMaxFlyStep);
+                r.c.update(step);
+                remaining -= step;
+            }
             const iris::Vec3 p = r.cam->getLocalPos();
             const bool turned = !sameRot(r.cam->getLocalRot(), rot0);
             return std::make_pair(iris::Vec3(p.x() - pos0.x(), p.y() - pos0.y(), p.z() - pos0.z()),

@@ -65,9 +65,19 @@ public:
 
     void onMouseMove(int x,int y) override;
     void onMouseWheel(int delta) override;
+	/// THE HELD SET LIVES EXACTLY AS LONG AS THE RIGHT BUTTON (ledger §356).
+	/// Both handlers drop it, which is behaviour-neutral — update() reads the
+	/// set only while the right button is down — and closes the one way a fly
+	/// key could stay down forever.
+	void onMouseDown(Qt::MouseButton button) override;
+	void onMouseUp(Qt::MouseButton button) override;
 	void onKeyPressed(Qt::Key key) override;
 	void onKeyReleased(Qt::Key key) override;
 	void clearKeys() override;
+	/// The keys the fly currently believes are down — `editor.viewportState()`
+	/// reports them, because "the arrows are dead" is otherwise invisible
+	/// (Left and Right in the set cancel to no movement at all).
+	QSet<int> heldKeyCodes() const override { return heldKeys; }
 
     void updateCameraRot();
 
@@ -79,7 +89,7 @@ public:
 	/// viewport uses this to withhold Up/Down/Left/Right/PageUp/PageDown from
 	/// the shortcut system. W/A/S/D/Q/E are NOT fly keys in the editor any
 	/// more (owner decision 2026-09-09); the player still takes both.
-	bool isFlying() const { return rightMouseDown; }
+	bool isFlying() const override { return rightMouseDown; }
 };
 
 #endif // EDITORCAMERACONTROLLER_H

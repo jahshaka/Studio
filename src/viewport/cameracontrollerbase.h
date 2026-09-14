@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QKeyEvent>
+#include <QSet>
 #include <Qt>
 #include <QSharedPointer>
 #include "irisgl/irisglfwd.h"
@@ -51,6 +52,14 @@ public:
     /// Drops any held-key state (focus lost, controller switched) so keys can
     /// never stick down. Only the fly controller tracks keys today.
     virtual void clearKeys() {}
+    /// WHAT THE FLY THINKS IS HELD, as Qt key codes (ledger §356). Empty for a
+    /// controller that tracks no keys. Reported by `editor.viewportState()`:
+    /// a key stuck in this set is silent — Left and Right in it together
+    /// cancel to no movement, which reads as "the arrows are dead".
+    virtual QSet<int> heldKeyCodes() const { return QSet<int>(); }
+    /// True while this controller's fly keys are armed (the right button is
+    /// held). Reported beside the held set.
+    virtual bool isFlying() const { return rightMouseDown; }
     virtual void keyReleaseEvent(QKeyEvent *event);
     virtual void setMousePos(int x, int y);
 

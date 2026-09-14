@@ -4,6 +4,7 @@
 #include "viewport/enginesceneviewport.h"
 
 #include <QShowEvent>
+#include <QKeySequence>
 #include <QMouseEvent>
 #include "bridge/sceneworkerthreads.h"
 #include "bridge/offscreenrenderscope.h"
@@ -1025,6 +1026,42 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
     }
 }
 
+// THE FLY'S HELD-KEY SET, READABLE (ledger §356). A key stuck in it moves
+// nothing and logs nothing — Left and Right held together cancel — so the only
+// way to see the state was to notice the camera refusing to fly. Now
+// `editor.viewportState()` reports it.
+QStringList EngineSceneViewport::heldFlyKeys() const
+{
+    QStringList names;
+    if (!mCamController) return names;
+    for (int key : mCamController->heldKeyCodes()) {
+        switch (key) {
+        case Qt::Key_Up:       names << QStringLiteral("Up"); break;
+        case Qt::Key_Down:     names << QStringLiteral("Down"); break;
+        case Qt::Key_Left:     names << QStringLiteral("Left"); break;
+        case Qt::Key_Right:    names << QStringLiteral("Right"); break;
+        case Qt::Key_PageUp:   names << QStringLiteral("PageUp"); break;
+        case Qt::Key_PageDown: names << QStringLiteral("PageDown"); break;
+        case Qt::Key_Shift:    names << QStringLiteral("Shift"); break;
+        default: {
+            // Every key the viewport saw goes into the set, not only the fly
+            // ones — report whatever Qt calls it, and the raw code when it has
+            // no name.
+            const QString named = QKeySequence(key).toString();
+            names << (named.isEmpty() ? QStringLiteral("0x%1").arg(key, 0, 16) : named);
+            break;
+        }
+        }
+    }
+    names.sort();
+    return names;
+}
+
+bool EngineSceneViewport::flying() const
+{
+    return mCamController && mCamController->isFlying();
+}
+
 void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
 {
     // Accept explicitly: an ignored press propagates to sceneContainer, whose
@@ -1787,6 +1824,11 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         iris::Viewport vp; vp.width = width(); vp.height = height(); vp.pixelRatioScale = 1.0f;
         simulated = mPlayback->update(vp, dt);   // physics, animation, play controllers move the document
     } else {
+        // `dt` HERE IS THE WALL CLOCK of the frame just gone, and after a
+        // UI-thread block that is the whole stall (ledger §356). The camera
+        // controller clamps its own step to flystep::kMaxFlyStep — the
+        // invariant lives with the controller so it holds for every caller —
+        // and the DOCUMENT clock below still gets the real dt.
         if (mCamController) mCamController->update(dt);
         // A PAUSED play-in-place (PlayBack still playing, this flag down so the
         // editor camera answers the mouse) holds the document AND the engine's
