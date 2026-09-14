@@ -17,15 +17,16 @@
 // Phase 1: editor -> assets -> editor and editor -> materials -> editor (pages
 // with no document scene of their own; the second is the owner's logged case).
 // NOTHING may move: no push, no rebuild, the same giStatus.
-// Phase 2: editor -> player -> editor. The mirror must not re-push, and the
-// editor scene must own the GI binding again once back. What it CANNOT assert
-// is "no rebuild": the player page drives its own engine scene over the SAME
-// document graph, the graph migrates between the two engine scenes on every
-// space switch (scripting.e2e.space_switch), and the editor scene's items are
-// destroyed and re-adopted with it — a destroyed item is a from-scratch GI
-// rebuild by the engine's own rule (raw Item* in the voxelizer). That cost is
-// the graph migration's (recorded by the lead for a later lane) and is pinned
-// at its current value, two, below. Phase 1 pins ZERO.
+// Phase 2: editor -> player -> editor. ZERO, exactly like phase 1, since lane
+// PLAYER-1 (owner decision 2026-09-14): the Player page is a second VIEW on the
+// editor's scene, so there is nothing to migrate and nothing to rebuild.
+//
+// It used to pin TWO. The player page drove its OWN engine scene over the same
+// document graph; the graph migrated between the two scene managers on every
+// space switch, the editor scene's items were destroyed and re-adopted with it,
+// and a destroyed item is a from-scratch GI rebuild by the engine's own rule
+// (raw Item* in the voxelizer) — once on the way out and once on the way back.
+// That pin is what this lane deleted, and this assertion is where it shows.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -125,16 +126,14 @@ assert(st2.vctBound && st2.pccBound === st0.pccBound,
        "player round trip: the editor scene owns the GI binding again");
 assert(m2.giPushes === m0.giPushes,
        "player round trip: NO GI re-push from the mirror (" + m0.giPushes + " -> " + m2.giPushes + ")");
-// THE RECORDED COST OF THE GRAPH MIGRATION (lead ledger, a later lane): the
-// editor scene's arm is rebuilt EXACTLY twice — once when the graph leaves for
-// the player's engine scene (its items are destroyed; nothing is left to
-// voxelize) and once when it comes back. Pinned at 2 so that a fix shows up as
-// a diff here and a regression (a third rebuild, e.g. a re-push) fails.
-assert(st2.rebuilds - st0.rebuilds === 2,
-       "player round trip: exactly the graph migration's two rebuilds (" + st0.rebuilds +
+// ONE SCENE, SO NOTHING IS REBUILT (lane PLAYER-1). The header says what this
+// used to pin and why; a regression to the two-scene shape, or any other
+// from-scratch build on a page switch, fails here.
+assert(st2.rebuilds === st0.rebuilds,
+       "player round trip: NO from-scratch GI rebuild (" + st0.rebuilds +
        " -> " + st2.rebuilds + ")");
-var st2same = JSON.parse(JSON.stringify(st2));
-st2same.rebuilds = st0.rebuilds;       // compared above; the rest must match field for field
-sameGi(st0, st2same, "player round trip (the same arms, rebuilt)");
+sameGi(st0, st2, "player round trip");
+assert(st2.staleProbes === 0 && st2.probeCapturesLastFrame === 0,
+       "player round trip: nothing stale, nothing re-captured");
 
 console.log("page_gi: all assertions passed");

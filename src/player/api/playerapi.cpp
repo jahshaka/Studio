@@ -30,10 +30,11 @@ QVector<VerbInfo> PlayerApi::verbs() const
 {
     return {
         { "play", "player.play() -> bool",
-          "Starts the PLAYER space's scene — the second engine Scene the Player page renders, "
-          "with its own mirror, its own PlayBack and the document's scene camera. This is NOT "
-          "editor.play(), which runs the scene in place inside the editor viewport; the two "
-          "spaces have independent state and both can be running. Idempotent: already playing "
+          "Starts the PLAYER space's scene — the Player page's own PlayBack, driving the same "
+          "document through the same engine scene the editor draws (the Player page is a second "
+          "VIEW on it, with the editor's helper geometry masked out). This is NOT editor.play(), "
+          "which runs the scene in place inside the editor viewport; the two spaces have "
+          "independent play state and both can be running. Idempotent: already playing "
           "answers true. The Player page's play button follows this, whoever calls it.",
           Needs::Engine },
         { "stop", "player.stop() -> bool",
@@ -77,11 +78,11 @@ QVector<VerbInfo> PlayerApi::verbs() const
           Needs::Engine },
         { "screenshot", "player.screenshot(path, {width?, height?, probes?, grade?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
           "What the PLAYER sees, written to `path` as a PNG. Rendered through a throwaway "
-          "offscreen view over the player's OWN engine Scene and the document's scene camera — "
-          "the same mechanism camera.screenshot uses, and the reason this is not just "
-          "editor.screenshot with an argument: the player is a second Scene with a second mirror, "
-          "so a shot taken through the editor viewport would photograph the editor's world state "
-          "and call it the player. Works before the Player page has ever been shown. `probes` are "
+          "offscreen view over the scene and the document's SCENE CAMERA, with the editor's "
+          "furniture masked out (the grid, the wires and icons, the gizmo, the selection shell) "
+          "— the same mechanism camera.screenshot uses, and still not just editor.screenshot "
+          "with an argument: the player looks through a different camera and hides different "
+          "things. Works before the Player page has ever been shown. `probes` are "
           "the same 5x5 averages editor.screenshot returns, in normalized 0..1 image coordinates; "
           "`grade` develops the shot exactly as editor.screenshot does — \"plain\" (also \"raw\"; the default: no post-processing at all, the neutral exactly-reproducible readback the pixel suites assert), \"tonemap\" (the thumbnail picture: the deterministic filmic grade only, so a bright scene does not clip to white), \"scene\" (the player's own picture: the whole post chain as the world has it, at the exposure the on-screen player view has converged on) or \"viewport\" (the whole chain with its own adaptive exposure re-seeded from the scene's value). `postFx` is the older boolean spelling of plain/viewport and still works.",
           Needs::Engine },
