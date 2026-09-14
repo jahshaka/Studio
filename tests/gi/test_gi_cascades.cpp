@@ -695,15 +695,20 @@ int main()
         };
         unsigned long long total = 0; int worst = 0;
 
-        // ---- (a) a box dragged and RELEASED (the settle's re-solve) ---------
-        // The drag itself must cost nothing at all, and the release must cost
-        // the cascades that can SEE the box — not the chain.
+        // ---- (a) a box dragged and RELEASED --------------------------------
+        // A STILL OBJECT THAT IS MOVING IS RE-VOXELISED WHILE IT MOVES (smoke
+        // rig 2026-09-15, ledger 320): leaving it until the settle is what left
+        // a dragged cube lit against a voxel copy of itself at its old pose, so
+        // the drag costs AT MOST ONE cascade per frame — the same budget a
+        // camera scroll lives inside — and the release costs the cascades that
+        // can SEE the box, never the chain.
         const NodeId dragged = enginetest::addTestCube(scene, Colour(0.2f, 0.8f, 0.2f), 0.0f, 0.8f);
         enginetest::setNodePosition(scene, dragged, Vec3(1.0f, 0.5f, 1.0f));
         render(e, 8);                                    // the spawn's own work drains
         {
             const unsigned long long arm0 = scene->giStatus().rebuilds;
             unsigned long long prev = chainRebuilds();
+            const unsigned long long dragFirst = prev;
             int worstDrag = 0;
             for (int i = 0; i < 20; ++i) {               // the gesture: no settle asked for
                 enginetest::setNodePosition(scene, dragged,
@@ -713,10 +718,15 @@ int main()
                 worstDrag = std::max(worstDrag, int(now - prev));
                 prev = now;
             }
-            std::printf("   the drag itself: chain builds %llu -> %llu, worst frame %d\n",
-                        arm0, scene->giStatus().rebuilds, worstDrag);
-            CHECK(scene->giStatus().rebuilds == arm0 && worstDrag == 0,
-                  "a drag in flight re-voxelises NOTHING (the host has not settled it)");
+            std::printf("   the drag itself: chain builds %llu -> %llu, cascade rebuilds %llu, "
+                        "worst frame %d\n",
+                        arm0, scene->giStatus().rebuilds, prev - dragFirst, worstDrag);
+            CHECK(scene->giStatus().rebuilds == arm0,
+                  "a drag in flight costs ZERO whole-chain builds");
+            CHECK(worstDrag <= 1,
+                  "...and never more than one cascade in a frame");
+            CHECK(prev - dragFirst >= 1,
+                  "...but the moving object IS re-voxelised while it moves, not left stale");
         }
         const unsigned long long armDrag = scene->giStatus().rebuilds;
         scene->refreshGlobalIllumination();              // the settle, as the mirror fires it
@@ -828,11 +838,11 @@ int main()
                 enginetest::addTestCube(scene, Colour(0.9f, 0.3f, 0.3f), 0.0f, 0.6f);
             enginetest::setNodePosition(scene, faraway, Vec3(40.0f, 0.5f, 0.0f));
             render(e, 16);                                   // its arrival drains
+            std::vector<unsigned long long> before;
+            for (const auto &c : scene->giStatus().cascades) before.push_back(c.rebuilds);
             enginetest::setNodePosition(scene, faraway, Vec3(41.0f, 0.5f, 0.0f));
             render(e, 2);
             scene->refreshGlobalIllumination();
-            std::vector<unsigned long long> before;
-            for (const auto &c : scene->giStatus().cascades) before.push_back(c.rebuilds);
             render(e, 12);
             std::vector<unsigned long long> after;
             for (const auto &c : scene->giStatus().cascades) after.push_back(c.rebuilds);
