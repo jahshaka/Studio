@@ -1491,6 +1491,7 @@ void EngineSceneViewport::focusOnTarget(const iris::Vec3 &target, float radius,
 {
     const iris::CameraNodePtr cam = viewCamera();   // F focuses whatever you fly
     if (!cam) return;
+    mLastOrbitPivot = target;   // the working distance a later Alt+drag over empty space falls back to
     const float dist = qMax(1.0f, preview::framingDistance(radius, cam->effectiveFovDegrees()));
 
     float nearClip, farClip;

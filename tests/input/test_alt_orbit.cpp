@@ -211,6 +211,15 @@ int main(int argc, char **argv)
         std::printf("    forward y %.4f, up y %.4f\n", double(fwd.y()), double(up.y()));
         CHECK(up.y() > 0.0f, "E: the pole guard holds — 800 degrees of pitch drag does not turn "
                              "the camera upside down");
+        // ...and the guard clamps the ACCUMULATOR, not just the picture: the
+        // first steps BACK must move the camera at once (a derived-value clamp
+        // let the accumulator wind up past the pole, and the reverse drag did
+        // nothing until the overshoot unwound — second reader, GIZMO-1).
+        const iris::Vec3 atPole = cam->getLocalPos();
+        for (int i = 0; i < 4; ++i) c.onMouseMove(0, 20);
+        const float movedBack = cam->getLocalPos().distanceToPoint(atPole);
+        std::printf("    four steps back from the pole moved %.4f\n", double(movedBack));
+        CHECK(movedBack > 0.01f, "E: the reverse drag answers immediately at the pole (no wind-up)");
         c.onMouseUp(Qt::LeftButton);
         c.setAltOrbit(false, iris::Vec3());
     }

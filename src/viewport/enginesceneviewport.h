@@ -65,9 +65,6 @@ public:
     void clearSelectedNode() override;
     void focusOnNode(iris::SceneNodePtr sceneNode) override;
     void focusOnSelection() override;
-    /// The point Alt+LMB orbits around: the selection's world bounding-box
-    /// centre (its origin when it has no meshes), else the last focus point,
-    /// else the world origin.
     /// Where an Alt+drag starting at this pixel orbits around: the point under
     /// the cursor, else the view ray at the current working distance (§353).
     iris::Vec3 altOrbitPivotAt(const QPointF &point);

@@ -75,8 +75,9 @@ public:
     /// Alt+LMB orbit (Maya/Unreal convention). The viewport turns this on
     /// when Alt+left-drag starts somewhere OTHER than the gizmo (a gizmo hit
     /// keeps its own Alt meaning: duplicate-while-transforming), and off on
-    /// release. `pivot` is the point to orbit around — the selection's
-    /// centre, else the last focus point / world origin.
+    /// release. `pivot` is the point to orbit around — the point under the
+    /// cursor at the press (a scene pick), else a point on the view ray at the
+    /// working distance (EngineSceneViewport::altOrbitPivotAt).
     ///
     /// THE ORBIT THAT CANNOT JUMP (owner report 2026-09-15, ledger §353: "it
     /// seems to jump the viewport like an F focus on the point — hard to

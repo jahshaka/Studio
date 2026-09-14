@@ -50,7 +50,6 @@ class ScaleGizmo : public Gizmo
 	// it's (hitPos - nodeStartPos).normalized();
 	iris::Vec3 hitDir;
 	ScaleHandle* draggedHandle;
-	int draggedHandleIndex;
 	iris::Vec3 startScale;
 
 	// just so the handle looks scaled when dragged

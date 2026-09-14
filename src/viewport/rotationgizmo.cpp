@@ -322,8 +322,11 @@ void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDi
 		return;
 	}
 	//qDebug()<<"sliding";
-	float hitAngle;
-	draggedHandle->getHitAngle(rayPos, rayDir, hitAngle);
+	float hitAngle = 0.0f;
+	// No answer this frame (the cursor dead on the centre pixel, a projection
+	// failure, the camera flown behind the gizmo mid-drag): hold still rather
+	// than feed an unset angle into the node — the plane drag's grazing guard.
+	if (!draggedHandle->getHitAngle(rayPos, rayDir, hitAngle)) return;
 
 	// move node along line
 	// do snapping here as well
@@ -427,8 +430,13 @@ RotationHandle* RotationGizmo::ringAtPixel(const QPointF& cursor, float& distanc
 	// the nearer circle, by more than the tie band.
 	{
 		float d = -1.0f, facing = 0.0f;
+		// ...and the tie band only applies against an axis ring that is itself
+		// inside the tolerance: an axis ring at 8 px must not veto the outer
+		// ring at 6.5 px and then fail the 7 px test itself, leaving a 2 px
+		// sliver where nothing picks (second reader, GIZMO-1).
 		if (handles[kScreenHandle]->screenDistance(cursor, d, facing) &&
-		    (nearest == nullptr || d < nearestDist - kRingPickTiePx)) {
+		    (nearest == nullptr || nearestDist > kRingPickTolerancePx ||
+		     d < nearestDist - kRingPickTiePx)) {
 			nearest = handles[kScreenHandle];
 			nearestDist = d;
 			nearestFacing = facing;

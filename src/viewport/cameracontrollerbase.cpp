@@ -146,9 +146,13 @@ void CameraControllerBase::applyAltOrbit(float yawDegrees, float pitchDegrees)
     // BEFORE any movement, so the no-movement case is answered by not touching
     // the node at all rather than by writing a value that is merely close.
     if (altOrbitYaw == 0.0f && altOrbitPitch == 0.0f) return;
-    // The pole guard is the free camera's, applied to the ACCUMULATED pitch, so
-    // the orbit stops at the pole instead of turning over.
-    const float pitch = qBound(-89.0f, altOrbitStartPitch + altOrbitPitch, 89.0f);
+    // The pole guard is the free camera's, applied to the ACCUMULATOR itself so
+    // the orbit stops at the pole instead of turning over AND answers the reverse
+    // drag at once — clamping only the derived value let the accumulator wind up
+    // past the pole, and a drag back did nothing until the overshoot unwound
+    // (second reader, GIZMO-1).
+    altOrbitPitch = qBound(-89.0f - altOrbitStartPitch, altOrbitPitch, 89.0f - altOrbitStartPitch);
+    const float pitch = altOrbitStartPitch + altOrbitPitch;
     const iris::Quat now = iris::Quat::fromEulerAngles(pitch, altOrbitStartYaw + altOrbitYaw, 0);
     const iris::Quat was = iris::Quat::fromEulerAngles(altOrbitStartPitch, altOrbitStartYaw, 0);
     const iris::Quat turn = (now * was.conjugated()).normalized();
