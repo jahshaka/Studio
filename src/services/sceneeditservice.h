@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 #include "data/project.h"   // ModelTypes
 #include "io/sceneformat.h"
+#include "services/surfaceplacement.h"
 
 #include <functional>
 
@@ -117,7 +118,8 @@ public:
     /// funnel's own placement (in front of the camera, stepped clear of
     /// whatever already stands there).
     void addPrimitive(const QString &name,
-                      const std::optional<iris::Vec3> &position = std::nullopt);
+                      const std::optional<iris::Vec3> &position = std::nullopt,
+                      surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
 
     void addPointLight();
     void addSpotLight();
@@ -200,7 +202,8 @@ public:
     void addMesh(const QString &path, bool ignore = false, iris::Vec3 position = iris::Vec3());
     /// Instantiates a stored object asset (drag-drop / assets.addToScene).
     void addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
-                         const QString &guid, const QString &assetName);
+                         const QString &guid, const QString &assetName,
+                         surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid,
                                 QString assetName);
 
@@ -386,7 +389,8 @@ signals:
 
 private:
     void addBuiltinPrimitive(const QString &meshPath, const QString &name,
-                             const std::optional<iris::Vec3> &position = std::nullopt);
+                             const std::optional<iris::Vec3> &position = std::nullopt,
+                             surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
 
     Database *db;
     Project *project;

@@ -160,4 +160,68 @@ assert(near(material.get(floor).roughness, 0.4), "... and so did the customisati
 assert(material.reset(floor) === true, "material.reset after the reopen");
 isFloorDefault(floor, "after reopen + reset");
 
+// ---- 6. A DROPPED OBJECT RESTS ON THE FLOOR, NOT IN IT -----------------------
+// Owner, 2026-09-14: "when we drag and drop an asset or primitive into the
+// scene it should be placed ON TOP of the floor; it is placed INSIDE the
+// floor." The drop resolves the point under the cursor and the node was born
+// with its PIVOT there — and every built-in primitive (and most exports) is
+// modelled around its centre, so half of it went through the floor.
+//
+// The rule is one sentence and it is asserted here on the MEASURED box:
+// `node.size(id).min.y` — the bottom of the thing — lands on the surface the
+// drop named. `onSurface: true` is that rule as an option, and it is the same
+// code the viewport's drop calls (services/surfaceplacement.h).
+var floorTop = node.size(floor).max.y;
+console.log("the floor's top is y=" + floorTop);
+
+function restsOn(id, surfaceY, what) {
+    var box = node.size(id);
+    assert(box.min !== undefined, what + ": node.size() reports the measured box's corners");
+    assert(Math.abs(box.min.y - surfaceY) < 1e-3,
+           what + ": its BOTTOM rests on y=" + surfaceY + " (min.y=" + box.min.y + ")");
+}
+
+// A primitive with a CENTRE pivot: lifted by half its height, and no further.
+var dropped = scene.addPrimitive("cube", { position: { x: 12, y: floorTop, z: 0 }, onSurface: true });
+restsOn(dropped, floorTop, "a dropped cube");
+assert(Math.abs(node.transform(dropped).position.y - (floorTop + node.size(dropped).y / 2)) < 1e-3,
+       "... which for a centre-pivot cube is exactly half its height above the floor");
+
+// A SPHERE, and a SCALED cube: the rule is the measured box, not a constant.
+var ball = scene.addPrimitive("sphere", { position: { x: 15, y: floorTop, z: 0 }, onSurface: true });
+restsOn(ball, floorTop, "a dropped sphere");
+var big = scene.addPrimitive("cube",
+                             { position: { x: 18, y: floorTop, z: 0 }, onSurface: true,
+                               scale: { x: 2, y: 2, z: 2 } });
+restsOn(big, floorTop, "a dropped cube scaled 2x");
+assert(Math.abs(node.size(big).y - 2 * node.size(dropped).y) < 1e-2,
+       "... and it really is twice the size (the lift follows the scale)");
+
+// A ROTATED drop rests on its lowest corner — the box is measured as it stands.
+var tipped = scene.addPrimitive("cube",
+                                { position: { x: 21, y: floorTop, z: 0 }, onSurface: true,
+                                  rotation: { x: 45, y: 0, z: 0 } });
+restsOn(tipped, floorTop, "a dropped cube tipped 45 degrees");
+
+// A RAISED surface (a table top): the same rule against a higher point.
+var tableTop = node.size(big).max.y;
+var onTable = scene.addPrimitive("cube",
+                                 { position: { x: 18, y: tableTop, z: 0 }, onSurface: true });
+restsOn(onTable, tableTop, "a cube dropped on top of another");
+
+// A BASE-PIVOT node is NOT lifted twice: the plane primitive's geometry sits at
+// its own origin, so resting it on the floor leaves its pivot on the floor.
+var flat = scene.addPrimitive("plane", { position: { x: 24, y: floorTop, z: 0 }, onSurface: true });
+assert(Math.abs(node.transform(flat).position.y - floorTop) < 1e-3,
+       "a base-pivot model is not lifted at all (nothing is lifted twice)");
+restsOn(flat, floorTop, "the base-pivot plane");
+
+// WITHOUT the option, a position is still a PIVOT: a script that says where a
+// node's origin goes still gets exactly that.
+var exact = scene.addPrimitive("cube", { position: { x: 27, y: 5, z: 0 } });
+assert(Math.abs(node.transform(exact).position.y - 5) < 1e-4,
+       "without onSurface, `position` still places the PIVOT (scripts are unchanged)");
+assert(node.size(exact).min.y < 5,
+       "... so a centre-pivot cube asked for y=5 has its bottom BELOW 5");
+
 console.log("e2e_default_floor: all sections passed");

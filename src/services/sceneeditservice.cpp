@@ -109,7 +109,8 @@ void SceneEditService::notifyHierarchyChanged() { emit hierarchyChanged(); }
 void SceneEditService::notifyTransformChanged() { emit transformRefreshRequested(); }
 
 void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QString &name,
-                                           const std::optional<iris::Vec3> &position)
+                                           const std::optional<iris::Vec3> &position,
+                                           surfaceplacement::Placement placement)
 {
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(meshPath, name, nodeGuid);
@@ -131,7 +132,13 @@ void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QStrin
     // ray-cast surface/ground point under the cursor, and the funnel's own
     // "in front of the camera" placement must not overwrite it. `ignore` is
     // that switch, spelled the way every other dropped add spells it.
-    if (position) node->setLocalPos(*position);
+    //
+    // …AND ON TOP OF IT, not inside it (owner, 2026-09-14): every built-in
+    // primitive is modelled around its own centre, so a drop that put the
+    // PIVOT on the floor buried half of it. Placement::OnSurface rests the
+    // node's bounding box on the point; a script asking for coordinates still
+    // gets its pivot exactly there (services/surfaceplacement.h).
+    if (position) surfaceplacement::place(node, *position, placement);
     addNodeToScene(node, position.has_value());
 }
 
@@ -177,11 +184,13 @@ const PrimitiveDef kPrimitiveDefs[] = {
 }   // namespace
 
 void SceneEditService::addPrimitive(const QString &text,
-                                    const std::optional<iris::Vec3> &position)
+                                    const std::optional<iris::Vec3> &position,
+                                    surfaceplacement::Placement placement)
 {
     for (const auto &def : kPrimitiveDefs) {
         if (text == QLatin1String(def.name)) {
-            addBuiltinPrimitive(QLatin1String(def.mesh), QLatin1String(def.nodeName), position);
+            addBuiltinPrimitive(QLatin1String(def.mesh), QLatin1String(def.nodeName), position,
+                                placement);
             return;
         }
     }
@@ -374,7 +383,8 @@ void SceneEditService::addMesh(const QString &path, bool ignore, iris::Vec3 posi
 }
 
 void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
-                                       const QString &guid, const QString &assetName)
+                                       const QString &guid, const QString &assetName,
+                                       surfaceplacement::Placement placement)
 {
     Q_UNUSED(path);
     Q_UNUSED(assetName);
@@ -451,8 +461,13 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
 
     // Honour the drop position (the viewport computed where the cursor hit the
     // scene) — legacy addMesh does the same; without this every dropped asset
-    // landed at the asset's authored origin (ASSET_ADD_AUDIT D1).
-    node->setLocalPos(position);
+    // landed at the asset's authored origin (ASSET_ADD_AUDIT D1) — and REST it
+    // on that point when the position came from a drop (owner, 2026-09-14: a
+    // model whose pivot is its centre was buried to the waist in the floor).
+    // The fit above has already scaled the subtree, so the bounds this measures
+    // are the ones the user will see. A model with a base pivot is not lifted
+    // at all, so nothing is lifted twice (services/surfaceplacement.h).
+    surfaceplacement::place(node, position, placement);
 
     addNodeToScene(node, ignore);
 }

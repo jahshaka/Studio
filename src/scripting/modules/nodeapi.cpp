@@ -88,11 +88,14 @@ QVector<VerbInfo> NodeApi::verbs() const
           "nothing is pushed onto the undo stack and a SCENE_STATIC node stays static (a write of a node's own "
           "values back onto it still counts as a move, and rule 4 demotes the subtree for it).",
           Needs::Document },
-        { "size", "node.size(id) -> {x, y, z, largest, height}",
+        { "size", "node.size(id) -> {x, y, z, largest, height, min, max}",
           "The node subtree's MEASURED size in the scene, in metres \u2014 the axis-aligned world "
           "extent of every mesh under it, which is what the Properties panel's Size row shows. "
           "This is the ANSWER to \"how big is this thing\", where node.transform's `scale` is the "
           "CONTROL: a model authored at 100x with a 0.01 scale reads 1 m here and 0.01 there. "
+          "`min` and `max` are that box's corners in WORLD space, so `min.y` is what a node "
+          "actually stands on — the reading a placement rule is written against (a dropped "
+          "object rests its `min.y` on the surface under the cursor). "
           "`largest` is max(x, y, z) and `height` is y \u2014 the two dimensions the import-time "
           "size policy measures a model on (services/fitsize.h: an object on its largest extent, "
           "a character on its height). All zeros for a node whose subtree carries no geometry "
@@ -724,8 +727,19 @@ QVariantMap NodeApi::size(const QString &id)
     if (!node) return QVariantMap();
 
     const fitsize::Extent extent = fitsize::measureNode(node);
-    return { { "x", extent.x }, { "y", extent.y }, { "z", extent.z },
-             { "largest", extent.largest() }, { "height", extent.height() } };
+    QVariantMap out{ { "x", extent.x }, { "y", extent.y }, { "z", extent.z },
+                     { "largest", extent.largest() }, { "height", extent.height() } };
+    // …AND WHERE THE BOX IS (lane SPACE-2): `min`/`max` are the same measured
+    // box's corners in world space. `min.y` is the one a placement rule is
+    // written against — "the bottom of this thing rests on that surface" — and
+    // the reason a drop can be asserted at all.
+    if (extent.located) {
+        out.insert("min", QVariantMap{ { "x", extent.minv[0] }, { "y", extent.minv[1] },
+                                       { "z", extent.minv[2] } });
+        out.insert("max", QVariantMap{ { "x", extent.maxv[0] }, { "y", extent.maxv[1] },
+                                       { "z", extent.maxv[2] } });
+    }
+    return out;
 }
 
 // The reflected key list, read off the document itself rather than kept as a

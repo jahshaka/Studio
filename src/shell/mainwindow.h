@@ -155,6 +155,7 @@ enum class Widget
 #include <QJsonObject>
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
+#include "services/surfaceplacement.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/texture2d.h"
 
@@ -550,7 +551,10 @@ public slots:
     void addEmpty();
     void addCamera();
     void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
-	void addMaterialMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3(), const QString &guid = QString(), const QString &name = QString());
+	void addMaterialMesh(const QString &path = "", bool ignore = false,
+	                     iris::Vec3 position = iris::Vec3(), const QString &guid = QString(),
+	                     const QString &name = QString(),
+	                     surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
     void addDragPlaceholder();
 

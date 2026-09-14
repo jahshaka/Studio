@@ -60,6 +60,7 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "shell/mainwindow.h"
 #include "services/sceneeditservice.h"
+#include "services/surfaceplacement.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "irisgl/core/irisutils.h"
@@ -197,8 +198,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Refuses an asset the project has not added. NOT undoable — asset mutations never are "
           "(SCRIPTING_SPEC \u00a71.6.5).",
           Needs::Document },
-        { "addToScene", "assets.addToScene(guid, {position}) -> nodeId",
-          "Instantiates a project object asset into the scene (undoable, like a drag from the asset browser).",
+        { "addToScene", "assets.addToScene(guid, {position, onSurface}) -> nodeId",
+          "Instantiates a project object asset into the scene (undoable, like a drag from the asset "
+          "browser). `position` places the node's PIVOT there; `onSurface: true` treats that point "
+          "as a SURFACE and rests the model's bounding box on it instead — which is what a drag "
+          "from the asset browser does, since a model pivoted at its centre otherwise lands half "
+          "inside the floor (owner, 2026-09-14). A model already pivoted at its base is not lifted, "
+          "so nothing is lifted twice.",
           Needs::Document },
         { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId}",
           "THE way to get a model file on disk into the open scene, in one call: it runs the one "
@@ -849,9 +855,13 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
     }
 
     const bool hasPosition = options.contains("position");
+    const auto placement = options.value(QStringLiteral("onSurface")).toBool()
+                               ? surfaceplacement::Placement::OnSurface
+                               : surfaceplacement::Placement::Pivot;
     host.services->selection->select(iris::SceneNodePtr());
     host.services->sceneEdit->addMaterialMesh(QString(), hasPosition,
-                                              vecFromJs(options.value("position")), guid, record.name);
+                                              vecFromJs(options.value("position")), guid,
+                                              record.name, placement);
     auto node = host.services->selection->selected();
     if (!node) {
         fail("assets.addToScene: the asset could not be instantiated");

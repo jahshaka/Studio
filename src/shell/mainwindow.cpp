@@ -2062,9 +2062,11 @@ void MainWindow::addMesh(const QString &path, bool ignore, iris::Vec3 position)
     sceneEditService->addMesh(filename, ignore, position);
 }
 
-void MainWindow::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position, const QString &guid, const QString &assetName)
+void MainWindow::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
+                                 const QString &guid, const QString &assetName,
+                                 surfaceplacement::Placement placement)
 {
-    sceneEditService->addMaterialMesh(path, ignore, position, guid, assetName);
+    sceneEditService->addMaterialMesh(path, ignore, position, guid, assetName, placement);
 }
 
 void MainWindow::addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName)
@@ -3497,8 +3499,12 @@ void MainWindow::setupViewPort()
     sceneContainer->setLayout(layout);
 
     auto events = sceneView->events();
+    // A DROP RESTS ON WHAT IT WAS DROPPED ON (owner, 2026-09-14). These two
+    // signals are the drag-and-drop route and nothing else, so this is where
+    // "the point under the cursor" becomes "the surface under the cursor";
+    // assets.addToScene and the menus keep placing the pivot.
     connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](QString path, bool v, iris::Vec3 pos, QString guid, QString name) {
-        addMaterialMesh(path, v, pos, guid, name);
+        addMaterialMesh(path, v, pos, guid, name, surfaceplacement::Placement::OnSurface);
     });
 
     // Straight to the service, WITH the drop point (smoke S2). The shell hop
@@ -3506,7 +3512,7 @@ void MainWindow::setupViewPort()
     // had exactly one caller — this lambda.
     connect(events, &EditorViewportEvents::addPrimitive, this,
             [this](QString guid, iris::Vec3 position) {
-        sceneEditService->addPrimitive(guid, position);
+        sceneEditService->addPrimitive(guid, position, surfaceplacement::Placement::OnSurface);
     });
 
     connect(events, &EditorViewportEvents::addDroppedParticleSystem, this, [this](bool v, iris::Vec3 pos, QString guid, QString name) {

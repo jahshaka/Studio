@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/sceneapi.h"
+#include "services/surfaceplacement.h"
 
 #include <optional>
 
@@ -82,12 +83,16 @@ QVector<VerbInfo> SceneApi::verbs() const
           "editor.select(hits[0].rootId) reproduces a user's click, editor.select(hits[0].id) "
           "drills into the part under the cursor.",
           Needs::Document },
-        { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent, count}) -> id | [id]",
+        { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent, count, onSurface}) -> id | [id]",
           "Adds a built-in primitive: plane, ground, cone, cube, cylinder, sphere, torus, capsule, "
           "gear, pyramid, teapot, sponge, steps ('ground' is the large floor plane the Add menu "
           "offers). {count: N} adds N of them and returns an ARRAY of ids instead of one id; "
           "every copy gets the same position/rotation/scale/parent options, so move them "
-          "afterwards with node.transform. Undoable — the whole batch is one step of the run's "
+          "afterwards with node.transform. `onSurface: true` reads `position` as a SURFACE rather "
+          "than a pivot: the primitive is lifted so the bottom of its bounding box rests on that "
+          "point, which is what a drag into the viewport does (every built-in primitive is "
+          "modelled around its own centre, so a drop that put the pivot on the floor buried half "
+          "of it — owner, 2026-09-14). Undoable — the whole batch is one step of the run's "
           "undo macro.",
           Needs::Document },
         { "addLight", "scene.addLight(type, {position, ...}) -> id",
@@ -443,9 +448,21 @@ bool SceneApi::applyOptions(const iris::SceneNodePtr &node, const QVariantMap &o
         host.services->undo->push(new ReparentSceneNodeCommand(node, parent));
     }
     if (options.contains("position") || options.contains("rotation") || options.contains("scale")) {
-        const iris::Vec3 pos = vecFromJs(options.value("position"), node->getLocalPos());
+        iris::Vec3 pos = vecFromJs(options.value("position"), node->getLocalPos());
         const iris::Vec3 rotEuler = vecFromJs(options.value("rotation"), node->getLocalRot().toEulerAngles());
         const iris::Vec3 scale = vecFromJs(options.value("scale"), node->getLocalScale());
+        // `onSurface`: the position is a SURFACE, not a pivot (owner,
+        // 2026-09-14 — what a drag-and-drop into the viewport means). The node
+        // is measured as it WILL be, rotation and scale included, and lifted so
+        // the bottom of its bounding box rests on the point; a model already
+        // pivoted at its base does not move. The temporary write below is what
+        // the command's redo() is about to set anyway.
+        if (options.value(QStringLiteral("onSurface")).toBool()) {
+            node->setLocalPos(pos);
+            node->setLocalRot(iris::Quat::fromEulerAngles(rotEuler));
+            node->setLocalScale(scale);
+            pos.setY(pos.y() + surfaceplacement::lift(node, pos.y()));
+        }
         host.services->undo->push(new TransformSceneNodeCommand(
             node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));
     }
