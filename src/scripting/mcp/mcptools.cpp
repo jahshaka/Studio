@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "scripting/mcp/mcptools.h"
 
 #include <QBuffer>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
@@ -346,16 +347,97 @@ QJsonArray McpTools::listTools() const
     return tools;
 }
 
+namespace {
+
+/// What came back, as SIZES: how much text, how many images and how many bytes
+/// of them. This is the "describe_scene sizes" and "screenshot bytes" half of
+/// the session record — never the content itself.
+QJsonObject summariseResult(const QJsonObject &result)
+{
+    int textChars = 0, images = 0, imageBytes = 0;
+    for (const QJsonValue &v : result.value(QLatin1String("content")).toArray()) {
+        const QJsonObject item = v.toObject();
+        const QString type = item.value(QLatin1String("type")).toString();
+        if (type == QLatin1String("text"))
+            textChars += item.value(QLatin1String("text")).toString().size();
+        else if (type == QLatin1String("image")) {
+            ++images;
+            imageBytes += item.value(QLatin1String("data")).toString().size() * 3 / 4;
+        }
+    }
+    QJsonObject detail{ { "textChars", textChars } };
+    if (images > 0) {
+        detail["images"] = images;
+        detail["imageBytes"] = imageBytes;
+    }
+    return detail;
+}
+
+/// A log line is a line: an error message that arrives with a stack in it is
+/// recorded up to here and no further.
+QString boundedError(const QString &message)
+{
+    QString out = message.simplified();
+    if (out.size() > 500) out = out.left(497) + QStringLiteral("…");
+    return out;
+}
+
+} // namespace
+
 QJsonObject McpTools::call(const QString &name, const QJsonObject &args)
 {
-    if (name == QLatin1String("run_script"))     return runScript(args);
-    if (name == QLatin1String("api_docs"))       return apiDocs(args);
-    if (name == QLatin1String("describe_scene")) return describeScene(args);
-    if (name == QLatin1String("screenshot"))     return screenshot(args);
-    if (name == QLatin1String("browse_assets"))  return browseAssets(args);
-    if (name == QLatin1String("undo_redo"))      return undoRedo(args);
-    if (name == QLatin1String("capture_perf"))   return capturePerf(args);
-    return textResult(QStringLiteral("unknown tool: %1").arg(name), true);
+    // EVERY call goes through here, which is why the logging does too (ledger
+    // §361). The error half is always on; the session half is the user's
+    // opt-in, and the VERB TRACE is armed only for the calls it applies to —
+    // a run that nobody is recording pays nothing at all.
+    McpLog &log = McpLog::instance();
+    const bool recording = log.sessionRecording();
+    const bool traced = recording && name == QLatin1String("run_script");
+
+    mRecord = McpCallRecord();
+    mRecord.tool = name;
+    mRecord.args = McpLog::summariseArgs(args);
+    if (traced && log.recordScriptSource())
+        mRecord.scriptSource = args.value(QLatin1String("script")).toString();
+
+    QElapsedTimer clock;
+    clock.start();
+    if (traced) mEngine->setVerbTracing(true);
+
+    QJsonObject result;
+    if (name == QLatin1String("run_script"))           result = runScript(args);
+    else if (name == QLatin1String("api_docs"))        result = apiDocs(args);
+    else if (name == QLatin1String("describe_scene"))  result = describeScene(args);
+    else if (name == QLatin1String("screenshot"))      result = screenshot(args);
+    else if (name == QLatin1String("browse_assets"))   result = browseAssets(args);
+    else if (name == QLatin1String("undo_redo"))       result = undoRedo(args);
+    else if (name == QLatin1String("capture_perf"))    result = capturePerf(args);
+    else result = textResult(QStringLiteral("unknown tool: %1").arg(name), true);
+
+    if (traced) {
+        mRecord.verbs = mEngine->takeVerbTrace();
+        mEngine->setVerbTracing(false);
+    }
+    mRecord.durationMs = clock.elapsed();
+    mRecord.ok = !result.value(QLatin1String("isError")).toBool();
+    if (!mRecord.ok && mRecord.error.isEmpty()) {
+        // A refusal's own sentence is the error: it is the tool's message to
+        // the caller, never an argument's value.
+        const QJsonArray content = result.value(QLatin1String("content")).toArray();
+        if (!content.isEmpty())
+            mRecord.error = boundedError(
+                content.first().toObject().value(QLatin1String("text")).toString());
+    }
+    mRecord.detail = summariseResult(result);
+    if (name == QLatin1String("screenshot")) {
+        // The GRADE the tool chose (what the user sees vs the exact readback):
+        // it is derived from `postFx`, and it is the one fact about a
+        // screenshot worth researching.
+        mRecord.detail["grade"] = args.value(QLatin1String("postFx")).toBool(true)
+                                      ? QStringLiteral("scene") : QStringLiteral("plain");
+    }
+    log.recordCall(mRecord);
+    return result;
 }
 
 QJsonObject McpTools::runScript(const QJsonObject &args)
@@ -420,6 +502,11 @@ QJsonObject McpTools::runScript(const QJsonObject &args)
         if (result.timedOut) payload["timedOut"] = true;
         if (result.line > 0) payload["line"] = result.line;
         if (!result.stack.isEmpty()) payload["stack"] = result.stack;
+        // The failing line and the message, for the error log (§361). The
+        // SOURCE never goes there — only where the run broke and what it said.
+        mRecord.error = boundedError(result.error);
+        mRecord.line = result.line;
+        mRecord.timedOut = result.timedOut;
     }
     payload["console"] = QJsonArray::fromStringList(consoleLines);
     // Only when non-empty: an always-present empty array on every response
@@ -457,7 +544,8 @@ QJsonObject McpTools::apiDocs(const QJsonObject &args)
         return textResult(registry.searchText(search, 40));
 
     if (moduleName.isEmpty())
-        return textResult(registry.markdown());
+        return textResult(registry.markdown() + QStringLiteral("\n---\n")
+                          + McpLog::instance().stateLine() + QLatin1Char('\n'));
     if (!registry.module(moduleName)) {
         QStringList known;
         for (ApiModule *m : registry.modules()) known << m->jsName();

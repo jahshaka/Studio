@@ -16,6 +16,12 @@ For more information see the LICENSE file
 // phase 1): enable toggle + port + the per-session token with its copyable
 // `claude mcp add ...` connect line. The token is never persisted — only
 // mcp_enabled and mcp_port are settings.
+//
+// Plus the LOGGING switches (owner, 2026-09-15): the error log is always on
+// and is not offered as a choice; the session recording (mcp_log_sessions) and
+// its script-source sub-option (mcp_log_script_source) are opt-in, default
+// OFF, and the page says in plain words what each one writes down and that
+// nothing leaves the machine (McpLog::privacyNote).
 
 #include <QWidget>
 
@@ -49,6 +55,8 @@ private:
     MainWindow *mMainWindow = nullptr;
 
     QAbstractButton *mEnabled;   // QCheckBox (Classic) or qlementine Switch (Qlementine)
+    QAbstractButton *mLogSessions;   // the opt-in tool-research record (default OFF)
+    QAbstractButton *mLogSource;     // ...and whether it carries the script source
     QSpinBox *mPort;
     QLineEdit *mToken;
     QLineEdit *mCommand;

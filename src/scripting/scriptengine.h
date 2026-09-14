@@ -78,6 +78,15 @@ public:
                           bool wrapUndoMacro = true,
                           int timeoutMs = 0);
 
+    /// VERB TRACING (MCP session logging): while on, every `module.verb` call
+    /// a script makes is recorded. Off by default and free when off — see
+    /// ApiRegistry::setTracing for what it costs when it is on. Arming
+    /// installs the API first, so it is safe before the first evaluate().
+    void setVerbTracing(bool on);
+    bool verbTracing() const { return mRegistry.tracing(); }
+    /// The verbs called since the last take ("scene.addPrimitive x64"), cleared.
+    QStringList takeVerbTrace() { return mRegistry.takeTrace(); }
+
 signals:
     /// console.log/info/warn/error output, one line per call.
     void consoleOutput(const QString &text);

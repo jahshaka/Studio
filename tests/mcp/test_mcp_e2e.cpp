@@ -45,6 +45,8 @@
 #include <QRegularExpression>
 #include <QDateTime>
 #include <QElapsedTimer>
+#include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QEventLoop>
 #include <QImage>
@@ -1225,6 +1227,138 @@ int main(int argc, char **argv)
         const HttpResult r = post(net, url, rpc("resources/list", ++id), token);
         CHECK(r.json().value("error").toObject().value("code").toInt() == -32601,
               "unknown methods get JSON-RPC -32601");
+    }
+
+    // ---- MCP LOGGING (ledger §361) ---------------------------------------
+    // Two files under the data root's logs/: failures always, tool calls only
+    // when the user opted in. The data root is where ctest put it.
+    {
+        const QString logsDir = qEnvironmentVariable("JAHSHAKA_DATA_ROOT") + "/logs";
+        const QString errorLog = logsDir + "/mcp-errors.log";
+
+        auto readLines = [](const QString &path) {
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QStringList();
+            return QString::fromUtf8(file.readAll()).split('\n', Qt::SkipEmptyParts);
+        };
+        auto jsonLines = [&readLines](const QString &path) {
+            QList<QJsonObject> out;
+            for (const QString &line : readLines(path))
+                out << QJsonDocument::fromJson(line.toUtf8()).object();
+            return out;
+        };
+
+        // (1) THE ERROR LOG, always on. A failing script lands in it with its
+        // message and failing LINE — and its SOURCE must not be anywhere in
+        // the file.
+        const QString marker = QStringLiteral("nosuchverb_%1_marker").arg(port);
+        callTool(net, url, token, ++id, "run_script",
+                 QJsonObject{ { "script", marker + "()" }, { "label", "a deliberate failure" } });
+        QList<QJsonObject> errors = jsonLines(errorLog);
+        CHECK(!errors.isEmpty()
+                  && errors.first().value("schema").toString() == "jahshaka.mcp.errors/1",
+              "log: the error file opens with its versioned schema line");
+        QJsonObject lastError = errors.isEmpty() ? QJsonObject() : errors.last();
+        CHECK(lastError.value("tool").toString() == "run_script"
+                  && lastError.value("kind").toString() == "tool_error",
+              "log: a failed run_script is recorded as a tool error");
+        CHECK(lastError.value("error").toString().contains("is not defined")
+                  && lastError.value("line").toInt() == 1
+                  && !lastError.value("session").toString().isEmpty(),
+              "log: ...with the message, the failing line and the session id");
+        {
+            QFile file(errorLog);
+            file.open(QIODevice::ReadOnly);
+            const QByteArray whole = file.readAll();
+            CHECK(!whole.contains(marker.toUtf8() + "()"),
+                  "log: THE SCRIPT SOURCE IS NEVER IN THE ERROR LOG");
+        }
+        // A refused request is a failure that never reaches a tool.
+        post(net, url, rpc("ping", ++id), QStringLiteral("wrong-on-purpose"));
+        errors = jsonLines(errorLog);
+        CHECK(!errors.isEmpty() && errors.last().value("kind").toString() == "auth",
+              "log: a 401 is recorded as a refusal");
+
+        // (2) THE SESSION FILE is OFF by default: nothing exists, and the verb
+        // says so.
+        QJsonObject state = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "app.mcpLogging()" } })).value("result").toObject();
+        CHECK(state.value("session").toBool() == false && state.value("source").toBool() == false,
+              "log: session recording is OFF by default, source too");
+        CHECK(state.value("errorLog").toString() == errorLog,
+              "log: app.mcpLogging() names the error log");
+        CHECK(QDir(logsDir).entryList({ "mcp-session-*.jsonl" }, QDir::Files).isEmpty(),
+              "log: ...and no session file exists while it is off");
+
+        // (3) Opted in: one line per tool call, the verbs a script called, and
+        // still no source.
+        state = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "app.mcpLogging({session: true})" } }))
+                    .value("result").toObject();
+        CHECK(state.value("session").toBool()
+                  && state.value("sessionLog").toString().contains("mcp-session-"),
+              "log: the verb turns the session record on and names the file");
+        const QString sessionLog = state.value("sessionLog").toString();
+
+        callTool(net, url, token, ++id, "run_script",
+                 QJsonObject{ { "script", "scene.addPrimitive('cube'); scene.addPrimitive('cube');"
+                                          " editor.selection()" },
+                              { "label", "two cubes" } });
+        callTool(net, url, token, ++id, "describe_scene", QJsonObject{ { "depth", 1 } });
+        QList<QJsonObject> lines = jsonLines(sessionLog);
+        CHECK(!lines.isEmpty()
+                  && lines.first().value("schema").toString() == "jahshaka.mcp.session/1",
+              "log: the session file opens with its versioned schema line");
+        CHECK(lines.size() >= 4, "log: one line per tool call since the opt-in");
+        QJsonObject describeLine = lines.last();
+        CHECK(describeLine.value("tool").toString() == "describe_scene"
+                  && describeLine.value("detail").toObject().value("textChars").toInt() > 0,
+              "log: describe_scene is recorded with the size of what it answered");
+        QJsonObject scriptLine;
+        for (const QJsonObject &l : lines)
+            if (l.value("tool").toString() == "run_script"
+                && l.value("args").toObject().contains("label"))
+                scriptLine = l;
+        const QJsonArray verbs = scriptLine.value("verbs").toArray();
+        QStringList verbNames;
+        for (const QJsonValue &v : verbs) verbNames << v.toString();
+        CHECK(verbNames.contains("scene.addPrimitive x2") && verbNames.contains("editor.selection"),
+              "log: THE REGISTRY VERBS THE SCRIPT CALLED are recorded, repeats counted");
+        CHECK(scriptLine.value("args").toObject().value("script").toObject()
+                  .value("chars").toInt() > 0
+                  && !scriptLine.value("args").toObject().value("script").toObject()
+                          .contains("value"),
+              "log: an argument is recorded by KEY and SIZE, never by value");
+        CHECK(!scriptLine.contains("script"),
+              "log: ...and the source is absent while the sub-option is off");
+        CHECK(scriptLine.value("ok").toBool() && scriptLine.value("durationMs").toInt() >= 0,
+              "log: the outcome and the duration are recorded");
+
+        // (4) The source sub-option, which is the only thing that writes it.
+        callTool(net, url, token, ++id, "run_script",
+                 QJsonObject{ { "script", "app.mcpLogging({source: true})" } });
+        const QString sourceMarker = QStringLiteral("var source_marker_%1 = 1;").arg(port);
+        callTool(net, url, token, ++id, "run_script", QJsonObject{ { "script", sourceMarker } });
+        lines = jsonLines(sessionLog);
+        bool sourceSeen = false;
+        for (const QJsonObject &l : lines)
+            if (l.value("script").toString() == sourceMarker) sourceSeen = true;
+        CHECK(sourceSeen, "log: with the sub-option on, the script source is recorded");
+        {
+            QFile file(errorLog);
+            file.open(QIODevice::ReadOnly);
+            CHECK(!file.readAll().contains(sourceMarker.toUtf8()),
+                  "log: ...and STILL never in the error log");
+        }
+
+        // (5) api_docs says what is being recorded right now.
+        const QString docs = toolText(callTool(net, url, token, ++id, "api_docs"));
+        CHECK(docs.contains("MCP logging:") && docs.contains(sessionLog),
+              "log: api_docs reports the logging state and the files");
+
+        // Leave the app as we found it (the setting is persisted).
+        callTool(net, url, token, ++id, "run_script",
+                 QJsonObject{ { "script", "app.mcpLogging({session: false, source: false})" } });
     }
 
     jahshaka.terminate();

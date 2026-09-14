@@ -158,6 +158,12 @@ void ScriptEngine::installApi()
     )JS"), QStringLiteral("<bootstrap>"));
 }
 
+void ScriptEngine::setVerbTracing(bool on)
+{
+    if (on) installApi();          // the shims replace globals that must exist
+    mRegistry.setTracing(mJs, on);
+}
+
 ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileName,
                                     bool wrapUndoMacro, int timeoutMs)
 {

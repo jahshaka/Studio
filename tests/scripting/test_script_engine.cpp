@@ -235,6 +235,31 @@ int main(int argc, char **argv)
     CHECK(md.contains("## fake") && md.contains("fake.add(a, b)"),
           "markdown reference is generated from the registry");
 
+    // ---- verb tracing (MCP session logging, ledger §361) ----
+    // There is no central verb dispatch to hook, so tracing swaps the module
+    // globals for forwarding shims. The contract: the SAME answers, the same
+    // errors, and a record of what was called.
+    CHECK(!engine.verbTracing(), "trace: off by default");
+    engine.setVerbTracing(true);
+    CHECK(engine.verbTracing(), "trace: armed");
+    r = engine.evaluate("fake.add(2, 40)", "trace.js", false);
+    CHECK(r.ok && r.value.toDouble() == 42.0, "trace: a traced verb returns the same answer");
+    r = engine.evaluate("for (var i = 0; i < 3; ++i) fake.set(i); fake.get()", "trace.js", true);
+    CHECK(r.ok && r.value.toInt() == 2, "trace: ...and undoable verbs still record commands");
+    r = engine.evaluate("fake.engineOnly()", "trace.js", false);
+    CHECK(!r.ok && r.error.contains("no rendering engine is available"),
+          "trace: a verb's thrown error passes through the shim unchanged");
+    QStringList trace = engine.takeVerbTrace();
+    CHECK(trace.contains("fake.add") && trace.contains("fake.set x3")
+              && trace.contains("fake.get") && trace.contains("fake.engineOnly"),
+          "trace: every call is recorded, repeats counted");
+    CHECK(engine.takeVerbTrace().isEmpty(), "trace: taking it clears it");
+    engine.setVerbTracing(false);
+    CHECK(!engine.verbTracing(), "trace: disarmed");
+    r = engine.evaluate("fake.add(1, 1)", "trace.js", false);
+    CHECK(r.ok && r.value.toDouble() == 2.0, "trace: the real module globals are back");
+    CHECK(engine.takeVerbTrace().isEmpty(), "trace: ...and nothing is recorded when off");
+
     printf(failures ? "\n%d FAILURES\n" : "\nall ok\n", failures);
     return failures ? 1 : 0;
 }

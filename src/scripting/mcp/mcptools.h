@@ -40,6 +40,8 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonObject>
 
+#include "scripting/mcp/mcplog.h"
+
 class ScriptEngine;
 
 class McpTools
@@ -65,6 +67,12 @@ private:
     QJsonObject browseAssets(const QJsonObject &args);
     QJsonObject undoRedo(const QJsonObject &args);
     QJsonObject capturePerf(const QJsonObject &args);
+
+    /// What the tools/call now in flight will tell McpLog. call() sets the
+    /// parts it can see from outside (tool, arguments, duration, outcome) and
+    /// the handlers enrich it with what only they know — run_script's failing
+    /// line, the timeout flag, the verbs the script called.
+    McpCallRecord mRecord;
 
     ScriptEngine *mEngine;
 };

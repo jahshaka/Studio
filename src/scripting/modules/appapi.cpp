@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "services/framepacing.h"
 #include "data/settingsmanager.h"
+#include "scripting/mcp/mcplog.h"
 #include "services/jahlog.h"
 #include "services/apppaths.h"
 #include "services/assetstorepaths.h"
@@ -370,6 +371,18 @@ QVector<VerbInfo> AppApi::verbs() const
           "jahsettings.ini in its historical place (applicationDirPath in a Debug build) and its "
           "projects under the `default_directory` preference. READ-ONLY on purpose: a setter "
           "would have to move a live database and a live asset store while they are open.",
+          Needs::Document },
+        { "mcpLogging", "app.mcpLogging({session, source}) -> {session, source, errorLog, sessionLog, sessionId}",
+          "What the MCP surface writes down about itself, and where. The ERROR log is always on "
+          "and holds failures only — a tool call that came back an error, a run_script's message "
+          "and failing line, a timeout, a refused request — never the script source and never an "
+          "argument's value; it is bounded (1 MiB plus one previous generation). `session` turns "
+          "on the opt-in RESEARCH record: one JSON line per tool call naming the tool, the "
+          "argument keys with their sizes, the registry verbs a script actually called, the "
+          "duration and the outcome. `source` additionally records the script text, and is "
+          "meaningless without `session`. Both are OFF by default, both persist, and nothing is "
+          "ever sent anywhere — the files stay under the data root's logs/ folder. Called with no "
+          "arguments it only reports.",
           Needs::Document },
         { "lastError", "app.lastError() -> string | null",
           "Why the last verb answered falsy. Verbs REFUSE by returning their documented falsy "
@@ -756,6 +769,26 @@ QVariantList AppApi::docks()
         return {};
     }
     return host.mainWindow->dockReport();
+}
+
+QVariantMap AppApi::mcpLogging(const QVariantMap &options)
+{
+    McpLog &log = McpLog::instance();
+    // A write only where the caller asked for one: passing {source: true}
+    // alone must not silently turn the session recording on as well.
+    if (options.contains(QStringLiteral("session")))
+        log.setSessionRecording(options.value(QStringLiteral("session")).toBool());
+    if (options.contains(QStringLiteral("source")))
+        log.setRecordScriptSource(options.value(QStringLiteral("source")).toBool());
+
+    QVariantMap out;
+    out["session"] = log.sessionRecording();
+    out["source"] = log.recordScriptSource();
+    out["errorLog"] = log.errorLogPath();
+    const QString sessionLog = log.sessionLogPath();
+    out["sessionLog"] = sessionLog.isEmpty() ? QVariant() : QVariant(sessionLog);
+    out["sessionId"] = log.sessionId().isEmpty() ? QVariant() : QVariant(log.sessionId());
+    return out;
 }
 
 QVariantMap AppApi::window()

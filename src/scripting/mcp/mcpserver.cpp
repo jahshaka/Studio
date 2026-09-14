@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QTcpServer>
 
 #include "data/constants.h"
+#include "scripting/mcp/mcplog.h"
 #include "scripting/scriptengine.h"
 
 namespace {
@@ -87,6 +88,9 @@ bool McpServer::start(quint16 port, QString *errorOut)
     }
     mTcp = tcp;
     mPort = tcp->serverPort();
+    // A server start IS a session: the logs name it, and the id is generated
+    // there (never derived from the token).
+    McpLog::instance().beginSession();
     emit stateChanged();
     return true;
 }
@@ -131,6 +135,13 @@ void McpServer::handlePost(const QHttpServerRequest &request, QHttpServerRespond
         headers.append(QHttpHeaders::WellKnownHeader::WWWAuthenticate,
                        QByteArrayLiteral("Bearer realm=\"jahshaka-mcp\""));
         responder.write(headers, StatusCode::Unauthorized);
+        // A refused request is the one failure that never reaches a tool, and
+        // it is exactly what somebody debugging a connect line needs to see.
+        // The offered token is NOT recorded — only that one was wrong.
+        McpLog::instance().recordRefusal(
+            QStringLiteral("auth"),
+            auth.isEmpty() ? QStringLiteral("401: no Authorization header")
+                           : QStringLiteral("401: wrong bearer token"));
         return;
     }
 
@@ -140,6 +151,9 @@ void McpServer::handlePost(const QHttpServerRequest &request, QHttpServerRespond
         responder.write(QJsonDocument(rpcError(QJsonValue(), -32700,
                             QStringLiteral("parse error: %1").arg(parseError.errorString()))),
                         StatusCode::BadRequest);
+        McpLog::instance().recordRefusal(
+            QStringLiteral("parse_error"),
+            QStringLiteral("-32700 parse error: %1").arg(parseError.errorString()));
         return;
     }
 
@@ -198,5 +212,7 @@ QJsonObject McpServer::dispatch(const QJsonObject &message)
         const QJsonObject args = params.value(QLatin1String("arguments")).toObject();
         return rpcResult(id, mTools.call(name, args));
     }
+    McpLog::instance().recordRefusal(QStringLiteral("unknown_method"),
+                                     QStringLiteral("-32601 method not found: %1").arg(method));
     return rpcError(id, -32601, QStringLiteral("method not found: %1").arg(method));
 }

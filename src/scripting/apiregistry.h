@@ -74,8 +74,27 @@ public:
 
     static QString needsName(Needs needs);
 
+    // ---- verb tracing (MCP session logging, ledger §361) -------------------
+    // "which verbs did that script actually call" has no central dispatch to
+    // hook: install() hands each module's QObject wrapper straight to the JS
+    // engine and every call goes engine -> qt_metacall, with nothing of ours
+    // in between. So tracing REPLACES each module global with a thin JS shim
+    // that records `module.verb` and forwards to the real wrapper, and puts
+    // the wrappers back when it is disarmed. It is off by default and costs
+    // nothing while it is: the plain wrappers are exactly what they were.
+    /// Arms/disarms the trace in `engine`. Idempotent; safe before install().
+    void setTracing(QJSEngine &engine, bool on);
+    bool tracing() const { return mTracing; }
+    /// The verbs called since the last take, in call order, deduplicated with
+    /// a count: "scene.addPrimitive x64". Clears the record.
+    QStringList takeTrace();
+    /// Recorded by the shim; not for callers.
+    void noteVerbCall(const QString &qualifiedName);
+
 private:
     QVector<ApiModule *> mModules;
+    bool mTracing = false;
+    QVector<QPair<QString, int>> mTrace;   // qualified name -> calls, in first-call order
 };
 
 #endif // APIREGISTRY_H
