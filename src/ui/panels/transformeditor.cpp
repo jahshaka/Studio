@@ -140,18 +140,15 @@ void TransformEditor::onResetBtnClicked()
 {
     // in the future, this should be the imported models defaults instead of assumed scene's
     if (!!sceneNode) {
-        xPosChanged(0);
-        yPosChanged(0);
-        zPosChanged(0);
-
-        xRotChanged(0);
-        yRotChanged(0);
-        zRotChanged(0);
-
+        // THE NODE, NOT THE ROW CALLBACKS. Reset used to walk the nine
+        // valueChanged slots with the values it wanted — which stopped meaning
+        // anything for the rotation the moment those slots started reading the
+        // FIELDS (they still held the old angles here, so Reset left the
+        // rotation exactly as it was). What Reset means is one statement:
         auto scale = defaultStateNode->getLocalScale();
-        xScaleChanged(scale.x());
-        yScaleChanged(scale.y());
-        zScaleChanged(scale.z());
+        sceneNode->setLocalPos(iris::Vec3(0, 0, 0));
+        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(0, 0, 0)));
+        sceneNode->setLocalScale(scale);
 
         // Display-only: the unrounded values went onto the node above; the
         // spinboxes must not echo their ROUNDED copies back (see refreshUi).
@@ -204,10 +201,30 @@ void TransformEditor::refreshUi()
 		ypos->setValue(pos.y());
 		zpos->setValue(pos.z());
 
-		auto rot = sceneNode->getLocalRot().toEulerAngles();
-		xrot->setValue(rot.x());
-		yrot->setValue(rot.y());
-		zrot->setValue(rot.z());
+		// THE ROTATION FIELDS ONLY MOVE WHEN THE ROTATION DOES (lane SPACE-2,
+		// the other half of the owner's "I can't drag the Rotation box").
+		//
+		// A quaternion has many euler triples, and toEulerAngles() returns the
+		// canonical one — which at gimbal lock is NOT the triple the user is
+		// typing or dragging. Anything that refreshes this panel (the gizmo's
+		// transformRefreshRequested, a selection re-bind) therefore rewrote the
+		// rotation row with an equivalent-but-different triple, and the field
+		// under the user's mouse snapped back: measured on the rig at pitch
+		// -90, dragging Z to 20 left the panel reading (-90, 20, 0) with Z at
+		// zero again, which is exactly what "the box does not drag" looks like.
+		//
+		// So the question this asks is "has the ROTATION changed", not "does
+		// the triple match": while the fields already describe the rotation the
+		// node has, they are left exactly as the user set them.
+		const iris::Quat shown = iris::Quat::fromEulerAngles(
+			iris::Vec3(float(xrot->value()), float(yrot->value()), float(zrot->value())));
+		const iris::Quat current = sceneNode->getLocalRot();
+		if (qAbs(qAbs(iris::Quat::dotProduct(shown, current)) - 1.0f) > 1e-4f) {
+			auto rot = current.toEulerAngles();
+			xrot->setValue(rot.x());
+			yrot->setValue(rot.y());
+			zrot->setValue(rot.z());
+		}
 
 		auto scale = sceneNode->getLocalScale();
 		xscale->setValue(scale.x());
@@ -295,33 +312,40 @@ void TransformEditor::zPosChanged(double value)
 
 /**
  * rotation change callbacks
+ *
+ * THE THREE FIELDS ARE THE ROTATION (owner report, 2026-09-14: "I can click and
+ * drag the Position and Scale boxes, but I can't click and drag the Rotation
+ * box").
+ *
+ * Each of these used to re-derive the euler triple FROM THE NODE'S QUATERNION
+ * on every tick, change the one component it owns and write it back. A
+ * quaternion has no memory of which triple produced it, and the decomposition
+ * is only unique away from gimbal lock — so for any node whose pitch is at or
+ * near +/-90 degrees (every flat plane, image plane and decal, and the many
+ * imported models that arrive rotated -90 on X) the triple that came back was
+ * not the one on screen, and the user's edit landed somewhere else entirely.
+ * Measured on the rig at rotation (-90, 0, 0): a 20-degree drag of the Z field
+ * moved the node's Y by 90 and left Z at 0 — the field snapped back and the
+ * panel looked dead. Past +/-90 the same thing reverses the drag (89 + 20
+ * landed on 71).
+ *
+ * So the panel's own three fields are the source of truth while the user is
+ * editing: whatever they read is the rotation the document gets. refreshUi
+ * puts the document's own decomposition back into them whenever the selection
+ * or the node changes, which is the only place a canonical triple belongs.
  */
-void TransformEditor::xRotChanged(double value)
+void TransformEditor::applyRotationFromFields()
 {
-    if (!!sceneNode) {
-        auto rot = sceneNode->getLocalRot().toEulerAngles();
-        rot.setX(value);
-        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(rot));
-    }
+    if (!sceneNode) return;
+    sceneNode->setLocalRot(iris::Quat::fromEulerAngles(
+        iris::Vec3(float(xrot->value()), float(yrot->value()), float(zrot->value()))));
 }
 
-void TransformEditor::yRotChanged(double value)
-{
-    if (!!sceneNode) {
-        auto rot = sceneNode->getLocalRot().toEulerAngles();
-        rot.setY(value);
-        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(rot));
-    }
-}
+void TransformEditor::xRotChanged(double) { applyRotationFromFields(); }
 
-void TransformEditor::zRotChanged(double value)
-{
-    if (!!sceneNode) {
-        auto rot = sceneNode->getLocalRot().toEulerAngles();
-        rot.setZ(value);
-        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(rot));
-    }
-}
+void TransformEditor::yRotChanged(double) { applyRotationFromFields(); }
+
+void TransformEditor::zRotChanged(double) { applyRotationFromFields(); }
 
 /**
  * scale change callbacks

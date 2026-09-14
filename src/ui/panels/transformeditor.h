@@ -66,6 +66,12 @@ protected slots:
     void onScrubFinished(bool cancelled);
 
 private:
+    /// The document's rotation IS what the three rotation fields read (lane
+    /// SPACE-2): a quaternion cannot say which euler triple built it, so
+    /// re-deriving one per edit sent the user's drag somewhere else at gimbal
+    /// lock. See the note in transformeditor.cpp.
+    void applyRotationFromFields();
+
     // builds one horizontal row: title label left, X/Y/Z fields side by side
     void addRow(class QGridLayout* grid, int row, const QString& title,
                 DragSpinBox*& x, DragSpinBox*& y, DragSpinBox*& z,
