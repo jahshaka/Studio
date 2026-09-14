@@ -120,6 +120,9 @@ public:
     Q_INVOKABLE bool importAssets(const QVariant &paths);
 
 private:
+    /// Is the PLAYER page the visible space? (editorapi.cpp's note: `frame` and
+    /// `screenshot` act on the space that owns the screen.)
+    bool playerHasTheScreen() const;
     /// id | [id] | null -> nodes, reporting an unknown id as a verb failure.
     /// Shared by editor.select and editor.selectAdd.
     bool resolveNodeArgument(const QVariant &id, const QString &verb,

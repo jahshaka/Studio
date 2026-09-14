@@ -68,6 +68,7 @@ private:
     QAction *gridAction = nullptr;
     CheckBoxWidget *sunDiscVisible = nullptr;    // the sun disc, a world setting (§3)
     CheckBoxWidget *sunDiscInProbes = nullptr;   // ... and whether probes capture it
+    DragFloatWidget *sunDiscSize = nullptr;      // ... and how wide it is drawn (degrees)
     HFloatSliderWidget *worldGravity;
     /// The AVATAR_LOCOMOTION_SPEC §8.5 world setting, as a row.
     ComboBoxWidget *playModeSelector = nullptr;

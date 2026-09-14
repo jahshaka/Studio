@@ -3530,7 +3530,7 @@ void fog_atmosphere_colour_follows_the_sky() {
 // The switch puts kVisibleBit beside the disc's own channel, which is exactly
 // what a capture pass asks for, so the disc CAN be captured. It must not reach
 // the ambient: the sun's energy already arrives through the directional light,
-// and `sunAngle` is a dial a user may take to 170 degrees — an integral that
+// and the disc's size is a dial a user may take to ten degrees — an integral that
 // saw the disc would let a decorative sun own the scene's diffuse lighting.
 // The sky capture therefore renders the sky's queue and nothing else.
 //

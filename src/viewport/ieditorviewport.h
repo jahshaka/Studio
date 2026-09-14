@@ -34,6 +34,8 @@ class Project;
 class EditorData;
 class Gizmo;
 enum WindowSpaces : int;      // mainwindow.h
+class SceneMirror;
+namespace jahshaka { namespace engine { class Scene; } }
 enum class SceneMode;         // playbackservice.h
 
 /// Signals a viewport emits. A separate QObject so the interface itself stays a
@@ -112,6 +114,34 @@ public:
     // ---- document ----
     virtual void setScene(iris::ScenePtr scene) = 0;
     virtual iris::ScenePtr getScene() = 0;
+
+    /// THE ONE ENGINE SCENE, and the ONE SceneMirror that pushes the document
+    /// into it (owner decision 2026-09-14, lane PLAYER-1).
+    ///
+    /// The Player page is a second VIEW on this scene, drawn by this mirror,
+    /// with the editor's helper geometry masked out per view — not a second
+    /// scene and not a second mirror. Both may be null: a headless stand-in
+    /// viewport has neither, and the engine viewport has neither until its
+    /// native window exists (they are built in its show event). A caller that
+    /// gets null must stay inert rather than build its own.
+    ///
+    /// Borrowed, never owned. The viewport destroys both at teardown, so no
+    /// caller may outlive it holding these.
+    virtual jahshaka::engine::Scene *engineScene() { return nullptr; }
+    virtual SceneMirror *sceneMirror() { return nullptr; }
+
+    /// WHAT THE EDITOR'S ON-SCREEN VIEW HAS ACTUALLY GRADED WITH — the
+    /// tonemapper's multiplier (View::measuredExposureScale), or 0 when there
+    /// is nothing to read (no view, no HDR, a fixed grade, nothing presented).
+    ///
+    /// It exists for the Player page, which is a second view of the same scene
+    /// with its own adaptation history: seeding that history from this value on
+    /// entry is what stops the Player opening at the authored midpoint and
+    /// walking to the room's real luminance in front of the user.
+    ///
+    /// COSTS A GPU STALL (a 1x1 readback with accurate tracking) — once per
+    /// picture or per page entry, never per frame.
+    virtual float measuredExposureScale() const { return 0.0f; }
     virtual void setSelectedNode(iris::SceneNodePtr sceneNode) = 0;
     /// The whole selection SET, primary first (EDITOR_MULTISELECT_SPEC §2.3) —
     /// the outline, the gizmo group and the focus/orbit/floor union read it.

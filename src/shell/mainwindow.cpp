@@ -1273,7 +1273,10 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
             playSceneBtn->hide();
             this->enterPlayMode();
 			playerView->begin();
-            playerView->onPlayScene();
+            // PLAY, not toggle (audit F4): entering the space is a statement,
+            // not a button press. `app.space("player")` after `player.play()`
+            // used to STOP the scene.
+            playerView->playScene();
 
             break;
         }

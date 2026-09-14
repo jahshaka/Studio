@@ -3,14 +3,35 @@
 
 // EnginePlayerScene — the player on the engine, minus the widget.
 //
-// Owns a second engine Scene ("player") and a SceneMirror that pushes the SAME
-// iris::ScenePtr document the editor viewport holds (the editor and the player
-// share the document; every other module gets its own). Runs PlayBack for
-// physics, keyframe animation and the camera controllers exactly as the legacy
-// PlayerView does, then mirrors the result and points the View's camera where
-// the document's scene camera looks. No GL, no Ogre, no QWidget — so it is
-// testable headless with an offscreen View (tests/player). EnginePlayerView
-// wraps it.
+// ONE SCENE (owner decision 2026-09-14, lane PLAYER-1). The Player page is a
+// second VIEW on the EDITOR'S engine Scene, pushed by the EDITOR'S SceneMirror:
+// this object owns neither. It owns the PlayBack (physics, keyframe animation,
+// the camera controllers) and it owns the per-frame order — PlayBack, then
+// document -> engine, then sky/world/camera -> ITS view.
+//
+// WHY, in one paragraph. It used to create a second engine Scene and a second
+// SceneMirror over the same document. A document's graph can only live in one
+// Ogre scene manager at a time, so every space switch EVACUATED every engine
+// object from the leaving mirror, migrated the tree, and full-walked the
+// arriving one — and every derived lighting structure (voxels, probes, lamp
+// maps, the irradiance field, the planar arm, the adaptation history) was
+// rebuilt from scratch on both sides of the switch. The Player was therefore
+// always looking at a COLD scene while the editor was warm, which is the
+// mechanism behind "terrible in the Player" (SPECS/audits/
+// PLAYER_CHAIN_AUDIT_2026-09-14.md, F1/F2/F5). The process-wide HlmsPbs planar
+// and GI bindings were bound by whichever of the two scenes armed last, so
+// which space showed correct mirrors depended on history.
+//
+// WHAT MAKES THE TWO SPACES LOOK DIFFERENT IS NOW THE VIEW, not the scene: the
+// Player's View is created with View::setHelpersVisible(false), which takes
+// kHelperBit out of every scene pass in that view's workspace — the grid, the
+// light/camera/decal wires and icons, the gizmo, the selection shell and the GI
+// volume boxes are excluded from the Player's picture and from nothing else.
+// The ground's horizon is a BACKDROP (Scene::setNodeBackdrop), not furniture,
+// and stays.
+//
+// No GL, no Ogre, no QWidget — so it is testable headless with an offscreen
+// View (tests/player). EnginePlayerView wraps it.
 #include "irisgl/core/math/mat4.h"
 #include <memory>
 #include <QElapsedTimer>
@@ -29,15 +50,23 @@ public:
     explicit EnginePlayerScene(const std::shared_ptr<jahshaka::engine::Engine> &engine);
     ~EnginePlayerScene();
 
-    /// Creates the player Scene and its mirror WITHOUT binding a view — what a
-    /// screenshot of a never-shown player page needs. Idempotent.
-    bool ensureScene();
-    /// Creates the player Scene and its mirror and binds them to `view` (the View
-    /// must already exist: Engine.h, ORDER MATTERS). Idempotent; false if the
-    /// engine is gone or the scene could not be created.
+    /// THE EDITOR'S SCENE AND ITS MIRROR — the one scene the Player draws and
+    /// the one mirror that pushes the document into it. Borrowed, never owned:
+    /// this object creates no Scene and destroys none.
+    ///
+    /// Must be set before attach() or step() can do anything. Passing nulls
+    /// (the editor viewport has not built its scene yet, or is going away)
+    /// leaves the player inert rather than half-bound.
+    void setEditorScene(jahshaka::engine::Scene *scene, SceneMirror *mirror);
+
+    /// Is there a scene to draw? (The editor's, through setEditorScene.)
+    bool ensureScene() const { return mScene != nullptr; }
+    /// Binds `view` to the editor's Scene and takes the editor's furniture out
+    /// of it (the View must already exist: Engine.h, ORDER MATTERS). Idempotent;
+    /// false if the engine is gone or no editor scene has been handed over.
     bool attach(jahshaka::engine::View *view);
-    /// Destroys the engine Scene and mirror while the Engine is still alive. The
-    /// View is the caller's. Safe to call repeatedly; the destructor calls it.
+    /// Unbinds this object's view. The Scene and the mirror are the editor's and
+    /// are NOT touched. Safe to call repeatedly; the destructor calls it.
     void release();
     /// The widget's View is about to be destroyed (native window recreated):
     /// drop the pointer with NO engine call, so the attach() that follows the
@@ -53,6 +82,9 @@ public:
     /// the legacy rule (SceneViewWidget::setScene) is that the play camera IS the
     /// editor camera, and the engine editor viewport does not set it on the
     /// document, so the player does. A null `camera` keeps whatever the document has.
+    ///
+    /// It does NOT bind the document to a mirror: the editor's mirror already
+    /// holds it, and there is only one now.
     void setDocument(iris::ScenePtr scene, iris::CameraNodePtr camera = iris::CameraNodePtr());
     iris::ScenePtr document() const { return mDocument; }
     /// The camera the view is driven from (the document's scene camera).
@@ -80,14 +112,9 @@ public:
 
     /// What the PLAYER is showing, rendered offscreen at the requested size —
     /// the same throwaway-view readback EngineSceneViewport::takeScreenshot
-    /// does for the editor, pointed at THIS scene and THIS camera (the
-    /// document's scene camera, which is not the editor's viewpoint).
-    ///
-    /// It exists because the player is a second engine Scene with a second
-    /// mirror: a screenshot of the player taken through the editor viewport
-    /// would photograph the editor's world state (its sky push, its camera,
-    /// its wires) and call it the player. Null QImage when there is nothing to
-    /// render (no engine, no scene, no camera).
+    /// does for the editor, pointed at the document's SCENE camera (which is
+    /// not the editor's viewpoint) and with the editor's furniture masked out,
+    /// exactly as the on-screen player view has it.
     /// `grade` is IEditorViewport::ScreenshotGrade as an int (Raw / Tonemap /
     /// Viewport — fix wave 2026-09-07 item 6). An int rather than the enum so
     /// this header keeps not including the editor viewport's.
@@ -101,8 +128,9 @@ public:
 private:
     std::weak_ptr<jahshaka::engine::Engine> mEngine;
     jahshaka::engine::View  *mView  = nullptr;
+    /// The EDITOR's, borrowed (setEditorScene). Never created, never destroyed.
     jahshaka::engine::Scene *mScene = nullptr;
-    std::unique_ptr<SceneMirror> mMirror;
+    SceneMirror *mMirror = nullptr;
     iris::ScenePtr mDocument;
     PlayBack *mPlayback = nullptr;
     iris::Mat4 mSavedCameraMatrix;

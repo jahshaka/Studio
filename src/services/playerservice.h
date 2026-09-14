@@ -16,10 +16,10 @@ For more information see the LICENSE file
 // F1).
 //
 // PlaybackService owns play-IN-PLACE (the editor viewport running the scene
-// where it stands). This owns the other one: the PLAYER PAGE, a second engine
-// Scene with its own mirror, its own camera and its own PlayBack. They are
-// genuinely different things — editor.playing() and player.playing() can differ
-// — and the verbs must not be able to confuse them.
+// where it stands). This owns the other one: the PLAYER PAGE — a second VIEW on
+// the editor's engine scene (lane PLAYER-1), with its own camera and its own
+// PlayBack. They are genuinely different things — editor.playing() and
+// player.playing() can differ — and the verbs must not be able to confuse them.
 //
 // The service is the seam the verbs call, exactly as editor.play calls
 // PlaybackService: no ApiModule reaches for the widget. The widget is the other

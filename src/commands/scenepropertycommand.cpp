@@ -89,6 +89,13 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->sunDiscVisible = v.toBool(); });
     add("sunDiscInProbes", [](const ScenePtr &s) { return QVariant(s->sunDiscInProbes); },
         [](const ScenePtr &s, const QVariant &v) { s->sunDiscInProbes = v.toBool(); });
+    // The disc's angular diameter in degrees, clamped where the verb, the
+    // reader and the panel row clamp it (iris::kMin/kMaxSunDiscSize).
+    add("sunDiscSize", [](const ScenePtr &s) { return QVariant(s->sunDiscSize); },
+        [](const ScenePtr &s, const QVariant &v) {
+            s->sunDiscSize = float(qBound(double(iris::kMinSunDiscSize), v.toDouble(),
+                                          double(iris::kMaxSunDiscSize)));
+        });
     // setWorldGravity, never the raw field: it drives the Bullet world too.
     add("gravity", [](const ScenePtr &s) { return QVariant(s->gravity); },
         [](const ScenePtr &s, const QVariant &v) { s->setWorldGravity(v.toFloat()); });

@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "ui/panels/scenehierarchywidget.h"
 #include "io/sceneformat.h"
 #include "services/services.h"
+#include "services/playerservice.h"
 #include "services/playbackservice.h"
 #include "services/sceneissues.h"
 #include "services/sceneeditservice.h"
@@ -1936,6 +1937,23 @@ QVariantMap EditorApi::warmUpShaders()
     return m;
 }
 
+
+// THE ACTIVE SPACE'S VIEW (audit F4, lane PLAYER-1). The editor and the Player
+// are two VIEWS on one scene now, and only one of them is enabled at a time:
+// whichever page is up is the one that syncs the document and the one the
+// engine renders. `editor.frame` and `editor.screenshot` used to act on the
+// editor's view regardless — so a script that entered the player space got
+// frames nobody had stepped and screenshots taken through the editor's camera,
+// twice over, and called them the player.
+//
+// The rule is stated once, here: while the PLAYER page is the visible space,
+// these two verbs act on the player. `player.frame` / `player.screenshot` are
+// still the explicit spelling and nothing about them changes.
+bool EditorApi::playerHasTheScreen() const
+{
+    return host.services && host.services->player && host.services->player->isActive();
+}
+
 bool EditorApi::frame(int n, double dt)
 {
     if (!requireEngine()) return false;
@@ -1945,6 +1963,11 @@ bool EditorApi::frame(int n, double dt)
                         .arg(dt).arg(iris::SimulationClock::kMaxAdvanceSeconds)
                         .arg(iris::SimulationClock::kMaxStepsPerAdvance - 1)
                         .arg(iris::SimulationClock::kStepHz));
+    // The player page owns the screen: step IT (see playerHasTheScreen).
+    if (playerHasTheScreen())
+        return host.services->player->stepFrames(qBound(1, n, 1000), float(dt)) ||
+               fail(QStringLiteral("editor.frame: the player space is active but its view is not "
+                                   "ready to render; show the page or use player.frame"));
     host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
     return true;
 }
@@ -2143,8 +2166,14 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
         }
     }
 
-    const QImage img = host.viewport->takeScreenshot(qBound(16, width, 4096),
-                                                     qBound(16, height, 4096), mode);
+    // The player page owns the screen: photograph IT, through the player's own
+    // camera and with the editor's furniture masked out (playerHasTheScreen).
+    const QImage img =
+        playerHasTheScreen()
+            ? host.services->player->screenshot(qBound(16, width, 4096),
+                                                qBound(16, height, 4096), int(mode))
+            : host.viewport->takeScreenshot(qBound(16, width, 4096),
+                                            qBound(16, height, 4096), mode);
     if (img.isNull()) { fail("editor.screenshot: the viewport returned no image"); return out; }
 
     QFileInfo info(path);

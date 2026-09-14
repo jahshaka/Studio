@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/checkboxwidget.h"
+#include "ui/controls/dragvaluewidgets.h"
 #include "ui/controls/comboboxwidget.h"
 
 #include <QJsonDocument>
@@ -56,19 +57,29 @@ WorldPropertyWidget::WorldPropertyWidget()
 
     // THE SUN DISC (SKY_LIGHT_SPEC.md §3, owner picks 2 and 4): a world
     // setting, because the disc is part of the world's picture like the sky it
-    // is drawn on, while its angular SIZE is a property of the sun light.
+    // is drawn on — its SIZE included, since the drawn disc is a picture of the
+    // sun and not the sun's geometry (lane SUN-DISC-1 retired the light
+    // panel's Sun Angle row).
     sunDiscVisible = this->addCheckBox("Sun Disc", true);
     sunDiscVisible->setToolTip(QStringLiteral(
-        "Draw the sun as a bright disc in the sky, where the scene's sun light points. Its size "
-        "is the sun light's own Sun Angle row. NOTE for image skies: an equirectangular or "
-        "cubemap sky usually has a sun painted into it — aim the sun light at that painted sun, "
-        "or turn this off, or the scene shows two suns."));
+        "Draw the sun as a bright disc in the sky, where the scene's sun light points. NOTE for "
+        "image skies: an equirectangular or cubemap sky usually has a sun painted into it — aim "
+        "the sun light at that painted sun, or turn this off, or the scene shows two suns."));
     sunDiscInProbes = this->addCheckBox("Sun Disc in Reflections", false);
     sunDiscInProbes->setToolTip(QStringLiteral(
         "Include the sun disc in the reflection probes' captures. Off by default: the sun's "
         "light already reaches shiny surfaces through the sun light's own highlight, so a "
         "captured disc paints a SECOND sun on everything the probes light. Mirrors (planar "
         "reflections) always show the disc."));
+    sunDiscSize = this->addDragFloat("Sun Disc Size", double(iris::kDefaultSunDiscSize),
+                                     double(iris::kMinSunDiscSize),
+                                     double(iris::kMaxSunDiscSize), 0.01, 2);
+    sunDiscSize->setToolTip(QStringLiteral(
+        "How wide the sun disc is drawn, in degrees. The real sun is 0.53 degrees across, but a "
+        "photograph's sun looks larger than that because glare spreads its saturated core — so "
+        "the default is 2.12, four times the physical angle. Making it wider costs no light: the "
+        "disc's brightness falls with its area, so the same amount of sun is spread over more of "
+        "the sky and the scene's lighting does not change."));
     // Constructed OFF to agree with EditorData::showGrid (the three-way default
     // the ui.grid_default gate pins). setGridAction immediately re-reads the
     // real state from the View menu's action, so this only ever shows for the
@@ -112,6 +123,7 @@ WorldPropertyWidget::WorldPropertyWidget()
 	rowundo::bind(worldGravity, rows(QStringLiteral("gravity"), tr("Gravity")));
 	rowundo::bind(sunDiscVisible, rows(QStringLiteral("sunDiscVisible"), tr("Sun Disc")));
 	rowundo::bind(sunDiscInProbes, rows(QStringLiteral("sunDiscInProbes"), tr("Sun Disc in Reflections")));
+	rowundo::bind(sunDiscSize, rows(QStringLiteral("sunDiscSize"), tr("Sun Disc Size")));
 }
 
 void WorldPropertyWidget::setDatabase(Database *db)
@@ -156,6 +168,7 @@ void WorldPropertyWidget::refreshRows()
     loading = true;
     sunDiscVisible->setValue(scene->sunDiscVisible);
     sunDiscInProbes->setValue(scene->sunDiscInProbes);
+    sunDiscSize->setValue(scene->sunDiscSize);
     worldGravity->setValue(scene->gravity);
     ambientMusicVolume->setValue(scene->ambientMusicVolume);
     playModeSelector->setCurrentItemData(

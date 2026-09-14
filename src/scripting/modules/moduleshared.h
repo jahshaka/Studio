@@ -405,9 +405,8 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
     m["shadowColor"] = colorToJs(light->shadowColor);
     if (light->lightType != iris::LightType::Directional)
         m["distance"] = light->distance;
-    // THE SUN'S ANGULAR SIZE (degrees) — the disc's size; directional only.
-    if (light->lightType == iris::LightType::Directional)
-        m["sunAngle"] = light->sunAngle;
+    // (The sun's angular size is NOT a light row any more — the disc's size is
+    // a world row, world.sunDisc({size}).)
     // FOLLOWS ATMOSPHERE — the sun's direct light tinted by the air at its own
     // elevation while the analytic sky is the sky (lightnode.h). Directional
     // only, like the row above.

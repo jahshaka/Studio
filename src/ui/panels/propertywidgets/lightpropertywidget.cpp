@@ -175,14 +175,11 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
            "the whole world; every further one slots into the next free number automatically and "
            "is a SECONDARY light — it lights the scene fully but casts no shadow, because the "
            "renderer has exactly one directional shadow slot. Lower wins."));
-    // THE SUN'S ANGULAR SIZE (SKY_LIGHT_SPEC.md §3). Directional only, beside
-    // the priority row, because it describes the SUN and not the disc: it sizes
-    // the disc today and is the row a soft-shadow penumbra would read.
-    sunAngle = this->addDragFloat(tr("Sun Angle"), 0.53, 0.0, 20.0, 0.01, 2);
-    sunAngle->setToolTip(
-        tr("How wide the sun is in the sky, in degrees. The real sun is 0.53 — about half a "
-           "degree — and that is the default. It sets the size of the sun disc drawn in the sky "
-           "where this light points; the disc itself is switched on and off in the World panel."));
+    // (The "Sun Angle" row stood here. It is GONE — lane SUN-DISC-1: the only
+    // thing that read it was the sun DISC, and the disc's drawn size is not the
+    // sun's physical angle (the default is four times it, which is what a
+    // photograph's sun looks like). It is a World-panel row now, beside the two
+    // rows that already decide where the disc is shown.)
 
     // FOLLOWS ATMOSPHERE (SUN_FOLLOWS_ATMOSPHERE). The sun's own row, beside
     // Sun Angle, and shown on the sun alone for the same reason.
@@ -269,7 +266,6 @@ void LightPropertyWidget::wireRows()
         return QVariant(shadowSize->getWidget()->itemText(row.toInt()).toInt());
     }));
     rowundo::bind(forwardShadingPriority, rows(QStringLiteral("forwardShadingPriority")));
-    rowundo::bind(sunAngle, rows(QStringLiteral("sunAngle")));
     rowundo::bind(followsAtmosphere, rows(QStringLiteral("followsAtmosphere")));
 
     // Accurate (LTC) area lights ignore the mask entirely — say so the moment
@@ -546,11 +542,10 @@ void LightPropertyWidget::clearMask()
 // nothing true, so they are not shown at all rather than shown disabled.
 void LightPropertyWidget::refreshSunRows()
 {
-    if (!sunReadout || !forwardShadingPriority || !sunAngle || !followsAtmosphere) return;
+    if (!sunReadout || !forwardShadingPriority || !followsAtmosphere) return;
     if (!lightNode || lightNode->lightType != iris::LightType::Directional) {
         sunReadout->hide();
         forwardShadingPriority->hide();
-        sunAngle->hide();
         followsAtmosphere->hide();
         return;
     }
@@ -561,14 +556,10 @@ void LightPropertyWidget::refreshSunRows()
     auto scene = lightNode->getScene();
     auto sun = scene ? scene->sunLight() : iris::LightNodePtr();
     const bool isSun = sun && sun.data() == lightNode.data();
-    // SUN ANGLE IS THE SUN'S. A secondary directional draws no disc and casts
-    // no shadow, so a Sun Angle row on one would say nothing true — which is
-    // exactly what lightnode.h promises and what the row did not do (round-2
-    // review item 11). It follows the RESOLVER, like the readout below.
-    sunAngle->setVisible(isSun);
-    sunAngle->setValue(lightNode->sunAngle);
-    // ...and so is Follows Atmosphere: it tints THE SUN's direct light, and a
-    // secondary directional is not the sun.
+    // FOLLOWS ATMOSPHERE IS THE SUN'S: it tints THE SUN's direct light, and a
+    // secondary directional is not the sun — it draws no disc and casts no
+    // shadow, so the row on one would say nothing true (round-2 review item
+    // 11). It follows the RESOLVER, like the readout below.
     followsAtmosphere->setVisible(isSun);
     followsAtmosphere->setValue(lightNode->followsAtmosphere);
 
