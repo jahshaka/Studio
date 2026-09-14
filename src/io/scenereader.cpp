@@ -551,10 +551,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         }
     }
     scene->shadowEnabled = sceneObj.value("shadowEnabled").toBool(true);
-    // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd
+    // Anti-aliasing: absent (a document written before the key existed) reads
+    // the CONSTRUCTOR's default — the fallback IS scene->antiAliasing rather
+    // than a second literal, so the reader-defaults trap (an absent-key
+    // fallback drifting away from the ctor, which is how five samples once
+    // shipped at exposure 0) cannot happen to this field again. Anything odd
     // is rounded down to the nearest supported step (1/2/4/8).
     {
-        const int aa = sceneObj.value("antiAliasing").toInt(1);
+        const int aa = sceneObj.value("antiAliasing").toInt(scene->antiAliasing);
         scene->antiAliasing = aa >= 8 ? 8 : aa >= 4 ? 4 : aa >= 2 ? 2 : 1;
     }
     // Shadow-map resolution: absent or <= 0 means Auto (derive from the lights);
