@@ -53,6 +53,21 @@ static void render(Engine *e, int frames = 1)
     for (int i = 0; i < frames; ++i) e->renderOneFrame();
 }
 
+/// Renders `frames` one at a time and returns how many probe FACE SETS the
+/// budget photographed across them. `probeCapturesLastFrame` is a per-frame
+/// figure, so a single reading after a burst of frames reports whatever the LAST
+/// of them happened to do — usually nothing, because the budget has already
+/// caught up. Accumulated, it is the number this gate is about.
+static int renderCounting(Engine *e, Scene *s, int frames)
+{
+    int captured = 0;
+    for (int i = 0; i < frames; ++i) {
+        e->renderOneFrame();
+        captured += s->giStatus().probeCapturesLastFrame;
+    }
+    return captured;
+}
+
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
 
 static float meanLum(const Image &img)
@@ -157,7 +172,12 @@ int main()
         const unsigned atlas0 = e->shadowStatus().atlasRebuilds;
         // A SHADOW QUALITY CHANGE: the explicit, deterministic trigger.
         e->setShadowResolution(e->shadowStatus().resolution == 1024u ? 2048u : 1024u);
-        render(e, 8);
+        // THE WORKSPACES MUST STILL CAPTURE (round-2 F8). Keeping the grid is
+        // only half the claim: every probe's cubemap went back to the pool with
+        // its workspace, so a probe whose workspace came back wrong would be a
+        // grid of BLACK probes — which reads as "the probes are fine" in every
+        // other counter this suite has.
+        const int capturedA = renderCounting(e, scene, 40);
         const GiStatus after = scene->giStatus();
         const unsigned atlas1 = e->shadowStatus().atlasRebuilds;
         std::printf("   after the rebuild: atlasRebuilds %u -> %u, arm rebuilds %llu -> %llu, "
@@ -169,6 +189,10 @@ int main()
               "THE VOXELS SURVIVED IT: not one from-scratch GI rebuild");
         CHECK(after.probeCount == before.probeCount && after.pccBound && after.vctBound,
               "...and the probe grid is still there, still bound, with the same probes");
+        std::printf("   the budget photographed %d probe(s) over the 40 frames after it, "
+                    "%d still stale\n", capturedA, scene->giStatus().staleProbes);
+        CHECK(capturedA > 0,
+              "THE RE-CREATED WORKSPACES CAPTURE: the budget photographs the probes again");
         Image img;
         CHECK(view->readPixels(img) && meanLum(img) > 0.01f,
               "...and the room still renders, lit");
@@ -194,12 +218,13 @@ int main()
         CHECK(before.probeShadows, "...with shadowed probe captures beside it");
         const unsigned atlas0 = e->shadowStatus().atlasRebuilds;
         // Lamps 3, 4 and 5: the count steps at 3 and again at 5.
+        int capturedB = 0;
         addCastingLamp(scene, Vec3(-2.0f, 4.0f, -2.0f));
-        render(e, 8);
+        capturedB += renderCounting(e, scene, 16);
         addCastingLamp(scene, Vec3( 2.0f, 4.0f, -2.0f));
-        render(e, 8);
+        capturedB += renderCounting(e, scene, 16);
         addCastingLamp(scene, Vec3(-2.0f, 4.0f,  2.0f));
-        render(e, 16);
+        capturedB += renderCounting(e, scene, 32);
         const GiStatus after = scene->giStatus();
         unsigned long long cascade1 = 0;
         for (const auto &c : after.cascades) cascade1 += c.rebuilds;
@@ -216,6 +241,10 @@ int main()
               "...the chain is the same chain, still bound");
         CHECK(after.probeCount == before.probeCount && after.pccBound,
               "...and the probe grid kept its probes and its binding");
+        std::printf("   under the chain the budget photographed %d probe(s) across the "
+                    "lamp additions, %d still stale\n", capturedB,
+                    scene->giStatus().staleProbes);
+        CHECK(capturedB > 0, "THE RE-CREATED WORKSPACES CAPTURE under the chain too");
         Image img;
         CHECK(view->readPixels(img) && meanLum(img) > 0.01f,
               "...and the room still renders, lit");

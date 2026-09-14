@@ -544,3 +544,34 @@ add_test(NAME gi.atlas_keeps_voxels COMMAND test_gi_atlas_voxels
 # RUN_SERIAL like gi.cascades: it holds the cascade chain AND a shadowed probe
 # grid at once, which is the VRAM-contention class (CLAUDE.md).
 set_tests_properties(gi.atlas_keeps_voxels PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# THE CASCADE SUITE UNDER ASan (PHOTON_SPEC G1, round-2 F1). The per-cascade
+# dirty path replaces a live cascade's VOXELISER under a kept VctLighting, and
+# every failure path around that swap is a candidate use-after-free: the lighting
+# holds the voxeliser by raw pointer and `fillConstBufferData` walks it on every
+# pass. Case 13 forces a throw on the far side of the swap on purpose; a build
+# that deletes the replacement there reads freed memory on the next frame, and
+# THIS is the binary that says so.
+if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
+    add_executable(test_gi_cascades_asan test_gi_cascades.cpp)
+    set_target_properties(test_gi_cascades_asan PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_gi_cascades_asan PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_link_libraries(test_gi_cascades_asan PRIVATE JahshakaEngineAsan)
+    add_dependencies(test_gi_cascades_asan JahshakaEngineMedia)
+    target_compile_options(test_gi_cascades_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_gi_cascades_asan PRIVATE -fsanitize=address)
+    add_test(NAME gi.cascades_asan COMMAND test_gi_cascades_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    # LeakSanitizer off for the same reason test_engine_asan turns it off (the
+    # only leaks are inside libdbus via the Vulkan loader's device-select layer);
+    # use-after-free detection is the point and stays on.
+    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 600 LABELS "engine"
+        RUN_SERIAL ON ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+endif()
