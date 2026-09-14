@@ -128,6 +128,7 @@ For more information see the LICENSE file
 
 #include "ui/panels/scenehierarchywidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "ui/controls/propertiestabstrip.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 
 #include "ui/panels/presets/skypresets.h"
@@ -2376,6 +2377,13 @@ void MainWindow::setupDockWidgets()
     sceneNodeScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     QVBoxLayout *sceneNodeLayout = new QVBoxLayout(sceneNodeDockWidgetContents);
     sceneNodeLayout->setContentsMargins(0, 0, 0, 0);
+    // THE TAB BAR SITS ABOVE THE SCROLL AREA (PROPERTY_FILTER_SPEC §2/§6.5):
+    // World | Selection, pinned, so the rows scroll under it and the panel's
+    // own minimum width — the column-width law — keeps measuring exactly the
+    // rows it measured before.
+    propertiesTabStrip = new PropertiesTabStrip(sceneNodePropertiesWidget,
+                                                sceneNodeDockWidgetContents);
+    sceneNodeLayout->addWidget(propertiesTabStrip);
     sceneNodeLayout->addWidget(sceneNodeScrollArea);
     sceneNodeDockWidgetContents->setLayout(sceneNodeLayout);
     sceneNodePropertiesDock->setWidget(sceneNodeDockWidgetContents);
@@ -4018,6 +4026,17 @@ void MainWindow::setupShortcuts()
     reg.add("claude.toggle", "Claude Assistant", "Windows",
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,
             [this]() { toggleClaudeChat(); });
+    // THE RIGHT COLUMN'S TWO TABS (PROPERTY_FILTER_SPEC D2): one toggle, not two
+    // keys. Ctrl+Tab is taken by space.previous, so Ctrl+Shift+P — free in the
+    // registry and remappable in Preferences like every other row.
+    reg.add("properties.tab", "Properties: World / Selection Tab", "Windows",
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, [this]() {
+        if (!sceneNodePropertiesWidget) return;
+        sceneNodePropertiesWidget->setPropertiesTab(
+            sceneNodePropertiesWidget->propertiesTab() == SceneNodePropertiesWidget::Tab::World
+                ? SceneNodePropertiesWidget::Tab::Selection
+                : SceneNodePropertiesWidget::Tab::World);
+    });
     reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
     reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,
@@ -4738,6 +4757,22 @@ QDockWidget *MainWindow::panelDock(const QString &name) const
     if (wanted == QLatin1String("timeline"))   return animationDock;
     if (wanted == QLatin1String("console"))    return scriptConsoleDock;
     return nullptr;
+}
+
+QString MainWindow::propertiesTab() const
+{
+    return sceneNodePropertiesWidget
+        ? SceneNodePropertiesWidget::tabName(sceneNodePropertiesWidget->propertiesTab())
+        : QString();
+}
+
+bool MainWindow::setPropertiesTab(const QString &name)
+{
+    if (!sceneNodePropertiesWidget) return false;
+    SceneNodePropertiesWidget::Tab tab;
+    if (!SceneNodePropertiesWidget::tabFromName(name, tab)) return false;
+    sceneNodePropertiesWidget->setPropertiesTab(tab);
+    return true;
 }
 
 bool MainWindow::setPanelOpen(const QString &name, bool open)

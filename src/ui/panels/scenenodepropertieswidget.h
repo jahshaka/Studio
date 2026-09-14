@@ -20,6 +20,10 @@ For more information see the LICENSE file
 
 namespace iris {
     class SceneNode;
+    // Was missing: every signature below that names iris::Scene depended on the
+    // INCLUDER having pulled scene.h in first, so this header could not be
+    // included on its own.
+    class Scene;
 }
 
 class AccordianBladeWidget;
@@ -56,6 +60,14 @@ class SceneNodePropertiesWidget : public QWidget
 {
     Q_OBJECT
 public:
+    /// THE RIGHT COLUMN HAS TWO TABS (PROPERTY_FILTER_SPEC §2). The panel does
+    /// not change shape by what is selected any more: the World settings are
+    /// always one tab away, and the selected object's rows are the other tab.
+    /// The World row that used to have to exist in the Hierarchy for the world
+    /// settings to be reachable is gone with it.
+    enum class Tab { World, Selection };
+    Q_ENUM(Tab)
+
     SceneNodePropertiesWidget(QWidget *parent = nullptr);
 
     /**
@@ -65,6 +77,24 @@ public:
 
     void setScene(QSharedPointer<iris::Scene> scene);
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+
+    /// Which tab is showing. A pick brings Selection to the front; the root
+    /// (`editor.select(rootId)`, the scene open) brings World to the front; a
+    /// deselect keeps whatever tab the user is on (D3).
+    Tab propertiesTab() const { return currentTab; }
+    /// Raise a tab. The tab decides WHICH BLADES THE ONE LAYOUT HOLDS — there
+    /// is no second page widget and no reparenting, so the selection-cost law
+    /// (blades are permanent children, see clearLayout) is untouched.
+    void setPropertiesTab(Tab tab);
+    /// The name the verbs and the tab bar use ("world" / "selection").
+    static QString tabName(Tab tab);
+    static bool tabFromName(const QString &name, Tab &out);
+
+signals:
+    /// The tab actually changed (the strip follows this; it never polls).
+    void propertiesTabChanged(SceneNodePropertiesWidget::Tab tab);
+
+public:
     void setAssetItem(QListWidgetItem *item);
 	void setSceneView(IEditorViewport *sceneView);
 	void setServices(StudioServices *services);
@@ -131,6 +161,18 @@ private:
     void mount(QWidget *blade);
 
 private:
+    /// Mounts the blade set the current tab calls for. Every path that used to
+    /// end in "mount the world blades" or "mount the node blades" ends here.
+    void applyTab();
+    void bindWorldBlades(const QSharedPointer<iris::Scene> &scene);
+    void mountSelectionBlades();
+    /// The scene the World tab binds to, whatever is selected.
+    QSharedPointer<iris::Scene> worldScene() const;
+
+    Tab currentTab = Tab::World;
+    /// The "nothing selected" line the Selection tab shows (a permanent child,
+    /// adopted like a blade).
+    class QLabel *emptySelectionLabel = nullptr;
     QSharedPointer<iris::SceneNode> sceneNode;
 
 public:

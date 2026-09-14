@@ -387,6 +387,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Timeline | Console) — an open panel behind another tab is `open: true, current: "
           "false`, which app.docks() reports for every panel at once.",
           Needs::Window },
+        { "propertiesTab", "editor.propertiesTab({tab}) -> {tab}",
+          "THE RIGHT COLUMN'S TAB — \"world\" or \"selection\" (PROPERTY_FILTER_SPEC §2). The "
+          "Properties column is two tabs now, not a panel that changes shape with the "
+          "selection: World holds the eight world sections (World, Sky, World Mode, Photon, "
+          "Post Process, Anti-Aliasing, Shadows, Fog) and Selection holds the selected "
+          "object's. A pick brings Selection to the front and `editor.select(rootId)` brings "
+          "World — the SELECTION itself is unchanged by this verb, which moves the tab only. "
+          "A deselect keeps the tab it is on. Called with no argument it reads. Same "
+          "implementation as the tab bar and the Ctrl+Shift+P toggle.",
+          Needs::Window },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
           "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
           "`translate` in world units — which is also the ground grid's spacing — `rotate` in "
@@ -1766,6 +1776,31 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
     out["open"] = host.mainWindow->isPanelOpen(name);
     out["current"] = MainWindow::isFrontTab(host.mainWindow->panelDock(name));
     out["tabbed"] = host.mainWindow->trayTabs().contains(name);
+    return out;
+}
+
+QVariantMap EditorApi::propertiesTab(const QVariantMap &change)
+{
+    if (!host.mainWindow) {
+        fail("editor.propertiesTab: this verb needs the editor window (a --script/--headless "
+             "run has no panels)");
+        return QVariantMap();
+    }
+    static const QStringList known = { QStringLiteral("tab") };
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("editor.propertiesTab"),
+                                                         change, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+
+    if (change.contains(QStringLiteral("tab"))) {
+        const QString wanted = change.value(QStringLiteral("tab")).toString();
+        if (!host.mainWindow->setPropertiesTab(wanted)) {
+            fail(QStringLiteral("editor.propertiesTab: unknown tab '%1' (world|selection)")
+                     .arg(wanted));
+            return QVariantMap();
+        }
+    }
+    QVariantMap out;
+    out[QStringLiteral("tab")] = host.mainWindow->propertiesTab();
     return out;
 }
 

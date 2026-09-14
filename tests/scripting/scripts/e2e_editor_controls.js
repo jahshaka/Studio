@@ -927,5 +927,42 @@ assert(cubeTarget != null && node.property(cubeTarget.id, "defaultFloor") === fa
     + JSON.stringify(cubeTarget) + ")");
 node.remove(onFloor);
 
+// ---- THE RIGHT COLUMN'S TWO TABS (PROPERTY_FILTER_SPEC §2, RIGHT-TABS-1) ----
+// The Properties column is World | Selection now, and the verb is the same
+// implementation the tab bar and Ctrl+Shift+P drive. The TAB is a view state:
+// moving it never moves the selection, and naming the root moves the tab
+// without the tree having a row for it any more.
+assert(editor.propertiesTab().tab === "world" || editor.propertiesTab().tab === "selection",
+    "editor.propertiesTab() reads a tab (" + editor.propertiesTab().tab + ")");
+var aCube = scene.addPrimitive("cube", { position: { x: 4, y: 0, z: 4 } });
+editor.select(aCube);
+editor.frame(1);
+assert(editor.propertiesTab().tab === "selection", "a pick raises the Selection tab");
+assert(editor.propertiesTab({ tab: "world" }).tab === "world",
+    "editor.propertiesTab({tab:'world'}) raises the World tab");
+assert(editor.selection() === aCube,
+    "…and moving the TAB did not move the SELECTION");
+editor.select(scene.root());
+editor.frame(1);
+assert(editor.propertiesTab().tab === "world",
+    "editor.select(scene.root()) raises the World tab");
+assert(editor.selection() === scene.root(),
+    "…and the root really is the selection (the verbs are unchanged)");
+editor.select(aCube);
+editor.frame(1);
+assert(editor.propertiesTab().tab === "selection", "a pick raises Selection again");
+editor.select(null);
+editor.frame(1);
+assert(editor.propertiesTab().tab === "selection",
+    "a DESELECT keeps the tab the user is on (D3)");
+var badTabRefused = false;
+try { editor.propertiesTab({ tab: "nonsense" }); } catch (e) { badTabRefused = true; }
+assert(badTabRefused, "an unknown tab name is refused");
+var badKeyRefused = false;
+try { editor.propertiesTab({ nope: 1 }); } catch (e) { badKeyRefused = true; }
+assert(badKeyRefused, "an unknown key is refused");
+node.remove(aCube);
+
 console.log("editor_controls: fly speed, post-fx params, screenshot grades, the "
-          + "new-scene defaults, the drop point and the drop TARGET verified");
+          + "new-scene defaults, the drop point, the drop TARGET and the "
+          + "properties tabs verified");

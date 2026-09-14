@@ -199,7 +199,26 @@ protected slots:
 	void attachAllChildren();
 	void detachFromParent();
 
-private:
+public:
+    /// WHAT A DROP OF `dragged` AT `pos` WOULD DO, and on which row. PUBLIC
+    /// because it is a pure query — the widget paints it (the drop indicator),
+    /// acts on it (the Drop handler) and ui.hierarchy_root asserts it. A drop
+    /// on the tree's empty area with no row answers Reparent (to the scene
+    /// root) for a nested node and ToRoot (leave the folder) for a filed
+    /// root-level one — the two duties the World row used to carry.
+    ///
+    /// The dragged set is a PARAMETER and not the member on purpose: the drop
+    /// handler has to take its own copy and clear the member before it does
+    /// anything else (a drop that repopulates the tree must not leave a stale
+    /// selection behind), and reading the member here silently answered "None"
+    /// for every drop — caught on the Xvfb rig, 2026-09-06, by a folder drop
+    /// that changed nothing.
+    SceneTreeWidget::DropHint dropHintAt(const QList<iris::SceneNodePtr> &dragged,
+                                         const QPoint &pos,
+                                         QTreeWidgetItem **rowOut = nullptr,
+                                         QString *folderOut = nullptr) const;
+
+protected:
     // ---- folders ----------------------------------------------------------
     iris::ScenePtr documentScene() const { return scene; }
     /// Applies `fn` (a folder edit on the scene) as ONE undo step and rebuilds.
@@ -215,18 +234,6 @@ private:
     /// Can this node be FILED at all? Folders organise the root level, so only
     /// a direct child of the world root can be in one (§6b, Unreal semantics).
     bool isFolderable(const iris::SceneNodePtr &node) const;
-    /// What a drop of `dragged` at `pos` would do, and on which row.
-    ///
-    /// The dragged set is a PARAMETER and not the member on purpose: the drop
-    /// handler has to take its own copy and clear the member before it does
-    /// anything else (a drop that repopulates the tree must not leave a stale
-    /// selection behind), and reading the member here silently answered "None"
-    /// for every drop — caught on the Xvfb rig, 2026-09-06, by a folder drop
-    /// that changed nothing.
-    SceneTreeWidget::DropHint dropHintAt(const QList<iris::SceneNodePtr> &dragged,
-                                         const QPoint &pos, QTreeWidgetItem **rowOut,
-                                         QString *folderOut) const;
-
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
     QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
@@ -311,12 +318,6 @@ private:
     /// Emits the set (or the single node) if it differs from the last one
     /// announced. THE panel's one exit toward the selection service.
     void announceSet(const QList<iris::SceneNodePtr> &nodes);
-    /// The World row's node (D6: never a member of a multi). Asked of THIS
-    /// panel's scene rather than of the node — SceneNode::isRootNode() answers
-    /// through the node's scene back-pointer, which a detached or
-    /// test-constructed document need not carry.
-    bool isWorldRoot(const iris::SceneNodePtr &node) const;
-
 public:
 
 signals:

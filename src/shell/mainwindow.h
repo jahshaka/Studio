@@ -342,6 +342,12 @@ public:
     bool isPanelOpen(const QString &name) const;
     /// That panel's dock, or null.
     QDockWidget *panelDock(const QString &name) const;
+    /// THE RIGHT COLUMN'S TAB ("world" | "selection", PROPERTY_FILTER_SPEC §2).
+    /// The one implementation behind the tab bar, the Ctrl+Shift+P toggle and
+    /// the `editor.propertiesTab` verb.
+    QString propertiesTab() const;
+    /// Raises a tab by name; false for a name that is not one.
+    bool setPropertiesTab(const QString &name);
     /// Whether `dock` is the tab in FRONT of its group (and not closed). Qt
     /// offers no such accessor: a tabified dock that is not current is shown
     /// and parked off-screen, which is the reading this uses — the same one
@@ -855,6 +861,8 @@ private:
 
     QDockWidget *sceneNodePropertiesDock;
     SceneNodePropertiesWidget *sceneNodePropertiesWidget;
+    /// The right column's World | Selection tab bar (above the scroll area).
+    class PropertiesTabStrip *propertiesTabStrip = nullptr;
 
     QDockWidget *presetsDock;
     /// Gives the editor's two COLUMNS their default widths, once per session

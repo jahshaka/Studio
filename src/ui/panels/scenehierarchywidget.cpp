@@ -227,7 +227,11 @@ void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
 
     if (!!sceneNode) {
         auto item = treeItemList.value(sceneNode->getNodeId());
-        if (!item) return;
+        // The ROOT's entry is the tree's INVISIBLE root item (see
+        // repopulateTree): it is not a row and can never be current. Selecting
+        // the root is legal — it means "the World tab" in the properties column
+        // — and it simply highlights nothing here.
+        if (!item || item == ui->sceneTree->invisibleRootItem()) return;
         // The panel drives the viewport and the viewport drives the panel. With
         // the tree on ExtendedSelection, setCurrentItem now raises
         // itemSelectionChanged, so without this guard a pick in the viewport
@@ -285,11 +289,13 @@ QList<iris::SceneNodePtr> SceneHierarchyWidget::selectedNodes() const
 }
 
 // ---- MULTI-SELECTION (EDITOR_MULTISELECT_SPEC §2.2) ------------------------
-
-bool SceneHierarchyWidget::isWorldRoot(const iris::SceneNodePtr &node) const
-{
-    return !!node && ((!!scene && scene->getRootNode() == node) || node->isRootNode());
-}
+//
+// D6's "the World root is never a member of a multi" needed five filters in
+// this widget while the root had a ROW that could be clicked, Ctrl-clicked and
+// swept over by a Shift range. The row is gone (PROPERTY_FILTER_SPEC §4), so
+// the root cannot enter a set from here at all and the filters (and the
+// isWorldRoot predicate they shared) are deleted. The guards in editorapi.cpp
+// and the viewport STAY: a verb and a pick can still name the root.
 
 QList<iris::SceneNodePtr> SceneHierarchyWidget::visibleNodeRows() const
 {
@@ -330,7 +336,6 @@ SceneHierarchyWidget::nodesInVisibleRange(const iris::SceneNodePtr &a,
     if (i > j) std::swap(i, j);
 
     for (int k = i; k <= j; ++k) {
-        if (isWorldRoot(rows[k])) continue;           // D6
         if (!out.contains(rows[k])) out.append(rows[k]);
     }
     return out;
@@ -357,7 +362,6 @@ void SceneHierarchyWidget::applyShiftRange(const iris::SceneNodePtr &clicked, bo
     QList<iris::SceneNodePtr> current = selectedNodes();
     iris::SceneNodePtr anchor;
     for (const auto &row : rows) {
-        if (isWorldRoot(row)) continue;
         if (current.contains(row)) { anchor = row; break; }
     }
     if (!anchor) anchor = clicked;
@@ -368,7 +372,7 @@ void SceneHierarchyWidget::applyShiftRange(const iris::SceneNodePtr &clicked, bo
     // Ctrl+Shift extends instead of replacing (Blender's additive range).
     QList<iris::SceneNodePtr> members;
     if (additive) {
-        for (const auto &n : current) if (!isWorldRoot(n)) members.append(n);
+        for (const auto &n : current) members.append(n);
     }
     for (const auto &n : range) if (!members.contains(n)) members.append(n);
 
@@ -474,14 +478,9 @@ void SceneHierarchyWidget::treeSelectionChanged()
     // THE WHOLE SET, not currentItem() alone (EDITOR_MULTISELECT_SPEC §2.2).
     // Qt's own Ctrl-toggle and plain click already produce the right set here;
     // the only rule this panel has to impose is Shift's (applyShiftRange, on
-    // the press) and D6's — the World root is never a member of a multi, so a
-    // set that contains it plus something else drops it.
-    QList<iris::SceneNodePtr> set = selectedNodes();
-    if (set.size() > 1) {
-        QList<iris::SceneNodePtr> filtered;
-        for (const auto &n : set) if (!isWorldRoot(n)) filtered.append(n);
-        set = filtered;
-    }
+    // the press). D6's root filter is gone with the World row — no row carries
+    // the root, so no set built from rows can contain it.
+    const QList<iris::SceneNodePtr> set = selectedNodes();
     // NOTHING SELECTED IS AN ANSWER (smoke S3, owner: "clicking the empty
     // space under the list deselects in the list but the node stays selected
     // in the viewport"). An empty set used to be REPLACED by the current row —
@@ -553,7 +552,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
                 const auto node = (row && !isFolderItem(row))
                     ? nodeList.value(row->data(0, Qt::UserRole).toLongLong())
                     : iris::SceneNodePtr();
-                if (node && !node->isRootNode()) {
+                if (node) {
                     applyShiftRange(node, me->modifiers() & Qt::ControlModifier);
                     return true;      // consumed: Qt's range must not also run
                 }
@@ -664,6 +663,10 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         iris::SceneNodePtr target;
         if (row && !isFolderItem(row))
             target = nodeList.value(row->data(0, Qt::UserRole).toLongLong());
+        // A REPARENT WITH NO ROW is the empty-space gesture: the target is the
+        // scene root (which no longer has a row to aim at).
+        else if (!row && hint == SceneTreeWidget::DropHint::Reparent)
+            target = scene->getRootNode();
 
         if (hint != SceneTreeWidget::DropHint::Reparent || !target) {
             dropEventPtr->setDropAction(Qt::IgnoreAction);
@@ -721,9 +724,25 @@ SceneTreeWidget::DropHint SceneHierarchyWidget::dropHintAt(const QList<iris::Sce
 
     QTreeWidgetItem *row = ui->sceneTree->itemAt(pos);
 
-    // Empty space under the last row: back to the root level.
+    // EMPTY SPACE UNDER THE LAST ROW — the home of the World row's drop duties
+    // now that the row is gone (PROPERTY_FILTER_SPEC §4).
+    //
+    // A NESTED node dropped here leaves its parent and becomes a child of the
+    // scene root: the reparent that used to be "drop onto the World row". A
+    // root-level node that is FILED in a folder leaves the folder, which is
+    // what empty space has always meant (metadata only). Reparent wins when the
+    // drag holds both, because it is the edit that actually moves something.
     if (!row) {
-        for (const auto &n : dragged) if (isFolderable(n)) return Hint::ToRoot;
+        for (const auto &n : dragged) {
+            if (!n || n == scene->getRootNode()) continue;
+            if (n->getParent() && n->getParent() != scene->getRootNode()) return Hint::Reparent;
+        }
+        // ...and only when a folder is really left: the World row's own branch
+        // asked for `anyFiled` before offering this, and an indicator that
+        // promises an edit and performs none (filing an unfiled node at the
+        // root level) is noise.
+        for (const auto &n : dragged)
+            if (isFolderable(n) && !n->folderPath.isEmpty()) return Hint::ToRoot;
         return Hint::None;
     }
     if (rowOut) *rowOut = row;
@@ -755,21 +774,6 @@ SceneTreeWidget::DropHint SceneHierarchyWidget::dropHintAt(const QList<iris::Sce
             if (folderOut) *folderOut = scenefolders::normalize(target->folderPath);
             return Hint::ToRoot;   // "beside", drawn as a line — the folder is in folderOut
         }
-    }
-
-    // Onto the WORLD row: for a nested node this is the existing reparent to
-    // the root node; for a root-level node it means "leave the folder".
-    if (target == scene->getRootNode()) {
-        bool anyNested = false, anyFiled = false;
-        for (const auto &n : dragged) {
-            if (!n) continue;
-            if (n->getParent() != scene->getRootNode()) anyNested = true;
-            else if (!n->folderPath.isEmpty()) anyFiled = true;
-        }
-        if (anyNested) return Hint::Reparent;
-        if (anyFiled) return Hint::ToRoot;
-        if (rowOut) *rowOut = nullptr;
-        return Hint::None;
     }
 
     // Onto a node row: the existing reparent, if any dragged node may go there.
@@ -961,7 +965,13 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     // the tree — this is the designated home for future row actions, so every
     // entry below is added the same way and nothing here is a one-off.
 
-    // ---- empty space: the folder actions that need no row ------------------
+    // ---- empty space: the actions that need no row -------------------------
+    //
+    // THE WORLD'S MENU LIVES HERE NOW (PROPERTY_FILTER_SPEC §4). Right-clicking
+    // the globe row used to be the way to paste an object at the top level and
+    // to frame the whole scene; with the row gone, empty space — the part of
+    // the list that IS the world — carries both, beside the folder action it
+    // already had.
     if (!item) {
         if (!scene) return;
         QMenu menu;
@@ -969,6 +979,36 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         QAction *newFolder = menu.addAction(tr("New Folder…"));
         connect(newFolder, &QAction::triggered, this,
                 &SceneHierarchyWidget::newFolderFromSelection);
+
+        ClipboardService *clip = mainWindow && mainWindow->studioServices()
+                                     ? mainWindow->studioServices()->clipboard : nullptr;
+        // Offered only when a tree paste has something to land — a row that
+        // always exists and usually refuses teaches nothing (the rule the row
+        // menu below follows too).
+        if (clip && !clip->contents()
+                         .itemsOfKind(QLatin1String(clipboardformat::kind::node()))
+                         .isEmpty()) {
+            menu.addSeparator();
+            QAction *paste = menu.addAction(tr("Paste"));
+            connect(paste, &QAction::triggered, this, [this, clip]() {
+                ClipboardPasteOptions options;
+                options.parentGuid = scene->getRootNode()->getGUID();   // the World itself
+                const auto result = clip->paste(options);
+                if (!result.missing.isEmpty() && mainWindow)
+                    QMessageBox::warning(this, tr("Paste"),
+                        tr("%1 asset(s) the copied objects need are not in this library.")
+                            .arg(result.missing.size()));
+            });
+        }
+
+        menu.addSeparator();
+        QAction *focus = menu.addAction(tr("Focus Camera"));
+        focus->setToolTip(tr("Frames the whole scene."));
+        connect(focus, &QAction::triggered, this, [this]() {
+            if (mainWindow && mainWindow->viewport())
+                mainWindow->viewport()->focusOnNode(scene->getRootNode());
+        });
+
         menu.exec(ui->sceneTree->mapToGlobal(pos));
         return;
     }
@@ -1056,21 +1096,21 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     // right-clicked row, or the whole selection when the row is part of it).
     if (ClipboardService *clip = mainWindow && mainWindow->studioServices()
                                      ? mainWindow->studioServices()->clipboard : nullptr) {
+        // No `isRootNode` case any more: every row in this tree is an object
+        // (the World row is gone), so Copy and Cut are unconditional.
         menu.addSeparator();
-        if (!node->isRootNode()) {
-            action = new QAction(QIcon(), tr("Copy"), this);
+        action = new QAction(QIcon(), tr("Copy"), this);
+        connect(action, &QAction::triggered, this, [clip, targets]() {
+            clip->copyNodes(targets);
+        });
+        menu.addAction(action);
+
+        if (node->isRemovable()) {
+            action = new QAction(QIcon(), tr("Cut"), this);
             connect(action, &QAction::triggered, this, [clip, targets]() {
-                clip->copyNodes(targets);
+                clip->cutNodes(targets);
             });
             menu.addAction(action);
-
-            if (node->isRemovable()) {
-                action = new QAction(QIcon(), tr("Cut"), this);
-                connect(action, &QAction::triggered, this, [clip, targets]() {
-                    clip->cutNodes(targets);
-                });
-                menu.addAction(action);
-            }
         }
         // Offered only when there is something a tree paste can land — a menu
         // row that always exists and usually refuses teaches nothing.
@@ -1086,9 +1126,9 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
                     options.parentGuid = parent->getGUID();
                     const int after = node->siblingIndex();
                     options.index = after >= 0 ? after + 1 : -1;
-                } else {
-                    options.parentGuid = node->getGUID();   // the World root itself
                 }
+                // (A row with no parent was the World row; it has no row now,
+                // and pasting at the top level is the EMPTY-SPACE menu above.)
                 const auto result = clip->paste(options);
                 if (!result.missing.isEmpty() && mainWindow)
                     QMessageBox::warning(this, tr("Paste"),
@@ -1299,17 +1339,29 @@ void SceneHierarchyWidget::repopulateTree()
     }
     collapsedFolders = wereCollapsed;
 
-    auto rootTreeItem = new QTreeWidgetItem();
+    // THE SELECTION SURVIVES THE REBUILD (EDITOR_MULTISELECT_SPEC §2.2).
+    // clear() throws away every row, and nothing used to put the selection back
+    // — so a Shift-range followed by any folder edit, reparent or
+    // hierarchyChanged lost the set the moment the command finished. The
+    // snapshot is by nodeId, which is exactly what structural undo preserves
+    // and what treeItemList is keyed on. Taken BEFORE the clear, which is also
+    // before any row exists again.
+    QList<qint64> selectedIds;
+    for (const auto &n : selectedNodes()) selectedIds.append(n->getNodeId());
+    const qint64 primaryId = selectedNode ? selectedNode->getNodeId() : -1;
 
-	QIcon *hiddenIcon = new QIcon;
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-globe-64.png"), QIcon::Normal);
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-globe-64.png"), QIcon::Selected);
+    // NO WORLD ROW (PROPERTY_FILTER_SPEC §4). The tree's top level IS the
+    // scene's root level: the scene's folders and the root node's children,
+    // directly. The globe row the world settings used to hang off is gone — the
+    // World settings are a TAB of the properties column now, always reachable,
+    // and nothing in the outliner has to be selected to see them.
+    //
+    // The root node still has an entry in treeItemList, pointing at the tree's
+    // INVISIBLE root item, so folderItemFor("") and every parentTreeItem lookup
+    // read exactly as they did.
+    ui->sceneTree->clear();
+    QTreeWidgetItem *rootTreeItem = ui->sceneTree->invisibleRootItem();
 
-    rootTreeItem->setText(0, rootNode->getName());
-    rootTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(rootNode->getNodeId()));
-	rootTreeItem->setIcon(0, *hiddenIcon);
-
-    // populate tree
     nodeList.clear();
     treeItemList.clear();
     folderItemList.clear();
@@ -1324,19 +1376,6 @@ void SceneHierarchyWidget::repopulateTree()
 
     populateTree(rootTreeItem, rootNode);
 
-    // THE SELECTION SURVIVES THE REBUILD (EDITOR_MULTISELECT_SPEC §2.2).
-    // clear() below throws away every row, and nothing used to put the
-    // selection back — so a Shift-range followed by any folder edit, reparent
-    // or hierarchyChanged lost the set the moment the command finished. The
-    // snapshot is by nodeId, which is exactly what structural undo preserves
-    // and what treeItemList is keyed on.
-    QList<qint64> selectedIds;
-    for (const auto &n : selectedNodes()) selectedIds.append(n->getNodeId());
-    const qint64 primaryId = selectedNode ? selectedNode->getNodeId() : -1;
-
-    ui->sceneTree->clear();
-    ui->sceneTree->addTopLevelItem(rootTreeItem);
-    ui->sceneTree->expandItem(rootTreeItem);
     for (auto it = folderItemList.constBegin(); it != folderItemList.constEnd(); ++it)
         if (it.value()) it.value()->setExpanded(!collapsedFolders.contains(it.key()));
     //ui->sceneTree->expandAll();
@@ -1609,8 +1648,13 @@ void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)
 {
     // remove from heirarchy
     auto nodeTreeItem = treeItemList.value(childNode->nodeId);
-    if (!nodeTreeItem || !nodeTreeItem->parent()) return;
-    nodeTreeItem->parent()->removeChild(nodeTreeItem);
+    if (!nodeTreeItem) return;
+    // A ROOT-LEVEL ROW IS A TOP-LEVEL ITEM since the World row left, and
+    // QTreeWidgetItem::parent() returns null for one — the old early return
+    // here would have left every root-level object's row behind on delete.
+    QTreeWidgetItem *parentItem = nodeTreeItem->parent();
+    if (!parentItem) parentItem = ui->sceneTree->invisibleRootItem();
+    parentItem->removeChild(nodeTreeItem);
 
     // remove from lists
     nodeList.remove(childNode->getNodeId());

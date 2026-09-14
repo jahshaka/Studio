@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include <QWidget>
+#include <QLabel>
 #include <QLayout>
 #include <QPointer>
 #include <QResizeEvent>
@@ -25,6 +26,7 @@ For more information see the LICENSE file
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
 #include "ui/panels/transformeditor.h"
+#include "ui/style/themeroles.h"
 
 #include "data/database/database.h"
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
@@ -207,6 +209,22 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
         adoptBlade(blade);
     }
 
+    // THE SELECTION TAB'S EMPTY STATE (§2). A column with nothing in it reads
+    // as a panel that failed to load; this one line says what to do instead.
+    // Adopted like a blade so it obeys the same mount/hide rules and never
+    // reparents.
+    emptySelectionLabel = new QLabel(
+        tr("Nothing selected — pick an object in the viewport or the Hierarchy."));
+    emptySelectionLabel->setWordWrap(true);
+    emptySelectionLabel->setContentsMargins(12, 16, 12, 16);
+    emptySelectionLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    ThemeRoles::setTone(emptySelectionLabel, ThemeRoles::Tone::Muted);
+    // The column has no horizontal scrollbar: a long sentence must be allowed
+    // to wrap to nothing rather than set the panel's minimum width.
+    emptySelectionLabel->setMinimumWidth(0);
+    emptySelectionLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    adoptBlade(emptySelectionLabel);
+
     setLayout(widgetPropertyLayout);
 }
 
@@ -251,6 +269,9 @@ void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
     if (!!scene) {
         this->scene = scene;
         skyPropView->setScene(this->scene);
+        // The World tab is PERMANENT now — it is not mounted by selecting a
+        // root node any more — so a new scene has to reach its blades here.
+        if (currentTab == Tab::World) applyTab();
     }
 }
 
@@ -258,135 +279,202 @@ void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
  * sets active scene node and determines which property ui should be shown
  * @param sceneNode
  */
+// THE TAB IS THE SELECTOR, NOT THE SELECTION (PROPERTY_FILTER_SPEC §2).
+//
+// This used to be a MODE SWITCH on isRootNode(): selecting the World row in the
+// Hierarchy was the only way to see the world settings, which is why that row
+// had to exist and why a scene open selected the root. Now the column has two
+// tabs; a selection raises Selection, the root (a verb, a scene open) raises
+// World, and the panel's one layout holds whichever blade set the CURRENT tab
+// calls for.
 void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if (!!sceneNode) {
-        this->sceneNode = sceneNode;
+    const bool isRoot = !!sceneNode && sceneNode->isRootNode();
+    // The ROOT IS NOT A SELECTION in this column any more: it names the World
+    // tab. The verbs still accept it (editor.select(rootId) is legal and
+    // scene.root() unchanged) — this is the visual half only.
+    this->sceneNode = isRoot ? iris::SceneNodePtr() : sceneNode;
+    if (isRoot && !!sceneNode) this->scene = sceneNode->getScene();
 
-        widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
-        clearLayout(this->layout());
+    setPropertiesTab(isRoot ? Tab::World
+                            : (!!sceneNode ? Tab::Selection : currentTab));
+    // setPropertiesTab only re-mounts when the tab MOVES; a pick that lands on
+    // the tab already showing still has to rebuild its rows.
+    applyTab();
+}
 
-        if (sceneNode->isRootNode()) {
-            fogPropView->setScene(sceneNode->getScene());
-            worldPropView->setScene(sceneNode->getScene());
-            worldModesPropView->setSceneView(sceneView);
-            worldModesPropView->setScene(sceneNode->getScene());
-            worldGiPropView->setSceneView(sceneView);
-            worldGiPropView->setScene(sceneNode->getScene());
-            worldPostFxPropView->setSceneView(sceneView);
-            worldPostFxPropView->setScene(sceneNode->getScene());
-            worldAaPropView->setSceneView(sceneView);
-            worldAaPropView->setScene(sceneNode->getScene());
-            worldShadowPropView->setSceneView(sceneView);
-            worldShadowPropView->setScene(sceneNode->getScene());
-            mount(worldPropView);
-            // The world's sky: re-bind, because the same panel may have been
-            // showing a LIBRARY sky asset since the last time the world was
-            // selected (one implementation, two bindings).
-            skyPropView->setScene(sceneNode->getScene());
-            mount(skyPropView);
-            mount(worldModesPropView);
-            mount(worldGiPropView);
-            mount(worldPostFxPropView);
-            mount(worldAaPropView);
-            mount(worldShadowPropView);
-            mount(fogPropView);
-        }
-        else {
-            transformWidget->setSceneNode(sceneNode);
-            mount(transformPropView);
-            // EVERY node kind: the resolution has an answer for all of them,
-            // and a light or an emitter is exactly the kind of thing an author
-            // needs to pin by hand.
-            mobilityPropView->setSceneNode(sceneNode);
-            mount(mobilityPropView);
+QString SceneNodePropertiesWidget::tabName(Tab tab)
+{
+    return tab == Tab::World ? QStringLiteral("world") : QStringLiteral("selection");
+}
 
-            switch (sceneNode->getSceneNodeType()) {
-                case iris::SceneNodeType::Light: {
-                    lightPropView->setSceneNode(sceneNode);
-                    mount(lightPropView);
-                    break;
-                }
+bool SceneNodePropertiesWidget::tabFromName(const QString &name, Tab &out)
+{
+    const QString n = name.trimmed().toLower();
+    if (n == QLatin1String("world"))     { out = Tab::World;     return true; }
+    if (n == QLatin1String("selection")) { out = Tab::Selection; return true; }
+    return false;
+}
 
-                case iris::SceneNodeType::Decal: {
-                    decalPropView->setDatabase(db);
-                    decalPropView->setProject(project);
-                    decalPropView->setServices(services);
-                    decalPropView->setSceneNode(sceneNode);
-                    mount(decalPropView);
-                    break;
-                }
+void SceneNodePropertiesWidget::setPropertiesTab(Tab tab)
+{
+    if (tab == currentTab) return;
+    currentTab = tab;
+    applyTab();
+    emit propertiesTabChanged(currentTab);
+}
 
-                case iris::SceneNodeType::Empty: {
-                    physicsPropView->setSceneNode(sceneNode);
-                    physicsPropView->setSceneView(sceneView);
-                    mount(physicsPropView);
-                    break;
-                }
+QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
+{
+    if (!!scene) return scene;
+    if (!!sceneNode) return sceneNode->getScene();
+    return QSharedPointer<iris::Scene>();
+}
 
-                case iris::SceneNodeType::Mesh: {
-                    // THE LEAK behind the session-long slowdown: this panel was
-                    // built fresh for EVERY mesh selection and the old one was
-                    // handed to clearLayout(), which orphaned it with
-                    // setParent(nullptr) — a live, parentless widget tree that
-                    // nothing ever deleted. An hour of clicking around left
-                    // hundreds of them (and their focus frames, their event
-                    // filters and their property listeners) alive in the
-                    // process. Build it ONCE and refill it; the rebuild-per-node
-                    // that made it look disposable is what clearPanel() does,
-                    // and materialChanged() has always used exactly that path on
-                    // the live panel.
-                    if (!materialPropView) {
-                        materialPropView = new MaterialPropertyWidget();
-                        materialPropView->setPanelTitle("Material");
-                        materialPropView->expand();
-                        adoptBlade(materialPropView);
-                    }
-                    materialPropView->setDatabase(db);
-                    materialPropView->setProject(project);
-                    materialPropView->setServices(services);
-                    // Drop the previous node's rows (deleteLater, so nothing is
-                    // freed under a signal that is still on the stack) before
-                    // the new ones are appended.
-                    materialPropView->clearPanel(materialPropView->layout());
+void SceneNodePropertiesWidget::applyTab()
+{
+    widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
+    clearLayout(this->layout());
 
-                    physicsPropView->setSceneNode(sceneNode);
-                    physicsPropView->setSceneView(sceneView);
-                    meshPropView->setSceneView(sceneView);
-                    meshPropView->setSceneNode(sceneNode);
-                    materialPropView->setSceneNode(sceneNode);
-
-                    if (!(services && services->playback && services->playback->isSimulationRunning())) {
-                        mount(physicsPropView);
-                    }
-
-                    mount(meshPropView);
-                    mount(materialPropView);
-                    break;
-                }
-
-                case iris::SceneNodeType::Camera: {
-                    cameraPostFxPropView->setSceneView(sceneView);
-                    cameraPostFxPropView->setSceneNode(sceneNode);
-                    mount(cameraPostFxPropView);
-                    break;
-                }
-
-                case iris::SceneNodeType::ParticleSystem: {
-                    emitterPropView->setSceneNode(sceneNode);
-                    mount(emitterPropView);
-                    break;
-                }
-
-                default: break;
-            }
-        }
-
-        widgetPropertyLayout->addStretch();
-        warnIfWiderThanDock();
+    if (currentTab == Tab::World) {
+        const auto sc = worldScene();
+        // With no scene there is nothing to bind; the tab stays empty rather
+        // than mounting blades pointing at nothing (headless and pre-open).
+        if (!!sc) bindWorldBlades(sc);
     }
     else {
-        clearLayout(this->layout());
+        mountSelectionBlades();
+    }
+
+    widgetPropertyLayout->addStretch();
+    warnIfWiderThanDock();
+}
+
+void SceneNodePropertiesWidget::bindWorldBlades(const QSharedPointer<iris::Scene> &scene)
+{
+    fogPropView->setScene(scene);
+    worldPropView->setScene(scene);
+    worldModesPropView->setSceneView(sceneView);
+    worldModesPropView->setScene(scene);
+    worldGiPropView->setSceneView(sceneView);
+    worldGiPropView->setScene(scene);
+    worldPostFxPropView->setSceneView(sceneView);
+    worldPostFxPropView->setScene(scene);
+    worldAaPropView->setSceneView(sceneView);
+    worldAaPropView->setScene(scene);
+    worldShadowPropView->setSceneView(sceneView);
+    worldShadowPropView->setScene(scene);
+    mount(worldPropView);
+    // The world's sky: re-bind, because the same panel may have been
+    // showing a LIBRARY sky asset since the last time the world was
+    // shown (one implementation, two bindings).
+    skyPropView->setScene(scene);
+    mount(skyPropView);
+    mount(worldModesPropView);
+    mount(worldGiPropView);
+    mount(worldPostFxPropView);
+    mount(worldAaPropView);
+    mount(worldShadowPropView);
+    mount(fogPropView);
+}
+
+void SceneNodePropertiesWidget::mountSelectionBlades()
+{
+    // NOTHING SELECTED IS AN ANSWER, and it says so (§2): an empty column
+    // reads as a broken panel.
+    if (!sceneNode) {
+        if (emptySelectionLabel) mount(emptySelectionLabel);
+        return;
+    }
+    {
+        const auto sceneNode = this->sceneNode;
+        transformWidget->setSceneNode(sceneNode);
+        mount(transformPropView);
+        // EVERY node kind: the resolution has an answer for all of them,
+        // and a light or an emitter is exactly the kind of thing an author
+        // needs to pin by hand.
+        mobilityPropView->setSceneNode(sceneNode);
+        mount(mobilityPropView);
+
+        switch (sceneNode->getSceneNodeType()) {
+            case iris::SceneNodeType::Light: {
+                lightPropView->setSceneNode(sceneNode);
+                mount(lightPropView);
+                break;
+            }
+
+            case iris::SceneNodeType::Decal: {
+                decalPropView->setDatabase(db);
+                decalPropView->setProject(project);
+                decalPropView->setServices(services);
+                decalPropView->setSceneNode(sceneNode);
+                mount(decalPropView);
+                break;
+            }
+
+            case iris::SceneNodeType::Empty: {
+                physicsPropView->setSceneNode(sceneNode);
+                physicsPropView->setSceneView(sceneView);
+                mount(physicsPropView);
+                break;
+            }
+
+            case iris::SceneNodeType::Mesh: {
+                // THE LEAK behind the session-long slowdown: this panel was
+                // built fresh for EVERY mesh selection and the old one was
+                // handed to clearLayout(), which orphaned it with
+                // setParent(nullptr) — a live, parentless widget tree that
+                // nothing ever deleted. An hour of clicking around left
+                // hundreds of them (and their focus frames, their event
+                // filters and their property listeners) alive in the
+                // process. Build it ONCE and refill it; the rebuild-per-node
+                // that made it look disposable is what clearPanel() does,
+                // and materialChanged() has always used exactly that path on
+                // the live panel.
+                if (!materialPropView) {
+                    materialPropView = new MaterialPropertyWidget();
+                    materialPropView->setPanelTitle("Material");
+                    materialPropView->expand();
+                    adoptBlade(materialPropView);
+                }
+                materialPropView->setDatabase(db);
+                materialPropView->setProject(project);
+                materialPropView->setServices(services);
+                // Drop the previous node's rows (deleteLater, so nothing is
+                // freed under a signal that is still on the stack) before
+                // the new ones are appended.
+                materialPropView->clearPanel(materialPropView->layout());
+
+                physicsPropView->setSceneNode(sceneNode);
+                physicsPropView->setSceneView(sceneView);
+                meshPropView->setSceneView(sceneView);
+                meshPropView->setSceneNode(sceneNode);
+                materialPropView->setSceneNode(sceneNode);
+
+                if (!(services && services->playback && services->playback->isSimulationRunning())) {
+                    mount(physicsPropView);
+                }
+
+                mount(meshPropView);
+                mount(materialPropView);
+                break;
+            }
+
+            case iris::SceneNodeType::Camera: {
+                cameraPostFxPropView->setSceneView(sceneView);
+                cameraPostFxPropView->setSceneNode(sceneNode);
+                mount(cameraPostFxPropView);
+                break;
+            }
+
+            case iris::SceneNodeType::ParticleSystem: {
+                emitterPropView->setSceneNode(sceneNode);
+                mount(emitterPropView);
+                break;
+            }
+
+            default: break;
+        }
     }
 }
 
@@ -430,9 +518,14 @@ void SceneNodePropertiesWidget::resizeEvent(QResizeEvent *event)
     warnIfWiderThanDock();
 }
 
+// An ASSET binding (a shader definition, a library sky) is what the Selection
+// tab shows while a library row is picked — the same "what is picked" slot as a
+// scene node, so it raises the same tab.
 void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 {
     if (!item) return;
+    currentTab = Tab::Selection;
+    emit propertiesTabChanged(currentTab);
 
     if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
         clearLayout(this->layout());
@@ -466,8 +559,9 @@ void SceneNodePropertiesWidget::refreshFromDocument()
     QPointer<SceneNodePropertiesWidget> self(this);
     QTimer::singleShot(0, this, [self]() {
         if (!self) return;
-        if (!!self->sceneNode) self->setSceneNode(self->sceneNode);
-        else if (!!self->scene) self->setScene(self->scene);
+        // Re-read whatever the CURRENT TAB is showing. A world-tab refresh no
+        // longer needs a selected root node to go through.
+        self->applyTab();
     });
 }
 
