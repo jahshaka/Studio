@@ -41,8 +41,22 @@ public:
 	iris::Vec3 plane;// the ring's own plane: its NORMAL in gizmo space
 	float handleScale = 0.08f;
 	float handleRadius = 1.0f;
+	/// The ring's radius in handle-local units: 1 for the three axis rings,
+	/// GizmoMeshes::kScreenRingRadius for the outer screen-facing one — the
+	/// same number the mesh is built with, so the circle picked IS the circle
+	/// drawn.
+	float ringRadius = 1.0f;
+	/// THE VIEW AXIS, for the Screen handle only, in WORLD space: the direction
+	/// the camera looks. Written by RotationGizmo::refreshFrame(), which means
+	/// it is FROZEN for the length of a drag exactly like the gizmo's frame.
+	iris::Vec3 screenAxis;
 
 	RotationHandle(Gizmo* gizmo, GizmoAxis axis);
+
+	/// The frame this ring is drawn and picked in, relative to the gizmo's own
+	/// frozen frame: identity for an axis ring, the camera-facing turn for the
+	/// screen ring. Unit scale — callers apply gizmoScale * handleScale.
+	iris::Mat4 ringFrame() const;
 
 	/// HOW FAR THE CURSOR IS FROM THIS RING, ON SCREEN (smoke S15).
 	///
@@ -71,17 +85,20 @@ public:
 	/// plane — the drag half of the same defect the hit test had.
 	bool getHitAngle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& angle);
 
-	/// "x" | "y" | "z" — the verb surface's name for this ring.
+	/// "x" | "y" | "z" | "screen" — the verb surface's name for this ring.
 	QString axisName() const;
 };
 
 class RotationGizmo : public Gizmo
 {
-	iris::MeshPtr screenRingMesh;   // camera-facing outer ring (visual only)
 	QVector<iris::MeshPtr> handleMeshes;
 
-
-	RotationHandle* handles[3];
+	/// X, Y, Z and — since GIZMO-1 item 2 — SCREEN: the outer grey ring is a
+	/// fourth handle, not decoration. It is last on purpose: it is drawn last
+	/// (on top of the three axis rings) and it LOSES a pick tie to any of
+	/// them, so grabbing an axis ring where the two cross still gets the axis.
+	static constexpr int kScreenHandle = 3;
+	RotationHandle* handles[4];
 
 	float startAngle;
 	iris::Quat nodeStartRot;
@@ -129,7 +146,7 @@ public:
 	/// this question asked from a script, and a picking test must be able to
 	/// ask it without synthesizing mouse events.
 	RotationHandle* ringAtPixel(const QPointF& cursor, float& distancePx);
-	/// The same answer as a name: "x" | "y" | "z", or an empty string.
+	/// The same answer as a name: "x" | "y" | "z" | "screen", or an empty string.
 	QString ringNameAtPixel(const QPointF& cursor, float& distancePx);
 
 	iris::Mat4 getTransform() override;

@@ -31,6 +31,12 @@ For more information see the LICENSE file
 
 namespace GizmoMeshes
 {
+    /// The outer (screen-facing) rotation ring's radius, in the same handle-local
+    /// units the axis rings' 1.0 is in. PUBLIC because that ring is a HANDLE now
+    /// (GIZMO-1 item 2): the circle picking projects has to be the circle the
+    /// mesh draws, so both read this one number.
+    constexpr float kScreenRingRadius = 1.18f;
+
     /// Thin shaft ending in a small cone along +axis (translate handle).
     iris::MeshPtr translateHandle(GizmoAxis axis);
     /// Thin shaft ending in a small cube along +axis (scale handle).

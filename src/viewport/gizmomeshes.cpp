@@ -34,7 +34,7 @@ const float kScaleEnd      = 1.46f;   // same reach as the old scale handle
 const float kCoreSphere    = 0.10f;
 const float kCoreCubeHalf  = 0.12f;
 const float kRingMinor     = 0.01f;   // thin rotation circles (halved 2026-08-30; old rings were flat fat bands)
-const float kScreenRingR   = 1.18f;   // just outside the axis rings
+// the outer ring's radius lives in the header: picking projects the same circle
 const float kScreenRingMinor = 0.007f;  // halved 2026-08-30 (was 0.014)
 const int   kSegments      = 20;      // round sections
 const int   kRingSegments  = 64;      // ring smoothness
@@ -240,7 +240,7 @@ iris::MeshPtr screenRing()
 {
     Builder b;
     addTorus(b, iris::Vec3(0, 0, 1), iris::Vec3(1, 0, 0), iris::Vec3(0, 1, 0),
-             kScreenRingR, kScreenRingMinor, kRingSegments, kRingSides);
+             GizmoMeshes::kScreenRingRadius, kScreenRingMinor, kRingSegments, kRingSides);
     return b.build();
 }
 

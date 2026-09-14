@@ -28,6 +28,12 @@
 //      pixel by many times the pick tolerance in Local space;
 //   F. release re-orients: after endDragging the frame is the node's again.
 //
+// AND THE OUTER GREY RING IS A LIVE HANDLE (ledger §345 item 2, "Unreal's is a
+// live handle"): it was drawn and nothing else. It now turns the node about the
+// VIEW direction by the angle the cursor sweeps around it on screen, it answers
+// to `editor.gizmoHitTest` as "screen", it loses a pick tie to any axis ring,
+// and the whole selection follows it like any other handle. Sections G-J.
+//
 // Runs on the headless document graph: no display, no GPU, no pixels.
 
 #include <QGuiApplication>
@@ -307,6 +313,184 @@ int main(int argc, char **argv)
         node->update(0.0f);
         CHECK(sameMatrix(gizmo.getTransform(), liveFrame(node, space.value)),
               "F: the release drops the frozen frame — the rings snap to the node again");
+    }
+
+    // ---- G-J: THE OUTER GREY RING IS A LIVE HANDLE ------------------------
+    {
+        std::printf("\n== the screen ring ==\n");
+        struct Pose { const char *name; float pitch, yaw; };
+        const Pose kPoses[] = {
+            { "iso",        -35.0f,  45.0f },
+            { "front",        0.0f,   0.0f },
+            { "top",        -90.0f,   0.0f },
+            { "low-oblique",  -8.0f, -30.0f },
+        };
+        int pickedPixels = 0, sampled = 0;
+        float worstAngleErr = 0.0f, worstAxisErr = 0.0f, worstRingDriftPx = 0.0f;
+
+        for (const Pose &pose : kPoses) {
+            place(cam, pose.pitch, pose.yaw, 9.0f);
+            node->setLocalRot(iris::Quat());
+            node->update(0.0f);
+
+            RotationGizmo gizmo;
+            gizmo.setSelectedNode(node);
+            gizmo.updateSize(cam);
+            gizmo.setPickView(cam, kWidth, kHeight);
+            // What the viewport does before the first draw: the pick view is
+            // what tells the gizmo which way the camera looks.
+            const float outer = gizmo.getGizmoScale() * kHandleScale * 1.18f;   // kScreenRingRadius
+            const iris::Vec3 centre = gizmo.getTransform().column(3).toVector3D();
+            const iris::Quat camRot = cam->getGlobalRotation();
+            const iris::Vec3 forward = camRot.rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+            const iris::Vec3 camRight = camRot.rotatedVector(iris::Vec3(1, 0, 0)).normalized();
+            const iris::Vec3 camUp = camRot.rotatedVector(iris::Vec3(0, 1, 0)).normalized();
+            // A point of the OUTER circle at a screen angle, and the pixel of it.
+            const auto outerPixel = [&](float deg, QPointF &px) {
+                const float a = float(deg * M_PI / 180.0);
+                return gizmo.projectToPixel(
+                    centre + (camRight * std::cos(a) + camUp * std::sin(a)) * outer, px);
+            };
+            QPointF centrePx;
+            if (!gizmo.projectToPixel(centre, centrePx)) continue;
+            const auto screenAngle = [&](const QPointF &px) {
+                return float(qRadiansToDegrees(std::atan2(-(px.y() - centrePx.y()),
+                                                           px.x() - centrePx.x())));
+            };
+
+            // G: every pixel of the outer circle picks "screen".
+            for (int i = 0; i < 36; ++i) {
+                QPointF px;
+                if (!outerPixel(float(10 * i), px)) continue;
+                if (px.x() < 0 || px.y() < 0 || px.x() > kWidth || px.y() > kHeight) continue;
+                ++sampled;
+                float d = -1.0f;
+                if (gizmo.ringNameAtPixel(px, d) == QLatin1String("screen")) ++pickedPixels;
+            }
+
+            // H: a drag around it turns the node about the VIEW axis by the
+            // angle the cursor swept — measured on screen, where the user is.
+            QPointF startPx, endPx;
+            const float startDeg = 20.0f, sweepDeg = 55.0f;
+            if (!outerPixel(startDeg, startPx) || !outerPixel(startDeg + sweepDeg, endPx)) continue;
+            iris::Vec3 rayPos, rayDir;
+            rayFromPixel(cam, startPx, rayPos, rayDir);
+            gizmo.startDragging(rayPos, rayDir, forward);
+            if (!gizmo.isDragging()) {
+                std::printf("FAIL: %s: a press on the outer ring did not start a drag\n", pose.name);
+                ++failures; continue;
+            }
+            const iris::Mat4 frozen = gizmo.getTransform();
+            const iris::Quat before = node->getGlobalRotation().normalized();
+            rayFromPixel(cam, endPx, rayPos, rayDir);
+            gizmo.drag(rayPos, rayDir, forward);
+            node->update(0.0f);
+            const iris::Quat after = node->getGlobalRotation().normalized();
+            const iris::Quat delta = (after * before.conjugated()).normalized();
+
+            // the axis of the turn, and its angle where the user sees it
+            const iris::Vec3 daxis = iris::Vec3(delta.x(), delta.y(), delta.z()).normalized();
+            const float axisErr = 1.0f - std::fabs(iris::Vec3::dotProduct(daxis, forward));
+            worstAxisErr = std::max(worstAxisErr, axisErr);
+            QPointF p0, p1;
+            const bool ok0 = gizmo.projectToPixel(centre + camRight * outer, p0);
+            const bool ok1 = gizmo.projectToPixel(centre + delta.rotatedVector(camRight) * outer, p1);
+            float turnedOnScreen = 0.0f;
+            if (ok0 && ok1) {
+                turnedOnScreen = screenAngle(p1) - screenAngle(p0);
+                while (turnedOnScreen > 180.0f) turnedOnScreen -= 360.0f;
+                while (turnedOnScreen < -180.0f) turnedOnScreen += 360.0f;
+            }
+            const float angleErr = std::fabs(turnedOnScreen - sweepDeg);
+            worstAngleErr = std::max(worstAngleErr, angleErr);
+
+            // I: and the ring it grabbed did not move (item 1's rule, on the
+            // handle whose frame is the CAMERA's rather than the node's).
+            if (!sameMatrix(gizmo.getTransform(), frozen)) {
+                std::printf("FAIL: %s: the frame moved during a screen-ring drag\n", pose.name);
+                ++failures;
+            }
+            float reported = -1.0f;
+            if (gizmo.ringNameAtPixel(startPx, reported) != QLatin1String("screen")) {
+                std::printf("FAIL: %s: the grab pixel stopped picking the screen ring\n", pose.name);
+                ++failures;
+            }
+            worstRingDriftPx = std::max(worstRingDriftPx, reported);
+
+            std::printf("   %-12s cursor swept %.0f deg -> the node turned %6.2f deg on screen "
+                        "about the view axis (axis error %.5f), grab pixel still %.2f px from "
+                        "the ring\n", pose.name, double(sweepDeg), double(turnedOnScreen),
+                        double(axisErr), double(reported));
+            gizmo.endDragging();
+        }
+
+        std::printf("   %d of %d sampled outer-circle pixels picked \"screen\"\n",
+                    pickedPixels, sampled);
+        CHECK(sampled > 100, "G: the outer circle was sampled at a real number of pixels");
+        CHECK(pickedPixels == sampled, "G: EVERY pixel of the outer grey ring picks it — it is a "
+                                       "handle, not decoration");
+        CHECK(worstAxisErr < 1e-3f, "H: the turn is about the camera's own view direction");
+        CHECK(worstAngleErr < 2.0f, "H: and by the angle the cursor swept around the circle, the "
+                                    "way the user watched it");
+        CHECK(worstRingDriftPx <= kRingPickTolerancePx,
+              "I: the outer ring stays under the cursor for the length of the drag");
+    }
+
+    // ---- J: THE WHOLE SELECTION FOLLOWS IT --------------------------------
+    //
+    // The group delta is the gizmo base class's (EDITOR_MULTISELECT_SPEC §2.4)
+    // and gizmo.group_transform proves the maths; what is asserted here is that
+    // the NEW handle goes through it like the three old ones.
+    {
+        place(cam, -35.0f, 45.0f, 9.0f);
+        node->setLocalRot(iris::Quat());
+        node->update(0.0f);
+        auto second = iris::SceneNode::create();
+        doc->getRootNode()->addChild(second);
+        second->setLocalPos(iris::Vec3(3, 0, 0));
+        second->update(0.0f);
+
+        RotationGizmo gizmo;
+        gizmo.setSelectedNode(node);
+        gizmo.setGroup({ node, second });
+        gizmo.updateSize(cam);
+        gizmo.setPickView(cam, kWidth, kHeight);
+
+        const float outer = gizmo.getGizmoScale() * kHandleScale * 1.18f;
+        const iris::Vec3 centre = gizmo.getTransform().column(3).toVector3D();
+        const iris::Quat camRot = cam->getGlobalRotation();
+        const iris::Vec3 forward = camRot.rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+        const iris::Vec3 camRight = camRot.rotatedVector(iris::Vec3(1, 0, 0)).normalized();
+        const iris::Vec3 camUp = camRot.rotatedVector(iris::Vec3(0, 1, 0)).normalized();
+        const auto outerPixel = [&](float deg, QPointF &px) {
+            const float a = float(deg * M_PI / 180.0);
+            return gizmo.projectToPixel(
+                centre + (camRight * std::cos(a) + camUp * std::sin(a)) * outer, px);
+        };
+        QPointF startPx, endPx;
+        const bool have = outerPixel(0.0f, startPx) && outerPixel(90.0f, endPx);
+        CHECK(have, "J: the outer ring projects where a group drag can be driven");
+        if (have) {
+            const iris::Vec3 startPos = second->getGlobalPosition();
+            iris::Vec3 rayPos, rayDir;
+            rayFromPixel(cam, startPx, rayPos, rayDir);
+            gizmo.startDragging(rayPos, rayDir, forward);
+            rayFromPixel(cam, endPx, rayPos, rayDir);
+            gizmo.drag(rayPos, rayDir, forward);
+            second->update(0.0f);
+            const iris::Vec3 moved = second->getGlobalPosition();
+            const iris::Quat delta = (node->getGlobalRotation().normalized() *
+                                      iris::Quat().conjugated()).normalized();
+            const iris::Vec3 expect = delta.rotatedVector(startPos);   // the primary is at the origin
+            std::printf("   the second node orbited to (%.3f, %.3f, %.3f); the primary's delta "
+                        "predicts (%.3f, %.3f, %.3f)\n", double(moved.x()), double(moved.y()),
+                        double(moved.z()), double(expect.x()), double(expect.y()), double(expect.z()));
+            CHECK(moved.distanceToPoint(startPos) > 1.0f,
+                  "J: the rest of the selection really moved");
+            CHECK(moved.distanceToPoint(expect) < 1e-3f,
+                  "J: and it orbited the primary by exactly the primary's delta");
+            gizmo.endDragging();
+        }
     }
 
     std::printf("\n%s\n", failures == 0 ? "PASS" : "FAILURES");

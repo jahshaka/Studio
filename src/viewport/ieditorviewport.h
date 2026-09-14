@@ -279,10 +279,12 @@ public:
     /// gizmo picks in SCREEN SPACE — the cursor's distance from each ring's
     /// projected circle — so "is this ring clickable from here" is a number,
     /// and `editor.gizmoHitTest` is that number without a synthesized mouse
-    /// event. `handle` is "x" | "y" | "z" for a ring inside the pick
-    /// tolerance and empty otherwise; `distancePx` is the distance to the
-    /// NEAREST ring either way (-1 when nothing could be measured: no
-    /// selection, no camera, or a gizmo that does not pick this way).
+    /// event. `handle` is "x" | "y" | "z" | "screen" (the outer grey ring,
+    /// which turns the node about the view direction — GIZMO-1 item 2) for a
+    /// ring inside the pick tolerance and empty otherwise; `distancePx` is the
+    /// distance to the NEAREST ring either way (-1 when nothing could be
+    /// measured: no selection, no camera, or a gizmo that does not pick this
+    /// way).
     struct GizmoPickResult
     {
         QString handle;

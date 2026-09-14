@@ -138,7 +138,8 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "gizmoHitTest", "editor.gizmoHitTest(x, y) -> {ring, distancePx, tolerancePx}",
           "WHICH ROTATION RING A VIEWPORT PIXEL HITS, and how far the cursor is from it in "
           "pixels. `x`/`y` are viewport pixels with the origin top-left, exactly as a mouse "
-          "event carries them. `ring` is \"x\", \"y\" or \"z\" when the pixel is inside the pick "
+          "event carries them. `ring` is \"x\", \"y\", \"z\" or \"screen\" (the outer grey ring, "
+          "which turns the node about the view direction) when the pixel is inside the pick "
           "tolerance of that ring's projected circle, and null when it is not; `distancePx` is "
           "the distance to the NEAREST ring either way, and `tolerancePx` the threshold the "
           "pick used. The rotation gizmo picks in SCREEN SPACE (smoke S15) — a ring seen "

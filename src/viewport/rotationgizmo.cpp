@@ -51,7 +51,34 @@ RotationHandle::RotationHandle(Gizmo* gizmo, GizmoAxis axis)
 		plane = iris::Vec3(0, 0, 1);
 		setHandleColor(QColor(58, 122, 240));
 		break;
+	case GizmoAxis::Screen:
+		// The plane is the VIEW's, so it is not a constant in gizmo space;
+		// `screenAxis` carries it instead (world space, refreshed with the
+		// gizmo's frame). Grey, and wider than the axis rings.
+		plane = iris::Vec3(0, 0, 1);
+		ringRadius = GizmoMeshes::kScreenRingRadius;
+		setHandleColor(QColor(205, 205, 205));
+		break;
+	default:
+		break;
 	}
+}
+
+// The frame a ring is drawn and picked in. An axis ring rides the gizmo's own
+// frame; the screen ring is turned to face the camera — its +Z is the direction
+// BACK to the eye — so that its circle is the circle on screen. `screenAxis` is
+// written by refreshFrame(), so this frame is frozen during a drag too and the
+// outer ring cannot slide under the cursor either.
+iris::Mat4 RotationHandle::ringFrame() const
+{
+	iris::Mat4 t = gizmo->getTransform();
+	if (axis != GizmoAxis::Screen) return t;
+	iris::Mat4 facing;
+	facing.setToIdentity();
+	facing.translate(t.column(3).toVector3D());
+	if (!screenAxis.isNull())
+		facing.rotate(iris::Quat::rotationTo(iris::Vec3(0, 0, 1), -screenAxis.normalized()));
+	return facing;
 }
 
 namespace {
@@ -83,6 +110,7 @@ QString RotationHandle::axisName() const
 	case GizmoAxis::X: return QStringLiteral("x");
 	case GizmoAxis::Y: return QStringLiteral("y");
 	case GizmoAxis::Z: return QStringLiteral("z");
+	case GizmoAxis::Screen: return QStringLiteral("screen");
 	default: return QString();
 	}
 }
@@ -94,7 +122,7 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 	const GizmoPickView &view = gizmo->pickView();
 	if (!view.isValid()) return false;
 
-	const float radius = handleRadius * handleScale * gizmo->getGizmoScale();
+	const float radius = ringRadius * handleScale * gizmo->getGizmoScale();
 	if (!(radius > 0.0f)) return false;
 
 	// THE RING AS IT IS DRAWN. gizmomeshes::rotationRing builds the unit circle
@@ -102,12 +130,14 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 	// normal is this handle's `plane`; drawItems renders it under the gizmo's
 	// transform scaled by handleScale * gizmoScale. Both are read from the same
 	// two calls here, so the circle measured IS the circle on screen.
-	const iris::Mat4 t = gizmo->getTransform();
+	const iris::Mat4 t = ringFrame();
 	const iris::Vec3 centre = t.column(3).toVector3D();
 	iris::Vec3 u, v, n;
 	switch (axis) {
 	case GizmoAxis::X: n = iris::Vec3(1, 0, 0); u = iris::Vec3(0, 1, 0); v = iris::Vec3(0, 0, 1); break;
 	case GizmoAxis::Y: n = iris::Vec3(0, 1, 0); u = iris::Vec3(0, 0, 1); v = iris::Vec3(1, 0, 0); break;
+	// Z and Screen are both the XY circle of their own frame — which for the
+	// screen ring is the camera-facing one ringFrame() just built.
 	default:           n = iris::Vec3(0, 0, 1); u = iris::Vec3(1, 0, 0); v = iris::Vec3(0, 1, 0); break;
 	}
 	const auto toWorldDir = [&t](const iris::Vec3 &d) {
@@ -150,6 +180,26 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 
 bool RotationHandle::getHitAngle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& angle)
 {
+	// THE SCREEN RING'S ANGLE IS A SCREEN ANGLE (GIZMO-1 item 2). There is no
+	// 3D construction to condition badly: the ring is a circle on the display,
+	// and the quantity the drag differences is the cursor's angle around its
+	// centre. The sign makes it the MATHS convention (counter-clockwise
+	// positive) even though Qt's pixel y points down, and it is negated so that
+	// drag()'s `startAngle - hitAngle` comes out as the counter-clockwise turn
+	// the cursor made — which about an axis pointing back at the eye is exactly
+	// the turn the user watched.
+	if (axis == GizmoAxis::Screen) {
+		const iris::Vec3 centre = gizmo->getTransform().column(3).toVector3D();
+		QPointF centrePx, cursorPx;
+		if (!gizmo->projectToPixel(centre, centrePx)) return false;
+		if (!gizmo->rayPixel(rayPos, rayDir, centre, cursorPx)) return false;
+		const double dx = cursorPx.x() - centrePx.x();
+		const double dy = -(cursorPx.y() - centrePx.y());
+		if (dx * dx + dy * dy < 1e-6) return false;       // dead on the centre
+		angle = -float(qRadiansToDegrees(std::atan2(dy, dx)));
+		return true;
+	}
+
 	// Work in the SCALED gizmo space the ring is drawn in: there the ring is
 	// the unit circle and the handle's sphere is the unit sphere.
 	auto gizmoTransform = gizmo->getTransform();
@@ -207,6 +257,7 @@ RotationGizmo::RotationGizmo() :
 	handles[0] = new RotationHandle(this, GizmoAxis::X);
 	handles[1] = new RotationHandle(this, GizmoAxis::Y);
 	handles[2] = new RotationHandle(this, GizmoAxis::Z);
+	handles[kScreenHandle] = new RotationHandle(this, GizmoAxis::Screen);
 
 	loadAssets();
 	//handle->setHandleColor(QColor(255, 255, 255));
@@ -224,7 +275,7 @@ void RotationGizmo::loadAssets()
 	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::X));
 	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Y));
 	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Z));
-	screenRingMesh = GizmoMeshes::screenRing();
+	handleMeshes.append(GizmoMeshes::screenRing());
 }
 
 bool RotationGizmo::isDragging()
@@ -282,6 +333,23 @@ void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDi
 		diff = Gizmo::snap(diff, SnapSettings::rotateSize());
 	}
 
+	// THE SCREEN RING (GIZMO-1 item 2) turns the node about the direction the
+	// camera looks, and that is the SAME rotation in either transform space: a
+	// turn about a world axis does not care which frame the OTHER handles are
+	// expressed in. The axis is brought into the node's PARENT frame, which is
+	// the frame setLocalRot writes in, so a rotated parent cannot skew it.
+	if (draggedHandle->axis == GizmoAxis::Screen) {
+		iris::Vec3 axis = -draggedHandle->screenAxis;       // points back at the eye
+		if (axis.isNull()) return;
+		if (auto parent = selectedNode->getParent())
+			axis = parent->getGlobalRotation().normalized().conjugated().rotatedVector(axis);
+		const iris::Quat rot = iris::Quat::fromAxisAndAngle(axis.normalized(), diff);
+		selectedNode->setLocalRot((rot * nodeStartRot).normalized());
+		applyGroupDelta();
+		if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
+		return;
+	}
+
 	iris::Quat rot;
 
 	switch (draggedHandle->axis) {
@@ -293,6 +361,8 @@ void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDi
 			break;
 		case GizmoAxis::Z:
 			rot = iris::Quat::fromEulerAngles(0, 0, diff);
+			break;
+		default:
 			break;
 	}
 
@@ -351,6 +421,19 @@ RotationHandle* RotationGizmo::ringAtPixel(const QPointF& cursor, float& distanc
 			nearestFacing = facing;
 		}
 	}
+	// THE OUTER RING LOSES EVERY TIE (GIZMO-1 item 2). It frames the three axis
+	// rings and crosses them wherever one is seen edge-on, and the axis ring is
+	// what the user is reaching for there — so it only wins when it is CLEARLY
+	// the nearer circle, by more than the tie band.
+	{
+		float d = -1.0f, facing = 0.0f;
+		if (handles[kScreenHandle]->screenDistance(cursor, d, facing) &&
+		    (nearest == nullptr || d < nearestDist - kRingPickTiePx)) {
+			nearest = handles[kScreenHandle];
+			nearestDist = d;
+			nearestFacing = facing;
+		}
+	}
 	if (!nearest) return nullptr;
 	distancePx = nearestDist;                       // reported hit or miss
 	return nearestDist <= kRingPickTolerancePx ? nearest : nullptr;
@@ -389,6 +472,14 @@ void RotationGizmo::refreshFrame()
 {
 	if (dragging) return;
 	trans = Gizmo::getTransform();
+	// The screen ring's own axis comes from the camera the gizmo is picked
+	// through — the SAME camera drawItems is handed a view direction for — and
+	// it freezes with everything else, so the outer ring cannot slide under the
+	// cursor mid-drag either.
+	const GizmoPickView &view = pickView();
+	if (view.isValid())
+		handles[kScreenHandle]->screenAxis =
+			view.camera->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
 }
 
 iris::Mat4 RotationGizmo::getTransform()
@@ -413,32 +504,32 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
 	refreshFrame();
+	// The screen ring's axis normally comes from the pick view (refreshFrame).
+	// A caller that draws without ever picking — an overlay test, a stand-in
+	// viewport — still hands a view direction here, so take it when there is no
+	// pick view to read. Never while dragging: the frame is frozen.
+	if (!dragging && !viewDir.isNull() && !pickView().isValid())
+		handles[kScreenHandle]->screenAxis = viewDir.normalized();
+
 	const QColor highlight(255, 255, 0);
+	// THE DRAWN FRAME, per handle: the gizmo's own for an axis ring, the
+	// camera-facing one for the screen ring — the same frames picking measures.
+	const auto itemFor = [&](int i, const QColor &colour) {
+		iris::Mat4 t = handles[i]->ringFrame();
+		t.scale(getGizmoScale() * handles[i]->handleScale);
+		return GizmoDrawItem{ handleMeshes[i], t, colour };
+	};
 	if (dragging) {
-		for (int i = 0; i < 3; i++) {
-			if (handles[i] != draggedHandle) continue;
-			auto transform = getTransform();
-			transform.scale(getGizmoScale() * handles[i]->handleScale);
-			items.append({ handleMeshes[i], transform, highlight });
-		}
+		for (int i = 0; i < 4; i++)
+			if (handles[i] == draggedHandle) items.append(itemFor(i, highlight));
 		return items;
 	}
 	float hitAngle = 0.0f;
 	auto hitHandle = getHitHandle(rayPos, rayDir, hitAngle);
-	for (int i = 0; i < 3; i++) {
-		auto transform = getTransform();
-		transform.scale(getGizmoScale() * handles[i]->handleScale);
-		items.append({ handleMeshes[i], transform, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor() });
-	}
-	// Screen-facing outer circle framing the three axis rings — visual only
-	// (there is no fourth handle behind it), always oriented at the camera.
-	if (screenRingMesh) {
-		iris::Mat4 t;
-		t.translate(getTransform().column(3).toVector3D());
-		if (!viewDir.isNull())
-			t.rotate(iris::Quat::rotationTo(iris::Vec3(0, 0, 1), -viewDir.normalized()));
-		t.scale(getGizmoScale() * handles[0]->handleScale);
-		items.append({ screenRingMesh, t, QColor(205, 205, 205) });
-	}
+	// The three axis rings first, then the outer screen ring ON TOP of them —
+	// it is the handle that frames the others, and it is the one a tie goes
+	// against, so drawing it last is what makes the picture agree with the pick.
+	for (int i = 0; i < 4; i++)
+		items.append(itemFor(i, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor()));
 	return items;
 }
