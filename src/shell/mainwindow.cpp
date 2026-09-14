@@ -4027,8 +4027,12 @@ void MainWindow::setupShortcuts()
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,
             [this]() { toggleClaudeChat(); });
     // THE RIGHT COLUMN'S TWO TABS (PROPERTY_FILTER_SPEC D2): one toggle, not two
-    // keys. Ctrl+Tab is taken by space.previous, so Ctrl+Shift+P — free in the
-    // registry and remappable in Preferences like every other row.
+    // keys. Ctrl+Tab is taken by space.previous, so Ctrl+Shift+P — verified
+    // free against the 50 rows already registered here, and remappable in
+    // Preferences → Shortcuts like every other row. (ShortcutRegistry's
+    // conflict check runs on a USER rebinding, not on these defaults: two
+    // defaults claiming one chord would simply both be registered, so the
+    // default above was checked by hand.)
     reg.add("properties.tab", "Properties: World / Selection Tab", "Windows",
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, [this]() {
         if (!sceneNodePropertiesWidget) return;

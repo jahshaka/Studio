@@ -399,6 +399,16 @@ void SceneHierarchyWidget::announceSet(const QList<iris::SceneNodePtr> &nodes)
     // setSelectedSet) — see the header: as "the last set we announced" it went
     // stale the moment anything else made a selection, and the row this tree
     // had announced before a viewport pick became unclickable.
+    //
+    // THE INVARIANT THIS DEPENDS ON, stated so the next reader can check it:
+    // the comparison is of ORDERED id lists, so it only swallows a genuine
+    // repeat because the round trip is SYNCHRONOUS and order-preserving —
+    // SelectionService::select re-emits inside this emit, MainWindow hands the
+    // set straight back to setSelectedSet, and that records the set in the
+    // SERVICE's order (primary first, the rest in document order). If the
+    // service ever emits queued, reorders a set, or drops a member, this must
+    // become an order-insensitive comparison (or the whole guard must move to
+    // the service).
     if (ids == knownSelection) return;
     knownSelection = ids;
     selectedNode = nodes.isEmpty() ? iris::SceneNodePtr() : nodes.first();
@@ -437,7 +447,10 @@ void SceneHierarchyWidget::paintSelection(const QList<iris::SceneNodePtr> &nodes
     for (const auto &node : nodes) {
         if (!node) continue;
         auto *item = treeItemList.value(node->getNodeId());
-        if (!item) continue;
+        // The ROOT's entry is the tree's INVISIBLE root item, not a row (see
+        // repopulateTree): selecting it or making it current is meaningless and
+        // Qt is not asked to (the same skip setSelectedNode has).
+        if (!item || item == ui->sceneTree->invisibleRootItem()) continue;
         item->setSelected(true);
         if (!primaryItem) primaryItem = item;
     }
@@ -947,11 +960,10 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 		// usually already reported this row — it fires on the press, before the
 		// click — and the case it cannot see is a click on the ALREADY current
 		// row. This branch used to emit a single node of its own, which walked
-		// straight past every set rule: a Ctrl+click on the World row announced
-		// the root as the selection even though D6 says the root is never part
-		// of a multi. So it goes through the same computation, and announceSet
-		// swallows the duplicate when the set has not actually changed (which
-		// is what kept one click from rebuilding the properties panel twice).
+		// straight past every set rule; it goes through the same computation
+		// instead, and announceSet swallows the duplicate when the set has not
+		// actually changed (which is what keeps one click from rebuilding the
+		// properties panel twice).
 		treeSelectionChanged();
 	}
 }
@@ -1074,7 +1086,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     connect(action, &QAction::triggered, this, [&]() { ui->sceneTree->editItem(item); });
     menu.addAction(action);
 
-    // The world node isn't removable
+    // Not everything can be deleted (a built-in the scene needs, say).
     if (node->isRemovable()) {
         action = new QAction(QIcon(), "Delete", this);
         connect(action, SIGNAL(triggered()), this, SLOT(deleteNode()));
@@ -1237,9 +1249,9 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		}
 	}
 
-	// attchment
-	auto nodeScene = node->getScene();
-	if (nodeScene && nodeScene->getRootNode() != node) {
+	// ATTACHMENT. (The "…and not the World root" half of this test went with
+	// the World row: every row in this tree is an object.)
+	{
 		QMenu *attachMenu = menu.addMenu("Attach..");
 
 		QAction* attachChildrenMenu = attachMenu->addAction("Attach All Children");
@@ -1393,7 +1405,14 @@ void SceneHierarchyWidget::repopulateTree()
         }
         // Under the guard, and WITHOUT announcing: the document did not change
         // its selection, the widget just rebuilt the rows that show it.
-        if (!restored.isEmpty()) setSelectedSet(restored);
+        //
+        // paintSelection, NOT setSelectedSet: `restored` holds only the members
+        // that still HAVE rows, and recording that as the editor's selection
+        // would be a lie whenever one does not (an asset part picked in the
+        // viewport, a node that just became attached) — the survivors would
+        // then equal knownSelection and a plain click on one of them would be
+        // swallowed as a duplicate (F4, second reader 2026-09-15).
+        if (!restored.isEmpty()) paintSelection(restored);
     }
 }
 
@@ -1458,34 +1477,31 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
 	childTreeItem->setData(2, Qt::UserRole, QVariant::fromValue(node->isPickable()));
 
-	QIcon *nodeIcon = new QIcon;
-	
-	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-mesh-32.png"), QIcon::Normal);
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-mesh-32.png"), QIcon::Selected);
+	// ONE ICON PER NODE TYPE, built once and shared (CRUD, second reader
+	// 2026-09-15). Every row used to `new QIcon` and never delete it — one
+	// leaked QIcon per row per repopulate, and this function runs on every add,
+	// delete, reparent and folder gesture. A QIcon is implicitly shared, so a
+	// static table costs one pixmap pair per type for the process.
+	static const QHash<iris::SceneNodeType, QString> kTypeIcon = {
+		{ iris::SceneNodeType::Mesh,           QStringLiteral("app/icons/icons8-mesh-32.png") },
+		{ iris::SceneNodeType::Light,          QStringLiteral("app/icons/icons8-sun-48.png") },
+		{ iris::SceneNodeType::ParticleSystem, QStringLiteral("app/icons/icons8-snow-storm-26.png") },
+		{ iris::SceneNodeType::Empty,          QStringLiteral("app/icons/icons8-average-math-filled-50.png") },
+		{ iris::SceneNodeType::Decal,          QStringLiteral("app/icons/icons8-picture-50.png") },
+		{ iris::SceneNodeType::Camera,         QStringLiteral("app/icons/icons8-camera-48.png") },
+	};
+	static QHash<iris::SceneNodeType, QIcon> icons;
+	const iris::SceneNodeType type = node->getSceneNodeType();
+	if (!icons.contains(type)) {
+		QIcon icon;
+		const QString path = kTypeIcon.value(type);
+		if (!path.isEmpty()) {
+			icon.addPixmap(IrisUtils::getAbsoluteAssetPath(path), QIcon::Normal);
+			icon.addPixmap(IrisUtils::getAbsoluteAssetPath(path), QIcon::Selected);
+		}
+		icons.insert(type, icon);      // a type with no icon caches the empty one
 	}
-	else if (node->getSceneNodeType() == iris::SceneNodeType::Light) {
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-sun-48.png"), QIcon::Normal);
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-sun-48.png"), QIcon::Selected);
-	}
-	else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-snow-storm-26.png"), QIcon::Normal);
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-snow-storm-26.png"), QIcon::Selected);
-	}
-	else if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-average-math-filled-50.png"), QIcon::Normal);
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-average-math-filled-50.png"), QIcon::Selected);
-	}
-	else if (node->getSceneNodeType() == iris::SceneNodeType::Decal) {
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-picture-50.png"), QIcon::Normal);
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-picture-50.png"), QIcon::Selected);
-	}
-	else if (node->getSceneNodeType() == iris::SceneNodeType::Camera) {
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-camera-48.png"), QIcon::Normal);
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-camera-48.png"), QIcon::Selected);
-	}
-
-	childTreeItem->setIcon(0, *nodeIcon);
+	childTreeItem->setIcon(0, icons.value(type));
 	
 	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
 	node->isPickable() ? childTreeItem->setIcon(2, *pickableIcon) : childTreeItem->setIcon(2, *disabledIcon);

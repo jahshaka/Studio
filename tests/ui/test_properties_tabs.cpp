@@ -33,6 +33,8 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QLabel>
+#include <QListWidgetItem>
+#include <QPointer>
 #include <QScrollArea>
 #include <QTabBar>
 #include <QUndoStack>
@@ -48,6 +50,7 @@ For more information see the LICENSE file
 
 #include "data/project.h"
 #include "data/settingsmanager.h"
+#include "ui/controls/accordionbladewidget.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "ui/controls/propertiestabstrip.h"
@@ -242,7 +245,147 @@ int main(int argc, char **argv)
     CHECK(panel->propertiesTab() == Tab::Selection,
           "properties_tabs: a click on the Selection tab moves it back");
 
-    // ---- 8. the names the verb speaks -------------------------------------
+    // ---- 8. ONE MOUNT PER PICK (F2, second reader) ------------------------
+    //
+    // setSceneNode used to raise the tab (which mounts when the tab MOVES) and
+    // then mount again unconditionally, so a pick that CROSSED tabs built its
+    // blades twice and charged the blade's retired-row ring two generations.
+    //
+    // Measured against the control instead of against a row count: a pick that
+    // does NOT cross tabs mounted once even with the defect, so the two must
+    // retire the same number of rows. (clearPanel retires the rows the previous
+    // mount built; a second mount in the same pick retires the rows the first
+    // one just built, doubling it.)
+    auto materialBlade = [panel]() -> AccordianBladeWidget * {
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            for (QLabel *l : b->findChildren<QLabel *>(QStringLiteral("content_title")))
+                if (l->text() == QStringLiteral("Material")) return b;
+        return nullptr;
+    };
+    panel->setSceneNode(mesh.staticCast<iris::SceneNode>());   // builds the blade
+    turn();
+    AccordianBladeWidget *material = materialBlade();
+    CHECK(material != nullptr, "properties_tabs: the material blade exists after a mesh pick");
+    if (material) {
+        // CONTROL: a pick that does not cross tabs (Selection -> Selection) —
+        // it mounted once even with the defect.
+        panel->setSceneNode(light.staticCast<iris::SceneNode>());
+        turn();
+        int before = panel->mountCount();
+        panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
+        const int sameTab = panel->mountCount() - before;
+        turn();
+
+        // THE CASE: from the World tab, so the pick crosses.
+        panel->setPropertiesTab(Tab::World);
+        turn();
+        before = panel->mountCount();
+        panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
+        const int crossing = panel->mountCount() - before;
+        turn();
+        CHECK(sameTab == 1,
+              QStringLiteral("properties_tabs: a same-tab pick mounts the column once (%1)")
+                  .arg(sameTab).toUtf8().constData());
+        CHECK(crossing == 1,
+              QStringLiteral("properties_tabs: a TAB-CROSSING pick mounts it once too (%1) — "
+                             "it used to mount twice, rebuilding every blade and charging the "
+                             "retired-row ring two generations").arg(crossing).toUtf8().constData());
+        // The same for the root: Selection -> World is one mount, not two.
+        panel->setPropertiesTab(Tab::Selection);
+        turn();
+        before = panel->mountCount();
+        panel->setSceneNode(scene->getRootNode());
+        CHECK(panel->mountCount() - before == 1,
+              QStringLiteral("properties_tabs: editor.select(root) from Selection mounts once (%1)")
+                  .arg(panel->mountCount() - before).toUtf8().constData());
+        turn();
+    }
+
+    // ---- 9. THE WORLD BLADES ARE BOUND ONCE PER SCENE (F1) ----------------
+    // A scene open ran the World tab's bind three times — once against the
+    // scene being closed — because every mount re-bound. Binding is what
+    // rebuilds the five scene-built panels' rows; mounting is a layout move.
+    // The Photon panel is one of the five: its rows are retired by its own
+    // rebuild, so a re-bind shows up as retired rows.
+    auto photonBlade = [panel]() -> AccordianBladeWidget * {
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            for (QLabel *l : b->findChildren<QLabel *>(QStringLiteral("content_title")))
+                if (l->text().startsWith(QStringLiteral("Photon"))) return b;
+        return nullptr;
+    };
+    AccordianBladeWidget *photon = photonBlade();
+    CHECK(photon != nullptr, "properties_tabs: the Photon blade exists");
+    if (photon) {
+        // THE MEASURE is the identity of the blade's first ROW: the Photon
+        // panel destroys and rebuilds every row it owns inside setScene (its
+        // rebuild()), so a row that is still the same object was not re-bound.
+        auto firstRow = [photon]() -> QWidget * {
+            QWidget *pane = photon->findChild<QWidget *>(QStringLiteral("contentpane"));
+            QLayout *l = pane ? pane->layout() : nullptr;
+            return (l && l->count() > 0) ? l->itemAt(0)->widget() : nullptr;
+        };
+        panel->setPropertiesTab(Tab::World);
+        turn();
+        QPointer<QWidget> boundRow = firstRow();
+        CHECK(!boundRow.isNull(), "properties_tabs: the Photon blade has rows to compare");
+
+        // Three more World mounts, no scene change: not one re-bind.
+        panel->setPropertiesTab(Tab::Selection);
+        panel->setPropertiesTab(Tab::World);
+        panel->setSceneNode(scene->getRootNode());
+        turn();
+        CHECK(!boundRow.isNull() && firstRow() == boundRow.data(),
+              "properties_tabs: re-showing the World tab does not re-bind the world blades "
+              "(the rows are the same objects)");
+
+        // A NEW SCENE does re-bind — the memo is per scene, not forever.
+        auto second = iris::Scene::create();
+        panel->setScene(second);
+        turn();
+        CHECK(firstRow() != nullptr && firstRow() != boundRow.data(),
+              "properties_tabs: a NEW scene re-binds the world blades (fresh rows)");
+        // ...and a CLOSE (a null scene) empties the column instead of showing
+        // a scene that is gone (F3).
+        panel->setScene(iris::ScenePtr());
+        turn();
+        CHECK(mountedSections(panel).isEmpty(),
+              QStringLiteral("properties_tabs: a closed scene leaves the World tab empty (%1)")
+                  .arg(mountedSections(panel).join(QStringLiteral(","))).toUtf8().constData());
+        panel->setScene(scene);          // put the suite's scene back
+        turn();
+    }
+
+    // ---- 10. A LIBRARY ASSET SURVIVES A RE-APPLY (F6) ---------------------
+    // setAssetItem used to mount its blade directly, so any later re-apply —
+    // an undo (refreshFromDocument), a tab toggle and back — replaced the
+    // asset's rows with the "nothing selected" line.
+    {
+        QListWidgetItem item;
+        item.setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Sky));
+        item.setData(MODEL_GUID_ROLE, QStringLiteral("sky-asset-guid"));
+        item.setData(SKY_TYPE_ROLE, static_cast<int>(iris::SkyType::SINGLE_COLOR));
+        panel->setAssetItem(&item);
+        turn();
+        CHECK(panel->propertiesTab() == Tab::Selection,
+              "properties_tabs: picking a library asset raises the Selection tab");
+        CHECK(hasSection(panel, QStringLiteral("Sky")),
+              "properties_tabs: ...and mounts the asset's blade");
+        panel->setPropertiesTab(Tab::World);
+        turn();
+        panel->setPropertiesTab(Tab::Selection);
+        turn();
+        CHECK(hasSection(panel, QStringLiteral("Sky")) &&
+              !mountedSections(panel).contains(QStringLiteral("<message>")),
+              "properties_tabs: the asset blade is STILL there after a tab toggle and back");
+        // A node pick takes the slot back (they are exclusive).
+        panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
+        turn();
+        CHECK(hasSection(panel, QStringLiteral("Transformation")) &&
+              !hasSection(panel, QStringLiteral("Sky")),
+              "properties_tabs: picking a node takes the Selection tab back from the asset");
+    }
+
+    // ---- 11. the names the verb speaks ------------------------------------
     Tab parsed = Tab::Selection;
     CHECK(SceneNodePropertiesWidget::tabName(Tab::World) == QStringLiteral("world") &&
           SceneNodePropertiesWidget::tabName(Tab::Selection) == QStringLiteral("selection"),

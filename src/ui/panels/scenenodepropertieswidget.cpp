@@ -264,15 +264,22 @@ void SceneNodePropertiesWidget::mount(QWidget *blade)
     blade->show();
 }
 
+// THE SCENE CHANGED — including to NOTHING.
+//
+// A null scene is a real state (MainWindow::removeScene, the close and the
+// load-in-place path) and this used to ignore it: `if (!!scene)` kept the OLD
+// scene, so the panel went on showing — and re-binding — a scene the viewport
+// had already cleared. Now a close clears the panel, and the world blades are
+// bound exactly ONCE per scene (F1/F3, second reader 2026-09-15).
 void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
-    if (!!scene) {
-        this->scene = scene;
-        skyPropView->setScene(this->scene);
-        // The World tab is PERMANENT now — it is not mounted by selecting a
-        // root node any more — so a new scene has to reach its blades here.
-        if (currentTab == Tab::World) applyTab();
-    }
+    if (this->scene == scene) return;
+    this->scene = scene;
+    // A CLOSED SCENE HAS NO SELECTION either: the node this panel was showing
+    // belongs to the document that is going away.
+    if (!scene) this->sceneNode.clear();
+    bindScene(scene);
+    applyTab();
 }
 
 /**
@@ -295,12 +302,20 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
     // scene.root() unchanged) — this is the visual half only.
     this->sceneNode = isRoot ? iris::SceneNodePtr() : sceneNode;
     if (isRoot && !!sceneNode) this->scene = sceneNode->getScene();
+    // A NODE and a library asset are exclusive — they are the same "what is
+    // picked" slot.
+    if (!!this->sceneNode) assetBinding = AssetBinding::None;
 
-    setPropertiesTab(isRoot ? Tab::World
-                            : (!!sceneNode ? Tab::Selection : currentTab));
-    // setPropertiesTab only re-mounts when the tab MOVES; a pick that lands on
-    // the tab already showing still has to rebuild its rows.
+    // ONE MOUNT PER PICK (F2, second reader 2026-09-15). This used to call
+    // setPropertiesTab() — which mounts when the tab moves — and then mount
+    // again unconditionally, so every tab-crossing pick built its blades
+    // twice and charged the retired-row ring two generations.
+    const Tab wanted = isRoot ? Tab::World
+                              : (!!sceneNode ? Tab::Selection : currentTab);
+    const bool moved = wanted != currentTab;
+    currentTab = wanted;
     applyTab();
+    if (moved) emit propertiesTabChanged(currentTab);
 }
 
 QString SceneNodePropertiesWidget::tabName(Tab tab)
@@ -333,14 +348,20 @@ QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
 
 void SceneNodePropertiesWidget::applyTab()
 {
+    ++mounts;                       // see mountCount()
     widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
     clearLayout(this->layout());
 
     if (currentTab == Tab::World) {
         const auto sc = worldScene();
-        // With no scene there is nothing to bind; the tab stays empty rather
-        // than mounting blades pointing at nothing (headless and pre-open).
-        if (!!sc) bindWorldBlades(sc);
+        // With no scene there is nothing to show; the tab stays empty rather
+        // than mounting blades pointing at nothing (a closed project, headless
+        // and pre-open). bindScene is a no-op when the blades already point
+        // here — the mount is the cheap half, the bind the expensive one.
+        if (!!sc) {
+            bindScene(sc);
+            mountWorldBlades();
+        }
     }
     else {
         mountSelectionBlades();
@@ -350,8 +371,13 @@ void SceneNodePropertiesWidget::applyTab()
     warnIfWiderThanDock();
 }
 
-void SceneNodePropertiesWidget::bindWorldBlades(const QSharedPointer<iris::Scene> &scene)
+// THE EXPENSIVE HALF, run once per scene (see the header). Five of these
+// panels rebuild every row they own from the scene inside their setScene.
+void SceneNodePropertiesWidget::bindScene(const QSharedPointer<iris::Scene> &scene)
 {
+    if (worldBoundScene == scene) return;
+    worldBoundScene = scene;
+
     fogPropView->setScene(scene);
     worldPropView->setScene(scene);
     worldModesPropView->setSceneView(sceneView);
@@ -364,11 +390,17 @@ void SceneNodePropertiesWidget::bindWorldBlades(const QSharedPointer<iris::Scene
     worldAaPropView->setScene(scene);
     worldShadowPropView->setSceneView(sceneView);
     worldShadowPropView->setScene(scene);
-    mount(worldPropView);
-    // The world's sky: re-bind, because the same panel may have been
-    // showing a LIBRARY sky asset since the last time the world was
-    // shown (one implementation, two bindings).
+    // The world's sky is bound here too, because the same panel may have been
+    // showing a LIBRARY sky asset since the last time the world was shown (one
+    // implementation, two bindings).
     skyPropView->setScene(scene);
+}
+
+// THE CHEAP HALF: the blades are permanent children and already bound, so a
+// mount is a layout move and a show (see clearLayout).
+void SceneNodePropertiesWidget::mountWorldBlades()
+{
+    mount(worldPropView);
     mount(skyPropView);
     mount(worldModesPropView);
     mount(worldGiPropView);
@@ -380,6 +412,22 @@ void SceneNodePropertiesWidget::bindWorldBlades(const QSharedPointer<iris::Scene
 
 void SceneNodePropertiesWidget::mountSelectionBlades()
 {
+    // A LIBRARY ASSET is what the Selection tab shows when one is picked — the
+    // same slot as a scene node, and exclusive with it. Re-mounted from STATE
+    // (not just at the moment of the pick) so an undo, a tab toggle or any
+    // other re-apply does not replace it with the "nothing selected" line.
+    if (assetBinding == AssetBinding::Shader) {
+        shaderPropView->setShaderGuid(assetGuid);
+        mount(shaderPropView);
+        return;
+    }
+    if (assetBinding == AssetBinding::Sky) {
+        skyPropView->setSkyAlongWithProperties(assetGuid,
+                                               static_cast<iris::SkyType>(assetSkyType));
+        mount(skyPropView);
+        return;
+    }
+
     // NOTHING SELECTED IS AN ANSWER, and it says so (§2): an empty column
     // reads as a broken panel.
     if (!sceneNode) {
@@ -524,23 +572,25 @@ void SceneNodePropertiesWidget::resizeEvent(QResizeEvent *event)
 void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 {
     if (!item) return;
+    const int type = item->data(MODEL_TYPE_ROLE).toInt();
+    if (type == static_cast<int>(ModelTypes::Shader)) {
+        assetBinding = AssetBinding::Shader;
+        assetGuid = item->data(MODEL_GUID_ROLE).toString();
+    }
+    else if (type == static_cast<int>(ModelTypes::Sky)) {
+        assetBinding = AssetBinding::Sky;
+        assetGuid = item->data(MODEL_GUID_ROLE).toString();
+        assetSkyType = item->data(SKY_TYPE_ROLE).toInt();
+    }
+    else {
+        return;                       // not an asset this column edits
+    }
+    // The asset is what is picked: it owns the Selection tab until a node is.
+    this->sceneNode.clear();
+    const bool moved = currentTab != Tab::Selection;
     currentTab = Tab::Selection;
-    emit propertiesTabChanged(currentTab);
-
-    if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
-        clearLayout(this->layout());
-        shaderPropView->setShaderGuid(item->data(MODEL_GUID_ROLE).toString());
-        mount(shaderPropView);
-        widgetPropertyLayout->addStretch();
-    }
-    else if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Sky))
-    {
-        clearLayout(this->layout());
-		skyPropView->setSkyAlongWithProperties(item->data(MODEL_GUID_ROLE).toString(),
-											   static_cast<iris::SkyType>(item->data(SKY_TYPE_ROLE).toInt()));
-		mount(skyPropView);
-		widgetPropertyLayout->addStretch();
-    }
+    applyTab();
+    if (moved) emit propertiesTabChanged(currentTab);
 }
 
 void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
@@ -559,8 +609,13 @@ void SceneNodePropertiesWidget::refreshFromDocument()
     QPointer<SceneNodePropertiesWidget> self(this);
     QTimer::singleShot(0, this, [self]() {
         if (!self) return;
-        // Re-read whatever the CURRENT TAB is showing. A world-tab refresh no
-        // longer needs a selected root node to go through.
+        // RE-READ WHATEVER THE CURRENT TAB IS SHOWING — that is this function's
+        // whole contract after an undo, so the bind memo is dropped first: the
+        // five world panels build their rows from the scene INSIDE setScene,
+        // and skipping that here would leave the World tab showing the numbers
+        // the undo just took back. It is off the open path (one deferred call
+        // per undo/redo), which is why the memo can be strict everywhere else.
+        self->invalidateWorldBinding();
         self->applyTab();
     });
 }
@@ -575,11 +630,16 @@ void SceneNodePropertiesWidget::refreshTransform()
 void SceneNodePropertiesWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
+    // bindScene pushes this into five of the world blades: a new viewport has
+    // to reach them, so the memo that says "already bound" is dropped.
+    invalidateWorldBinding();
     if (skyPropView) skyPropView->wireViewportEvents(sceneView);
 }
 
 void SceneNodePropertiesWidget::setServices(StudioServices *services)
 {
+    // A world blade built before the undo stack arrived was built without it.
+    invalidateWorldBinding();
     this->services = services;
     if (transformWidget) transformWidget->setServices(services);
     // World Mode edits are undoable (WorldModeCommand) — the section needs the
@@ -608,6 +668,8 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
 
 void SceneNodePropertiesWidget::setDatabase(Database *db)
 {
+    // A world blade built before the library arrived was built without it.
+    invalidateWorldBinding();
     this->db = db;
     // FORWARD, DO NOT JUST STORE. Every panel here is built in the CONSTRUCTOR,
     // which runs before this setter — so the ctor's `setDatabase(db)` calls
@@ -631,6 +693,8 @@ void SceneNodePropertiesWidget::setDatabase(Database *db)
 
 void SceneNodePropertiesWidget::setProject(Project *project)
 {
+    // A world blade built before the project arrived was built without it.
+    invalidateWorldBinding();
     // Phase 4: every panel that used to read the Globals::project static now
     // carries the pointer (AccordianBladeWidget::project, which its add*()
     // helpers forward to the controls they build).

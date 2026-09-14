@@ -55,7 +55,6 @@ void SceneTreeWidget::paintEvent(QPaintEvent *event)
         return;
     }
 
-    if (!mHintItem) return;
     QRect r = visualItemRect(mHintItem);
     if (!r.isValid()) return;
     r.setLeft(0);

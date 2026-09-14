@@ -157,14 +157,53 @@ void run()
     CHECK(announced == cube,
           "tree_reselect: one click on the current row after editor.select(null) selects it");
 
+    // ---- 3b. A REBUILD MUST NOT SHRINK THE CACHE (F4, second reader) ------
+    //
+    // repopulateTree restores the selection through the rows that SURVIVED the
+    // rebuild. A member with no row (an asset part picked in the viewport, a
+    // node that just became attached) is not among them — and recording that
+    // shortened set as the editor's selection made a plain click on a survivor
+    // equal the cache and be swallowed. The restore paints without recording.
+    {
+        auto part = iris::SceneNode::create();
+        part->setName(QStringLiteral("Part"));
+        part->setAttached(true);                 // an asset's inside: no row, by design
+        cube->addChild(part);
+        panel.repopulateTree();
+        QApplication::processEvents();
+        CHECK(rowFor(tree, QStringLiteral("Part")) == nullptr,
+              "tree_reselect: the attached part has no row");
+
+        // The editor's selection, made elsewhere, holds a row-less member.
+        panel.setSelectedSet({ sphere, part });
+        QApplication::processEvents();
+        panel.repopulateTree();                  // any folder edit, reparent, undo…
+        QApplication::processEvents();
+
+        announced = iris::SceneNodePtr();
+        QList<iris::SceneNodePtr> set;
+        auto conn = QObject::connect(&panel, &SceneHierarchyWidget::sceneNodeSetSelected,
+                                     [&set](const QList<iris::SceneNodePtr> &s) { set = s; });
+        CHECK(clickRow(QStringLiteral("Sphere")), "tree_reselect: the Sphere row after a rebuild");
+        CHECK(announced == sphere || (set.size() == 1 && set.first() == sphere),
+              "tree_reselect: clicking a survivor after a rebuild announces it (the rebuild's "
+              "restore does not shrink the cache)");
+        QObject::disconnect(conn);
+        cube->removeChild(part);
+        panel.repopulateTree();
+        QApplication::processEvents();
+    }
+
     // ---- 4. the panel's own gestures still announce -----------------------
     // paintSelection() must NOT record: a click on empty space paints the clear
     // and then announces it, and the Shift range paints its set and announces
     // it. Both would be swallowed by a cache written in the paint.
-    announced = cube;
-    QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier,
-                      QPoint(tree->viewport()->width() / 2,
-                             tree->viewport()->height() - 4));   // below the last row
+    // From a KNOWN state: a row is selected, then the user clicks nothing.
+    CHECK(clickRow(QStringLiteral("Cube")), "tree_reselect: Cube row (empty-space gesture)");
+    CHECK(announced == cube, "tree_reselect: ...and it is the selection");
+    const QPoint below(tree->viewport()->width() / 2, tree->viewport()->height() - 4);
+    CHECK(tree->itemAt(below) == nullptr, "tree_reselect: the point below the rows is empty");
+    QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier, below);
     QApplication::processEvents();
     CHECK(!announced,
           "tree_reselect: a click on empty space still announces the empty selection");
