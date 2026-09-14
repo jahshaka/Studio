@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 class QAbstractButton;
+class QShowEvent;
 class QLabel;
 class QLineEdit;
 class QSpinBox;
@@ -46,8 +47,17 @@ public:
     /// match. Called from the dialog's Apply.
     void saveSettings();
 
+protected:
+    /// Every page's saveSettings() runs on ANY OK, so every page's widgets
+    /// must show the LIVE state when the dialog opens — a value that changed
+    /// since this widget was built (a scripted app.mcpLogging, a server
+    /// started from --mcp-port) would otherwise be written back stale.
+    void showEvent(QShowEvent *event) override;
+
 private slots:
     void refresh();
+    /// Re-reads every control from the live state (McpLog, the server).
+    void reloadFromLiveState();
 
 private:
     SettingsManager *mSettings;
@@ -57,6 +67,10 @@ private:
     QAbstractButton *mEnabled;   // QCheckBox (Classic) or qlementine Switch (Qlementine)
     QAbstractButton *mLogSessions;   // the opt-in tool-research record (default OFF)
     QAbstractButton *mLogSource;     // ...and whether it carries the script source
+    /// Did the USER touch the enable switch in this dialog session? An OK on a
+    /// session whose server came from --mcp-port must neither stop it nor
+    /// persist mcp_enabled: the command line is not a preference.
+    bool mEnabledTouched = false;
     QSpinBox *mPort;
     QLineEdit *mToken;
     QLineEdit *mCommand;
