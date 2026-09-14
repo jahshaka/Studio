@@ -192,6 +192,54 @@ assert(app.engineErrors().recorded === 0,
 assert(material.get(hero).reflectionMap === equirect,
        "the DOCUMENT still holds the override — it is suppressed, not thrown away");
 
+// ---- THE SKY LIGHT GATE DOES NOT TOUCH AN AUTHORED MAP -------------------
+// SMOKE-ENGINE-1 item 2, round 2, the lead's decision. The sky's specular IBL
+// is scaled by the Sky Light — hide it and the sky reflects nothing — and that
+// scale rides `ambientUpperHemi.w`, which HlmsPbs applies to EVERY
+// PBSM_REFLECTION texture in the pass. An authored reflection map is not the
+// sky: it is the material's own environment, and the sky's gain has no business
+// dimming it. The renderer gates the SKY CUBE by not BINDING it (binding is per
+// material) and leaves the pass scale at 1.0 while any authored map is live.
+//
+// The fixture is already exactly right for this: HERO carries the override,
+// CONTROL takes the global cube. So hide the Sky Light and watch them part.
+assert(world.gi({ mode: "off" }) === true, "GI off again for the Sky Light case");
+for (var w2 = 0; w2 < 12 && world.giStatus().pccBound !== false; ++w2) editor.frame(5);
+assert(material.set(hero, { reflectionMap: equirect }) === true, "hero keeps its own map");
+var hLit = probeOf(hero, "reflection_hero_skylight_on.png");
+var cLit = probeOf(control, "reflection_control_skylight_on.png");
+console.log("    " + show("HERO skylight on", hLit) + " " + show("CONTROL skylight on", cLit));
+
+var sky = world.skyLight();
+assert(sky.light, "the scene has a Sky Light to hide");
+// `light` is the node id; `name` is what the hierarchy shows.
+assert(node.setProperty(sky.light, "visible", false) === true, "hide the Sky Light");
+var hOff = probeOf(hero, "reflection_hero_skylight_off.png");
+var cOff = probeOf(control, "reflection_control_skylight_off.png");
+console.log("    " + show("HERO skylight off", hOff) + " " + show("CONTROL skylight off", cOff));
+
+function lum(p) { return (p.r + p.g + p.b) / 3; }
+console.log("    luminance: hero " + lum(hLit).toFixed(1) + " -> " + lum(hOff).toFixed(1) +
+            ", control " + lum(cLit).toFixed(1) + " -> " + lum(cOff).toFixed(1));
+// The CONTROL reflects the sky, and the sky is a light: it goes out.
+assert(lum(cOff) < lum(cLit) * 0.5,
+       "the CONTROL sphere, which reflects the SKY, goes dark with the Sky Light (" +
+       lum(cLit).toFixed(1) + " -> " + lum(cOff).toFixed(1) + ")");
+// The HERO reflects its OWN map, which is not the sky and is not a light the
+// scene owns. It keeps it. (Not "identical": the sphere is metal 1 with a 0.05
+// roughness, so a sliver of the ambient still reaches it and the Sky Light is
+// the ambient — the claim is that the MAP survives, not that nothing moved.)
+assert(lum(hOff) > lum(hLit) * 0.6,
+       "the HERO sphere KEEPS its authored reflection map with the Sky Light hidden (" +
+       lum(hLit).toFixed(1) + " -> " + lum(hOff).toFixed(1) + ")");
+assert(hOff.b - hOff.r > 20,
+       "and it is still the MAP: the blue cast of the override is intact (" +
+       (hOff.b - hOff.r) + ")");
+assert(node.setProperty(sky.light, "visible", true) === true, "show the Sky Light again");
+var cBack = probeOf(control, "reflection_control_skylight_back.png");
+assert(lum(cBack) > lum(cLit) * 0.8,
+       "and showing it brings the sky's reflection back (" + lum(cBack).toFixed(1) + ")");
+
 // ---- save / close / open ------------------------------------------------
 assert(project.save() === true, "project.save");
 assert(project.close() === true, "project.close");

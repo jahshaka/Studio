@@ -1348,18 +1348,45 @@ int main()
     //      history nor the exposure — so a run that cannot come back is the
     //      defect, whatever the picture looked like at its worst.
     //
-    // WHAT THIS SECTION CANNOT DO, said plainly so nobody reads more into a
-    // green run than it carries: a 256x256 offscreen view does not reach the
-    // LOOP GAIN a real viewport does. The owner's picture came apart because
-    // the Shadow Maps port's mirror floor reflects ITSELF at close to unit
-    // gain, over a 918x523 viewport, for thousands of frames; the pixel proof
-    // of the guard is the live editor measurement recorded in
-    // spikes/smoke-engine-1/FINDINGS.md (4.142 % of the viewport pure black
-    // before, 0.149 % after, against 0.166 % for the same frame with SSR off).
-    // What this section locks in is the INVARIANT — that an unrepresentable
-    // radiance cannot put a hole in the picture and cannot latch the exposure —
-    // on a fixture that runs in the gate in twenty seconds.
+    // WHAT THIS SECTION DOES NOT DO, measured rather than assumed, because a
+    // green run here must not be read as proof of the guard:
+    //
+    // IT PASSES ON THE BINARY BEFORE THE GUARD. Run against the round-1 BASE
+    // media (irisgl c620eee's resolve, a pass-through history copy, the
+    // pristine HDR luminance end) every assertion below is green, with the same
+    // numbers to three decimal places. It was never red, and no amount of
+    // tuning made it red, for a reason worth writing down:
+    //
+    //   THIS GPU DOES NOT OVERFLOW A HALF-FLOAT TARGET TO INFINITY. Vulkan
+    //   leaves the narrowing conversion implementation-defined — "values with
+    //   magnitude greater than the maximum representable value may be converted
+    //   to either infinity or the maximum representable value" — and on the
+    //   RTX 4080 (driver 595.84) it CLAMPS. An emitter at 1e6 and an emitter at
+    //   1e30 produce the identical frame, mean 0.4204 both times, with not one
+    //   black pixel anywhere: the fixture has nothing to overflow. A non-finite
+    //   value in this renderer is therefore made by ARITHMETIC — the loop's own
+    //   Inf * 0 — and not by a store, and a 256x256 view two hundred frames
+    //   long does not reach the loop gain that takes it there.
+    //
+    // The pixel proof of the guard is consequently the LIVE editor measurement
+    // in spikes/smoke-engine-1/FINDINGS.md: on Ogre's ShadowMapFromCode port at
+    // Full-Res Rays, 4.142 % of the viewport pure black before the guard,
+    // 0.149 % after, against 0.166 % for the same frame with SSR switched off.
+    //
+    // What this section IS worth: it is the regression guard for the three
+    // invariants around that fix — a very bright source does not hole the
+    // picture, it develops as white, and removing it recovers — on a fixture
+    // that runs in the gate in seconds. That is the honest claim.
     {
+        const auto meanOf = [](const Image &img) {
+            double s = 0.0;
+            for (unsigned y = 0; y < img.height; ++y)
+                for (unsigned x = 0; x < img.width; ++x) {
+                    const Colour c = img.at(x, y);
+                    s += (c.r + c.g + c.b) / 3.0;
+                }
+            return float(s / double(img.width * img.height));
+        };
         // A GREY BACKDROP AND A GREY FLOOR, on purpose: in this fixture NOTHING
         // is legitimately black, so "a black pixel" means "a NaN reached the
         // tonemapper" with no heuristic in between.
@@ -1397,8 +1424,19 @@ int main()
 
         PostFxDesc hfx;
         hfx.allowOffscreen = true;
-        hfx.hdr = true;                 // the tonemap half of the defect
+        hfx.hdr = true;                 // the half-float target is the whole point
         hfx.ssr = 2;                    // full-resolution rays, the owner's row
+        // A CONSTANT GRADE, and this is what makes the section discriminating.
+        // With the AUTO exposure the fixture proved nothing: a scene holding
+        // something a million times brighter than the rest meters dark, that is
+        // a camera working rather than a bug, and the black it produces swamps
+        // the black the defect produces. tonemapFixed replaces the whole
+        // luminance reduction with a per-frame clear of the 1x1 exposure
+        // texture, so the grade cannot move and a black pixel in the measured
+        // region can only be a NaN. exposureScale is pushed rather than derived
+        // from the grey card so the floor reads mid-bright.
+        hfx.tonemapFixed = true;
+        hfx.exposureScale = 3.0f;
         hv->setPostFx(hfx);
 
         // "A black hole": a pixel that is pure black with a bright neighbour.
@@ -1410,36 +1448,22 @@ int main()
         // meter dark — that is a camera working, not a bug — and every pixel of
         // a frame the exposure has stopped down has dark neighbours too. A NaN
         // does not: it sits inside the lit region it came from.
+        // THE MEASURED REGION IS THE LOWER HALF, i.e. the FLOOR, and the
+        // emitter sits in the upper half. That is not tidiness, it is the whole
+        // discrimination: an emitter whose own radiance is +Inf is a NaN in the
+        // TONEMAPPER (FilmicTonemap(Inf) is Inf/Inf) on every binary ever
+        // built, fixed or not, so its own pixels say nothing about this guard.
+        // The floor is lit by the ambient and by one thing else — the SSR
+        // reflection — so a black pixel down there IS the loop, and nothing
+        // else in this fixture can write one.
         auto blackHoles = [](const Image &img) {
             unsigned n = 0;
-            for (unsigned y = 1; y + 1 < img.height; ++y)
-                for (unsigned x = 1; x + 1 < img.width; ++x) {
-                    const Colour c = img.at(x, y);
-                    if (c.r > 0.004f || c.g > 0.004f || c.b > 0.004f) continue;
-                    // SURROUNDED, not merely adjacent: six of the eight
-                    // neighbours bright. The EDGE of a blown-out reflection has
-                    // black on one side of it by construction and is not a
-                    // hole; a NaN is a hole because the thing it replaced is
-                    // still all around it.
-                    unsigned bright = 0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx) {
-                            if (!dx && !dy) continue;
-                            const Colour q = img.at(unsigned(int(x) + dx), unsigned(int(y) + dy));
-                            if (std::max(q.r, std::max(q.g, q.b)) > 0.25f) ++bright;
-                        }
-                    if (bright >= 6u) ++n;
-                }
-            return n;
-        };
-        auto meanOf = [](const Image &img) {
-            double s = 0.0;
-            for (unsigned y = 0; y < img.height; ++y)
+            for (unsigned y = img.height / 2u; y < img.height; ++y)
                 for (unsigned x = 0; x < img.width; ++x) {
                     const Colour c = img.at(x, y);
-                    s += (c.r + c.g + c.b) / 3.0;
+                    if (c.r <= 0.004f && c.g <= 0.004f && c.b <= 0.004f) ++n;
                 }
-            return float(s / double(img.width * img.height));
+            return n;
         };
 
         // The BASELINE the two later measurements are read against.
@@ -1449,13 +1473,16 @@ int main()
         const unsigned holesCold = blackHoles(cold);
         std::printf("   baseline (ordinary emitter): black pixels %u/%u, mean %.4f\n",
                     holesCold, cold.width * cold.height, meanOf(cold));
-        CHECK_MSG(holesCold == 0u, "no holes in the fixture before anything overflows (%u px)",
-                  holesCold);
+        CHECK_MSG(holesCold == 0u,
+                  "no holes in the fixture before anything goes over-bright (%u px)", holesCold);
 
-        // The overflow source. 1e6 in linear radiance is stored as +Inf the
-        // moment it reaches the RGBA16_FLOAT scene target.
+        // THE OVER-BRIGHT SOURCE. 1e6 is fifteen times the half-float target's
+        // largest value, so this is as far past the format as a scene can
+        // meaningfully go — on hardware that overflows to infinity it IS +Inf,
+        // and on this one it clamps (see the note at the top of the section).
         ep.emissive = Colour(1.0e6f, 1.0e6f, 1.0e6f);
-        CHECK(hs->setPbrMaterial(hEmitMat, ep), "the emitter overflows the history's format");
+        CHECK(hs->setPbrMaterial(hEmitMat, ep),
+              "the emitter goes far past what the history's format can hold");
         Image hot;
         render(engine.get(), 120);
         CHECK(hv->readPixels(hot), "readPixels with the overflow source present");
@@ -1480,8 +1507,8 @@ int main()
             render(engine.get(), 60);
         }
         CHECK_MSG(holesHot == 0u,
-                  "no black holes while a source brighter than the history format is on screen "
-                  "(%u px)", holesHot);
+                  "no black holes on the FLOOR while a source far brighter than the history's "
+                  "format can hold is on screen (%u px)", holesHot);
         // ...and the unrepresentable thing itself develops as WHITE. A hole and
         // a blown highlight are both "not the right colour"; only one of them
         // is what an over-bright pixel IS.
@@ -1519,6 +1546,7 @@ int main()
         engine->destroyView(hv);
         engine->destroyScene(hs);
         }
+
     }
 
     // ---- teardown with the chain live --------------------------------------
