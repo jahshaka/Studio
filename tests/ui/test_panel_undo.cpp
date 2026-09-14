@@ -298,8 +298,10 @@ int main(int argc, char **argv)
         ComboBoxWidget *combo = comboWith(&panel, QStringLiteral("MSAA"));
         CHECK(combo != nullptr, "msaa: the row is on the blade");
         const int was = scene->antiAliasing;
-        if (combo && combo->getWidget()) combo->getWidget()->setCurrentIndex(1);   // 2x
-        CHECK(scene->antiAliasing == 2, "msaa: the pick wrote the document");
+        // 4x — a level the tier does NOT already give (the tier is 2x since
+        // 2026-09-15; picking the tier's own value is a no-op that pins nothing).
+        if (combo && combo->getWidget()) combo->getWidget()->setCurrentIndex(2);   // 4x
+        CHECK(scene->antiAliasing == 4, "msaa: the pick wrote the document");
         CHECK(scene->worldOverrides.contains(QStringLiteral("msaa")),
               "msaa: and PINNED the row against the tier");
         CHECK(stack.index() == before + 1, "msaa: as ONE step");

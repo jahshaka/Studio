@@ -55,20 +55,20 @@ for (var k = 0; k < table.rows.length; ++k) {
 assert(world.mode() === "epic", "a new scene starts on Epic: " + world.mode());
 var fresh = world.settings();
 assert(fresh.hdr.value === 1, "Epic turns HDR on");
-// Hardware MSAA is 1x in EVERY tier: with the post chain on it either crashes
-// the driver (HDR) or renders black (ambient occlusion), both reproduced in
-// tests/engine. SMAA does the anti-aliasing instead.
+// Hardware MSAA is 2x in EVERY tier (owner 2026-09-15): with the post chain
+// on it cannot touch the SCENE (HDR crashes the driver, ambient occlusion
+// renders black — both reproduced in tests/engine; SMAA smooths the scene),
+// but the gizmos, light wires and helpers drawn into the window still get the
+// samples, and at Low — chain off — 2x is the scene's only anti-aliasing.
 assert(fresh.msaa.value === 2, "Epic asks for 2x MSAA (the helpers' edges; the chain renders the scene at 1x): " + fresh.msaa.valueId);
-// AND THAT 1 IS THE TIER'S, NOT THE DOCUMENT'S. iris::Scene's own default is 2x
-// MSAA (owner 2026-09-15) — what a scene renders at when no tier has decided,
-// which is the chainless case where hardware MSAA is the only anti-aliasing
-// there is. A NEW PROJECT applies Epic (MainWindow::createDefaultScene), so the
-// tier decides here and the answer is 1x + SMAA Ultra. This assertion is what
-// keeps "the document's default" and "what a new project renders at" from being
-// read as the same number again.
-assert(world.get().antiAliasing === 1,
-       "a new project's backing field is the TIER's 1x, not the document's 2x default: " +
-       world.get().antiAliasing);
+// The TIER decides here, not the document: a NEW PROJECT applies Epic
+// (MainWindow::createDefaultScene), so the backing field is the tier's value
+// and reports source "mode". The two numbers are equal today (both 2x), which
+// is why the SOURCE is what this assertion pins — a document default of 2x
+// with a tier of 1x would still read "mode" and still be 1x.
+assert(world.get().antiAliasing === 2 && fresh.msaa.source === "mode",
+       "a new project's backing field is the TIER's 2x, from the mode, not the document's default: " +
+       world.get().antiAliasing + " / " + fresh.msaa.source);
 assert(fresh.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra: " + fresh.smaa.valueId);
 // EPIC = the VCT+PCC hybrid since REFLECTIONS_ADOPTION_SPEC P6 (2026-09-07).
 // It was plain "vct" until P1+P2 fixed probe placement, the helper channel and
@@ -90,7 +90,7 @@ assert(s.giMode.valueId === "off", "Low turns GI off: " + s.giMode.valueId);
 assert(s.msaa.source === "mode", "an untouched row reports source 'mode'");
 // The invariant: the backing field IS the resolved value, so every existing
 // reader (SceneMirror, the serializer, the old verbs) sees the same number.
-assert(world.get().antiAliasing === 1, "world.get().antiAliasing follows the tier");
+assert(world.get().antiAliasing === 2, "world.get().antiAliasing follows the tier (2x at Low)");
 assert(world.get().shadowResolution === 512, "world.get().shadowResolution follows the tier");
 
 assert(world.mode({ mode: "epic" }) === "epic", "world.mode({mode:'epic'})");
@@ -106,13 +106,13 @@ assert(s.shadowFilter.valueId === "soft", "Epic filters shadows with PCF 4x4 (So
 assert(s.hdr.value === 1 && s.bloom.value === 1, "Epic turns HDR and bloom on");
 assert(s.ssao.valueId === "half", "Epic runs ambient occlusion at half resolution");
 assert(s.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra");
-assert(world.get().antiAliasing === 1, "the backing field followed Epic too (MSAA stays 1x)");
+assert(world.get().antiAliasing === 2, "the backing field followed Epic too (MSAA at the tier's 2x)");
 assert(world.get().shadowResolution === 2048, "and Epic's shadow atlas landed in the field");
 
 // ---- a pin survives a mode switch -------------------------------------------
 var pinned = world.override({ id: "msaa", value: "4x" });
 assert(pinned.value === 4 && pinned.source === "override", "world.override pins MSAA to 4x");
-assert(world.get().antiAliasing === 2, "the pin wrote through to the backing field");
+assert(world.get().antiAliasing === 4, "the pin wrote through to the backing field (4x)");
 assert(pinned.tierValue === 2, "the row still reports what Epic would give it");
 
 world.mode({ mode: "low" });
@@ -133,8 +133,8 @@ assert(world.override({ id: "shadowResolution", value: 2048 }).value === 2048,
 // ---- clearing a pin puts the tier's value back ------------------------------
 var cleared = world.clearOverride({ id: "msaa" });
 assert(cleared.source === "mode", "clearOverride drops the pin: " + cleared.source);
-assert(cleared.value === 1, "and puts Low's value back: " + cleared.value);
-assert(world.get().antiAliasing === 1, "the backing field followed");
+assert(cleared.value === 2, "and puts Low's value (2x) back: " + cleared.value);
+assert(world.get().antiAliasing === 2, "the backing field followed (2x)");
 
 s = world.clearOverrides();
 assert(s.shadowResolution.source === "mode", "clearOverrides drops the rest");
