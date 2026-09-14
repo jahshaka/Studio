@@ -70,6 +70,28 @@ const QVector<Entry> &table()
           QString() },
         { QStringLiteral("Decals"), QStringLiteral("Decals"),
           QString() },
+        // ---- round 2 (2026-09-14) ----------------------------------------
+        { QStringLiteral("IesProfiles"), QStringLiteral("IES Profiles"),
+          QStringLiteral("Their three profiles are Ogre's media; this port ships three of our "
+                         "own (a narrow beam, a wide flood and a batwing). Binding a profile "
+                         "here re-calibrates intensity by its peak candela, so the four lights "
+                         "differ in SHAPE only.") },
+        { QStringLiteral("ShadowMapFromCode"), QStringLiteral("Shadow Maps"),
+          QStringLiteral("Our shadow node is fixed; theirs is authored per sample. Their live "
+                         "filter/resolution keys are scene settings here.") },
+        { QStringLiteral("PlanarReflections"), QStringLiteral("Planar Reflections"),
+          QString() },
+        { QStringLiteral("Tutorial_SSAO"), QStringLiteral("SSAO"),
+          QString() },
+        { QStringLiteral("Tutorial_SMAA"), QStringLiteral("SMAA"),
+          QStringLiteral("Offscreen screenshots here are 1x MSAA by design, so the tile picture "
+                         "is the un-antialiased frame SMAA is there to rescue — open the port "
+                         "and look at the viewport, or compare on-screen against on-screen.") },
+        { QStringLiteral("ImageVoxelizer"), QStringLiteral("Voxelizer (technique)"),
+          QStringLiteral("A TECHNIQUE COMPARISON, NOT A PICTURE ONE. Their sample voxelizes "
+                         "imported Ogre meshes, which we deliberately cannot read; this port "
+                         "puts a primitive Cornell box in the shared room under voxel cone "
+                         "tracing, so what lines up is the bounce and not the geometry.") },
     };
     return t;
 }

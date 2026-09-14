@@ -1,0 +1,14 @@
+IESNA:LM-63-1995
+[TEST] Jahshaka synthetic photometry - narrow beam
+[TESTLAB] none - this file is authored, not measured
+[MANUFAC] Jahshaka
+[LUMCAT] JAH-NARROW-20
+[DESCRIPTION] A 20-degree spot: full candela on axis, half at 10 degrees, dark past 30.
+[MORE] Authored for the Ogre-Next IesProfiles port (SPECS/OGRE_SAMPLES_TAB_SPEC.md).
+[MORE] Ogre's own sample profiles are their media and are not redistributed here.
+TILT=NONE
+1 1000 1 19 1 1 2 0 0 0
+1 1 60
+0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180
+0
+1000 820 380 90 12 0 0 0 0 0 0 0 0 0 0 0 0 0 0

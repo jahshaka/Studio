@@ -1,0 +1,13 @@
+IESNA:LM-63-1995
+[TEST] Jahshaka synthetic photometry - wide flood
+[TESTLAB] none - this file is authored, not measured
+[MANUFAC] Jahshaka
+[LUMCAT] JAH-FLOOD-140
+[DESCRIPTION] A soft flood: nearly flat to 50 degrees, gone by 90.
+[MORE] Authored for the Ogre-Next IesProfiles port (SPECS/OGRE_SAMPLES_TAB_SPEC.md).
+TILT=NONE
+1 1000 1 19 1 1 2 0 0 0
+1 1 60
+0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180
+0
+1000 995 975 940 880 790 650 450 200 0 0 0 0 0 0 0 0 0 0
