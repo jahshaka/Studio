@@ -78,6 +78,16 @@ struct CliOptions
     /// --no-log: routing, levels and the in-memory ring all still work;
     /// nothing reaches disk.
     bool noLog = false;
+    /// --no-ray-query: boot with the hardware ray-query tier OFF, so this
+    /// machine renders the picture a machine WITHOUT ray-tracing hardware gets
+    /// (SPECS/PHOTON_SPEC.md §7 R1). It exists so every ray-consuming suite can
+    /// run BOTH pictures on one GPU and the fallback is proved on every push
+    /// instead of assumed. JAHSHAKA_NO_RAY_QUERY=1 is the same switch for a
+    /// runner that cannot pass an argument; app.rayTracing("off") is the same
+    /// switch as a persisted PREFERENCE (ray tracing is a property of the
+    /// machine, not of the document), and this flag is the one-run override
+    /// that never writes it.
+    bool noRayQuery = false;
 
     static CliOptions parse(int argc, char *argv[]);
 

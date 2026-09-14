@@ -198,6 +198,6 @@ if(JAHSHAKA_ASAN)
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
     set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 120 LABELS "engine"
-        ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     jah_no_display(skeletal.share_asan)
 endif()

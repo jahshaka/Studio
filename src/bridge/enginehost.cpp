@@ -18,6 +18,13 @@
 #include <QStandardPaths>
 #include <cstring>
 
+namespace {
+bool gCliNoRayQuery = false;
+}
+void setCliNoRayQuery(bool on) { gCliNoRayQuery = on; }
+bool cliNoRayQuery() { return gCliNoRayQuery; }
+
+
 using namespace jahshaka::engine;
 
 EngineHost &EngineHost::instance()
@@ -172,6 +179,29 @@ EngineConfig EngineHost::resolveConfig()
     // changes straight to the live Engine.
     cfg.optimizeShadowMeshes =
         SettingsManager::getDefaultManager()->getValue("shadow_mesh_optimization", true).toBool();
+
+    // HARDWARE RAY TRACING (SPECS/PHOTON_SPEC.md §7 R1) — an APPLICATION
+    // preference, not a document setting: it is a property of the GPU in this
+    // machine, and a picture that changed with the file open would be a second
+    // authoring path. Preferences > Rendering writes it, app.rayTracing reads
+    // and sets it, and --no-ray-query forces it off for one run without
+    // touching what the user chose.
+    cfg.rayTracing =
+        SettingsManager::getDefaultManager()->getValue("hardware_ray_tracing", true).toBool() &&
+        !cliNoRayQuery();
+    // OFF MUST REACH THE DEVICE, not just our tier (the lead's call, round 3
+    // item 10). ogre-patch 0038 decides at vkCreateDevice whether to ask for
+    // the ray extensions at all, and it reads the environment because the pin
+    // cannot see an EngineConfig. Without this line the preference only stopped
+    // us BUILDING structures while the process still came up on a 1.2 instance
+    // with seven extra extensions and three feature bits on — so "renders
+    // exactly what a machine without ray tracing renders" was a softening, not
+    // a fact. Set here, before Engine::create, the next launch creates the
+    // device the way it did before the tier existed and the claim is true.
+    //
+    // Only ever SET, never unset: a runner that exported the variable meant it,
+    // and the preference has no business overriding a deliberate override.
+    if (!cfg.rayTracing) qputenv("JAHSHAKA_NO_RAY_QUERY", "1");
 
     // ---- Persistent shader cache (SHADER_CACHE_SPEC.md §4.1) ----
     // AppDataLocation/shadercache: the same root the library DB and the asset

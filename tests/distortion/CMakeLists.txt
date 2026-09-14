@@ -41,5 +41,6 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
     set_tests_properties(distortion.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
-                         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
