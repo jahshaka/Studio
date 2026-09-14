@@ -175,23 +175,11 @@ static void gridStateForView(const QString &view, bool showPref,
 // Everything else the grid needs from the current view (owner report
 // 2026-09-07 — "the axis-view grid is not there, and where it is it is white"):
 //
-//   * WHERE the floor plane sits. The default -0.01 tucks the floor grid under
-//     the ground plane every scene ships, which is right in perspective and
-//     fatal from above: in `top` / `bottom` the ground hid the grid completely.
-//     Those two views get a small POSITIVE offset so the grid draws over the
-//     ground; nothing else changes.
 //   * WHAT COLOUR it is. One blue-grey for every plane made an axis view read
 //     as "white lines". Each axis view is tinted by the axis its grid plane
 //     FACES — Y green for top/bottom, Z blue for front/back, X red for
 //     left/right — the gizmo's own axis colours, so the view announces itself.
 //     Perspective keeps the neutral editor grid.
-static float gridFloorOffsetForView(const QString &view)
-{
-    if (view == QLatin1String("top") || view == QLatin1String("bottom"))
-        return 0.02f;
-    return -0.01f;
-}
-
 static void gridColoursForView(const QString &view,
                                jahshaka::engine::Colour &minor,
                                jahshaka::engine::Colour &major)
@@ -225,7 +213,6 @@ void EngineSceneViewport::pushGridForView(bool helpers)
     jahshaka::engine::Colour minor, major;
     gridColoursForView(mCameraView, minor, major);
     mMirror->setGridColours(minor, major);
-    mMirror->setGridFloorOffset(gridFloorOffsetForView(mCameraView));
     mMirror->setGrid(on && helpers, SnapSettings::translateSize(), plane);
     // What was actually pushed, for editor.overlays().gridPlane: the plane
     // follows the VIEW, never the camera's pose, so panning inside an axis view
