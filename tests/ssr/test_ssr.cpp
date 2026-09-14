@@ -1835,6 +1835,190 @@ int main()
         }
     }
 
+    // ---- 16. ON A MIRROR THE WEIGHT IS A DECISION, NOT A FRACTION ----------
+    //
+    // Lane SSR-2, the owner's DUAL IMAGE on the Mirror Room's chrome sphere
+    // (rig evidence spikes/smoke-2026-09-15/reportB, ledger §321): with SSR on,
+    // the sphere showed a stippled ghost of the teapot painted OVER the probe's
+    // smooth image; with SSR off, one image. Section 14 above is about SSR
+    // painting things it cannot verify; this one is about it painting a thing
+    // it CAN verify at a FRACTION, which is a different defect with a different
+    // cure.
+    //
+    // WHY A FRACTION IS WRONG ON A MIRROR, in one line: the probe's image and
+    // the screen's image are the same objects in two PLACES (the probe is
+    // parallax-corrected onto a box and captured from a grid point; the trace
+    // is at the true position and from this frame), so any weight strictly
+    // between 0 and 1 shows BOTH of them, and a weight that changes from pixel
+    // to pixel — which is what a per-ray confidence does — shows the screen's
+    // copy as a dither. Below a roughness threshold the confidence therefore
+    // decides VALID vs NONE and stops scaling the blend
+    // (JahSsrResolve_ps.glsl, "THE RULE ON A MIRROR"); above it the lerp stays,
+    // because a wide enough lobe blurs the two sources into one answer.
+    //
+    // THE FIXTURE MAKES THE WEIGHT ITSELF READABLE, which takes three
+    // deliberate choices and is worth spelling out because each one removes a
+    // term that would otherwise be mistaken for the weight:
+    //
+    //  1. NO SKY, NO AMBIENT, NO LIGHT. With no environment source at all the
+    //     composite is lerp( 0, ssr, w ) = w * ssr — the mirror is BLACK where
+    //     the screen has no answer — so the picture IS the weight field, scaled
+    //     by the reflected radiance.
+    //  2. A WHITE METAL MIRROR. F0 = albedo = 1 makes the Fresnel term 1 at
+    //     every angle, so that scale does not drift across the floor. (The
+    //     first cut of this fixture used a coloured sky and a lit metal and
+    //     measured the Fresnel ramp instead of the weight.)
+    //  3. AN EMISSIVE CEILING, low and wide. Emissive so what the screen finds
+    //     does not depend on lighting or GI; low so a grazing reflected ray
+    //     still reaches it; and horizontal so the reflected ray's vertical
+    //     component IS the arrival angle at it, sweeping from face-on near the
+    //     camera to grazing towards the horizon — straight through the march's
+    //     `faceFade` ramp. That is the confidence term with the widest, most
+    //     even footprint, which is what makes a blend and a decision differ
+    //     over a whole region of the picture instead of a few pixels.
+    //     `ssrMaxDistance` is moved far past the scene for the same reason: the
+    //     DISTANCE fade is an envelope the rule keeps as a fraction on purpose,
+    //     and on this geometry it sweeps the same pixels the arrival angle does.
+    //
+    // The measurement is then the HISTOGRAM of the floor's LINEAR green, in
+    // bands of its own maximum:
+    //
+    //     full   d >= 0.75 M            the screen answered and won
+    //     middle 0.20 M <= d < 0.75 M   both images are on the pixel at once
+    //
+    // and the assertion is the middle band as a fraction of the two. A blend
+    // spreads its pixels across the middle; a decision puts them at the ends
+    // and keeps in the middle only the mask's own FEATHER — about one
+    // ray-buffer texel of ramp at the hit region's edge, a boundary and not a
+    // ghost.
+    //
+    // WHAT THIS SECTION IS AND IS NOT, said plainly because the number it
+    // prints is the same on both media: 0.089 on the base resolve and 0.092
+    // with the rule. It is a GUARD, not the proof of the fix. A well-sampled
+    // mirror is FULLY confident under both — that is the design, and it is why
+    // the flat-floor sections above do not move either — so the two only differ
+    // where the trace is marginal, and there the probe's answer has to DISAGREE
+    // with the screen's for the difference to be visible at all. Nothing in
+    // this suite's fixtures disagrees: they fall back to the analytic sky,
+    // which is the same sky the trace is looking at. It takes a
+    // parallax-corrected PROBE GRID — a captured photograph of a room, from a
+    // point that is not this pixel — for the two sources to be the same objects
+    // in two places, and that is the Mirror Room, not a 256x256 fixture. The
+    // lane's proof is there (SSR on vs off over the chrome sphere's limb:
+    // footprint 7.58 % and mean delta 4.34 before, 0.47 % and 1.07 after).
+    //
+    // What this section DOES pin is the other half of the rule, the half a
+    // future change could quietly break: where the screen DOES answer on a
+    // mirror, the answer must arrive as a decision — full strength across the
+    // region, with only the mask's feather in between — rather than as a field
+    // of fractions.
+    {
+        Scene *ms = engine->createScene("ssr-mirror-rule");
+        View  *mv = engine->createOffscreenView("ssr-mirror-rule", 256, 256,
+                                                Colour(0.0f, 0.0f, 0.0f));
+        CHECK(ms && mv, "the mirror-rule fixture's scene and view exist");
+        if (ms && mv) {
+        mv->setScene(ms);
+        ms->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
+
+        PbrParams fp2;
+        fp2.albedo = Colour(1.0f, 1.0f, 1.0f);
+        fp2.metalness = 1.0f;
+        fp2.roughness = 0.02f;                    // mirror class: the rule's own range
+        const NodeId mfloor = ms->createNode();
+        ms->attachMesh(mfloor, ms->createMesh(enginetest::unitCubeMesh()),
+                       ms->createPbrMaterial(fp2));
+        enginetest::setNodeScale(ms, mfloor, Vec3(60.0f, 0.2f, 60.0f));
+        enginetest::setNodePosition(ms, mfloor, Vec3(0.0f, -0.2f, 0.0f));
+
+        PbrParams cp;
+        cp.albedo   = Colour(0.0f, 0.0f, 0.0f);
+        cp.emissive = Colour(0.0f, 1.0f, 0.0f);
+        cp.roughness = 0.9f;
+        const NodeId ceiling = ms->createNode();
+        ms->attachMesh(ceiling, ms->createMesh(enginetest::unitCubeMesh()),
+                       ms->createPbrMaterial(cp));
+        enginetest::setNodeScale(ms, ceiling, Vec3(60.0f, 0.1f, 60.0f));
+        enginetest::setNodePosition(ms, ceiling, Vec3(0.0f, 0.55f, 0.0f));
+        enginetest::testCameraLookAt(mv, Vec3(0.0f, 0.16f, 6.0f), Vec3(0.0f, 0.13f, -6.0f));
+
+        Image mirrOff, mirrOn;
+        PostFxDesc mfx;
+        mfx.allowOffscreen = true;
+        mv->setPostFx(mfx);                        // ssr == 0
+        render(engine.get(), 6);
+        CHECK(mv->readPixels(mirrOff), "mirror-rule fixture renders with SSR off");
+        mfx.ssr = 2;                               // full-resolution rays
+        mv->setPostFx(mfx);
+        render(engine.get(), 8);
+        CHECK(mv->readPixels(mirrOn), "mirror-rule fixture renders with SSR on");
+        if (envOn("JAH_SSR_DUMP")) {
+            writePpm(mirrOff, "ssr-mirror-rule-off.ppm");
+            writePpm(mirrOn, "ssr-mirror-rule-on.ppm");
+        }
+
+        // A window of FLOOR: below the horizon, inset from the frame's edges so
+        // the march's own screen-edge ramp is not what is being measured.
+        const unsigned mx0 = 40, mx1 = 215, my0 = 140, my1 = 250;
+        // The readback is 8-bit sRGB-ENCODED (this fixture has HDR off, so
+        // there is no film curve); the weight is linear, so the bands are
+        // measured after decoding. A monotone curve would not change WHICH
+        // pixels are extreme, but it would move the band edges.
+        const auto linear = [](float v) {
+            return v <= 0.04045f ? v / 12.92f
+                                 : std::pow((v + 0.055f) / 1.055f, 2.4f);
+        };
+        const auto weightAt = [&](unsigned x, unsigned y) {
+            return linear(mirrOn.at(x, y).g) - linear(mirrOff.at(x, y).g);
+        };
+        // NORMALISED PER ROW, which is what makes this a measurement of the
+        // CONFIDENCE and not of the envelope. The distance fade, the arrival
+        // angle and the reflected radiance are all functions of the reflected
+        // ray's elevation — i.e. of the screen ROW — and are constant along a
+        // row; the mask is not. So each row is measured against its own
+        // brightest pixel, and a row is either answered (its pixels sit at its
+        // own full strength), unanswered (nothing above the floor of the
+        // measurement), or DITHERED — which is the defect, and the only thing
+        // that puts pixels in the middle band.
+        float peak = 0.0f;
+        for (unsigned y = my0; y <= my1; ++y)
+            for (unsigned x = mx0; x <= mx1; ++x)
+                peak = std::max(peak, weightAt(x, y));
+        unsigned full = 0, middle = 0;
+        if (peak > 0.02f)
+            for (unsigned y = my0; y <= my1; ++y) {
+                float rowPeak = 0.0f;
+                for (unsigned x = mx0; x <= mx1; ++x)
+                    rowPeak = std::max(rowPeak, weightAt(x, y));
+                if (rowPeak < 0.10f * peak) continue;      // an unanswered row
+                for (unsigned x = mx0; x <= mx1; ++x) {
+                    const float d = weightAt(x, y);
+                    if (d >= 0.75f * rowPeak)      ++full;
+                    else if (d >= 0.20f * rowPeak) ++middle;
+                }
+            }
+        const float midFrac = (full + middle) > 0u
+                                  ? float(middle) / float(full + middle)
+                                  : 1.0f;
+        std::printf("   mirror rule: peak reflected green %.3f; full %u px, middle %u px "
+                    "-> middle fraction %.3f\n", peak, full, middle, midFrac);
+        CHECK_MSG(peak > 0.02f,
+                  "the screen's answer really is on this mirror (%.3f), so the bands "
+                  "below measure something", peak);
+        CHECK_MSG(full > 400u,
+                  "...and it WINS over a real region of it (%u px at full strength)", full);
+        CHECK_MSG(midFrac < 0.35f,
+                  "on a mirror the composite is a decision, not a blend: only %.3f of the "
+                  "answered pixels carry both images at once (budget 0.35; measured 0.09 "
+                  "on both the base resolve and the rule — see the note above)", midFrac);
+
+        mv->setPostFx(PostFxDesc());
+        render(engine.get(), 2);
+        engine->destroyView(mv);
+        engine->destroyScene(ms);
+        }
+    }
+
     // ---- teardown with the chain live --------------------------------------
     // The ASan copy of this suite is what would catch a texture or node
     // definition the SSR shape leaks across a rebuild.
