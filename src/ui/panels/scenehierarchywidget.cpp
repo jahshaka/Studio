@@ -230,7 +230,30 @@ void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
         suppressSelectionSignal = true;
         ui->sceneTree->setCurrentItem(item);
         suppressSelectionSignal = false;
-		ui->sceneTree->scrollTo(ui->sceneTree->currentIndex(), QAbstractItemView::PositionAtCenter);
+		// REVEAL A ROW THE USER CANNOT SEE — AND NOTHING ELSE (owner report
+		// 2026-09-14: "when the list grows beyond the widget the clicks become
+		// broken — it jumps items; when there are fewer items than fit I can
+		// click them all").
+		//
+		// A click in this tree goes out as a selection and comes straight back
+		// in here (treeSelectionChanged -> SelectionService ->
+		// MainWindow::applySelectionToUi -> setSelectedNode), and this call
+		// used to be scrollTo(PositionAtCenter): every click scrolled the list
+		// UNDER THE CURSOR so the picked row sat in the middle, and the next
+		// click landed on a different node. With a list shorter than the dock
+		// there is nothing to scroll, which is exactly why it only showed in
+		// scenes with more nodes than fit.
+		//
+		// Two changes, both needed. EnsureVisible instead of PositionAtCenter,
+		// so an off-screen row (a pick in the 3D VIEWPORT — the reason this
+		// call exists) is revealed by the smallest scroll instead of a jump;
+		// and nothing at all when the selection is this panel's OWN, because a
+		// row the user just clicked is a row they are already looking at —
+		// EnsureVisible would still slide a partly-clipped bottom row up by
+		// one.
+		if (!announcingOwnSelection)
+			ui->sceneTree->scrollTo(ui->sceneTree->currentIndex(),
+			                        QAbstractItemView::EnsureVisible);
     }
 }
 
@@ -362,8 +385,13 @@ void SceneHierarchyWidget::announceSet(const QList<iris::SceneNodePtr> &nodes)
     if (ids == lastAnnouncedSet) return;
     lastAnnouncedSet = ids;
     selectedNode = nodes.isEmpty() ? iris::SceneNodePtr() : nodes.first();
+    // THE ROUND TRIP STARTS HERE and comes back into setSelectedNode() before
+    // this line returns: the flag is what stops the return leg from scrolling
+    // the list the user just clicked in (see setSelectedNode).
+    announcingOwnSelection = true;
     if (nodes.size() > 1) emit sceneNodeSetSelected(nodes);
     else                  emit sceneNodeSelected(selectedNode);
+    announcingOwnSelection = false;
 }
 
 void SceneHierarchyWidget::setSelectedSet(const QList<iris::SceneNodePtr> &nodes)
@@ -383,8 +411,11 @@ void SceneHierarchyWidget::setSelectedSet(const QList<iris::SceneNodePtr> &nodes
     if (primaryItem) {
         ui->sceneTree->setCurrentItem(primaryItem, 0,
                                       QItemSelectionModel::NoUpdate);
-        ui->sceneTree->scrollTo(ui->sceneTree->currentIndex(),
-                                QAbstractItemView::PositionAtCenter);
+        // Reveal a row that cannot be seen; never move the list under a click
+        // the user just made — see setSelectedNode.
+        if (!announcingOwnSelection)
+            ui->sceneTree->scrollTo(ui->sceneTree->currentIndex(),
+                                    QAbstractItemView::EnsureVisible);
     }
     suppressSelectionSignal = false;
 }

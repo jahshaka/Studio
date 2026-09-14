@@ -245,6 +245,13 @@ private:
     /// Guards setSelectedNode() against re-emitting the selection it was just
     /// given (the panel drives the viewport and the viewport drives the panel).
     bool suppressSelectionSignal = false;
+    /// True while a selection this panel announced is on its way back in. The
+    /// shell's round trip is synchronous — announceSet() emits, the shell tells
+    /// SelectionService, and the service calls setSelectedNode()/setSelectedSet()
+    /// before the emit returns — so this is what tells the return leg "the user
+    /// is looking at the row already; do not scroll the list under their
+    /// cursor" (owner report 2026-09-14, the jumping outliner).
+    bool announcingOwnSelection = false;
     /// Folder rows that were collapsed, so a repopulate does not expand them all.
     QStringList collapsedFolders;
     /// The last set this panel announced (node ids, primary first). The tree's
