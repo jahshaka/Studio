@@ -320,10 +320,17 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// same directional light the pin names.
 	scene->sunLightGuid = sceneObj.value("sunLight").toString();
 	// THE SUN DISC (SKY_LIGHT_SPEC §3): visible by default, excluded from probe
-	// captures by default. Absent keys read as those defaults, so a file written
-	// before the disc existed gets the shipped behaviour.
+	// captures by default, drawn at iris::kDefaultSunDiscSize degrees across.
+	// Absent keys read as those defaults, so a file written before the disc
+	// existed gets the shipped behaviour — and the SIZE default is the same
+	// named constant the field's initialiser uses, so the two cannot drift
+	// apart (the reader-defaults trap this file's header records).
 	scene->sunDiscVisible = sceneObj.value("sunDiscVisible").toBool(true);
 	scene->sunDiscInProbes = sceneObj.value("sunDiscInProbes").toBool(false);
+	scene->sunDiscSize = float(qBound(double(iris::kMinSunDiscSize),
+	                                  sceneObj.value("sunDiscSize")
+	                                      .toDouble(double(iris::kDefaultSunDiscSize)),
+	                                  double(iris::kMaxSunDiscSize)));
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
 	auto volume = sceneObj.value("ambientMusicVolume").toDouble(50);
 	scene->setAmbientMusicVolume(volume);
@@ -1366,9 +1373,10 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // it is non-zero).
     lightNode->forwardShadingPriority =
         qMax(0, nodeObj.value("forwardShadingPriority").toInt(0));
-    // THE SUN'S ANGULAR DIAMETER: absent = the real sun's 0.53 degrees.
-    lightNode->sunAngle =
-        float(qBound(0.0, nodeObj.value("sunAngle").toDouble(0.53), 20.0));
+    // (The sun's angular size used to be read here as `sunAngle`. The disc's
+    // size is a WORLD row now — Scene::sunDiscSize — so the key is not read any
+    // more and an old file's value is simply dropped: no migration exists and
+    // nothing is owed to old data, the CRUD law.)
     // FOLLOWS ATMOSPHERE: absent = ON, which is the constructor's default too
     // (the two must agree — this file's own header records what happens when
     // they do not).

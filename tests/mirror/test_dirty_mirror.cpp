@@ -439,7 +439,7 @@ int main(int argc, char **argv)
     // ---- SUBCLASS PARAMETERS (the Params mark) ----------------------------
     for (const char *key : { "intensity", "distance", "spotCutOff", "spotFalloff",
                              "rectWidth", "rectHeight", "shadowAlpha", "doubleSided",
-                             "accurate", "sunAngle", "iconSize", "forwardShadingPriority" }) {
+                             "accurate", "iconSize", "forwardShadingPriority" }) {
         const QString k = QLatin1String(key);
         const QVariant before = r.light->getPropertyValue(k);
         const QVariant after = before.typeId() == QMetaType::Bool

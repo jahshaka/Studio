@@ -319,8 +319,8 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "skyLight", "world.skyLight() -> {light, name, intensity, tint, reason, skyType, count}",
           "THE SCENE'S SKYLIGHT — the light that reads the World sky and fills the scene with its diffuse ambient. There is no flat \"ambient colour\" any more: ambient IS a Sky Light, a light node of type \"sky\" (scene.addLight(\"sky\")), and a scene with no Sky Light has no ambient at all. `light`/`name` are the resolved one (the FIRST VISIBLE Sky Light in creation order) and `reason` says how it was chosen: \"first\", \"allHidden\" (every Sky Light in the scene is hidden — hiding one is how you switch the skylight off without deleting it) or \"none\". `intensity` is its strength (1.0 = the sky at full physical strength) and `tint` its colour, which multiplies the sky's own integral per channel. `skyType` is the sky it is reading and `count` how many Sky Lights the scene holds — more than one raises the `sky.duplicate` scene issue, because only the first lights anything. Both rows are ordinary light properties: node.property(id, \"intensity\", 2) doubles the skylight and is keyable.",
           Needs::Document },
-        { "sunDisc", "world.sunDisc({visible, inProbes}) -> {visible, inProbes}",
-          "THE SUN DISC — the bright disc drawn in the sky where the scene's sun light points. It is the SUN's, not the sky's: one mechanism, drawn over EVERY sky type (colour, gradient, realistic, equirect, cubemap) at the angular size the sun light's Sun Angle row sets, and it moves when the light is rotated. `visible` (default true) is the scene-level switch. NOTE for image skies: an equirect or cubemap sky usually has a sun PAINTED into it, and the disc will only line up with it if you aim the sun light at it — otherwise the scene shows two suns, so either align the light or turn the disc off here. `inProbes` (default FALSE) says whether reflection-probe captures contain it: off, because the sun's energy already reaches glossy surfaces through the directional light's own specular highlight, and capturing the disc as well paints a SECOND sun on everything the probes light. Turn it on if you want probe-lit mirrors to show the disc. Called with no argument it reads. One undo step.",
+        { "sunDisc", "world.sunDisc({visible, inProbes, size}) -> {visible, inProbes, size}",
+          "THE SUN DISC — the bright disc drawn in the sky where the scene's sun light points. It is the SUN's, not the sky's: one mechanism, drawn over EVERY sky type (colour, gradient, realistic, equirect, cubemap), and it moves when the light is rotated. `visible` (default true) is the scene-level switch. `size` is its ANGULAR DIAMETER IN DEGREES, 0.1 to 10, default 2.12: the real sun is 0.53 degrees across, but a photograph's sun looks several times larger because glare in the lens and in the eye spreads the saturated core, so the default is four times the physical angle. THE SIZE COSTS NO LIGHT: the disc's radiance is normalised per solid angle, so a wider disc spreads the SAME energy over more of the sky — bloom and an `inProbes` capture read the same total at every size, and only the sun light's own colour and intensity say how bright it is. NOTE for image skies: an equirect or cubemap sky usually has a sun PAINTED into it, and the disc will only line up with it if you aim the sun light at it — otherwise the scene shows two suns, so either align the light or turn the disc off here. `inProbes` (default FALSE) says whether reflection-probe captures contain it: off, because the sun's energy already reaches glossy surfaces through the directional light's own specular highlight, and capturing the disc as well paints a SECOND sun on everything the probes light. Turn it on if you want probe-lit mirrors to show the disc. A sun that has set draws no disc at all. Called with no argument it reads. One undo step.",
           Needs::Document },
         { "planarReflections", "world.planarReflections() -> {enabled, budget, resolution, shadows, activeActors}",
           "Reads the scene's planar-reflection settings. 'budget' is how many mirror planes may render (the resolved value: a scene that never set one follows its World Mode). 'resolution' and 'shadows' are the per-plane render-target size and whether shadows are drawn inside the reflections; both report the value in force, derived from the budget when the scene has not pinned them. 'activeActors' is how many planes ACTUALLY rendered in the last frame — planes off screen are culled — and is 0 without a live engine viewport. Individual objects become mirror planes through node.setPlanarReflector.",
@@ -367,12 +367,13 @@ QVector<VerbInfo> WorldApi::verbs() const
           "`direction` is the world direction it travels (the realistic sky and the sun disc are "
           "both placed from it — the sky has no sun dials of its own); `nextPriority` is the "
           "number the next directional light added to this scene will take. "
-          "TWO ROWS LIVE ON THE SUN ITSELF rather than here, because they describe the light: "
-          "`sunAngle` (its angular size in degrees, which sets the disc's size) and "
+          "ONE ROW LIVES ON THE SUN ITSELF rather than here, because it describes the light: "
           "`followsAtmosphere` (default true) — with the Realistic sky, the sun's direct light "
           "takes the colour the air gives it, so the colour you picked is its NOON colour and a "
-          "low sun arrives redder and dimmer; the disc follows the same value. On any other sky "
-          "it is inert. Both are read and written with node.property / node.setProperty.",
+          "low sun arrives redder and dimmer, and a sun below the horizon lights nothing, draws "
+          "no disc and casts no shadow — the three fade together as it sets. The disc's SIZE is "
+          "not here either: it is a world row, world.sunDisc({size}). On any other sky "
+          "it is inert. It is read and written with node.property / node.setProperty.",
           Needs::Document },
         { "get", "world.get() -> {skyLight, sunDisc, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
@@ -1370,18 +1371,28 @@ QVariantMap WorldApi::sunDisc(const QVariantMap &params)
     if (!scene) return out;
     if (!params.isEmpty()) {
         WorldEdit edit(scene, { QStringLiteral("sunDiscVisible"),
-                                QStringLiteral("sunDiscInProbes") });
+                                QStringLiteral("sunDiscInProbes"),
+                                QStringLiteral("sunDiscSize") });
         if (params.contains(QStringLiteral("visible")))
             sceneprops::set(scene, QStringLiteral("sunDiscVisible"),
                             params.value(QStringLiteral("visible")).toBool());
         if (params.contains(QStringLiteral("inProbes")))
             sceneprops::set(scene, QStringLiteral("sunDiscInProbes"),
                             params.value(QStringLiteral("inProbes")).toBool());
+        // THE SIZE, in degrees of angular diameter, clamped to the dial's own
+        // range rather than refused: it is a continuous row, and the panel's
+        // drag widget cannot leave the range either.
+        if (params.contains(QStringLiteral("size")))
+            sceneprops::set(scene, QStringLiteral("sunDiscSize"),
+                            qBound(double(iris::kMinSunDiscSize),
+                                   params.value(QStringLiteral("size")).toDouble(),
+                                   double(iris::kMaxSunDiscSize)));
         edit.commit(host.services ? host.services->undo : nullptr,
                     QStringLiteral("Sun Disc"));
     }
     out[QStringLiteral("visible")] = scene->sunDiscVisible;
     out[QStringLiteral("inProbes")] = scene->sunDiscInProbes;
+    out[QStringLiteral("size")] = scene->sunDiscSize;
     return out;
 }
 
