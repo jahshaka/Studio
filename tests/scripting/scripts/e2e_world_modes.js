@@ -59,6 +59,16 @@ assert(fresh.hdr.value === 1, "Epic turns HDR on");
 // the driver (HDR) or renders black (ambient occlusion), both reproduced in
 // tests/engine. SMAA does the anti-aliasing instead.
 assert(fresh.msaa.value === 1, "Epic leaves hardware MSAA off: " + fresh.msaa.valueId);
+// AND THAT 1 IS THE TIER'S, NOT THE DOCUMENT'S. iris::Scene's own default is 2x
+// MSAA (owner 2026-09-15) — what a scene renders at when no tier has decided,
+// which is the chainless case where hardware MSAA is the only anti-aliasing
+// there is. A NEW PROJECT applies Epic (MainWindow::createDefaultScene), so the
+// tier decides here and the answer is 1x + SMAA Ultra. This assertion is what
+// keeps "the document's default" and "what a new project renders at" from being
+// read as the same number again.
+assert(world.get().antiAliasing === 1,
+       "a new project's backing field is the TIER's 1x, not the document's 2x default: " +
+       world.get().antiAliasing);
 assert(fresh.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra: " + fresh.smaa.valueId);
 // EPIC = the VCT+PCC hybrid since REFLECTIONS_ADOPTION_SPEC P6 (2026-09-07).
 // It was plain "vct" until P1+P2 fixed probe placement, the helper channel and

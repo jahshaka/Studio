@@ -77,6 +77,14 @@ int main(int argc, char **argv)
     CHECK(!!scene, "iris::Scene constructed without GL");
     CHECK(!!scene->getRootNode(), "scene has a root node");
     CHECK(scene->skyType == iris::SkyType::SINGLE_COLOR, "sky defaults to single colour (document field)");
+    // THE DOCUMENT'S ANTI-ALIASING DEFAULT (owner 2026-09-15): 2x MSAA, the
+    // count an on-screen view uses when no World Mode tier has decided one.
+    // Pinned here because it is the field a reader's absent-key fallback has to
+    // agree with (SceneReader reads THIS value, not a literal of its own), and
+    // because the samples' exposure incident is what an unpinned default costs.
+    CHECK(scene->antiAliasing == 2, "a fresh document anti-aliases at 2x MSAA");
+    CHECK(scene->antiAliasing > 0 && (scene->antiAliasing & (scene->antiAliasing - 1)) == 0,
+          "and the default is a supported sample count (a power of two)");
 
     // --- LightNode: previously created a ShadowMap -> QOpenGLTexture in its ctor
     auto light = iris::LightNode::create();
