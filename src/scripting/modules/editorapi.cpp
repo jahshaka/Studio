@@ -135,19 +135,25 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "setGizmoMode", "editor.setGizmoMode(\"translate\"|\"rotate\"|\"scale\") -> bool",
           "Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons.",
           Needs::Engine },
-        { "gizmoHitTest", "editor.gizmoHitTest(x, y) -> {ring, distancePx, tolerancePx}",
-          "WHICH ROTATION RING A VIEWPORT PIXEL HITS, and how far the cursor is from it in "
+        { "gizmoHitTest", "editor.gizmoHitTest(x, y) -> {handle, distancePx, tolerancePx}",
+          "WHICH GIZMO HANDLE A VIEWPORT PIXEL HITS, and how far the cursor is from it in "
           "pixels. `x`/`y` are viewport pixels with the origin top-left, exactly as a mouse "
-          "event carries them. `ring` is \"x\", \"y\", \"z\" or \"screen\" (the outer grey ring, "
-          "which turns the node about the view direction) when the pixel is inside the pick "
-          "tolerance of that ring's projected circle, and null when it is not; `distancePx` is "
-          "the distance to the NEAREST ring either way, and `tolerancePx` the threshold the "
-          "pick used. The rotation gizmo picks in SCREEN SPACE (smoke S15) — a ring seen "
-          "edge-on projects to a line, which is still clickable, where the old 3D annulus test "
-          "made whichever ring the camera looked along unclickable everywhere. This is the very "
-          "function a click takes, so what the verb reports is what the mouse would do. `ring` "
-          "is null (and `distancePx` -1) when the rotate gizmo is not the active one, when "
-          "nothing is selected, or when this session's viewport has no camera.",
+          "event carries them, and the answer comes from the very call a mouse press takes — "
+          "so what the verb reports is what a click would do. `handle` is null when the pixel "
+          "grabs nothing.\n\nROTATE: \"x\", \"y\", \"z\" or \"screen\" (the outer grey ring, which "
+          "turns the node about the view direction) when the pixel is inside the pick tolerance "
+          "of that ring's projected circle; `distancePx` is the distance to the NEAREST ring "
+          "either way, and `tolerancePx` the threshold the pick used. The rotation gizmo picks "
+          "in SCREEN SPACE (smoke S15) — a ring seen edge-on projects to a line, which is still "
+          "clickable, where the old 3D annulus test made whichever ring the camera looked along "
+          "unclickable everywhere.\n\nTRANSLATE: \"xy\", \"yz\" or \"xz\" for the three plane "
+          "handles, which are picked in pixels too (`distancePx` is 0 inside the square and the "
+          "distance to its border outside, and a plane within 10 degrees of edge-on is neither "
+          "drawn nor pickable); \"center\", \"x\", \"y\" or \"z\" for the ball and the three "
+          "arrows, which are picked against their own geometry in 3D and therefore report no "
+          "pixel distance (-1).\n\n`handle` is null (and `distancePx` -1) when the SCALE gizmo "
+          "is the active one, when nothing is selected, or when this session's viewport has no "
+          "camera.",
           Needs::Engine },
         { "focusSelection", "editor.focusSelection() -> bool",
           "Frames the selection in the editor camera (the F key): bounds-aware distance, current view direction kept. "
@@ -1006,14 +1012,16 @@ QVariantMap EditorApi::gizmoHitTest(double x, double y)
 {
     QVariantMap out;
     // An explicit JS `null`, not an absent key: an invalid QVariant inside a
-    // map reaches a script as `undefined`, and `r.ring === null` is how a
-    // caller asks "did this pixel miss".
-    out.insert("ring", QVariant::fromValue(nullptr));
+    // map reaches a script as `undefined`, and `r.handle === null` is how a
+    // caller asks "did this pixel miss". (The key was `ring` until GIZMO-1
+    // item 3 — the verb answers for the translate gizmo's plane handles and
+    // arrows now, and none of those is a ring.)
+    out.insert("handle", QVariant::fromValue(nullptr));
     out.insert("distancePx", -1.0);
     out.insert("tolerancePx", 0.0);
     if (!requireEngine()) return out;
     const IEditorViewport::GizmoPickResult pick = host.viewport->gizmoHitTest(QPointF(x, y));
-    if (!pick.handle.isEmpty()) out.insert("ring", pick.handle);
+    if (!pick.handle.isEmpty()) out.insert("handle", pick.handle);
     out.insert("distancePx", double(pick.distancePx));
     out.insert("tolerancePx", double(pick.tolerancePx));
     return out;

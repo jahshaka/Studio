@@ -771,19 +771,46 @@ iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
 IEditorViewport::GizmoPickResult EngineSceneViewport::gizmoHitTest(const QPointF &point) const
 {
     GizmoPickResult out;
-    if (!mGizmo || mGizmo != mRotateGizmo || !mSelectedNode) return out;
+    if (!mGizmo || !mSelectedNode) return out;
     const iris::CameraNodePtr cam = viewCamera();
     if (!cam) return out;
     // Size and view exactly as a mouse pick would, then ask the same question
     // at the given pixel — a script and a click cannot disagree.
-    mRotateGizmo->updateSize(cam);
     const QRectF picture = pictureRect();
-    mRotateGizmo->setPickView(cam, float(picture.width()), float(picture.height()),
-                              float(devicePixelRatioF()));
-    out.tolerancePx = kRingPickTolerancePx;
-    float distancePx = -1.0f;
-    out.handle = mRotateGizmo->ringNameAtPixel(point - picture.topLeft(), distancePx);
-    out.distancePx = distancePx;
+    mGizmo->updateSize(cam);
+    mGizmo->setPickView(cam, float(picture.width()), float(picture.height()),
+                        float(devicePixelRatioF()));
+    const QPointF local = point - picture.topLeft();
+
+    if (mGizmo == mRotateGizmo) {
+        out.tolerancePx = kRingPickTolerancePx;
+        float distancePx = -1.0f;
+        out.handle = mRotateGizmo->ringNameAtPixel(local, distancePx);
+        out.distancePx = distancePx;
+        return out;
+    }
+
+    // THE TRANSLATE GIZMO (GIZMO-1 item 3). Its PLANE handles are picked in
+    // pixels like the rotation rings, so they answer with a distance; its
+    // arrows and its centre are picked in 3D against their own geometry, so
+    // they answer with a NAME and no distance (-1). Both go through the very
+    // call a press takes, which is the promise this verb makes.
+    if (mGizmo == mTranslateGizmo) {
+        out.tolerancePx = kPlanePickTolerancePx;
+        float distancePx = -1.0f;
+        out.handle = mTranslateGizmo->planeNameAtPixel(local, distancePx);
+        out.distancePx = distancePx;
+        if (!out.handle.isEmpty()) return out;
+        iris::Vec3 a, b;
+        pictureSegment(cam, point, a, b);
+        const iris::Vec3 viewDir = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
+        iris::Vec3 hit;
+        if (auto *handle = mTranslateGizmo->getHitHandle(a, (b - a).normalized(), viewDir, hit)) {
+            out.handle = handle->axisName();
+            out.distancePx = -1.0f;      // a 3D pick has no pixel distance
+        }
+        return out;
+    }
     return out;
 }
 

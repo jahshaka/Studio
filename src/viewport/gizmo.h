@@ -35,7 +35,14 @@ enum class GizmoAxis
 	/// axis the camera looks along, and its angle is simply the cursor's angle
 	/// around the circle on screen — well conditioned everywhere, because it
 	/// is a 2D quantity.
-	Screen
+	Screen,
+	/// THE TRANSLATE GIZMO'S PLANE HANDLES (GIZMO-1 item 3, owner report §346:
+	/// "it helps with the spatial connection for the user"). Each is a small
+	/// square drawn IN the plane its two axes span, and dragging it slides the
+	/// node across that plane.
+	XYPlane,
+	YZPlane,
+	XZPlane
 };
 
 enum class AxisHandle

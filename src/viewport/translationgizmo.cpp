@@ -29,6 +29,10 @@ For more information see the LICENSE file
 #include "viewport/gizmomeshes.h"
 
 #include "viewport/snapsettings.h"
+
+#include <QLineF>
+#include <cmath>
+
 #define CENTER_CIRCLE_RADIUS (0.015f)
 
 TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
@@ -60,12 +64,131 @@ TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 		planes.append(iris::Vec3(0, 1, 0));
 		setHandleColor(QColor(58, 122, 240));
 		break;
+	// THE PLANE HANDLES (GIZMO-1 item 3). Each lies in the plane its two axes
+	// span and wears their two colours MIXED, so which two axes a drag will
+	// move is readable without a legend.
+	case GizmoAxis::XYPlane:
+		planeU = iris::Vec3(1, 0, 0); planeV = iris::Vec3(0, 1, 0);
+		setHandleColor(QColor(179, 135, 55));      // red + green
+		break;
+	case GizmoAxis::YZPlane:
+		planeU = iris::Vec3(0, 1, 0); planeV = iris::Vec3(0, 0, 1);
+		setHandleColor(QColor(90, 163, 142));      // green + blue
+		break;
+	case GizmoAxis::XZPlane:
+		planeU = iris::Vec3(1, 0, 0); planeV = iris::Vec3(0, 0, 1);
+		setHandleColor(QColor(147, 94, 153));      // red + blue
+		break;
+	default:
+		break;
 	}
+	if (!planeU.isNull())
+		planeNormal = iris::Vec3::crossProduct(planeU, planeV).normalized();
+}
+
+QString TranslationHandle::axisName() const
+{
+	switch (axis) {
+	case GizmoAxis::Center:  return QStringLiteral("center");
+	case GizmoAxis::X:       return QStringLiteral("x");
+	case GizmoAxis::Y:       return QStringLiteral("y");
+	case GizmoAxis::Z:       return QStringLiteral("z");
+	case GizmoAxis::XYPlane: return QStringLiteral("xy");
+	case GizmoAxis::YZPlane: return QStringLiteral("yz");
+	case GizmoAxis::XZPlane: return QStringLiteral("xz");
+	default: return QString();
+	}
+}
+
+namespace {
+
+/// Distance in pixels from a point to a segment (Qt has no such call on QLineF
+/// that answers for a SEGMENT rather than an infinite line).
+float pointToSegmentPx(const QPointF &p, const QPointF &a, const QPointF &b)
+{
+	const double vx = b.x() - a.x(), vy = b.y() - a.y();
+	const double wx = p.x() - a.x(), wy = p.y() - a.y();
+	const double len2 = vx * vx + vy * vy;
+	double t = len2 > 1e-12 ? (wx * vx + wy * vy) / len2 : 0.0;
+	t = qBound(0.0, t, 1.0);
+	const double dx = wx - t * vx, dy = wy - t * vy;
+	return float(std::sqrt(dx * dx + dy * dy));
+}
+
+}  // namespace
+
+// EDGE-ON IS NOT A HANDLE. Read from the pick view's camera — the same camera
+// the quad is projected through — so the picture and the pick agree by
+// construction. No pick view (a document-only stand-in) means no plane handles,
+// exactly as it means no ring picking.
+bool TranslationHandle::planeFacesCamera() const
+{
+	if (!isPlane()) return false;
+	const GizmoPickView &view = gizmo->pickView();
+	if (!view.isValid()) return false;
+	const iris::Mat4 t = gizmo->getTransform();
+	const iris::Vec3 n = (t * iris::Vec4(planeNormal, 0)).toVector3D().normalized();
+	const iris::Vec3 forward =
+		view.camera->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+	return std::fabs(iris::Vec3::dotProduct(n, forward)) >
+	       std::sin(float(qDegreesToRadians(kPlaneEdgeOnDegrees)));
+}
+
+bool TranslationHandle::planeDistance(const QPointF& cursor, float& distancePx) const
+{
+	distancePx = -1.0f;
+	if (!planeFacesCamera()) return false;
+	const float scale = handleScale * gizmo->getGizmoScale();
+	if (!(scale > 0.0f)) return false;
+
+	// THE SQUARE AS IT IS DRAWN: gizmomeshes::planeHandle builds it from the
+	// same two axes and the same two offsets, under the same transform.
+	const iris::Mat4 t = gizmo->getTransform();
+	const float n = GizmoMeshes::kPlaneHandleNear, f = GizmoMeshes::kPlaneHandleFar;
+	const iris::Vec3 corners[4] = {
+		planeU * n + planeV * n, planeU * f + planeV * n,
+		planeU * f + planeV * f, planeU * n + planeV * f,
+	};
+	QPointF px[4];
+	for (int i = 0; i < 4; ++i)
+		if (!gizmo->projectToPixel(t * (corners[i] * scale), px[i])) return false;
+
+	// Inside the projected quad? A convex quadrilateral: the cursor is inside
+	// when it is on the same side of all four edges.
+	bool positive = false, negative = false;
+	for (int i = 0; i < 4; ++i) {
+		const QPointF &a = px[i], &b = px[(i + 1) % 4];
+		const double cross = (b.x() - a.x()) * (cursor.y() - a.y()) -
+		                     (b.y() - a.y()) * (cursor.x() - a.x());
+		if (cross > 0.0) positive = true;
+		if (cross < 0.0) negative = true;
+	}
+	if (!(positive && negative)) { distancePx = 0.0f; return true; }
+
+	float best = -1.0f;
+	for (int i = 0; i < 4; ++i) {
+		const float d = pointToSegmentPx(cursor, px[i], px[(i + 1) % 4]);
+		if (best < 0.0f || d < best) best = d;
+	}
+	distancePx = best;
+	return true;
 }
 
 bool TranslationHandle::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 {
     auto gizmoTrans = gizmo->getTransform();
+
+	// A PLANE HANDLE IS PICKED IN PIXELS (GIZMO-1 item 3): it is a flat square
+	// with area, so "is the cursor on it" is a 2D question and stays well
+	// conditioned however the camera is turned — the same argument the rotation
+	// rings' screen-space pick rests on (smoke S15).
+	if (isPlane()) {
+		QPointF cursor;
+		if (!gizmo->rayPixel(rayPos, rayDir, gizmoTrans.column(3).toVector3D(), cursor))
+			return false;
+		float d = -1.0f;
+		return planeDistance(cursor, d) && d <= kPlanePickTolerancePx;
+	}
 
 	if (this->axis == GizmoAxis::Center) {
 		// sphere center intersection
@@ -104,6 +227,23 @@ iris::Vec3 TranslationHandle::getHitPos(iris::Vec3 rayPos, iris::Vec3 rayDir, ir
 	auto worldToGizmo = gizmoTransform.inverted();
 	rayPos = worldToGizmo * rayPos;
 	rayDir = iris::Quat::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(rayDir);
+
+	// A PLANE DRAG IS THE RAY MEETING THAT PLANE (GIZMO-1 item 3): the node
+	// follows the cursor across the plane through the gizmo's origin, so the
+	// motion is exactly the two axes the square spans and nothing else. The
+	// grazing guard cannot normally fire — the handle is hidden and unpickable
+	// within kPlaneEdgeOnDegrees of edge-on, and the camera cannot move during
+	// a gizmo drag — but a drag that survives one anyway holds still instead of
+	// teleporting the node to infinity.
+	if (isPlane()) {
+		float t = 0.0f;
+		iris::Vec3 hitPoint;
+		if (std::fabs(iris::Vec3::dotProduct(rayDir.normalized(), planeNormal)) > 0.02f &&
+		    iris::IntersectionHelper::intersectSegmentPlane(
+		        rayPos, rayPos + rayDir * 10000000, iris::Plane(planeNormal, 0), t, hitPoint))
+			lastPlaneHit = hitPoint;
+		return gizmoTransform * lastPlaneHit;
+	}
 
 	if (this->axis == GizmoAxis::Center) {
 		// sphere center intersection
@@ -171,6 +311,9 @@ TranslationGizmo::TranslationGizmo() :
 	handles.append(new TranslationHandle(this, GizmoAxis::X));
 	handles.append(new TranslationHandle(this, GizmoAxis::Y));
 	handles.append(new TranslationHandle(this, GizmoAxis::Z));
+	handles.append(new TranslationHandle(this, GizmoAxis::XYPlane));
+	handles.append(new TranslationHandle(this, GizmoAxis::YZPlane));
+	handles.append(new TranslationHandle(this, GizmoAxis::XZPlane));
 
 	loadAssets();
 
@@ -187,6 +330,9 @@ void TranslationGizmo::loadAssets()
 	handleMeshes.append(GizmoMeshes::translateHandle(GizmoAxis::X));
 	handleMeshes.append(GizmoMeshes::translateHandle(GizmoAxis::Y));
 	handleMeshes.append(GizmoMeshes::translateHandle(GizmoAxis::Z));
+	handleMeshes.append(GizmoMeshes::planeHandle(GizmoAxis::XYPlane));
+	handleMeshes.append(GizmoMeshes::planeHandle(GizmoAxis::YZPlane));
+	handleMeshes.append(GizmoMeshes::planeHandle(GizmoAxis::XZPlane));
 
 	centerMesh = GizmoMeshes::centerSphere();
 
@@ -256,9 +402,25 @@ void TranslationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 vie
 	// apply snapping (relative snapping)
 	auto mods = QApplication::keyboardModifiers();
 	if (mods.testFlag(Qt::ControlModifier)) {
-		float length = diff.length();
-		float snapLength = Gizmo::snap(length, SnapSettings::translateSize());
-		diff = diff.normalized() * snapLength;
+		if (draggedHandle->isPlane()) {
+			// A PLANE DRAG SNAPS ON BOTH OF ITS AXES (GIZMO-1 item 3), which is
+			// what "snap as the arrows do" means for two degrees of freedom:
+			// the arrows snap the one distance they can move, so each of the
+			// plane's two components is snapped to the same grid. Snapping the
+			// LENGTH of a two-axis move instead (the arrows' formula, applied
+			// blindly) would leave both components off the grid.
+			const iris::Mat4 gizmoTransform = this->getTransform();
+			const iris::Vec3 local = (gizmoTransform.inverted() * iris::Vec4(diff, 0)).toVector3D();
+			const float grid = SnapSettings::translateSize();
+			const iris::Vec3 snapped =
+				draggedHandle->planeU * Gizmo::snap(iris::Vec3::dotProduct(local, draggedHandle->planeU), grid) +
+				draggedHandle->planeV * Gizmo::snap(iris::Vec3::dotProduct(local, draggedHandle->planeV), grid);
+			diff = (gizmoTransform * iris::Vec4(snapped, 0)).toVector3D();
+		} else {
+			float length = diff.length();
+			float snapLength = Gizmo::snap(length, SnapSettings::translateSize());
+			diff = diff.normalized() * snapLength;
+		}
 	}
 
 	// apply diff in global space
@@ -289,31 +451,78 @@ bool TranslationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 	return false;
 }
 
-// returns hit position of the hit handle
+// WHAT A PRESS GRABS, in three passes with an explicit precedence.
+//
+// CENTRE first (it always did: the smallest target, and it sits under
+// everything). Then the PLANE handles (GIZMO-1 item 3): a plane square is drawn
+// on top of the inner stretch of the two arrows it lies between, so a pixel
+// inside one is unambiguous — reaching for the square and getting an arrow is
+// the mistake this ordering prevents. Then the arrows, nearest first.
+//
+// The arrows' pass also fixes a stale read that was there since 2016: `dist`
+// was measured from `hitPos`, the caller's OUT parameter, before this call had
+// written it — so the "closest" arrow was ranked by the PREVIOUS press's hit
+// point (or by uninitialised memory on the first one).
 TranslationHandle* TranslationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPos)
 {
+	for (auto i = 0; i < handles.size(); i++) {
+		if (handles[i]->axis != GizmoAxis::Center) continue;
+		if (!handles[i]->isHit(rayPos, rayDir)) continue;
+		hitPos = handles[i]->getHitPos(rayPos, rayDir, viewDir);
+		return handles[i];
+	}
+
+	TranslationHandle* nearestPlane = nullptr;
+	float nearestPlanePx = -1.0f;
+	QPointF cursor;
+	const bool havePixel =
+		rayPixel(rayPos, rayDir, getTransform().column(3).toVector3D(), cursor);
+	if (havePixel) {
+		for (auto i = 0; i < handles.size(); i++) {
+			if (!handles[i]->isPlane()) continue;
+			float d = -1.0f;
+			if (!handles[i]->planeDistance(cursor, d)) continue;
+			if (d > kPlanePickTolerancePx) continue;
+			if (!nearestPlane || d < nearestPlanePx) { nearestPlane = handles[i]; nearestPlanePx = d; }
+		}
+	}
+	if (nearestPlane) {
+		hitPos = nearestPlane->getHitPos(rayPos, rayDir, viewDir);
+		return nearestPlane;
+	}
+
 	TranslationHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
-
-	for (auto i = 0; i< handles.size(); i++)
+	for (auto i = 0; i < handles.size(); i++)
 	{
+		if (handles[i]->isPlane() || handles[i]->axis == GizmoAxis::Center) continue;
 		if (handles[i]->isHit(rayPos, rayDir)) {
-			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);// bad, move hitPos to ref variable
-			auto dist = hitPos.distanceToPoint(rayPos);
-			//irisDebug() << "hit handle " << i;
+			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);
+			auto dist = hit.distanceToPoint(rayPos);
 			if (dist < closestDistance) {
 				closestHandle = handles[i];
 				closestDistance = dist;
 				hitPos = hit;
-
-				// center takes precedence over all
-				if (closestHandle->axis == GizmoAxis::Center)
-					break;
 			}
 		}
 	}
 
 	return closestHandle;
+}
+
+QString TranslationGizmo::planeNameAtPixel(const QPointF& cursor, float& distancePx)
+{
+	distancePx = -1.0f;
+	if (!selectedNode || !pickView().isValid()) return QString();
+	TranslationHandle* nearest = nullptr;
+	for (auto i = 0; i < handles.size(); i++) {
+		if (!handles[i]->isPlane()) continue;
+		float d = -1.0f;
+		if (!handles[i]->planeDistance(cursor, d)) continue;
+		if (distancePx < 0.0f || d < distancePx) { distancePx = d; nearest = handles[i]; }
+	}
+	if (!nearest) return QString();
+	return distancePx <= kPlanePickTolerancePx ? nearest->axisName() : QString();
 }
 
 QVector<GizmoDrawItem> TranslationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
@@ -333,6 +542,10 @@ QVector<GizmoDrawItem> TranslationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3
 	iris::Vec3 hitPos;
 	auto hitHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 	for (int i = 0; i < handles.size(); i++) {
+		// A PLANE SEEN EDGE-ON IS NOT DRAWN (GIZMO-1 item 3) — it would be a
+		// line the user cannot aim at, and the pick refuses it for the same
+		// reason, so the picture and the pick say the same thing.
+		if (handles[i]->isPlane() && !handles[i]->planeFacesCamera()) continue;
 		auto transform = this->getTransform();
 		transform.scale(getGizmoScale() * handles[i]->handleScale);
 		items.append({ handleMeshes[i], transform, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor() });
