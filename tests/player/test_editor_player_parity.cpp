@@ -2,6 +2,25 @@
 // the editor viewport and in the player. They differ only by editor helpers
 // (grid, light wires, gizmos, selection outline) being hidden.
 //
+// ONE SCENE (owner decision 2026-09-14, lane PLAYER-1). The Player is a second
+// VIEW on the editor's engine scene, drawn by the editor's mirror, with the
+// furniture masked out per view. This suite therefore asserts two things the
+// two-scene shape could not even express:
+//
+//   * THE SWITCH IS FREE. Round-tripping editor -> player -> editor moves
+//     neither Scene::giStatus().rebuilds nor shadowStatus().atlasRebuilds. On
+//     the old shape each switch migrated the document's graph between two Ogre
+//     scene managers, released every engine object and full-walked the arriving
+//     mirror, which is a from-scratch GI build on both sides of every switch
+//     (audit F1).
+//   * THE MIRRORS SURVIVE IT. The HlmsPbs planar-reflection binding is
+//     process-wide and was owned by whichever SCENE armed last, so after a
+//     switch one space's mirrors sampled the other's arm against the other's
+//     plane — or vanished, because HlmsPbs only samples when the bound arm's
+//     last update camera MATCHES the one rendering (audit F2). With one scene
+//     there is one arm; the case below renders the two spaces ALTERNATELY,
+//     exactly as a page switch does, and compares the mirror region.
+//
 // The defect this suite exists to lock down (owner-sighted 2026-09-03, "dark in
 // the editor, blown out white in the player"): EnginePlayerScene::step() pushed
 // only sync + applySky + applyCamera, while EngineSceneViewport::syncFrame()
@@ -45,6 +64,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
+#include "viewport/freecamerapolicy.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -73,12 +93,38 @@ static void probe(const char *tag, const Image &i)
                 double(k.r * 255), double(k.g * 255), double(k.b * 255));
 }
 
-// One frame of BOTH paths, exactly as the app drives them:
-//   player: EnginePlayerScene::step()      (the whole player frame)
-//   editor: sync + applySky + applyEnvironment + applyCamera
-//           (EngineSceneViewport::syncFrame, minus the editor-helper calls)
-// The player runs first so both sides see the same document state — PlayBack
-// moves the camera and ticks animation inside step().
+/// How much CONTENT a picture has: the largest channel spread across the whole
+/// frame. A parity comparison of two identical FLAT frames is vacuous, and the
+/// suite says so rather than passing (the mirror region's comparison below
+/// leans on this).
+static int spread(const Image &i)
+{
+    float lo = 1.0f, hi = 0.0f;
+    for (unsigned y = 0; y < i.height; ++y)
+        for (unsigned x = 0; x < i.width; ++x) {
+            const Colour c = i.at(x, y);
+            lo = std::min({ lo, c.r, c.g, c.b });
+            hi = std::max({ hi, c.r, c.g, c.b });
+        }
+    return int((hi - lo) * 255.0f + 0.5f);
+}
+
+// THE EDITOR'S FRAME, exactly as EngineSceneViewport::syncFrame drives it
+// (minus the editor-helper calls, which this document has none of).
+static void editorFrame(SceneMirror &editorMirror, Engine &engine, View *editorView,
+                        const iris::CameraNodePtr &camera)
+{
+    editorMirror.sync();
+    editorMirror.applySky(editorView);
+    editorMirror.applyEnvironment(editorView, &engine);
+    editorMirror.applyCamera(camera, editorView, freecam::kFreeCameraFramingAspect);
+    engine.renderOneFrame();
+}
+
+// One frame of BOTH paths at once — what the ORIGINAL parity case needs (the
+// two descriptions must agree, and the cheapest way to see that is to push both
+// in one frame). The player runs first so both sides see the same document
+// state: PlayBack moves the camera and ticks animation inside step().
 static void frame(EnginePlayerScene &player, SceneMirror &editorMirror, Engine &engine,
                   View *editorView, const iris::CameraNodePtr &camera, float dt)
 {
@@ -86,7 +132,7 @@ static void frame(EnginePlayerScene &player, SceneMirror &editorMirror, Engine &
     editorMirror.sync();
     editorMirror.applySky(editorView);
     editorMirror.applyEnvironment(editorView, &engine);
-    editorMirror.applyCamera(camera, editorView);
+    editorMirror.applyCamera(camera, editorView, freecam::kFreeCameraFramingAspect);
     engine.renderOneFrame();
 }
 
@@ -103,6 +149,33 @@ int main(int argc, char **argv)
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
+
+    // THE VIEWS COME FIRST, AND THAT IS LOAD-BEARING (found by this lane).
+    //
+    // A document node's transform, its children and its very existence live in
+    // an Ogre scene node (SCENEGRAPH_SPEC D2). Until a document is bound to an
+    // engine scene those nodes sit in the process-wide STAGING manager — and
+    // `graph::stagingScene()` cannot build that manager before a render window
+    // exists and the Hlms is registered, so before the first View it answers
+    // NULL and every addChild/setLocalPos silently does nothing
+    // (nodegraph.cpp:397-415, "the suites always create their View before their
+    // first document node").
+    //
+    // This suite used to build its document first. The result was a document
+    // with an EMPTY root: both views rendered the bare sky, the comparisons all
+    // read 0/255, and the suite passed on two identical blank frames for as
+    // long as it has existed. The `spread()` assertion below is the guard that
+    // would have caught it.
+    // ---- ONE SCENE, two views (lane PLAYER-1) -------------------------------
+    View *editorView = engine->createOffscreenView("parity-editor", W, H, kBackground);
+    View *playerView = engine->createOffscreenView("parity-player", W, H, kBackground);
+    CHECK(editorView && playerView, "two offscreen views of the same size and background");
+    if (!editorView || !playerView) return 1;
+    Scene *editorScene = engine->createScene("parity-editor");
+    editorView->setScene(editorScene);
+    // The editor's engine scene starts at the same hardcoded default
+    // EngineSceneViewport::ensureEngineScene sets.
+    editorScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
 
     // ---- the document: a lit cube on a ground plane, a bright world ----------
     // Every World-panel dial that applyEnvironment owns is moved OFF its default
@@ -153,6 +226,26 @@ int main(int argc, char **argv)
     cube->setLocalPos(iris::Vec3(0, 1, 0));
     doc->getRootNode()->addChild(cube);
 
+    // A MIRROR FLOOR (PLANAR_REFLECTIONS_SPEC §7) — the whole point of the
+    // switch case below: the HlmsPbs planar binding is process-wide and used to
+    // belong to whichever SCENE armed last.
+    auto floor = iris::MeshNode::create();
+    floor->setName("mirror floor");
+    floor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+    {
+        auto mirrorMat = iris::DefaultMaterial::create();
+        mirrorMat->setDiffuseColor(QColor(30, 30, 34));
+        floor->setMaterial(mirrorMat);
+    }
+    floor->setLocalScale(iris::Vec3(8, 1, 8));
+    floor->setLocalPos(iris::Vec3(0, 0, 0));
+    floor->setPlanarReflector(true);
+    doc->getRootNode()->addChild(floor);
+    // Budget 2 (shadows inside the reflection) and the HYBRID GI mode: the two
+    // scene-level systems a page switch used to rebuild from scratch.
+    doc->planarReflectionBudget = 2;
+    doc->giMode = iris::GiMode::VCT_PCC_HYBRID;
+
     auto camera = iris::CameraNode::create();
     camera->setLocalPos(iris::Vec3(0, 2, 6));
     camera->lookAt(iris::Vec3(0, 1, 0));
@@ -160,18 +253,10 @@ int main(int argc, char **argv)
     camera->nearClip = 0.1f;
     camera->farClip = 100.0f;
     doc->refresh();
-
-    // ---- the two halves, each on its own view + engine scene ----------------
-    View *editorView = engine->createOffscreenView("parity-editor", W, H, kBackground);
-    View *playerView = engine->createOffscreenView("parity-player", W, H, kBackground);
-    CHECK(editorView && playerView, "two offscreen views of the same size and background");
-    if (!editorView || !playerView) return 1;
-    Scene *editorScene = engine->createScene("parity-editor");
-    editorView->setScene(editorScene);
-    // The editor's engine scene starts at the same hardcoded default the
-    // player's does (EngineSceneViewport::ensureEngineScene) — otherwise frame 1
-    // would differ for a reason that is not the defect.
-    editorScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
+    // The document really MATERIALISED (see "THE VIEWS COME FIRST" above): with
+    // no staging manager every addChild is a silent no-op and the root stays
+    // empty, which is exactly how this suite came to compare two blank frames.
+    CHECK(doc->getRootNode()->childCount() > 0, "the document's root has children");
 
     int rc = 0;
     {
@@ -180,8 +265,11 @@ int main(int argc, char **argv)
         editorMirror.setSource(doc);
 
         EnginePlayerScene player(engine);
-        CHECK(player.attach(playerView), "player scene attached to its view");
-        CHECK(player.engineScene() != editorScene, "the player is a second engine scene");
+        player.setEditorScene(editorScene, &editorMirror);
+        CHECK(player.attach(playerView), "player view bound to the editor's scene");
+        CHECK(player.engineScene() == editorScene, "ONE SCENE: the player draws the editor's");
+        CHECK(!playerView->helpersVisible() && editorView->helpersVisible(),
+              "the furniture is hidden per VIEW, not per scene");
         player.setDocument(doc, camera);
         player.begin();
 
@@ -239,6 +327,117 @@ int main(int argc, char **argv)
             const int chainMoved = maxAbsDiff(e, ec);
             std::printf("    max |editor chain off - chain on| = %d/255\n", chainMoved);
             CHECK(chainMoved > 8, "the post chain changed the picture (the comparison is not vacuous)");
+        }
+
+        // ---- 4. THE SWITCH (lane PLAYER-1) ----------------------------------
+        // The two spaces rendered ALTERNATELY, exactly as a page switch does:
+        // one view enabled at a time, the leaving host's end() and the arriving
+        // host's begin() in between. This is the pattern that used to migrate
+        // the document's graph between two scene managers.
+        {
+            // Put both views back on their own pushed descriptions (step 3 left
+            // allowOffscreen forced on both, which is fine — it is what lets an
+            // offscreen view have a chain at all — but the mirror must be able
+            // to push again).
+            editorMirror.invalidateEnvironment();
+
+            const GiStatus gi0 = editorScene->giStatus();
+            const ShadowStatus sh0 = engine->shadowStatus();
+            std::printf("    before the switch: gi.rebuilds=%llu atlasRebuilds=%u\n",
+                        (unsigned long long)gi0.rebuilds, sh0.atlasRebuilds);
+
+            // --- the EDITOR owns the screen ---------------------------------
+            playerView->setEnabled(false);
+            editorView->setEnabled(true);
+            editorMirror.invalidateEnvironment();          // EngineSceneViewport::begin()
+            for (int i = 0; i < 24; ++i) editorFrame(editorMirror, *engine, editorView, camera);
+            Image eSwitch;
+            CHECK(editorView->readPixels(eSwitch), "editor readback after taking the screen");
+            const int reflectorsEditor = editorScene->activePlanarReflectors();
+
+            // --- the PLAYER takes it ----------------------------------------
+            editorView->setEnabled(false);
+            playerView->setEnabled(true);
+            player.begin();                                 // EnginePlayerView::start()
+            // The app seeds the arriving view's adaptation history from the one
+            // handing over; do the same here or the two pictures differ by a
+            // second of auto-exposure and nothing else.
+            playerView->seedExposureHistory(editorView->measuredExposureScale());
+            for (int i = 0; i < 24; ++i) {
+                player.step(1.0f / 60.0f, W, H);
+                engine->renderOneFrame();
+            }
+            Image pSwitch;
+            CHECK(playerView->readPixels(pSwitch), "player readback after taking the screen");
+            const int reflectorsPlayer = editorScene->activePlanarReflectors();
+            std::printf("    planar reflectors rendered: editor %d, player %d\n",
+                        reflectorsEditor, reflectorsPlayer);
+            // WITHOUT THIS the mirror comparison below is vacuous — two frames
+            // with no reflection in them agree perfectly.
+            CHECK(reflectorsEditor > 0 && reflectorsPlayer > 0,
+                  "the mirror floor really rendered a reflection in BOTH spaces");
+
+            probe("editor (owns the screen)", eSwitch);
+            probe("player (owns the screen)", pSwitch);
+            std::printf("    content spread: editor %d/255, player %d/255\n",
+                        spread(eSwitch), spread(pSwitch));
+            CHECK(spread(eSwitch) > 24 && spread(pSwitch) > 24,
+                  "both pictures have content (the comparison is not vacuous)");
+            const int acrossSwitch = maxAbsDiff(eSwitch, pSwitch);
+            std::printf("    max |editor - player| across the switch = %d/255\n", acrossSwitch);
+            // TOLERANCE, justified: the two pictures are the same scene, the
+            // same camera and the same play state through the same chain, so
+            // the only honest sources of difference are the two views' own
+            // auto-exposure histories (seeded equal a few lines up, then
+            // adapting independently for 24 frames) and the planar mirror's
+            // RTT, which is re-rendered per view from that view's camera. 8/255
+            // is twice the 4/255 the two static comparisons above hold to, and
+            // it is a CEILING, not a target: the measured value is printed.
+            CHECK(acrossSwitch <= 8,
+                  "the same world looks the same in both spaces across a page switch");
+
+            // THE MIRROR REGION specifically (audit F2). The reflection lives in
+            // the bottom half of the frame — the floor plate at y=0 seen from
+            // y=2 — and a lost planar binding is not a subtle shift there: the
+            // reflection either vanishes (HlmsPbs refuses to sample when the
+            // bound arm's camera does not match) or shows the other arm's
+            // content. Compared as a REGION so a few pixels of shadow-edge
+            // dither cannot pass for a reflection.
+            int mirrorWorst = 0;
+            for (unsigned y = unsigned(H * 55 / 100); y < unsigned(H * 95 / 100); ++y)
+                for (unsigned x = unsigned(W / 5); x < unsigned(W * 4 / 5); ++x) {
+                    const Colour a = eSwitch.at(x, y), b = pSwitch.at(x, y);
+                    mirrorWorst = std::max({ mirrorWorst,
+                                             int(std::fabs(a.r - b.r) * 255.0f + 0.5f),
+                                             int(std::fabs(a.g - b.g) * 255.0f + 0.5f),
+                                             int(std::fabs(a.b - b.b) * 255.0f + 0.5f) });
+                }
+            std::printf("    max |editor - player| over the mirror region = %d/255\n", mirrorWorst);
+            CHECK(mirrorWorst <= 8, "the planar mirror shows the same thing in both spaces");
+
+            // --- and back to the EDITOR --------------------------------------
+            player.end();
+            playerView->setEnabled(false);
+            editorView->setEnabled(true);
+            editorMirror.invalidateEnvironment();
+            for (int i = 0; i < 24; ++i) editorFrame(editorMirror, *engine, editorView, camera);
+
+            const GiStatus gi1 = editorScene->giStatus();
+            const ShadowStatus sh1 = engine->shadowStatus();
+            std::printf("    after the round trip: gi.rebuilds=%llu atlasRebuilds=%u\n",
+                        (unsigned long long)gi1.rebuilds, sh1.atlasRebuilds);
+            // THE WHOLE POINT OF ONE SCENE. On the two-scene shape this was four
+            // from-scratch GI builds per round trip (audit F1/F5).
+            CHECK(gi1.rebuilds == gi0.rebuilds,
+                  "a page round trip costs NO from-scratch GI rebuild");
+            CHECK(sh1.atlasRebuilds == sh0.atlasRebuilds,
+                  "a page round trip costs NO shadow-atlas rebuild");
+
+            Image eBack;
+            CHECK(editorView->readPixels(eBack), "editor readback after the round trip");
+            const int returned = maxAbsDiff(eSwitch, eBack);
+            std::printf("    max |editor before - editor after| = %d/255\n", returned);
+            CHECK(returned <= 8, "the editor comes back to the picture it left");
         }
 
         player.release();

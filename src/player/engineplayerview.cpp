@@ -52,6 +52,20 @@ void EnginePlayerView::setEditorViewport(IEditorViewport *viewport)
 {
     mEditorViewport = viewport;
     if (mScene && mScene->playback()) mScene->playback()->setEditorViewport(viewport);
+    adoptEditorScene();
+}
+
+// ONE SCENE (lane PLAYER-1). The editor viewport builds its engine Scene and its
+// SceneMirror in its OWN show event, so they may not exist yet when this view is
+// wired up — and the viewport can rebuild neither without going away entirely.
+// So this is asked again at every edge that can precede a frame (the wiring, the
+// show, the page start, a scripted step), and it is a pair of pointer writes
+// when the answer has not changed.
+void EnginePlayerView::adoptEditorScene()
+{
+    if (!mScene) return;
+    mScene->setEditorScene(mEditorViewport ? mEditorViewport->engineScene() : nullptr,
+                           mEditorViewport ? mEditorViewport->sceneMirror() : nullptr);
 }
 
 void EnginePlayerView::setScene(iris::ScenePtr scene)
@@ -70,6 +84,7 @@ void EnginePlayerView::showEvent(QShowEvent *e)
     if (!view() && mEngine)
         createView(mEngine, "player-view-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
+    adoptEditorScene();
     if (view()) mScene->attach(view());
 }
 
@@ -77,10 +92,26 @@ void EnginePlayerView::start()
 {
     mActive = true;
     setFocus();
+    adoptEditorScene();
     // The editor camera may have been replaced since setScene (EditorData load).
     if (mDocument) mScene->setDocument(mDocument, editorCamera());
     mScene->begin();
-    if (view()) view()->setEnabled(true);
+    if (view()) {
+        view()->setEnabled(true);
+        // THE EXPOSURE HAND-OVER (View::seedExposureHistory). Auto-exposure is
+        // per view and it ADAPTS: a view that has never presented starts from
+        // the authored midpoint and walks to the scene's real luminance over
+        // the next second — visibly, on the frame the user pressed Play. The
+        // editor's view has been looking at this very scene, so its converged
+        // multiplier is the right starting point and the Player opens graded.
+        //
+        // Not a shared history: after this frame the two views adapt
+        // independently, which is what lets them look at different parts of a
+        // world. 0 (the editor never presented, no HDR, the fixed grade) leaves
+        // the descriptor's own seed in place.
+        if (mEditorViewport)
+            view()->seedExposureHistory(mEditorViewport->measuredExposureScale());
+    }
 }
 
 void EnginePlayerView::end()
@@ -96,6 +127,7 @@ void EnginePlayerView::stopScene()      { mScene->stop(); }
 
 QImage EnginePlayerView::takePlayerScreenshot(int width, int height, int grade)
 {
+    adoptEditorScene();
     // Bind the view lazily: a screenshot may be the FIRST thing a script asks
     // of the player, before the page has ever been shown (the native window is
     // created in showEvent). The engine Scene and its mirror do not need the
@@ -108,6 +140,7 @@ QImage EnginePlayerView::takePlayerScreenshot(int width, int height, int grade)
 bool EnginePlayerView::stepPlayerFrames(int n, float dt)
 {
     if (!view()) return false;
+    adoptEditorScene();
     if (!mScene->attach(view())) return false;
     mScene->stepFrames(n, dt, width(), height());
     return true;

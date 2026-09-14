@@ -33,7 +33,27 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
         const GizmoDrawItem &item = items[i];
         if (i >= mSlots.size()) mSlots.append(Slot());
         Slot &slot = mSlots[i];
-        if (!slot.node) slot.node = mTarget->createNode();
+        if (!slot.node) {
+            slot.node = mTarget->createNode();
+            // EDITOR FURNITURE, in the engine's sense (EnginePrivate.h's bit
+            // scheme, Scene::setNodeHelper): kHelperBit instead of kVisibleBit.
+            //
+            // It was missing, and it was two defects at once. (1) A gizmo is
+            // real geometry to every capture pass that asks for kVisibleBit —
+            // the reflection-probe faces cut at RQ 200 so they never saw it,
+            // but the PLANAR reflection pass (RQ 0..199, mask kVisibleBit) did:
+            // a selected object's gizmo was reflected in the mirror floor.
+            // (2) Since the Player page became a second VIEW on this scene
+            // (lane PLAYER-1), "not the editor's furniture" is a visibility
+            // channel and not a second scene — an unmarked gizmo would be drawn
+            // in the Player.
+            //
+            // Marked at CREATION rather than after attachMesh because the slots
+            // are POOLED and re-attached to different meshes: one uncorrected
+            // frame is one polluted reflection (the same trap the selection
+            // shells and the light icons record).
+            if (slot.node) mTarget->setNodeHelper(slot.node, true);
+        }
         if (!slot.material)
             slot.material = mTarget->createUnlitMaterial(Colour(1, 1, 1), false);   // on top
         if (!slot.node || !slot.material) continue;

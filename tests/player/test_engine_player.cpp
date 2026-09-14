@@ -26,6 +26,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
+#include "irisgl/mirror/scenemirror.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -302,8 +303,10 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    // The editor viewport exists first in the app; the player is the SECOND view
-    // and the second scene on the same engine.
+    // The editor viewport exists first in the app; the player is a SECOND VIEW
+    // on the EDITOR'S scene (owner decision 2026-09-14, lane PLAYER-1) — not a
+    // second scene. The editor's half is stood up here exactly as
+    // EngineSceneViewport::ensureEngineScene does it.
     const int W = 128, H = 128;
     View *editorView = engine->createOffscreenView("editor", 64, 64, Colour(0, 0, 0));
     Scene *editorScene = engine->createScene("editor");
@@ -379,10 +382,19 @@ int main(int argc, char **argv)
     doc->refresh();
 
     {
+        // ONE MIRROR, the editor's — it is what pushes the document into the one
+        // scene both views draw.
+        SceneMirror editorMirror(editorScene);
+        editorMirror.setSource(doc);
+
         EnginePlayerScene player(engine);
-        CHECK(player.attach(view), "player scene attached to the view");
-        CHECK(view->scene() == player.engineScene(), "the view renders the PLAYER scene");
-        CHECK(player.engineScene() != editorScene, "the player scene is a second scene on the engine");
+        CHECK(!player.attach(view), "no editor scene yet: the player refuses to bind");
+        player.setEditorScene(editorScene, &editorMirror);
+        CHECK(player.attach(view), "player view bound to the EDITOR's scene");
+        CHECK(view->scene() == player.engineScene(), "the view renders that scene");
+        CHECK(player.engineScene() == editorScene, "ONE SCENE: the player draws the editor's");
+        CHECK(!view->helpersVisible(), "the player's view hides the editor's furniture");
+        CHECK(editorView->helpersVisible(), "...and the editor's view still shows it");
 
         player.setDocument(doc, camera);
         CHECK(doc->getCamera() == camera, "the document's scene camera is the play camera");

@@ -32,6 +32,13 @@ public:
 	/// follows. Wired by the shell to PlayerService::playingChanged.
 	void showPlaying(bool playing);
 
+	/// PLAY, not "toggle play" (audit F4). Entering the player SPACE is not a
+	/// button press: switchSpace(PLAYER) used to call onPlayScene(), so a script
+	/// that had already started the scene had it STOPPED by the switch, and the
+	/// second of two switches in a run left the page paused. The button keeps
+	/// the toggle; the space entry states what it means.
+	void playScene();
+
 public slots:
     void onPlayScene();
 };

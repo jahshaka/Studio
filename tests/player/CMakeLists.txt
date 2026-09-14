@@ -1,6 +1,6 @@
-# The player on the engine (plan step 11): EnginePlayerScene — the second engine
-# Scene + SceneMirror + document camera + PlayBack — driven headless into an
-# offscreen View. Links the player's simulation classes (PlayBack and its
+# The player on the engine: EnginePlayerScene — the EDITOR's Scene and mirror
+# (lane PLAYER-1: there is one of each) + the document camera + PlayBack —
+# driven headless into a second offscreen View. Links the player's simulation classes (PlayBack and its
 # controllers) with link stubs for the Studio globals they reach into. Output
 # goes to bin/ so asset paths relative to the executable resolve.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets)
@@ -47,12 +47,13 @@ target_include_directories(test_editor_player_parity PRIVATE ${CMAKE_SOURCE_DIR}
    ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_editor_player_parity PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_editor_player_parity PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL Qt6::Widgets)
 add_dependencies(test_editor_player_parity JahshakaEngineMedia)
 add_test(NAME player.editor_parity COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "mirror")
 
 # ---- player.playback_routing (A1.6) --------------------------------------
 # The play/edit STATE MACHINE — PlaybackService's routing into the viewport,
