@@ -60,7 +60,14 @@ namespace DockState {
 /// no longer match. It also retires every layout written by the builds that
 /// saved the PLAYER's hidden docks as the editor's (the defect this lane
 /// fixed), which is worth one free fall-back to the default.
-constexpr int kVersion = 3;
+///
+/// 4 (lane SPACE-2, 2026-09-14): the bottom area changed shape — the script
+/// console is a DOCK again (`scriptConsoleDock`, the third tab beside Assets
+/// and the Timeline), the tray's nested QTabWidget is gone, and the group's tab
+/// bar moved to the top of the area. A version-3 blob knows nothing about the
+/// console dock, and a blob that leaves a dock unplaced leaves Qt guessing at
+/// the whole area; the bump hands every existing layout the new default once.
+constexpr int kVersion = 4;
 
 /// `window`'s dock layout, at this layout version. The one place saveState's
 /// version argument is supplied, so a snapshot taken to be kept in memory (the

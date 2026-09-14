@@ -345,15 +345,15 @@ QVector<VerbInfo> EditorApi::verbs() const
           "readout deliberately survives it: it is a diagnostic, not an editor helper.",
           Needs::Window },
         { "trayState", "editor.trayState() -> {tab, tabs, consoleVisible, consoleFocused, visible, title, trayRight, rightColumnLeft, rightColumnBottom, areaBottom, trayTop, presetsTop}",
-          "THE EDITOR'S BOTTOM TRAY, the one widget that carries the asset browser and the "
-          "script console as TABS at its top (owner, 2026-09-11: turning the console on adds a "
-          "Console tab beside Assets and the two share that widget). `tab` is the tab in front "
-          "(\"assets\" or \"console\"), `tabs` the tabs the tab bar is showing, "
-          "`consoleVisible` whether the Console tab is in the bar at all, `consoleFocused` "
+          "THE EDITOR'S BOTTOM AREA: ONE tab bar along the bottom of the editor carrying the "
+          "asset browser, the Timeline and — when it is turned on — the script console (owner, "
+          "2026-09-14). `tab` is the tab in front (\"assets\", \"timeline\" or \"console\"), "
+          "`tabs` the tabs the bar is showing right now (a panel closed from its X leaves the "
+          "bar), `consoleVisible` whether the Console tab is in the bar at all, `consoleFocused` "
           "whether the console's INPUT line has the keyboard — the half of Ctrl+` a console "
-          "you still have to click does not deliver, `visible` whether the tray widget "
-          "itself is on screen, and `title` the tray DOCK's own title — what the bottom tab bar "
-          "shows beside \"Timeline\" when the two docks share the bottom area (\"Tray\").",
+          "you still have to click does not deliver, `visible` whether the asset browser itself "
+          "is on screen, and `title` its dock's own title — the string its tab is drawn from "
+          "(\"Assets\").",
           Needs::Window },
         { "trayAssets", "editor.trayAssets() -> [{guid, name, folder}]",
           "WHAT THE ASSET TRAY IS SHOWING, read off the panel itself: its tiles in order — "
@@ -366,15 +366,26 @@ QVector<VerbInfo> EditorApi::verbs() const
           "applied first, so the answer is what the user sees.",
           Needs::Window },
         { "tray", "editor.tray({tab, console, height}) -> (the trayState map)",
-          "DRIVES THAT TRAY. `tab: \"console\"` shows the Console tab, raises the tray and "
-          "puts the keyboard in the console input — exactly what the Ctrl+` chord does, "
-          "through the same function; `tab: \"assets\"` brings the asset browser forward "
-          "without closing the console tab. `console: true|false` adds or removes the Console "
-          "tab itself (false returns the tray to Assets). `height: px` resizes the tray (at least 40; a request below the tray's own "
+          "DRIVES THAT AREA. `tab: \"console\"` shows the Console tab, brings it to the front "
+          "and puts the keyboard in the console input — exactly what the Ctrl+` chord does, "
+          "through the same function; `tab: \"assets\"` and `tab: \"timeline\"` bring those "
+          "forward without closing anything (naming a tab whose panel was CLOSED opens it "
+          "again). `console: true|false` adds or removes the Console tab itself. `height: px` resizes the tray (at least 40; a request below the tray's own "
           "minimum content height — ~230 px at 1080 — lands AT that minimum, read the result from "
           "trayTop), and the right column's Presets panel follows so its top stays on the tray's top "
           "line. Called with no argument it reads, "
           "like editor.trayState().",
+          Needs::Window },
+        { "panel", "editor.panel({name, open}) -> {name, open, current, tabbed}",
+          "OPENS OR CLOSES AN EDITOR PANEL — \"hierarchy\", \"properties\", \"presets\", "
+          "\"assets\", \"timeline\" or \"console\" — which is exactly what the Toggle "
+          "Widgets dialog's buttons and a panel's own title-bar X do, through the same "
+          "function (lane SPACE-2): `open: false` CLOSES the dock the way its X does, so the "
+          "panel stays closed across a space switch and a restart, and `open: true` brings it "
+          "back AND to the front of its tab bar. Called with a name alone it reads. `current` "
+          "is whether it is the tab in front of the bottom area's one tab bar (Assets | "
+          "Timeline | Console) — an open panel behind another tab is `open: true, current: "
+          "false`, which app.docks() reports for every panel at once.",
           Needs::Window },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
           "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
@@ -579,6 +590,18 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`scene.addPrimitive(name, {position: editor.dropPointAt(x, y)})` puts a cube exactly "
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
+          Needs::Engine },
+        { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name, locked} | null",
+          "WHAT A DROP AT THIS VIEWPORT PIXEL APPLIES TO — the node a dragged MATERIAL or IMAGE "
+          "would land on. `locked` is the hierarchy's lock (the node's `pickable` flag, which is "
+          "the same thing): a LOCKED node takes no drop and no click, and the drop says so by "
+          "name instead of vanishing — the default Ground ships locked, which is why a material "
+          "dragged onto it used to do nothing at all and an image spawned a floating plane "
+          "instead of retexturing it (owner, 2026-09-14/15). Unlock the node "
+          "(node.setProperty(id, \"pickable\", true), or the lock icon in the hierarchy) and both "
+          "work like any other object's. Null when the ray hits NOTHING, which is the only case "
+          "that spawns an image plane for a dropped picture. Same pixels as editor.dropPointAt, "
+          "which answers WHERE the same drop would place a new object.",
           Needs::Engine },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
@@ -1625,17 +1648,22 @@ QVariantMap EditorApi::trayState()
         fail("editor.trayState: this window has no bottom tray");
         return out;
     }
-    QVariantList tabs{ QStringLiteral("assets") };
-    if (host.mainWindow->isConsoleTabVisible()) tabs << QStringLiteral("console");
+    QVariantList tabs;
+    for (const QString &name : host.mainWindow->trayTabs()) tabs << name;
     out["tab"] = tab;
     out["tabs"] = tabs;
     out["consoleVisible"] = host.mainWindow->isConsoleTabVisible();
     out["consoleFocused"] = host.mainWindow->isConsoleInputFocused();
     out["visible"] = host.mainWindow->isTrayVisible();
-    // The dock's title, read off the dock itself (objectName "assetDock", the
-    // DockState key): the one string the bottom tab bar is drawn from.
-    const auto *dock = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("assetDock"));
-    out["title"] = dock ? dock->windowTitle() : QString();
+    // The asset browser dock's title, read off the dock itself (objectName
+    // "assetDock", the DockState key): the string its tab is drawn from.
+    const auto *assets = host.mainWindow->findChild<QDockWidget *>(QStringLiteral("assetDock"));
+    out["title"] = assets ? assets->windowTitle() : QString();
+    // …and the GEOMETRY belongs to whichever tab is in front: the three docks
+    // down there share one rectangle and Qt parks the ones behind off-screen
+    // (lane SPACE-2), so measuring the asset browser while the Timeline is up
+    // answers with the parking spot.
+    const auto *dock = host.mainWindow->bottomFrontDock();
     // THE CORNER (owner, 2026-09-12): the right column owns the bottom-right
     // corner, so it runs to the bottom of the editor and the tray stops at its
     // edge. Reported in the docks' shared parent (the editor's nested window)
@@ -1653,7 +1681,7 @@ QVariantMap EditorApi::trayState()
         out["rightColumnBottom"] = bottom;
         out["areaBottom"] = area->height() - 1;
         // THE PRESETS LINE (owner 2026-09-12): Presets starts where the Tray does.
-        out["trayTop"] = dock->geometry().top();
+        out["trayTop"] = host.mainWindow->bottomAreaTop();
         if (presets && presets->isVisible() && presets->parentWidget() == area)
             out["presetsTop"] = presets->geometry().top();
     }
@@ -1704,11 +1732,41 @@ QVariantMap EditorApi::tray(const QVariantMap &change)
     if (change.contains("tab")) {
         const QString tab = change.value("tab").toString();
         if (!host.mainWindow->setTrayTab(tab)) {
-            fail(QStringLiteral("editor.tray: unknown tab '%1' (assets|console)").arg(tab));
+            fail(QStringLiteral("editor.tray: unknown tab '%1' (assets|timeline|console)").arg(tab));
             return QVariantMap();
         }
     }
     return trayState();
+}
+
+QVariantMap EditorApi::panel(const QVariantMap &change)
+{
+    if (!host.mainWindow) {
+        fail("editor.panel: this verb needs the editor window (a --script/--headless run has "
+             "no panels)");
+        return QVariantMap();
+    }
+    static const QStringList known = { "name", "open" };
+    for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
+        if (known.contains(it.key())) continue;
+        fail(QStringLiteral("editor.panel: unknown key '%1' (known: %2)")
+                 .arg(it.key(), known.join(", ")));
+        return QVariantMap();
+    }
+    const QString name = change.value("name").toString().trimmed().toLower();
+    if (!host.mainWindow->panelDock(name)) {
+        fail(QStringLiteral("editor.panel: unknown panel '%1' (hierarchy|properties|presets|"
+                            "assets|timeline|console)").arg(change.value("name").toString()));
+        return QVariantMap();
+    }
+    if (change.contains("open"))
+        host.mainWindow->setPanelOpen(name, change.value("open").toBool());
+    QVariantMap out;
+    out["name"] = name;
+    out["open"] = host.mainWindow->isPanelOpen(name);
+    out["current"] = MainWindow::isFrontTab(host.mainWindow->panelDock(name));
+    out["tabbed"] = host.mainWindow->trayTabs().contains(name);
+    return out;
 }
 
 QVariantMap EditorApi::snapSize()
@@ -1926,6 +1984,22 @@ QVariant EditorApi::dropPointAt(double x, double y)
     out.insert("x", point.x());
     out.insert("y", point.y());
     out.insert("z", point.z());
+    return out;
+}
+
+QVariant EditorApi::dropTargetAt(double x, double y)
+{
+    if (!requireEngine()) return QVariant();
+    bool locked = false;
+    const iris::SceneNodePtr node = host.viewport->dropTargetAt(QPointF(x, y), &locked);
+    if (!node) return QVariant();
+    QVariantMap out;
+    out.insert("id", node->getGUID());
+    out.insert("name", node->getName());
+    // A LOCKED node is reported, not hidden (owner correction, 2026-09-15):
+    // "there is something here and it will refuse you" is a different answer
+    // from "there is nothing here", and only one of them spawns an image plane.
+    out.insert("locked", locked);
     return out;
 }
 

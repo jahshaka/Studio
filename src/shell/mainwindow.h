@@ -134,18 +134,28 @@ enum WindowSpaces : int {
     AVATAR
 };
 
+// The editor's panels, in `widgetStates` order. CONSOLE is APPENDED (lane
+// SPACE-2, 2026-09-14): the script console is a dock of the bottom area again —
+// the third tab beside Assets and the Timeline — so it needs the same record
+// every other panel has (the space switch hides it with the rest, its title-bar
+// X closes it for good, a restart brings back the tab the user left open). It
+// is deliberately NOT one of the Toggle Widgets dialog's buttons: Ctrl+` is the
+// console's switch, and "Restore All" restoring a console nobody asked for is
+// not what that button means.
 enum class Widget
 {
 	HIERARCHY,
 	PROPERTIES,
 	ASSETS,
 	TIMELINE,
-	PRESETS
+	PRESETS,
+	CONSOLE
 };
 
 #include <QJsonObject>
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
+#include "services/surfaceplacement.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/texture2d.h"
 
@@ -279,37 +289,78 @@ public:
     /// null before the editor is built. editor.trayAssets reads it.
     AssetWidget *assetTray() const { return assetWidget; }
 
-    // ---- the editor's BOTTOM TRAY (smoke S1, owner 2026-09-11) -------------
-    // One widget along the bottom of the editor with TABS at its top: "Assets"
-    // (the asset browser that was always there) and "Console" (the script
-    // console, which used to be a bottom dock of its own and split the area).
+    /// One toast, reused, for every transient viewport readout (snap size, fly
+    /// speed) — and for a gesture the viewport has to REFUSE: a material or an
+    /// image dropped on a LOCKED node (lane SPACE-2 item 5), which is why the
+    /// viewport calls it and it lives out here with the rest of the shell's
+    /// public surface.
+    void showViewportToast(const QString &title, const QString &text);
+
+    // ---- the editor's BOTTOM AREA (owner, 2026-09-14, lane SPACE-2) --------
+    // ONE tab bar along the bottom of the editor: "Assets" (the asset browser),
+    // "Timeline" (the keyframe panel) and "Console" (the script console) when
+    // it is turned on. All three are DOCKS of the editor's nested window,
+    // tabified into one group whose tab bar sits at the TOP of the area
+    // (setTabPosition(North) in setupDockWidgets) — the bar used to be Qt's
+    // default SOUTH one, a 20 px strip along the very bottom edge of the
+    // window under a tray that carried its own tab bar at the top, which is how
+    // the Timeline came to read as "gone" (owner report, 2026-09-14).
+    //
     // Ctrl+` and the `editor.tray` / `editor.trayState` verbs go through these
     // — the key and the verb are the same code path, which is what lets a
     // suite assert what the key did.
 
-    /// Which tab the tray is showing: "assets" or "console". Empty with no tray
-    /// (a --headless run has no window at all).
+    /// Which tab of the bottom area is in front: "assets", "timeline" or
+    /// "console". Empty with no bottom area (a --headless run has no window).
     QString trayTab() const;
-    /// Shows a tab by name ("assets" | "console"). Naming the console shows the
-    /// tab if it was hidden, raises the tray and (focusConsoleInput) puts the
-    /// keyboard in the console's input line. False for an unknown name.
+    /// The bottom area's tabs, in tab-bar order — the names trayTab() can
+    /// return, for the panels that are open right now.
+    QStringList trayTabs() const;
+    /// Shows a tab by name ("assets" | "timeline" | "console"). Naming the
+    /// console shows the dock if it was closed, raises it and
+    /// (focusConsoleInput) puts the keyboard in the console's input line.
+    /// False for an unknown name.
     bool setTrayTab(const QString &tab, bool focusConsoleInput = true);
     /// Whether the Console tab is in the tab bar at all.
     bool isConsoleTabVisible() const;
-    /// Adds/removes the Console tab. Showing it selects it; hiding it returns
-    /// the tray to Assets.
+    /// Adds/removes the Console tab (shows/closes its dock). Showing it selects
+    /// it; hiding it leaves the Assets and Timeline tabs as they were.
     void setConsoleTabVisible(bool visible, bool focusInput = true);
     /// Whether the console's INPUT line has the keyboard right now — the half
     /// of Ctrl+` that a console you still have to click does not deliver.
     bool isConsoleInputFocused() const;
     /// Whether the tray widget itself is on screen (the View menu can hide it).
     bool isTrayVisible() const;
+    /// OPENS OR CLOSES AN EDITOR PANEL by its script name ("hierarchy",
+    /// "properties", "presets", "assets", "timeline", "console"). The ONE
+    /// implementation: the Toggle Widgets dialog's buttons, the `editor.panel`
+    /// verb and the tests all call it, and closing goes through the dock's own
+    /// close() — the title-bar X's gesture — so every route leaves the same
+    /// state behind. False for a name that is not a panel.
+    bool setPanelOpen(const QString &name, bool open);
+    /// Whether that panel is open (it may still be behind another tab).
+    bool isPanelOpen(const QString &name) const;
+    /// That panel's dock, or null.
+    QDockWidget *panelDock(const QString &name) const;
+    /// Whether `dock` is the tab in FRONT of its group (and not closed). Qt
+    /// offers no such accessor: a tabified dock that is not current is shown
+    /// and parked off-screen, which is the reading this uses — the same one
+    /// QDockWidget itself uses to emit visibilityChanged. A dock that shares a
+    /// bar with nothing is trivially in front of its own group.
+    static bool isFrontTab(const QDockWidget *dock);
+    /// The bottom area's dock whose geometry IS the area: the tab in FRONT.
+    /// The other tabs are parked off-screen by Qt, so this is the only honest
+    /// answer to "where is the bottom area and how tall is it".
+    QDockWidget *bottomFrontDock() const;
+    /// The y of the bottom area's TOP EDGE as the user sees it — the group's
+    /// tab bar, which sits above the dock, when there is one.
+    int bottomAreaTop() const;
     /// The editor's bottom Tray height (owner 2026-09-12, editor.tray({height})).
     bool setTrayHeight(int height);
     /// THE PRESETS LINE: the right column's Presets panel starts on the SAME
     /// horizontal line as the bottom Tray (owner 2026-09-12). Re-run whenever the
     /// Tray is resized, so the two panels move together.
-    void alignPresetsWithTray();
+    void alignPresetsWithTray(int retries = 3);
     /// Ctrl+` : show + focus the Console tab, or hide it when it is already the
     /// tab in front. The ShortcutRegistry entry calls exactly this.
     void toggleScriptConsole();
@@ -507,7 +558,10 @@ public slots:
     void addEmpty();
     void addCamera();
     void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
-	void addMaterialMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3(), const QString &guid = QString(), const QString &name = QString());
+	void addMaterialMesh(const QString &path = "", bool ignore = false,
+	                     iris::Vec3 position = iris::Vec3(), const QString &guid = QString(),
+	                     const QString &name = QString(),
+	                     surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
     void addDragPlaceholder();
 
@@ -559,7 +613,8 @@ public slots:
     bool isOpeningProject() const;
     void closeProject();
 
-    void toggleWidgets(bool toggle);
+    /// Takes the editor's panels down for a page that is not the editor.
+    void hideEditorPanels();
 
     iris::ScenePtr createDefaultScene();
 
@@ -830,24 +885,33 @@ private:
     /// space switch and the queued layout pass cannot disagree about it.
     void applyDockVisibilityForSpace();
 
+    /// The bottom area's docks in tab-bar order, each with the name the
+    /// `editor.tray` verbs call it by ("assets" | "timeline" | "console").
+    QVector<QPair<QString, QDockWidget *>> bottomAreaTabs() const;
+    /// The tab that was in front the last time the bottom area was on screen —
+    /// what a space round trip puts back (lane SPACE-2).
+    QString bottomFrontTab = QStringLiteral("assets");
+    /// The tab Ctrl+` interrupted — where the bottom area goes when the
+    /// console tab is taken away again.
+    QString bottomReturnTab = QStringLiteral("assets");
+    /// Brings `bottomFrontTab` back to the front of the bottom area.
+    void raiseBottomFrontTab();
+
     QTabWidget *presetsTabWidget;
 
-    /// The bottom tray's dock. Its widget is `bottomTray`, whose first tab is
-    /// the asset browser and whose second is the script console.
+    /// The bottom area's three docks — ONE tab group, one tab bar (lane
+    /// SPACE-2). `assetDock` holds the asset browser directly (the QTabWidget
+    /// that used to nest a second tab bar inside it is gone), `animationDock`
+    /// the Timeline, `scriptConsoleDock` the script console, which is hidden
+    /// until Ctrl+` (or editor.tray) asks for it — a hidden dock has no tab, so
+    /// "the Console tab is in the bar" and "the console dock is open" are the
+    /// same statement.
     QDockWidget *assetDock;
     AssetWidget *assetWidget;
-    QTabWidget *bottomTray = nullptr;
-    /// The console's tab index in `bottomTray`, or -1 before the console is
-    /// built. The tab is always PRESENT and merely hidden (setTabVisible), so
-    /// the console widget keeps one parent for the window's whole life.
-    int consoleTabIndex = -1;
-    /// True when showing the console had to un-hide the tray dock — hiding the
-    /// console again puts the tray back the way the user left it.
-    bool trayForcedVisible = false;
-    static constexpr int kAssetsTrayTab = 0;
 
     QDockWidget *animationDock;
     AnimationWidget *animationWidget;
+    QDockWidget *scriptConsoleDock = nullptr;
 
     QMainWindow *viewPort;
     QWidget *sceneContainer;
@@ -888,9 +952,6 @@ private:
     /// Owned by the toolbar; held to keep it in sync with FlySpeedSettings,
     /// which the verb and the scroll wheel can both change behind its back.
     class QComboBox *flySpeedCombo = nullptr;
-    /// One toast, reused, for every transient viewport readout (snap size, fly
-    /// speed). Positioned over the viewport by showViewportToast.
-    void showViewportToast(const QString &title, const QString &text);
     /// "The 3D view could not be created" — the respecced Failed state
     /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
     class Toast *viewErrorToast = nullptr;

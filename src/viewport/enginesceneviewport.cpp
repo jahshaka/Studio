@@ -697,6 +697,62 @@ iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool select
     return ScenePicker::resolveRootSelection(best.node, mSelectedSet, selectRootObject);
 }
 
+// WHAT A DROP AT THIS PIXEL LANDS ON, AND WHETHER IT IS LOCKED (lane SPACE-2
+// item 5, owner correction 2026-09-15).
+//
+// THE MODEL, in the owner's words: "we can select the floor like any other
+// asset, it is just LOCKED by default (and has no outline); if I unlock it I
+// can click to select it; you can't drop a material on it while it is locked."
+// The code already says exactly that with ONE flag — `pickable`. The hierarchy
+// row's lock icon IS setPickable (scenehierarchywidget.cpp lockItemAndChildren
+// / releaseItemAndChildren), and the default floor ships with it off
+// (services/defaultfloor.cpp). So there is no second concept to unify: locked
+// == !isPickable().
+//
+// A locked node therefore takes no drop — but the drop must SAY SO rather than
+// vanish, which is what it used to do: the material and texture branches
+// resolved their target with an ordinary pick, so the floor was simply not
+// there. A material dragged onto it did nothing at all, silently, and a
+// texture fell into the "empty space" branch and spawned a floating image
+// plane. This resolves what is under the cursor whether it is locked or not
+// and REPORTS the lock; the callers refuse with a toast that names the node.
+//
+// `selectRootObject` stays FALSE: a drop applies to the surface under the
+// cursor, not to the whole imported asset it belongs to.
+iris::SceneNodePtr EngineSceneViewport::dropTargetAt(const QPointF &point, bool *locked)
+{
+    if (locked) *locked = false;
+    const iris::CameraNodePtr cam = viewCamera();
+    if (!mScene || !cam) return iris::SceneNodePtr();
+    iris::Vec3 a, b;
+    pictureSegment(cam, point, a, b);
+    // NO ICONS IN THE WAY, either: a material and an image both need a SURFACE,
+    // so a light's icon, a camera's body and a decal's box — none of which can
+    // wear one — must not swallow a drop meant for the wall behind them.
+    const auto hits = ScenePicker::pickAll(mScene, a, b, cam->getGlobalPosition(),
+                                           /*forcePickable*/ true, /*includeLights*/ false,
+                                           /*includeDecals*/ false, /*refreshTransforms*/ true,
+                                           /*includeCameras*/ false);
+    const iris::SceneNodePtr node = ScenePicker::nearest(hits).node;
+    if (node && locked) *locked = !node->isPickable();
+    return node;
+}
+
+// A LOCKED NODE REFUSES THE DROP, OUT LOUD (owner correction, 2026-09-15).
+// Returns true when the drop was refused, so each branch can stop right there —
+// nothing applied, nothing spawned, and a toast that names the node and the
+// one thing the user has to do about it.
+bool EngineSceneViewport::refuseDropOnLocked(const iris::SceneNodePtr &node, const QString &what)
+{
+    if (!node || node->isPickable()) return false;
+    if (mMainWindow)
+        mMainWindow->showViewportToast(
+            tr("Locked"),
+            tr("%1 is locked — unlock it in the hierarchy to apply %2.")
+                .arg(node->getName(), what));
+    return true;
+}
+
 iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
 {
     iris::Vec3 hit;
@@ -776,7 +832,13 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
     const int type = role.value(0).toInt();
     if (type == static_cast<int>(ModelTypes::Material)) {
         // Hover preview: temporarily apply the dragged material to the mesh under the pointer.
-        iris::SceneNodePtr node = pickAt(event->position(), false);
+        // dropTargetAt, not pickAt: a LOCKED node is under the cursor as much
+        // as any other, and the drop has to know it is there to refuse it by
+        // name. It gets no preview, though — a preview on a node that will
+        // refuse the drop is a promise the release cannot keep.
+        bool lockedTarget = false;
+        iris::SceneNodePtr node = dropTargetAt(event->position(), &lockedTarget);
+        if (lockedTarget) node.reset();
         if (node && node->getSceneNodeType() != iris::SceneNodeType::Mesh) node.reset();
         if (mDragPreviewNode && mDragPreviewNode != node) {
             mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
@@ -850,6 +912,17 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
             mMainWindow->assignAnimationAsset(role.value(3).toString(),
                                               pickAt(event->position(), true));
     } else if (type == static_cast<int>(ModelTypes::Material)) {
+        // The hover preview refuses a locked node, so there is no preview to
+        // apply — say why, rather than dropping the gesture on the floor (the
+        // owner's report: a material dragged onto the Ground did nothing at
+        // all, silently).
+        bool lockedTarget = false;
+        const iris::SceneNodePtr under = dropTargetAt(event->position(), &lockedTarget);
+        if (lockedTarget && refuseDropOnLocked(under, tr("a material"))) {
+            mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+            event->acceptProposedAction();
+            return;
+        }
         if (mDragPreviewNode && mMainWindow) {
             auto target = mDragPreviewNode;
             // Put the original material back BEFORE the real apply: the hover
@@ -869,7 +942,18 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // IMAGE_PLANE_SPEC §2: on a mesh the image retextures it; on empty
         // space it spawns an image plane at the tracked drop point.
         const QString textureGuid = role.value(3).toString();
-        iris::SceneNodePtr node = pickAt(event->position(), false);
+        // The same drop-target rule as the material branch: an image dropped on
+        // an UNLOCKED floor retextures the floor (lane SPACE-2 item 5), a drop
+        // on a LOCKED node is refused by name — and, in particular, does not
+        // quietly become an image plane hanging in front of it. Only a drop
+        // that hits NOTHING — the sky, past the edge of the ground — spawns a
+        // plane, which is what the else below still does.
+        bool lockedTarget = false;
+        iris::SceneNodePtr node = dropTargetAt(event->position(), &lockedTarget);
+        if (lockedTarget && refuseDropOnLocked(node, tr("an image"))) {
+            event->acceptProposedAction();
+            return;
+        }
         if (node && node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             auto meshNode = node.staticCast<iris::MeshNode>();
             // Bytes resolve pin-first through the CAS — the flat

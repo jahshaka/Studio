@@ -129,6 +129,15 @@ struct Extent
     double y = 0.0;
     double z = 0.0;
     bool valid = false;
+    /// WHERE it is, not just how big (lane SPACE-2): the corners of the same
+    /// box, in world space, for the callers that need the BOTTOM of a model and
+    /// not its height — a drop that must rest an object on a floor, and the
+    /// `node.size()` verb that lets a test state that rule. Zero when the
+    /// extent came from a metadata block (extentOf) rather than a measurement:
+    /// a stored size has no position.
+    double minv[3] = { 0.0, 0.0, 0.0 };
+    double maxv[3] = { 0.0, 0.0, 0.0 };
+    bool located = false;
 
     double largest() const { return std::max(x, std::max(y, z)); }
     double height() const { return y; }
@@ -308,6 +317,8 @@ inline Extent measureNode(const iris::SceneNodePtr &node)
     out.x = maxv[0] - minv[0];
     out.y = maxv[1] - minv[1];
     out.z = maxv[2] - minv[2];
+    for (int a = 0; a < 3; ++a) { out.minv[a] = minv[a]; out.maxv[a] = maxv[a]; }
+    out.located = true;
     out.valid = out.x > 0.0 || out.y > 0.0 || out.z > 0.0;
     return out;
 }

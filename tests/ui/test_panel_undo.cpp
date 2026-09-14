@@ -39,7 +39,12 @@ For more information see the LICENSE file
 #include <QCheckBox>
 #include <QComboBox>
 #include <QSlider>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QMouseEvent>
+#include <QVector3D>
 #include <QUndoStack>
+#include <limits>
 
 #include <cstdio>
 
@@ -56,6 +61,7 @@ For more information see the LICENSE file
 #include "services/worldmodes.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
+#include "ui/controls/dragspinbox.h"
 #include "ui/controls/dragvaluewidgets.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
@@ -70,6 +76,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "ui/panels/transformeditor.h"
 #include "ui/controls/texturepickerwidget.h"
 #include "ui_hfloatsliderwidget.h"
 
@@ -151,6 +158,36 @@ static DragFloatWidget *dragWith(QWidget *w, const QString &label)
         for (QLabel *l : d->findChildren<QLabel *>())
             if (l->text().startsWith(label)) return d;
     return nullptr;
+}
+
+/// A user's SCRUB on a transform field: press on the field, a few horizontal
+/// ticks, release — the gesture DragSpinBox watches for on its line edit
+/// (ui/controls/dragspinbox.cpp). `dx` is the travel in pixels; the value moves
+/// by dx * the row's per-pixel step. Returns the value the field held just
+/// before the release (the live half of the gesture), or NaN if the box is
+/// missing, so a renamed field FAILS rather than passing silently.
+static double scrub(DragSpinBox *box, int dx)
+{
+    QWidget *edit = box ? box->findChild<QLineEdit *>() : nullptr;
+    if (!edit) return std::numeric_limits<double>::quiet_NaN();
+    const QPointF local(6, 6);
+    const QPointF origin = edit->mapToGlobal(local.toPoint());
+    QMouseEvent press(QEvent::MouseButtonPress, local, origin, Qt::LeftButton, Qt::LeftButton,
+                      Qt::NoModifier);
+    QCoreApplication::sendEvent(edit, &press);
+    const int step = dx > 0 ? 4 : -4;
+    for (int moved = step; qAbs(moved) <= qAbs(dx); moved += step) {
+        const QPointF at = origin + QPointF(moved, 0);
+        QMouseEvent move(QEvent::MouseMove, local + QPointF(moved, 0), at, Qt::NoButton,
+                         Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(edit, &move);
+    }
+    const double live = box->value();
+    const QPointF end = origin + QPointF(dx, 0);
+    QMouseEvent release(QEvent::MouseButtonRelease, local + QPointF(dx, 0), end, Qt::LeftButton,
+                        Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(edit, &release);
+    return live;
 }
 
 /// A user's drag: press, a couple of ticks, release. Returns false when the row
@@ -730,6 +767,211 @@ int main(int argc, char **argv)
               "identity: undo restored the emitter the step was recorded for");
         CHECK(qFuzzyCompare(b->particlesPerSecond, 77.0f),
               "identity: and left the SELECTED emitter alone");
+    }
+
+    // ---- THE TRANSFORM ROWS ALL SCRUB (owner report, 2026-09-14) -----------
+    // "I can click and drag the Position and Scale boxes (X/Y/Z) to change
+    // them, but I can't click and drag the Rotation box."
+    //
+    // All nine fields are the same widget with the same gesture (DragSpinBox),
+    // so the claim worth pinning is per FIELD and on the DOCUMENT: a drag of a
+    // known length moves that component of the transform by a known amount,
+    // and the value SURVIVES the release (the release rewinds the node and
+    // pushes one undo step — a row with no services silently reverts).
+    {
+        auto node = iris::SceneNode::create();
+        node->setName("scrubbed");
+        TransformEditor editor;
+        editor.setServices(&services);
+        editor.setSceneNode(node);
+        editor.resize(420, 200);
+        editor.show();
+        pump();
+
+        struct Field { const char *name; const char *label; };
+        static const Field fields[] = {
+            { "xpos", "Position X" },   { "ypos", "Position Y" },   { "zpos", "Position Z" },
+            { "xrot", "Rotation X" },   { "yrot", "Rotation Y" },   { "zrot", "Rotation Z" },
+            { "xscale", "Scale X" },    { "yscale", "Scale Y" },    { "zscale", "Scale Z" },
+        };
+        const int dx = 20;              // 0.4 units of position/scale, 10 degrees of rotation
+        for (const Field &field : fields) {
+            auto *box = editor.findChild<DragSpinBox *>(QLatin1String(field.name));
+            CHECK(box != nullptr,
+                  qPrintable(QStringLiteral("transform: the %1 field is on the panel")
+                                 .arg(QLatin1String(field.label))));
+            if (!box) continue;
+            const iris::Vec3 pos = node->getLocalPos();
+            const iris::Vec3 scale = node->getLocalScale();
+            const iris::Vec3 rot = node->getLocalRot().toEulerAngles();
+            const double before = box->value();
+            const int steps = stack.index();
+
+            const double live = scrub(box, dx);
+            pump();
+            const iris::Vec3 nowRot = node->getLocalRot().toEulerAngles();
+            const iris::Vec3 nowPos = node->getLocalPos();
+            const iris::Vec3 nowScale = node->getLocalScale();
+            std::printf("    %s: %.4f -> %.4f (live), node pos %.4f/%.4f/%.4f rot %.3f/%.3f/%.3f "
+                        "scale %.4f/%.4f/%.4f\n",
+                        field.label, before, live, nowPos.x(), nowPos.y(), nowPos.z(),
+                        nowRot.x(), nowRot.y(), nowRot.z(),
+                        nowScale.x(), nowScale.y(), nowScale.z());
+            CHECK(qAbs(live - before) > 1e-3,
+                  qPrintable(QStringLiteral("transform: a drag on %1 moves the FIELD")
+                                 .arg(QLatin1String(field.label))));
+
+            // …and the DOCUMENT: the component that field owns, and only it.
+            const double movedPos = QVector3D(nowPos.x() - pos.x(), nowPos.y() - pos.y(),
+                                              nowPos.z() - pos.z()).length();
+            const double movedScale = QVector3D(nowScale.x() - scale.x(), nowScale.y() - scale.y(),
+                                                nowScale.z() - scale.z()).length();
+            const double movedRot = QVector3D(nowRot.x() - rot.x(), nowRot.y() - rot.y(),
+                                              nowRot.z() - rot.z()).length();
+            const QString row = QString::fromLatin1(field.label).section(' ', 0, 0);
+            const double moved = row == QLatin1String("Position") ? movedPos
+                               : row == QLatin1String("Scale")    ? movedScale
+                                                                  : movedRot;
+            CHECK(moved > 1e-3,
+                  qPrintable(QStringLiteral("transform: …and the node's %1 with it (moved %2)")
+                                 .arg(QLatin1String(field.label)).arg(moved)));
+            CHECK(stack.index() == steps + 1,
+                  qPrintable(QStringLiteral("transform: …in ONE undo step (%1)")
+                                 .arg(QLatin1String(field.label))));
+            CHECK(qAbs(box->value() - live) < 1e-3,
+                  qPrintable(QStringLiteral("transform: …and the value SURVIVES the release (%1)")
+                                 .arg(QLatin1String(field.label))));
+        }
+    }
+
+    // ---- THE ROTATION FIELDS ARE THE ROTATION, AT GIMBAL LOCK TOO ----------
+    // The owner's "I can't drag the Rotation box", found on the rig: the three
+    // callbacks re-derived the euler triple from the node's QUATERNION on every
+    // tick, and a quaternion does not remember which triple built it. At a
+    // pitch of +/-90 degrees — every flat plane, image plane and decal, and the
+    // imported models that arrive rotated -90 on X — the decomposition that
+    // came back was a DIFFERENT triple, so the edit landed elsewhere: measured
+    // before the fix, a 20-degree drag of Z at (-90, 0, 0) moved Y by 90 and
+    // left Z at 0 (the field snapped back and the panel read as dead), and a
+    // drag of X from 89 went DOWN to 71.
+    //
+    // What the panel shows is what the document gets. Asserted on the
+    // QUATERNION, since that is the thing that must match — comparing euler
+    // triples would be comparing two decompositions.
+    {
+        auto node = iris::SceneNode::create();
+        TransformEditor editor;
+        editor.setServices(&services);
+        editor.setSceneNode(node);
+        editor.resize(420, 200);
+        editor.show();
+        pump();
+        auto *xrot = editor.findChild<DragSpinBox *>("xrot");
+        auto *yrot = editor.findChild<DragSpinBox *>("yrot");
+        auto *zrot = editor.findChild<DragSpinBox *>("zrot");
+        CHECK(xrot && yrot && zrot, "gimbal: the three rotation fields are on the panel");
+
+        auto sameQuat = [](const iris::Quat &a, const iris::Quat &b) {
+            // q and -q are the same rotation
+            const float dot = iris::Quat::dotProduct(a, b);
+            return qAbs(qAbs(dot) - 1.0f) < 1e-3f;
+        };
+
+        if (xrot && yrot && zrot) {
+            // A node lying flat: the case a plane, an image plane, a decal and
+            // most imported models are in the moment they reach the scene.
+            node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(-90, 0, 0)));
+            editor.refreshUi();
+            pump();
+            const double zBefore = zrot->value();
+            const double zLive = scrub(zrot, 40);       // +20 degrees
+            pump();
+            std::printf("    gimbal: Z %.3f -> %.3f, node euler %.3f/%.3f/%.3f\n", zBefore, zLive,
+                        node->getLocalRot().toEulerAngles().x(),
+                        node->getLocalRot().toEulerAngles().y(),
+                        node->getLocalRot().toEulerAngles().z());
+            CHECK(sameQuat(node->getLocalRot(),
+                           iris::Quat::fromEulerAngles(iris::Vec3(-90, 0, float(zLive)))),
+                  "gimbal: at pitch -90, dragging Z rotates the node by what the FIELDS say");
+            CHECK(qAbs(zrot->value() - zLive) < 1e-3,
+                  "gimbal: …and the Z field keeps the value the user dragged to");
+            // …INCLUDING THROUGH A REFRESH. Anything that refreshes the panel
+            // (the gizmo's transformRefreshRequested, a re-bind) used to
+            // rewrite the row with the quaternion's canonical triple, which at
+            // gimbal lock is a different one: on the rig the Z field snapped
+            // back to 0 and the 20 degrees appeared under Y.
+            editor.refreshUi();
+            pump();
+            std::printf("    gimbal: after a refresh the row reads %.3f/%.3f/%.3f\n",
+                        xrot->value(), yrot->value(), zrot->value());
+            CHECK(qAbs(zrot->value() - zLive) < 1e-3 && qAbs(yrot->value()) < 1e-3,
+                  "gimbal: …and a refresh of the panel does not move it to another triple");
+
+            // Past +/-90: the drag must keep going the way the user is pulling.
+            node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(89, 0, 0)));
+            editor.refreshUi();
+            pump();
+            const double xLive = scrub(xrot, 40);       // 89 -> 109
+            pump();
+            std::printf("    gimbal: X 89 -> %.3f\n", xLive);
+            CHECK(xLive > 100.0,
+                  "gimbal: a drag from 89 degrees carries ON past 90 (it used to reverse)");
+            CHECK(sameQuat(node->getLocalRot(),
+                           iris::Quat::fromEulerAngles(iris::Vec3(float(xLive), 0, 0))),
+                  "gimbal: …and the node is rotated to the angle the field shows");
+        }
+
+        // NO DEAD BAND AROUND THE ROW (round 2). The rule is "the row keeps its
+        // triple while the document holds exactly what the row built", and the
+        // first cut wrote it as a TOLERANCE on a quaternion dot product — 1e-4
+        // of |dot| is 1.62 degrees, so a small rotation from anywhere else (a
+        // script, an MCP client, the gizmo, an animation) left the panel
+        // showing the old numbers.
+        {
+            node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(0, 0, 0)));
+            editor.refreshUi();
+            pump();
+            // …somebody else rotates it by ONE degree: node.transform's job.
+            node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(0, 1, 0)));
+            editor.refreshUi();
+            pump();
+            std::printf("    dead band: after a 1 degree write the row reads %.3f/%.3f/%.3f\n",
+                        xrot->value(), yrot->value(), zrot->value());
+            CHECK(qAbs(yrot->value() - 1.0) < 1e-2,
+                  "no dead band: a 1-degree rotation from anywhere else moves the row");
+
+            // A NEW SELECTION ALWAYS SHOWS ITS OWN TRIPLE, even one 1.5 degrees
+            // from the node that was selected before it.
+            auto other = iris::SceneNode::create();
+            other->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(0, 2.5, 0)));
+            editor.setSceneNode(other);
+            pump();
+            std::printf("    dead band: selecting a node 1.5 degrees away reads %.3f/%.3f/%.3f\n",
+                        xrot->value(), yrot->value(), zrot->value());
+            CHECK(qAbs(yrot->value() - 2.5) < 1e-2,
+                  "no dead band: selecting a node 1.5 degrees from the last one shows ITS triple");
+            editor.setSceneNode(node);
+            pump();
+        }
+
+        // RESET still resets — it used to drive the same row callbacks, which
+        // read the fields now (they still hold the old angles at that moment).
+        node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(20, 30, 40)));
+        node->setLocalPos(iris::Vec3(1, 2, 3));
+        editor.refreshUi();
+        pump();
+        if (auto *reset = editor.findChild<QPushButton *>("resetBtn")) reset->click();
+        pump();
+        const iris::Vec3 afterReset = node->getLocalRot().toEulerAngles();
+        std::printf("    reset: euler %.3f/%.3f/%.3f pos %.3f/%.3f/%.3f\n", afterReset.x(),
+                    afterReset.y(), afterReset.z(), node->getLocalPos().x(),
+                    node->getLocalPos().y(), node->getLocalPos().z());
+        CHECK(qAbs(afterReset.x()) < 1e-2 && qAbs(afterReset.y()) < 1e-2
+                  && qAbs(afterReset.z()) < 1e-2,
+              "reset: the Reset button puts the rotation back to zero");
+        CHECK(node->getLocalPos().x() == 0 && node->getLocalPos().y() == 0
+                  && node->getLocalPos().z() == 0,
+              "reset: …and the position with it");
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

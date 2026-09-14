@@ -78,6 +78,17 @@ for tool in xdotool curl jq Xvfb; do
     command -v "$tool" > /dev/null 2>&1 || { echo "input_keys: $tool missing"; exit 1; }
 done
 
+# THE EDITOR OPENS ON THE LAYOUT IT SHIPS WITH (lane SPACE-2). This suite's
+# home is PERSISTENT, and the editor now saves the bottom area's front tab with
+# the rest of the dock layout — so a run that happened to leave the Timeline in
+# front handed the NEXT run an editor that opens on the Timeline, and the
+# section that asserts "Ctrl+` puts the tray back on Assets" started failing
+# against its own history. The stored dock layout is this suite's own scratch,
+# not its subject: drop it and start from the compiled-in default.
+SETTINGS="${JAHSHAKA_DATA_ROOT:-}/jahsettings.ini"
+[ -n "${JAHSHAKA_DATA_ROOT:-}" ] && [ -f "$SETTINGS" ] \
+    && sed -i '/^viewportDockState=/d' "$SETTINGS" || true
+
 # ------------------------------------------------------- its own display -----
 # THIS SUITE OWNS ITS DISPLAY, and deliberately ignores JAH_TEST_DISPLAY.
 #
