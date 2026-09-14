@@ -279,6 +279,22 @@ assert(maxDelta(withSsr, noSsr) > 4,
        "screen-space reflections are IN the user's shot — switching them off changes the floor (delta " +
        maxDelta(withSsr, noSsr) + ")");
 
+// ...AND THE PLAIN GRADE HAS NONE OF THEM, WITH SSR ON — the other half of the
+// same contract, and the half that was misread (lane SSR-2, round 2). A
+// diagnosis compared two PLAIN shots of a mirror scene at ssr hq and ssr off,
+// found them bit-identical over 1.44 Mpx and reported the offscreen chain as
+// having lost SSR; it had not — Plain is the pixel-suites' readback and takes
+// the offscreen early-out by construction (OgreView::chainDesc), and Plain is
+// `editor.screenshot`'s DEFAULT, which is what made the misreading easy. So
+// with the reflections ON, the same slab, in the same open: Scene carries them
+// and Plain does not.
+settle();
+var plainSsr = editor.screenshot("shot-floor-plain-ssr-on.png", W, H, FLOOR, "plain");
+console.log("   with SSR on, scene vs PLAIN on the floor: " + maxDelta(withSsr, plainSsr));
+assert(maxDelta(withSsr, plainSsr) > 4,
+       "the plain grade is the readback, not the picture: with SSR on it differs from the " +
+       "scene grade on the reflective floor (delta " + maxDelta(withSsr, plainSsr) + ")");
+
 // ---------------------------------------------------------------------------
 // PHASE E — A MOVABLE OBJECT IS IN THE PICTURE.
 //
