@@ -1490,7 +1490,12 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 		{ iris::SceneNodeType::Decal,          QStringLiteral("app/icons/icons8-picture-50.png") },
 		{ iris::SceneNodeType::Camera,         QStringLiteral("app/icons/icons8-camera-48.png") },
 	};
-	static QHash<iris::SceneNodeType, QIcon> icons;
+	// LEAKED ON PURPOSE, like the four member icons above: a QIcon holds
+	// QPixmaps, and a QPixmap destroyed after QApplication is gone (which is
+	// when a function-local static's destructor runs) is the classic Qt
+	// shutdown crash. One hash for the process, never destroyed.
+	static QHash<iris::SceneNodeType, QIcon> &icons =
+		*new QHash<iris::SceneNodeType, QIcon>;
 	const iris::SceneNodeType type = node->getSceneNodeType();
 	if (!icons.contains(type)) {
 		QIcon icon;
