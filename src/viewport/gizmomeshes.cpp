@@ -298,6 +298,51 @@ iris::MeshPtr planeHandle(GizmoAxis axis)
     return b.build();
 }
 
+// ---- the drag marker (GIZMO-2 item 3) --------------------------------------
+// In handle-local units, where the axis ring is the unit circle: the hub is a
+// filled disc of kDragHubRadius in the ring's own plane, the arrow a thin shaft
+// from the hub's edge to kDragArrowHead ending in a cone that stops exactly ON
+// the ring. The shaft is the rings' own thickness so the marker reads as part
+// of the same drawing.
+namespace {
+const float kDragHubRadius   = 0.15f;
+const float kDragShaftRadius = 0.012f;
+const float kDragHead        = 0.78f;   // where the arrowhead starts
+const float kDragConeBase    = 0.075f;  // the arrowhead's radius
+}
+
+iris::MeshPtr dragHub(GizmoAxis axis)
+{
+    iris::Vec3 A, U, V;
+    axisFrame(axis == GizmoAxis::Screen ? GizmoAxis::Z : axis, A, U, V);
+    Builder b;
+    // A filled disc in the plane the ring lies in, both sides: the marker is
+    // looked at from wherever the camera happens to be.
+    const int segments = 24;
+    for (int i = 0; i < segments; ++i) {
+        const float a0 = float(2.0 * M_PI * i / segments);
+        const float a1 = float(2.0 * M_PI * (i + 1) / segments);
+        const iris::Vec3 r0 = (U * qCos(a0) + V * qSin(a0)) * kDragHubRadius;
+        const iris::Vec3 r1 = (U * qCos(a1) + V * qSin(a1)) * kDragHubRadius;
+        b.tri(iris::Vec3(0, 0, 0), r0, r1,  A,  A,  A);
+        b.tri(iris::Vec3(0, 0, 0), r1, r0, -A, -A, -A);
+    }
+    return b.build();
+}
+
+iris::MeshPtr dragArrow(GizmoAxis axis)
+{
+    Builder b;
+    if (axis != GizmoAxis::X && axis != GizmoAxis::Y && axis != GizmoAxis::Z) return b.build();
+    iris::Vec3 A, U, V;
+    axisFrame(axis, A, U, V);
+    addCylinder(b, A, U, V, kDragHubRadius, kDragHead, kDragShaftRadius, kSegments);
+    // The head stops at 1.0 — the axis ring's own radius, so the arrow points
+    // from the centre out TO the ring being dragged.
+    addCone(b, A, U, V, kDragHead, 1.0f, kDragConeBase, kSegments);
+    return b.build();
+}
+
 iris::MeshPtr screenRing()
 {
     Builder b;

@@ -96,6 +96,12 @@ public:
 class RotationGizmo : public Gizmo
 {
 	QVector<iris::MeshPtr> handleMeshes;
+	/// THE DRAG MARKER (GIZMO-2 item 3): one hub disc per handle and one axis
+	/// arrow per AXIS handle (the screen ring's axis points at the eye, so it
+	/// has no arrow — index kScreenHandle is null there). Drawn only while
+	/// `dragging`, in the dragged ring's colour, in that ring's frozen frame.
+	QVector<iris::MeshPtr> hubMeshes;
+	QVector<iris::MeshPtr> arrowMeshes;
 
 	/// X, Y, Z and — since GIZMO-1 item 2 — SCREEN: the outer grey ring is a
 	/// fourth handle, not decoration. It is last on purpose: it is drawn last

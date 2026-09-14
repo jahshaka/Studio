@@ -110,6 +110,19 @@ namespace GizmoMeshes
     /// Slightly larger thin ring in the XY plane; the rotation gizmo orients it
     /// to face the camera each frame (the screen-space outer ring).
     iris::MeshPtr screenRing();
+
+    /// THE DRAG MARKER (GIZMO-2 item 3, owner §366/§371 — Unreal's shape): a
+    /// small filled disc at the centre, in the dragged ring's own plane, and a
+    /// line with an arrowhead running from it out ALONG that ring's axis to the
+    /// ring's radius. Drawn only while a ring is being dragged, in the ring's
+    /// colour, in the ring's frozen frame — so it says which axis the turn is
+    /// about while the turn is happening. Both are built in the same
+    /// handle-local units the rings are (the axis ring is the unit circle).
+    ///
+    /// For GizmoAxis::Screen the axis IS the view direction, so the arrow would
+    /// project to a point: RotationGizmo draws the hub alone there.
+    iris::MeshPtr dragHub(GizmoAxis axis);
+    iris::MeshPtr dragArrow(GizmoAxis axis);
     /// A thin square FRAME in the plane spanned by a plane axis's two axes
     /// (XYPlane / YZPlane / XZPlane), with its inner corner at the origin and
     /// its two sides running out along those axes (GIZMO-2 item 1). Four thin

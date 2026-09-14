@@ -1,7 +1,10 @@
 // Gizmo overlay through the engine: the translation gizmo draws on top, no GL, no window.
 #include "irisgl/core/math/vec.h"
+#include <QColor>
 #include <QGuiApplication>
+#include <QImage>
 #include <QPointF>
+#include <QString>
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -231,6 +234,141 @@ int main(int argc, char **argv)
     overlay2.clear();
     CHECK(countNonBg(img) > 5, "rotation gizmo is visible");
     CHECK(hasColour(img, 237/255.f, 66/255.f, 66/255.f) || hasColour(img, 122/255.f, 204/255.f, 44/255.f) || hasColour(img, 58/255.f, 122/255.f, 240/255.f), "rotation rings carry axis colours");
+
+    // ------------------------------------------------------------------
+    // THE DRAG MARKER (GIZMO-2 item 3; owner §366/§371, Unreal's shape).
+    //
+    // While a ring is being dragged the gizmo also draws a small disc at the
+    // centre and a line with an arrowhead running out along THAT ring's axis to
+    // the ring's radius, in the ring's own colour. Driven here through the very
+    // calls a mouse press makes, drawn through the real overlay, read back as
+    // pixels: the X ring is grabbed (the camera looks down -Z, so that ring is
+    // edge-on and its axis points to the right of the frame), and the arrow is
+    // the only red thing to the right of the centre while the ring itself is
+    // highlighted yellow.
+    // EVIDENCE ON DISK when asked for it (spikes/gizmo-2): the same buffers the
+    // assertions read, as PNGs. Off unless the environment names a directory, so
+    // the suite writes nothing during a gate.
+    const auto saveShot = [](const Image &src, const char *name) {
+        const QByteArray dir = qgetenv("JAH_GIZMO2_SHOT_DIR");
+        if (dir.isEmpty()) return;
+        QImage out(int(src.width), int(src.height), QImage::Format_RGB888);
+        for (unsigned y = 0; y < src.height; ++y)
+            for (unsigned x = 0; x < src.width; ++x) {
+                const Colour c = src.at(x, y);
+                out.setPixel(int(x), int(y), qRgb(int(std::min(1.0f, c.r) * 255.0f),
+                                                  int(std::min(1.0f, c.g) * 255.0f),
+                                                  int(std::min(1.0f, c.b) * 255.0f)));
+            }
+        const QString path = QString::fromUtf8(dir) + "/" + QString::fromUtf8(name);
+        std::printf("    wrote %s: %d\n", qPrintable(path), int(out.save(path)));
+    };
+
+    {
+        View *big = engine->createOffscreenView("gizmo-drag", 512, 512, Colour(0.1f, 0.1f, 0.1f));
+        big->setScene(target);
+        mirror.applyCamera(cam, big);
+        GizmoOverlay dragOverlay(target);
+
+        RotationGizmo drag;
+        drag.setSelectedNode(node);
+        drag.setPickView(cam, 512.0f, 512.0f);
+        drag.updateSize(cam);
+        const float ringR = drag.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
+        // A point ON the X ring (its circle lies in the YZ plane) and away from
+        // where the Z ring crosses it.
+        const iris::Vec3 onXRing(0.0f, 0.55f * ringR, 0.83f * ringR);
+        QPointF grab;
+        const bool projected = drag.projectToPixel(onXRing, grab);
+        float px = -1.0f;
+        const QString ring = projected ? drag.ringNameAtPixel(grab, px) : QString();
+        std::printf("    the pixel on the X ring picks '%s' at %.2f px\n", qPrintable(ring),
+                    double(px));
+        CHECK(ring == QLatin1String("x"), "the drag starts on the X ring");
+
+        const iris::Vec3 eye = cam->getGlobalPosition();
+        const iris::Vec3 rayDir = (onXRing - eye).normalized();
+        const iris::Vec3 viewDir = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
+        drag.startDragging(eye, rayDir, viewDir);
+        CHECK(drag.isDragging(), "and the gizmo is dragging");
+        auto dragItems = drag.drawItems(eye, rayDir, viewDir);
+        std::printf("    dragging: %d draw items (the ring, the hub disc, the axis arrow)\n",
+                    dragItems.size());
+        CHECK(dragItems.size() == 3, "a ring under drag draws the ring plus the two marker parts");
+        if (dragItems.size() == 3) {
+            CHECK(dragItems[0].colour == QColor(255, 255, 0), "the dragged ring stays highlighted");
+            CHECK(dragItems[1].colour == QColor(237, 66, 66) &&
+                  dragItems[2].colour == QColor(237, 66, 66),
+                  "and the hub and arrow carry the dragged ring's OWN colour (X = red)");
+        }
+        dragOverlay.update(&drag, eye, rayDir, viewDir);
+        Image dragImg;
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        big->readPixels(dragImg);
+        int redRight = 0, farthest = 0;
+        for (unsigned y = 0; y < dragImg.height; ++y)
+            for (unsigned x = 270; x < dragImg.width; ++x) {
+                const Colour c = dragImg.at(x, y);
+                if (std::abs(c.r - 237/255.f) < 0.2f && std::abs(c.g - 66/255.f) < 0.2f &&
+                    std::abs(c.b - 66/255.f) < 0.2f) { ++redRight; farthest = int(x); }
+            }
+        std::printf("    the arrow: %d red pixels right of the centre, reaching x = %d "
+                    "(the ring's own radius projects to about x = %d)\n", redRight, farthest,
+                    int(256 + 512 * 0.5 * ringR / (6.0f * std::tan(float(M_PI) * 22.5f / 180.f))));
+        CHECK(redRight > 20, "the axis arrow is on screen, pointing out along the dragged "
+                             "ring's axis");
+
+        saveShot(dragImg, "rotate-dragging.png");
+
+        // THE SAME MARKER FROM A 3/4 VIEW, on the Y ring — and the reason the
+        // hub lies in the ring's PLANE rather than facing the camera: the two
+        // parts are complementary. A ring seen edge-on shows a line and its
+        // arrow across the frame (the capture above); a ring seen face-on shows
+        // a disc and an arrow pointing at the eye. Whichever way the camera is
+        // turned, one of the two is legible.
+        {
+            cam->setLocalPos(iris::Vec3(5, 4, 5));
+            cam->lookAt(iris::Vec3(0, 0, 0));
+            cam->update(0.0f);
+            mirror.applyCamera(cam, big);
+            RotationGizmo iso;
+            iso.setSelectedNode(node);
+            iso.setPickView(cam, 512.0f, 512.0f);
+            iso.updateSize(cam);
+            const float r = iso.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
+            // On the Y ring (its circle lies in XZ) and away from the two axes,
+            // where the X and Z rings cross it.
+            const iris::Vec3 onYRing(0.707f * r, 0.0f, 0.707f * r);
+            const iris::Vec3 isoEye = cam->getGlobalPosition();
+            const iris::Vec3 isoDir = (onYRing - isoEye).normalized();
+            const iris::Vec3 isoView =
+                cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
+            QPointF isoPx; float isoD = -1.0f;
+            const QString isoRing = iso.projectToPixel(onYRing, isoPx)
+                                        ? iso.ringNameAtPixel(isoPx, isoD) : QString();
+            iso.startDragging(isoEye, isoDir, isoView);
+            auto isoItems = iso.drawItems(isoEye, isoDir, isoView);
+            std::printf("    3/4 view: the pixel on the Y ring picks '%s'; dragging draws %d "
+                        "items\n", qPrintable(isoRing), isoItems.size());
+            CHECK(isoRing == QLatin1String("y") && isoItems.size() == 3,
+                  "the marker draws for a ring grabbed from a 3/4 view too");
+            dragOverlay.update(&iso, isoEye, isoDir, isoView);
+            Image isoImg;
+            for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            big->readPixels(isoImg);
+            saveShot(isoImg, "rotate-dragging-iso.png");
+            iso.endDragging();
+        }
+
+        drag.endDragging();
+        auto released = drag.drawItems(eye, rayDir, viewDir);
+        std::printf("    released: %d draw items\n", released.size());
+        CHECK(!drag.isDragging() && released.size() == 4,
+              "and at release the marker is gone: the four rings and nothing else");
+        dragOverlay.clear();
+        mirror.applyCamera(cam, view);
+        engine->destroyView(big);
+    }
 
     mirror.setSource(nullptr);
     engine->destroyView(view); engine->destroyScene(target); engine.reset();
