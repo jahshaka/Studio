@@ -1319,6 +1319,208 @@ int main()
         }
     }
 
+
+    // ---- 13. THE COLOUR HISTORY CANNOT RUN AWAY (SMOKE-ENGINE-1 item 1) ----
+    //
+    // The owner's "black holes in the textures when I move the sun" and the
+    // player's "all white, stuck exposure" are ONE defect: the SSR chain closes
+    // a loop — scene colour -> the kSsrPrev history -> this shader's `prevFrame`
+    // -> jahSsrReflection -> HlmsPbs' envColourS -> scene colour — and before
+    // this section the loop had no finite guard anywhere in it. The history is
+    // RGBA16_FLOAT, so a radiance above 65504 is stored as +Inf; the firefly
+    // clamp then computes `reflected *= ceiling / lum` with lum == Inf, which is
+    // Inf * 0 == NaN, and a NaN in the scene colour is a BLACK PIXEL after the
+    // tonemap. It circulates for as long as the workspace lives, and the HDR
+    // luminance reduction averages it into a 1x1 keep_content history that never
+    // recovers — which is the stuck exposure.
+    //
+    // The fixture seeds the loop the way the engine really does it: a mirror
+    // floor under an emitter far brighter than the half-float format can hold.
+    // Nothing here is exotic — an emissive of 1e6 is what a sun disc or a
+    // runaway feedback loop arrives at after a handful of frames of gain > 1.
+    //
+    // THREE THINGS ARE ASSERTED, and the third is the one that matters most:
+    //   a. the picture is not shot through with black holes while the bright
+    //      source is present;
+    //   b. the unrepresentable thing itself develops as WHITE, which is what an
+    //      over-bright pixel IS, rather than as a hole;
+    //   c. REMOVING IT RECOVERS. A latched NaN never leaves — neither the
+    //      history nor the exposure — so a run that cannot come back is the
+    //      defect, whatever the picture looked like at its worst.
+    //
+    // WHAT THIS SECTION CANNOT DO, said plainly so nobody reads more into a
+    // green run than it carries: a 256x256 offscreen view does not reach the
+    // LOOP GAIN a real viewport does. The owner's picture came apart because
+    // the Shadow Maps port's mirror floor reflects ITSELF at close to unit
+    // gain, over a 918x523 viewport, for thousands of frames; the pixel proof
+    // of the guard is the live editor measurement recorded in
+    // spikes/smoke-engine-1/FINDINGS.md (4.142 % of the viewport pure black
+    // before, 0.149 % after, against 0.166 % for the same frame with SSR off).
+    // What this section locks in is the INVARIANT — that an unrepresentable
+    // radiance cannot put a hole in the picture and cannot latch the exposure —
+    // on a fixture that runs in the gate in twenty seconds.
+    {
+        // A GREY BACKDROP AND A GREY FLOOR, on purpose: in this fixture NOTHING
+        // is legitimately black, so "a black pixel" means "a NaN reached the
+        // tonemapper" with no heuristic in between.
+        Scene *hs = engine->createScene("ssr-history");
+        View  *hv = engine->createOffscreenView("ssr-history", 256, 256, Colour(0.25f, 0.25f, 0.30f));
+        CHECK(hs && hv, "the history fixture's scene and view exist");
+        if (hs && hv) {
+        hv->setScene(hs);
+        hs->setAmbient(Colour(0.35f, 0.35f, 0.40f), Colour(0.30f, 0.30f, 0.32f));
+
+        PbrParams fp;
+        fp.albedo = Colour(0.60f, 0.60f, 0.62f);
+        fp.metalness = 0.85f;
+        fp.roughness = 0.08f;
+        const MaterialId hFloorMat = hs->createPbrMaterial(fp);
+        const NodeId hFloor = hs->createNode();
+        hs->attachMesh(hFloor, hs->createMesh(enginetest::unitCubeMesh()), hFloorMat);
+        enginetest::setNodeScale(hs, hFloor, Vec3(12.0f, 0.2f, 12.0f));
+        enginetest::setNodePosition(hs, hFloor, Vec3(0.0f, -0.1f, 0.0f));
+
+        // The emitter. It starts ORDINARY so the fixture has a clean baseline,
+        // and is cranked past the half-float ceiling below.
+        PbrParams ep;
+        ep.albedo = Colour(0.05f, 0.05f, 0.05f);
+        ep.emissive = Colour(3.0f, 0.0f, 0.0f);
+        ep.roughness = 0.5f;
+        const MaterialId hEmitMat = hs->createPbrMaterial(ep);
+        const NodeId hEmit = hs->createNode();
+        hs->attachMesh(hEmit, hs->createMesh(enginetest::unitCubeMesh()), hEmitMat);
+        enginetest::setNodeScale(hs, hEmit, Vec3(1.5f, 1.5f, 1.5f));
+        enginetest::setNodePosition(hs, hEmit, Vec3(0.0f, 2.2f, 0.0f));
+
+        enginetest::addDirectionalLight(hs, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+        enginetest::testCameraLookAt(hv, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
+
+        PostFxDesc hfx;
+        hfx.allowOffscreen = true;
+        hfx.hdr = true;                 // the tonemap half of the defect
+        hfx.ssr = 2;                    // full-resolution rays, the owner's row
+        hv->setPostFx(hfx);
+
+        // "A black hole": a pixel that is pure black with a bright neighbour.
+        // A NaN tonemaps to 0 while everything around it stays lit, which is
+        // exactly what the owner photographed.
+        // A BLACK HOLE, defined so the AUTO-EXPOSURE cannot fake one: a pixel
+        // that is pure black while one of its eight neighbours is bright. A
+        // scene holding something a million times brighter than the rest SHOULD
+        // meter dark — that is a camera working, not a bug — and every pixel of
+        // a frame the exposure has stopped down has dark neighbours too. A NaN
+        // does not: it sits inside the lit region it came from.
+        auto blackHoles = [](const Image &img) {
+            unsigned n = 0;
+            for (unsigned y = 1; y + 1 < img.height; ++y)
+                for (unsigned x = 1; x + 1 < img.width; ++x) {
+                    const Colour c = img.at(x, y);
+                    if (c.r > 0.004f || c.g > 0.004f || c.b > 0.004f) continue;
+                    // SURROUNDED, not merely adjacent: six of the eight
+                    // neighbours bright. The EDGE of a blown-out reflection has
+                    // black on one side of it by construction and is not a
+                    // hole; a NaN is a hole because the thing it replaced is
+                    // still all around it.
+                    unsigned bright = 0;
+                    for (int dy = -1; dy <= 1; ++dy)
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            if (!dx && !dy) continue;
+                            const Colour q = img.at(unsigned(int(x) + dx), unsigned(int(y) + dy));
+                            if (std::max(q.r, std::max(q.g, q.b)) > 0.25f) ++bright;
+                        }
+                    if (bright >= 6u) ++n;
+                }
+            return n;
+        };
+        auto meanOf = [](const Image &img) {
+            double s = 0.0;
+            for (unsigned y = 0; y < img.height; ++y)
+                for (unsigned x = 0; x < img.width; ++x) {
+                    const Colour c = img.at(x, y);
+                    s += (c.r + c.g + c.b) / 3.0;
+                }
+            return float(s / double(img.width * img.height));
+        };
+
+        // The BASELINE the two later measurements are read against.
+        Image cold;
+        render(engine.get(), 60);
+        CHECK(hv->readPixels(cold), "readPixels before the overflow source exists");
+        const unsigned holesCold = blackHoles(cold);
+        std::printf("   baseline (ordinary emitter): black pixels %u/%u, mean %.4f\n",
+                    holesCold, cold.width * cold.height, meanOf(cold));
+        CHECK_MSG(holesCold == 0u, "no holes in the fixture before anything overflows (%u px)",
+                  holesCold);
+
+        // The overflow source. 1e6 in linear radiance is stored as +Inf the
+        // moment it reaches the RGBA16_FLOAT scene target.
+        ep.emissive = Colour(1.0e6f, 1.0e6f, 1.0e6f);
+        CHECK(hs->setPbrMaterial(hEmitMat, ep), "the emitter overflows the history's format");
+        Image hot;
+        render(engine.get(), 120);
+        CHECK(hv->readPixels(hot), "readPixels with the overflow source present");
+        const unsigned holesHot = blackHoles(hot);
+        const float meanHot = meanOf(hot);
+        std::printf("   overflow source present: black holes %u/%u, mean %.4f\n",
+                    holesHot, hot.width * hot.height, meanHot);
+        if (envOn("JAH_SSR_DUMP")) writePpm(hot, "ssr-history-hot.ppm");
+        // ATTRIBUTION: the same overflow with SSR OFF. Whatever black is left
+        // in THAT frame is the tonemapper's answer to an Inf that never went
+        // near the reflection chain; the difference is SSR's own contribution.
+        {
+            PostFxDesc noSsr = hfx; noSsr.ssr = 0;
+            hv->setPostFx(noSsr);
+            Image hotOff;
+            render(engine.get(), 60);
+            hv->readPixels(hotOff);
+            std::printf("   overflow source, SSR OFF: black %u/%u, mean %.4f\n",
+                        blackHoles(hotOff), hotOff.width * hotOff.height, meanOf(hotOff));
+            if (envOn("JAH_SSR_DUMP")) writePpm(hotOff, "ssr-history-hot-ssroff.ppm");
+            hv->setPostFx(hfx);
+            render(engine.get(), 60);
+        }
+        CHECK_MSG(holesHot == 0u,
+                  "no black holes while a source brighter than the history format is on screen "
+                  "(%u px)", holesHot);
+        // ...and the unrepresentable thing itself develops as WHITE. A hole and
+        // a blown highlight are both "not the right colour"; only one of them
+        // is what an over-bright pixel IS.
+        {
+            float brightest = 0.0f;
+            for (unsigned y = 0; y < hot.height; ++y)
+                for (unsigned x = 0; x < hot.width; ++x) {
+                    const Colour c = hot.at(x, y);
+                    brightest = std::max(brightest, (c.r + c.g + c.b) / 3.0f);
+                }
+            CHECK_MSG(brightest > 0.90f,
+                      "the over-bright source develops as WHITE, not as a hole (%.3f)", brightest);
+        }
+
+        // c. RECOVERY. Take the source back to an ordinary brightness; the
+        //    history and the exposure must come back within a second of frames.
+        ep.emissive = Colour(3.0f, 0.0f, 0.0f);
+        CHECK(hs->setPbrMaterial(hEmitMat, ep), "the overflow source goes back to an ordinary one");
+        (void)holesCold;
+        Image cool;
+        render(engine.get(), 120);
+        CHECK(hv->readPixels(cool), "readPixels after the overflow source is gone");
+        const unsigned holesCool = blackHoles(cool);
+        const float meanCool = meanOf(cool);
+        std::printf("   overflow source removed: black holes %u/%u, mean %.4f\n",
+                    holesCool, cool.width * cool.height, meanCool);
+        if (envOn("JAH_SSR_DUMP")) writePpm(cool, "ssr-history-cool.ppm");
+        CHECK_MSG(holesCool == 0u,
+                  "the black holes are GONE two seconds after the source is (%u px)", holesCool);
+        CHECK_MSG(meanCool > 0.02f && meanCool < 0.95f,
+                  "the auto-exposure RECOVERED rather than latching (mean %.4f)", meanCool);
+
+        hv->setPostFx(PostFxDesc());
+        render(engine.get(), 2);
+        engine->destroyView(hv);
+        engine->destroyScene(hs);
+        }
+    }
+
     // ---- teardown with the chain live --------------------------------------
     // The ASan copy of this suite is what would catch a texture or node
     // definition the SSR shape leaks across a rebuild.

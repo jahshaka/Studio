@@ -20,6 +20,11 @@
 //                 degenerate vertex formats are permutations of their own.)
 //   run 4       : --clear-shader-cache makes a warm launch cold again, and the
 //                 run still succeeds. Our r.InvalidateCachedShaders.
+//   run 5       : THE SAVE UNDER CHURN. Every World post row through every
+//                 value, the player in and out, a save after each step — the
+//                 path that crashed three instances on 2026-09-14. Asserts the
+//                 process survives it AND that ogre-patch 0035's guard never
+//                 had to fire.
 #include <QCoreApplication>
 #include <QDir>
 #include <QJsonDocument>
@@ -33,6 +38,10 @@ static int failures = 0;
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 namespace {
+
+/// The last run's merged stdout+stderr, for the assertions that are about what
+/// the app SAID rather than about what app.shaderCache() reported.
+QString gLastOutput;
 
 /// Runs the app with `--script`, returns the app.shaderCache() object the
 /// script printed. The marker prefix keeps it findable in a log the engine also
@@ -64,6 +73,7 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     }
     if (exitCodeOut) *exitCodeOut = app.exitCode();
     const QString out = QString::fromUtf8(app.readAll());
+    gLastOutput = out;
     QJsonObject last;
     for (const QString &line : out.split('\n')) {
         const int at = line.indexOf(QStringLiteral("SHADERCACHE "));
@@ -172,6 +182,34 @@ int main(int argc, char **argv)
     CHECK(!cleared.value("microcodeLoaded").toBool() &&
           !cleared.value("pipelineCacheLoaded").toBool(),
           "--clear-shader-cache left no layer to load");
+
+    // ---- run 5: THE SAVE UNDER CHURN (SMOKE-ENGINE-1 item 3) --------------
+    // The periodic save crashed the owner's editor and two rig instances on
+    // 2026-09-14, inside HlmsDiskCache::copyFrom, which subscripts Ogre's
+    // renderable and pass caches with indices unpacked from a shader hash and
+    // checks neither (ogre-patch 0035 checks them now). Both indices grow with
+    // CHURN — new material/mesh permutations, new pass property sets, and every
+    // World post row is a compositor rebuild that produces some.
+    //
+    // The script drives that churn and saves after every step. This run asserts
+    // the two things a green run can honestly claim:
+    //   * the process SURVIVES it (before 0035 an out-of-range index was a
+    //     SIGSEGV, not a skipped entry), and
+    //   * the guard never had to fire. A "skipping shader cache entry" line in
+    //     this run's output would mean the indices really do go out of range in
+    //     ordinary churn, which is the diagnosis the lane could not obtain — so
+    //     the day this assertion fails is the day the cause is known, and the
+    //     log line carries the hash, both indices, both sizes and the Hlms type
+    //     the hash claims.
+    const QJsonObject churn = runApp(home, scripts + "e2e_shader_cache_churn.js", {}, &rc);
+    CHECK(rc == 0, "run 5 survived the churn and exited cleanly");
+    CHECK(!churn.isEmpty(), "run 5 reported its cache state after the churn");
+    CHECK(!gLastOutput.contains(QStringLiteral("skipping shader cache entry")),
+          "no shader-cache entry had an out-of-range index or a missing PSO during the churn");
+    CHECK(!gLastOutput.contains(QStringLiteral("distinct pass property combinations")),
+          "the pass cache stayed inside the 8 bits the shader hash gives it");
+    CHECK(!gLastOutput.contains(QStringLiteral("save already in progress")),
+          "no re-entrant save was attempted");
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return failures ? 1 : 0;
