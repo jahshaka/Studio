@@ -96,22 +96,27 @@ void EnginePlayerView::start()
     // The editor camera may have been replaced since setScene (EditorData load).
     if (mDocument) mScene->setDocument(mDocument, editorCamera());
     mScene->begin();
-    if (view()) {
-        view()->setEnabled(true);
-        // THE EXPOSURE HAND-OVER (View::seedExposureHistory). Auto-exposure is
-        // per view and it ADAPTS: a view that has never presented starts from
-        // the authored midpoint and walks to the scene's real luminance over
-        // the next second — visibly, on the frame the user pressed Play. The
-        // editor's view has been looking at this very scene, so its converged
-        // multiplier is the right starting point and the Player opens graded.
-        //
-        // Not a shared history: after this frame the two views adapt
-        // independently, which is what lets them look at different parts of a
-        // world. 0 (the editor never presented, no HDR, the fixed grade) leaves
-        // the descriptor's own seed in place.
-        if (mEditorViewport)
-            view()->seedExposureHistory(mEditorViewport->measuredExposureScale());
-    }
+    if (view()) view()->setEnabled(true);
+    // THE EXPOSURE HAND-OVER. Auto-exposure is per view and it ADAPTS: a view
+    // that has never presented starts from the authored midpoint and walks to
+    // the scene's real luminance over the next second — visibly, on the frame
+    // the user pressed Play. The editor's view has been looking at this very
+    // scene, so its converged multiplier is the right starting point and the
+    // Player opens graded.
+    //
+    // IT SURVIVES THE CHAIN THIS VIEW DOES NOT HAVE YET (lead review round 2).
+    // On the FIRST entry this view still carries the passthrough chain, which
+    // has no seed pass at all, and the HDR chain is built by frame-1's
+    // applyEnvironment a moment later. The engine remembers a value it cannot
+    // take yet and spends it on the chain it next builds, before that chain has
+    // rendered anything — see View::seedExposureHistory.
+    //
+    // Not a shared history: after that frame the two views adapt independently,
+    // which is what lets them look at different parts of a world. 0 (the editor
+    // never presented, no HDR, the fixed grade) leaves the descriptor's own
+    // seed in place.
+    if (view() && mEditorViewport)
+        view()->seedExposureHistory(mEditorViewport->measuredExposureScale());
 }
 
 void EnginePlayerView::end()
@@ -149,6 +154,18 @@ bool EnginePlayerView::stepPlayerFrames(int n, float dt)
 void EnginePlayerView::syncFrame()
 {
     if (!mActive || !view()) return;
+    // RE-ADOPT FIRST, EVERY FRAME (lead review round 2). The editor's Scene and
+    // its mirror are DESTROYED on a project close or an async open — which the
+    // user can trigger from this very page — and the viewport nulls its own
+    // pointers, so ours would be dangling. Engine::destroyScene detaches every
+    // view bound to that scene, so `view()->scene()` is already null here and
+    // nothing below would notice: attach() would call setScene() on a freed
+    // Scene and step() would sync a freed SceneMirror.
+    //
+    // adoptEditorScene is null-safe on both sides and a pair of pointer
+    // compares when nothing moved, so it belongs at the top of the only edge
+    // that did not already have it.
+    adoptEditorScene();
     if (!mScene->attach(view())) return;
     // THE FRAME ABOUT TO BE RENDERED IS A PLAYER FRAME (RENDER_LOOP_MONITOR_SPEC
     // §4.2's frame reason). This runs inside the driver's beforeFrame, after the

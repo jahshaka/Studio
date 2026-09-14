@@ -2,10 +2,17 @@
 // that exposed the graph-ownership defect (2026-09-05 smoke test): Particles
 // (a particle-system definition read positions off nodes another mirror's bind
 // had just destroyed — worker-thread fault) and Showroom (the planar pass, same
-// family). The player page owns a SECOND engine scene whose mirror pushes the
-// SAME document as the editor's, so every space switch migrates the document's
-// graph between managers; this suite is the coverage the 155/155 gate lacked —
-// no other test switches spaces on a particles or planar scene.
+// family). The player page USED TO own a second engine scene whose mirror
+// pushed the SAME document as the editor's, so every space switch migrated the
+// document's graph between managers; this suite is the coverage the 155/155
+// gate lacked — no other test switches spaces on a particles or planar scene.
+//
+// Since lane PLAYER-1 (owner decision 2026-09-14) the Player page is a second
+// VIEW on the editor's scene and there is no migration at all, which is why the
+// last section below exists: the failure mode moved. What can still leave the
+// Player pointing at freed memory is the editor's Scene and SceneMirror being
+// DESTROYED under it — a project close or open, both reachable from the Player
+// page — so that is now driven here too.
 //
 // Engine + window path — NOT headless (app.space needs the real pages).
 
@@ -28,8 +35,11 @@ function ensureProject(name) {
     return r.guid;
 }
 
+var lastGuid = "";
+
 function roundTrip(name) {
     var guid = ensureProject(name);
+    lastGuid = guid;
     assert(project.open(guid), name + " opened");
     var editorNodes = scene.nodes().length;
     assert(editorNodes > 1, name + ": document has " + editorNodes + " nodes");
@@ -61,5 +71,47 @@ function roundTrip(name) {
 }
 
 roundTrip("Particles");
+var particlesGuid = lastGuid;
 roundTrip("Showroom");
+var showroomGuid = lastGuid;
+
+// ---- THE WORLD CHANGES WHILE THE PLAYER PAGE IS UP (lead review round 2) ---
+//
+// project.open from the Player space closes the current world first, and
+// MainWindow::closeProject DESTROYS the editor's engine Scene and its
+// SceneMirror — which the Player page draws through. Engine::destroyScene
+// detaches every view bound to that scene, so nothing looks wrong from the
+// outside; what is left is a host holding two freed pointers.
+//
+// The synchronous verb ends in switchSpace(EDITOR), so THIS drives the open and
+// the re-entry rather than the freed-pointer frame itself (the async open,
+// which leaves the Player page up across the whole load, cannot complete inside
+// a single --script run — it advances one slice per event-loop turn). The
+// deterministic freed-scene frame is asserted in player.editor_parity, where
+// the scene can be destroyed under the host on purpose.
+app.space("player");
+editor.frame(10);
+assert(player.state().active, "the Player page is the space on screen");
+
+assert(project.open(particlesGuid), "another world opened from the PLAYER space");
+editor.frame(20);
+var nodesAfterOpen = scene.nodes().length;
+assert(nodesAfterOpen > 1, "the document is the NEW world (" + nodesAfterOpen + " nodes)");
+
+// Back into the Player, on the scene that was rebuilt under it.
+app.space("player");
+editor.frame(30);
+assert(scene.nodes().length === nodesAfterOpen, "the Player space has that world");
+var shot = player.screenshot("player-after-open.png",
+                             { width: 96, height: 96, probes: [{ x: 0.5, y: 0.5 }] });
+assert(shot.center.r + shot.center.g + shot.center.b > 20,
+       "the Player renders it, not a black frame (" +
+       shot.center.r + "," + shot.center.g + "," + shot.center.b + ")");
+
+// And a CLOSE from the Player space, which leaves no editor scene at all.
+assert(project.close(), "the world closed from the Player space");
+assert(project.open(showroomGuid), "and a world opens again afterwards");
+editor.frame(20);
+assert(scene.nodes().length > 1, "the editor has a world again");
+
 console.log("space_switch: all assertions passed");

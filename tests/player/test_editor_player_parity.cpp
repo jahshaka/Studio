@@ -440,6 +440,171 @@ int main(int argc, char **argv)
             CHECK(returned <= 8, "the editor comes back to the picture it left");
         }
 
+        // ---- 5. THE EXPOSURE HAND-OVER (lead review round 2) ----------------
+        //
+        // Auto-exposure is per view and it ADAPTS, so a second on-screen view
+        // of one scene must not start at the authored midpoint and walk to the
+        // room's real luminance in front of the user. The hand-over cannot be a
+        // plain write at page-show time: the arriving view's chain is still the
+        // PASSTHROUGH one, which has no seed pass, so the call used to be a
+        // silent no-op and the HDR chain the host's first world push then built
+        // seeded ITSELF at 1.0 — the very walk this is meant to remove.
+        //
+        // The engine remembers a value the graph cannot take yet and spends it
+        // on the chain it next builds. Two fresh views prove it, each starting
+        // with a brand-new passthrough chain: one handed the editor's converged
+        // value BEFORE it has an HDR chain, one not. Then the HDR chain is
+        // built and ONE frame is rendered.
+        {
+            // The editor's own chain must be the HDR one to have a converged
+            // value at all; an OFFSCREEN view only keeps a chain with
+            // allowOffscreen, which the mirror's own description clears on
+            // every push (POST_CHAIN_SPEC §7.3). So force it, settle, read.
+            const auto force = [](View *v, PostFxDesc fx) {
+                fx.allowOffscreen = true; v->setPostFx(fx);
+            };
+            force(editorView, editorView->postFx());
+            for (int i = 0; i < 24; ++i) engine->renderOneFrame();
+            const float editorScale = editorView->measuredExposureScale();
+            std::printf("    editor converged exposure = %.4f\n", double(editorScale));
+            CHECK(editorScale > 0.0f, "the editor view has a converged exposure to hand over");
+
+            View *seeded  = engine->createOffscreenView("parity-seeded",  W, H, kBackground);
+            View *control = engine->createOffscreenView("parity-control", W, H, kBackground);
+            CHECK(seeded && control, "two fresh views for the hand-over case");
+            if (seeded && control) {
+                seeded->setScene(editorScene);
+                control->setScene(editorScene);
+                editorMirror.applyCamera(camera, seeded, freecam::kFreeCameraFramingAspect);
+                editorMirror.applyCamera(camera, control, freecam::kFreeCameraFramingAspect);
+
+                // A BRAND-NEW VIEW HAS THE PASSTHROUGH CHAIN and therefore no
+                // seed pass: this write cannot land yet, and there is nothing
+                // to read back. It must be REMEMBERED, not dropped.
+                seeded->seedExposureHistory(editorScale);
+                CHECK(seeded->measuredExposureScale() == 0.0f,
+                      "a passthrough view has no exposure to read (the write cannot land yet)");
+
+                // NOW the HDR chain is built on both — in the app this is the
+                // host's first applyEnvironment, here the same description
+                // pushed by hand (a fresh view's own PostFxDesc has no HDR in
+                // it at all) — and one frame is rendered.
+                const PostFxDesc worldFx = editorView->postFx();
+                force(seeded, worldFx);
+                force(control, worldFx);
+                engine->renderOneFrame();
+
+                const float seededScale  = seeded->measuredExposureScale();
+                const float controlScale = control->measuredExposureScale();
+                std::printf("    first HDR frame: seeded %.4f, unseeded %.4f, editor %.4f\n",
+                            double(seededScale), double(controlScale), double(editorScale));
+                CHECK(seededScale > 0.0f && controlScale > 0.0f,
+                      "both fresh views built an HDR chain and graded a frame");
+                const float seededErr  = std::fabs(seededScale  - editorScale);
+                const float controlErr = std::fabs(controlScale - editorScale);
+                // WITHIN 5% on the FIRST HDR frame. Not EQUAL: the frame the
+                // seed is spent on also runs one step of the adaptation filter
+                // over it, which is what a history is for.
+                CHECK(seededErr <= editorScale * 0.05f,
+                      "the seeded view's FIRST HDR frame grades at the editor's exposure");
+                // ...and the comparison is not vacuous: with nothing handed
+                // over the same view starts somewhere else entirely.
+                CHECK(controlErr > seededErr * 4.0f,
+                      "an unseeded view does NOT (the hand-over is what makes the difference)");
+
+                seeded->setScene(nullptr);
+                control->setScene(nullptr);
+                engine->destroyView(seeded);
+                engine->destroyView(control);
+            }
+        }
+
+        // ---- 6. THE HOST SCENE IS DESTROYED UNDER THE PLAYER ---------------
+        //
+        // (lead review round 2.) A project close or an asynchronous open
+        // DESTROYS the editor's engine Scene and its SceneMirror, and both are
+        // reachable from the Player page — whose View is drawing through them.
+        // Engine::destroyScene detaches every view bound to that scene, so
+        // nothing looks wrong from the outside: what is left is a host holding
+        // two freed pointers and a driver tick about to call setScene() on one
+        // and sync() on the other.
+        //
+        // Driven here rather than in a script because a script cannot make the
+        // window happen deterministically (the synchronous open ends in
+        // switchSpace(EDITOR); the asynchronous one needs event-loop turns a
+        // --script run does not have). Here the scene can simply be destroyed
+        // under the host, in the order EngineSceneViewport::clearScene uses.
+        {
+            View *orphanView = engine->createOffscreenView("parity-orphan", W, H, kBackground);
+            Scene *temp = engine->createScene("parity-temp");
+            CHECK(orphanView && temp, "a throwaway view and host scene");
+            // Its OWN document: binding this suite's `doc` to a second mirror
+            // is precisely the graph migration this lane removed.
+            auto doc2 = iris::Scene::create();
+            auto cam2 = iris::CameraNode::create();
+            cam2->setLocalPos(iris::Vec3(0, 2, 6));
+            cam2->lookAt(iris::Vec3(0, 0, 0));
+            doc2->refresh();
+            if (orphanView && temp) {
+                EnginePlayerScene orphan(engine);
+                {
+                    SceneMirror tempMirror(temp);
+                    tempMirror.setSource(doc2);
+                    orphan.setEditorScene(temp, &tempMirror);
+                    CHECK(orphan.attach(orphanView), "the orphan player bound to its host scene");
+                    orphan.setDocument(doc2, cam2);
+                    orphan.begin();
+                    orphan.step(1.0f / 60.0f, W, H);
+                    engine->renderOneFrame();
+                    CHECK(orphanView->scene() == temp, "...and is drawing it");
+                    // THE TEARDOWN, in clearScene's order: mirror first, then
+                    // the scene. The host is told nothing.
+                    tempMirror.setSource(nullptr);
+                }
+                engine->destroyScene(temp);
+                CHECK(orphanView->scene() == nullptr,
+                      "destroyScene detached the view — nothing looks wrong from outside");
+
+                // THE DRIVER TICK. syncFrame re-adopts first, which is this
+                // pair of null pointers; everything after it must go quiet
+                // rather than touch freed memory.
+                orphan.setEditorScene(nullptr, nullptr);
+                CHECK(orphan.engineScene() == nullptr, "the player let go of the freed scene");
+                CHECK(!orphan.attach(orphanView), "...refuses to bind to nothing");
+                orphan.step(1.0f / 60.0f, W, H);
+                engine->renderOneFrame();
+                CHECK(true, "a frame after the host scene was destroyed is survivable");
+
+                // ...and handed a LIVE scene it draws again, which is what the
+                // frame after a project open has to do.
+                orphan.setEditorScene(editorScene, &editorMirror);
+                CHECK(orphan.attach(orphanView), "bound to the new host scene");
+                // THE DOCUMENT GUARD. The mirror now holds this suite's
+                // document, but the player was last given doc2 — the window
+                // between a project open and the host's push. Stepping it would
+                // drive the view from a camera whose graph node lives in a
+                // scene manager that has just been destroyed; step() must
+                // return before it touches that camera at all. Observed on the
+                // first thing step() writes to it, its aspect ratio.
+                cam2->setAspectRatio(3.0f);
+                orphan.step(1.0f / 60.0f, W, H);
+                CHECK(cam2->aspectRatio == 3.0f,
+                      "a document the mirror does not hold is NOT stepped");
+                orphan.setDocument(doc, camera);
+                orphan.begin();
+                for (int i = 0; i < 4; ++i) {
+                    orphan.step(1.0f / 60.0f, W, H);
+                    engine->renderOneFrame();
+                }
+                Image revived;
+                CHECK(orphanView->readPixels(revived), "readback after the re-adopt");
+                std::printf("    orphan after re-adopt: spread %d/255\n", spread(revived));
+                CHECK(spread(revived) > 24, "the player renders the NEW world");
+                orphan.release();
+            }
+            if (orphanView) engine->destroyView(orphanView);
+        }
+
         player.release();
     }
 

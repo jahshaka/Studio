@@ -136,6 +136,12 @@ void EnginePlayerScene::end()
 void EnginePlayerScene::step(float dt, int width, int height)
 {
     if (!mDocument || !mView || !mScene) return;
+    // THE MIRROR IS THE EDITOR'S AND IT HOLDS THE DOCUMENT. A frame where the
+    // two disagree is a frame between a project open and the host's push of the
+    // new document: stepping it would drive this view from a camera whose graph
+    // node lives in a scene manager that has just been destroyed. Wait one
+    // frame instead — EnginePlayerView::setScene is the push.
+    if (mMirror && mMirror->source() != mDocument) return;
     auto cam = camera();
     if (!cam) return;
 

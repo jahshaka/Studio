@@ -53,7 +53,7 @@ target_link_libraries(test_editor_player_parity PRIVATE IrisGL JahshakaEngine Qt
 add_dependencies(test_editor_player_parity JahshakaEngineMedia)
 add_test(NAME player.editor_parity COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "mirror")
+set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # ---- player.playback_routing (A1.6) --------------------------------------
 # The play/edit STATE MACHINE — PlaybackService's routing into the viewport,
