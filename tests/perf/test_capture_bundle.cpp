@@ -249,6 +249,7 @@ int main(int argc, char **argv)
                                   QStringLiteral("staleProbes"),
                                   QStringLiteral("probeCapturesLastFrame"),
                                   QStringLiteral("cascades"),
+                                  QStringLiteral("cascadesAwaitingCamera"),
                                   QStringLiteral("cascadeFullRebuilds"),
                                   QStringLiteral("cascadeDeferrals"),
                                   QStringLiteral("cascadeDirtyMajority") };

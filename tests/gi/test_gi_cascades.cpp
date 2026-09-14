@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -128,8 +129,16 @@ int main()
         // a single one of its cascades — the honest form of the defect.
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(200.0f, 2.0f, 206.0f),
                                                          Vec3(200.0f, 1.0f, 200.0f)));
+        const unsigned long long rebuildsBefore = scene->giStatus().rebuilds;
         CHECK(scene->setGlobalIllumination(cascadeGi()),
               "the cascade arm accepts before any frame has rendered");
+        // WAITING IS NOT A REBUILD, and it says so rather than looking like a
+        // failed build (round-2 review F4/F5).
+        const GiStatus waiting = scene->giStatus();
+        CHECK(waiting.cascadesAwaitingCamera && waiting.cascades.empty(),
+              "...and reports that it is WAITING FOR A CAMERA, not that it built nothing");
+        CHECK(waiting.rebuilds == rebuildsBefore,
+              "...without counting the wait as a from-scratch rebuild");
         render(e, 24);
         const GiStatus o = scene->giStatus();
         unsigned long long total = 0;
@@ -139,6 +148,9 @@ int main()
                     o.cascades.size(), total, o.cascadeFullRebuilds, o.cascadeDeferrals);
         CHECK(!o.cascades.empty() && o.vctBound,
               "the chain is up and bound once a camera has been tracked");
+        CHECK(!o.cascadesAwaitingCamera, "...and it is not waiting for anything any more");
+        CHECK(o.rebuilds == rebuildsBefore + 1u,
+              "THE WHOLE OPEN IS ONE COUNTED REBUILD (it was two: the wait and the build)");
         CHECK(total == (unsigned long long)o.cascades.size(),
               "EVERY CASCADE IS VOXELISED EXACTLY ONCE ON AN OPEN (not twice: origin, then camera)");
         CHECK(o.cascadeFullRebuilds == 0,
@@ -529,6 +541,88 @@ int main()
         CHECK(worstPerFrame <= 1, "...at most one row per frame");
         CHECK(counterTotal == rows,
               "...and FrameRecord::cascadeRebuilds counts exactly them");
+    }
+
+    // =====================================================================
+    // CASE 10 — `items` IS WHAT THIS REBUILD VOXELISED
+    // =====================================================================
+    // `GiStatus::cascades[].items` promises "inside its box and big enough to
+    // fill half a voxel of it". It used to be counted inside setCascadeItems,
+    // which by rule 1 runs only when the ATTACH SET changes — so the number
+    // froze at the last selection and a cascade that scrolled across a room
+    // went on reporting the contents of the room it had left (round-2 review
+    // F1). Here the wall leaves cascade 0's 5 m box as the camera walks away
+    // from it, and the number has to say so.
+    std::printf("\n== case 10: items follows the cascade ==\n");
+    {
+        // A prop where the camera starts, so cascade 0's 5 m box holds the
+        // ground AND it; the scene's wall is 12 m away and was never in it.
+        const NodeId prop = enginetest::addTestCube(scene, Colour(0.7f, 0.7f, 0.2f), 0.0f, 0.6f);
+        enginetest::setNodePosition(scene, prop, Vec3(0.0f, 1.0f, 6.0f));
+        enginetest::setNodeScale(scene, prop, Vec3(1.2f, 1.2f, 1.2f));
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 9.0f),
+                                                         Vec3(0.0f, 1.0f, 6.0f)));
+        CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up around the prop");
+        render(e, 8);
+        st = scene->giStatus();
+        const int near = st.cascades[0].items;
+        const float step = st.cascades[0].step;
+        for (int f = 1; f <= 40; ++f) {
+            const float x = float(f) * step / 4.0f;
+            view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 9.0f),
+                                                             Vec3(x, 1.0f, 6.0f)));
+            render(e, 1);
+        }
+        st = scene->giStatus();
+        const int far = st.cascades[0].items;
+        std::printf("   cascade 0 items: %d beside the prop -> %d %.0f m away\n",
+                    near, far, 10.0f * step);
+        CHECK(near >= 2, "beside the prop the inner cascade voxelises the ground AND the prop");
+        CHECK(far < near, "walking away DROPS the prop from what it voxelises");
+        CHECK(far >= 1, "...and the ground is still in it");
+        scene->removeNode(prop);
+        render(e, 4);
+    }
+
+    // =====================================================================
+    // CASE 11 — A REBUILD THAT THROWS CHANGES NOTHING BUT THE CLOCK
+    // =====================================================================
+    // The scheduler re-centres a cascade BEFORE building it, and the
+    // voxeliser's region is read live by the shader — so a build that throws
+    // would leave the new region mapped onto the old place's voxels: a wrong
+    // bounce, silently, until the next scroll (audit B4). The revert path had
+    // never executed, which is not a proof of anything (round-2 review F2), so
+    // one build is forced to throw here through the same kind of fault switch
+    // the texture-wait budget uses (JAH_TEXTURE_WAIT_FAULT).
+    std::printf("\n== case 11: a failed rebuild ==\n");
+    {
+        st = scene->giStatus();
+        const GiStatus::CascadeStatus c0 = st.cascades[0];
+        const float step = c0.step;
+        const float x0 = c0.centre.x;
+        setenv("JAH_GI_CASCADE_FAULT", "0", 1);
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(x0 + 1.5f * step, 2.0f, 6.0f),
+                                                         Vec3(x0 + 1.5f * step, 1.0f, 0.0f)));
+        render(e, 1);
+        GiStatus bad = scene->giStatus();
+        std::printf("   forced failure: rebuilds %llu -> %llu, centre %.2f -> %.2f, pending %d\n",
+                    c0.rebuilds, bad.cascades[0].rebuilds, c0.centre.x, bad.cascades[0].centre.x,
+                    bad.cascades[0].pending);
+        CHECK(bad.cascades[0].rebuilds == c0.rebuilds,
+              "a rebuild that threw is NOT counted as one");
+        CHECK(std::fabs(bad.cascades[0].centre.x - c0.centre.x) < 1e-3f,
+              "AND THE CASCADE KEEPS THE PLACEMENT ITS VOXELS ARE FOR (the revert path)");
+        CHECK(bad.cascades[0].pending != 0, "...with the rebuild still owed");
+        CHECK(scene->giStatus().vctBound, "...and the chain still bound and rendering");
+        unsetenv("JAH_GI_CASCADE_FAULT");
+        render(e, 1);
+        st = scene->giStatus();
+        std::printf("   after the fault is cleared: rebuilds %llu, centre %.2f, pending %d\n",
+                    st.cascades[0].rebuilds, st.cascades[0].centre.x, st.cascades[0].pending);
+        CHECK(st.cascades[0].rebuilds == c0.rebuilds + 1u, "the NEXT FRAME retries, and succeeds");
+        CHECK(st.cascades[0].centre.x > c0.centre.x + step * 0.5f,
+              "...and the cascade is where the camera is");
+        CHECK(st.cascades[0].pending == 0, "...and owes nothing");
     }
 
     // The arm must come down cleanly — the chain's extra cascades are owned by

@@ -698,6 +698,9 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "probeGateCrossings", double(s.gi.probeGateCrossings) },
             // ...and the Photon chain as BUILT (empty in the single-volume arm).
             { "cascades", cascades },
+            // "the chain is wanted but no view has tracked a camera yet" — an
+            // empty `cascades` with this false means something failed instead.
+            { "cascadesAwaitingCamera", s.gi.cascadesAwaitingCamera },
             { "cascadeFullRebuilds", double(s.gi.cascadeFullRebuilds) },
             { "cascadeDeferrals", double(s.gi.cascadeDeferrals) },
             { "cascadeDirtyMajority", double(s.gi.cascadeDirtyMajority) } } },
