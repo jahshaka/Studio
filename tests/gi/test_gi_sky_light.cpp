@@ -526,6 +526,69 @@ int main(int argc, char **argv)
               "11d. and neither does putting it back");
     }
 
+    // ---- 12. THE SKY REFLECTS AT THE SKY LIGHT'S GAIN, AND ONLY THEN -------
+    // The owner's report, 2026-09-14: "with all lights off the GPU sky still
+    // lights the scene". Their hypothesis was right and it was the SPECULAR
+    // half. Case 3 above proves the diffuse half is gated — hide the Sky Light
+    // and a matte sphere goes black — but the sky's own captured cube reached
+    // every material through reflectionTexFor with no gate at all, so a MIRROR
+    // went on reflecting the sky byte-identically with every light in the scene
+    // hidden. It is the same light or it is not a light: a sky with no Sky
+    // Light is a BACKDROP, still drawn, still visible behind the scene, and it
+    // reflects nothing into it.
+    //
+    // The fixture turns the sphere into a mirror for this case — metal,
+    // roughness 0 — so the pixel at its centre IS the environment sample and
+    // nothing else. The sky stays on throughout: every assertion here is about
+    // the LIGHT, and the last one proves the sky itself never went away.
+    {
+        mat->setMetallicFactor(1.0f);
+        mat->setRoughnessFactor(0.02f);
+        sphere->setMaterial(mat);
+        skyLight->intensity = 1.0f;
+        skyLight->color = QColor(255, 255, 255);
+        for (int f = 0; f < 8; ++f) frame();
+        const Colour mirrorOn = shade(128);          // dead centre: the mirror
+        const Colour skyPixel = shade(8);            // top of the frame: the sky itself
+
+        skyLight->setVisible(false);
+        for (int f = 0; f < 8; ++f) frame();
+        const Colour mirrorOff = shade(128);
+        const Colour skyOff    = shade(8);
+        std::printf("   mirror sphere: skylight on %.4f, hidden %.4f; sky backdrop %.4f -> %.4f\n",
+                    lum(mirrorOn), lum(mirrorOff), lum(skyPixel), lum(skyOff));
+        CHECK(lum(mirrorOn) > 0.05f, "12a. the mirror reflects the sky while the Sky Light is lit");
+        CHECK(lum(mirrorOff) < lum(mirrorOn) * 0.05f,
+              "12b. HIDING the Sky Light takes the sky's REFLECTION with it");
+        CHECK(lum(skyOff) > lum(skyPixel) * 0.95f && lum(skyOff) < lum(skyPixel) * 1.05f,
+              "12c. ...and the sky itself is untouched: it is a backdrop, not a light");
+
+        // And it SCALES, linearly, like the diffuse half does in case 4.
+        skyLight->setVisible(true);
+        skyLight->intensity = 0.5f;
+        for (int f = 0; f < 8; ++f) frame();
+        const Colour half = shade(128);
+        skyLight->intensity = 2.0f;
+        for (int f = 0; f < 8; ++f) frame();
+        const Colour twice = shade(128);
+        const float rHalf  = lum(mirrorOn) > 0.001f ? lum(half) / lum(mirrorOn) : 0.0f;
+        const float rTwice = lum(mirrorOn) > 0.001f ? lum(twice) / lum(mirrorOn) : 0.0f;
+        std::printf("   mirror sphere gain: 0.5 -> %.3fx, 2.0 -> %.3fx of intensity 1.0\n",
+                    rHalf, rTwice);
+        CHECK(rHalf > 0.42f && rHalf < 0.58f,
+              "12d. half the Sky Light is half the reflection");
+        // The upper end is a ratio of TONEMAP-FREE 8-bit radiance, so it clips
+        // where the sky is bright; assert the direction and a floor rather than
+        // a two, which the format cannot carry for a bright sky.
+        CHECK(rTwice > 1.3f, "12e. twice the Sky Light is a brighter reflection");
+
+        skyLight->intensity = 1.0f;
+        mat->setMetallicFactor(0.0f);
+        mat->setRoughnessFactor(1.0f);
+        sphere->setMaterial(mat);
+        for (int f = 0; f < 8; ++f) frame();
+    }
+
     mirror.setSource(iris::ScenePtr());
     std::printf(failures == 0 ? "gi.sky_light: PASS\n" : "gi.sky_light: %d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;
