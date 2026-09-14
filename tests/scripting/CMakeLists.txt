@@ -1229,6 +1229,36 @@ set_tests_properties(scripting.e2e.ogre_samples PROPERTIES
     TIMEOUT 120)
 jah_no_display(scripting.e2e.ogre_samples)
 
+# scripting.e2e.ogre_ports — THE PORTS (SPECS/OGRE_SAMPLES_TAB_SPEC.md §3): the
+# archives the Ogre-Samples tab's tiles open, imported into a VIRGIN home,
+# opened, rendered and measured. ogre_samples above is the verb half (the
+# inventory and the launch refusal); this is the content half.
+#
+# ENGINE-UP and display-bound, unlike its sibling: a port that imports but does
+# not render is exactly the failure this has to catch. A virgin HOME per run
+# for the same reason samples.cleanstart has one — the import step must be an
+# import and not a re-import.
+#
+# ONE PROCESS FOR ALL THREE ports: they share a base scene and a harness, so
+# back-to-back imports into one library is also the cross-archive dedup case,
+# at a third of the launches.
+configure_file(scripts/e2e_ogre_ports.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_ports)
+add_test(NAME scripting.freshhome.ogre_ports
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_home}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(scripting.freshhome.ogre_ports PROPERTIES
+    FIXTURES_SETUP scripting_home_ogre_ports
+    LABELS "scripting")
+add_test(NAME scripting.e2e.ogre_ports
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED scripting_home_ogre_ports
+    LABELS "scripting"
+    TIMEOUT 480)
+
 # MATERIAL_GAPS_SPEC GAP 2 (P6 + P7): DETAIL LAYERS end to end, and the §3.7
 # acceptance port — Ogre's own `Marble` material (detail_map0 MRAMOR6X6.jpg at
 # offset/scale 0 0 5 5, roughness_map MRAMOR-bump.jpg) rebuilt from OUR document

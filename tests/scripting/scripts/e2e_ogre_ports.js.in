@@ -1,0 +1,144 @@
+// scripting.e2e.ogre_ports — THE PORTS THEMSELVES (SPECS/OGRE_SAMPLES_TAB_SPEC.md
+// §3): the archives the Ogre-Samples tab opens, imported into a virgin home,
+// opened, rendered and measured.
+//
+// The companion suite scripting.e2e.ogre_samples is the VERB half (the curated
+// inventory and the launch refusal, headless, with no display). This is the
+// CONTENT half: each port archive really imports, really opens and really
+// renders a picture that is neither black nor blown out, with the lights and
+// the world settings its authoring script put there.
+//
+// ONE SESSION, THREE ARCHIVES, on purpose: the three ports share a harness
+// (scenes/tools/ogre_pbs_base.js) and two of them share the same base scene, so
+// importing them back to back into one library is also the cross-archive dedup
+// case — and it costs a third of what three app launches would.
+//
+// WHAT IS *NOT* ASSERTED, deliberately:
+//   * exact pixels. Two of these scenes carry GI or refraction and neither is
+//     open-to-open deterministic (the mesh-bake facts: Showroom's centre pixel
+//     swings +-80 between identical opens). The pixel claim here is the WIDE
+//     one — colour, not blackness, not white-out.
+//   * that reflection probes were PLACED in the Local Cubemaps room. They are
+//     refused today by the enclosure rule (a wall made of four panels reads as
+//     open — the lane's engine finding), and a test that asserted the refusal
+//     would turn red on the day the rule is fixed. The suite asserts what the
+//     SCENE asks for, which does not move: the hybrid technique and the 1x1x3
+//     probe grid the authoring script pinned.
+
+var SOURCE = "@SOURCE_DIR@";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+// name, archive, the nodes it must carry, how many lights of its own, and the
+// GI mode the port authored.
+var PORTS = [
+    { name: "PbsMaterials",
+      names: ["Floor", "Sun", "Sky Light", "Warm Spot", "Cold Spot",
+              "GridSphere0", "Palette_r0_f0", "Palette_r7_f7"],
+      nodes: 85, lights: 4, gi: "off" },
+    { name: "LocalCubemaps",
+      names: ["Sun", "Sky Light", "Warm Spot", "Cold Spot",
+              "Room00_Cream", "Room22_Red"],
+      nodes: 28, lights: 4, gi: "vct_pcc_hybrid" },
+    { name: "Refractions",
+      names: ["Floor", "Glass Wall", "Sun", "Sky Light", "Glass_r0_f0", "Glass_r7_f7"],
+      nodes: 86, lights: 4, gi: "off" }
+];
+
+function renderSanity(tag) {
+    editor.frame(90, 1.0 / 60.0);
+    var pts = [];
+    for (var y = 0; y < 5; y++) for (var x = 0; x < 5; x++)
+        pts.push({ x: 0.1 + x * 0.2, y: 0.1 + y * 0.2 });
+    var shot = editor.screenshot("ogre_port_" + tag + ".png", 640, 360, pts);
+    var black = 0, mean = 0, spread = 0;
+    for (var i = 0; i < shot.probes.length; i++) {
+        var p = shot.probes[i], b = (p.r + p.g + p.b) / 3;
+        mean += b;
+        if (b < 2) black++;
+        spread = Math.max(spread, Math.abs(p.r - p.b), Math.abs(p.g - p.b));
+    }
+    mean /= shot.probes.length;
+    console.log(tag + " pixels: mean=" + Math.round(mean) + " black=" + black +
+                " maxChannelSpread=" + spread);
+    assert(black <= 10, tag + ": the frame is not mostly black (" + black + "/25 probes)");
+    assert(mean > 3 && mean < 250, tag + ": usable exposure (mean " + Math.round(mean) + ")");
+    assert(spread >= 2, tag + ": the frame carries colour (spread " + spread + ")");
+    return shot;
+}
+
+for (var pi = 0; pi < PORTS.length; ++pi) {
+    var port = PORTS[pi];
+    var zip = SOURCE + "/scenes/ogre/" + port.name + ".zip";
+
+    var imported = project.importArchive(zip);
+    assert(imported && imported.guid && imported.guid.length > 10,
+           port.name + ": importArchive -> " + (imported ? imported.guid : "null"));
+    assert(project.open(imported.guid) === true, port.name + ": project.open");
+
+    // ---- the document ----
+    var nodes = scene.nodes();
+    assert(nodes.length >= port.nodes,
+           port.name + ": " + nodes.length + " nodes (>= " + port.nodes + ")");
+    for (var n = 0; n < port.names.length; ++n)
+        assert(!!scene.find(port.names[n]), port.name + ": carries '" + port.names[n] + "'");
+
+    var lights = 0;
+    for (var k = 0; k < nodes.length; ++k) if (nodes[k].type === "light") ++lights;
+    assert(lights === port.lights,
+           port.name + ": " + lights + " lights, exactly the ones it authored");
+
+    // THE SUN IS A ROLE: the first directional light. Every port aims it where
+    // their sample aims its directional light, so the resolver must find one.
+    var sun = world.sun();
+    assert(sun.light && sun.name === "Sun", port.name + ": the sun resolves to 'Sun'");
+    // AMBIENT IS A LIGHT: a port with no Sky Light would open with no ambient.
+    var sky = world.skyLight();
+    assert(sky.light && sky.intensity > 0, port.name + ": a Sky Light lights it (" + sky.intensity + ")");
+
+    // ---- the world the port authored ----
+    var gi = world.get().gi;
+    assert(gi.mode === port.gi, port.name + ": GI mode " + gi.mode + " (authored " + port.gi + ")");
+    if (port.name === "LocalCubemaps") {
+        assert(gi.pccGrid.x === 1 && gi.pccGrid.y === 1 && gi.pccGrid.z === 3,
+               "LocalCubemaps: the 1 x 1 x 3 probe grid survived the round trip");
+        // Reported, never asserted (see the header).
+        console.log("LocalCubemaps probes: " + J(world.giStatus().probeCount) +
+                    " enclosedAxes=" + world.giStatus().probeEnclosedAxes +
+                    " refused=" + world.giStatus().probeGridRefused);
+    }
+    if (port.name === "Refractions") {
+        var rows = world.settings();
+        assert(rows.refractions.valueId === "on",
+               "Refractions: the refraction pass is pinned on (" + rows.refractions.valueId + ")");
+        var glass = material.get(scene.find("Glass_r3_f3"));
+        assert(glass.alphaMode === 6, "Refractions: the palette is refractive (alphaMode 6)");
+        assert(Math.abs(glass.alpha - 0.15) < 1e-3,
+               "Refractions: at their 15% transparency (" + glass.alpha + ")");
+    }
+    if (port.name === "PbsMaterials") {
+        // The sweep IS the sample: the two axes must survive save/export/import.
+        var lo = material.get(scene.find("Palette_r0_f0"));
+        var hi = material.get(scene.find("Palette_r7_f7"));
+        assert(lo.workflow === 1 && hi.workflow === 1,
+               "PbsMaterials: the palette is on the Specular workflow");
+        assert(Math.abs(lo.roughness - 0.02) < 1e-3 && Math.abs(hi.roughness - 1.0) < 1e-3,
+               "PbsMaterials: the roughness axis survived (" + lo.roughness + " -> " + hi.roughness + ")");
+        assert(lo.fresnelColor === "#000000" && hi.fresnelColor === "#ffffff",
+               "PbsMaterials: the fresnel axis survived (" + lo.fresnelColor + " -> " + hi.fresnelColor + ")");
+    }
+
+    // ---- the picture ----
+    renderSanity(port.name);
+
+    // The renderer swallows its failures by design; the pump is the truth.
+    var e = app.engineErrors(true);
+    assert(e.entries.length === 0,
+           port.name + ": no engine errors (" + J(e.entries) + ")");
+}
+
+console.log("ogre ports: OK");
