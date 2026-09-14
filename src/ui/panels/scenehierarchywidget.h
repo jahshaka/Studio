@@ -131,8 +131,6 @@ public:
 
     QTreeWidget *getWidget();
 
-	void selectNode(QString nodeId);
-
     /// Rebuilds the whole tree from the document. Public for the undo commands
     /// (reparent, folder edits) that change the document behind the widget's back.
     void repopulateTree();
@@ -168,6 +166,9 @@ public:
     /// Selects a SET of rows (service -> tree), current row = the primary
     /// (`nodes` first), scrolled into view, under the suppress guard.
     void setSelectedSet(const QList<iris::SceneNodePtr> &nodes);
+    /// Paint a set in the tree WITHOUT recording it as the editor's selection —
+    /// for this panel's own gestures, which paint first and announce after.
+    void paintSelection(const QList<iris::SceneNodePtr> &nodes);
 
     /// The visible rows, in draw order, node rows only (folder rows and the
     /// rows under a collapsed parent are not in it). The order the owner's
@@ -254,11 +255,23 @@ private:
     bool announcingOwnSelection = false;
     /// Folder rows that were collapsed, so a repopulate does not expand them all.
     QStringList collapsedFolders;
-    /// The last set this panel announced (node ids, primary first). The tree's
-    /// selectionChanged fires for reasons that are not selection changes
-    /// (setCurrentItem, a rebuild, a row edit); without this the panel
-    /// re-announced the same set and every consumer rebuilt for nothing.
-    QList<qint64> lastAnnouncedSet;
+    /// THE SELECTION THIS PANEL BELIEVES THE EDITOR HOLDS (node ids, primary
+    /// first) — written by every leg, outbound AND inbound.
+    ///
+    /// It exists because one click on a row reaches announceSet() TWICE: Qt
+    /// fires itemSelectionChanged on the press (-> treeSelectionChanged) and
+    /// itemClicked on the release (-> treeItemSelected -> treeSelectionChanged),
+    /// and SelectionService re-emits on every replace, so an un-deduplicated
+    /// second announce rebuilds the whole properties column for nothing.
+    ///
+    /// It used to be written ONLY by announceSet ("the last set we announced"),
+    /// which made it LIE about any selection made anywhere else: after a
+    /// viewport pick, a script verb or a service call, the row this tree had
+    /// last announced was still in here, so clicking that row was swallowed as
+    /// a duplicate and the selection did not move — one, two, three clicks
+    /// (SPACE-3 diagnosis, 2026-09-15). The inbound legs (setSelectedNode,
+    /// setSelectedSet) now record what they were given, which is the truth.
+    QList<qint64> knownSelection;
 
 	void setItemVisible(QTreeWidgetItem *item, bool visible);
 	void lockItemAndChildren(QTreeWidgetItem* item);

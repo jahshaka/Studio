@@ -1502,9 +1502,15 @@ void MainWindow::openStageReveal(bool playMode)
 	updateTopMenuStates(playbackService->isPlayerMode() ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 
 	LoadTimeline::mark(QStringLiteral("selectRoot"));
-	// highlight root node
+	// A SCENE OPENS ON THE WORLD. The properties panel is bound to the root, so
+	// the World settings are what a freshly opened scene shows.
+	//
+	// The tree leg used to call a `selectNode(guid)` that DEFINED a lambda and
+	// never called it (and compared a node id against a GUID string): for years
+	// "highlight root node" highlighted nothing. Deleted with the dead function
+	// (RIGHT-TABS-1, CRUD); the row is selected through the panel's real API.
 	if (!!scene) {
-		sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
+		sceneHierarchyWidget->setSelectedNode(scene->getRootNode());
 		sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
 	}
 

@@ -813,6 +813,53 @@ set_tests_properties(ui.tree_scroll PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.tree_scroll)
 
+# ui.tree_reselect — THE ROW THE TREE LAST ANNOUNCED IS STILL CLICKABLE after a
+# selection made anywhere else (lane RIGHT-TABS-1, SPACE-3 diagnosis /
+# MASTER_QUEUE §311: "clicking an item often needs two or three clicks"). Same
+# widget, same stubs and the same offscreen QTest clicks as ui.tree_scroll; what
+# it pins is announceSet's deduplication cache — one announce per click, and the
+# cache written by the INBOUND legs so it can never go stale.
+add_executable(test_tree_reselect
+    test_tree_reselect.cpp
+    test_tree_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/reparentscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/scenefoldercommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_tree_reselect PROPERTIES
+    AUTOMOC ON AUTOUIC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_tree_reselect PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_tree_reselect PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_tree_reselect
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)
+jah_document_graph(test_tree_reselect)
+add_test(NAME ui.tree_reselect COMMAND test_tree_reselect
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.tree_reselect PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.tree_reselect)
+
 # ui.column_law — S1: every page's columns are the editor's columns, and the
 # console is a TAB of the editor's bottom tray. Spawns the REAL binary and
 # drives it over MCP (the shutdown suites' harness): these widths come out of a

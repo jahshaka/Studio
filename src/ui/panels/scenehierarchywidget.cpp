@@ -219,6 +219,11 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
 void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     selectedNode = sceneNode;
+    // THE EDITOR'S SELECTION IS NOW THIS, whoever made it (a viewport pick, a
+    // script verb, a service). Recorded before the no-row early return below,
+    // because a selection with no row in this tree is still the selection.
+    knownSelection.clear();
+    if (!!sceneNode) knownSelection.append(sceneNode->getNodeId());
 
     if (!!sceneNode) {
         auto item = treeItemList.value(sceneNode->getNodeId());
@@ -373,7 +378,7 @@ void SceneHierarchyWidget::applyShiftRange(const iris::SceneNodePtr &clicked, bo
     ordered.append(clicked);
     for (const auto &n : members) if (n.data() != clicked.data()) ordered.append(n);
 
-    setSelectedSet(ordered);              // paint it now; the guard stops the echo
+    paintSelection(ordered);              // paint it now; the guard stops the echo
     announceSet(ordered);
 }
 
@@ -382,8 +387,16 @@ void SceneHierarchyWidget::announceSet(const QList<iris::SceneNodePtr> &nodes)
 {
     QList<qint64> ids;
     for (const auto &n : nodes) if (n) ids.append(n->getNodeId());
-    if (ids == lastAnnouncedSet) return;
-    lastAnnouncedSet = ids;
+    // ONE CLICK, ONE ANNOUNCE: Qt reports the same click twice (press ->
+    // itemSelectionChanged, release -> itemClicked) and SelectionService
+    // re-emits on every replace, so the second one would rebuild the whole
+    // properties column for nothing. What makes this safe is that
+    // knownSelection is written by the INBOUND legs too (setSelectedNode /
+    // setSelectedSet) — see the header: as "the last set we announced" it went
+    // stale the moment anything else made a selection, and the row this tree
+    // had announced before a viewport pick became unclickable.
+    if (ids == knownSelection) return;
+    knownSelection = ids;
     selectedNode = nodes.isEmpty() ? iris::SceneNodePtr() : nodes.first();
     // THE ROUND TRIP STARTS HERE and comes back into setSelectedNode() before
     // this line returns: the flag is what stops the return leg from scrolling
@@ -394,7 +407,23 @@ void SceneHierarchyWidget::announceSet(const QList<iris::SceneNodePtr> &nodes)
     announcingOwnSelection = false;
 }
 
+// THE INBOUND LEG: someone else (the viewport, a verb, the service) decided
+// this is the selection. Record it — announceSet deduplicates against
+// knownSelection, and a cache that only ever heard this panel's own
+// announcements made every row it had announced unclickable after any outside
+// selection (SPACE-3, see the header).
 void SceneHierarchyWidget::setSelectedSet(const QList<iris::SceneNodePtr> &nodes)
+{
+    knownSelection.clear();
+    for (const auto &n : nodes) if (n) knownSelection.append(n->getNodeId());
+    paintSelection(nodes);
+}
+
+// Paint a set in the tree without claiming it came from outside. The panel's
+// own gestures (the Shift range, the empty-space clear) paint FIRST and
+// announce after, so they must not touch knownSelection — writing it here
+// would make announceSet swallow the very announcement they exist to make.
+void SceneHierarchyWidget::paintSelection(const QList<iris::SceneNodePtr> &nodes)
 {
     selectedNode = nodes.isEmpty() ? iris::SceneNodePtr() : nodes.first();
 
@@ -509,7 +538,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         if (me->button() == Qt::LeftButton
             && !(me->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier))
             && !ui->sceneTree->itemAt(me->position().toPoint())) {
-            setSelectedSet({});                       // paints the clear
+            paintSelection({});                       // paints the clear
             suppressSelectionSignal = true;
             ui->sceneTree->setCurrentItem(nullptr);    // ...and drops the cursor row
             suppressSelectionSignal = false;
@@ -1637,23 +1666,6 @@ void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
 QTreeWidget * SceneHierarchyWidget::getWidget()
 {
     return ui->sceneTree;
-}
-
-void SceneHierarchyWidget::selectNode(QString nodeId)
-{
-	std::function<void(QTreeWidgetItem*, QString)> hightlightNode;
-	hightlightNode = [=](QTreeWidgetItem* treeItem, QString nodeId)
-	{
-		for (int i = 0; i < treeItem->childCount(); i++) {
-			auto item = treeItem->child(i);
-			if (item->data(0, Qt::UserRole) == nodeId) {
-                ui->sceneTree->setCurrentItem(item);
-				return;
-			}
-
-			hightlightNode(item, nodeId);
-		}
-	};
 }
 
 SceneHierarchyWidget::~SceneHierarchyWidget()
