@@ -152,17 +152,23 @@ void run()
     QApplication::processEvents();
     CHECK(announced.size() == 3, "tree_multiselect: an upward Shift range is [min..max] too");
 
-    // ---- the World root is never in a multi (D6) -------------------------
-    QTreeWidgetItem *rootRow = rowFor(tree, root->getName());
-    CHECK(rootRow != nullptr, "tree_multiselect: the World row exists");
-    if (rootRow) {
+    // ---- the World root has NO ROW AT ALL (RIGHT-TABS-1) -----------------
+    // D6 ("the root is never a member of a multi") needed five filters in this
+    // widget while the root had a clickable row. The row is gone — the World
+    // settings are a TAB of the properties column — so the root cannot enter a
+    // set from the tree by any gesture, and the filters went with it. The
+    // verb-side guards (editor.selectAdd / selectToggle) still hold D6.
+    CHECK(rowFor(tree, root->getName()) == nullptr,
+          "tree_multiselect: the World root has no row in the outliner");
+    {
+        bool rootIsARow = false;
+        for (const auto &n : panel.visibleNodeRows()) if (n && n->isRootNode()) rootIsARow = true;
+        CHECK(!rootIsARow, "tree_multiselect: the root is not one of the visible rows");
         clickRow(tree, r4, Qt::NoModifier);
-        QApplication::processEvents();
-        clickRow(tree, rootRow, Qt::ControlModifier);
         QApplication::processEvents();
         bool hasRoot = false;
         for (const auto &n : announced) if (n && n->isRootNode()) hasRoot = true;
-        CHECK(!hasRoot, "tree_multiselect: Ctrl+clicking the World root never puts it in a set");
+        CHECK(!hasRoot, "tree_multiselect: no set the tree announces contains the root");
     }
 
     // ---- the set survives a rebuild --------------------------------------
@@ -257,8 +263,10 @@ void run()
         CHECK(rowFor(tree, "part1") == nullptr && rowFor(tree, "deep1") == nullptr,
               "one_asset: its attached parts (and their children) have NO rows");
         const int rows = panel.visibleNodeRows().size();
-        CHECK(rows == 8,
-              QStringLiteral("one_asset: 6 loose rows + the World root + ONE asset row = 8 "
+        // 6 loose rows + ONE asset row. (It was 8 while the World root had a
+        // row of its own; that row is gone — RIGHT-TABS-1.)
+        CHECK(rows == 7,
+              QStringLiteral("one_asset: 6 loose rows + ONE asset row = 7 "
                              "(got %1) — the document has %2 nodes under the asset")
                   .arg(rows).arg(6).toUtf8().constData());
 

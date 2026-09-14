@@ -1397,6 +1397,24 @@ foreach(_clip clipboard clipboard_xproject clipboard_assets)
     jah_no_display(scripting.e2e.${_clip})
 endforeach()
 
+# THE DUAL IMAGE ON A CURVED MIRROR (lane SSR-2; the owner's push #35 smoke).
+# The script's own header says why this lives here and not in tests/ssr: the
+# defect needs a parallax-corrected PROBE GRID whose answer disagrees with the
+# screen's, and every fixture in the engine suite falls back to the same
+# analytic sky the trace is looking at. The Mirror Room sample is the scene the
+# owner photographed. Engine-up and on-screen, like the grades suite beside it.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_ssr_mirror.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js @ONLY)
+set(_ssrhome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ssr_mirror)
+file(MAKE_DIRECTORY ${_ssrhome}/run)
+add_test(NAME scripting.e2e.ssr_mirror
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
+         WORKING_DIRECTORY ${_ssrhome}/run)
+set_tests_properties(scripting.e2e.ssr_mirror PROPERTIES
+    ENVIRONMENT "HOME=${_ssrhome};JAHSHAKA_DATA_ROOT=${_ssrhome}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 600)
+
 # WHAT A SCREENSHOT IS A PICTURE OF (SS1, owner 2026-09-13 — "match the
 # screenshot to the scene properly"). The four ScreenshotGrade modes through
 # editor.screenshot: the plain readback the whole pixel corpus asserts does not

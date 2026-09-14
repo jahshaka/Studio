@@ -43,15 +43,18 @@ void SceneTreeWidget::paintEvent(QPaintEvent *event)
     pen.setWidth(2);
     p.setPen(pen);
 
-    if (mHint == DropHint::ToRoot && !mHintItem) {
-        // Empty space below the last row: the drop lands at the root level, so
-        // the line is drawn at the bottom of the content.
-        const int y = qMin(viewport()->height() - 1, viewport()->height() - 1);
+    if (!mHintItem) {
+        // EMPTY SPACE BELOW THE LAST ROW. Both edits can land here since the
+        // World row left the tree (RIGHT-TABS-1): amber = filed back to the
+        // root LEVEL (folder metadata), blue = really reparented to the scene
+        // root, which is the gesture that used to mean "drop onto the World
+        // row". The line is drawn at the bottom of the content either way — the
+        // target is the list itself, not a row.
+        const int y = viewport()->height() - 1;
         p.drawLine(2, y, viewport()->width() - 2, y);
         return;
     }
 
-    if (!mHintItem) return;
     QRect r = visualItemRect(mHintItem);
     if (!r.isValid()) return;
     r.setLeft(0);

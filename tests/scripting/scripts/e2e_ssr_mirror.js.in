@@ -1,0 +1,135 @@
+// scripting.e2e.ssr_mirror — THE DUAL IMAGE ON A CURVED MIRROR (lane SSR-2;
+// the owner's push #35 smoke, rig evidence spikes/smoke-2026-09-15/reportB,
+// ledger §321).
+//
+// WHAT WENT WRONG. With screen-space reflections on, the Mirror Room's chrome
+// sphere showed a STIPPLED ghost of the room painted over the probe's smooth
+// image; with them off, one image, correctly placed. The cause was the
+// composite: the screen's answer was LERPED over the probe's by a per-ray
+// confidence, and the two are not two samples of one thing on a mirror — the
+// probe is parallax-corrected onto the room's box and captured from a grid
+// point, the trace is at the true position and from this frame, so they are the
+// same objects in two PLACES. A fraction of two places is both of them, and a
+// fraction that changes from pixel to pixel is a dither.
+//
+// WHY THIS SUITE EXISTS AND NOT A 256x256 ENGINE FIXTURE (tests/ssr §16 says
+// the same thing from the other side): the defect needs a PARALLAX-CORRECTED
+// PROBE GRID whose answer DISAGREES with the screen's. Every fixture in the
+// engine suite falls back to the analytic sky — the same sky the trace is
+// looking at — so the two sources agree there and the defect cannot appear.
+// The Mirror Room is the scene the owner photographed: 18 probes, a chrome
+// sphere at roughness 0.03, a mirror panel, a gold torus and a teapot.
+//
+// THE MEASUREMENT is SSR on minus SSR off, IN THE SAME OPEN. That matters: the
+// sample's GI is not open-to-open deterministic (probe capture order, the VCT
+// re-solve), and a cross-open comparison of this scene carries a noise floor of
+// about 23 levels. Within one open, everything except the reflections is the
+// same frame, so what is left IS the effect.
+//
+// THE GRADE IS "viewport", deliberately:
+//   * "plain" has NO post chain at all by construction (the offscreen
+//     determinism law) — hq and off are bit-identical through it, which is
+//     what the rig measured and read as "screenshots have no SSR";
+//   * "scene" needs an on-screen view that has CONVERGED its exposure, which a
+//     script driving frames cannot guarantee;
+//   * "viewport" is the whole chain with its own exposure re-seeded from the
+//     description — repeatable, and it carries SSR.
+//
+// THE BAND is the sphere's left limb, where the reflected rays fan fastest and
+// the trace is least able to answer: the region the rig photographed. Measured
+// at 1600x900 on the owner's pose: 7.58 % of it moved by 10/255 or more before
+// the fix, 0.58 % after, so the budget is 2.5 % — about 3x headroom either way.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+// @SOURCE_DIR@ is substituted by CMake, the way tests/samples does it: a
+// committed script never hardcodes a tree path.
+var ZIPS = "@SOURCE_DIR@/scenes/";
+
+var imported = project.importArchive(ZIPS + "Mirror Room.zip");
+assert(imported && imported.guid && imported.guid.length > 10, "imported the Mirror Room sample");
+assert(project.open(imported.guid) === true, "opened it");
+editor.frame(120);
+
+// THE OWNER'S POSE: the teapot large in the foreground, the chrome sphere
+// filling the middle, the mirror panel to the left — the framing of
+// screenshot4.png, which is where the ghost was photographed.
+editor.setCamera({ position: { x: 0.55, y: 1.05, z: 3.30 },
+                   lookAt:   { x: 2.10, y: 1.35, z: -0.20 }, fov: 45 });
+editor.select(null);
+editor.setOverlays({ lightWires: false });
+editor.gameView(true);          // no editor furniture in the picture
+editor.frame(180);
+
+var W = 1600, H = 900;
+// The limb band in pixels at this size: x 390..530, y 240..450. Sampled on a
+// grid rather than read whole, because a screenshot verb returns probes.
+var PROBES = [];
+var NX = 36, NY = 48;
+for (var iy = 0; iy < NY; ++iy)
+    for (var ix = 0; ix < NX; ++ix)
+        PROBES.push({ x: (390 + (140 * ix) / (NX - 1)) / W,
+                      y: (240 + (210 * iy) / (NY - 1)) / H });
+assert(PROBES.length === NX * NY, "the limb band is sampled at " + PROBES.length + " points");
+
+function shoot(tag) {
+    editor.frame(60);
+    var r = editor.screenshot("ssr-mirror-" + tag + ".png", W, H, PROBES, "viewport");
+    assert(r && r.probes && r.probes.length === PROBES.length,
+           tag + ": the shot came back with every probe");
+    return r.probes;
+}
+
+world.override({ id: "ssr", value: "hq" });
+editor.frame(120);
+var on = shoot("hq");
+world.override({ id: "ssr", value: "off" });
+editor.frame(120);
+var off = shoot("off");
+world.clearOverride({ id: "ssr" });
+
+var moved = 0, worst = 0;
+for (var i = 0; i < on.length; ++i) {
+    var d = Math.max(Math.abs(on[i].r - off[i].r),
+                     Math.abs(on[i].g - off[i].g),
+                     Math.abs(on[i].b - off[i].b));
+    if (d > worst) worst = d;
+    if (d >= 10) ++moved;
+}
+var pct = (100 * moved) / on.length;
+console.log("   limb band: " + moved + " of " + on.length + " samples moved by >= 10/255 (" +
+            pct.toFixed(3) + " %), worst " + worst);
+
+// THE ASSERTION. Not "SSR does nothing here" — it still answers wherever the
+// trace is well sampled, and the sphere's face-on middle is outside this band
+// anyway. What must not come back is the SCREEN OVERRULING THE PROBE ACROSS
+// THE LIMB, which is the ghost.
+assert(pct < 2.5,
+       "the screen does not overrule the probe across the sphere's limb (" +
+       pct.toFixed(3) + " % of the band moved, budget 2.5 %; 7.58 % before the rule)");
+
+// ...and the picture is still a picture: SSR must be IN the shot somewhere, or
+// the assertion above would pass on a binary that had simply lost the feature.
+var FLOOR = [];
+for (var fy = 0; fy < 12; ++fy)
+    for (var fx = 0; fx < 16; ++fx)
+        FLOOR.push({ x: 0.10 + (fx * 0.8) / 15, y: 0.55 + (fy * 0.4) / 11 });
+world.override({ id: "ssr", value: "hq" });
+editor.frame(120);
+var fOn = editor.screenshot("ssr-mirror-floor-hq.png", W, H, FLOOR, "viewport").probes;
+world.override({ id: "ssr", value: "off" });
+editor.frame(120);
+var fOff = editor.screenshot("ssr-mirror-floor-off.png", W, H, FLOOR, "viewport").probes;
+world.clearOverride({ id: "ssr" });
+var fWorst = 0;
+for (var j = 0; j < fOn.length; ++j)
+    fWorst = Math.max(fWorst, Math.abs(fOn[j].r - fOff[j].r),
+                      Math.abs(fOn[j].g - fOff[j].g), Math.abs(fOn[j].b - fOff[j].b));
+console.log("   the rest of the frame: worst SSR delta " + fWorst);
+assert(fWorst >= 10,
+       "screen-space reflections are still IN this picture (worst delta " + fWorst + ")");
+
+console.log("scripting.e2e.ssr_mirror complete");

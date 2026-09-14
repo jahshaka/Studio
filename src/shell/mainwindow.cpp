@@ -128,6 +128,7 @@ For more information see the LICENSE file
 
 #include "ui/panels/scenehierarchywidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "ui/controls/propertiestabstrip.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 
 #include "ui/panels/presets/skypresets.h"
@@ -1502,9 +1503,15 @@ void MainWindow::openStageReveal(bool playMode)
 	updateTopMenuStates(playbackService->isPlayerMode() ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 
 	LoadTimeline::mark(QStringLiteral("selectRoot"));
-	// highlight root node
+	// A SCENE OPENS ON THE WORLD. The properties panel is bound to the root, so
+	// the World settings are what a freshly opened scene shows.
+	//
+	// The tree leg used to call a `selectNode(guid)` that DEFINED a lambda and
+	// never called it (and compared a node id against a GUID string): for years
+	// "highlight root node" highlighted nothing. Deleted with the dead function
+	// (RIGHT-TABS-1, CRUD); the row is selected through the panel's real API.
 	if (!!scene) {
-		sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
+		sceneHierarchyWidget->setSelectedNode(scene->getRootNode());
 		sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
 	}
 
@@ -2370,6 +2377,13 @@ void MainWindow::setupDockWidgets()
     sceneNodeScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     QVBoxLayout *sceneNodeLayout = new QVBoxLayout(sceneNodeDockWidgetContents);
     sceneNodeLayout->setContentsMargins(0, 0, 0, 0);
+    // THE TAB BAR SITS ABOVE THE SCROLL AREA (PROPERTY_FILTER_SPEC §2/§6.5):
+    // World | Selection, pinned, so the rows scroll under it and the panel's
+    // own minimum width — the column-width law — keeps measuring exactly the
+    // rows it measured before.
+    propertiesTabStrip = new PropertiesTabStrip(sceneNodePropertiesWidget,
+                                                sceneNodeDockWidgetContents);
+    sceneNodeLayout->addWidget(propertiesTabStrip);
     sceneNodeLayout->addWidget(sceneNodeScrollArea);
     sceneNodeDockWidgetContents->setLayout(sceneNodeLayout);
     sceneNodePropertiesDock->setWidget(sceneNodeDockWidgetContents);
@@ -2533,8 +2547,8 @@ void MainWindow::setupDockWidgets()
     // AND THE EDITOR OPENS ON ASSETS. tabifyDockWidget leaves the dock it
     // inserted LAST in front, which would hand a fresh profile the Timeline —
     // a panel most sessions never touch — in front of the asset browser every
-    // session starts in. (A restored layout carries the user's own front tab
-    // and is applied after this.)
+    // session starts in. (The restored layout below carries the user's LAST
+    // front tab; it is raised again after that restore — see there.)
     assetDock->raise();
 
     // ...and the USER's layout on top of it, if there is one. The docks belong
@@ -2548,6 +2562,13 @@ void MainWindow::setupDockWidgets()
     // A saved dock layout carries the dock-area CORNERS: restoring one saved
     // before the corner rule would put the default corner back. Re-assert it.
     viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
+    // EVERY SESSION STARTS IN THE ASSET BROWSER (owner, 2026-09-15, ledger
+    // §351). The restored blob carries whichever bottom tab was in front when
+    // the last session ended — the Timeline, or the Console after a Ctrl+` —
+    // and which tab is in front is SESSION state, not a preference: within a
+    // session it still persists across space switches (SPACE-2), but a launch
+    // raises Assets over whatever the blob remembered.
+    assetDock->raise();
     // A dock closed from its own title bar is a dock the user closed: the
     // Close event goes into `widgetStates` (see eventFilter), so the panel
     // stays closed across space switches and the Toggle Widgets dialog agrees.
@@ -4012,6 +4033,21 @@ void MainWindow::setupShortcuts()
     reg.add("claude.toggle", "Claude Assistant", "Windows",
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,
             [this]() { toggleClaudeChat(); });
+    // THE RIGHT COLUMN'S TWO TABS (PROPERTY_FILTER_SPEC D2): one toggle, not two
+    // keys. Ctrl+Tab is taken by space.previous, so Ctrl+Shift+P — verified
+    // free against the 50 rows already registered here, and remappable in
+    // Preferences → Shortcuts like every other row. (ShortcutRegistry's
+    // conflict check runs on a USER rebinding, not on these defaults: two
+    // defaults claiming one chord would simply both be registered, so the
+    // default above was checked by hand.)
+    reg.add("properties.tab", "Properties: World / Selection Tab", "Windows",
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, [this]() {
+        if (!sceneNodePropertiesWidget) return;
+        sceneNodePropertiesWidget->setPropertiesTab(
+            sceneNodePropertiesWidget->propertiesTab() == SceneNodePropertiesWidget::Tab::World
+                ? SceneNodePropertiesWidget::Tab::Selection
+                : SceneNodePropertiesWidget::Tab::World);
+    });
     reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
     reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,
@@ -4732,6 +4768,22 @@ QDockWidget *MainWindow::panelDock(const QString &name) const
     if (wanted == QLatin1String("timeline"))   return animationDock;
     if (wanted == QLatin1String("console"))    return scriptConsoleDock;
     return nullptr;
+}
+
+QString MainWindow::propertiesTab() const
+{
+    return sceneNodePropertiesWidget
+        ? SceneNodePropertiesWidget::tabName(sceneNodePropertiesWidget->propertiesTab())
+        : QString();
+}
+
+bool MainWindow::setPropertiesTab(const QString &name)
+{
+    if (!sceneNodePropertiesWidget) return false;
+    SceneNodePropertiesWidget::Tab tab;
+    if (!SceneNodePropertiesWidget::tabFromName(name, tab)) return false;
+    sceneNodePropertiesWidget->setPropertiesTab(tab);
+    return true;
 }
 
 bool MainWindow::setPanelOpen(const QString &name, bool open)

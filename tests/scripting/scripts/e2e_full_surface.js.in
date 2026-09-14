@@ -89,9 +89,9 @@ assert(world.sunDisc().inProbes === false, "...and out of the probe captures");
 
 // ---- world anti-aliasing (WORLD_AA_SPEC.md phase 1) ----
 // A new scene starts on the Epic World Mode (POST_CHAIN_SPEC §12 decision 8),
-// whose hardware-MSAA row is 1x — the post chain does the anti-aliasing with
-// SMAA instead. So this still starts at 1, for a new reason.
-assert(world.antiAliasing() === 1, "anti-aliasing starts off (1 sample)");
+// whose hardware-MSAA row is 2x since 2026-09-15 (the helpers' edges; the post
+// chain renders the scene itself at 1x and SMAA smooths it).
+assert(world.antiAliasing() === 2, "anti-aliasing starts at the tier's 2x");
 var aa = world.setAntiAliasing(4);   // 4x is the one MSAA level Vulkan guarantees
 assert(aa === 4, "setAntiAliasing(4) achieved 4x (got " + aa + ")");
 assert(world.get().antiAliasing === 4, "document stores the AA request");

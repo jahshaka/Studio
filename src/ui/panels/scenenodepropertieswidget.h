@@ -20,6 +20,10 @@ For more information see the LICENSE file
 
 namespace iris {
     class SceneNode;
+    // Was missing: every signature below that names iris::Scene depended on the
+    // INCLUDER having pulled scene.h in first, so this header could not be
+    // included on its own.
+    class Scene;
 }
 
 class AccordianBladeWidget;
@@ -56,6 +60,14 @@ class SceneNodePropertiesWidget : public QWidget
 {
     Q_OBJECT
 public:
+    /// THE RIGHT COLUMN HAS TWO TABS (PROPERTY_FILTER_SPEC §2). The panel does
+    /// not change shape by what is selected any more: the World settings are
+    /// always one tab away, and the selected object's rows are the other tab.
+    /// The World row that used to have to exist in the Hierarchy for the world
+    /// settings to be reachable is gone with it.
+    enum class Tab { World, Selection };
+    Q_ENUM(Tab)
+
     SceneNodePropertiesWidget(QWidget *parent = nullptr);
 
     /**
@@ -65,6 +77,32 @@ public:
 
     void setScene(QSharedPointer<iris::Scene> scene);
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+
+    /// Which tab is showing. A pick brings Selection to the front; the root
+    /// (`editor.select(rootId)`, the scene open) brings World to the front; a
+    /// deselect keeps whatever tab the user is on (D3).
+    Tab propertiesTab() const { return currentTab; }
+    /// Raise a tab. The tab decides WHICH BLADES THE ONE LAYOUT HOLDS — there
+    /// is no second page widget and no reparenting, so the selection-cost law
+    /// (blades are permanent children, see clearLayout) is untouched.
+    void setPropertiesTab(Tab tab);
+    /// HOW MANY TIMES THE COLUMN HAS BEEN (RE)MOUNTED — every applyTab, i.e.
+    /// every clearLayout + mount of a blade set. It is here because "how much
+    /// work does one pick cost" is an assertion the cost suites have to be able
+    /// to make: a pick that crossed tabs used to mount TWICE (F2, second reader
+    /// 2026-09-15) and nothing about that was visible from outside. Read by
+    /// ui.properties_tabs; never used to make a decision.
+    int mountCount() const { return mounts; }
+
+    /// The name the verbs and the tab bar use ("world" / "selection").
+    static QString tabName(Tab tab);
+    static bool tabFromName(const QString &name, Tab &out);
+
+signals:
+    /// The tab actually changed (the strip follows this; it never polls).
+    void propertiesTabChanged(SceneNodePropertiesWidget::Tab tab);
+
+public:
     void setAssetItem(QListWidgetItem *item);
 	void setSceneView(IEditorViewport *sceneView);
 	void setServices(StudioServices *services);
@@ -131,6 +169,48 @@ private:
     void mount(QWidget *blade);
 
 private:
+    /// Mounts the blade set the current tab calls for. Every path that used to
+    /// end in "mount the world blades" or "mount the node blades" ends here.
+    /// MOUNTING IS NOT BINDING: this only moves blades on and off the layout.
+    void applyTab();
+    /// Points the eight world blades at `scene` — which REBUILDS the rows of
+    /// the five that build from the scene (World Mode, Photon, Post Process,
+    /// Anti-Aliasing, Shadows). Idempotent by `worldBoundScene`, so it costs
+    /// that rebuild ONCE per scene, not once per mount: a scene open used to
+    /// run it three times (once against the scene being closed) because every
+    /// mount re-bound (F1, second reader 2026-09-15). A bound blade is kept
+    /// live afterwards by the worldSettingsChanged fan-out and
+    /// refreshFromDocument, never by re-binding.
+    void bindScene(const QSharedPointer<iris::Scene> &scene);
+    /// Drops the memo so the next mount re-binds — for the setters that feed
+    /// the world blades something other than the scene (the viewport, the
+    /// library, the project, the undo stack).
+    void invalidateWorldBinding() { worldBoundScene.clear(); }
+    void mountWorldBlades();
+    void mountSelectionBlades();
+    /// The scene the World tab binds to, whatever is selected.
+    QSharedPointer<iris::Scene> worldScene() const;
+
+    /// See mountCount().
+    int mounts = 0;
+    /// The scene the world blades are currently pointed at (see bindScene).
+    QSharedPointer<iris::Scene> worldBoundScene;
+
+    /// WHAT THE SELECTION TAB IS SHOWING when it is not a scene node: a
+    /// library asset picked in a drawer (setAssetItem). It has to be STATE and
+    /// not just a mount, because the tab is re-applied for reasons that have
+    /// nothing to do with the pick — an undo (refreshFromDocument), a tab
+    /// toggle and back — and those used to replace the asset's rows with the
+    /// "nothing selected" line (F6, second reader 2026-09-15).
+    enum class AssetBinding { None, Shader, Sky };
+    AssetBinding assetBinding = AssetBinding::None;
+    QString assetGuid;
+    int assetSkyType = 0;
+
+    Tab currentTab = Tab::World;
+    /// The "nothing selected" line the Selection tab shows (a permanent child,
+    /// adopted like a blade).
+    class QLabel *emptySelectionLabel = nullptr;
     QSharedPointer<iris::SceneNode> sceneNode;
 
 public:
