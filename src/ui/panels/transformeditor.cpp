@@ -173,6 +173,11 @@ void TransformEditor::onResetBtnClicked()
 void TransformEditor::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     this->sceneNode = defaultStateNode = sceneNode;
+    // A NEW SELECTION ALWAYS GETS THE CANONICAL TRIPLE (round 2): the memo is
+    // "this row built the rotation this node is holding", which is a statement
+    // about one node and one gesture. Selecting another node — or the same one
+    // again — is neither.
+    rotationMemoValid = false;
 
     if (!!sceneNode) {
 		refreshUi();
@@ -213,13 +218,23 @@ void TransformEditor::refreshUi()
 		// -90, dragging Z to 20 left the panel reading (-90, 20, 0) with Z at
 		// zero again, which is exactly what "the box does not drag" looks like.
 		//
-		// So the question this asks is "has the ROTATION changed", not "does
-		// the triple match": while the fields already describe the rotation the
-		// node has, they are left exactly as the user set them.
-		const iris::Quat shown = iris::Quat::fromEulerAngles(
-			iris::Vec3(float(xrot->value()), float(yrot->value()), float(zrot->value())));
+		// THE TEST IS IDENTITY, NOT NEARNESS (round 2). The first cut compared
+		// the row's quaternion to the node's with a tolerance, and a tolerance
+		// on a dot product is a DEAD BAND: 1e-4 of |dot| is 1.62 degrees, so a
+		// scripted `node.transform(id, {rotation: {y: 1}})` left the panel
+		// reading zero, a gizmo nudge moved the row in 1.6-degree steps, and
+		// selecting a node within 1.6 degrees of the last one showed the OLD
+		// triple. The row is allowed to differ from the canonical decomposition
+		// for exactly one reason — the document is holding the rotation THIS
+		// ROW built — so that is the question asked, bit for bit, against the
+		// quaternion the row last wrote (read back from the node, so a
+		// document-side normalisation cannot make it a near-miss). Anything
+		// else moved the rotation, and the row follows it.
 		const iris::Quat current = sceneNode->getLocalRot();
-		if (qAbs(qAbs(iris::Quat::dotProduct(shown, current)) - 1.0f) > 1e-4f) {
+		const bool rowBuiltThis = rotationMemoValid
+			&& current.x() == rotationMemo.x() && current.y() == rotationMemo.y()
+			&& current.z() == rotationMemo.z() && current.scalar() == rotationMemo.scalar();
+		if (!rowBuiltThis) {
 			auto rot = current.toEulerAngles();
 			xrot->setValue(rot.x());
 			yrot->setValue(rot.y());
@@ -339,6 +354,10 @@ void TransformEditor::applyRotationFromFields()
     if (!sceneNode) return;
     sceneNode->setLocalRot(iris::Quat::fromEulerAngles(
         iris::Vec3(float(xrot->value()), float(yrot->value()), float(zrot->value()))));
+    // READ BACK, don't remember what we sent: this is the value refreshUi
+    // compares against, and it has to be what the DOCUMENT holds.
+    rotationMemo = sceneNode->getLocalRot();
+    rotationMemoValid = true;
 }
 
 void TransformEditor::xRotChanged(double) { applyRotationFromFields(); }

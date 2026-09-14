@@ -30,18 +30,23 @@ For more information see the LICENSE file
 // lifted twice. `lift` is a pure function of the node and the point — no
 // document, no engine — which is what lets a test state the rule directly.
 //
-// ALONG WORLD UP, not the surface normal: the drop resolves a point and not a
-// plane (dropPositionAt intersects the picked geometry or the y=0 ground), and
-// the surfaces a user drops onto — the floor, a table top, the top of a crate —
+// ALONG THE PARENT'S +Y, which for a drop is world up: a drop lands at the
+// scene root, whose transform is the identity, so the node's own local frame
+// and the world agree — and `setLocalPos` writes in that frame, which is why
+// everything here is measured in it. (A caller that places a node under a
+// ROTATED parent would be lifting it along that parent's Y, not the world's;
+// no caller does, and the day one does this has to take the parent's global
+// transform into account.)
+//
+// NOT the surface normal, either: the drop resolves a point and not a plane
+// (dropPositionAt intersects the picked geometry or the y=0 ground), and the
+// surfaces a user drops onto — the floor, a table top, the top of a crate —
 // are horizontal. A sloped surface leaves the object standing upright with its
 // lowest corner on the slope, which is the same thing every editor does until
 // it grows surface alignment.
-//
-// PARENT SPACE. A drop lands at the scene root, whose transform is the
-// identity, so the node's own local frame and the world agree. The bounds are
-// therefore measured in the PARENT's space (the node's local transform applied
-// to its subtree) — the frame setLocalPos writes into.
 
+#include <algorithm>
+#include <functional>
 #include <limits>
 
 #include "irisgl/core/geometry/aabb.h"

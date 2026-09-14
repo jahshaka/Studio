@@ -921,6 +921,39 @@ int main(int argc, char **argv)
                   "gimbal: …and the node is rotated to the angle the field shows");
         }
 
+        // NO DEAD BAND AROUND THE ROW (round 2). The rule is "the row keeps its
+        // triple while the document holds exactly what the row built", and the
+        // first cut wrote it as a TOLERANCE on a quaternion dot product — 1e-4
+        // of |dot| is 1.62 degrees, so a small rotation from anywhere else (a
+        // script, an MCP client, the gizmo, an animation) left the panel
+        // showing the old numbers.
+        {
+            node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(0, 0, 0)));
+            editor.refreshUi();
+            pump();
+            // …somebody else rotates it by ONE degree: node.transform's job.
+            node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(0, 1, 0)));
+            editor.refreshUi();
+            pump();
+            std::printf("    dead band: after a 1 degree write the row reads %.3f/%.3f/%.3f\n",
+                        xrot->value(), yrot->value(), zrot->value());
+            CHECK(qAbs(yrot->value() - 1.0) < 1e-2,
+                  "no dead band: a 1-degree rotation from anywhere else moves the row");
+
+            // A NEW SELECTION ALWAYS SHOWS ITS OWN TRIPLE, even one 1.5 degrees
+            // from the node that was selected before it.
+            auto other = iris::SceneNode::create();
+            other->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(0, 2.5, 0)));
+            editor.setSceneNode(other);
+            pump();
+            std::printf("    dead band: selecting a node 1.5 degrees away reads %.3f/%.3f/%.3f\n",
+                        xrot->value(), yrot->value(), zrot->value());
+            CHECK(qAbs(yrot->value() - 2.5) < 1e-2,
+                  "no dead band: selecting a node 1.5 degrees from the last one shows ITS triple");
+            editor.setSceneNode(node);
+            pump();
+        }
+
         // RESET still resets — it used to drive the same row callbacks, which
         // read the fields now (they still hold the old angles at that moment).
         node->setLocalRot(iris::Quat::fromEulerAngles(iris::Vec3(20, 30, 40)));

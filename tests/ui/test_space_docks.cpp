@@ -277,6 +277,9 @@ int main(int argc, char **argv)
         // §3), so a space round trip taken while it is on must not put them
         // back on top of it — and leaving fullscreen must still bring back
         // exactly what was there before.
+        // A KNOWN front tab going in, so "it came back to it" means something.
+        mcp.runScript(QStringLiteral("editor.tray({tab: 'timeline'})"));
+        settle(mcp);
         mcp.runScript(QStringLiteral("editor.fullscreen(true)"));
         settle(mcp);
         const DockReading fullscreen = readDocks(mcp);
@@ -293,6 +296,17 @@ int main(int argc, char **argv)
         mcp.runScript(QStringLiteral("editor.fullscreen(false)"));
         settle(mcp);
         expectEditorPanels(mcp, "leaving fullscreen");
+        // …ON THE TAB F11 INTERRUPTED (round 2). Leaving fullscreen re-shows
+        // the bottom docks, and showing a tabified dock raises it — so without
+        // a front-tab restore the trip home lands on whichever dock the list
+        // shows last (the Console when it is open, the Timeline otherwise),
+        // which is the same defect the space switch had.
+        const DockReading afterF11 = readDocks(mcp);
+        std::printf("info: after F11 -> %s\n", qUtf8Printable(afterF11.detail));
+        CHECK(afterF11.isCurrent("animationDock"),
+              "leaving fullscreen comes back to the tab that was in front when F11 was pressed");
+        mcp.runScript(QStringLiteral("editor.tray({tab: 'assets'})"));
+        settle(mcp);
 
         // ---- quit FROM THE PLAYER: the exit that wrote "no panels" ---------
         mcp.runScript(QStringLiteral("app.space('player')"));

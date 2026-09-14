@@ -203,7 +203,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "browser). `position` places the node's PIVOT there; `onSurface: true` treats that point "
           "as a SURFACE and rests the model's bounding box on it instead — which is what a drag "
           "from the asset browser does, since a model pivoted at its centre otherwise lands half "
-          "inside the floor (owner, 2026-09-14). A model already pivoted at its base is not lifted, "
+          "inside the floor (owner, 2026-09-14); it needs a `position` and is refused without one. "
+          "A model already pivoted at its base is not lifted, "
           "so nothing is lifted twice.",
           Needs::Document },
         { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId}",
@@ -855,9 +856,14 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
     }
 
     const bool hasPosition = options.contains("position");
-    const auto placement = options.value(QStringLiteral("onSurface")).toBool()
-                               ? surfaceplacement::Placement::OnSurface
-                               : surfaceplacement::Placement::Pivot;
+    const bool onSurface = options.value(QStringLiteral("onSurface")).toBool();
+    if (onSurface && !hasPosition) {
+        fail("assets.addToScene: onSurface needs a position — it says what that position MEANS "
+             "(the surface the model rests on), so on its own there is nothing to rest it on");
+        return QString();
+    }
+    const auto placement = onSurface ? surfaceplacement::Placement::OnSurface
+                                     : surfaceplacement::Placement::Pivot;
     host.services->selection->select(iris::SceneNodePtr());
     host.services->sceneEdit->addMaterialMesh(QString(), hasPosition,
                                               vecFromJs(options.value("position")), guid,

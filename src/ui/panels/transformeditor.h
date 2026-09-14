@@ -71,6 +71,15 @@ private:
     /// re-deriving one per edit sent the user's drag somewhere else at gimbal
     /// lock. See the note in transformeditor.cpp.
     void applyRotationFromFields();
+    /// The exact quaternion the rotation row last wrote, read back off the
+    /// node. THE ROW IS ALLOWED TO SHOW A TRIPLE OTHER THAN THE CANONICAL
+    /// DECOMPOSITION FOR EXACTLY AS LONG AS THE DOCUMENT HOLDS THIS VALUE —
+    /// bit for bit. The moment anything else moves the rotation (a script, the
+    /// gizmo, an animation, an undo) refreshUi puts the document's own triple
+    /// back; and a new selection clears the memo, so a freshly selected node
+    /// always shows its canonical one.
+    iris::Quat rotationMemo;
+    bool rotationMemoValid = false;
 
     // builds one horizontal row: title label left, X/Y/Z fields side by side
     void addRow(class QGridLayout* grid, int row, const QString& title,

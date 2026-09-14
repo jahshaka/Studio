@@ -224,4 +224,12 @@ assert(Math.abs(node.transform(exact).position.y - 5) < 1e-4,
 assert(node.size(exact).min.y < 5,
        "... so a centre-pivot cube asked for y=5 has its bottom BELOW 5");
 
+// AND `onSurface` WITHOUT A POSITION IS REFUSED, not quietly ignored: the flag
+// says what a position MEANS, so on its own there is nothing to rest anything
+// on (round 2).
+var refused = false;
+try { scene.addPrimitive("cube", { onSurface: true }); } catch (e) { refused = true; }
+assert(refused || ("" + app.lastError()).indexOf("onSurface") >= 0,
+       "scene.addPrimitive({onSurface}) with no position is refused: " + app.lastError());
+
 console.log("e2e_default_floor: all sections passed");

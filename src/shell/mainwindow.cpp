@@ -4549,6 +4549,14 @@ void MainWindow::toggleImmersiveFullscreen()
     preFullscreenMaximized = isMaximized();
     preFullscreenWidgets.clear();
     if (currentSpace == WindowSpaces::EDITOR) {
+        // WHICH TAB WAS IN FRONT, before the chrome goes away (round 2). F11
+        // hides these docks itself rather than going through
+        // applyDockVisibilityForSpace, so nothing else records it — and
+        // re-showing them in list order hands the front tab to the last one
+        // shown, which is the Console if it is open and the Timeline if it is
+        // not. Same mechanism, same remedy as the space switch.
+        for (const auto &tab : bottomAreaTabs())
+            if (isFrontTab(tab.second)) { bottomFrontTab = tab.first; break; }
         for (QWidget *w : editorDocks) {
             preFullscreenWidgets.append(w && w->isVisible());
             if (w) w->hide();
@@ -4567,8 +4575,20 @@ void MainWindow::leaveImmersiveFullscreen(bool restoreWindow)
     immersiveFullscreen = false;
     enteringFullscreen = false;
     if (preFullscreenWidgets.size() == kImmersiveDockCount) {
+        // THE FRONT TAB GOES LAST, because showing a tabified dock raises it
+        // (round 2) — the same two-pass order applyDockVisibilityForSpace
+        // uses, so leaving fullscreen comes back to the tab F11 interrupted
+        // instead of to whichever dock happens to sit last in this list.
+        QDockWidget *front = nullptr;
+        for (const auto &tab : bottomAreaTabs())
+            if (tab.first == bottomFrontTab) { front = tab.second; break; }
         for (int i = 0; i < preFullscreenWidgets.size(); ++i)
-            if (editorDocks[i]) editorDocks[i]->setVisible(preFullscreenWidgets[i]);
+            if (editorDocks[i] && editorDocks[i] != front)
+                editorDocks[i]->setVisible(preFullscreenWidgets[i]);
+        for (int i = 0; i < preFullscreenWidgets.size(); ++i)
+            if (editorDocks[i] && editorDocks[i] == front)
+                editorDocks[i]->setVisible(preFullscreenWidgets[i]);
+        raiseBottomFrontTab();
     }
     preFullscreenWidgets.clear();
     if (restoreWindow) preFullscreenMaximized ? showMaximized() : showNormal();
@@ -4724,13 +4744,19 @@ bool MainWindow::setPanelOpen(const QString &name, bool open)
     }
     // The record first: showing a dock whose page is not up would be undone by
     // the next applyDockVisibilityForSpace, and the user's answer is the bit.
-    const QString wanted = name.trimmed().toLower();
     if      (dock == sceneHierarchyDock)      widgetStates[(int) Widget::HIERARCHY]  = true;
     else if (dock == sceneNodePropertiesDock) widgetStates[(int) Widget::PROPERTIES] = true;
     else if (dock == presetsDock)             widgetStates[(int) Widget::PRESETS]    = true;
     else if (dock == assetDock)               widgetStates[(int) Widget::ASSETS]     = true;
     else if (dock == animationDock)           widgetStates[(int) Widget::TIMELINE]   = true;
-    else if (dock == scriptConsoleDock)       widgetStates[(int) Widget::CONSOLE]    = true;
+    else if (dock == scriptConsoleDock) {
+        // ONE OPENER FOR THE CONSOLE (round 2): setConsoleTabVisible is where
+        // the tab it interrupts is recorded, so a console opened through this
+        // verb and one opened with Ctrl+` return to the same tab when they
+        // close. `false`: opening a panel is not a request for the keyboard.
+        setConsoleTabVisible(true, false);
+        return true;
+    }
     dock->show();
     dock->raise();
     for (const auto &tab : bottomAreaTabs())
