@@ -393,6 +393,7 @@ void Registry::collect(QWidget *container, const QStringList &sections,
         l.key = it->key;
         l.keywords = it->keywords;
         l.panelVisible = it->panelVisible;
+        l.filteredOut = it->filteredOut;
         l.visible = it->panelVisible && !it->filteredOut;
         out.append(l);
     }

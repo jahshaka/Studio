@@ -411,6 +411,17 @@ SceneNodePropertiesWidget::filterCounts(Tab tab) const
     return counts[int(tab)];
 }
 
+QVector<PropertyRows::Registry::Listing>
+SceneNodePropertiesWidget::propertyRows(Tab tab) const
+{
+    QVector<PropertyRows::Registry::Listing> out;
+    for (const QPointer<QWidget> &blade : std::as_const(mountedBlades[int(tab)])) {
+        if (!blade) continue;
+        out += PropertyRows::registry().list(blade.data());
+    }
+    return out;
+}
+
 void SceneNodePropertiesWidget::setPropertiesFilter(Tab tab, const QString &text)
 {
     const int t = int(tab);

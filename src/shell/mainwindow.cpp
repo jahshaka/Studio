@@ -4795,6 +4795,29 @@ QDockWidget *MainWindow::panelDock(const QString &name) const
     return nullptr;
 }
 
+QVariantList MainWindow::propertyRows(const QString &tabName) const
+{
+    QVariantList out;
+    if (!sceneNodePropertiesWidget) return out;
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.trimmed().isEmpty()
+        && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return out;
+    const QString name = SceneNodePropertiesWidget::tabName(tab);
+    for (const auto &row : sceneNodePropertiesWidget->propertyRows(tab)) {
+        QVariantMap entry;
+        entry[QStringLiteral("tab")] = name;
+        entry[QStringLiteral("section")] = row.sections;
+        entry[QStringLiteral("label")] = row.label;
+        entry[QStringLiteral("key")] = row.key;
+        entry[QStringLiteral("keywords")] = row.keywords;
+        entry[QStringLiteral("panelVisible")] = row.panelVisible;
+        entry[QStringLiteral("filteredOut")] = row.filteredOut;
+        entry[QStringLiteral("visible")] = row.visible;
+        out.append(entry);
+    }
+    return out;
+}
+
 bool MainWindow::isPropertiesTab(const QString &tabName) const
 {
     if (tabName.trimmed().isEmpty()) return true;

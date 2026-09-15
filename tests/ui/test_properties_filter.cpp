@@ -279,6 +279,22 @@ int main(int argc, char **argv)
         CHECK(keyed >= 20,
               QStringLiteral("properties_filter: the world rows carry stable keys (%1)")
                   .arg(keyed).toUtf8().constData());
+
+        // THE LISTING THE VERB ANSWERS WITH (editor.properties, §3.5): the same
+        // rows, in column order, with both halves of the visibility law.
+        const auto listing = panel->propertyRows(Tab::World);
+        CHECK(listing.size() == registered,
+              QStringLiteral("properties_filter: editor.properties lists the tab's rows "
+                             "(%1 of %2)").arg(listing.size()).arg(registered)
+                  .toUtf8().constData());
+        bool ssrListed = false;
+        for (const auto &row : listing)
+            if (row.key == QStringLiteral("world.override:ssr")
+                && row.label == QStringLiteral("Screen-Space Reflections")
+                && !row.sections.isEmpty() && row.visible && !row.filteredOut)
+                ssrListed = true;
+        CHECK(ssrListed,
+              "properties_filter: ...each with its section chain, its key and its verdict");
     }
 
     // ---- 3. "ssr" — THE OWNER'S OWN EXAMPLE --------------------------------

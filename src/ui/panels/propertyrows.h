@@ -144,6 +144,7 @@ public:
         QStringList keywords;
         bool panelVisible = true;
         bool visible = true;
+        bool filteredOut = false;
     };
     QVector<Listing> list(QWidget *root) const;
 

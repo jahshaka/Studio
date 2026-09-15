@@ -421,6 +421,22 @@ QVector<VerbInfo> EditorApi::verbs() const
           "neither. Called with no argument it reads. Rows are hidden and shown, never rebuilt: "
           "the same call the box makes on every keystroke.",
           Needs::Window },
+        { "properties", "editor.properties({tab}) -> [{tab, section, label, key, keywords, "
+                        "panelVisible, filteredOut, visible}]",
+          "WHAT IS ON THE PROPERTIES COLUMN RIGHT NOW, row by row, in the order the column "
+          "holds them (PROPERTY_FILTER_SPEC §3.5) — the answer to \"which rows exist\" and "
+          "\"why can I not see that row\" without a screenshot. `section` is the title chain "
+          "the row sits in, outermost first (a nested section like Detail Layers adds a "
+          "second entry); `label` is the row's NAME even when the header elided it on a "
+          "narrow dock; `key` is its stable name where it has one (\"world.override:ssr\", "
+          "\"postFx.exposure\", a material property's own name) and `keywords` the synonyms "
+          "curated beside it. VISIBILITY HAS TWO INPUTS and both are reported: "
+          "`panelVisible` is the panel's own intent (a spot row on a point light is false), "
+          "`filteredOut` is the filter box's verdict, and `visible` is the AND of them — the "
+          "row on screen. `tab` is \"world\" or \"selection\", defaulting to the tab in "
+          "front; only the rows that tab has MOUNTED are listed, because those are the rows "
+          "that exist for the current selection.",
+          Needs::Window },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
           "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
           "`translate` in world units — which is also the ground grid's spacing — `rotate` in "
@@ -1860,6 +1876,26 @@ QVariantMap EditorApi::propertiesFilter(const QVariantMap &change)
     out[QStringLiteral("visible")] = counts.first;
     out[QStringLiteral("hidden")] = counts.second;
     return out;
+}
+
+QVariantList EditorApi::properties(const QVariantMap &args)
+{
+    if (!host.mainWindow) {
+        fail("editor.properties: this verb needs the editor window (a --script/--headless "
+             "run has no panels)");
+        return QVariantList();
+    }
+    static const QStringList known = { QStringLiteral("tab") };
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("editor.properties"),
+                                                         args, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantList(); }
+
+    const QString tab = args.value(QStringLiteral("tab")).toString();
+    if (!host.mainWindow->isPropertiesTab(tab)) {
+        fail(QStringLiteral("editor.properties: unknown tab '%1' (world|selection)").arg(tab));
+        return QVariantList();
+    }
+    return host.mainWindow->propertyRows(tab);
 }
 
 QVariantMap EditorApi::snapSize()

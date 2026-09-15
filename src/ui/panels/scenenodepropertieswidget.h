@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QVector>
 
+#include "ui/panels/propertyrows.h"
+
 namespace iris {
     class SceneNode;
     // Was missing: every signature below that names iris::Scene depended on the
@@ -111,6 +113,13 @@ public:
     /// (a spot row on a point light) are in neither.
     struct FilterCounts { int visible = 0; int hidden = 0; };
     FilterCounts filterCounts(Tab tab) const;
+
+    /// EVERY ROW THAT TAB HAS MOUNTED, in column order — what `editor.properties`
+    /// answers with (PROPERTY_FILTER_SPEC §3.5). It is the column's own account
+    /// of itself: section chain, name, key, keywords and both halves of the
+    /// visibility law, so a script (or Claude) can ask what is on the Properties
+    /// panel without a screenshot.
+    QVector<PropertyRows::Registry::Listing> propertyRows(Tab tab) const;
 
     /// The name the verbs and the tab bar use ("world" / "selection").
     static QString tabName(Tab tab);

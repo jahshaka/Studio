@@ -356,6 +356,9 @@ public:
     bool setPropertiesFilter(const QString &tabName, const QString &text);
     /// {rows the filter kept, rows it removed} for that tab's last apply.
     QPair<int, int> propertiesFilterCounts(const QString &tabName = QString()) const;
+    /// THE COLUMN'S OWN ACCOUNT OF ITSELF (`editor.properties`): one entry per
+    /// row that tab has mounted, in column order.
+    QVariantList propertyRows(const QString &tabName = QString()) const;
     /// Raises a tab by name; false for a name that is not one.
     bool setPropertiesTab(const QString &name);
     /// Whether `dock` is the tab in FRONT of its group (and not closed). Qt
