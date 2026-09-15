@@ -34,10 +34,15 @@ public:
         this->mainWindow = mainWindow;
     }
 
+    /// The favourites are listed HERE, not in the constructor: the panel is
+    /// built before MainWindow has a database to give it, and reading the
+    /// library through a pointer that does not exist yet is what the
+    /// constructor's addFavorites() call was doing (CLOSE-2). Called once,
+    /// like the wiring that calls it; addDefaultItems() stays in the
+    /// constructor so the starter tiles still come first.
     void setDatabaseHandle(Database *db) {
         this->handle = db;
-        // objectAssets = handle->fetchAssetsByView(...);
-        // objectAssets = handle->fetchFavorites();
+        addFavorites();
     }
 
     // Add the default starter primitives
