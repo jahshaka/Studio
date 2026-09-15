@@ -536,6 +536,13 @@ int main(int argc, char **argv)
         box("-X wall", iris::Vec3(-7.1f, 3.1f, 0.0f),  iris::Vec3(0.1f, 3.4f, 7.2f));
         box("+X wall", iris::Vec3(7.1f, 3.1f, 0.0f),   iris::Vec3(0.1f, 3.4f, 7.2f));
         box("+Z wall", iris::Vec3(0.0f, 3.1f, 7.1f),   iris::Vec3(7.2f, 3.4f, 0.1f));
+        // ...AND THE FOURTH WALL (R5-ROOM, 2026-09-15). A probe is kept when
+        // the box it photographs is materially smaller than the volume the
+        // renderer lit, and a room with one side open leaves half of every
+        // probe's view on the sky: measured, this room's four probes were all
+        // dropped with -Z missing. The suite is about probe-capture
+        // COALESCING, so it closes the room it already meant to close.
+        box("-Z wall", iris::Vec3(0.0f, 3.1f, -7.1f),  iris::Vec3(7.2f, 3.4f, 0.1f));
     }
     doc->giMode = iris::GiMode::VCT_PCC_HYBRID;
     doc->giPccGrid = iris::Vec3(2, 1, 2);             // 4 probes
