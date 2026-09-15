@@ -4181,7 +4181,10 @@ void MainWindow::setupShortcuts()
     reg.add("properties.filter", "Properties: Filter Rows", "Windows",
             QKeySequence(Qt::CTRL | Qt::Key_F), this, [this]() {
         if (!propertiesTabStrip) return;
-        if (sceneNodePropertiesDock && !sceneNodePropertiesDock->isVisible())
+        // A dock tabbed BEHIND another is visible (shown, parked off-screen — the
+        // SPACE-2 fact), so the test is "in front", not "visible": otherwise the
+        // shortcut focused a filter box the user could not see (PROPS-SMALL-1).
+        if (sceneNodePropertiesDock && !isFrontTab(sceneNodePropertiesDock))
             setPanelOpen(QStringLiteral("properties"), true);
         propertiesTabStrip->focusFilter();
     });
