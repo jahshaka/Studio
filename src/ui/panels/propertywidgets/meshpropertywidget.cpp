@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
+#include "services/editgate.h"
 #include "ui/controls/filepickerwidget.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "ui/controls/comboboxwidget.h"
@@ -154,6 +155,9 @@ void MeshPropertyWidget::onPlanarReflectorChanged(bool enabled)
 void MeshPropertyWidget::onLightChannelsChanged(quint32 mask)
 {
     if (loading || meshNode.isNull()) return;
+    // The edit gate (ledger §423): the channel grid writes the node and records
+    // the step afterwards, so the refusal belongs before the write.
+    if (editgate::refuse()) return;
     // Straight to the document: the mirror pushes the mask onto the node's Item
     // on the next sync, change-guarded like every other flag. `lightMask` is a
     // reflected key, so the step is the one node.setLightMask records.

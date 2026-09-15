@@ -35,6 +35,20 @@ assert(guid.length > 10, "project.create -> " + guid);
 var undoBefore = editor.undoState();
 assert(undoBefore.macroOpen === true, "the run's undo macro is open on the UI thread");
 
+// ---- THE EDIT GATE (owner, ledger §423) ----
+//
+// While this run is in flight the editor is non-editable by hand — the gate
+// refuses every document write arriving from the UI, under EITHER policy,
+// because the UI thread is free between these verbs either way. Nobody is
+// clicking in a ctest run, so what this asserts is the state the app is really
+// in (the refusal itself is proven in scripting.engine, where a timer delivers
+// a hand edit into a live run, and in ui.panel_undo and gizmo.group_transform,
+// where real gestures are driven against the gate).
+var gate = editor.editGate();
+assert(gate.scriptRunning === true, "the edit gate says a script run is in flight");
+assert(gate.refusals === 0, "...and nothing has been refused: nobody is clicking");
+assert(gate.notice === false, "...so the run's 'script running' notice was never raised");
+
 // ---- twenty nodes, watching the driver ----
 //
 // THE MEASUREMENT IS WALL-TIME BOUNDED, not verb-counted (round 2, M3). A live
@@ -104,6 +118,11 @@ assert(caught && caught.indexOf("no project named") >= 0,
        "project.open's fail() reached the script as a catchable error: " + caught);
 assert(app.lastError().indexOf("no project named") >= 0,
        "...and app.lastError() recorded the same sentence");
+
+// ---- the gate is still the run's, at the end of it ----
+var gateEnd = editor.editGate();
+assert(gateEnd.scriptRunning === true, "the gate is armed for the WHOLE run, not just its start");
+assert(gateEnd.refusals === 0, "...and this run refused nothing, having been left alone");
 
 // ---- console.log ordering survives the thread hop ----
 for (var k = 0; k < 5; ++k) {

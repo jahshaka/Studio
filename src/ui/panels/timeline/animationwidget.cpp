@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/timeline/animationwidget.h"
+#include "services/editgate.h"
 #include "ui_animationwidget.h"
 #include <QMenu>
 #include <QAction>
@@ -347,6 +348,17 @@ void AnimationWidget::clearAnimationList()
 void AnimationWidget::pushEdit(QUndoCommand *command)
 {
     if (!command) return;
+    // THE EDIT GATE (owner, ledger §423). Every timeline edit APPLIES first
+    // and records after — the key is inserted, the track removed, the clip
+    // deleted, and the command carries the snapshot to go back to. So a
+    // refusal here is that command's own undo(): the restore it was built to
+    // perform, run instead of stored. (Each of these commands' undo() is a
+    // snapshot restore that does not assume its redo() ever ran.)
+    if (editgate::refuse()) {
+        command->undo();
+        delete command;
+        return;
+    }
     if (services && services->undo) {
         services->undo->push(command);
         return;
@@ -388,6 +400,11 @@ void AnimationWidget::addAnimation()
 {
     if(!node)
         return;
+    // The edit gate (round 2, item 6): New Animation adds a clip to the node
+    // with no command behind it, so the spine never sees it. Asked before the
+    // name dialog, not after — refusing a name the user has just typed is
+    // worse than not asking for it.
+    if (editgate::refuse()) return;
 
     GetNameDialog dialog;
     auto defaultName = QString("Animation%1").arg(node->getAnimations().count()+1);
@@ -437,6 +454,11 @@ iris::AnimationPtr AnimationWidget::ensureAnimation()
 {
     if (!!animation) return animation;
     if (!node) return iris::AnimationPtr();
+    // The edit gate (round 2, item 6). This runs BEFORE the key-insert push
+    // that pushEdit gates, and it is itself a document write — the first key
+    // on a node with no clip creates one. Its only caller is a hand action
+    // (addPropertyKey); a script keys through anim.keyframe, inside a verb.
+    if (editgate::refuse()) return iris::AnimationPtr();
 
     animation = iris::Animation::create("Animation");
     node->addAnimation(animation);
@@ -581,6 +603,9 @@ void AnimationWidget::updateCreationWidgetMessage(iris::SceneNodePtr node)
 
 void AnimationWidget::OnAnimationChanged(QString name)
 {
+    // The edit gate (round 2, item 6): picking another clip in the combo
+    // writes the node's ACTIVE animation — a document field, no command.
+    if (editgate::refuse()) return;
     auto animList = node->getAnimations();
     for (auto anim : animList)
     {

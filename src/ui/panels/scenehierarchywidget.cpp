@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/scenehierarchywidget.h"
+#include "services/editgate.h"
 #include "ui_scenehierarchywidget.h"
 
 #include <QMenu>
@@ -707,6 +708,13 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         auto *undo = mainWindow->studioServices()->undo;
         // One GESTURE is one undo step even when it moved five objects.
         const bool macro = moves.size() > 1 && undo->stack();
+        // The edit gate (ledger §423), before the macro opens: refusing the
+        // commands one at a time would leave an empty macro on the stack.
+        if (editgate::refuse()) {
+            dropEventPtr->setDropAction(Qt::IgnoreAction);
+            dropEventPtr->ignore();
+            return true;
+        }
         if (macro) undo->stack()->beginMacro(tr("Reparent Objects"));
         for (const auto &n : moves) undo->push(new ReparentSceneNodeCommand(n, target));
         if (macro) undo->stack()->endMacro();
@@ -803,6 +811,9 @@ SceneTreeWidget::DropHint SceneHierarchyWidget::dropHintAt(const QList<iris::Sce
 void SceneHierarchyWidget::runFolderEdit(const QString &text, const std::function<bool()> &fn)
 {
     if (!scene || !fn) return;
+    // The edit gate (ledger §423): a folder edit APPLIES and then records, so
+    // the refusal has to come before `fn()` runs.
+    if (editgate::refuse()) return;
     const auto before = scenefolders::snapshot(scene);
     if (!fn()) return;
     repopulateTree();
@@ -952,6 +963,10 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 		setItemVisible(item, !item->data(1, Qt::UserRole).toBool());
 	}
     else if (column == 2) {
+        // The edit gate (round 2, item 5): the lock IS the node's `pickable`
+        // flag, written straight onto the document with no command behind it,
+        // so the spine never sees it.
+        if (editgate::refuse()) return;
         if (item->data(2, Qt::UserRole).toBool()) lockItemAndChildren(item);
         else releaseItemAndChildren(item);
     }
@@ -1532,6 +1547,7 @@ void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 
 	auto *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo : nullptr;
 	const bool macro = undo && undo->stack() && nodes.size() > 1;
+	if (editgate::refuse()) return;          // the edit gate, before the macro opens
 	if (macro) undo->stack()->beginMacro(visible ? tr("Show Objects") : tr("Hide Objects"));
 	for (const auto &node : nodes) {
 		if (node->isVisible() == visible) continue;

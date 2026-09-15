@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "ui/panels/propertyrows.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "services/editgate.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/worldmodes.h"
@@ -632,6 +633,9 @@ void WorldGiPropertyWidget::endPhotonEdit(const QString &text)
 void WorldGiPropertyWidget::editPhotonRow(const QString &id, int value, const QString &text)
 {
     if (!scene) return;
+    // The edit gate (ledger §423): this row writes the registry itself rather
+    // than through a rowundo binding, so it asks before it writes.
+    if (editgate::refuse()) return;
     // A tick outside a start/end bracket (nothing in this panel emits one, but
     // the slider's contract does not forbid it) is its own one-step edit.
     const bool atomic = !editing;

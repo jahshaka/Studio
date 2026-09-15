@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "ui/panels/assetwidget.h"
 #include "ui/panels/scenehierarchywidget.h"
 #include "io/sceneformat.h"
+#include "services/editgate.h"
 #include "services/services.h"
 #include "services/playerservice.h"
 #include "services/playbackservice.h"
@@ -491,6 +492,22 @@ QVector<VerbInfo> EditorApi::verbs() const
           "library write the run makes rides it, which is why 300 scene.addPrimitive calls cost one commit "
           "instead of 300. `dbCommits` counts this process's durable write commits so far — read it before "
           "and after an action and the difference is the number of disk syncs that action cost.",
+          Needs::Document },
+        { "editGate", "editor.editGate() -> {scriptRunning, refusals, notice}",
+          "THE EDIT GATE — what a script run does to HAND editing (owner, 2026-09-15). While a "
+          "script runs the editor is NON-EDITABLE BUT FULLY NAVIGABLE: the viewport camera, the "
+          "panels, the tabs, the page switches and the selection all still work, and every "
+          "document write arriving from the UI — a gizmo drag, a property row, a drop, the Delete "
+          "key, a menu action that edits — is refused until the run ends. It has to be: the "
+          "JavaScript runs on its own thread, so the event loop turns between two verbs, and the "
+          "run is ONE open undo entry, so a hand edit would silently become part of the script's "
+          "step. The run's OWN writes are not gated — the gate keys on the calling context (a "
+          "verb), never on the thread, and every verb arrives on the UI thread like the hand "
+          "does. `scriptRunning` is true whenever a run is in flight (so it is ALWAYS true read "
+          "from a script — it is the state verb for a test or an agent, and the answer from "
+          "inside is the trivial one); `refusals` counts REFUSED WRITES, not gestures: a drag asks the gate on every tick, so one refused slider drag can count a dozen — read it as \"did anything try\", never as a number of user actions; "
+          "`notice` says whether the run's one \"Script running\" toast has been raised — once "
+          "per run, not once per refused event.",
           Needs::Document },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
@@ -1999,6 +2016,19 @@ bool EditorApi::snapToFloor()
     if (!host.services || !host.services->selection || !host.services->selection->selected())
         return fail("editor.snapToFloor: nothing is selected");
     return host.viewport->snapSelectionToFloor();
+}
+
+QVariantMap EditorApi::editGate()
+{
+    // Straight off the gate (services/editgate.h) rather than through the undo
+    // service: the gate is what the panels, the viewport and the undo spine all
+    // ask, so a verb that read a copy of it somewhere else could disagree with
+    // the answer the app is actually acting on.
+    QVariantMap out;
+    out["scriptRunning"] = editgate::runActive();
+    out["refusals"]      = QVariant::fromValue(qulonglong(editgate::refusals()));
+    out["notice"]        = editgate::noticeShown();
+    return out;
 }
 
 QVariantMap EditorApi::undoState()

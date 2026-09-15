@@ -54,9 +54,11 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
+#include "commands/nodeeditcommand.h"
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/services.h"
+#include "services/editgate.h"
 #include "services/undoservice.h"
 #include "services/worldmodes.h"
 #include "ui/controls/checkboxwidget.h"
@@ -1027,6 +1029,138 @@ int main(int argc, char **argv)
         CHECK(node->getLocalPos().x() == 0 && node->getLocalPos().y() == 0
                   && node->getLocalPos().z() == 0,
               "reset: …and the position with it");
+    }
+
+    // ---- THE EDIT GATE: NON-EDITABLE WHILE A SCRIPT RUNS --------------------
+    //
+    // Owner, ledger §423. The script engine runs off the UI thread, so the
+    // event loop turns between two verbs and a person can reach these very rows
+    // in the middle of somebody else's edit — and the run is ONE open undo
+    // entry, so a hand edit would silently join it. While a run is in flight
+    // every document write arriving from the UI is refused (services/editgate.h)
+    // and NAVIGATION is untouched.
+    //
+    // What is asserted here is the part a state flag cannot show: after a full
+    // gesture on a real row, and after a full scrub on a real transform field,
+    // the DOCUMENT IS BYTE-IDENTICAL and the stack has not moved — because
+    // these rows write live and only push at the end, so a refusal that only
+    // stopped the push would leave the dragged value behind.
+    {
+        int notices = 0;
+        editgate::setNoticeHook([&notices]() { ++notices; });
+        editgate::runStarted();          // what ScriptEngine::evaluate does
+
+        // 1. A SLIDER ROW (rowundo, i.e. every panel's generic rows).
+        FogPropertyWidget panel;
+        panel.setServices(&services);
+        panel.setScene(scene);
+        pump();
+        HFloatSliderWidget *density = sliderWith(&panel, QStringLiteral("Fog Density"));
+        CHECK(density != nullptr, "gate: the density row is on the blade");
+        const float fogWas = scene->fogDensity;
+        const int stackWas = stack.index();
+        CHECK(drag(density, 0.02f, 0.09f), "gate: the row can still be dragged (nothing is disabled)");
+        CHECK(qFuzzyCompare(scene->fogDensity, fogWas),
+              "gate: ...and the document did not move by a single tick");
+        CHECK(stack.index() == stackWas, "gate: ...and nothing reached the undo stack");
+
+        // 2. A CHECKBOX — a one-shot row, the other half of rowundo.
+        const bool fogEnabledWas = scene->fogEnabled;
+        if (auto *b = box(checkWith(&panel, QStringLiteral("Fog Enabled"))))
+            b->setChecked(!fogEnabledWas);
+        CHECK(scene->fogEnabled == fogEnabledWas, "gate: a checkbox row writes nothing either");
+        CHECK(stack.index() == stackWas, "gate: ...and records nothing");
+
+        // 3. A TRANSFORM FIELD — its own gesture, not a rowundo binding: it
+        //    writes the node live through the scrub and records on release.
+        auto node = iris::SceneNode::create();
+        node->setLocalPos(iris::Vec3(1, 2, 3));
+        TransformEditor editor;
+        editor.setServices(&services);
+        editor.setSceneNode(node);
+        pump();
+        auto *xpos = editor.findChild<DragSpinBox *>(QStringLiteral("xpos"));
+        CHECK(xpos != nullptr, "gate: the transform panel's X field is there");
+        scrub(xpos, 40);
+        CHECK(qFuzzyCompare(node->getLocalPos().x(), 1.0f),
+              "gate: a full scrub of a transform field left the node where it was");
+        CHECK(stack.index() == stackWas, "gate: ...and pushed no step");
+
+        // 4. A PLAIN COMMAND — the Delete key, a paste, a menu action that
+        //    edits: everything whose work happens in the command's redo().
+        bool applied = false;
+        undo.push(new NodeEditCommand(QStringLiteral("a hand edit"),
+                                      [&applied]() { applied = true; },
+                                      [&applied]() { applied = false; }));
+        CHECK(!applied, "gate: a command pushed by hand never ran");
+        CHECK(stack.index() == stackWas, "gate: ...and never reached the stack");
+
+        // 4b. A REFUSED ROW SHOWS THE DOCUMENT AGAIN (round 2, item 3). The
+        //     control keeps whatever the user dragged it to — the gate stops
+        //     the WRITE, it does not move widgets — so the row and the
+        //     document disagree until something re-reads. That something is
+        //     SceneNodePropertiesWidget::refreshFromDocument(), which the shell
+        //     calls on the run's first refusal (beside the toast) and again
+        //     when the run ends.
+        {
+            Database db;
+            Project project;
+            SceneNodePropertiesWidget host;
+            host.setDatabase(&db);
+            host.setProject(&project);
+            host.setServices(&services);
+            host.setScene(scene);
+            // SHOWN, because the panel only mounts what is on screen
+            // (scheduleMount returns early on an invisible column) — and a row
+            // nobody can see is a row nobody can be refused on. Offscreen QPA:
+            // no window appears.
+            host.show();
+            // The World tab, because that is where the fog row lives and the
+            // panel repaints the tab it is SHOWING (a user can only be refused
+            // on a row they can reach).
+            host.setPropertiesTab(SceneNodePropertiesWidget::Tab::World);
+            pump();
+            HFloatSliderWidget *hosted = sliderWith(&host, QStringLiteral("Fog Density"));
+            CHECK(hosted != nullptr, "gate: the host shows the fog density row");
+            if (hosted) {
+                const float doc = scene->fogDensity;
+                CHECK(drag(hosted, 0.02f, 0.11f), "gate: the hosted row can be dragged");
+                CHECK(qFuzzyCompare(scene->fogDensity, doc),
+                      "gate: ...the document still holds its own value");
+                CHECK(qFuzzyCompare(hosted->getValue(), 0.11f),
+                      "gate: ...and the CONTROL is left showing the refused value");
+                host.refreshFromDocument();
+                // Two turns: the refresh defers its own rebuild, and applyTab
+                // coalesces to the end of the turn after that.
+                pump(); pump(); pump();
+                // The refresh may REBUILD the blade (applyTab), so ask the host
+                // for the row again rather than trusting the old pointer — what
+                // is being asserted is what the user sees, not which widget
+                // object shows it.
+                HFloatSliderWidget *again = sliderWith(&host, QStringLiteral("Fog Density"));
+                CHECK(again != nullptr, "gate: the row is still there after the refresh");
+                if (again)
+                    CHECK(qFuzzyCompare(again->getValue(), doc),
+                          "gate: ...until the panel re-reads the document, which puts the row back");
+            }
+        }
+
+        // 5. THE NOTICE: once per run, however many edits were refused.
+        CHECK(notices == 1, "gate: the run's notice was raised ONCE, not once per refused event");
+        CHECK(editgate::refusals() >= 4, "gate: every refusal was counted");
+
+        // 6. AND AFTERWARDS THE SAME EDITS WORK.
+        editgate::runFinished();
+        CHECK(!editgate::runActive(), "gate: the run gave the document back");
+        CHECK(drag(density, 0.02f, 0.09f), "gate: the same row drags again");
+        CHECK(qFuzzyCompare(scene->fogDensity, 0.09f), "gate: ...and writes the document");
+        CHECK(stack.index() == stackWas + 1, "gate: ...and records its one step");
+        undo.push(new NodeEditCommand(QStringLiteral("a hand edit"),
+                                      [&applied]() { applied = true; },
+                                      [&applied]() { applied = false; }));
+        CHECK(applied && stack.index() == stackWas + 2, "gate: ...and a command pushes and runs");
+        editgate::setNoticeHook({});
+        editgate::reset();
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

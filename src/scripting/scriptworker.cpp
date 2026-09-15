@@ -22,6 +22,7 @@ For more information see the LICENSE file
 
 #include "scripting/apiregistry.h"
 #include "scripting/scripthost.h"
+#include "services/editgate.h"
 
 namespace {
 
@@ -265,6 +266,13 @@ VerbOutcome VerbDispatcher::dispatch(const QString &moduleName, const QString &v
     const QMetaType ret = chosen.returnMetaType();
     bool called = false;
     QVariant returned;
+    // THE RUN'S OWN WRITE SCOPE (services/editgate.h, owner ledger §423).
+    // While a script runs the editor refuses document writes coming from the
+    // UI — and the script's writes arrive HERE, on that same UI thread, so
+    // "which thread is this" cannot tell them apart. This bracket is what
+    // does: inside it the document is the run's to write, outside it, while a
+    // run is in flight, it is nobody's. RAII, because a verb may throw.
+    const editgate::VerbScope verbScope;
     try {
         if (ret.id() == QMetaType::Void) {
             called = chosen.invoke(module, Qt::DirectConnection, QGenericReturnArgument(),

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/clipboardservice.h"
+#include "services/editgate.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -330,6 +331,14 @@ QStringList neededGuids(const ClipItem &item, const Envelope &envelope)
 ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &options)
 {
     ClipboardPasteResult result;
+    // THE EDIT GATE (ledger §423), at the gesture's entry: a paste is a
+    // document write, it opens a macro before its first command, and the
+    // clipboard half would otherwise import assets for nodes that never land.
+    if (editgate::refuse()) {
+        result.error = QStringLiteral("a script is running — the editor is read-only until it "
+                                      "finishes");
+        return result;
+    }
     const Envelope envelope = contents();
     if (envelope.isNull()) {
         result.error = QStringLiteral("the clipboard does not hold Jahshaka content");

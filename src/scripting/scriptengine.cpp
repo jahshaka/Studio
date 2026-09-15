@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QUndoStack>
 
 #include "scripting/scriptworker.h"
+#include "services/editgate.h"
 #include "services/jahlog.h"
 
 QString ScriptResult::toString() const
@@ -215,6 +216,20 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
         mHost.beginRunUndoMacro();
     }
 
+    // THE EDITOR IS NON-EDITABLE FOR THE LENGTH OF THE RUN (owner, ledger
+    // §423). The UI thread is free between the verbs, so a gizmo drag or a
+    // slider is physically possible in the middle of the script's work — and
+    // the run is ONE open undo macro, so a hand edit would silently join it.
+    // Navigation is untouched: the camera, the panels, the tabs and the
+    // selection all still answer. Armed for BOTH policies: "off" only means
+    // the viewport holds its picture, not that the app is blocked.
+    //
+    // Armed HERE, beside the macro, rather than through a host hook, so the
+    // two halves of the gate — the run bracket and the verb scope the
+    // dispatcher opens — can never be half-wired by a host. A host that wired
+    // one and forgot the other would refuse the SCRIPT's own writes.
+    editgate::runStarted();
+
     // THE RUN POLICY, handed to the render loop as one state. Off suspends the
     // driver's tick for the duration — which is what a blocked UI thread used
     // to do for free, and what the 54 frame-stepping e2e scripts and the 18
@@ -276,6 +291,9 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
 
     result = mWorker->result();
     mWorker->engine()->setInterrupted(false);
+
+    // The document is the user's again (the notice re-arms with the next run).
+    editgate::runFinished();
 
     if (mHost.scriptRunState) mHost.scriptRunState(ScriptRunState::None);
 

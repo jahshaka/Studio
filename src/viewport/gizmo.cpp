@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "services/services.h"
+#include "services/editgate.h"
 #include "services/undoservice.h"
 #include "commands/transformscenenodecommand.h"
 #include <QUndoStack>
@@ -267,6 +268,14 @@ void Gizmo::createUndoAction()
 			m.node->setLocalRot(m.localRot);
 			m.node->setLocalScale(m.localScale);
 		}
+		// THE EDIT GATE (round 2, item 8). A group drag that began before a
+		// script run and was released during it has just been rewound above,
+		// so there is nothing left to record — and opening the macro anyway
+		// would leave an EMPTY entry on the stack for the pushes the spine is
+		// about to refuse, which is an undo step that eats the user's next
+		// Ctrl+Z. (blocked(), not refuse(): the single-node path below counts
+		// and announces the same gesture through the push.)
+		if (editgate::blocked()) { groupStart.clear(); return; }
 		if (services && services->undo) {
 			const bool macro = applied.size() > 1 && stack;
 			if (macro) stack->beginMacro(QObject::tr("Transform %1 objects").arg(applied.size()));

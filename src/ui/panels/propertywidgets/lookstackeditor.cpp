@@ -23,15 +23,30 @@ For more information see the LICENSE file
 #include "ui/controls/dragvaluewidgets.h"
 #include "ui/controls/labelwidget.h"
 
+#include "services/editgate.h"
+
 namespace lookstack
 {
 
 void build(AccordianBladeWidget *blade, const QJsonArray &raw,
-           const std::function<void(const QJsonArray &, bool)> &write,
+           const std::function<void(const QJsonArray &, bool)> &writeStack,
            const std::function<void()> &gestureEnd)
 {
-    if (!blade || !write) return;
+    if (!blade || !writeStack) return;
     const QJsonArray stack = iris::normalizeLookStack(raw);
+
+    // THE EDIT GATE, ONCE FOR BOTH PANELS (owner, ledger §423;
+    // services/editgate.h). Every row this editor builds writes the stack
+    // straight onto the document and records the step afterwards, so the
+    // refusal belongs on the write itself — and wrapping it here covers the
+    // World panel's stack and the camera's override with one rule, which is
+    // the reason this editor is written once. Copied into every row's lambda
+    // exactly as the caller's own function was.
+    const std::function<void(const QJsonArray &, bool)> write =
+        [writeStack](const QJsonArray &next, bool rebuildPanel) {
+            if (editgate::refuse()) return;
+            writeStack(next, rebuildPanel);
+        };
 
     for (int i = 0; i < stack.size(); ++i) {
         const QJsonObject entry = stack.at(i).toObject();

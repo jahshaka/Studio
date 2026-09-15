@@ -435,10 +435,20 @@ void MaterialPropertyWidget::updateTextureDependency(iris::Property *prop)
 void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
 {
     startValue = prop->getValue();
+    // A GESTURE THAT REALLY STARTED (round 2, item 9). The edit gate makes
+    // these rows inert while a script runs — the row's own handlers return
+    // before this is ever called — so a picker held open ACROSS the end of a
+    // run would have reached the End below with a startValue left over from
+    // the last gesture before the script, and pushed a command undoing to a
+    // value the user never saw. One flag: the End half only records what this
+    // half opened.
+    gestureOpen = true;
 }
 
 void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
 {
+    if (!gestureOpen) return;       // never started (see onPropertyChangeStart)
+    gestureOpen = false;
     // A gesture that ended on its starting value (slider pressed and released
     // in place, colour dialog cancelled, Enter on an unchanged field) is not
     // an edit - don't pollute the undo stack with a no-op command.

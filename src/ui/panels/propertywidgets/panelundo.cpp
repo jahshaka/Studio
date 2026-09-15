@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "commands/setnodepropertycommand.h"
 #include "commands/worldmodecommand.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "services/editgate.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 
@@ -87,6 +88,11 @@ void runWorldModeEdit(StudioServices *services, const iris::ScenePtr &scene, con
                       const std::function<void()> &edit, std::function<void()> refresh)
 {
     if (!scene || !edit) return;
+    // THE EDIT GATE, BEFORE THE EDIT (owner, ledger §423; services/editgate.h).
+    // This helper APPLIES and then records, so the gate has to be asked before
+    // `edit()` runs — a refusal at the push would leave the registry written
+    // with no step behind it.
+    if (editgate::refuse()) return;
     const auto before = WorldModeCommand::capture(scene);
     edit();
     if (refresh) refresh();
@@ -100,8 +106,20 @@ void pushSceneEdit(StudioServices *services, const iris::ScenePtr &scene, const 
                    const QString &text, const QVariant &before, const QVariant &after,
                    std::function<void()> refresh)
 {
-    if (!scene || !services || !services->undo) return;
+    if (!scene) return;
     if (before == after) return;
+    // THE EDIT GATE, WITH THE UNDO ITS CALLER NEVER GOT TO WRITE (ledger §423).
+    // Callers of this helper have ALREADY written the document — that is what
+    // it is for — so refusing here means putting the value back, and `before`
+    // is exactly the state the undo step would have restored. Asked before the
+    // undo service is required: a host with no undo stack still may not be
+    // edited by hand while a script runs.
+    if (editgate::refuse()) {
+        sceneprops::set(scene, key, before);
+        if (refresh) refresh();
+        return;
+    }
+    if (!services || !services->undo) return;
     auto *cmd = new ScenePropertyCommand(text, scene, key, before, after);
     if (refresh) cmd->setRefresh(refresh);
     services->undo->push(cmd);
@@ -110,6 +128,13 @@ void pushSceneEdit(StudioServices *services, const iris::ScenePtr &scene, const 
 void pushEdit(StudioServices *services, const QString &text, std::function<void()> redoFn,
               std::function<void()> undoFn)
 {
+    // As above: NodeEditCommand's contract is "applied and verified first,
+    // pushed after", so a refusal here runs the undo half the caller handed in
+    // rather than dropping a command that has already happened.
+    if (editgate::refuse()) {
+        if (undoFn) undoFn();
+        return;
+    }
     if (!services || !services->undo) return;
     services->undo->push(new NodeEditCommand(text, std::move(redoFn), std::move(undoFn)));
 }

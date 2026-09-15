@@ -63,6 +63,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
+#include "services/editgate.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/materialpreset.h"
@@ -888,6 +889,12 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
 
 QString SceneEditService::renameNode(const iris::SceneNodePtr &node, const QString &desired)
 {
+    // The edit gate (round 2, item 7). The push below is refused for a hand
+    // edit, but this function ANSWERS with the name it would have given — and
+    // the hierarchy reads that as success and keeps the typed row text. An
+    // empty answer is what every other refusal here reads as. (blocked(), not
+    // refuse(): the push that follows counts it and raises the notice.)
+    if (editgate::blocked()) return QString();
     if (!node || node->isRootNode()) return QString();
     const QString wanted = desired.trimmed();
     if (wanted.isEmpty()) return QString();
@@ -1045,6 +1052,13 @@ SceneEditService::deleteNodes(const QList<iris::SceneNodePtr> &nodes)
 {
     DeleteSetResult result;
     if (!scene()) return result;
+    // THE EDIT GATE (owner, ledger §423): asked ONCE, at the gesture's entry,
+    // for the same reason the multi-node branch below opens a macro before its
+    // first command — refusing the commands one at a time would leave an EMPTY
+    // macro on the stack, which is an undo entry that eats the user's next
+    // Ctrl+Z. Keyed on the calling context, so the verb that shares this
+    // funnel is not gated.
+    if (editgate::refuse()) return result;
 
     // THE WORLD ROOT COMES OUT FIRST, before the D5 reduction (D6): every other
     // node in the scene is its descendant, so reducing with the root still in
@@ -1114,6 +1128,7 @@ SceneEditService::duplicateNodes(const QList<iris::SceneNodePtr> &nodes)
 {
     QList<iris::SceneNodePtr> copies;
     if (!scene()) return copies;
+    if (editgate::refuse()) return copies;      // the edit gate, as in deleteNodes
 
     QList<iris::SceneNodePtr> input;      // D6, same reason as deleteNodes
     for (const auto &node : nodes) if (!!node && !node->isRootNode()) input.append(node);
@@ -1194,6 +1209,7 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return;
+    if (editgate::refuse()) return;             // the edit gate, as in deleteNodes
 
     // THE PRESET'S MAPS ARE LIBRARY TEXTURES (plan item 15c). A preset names
     // files the app ships (app/content/materials/presets/...). Each one goes
@@ -1318,6 +1334,7 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
 
 bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target)
 {
+    if (editgate::refuse()) return false;       // the edit gate, as in deleteNodes
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return false;
@@ -1376,6 +1393,11 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
 bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
 {
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
+    // The edit gate (round 2, item 10), before the work: this verb PINS the
+    // default material's textures into the project database on its way to the
+    // push and emits materialApplied after it — both would have happened
+    // around a command that was refused.
+    if (editgate::refuse()) return false;
     if (!materialdefaults::hasDefault(node)) return false;
     QStringList defaultTextures, newlyPinned;
     auto material = materialdefaults::create(node, db, project, &defaultTextures, &newlyPinned);

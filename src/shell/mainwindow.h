@@ -294,6 +294,9 @@ public:
     /// viewport calls it and it lives out here with the rest of the shell's
     /// public surface.
     void showViewportToast(const QString &title, const QString &text);
+    /// Re-reads the properties panel from the document (the edit gate's repaint:
+    /// a refused row is showing a value the document does not hold).
+    void refreshPropertiesFromDocument();
 
     // ---- the editor's BOTTOM AREA (owner, 2026-09-14, lane SPACE-2) --------
     // ONE tab bar along the bottom of the editor: "Assets" (the asset browser),

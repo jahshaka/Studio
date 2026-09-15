@@ -27,6 +27,7 @@
 #include <stdexcept>
 
 #include "scriptengine.h"
+#include "services/editgate.h"
 #include "services/undoservice.h"
 
 static int failures = 0;
@@ -74,6 +75,7 @@ public:
             { "boom", "fake.boom()", "Throws a C++ exception.", Needs::Document },
             { "defaults", "fake.defaults(a, b, c) -> string", "Exercises default arguments.", Needs::Document },
             { "reenter", "fake.reenter() -> string", "Starts a second run from inside a verb.", Needs::Document },
+            { "gate", "fake.gate() -> string", "Reports the edit gate as a VERB sees it.", Needs::Document },
         };
     }
 
@@ -117,6 +119,15 @@ public:
     /// event loop can do for real (project.open, an import, a progress dialog).
     /// The second run must be refused, not nested.
     ScriptEngine *engine = nullptr;
+    /// THE EDIT GATE AS THE RUN ITSELF SEES IT (ledger §423): a run is in
+    /// flight, and yet writes are NOT blocked here — because this is a verb,
+    /// and the gate keys on the calling context, not on the thread (every verb
+    /// arrives on the UI thread, exactly like a click does).
+    Q_INVOKABLE QString gate()
+    {
+        return QStringLiteral("%1/%2").arg(editgate::runActive() ? "running" : "idle",
+                                           editgate::blocked() ? "blocked" : "open");
+    }
     Q_INVOKABLE QString reenter()
     {
         if (!engine) return QStringLiteral("no engine");
@@ -400,6 +411,84 @@ int main(int argc, char **argv)
     }
     r = engine.evaluate("1 + 1", "after-stop.js", false);
     CHECK(r.ok && r.value.toInt() == 2, "a stopped run does not poison the next one");
+
+    // ---- THE EDIT GATE: THE EDITOR IS NON-EDITABLE WHILE A SCRIPT RUNS -------
+    //
+    // Owner, ledger §423. The UI thread is free between two verbs now, so a
+    // click really can land in the middle of a script's work — and the run is
+    // ONE open undo entry, so a hand edit would silently join it and come back
+    // on the script's Ctrl+Z. The rule: while a run is in flight every document
+    // write coming from the UI is refused, the run's own writes are not, and
+    // the person who tried is told once.
+    //
+    // The hand edit here is a command pushed from a QTimer — which is exactly
+    // how a click lands now: an event delivered on this thread while
+    // evaluate() pumps it. The verb below is the script writing at the same
+    // moment, through the same sink.
+    {
+        undoStack.clear();
+        fake->value = 0;
+        int notices = 0;
+        editgate::setNoticeHook([&notices]() { ++notices; });
+
+        // ONE EDIT THE USER MADE BEFORE THE SCRIPT STARTED — the step a hand
+        // Ctrl+Z during the run would reach if the gate did not stop it.
+        undoService.push(new SetValueCommand(&fake->value, 5));
+        CHECK(fake->value == 5 && undoStack.count() == 1, "a hand edit before the run records");
+
+        bool armedDuringRun = false;
+        int valueAfterHand = -1, valueAfterHandUndo = -1, stackAfterHandUndo = -1;
+        qulonglong refusalsDuring = 0;
+        QTimer hand;
+        hand.setSingleShot(true);
+        QObject::connect(&hand, &QTimer::timeout, [&]() {
+            armedDuringRun = editgate::runActive() && editgate::blocked();
+            // TWO of them, to prove the notice is per RUN and not per event.
+            undoService.push(new SetValueCommand(&fake->value, 99));
+            undoService.push(new SetValueCommand(&fake->value, 98));
+            valueAfterHand = fake->value;
+            // ...AND THE HAND EDIT THAT NEEDS NO COMMAND (round 2, item 2):
+            // Ctrl+Z, Ctrl+Y and the MCP undo_redo tool call straight into the
+            // undo service, so refusing at push() alone left them moving the
+            // document under a running script.
+            undoService.undo();
+            undoService.redo();
+            valueAfterHandUndo = fake->value;
+            stackAfterHandUndo = undoStack.index();
+            refusalsDuring = editgate::refusals();
+        });
+        hand.start(20);
+
+        r = engine.evaluate("var g = fake.gate();"
+                            "fake.set(7);"
+                            "var t = Date.now(); while (Date.now() - t < 150) fake.get();"
+                            "g",
+                            "gate.js", true, 0, ScriptRunPolicy::Live);
+        CHECK(r.ok && r.value.toString() == "running/open",
+              "the gate is armed for the run and OPEN inside a verb (context, not thread)");
+        CHECK(armedDuringRun, "...and closed to everything else while the run is in flight");
+        CHECK(valueAfterHand == 7, "a hand edit during the run left the document untouched");
+        CHECK(valueAfterHandUndo == 7 && stackAfterHandUndo == 1,
+              "...and so did a hand UNDO and REDO, which need no command at all");
+        CHECK(refusalsDuring == 4, "...and all four refusals were counted");
+        CHECK(notices == 1, "...and the run's notice was raised ONCE, not once per refused edit");
+        CHECK(fake->value == 7, "the script's own write went through");
+        CHECK(undoStack.count() == 2,
+              "two undo entries: the user's own and the run's, with nothing folded together");
+        undoStack.undo();
+        CHECK(fake->value == 5, "one Ctrl+Z takes the run back, and only the run");
+        undoStack.undo();
+        CHECK(fake->value == 0, "...the next one takes back the edit the user made before it");
+
+        CHECK(!editgate::runActive(), "the run gave the document back when it ended");
+        undoStack.clear();
+        fake->value = 0;
+        undoService.push(new SetValueCommand(&fake->value, 99));
+        CHECK(fake->value == 99 && undoStack.count() == 1,
+              "after the run the very same hand edit succeeds");
+        undoStack.clear();
+        editgate::setNoticeHook({});
+    }
 
     // ---- THE HOP, MEASURED ---------------------------------------------------
     //

@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QPushButton>
 
 #include "ui/panels/transformeditor.h"
+
+#include "services/editgate.h"
 #include "ui/controls/dragspinbox.h"
 
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -139,7 +141,7 @@ DragSpinBox* TransformEditor::createField(const QString& objectName, double perP
 void TransformEditor::onResetBtnClicked()
 {
     // in the future, this should be the imported models defaults instead of assumed scene's
-    if (!!sceneNode) {
+    if (auto sceneNode = editableNode()) {
         // THE NODE, NOT THE ROW CALLBACKS. Reset used to walk the nine
         // valueChanged slots with the values it wanted — which stopped meaning
         // anything for the rotation the moment those slots started reading the
@@ -260,6 +262,17 @@ void TransformEditor::refreshUi()
 	}
 }
 
+// THE NODE THIS PANEL MAY WRITE RIGHT NOW (owner, ledger §423;
+// services/editgate.h). Null while a script run owns the document, which makes
+// every slot below inert in exactly the way an empty selection already does —
+// and it is asked here rather than at the undo push because these rows write
+// the node live through a scrub and record the step only when it ends.
+QSharedPointer<iris::SceneNode> TransformEditor::editableNode() const
+{
+    if (editgate::refuse()) return QSharedPointer<iris::SceneNode>();
+    return sceneNode;
+}
+
 void TransformEditor::onScrubStarted()
 {
     if (!!sceneNode) {
@@ -300,7 +313,7 @@ void TransformEditor::onScrubFinished(bool cancelled)
 
 void TransformEditor::xPosChanged(double value)
 {
-    if (!!sceneNode) {
+    if (auto sceneNode = editableNode()) {
         auto pos = sceneNode->getLocalPos();
         pos.setX(value);
         sceneNode->setLocalPos(pos);
@@ -309,7 +322,7 @@ void TransformEditor::xPosChanged(double value)
 
 void TransformEditor::yPosChanged(double value)
 {
-    if (!!sceneNode) {
+    if (auto sceneNode = editableNode()) {
         auto pos = sceneNode->getLocalPos();
         pos.setY(value);
         sceneNode->setLocalPos(pos);
@@ -318,7 +331,7 @@ void TransformEditor::yPosChanged(double value)
 
 void TransformEditor::zPosChanged(double value)
 {
-    if (!!sceneNode) {
+    if (auto sceneNode = editableNode()) {
         auto pos = sceneNode->getLocalPos();
         pos.setZ(value);
         sceneNode->setLocalPos(pos);
@@ -351,6 +364,7 @@ void TransformEditor::zPosChanged(double value)
  */
 void TransformEditor::applyRotationFromFields()
 {
+    const QSharedPointer<iris::SceneNode> sceneNode = editableNode();
     if (!sceneNode) return;
     sceneNode->setLocalRot(iris::Quat::fromEulerAngles(
         iris::Vec3(float(xrot->value()), float(yrot->value()), float(zrot->value()))));
@@ -371,7 +385,7 @@ void TransformEditor::zRotChanged(double) { applyRotationFromFields(); }
  */
 void TransformEditor::xScaleChanged(double value)
 {
-    if (!!sceneNode) {
+    if (auto sceneNode = editableNode()) {
         auto scale = sceneNode->getLocalScale();
         scale.setX(value);
         sceneNode->setLocalScale(scale);
@@ -380,7 +394,7 @@ void TransformEditor::xScaleChanged(double value)
 
 void TransformEditor::yScaleChanged(double value)
 {
-    if (!!sceneNode) {
+    if (auto sceneNode = editableNode()) {
         auto scale = sceneNode->getLocalScale();
         scale.setY(value);
         sceneNode->setLocalScale(scale);
@@ -389,7 +403,7 @@ void TransformEditor::yScaleChanged(double value)
 
 void TransformEditor::zScaleChanged(double value)
 {
-    if (!!sceneNode) {
+    if (auto sceneNode = editableNode()) {
         auto scale = sceneNode->getLocalScale();
         scale.setZ(value);
         sceneNode->setLocalScale(scale);

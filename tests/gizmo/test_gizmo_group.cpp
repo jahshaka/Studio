@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
+#include "services/editgate.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "viewport/translationgizmo.h"
@@ -200,6 +201,51 @@ void testUndoShape()
     CHECK(single.count() == 1, "single-node drag: one command, no macro");
 }
 
+// A DRAG THAT HAPPENS WHILE A SCRIPT OWNS THE DOCUMENT (owner, ledger §423).
+//
+// The editor refuses hand edits for the length of a script run, and the
+// viewport refuses the drag before it starts (EngineSceneViewport's press
+// handler asks the gate, so the object never follows the mouse). This is the
+// second line of that defence and the one that can be asserted without a
+// window: a drag that somehow DID run — one that began before the run did —
+// must leave the node exactly where it was and record nothing, because the
+// gizmo rewinds to the drag's start transform before it pushes and the push is
+// refused at the undo spine.
+void testEditGateDuringARun()
+{
+    Fixture f;
+    QUndoStack stack;
+    UndoService undo(&stack);
+    StudioServices services;
+    services.undo = &undo;
+
+    const iris::Vec3 startPos = f.primary->getGlobalPosition();
+
+    editgate::runStarted();              // what ScriptEngine::evaluate does
+
+    TranslationGizmo lone;
+    lone.setServices(&services);
+    lone.setSelectedNode(f.primary);
+    lone.setInitialTransform();
+    f.primary->setGlobalPos(iris::Vec3(0, 5, 0));    // the drag, live
+    lone.createUndoAction();                          // the mouse comes up
+
+    f.primary->update(0.0f);
+    CHECK(stack.count() == 0, "edit gate: a drag during a script run records nothing");
+    CHECK(nearVec(f.primary->getGlobalPosition(), startPos),
+          "edit gate: ...and leaves the node exactly where it was");
+
+    editgate::runFinished();
+    lone.setInitialTransform();
+    f.primary->setGlobalPos(iris::Vec3(0, 5, 0));
+    lone.createUndoAction();
+    f.primary->update(0.0f);
+    CHECK(stack.count() == 1, "edit gate: after the run the same drag records its one step");
+    CHECK(nearVec(f.primary->getGlobalPosition(), iris::Vec3(0, 5, 0)),
+          "edit gate: ...and moves the node");
+    editgate::reset();
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -210,6 +256,7 @@ int main(int argc, char *argv[])
     testRotate();
     testScale();
     testUndoShape();
+    testEditGateDuringARun();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;
 }

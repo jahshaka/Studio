@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/core/logger.h"
 #include "services/jahlog.h"
 #include "services/sessionmarkers.h"
+#include "services/editgate.h"
 #include "services/framemonitor.h"
 #include "services/perfsampler.h"
 
@@ -339,7 +340,37 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// alone (hygiene lane, 2026-09-09).
 	scriptHost->beginUndoMacro = [this](const QString &text) { undoService->beginScriptMacro(text); };
 	scriptHost->endUndoMacro = [this]() { undoService->endScriptMacro(); };
+	// THE RUN'S ONE NOTICE (owner, ledger §423: "a 'script running' toast
+	// later would be cool"). While a script runs the editor is non-editable —
+	// the gate refuses every document write coming from the UI — and a refusal
+	// with nothing said reads as a frozen app. Raised by the gate the FIRST
+	// time an edit is refused in a run and not again until the next one: a
+	// drag is dozens of refused events and a toast per event is its own bug.
+	//
+	// Anchored to the WINDOW, not the viewport: an edit can be refused from
+	// any page (a properties row, the hierarchy, the timeline), and the
+	// viewport anchor is where gesture feedback lives.
+	editgate::setNoticeHook([this]() {
+		if (!snapToast) snapToast = new Toast(this);
+		snapToast->setAnchor(Toast::Anchor::WindowBottom);
+		snapToast->showToast(tr("Script running"),
+		                     tr("The editor is read-only until the script finishes. "
+		                        "You can still look around, select and switch pages."));
+		// AND THE CONTROL SNAPS BACK (round 2, item 3). A refused row keeps the
+		// value the user dragged or typed while the document still holds the
+		// old one — two different numbers on screen, and nothing to correct
+		// them. Re-read the panel from the document so the row shows the truth
+		// while the toast is up saying why. Deferred (refreshFromDocument
+		// defers by itself; the transform rows do it here) because this is
+		// reached from inside a control's own signal handler.
+		refreshPropertiesFromDocument();
+	});
 	scriptEngine = new ScriptEngine(*scriptHost, this);
+	// ...AND AGAIN WHEN THE RUN ENDS, for the rows that were refused later in
+	// the run, after the one notice had already been raised.
+	connect(scriptEngine, &ScriptEngine::runningChanged, this, [this](bool running) {
+		if (!running) refreshPropertiesFromDocument();
+	});
 	// LIVE SCRIPT FEEDBACK, as the user left it (Preferences > Scripting,
 	// app.scriptPolicy). Live is the default: a person or an agent driving the
 	// editor should see it work.
@@ -4276,6 +4307,22 @@ QVariantMap MainWindow::sceneIssueBarState() const
     return out;
 }
 
+// THE PANEL RE-READS THE DOCUMENT (round 2, item 3). Used by the edit gate:
+// a row whose write was refused is still showing the refused value, and the
+// document is the only thing that knows better. Both halves are deferred —
+// refreshFromDocument defers its own rebuild (a blade rebuilt inside a
+// control's signal handler is the sky panel's crash), and the transform rows
+// are refreshed on the same turn for symmetry.
+void MainWindow::refreshPropertiesFromDocument()
+{
+    if (!sceneNodePropertiesWidget) return;
+    sceneNodePropertiesWidget->refreshFromDocument();
+    QPointer<MainWindow> self(this);
+    QTimer::singleShot(0, this, [self]() {
+        if (self && self->sceneNodePropertiesWidget) self->sceneNodePropertiesWidget->refreshTransform();
+    });
+}
+
 void MainWindow::showViewportToast(const QString &title, const QString &text)
 {
     if (!sceneView) return;
@@ -5271,6 +5318,11 @@ void MainWindow::destroyEngineViews()
 MainWindow::~MainWindow()
 {
     JAH_SHUTDOWN_STEP(ShutdownOrder::WindowBody, "~MainWindow body");
+
+    // The edit gate's notice captured this window (ledger §423). The gate
+    // outlives every window — it is process-wide — so the hook goes first,
+    // before anything here can raise it.
+    editgate::setNoticeHook({});
 
     // ORDER IS LOAD-BEARING. Undo commands owe the database work when they die
     // (DeleteSceneNodeCommand finalises the asset row once no undo can reach
