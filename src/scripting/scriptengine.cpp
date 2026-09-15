@@ -161,22 +161,6 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
 
     installApi();
 
-    // THE CONSOLE IS NOT THE AGENT (round-2 review item 5). A traced MCP run
-    // can spin the event loop (project.open does), and the user's console dock
-    // can run a script inside that window — pause the trace for the duration
-    // of a console run and restore whatever the state was.
-    struct TracePause
-    {
-        ApiRegistry &registry;
-        bool previous;
-        explicit TracePause(ApiRegistry &r, bool pause)
-            : registry(r), previous(r.tracePaused())
-        {
-            if (pause) registry.setTracePaused(true);
-        }
-        ~TracePause() { registry.setTracePaused(previous); }
-    } tracePause(mRegistry, fileName == QLatin1String("<console>"));
-
     QElapsedTimer scriptClock;
     scriptClock.start();
 

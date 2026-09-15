@@ -84,19 +84,19 @@ public:
     /// The verbs called since the last take, in call order, deduplicated with
     /// a count: "scene.addPrimitive x64". Clears the record.
     QStringList takeTrace();
-    /// Recorded by the shim; not for callers.
+    /// Recorded by the dispatcher; not for callers.
+    ///
+    /// THE CONSOLE CANNOT BE CHARGED TO THE AGENT ANY MORE, so nothing pauses
+    /// this. The trace is armed only around an MCP run_script, and a script run
+    /// started inside that window — by the console, by anything — is REFUSED
+    /// (ScriptEngine::evaluate, SCRIPTING_LIVE_SPEC): there is no longer a way
+    /// for a second run's verbs to reach this record. The pause pair that used
+    /// to guard it is deleted.
     void noteVerbCall(const QString &qualifiedName);
-    /// Stops/resumes recording without removing the shims. ScriptEngine pauses
-    /// it around a CONSOLE run: a traced MCP script that spins the event loop
-    /// (project.open does) lets the user's own console run interleave, and
-    /// those verbs are not the agent's.
-    void setTracePaused(bool paused) { mTracePaused = paused; }
-    bool tracePaused() const { return mTracePaused; }
 
 private:
     QVector<ApiModule *> mModules;
     bool mTracing = false;
-    bool mTracePaused = false;
     QVector<QPair<QString, int>> mTrace;   // qualified name -> calls, in first-call order
 };
 

@@ -41,7 +41,7 @@ ApiModule *ApiRegistry::module(const QString &jsName) const
 
 void ApiRegistry::noteVerbCall(const QString &qualifiedName)
 {
-    if (!mTracing || mTracePaused) return;
+    if (!mTracing) return;
     for (auto &entry : mTrace) {
         if (entry.first == qualifiedName) { ++entry.second; return; }
     }
