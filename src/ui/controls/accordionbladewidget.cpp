@@ -440,6 +440,14 @@ LabelWidget* AccordianBladeWidget::addLabel(const QString& title, const QString&
     return label;
 }
 
+void AccordianBladeWidget::setHeaderMuted(bool muted)
+{
+    if (headerMuted == muted) return;
+    headerMuted = muted;
+    ThemeRoles::setTone(ui->content_title,
+                        muted ? ThemeRoles::Tone::Muted : ThemeRoles::Tone::Normal);
+}
+
 void AccordianBladeWidget::collapse()
 {
 	ui->toggle->setIcon(QIcon(":/icons/right-chevron.svg"));

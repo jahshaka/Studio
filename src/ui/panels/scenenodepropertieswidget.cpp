@@ -502,12 +502,25 @@ void SceneNodePropertiesWidget::applyRowFilter()
         const PropertyRows::Result r = registry.apply(blade, terms, strongOnly);
         total.visible += r.visible;
         total.hidden  += r.hidden;
-        if (terms.isEmpty()) { blade->show(); continue; }
-        // A SECTION WHOSE ROWS ALL HID GOES WITH THEM; one with a match opens
-        // so the row that matched is on screen without a click.
+        auto *b = qobject_cast<AccordianBladeWidget *>(blade);
+        if (terms.isEmpty()) {
+            blade->show();
+            if (b) b->setHeaderMuted(false);
+            continue;
+        }
+        // A SECTION WITH A MATCH OPENS, so the row that matched is on screen
+        // without a click. A SECTION WITHOUT ONE KEEPS ITS HEADER, greyed and
+        // closed (PROPERTY_FILTER_SPEC D7a, the owner's pick): the column stays
+        // legible — the user can see WHERE it went thin, and that the Sky
+        // settings are still there and simply have nothing called "ssr" in
+        // them. Hiding the header instead makes a filtered column read as a
+        // panel that failed to load.
         const bool keep = r.anyVisible || r.titleMatch;
-        blade->setVisible(keep);
-        if (auto *b = qobject_cast<AccordianBladeWidget *>(blade)) { if (keep) b->expand(); }
+        blade->show();
+        if (b) {
+            b->setHeaderMuted(!keep);
+            keep ? b->expand() : b->collapse();
+        }
     }
     counts[t] = total;
 }

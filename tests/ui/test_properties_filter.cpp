@@ -290,8 +290,18 @@ int main(int argc, char **argv)
           "properties_filter: \"ssr\" finds Screen-Space Reflections (by its key)");
     CHECK(!rowShown(panel, QStringLiteral("Sky Type")),
           "properties_filter: ...and the Sky rows are gone");
-    CHECK(!sectionShown(panel, QStringLiteral("Sky")),
-          "properties_filter: a section whose rows all hide goes with them");
+    // D7a (the owner's pick): the header STAYS — greyed and closed — so the
+    // column says where its settings are instead of reading as a broken panel.
+    {
+        AccordianBladeWidget *sky = nullptr;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->panelTitle() == QStringLiteral("Sky")) sky = b;
+        CHECK(sky && sky->isVisibleTo(panel) && !sky->isExpanded() && sky->isHeaderMuted(),
+              "properties_filter: a section with no match keeps its header, greyed and "
+              "collapsed (D7a)");
+        CHECK(!rowShown(panel, QStringLiteral("Sky Color")),
+              "properties_filter: ...and none of its rows is on screen");
+    }
     CHECK(shownRowCount(panel) < allRows / 2,
           QStringLiteral("properties_filter: the column is a fraction of itself (%1 of %2 rows)")
               .arg(shownRowCount(panel)).arg(allRows).toUtf8().constData());
@@ -348,6 +358,12 @@ int main(int argc, char **argv)
           "properties_filter: ...and every section back to the expand state it had");
     CHECK(sectionShown(panel, QStringLiteral("Sky")),
           "properties_filter: ...and every section back on screen");
+    {
+        bool anyMuted = false;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->isVisibleTo(panel) && b->isHeaderMuted()) anyMuted = true;
+        CHECK(!anyMuted, "properties_filter: ...and no header is left greyed");
+    }
 
     // ---- 6. THE TWO-INPUT VISIBILITY LAW -----------------------------------
     // A row the PANEL hides (a spot row on a point light, the AA driver
@@ -421,7 +437,7 @@ int main(int argc, char **argv)
     CHECK(box->text() == QStringLiteral("ssr"),
           "properties_filter: the box shows the tab's own text on a switch");
     CHECK(rowShown(panel, QStringLiteral("Screen-Space Reflections"))
-              && !sectionShown(panel, QStringLiteral("Sky")),
+              && !rowShown(panel, QStringLiteral("Sky Type")),
           "properties_filter: ...and the World tab is filtered by ITS text");
     panel->setPropertiesTab(Tab::Selection);
     turn();
@@ -604,9 +620,13 @@ int main(int argc, char **argv)
     const int worldRowsNow = shownRowCount(panel);
     panel->setPropertiesFilter(Tab::World, QStringLiteral("zzzznothing"));
     turn();
-    CHECK(shownRowCount(panel) == 0 && visibleSections(panel).isEmpty(),
-          "properties_filter: a text nothing matches empties the column (and says so in "
-          "the counts), rather than showing everything");
+    CHECK(shownRowCount(panel) == 0,
+          "properties_filter: a text nothing matches leaves no ROW on screen (and says so "
+          "in the counts), rather than showing everything");
+    CHECK(visibleSections(panel).size() == 8,
+          QStringLiteral("properties_filter: ...while every section header stays, greyed "
+                         "and closed (%1 of 8)").arg(visibleSections(panel).size())
+              .toUtf8().constData());
     panel->setPropertiesFilter(Tab::World, QString());
     turn();
     CHECK(shownRowCount(panel) == worldRowsNow,

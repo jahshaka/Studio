@@ -109,6 +109,12 @@ public:
     void expand();
     /// Whether the content pane is open (the filter's expand snapshot).
     bool isExpanded() const;
+    /// GREYS THE HEADER — the property filter's "nothing in here matches"
+    /// (PROPERTY_FILTER_SPEC D7a, the owner's pick): the section keeps its
+    /// header so the user can see WHERE the column went thin, muted and closed
+    /// rather than gone. A palette tone, never a sheet; a no-op under Classic.
+    void setHeaderMuted(bool muted);
+    bool isHeaderMuted() const { return headerMuted; }
 
     /// Retires every row in the content pane. `layout` is IGNORED and has
     /// always been (the pane is the only thing this clears); it stays only
@@ -167,6 +173,8 @@ private:
     /// a rebuild driven from a row's slot mid-clear) must not consume a
     /// generation of its own.
     int mClearDepth = 0;
+    /// See setHeaderMuted.
+    bool headerMuted = false;
 };
 
 #endif // ACCORDIANBLADEWIDGET_H
