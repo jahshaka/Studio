@@ -23,7 +23,8 @@ For more information see the LICENSE file
 // scrubs on a horizontal click-drag and only enters text edit on a clean click.
 // Everything else in the panels used Widget3D/HFloatSliderWidget, which are
 // plain QDoubleSpinBoxes at their natural width with no label at all
-// (AccordianBladeWidget::addVector3Widget literally ignores its name argument).
+// (the blade's old addVector3Widget literally ignored its name argument, which
+// is why it is gone).
 //
 // These two are that shape, extracted so any panel can have it. They are
 // deliberately NOT a change to Widget3D: that class is the materials module's

@@ -58,19 +58,19 @@ public:
     TextInputWidget*        addTextInput(const QString&);
     LabelWidget*            addLabel(const QString&, const QString&);
     FilePickerWidget*       addFilePicker(const QString&);
-	Widget2D*				addVector2Widget(const QString&, float xValue, float yValue);
-	Widget3D*				addVector3Widget(const QString&, float xValue, float yValue, float zValue);
 	/// The COMPACT, SCRUBBABLE rows (ui/controls/dragvaluewidgets.h) — the
-	/// transform editor's shape, for panels that want a labelled number rather
-	/// than the unlabelled full-width spinboxes addVector3Widget produces (it
-	/// ignores its name argument entirely). New panel rows should use these.
+	/// transform editor's shape, and the ONLY vector rows a blade offers now:
+	/// the three addVector*Widget helpers that stood beside them built
+	/// unlabelled full-width spin boxes and ignored their name argument
+	/// outright, which is a row the property filter could never find by name.
+	/// They had no call sites and are gone (lane PROPERTY-FILTER-1); the
+	/// material list keeps its own, whose rows carry a titled holder.
 	DragFloatWidget*		addDragFloat(const QString &title, double value,
 	                                     double min, double max,
 	                                     double perPixelStep = 0.02, int decimals = 3);
 	DragVector3Widget*		addDragVector3(const QString &title, const iris::Vec3 &value,
 	                                       double min = -100000.0, double max = 100000.0,
 	                                       double perPixelStep = 0.02, int decimals = 3);
-	Widget4D*				addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
 	CubeMapWidget*			addCubeMapWidget(QStringList list);
 	CubeMapWidget*			addCubeMapWidget();
 	CubeMapWidget*			addCubeMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back);

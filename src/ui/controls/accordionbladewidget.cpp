@@ -287,24 +287,6 @@ FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
     return filePicker;
 }
 
-Widget2D * AccordianBladeWidget::addVector2Widget(const QString &, float xValue, float yValue)
-{
-	auto widget = new Widget2D;
-	widget->setValues(xValue, yValue);
-	minimum_height += widget->height() + stretch;
-	addRow(widget);
-	return widget;
-}
-
-Widget3D * AccordianBladeWidget::addVector3Widget(const QString &, float xValue, float yValue, float zValue)
-{
-	auto widget = new Widget3D;
-	widget->setValues(xValue, yValue, zValue);
-	minimum_height += widget->height() + stretch;
-	addRow(widget);
-	return widget;
-}
-
 DragFloatWidget *AccordianBladeWidget::addDragFloat(const QString &title, double value,
                                                    double min, double max,
                                                    double perPixelStep, int decimals)
@@ -328,15 +310,6 @@ DragVector3Widget *AccordianBladeWidget::addDragVector3(const QString &title, co
 	widget->setRange(min, max);
 	widget->setPerPixelStep(perPixelStep);
 	widget->setValues(value);
-	minimum_height += widget->height() + stretch;
-	addRow(widget);
-	return widget;
-}
-
-Widget4D * AccordianBladeWidget::addVector4Widget(const QString &, float xValue, float yValue, float zValue, float wValue)
-{
-	auto widget = new Widget4D;
-	widget->setValues(xValue, yValue, zValue, wValue);
 	minimum_height += widget->height() + stretch;
 	addRow(widget);
 	return widget;
