@@ -86,10 +86,7 @@ namespace Contants
 	QString ASSET_EXT			= "jaf";
     
 
-    QString PLAYER_CHECK_URL = "http://api.dev.jahfx.com/applications/4bc5d09b-2efc-4f0e-bcdb-f6f98f8bd93c/update/";
 	QString UPDATE_CHECK_URL = "http://api.dev.jahfx.com/applications/5d7c5a71-f8ec-4c73-a2dc-de7b99ed824f/update/";
-
-	//QString UPDATE_CHECK_URL = "http://api.dev.jahfx.com/applications/5d7c5a71-f8ec-4c73-a2dc-de7b99ed824f/update/";
 
 
     int FPS_90                  = 11;	// milliseconds
