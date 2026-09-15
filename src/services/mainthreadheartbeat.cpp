@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "services/mainthreadheartbeat.h"
 
 #include "services/loadtimeline.h"
+#include "services/uistep.h"
 
 #include <QDebug>
 #include <QElapsedTimer>
@@ -71,9 +72,13 @@ void start(int intervalMs)
             // ledger's open stage (when an open is being measured) is usually
             // the answer, and "which stage" is the whole diagnostic.
             if (gap >= 400.0) {
+                // The open's stage when an open is running, else the UI STEP
+                // (UiStep, FSYNC-1) — the archive and the shader-cache save are
+                // the two blocks that used to print "-" and cost a lane each.
+                QString where = LoadTimeline::currentStage();
+                if (where.isEmpty()) where = UiStep::current();
                 qWarning("[heartbeat] UI thread blocked %.0f ms (stage: %s)", gap,
-                         LoadTimeline::currentStage().isEmpty()
-                             ? "-" : qUtf8Printable(LoadTimeline::currentStage()));
+                         where.isEmpty() ? "-" : qUtf8Printable(where));
             }
             ++q.ticks;
             q.sinceTick.restart();

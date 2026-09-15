@@ -128,6 +128,152 @@ bool storeObject(const QString &srcPath, const QString &root,
     return FileWrite::atomicRename(tmpPath, dstPath, errorOut);
 }
 
+// --- The two-phase ingest (FSYNC-1; contract in the header) ---------------
+
+bool stage(const QString &root, Staged &file)
+{
+    const QFileInfo info(file.srcPath);
+    if (!info.exists() || !info.isFile()) {
+        file.error = QStringLiteral("no such file %1").arg(file.srcPath);
+        return false;
+    }
+    file.size = info.size();
+    file.ext  = info.suffix().toLower();
+    file.oid  = file.knownOid.isEmpty() ? hashFile(file.srcPath) : file.knownOid;
+    if (file.oid.isEmpty()) {
+        file.error = QStringLiteral("cannot hash %1").arg(file.srcPath);
+        return false;
+    }
+
+    // THE DEDUP, WITHOUT THE DATABASE. The store's extension for a known oid
+    // lives in the files table, which this thread may not touch — but the
+    // object's DIRECTORY depends only on the oid (objects/<ab>/<oid>.<ext>), so
+    // "is this content already here, under whatever name" is one directory
+    // listing. A match of the right size means there is nothing to copy; the
+    // commit resolves the real extension and confirms it.
+    const QString dir = QFileInfo(AssetStorePaths::objectPathIn(root, file.oid, file.ext)).absolutePath();
+    const auto existing = QDir(dir).entryInfoList({ file.oid.toLower() + QStringLiteral(".*"),
+                                                    file.oid.toLower() }, QDir::Files);
+    for (const QFileInfo &candidate : existing) {
+        if (candidate.size() != file.size) continue;
+        file.present = true;
+        return true;
+    }
+
+    if (!QDir().mkpath(dir)) {
+        file.error = QStringLiteral("cannot create %1").arg(dir);
+        return false;
+    }
+    // The temp is named for the OID, not for the final path: the extension is
+    // the store's to decide (commitStaged), and the rename that publishes this
+    // must stay inside one directory.
+    const QString tmpPath = FileWrite::stagingTempPath(dir + QLatin1Char('/') + file.oid.toLower());
+    QFile::remove(tmpPath);
+#ifdef Q_OS_UNIX
+    // Hardlink first: same filesystem = ~0 extra bytes, instant, and nothing to
+    // flush (the bytes are the source's). A copy is the fallback across devices
+    // (EXDEV) — which is the archive import's normal case, since the archive is
+    // extracted into a QTemporaryDir and /tmp is a different filesystem.
+    file.copied = ::link(QFile::encodeName(file.srcPath).constData(),
+                         QFile::encodeName(tmpPath).constData()) != 0;
+#else
+    file.copied = true;
+#endif
+    if (file.copied && !QFile::copy(file.srcPath, tmpPath)) {
+        QFile::remove(tmpPath);
+        file.error = QStringLiteral("copy failed: %1 -> %2").arg(file.srcPath, tmpPath);
+        return false;
+    }
+    file.tmpPath = tmpPath;
+    return true;
+}
+
+void flushStaged(QVector<Staged> &files)
+{
+    // The batch's ONE waiting point. Every copy, then nothing else: a hardlink
+    // has no bytes of its own, and the directory entry is deliberately not
+    // flushed (losing a rename loses an object, which is a re-ingest — losing
+    // an object's CONTENT is a corruption, which is what this prevents).
+    for (Staged &file : files)
+        if (file.copied && !file.tmpPath.isEmpty()) FileWrite::fsyncPath(file.tmpPath);
+}
+
+void discardStaged(QVector<Staged> &files)
+{
+    for (Staged &file : files) {
+        if (!file.tmpPath.isEmpty()) QFile::remove(file.tmpPath);
+        file.tmpPath.clear();
+    }
+}
+
+bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
+                  Staged &file, QString *errorOut)
+{
+    if (file.oid.isEmpty()) {
+        if (errorOut) *errorOut = file.error.isEmpty()
+                                      ? QStringLiteral("nothing staged for %1").arg(file.srcPath)
+                                      : file.error;
+        return false;
+    }
+
+    // Known content keeps its recorded extension (jpeg/jpg aliasing — one
+    // object per oid, never a sibling copy under another name). This is the one
+    // question the staging thread could not answer.
+    QString ext = file.ext;
+    {
+        QSqlQuery known(conn);
+        known.prepare("SELECT ext FROM files WHERE oid = ?");
+        known.addBindValue(file.oid);
+        if (known.exec() && known.next()) ext = known.value(0).toString();
+    }
+
+    const QString dstPath = AssetStorePaths::objectPathIn(root, file.oid, ext);
+    const QFileInfo dst(dstPath);
+    if (dst.exists() && dst.size() == file.size) {
+        // Already stored under the name the store uses. Whatever we staged (if
+        // anything) is redundant.
+        if (!file.tmpPath.isEmpty()) { QFile::remove(file.tmpPath); file.tmpPath.clear(); }
+    } else if (!file.tmpPath.isEmpty()) {
+        if (dst.exists())
+            iris::Logger::getSingleton()->warn(
+                QStringLiteral("asset store: replacing a %1-byte object that claims %2 bytes of "
+                               "content (%3) — a torn write from an interrupted run")
+                    .arg(dst.size()).arg(file.size).arg(dstPath));
+        // The bytes are already durable (flushStaged); this is the publish.
+        if (!FileWrite::atomicRename(file.tmpPath, dstPath, errorOut)) return false;
+        file.tmpPath.clear();
+    } else {
+        // The staging thread found this content under a DIFFERENT extension
+        // than the store records, or the object vanished between the two
+        // phases. Rare, and the repair is the synchronous store — on this
+        // thread, because correctness beats latency in a case that means the
+        // store disagrees with itself.
+        if (!storeObject(file.srcPath, root, file.oid, ext, errorOut)) return false;
+    }
+
+    QSqlQuery insertFile(conn);
+    insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
+    insertFile.addBindValue(file.oid);
+    insertFile.addBindValue(file.size);
+    insertFile.addBindValue(ext);
+    if (!insertFile.exec()) {
+        if (errorOut) *errorOut = QStringLiteral("files row refused: %1").arg(insertFile.lastError().text());
+        return false;
+    }
+
+    QSqlQuery insertLink(conn);
+    insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
+    insertLink.addBindValue(guid);
+    insertLink.addBindValue(file.role);
+    insertLink.addBindValue(file.oid);
+    insertLink.addBindValue(file.name.isEmpty() ? QFileInfo(file.srcPath).fileName() : file.name);
+    if (!insertLink.exec()) {
+        if (errorOut) *errorOut = QStringLiteral("asset_files row refused: %1").arg(insertLink.lastError().text());
+        return false;
+    }
+    return true;
+}
+
 void ensureCasSchema(QSqlDatabase conn)
 {
     QSqlQuery(CasSchema::kFilesTable, conn);

@@ -8,6 +8,8 @@
 #include "services/jahlog.h"
 #include "data/constants.h"
 #include "services/loadtimeline.h"
+#include "services/projectarchiver.h"
+#include "services/uistep.h"
 
 #include <QTimer>
 
@@ -490,9 +492,21 @@ void EngineHost::startShaderCacheWatchdog()
         // ledger already knows when an open is in flight; deferring costs a
         // second.
         if (LoadTimeline::isRunning()) { mQuietTicks = 0; return; }
+        // NOR WHILE AN ARCHIVE IS IN FLIGHT (FSYNC-1, the belt). The write
+        // itself is off this thread now, but SERIALIZING is not — it walks
+        // Ogre's Hlms caches and serializes a megabyte and more in memory —
+        // and an export or import is precisely a stretch where the user is
+        // watching a progress bar this thread has to keep drawing. An archive
+        // is seconds long and the save has waited minutes already; it can wait
+        // for the bar. (An open gets the same courtesy above; nothing else on
+        // this thread runs long enough to need it.)
+        if (ProjectArchiver::anyRunning()) { mQuietTicks = 0; return; }
         if (total != mShadersSeen) { mShadersSeen = total; mQuietTicks = 0; return; }
         if (mShadersSeen == mShadersSaved) return;         // nothing new since the last save
         if (++mQuietTicks < 3) return;                     // still inside the burst
+        // Named for the two probes: what is left here is the SERIALIZATION, the
+        // file write having moved to the engine's writer thread.
+        UiStep::Scope step("shader cache: serializing the save");
         if (mEngine->saveShaderCache()) mShadersSaved = mShadersSeen;
         mQuietTicks = 0;
     });
@@ -517,7 +531,23 @@ void EngineHost::shutdown()
     // saves too, but a viewport that still holds the shared_ptr can defer that
     // destructor past Qt's own teardown — this is the point we can prove runs,
     // with the render loop stopped a line below and nothing compiling.
-    if (mEngine) mEngine->saveShaderCache();
+    if (mEngine) {
+        UiStep::Scope step("shader cache: the clean-quit save");
+        // FLUSH FIRST (FSYNC-1's second read): a save that meets a write in
+        // flight SKIPS, and at quit a skip would leave everything compiled
+        // since that write to the engine's destructor — the path this call
+        // exists to stop depending on. The first flush is a no-op when nothing
+        // is in flight.
+        mEngine->flushShaderCache(20000);
+        mEngine->saveShaderCache();
+        // AND WE WAIT FOR IT, HERE (FSYNC-1). The write is off-thread now, and
+        // the engine's destructor joins the writer — but the destructor runs
+        // when the last viewport drops its shared_ptr, which is exactly the
+        // ordering this call exists to stop depending on. Waiting here is the
+        // point we can prove runs, and a quit is the one moment where the wait
+        // costs the user nothing.
+        mEngine->flushShaderCache(20000);
+    }
     // THE TEXTURE CACHE, beside it and for the same reason
     // (THREADING_ADOPTION_SPEC.md P2 item 6): resolution/format/pool per texture
     // path, plus our channel sidecar, so the next launch can reserve the right

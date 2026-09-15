@@ -22,6 +22,7 @@ For more information see the LICENSE file
 
 #include <QSqlDatabase>
 #include <QString>
+#include <QVector>
 
 namespace AssetCas
 {
@@ -44,6 +45,76 @@ bool storeObject(const QString &srcPath, const QString &root,
 
 /// Ensure the CAS tables/triggers/user_version exist on this connection.
 void ensureCasSchema(QSqlDatabase conn);
+
+// --- The two-phase ingest (FSYNC-1) ---------------------------------------
+//
+// storeObject above does the whole thing on one thread: hash, copy, FSYNC,
+// rename. The fsync is the problem. It is what makes the content-addressed
+// name a true claim about the bytes under it — a power cut must not leave a
+// correctly named empty file — and it waits behind every other dirty page the
+// filesystem's journal is holding, which on a project import meant 547-995 ms
+// of frozen window, once per object, on the UI thread (ledger 474).
+//
+// It cannot simply move: the DATABASE cannot. Every Database method rides the
+// implicit default QSqlDatabase connection, which belongs to the thread that
+// opened it, and ProjectArchiver's header says in so many words that there is
+// no per-thread connection here and there must not be one.
+//
+// So the ingest splits along the line that already exists — bytes on one side,
+// rows on the other:
+//
+//   stage()        any thread, NO DATABASE. Hash the source, and put its bytes
+//                  in the destination's own directory under a temp name. No
+//                  object is published and no row is written, so an abandoned
+//                  stage is a file to delete and nothing else.
+//   flushStaged()  any thread. ONE PASS over a batch: every copy this batch
+//                  made is flushed to the device. After it returns, every
+//                  staged byte is durable.
+//   commitStaged() the DB thread. Rename the staged temp over its final name
+//                  (a metadata operation: microseconds, no flush) and write the
+//                  files/asset_files rows.
+//
+// THE DURABILITY CONTRACT IS THE SAME ONE, and the ORDER is what keeps it: a
+// file at its content-addressed name still never exists before its bytes are
+// durable, because the flush happens before any rename in the batch, and the
+// rows that reference an object are still committed after the object exists.
+// The only thing that moved is which thread waits for the device.
+
+/// One file on its way into the store.
+struct Staged
+{
+    // --- in ---
+    QString srcPath;      ///< the bytes to ingest (an extracted archive, a staging dir)
+    QString role;         ///< asset_files.role ("source", "texture", ...)
+    QString name;         ///< asset_files.name; empty = the source's file name
+    QString knownOid;     ///< a precomputed sha256, when the caller has one
+
+    // --- out ---
+    QString oid;          ///< sha256 of the bytes actually read
+    QString ext;          ///< the SOURCE's extension (the store may know another)
+    QString tmpPath;      ///< the staged temp; empty when nothing was staged
+    qint64  size = 0;
+    bool    copied = false;   ///< bytes were copied (a hardlink needs no flush)
+    bool    present = false;  ///< this content is already in the store
+    QString error;
+};
+
+/// Hash `file.srcPath` and stage its bytes beside their destination. No
+/// database, no Qt event loop, safe on a worker. False leaves `file.error` set.
+/// Staging is SKIPPED (`present`) when the store already holds this content.
+bool stage(const QString &root, Staged &file);
+
+/// Flush every copy in `files` to the device — one pass, and the only place in
+/// the two-phase ingest that waits for hardware. Call it before the first
+/// commitStaged of the batch.
+void flushStaged(QVector<Staged> &files);
+
+/// Publish `file` (rename) and record its rows against `guid`. The DB thread.
+bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
+                  Staged &file, QString *errorOut);
+
+/// Delete whatever `files` staged — a cancelled or failed batch. Any thread.
+void discardStaged(QVector<Staged> &files);
 
 /// CAS-FIRST ingest of ONE file (phase 3 — the import pipeline's store
 /// primitive): hash srcPath (wherever it lives — the import source, a

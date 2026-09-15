@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include "data/settingsmanager.h"
 #include "services/loadtimeline.h"
+#include "services/uistep.h"
 #include "services/mainthreadheartbeat.h"
 
 #include <QCoreApplication>
@@ -123,7 +124,9 @@ void watchdogLoop()
 
         // The human line comes from HERE, not the handler: this is an ordinary
         // thread and may allocate. The handler only writes the stack.
-        const QString stage = LoadTimeline::currentStage();
+        // Same rule as the heartbeat: the open's stage, else the UI step.
+        QString stage = LoadTimeline::currentStage();
+        if (stage.isEmpty()) stage = UiStep::current();
         qWarning("[watchdog] UI thread stalled %lld ms (stage: %s) — signalling it "
                  "for a backtrace", static_cast<long long>(stallMs),
                  stage.isEmpty() ? "-" : qUtf8Printable(stage));
