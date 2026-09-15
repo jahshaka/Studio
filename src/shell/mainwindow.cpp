@@ -304,16 +304,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		if (!engineHost.isRunning() || engineHost.engine()->isHeadless()) return false;
 		return sceneView->isInitialized();
 	};
-	// THE RUN'S SCOPE — the undo guard AND the database's gesture batch
-	// (CLOSE-2 item 1). A script run is one undo macro, which is the gesture
-	// boundary the library writes want too: without this, every
-	// scene.addPrimitive in a loop autocommitted its asset row on its own
-	// (journal, write, fdatasync, unlink — 300 primitives paid it 300+ times,
-	// on the UI thread). One scope, so the pair can never drift apart; the
-	// project verbs close and reopen it together at a project boundary
-	// (ScriptHost::endRunUndoMacro).
+	// THE RUN'S DATABASE SCOPE (CLOSE-2 item 1). A script run is one undo
+	// macro, which is the gesture boundary the library writes want too:
+	// without this, every scene.addPrimitive in a loop autocommitted its asset
+	// row on its own (journal, write, fdatasync, unlink — 300 primitives paid
+	// it 300+ times, on the UI thread). The undo half of this hook is gone
+	// (round 2, C1): UndoService answers "is a run in progress?" from the run
+	// macro it already arms, rather than from a second flag set here. The
+	// project verbs close and reopen the scope at a project boundary
+	// (ScriptHost::endRunUndoMacro), which is what keeps a transaction from
+	// spanning two projects.
 	scriptHost->macroOpenChanged = [this](bool open) {
-		undoService->setScriptMacroOpen(open);
 		if (!db) return;
 		if (open) db->beginBatch();
 		else      db->endBatch();
