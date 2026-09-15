@@ -117,13 +117,49 @@ static const double kHeartbeatMs = 100.0;
 static const int kOpBudgetMs = 300000;
 static const int kExitBudgetMs = 30000;
 
-struct JobStats { bool done = false; int polls = 0, ticks = 0; double maxGap = 0.0; QJsonObject last; };
+/// THE APP'S OWN OUTPUT, kept. spawn() merges the child's stdout and stderr
+/// and nothing read them after the boot token, so the app's
+/// `[heartbeat] UI thread blocked N ms (stage: ...)` lines — and the
+/// watchdog's backtrace of the blocked thread past two seconds — were thrown
+/// away on every red this suite ever had. Drained on every poll below,
+/// printed by printUiThreadEvidence when a gap misses its budget.
+static QProcess *gApp = nullptr;
+static QByteArray gAppLog;
+static void drainApp() { if (gApp) gAppLog += gApp->readAll(); }
+
+/// How many shaders the ENGINE has compiled in this process so far
+/// (app.shaderCache().compiledThisRun).
+///
+/// Read on both sides of every measured window, because Ogre builds a shader
+/// variant per material/pass permutation INSIDE renderOneFrame: a compile
+/// inside a measured window is a UI-thread block this suite's subject does not
+/// own, and this delta is the only way to tell one from the other. It is
+/// PRINTED, never asserted on, and it is not an excuse — the gap is still
+/// asserted whatever the delta says. What it buys is that the next red carries
+/// its own verdict.
+///
+/// Measured on this box 2026-09-15 (lane RESPONSIVE-3), quiet and under 40
+/// spinners, warm and with the binary's pages evicted: an avatar import
+/// compiles ZERO (91 -> 91 every time, and a throwaway warm-up import changes
+/// neither the count nor the gap). archive.responsive's import is the opposite
+/// case: the sample's own permutations compile inside its window and block the
+/// UI thread ~2.3 s doing it.
+static int shadersCompiled(McpClient &mcp)
+{
+    return mcp.runScript(QStringLiteral("app.shaderCache().compiledThisRun"))
+        .value("result").toInt();
+}
+
+struct JobStats { bool done = false; int polls = 0, ticks = 0; double maxGap = 0.0;
+                  int logMark = 0; QJsonObject last; };
 
 /// Poll avatar.progress() until the module's background job is idle, and
 /// report what the UI thread did while it ran.
-static JobStats waitForJob(McpClient &mcp, const char *label)
+static JobStats waitForJob(McpClient &mcp, const char *label, int compiledBefore = -1)
 {
     JobStats r;
+    drainApp();
+    r.logMark = gAppLog.size();   // the window's start in the app's own output
     QElapsedTimer timer;
     timer.start();
     while (timer.elapsed() < kOpBudgetMs) {
@@ -131,6 +167,7 @@ static JobStats waitForJob(McpClient &mcp, const char *label)
                                          .value("result").toObject();
         ++r.polls;
         r.last = progress;
+        drainApp();
         if (!progress.value("running").toBool()) { r.done = true; break; }
         QThread::msleep(50);
     }
@@ -141,6 +178,12 @@ static JobStats waitForJob(McpClient &mcp, const char *label)
     std::printf("info: [%s] finished=%d after %lld ms, %d polls; ticks=%d maxGapMs=%.1f\n",
                 label, int(r.done), static_cast<long long>(timer.elapsed()), r.polls,
                 r.ticks, r.maxGap);
+    if (compiledBefore >= 0) {
+        const int compiledAfter = shadersCompiled(mcp);
+        std::printf("info: [%s] the ENGINE compiled %d shader(s) inside this window "
+                    "(%d -> %d) — see shadersCompiled()\n",
+                    label, compiledAfter - compiledBefore, compiledBefore, compiledAfter);
+    }
     return r;
 }
 
@@ -174,6 +217,53 @@ static double budgetFor(double controlMs, const char *label)
     return budget;
 }
 
+/// THE WARM-UP STOPS WHEN THE APP HAS SETTLED, NOT WHEN A CLOCK SAYS SO.
+///
+/// The first frames of a PROCESS pay the engine's shader/PSO compile storm
+/// inside renderOneFrame — captured, not guessed: the watchdog's backtrace of
+/// the blocked UI thread during a boot stall on this box reads
+/// `glslang ... yyparse` in one sample and `libnvidia-glcore.so.595.84` in the
+/// next (lane RESPONSIVE-3, spikes/responsive-3/). It is UI-thread work this
+/// lane neither owns nor can slice, and this suite wipes its data root — which
+/// IS the engine's shader + pipeline cache — at the top of every run, so EVERY
+/// run pays it in full (`pipelineCacheLoaded:false, reason:"absent"`, 91
+/// shaders compiled, every time).
+///
+/// A FIXED two-second warm-up is therefore a guess about how long that takes,
+/// and the guess is wrong exactly when the box is busy: the storm does not
+/// scale with the clock, it scales with the CPU the app gets. When it outlives
+/// the window its TAIL lands in the first measured window and is read as the
+/// subject's block. So the warm-up repeats its control until the app stops
+/// getting better at it:
+///
+///   * stop when the round compiled NOTHING and either the round is already at
+///     the probe period's floor (a quiet box: one round, exactly what this
+///     suite did before — measured 111-121 ms here) or the round is no better
+///     than the one before it by more than a fifth (a busy box: the storm is
+///     over and what remains is the weather, which more rounds cannot buy);
+///   * at most kWarmUpRounds, because a control costs 2 s and a warm-up that
+///     never stops is a hang.
+static const int kWarmUpRounds = 4;
+static void warmUpUntilSettled(McpClient &mcp)
+{
+    double previous = 0.0;
+    for (int round = 1; round <= kWarmUpRounds; ++round) {
+        const int before = shadersCompiled(mcp);
+        const double gap = measureControlGap(mcp, "boot");
+        const int compiled = shadersCompiled(mcp) - before;
+        const bool atFloor = gap <= 1.5 * kHeartbeatMs;
+        const bool noBetter = round > 1 && gap >= 0.8 * previous;
+        const bool settled = compiled == 0 && (atFloor || noBetter);
+        std::printf("info: [boot] warm-up round %d: worst gap %.1f ms, %d shader(s) "
+                    "compiled in it%s\n", round, gap, compiled, settled ? " — settled" : "");
+        if (settled) return;
+        previous = gap;
+    }
+    std::printf("info: [boot] warm-up gave up after %d rounds — the engine was still "
+                "compiling, or the box never settled; the numbers below carry that\n",
+                kWarmUpRounds);
+}
+
 /// Was this run's worst gap inside this run's budget? The control is measured
 /// RIGHT AFTER the job it judges — same second, same weather — and on the way
 /// to a red the CONTROL is re-rolled once.
@@ -186,14 +276,20 @@ static double budgetFor(double controlMs, const char *label)
 /// three consecutive runs of one build), and the ceiling means a second roll can
 /// never rescue a regression: work back on this thread is a multi-second block
 /// at any control value.
-static bool withinControlBudget(McpClient &mcp, double maxGap, const char *label)
+static bool withinControlBudget(McpClient &mcp, double maxGap, const char *label,
+                                int logMark = 0)
 {
     const double control = measureControlGap(mcp, label);
     if (maxGap > 0.0 && maxGap < budgetFor(control, label)) return true;
     std::printf("info: [%s] the worst gap (%.1f ms) exceeded this run's budget — "
                 "re-rolling the control once\n", label, maxGap);
     const double control2 = measureControlGap(mcp, label);
-    return maxGap > 0.0 && maxGap < budgetFor(qMax(control, control2), label);
+    const bool ok = maxGap > 0.0 && maxGap < budgetFor(qMax(control, control2), label);
+    if (!ok) {
+        drainApp();
+        printUiThreadEvidence(gAppLog, label, logMark);
+    }
+    return ok;
 }
 
 static QStringList clipNames(McpClient &mcp, const QString &expression)
@@ -238,6 +334,9 @@ int main(int argc, char **argv)
     const quint16 port = freePort();
     CHECK(spawn(jahshaka, port, &token, QStringList(), 180000), "app booted and printed the MCP token");
     if (token.isEmpty()) return 1;
+    // From here the app's own output is KEPT (see drainApp): a red prints the
+    // app's account of its UI thread instead of discarding it with the pipe.
+    gApp = &jahshaka;
 
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
@@ -258,9 +357,12 @@ int main(int argc, char **argv)
     // boot control there). This suite wipes its data root — which IS the
     // engine's shader + pipeline cache — at the top of every run, so EVERY run
     // is cold and pays the storm; the only question is whether a measurement
-    // is taken inside it. Pay it here, before anything is measured. Printed,
-    // never asserted: open.responsive owns the cold case.
-    measureControlGap(mcp, "boot");
+    // is taken inside it. Pay it here, before anything is measured, and pay it
+    // UNTIL IT IS PAID rather than for two seconds (see warmUpUntilSettled: a
+    // fixed window is a guess about a cost that scales with the CPU the app
+    // gets, and its tail lands in the first measured window when the guess is
+    // short). Printed, never asserted: open.responsive owns the cold case.
+    warmUpUntilSettled(mcp);
 
     // ---- 1. the ASYNC IMPORT, with the UI thread under measurement --------
     // (The budget is no longer computed here: the control that sets it is
@@ -268,6 +370,7 @@ int main(int argc, char **argv)
     // kControlFactor.)
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
     mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
+    const int compiledBeforeImport = shadersCompiled(mcp);
     QElapsedTimer verbTimer;
     verbTimer.start();
     const QJsonObject started =
@@ -279,11 +382,11 @@ int main(int argc, char **argv)
     CHECK(started.value("started").toBool(), "avatar.importAvatar({async:true}) started a job");
     CHECK(verbMs < 1000, "... and RETURNED immediately instead of importing inline");
 
-    const JobStats imported = waitForJob(mcp, "import");
+    const JobStats imported = waitForJob(mcp, "import", compiledBeforeImport);
     CHECK(imported.done, "the threaded avatar import completed");
     CHECK(imported.polls >= 2, "the app answered requests WHILE the import was in flight");
     CHECK(imported.ticks > 0, "the UI thread kept ticking during the import");
-    CHECK(withinControlBudget(mcp, imported.maxGap, "import"),
+    CHECK(withinControlBudget(mcp, imported.maxGap, "import", imported.logMark),
           "no UI-thread gap beyond the budget during the threaded import");
 
     const QJsonObject result = imported.last.value("result").toObject();
@@ -371,6 +474,7 @@ int main(int argc, char **argv)
     // ---- 4. the ASYNC SWITCH ----------------------------------------------
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
     mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
+    const int compiledBeforeSwitch = shadersCompiled(mcp);
     verbTimer.restart();
     mcp.runScript(QStringLiteral("avatar.open('%1', {async: true})").arg(asyncAvatar));
     const qint64 openMs = verbTimer.elapsed();
@@ -381,9 +485,9 @@ int main(int argc, char **argv)
     std::printf("info: avatar.open({async:true}) returned in %lld ms\n",
                 static_cast<long long>(openMs));
     CHECK(openMs < 1000, "... and returned immediately instead of parsing inline");
-    const JobStats switched = waitForJob(mcp, "switch");
+    const JobStats switched = waitForJob(mcp, "switch", compiledBeforeSwitch);
     CHECK(switched.done, "the threaded avatar switch completed");
-    CHECK(withinControlBudget(mcp, switched.maxGap, "switch"),
+    CHECK(withinControlBudget(mcp, switched.maxGap, "switch", switched.logMark),
           "no UI-thread gap beyond the budget during the switch");
     CHECK(mcp.integer(QStringLiteral("avatar.preview().bones")) > 10,
           "the switched-to character is loaded in the preview");
