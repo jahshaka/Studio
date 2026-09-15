@@ -340,7 +340,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                                "none. It is rendering the fallback picture.");
             issue.action = tr("Nothing is broken — the scene renders without rays. Open it on a "
                               "machine with a ray-tracing GPU to see what it was authored for, "
-                              "or set World > Hardware Ray Tracing to Auto if this project "
+                              "or set World > Ray Tracing to Auto if this project "
                               "should simply use rays wherever they exist.");
             issue.id = issue.kind;
             raise(issue);

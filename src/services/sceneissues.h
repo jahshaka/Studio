@@ -129,7 +129,7 @@ public:
     ///     enough to opaque geometry to light straight through it (the
     ///     Showroom's lamp above a sealed roof, which nothing ever mentioned);
     ///   * `sky.duplicate` — a second Sky Light, which lights nothing;
-    ///   * `rays.absent` — the project's Hardware Ray Tracing row says ON (it
+    ///   * `rays.absent` — the project's Ray Tracing row says ON (it
     ///     was AUTHORED for rays) and this machine has none. The one issue that
     ///     is about the PROJECT rather than an object, so it names no node —
     ///     and the entire reason the On state exists, since On and Auto render

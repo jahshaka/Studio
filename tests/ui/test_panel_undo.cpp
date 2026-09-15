@@ -288,9 +288,9 @@ int main(int argc, char **argv)
         // what a project was authored for is not a scalability trade, and a
         // World Mode switch must never move it.
         // Found by a PREFIX: a row label is elided to the label column's width
-        // ("Hardware Ray T…" on an unparented panel, "Background Am…" beside
-        // it), so matching the whole label would be matching the layout.
-        ComboBoxWidget *rays = comboWith(&panel, QStringLiteral("Hardware Ray"));
+        // The row is "Ray Tracing" (renamed from "Hardware Ray Tracing" at the
+        // RAYROW-1 merge so it fits a narrow label column without eliding).
+        ComboBoxWidget *rays = comboWith(&panel, QStringLiteral("Ray Tracing"));
         CHECK(rays != nullptr, "rays: the row is on the World blade");
         CHECK(scene->rayTracing == iris::RayTracingMode::Auto,
               "rays: a scene starts at Auto");

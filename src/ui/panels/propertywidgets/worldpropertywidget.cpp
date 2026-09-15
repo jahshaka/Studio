@@ -121,7 +121,7 @@ WorldPropertyWidget::WorldPropertyWidget()
     // it), and not a World Mode row either: the tier table is the SCALABILITY
     // registry, and "what this project was authored for" is not a quality
     // trade a tier switch may overwrite.
-    rayTracingSelector = this->addComboBox("Hardware Ray Tracing");
+    rayTracingSelector = this->addComboBox("Ray Tracing");
     rayTracingSelector->addItem("Off", QStringLiteral("off"));
     rayTracingSelector->addItem("Auto", QStringLiteral("auto"));
     rayTracingSelector->addItem("On", QStringLiteral("on"));
@@ -154,7 +154,7 @@ WorldPropertyWidget::WorldPropertyWidget()
     // above: the row index means nothing to the document, and the enum's ints
     // stay free to be reordered.
     rowundo::bind(rayTracingSelector, rows(QStringLiteral("rayTracing"),
-                                           tr("Hardware Ray Tracing"),
+                                           tr("Ray Tracing"),
                                            [this](const QVariant &row) {
         iris::RayTracingMode mode = iris::RayTracingMode::Auto;
         iris::rayTracingModeFromName(

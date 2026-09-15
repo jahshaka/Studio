@@ -124,7 +124,7 @@ if (machineHasRays) {
     assert(onIssues.length === 1, "ON with no ray hardware raises exactly ONE issue");
     assert(onIssues[0].message.indexOf("hardware ray tracing") >= 0,
            "...saying this project expects hardware ray tracing: " + onIssues[0].message);
-    assert(onIssues[0].action.indexOf("Hardware Ray Tracing") >= 0,
+    assert(onIssues[0].action.indexOf("Ray Tracing") >= 0,
            "...and pointing at the World row: " + onIssues[0].action);
     assert(onIssues[0].node === "",
            "...naming no object, because it is about the PROJECT and not a thing in the scene");
