@@ -80,14 +80,16 @@ var brighter = 0;
 for (var i = 0; i < matte.length; i++) if (shiny[i] > matte[i]) brighter++;
 assert(brighter === matte.length,
        "every grazing probe is BRIGHTER with specular on (" + J(matte) + " -> " + J(shiny) + ")");
-// 3/255, not the 5 this read before R5-ROOM (2026-09-15): a probe grid is
-// decided per probe by what each one SEES now, so this project's ground and its
-// content keep the probes that can see them where the retired scene-wide rule
-// refused the whole grid — and a floor made reflective then takes its specular
-// from those probes rather than from the sky cubemap alone. Measured 4/255
-// where it was 5. What the case is for — kS white is the master switch, every
-// grazing probe brightens — is asserted above and unchanged.
-assert(shiny[3] - matte[3] >= 3,
+// 5/255, RESTORED (lane SKY-FALLBACK-1, 2026-09-15). It was lowered to 3 for a
+// day, and the lowering was this defect measured rather than a property of the
+// scene: R5-ROOM made the probe grid a per-probe decision, so this project keeps
+// a PARTIAL grid — and a partial grid used to take the sky cubemap off every
+// datablock (the shader's environment slot has one occupant), leaving the
+// grazing floor pixels no probe box contains with nothing but cone tracing.
+// ogre-patch 0048 gives the sky its own pass-level slot and hands it back to
+// exactly those pixels; the margin measures 5 again, the number this read for
+// the whole life of the case before the regression.
+assert(shiny[3] - matte[3] >= 5,
        "...and the near-field one by a visible margin (" + (shiny[3] - matte[3]) + "/255)");
 
 // material.reset takes the matte default back — the reset is the one route the
