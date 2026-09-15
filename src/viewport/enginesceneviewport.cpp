@@ -2002,8 +2002,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeRegionMax = q(st.probeRegionMax);
     out.probeHdr       = st.probeHdr;
     out.probeCaptureSize   = st.probeCaptureSize;
-    out.probeEnclosedAxes  = st.probeEnclosedAxes;
-    out.probeGridRefused   = st.probeGridRefused;
+    out.probesDropped      = st.probesDropped;
     out.probeGateCrossings = st.probeGateCrossings;
     out.probeShadows   = st.probeShadows;
     out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;

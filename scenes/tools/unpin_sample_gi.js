@@ -78,8 +78,8 @@ function giLine(tag, st) {
         " size " + size(st.boundsMin, st.boundsMax) +
         " voxelMetres " + r2(st.voxelMetres) +
         " | probes " + st.probeCount + " region " + vec(st.probeRegionMin) + " .. " +
-        vec(st.probeRegionMax) + " enclosedAxes " + st.probeEnclosedAxes +
-        " gridRefused " + st.probeGridRefused + " clamped " + st.probesClampedToRegion +
+        vec(st.probeRegionMax) + " dropped " + st.probesDropped +
+        " clamped " + st.probesClampedToRegion +
         " pccBound " + st.pccBound + " vctBound " + st.vctBound + " ifdBound " + st.ifdBound);
 }
 

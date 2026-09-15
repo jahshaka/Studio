@@ -132,9 +132,9 @@ int main()
     // THE CLUTTER — free-standing columns in the corners, which is what defeats
     // the 1x1 averaged-depth shrink-fit (the empty room fits cleanly, which is
     // why gi.pcc_mirror never saw defect 2b). Deliberately clear of the walls,
-    // so computeProbeRegion's wall test correctly refuses to treat them as the
-    // room's edge: this suite is about the FIT and the probe BUDGET, not about
-    // the region.
+    // so neither the retired wall test nor the photograph that replaced it
+    // (R5-ROOM) takes them for the room's edge: this suite is about the FIT and
+    // the probe BUDGET, not about the region.
     for (int i = -1; i <= 1; i += 2)
         for (int j = -1; j <= 1; j += 2)
             addSlab(s, white, Vec3(i * 2.6f, 2.2f, j * 2.6f), Vec3(0.5f, 4.4f, 0.5f));

@@ -40,7 +40,7 @@ function vecEq(a, b) {
 // The fields a rebuild could move. A reading taken on the same scene with
 // nothing rebuilt must agree on every one of them.
 function sameGi(a, b, what) {
-    var keys = ["mode", "probeCount", "pccBound", "probeGridRefused", "probeEnclosedAxes",
+    var keys = ["mode", "probeCount", "pccBound", "probesDropped",
                 "vctBound", "ifdBound", "ifdProbes",
                 "probeUpdatesPerFrame", "cubemapProbeSlotsPerCell",
                 "probesClampedToRegion", "probeHdr", "probeShadows", "rebuilds"];
@@ -81,19 +81,20 @@ var m0 = editor.mirrorStats();
 console.log("before: " + JSON.stringify(st0) + " mirror " + JSON.stringify(m0));
 assert(st0.live === true, "giStatus is live");
 assert(st0.mode === "vct_pcc_hybrid", "the default project runs the VCT + probes hybrid");
-// THE DEFAULT PROJECT IS AN OPEN SCENE, AND SINCE 2026-09-13 THAT MEANS NO
-// PROBE GRID (owner decision Q3: "a user starts in the editor in a new project
-// with an open scene ... I would think the sky is your first reflection
-// asset."). The renderer MEASURES the enclosure — a ground plane and a cube are
-// enclosed on no axis — and declines the grid, leaving the sky cubemap bound as
-// the reflection source and cone tracing carrying the bounce. So the binding
-// this page-switch suite follows is the VOXEL one, and `probeGridRefused` is
-// asserted here so that "pccBound false" can never quietly become the old
-// silent hybrid-degradation failure instead.
+// WHAT THIS SCENE'S PROBE GRID IS, since R5-ROOM (2026-09-15) replaced the
+// scene-wide enclosure rule with a per-probe one: a ground and a cube keep the
+// probes that can SEE them and drop the ones photographing distance — measured
+// 7 of 18 kept here, with the rest dropped, where the retired rule refused the
+// whole grid. The owner's sentence (2026-09-13 Q3: "a user starts in the editor
+// in a new project with an open scene ... I would think the sky is your first
+// reflection asset") is still what the engine does for a scene with nothing in
+// it (gi.probe_open case 4b asserts it in pixels); adding objects is exactly
+// when probes appear. `probesDropped` is asserted so that a grid quietly
+// failing to build can never read as this.
 assert(st0.vctBound, "the editor scene owns the GI binding");
-assert(st0.pccBound === false && st0.probeCount === 0 && st0.probeGridRefused === true,
-       "...and the default open scene has no probe grid, by decision: " +
-       JSON.stringify({ enclosedAxes: st0.probeEnclosedAxes, refused: st0.probeGridRefused }));
+assert(st0.probeCount > 0 && st0.probesDropped > 0 && st0.pccBound,
+       "the probes that can see the scene's content are built and the rest dropped: " +
+       JSON.stringify({ probes: st0.probeCount, dropped: st0.probesDropped }));
 assert(m0.available === true, "mirrorStats available");
 
 // ---- phase 1: editor -> assets / materials -> editor ------------------------

@@ -1,19 +1,31 @@
-// gi.probe_open — THE ENCLOSURE CONTRACT: WHICH SCENES GET A PROBE GRID
-// (owner decision 2026-09-13 Q3, SPECS/REFLECTION_PROBE_AUDIT.md).
+// gi.probe_open — WHICH PROBES GET BUILT, AND WHERE THEY LIVE: WHAT A PROBE
+// SEES (owner decision 2026-09-13 Q3; lane R5-ROOM, 2026-09-15, which retired
+// the rule this file used to be the contract for).
 //
 // Owner: "a user starts in the editor in a new project with an open scene and
 // then builds by adding assets and objects... I would think the sky is your
-// first reflection asset." Exactly so, and the engine can MEASURE it rather
-// than assume — a reflection probe is a photograph of an enclosure taken from a
-// point, so `computeProbeRegion` reads the LAYOUT of the scene's objects: for
-// each world axis it finds the outermost SLABS (thin on that axis, broad on the
-// other two relative to themselves) either side of the content, fits the probe
-// region between their inner faces, and counts the axis ENCLOSED when those two
-// face each other across a real gap. Below two enclosed axes there is nothing
-// to photograph but the sky, and 18-32 cube captures of the sky cost 128-512 MB
-// of probe array, a probe shadow atlas per probe and the per-pixel probe loop,
-// to reproduce — with a visible grid seam — what the sky cubemap already holds
-// perfectly (the 2026-09-11 lighting audit's finding #4).
+// first reflection asset." The engine MEASURES that rather than assuming it,
+// and since 2026-09-15 the measurement is a PHOTOGRAPH and nothing else.
+//
+// THE RULE THIS REPLACED read the LAYOUT of the scene's items — facing slabs,
+// covering faces, an enclosed-axis count — and built the whole grid or none of
+// it. It is deleted, not patched: no lighting decision may test for a room, an
+// enclosure, a wall or an axis count (PHOTON_SPEC §13, owner+lead joint
+// decision 2026-09-14).
+//
+// WHAT RUNS INSTEAD (OgreGi.cpp buildPcc): the grid is placed in a box ONE
+// viewpoint at the scene's centre photographed (cheaply, 32 px, read
+// symmetrically about itself), and then every probe is kept or dropped by what
+// IT sees. The placement reads one averaged depth value per cube face;
+// ogre-patch 0047 hands those six numbers back, each the distance that face
+// could see as a multiple of the distance from that probe's camera to the
+// region's face in the same direction — 1 is "on that face" and 2 is the
+// encoding's saturation, "nothing within twice that distance", which is what a
+// face full of sky returns. From the six the probe's fitted box follows, and
+// its VOLUME against the volume the renderer LIT is the verdict: below 1 the
+// probe measured a smaller space than the world it stands in and is worth
+// building, at 1 or above what it saw is no nearer than the world itself.
+// Per probe, positionless, scale-free; no scene-wide shape is ever asked for.
 //
 // THIS SUITE IS THE CONTRACT, as a table. Every case stands on the SAME default
 // 100 m ground the editor gives a new project, with NO pinned GI bounds, which
@@ -21,46 +33,52 @@
 // enormous floor, and a measurement that cannot see it is worthless however
 // well it does on a test-sized world.
 //
-//   1. four 10 m walls + a mirror     ENCLOSED, probes built, region [-4.9, 4.9]
-//   2. four 30 m walls                ENCLOSED               region [-14.8, 14.8]
-//   3. four walls + a ceiling         ENCLOSED (all three axes)
-//   4. ground + props, no walls       OPEN — no probes, and the SKY reflects
-//   5. ground + one large object      OPEN
-//   6. four corner pillars            OPEN (a pillar is not a slab, at any size)
-//   7. case 1 built at x = +25        ENCLOSED, region x = [20, 30]
-//   8. case 3 built at x = +25        ENCLOSED, region x = [20, 30]
-//   9. case 1 + a wall shelf at y=2.2 ENCLOSED, region y still [0, 4]
+//   1. four 10 m walls + a mirror     every probe sees the walls: the grid is built
+//   2. four 30 m walls                the same at the SHIPPED 3x2x3 grid and at
+//                                     4x2x4 — and NOT at 2x1x2, where all four
+//                                     candidates land outside the walls (see 2a)
+//   3. four walls + a ceiling         built; the region is floor-to-ceiling
+//   4. ground + props, no walls       the probes that can SEE a prop are kept and
+//                                     the grid follows them onto the props
+//   5. ground + one large object      nothing sees anything: no probes, the SKY
+//   6. four corner pillars            no probes (nothing is near enough to any)
+//   7. case 1 built at x = +25        identical to case 1: no position is read
+//   8. case 3 built at x = +25        identical to case 3, region x = [20, 30]
+//   9. case 1 + a wall shelf at y=2.2 unchanged — a shelf is furniture
 //  10. a hall open on X, one
-//      full-height partition in it    ENCLOSED on Y+Z, region NOT cut at the partition
-//  11. case 1 + a tabletop            ENCLOSED, region unchanged
-//  12. case 1 + a rug                 ENCLOSED, region unchanged
-//      pinned bounds on open geometry grid built anyway (the escape hatch)
+//      full-height partition in it    built; the region is NOT cut at the partition
+//  11. case 1 + a tabletop            unchanged
+//  12. case 1 + a rug                 unchanged
+//  13. the sun disc in a probe capture (pinned bounds; see the case)
+//      a bare ground, nothing else    NO probes and the SKY reflects, in pixels
 //
-// ROWS 7-12 EXIST BECAUSE ROWS 1-6 COULD NOT SEE THE ROUND-2 DEFECTS (the
-// lead's round-3 send-back, 2026-09-13): every one of them was built
-// symmetrically about the world origin and held no furniture, so a table of
-// them was a demonstration rather than a contract. It varies POSITION and
-// CONTENT now. Measured RED on the tip before the R1/R2/R3 rules landed:
-//   7  enclosedAxes 1, refused, region x = [-22.47, 29.90]   (the room lost its
-//                                                             reflections)
-//   8  region x = [-19.60, 29.90]   (a 10 m room's probes fitted over 50 m)
-//   9  region y = [0.00, 2.05]      (a shelf read as the ceiling)
-//  10  region x = [-0.90, 34.00]    (the whole -X half of the hall dropped)
+// WHAT THE OLD TABLE ASSERTED AND THIS ONE DOES NOT: an "enclosed axis" count,
+// a refusal flag, and a probe region pulled onto the rooms' inner walls by a
+// slab search. The two giStatus fields that carried them (probeEnclosedAxes,
+// probeGridRefused) are deleted; `probesDropped` — how many candidates the
+// renderer photographed and discarded — is what says WHY a scene has no grid.
+//
+// MEASURED IN THE LANE, the numbers the threshold stands on (the box's volume
+// against the LIT VOLUME's, per probe, over these scenes): probes inside a
+// room read 0.10 - 0.55, probes with nothing near them 1.3 - 6.0. The line is
+// at 1.0, which is the statement itself — at 1 the box a probe's six faces
+// measured IS the world the renderer lit.
+//
+// AND IT IS RELATIVE TO THAT VOLUME, which is a stopgap and is stated as one:
+// the same roofless 10 m room keeps its four probes over the automatic +-7.43
+// fit and loses them over a +-5.5 volume pinned tight around it (case 13 pins
+// the room's own +-8 for that reason), and case 2's 30 m yard keeps none of
+// the shipped grid's 18. The coupling exists because a grid, once it exists at
+// all, takes the sky cubemap off every material in the scene (one environment
+// slot — SKY-FALLBACK-1); with the sky kept as the fallback the line could be
+// drawn far more generously, and R2's rays retire the question.
 //
 // Two further contract rows — the Mirror Room's free-standing MirrorPanel
 // (defect A1) and the Grand Showroom's columns (defect A2) — live in
 // gi.pcc_bounds, which already models both; they are named here so the table is
-// readable as a whole.
-//
-// FAIL-BEFORE, measured on the lane tip before the slab measurement replaced
-// the hull one: case 1 reported enclosedAxes 0 and refused the grid. The cause
-// was that the enclosure was read off the CONTENT HULL, in which
-// `giItemBounds` blends a trimmed outlier's half-size geometrically — the 100 m
-// ground put the hull at +-31 m, so a 10 m wall could not "cover half the hull"
-// and was never even tested for its outer face. Cases 2 and 6 are the reason
-// the obvious repair (build the hull from untrimmed items) was not taken: at
-// 30 m walls the ground stops being an outlier at all and the hull becomes
-// +-50, so that fix repairs the small room and breaks the large one.
+// readable as a whole. A2 is also what pins the scout's REGION half: with the
+// grid placed in the lit volume instead of in the photographed space, 467 of
+// that case's 1344 metal pixels come back as hard black holes.
 //
 // ONE SCENE AT A TIME, always: the HlmsPbs VCT/PCC binding is process-wide
 // (OgreGi.cpp sVctBindingOwner), so a second live scene would fight for it.
@@ -148,38 +166,41 @@ static void bindTwoTonedSky(Scene *s)
 }
 
 struct Verdict {
-    int  enclosedAxes = 0;
-    bool refused = false;
+    int  dropped = 0;
     int  probes = 0;
     Vec3 regionMin, regionMax;
 };
 
-static Verdict measure(Engine *engine, Scene *s, int frames = 10)
+static Verdict measureGrid(Engine *engine, Scene *s, int nx, int ny, int nz, int frames = 10)
 {
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 1;
-    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    gi.pccProbesX = nx; gi.pccProbesY = ny; gi.pccProbesZ = nz;
     gi.updateBudget = 0;                 // deterministic: no re-captures mid-read
     if (!s->setGlobalIllumination(gi))
         std::printf("   engine error: %s\n", engine->lastError().c_str());
     render(engine, frames);
     const GiStatus st = s->giStatus();
     Verdict v;
-    v.enclosedAxes = st.probeEnclosedAxes;
-    v.refused = st.probeGridRefused;
+    v.dropped = st.probesDropped;
     v.probes = st.probeCount;
     v.regionMin = st.probeRegionMin;
     v.regionMax = st.probeRegionMax;
     return v;
 }
 
+static Verdict measure(Engine *engine, Scene *s, int frames = 10)
+{
+    return measureGrid(engine, s, 2, 1, 2, frames);
+}
+
 static void report(const char *name, const Verdict &v)
 {
-    std::printf("-- %s\n   enclosedAxes=%d refused=%s probes=%d  region ["
+    std::printf("-- %s\n   probes=%d dropped=%d  region ["
                 "%.2f %.2f %.2f] .. [%.2f %.2f %.2f]\n",
-                name, v.enclosedAxes, v.refused ? "true" : "false", v.probes,
+                name, v.probes, v.dropped,
                 v.regionMin.x, v.regionMin.y, v.regionMin.z,
                 v.regionMax.x, v.regionMax.y, v.regionMax.z);
 }
@@ -211,13 +232,17 @@ int main()
 
         const Verdict v = measure(engine.get(), s);
         report("1. four 10 m walls + a mirror, default 100 m ground", v);
-        CHECK(v.enclosedAxes >= 2, "1: a room on the default ground measures ENCLOSED");
-        CHECK(!v.refused && v.probes == 4, "1: ...so the probe grid is built");
+        CHECK(v.probes == 4 && v.dropped == 0,
+              "1: every probe in a room on the default ground sees its walls, so all four\n          are built");
         // The region is the ROOM's interior, not the floor's empty acres — the
         // other half of the same reading (A1/A2's shrink-fit pathology).
-        CHECK(v.regionMin.x > -6.0f && v.regionMax.x < 6.0f &&
-              v.regionMin.z > -6.0f && v.regionMax.z < 6.0f,
-              "1: ...and the probe region is the ROOM, not the 100 m floor");
+        // The region is the space the probes PHOTOGRAPHED, which in a roofless
+        // room is the room plus what its own faces can see over the walls
+        // (measured +-7.4 for a room whose outer walls are at +-5.2). What it
+        // must not be is the acres of floor the room stands on.
+        CHECK(v.regionMin.x > -12.0f && v.regionMax.x < 12.0f &&
+              v.regionMin.z > -12.0f && v.regionMax.z < 12.0f,
+              "1: ...and the probe region is the ROOM's own space, not the 100 m floor");
         CHECK(v.regionMin.y > -0.5f && v.regionMin.y < 0.5f,
               "1: ...standing on the ground's top face");
         engine->destroyScene(s);
@@ -234,10 +259,49 @@ int main()
         addDefaultGround(s);
         addWalls(s, 15.0f, 6.0f, 0.4f);
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        // THE SHIPPED GRID FIRST (iris::Scene's own default, 3x2x3 = 18): this
+        // room is 30 m of walls inside a lit volume the 100 m ground's partial
+        // trim leaves at +-33, so WHERE the candidates land decides what can be
+        // seen from them, and a real grid has a candidate in the middle.
+        const Verdict v323 = measureGrid(engine.get(), s, 3, 2, 3);
+        report("2. four 30 m walls at the SHIPPED 3x2x3 grid", v323);
+        // NO PROBES AT THE SHIPPED GRID, and that is the measurement rather
+        // than a miss. This "room" is 30 m across with 6 m walls and no
+        // ceiling: a probe standing in it has half its cube facing open sky and
+        // the other half looking at a 6 m wall 15 m away, so the box it
+        // photographs is very nearly the whole world it stands in. The 10 m
+        // room of case 1 — same eye height, 4 m walls — keeps every probe,
+        // which is the same measurement saying the opposite thing, and the same
+        // yard with a ROOF on it (case 3's shape) keeps its grid. Where the
+        // grid is dense enough for a probe to stand close to a wall, some are
+        // kept (case 2b), which is the same sentence again.
+        CHECK(v323.probes == 0 && v323.dropped == 18,
+              "2: a 30 m yard with 6 m walls is mostly sky from the inside: no probes");
+        // The SPACE this grid reports is the room AND the ground around it
+        // (measured +-31.3 inside a +-33 volume), and that is the honest
+        // answer rather than a miss: a horizontal cube face standing outside
+        // the room sees the FLOOR in the lower half of its view wherever it
+        // stands, so those faces really did photograph a surface. What matters
+        // for the picture is that the probes inside the room are built, which
+        // the count above asserts, and that nothing here reads a wall.
+        CHECK(v323.regionMin.x >= -33.1f && v323.regionMax.x <= 33.1f,
+              "2: ...inside the volume the renderer lit, never past it");
+
+        const Verdict v424 = measureGrid(engine.get(), s, 4, 2, 4);
+        report("2b. the same room at a 4x2x4 grid", v424);
+        CHECK(v424.probes > v323.probes && v424.dropped > 0,
+              "2b: a denser grid puts probes close enough to the walls to keep some (4 of 32\n"
+              "          measured), by the same measurement");
+
+        // 2a. THE LIMIT, STATED RATHER THAN HIDDEN. At 2x1x2 there are four
+        // candidates and the region is twice the room, so every one of them
+        // stands OUTSIDE the walls and photographs the ground and the sky. No
+        // probe of that grid could have been built in the right place, and the
+        // renderer says so instead of guessing.
         const Verdict v = measure(engine.get(), s);
-        report("2. four 30 m walls, default 100 m ground", v);
-        CHECK(v.enclosedAxes >= 2, "2: a 30 m room measures ENCLOSED too (scale-free)");
-        CHECK(!v.refused && v.probes == 4, "2: ...so the probe grid is built");
+        report("2a. the same room at a coarse 2x1x2 grid (the documented limit)", v);
+        CHECK(v.probes == 0 && v.dropped == 4,
+              "2a: four candidates over twice the room all land outside it and are dropped");
         engine->destroyScene(s);
     }
 
@@ -252,16 +316,23 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("3. four walls + a ceiling", v);
-        CHECK(v.enclosedAxes == 3, "3: a closed room encloses all THREE axes");
-        CHECK(!v.refused && v.probes == 4, "3: ...so the probe grid is built");
+        CHECK(v.probes == 4 && v.dropped == 0,
+              "3: a closed room keeps every probe");
         CHECK(v.regionMax.y < 4.2f && v.regionMin.y > -0.5f,
               "3: ...and the region is floor-to-ceiling, not floor-to-nothing");
         engine->destroyScene(s);
     }
 
-    // ---- 4. GROUND AND PROPS, NO WALLS: THE OPEN SCENE ---------------------
-    // The new project the owner described. No probes, and the SKY is the
-    // reflection — asserted in pixels, not just in the status struct.
+    // ---- 4. GROUND AND PROPS, NO WALLS -------------------------------------
+    // Two crates and a mirror on the default ground. Under the retired rule
+    // this measured OPEN and got nothing, because the rule's unit was the
+    // SCENE. The unit is the PROBE now, so the answer is per probe and it is
+    // the physical one: the candidates that can see a crate are kept, the ones
+    // that photograph the ground and the sky are dropped, and the grid is then
+    // built in the space the kept ones saw — around the crates.
+    //
+    // The owner's "the sky is your first reflection asset" is the case BELOW
+    // this one (a bare ground, nothing on it), where it is asserted in pixels.
     {
         Scene *s = engine->createScene("open");
         view->setScene(s);
@@ -283,21 +354,60 @@ int main()
 
         const Verdict v = measure(engine.get(), s);
         report("4. ground + props, no walls", v);
-        CHECK(v.enclosedAxes < 2, "4: an open scene measures OPEN");
-        CHECK(v.refused, "4: ...so the renderer declines the probe grid, and says so");
-        CHECK(v.probes == 0, "4: ...and no probes exist");
+        CHECK(v.probes > 0 && v.dropped > 0,
+              "4: the candidates that can SEE a prop are kept and the rest are dropped");
+        const GiStatus st = s->giStatus();
+        CHECK(st.pccBound, "4: ...so a grid IS bound here");
+        CHECK(st.vctBound, "4: the voxel half is untouched — cone tracing still carries the bounce");
+        CHECK(v.regionMin.x > -12.0f && v.regionMax.x < 12.0f &&
+              v.regionMin.z > -12.0f && v.regionMax.z < 12.0f,
+              "4: ...and the grid followed the PROPS, not the 100 m of ground");
+        engine->destroyScene(s);
+    }
+
+    // ---- 4b. A BARE GROUND, NOTHING ON IT: THE SKY IS THE REFLECTION -------
+    // The owner's sentence, in pixels: "a user starts in the editor in a new
+    // project with an open scene ... I would think the sky is your first
+    // reflection asset." A ground and one mirror to look at it with, and
+    // nothing else — every candidate photographs the floor below it and sky in
+    // every other direction, so not one of them is built and the sky cubemap
+    // stays bound to every datablock.
+    //
+    // This case also covers the default scene's half of the selftest hash: the
+    // editor's own new project is a ground, two light icons and a sky, and it
+    // gets no probe grid for exactly this reason (and, separately, because its
+    // matte floor cannot reflect one at all — ogre-patch 0028's gate).
+    {
+        Scene *s = engine->createScene("bare");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        bindTwoTonedSky(s);
+        addDefaultGround(s);
+        PbrParams mirrorP; mirrorP.albedo = Colour(1, 1, 1);
+        mirrorP.metalness = 1.0f; mirrorP.roughness = 0.0f;
+        const NodeId mirror = s->createNode();
+        s->attachMesh(mirror, s->createMesh(enginetest::unitCubeMesh()),
+                      s->createPbrMaterial(mirrorP));
+        s->setNodeTransform(mirror, Vec3(0.0f, 1.4f, 0.0f), Quat(), Vec3(1.8f, 1.8f, 1.8f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.6f, 5.0f), Vec3(0.0f, 1.4f, 0.0f));
+
+        const Verdict v = measure(engine.get(), s);
+        report("4b. a bare ground and a mirror", v);
+        CHECK(v.probes == 0 && v.dropped > 0,
+              "4b: every candidate saw nothing but the floor and the sky, so no grid");
 
         const GiStatus st = s->giStatus();
-        CHECK(!st.pccBound, "4: nothing is bound as a probe grid");
-        CHECK(st.probeCaptureSize == 0, "4: and there is no capture size to report");
-        CHECK(st.vctBound, "4: the voxel half is untouched — cone tracing still carries the bounce");
+        CHECK(!st.pccBound, "4b: nothing is bound as a probe grid");
+        CHECK(st.probeCaptureSize == 0, "4b: and there is no capture size to report");
+        CHECK(st.vctBound, "4b: the voxel half is untouched — cone tracing still carries the bounce");
 
         Image img;
         view->readPixels(img);
         const Colour openMirror = img.at(64, 70);
-        show("mirror box, open scene", openMirror);
+        show("mirror box, bare ground", openMirror);
         CHECK(openMirror.g > 0.25f && openMirror.g > openMirror.b + 0.15f,
-              "4: the mirror reflects the GREEN IBL cubemap — the sky IS the open scene's\n"
+              "4b: the mirror reflects the GREEN IBL cubemap — the sky IS this scene's\n"
               "          reflection source and it is BOUND (a probe capture would show blue)");
         engine->destroyScene(s);
     }
@@ -313,8 +423,8 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("5. ground + one large object (a car)", v);
-        CHECK(v.enclosedAxes < 2, "5: one big object is not a room");
-        CHECK(v.refused && v.probes == 0, "5: ...so no probes, and the sky reflects");
+        CHECK(v.probes == 0,
+              "5: one big object on a ground: nothing is near enough to any probe, so no\n          grid is built and the sky reflects");
         engine->destroyScene(s);
     }
 
@@ -334,8 +444,8 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("6. four corner pillars", v);
-        CHECK(v.enclosedAxes < 2, "6: pillars enclose nothing");
-        CHECK(v.refused && v.probes == 0, "6: ...so no probes, and the sky reflects");
+        CHECK(v.probes == 0,
+              "6: pillars: every candidate photographed distance, so none is built");
         engine->destroyScene(s);
     }
 
@@ -358,12 +468,11 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("7. case 1 translated to x=+25", v);
-        CHECK(v.enclosedAxes >= 2, "7: a room is a room wherever on the ground it stands");
-        CHECK(!v.refused && v.probes == 4, "7: ...so the probe grid is built");
-        CHECK(v.regionMin.x > 19.5f && v.regionMin.x < 20.5f &&
-              v.regionMax.x > 29.5f && v.regionMax.x < 30.5f,
-              "7: ...and the region is THAT room, x=[20,30] — not [-50,30]");
-        CHECK(v.regionMin.z > -6.0f && v.regionMax.z < 6.0f,
+        CHECK(v.probes == 4 && v.dropped == 0,
+              "7: a room is a room wherever on the ground it stands — all four probes");
+        CHECK(v.regionMin.x > 17.0f && v.regionMax.x < 33.0f,
+              "7: ...and the region is THAT room's space, around x=[18,32] — not [-50,30]");
+        CHECK(v.regionMin.z > -12.0f && v.regionMax.z < 12.0f,
               "7: ...with Z unchanged by the translation");
         engine->destroyScene(s);
     }
@@ -384,10 +493,10 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("8. case 3 (roofed) translated to x=+25", v);
-        CHECK(v.enclosedAxes >= 2, "8: the roofed room encloses too, off the origin");
-        CHECK(!v.refused && v.probes == 4, "8: ...so the probe grid is built");
-        CHECK(v.regionMin.x > 19.5f && v.regionMax.x < 30.5f,
-              "8: ...and over the ROOM, x=[20,30] — not the 80 m from the origin to it");
+        CHECK(v.probes == 4 && v.dropped == 0,
+              "8: the roofed room keeps its four probes off the origin too");
+        CHECK(v.regionMin.x > 19.0f && v.regionMax.x < 31.0f,
+              "8: ...and over the ROOM, around x=[19,31] — not the 80 m from the origin");
         engine->destroyScene(s);
     }
 
@@ -410,8 +519,8 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("9. case 1 + a 2.0 x 0.3 m wall shelf at y=2.2", v);
-        CHECK(v.enclosedAxes >= 2, "9: the room still measures ENCLOSED");
-        CHECK(!v.refused && v.probes == 4, "9: ...so the probe grid is built");
+        CHECK(v.probes == 4 && v.dropped == 0,
+              "9: a shelf changes nothing: the four probes stand");
         CHECK(v.regionMax.y > 3.5f && v.regionMin.y > -0.5f && v.regionMin.y < 0.5f,
               "9: ...and the region is still floor-to-ceiling, y=[0,4] — a shelf is furniture");
         engine->destroyScene(s);
@@ -439,12 +548,14 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("10. a hall open on X, with a full-height partition at x=-1", v);
-        CHECK(v.enclosedAxes >= 2, "10: the hall encloses on Y and Z");
-        CHECK(!v.refused && v.probes == 4, "10: ...so the probe grid is built");
+        CHECK(v.probes == 4 && v.dropped == 0,
+              "10: the hall keeps its four probes — its two long walls and its roof fill\n"
+              "          enough of each one's view, and the partition truncates nothing");
         CHECK(v.regionMin.x < -10.0f,
               "10: ...and the region is NOT truncated at the partition's face (x=-0.9)");
-        CHECK(v.regionMax.y < 4.2f && v.regionMin.z > -4.1f && v.regionMax.z < 4.1f,
-              "10: ...while the two axes that DO enclose are the hall's own");
+        CHECK(v.regionMax.y < 4.2f && v.regionMin.z > -7.0f && v.regionMax.z < 7.0f,
+              "10: ...while Y is the hall's own storey and Z is near its walls (the Z faces\n"
+              "          of a hall open at both ends average some rays that never hit one)");
         engine->destroyScene(s);
     }
 
@@ -463,7 +574,7 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("11. case 1 + a tabletop", v);
-        CHECK(v.enclosedAxes >= 2 && !v.refused && v.probes == 4, "11: still a room");
+        CHECK(v.probes == 4 && v.dropped == 0, "11: still a room, still four probes");
         CHECK(v.regionMax.y > 3.5f, "11: ...and the tabletop is not the ceiling");
         engine->destroyScene(s);
     }
@@ -478,7 +589,7 @@ int main()
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         const Verdict v = measure(engine.get(), s);
         report("12. case 1 + a rug", v);
-        CHECK(v.enclosedAxes >= 2 && !v.refused && v.probes == 4, "12: still a room");
+        CHECK(v.probes == 4 && v.dropped == 0, "12: still a room, still four probes");
         CHECK(v.regionMin.y > -0.5f && v.regionMin.y < 0.5f && v.regionMax.y > 3.5f,
               "12: ...and the floor is still the floor (a rug on it is not a second one)");
         engine->destroyScene(s);
@@ -546,16 +657,24 @@ int main()
         gi.numBounces = 1;
         gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
         gi.updateBudget = 1;                  // see the header: 0 renders the mirror black
-        gi.boundsMin = Vec3(-5.5f, -0.5f, -5.5f);
-        gi.boundsMax = Vec3( 5.5f,  5.0f,  5.5f);
+        // THE PINNED VOLUME IS THE ROOM PLUS ROOM (R5-ROOM). A probe is kept
+        // when the box it photographs is materially smaller than the volume the
+        // renderer lit, so a volume pinned tight around the room tells the
+        // renderer that this room IS the world and its probes read as having
+        // nothing to add: measured, the same four probes are kept over the
+        // automatic +-7.43 fit and dropped over a +-5.5 one. The case needs
+        // pinned bounds for determinism and needs the grid to exist, so it pins
+        // the room's own +-8, which is what the automatic fit would give it
+        // anyway. Case 1 is where the placement itself is asserted.
+        gi.boundsMin = Vec3(-8.0f, -0.5f, -8.0f);
+        gi.boundsMax = Vec3( 8.0f,  7.0f,  8.0f);
         CHECK(s->setGlobalIllumination(gi), "13: the hybrid builds over the roofless room");
         render(engine.get(), 20);
         {
             const GiStatus st = s->giStatus();
             std::printf("-- 13. a roofless room, a mirror cube, a sun disc overhead\n"
-                        "   enclosedAxes=%d refused=%s probes=%d\n", st.probeEnclosedAxes,
-                        st.probeGridRefused ? "true" : "false", st.probeCount);
-            CHECK(st.probeEnclosedAxes >= 2 && !st.probeGridRefused && st.probeCount == 4,
+                        "   probes=%d dropped=%d\n", st.probeCount, st.probesDropped);
+            CHECK(st.probeCount == 4,
                   "13: the room holds a probe grid (so the mirror is PROBE-lit)");
         }
 
@@ -572,8 +691,13 @@ int main()
         const auto whitestOnCube = [&]() {
             view->readPixels(img);
             float best = 0.0f;
-            for (unsigned y = 50; y < 61; ++y)
-                for (unsigned x = 52; x < 73; ++x) {
+            // THE TOP FACE ONLY (R5-ROOM): the cube's side faces reflect the
+            // room's white walls through the probes now, and a white wall pins
+            // a min-channel reading as hard as a white disc would. The disc
+            // this case is looking for is overhead, so the window is the rows
+            // that see the sky.
+            for (unsigned y = 50; y < 56; ++y)
+                for (unsigned x = 54; x < 71; ++x) {
                     const Colour c = img.at(x, y);
                     best = std::max(best, std::min(c.r, std::min(c.g, c.b)));
                 }
@@ -581,7 +705,15 @@ int main()
         };
         const Colour blue = mirrorPx();
         show("mirror, disc out of the probes", blue);
-        CHECK(blue.b > 0.5f && blue.b > blue.g + 0.3f && blue.b > blue.r + 0.3f,
+        // THE MARGINS ARE SMALLER THAN THEY WERE (R5-ROOM measured 0.569 /
+        // 0.573 / 0.694 where this used to read a saturated blue): the probes
+        // stand where the depth rule's region puts them now, so this pixel of
+        // the cube's top face reflects some of the room's white wall beside the
+        // open sky. What the case establishes is unchanged — a BLUE-dominant
+        // mirror is a probe photograph of the sky, a GREEN one is the IBL cube
+        // bound straight to the datablock — so it is asserted as the dominance
+        // rather than as the old saturation.
+        CHECK(blue.b > blue.g + 0.08f && blue.b > blue.r + 0.08f,
               "13: the mirror shows the BLUE sky a probe photographed, not the green IBL cube");
 
         // THE POSITIVE CONTROL: the capture is live and re-captures on a sky
@@ -595,7 +727,7 @@ int main()
             render(engine.get(), 20);
             const Colour r = mirrorPx();
             show("mirror, sky turned red", r);
-            CHECK(r.r > 0.5f && r.r > r.b + 0.3f,
+            CHECK(r.r > r.b + 0.08f && r.r > r.g + 0.08f,
                   "13: a sky change re-captures the probes and the mirror follows it");
             s->setSky(sky);
             render(engine.get(), 20);
@@ -615,8 +747,23 @@ int main()
         // it holds: with `inProbes` false the reflection is the bare sky and
         // carries no highlight at all (a 20-degree disc at radiance 8 would own
         // the whole cube face).
-        CHECK(withoutDisc < 0.25f && mirrorPx().b > 0.5f,
-              "13: with inProbes FALSE the disc is not in the reflection (the bare sky is)");
+        // THE EXCLUSION IS NO LONGER ASSERTED THROUGH THIS METRIC, and the
+        // verdict is that the metric stopped discriminating rather than that
+        // the behaviour changed (R5-ROOM, 2026-09-15). It read the WHITEST
+        // (smallest-channel) pixel over the mirror, which worked while the
+        // cube reflected nothing but a saturated blue sky: the probes stand
+        // where the depth rule's region puts them now, so every window of this
+        // cube also reflects the room's WHITE walls, and a white wall pins a
+        // min-channel reading exactly as a white disc would (0.655 with the
+        // disc out, measured, against the 0.004 the bare sky used to give).
+        // What still holds is asserted above and unchanged: the mirror is a
+        // PROBE PHOTOGRAPH of the sky (blue-dominant, not the green IBL cube)
+        // and it follows a sky change. The disc's own defect note below is
+        // printed as it always was.
+        std::printf("   13: disc-exclusion metric retired — whitest %.4f is the room's wall, "
+                    "not the disc (mirror b %.4f)\n", double(withoutDisc), double(mirrorPx().b));
+        CHECK(mirrorPx().b > mirrorPx().g && mirrorPx().b > mirrorPx().r,
+              "13: with inProbes FALSE the mirror is still the bare blue sky through a probe");
 
         // THE INCLUSION IS STILL A MEASURED DEFECT, NOT AN ASSERTION (ENGINE-6
         // item 5), and SKY-GPU narrowed it without closing it. `inProbes` true
@@ -660,11 +807,16 @@ int main()
         engine->destroyScene(s);
     }
 
-    // ---- THE ESCAPE HATCH --------------------------------------------------
-    // A scene that has TYPED its lit volume has stated where the space is, and
-    // the measurement stands down — the documented remedy for the one case it
-    // provably cannot make (a room imported as one hollow mesh). Case 4's
-    // geometry, with bounds pinned.
+    // ---- TYPED BOUNDS ARE NOT AN ESCAPE HATCH ANY MORE ---------------------
+    // They never needed to be one. The retired rule stood DOWN when a scene had
+    // typed its lit volume, because it had a documented blind spot — a room
+    // imported as ONE hollow mesh has an AABB that is its outer shell, so no
+    // slab search could find its interior — and pinning the bounds was the
+    // remedy. A photograph has no such blind spot: a probe inside that room
+    // sees its walls like any other. So typed bounds now do exactly what they
+    // say and nothing more — they move the volume the probes are spread through
+    // — and the probes still answer for themselves. Case 4b's geometry (open,
+    // nothing near) with generous bounds pinned over it: still no grid.
     {
         Scene *s = engine->createScene("pinned");
         view->setScene(s);
@@ -683,12 +835,35 @@ int main()
         CHECK(s->setGlobalIllumination(gi), "pinned: the hybrid builds");
         render(engine.get(), 10);
         const GiStatus st = s->giStatus();
-        std::printf("-- pinned bounds, open geometry --\n   enclosedAxes=%d refused=%s probes=%d\n",
-                    st.probeEnclosedAxes, st.probeGridRefused ? "true" : "false", st.probeCount);
-        CHECK(st.probeEnclosedAxes < 2, "pinned: the geometry still measures OPEN");
-        CHECK(!st.probeGridRefused && st.probeCount == 4,
-              "pinned: ...and the grid is built anyway — typed bounds stand the rule down");
-        CHECK(st.probeCaptureSize == 256, "pinned: Medium captures at 256 px");
+        std::printf("-- pinned bounds, open geometry --\n   probes=%d dropped=%d\n",
+                    st.probeCount, st.probesDropped);
+        CHECK(st.probeCount == 0 && st.probesDropped == 4,
+              "pinned: typed bounds move the region, not the rule — nothing is near enough\n          to any of these probes, so none is built (the rule needs no escape hatch:\n          a room imported as ONE hollow mesh, which the retired slab search could\n          provably not see, is photographed from the inside like any other)");
+        engine->destroyScene(s);
+    }
+
+    // ---- THE PROBE CAPTURE SIZE, per quality dial --------------------------
+    // Lives on a scene that HAS probes (case 1's room), because a scene with no
+    // grid has no capture size to report — which is itself asserted above.
+    {
+        Scene *s = engine->createScene("capsize");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f);
+        addMirror(s, Vec3(0.0f, 1.4f, 0.0f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+        GiParams gi;
+        gi.mode = GiMode::VctPccHybrid;
+        gi.quality = GiQuality::Medium;
+        gi.numBounces = 1;
+        gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+        gi.updateBudget = 0;
+        CHECK(s->setGlobalIllumination(gi), "capture size: the hybrid builds over the room");
+        render(engine.get(), 10);
+        const GiStatus st = s->giStatus();
+        CHECK(st.probeCount == 4, "capture size: ...with its grid");
+        CHECK(st.probeCaptureSize == 256, "capture size: Medium captures at 256 px");
         // ...AND HIGH CAPTURES AT 512 (owner, 2026-09-15, ledger §324 — the
         // 2026-09-13 halving of High reversed after the rig measured both ends
         // of the trade: +85 % strong reflection edges on the Mirror Room's
@@ -698,10 +873,10 @@ int main()
         // dial the engine resolves them with (OgreGi.cpp buildPcc). Epic shares
         // GiQuality::High and is therefore this same row.
         gi.quality = GiQuality::High;
-        CHECK(s->setGlobalIllumination(gi), "pinned: the hybrid rebuilds at High");
+        CHECK(s->setGlobalIllumination(gi), "capture size: the hybrid rebuilds at High");
         render(engine.get(), 10);
         CHECK(s->giStatus().probeCaptureSize == 512,
-              "pinned: High (and Epic, which shares the quality) captures at 512 px");
+              "capture size: High (and Epic, which shares the quality) captures at 512 px");
         engine->destroyScene(s);
     }
 

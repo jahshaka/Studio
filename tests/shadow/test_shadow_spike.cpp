@@ -200,6 +200,35 @@ static Room buildRoom(Engine *e, View *v, const char *name, int lampCount, bool 
     return room;
 }
 
+/// WALLS AND A ROOF FOR THE CASES THAT NEED PROBES (R5-ROOM, 2026-09-15).
+/// Probes are kept or dropped by what each one SEES from its own captured depth
+/// now, and buildRoom is a 40 m floor with pillars on it, where every candidate
+/// photographs the floor below it and sky in every direction else. The cases
+/// below are about probe-capture shadow CACHING, not about placement, so they
+/// give their probes something to photograph. (The note these cases used to
+/// carry named a rule that measured the SCENE for an enclosure and stood down
+/// for pinned bounds; pinned bounds now move the volume the probes are spread
+/// through and nothing else, because there is no rule about scenes left.)
+static void shellRoom(Scene *s)
+{
+    const Vec3 shell[5][2] = {
+        { Vec3(-5.5f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 11.0f) },
+        { Vec3( 5.5f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 11.0f) },
+        { Vec3(0.0f, 2.5f, -5.5f), Vec3(11.0f, 5.0f, 0.4f) },
+        { Vec3(0.0f, 2.5f,  5.5f), Vec3(11.0f, 5.0f, 0.4f) },
+        { Vec3(0.0f, 5.2f,  0.0f), Vec3(11.0f, 0.4f, 11.0f) },
+    };
+    const MeshId m = s->createMesh(cubeMesh());
+    PbrParams p; p.albedo = Colour(0.85f, 0.85f, 0.85f); p.roughness = 0.9f;
+    const MaterialId mt = s->createPbrMaterial(p);
+    for (const auto &w : shell) {
+        const NodeId n = s->createNode();
+        s->attachMesh(n, m, mt);
+        s->setNodeTransform(n, w[0], Quat(), w[1]);
+    }
+}
+
+
 static void render(Engine *e, int frames = 4) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
 static int lum(const Image &img, unsigned x, unsigned y)
@@ -457,14 +486,9 @@ static void r3Case()
     // Shadow Quality change performs, between frames.
     engine->setShadowMapBudget(2u);
     Room room = buildRoom(engine.get(), v, "roomGi", 3, false);
+    shellRoom(room.scene);   // this case needs probes: see shellRoom
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE, because this case needs a probe grid to exist at all
-    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
-    // declines to build probes in an open scene — a floor with a block on it is
-    // exactly that — unless the author has pinned the lit volume. This suite is
-    // about probe-capture shadow caching, not about probe placement, so it says
-    // where the space is and gets its grid.
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::High;          // probeShadows resolves true at high
@@ -603,14 +627,9 @@ static void cacheKindsCase()
     PlanarReflectionParams pr; pr.budget = 1; pr.resolution = 256; pr.shadows = true;
     CHECK(room.scene->setPlanarReflections(pr), "planar arm up");
     CHECK(room.scene->setNodePlanarReflector(room.floor, true), "the floor is a reflector");
+    shellRoom(room.scene);   // this case needs probes: see shellRoom
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE, because this case needs a probe grid to exist at all
-    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
-    // declines to build probes in an open scene — a floor with a block on it is
-    // exactly that — unless the author has pinned the lit volume. This suite is
-    // about probe-capture shadow caching, not about probe placement, so it says
-    // where the space is and gets its grid.
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
@@ -727,14 +746,9 @@ static void scanCostCase(int n)
     v->setCamera(c);
     v->setShadows(true);
     engine->setShadowMapBudget(8u);
+    shellRoom(s);   // this case needs probes: see shellRoom
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE, because this case needs a probe grid to exist at all
-    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
-    // declines to build probes in an open scene — a floor with a block on it is
-    // exactly that — unless the author has pinned the lit volume. This suite is
-    // about probe-capture shadow caching, not about probe placement, so it says
-    // where the space is and gets its grid.
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;

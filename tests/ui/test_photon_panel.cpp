@@ -334,7 +334,7 @@ int main(int argc, char **argv)
     // FIX, never for engine data — and an open scene reflecting the sky is
     // CORRECT, not an error. So the renderer's decision to build no probe grid
     // is surfaced as a DATA row, reading the same GiStatus world.giStatus()
-    // publishes (probeGridRefused / probeCount). Never a toast, never a
+    // publishes (probesDropped / probeCount). Never a toast, never a
     // scene-issue row.
     {
         const auto label = [&panel]() -> LabelWidget * {
@@ -360,22 +360,32 @@ int main(int argc, char **argv)
         StubViewport viewport;
         viewport.status.available = true;
         viewport.status.mode = QStringLiteral("vct_pcc_hybrid");
-        viewport.status.probeGridRefused = true;
+        viewport.status.probesDropped = 4;             // every candidate saw nothing
         viewport.status.probeCount = 0;
         panel.setSceneView(&viewport);
         panel.setScene(scene);
         pump();
         row = label();
         CHECK(row && !row->isHidden() && valueOf(row).contains(QStringLiteral("Sky")),
-              "an OPEN scene reads 'Sky' — the refusal is visible, as data");
+              "an OPEN scene reads 'Sky' — the decision is visible, as data");
 
-        viewport.status.probeGridRefused = false;
+        // ...AND A GRID THAT FAILED TO BUILD IS NOT A DECISION. probeCount 0
+        // with nothing dropped is gi.pcc_mirror's silent degradation, and the
+        // row must not dress it up as the open-scene answer.
+        viewport.status.probesDropped = 0;
+        panel.setScene(scene);
+        pump();
+        row = label();
+        CHECK(row && row->isHidden(),
+              "...while 0 probes with none dropped is a FAILED build, and says nothing");
+
+        viewport.status.probesDropped = 0;
         viewport.status.probeCount = 18;
         panel.setScene(scene);
         pump();
         row = label();
         CHECK(row && !row->isHidden() && valueOf(row).contains(QStringLiteral("18 probes")),
-              "...and an enclosed scene reads its probe count");
+              "...and a scene whose probes saw something reads their count");
 
         // A technique with no probe arm has nothing to report, so the row goes.
         viewport.status.mode = QStringLiteral("vct");
@@ -386,21 +396,22 @@ int main(int argc, char **argv)
               "...and plain VCT hides the row rather than reporting a grid it never builds");
 
         // ---- THE ROW IS LIVE, NOT A SNAPSHOT (round-3 item 5) --------------
-        // Its input is the SCENE's LAYOUT, which this panel cannot hear about:
+        // Its input is what the renderer's probes SAW, which this panel cannot
+        // hear about:
         // rebuild() runs on setScene and after a World-GI edit, so adding four
         // walls to an open scene left the row saying "Sky" while the renderer
         // had already built the grid. It re-reads on show and polls while it is
         // visible. Driven here by moving the stub's status WITHOUT touching the
         // panel, exactly as the renderer would.
         viewport.status.mode = QStringLiteral("vct_pcc_hybrid");
-        viewport.status.probeGridRefused = true;
+        viewport.status.probesDropped = 4;
         viewport.status.probeCount = 0;
         panel.setScene(scene);
         pump();
         CHECK(label() && valueOf(label()).contains(QStringLiteral("Sky")),
               "the row starts at 'Sky' for the open scene");
 
-        viewport.status.probeGridRefused = false;      // ...the user builds a room
+        viewport.status.probesDropped = 0;             // ...the user builds a room
         viewport.status.probeCount = 8;
         pump();                                        // no panel call at all
         CHECK(valueOf(label()).contains(QStringLiteral("Sky")),

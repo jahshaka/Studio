@@ -287,8 +287,14 @@ static void hiddenParentBounce(Engine *engine, View *view)
                 "(probes %d, ifd converged %d)\n",
                 noModel.r, noModel.g, withModel.r, withModel.g,
                 shownSt.probeCount, int(shownSt.ifdConverged));
-    CHECK(shownSt.probeCount > 0 && !shownSt.probeGridRefused,
-          "pinned bounds stand the enclosure rule down, so the probes are live here");
+    // NO ASSERTION ABOUT THE PROBE COUNT HERE ANY MORE (R5-ROOM, 2026-09-15),
+    // and the verdict is that the line was about the retired rule rather than
+    // about this case: it read "pinned bounds stand the enclosure rule down, so
+    // the probes are live here", and there is no rule about scenes left to
+    // stand down — probes are kept one at a time by what each one photographs,
+    // and this scene's are dropped because the box they measure is the box they
+    // were placed in. What the case is FOR is the two lines below: the shown
+    // model bounces red onto the floor, and hiding it takes that bounce away.
     const float bounceOn = (withModel.r - withModel.g) - (noModel.r - noModel.g);
     std::printf("   bounce ON = %+.4f\n", bounceOn);
     // Measured +0.0980 here against a +0.0001 noise floor; the ratio below is

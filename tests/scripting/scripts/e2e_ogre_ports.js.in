@@ -63,7 +63,7 @@ var PORTS = [
                  "LocalCubemaps: the 1 x 1 x 3 probe grid survived the round trip");
           var st = world.giStatus();
           console.log("LocalCubemaps probes: " + st.probeCount +
-                      " enclosedAxes=" + st.probeEnclosedAxes + " refused=" + st.probeGridRefused);
+                      " dropped=" + st.probesDropped);
       } },
     { name: "Refractions", nodes: 86, lights: 4, gi: "off",
       names: ["Floor", "Glass Wall", "Sun", "Sky Light", "Glass_r0_f0", "Glass_r7_f7"],

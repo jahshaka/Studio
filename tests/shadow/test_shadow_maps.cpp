@@ -386,6 +386,25 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
     const NodeId block = s->createNode();
     s->attachMesh(block, mesh, mat);
     s->setNodeTransform(block, Vec3(0, 1.0f, 0), Quat(), Vec3(1.5f, 2.0f, 1.5f));
+    // WALLS AND A ROOF, because this case needs a probe grid to exist at all
+    // (R5-ROOM, 2026-09-15): probes are kept or dropped by what each one SEES,
+    // and over a bare floor with one block on it every candidate photographs
+    // the floor below it and sky in every direction else. The case is about a
+    // shadow-node DEFINITION LIFETIME, not about probe placement.
+    {
+        const Vec3 shell[5][2] = {
+            { Vec3(-5.5f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 11.0f) },
+            { Vec3( 5.5f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 11.0f) },
+            { Vec3(0.0f, 2.5f, -5.5f), Vec3(11.0f, 5.0f, 0.4f) },
+            { Vec3(0.0f, 2.5f,  5.5f), Vec3(11.0f, 5.0f, 0.4f) },
+            { Vec3(0.0f, 5.2f,  0.0f), Vec3(11.0f, 0.4f, 11.0f) },
+        };
+        for (const auto &w : shell) {
+            const NodeId n = s->createNode();
+            s->attachMesh(n, mesh, mat);
+            s->setNodeTransform(n, w[0], Quat(), w[1]);
+        }
+    }
     for (int i = 0; i < 3; ++i) {
         const NodeId lamp = s->createNode();
         LightDesc d;
@@ -405,12 +424,6 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
     e->setShadowMapBudget(2u);          // hold the derivation still
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE, because this case needs a probe grid to exist at all
-    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
-    // declines to build probes in an open scene — a floor with a block on it is
-    // exactly that — unless the author has pinned the lit volume. This suite is
-    // about probe-capture shadow caching, not about probe placement, so it says
-    // where the space is and gets its grid.
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     // DELIBERATELY THE CHEAPEST HYBRID THAT STILL SHADOWS ITS PROBES: Low
@@ -1317,6 +1330,33 @@ static void t3v_atlas_rebuild(Engine *e, View *v)
     e->destroyScene(r.scene);
 }
 
+/// WALLS AND A ROOF FOR THE CASES THAT NEED PROBES (R5-ROOM, 2026-09-15). A
+/// probe is built or dropped by WHAT IT SEES now — its own captured depth, per
+/// probe — and the cache room is a 40 m floor with two 1 m blocks on it, where
+/// every candidate photographs the floor below it and sky in every direction
+/// else, and is correctly dropped. The "stated space" note these cases used to
+/// carry is gone with the rule it named: pinning the bounds moves the volume
+/// the probes are spread through, it does not stand a rule down, because there
+/// is no rule about scenes left to stand down. These cases are about
+/// probe-capture shadow CACHING, not about placement, so they give their probes
+/// something to photograph. The lamps and the movers are untouched, and so are
+/// the pass counts every one of them asserts.
+static void wallCacheRoom(Scene *s, const CacheRoom &r)
+{
+    const Vec3 walls[5][2] = {
+        { Vec3(-5.5f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 11.0f) },
+        { Vec3( 5.5f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 11.0f) },
+        { Vec3(0.0f, 2.5f, -5.5f), Vec3(11.0f, 5.0f, 0.4f) },
+        { Vec3(0.0f, 2.5f,  5.5f), Vec3(11.0f, 5.0f, 0.4f) },
+        { Vec3(0.0f, 5.2f,  0.0f), Vec3(11.0f, 0.4f, 11.0f) },
+    };
+    for (const auto &w : walls) {
+        const NodeId n = s->createNode();
+        s->attachMesh(n, r.mesh, r.mat);
+        s->setNodeTransform(n, w[0], Quat(), w[1]);
+    }
+}
+
 // T3r — THE PLANAR MIRROR REUSES THE LAMP MAPS (P5; D3 = A: the reflect node's
 // focused count follows the main node's, so the mirror caches every lamp).
 static void t3_cache_reflect(Engine *e, View *v)
@@ -1361,14 +1401,9 @@ static void t3_cache_probe(Engine *e, View *v)
     std::printf("-- T3p: reflection probes reuse the cached lamp maps\n");
     ensureRoomForThreeLamps(e, v);
     CacheRoom r = buildCacheRoom(e, v, "t3p");
+    wallCacheRoom(r.scene, r);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE, because this case needs a probe grid to exist at all
-    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
-    // declines to build probes in an open scene — a floor with a block on it is
-    // exactly that — unless the author has pinned the lit volume. This suite is
-    // about probe-capture shadow caching, not about probe placement, so it says
-    // where the space is and gets its grid.
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
@@ -1591,11 +1626,9 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     CHECK(e->shadowStatus().focusedMaps >= 5u,
           "the view atlas holds all five lamps (%u maps)", e->shadowStatus().focusedMaps);
 
+    wallCacheRoom(r.scene, r);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE: the hybrid measures enclosure and declines to place
-    // probes in an open scene unless the author pins the lit volume (the same
-    // note T3p carries).
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
@@ -1749,14 +1782,9 @@ static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
     LightDesc d; d.type = LightType::Directional; d.intensity = 0.5f; d.castShadows = true;
     r.scene->setLight(sun, d);
     r.scene->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
+    wallCacheRoom(r.scene, r);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE, because this case needs a probe grid to exist at all
-    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
-    // declines to build probes in an open scene — a floor with a block on it is
-    // exactly that — unless the author has pinned the lit volume. This suite is
-    // about probe-capture shadow caching, not about probe placement, so it says
-    // where the space is and gets its grid.
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
@@ -1807,14 +1835,9 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
     LightDesc d; d.type = LightType::Directional; d.intensity = 0.3f; d.castShadows = true;
     a.scene->setLight(sun, d);
     a.scene->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
+    wallCacheRoom(a.scene, a);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    // A STATED SPACE, because this case needs a probe grid to exist at all
-    // (2026-09-13 reflection-probe lane): the hybrid now MEASURES enclosure and
-    // declines to build probes in an open scene — a floor with a block on it is
-    // exactly that — unless the author has pinned the lit volume. This suite is
-    // about probe-capture shadow caching, not about probe placement, so it says
-    // where the space is and gets its grid.
     gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
     gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;

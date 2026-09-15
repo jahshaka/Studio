@@ -53,21 +53,21 @@ var createMs = Date.now() - t0;
 // "fix" that simply left global illumination off would pass every timing budget
 // in this file and ruin every scene.
 //
-// WHAT "ARMED" MEANS FOR A NEW PROJECT CHANGED ON 2026-09-13 (owner decision
-// Q3, SPECS/REFLECTION_PROBE_AUDIT.md): a new project's scene is OPEN — a
-// ground plane and nothing enclosing it — and the hybrid now measures that and
-// declines to build a probe grid there, leaving the sky cubemap as the
-// reflection source. So the arming this suite watches for is the VOXEL half
-// (vctBound), and `probeGridRefused` is asserted with it so that a silent
-// hybrid failure can never masquerade as the decision.
+// WHAT "ARMED" MEANS FOR A NEW PROJECT: a new project's scene is a ground and
+// nothing near it, and every candidate probe over it photographs the floor
+// below and sky in every other direction, so not one is kept and the sky
+// cubemap stays the reflection source (owner decision 2026-09-13 Q3; the rule
+// has been per PROBE since R5-ROOM, 2026-09-15). So the arming this suite
+// watches for is the VOXEL half (vctBound), and `probesDropped` is asserted
+// with it so that a silent hybrid failure can never masquerade as the
+// decision.
 var giAtReturn = world.giStatus();
 editor.frame(4);
 var gi = world.giStatus();
-if (!gi.live || !gi.vctBound || !gi.probeGridRefused || gi.pccBound)
+if (!gi.live || !gi.vctBound || !(gi.probesDropped > 0) || gi.pccBound)
     fail("global illumination never armed after project creation (live=" + gi.live +
          " pccBound=" + gi.pccBound + " vctBound=" + gi.vctBound +
-         " probeCount=" + gi.probeCount + " probeGridRefused=" + gi.probeGridRefused +
-         " probeEnclosedAxes=" + gi.probeEnclosedAxes +
+         " probeCount=" + gi.probeCount + " probesDropped=" + gi.probesDropped +
          ") — the initial thumbnail's GI park did not restore");
 
 var after = world.photon();

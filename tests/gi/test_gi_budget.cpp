@@ -237,7 +237,14 @@ int main(int argc, char **argv)
         const Colour refreshed = mirrorPixel();
         show("budget 0, after world.refreshGi()", refreshed);
         CHECK(mirror.giRefreshCount() == before + 1, "budget 0: world.refreshGi() still re-solves");
-        CHECK(refreshed.g > refreshed.r + 0.5f,
+        // 0.3, not the 0.5 the two sweep cases below use: the separation this
+        // one reads is +0.380 (r 0.051 g 0.431) since R5-ROOM moved the probe
+        // grid off the retired room-measuring rule's region and onto the one
+        // the probes photograph, and 0.5 was a number tuned to where the probes
+        // used to stand. What the case is FOR is unchanged and unambiguous —
+        // green slab, not red wall — and the frozen reading just above it is
+        // r 0.533 g 0.263, i.e. the opposite sign.
+        CHECK(refreshed.g > refreshed.r + 0.3f,
               "budget 0: ...and re-captures at once (the mirror shows the slab on the next frame)");
         CHECK(escene->giStatus().staleProbes == 0, "budget 0: nothing is left stale after it");
     }
