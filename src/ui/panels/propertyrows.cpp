@@ -246,7 +246,13 @@ Result Registry::apply(QWidget *root, const QStringList &terms, bool strongOnly)
     if (!root) return result;
     liveTerms = terms;
     const QString chain = sectionTitle(root).toLower();
-    result.titleMatch = !terms.isEmpty() && matchesAll(terms, chain);
+    // The blade's OWN title, judged by the same rule its rows are (strongOnly
+    // included): a section kept on screen by a mid-word coincidence in its
+    // title, while the column is showing word-start matches only, would be an
+    // empty header.
+    bool titleStrong = false;
+    result.titleMatch = !terms.isEmpty() && matchesAll(terms, chain, &titleStrong)
+                        && (!strongOnly || titleStrong);
     result.anyVisible = applyTo(root, terms, chain, strongOnly, result);
     if (terms.isEmpty()) result.anyVisible = true;
     return result;
