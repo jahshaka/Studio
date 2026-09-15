@@ -705,3 +705,31 @@ if(JAHSHAKA_ASAN)
         RUN_SERIAL ON
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
+
+# GI OFF AND BACK ON AT RUNTIME (lane PATCHES-1 / GI-REENABLE-1): every other GI
+# suite pushes its mode once, so the TRANSITION had no coverage at all — and it
+# is what a user drives (the World panel's dropdown, `world.setGi`, a scene
+# open). Two things here that no other suite does: it runs the hybrid with
+# MULTIPLE BOUNCES (numBounces = 2, i.e. the bounce-inject compute job actually
+# exists — ogre-patch 0057's subject), and it drains `takeLastError()` after
+# every push, so an arm that throws its way out of a build fails the suite
+# instead of rendering a dark picture quietly.
+# Its own binary for the same process-wide-binding reason as every GI suite.
+add_executable(test_gi_reenable test_gi_reenable.cpp)
+set_target_properties(test_gi_reenable PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_reenable PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_reenable PRIVATE JahshakaEngine)
+add_dependencies(test_gi_reenable JahshakaEngineMedia)
+add_test(NAME gi.reenable COMMAND test_gi_reenable
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL and a wide timeout for the same reason as gi.cascades: the chain
+# holds several voxel volumes at once (the VRAM-contention class, CLAUDE.md) and
+# this suite builds the arm six times over.
+set_tests_properties(gi.reenable PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
