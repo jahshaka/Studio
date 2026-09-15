@@ -724,6 +724,22 @@ static int costMain(Engine *e, const char *, const char *)
     measureMs(2, "1080p FULL-res, mirror-heavy", 0.8f);
     measureMs(1, "1080p HALF-res, mirror-heavy", 0.2f);
 
+    // ...AND THE FILTER'S OWN WORST CASE, which a box of MIRRORS does not
+    // measure (round C). The spatial filter's radius is 0 on a mirror by
+    // design — there is no variance to remove and a blur would destroy a
+    // correct image — so the two numbers above are the trace plus an empty
+    // kernel. Taking every wall to just below the cutoff saturates the radius
+    // at kMaxRadius over the whole frame: a 7x7 gather per traced pixel, which
+    // is the most this pass can ever be asked for.
+    {
+        PbrParams glossy = mirror;
+        glossy.roughness = 0.39f;                 // just inside the 0.40 gate
+        CHECK(s->setPbrMaterial(mirrorMat, glossy), "the mirror box goes glossy");
+        e->renderOneFrame();
+        measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 0.8f);
+        measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.2f);
+    }
+
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
