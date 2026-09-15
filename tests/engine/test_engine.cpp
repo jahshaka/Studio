@@ -5513,6 +5513,16 @@ void monitor_survives_rebuilds_and_view_destruction() {
     render(fx.e, 3);
     evs.clear();
     fx.e->takeMonitorEvents(evs); evs.clear();
+    // A FROM-SCRATCH REBUILD, and it has to be ASKED for as one: the arm this
+    // case used to run was Instant Radiosity, whose refresh WAS a from-scratch
+    // re-trace. The voxel arm's refresh takes the reuse path when nothing it
+    // holds can have died (FIX WAVE B4) and files a `vct.refresh` row instead of
+    // a `gi.rebuild` event — which is the right behaviour and the wrong thing
+    // for this case to measure. A quality change is a rebuild by definition, so
+    // this is the same statement about the monitor with no assumption about
+    // which refresh path the engine chose.
+    gi.quality = GiQuality::Medium;
+    rig.s->setGlobalIllumination(gi);
     rig.s->refreshGlobalIllumination();
     render(fx.e, 6);
     fx.e->takeFrameRecords(recs);
@@ -5520,17 +5530,16 @@ void monitor_survives_rebuilds_and_view_destruction() {
     bool passesAfterGi = false;
     for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterGi = true;
     CHECK_MSG(passesAfterGi, "the listener must ride a GI rebuild");
-    // ...and the rebuild itself is an EVENT, timed and tagged with the reason
-    // that asked for it (Refresh here: the host asked explicitly).
+    // ...and the rebuild itself is an EVENT, timed and tagged with a reason.
     bool giRebuild = false, giHasReason = false;
     for (const MonitorEvent &e : evs)
         if (e.kind == MonitorEventKind::GiRebuild) {
             giRebuild = true;
-            if (e.reason == WorkReason::Refresh) giHasReason = true;
+            if (e.reason != WorkReason::None) giHasReason = true;
             std::printf("    gi rebuild event: %.2f ms, reason %d\n", e.ms, int(e.reason));
         }
     CHECK_MSG(giRebuild, "a GI rebuild must appear in events");
-    CHECK_MSG(giHasReason, "a GI rebuild carries the reason that asked for it");
+    CHECK_MSG(giHasReason, "a GI rebuild carries a reason, never None");
     gi.mode = GiMode::Off;
     rig.s->setGlobalIllumination(gi);
     render(fx.e, 2);

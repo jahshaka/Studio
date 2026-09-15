@@ -159,13 +159,21 @@ editor.frame(90);                       // well past both settle gates
 var after = world.giStatus();
 assert(after.mobilityRebuilds === mob0 + 1,
        "the flip costs EXACTLY ONE mobility rebuild [" + mob0 + " -> " + after.mobilityRebuilds + "]");
-assert(after.rebuilds === reb0 + 1,
-       "...one from-scratch GI rebuild in total [" + reb0 + " -> " + after.rebuilds + "]");
+// ...AND NO WHOLE-CHAIN REBUILD AT ALL, which is the stronger statement and the
+// one the cascade chain makes possible (PHOTON_SPEC G1): a mobility flip is an
+// EDIT, and under the chain — on at every tier since E2 (6) — an edit marks the
+// cascades that can see it and the scheduler spends them one per frame. It used
+// to cost a from-scratch arm. `mobilityRebuilds` above still counts the flip, so
+// nothing about "one re-solve per flip" is weakened; what changed is what a
+// re-solve COSTS, and that is exactly what this line now says.
+assert(after.rebuilds === reb0,
+       "...and NOT ONE from-scratch GI rebuild, because the chain answers an edit " +
+       "per cascade [" + reb0 + " -> " + after.rebuilds + "]");
 assert(editor.mirrorStats().giRefreshes === solves0,
        "...and NO re-solve settled out of it on top [" + editor.mirrorStats().giRefreshes +
        " vs " + solves0 + "]");
 editor.frame(60);
-assert(world.giStatus().rebuilds === reb0 + 1 && world.giStatus().mobilityRebuilds === mob0 + 1,
+assert(world.giStatus().rebuilds === reb0 && world.giStatus().mobilityRebuilds === mob0 + 1,
        "...and 60 more idle frames add nothing");
 
 console.log("mobility_play: all assertions passed");
