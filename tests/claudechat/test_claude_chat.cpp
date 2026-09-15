@@ -1104,6 +1104,21 @@ static void testUserBubbleVisible(const QString &scratch)
     std::printf("   (ink %d px, background %d px, box %dx%d at %d,%d)\n", inkPixels,
                 backgroundPixels, box.width(), box.height(), box.x(), box.y());
 
+    // §362's OTHER hypothesis, closed: the transcript is wiped by a
+    // projectChanged that the MCP connection state (or any other
+    // refreshClaudeChatContext caller) re-fires with the SAME folder. A
+    // configure() to the folder it already has must emit nothing at all, so
+    // the question stays on screen.
+    QTemporaryDir projectDir;
+    host.configure(projectDir.path(), false, 0, QString());
+    host.configure(projectDir.path(), true, 8639, QStringLiteral("tok"));
+    host.configure(projectDir.path(), false, 0, QString());
+    qApp->processEvents();
+    CHECK(window.findChildren<QLabel *>("claudeBubbleUser").size() == 1,
+          "bubble: re-configuring the SAME project leaves the question on screen");
+    CHECK(window.findChildren<QLabel *>("claudeBubbleUser").first()->text() == question,
+          "bubble: ...unchanged");
+
     // The error bubble is made by the same one function now (it used to be an
     // assistant bubble renamed and re-polished by hand at three call sites).
     host.parser()->feed("{\"type\":\"result\",\"subtype\":\"error_during_execution\","
