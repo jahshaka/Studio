@@ -73,6 +73,19 @@ ScriptEngine::~ScriptEngine()
 void ScriptEngine::addModule(ApiModule *module)
 {
     if (!module) return;
+    // EVERY MODULE MUST BE REGISTERED BEFORE THE FIRST RUN (round 2, L3). The
+    // worker's shim objects are generated once, from the registry, when the
+    // engine is first used; a module added after that is in the registry — so
+    // help(), the docs and api.verbs() all advertise it — and has no JS object
+    // at all, which reads as "the verb silently does nothing". Loud, because
+    // the symptom is not.
+    if (mInstalled) {
+        qWarning("scripting: module '%s' was registered AFTER the first script ran — its verbs "
+                 "are documented but not callable. Register every module before the engine is "
+                 "used (MainWindow does this in one place).",
+                 qPrintable(module->jsName()));
+        Q_ASSERT(!mInstalled);
+    }
     module->setParent(this);   // C++ ownership: nothing else decides when a module dies
     mRegistry.add(module);
 }
