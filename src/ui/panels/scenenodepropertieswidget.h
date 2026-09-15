@@ -181,6 +181,8 @@ public slots:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    /// Pays an owed mount when the dock opens (see applyTab).
+    void showEvent(QShowEvent *event) override;
 
 private:
     /// Logs (once per offender) when the panel's minimum width does not fit the
@@ -265,6 +267,10 @@ private:
     int mounts = 0;
     /// A mount is owed to this turn of the event loop (see applyTab).
     bool mountPending = false;
+    /// A mount is owed to the moment this column becomes VISIBLE — the dock is
+    /// closed, or the panel is behind another tabified dock, or it has not been
+    /// realised yet. The second of the two inputs.
+    bool mountWhenShown = false;
     /// The scene the world blades are currently pointed at (see bindScene).
     QSharedPointer<iris::Scene> worldBoundScene;
 

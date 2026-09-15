@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QLayout>
 #include <QPointer>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QScrollArea>
 #include <QTimer>
 
@@ -392,18 +393,49 @@ QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
 // EVERY QUESTION ABOUT THE COLUMN PAYS THE DEBT FIRST (flushPendingMount): a
 // verb that lists the rows, the filter box, a test that asserts what is
 // mounted. Deferred is never "not built" to anyone who asks.
+//
+// AND NOTHING IS BUILT FOR A COLUMN NOBODY CAN SEE. The properties dock is
+// closable, and with it closed an add still cost 32 ms of its 50: the panel
+// built its whole blade column into a widget tree that was not on screen. So
+// VISIBILITY IS THE SECOND INPUT, kept apart from the first exactly as
+// PROPERTY_FILTER_SPEC's two-inputs law keeps the panel's own reason apart from
+// the filter's: the panel's reason is "the selection moved", the dock's is "is
+// anyone looking", and the debt is owed to whichever comes last. A hidden
+// column owes its mount to its showEvent; a question owes it to the asker.
 void SceneNodePropertiesWidget::applyTab()
 {
+    if (!isVisible()) {
+        // Nobody can see this column: the debt moves from this turn to the
+        // moment it is shown. (A query still forces it — flushPendingMount.)
+        mountWhenShown = true;
+        mountPending = false;
+        return;
+    }
     if (mountPending) return;       // already owed for this turn — the LAST state wins
     mountPending = true;
-    QTimer::singleShot(0, this, [this]() { flushPendingMount(); });
+    QTimer::singleShot(0, this, [this]() {
+        if (!mountPending) return;
+        mountPending = false;
+        // The dock may have closed between the selection and the turn's end.
+        if (!isVisible()) { mountWhenShown = true; return; }
+        mountNow();
+    });
 }
 
 void SceneNodePropertiesWidget::flushPendingMount()
 {
-    if (!mountPending) return;
+    if (!mountPending && !mountWhenShown) return;
     mountPending = false;
+    mountWhenShown = false;
     mountNow();
+}
+
+/// THE DOCK OPENED (or the tabified dock came to the front, or the panel was
+/// realised for the first time). Whatever the column owes, it owes now.
+void SceneNodePropertiesWidget::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    flushPendingMount();
 }
 
 void SceneNodePropertiesWidget::mountNow()

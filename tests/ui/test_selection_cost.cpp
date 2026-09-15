@@ -592,6 +592,51 @@ int main(int argc, char **argv)
         turn();
     }
 
+    // ---- A COLUMN NOBODY CAN SEE BUILDS NOTHING (ADD-1) -------------------
+    //
+    // With the properties dock CLOSED a scripted add still cost 32 ms of its 50:
+    // the panel built its whole blade column into a widget tree that was not on
+    // screen. Visibility is the SECOND input (the two-inputs law, as in
+    // PROPERTY_FILTER_SPEC): the panel's own reason is "the selection moved",
+    // the dock's is "is anyone looking", and the debt is owed to whichever comes
+    // last — the showEvent, or the first question asked.
+    {
+        panel->setSceneNode(nodes[0]);
+        turn();
+        scroll->hide();                       // the dock closes
+        turn();
+        const int before = panel->mountCount();
+        for (int i = 0; i < 20; ++i) { panel->setSceneNode(nodes[i % nodes.size()]); turn(); }
+        CHECK(panel->mountCount() == before,
+              QStringLiteral("hidden: 20 selections with the column hidden mount NOTHING (%1)")
+                  .arg(panel->mountCount() - before).toUtf8().constData());
+        scroll->show();                       // the dock opens again
+        turn();
+        CHECK(panel->mountCount() == before + 1,
+              QStringLiteral("hidden: ...and showing it mounts exactly once, for the LAST "
+                             "selection (%1)").arg(panel->mountCount() - before)
+                  .toUtf8().constData());
+        // ...and what it mounted is the last selection's blade set, not the
+        // first's: nodes[19 % 15] == nodes[4] is a mesh.
+        bool material = false;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->isVisibleTo(panel) && b->panelTitle() == QStringLiteral("Material")) material = true;
+        CHECK(material, "hidden: ...and it is the LAST selection that got mounted");
+
+        // A QUESTION STILL GETS A TRUE ANSWER while the column is hidden: the
+        // verb that lists the rows must never report an empty column just
+        // because the dock is closed.
+        scroll->hide();
+        turn();
+        panel->setSceneNode(nodes[5]);        // a light
+        turn();
+        const auto hiddenRows = panel->propertyRows(SceneNodePropertiesWidget::Tab::Selection);
+        CHECK(!hiddenRows.isEmpty(),
+              "hidden: asking what a hidden column holds builds it and answers truthfully");
+        scroll->show();
+        turn();
+    }
+
     // ---- THE TWO PICK NUMBERS (ADD-1) -------------------------------------
     //
     // Reported, not asserted in milliseconds (this box is shared): the cost of
