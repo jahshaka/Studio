@@ -5,11 +5,12 @@
 // once, right after the window is up. Two things about that used to be wrong
 // and this suite holds them:
 //
-//   1. THE REQUEST CARRIED NO TRANSFER TIMEOUT, so it inherited Qt >= 6.7's
-//      30 s default on a plain QNetworkAccessManager. A launch behind a
-//      black-holing route therefore kept a socket, a reply and a timer alive
-//      for half a minute after startup, and the budget was Qt's to change. It
-//      sets its own now (UpdateChecker::kTransferTimeoutMs).
+//   1. THE REQUEST CARRIED NO TRANSFER TIMEOUT — and a plain
+//      QNetworkAccessManager applies NONE by itself (measured: 0; a GET
+//      against a never-answering socket never finishes), so a launch behind a
+//      black-holing route kept a socket, a reply and the manager's state alive
+//      for the life of the process. It sets its own now
+//      (UpdateChecker::kTransferTimeoutMs).
 //   2. THE REPLY WAS NEVER DELETED — one orphan per launch, owned by the
 //      manager until the process exited, on every path including the failures.
 //
@@ -140,11 +141,12 @@ int main(int argc, char **argv)
 
     // ---- 3. THE SHIPPED DEFAULT -------------------------------------------
     // The number the launch path actually uses. Asserted as a range, because
-    // the point is the ORDER: a small JSON fetch, seconds not minutes, and
-    // strictly under the 30 s Qt would have imposed.
+    // the point is the ORDER: a small JSON fetch, seconds not minutes (Qt
+    // itself imposes nothing; 30 s is only setTransferTimeout()'s no-argument
+    // value, kept here as the ceiling a launch check must never reach).
     std::printf("info: the shipped transfer timeout is %d ms\n", UpdateChecker::kTransferTimeoutMs);
     CHECK(UpdateChecker::kTransferTimeoutMs > 1000 && UpdateChecker::kTransferTimeoutMs < 30000,
-          "the shipped transfer timeout is this check's own, and under Qt's default");
+          "the shipped transfer timeout is this check's own, seconds not minutes");
 
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;

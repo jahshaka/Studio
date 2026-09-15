@@ -255,11 +255,11 @@ int main(int argc, char **argv)
     // inside renderOneFrame — UI-thread work this lane neither owns nor can
     // slice, and the cost is real: archive.responsive measured ~1 780 ms of it
     // on a quiet box and spent months reading it as its own subject (see the
-    // boot control there). This suite's scratch home survives between runs, so
-    // its shader cache is usually warm and it usually does not pay it — but
-    // the cache is keyed by BUILD, so the first run after every rebuild is
-    // cold, which is the run a gate makes. Pay it here, before anything is
-    // measured. Printed, never asserted: open.responsive owns the cold case.
+    // boot control there). This suite wipes its data root — which IS the
+    // engine's shader + pipeline cache — at the top of every run, so EVERY run
+    // is cold and pays the storm; the only question is whether a measurement
+    // is taken inside it. Pay it here, before anything is measured. Printed,
+    // never asserted: open.responsive owns the cold case.
     measureControlGap(mcp, "boot");
 
     // ---- 1. the ASYNC IMPORT, with the UI thread under measurement --------
