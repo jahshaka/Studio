@@ -30,7 +30,11 @@
 //                 (lane shadercache-2) those 300 captures minted 300 permanent
 //                 Hlms pass-cache entries and the warning fired at 256.
 //                 (The field is 13 bits since ogre-patch 0046 and run 5 asserts
-//                 the live count instead of the warning — see run 5.)
+//                 the live count instead of the warning — see run 5. And it
+//                 asserts a DELTA across the sky loop, not an absolute after
+//                 it: the absolute is that delta plus a baseline nobody
+//                 controls, so a legitimate new pass property used to red this
+//                 suite with no regression in it.)
 #include <QCoreApplication>
 #include <QDir>
 #include <QJsonDocument>
@@ -49,9 +53,23 @@ namespace {
 /// the app SAID rather than about what app.shaderCache() reported.
 QString gLastOutput;
 
+/// The LAST `<marker> {json}` line of a run's output, as an object. The marker
+/// prefix keeps it findable in a log the engine also writes to; a run may print
+/// several different markers (run 5 samples the cache either side of its sky
+/// loop), so the scan is parameterised.
+QJsonObject markerObject(const QString &out, const QString &marker)
+{
+    QJsonObject last;
+    for (const QString &line : out.split('\n')) {
+        const int at = line.indexOf(marker);
+        if (at < 0) continue;
+        last = QJsonDocument::fromJson(line.mid(at + marker.size()).toUtf8()).object();
+    }
+    return last;
+}
+
 /// Runs the app with `--script`, returns the app.shaderCache() object the
-/// script printed. The marker prefix keeps it findable in a log the engine also
-/// writes to.
+/// script printed.
 QJsonObject runApp(const QString &home, const QString &script, const QStringList &extraArgs,
                    int *exitCodeOut)
 {
@@ -80,12 +98,7 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     if (exitCodeOut) *exitCodeOut = app.exitCode();
     const QString out = QString::fromUtf8(app.readAll());
     gLastOutput = out;
-    QJsonObject last;
-    for (const QString &line : out.split('\n')) {
-        const int at = line.indexOf(QStringLiteral("SHADERCACHE "));
-        if (at < 0) continue;
-        last = QJsonDocument::fromJson(line.mid(at + 12).toUtf8()).object();
-    }
+    const QJsonObject last = markerObject(out, QStringLiteral("SHADERCACHE "));
     if (last.isEmpty()) {
         std::printf("---- app output ----\n%s\n--------------------\n", qPrintable(out));
     }
@@ -220,20 +233,64 @@ int main(int argc, char **argv)
     // field holds 8,192 entries and 300 stray ones would no longer trip any
     // log line — the assertion that caught this regression would have gone
     // quiet while still printing "ok". app.shaderCache() reports the live cache
-    // sizes, so the bound is stated directly, and it is deliberately 256: the
-    // size of the field that actually overflowed, which the churn must stay
-    // inside whatever the hash's split becomes later.
+    // sizes, so the bound is stated directly.
+    //
+    // AND IT IS A DELTA, NOT A FENCE (lane SMALL-ITEMS D, ledger §417). The
+    // absolute count after the churn is two things added together: the sky
+    // captures' contribution, which is the regression, and a BASELINE this
+    // suite does not control — the World-row churn's compositor rebuilds, the
+    // player round trips, and the pass sets runs 1-4 left in the disk cache for
+    // this run to replay (measured at 115 for a whole session). `< 256`
+    // conflated them: the day somebody legitimately adds a pass property the
+    // baseline rises and this suite reds with no regression in it, while the
+    // regression it guards — one permanent entry per sky capture — is a STEP
+    // across the sky loop. So the script samples the cache either side of that
+    // loop and the assertion is the difference.
+    //
+    // THE TOLERANCE IS 8, MEASURED. MEASURED ON THIS TREE, twice, 300 colour-sky
+    // captures: 36 -> 36, delta ZERO — which is the point of the recycled
+    // capture name, a sky change re-entering pass property sets that already
+    // exist. The tolerance is not zero because a sky change is not GUARANTEED
+    // free of new sets: the first capture of a run mints the sets for a
+    // configuration nothing has drawn yet, and a future sky type or a new pass
+    // property could add a handful more. Eight is that handful; the regression's
+    // own signature is +300, nearly two orders of magnitude above it.
+    //
+    // The BASELINE this delta is taken from — 36 here, 115 in a whole editor
+    // session — is exactly what the old absolute fence conflated with the
+    // regression, and it moves for reasons that have nothing to do with sky
+    // captures.
     const QJsonObject churn = runApp(home, scripts + "e2e_shader_cache_churn.js", {}, &rc);
     CHECK(rc == 0, "run 5 survived the churn and exited cleanly");
     CHECK(!churn.isEmpty(), "run 5 reported its cache state after the churn");
     CHECK(!gLastOutput.contains(QStringLiteral("skipping shader cache entry")),
           "no shader-cache entry had an out-of-range index or a missing PSO during the churn");
+    const QJsonObject preSky = markerObject(gLastOutput, QStringLiteral("SHADERCACHE-PRESKY "));
+    const QJsonObject postSky = markerObject(gLastOutput, QStringLiteral("SHADERCACHE-POSTSKY "));
+    CHECK(!preSky.isEmpty() && !postSky.isEmpty(),
+          "run 5 reported its cache state either side of the sky loop");
+    const int passBefore = preSky.value(QStringLiteral("passCacheEntries")).toInt(-1);
+    const int passAfter = postSky.value(QStringLiteral("passCacheEntries")).toInt(-1);
+    const int compiledBefore = preSky.value(QStringLiteral("compiledThisRun")).toInt(-1);
+    const int compiledAfter = postSky.value(QStringLiteral("compiledThisRun")).toInt(-1);
     const int passEntries = churn.value(QStringLiteral("passCacheEntries")).toInt(-1);
     const int passCapacity = churn.value(QStringLiteral("passCacheCapacity")).toInt(-1);
-    std::printf("      pass cache after the churn: %d of %d\n", passEntries, passCapacity);
-    CHECK(passEntries > 0 && passEntries < 256,
-          "the pass cache stayed inside 256 entries through 300 sky captures "
-          "(the recycled capture name)");
+    std::printf("      pass cache across 300 sky captures: %d -> %d (delta %d); "
+                "compiled %d -> %d (delta %d)\n",
+                passBefore, passAfter, passAfter - passBefore,
+                compiledBefore, compiledAfter, compiledAfter - compiledBefore);
+    std::printf("      pass cache after the whole churn: %d of %d\n", passEntries, passCapacity);
+    CHECK(passBefore > 0 && passAfter >= passBefore,
+          "the pass cache was measured either side of the sky loop and never shrank");
+    // THE REGRESSION ASSERTION. Before the fix this delta was 300.
+    CHECK(passAfter - passBefore < 8,
+          "300 sky captures added fewer than 8 pass-cache entries "
+          "(the recycled capture name — before the fix: 300)");
+    // The absolute stays PRINTED, and asserted only against the field that
+    // actually overflowed. It is a sanity bound on the whole session, not the
+    // regression fence it used to be.
+    CHECK(passEntries > 0 && passEntries < passCapacity,
+          "the whole session's pass cache fits the shader hash's pass field");
     CHECK(passCapacity >= 8192,
           "the shader hash's pass field addresses at least 8192 entries (ogre-patch 0046)");
     CHECK(!gLastOutput.contains(QStringLiteral("distinct pass property combinations")),

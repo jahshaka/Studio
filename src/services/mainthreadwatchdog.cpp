@@ -43,7 +43,7 @@ namespace {
 std::atomic<bool> gDisabled { false };
 std::atomic<int>  gReports { 0 };
 std::atomic<qint64> gLastStallMs { 0 };
-std::atomic<int>  gStallMs { 2000 };
+std::atomic<int>  gStallMs { MainThreadWatchdog::kDefaultStallMs };
 /// WHEN the last report was made, on the heartbeat's monotonic clock. Reported
 /// by stats() because the COOLDOWN below is otherwise invisible: a caller that
 /// stalls the thread inside it gets no report at all and has no way to tell
@@ -135,6 +135,41 @@ void watchdogLoop()
     gRunning.store(false, std::memory_order_relaxed);
 }
 
+/// `--watchdog-stall=N`, or -1 when the launch did not ask for a threshold.
+///
+/// Read from the argument list for the same reason `--watchdog=off` is: the
+/// watchdog is started from MainWindow's constructor (the UI thread it watches
+/// is the one that runs it) and MainWindow never sees CliOptions. Unknown flags
+/// are ignored by CliOptions::parse, so this costs nobody anything.
+///
+/// A malformed or out-of-range value is a WARNING and the default, never a
+/// silent reinterpretation: `--watchdog-stall=50` asking for something the
+/// 200 ms poll cannot resolve should say so.
+int stallMsFromCommandLine()
+{
+    const QStringList args = QCoreApplication::arguments();
+    for (const QString &a : args) {
+        if (!a.startsWith(QLatin1String("--watchdog-stall="))) continue;
+        const QString text = a.mid(17);
+        bool ok = false;
+        const int value = text.toInt(&ok);
+        if (!ok) {
+            qWarning("--watchdog-stall: '%s' is not a number of milliseconds; "
+                     "keeping %d ms", qUtf8Printable(text),
+                     MainThreadWatchdog::kDefaultStallMs);
+            return -1;
+        }
+        if (value < MainThreadWatchdog::kMinStallMs) {
+            qWarning("--watchdog-stall: %d ms is below the %d ms floor (the watchdog polls "
+                     "every 200 ms and could not resolve it); keeping %d ms", value,
+                     MainThreadWatchdog::kMinStallMs, MainThreadWatchdog::kDefaultStallMs);
+            return -1;
+        }
+        return value;
+    }
+    return -1;
+}
+
 bool enabledByConfiguration()
 {
     if (gDisabled.load(std::memory_order_relaxed)) return false;
@@ -174,7 +209,13 @@ void start(int stallMs)
     if (gRunning.load(std::memory_order_relaxed)) return;
     if (!enabledByConfiguration()) return;
 
-    gStallMs.store(qMax(250, stallMs), std::memory_order_relaxed);
+    // THE LAUNCH'S THRESHOLD WINS over the caller's default: `--watchdog-stall=N`
+    // exists so a diagnosis run can photograph a stall that is real but shorter
+    // than the 2 s the shipped default is tuned for (RESPONSIVE-3 lost a 1.4 s
+    // export stall to exactly that, ledger §468).
+    const int fromFlag = stallMsFromCommandLine();
+    gStallMs.store(qMax(kMinStallMs, fromFlag > 0 ? fromFlag : stallMs),
+                   std::memory_order_relaxed);
     gUiThread = pthread_self();
 
     // PRE-WARM. The first backtrace() in a process dlopen()s the unwinder and
@@ -241,6 +282,27 @@ void disable()
     stop();
 }
 
+int stallMs()
+{
+    return gStallMs.load(std::memory_order_relaxed);
+}
+
+bool setStallMs(int ms)
+{
+#if JAH_WATCHDOG_ENABLED
+    if (ms < kMinStallMs) return false;
+    // A plain atomic store and nothing else: the watchdog thread re-reads
+    // gStallMs on every poll (200 ms), so a change takes effect within one
+    // poll with no restart, no lock and no window in which the watchdog is not
+    // watching.
+    gStallMs.store(ms, std::memory_order_relaxed);
+    return true;
+#else
+    Q_UNUSED(ms);
+    return false;
+#endif
+}
+
 QVariantMap stats()
 {
     QVariantMap m;
@@ -248,6 +310,8 @@ QVariantMap stats()
     m["running"] = isRunning();
     m["enabled"] = isSupported() && !gDisabled.load(std::memory_order_relaxed);
     m["stallMs"] = gStallMs.load(std::memory_order_relaxed);
+    m["minStallMs"] = kMinStallMs;
+    m["defaultStallMs"] = kDefaultStallMs;
     m["reports"] = gReports.load(std::memory_order_relaxed);
     m["lastStallMs"] = double(gLastStallMs.load(std::memory_order_relaxed));
     // THE COOLDOWN, VISIBLE. Without these two a caller cannot tell "no stall
