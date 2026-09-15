@@ -238,11 +238,6 @@ void MaterialPropertyWidget::addResetRow()
                              { QStringLiteral("reset"), QStringLiteral("assign") });
 }
 
-void MaterialPropertyWidget::forceShaderRefresh(const QString &materialName)
-{
-    emit materialChanged(materialName);
-}
-
 void MaterialPropertyWidget::setWidgetProperties()
 {
     materialPropWidget = this->addPropertyWidget();
@@ -281,11 +276,6 @@ void MaterialPropertyWidget::setWidgetProperties()
             "A detail Normal Map needs a mesh with tangents, and only ever adds to the "
             "base normal map."));
     }
-}
-
-void MaterialPropertyWidget::materialChanged(const QString &text)
-{
-    Q_UNUSED(text)
 }
 
 // The picker now chooses a MATERIAL, not a shader (HLMS_ADOPTION P4b): a

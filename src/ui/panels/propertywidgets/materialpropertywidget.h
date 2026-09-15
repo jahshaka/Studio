@@ -55,7 +55,6 @@ public:
     iris::MaterialPtr currentMaterial() const { return material; }
 
     void setSceneNode(iris::SceneNodePtr sceneNode);
-    void forceShaderRefresh(const QString&);
     /// "Reset to <provider>": present only while the shown node has a default
     /// material of its own (services/materialdefaults.h); null otherwise.
     QPushButton *resetMaterialButton() const { return resetButton.data(); }
@@ -82,7 +81,6 @@ public:
 
 protected slots:
     void materialChanged(int);
-    void materialChanged(const QString&);
 
 private:
     void addResetRow();

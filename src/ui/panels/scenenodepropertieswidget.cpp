@@ -880,11 +880,17 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
     if (moved) emit propertiesTabChanged(currentTab);
 }
 
-void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
+// A material applied to the SHOWN node (a drop, an "Apply" from the tray) must
+// move the blade to the material the node now wears — or its rows keep writing
+// into the one it took off. Before ADD-1 this reached a slot that did nothing
+// (the blade stayed on the previous material until the next pick); with the
+// refill a re-bind is ~3 ms, so it simply re-binds. The caller passes the
+// material's NAME, which nothing here needs: the node knows what it wears.
+void SceneNodePropertiesWidget::refreshMaterial()
 {
     if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh
         && materialPropView) {
-        materialPropView->forceShaderRefresh(matName);
+        materialPropView->setSceneNode(sceneNode);
     }
 }
 

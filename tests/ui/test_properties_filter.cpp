@@ -584,8 +584,10 @@ int main(int argc, char **argv)
 
         panel->setPropertiesFilter(Tab::Selection, QString());                  // restore
         turn();
-        CHECK(rowShown(panel, QStringLiteral("Transform")) || shownRowCount(panel) > 0,
-              "properties_filter: the restore skips what is gone and the column is whole");
+        CHECK(rowShown(panel, QStringLiteral("Cast Shadow"))
+                  && !rowShown(panel, QStringLiteral("Roughness")),
+              "properties_filter: the restore skips what is gone (no material rows on a "
+              "bare mesh) and the column is whole (its mesh rows back)");
         // ...and the column comes back whole for a mesh that HAS a material:
         // the blade rebuilds its rows, nested section included.
         panel->setSceneNode(mesh.staticCast<iris::SceneNode>());

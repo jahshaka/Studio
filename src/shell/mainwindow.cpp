@@ -1032,8 +1032,8 @@ void MainWindow::setupServices()
     connect(sceneEditService, &SceneEditService::assetViewRefreshRequested, this, [this]() {
         assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
     });
-    connect(sceneEditService, &SceneEditService::materialApplied, this, [this](const QString &type) {
-        sceneNodePropertiesWidget->refreshMaterial(type);
+    connect(sceneEditService, &SceneEditService::materialApplied, this, [this](const QString &) {
+        sceneNodePropertiesWidget->refreshMaterial();
     });
 
     // THE CLIPBOARD (CLIPBOARD_SPEC D3 b) — one component, over the system
@@ -1999,7 +1999,10 @@ iris::SceneNodePtr MainWindow::selectedSceneNode() const
 // only one nobody can see until the frame paints: it settles its rebuild at the
 // end of the event-loop turn instead, coalescing repeated selections into one
 // mount (SceneNodePropertiesWidget::applyTab). A click is one turn, so the pick
-// is unchanged in feel; a script adding 64 objects mounts once for the run.
+// is unchanged in feel; an undo of a 64-object macro selects 64 times and mounts
+// once. A scripted add is a turn of its own (every verb hops to this thread), so
+// a script still mounts per add — the win there is the material blade's REFILL
+// and the mesh cache (~3 ms per add, not 44).
 void MainWindow::applySelectionToUi(iris::SceneNodePtr sceneNode)
 {
     sceneView->setSelectedNode(sceneNode);
