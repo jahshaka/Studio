@@ -521,6 +521,54 @@ add_test(NAME gi.cascades COMMAND test_gi_cascades
 # back a frame at a time.
 set_tests_properties(gi.cascades PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
+# the field is built over the INNERMOST cascade's box and follows it as the
+# camera walks — in the same frame the cascade moved, bound throughout, and
+# converged by the end of that frame (the atlas describes another place until it
+# is). Before E1 the arm refused to build a field under a chain at all.
+# Its own binary for the same process-wide-binding reason as every GI suite.
+add_executable(test_gi_field_follows test_gi_field_follows.cpp)
+set_target_properties(test_gi_field_follows PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_follows PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_follows PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_follows JahshakaEngineMedia)
+add_test(NAME gi.field_follows COMMAND test_gi_field_follows
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL and a wide timeout for gi.cascades' reasons: four voxel volumes at
+# once (the VRAM-contention class, CLAUDE.md) plus a 14 MB probe atlas, and the
+# walk renders a frame at a time.
+set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
+# promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
+# it, four wall thicknesses, measured with the scene-fitted single volume and
+# again with the chain. The leak is the only reason the irradiance field is in
+# this engine, and E1 moves the field onto a volume that walks.
+add_executable(test_gi_leak_room test_gi_leak_room.cpp)
+set_target_properties(test_gi_leak_room PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_leak_room PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_leak_room PRIVATE JahshakaEngine)
+add_dependencies(test_gi_leak_room JahshakaEngineMedia)
+add_test(NAME gi.leak_room COMMAND test_gi_leak_room
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL and a wide timeout: eight full GI builds (four rooms x two arms),
+# each with a shadowed room, a chain and a 14 MB probe atlas.
+set_tests_properties(gi.leak_room PROPERTIES TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
+
 # A SHADOW-ATLAS REBUILD IS NOT A GI REBUILD (PHOTON_SPEC gate G2, audit C
 # finding 2): the atlas change drops only the WORKSPACES that instantiate the
 # probe shadow node, never the voxels — so the 3rd casting lamp in a scene, or a

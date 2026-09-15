@@ -538,6 +538,14 @@ public:
         /// What is feeding the probes: true = rasterised captures (world.gi's
         /// ddgiSource resolved to raster and the engine took it), false = voxel.
         bool ifdRaster = false;
+        /// WHERE THE FIELD IS — the corners of the volume its probes span. The
+        /// scene's fitted box in the single-volume arm; cascade 0's box, which
+        /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).
+        /// `ifdFollows` counts the re-placements onto cascade 0 since the last
+        /// build: 0 while standing still, one per cascade-0 step while walking.
+        QVector3D ifdMin;
+        QVector3D ifdMax;
+        quint64   ifdFollows = 0;
         /// THE PROBE CACHE (ENGINE_CACHE_POLICY_SPEC P1/P6/P7): probes
         /// re-capture only while stale. Captures the last rendered frame made,
         /// probes still owed a capture, the input that last staled the grid
