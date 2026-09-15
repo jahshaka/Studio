@@ -1107,20 +1107,20 @@ set_tests_properties(scripting.e2e.graph_edit PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
-# scripting.e2e.fitsize — FIT TO SIZE end to end (services/fitsize.h; owner
-# 2026-09-09: "everything is coming in messed up in the asset module and the
-# avatars"). The unit suite (importer.fitsize) pins the measurement and the
-# policy; this pins what the owner does — import a mis-declared file, place it,
-# and get the right size — through the real binary, the real library and the
-# one instantiation route, plus the assets.setFit override/reset/re-measure
-# round trip. Document verbs only -> --headless.
-configure_file(scripts/e2e_fitsize.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_fitsize.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-fitsize)
+# scripting.e2e.import_settings — the import decision end to end
+# (SPECS/IMPORT_DIALOG_SPEC.md §9). The unit suite (importer.extent) pins the
+# arithmetic; this pins what the user does — import with settings, place it and
+# find the size in the GEOMETRY with the node at scale 1, then reimport with new
+# settings and watch the placed node follow while its transform does not — plus
+# the retirement of assets.setFit. Document verbs only -> --headless.
+# It replaces scripting.e2e.fitsize.
+configure_file(scripts/e2e_import_settings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_settings.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import-settings)
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.fitsize
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_fitsize.js --headless
+add_test(NAME scripting.e2e.import_settings
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_settings.js --headless
          WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.fitsize PROPERTIES
+set_tests_properties(scripting.e2e.import_settings PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 120)
@@ -1155,7 +1155,7 @@ jah_no_display(
     scripting.e2e.world_modes
     scripting.e2e.looks
     scripting.e2e.photon
-    scripting.e2e.fitsize
+    scripting.e2e.import_settings
     scripting.e2e.folders)
 
 # scripting.e2e.glb_textures — the owner's "the glb imports still don't work,

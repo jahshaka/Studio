@@ -72,19 +72,34 @@ assert(close(preview.bounds.size.x, placed.size.x, 0.01)
        "THE PREVIEW IS THE SIZE THE EDITOR PLACES");
 
 // The case that made the owner report it: a model whose declared unit is wrong
-// (a 1 mm cube) is fitted x1000 on the way into a scene. The preview must show
-// the same fitted metre, not the millimetre the file claims.
+// (a 1 mm cube). SINCE THE IMPORT DIALOG (SPECS/IMPORT_DIALOG_SPEC.md) nothing
+// guesses a size — the file arrives at the millimetre it declares, and the
+// person importing it says otherwise with an import setting. Both halves are
+// asserted here, because "the preview is the size the editor places" has to
+// hold either way.
 var tiny = assets.importFile(MILLIMETRE_CUBE);
 assert(tiny.length > 10, "assets.importFile(1 mm cube) -> " + tiny);
-var fit = assets.metadata(tiny).fitScale;
-assert(fit > 100, "the 1 mm cube is fitted (x" + fit + ")");
+assert(assets.metadata(tiny).fitScale === undefined,
+       "no fit is inferred any more — the retired block is not written");
+assert(assets.metadata(tiny).extent.x < 0.01,
+       "the 1 mm cube imports at the millimetre its file declares ("
+           + assets.metadata(tiny).extent.x + " m)");
 assert(assets.select(tiny) === true, "assets.select(the mis-declared model)");
 var tinyPreview = assets.preview();
 assert(tinyPreview.bounds, "the mis-declared model previews with bounds");
-console.log("   fitted preview size " + JSON.stringify(tinyPreview.bounds.size));
-assert(tinyPreview.bounds.size.x > 0.5 && tinyPreview.bounds.size.x < 2.0,
-       "the preview renders the FITTED metre, not the authored millimetre: "
-       + tinyPreview.bounds.size.x);
+console.log("   as-declared preview size " + JSON.stringify(tinyPreview.bounds.size));
+
+// …and the way to make it a metre is to say so, ONCE, at the import.
+var sized = assets.importFile(MILLIMETRE_CUBE, -1, { scale: 1000 });
+assert(sized.length > 10, "assets.importFile(1 mm cube, {scale: 1000})");
+var sizedExtent = assets.metadata(sized).extent;
+assert(sizedExtent.x > 0.5 && sizedExtent.x < 2.0,
+       "…and it imports as a metre cube: " + sizedExtent.x);
+assert(assets.select(sized) === true, "assets.select(the resized model)");
+var sizedPreview = assets.preview();
+assert(sizedPreview.bounds && sizedPreview.bounds.size.x > 0.5
+       && sizedPreview.bounds.size.x < 2.0,
+       "the preview renders the size that was IMPORTED: " + sizedPreview.bounds.size.x);
 
 // ---- S7: the preview flies -------------------------------------------------
 var before = assets.preview().camera;

@@ -365,16 +365,19 @@ set_tests_properties(importer.texture_guids PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 jah_no_display(importer.texture_guids)
 
-# FIT TO SIZE (services/fitsize.h) — the import-time size policy, owner report
-# 2026-09-09 ("everything is coming in messed up in the asset module and the
-# avatars"). The three unit_cube fixtures pin the MEASUREMENT (one cube
-# declared m / cm / mm), the giant/tiny/plain rig2 fixtures pin the POLICY in
-# both directions with a control, and section 5 pins the ORDER that keeps the
-# Avatar module from normalizing an already-fitted character a second time —
-# which is why this suite links avatarpreviewmodel.cpp. Real pipeline, real
-# store, no engine rendering, no display.
+# importer.extent — the IMPORT SETTINGS and the measurement
+# (SPECS/IMPORT_DIALOG_SPEC.md §9). The three unit_cube fixtures pin what a
+# FILE declares, the settings cases pin what a USER decides over it (unit
+# override, uniform scale, rotation, origin), and the skinned section pins the
+# one risk the whole design rests on: under a uniform k a rig's bind
+# translations and clip position keys scale while every rotation is
+# bit-identical. Real pipeline, real store, no engine rendering, no display.
+#
+# It replaces importer.fitsize: the size POLICY it gated (envelopes, an
+# inferred fitScale, a per-instance multiply and the avatar double-normalisation
+# order) retired with the import dialog.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
-add_executable(test_importer_fitsize test_importer_fitsize.cpp
+add_executable(test_importer_extent test_importer_extent.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetimporter.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
@@ -391,11 +394,6 @@ add_executable(test_importer_fitsize test_importer_fitsize.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    # the Avatar module's height rule — section 5 asserts it is a NO-OP on a
-    # fitted character (the double-normalisation gate)
-    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarpreviewmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarsockets.cpp
     # database.cpp's link closure (same as tests/importer's other suites)
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
@@ -405,25 +403,25 @@ add_executable(test_importer_fitsize test_importer_fitsize.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
-set_target_properties(test_importer_fitsize PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+set_target_properties(test_importer_extent PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_importer_fitsize PRIVATE
+target_include_directories(test_importer_extent PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_fitsize PRIVATE
+target_compile_definitions(test_importer_extent PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_importer_fitsize PRIVATE IrisGL
+target_link_libraries(test_importer_extent PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
 # This suite builds a DOCUMENT, and a document node is an engine node now
 # (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
 # system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
 # below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_importer_fitsize)
-add_test(NAME importer.fitsize COMMAND test_importer_fitsize
+jah_document_graph(test_importer_extent)
+add_test(NAME importer.extent COMMAND test_importer_extent
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.fitsize PROPERTIES
+set_tests_properties(importer.extent PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
-jah_no_display(importer.fitsize)
+jah_no_display(importer.extent)
