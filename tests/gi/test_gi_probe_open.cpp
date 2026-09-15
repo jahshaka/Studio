@@ -412,6 +412,82 @@ int main()
         engine->destroyScene(s);
     }
 
+    // ---- 4c. THE SKY ANSWERS WHERE NO PROBE BOX DOES -----------------------
+    // Lane SKY-FALLBACK-1 / ogre-patch 0048, and the case the patch exists for.
+    //
+    // Since the grid became a PER PROBE decision (R5-ROOM) a PARTIAL grid is the
+    // normal case — one crate in a new project keeps 7 of 18 candidates — and a
+    // grid of ANY size takes the sky cubemap off every datablock, because the
+    // PBS env-probe slot has one occupant and under automatic PCC it is the
+    // probe cube ARRAY. Everything the probe boxes do not contain was then left
+    // with no environment at all but cone tracing, which outside the voxel
+    // volume is nothing at all.
+    //
+    // The two-toned sky makes it a HUE question with no brightness in it: the
+    // visible sky is BLUE (what a probe photographs) and the IBL cubemap is
+    // GREEN (what the sky's own slot carries). So, in one scene:
+    //   * a mirror INSIDE the probe boxes must read BLUE — the probes still own
+    //     every pixel their boxes contain, exactly as before this patch;
+    //   * a mirror OUTSIDE every probe box must read GREEN — the sky is its
+    //     environment. Before patch 0048 that mirror was BLACK.
+    // The room is case 1's, because a room reliably keeps its grid; the volume
+    // is pinned to it so that "outside the grid" is the scene's arithmetic and
+    // not a fit's; and the outside mirror stands 25 m away on the same ground.
+    {
+        Scene *s = engine->createScene("skyfallback");
+        view->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        bindTwoTonedSky(s);
+        addDefaultGround(s);
+        addWalls(s, 5.0f, 4.0f);
+        addMirror(s, Vec3(0.0f, 1.4f, 0.0f));
+        addMirror(s, Vec3(0.0f, 1.4f, 25.0f));
+        enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
+
+        GiParams gi;
+        gi.mode = GiMode::VctPccHybrid;
+        gi.quality = GiQuality::Medium;
+        gi.numBounces = 1;
+        gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+        // A budget, not 0: a probe that never captures reflects nothing, and the
+        // "inside" half would then read black for the reason case 13 documents.
+        gi.updateBudget = 1;
+        gi.boundsMin = Vec3(-8.0f, -0.5f, -8.0f);
+        gi.boundsMax = Vec3( 8.0f,  7.0f,  8.0f);
+        CHECK(s->setGlobalIllumination(gi), "4c: the hybrid builds over the pinned room");
+        render(engine.get(), 20);
+        const GiStatus st = s->giStatus();
+        std::printf("-- 4c. a room with a mirror in it, and a mirror 25 m outside it\n"
+                    "   probes=%d dropped=%d pccBound=%d\n",
+                    st.probeCount, st.probesDropped, st.pccBound ? 1 : 0);
+        CHECK(st.probeCount > 0 && st.pccBound,
+              "4c: a grid exists — so the sky cubemap is OFF every datablock and the\n"
+              "          only sky left is ogre-patch 0048's pass-level slot");
+
+        Image img;
+        // Case 13's camera and pixel: from above, the cube's TOP face reflects
+        // the open sky rather than a wall (the centre pixel of its +Z face is a
+        // white wall through a probe, which says nothing about the sky).
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 7.0f, 6.0f), Vec3(0.0f, 1.4f, 0.0f));
+        render(engine.get(), 6);
+        view->readPixels(img);
+        const Colour inside = img.at(56, 54);
+        show("mirror INSIDE the probe boxes", inside);
+        CHECK(inside.b > inside.g + 0.08f && inside.b > inside.r + 0.08f,
+              "4c: the mirror inside the grid reflects the BLUE sky a probe photographed —\n"
+              "          the probes own every pixel their boxes contain, unchanged");
+
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.6f, 30.0f), Vec3(0.0f, 1.4f, 25.0f));
+        render(engine.get(), 6);
+        view->readPixels(img);
+        const Colour outside = img.at(64, 64);
+        show("mirror OUTSIDE every probe box", outside);
+        CHECK(outside.g > outside.b + 0.15f && outside.g > outside.r + 0.15f,
+              "4c: the mirror no probe box contains reflects the GREEN sky cubemap —\n"
+              "          the sky is the environment wherever no probe is (patch 0048)");
+        engine->destroyScene(s);
+    }
+
     // ---- 5. GROUND AND ONE LARGE OBJECT ------------------------------------
     // An imported car, parked on the ground. Big, and no kind of room.
     {
