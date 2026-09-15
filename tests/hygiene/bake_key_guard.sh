@@ -63,7 +63,13 @@ WATCHED=(document/assets/mesh.cpp
          document/assets/skeleton.h
          document/scenegraph/meshnode.cpp
          core/geometry/trimesh.cpp
-         import/graphicshelper.cpp)
+         import/graphicshelper.cpp
+         # Three more layout PRODUCERS the second read found (2026-09-15): the
+         # vertex-attribute enum VALUES are the baked integers, the bounding
+         # sphere is AABB's, and key ORDER is KeyFrame::addKey's sort.
+         document/assets/vertexlayout.h
+         core/geometry/aabb.cpp
+         document/animation/keyframeanimation.h)
 
 failures=0
 
@@ -117,7 +123,7 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "note: no git history here — the commit-message half of this gate cannot run"
 elif ! base=$(git log -1 --format=%H -G"$VERSION_RE" -- "$VERSION_FILE" 2>/dev/null) \
      || [ -z "$base" ]; then
-    echo "note: no commit in this history touches the version line (shallow clone?) —"
+    echo "note: no commit in this history touches the version line —"
     echo "      the commit-message half of this gate cannot run"
 else
     head=$(git rev-parse HEAD)

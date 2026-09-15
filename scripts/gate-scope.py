@@ -46,7 +46,7 @@ AREA_RULES = [
     # `hygiene` rides irisgl/import, irisgl/document and irisgl/core because
     # source.bake_key_guard (BAKEKEY-1) watches files in all three: the mesh
     # bake's format version is HAND-bumped, and the lane that has to bump it is
-    # exactly a lane whose scoped selection comes from these rules. Four
+    # exactly a lane whose scoped selection comes from these rules. Five
     # display-free shell scripts, well under a second.
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
