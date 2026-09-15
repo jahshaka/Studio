@@ -90,6 +90,9 @@ ProjectArchiver::~ProjectArchiver()
     // same thing for the same reason).
     mCanceled.store(true);
     if (mFuture.isValid() && !mFuture.isFinished()) mFuture.waitForFinished();
+    // The queued completion dies with this object, so its discard never runs:
+    // do it here, after the join (the worker is the only other writer).
+    discardStagedImports();
     mRunning.store(false);
     sLive.removeAll(this);
     delete mStage;
@@ -113,6 +116,11 @@ void ProjectArchiver::finish(bool canceled)
     mResult.canceled = canceled;
     if (canceled && mResult.error.isEmpty())
         mResult.error = QStringLiteral("cancelled");
+    // The staged CAS temps too (FSYNC-1's second read): a cancel while the
+    // worker's completion is queued, a beginInstallImport error, and the
+    // in-loop paths all end here. Idempotent — a committed file's tmpPath is
+    // cleared at the rename, so nothing live is ever touched.
+    discardStagedImports();
     // The staging directory goes here, at the ONE place every path ends: an
     // extracted Showroom is ~50 MB of /tmp, and a session archiver that keeps
     // one alive until the next import is a leak with a long fuse. Result::path

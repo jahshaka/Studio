@@ -494,7 +494,7 @@ void EngineHost::startShaderCacheWatchdog()
         if (LoadTimeline::isRunning()) { mQuietTicks = 0; return; }
         // NOR WHILE AN ARCHIVE IS IN FLIGHT (FSYNC-1, the belt). The write
         // itself is off this thread now, but SERIALIZING is not — it walks
-        // Ogre's Hlms caches and reads a megabyte back through a scratch file —
+        // Ogre's Hlms caches and serializes a megabyte and more in memory —
         // and an export or import is precisely a stretch where the user is
         // watching a progress bar this thread has to keep drawing. An archive
         // is seconds long and the save has waited minutes already; it can wait
@@ -533,6 +533,12 @@ void EngineHost::shutdown()
     // with the render loop stopped a line below and nothing compiling.
     if (mEngine) {
         UiStep::Scope step("shader cache: the clean-quit save");
+        // FLUSH FIRST (FSYNC-1's second read): a save that meets a write in
+        // flight SKIPS, and at quit a skip would leave everything compiled
+        // since that write to the engine's destructor — the path this call
+        // exists to stop depending on. The first flush is a no-op when nothing
+        // is in flight.
+        mEngine->flushShaderCache(20000);
         mEngine->saveShaderCache();
         // AND WE WAIT FOR IT, HERE (FSYNC-1). The write is off-thread now, and
         // the engine's destructor joins the writer — but the destructor runs
