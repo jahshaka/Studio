@@ -868,6 +868,11 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c)
         sky["horizon"] = double(s.horizon);
         sky["power"] = double(s.power);
         sky["skyColour"] = s.skyColour.name();
+        // The SUN's air rather than the sky's (lane SKY-DENSITY-1): the
+        // atmosphere's turbidity, which colours the direct sunlight and no sky
+        // pixel. Exported for truthfulness like the four above; the viewer's
+        // own sky model has no counterpart and does not read it.
+        sky["sunHaze"] = double(s.sunHaze);
         // THE SKY HAS NO SUN OF ITS OWN (SKY_LIGHT_SPEC.md §3): the analytic
         // sky's sun is the scene's SUN LIGHT. Export the DIRECTION the light
         // travels — the viewer places its own sun from it (viewer.js) — rather
