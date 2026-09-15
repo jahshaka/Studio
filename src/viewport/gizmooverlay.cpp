@@ -92,9 +92,15 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
         // const-buffer write, and this ran for every part of the gizmo on every
         // frame the gizmo was up — while the only thing that ever changes a
         // part's colour is the mouse moving onto or off it.
+        // ALPHA AND ALL (GIZMO-2 item 4, owner §369). A GizmoDrawItem's colour is
+        // a QColor, which has always carried an alpha; this used to hand the
+        // engine a hard 1.0 and drop it. The engine turns a material blended (or
+        // back) when the alpha crosses 1, so a gizmo part that wants to be
+        //half-transparent only has to say so in its colour. Nothing does yet —
+        // every handle is opaque — so this changes no pixel today.
         if (!slot.colourPushed || slot.colour != item.colour) {
             mTarget->setUnlitMaterial(slot.material, Colour(item.colour.redF(), item.colour.greenF(),
-                                                            item.colour.blueF(), 1.0f));
+                                                            item.colour.blueF(), item.colour.alphaF()));
             slot.colour = item.colour;
             slot.colourPushed = true;
         }

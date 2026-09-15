@@ -53,6 +53,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "viewport/freecamerapolicy.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmomeshes.h"
 #include "viewport/rotationgizmo.h"
 
 static int failures = 0;
@@ -66,7 +67,7 @@ namespace {
 
 constexpr float kWidth = 1920.0f;      // the rig's display, and the shipped default
 constexpr float kHeight = 1080.0f;
-constexpr float kHandleScale = 0.08f;  // RotationHandle::handleScale
+constexpr float kHandleScale = GizmoMeshes::kRotationHandleScale;  // RotationHandle::handleScale
 
 /// The pick ray a click at `px` casts — ScenePicker::screenSegment's own
 /// unprojection, inlined so this stays a document-only suite.
@@ -339,7 +340,7 @@ int main(int argc, char **argv)
             gizmo.setPickView(cam, kWidth, kHeight);
             // What the viewport does before the first draw: the pick view is
             // what tells the gizmo which way the camera looks.
-            const float outer = gizmo.getGizmoScale() * kHandleScale * 1.18f;   // kScreenRingRadius
+            const float outer = gizmo.getGizmoScale() * kHandleScale * GizmoMeshes::kScreenRingRadius;
             const iris::Vec3 centre = gizmo.getTransform().column(3).toVector3D();
             const iris::Quat camRot = cam->getGlobalRotation();
             const iris::Vec3 forward = camRot.rotatedVector(iris::Vec3(0, 0, -1)).normalized();

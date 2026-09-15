@@ -175,23 +175,11 @@ static void gridStateForView(const QString &view, bool showPref,
 // Everything else the grid needs from the current view (owner report
 // 2026-09-07 — "the axis-view grid is not there, and where it is it is white"):
 //
-//   * WHERE the floor plane sits. The default -0.01 tucks the floor grid under
-//     the ground plane every scene ships, which is right in perspective and
-//     fatal from above: in `top` / `bottom` the ground hid the grid completely.
-//     Those two views get a small POSITIVE offset so the grid draws over the
-//     ground; nothing else changes.
 //   * WHAT COLOUR it is. One blue-grey for every plane made an axis view read
 //     as "white lines". Each axis view is tinted by the axis its grid plane
 //     FACES — Y green for top/bottom, Z blue for front/back, X red for
 //     left/right — the gizmo's own axis colours, so the view announces itself.
 //     Perspective keeps the neutral editor grid.
-static float gridFloorOffsetForView(const QString &view)
-{
-    if (view == QLatin1String("top") || view == QLatin1String("bottom"))
-        return 0.02f;
-    return -0.01f;
-}
-
 static void gridColoursForView(const QString &view,
                                jahshaka::engine::Colour &minor,
                                jahshaka::engine::Colour &major)
@@ -225,7 +213,6 @@ void EngineSceneViewport::pushGridForView(bool helpers)
     jahshaka::engine::Colour minor, major;
     gridColoursForView(mCameraView, minor, major);
     mMirror->setGridColours(minor, major);
-    mMirror->setGridFloorOffset(gridFloorOffsetForView(mCameraView));
     mMirror->setGrid(on && helpers, SnapSettings::translateSize(), plane);
     // What was actually pushed, for editor.overlays().gridPlane: the plane
     // follows the VIEW, never the camera's pose, so panning inside an axis view
@@ -794,22 +781,34 @@ IEditorViewport::GizmoPickResult EngineSceneViewport::gizmoHitTest(const QPointF
     // THE TRANSLATE GIZMO (GIZMO-1 item 3). Its PLANE handles are picked in
     // pixels like the rotation rings, so they answer with a distance; its
     // arrows and its centre are picked in 3D against their own geometry, so
-    // they answer with a NAME and no distance (-1). Both go through the very
-    // call a press takes, which is the promise this verb makes.
+    // they answer with a NAME and no distance (-1).
+    //
+    // THE PRESS'S OWN CALL DECIDES (GIZMO-2 round 2). This used to ask
+    // planeNameAtPixel FIRST and return its answer, which is not the order a
+    // press takes: getHitHandle tries the CENTRE BALL before the planes, so
+    // every pixel where the ball wins — the inner part of all three squares,
+    // since item 1 anchored them at the origin — was reported as a plane while
+    // a click there grabbed the ball. One call now answers both, and
+    // planeDistance is asked afterwards only to fill in the pixel distance a
+    // plane result carries.
     if (mGizmo == mTranslateGizmo) {
         out.tolerancePx = kPlanePickTolerancePx;
-        float distancePx = -1.0f;
-        out.handle = mTranslateGizmo->planeNameAtPixel(local, distancePx);
-        out.distancePx = distancePx;
-        if (!out.handle.isEmpty()) return out;
         iris::Vec3 a, b;
         pictureSegment(cam, point, a, b);
         const iris::Vec3 viewDir = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
         iris::Vec3 hit;
         if (auto *handle = mTranslateGizmo->getHitHandle(a, (b - a).normalized(), viewDir, hit)) {
             out.handle = handle->axisName();
-            out.distancePx = -1.0f;      // a 3D pick has no pixel distance
+            float distancePx = -1.0f;    // a 3D pick (ball, arrow) has none
+            if (handle->isPlane()) handle->planeDistance(local, distancePx);
+            out.distancePx = distancePx;
+            return out;
         }
+        // A MISS still reports how far the nearest plane handle is — the one
+        // measurable distance this gizmo has.
+        float distancePx = -1.0f;
+        mTranslateGizmo->planeNameAtPixel(local, distancePx);
+        out.distancePx = distancePx;
         return out;
     }
     return out;
