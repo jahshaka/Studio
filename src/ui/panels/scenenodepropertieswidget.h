@@ -204,8 +204,12 @@ public slots:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
-    /// Pays an owed mount when the dock opens (see applyTab).
+    /// Pays an owed mount when the dock opens (see applyTab) — unless the dock
+    /// opened behind another tab, where nobody can see it yet (onScreen()).
     void showEvent(QShowEvent *event) override;
+    /// Watches the ancestor dock for the tab raise Qt sends this panel no event
+    /// for (see watchDock()).
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     /// Logs (once per offender) when the panel's minimum width does not fit the
@@ -238,6 +242,16 @@ private:
     void applyTab();
     /// Posts the end-of-turn settlement, when nothing says "not yet".
     void scheduleMount();
+    /// CAN ANYBODY SEE THIS COLUMN — `isVisible()` AND, when the panel lives in
+    /// a dock, that dock being the tab in FRONT of its group (a tab behind
+    /// another is shown and parked off-screen). See the definition.
+    bool onScreen() const;
+    /// The QDockWidget this panel is hosted in, or null (a test rig, a preview).
+    const class QDockWidget *ancestorDock() const;
+    /// Points the event filter at the dock the panel is currently under.
+    void watchDock();
+    /// The dock watchDock() last installed the filter on.
+    QPointer<class QDockWidget> watchedDock;
     /// The mount itself — clearLayout, the tab's blade set, the filter. Never
     /// called directly by a selection: applyTab() coalesces the calls and this
     /// runs once per turn.

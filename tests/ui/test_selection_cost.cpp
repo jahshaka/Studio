@@ -51,6 +51,11 @@ For more information see the LICENSE file
 #include <QEvent>
 #include <QFocusFrame>
 #include <QScrollArea>
+#include <QDockWidget>
+#include <QFrame>
+#include <QTabBar>
+#include <QLabel>
+#include <QMainWindow>
 #include <QHash>
 #include <QMap>
 #include <QPointer>
@@ -649,6 +654,140 @@ int main(int argc, char **argv)
               "hidden: asking what a hidden column holds builds it and answers truthfully");
         scroll->show();
         turn();
+    }
+
+    // ---- A TAB BEHIND ANOTHER TAB IS NOBODY LOOKING (TABS-HIDDEN-1) -------
+    //
+    // The saving above reads "can anybody see this column". `isVisible()` is
+    // NOT that question: a QDockWidget that shares a tab bar with another is
+    // SHOWN whichever tab is in front — Qt parks the ones behind off-screen
+    // (geometry().right() < 0, MainWindow::isFrontTab, lane SPACE-2) — so a
+    // Properties dock tabbed behind the Hierarchy answered true and rebuilt its
+    // whole column on every selection turn, for nobody. Correct, and the 44 ms
+    // -> 3 ms win simply did not apply to that arrangement.
+    //
+    // Qt sends the PANEL no event when its tab comes to the front (the dock
+    // moves; nothing inside it does), so the raise has to be noticed as well:
+    // the panel watches its own dock, and MainWindow connects the dock's
+    // visibilityChanged(true) so the product fills in the same turn as the
+    // click. This is the panel half — a real tabified QMainWindow, no
+    // MainWindow in sight.
+    {
+        QMainWindow win;
+        win.resize(1200, 800);
+        auto *otherDock = new QDockWidget(QStringLiteral("Hierarchy"), &win);
+        otherDock->setObjectName(QStringLiteral("otherDock"));
+        otherDock->setWidget(new QLabel(QStringLiteral("hierarchy"), otherDock));
+        auto *propsDock = new QDockWidget(QStringLiteral("Properties"), &win);
+        propsDock->setObjectName(QStringLiteral("propsDock"));
+        // The dock body is the shape MainWindow gives this panel: a fixed-width
+        // column holding a scroll area with NO horizontal bar. (Handing the
+        // scroll area to the dock directly instead leaves the column's width
+        // free on both sides and QScrollArea::eventFilter recurses until the
+        // stack runs out — the rig has to pin the width the way the real one
+        // does, PanelMetrics::rightColumnWidth.)
+        auto *body = new QWidget(propsDock);
+        auto *bodyLayout = new QVBoxLayout(body);
+        bodyLayout->setContentsMargins(0, 0, 0, 0);
+        body->setFixedWidth(400);
+        auto *dockScroll = new QScrollArea(body);
+        dockScroll->setFrameShape(QFrame::NoFrame);
+        dockScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        dockScroll->setWidgetResizable(true);
+        // takeWidget(), not a bare reparent: a QScrollArea keeps filtering the
+        // events of a widget handed to it, so leaving the panel registered with
+        // BOTH areas has the two of them resizing it against each other until
+        // the stack runs out (measured — 82,000 frames of
+        // QScrollArea::eventFilter).
+        scroll->takeWidget();
+        dockScroll->setWidget(panel);              // the panel moves into the dock
+        bodyLayout->addWidget(dockScroll);
+        propsDock->setWidget(body);
+        win.addDockWidget(Qt::RightDockWidgetArea, otherDock);
+        win.addDockWidget(Qt::RightDockWidgetArea, propsDock);
+        win.tabifyDockWidget(otherDock, propsDock);
+        win.show();
+        auto winTurn = [&]() {
+            win.grab();
+            QApplication::processEvents();
+            QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        };
+        for (int i = 0; i < 4; ++i) winTurn();
+
+        // CLICKING A TAB is what raises one: the group's QTabBar is a private
+        // child of the dock area, so the rig finds it by the tab TEXT, which is
+        // the dock's title. (QWidget::raise() re-orders siblings and the dock
+        // area's next layout pass simply parks the dock again.)
+        auto raiseTab = [&](QDockWidget *dock) {
+            for (QTabBar *bar : win.findChildren<QTabBar *>())
+                for (int i = 0; i < bar->count(); ++i)
+                    if (bar->tabText(i) == dock->windowTitle()) { bar->setCurrentIndex(i); return true; }
+            return false;
+        };
+        CHECK(raiseTab(otherDock), "tabbed: the group's tab bar is there to click");
+        for (int i = 0; i < 3; ++i) winTurn();
+        for (int i = 0; i < 3; ++i) winTurn();
+        CHECK(propsDock->isVisible() && propsDock->geometry().right() < 0,
+              QStringLiteral("tabbed: a dock behind another tab is SHOWN and parked off-screen "
+                             "(visible=%1 right=%2)").arg(propsDock->isVisible())
+                  .arg(propsDock->geometry().right()).toUtf8().constData());
+        const auto behind = panel->propertiesStats();
+        CHECK(!behind.visible,
+              "tabbed: ...and the column says nobody can see it, though isVisible() is true");
+
+        const int before = panel->mountCount();
+        for (int i = 0; i < 20; ++i) { panel->setSceneNode(nodes[i % nodes.size()]); winTurn(); }
+        CHECK(panel->mountCount() == before,
+              QStringLiteral("tabbed: 20 selections behind another tab mount NOTHING (%1)")
+                  .arg(panel->mountCount() - before).toUtf8().constData());
+        CHECK(panel->mountIsPending() && panel->propertiesStats().deferredHidden,
+              "tabbed: ...the debt is owed to the moment the tab is raised");
+
+        raiseTab(propsDock);                       // ...and the user clicks the tab
+        for (int i = 0; i < 3; ++i) winTurn();
+        CHECK(propsDock->geometry().right() >= 0, "tabbed: the raise brings the dock on screen");
+        CHECK(panel->mountCount() == before + 1,
+              QStringLiteral("tabbed: raising the tab mounts exactly ONCE (%1)")
+                  .arg(panel->mountCount() - before).toUtf8().constData());
+        // ...for the LAST selection: nodes[19 % 15] == nodes[4], a mesh.
+        bool material = false;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->isVisibleTo(panel) && b->panelTitle() == QStringLiteral("Material")) material = true;
+        CHECK(material, "tabbed: ...and it is the CURRENT node that got mounted");
+        CHECK(!panel->mountIsPending(), "tabbed: ...with no debt left over");
+
+        // THE FRONT TAB IS ORDINARY: a selection there mounts at the end of its
+        // turn exactly as it does with no tab bar at all.
+        const int front = panel->mountCount();
+        panel->setSceneNode(nodes[5]);             // a light
+        winTurn();
+        CHECK(panel->mountCount() == front + 1,
+              QStringLiteral("tabbed: a selection on the FRONT tab still mounts once (%1)")
+                  .arg(panel->mountCount() - front).toUtf8().constData());
+        // HIDING the dock while it is in front is the old rule, unchanged.
+        propsDock->hide();
+        winTurn();
+        const int hidden = panel->mountCount();
+        for (int i = 0; i < 5; ++i) { panel->setSceneNode(nodes[i]); winTurn(); }
+        CHECK(panel->mountCount() == hidden,
+              "tabbed: a hidden dock still builds nothing");
+        propsDock->show();
+        for (int i = 0; i < 3; ++i) winTurn();
+        // A re-shown dock rejoins the group WHERE ITS TAB LANDS, which need not
+        // be in front — so "bring it back" is show plus, if it came back behind,
+        // the click. Either way the column is built exactly ONCE.
+        raiseTab(propsDock);
+        for (int i = 0; i < 3; ++i) winTurn();
+        CHECK(panel->mountCount() == hidden + 1,
+              QStringLiteral("tabbed: ...and bringing it back mounts exactly once (%1)")
+                  .arg(panel->mountCount() - hidden).toUtf8().constData());
+
+        // THE PANEL GOES HOME to the plain scroll area the rest of the suite
+        // uses, so nothing below depends on the dock rig.
+        dockScroll->takeWidget();
+        scroll->setWidget(panel);
+        win.hide();
+        for (int i = 0; i < 3; ++i) turn();
     }
 
     // ---- THE TWO PICK NUMBERS (ADD-1) -------------------------------------

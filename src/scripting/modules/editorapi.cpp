@@ -454,7 +454,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "different material class, a mesh with no material, a node that gained or lost its "
           "Reset row. `rows` is how many rows the mounted tab holds. `pending` is true while a "
           "mount is owed to this turn and `deferredHidden` while one is owed to the moment the "
-          "dock becomes visible (a column nobody can see builds nothing). READING THIS BUILDS "
+          "column can be SEEN (a column nobody can see builds nothing). `visible` is that same "
+          "reading: the panel shown AND its dock being the tab in FRONT of its group — a dock "
+          "tabbed behind another is shown by Qt and parked off-screen, so a Properties panel "
+          "arranged that way used to rebuild itself for every selection, for nobody "
+          "(TABS-HIDDEN-1). READING THIS BUILDS "
           "NOTHING: unlike `editor.properties`, it never settles an owed mount, because a "
           "measurement must not change what it measures.",
           Needs::Window },

@@ -2501,6 +2501,18 @@ void MainWindow::setupDockWidgets()
     sceneNodeLayout->addWidget(sceneNodeScrollArea);
     sceneNodeDockWidgetContents->setLayout(sceneNodeLayout);
     sceneNodePropertiesDock->setWidget(sceneNodeDockWidgetContents);
+    // THE COLUMN FILLS THE MOMENT THIS DOCK COMES FORWARD (TABS-HIDDEN-1). A
+    // selection only raises a mount DEBT while nobody can see the column
+    // (SceneNodePropertiesWidget::onScreen) — and "nobody can see it" includes
+    // this dock sitting behind another tab of its group, which Qt SHOWS and
+    // parks off-screen. Qt emits visibilityChanged(true) both when the dock is
+    // opened and when its tab is raised (QMainWindowLayout::tabChanged), so
+    // this is the one wire that settles the debt in the SAME turn as the click.
+    connect(sceneNodePropertiesDock, &QDockWidget::visibilityChanged,
+            this, [this](bool shown) {
+                if (shown && sceneNodePropertiesWidget)
+                    sceneNodePropertiesWidget->flushPendingMount();
+            });
 
     // Presets Dock
     presetsDock = new QDockWidget("Presets", viewPort);

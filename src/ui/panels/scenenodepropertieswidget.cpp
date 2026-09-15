@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QLayout>
 #include <QPointer>
+#include <QDockWidget>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QScrollArea>
@@ -402,21 +403,82 @@ void SceneNodePropertiesWidget::applyTab()
 }
 
 /// Arranges for the owed mount to happen at the end of this turn — or does
-/// nothing, because something is going to come back for it (showEvent, or a
-/// question).
+/// nothing, because something is going to come back for it (the dock coming
+/// forward, or a question).
 void SceneNodePropertiesWidget::scheduleMount()
 {
+    watchDock();
     if (!mountOwed || mountScheduled) return;
-    if (!isVisible()) return;
+    if (!onScreen()) return;
     mountScheduled = true;
     QTimer::singleShot(0, this, [this]() {
         mountScheduled = false;
         // The reason can arrive between the selection and the turn's end: the
-        // dock can close.
-        if (!mountOwed || !isVisible()) return;
+        // dock can close, or another tab of its group can be raised in front
+        // of it.
+        if (!mountOwed || !onScreen()) return;
         mountOwed = false;
         mountNow();
     });
+}
+
+/// CAN ANYBODY SEE THIS COLUMN? — the second input of applyTab's two-inputs
+/// law, and NOT the same question as `isVisible()` (TABS-HIDDEN-1, from the
+/// ADD-1 second read).
+///
+/// A dock that shares a tab bar with another is SHOWN whichever tab is in
+/// front: Qt parks the ones behind off-screen instead of hiding them, so
+/// `isVisible()` says true for a panel the user cannot see a pixel of and the
+/// whole saving was silently lost for that arrangement — a Properties dock
+/// tabbed behind the Hierarchy mounted its 44 ms column on every selection
+/// turn, for nobody. The reading that IS the answer is the one QDockWidget's
+/// own code uses (`MainWindow::isFrontTab`, lane SPACE-2, same comment):
+/// `geometry().right() < 0` is Qt's parking spot.
+///
+/// A panel with no dock ancestor (a test rig, a preview host) trivially passes
+/// — its own `isVisible()` is then the whole answer, which is what it was
+/// before this existed.
+bool SceneNodePropertiesWidget::onScreen() const
+{
+    if (!isVisible()) return false;
+    const QDockWidget *dock = ancestorDock();
+    if (!dock) return true;
+    return !dock->isHidden() && dock->geometry().right() >= 0;
+}
+
+const QDockWidget *SceneNodePropertiesWidget::ancestorDock() const
+{
+    for (const QWidget *w = parentWidget(); w; w = w->parentWidget())
+        if (const auto *dock = qobject_cast<const QDockWidget *>(w)) return dock;
+    return nullptr;
+}
+
+/// THE TAB COMING TO THE FRONT IS A REASON TO MOUNT, and Qt sends this panel
+/// NO event for it: the raise moves the DOCK from its parking spot to the
+/// group's rectangle and nothing inside the dock moves at all. So the panel
+/// watches the dock itself — one event filter, re-pointed whenever the panel
+/// finds itself under a different dock (it is built parentless and reparented
+/// into the scroll area). MainWindow connects the dock's own
+/// `visibilityChanged(true)` to flushPendingMount() as well, which is what
+/// makes the raise land in the SAME turn in the product; this filter is what
+/// makes the rule hold for any host, with no wiring.
+void SceneNodePropertiesWidget::watchDock()
+{
+    const QDockWidget *dock = ancestorDock();
+    if (dock == watchedDock) return;
+    if (watchedDock) watchedDock->removeEventFilter(this);
+    watchedDock = const_cast<QDockWidget *>(dock);
+    if (watchedDock) watchedDock->installEventFilter(this);
+}
+
+bool SceneNodePropertiesWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    // A raise parks the outgoing tab and un-parks this one: a Move on the dock.
+    // Show covers the dock being opened while a mount is owed.
+    if (watched == watchedDock
+        && (event->type() == QEvent::Move || event->type() == QEvent::Show))
+        scheduleMount();
+    return QWidget::eventFilter(watched, event);
 }
 
 void SceneNodePropertiesWidget::flushPendingMount()
@@ -426,13 +488,17 @@ void SceneNodePropertiesWidget::flushPendingMount()
     mountNow();
 }
 
-/// THE DOCK OPENED (or the tabified dock came to the front, or the panel was
-/// realised for the first time). Whatever the column owes, it owes now — in
-/// this turn, so the dock is never seen holding the previous selection.
+/// THE DOCK OPENED (or the panel was realised for the first time). Whatever the
+/// column owes, it owes now — in this turn, so the dock is never seen holding
+/// the previous selection.
+///
+/// ...unless the dock it opened into is a tab behind another one, in which case
+/// nobody can see it yet and the debt waits for the raise (onScreen()).
 void SceneNodePropertiesWidget::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
-    flushPendingMount();
+    watchDock();
+    if (onScreen()) flushPendingMount();
 }
 
 void SceneNodePropertiesWidget::mountNow()
@@ -504,8 +570,8 @@ SceneNodePropertiesWidget::Stats SceneNodePropertiesWidget::propertiesStats() co
     out.rebuilds = materialPropView ? materialPropView->rebuildCount() : 0;
     out.rows = mountedRowCount(currentTab);
     out.pending = mountOwed;
-    out.deferredHidden = mountOwed && !isVisible();
-    out.visible = isVisible();
+    out.deferredHidden = mountOwed && !onScreen();
+    out.visible = onScreen();
     return out;
 }
 
