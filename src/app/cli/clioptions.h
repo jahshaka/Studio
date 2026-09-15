@@ -91,10 +91,10 @@ struct CliOptions
     /// (SPECS/PHOTON_SPEC.md §7 R1). It exists so every ray-consuming suite can
     /// run BOTH pictures on one GPU and the fallback is proved on every push
     /// instead of assumed. JAHSHAKA_NO_RAY_QUERY=1 is the same switch for a
-    /// runner that cannot pass an argument; app.rayTracing("off") is the same
-    /// switch as a persisted PREFERENCE (ray tracing is a property of the
-    /// machine, not of the document), and this flag is the one-run override
-    /// that never writes it.
+    /// runner that cannot pass an argument. It is a DIAGNOSTIC and nothing
+    /// else: what a PROJECT asks for is world.rayTracing ("off"/"auto"/"on",
+    /// saved with the scene), and this flag overrides it downward for one run
+    /// without touching the document.
     bool noRayQuery = false;
 
     static CliOptions parse(int argc, char *argv[]);

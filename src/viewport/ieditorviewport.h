@@ -634,15 +634,6 @@ public:
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
-    /// THE NO-RAYS SWITCH (SPECS/PHOTON_SPEC.md §7 R1). Turning it off tears the
-    /// acceleration structures down and renders the picture a machine WITHOUT
-    /// ray-tracing hardware renders — which is the point: the fallback is not a
-    /// second authoring path, it is the same scene with one term computed
-    /// differently, and every ray-consuming suite runs both on this GPU.
-    /// A no-op where the device has no rays; read the result back through
-    /// giStatus().rayQuery, never from what was asked for.
-    virtual void setRayTracing(bool) {}
-
     /// WHAT THE SHADOW ATLAS IS, as opposed to what the scene asked for
     /// (SPECS/SHADOW_TOOLING_SPEC.md §7) — the same reading as giStatus() and
     /// for the same reason: the renderer has a FIXED number of point/spot

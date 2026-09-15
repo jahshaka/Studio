@@ -2051,15 +2051,6 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     return out;
 }
 
-void EngineSceneViewport::setRayTracing(bool on)
-{
-    // The switch is on the ENGINE, not the scene: the acceleration structures
-    // are per scene but the device, the pipeline and the descriptor pool are
-    // process-wide, and "this machine has no ray tracing" is not a per-scene
-    // fact. Off drops every structure; on lets the next frame rebuild them.
-    if (mEngine) mEngine->setRayTracing(on);
-}
-
 void EngineSceneViewport::renderFrames(int n)
 {
     renderFrames(n, -1.0f);

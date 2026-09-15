@@ -282,6 +282,36 @@ int main(int argc, char **argv)
         CHECK(stack.index() == steps + 1, "world: as ONE step");
         stack.undo();
         CHECK(scene->getPlayMode() == iris::ScenePlayMode::Explorer, "world: undone");
+
+        // HARDWARE RAY TRACING (ledger §425) — a PLAIN world row and not a
+        // quality-registry one, so it writes the document and pins NOTHING:
+        // what a project was authored for is not a scalability trade, and a
+        // World Mode switch must never move it.
+        // Found by a PREFIX: a row label is elided to the label column's width
+        // ("Hardware Ray T…" on an unparented panel, "Background Am…" beside
+        // it), so matching the whole label would be matching the layout.
+        ComboBoxWidget *rays = comboWith(&panel, QStringLiteral("Hardware Ray"));
+        CHECK(rays != nullptr, "rays: the row is on the World blade");
+        CHECK(scene->rayTracing == iris::RayTracingMode::Auto,
+              "rays: a scene starts at Auto");
+        const int raySteps = stack.index();
+        if (rays && rays->getWidget()) rays->getWidget()->setCurrentIndex(2);   // On
+        CHECK(scene->rayTracing == iris::RayTracingMode::On,
+              "rays: picking On wrote it through");
+        CHECK(stack.index() == raySteps + 1, "rays: as ONE step");
+        CHECK(!scene->worldOverrides.contains(QStringLiteral("rayTracing")),
+              "rays: and it pinned NOTHING — it is not a tier row");
+        stack.undo();
+        pump();
+        CHECK(scene->rayTracing == iris::RayTracingMode::Auto, "rays: undone");
+        CHECK(rays && rays->getWidget() && rays->getWidget()->currentIndex() == 1,
+              "rays: and the ROW followed the document back to Auto");
+        // Off is the third state, and the row reaches it the same way.
+        if (rays && rays->getWidget()) rays->getWidget()->setCurrentIndex(0);   // Off
+        CHECK(scene->rayTracing == iris::RayTracingMode::Off, "rays: Off writes through too");
+        stack.undo();
+        pump();
+        CHECK(scene->rayTracing == iris::RayTracingMode::Auto, "rays: and undoes");
     }
 
     // ---- 3. A QUALITY-REGISTRY ROW: THE VALUE **AND** THE PIN ---------------

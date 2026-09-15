@@ -101,7 +101,6 @@ private slots:
 	void mouseControlChanged(const QString& value);
 	void sliderRowsChanged(int rows);
 	void shadowMeshOptimizationChanged(bool on);
-	void rayTracingChanged(int index);
 
 signals:
 	/// The Slider Rows spin box moved. VISUAL_PARITY re-audit F8:

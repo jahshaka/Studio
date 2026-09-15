@@ -180,15 +180,18 @@ EngineConfig EngineHost::resolveConfig()
     cfg.optimizeShadowMeshes =
         SettingsManager::getDefaultManager()->getValue("shadow_mesh_optimization", true).toBool();
 
-    // HARDWARE RAY TRACING (SPECS/PHOTON_SPEC.md §7 R1) — an APPLICATION
-    // preference, not a document setting: it is a property of the GPU in this
-    // machine, and a picture that changed with the file open would be a second
-    // authoring path. Preferences > Rendering writes it, app.rayTracing reads
-    // and sets it, and --no-ray-query forces it off for one run without
-    // touching what the user chose.
-    cfg.rayTracing =
-        SettingsManager::getDefaultManager()->getValue("hardware_ray_tracing", true).toBool() &&
-        !cliNoRayQuery();
+    // HARDWARE RAY TRACING (owner, 2026-09-15; ledger §425). There is NO
+    // application preference any more — the state is a property of the PROJECT
+    // (world.rayTracing, the World panel's row), pushed per scene by
+    // SceneMirror, and the renderer resolves it against what the machine can
+    // do. One switch, never two layers that can disagree.
+    //
+    // What survives here is the DIAGNOSTIC LATCH: `--no-ray-query` (and
+    // JAHSHAKA_NO_RAY_QUERY for a runner that cannot pass an argument) boots
+    // this process with no ray tier at all, so a ray-capable box renders the
+    // picture a machine without the hardware renders and every fallback is
+    // proved on each push instead of assumed.
+    cfg.rayTracing = !cliNoRayQuery();
     // OFF MUST REACH THE DEVICE, not just our tier (the lead's call, round 3
     // item 10). ogre-patch 0038 decides at vkCreateDevice whether to ask for
     // the ray extensions at all, and it reads the environment because the pin

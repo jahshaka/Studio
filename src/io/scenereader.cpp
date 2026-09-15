@@ -331,6 +331,16 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	                                  sceneObj.value("sunDiscSize")
 	                                      .toDouble(double(iris::kDefaultSunDiscSize)),
 	                                  double(iris::kMaxSunDiscSize)));
+	// HARDWARE RAY TRACING (ledger §425). Tolerant, like the play mode: a key
+	// that is absent (every scene written before the row existed) or that names
+	// a state this build does not know leaves the CONSTRUCTOR's default — which
+	// is Auto, spelled exactly once, in the field's initialiser (the
+	// reader-defaults trap this file's header records).
+	{
+		iris::RayTracingMode rt = iris::RayTracingMode::Auto;
+		if (iris::rayTracingModeFromName(sceneObj.value("rayTracing").toString(), rt))
+			scene->rayTracing = rt;
+	}
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
 	auto volume = sceneObj.value("ambientMusicVolume").toDouble(50);
 	scene->setAmbientMusicVolume(volume);

@@ -72,6 +72,11 @@ private:
     HFloatSliderWidget *worldGravity;
     /// The AVATAR_LOCOMOTION_SPEC §8.5 world setting, as a row.
     ComboBoxWidget *playModeSelector = nullptr;
+    /// HARDWARE RAY TRACING (ledger §425) — the project's own state, Off /
+    /// Auto / On. A plain World row and deliberately NOT a World Mode tier row:
+    /// it is a fact about what the project was authored for, not a quality
+    /// trade a scalability tier may overwrite.
+    ComboBoxWidget *rayTracingSelector = nullptr;
 	ComboBoxWidget *ambientMusicSelector;
 	HFloatSliderWidget *ambientMusicVolume;
 

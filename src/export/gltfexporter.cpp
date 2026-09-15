@@ -1556,6 +1556,12 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         jahScene["skyLight"] = skyLight;
     }
     jahScene["antiAliasing"] = scene->antiAliasing;
+    // HARDWARE RAY TRACING (ledger §425), recorded for information like the
+    // fog's height layer above it: the three.js viewer has nothing to trace
+    // with, and an archive that dropped what the project was authored for would
+    // lose the one fact that says why it looks the way it does on a machine
+    // that HAS the hardware.
+    jahScene["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     if (scene->giMode != iris::GiMode::OFF)
         jahScene["gi"] = QStringLiteral("engine-only (mode %1)").arg(int(scene->giMode));
     if (!scene->ambientMusicPath.isEmpty()) {
