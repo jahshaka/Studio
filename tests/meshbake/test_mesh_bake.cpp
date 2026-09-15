@@ -69,6 +69,7 @@
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
+#include "jahshaka/engine/Types.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/vertexbuffer.h"
@@ -819,6 +820,108 @@ static void storeIntegration()
     AssetStorePaths::setRootOverride(QString());
 }
 
+// ---------------------------------------------------------------------------
+// 7. THE ATOM LOD CHAIN (SPECS/NANITE_SPEC.md §7).
+//
+// Three separate claims, and they fail in different ways:
+//   (a) the POLICY — which meshes get a chain and what it looks like;
+//   (b) the SERIALIZER — the chain survives the blob byte for byte, because a
+//       level that comes back subtly different draws holes at a distance and
+//       nothing else in the tree would notice;
+//   (c) the CONTRACT the LOD levels are consumed through, MeshData::
+//       lodForCellSize — Photon's voxelizer and its far-field proxy pick a
+//       level with it, and "the coarsest level whose error is below this cell
+//       size" has to mean exactly that at both ends of the range.
+// ---------------------------------------------------------------------------
+
+static void lodChain()
+{
+    // (a) THE POLICY, on a mesh that has one: the shipped gizmo sphere.
+    const QString spherePath = fixture(QStringLiteral("app/models/axis_sphere.obj"));
+    QTemporaryDir staging;
+    iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
+        spherePath, iris::MeshBake::fingerprintFor(QStringLiteral("lodchain")), staging.path());
+    CHECK_LOUD(model.valid && !model.meshes.isEmpty(), "the LOD fixture baked");
+    if (!model.valid || model.meshes.isEmpty()) return;
+
+    const iris::MeshPtr &mesh = model.meshes.first();
+    CHECK_LOUD(mesh->lodIndices.size() >= 2, "a 960-triangle mesh gets a chain of at least two levels");
+    CHECK_LOUD(mesh->lodIndices.size() == mesh->lodErrors.size(),
+               "every level carries exactly one error");
+    const int baseTris = mesh->getIndexBuffer() ? mesh->getIndexBuffer()->dataSize / 12 : 0;
+    int previousTris = baseTris;
+    float previousError = 0.0f;
+    bool ordered = baseTris > 0;
+    for (int i = 0; i < mesh->lodIndices.size(); ++i) {
+        const int tris = int(mesh->lodIndices.at(i).size()) / 3;
+        if (tris >= previousTris || mesh->lodErrors.at(i) <= previousError) ordered = false;
+        // A level indexes the ORIGINAL vertex buffer — that is what keeps every
+        // level of a mesh inside one draw call, and a level naming a vertex the
+        // mesh does not have would draw garbage the moment the camera backs off.
+        for (quint32 v : mesh->lodIndices.at(i))
+            if (int(v) >= mesh->numVerts && int(v) >= baseTris * 3) { ordered = false; break; }
+        previousTris = tris;
+        previousError = mesh->lodErrors.at(i);
+    }
+    CHECK_LOUD(ordered, "levels get coarser and their errors grow, monotonically");
+    CHECK_LOUD(mesh->lodErrors.first() > 0.0f, "the first level's error is a real length, not zero");
+
+    // (b) THE SERIALIZER: through the blob and back, byte for byte.
+    const QString blob = QDir(staging.path()).filePath(QStringLiteral("lod.jmb"));
+    QString err;
+    CHECK_LOUD(iris::MeshBake::write(blob, model, &err), "the chain serialized");
+    iris::MeshBake::Model read = iris::MeshBake::read(blob);
+    CHECK_LOUD(read.valid && !read.meshes.isEmpty(), "and read back");
+    if (read.valid && !read.meshes.isEmpty()) {
+        const iris::MeshPtr &back = read.meshes.first();
+        bool identical = back->lodIndices.size() == mesh->lodIndices.size() &&
+                         back->lodErrors.size() == mesh->lodErrors.size();
+        for (int i = 0; identical && i < mesh->lodIndices.size(); ++i)
+            identical = back->lodIndices.at(i) == mesh->lodIndices.at(i) &&
+                        back->lodErrors.at(i) == mesh->lodErrors.at(i);
+        CHECK_LOUD(identical, "every level survives the blob byte for byte");
+    }
+
+    // (a2) A MESH THAT MUST NOT GET ONE. The axis cube is far below the point
+    // where a level saves anything, and a chain there would cost a buffer, a
+    // VAO and a switch for nothing.
+    iris::MeshBake::Model cube = iris::MeshBake::buildFromFile(
+        fixture(QStringLiteral("app/models/axis_cube.obj")),
+        iris::MeshBake::fingerprintFor(QStringLiteral("lodcube")), staging.path());
+    if (cube.valid && !cube.meshes.isEmpty()) {
+        CHECK_LOUD(cube.meshes.first()->lodIndices.isEmpty(),
+                   "a mesh too small to simplify gets NO chain (not a fake level)");
+    }
+
+    // (a3) THE CHAIN BUILDER IS IDEMPOTENT: asking twice must not append a
+    // second chain to the same mesh.
+    const int before = int(mesh->lodIndices.size());
+    iris::MeshBake::buildLodChain(mesh);
+    CHECK_LOUD(int(mesh->lodIndices.size()) == before,
+               "buildLodChain replaces the chain, it does not append to it");
+
+    // (c) THE CONSUMER CONTRACT (the hand-off Photon reads): the coarsest level
+    // whose error is below a world-space cell size.
+    jahshaka::engine::MeshData data;
+    data.positions.assign(9, 0.0f);
+    data.indices = { 0, 1, 2 };
+    data.lodIndices = { { 0, 1, 2 }, { 0, 1, 2 }, { 0, 1, 2 } };
+    data.lodErrors = { 0.01f, 0.05f, 0.20f };
+    CHECK_LOUD(data.lodLevelCount() == 4, "lodLevelCount counts level 0 too");
+    CHECK_LOUD(&data.lodLevelIndices(0) == &data.indices, "level 0 IS the mesh's own index list");
+    CHECK_LOUD(data.lodForCellSize(0.005f) == 0,
+               "a cell finer than every level's error asks for the finest level");
+    CHECK_LOUD(data.lodForCellSize(0.02f) == 1, "a 2 cm cell takes the 1 cm level");
+    CHECK_LOUD(data.lodForCellSize(0.10f) == 2, "a 10 cm cell takes the 5 cm level");
+    CHECK_LOUD(data.lodForCellSize(10.0f) == 3, "a cell coarser than every level takes the coarsest");
+    CHECK_LOUD(data.lodForCellSize(0.0f) == 0 && data.lodForCellSize(-1.0f) == 0,
+               "a non-positive cell size means the finest, never a wrap-around");
+    jahshaka::engine::MeshData plain;
+    plain.indices = { 0, 1, 2 };
+    CHECK_LOUD(plain.lodLevelCount() == 1 && plain.lodForCellSize(100.0f) == 0,
+               "a mesh with no chain has exactly one level at every cell size");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -840,6 +943,9 @@ int main(int argc, char **argv)
 
     std::printf("== 5. the store ==\n");
     storeIntegration();
+
+    std::printf("== 7. the ATOM LOD chain ==\n");
+    lodChain();
 
     if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
     else          std::printf("ALL %d CHECKS PASSED\n", checks);
