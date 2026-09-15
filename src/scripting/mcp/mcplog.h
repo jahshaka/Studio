@@ -51,6 +51,7 @@ For more information see the LICENSE file
 // in this class ever leaves the machine.
 
 #include <QJsonObject>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 
@@ -102,8 +103,11 @@ public:
     void recordRefusal(const QString &kind, const QString &detail);
 
     /// Argument summary: keys with type and size, values only for numbers,
-    /// booleans and the enum-shaped keys. Public because it is the contract.
-    static QJsonObject summariseArgs(const QJsonObject &args);
+    /// booleans and the keys in `enumKeys` — which the caller derives from the
+    /// tools' PUBLISHED SCHEMAS (the `enum` arrays in tools/list), so the
+    /// allowlist cannot drift away from what the schemas actually offer.
+    /// Public because it is the contract.
+    static QJsonObject summariseArgs(const QJsonObject &args, const QSet<QString> &enumKeys);
 
     /// The sentence the Preferences page and api_docs both say.
     static QString privacyNote();

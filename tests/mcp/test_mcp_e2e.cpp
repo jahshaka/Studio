@@ -1311,7 +1311,8 @@ int main(int argc, char **argv)
                  QJsonObject{ { "script", "scene.addPrimitive('cube'); scene.addPrimitive('cube');"
                                           " editor.selection()" },
                               { "label", "two cubes" } });
-        callTool(net, url, token, ++id, "describe_scene", QJsonObject{ { "depth", 1 } });
+        callTool(net, url, token, ++id, "describe_scene",
+                 QJsonObject{ { "depth", 1 }, { "include", QJsonArray{ "lights" } } });
         QList<QJsonObject> lines = jsonLines(sessionLog);
         CHECK(!lines.isEmpty()
                   && lines.first().value("schema").toString() == "jahshaka.mcp.session/1",
@@ -1321,6 +1322,12 @@ int main(int argc, char **argv)
         CHECK(describeLine.value("tool").toString() == "describe_scene"
                   && describeLine.value("detail").toObject().value("textChars").toInt() > 0,
               "log: describe_scene is recorded with the size of what it answered");
+        // The recorded VALUES are the ones the tool schemas declare as enums
+        // (`include` here, through its items' enum) — derived from
+        // listTools(), never hand-listed.
+        CHECK(describeLine.value("args").toObject().value("depth").toObject()
+                  .value("value").toInt() == 1,
+              "log: a numeric argument keeps its value");
         QJsonObject scriptLine;
         for (const QJsonObject &l : lines)
             if (l.value("tool").toString() == "run_script"

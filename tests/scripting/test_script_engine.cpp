@@ -254,6 +254,15 @@ int main(int argc, char **argv)
               && trace.contains("fake.get") && trace.contains("fake.engineOnly"),
           "trace: every call is recorded, repeats counted");
     CHECK(engine.takeVerbTrace().isEmpty(), "trace: taking it clears it");
+    // THE CONSOLE IS NOT THE AGENT: a traced MCP run can spin the event loop,
+    // and the user's own console run inside that window must not be charged to
+    // it (round-2 review item 5).
+    r = engine.evaluate("fake.add(1, 2)", "<console>", false);
+    CHECK(r.ok && engine.takeVerbTrace().isEmpty(),
+          "trace: a <console> run is NOT recorded, even while the trace is armed");
+    r = engine.evaluate("fake.add(1, 2)", "mcp", false);
+    CHECK(r.ok && engine.takeVerbTrace() == QStringList{ "fake.add" },
+          "trace: ...and the next tool run is recorded normally");
     engine.setVerbTracing(false);
     CHECK(!engine.verbTracing(), "trace: disarmed");
     r = engine.evaluate("fake.add(1, 1)", "trace.js", false);

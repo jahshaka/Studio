@@ -32,23 +32,17 @@ const char *kSourceKey  = "mcp_log_script_source";
 /// one previous generation, and nothing else ever accumulates.
 constexpr qint64 kErrorLogMaxBytes   = 1024 * 1024;
 /// A recording session is a user's deliberate act, but a runaway agent must
-/// not fill a disk either.
+/// not fill a disk either. It ROTATES like the error file (one previous
+/// generation beside it) rather than restarting: a collector that reads
+/// `<id>.jsonl` and `<id>.jsonl.1` has the whole tail of a long session, and
+/// no line is ever dropped without a file to find it in.
 constexpr qint64 kSessionLogMaxBytes = 8 * 1024 * 1024;
 /// Session files kept in the logs directory; the oldest go first.
 constexpr int    kKeepSessionFiles   = 20;
 
-/// Argument keys whose VALUE is part of the question being asked and carries
-/// no content of the user's: they are enum-shaped, short and fixed by the tool
-/// schema. Everything else that is a string is recorded by SIZE only.
-bool isEnumKey(const QString &key)
-{
-    static const QStringList kEnums = {
-        QStringLiteral("view"),   QStringLiteral("action"),  QStringLiteral("grade"),
-        QStringLiteral("format"), QStringLiteral("type"),    QStringLiteral("direction"),
-        QStringLiteral("module"), QStringLiteral("include"),
-    };
-    return kEnums.contains(key);
-}
+/// A recorded enum value is short by definition; this is the backstop for a
+/// caller that sends something else under an enum-shaped key.
+constexpr int kMaxRecordedValueChars = 32;
 
 QString nowIso() { return QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs); }
 
@@ -141,7 +135,7 @@ QString McpLog::sessionLogPath() const
     return logsDir() + QStringLiteral("/mcp-session-%1.jsonl").arg(mSessionId);
 }
 
-QJsonObject McpLog::summariseArgs(const QJsonObject &args)
+QJsonObject McpLog::summariseArgs(const QJsonObject &args, const QSet<QString> &enumKeys)
 {
     QJsonObject out;
     for (auto it = args.constBegin(); it != args.constEnd(); ++it) {
@@ -150,7 +144,8 @@ QJsonObject McpLog::summariseArgs(const QJsonObject &args)
         if (v.isString()) {
             entry["type"] = "string";
             entry["chars"] = v.toString().size();
-            if (isEnumKey(it.key()) && v.toString().size() <= 32) entry["value"] = v.toString();
+            if (enumKeys.contains(it.key()) && v.toString().size() <= kMaxRecordedValueChars)
+                entry["value"] = v.toString();
         } else if (v.isBool()) {
             entry["type"] = "bool";
             entry["value"] = v.toBool();
@@ -160,7 +155,12 @@ QJsonObject McpLog::summariseArgs(const QJsonObject &args)
         } else if (v.isArray()) {
             entry["type"] = "array";
             entry["size"] = v.toArray().size();
-            if (isEnumKey(it.key())) entry["value"] = v.toArray();
+            // Capped exactly as a string value is: an "include"-shaped key
+            // carrying something long is recorded by size alone.
+            if (enumKeys.contains(it.key())
+                && QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact).size()
+                       <= kMaxRecordedValueChars)
+                entry["value"] = v.toArray();
         } else if (v.isObject()) {
             entry["type"] = "object";
             entry["keys"] = v.toObject().size();
@@ -212,7 +212,7 @@ void McpLog::recordCall(const McpCallRecord &record)
     // ---- the session file: every call, opt-in -----------------------------
     const QString sessionPath = sessionLogPath();
     if (sessionPath.isEmpty()) return;
-    rotate(sessionPath, kSessionLogMaxBytes, false);
+    rotate(sessionPath, kSessionLogMaxBytes, true);
     QJsonObject line{
         { "t", when },
         { "tool", record.tool },
@@ -239,9 +239,12 @@ void McpLog::recordCall(const McpCallRecord &record)
         { "started", when },
         { "scriptSource", recordScriptSource() },
         { "note", "One object per MCP tool call: the tool, the argument KEYS with their "
-                  "sizes (values only for numbers, booleans and enum-shaped keys), the "
-                  "registry verbs a script called, the duration and the outcome. "
-                  "Recorded because the user opted in; nothing is sent anywhere." } });
+                  "sizes (values only for numbers, booleans and the keys the tool schemas "
+                  "declare as enums), the registry verbs a script called, the duration and "
+                  "the outcome. Bounded at 8 MiB: at that point the file is renamed with a "
+                  ".1 suffix and a new one started under the same name, so a reader wanting "
+                  "the whole session reads the .1 first. Recorded because the user opted "
+                  "in; nothing is sent anywhere." } });
 }
 
 void McpLog::recordRefusal(const QString &kind, const QString &detail)

@@ -140,6 +140,7 @@ void ApiRegistry::install(QJSEngine &engine)
 
 void ApiRegistry::noteVerbCall(const QString &qualifiedName)
 {
+    if (mTracePaused) return;
     for (auto &entry : mTrace) {
         if (entry.first == qualifiedName) { ++entry.second; return; }
     }

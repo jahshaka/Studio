@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QBuffer>
 #include <QElapsedTimer>
+#include <QSet>
 #include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
@@ -373,6 +374,30 @@ QJsonObject summariseResult(const QJsonObject &result)
     return detail;
 }
 
+/// The argument keys the TOOL SCHEMAS themselves declare as enums (a property
+/// with an `enum` array, or an array property whose `items` carry one). Those
+/// values are part of the question being asked and carry nothing of the
+/// user's, so the session record keeps them; every other string is recorded by
+/// size alone. Derived from listTools() rather than hand-listed, because a
+/// hand-listed set drifts — the first one named three keys no schema has.
+QSet<QString> enumArgKeys(const QJsonArray &tools)
+{
+    QSet<QString> keys;
+    for (const QJsonValue &tool : tools) {
+        const QJsonObject properties = tool.toObject()
+                                           .value(QLatin1String("inputSchema")).toObject()
+                                           .value(QLatin1String("properties")).toObject();
+        for (auto it = properties.constBegin(); it != properties.constEnd(); ++it) {
+            const QJsonObject property = it.value().toObject();
+            if (property.contains(QLatin1String("enum"))
+                || property.value(QLatin1String("items")).toObject()
+                       .contains(QLatin1String("enum")))
+                keys.insert(it.key());
+        }
+    }
+    return keys;
+}
+
 /// A log line is a line: an error message that arrives with a stack in it is
 /// recorded up to here and no further.
 QString boundedError(const QString &message)
@@ -396,7 +421,9 @@ QJsonObject McpTools::call(const QString &name, const QJsonObject &args)
 
     mRecord = McpCallRecord();
     mRecord.tool = name;
-    mRecord.args = McpLog::summariseArgs(args);
+    // The schemas are built once per process and never change inside one.
+    static const QSet<QString> valueKeys = enumArgKeys(listTools());
+    mRecord.args = McpLog::summariseArgs(args, valueKeys);
     if (traced && log.recordScriptSource())
         mRecord.scriptSource = args.value(QLatin1String("script")).toString();
 
