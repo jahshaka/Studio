@@ -722,15 +722,20 @@ static void storeIntegration()
         CHECK_LOUD(!MeshBakeStore::modelSourcesNeedingBake(conn, storeRoot.path()).isEmpty(),
                    "a previous-key bake puts the asset back on assets.bakeAll's list");
 
-        bool reneeded = false;
+        // THROUGH THE VERB'S OWN CALLS: assets.bakeAll (and Preferences ->
+        // Assets -> Bake All, which runs the same implementation) walks
+        // modelSourcesNeedingBake and calls bakeSource on each — not the
+        // per-asset entry point the corrupt case above exercised.
         QString rerror;
-        const bool reok = MeshBakeStore::bakeAsset(&db, conn, storeRoot.path(),
-                                                   result.assetGuid, false, &reneeded, &rerror);
-        CHECK_LOUD(reok && reneeded, "assets.bakeAll re-bakes under the new key");
+        const bool reok = MeshBakeStore::bakeSource(conn, storeRoot.path(), sourcePath, &rerror);
+        CHECK_LOUD(reok, "assets.bakeAll's per-source re-bake ran");
         if (!reok) std::printf("info: upgrade rebake error: %s\n", qUtf8Printable(rerror));
+        MeshBakeStore::clear();
         CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath),
                    "the re-baked asset is fresh under the new key, with the stale "
                    "generation still in the catalog");
+        CHECK_LOUD(MeshBakeStore::modelSourcesNeedingBake(conn, storeRoot.path()).isEmpty(),
+                   "assets.bakeAll converges: nothing is left needing a bake");
     }
 
     // DETERMINISM, END TO END: assets.checkConsistency re-runs the whole
