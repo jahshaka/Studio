@@ -2178,6 +2178,59 @@ int main(int argc, char **argv)
               "gradient bake: offsets 0 and 1 are clamped, not division by zero");
     }
 
+    // ---- ONE DOCUMENT MESH IS ONE ENGINE MESH (ADD-1, 2026-09-15) ----------
+    //
+    // The mirror keys its engine meshes by the DOCUMENT Mesh pointer
+    // (SceneMirror::meshFor), so what decides how many vertex buffers reach the
+    // GPU is how many distinct iris::Mesh objects the document holds. It used
+    // to hold one per node: every `scene.addPrimitive` ran assimp again, so a
+    // scene of 64 spheres was 64 identical parses AND 64 identical v2 uploads
+    // (measured through the app: 73 engine meshes for 68 scene nodes; 10 after).
+    //
+    // Mesh::loadMesh caches its parse now (document.mesh_cache), which is only
+    // worth anything if this side really collapses. Both halves are asserted
+    // here: the document hands out one MeshPtr for one path, and the engine
+    // builds one mesh for it however many nodes carry it.
+    {
+        auto sdoc2 = iris::Scene::create();
+        SceneMirror smirror2(target);
+        smirror2.setSource(sdoc2);
+        smirror2.sync();
+        engine->renderOneFrame();
+
+        jahshaka::engine::ObjectCounts before{};
+        CHECK(engine->objectCounts(before), "census: the engine reports its object counts");
+
+        iris::MeshPtr shared;
+        QVector<iris::MeshNodePtr> copies;
+        for (int i = 0; i < 16; ++i) {
+            auto n2 = iris::MeshNode::create();
+            n2->setName(QStringLiteral("shared-%1").arg(i));
+            n2->setMesh(":assets/models/cube.obj");    // the same path, every time
+            n2->setMaterial(iris::PbrMaterial::create());
+            n2->setLocalPos(iris::Vec3(0.0f, -50.0f - i, 0.0f));   // out of frame
+            sdoc2->getRootNode()->addChild(n2, false);
+            if (i == 0) shared = n2->getMesh();
+            copies.append(n2);
+        }
+        bool allShared = !shared.isNull();
+        for (const auto &n2 : copies) if (n2->getMesh() != shared) allShared = false;
+        CHECK(allShared, "document: 16 nodes naming one file hold ONE iris::Mesh");
+
+        smirror2.sync();
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        jahshaka::engine::ObjectCounts after{};
+        engine->objectCounts(after);
+        std::printf("    census: meshes %u -> %u, nodes %u -> %u for 16 added mesh nodes\n",
+                    before.meshes, after.meshes, before.nodes, after.nodes);
+        CHECK(after.meshes - before.meshes <= 1,
+              "engine: 16 nodes sharing one document mesh cost at most ONE engine mesh");
+        CHECK(after.nodes - before.nodes >= 16,
+              "engine: ...and they are really there, as 16 engine nodes");
+
+        smirror2.setSource(nullptr);
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);
