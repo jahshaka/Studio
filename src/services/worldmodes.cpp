@@ -297,23 +297,24 @@ QVector<Row> buildRows()
         r.minValue = 5;
         r.maxValue = 100;
         r.tier[0] = 40; r.tier[1] = 40; r.tier[2] = 40; r.tier[3] = 40;
-        // WHAT THIS ROW ACTUALLY DRIVES, and the tooltip may not promise more
-        // (third reader, item 6). It is read by the RAY-TRACED reflections
-        // only. The screen-space march keeps its own cutoff
-        // (`PostFxDesc::ssrRoughnessCutoff`, 0.35), which nothing in the
-        // document has ever written — wiring the march to this dial is lane
-        // SSR-3's subject, and until it lands a tooltip that says "the
-        // renderer marches the screen below it" would be describing a setting
-        // the march does not take.
+        // WHAT THIS ROW DRIVES, and it is now BOTH sources (lane SSR-3). The
+        // screen-space march used to keep a cutoff of its own
+        // (`PostFxDesc::ssrRoughnessCutoff`, 0.35) that nothing in the document
+        // could write — and that the marcher compared against the G-buffer's GGX
+        // ALPHA without ever square-rooting it, so the band the frame applied
+        // was perceptual 0.581, a number nobody chose and nobody could read.
+        // That second cutoff is DELETED and the march takes this dial, so the
+        // tooltip may say the whole sentence again.
         r.cost = QStringLiteral("How rough a surface may be and still have its reflections "
-                                "TRACED, in per cent, on a machine with ray-tracing hardware. "
-                                "Below it a ray answers whatever the screen cannot see; above it "
-                                "the reflection probes' own blurred photograph answers, which for "
-                                "a rough surface is both cheaper and closer to the truth. The "
-                                "change is feathered either side of the value, so a surface whose "
+                                "computed per pixel — MARCHED in screen space and, on a machine "
+                                "with ray-tracing hardware, TRACED — in per cent. Below it the "
+                                "screen answers what it can see and a ray answers the rest; above "
+                                "it the reflection probes' own blurred photograph answers, which "
+                                "for a rough surface is both cheaper and closer to the truth. The "
+                                "change is feathered around the value, so a surface whose "
                                 "roughness varies across it has no seam in it. Raising it spends "
-                                "rays on surfaces that will look much the same either way; "
-                                "lowering it hands more of the picture to the probes.");
+                                "rays and marches on surfaces that will look much the same either "
+                                "way; lowering it hands more of the picture to the probes.");
         r.available = true;
         r.get = [](const iris::ScenePtr &s) { return s->rayReflectRoughness; };
         r.set = [](const iris::ScenePtr &s, int v) { s->rayReflectRoughness = v; };

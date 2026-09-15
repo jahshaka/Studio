@@ -29,9 +29,13 @@
 //      six-face re-render to notice; a planar reflector would need its own
 //      extra scene pass. This assertion is the reason the feature exists.
 //   4. THE ROUGHNESS CUTOFF IS HONOURED. Raise the floor's roughness above
-//      PostFxDesc::ssrRoughnessCutoff and the reflection disappears — because a
-//      v1 with no roughness-varying blur must not draw a sharp mirror image on
-//      a matte surface.
+//      PostFxDesc::rayReflectRoughness — the World panel's "Roughness Cutoff"
+//      row, the ONE number both the march and the traced ray gate on since lane
+//      SSR-3 — and the reflection disappears, because a v1 with no
+//      roughness-varying blur must not draw a sharp mirror image on a matte
+//      surface. Section 13 is the sharp version of the same statement: it pins
+//      what the cutoff is MEASURED AGAINST to within 0.29..0.31 on a floor
+//      authored at perceptual 0.30.
 //   5. SSR OFF IS BYTE-IDENTICAL TO TODAY. The frame captured before SSR was
 //      ever enabled and the frame captured after it is switched off again must
 //      match exactly, pixel for pixel. That is the offscreen-determinism law
@@ -40,7 +44,9 @@
 //      PostFxDesc has ssr == 0.
 //   6. The quality row is a SHAPE change (half-res rays -> full-res rays
 //      rebuilds the workspace) and the tuning is NOT (max distance, thickness,
-//      cutoff and intensity are uniforms and must never rebuild anything).
+//      cutoff and intensity are uniforms and must never rebuild anything) —
+//      dragging the Roughness Cutoff row must not rebuild a workspace, which
+//      section 13 drags through five values to say again.
 //   7. Full-resolution rays still produce the reflection.
 //   8. SHADOWS SURVIVE THE PREPASS, on their own fixture. This is the thing
 //      `use_prepass` changes that has nothing to do with reflections: the main
@@ -379,7 +385,7 @@ int main()
     // ---- 4. the roughness cutoff -------------------------------------------
     {
         PbrParams rough = floorParams;
-        rough.roughness = 0.9f;                        // far above the 0.35 cutoff
+        rough.roughness = 0.9f;                        // far above the 0.40 cutoff
         CHECK(s->setPbrMaterial(floorMat, rough), "the floor accepts a rough material");
         const float redRough = measure(engine.get(), view, "rough floor, ssr on", 4);
         CHECK(redRough < 0.06f, "a ROUGH floor shows no screen-space reflection (cutoff honoured)");
@@ -395,9 +401,11 @@ int main()
         tuned.ssrMaxDistance = 40.0f;
         tuned.ssrThickness = 0.8f;
         tuned.ssrIntensity = 0.9f;
+        tuned.rayReflectRoughness = 0.55f;   // the World row, mid-drag
         view->setPostFx(tuned);
         CHECK(view->workspaceGeneration() == gen,
-              "SSR distance/thickness/intensity are UNIFORMS, not graph changes");
+              "SSR distance/thickness/intensity/roughness-cutoff are UNIFORMS, "
+              "not graph changes");
         render(engine.get(), 3);
 
         PostFxDesc hq = fx;
@@ -548,7 +556,7 @@ int main()
         PostFxDesc neutral;
         neutral.allowOffscreen = true;
         neutral.ssr = 1;
-        neutral.ssrRoughnessCutoff = 0.0f;   // reject every surface
+        neutral.rayReflectRoughness = 0.0f;  // reject every surface
         view->setPostFx(neutral);
         render(engine.get(), 4);
         Image flat;
@@ -2139,7 +2147,7 @@ int main()
             PostFxDesc pfx;
             pfx.allowOffscreen = true;
             pfx.ssr = 2;                     // full-res rays, so nothing is half-res
-            pfx.ssrRoughnessCutoff = 0.0f;   // ...and the reflection is empty everywhere
+            pfx.rayReflectRoughness = 0.0f;  // ...and the reflection is empty everywhere
             rv->setPostFx(pfx);
             render(engine.get(), 5);
             CHECK(rv->readPixels(withPrepass), "readPixels (prepass, zero confidence)");
@@ -2184,6 +2192,150 @@ int main()
             engine->destroyScene(rs);
         } else {
             CHECK_MSG(false, "could not build the roughness-gate fixture");
+        }
+    }
+
+    // ---- 13. WHAT THE CUTOFF IS MEASURED AGAINST ---------------------------
+    //
+    // THE DEFECT THIS SECTION EXISTS FOR (lane SSR-3; found by the PHOTON-R5
+    // readers, ledger §432/§440). The march decoded the prepass G-buffer's
+    // roughness channel with the PRE-ogre-patch-0043 range (`.y * 0.98 + 0.02`)
+    // and then compared the result to its cutoff as though it were a perceptual
+    // roughness. Both halves were wrong: patch 0043 packs the GGX ALPHA over
+    // [0.001, 1], and the alpha is the perceptual roughness SQUARED
+    // (`mPerceptualRoughness` is true on this pin). The band the frame actually
+    // applied for a cutoff of 0.35 was therefore
+    //
+    //     0.980981 * alpha + 0.019019 > 0.35   ->   alpha > 0.3374
+    //                                          ->   PERCEPTUAL > 0.581
+    //
+    // — half again the number anyone could read, and in a unit nothing in the
+    // product is stated in. Nothing failed: the reflection appeared and
+    // disappeared, just at the wrong roughness.
+    //
+    // HOW A PIXEL SUITE PINS A DECODE. The shader hands out no numbers, so the
+    // cutoff itself is the probe: the resolve's ramp is
+    // `1 - smoothstep(cutoff/2, cutoff, roughness)`, so for a floor authored at
+    // a known roughness r the screen's contribution is EXACTLY FULL while
+    // `cutoff >= 2r` and EXACTLY ZERO while `cutoff <= r`. Two shots bracket r
+    // from both sides, and the bracket is tight enough to separate the right
+    // answer from both wrong ones:
+    //
+    //     the floor is authored at   r          = 0.300 (perceptual)
+    //     a correct read gives                    0.300
+    //     reading the raw packed alpha gives      0.090
+    //     the pre-0043 decode of it gives         0.107
+    //
+    // At `cutoff = 0.29` a correct read marches NOTHING; both wrong reads are
+    // far below half the cutoff and would march at FULL strength. At
+    // `cutoff = 0.62` a correct read is at full strength and must match the
+    // wide-open shot exactly — which says the value read is not above 0.31
+    // either. Together: 0.29 <= what the shader read <= 0.31.
+    //
+    // AND THE ROW IS A UNIFORM. The five shots below run through five cutoffs
+    // on one workspace; a drag of the World panel's slider must not rebuild a
+    // compositor graph, and this is that assertion with a real drag in it.
+    {
+        Scene *cs = engine->createScene("ssr-cutoff");
+        View  *cv = engine->createOffscreenView("ssr-cutoff", 256, 256, Colour(0, 0, 0));
+        if (cs && cv) {
+            cv->setScene(cs);
+            cs->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.10f, 0.10f, 0.10f));
+
+            const float kFloorRoughness = 0.30f;
+            {
+                PbrParams p;
+                p.albedo = Colour(1.0f, 1.0f, 1.0f);
+                p.metalness = 1.0f;
+                p.roughness = kFloorRoughness;   // PERCEPTUAL: alpha 0.09
+                const NodeId n = cs->createNode();
+                CHECK(n && cs->attachMesh(n, cs->createMesh(enginetest::unitCubeMesh()),
+                                          cs->createPbrMaterial(p)),
+                      "cutoff fixture: a floor authored at perceptual roughness 0.30");
+                enginetest::setNodeScale(cs, n, Vec3(12.0f, 0.2f, 12.0f));
+                enginetest::setNodePosition(cs, n, Vec3(0.0f, -0.1f, 0.0f));
+            }
+            {
+                PbrParams p;
+                p.albedo = Colour(0.05f, 0.05f, 0.05f);
+                p.emissive = Colour(3.0f, 0.0f, 0.0f);
+                p.roughness = 0.5f;
+                const NodeId n = cs->createNode();
+                CHECK(n && cs->attachMesh(n, cs->createMesh(enginetest::unitCubeMesh()),
+                                          cs->createPbrMaterial(p)),
+                      "cutoff fixture: the emissive cube");
+                enginetest::setNodeScale(cs, n, Vec3(1.5f, 1.5f, 1.5f));
+                enginetest::setNodePosition(cs, n, Vec3(0.0f, 2.2f, 0.0f));
+            }
+            enginetest::addDirectionalLight(cs, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+            enginetest::testCameraLookAt(cv, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
+
+            PostFxDesc base;
+            base.allowOffscreen = true;
+            base.ssr = 2;                      // full-res rays: no half-res blockiness
+            base.rayReflectRoughness = 1.0f;
+            cv->setPostFx(base);
+            render(engine.get(), 5);
+            const unsigned genCut = cv->workspaceGeneration();
+
+            auto atCutoff = [&](float cutoff, const char *what) {
+                PostFxDesc p = base;
+                p.rayReflectRoughness = cutoff;
+                cv->setPostFx(p);
+                return measure(engine.get(), cv, what, 5);
+            };
+
+            const float wide  = atCutoff(1.00f, "cutoff 1.00, wide open");
+            const float full  = atCutoff(0.62f, "cutoff 0.62, the ramp is still exactly 1 at r=0.30");
+            const float shut  = atCutoff(0.29f, "cutoff 0.29, just below the floor's roughness");
+            const float oldBd = atCutoff(0.35f, "cutoff 0.35, the deleted constant read as perceptual");
+            const float dflt  = atCutoff(0.40f, "cutoff 0.40, the shipped default");
+
+            CHECK_MSG(wide > 0.10f,
+                      "the 0.30-roughness floor reflects the cube at all (red excess %.3f)", wide);
+            // THE UPPER BRACKET.
+            CHECK_MSG(std::fabs(full - wide) <= 0.01f,
+                      "at cutoff 0.62 the ramp is still exactly 1, so the frame matches the "
+                      "wide-open one: the roughness the shader read is at most 0.31 "
+                      "(%.3f vs %.3f)", full, wide);
+            // THE LOWER BRACKET, and the one that kills both wrong decodes.
+            CHECK_MSG(shut < 0.06f,
+                      "at cutoff 0.29 NOTHING is marched: the roughness the shader read is at "
+                      "least 0.29, so it is neither the raw packed alpha (0.090) nor the "
+                      "pre-0043 decode of it (0.107) — either would have marched at full "
+                      "strength here (red excess %.3f)", shut);
+            // ...and the ramp really is a ramp in that number.
+            CHECK_MSG(oldBd > shut && oldBd < wide,
+                      "and between the two the hand-over is a RAMP, not a step "
+                      "(cutoff 0.35 -> %.3f, between %.3f and %.3f)", oldBd, shut, wide);
+            std::printf("    the shipped default (0.40) on this floor: %.3f of the wide-open "
+                        "%.3f; the deleted constant's band reached perceptual 0.581, where "
+                        "this floor scored the full %.3f\n",
+                        dflt, wide, wide);
+            // THE DRAG.
+            CHECK_MSG(cv->workspaceGeneration() == genCut,
+                      "five cutoffs on one workspace: dragging the Roughness Cutoff row is a "
+                      "UNIFORM and never rebuilds the chain (generation %u throughout)", genCut);
+
+            if (envOn("JAH_SSR_DUMP")) {
+                PostFxDesc p = base;
+                p.rayReflectRoughness = 1.0f;
+                cv->setPostFx(p);
+                render(engine.get(), 5);
+                Image img;
+                if (cv->readPixels(img)) writePpm(img, "ssr-cutoff-wide.ppm");
+                p.rayReflectRoughness = 0.29f;
+                cv->setPostFx(p);
+                render(engine.get(), 5);
+                if (cv->readPixels(img)) writePpm(img, "ssr-cutoff-shut.ppm");
+            }
+
+            cv->setPostFx(PostFxDesc());
+            render(engine.get(), 2);
+            engine->destroyView(cv);
+            engine->destroyScene(cs);
+        } else {
+            CHECK_MSG(false, "could not build the cutoff fixture");
         }
     }
 

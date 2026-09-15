@@ -39,6 +39,12 @@
 // the trace is least able to answer: the region the rig photographed. Measured
 // at 1600x900 on the owner's pose: 7.58 % of it moved by 10/255 or more before
 // the fix, 0.58 % after, so the budget is 2.5 % — about 3x headroom either way.
+//
+// LANE SSR-3 ADDED A SECOND SUBJECT at the end of the script, on the same open
+// and with the same difference-against-SSR-off measure: the World panel's
+// "Roughness Cutoff" row now drives the screen-space march as well as the
+// traced ray, and closing it has to shrink the marched footprint. See the block
+// comment there.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -129,7 +135,98 @@ for (var j = 0; j < fOn.length; ++j)
     fWorst = Math.max(fWorst, Math.abs(fOn[j].r - fOff[j].r),
                       Math.abs(fOn[j].g - fOff[j].g), Math.abs(fOn[j].b - fOff[j].b));
 console.log("   the rest of the frame: worst SSR delta " + fWorst);
-assert(fWorst >= 10,
+// RE-ANCHORED BY LANE SSR-3, with the verdict: this bar was 10 and the band
+// measured 20. The march used to decode the G-buffer's GGX alpha with the
+// pre-ogre-patch-0043 range and never square-root it, so its cutoff of 0.35
+// was a band on PERCEPTUAL roughness 0.581; it is now the World row's 0.40, in
+// the perceptual number the row is stated in. This sample's GreenTeapot is
+// authored at exactly 0.40 — comfortably inside the old band, exactly ON the
+// new cutoff — so it has stopped contributing a screen reflection and the
+// band's worst fell 20 -> 11, measured, with a noise floor of ZERO between two
+// shots of one open (spikes/ssr-3/). The bar is 8: still a statement that the
+// feature is in the picture, with the headroom the old 10 no longer had.
+assert(fWorst >= 8,
        "screen-space reflections are still IN this picture (worst delta " + fWorst + ")");
+
+// ---- THE MARCH TAKES THE WORLD ROW (lane SSR-3) ---------------------------
+//
+// "Roughness Cutoff" (worldmodes reflectionRoughnessCutoff -> Scene::
+// rayReflectRoughness -> PostFxDesc::rayReflectRoughness) used to drive the
+// TRACED reflections only; the screen-space march carried a second cutoff of
+// its own that nothing in the document could write, and its tooltip could not
+// honestly say the word "marched". It can now, and this is the proof from the
+// outside: the row moves the SCREEN's picture, in the direction physics
+// requires.
+//
+// THE MEASUREMENT AVOIDS THE SAMPLE'S OPEN-TO-OPEN NOISE the same way the band
+// above does — everything is one open, and every number is a difference
+// against the SSR-OFF shot taken in it, so the GI, the probes and the exposure
+// cancel. This suite runs with JAHSHAKA_NO_RAY_QUERY=1, so the only thing that
+// can answer below the cutoff here is the march.
+//
+// THE DIRECTION IS THE ASSERTION, not a magnitude: closing the cutoff can only
+// take surfaces OUT of the marched set (nothing in the composite grows when a
+// gate closes), so the footprint at the BOTTOM of the row must be a fraction of
+// the one at the TOP of it. The two ends are used rather than the default and
+// the bottom because this sample's surfaces sit at 0.02, 0.03, 0.25, 0.40 and
+// 0.80 roughness: the default already excludes the walls, so the default and
+// the minimum differ by little, while the two ends differ by all of it.
+function footprint(tag, probes, off) {
+    var mass = 0, far = 0;
+    for (var i = 0; i < probes.length; ++i) {
+        var d = Math.max(Math.abs(probes[i].r - off[i].r),
+                         Math.abs(probes[i].g - off[i].g),
+                         Math.abs(probes[i].b - off[i].b));
+        mass += d;
+        if (d >= 10) ++far;
+    }
+    console.log("   " + tag + ": mass " + mass + " over " + probes.length +
+                " samples, " + far + " of them past 10/255");
+    return { mass: mass, far: far };
+}
+
+// A grid over the whole frame, so the count is the effect's whole footprint and
+// not one surface's.
+var ALL = [];
+for (var ay = 0; ay < 48; ++ay)
+    for (var ax = 0; ax < 64; ++ax)
+        ALL.push({ x: 0.01 + (ax * 0.98) / 63, y: 0.01 + (ay * 0.98) / 47 });
+
+world.override({ id: "ssr", value: "off" });
+editor.frame(120);
+var allOff = editor.screenshot("ssr-cutoff-off.png", W, H, ALL, "viewport").probes;
+
+world.override({ id: "ssr", value: "hq" });
+world.override({ id: "reflectionRoughnessCutoff", value: 100 });
+editor.frame(120);
+var allWide = editor.screenshot("ssr-cutoff-100.png", W, H, ALL, "viewport").probes;
+var wide = footprint("cutoff 100 % (the row's maximum)", allWide, allOff);
+
+world.override({ id: "reflectionRoughnessCutoff", value: 5 });
+editor.frame(120);
+var allTight = editor.screenshot("ssr-cutoff-05.png", W, H, ALL, "viewport").probes;
+var tight = footprint("cutoff 5 % (the row's minimum)", allTight, allOff);
+
+world.clearOverride({ id: "reflectionRoughnessCutoff" });
+world.clearOverride({ id: "ssr" });
+
+// THE TWO ENDS OF THE ROW, and the row's own physics as the assertion: closing
+// the cutoff can only take surfaces OUT of the marched set, so the footprint at
+// 5 % must be a fraction of the one at 100 %. Measured on this sample at the
+// owner's pose (spikes/ssr-3/): mass 929 at 100 %, 481 at 5 %, 507 at the
+// default 40 %; 12 samples past 10/255 against 1. The room's walls are authored
+// at roughness 0.8 and its GreenTeapot at 0.40, which is what the top of the
+// row reaches and the bottom does not. A march that ignored the row would
+// return the same two numbers.
+assert(wide.mass > 0 && wide.far > 0,
+       "SSR has a footprint at the top of the row (mass " + wide.mass + ", " +
+       wide.far + " samples past 10/255)");
+assert(tight.mass * 13 < wide.mass * 10,
+       "the WORLD ROW drives the screen-space march: closing the cutoff from 100 % to 5 % " +
+       "shrinks the marched footprint from mass " + wide.mass + " to " + tight.mass +
+       " (budget: the tight one under 0.77 of the wide one)");
+assert(tight.far + 4 <= wide.far,
+       "...and it removes whole SAMPLES, not just amplitude: " + wide.far + " samples past " +
+       "10/255 at 100 %, " + tight.far + " at 5 %");
 
 console.log("scripting.e2e.ssr_mirror complete");

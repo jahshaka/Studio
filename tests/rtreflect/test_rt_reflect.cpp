@@ -32,7 +32,9 @@
 //   4. A GLOSSY SURFACE CONVERGES AND HOLDS STILL. At roughness 0.3 one ray per
 //      pixel per frame is noise; the temporal mean is the integral. Within 16
 //      frames the frame-to-frame change must fall below 2/255 — no flicker.
-//   5. THE ROUGHNESS GATE. Above `kRayReflectRoughness` the probe's own
+//   5. THE ROUGHNESS GATE. Above `PostFxDesc::rayReflectRoughness` — the World
+//      panel's "Roughness Cutoff" row, and since lane SSR-3 the one number the
+//      screen-space march gates on too — the probe's own
 //      photograph is the better answer and no ray is spent: a wall at roughness
 //      0.8 reads the same with rays on as with them off.
 //   6. THE TIER RULE. With the view's SSR row OFF there is no trace at all,
@@ -312,7 +314,7 @@ int main()
     // ---- 5: the roughness gate ----------------------------------------------
     {
         PbrParams rough = wallParams;
-        rough.roughness = 0.8f;              // far above kRayReflectRoughness (0.4)
+        rough.roughness = 0.8f;              // far above the cutoff's 0.4 default
         CHECK(s->setPbrMaterial(wallMat, rough), "the wall accepts roughness 0.8");
         const float redRough = measure(e, view, "wall at roughness 0.8", 20);
         CHECK_MSG(redRough < redPlain + 0.03f,
