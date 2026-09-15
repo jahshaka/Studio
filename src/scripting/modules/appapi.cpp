@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "services/engineerrorpump.h"
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
+#include "irisgl/import/parsecensus.h"
 #include "services/mainthreadwatchdog.h"
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
@@ -89,6 +90,21 @@ QVector<VerbInfo> AppApi::verbs() const
           "the first entry being {stage:'total', ms, label}, plus 'counter:*' entries for the work that "
           "accumulates inside the stages (assimp parses, database sweeps, the engine push). Empty before "
           "the first open of the session.",
+          Needs::Document },
+        { "openStats", "app.openStats({reset:false}) -> {uiThreadParses, uiThreadParseMs, "
+          "uiThreadResourceParses, uiThreadResourceParseMs, workerParses, workerParseMs, "
+          "lastUiThreadParse, bakeHits, bakeMisses}",
+          "Model PARSES since the last reset, split by the thread that paid for them "
+          "(irisgl/import/parsecensus.h), and the bake reads beside them. A project open must "
+          "never parse a model on the UI thread — assimp on a 6 MB mesh is a second of frozen "
+          "window — so 'uiThreadParses' is the number open.responsive asserts is ZERO over the "
+          "open of every shipped sample. 'bakeMisses' says why a parse was needed at all (no "
+          "bake for that content yet), and 'lastUiThreadParse' names the file when the count is "
+          "not zero. Pass {reset:true} to zero the counters AFTER reading them, which is how a "
+          "caller measures ONE open. 'uiThreadResourceParses' counts the built-in primitives "
+          "(':/...') separately: a few kilobytes compiled into the binary, parsed once per "
+          "process and cached, which no worker can hoist because every caller asks for them by "
+          "name. Process-wide and always on: the cost is one clock read per parse.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -478,6 +494,25 @@ QVector<VerbInfo> AppApi::verbs() const
 QVariantList AppApi::openTimings()
 {
     return LoadTimeline::lastRun();
+}
+
+QVariantMap AppApi::openStats(const QVariantMap &options)
+{
+    const iris::ParseCensus::Counts parses = iris::ParseCensus::snapshot();
+    QVariantMap out;
+    out.insert(QStringLiteral("uiThreadParses"), parses.mainThreadParses);
+    out.insert(QStringLiteral("uiThreadParseMs"), parses.mainThreadMs);
+    out.insert(QStringLiteral("uiThreadResourceParses"), parses.mainThreadResourceParses);
+    out.insert(QStringLiteral("uiThreadResourceParseMs"), parses.mainThreadResourceMs);
+    out.insert(QStringLiteral("workerParses"), parses.workerParses);
+    out.insert(QStringLiteral("workerParseMs"), parses.workerMs);
+    out.insert(QStringLiteral("lastUiThreadParse"), parses.lastMainThreadPath);
+    out.insert(QStringLiteral("bakeHits"), parses.bakeHits);
+    out.insert(QStringLiteral("bakeMisses"), parses.bakeMisses);
+    // Read FIRST, then zero: a caller measuring one open wants the numbers of
+    // the window it just closed, not an empty map.
+    if (options.value(QStringLiteral("reset")).toBool()) iris::ParseCensus::reset();
+    return out;
 }
 
 bool AppApi::heartbeat(int intervalMs)

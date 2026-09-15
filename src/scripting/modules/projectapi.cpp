@@ -197,10 +197,14 @@ bool ProjectApi::open(const QString &guidOrName)
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
     // The ledger starts HERE, not in MainWindow::openProject: the session
-    // registrations prepareOpen runs are part of what an open costs.
+    // registrations are part of what an open costs and they happen inside it.
     LoadTimeline::begin(QStringLiteral("open(script) %1").arg(name.isEmpty() ? guid : name));
-    // Point the current project + synchronous preload, then the reader half.
-    host.services->project->prepareOpen(guid, name);
+    // Point the current project, then the open — which registers the session
+    // assets itself, in its slices, with the worker's parsed models in hand
+    // (OPEN-ASSIMP-1: the synchronous verb and the threaded open are ONE path
+    // now, so the preload that used to run here — and parse on this thread —
+    // is gone).
+    host.services->project->pointAtProject(guid, name);
     host.mainWindow->openProject(false);
     host.beginRunUndoMacro();
     return true;
@@ -229,8 +233,8 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
     LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
-    // NOT prepareOpen: the runner's first slice does the session registrations
-    // itself, with the worker's parsed models in hand.
+    // The open's first slices do the session registrations themselves, with
+    // the worker's parsed models in hand.
     host.services->project->pointAtProject(guid, name);
     host.mainWindow->openProjectAsync(false);
     host.beginRunUndoMacro();

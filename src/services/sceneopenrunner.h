@@ -106,7 +106,13 @@ public:
     /// Bounded join for the UI thread: pumps queued events (the worker's
     /// completion hop needs servicing) until the runner is idle or msTimeout
     /// elapses. Returns true when it is done.
-    bool waitForDone(int msTimeout);
+    ///
+    /// This is ALSO how the blocking open waits (MainWindow::openProject,
+    /// OPEN-ASSIMP-1): the caller is promised a loaded world, the window is
+    /// promised a pumping event loop, and this is both. `idleSleepMs` is the
+    /// nap between pumps — the shutdown join can afford five, an open that a
+    /// script is waiting on pays it once per slice, so it passes one.
+    bool waitForDone(int msTimeout, int idleSleepMs = 5);
 
 signals:
     /// Progress for the dialog: (percent, text). Queued from the worker,
