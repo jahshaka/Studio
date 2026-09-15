@@ -86,7 +86,11 @@ namespace GizmoMeshes
     /// run out ALONG the two arrows it lies between, so it spans [0, span] on
     /// both of its axes and reads as one corner of a small box at the centre.
     /// It is drawn as a FRAME (four thin lines, kPlaneFrameRadius); the PICK is
-    /// the whole square's area, so it stays as easy to grab as a filled quad.
+    /// the whole square's area, so it stays as easy to grab as a filled quad —
+    /// and since GIZMO-3 item 3 the two INNER legs are drawn from the centre
+    /// ball's surface outwards, never inside the ball: the square still spans
+    /// [0, span] and is still PICKED over that whole area, only the couple of
+    /// millimetres of line the ball covers are not drawn.
     ///
     /// 0.50 — smaller than GIZMO-1's 0.45..1.05 square (side 0.60), which is
     /// what the owner asked for, and it leaves the outer 74 % of every arrow
@@ -95,15 +99,32 @@ namespace GizmoMeshes
     /// against IS the square drawn.
     constexpr float kPlaneHandleSpan = 0.50f;
     /// The frame's line thickness, DERIVED so it draws the same width as the
-    /// rotation rings do at any tuning of kRotationExtentRatio: the rings' tube
-    /// is kRingMinor of THEIR handleScale, and a plane frame is drawn at the
-    /// translate gizmo's. Defined in gizmomeshes.cpp beside kRingMinor, which
-    /// is the number it follows (0.014228 today).
+    /// rotation rings do at any tuning of kRotationExtentRatio AND of the
+    /// rings' own weight: the rings' tube is kRingMinor of THEIR handleScale,
+    /// and a plane frame is drawn at the translate gizmo's. Defined in
+    /// gizmomeshes.cpp beside kRingMinor, which is the number it follows
+    /// (0.028456 since GIZMO-3 item 2 doubled the line weight).
     extern const float kPlaneFrameRadius;
 
-    /// THE CENTRE BALL'S PICK RADIUS, in units of gizmoScale — twice the ball's
-    /// DRAWN radius (kCoreSphere * kHandleScale = 0.005), i.e. about a 19-pixel
-    /// disc for a 9-pixel ball at the sizes Gizmo::updateSize holds.
+    /// THE TRANSLATE GIZMO'S CENTRE BALL, in handle-local units — its DRAWN
+    /// radius, and therefore the radius the three arrow shafts and the three
+    /// plane frames start at (GIZMO-3 item 3, owner: "the translate ball
+    /// should occlude the axis lines meeting inside it, as the scale gizmo's
+    /// white cube hides its lines").
+    ///
+    /// It is the SCALE gizmo's centre cube's half-extent, which is the same
+    /// number its own shafts start at (kShaftStart in gizmomeshes.cpp): the two
+    /// gizmos' centres are one decision, so they read as the same object, and
+    /// nothing is drawn inside either of them. Measured before the change: a
+    /// 12-pixel ball with the two inner plane-frame legs and the near shaft
+    /// ends painted over it (88 non-white pixels inside its disc,
+    /// spikes/gizmo-3/).
+    constexpr float kCentreBallRadius = 0.12f;
+
+    /// THE CENTRE BALL'S PICK RADIUS, in units of gizmoScale — the ball's
+    /// drawn radius is kCentreBallRadius * kHandleScale = 0.006, so this is a
+    /// ~19-pixel pick disc for an 11-pixel ball at the sizes Gizmo::updateSize
+    /// holds. UNCHANGED by GIZMO-3 (the ball grew, the pick did not).
     ///
     /// It lives HERE, beside the geometry it has to stay clear of, because the
     /// plane frames' inner corner is the gizmo's ORIGIN (item 1): the ball's
@@ -123,8 +144,23 @@ namespace GizmoMeshes
     iris::MeshPtr centerSphere();
     /// Small cube for the scale gizmo's core (uniform scale).
     iris::MeshPtr centerCube();
-    /// Thin ring (torus) of radius 1 in the plane perpendicular to `axis`.
-    iris::MeshPtr rotationRing(GizmoAxis axis);
+    /// HALF a thin ring (torus) of radius 1 in the plane perpendicular to
+    /// `axis`: the 180-degree arc centred on +U of that axis's frame (the
+    /// frame axisFrame() builds — X: U = +Y, Y: U = +Z, Z: U = +X).
+    ///
+    /// WHY HALF (GIZMO-3 item 1, owner: "the three rings should look like
+    /// Blender's, where each ring is 90 degrees to the other ring — ours look
+    /// like ellipses crossing"). Blender draws each dial as the part of the
+    /// circle on the CAMERA's side of the plane through the gizmo's centre
+    /// perpendicular to the view — a clip plane, dial3d_gizmo.c — so the three
+    /// rings read as three arcs of one sphere instead of three full ellipses
+    /// crossing each other twice. RotationGizmo turns this one arc into that
+    /// picture: it draws the mesh TWICE per ring, rotated about the ring's own
+    /// axis to the two ends of the visible span, and the union of two
+    /// 180-degree arcs is exactly the span (see RotationHandle::arcFrame).
+    /// That is why the span can vary continuously with no second mesh and no
+    /// per-frame geometry: the two copies simply overlap more or less.
+    iris::MeshPtr rotationRingHalf(GizmoAxis axis);
     /// Slightly larger thin ring in the XY plane; the rotation gizmo orients it
     /// to face the camera each frame (the screen-space outer ring).
     iris::MeshPtr screenRing();

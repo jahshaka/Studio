@@ -81,6 +81,39 @@ iris::Mat4 RotationHandle::ringFrame() const
 	return facing;
 }
 
+// THE BASIS A RING'S CIRCLE IS PARAMETERISED IN — gizmomeshes::axisFrame's
+// (A, U, V) for this handle's axis, in the ring's own frame. The circle's point
+// at angle a is U cos a + V sin a, which is what the mesh builds, what
+// screenDistance walks and what arcCentre is measured from.
+void RotationHandle::ringBasis(iris::Vec3 &A, iris::Vec3 &U, iris::Vec3 &V) const
+{
+	switch (axis) {
+	case GizmoAxis::X: A = iris::Vec3(1, 0, 0); U = iris::Vec3(0, 1, 0); V = iris::Vec3(0, 0, 1); break;
+	case GizmoAxis::Y: A = iris::Vec3(0, 1, 0); U = iris::Vec3(0, 0, 1); V = iris::Vec3(1, 0, 0); break;
+	// Z and Screen are both the XY circle of their own frame — which for the
+	// screen ring is the camera-facing one ringFrame() builds.
+	default:           A = iris::Vec3(0, 0, 1); U = iris::Vec3(1, 0, 0); V = iris::Vec3(0, 1, 0); break;
+	}
+}
+
+// ONE HALF-RING MESH, TURNED TO ONE END OF THE VISIBLE SPAN (GIZMO-3 item 1).
+// The mesh is the arc [-90, +90] degrees about +U; copy 0 is turned so its
+// range starts at arcCentre - arcHalf, copy 1 so its range ends at arcCentre +
+// arcHalf. Their union is exactly the span, for any arcHalf in [90, 180]
+// degrees, and at 180 (a face-on ring) the two meet end to end and draw the
+// whole circle.
+iris::Mat4 RotationHandle::arcFrame(int copy) const
+{
+	iris::Mat4 t = ringFrame();
+	if (axis == GizmoAxis::Screen) return t;            // a full circle, no arc
+	iris::Vec3 A, U, V;
+	ringBasis(A, U, V);
+	const float offset = arcHalf - float(M_PI) * 0.5f;  // 0 at a half circle
+	const float turn = arcCentre + (copy == 0 ? -offset : offset);
+	t.rotate(iris::Quat::fromAxisAndAngle(A, float(qRadiansToDegrees(turn))));
+	return t;
+}
+
 namespace {
 
 /// Distance in pixels from a point to a segment (Qt has no such call on
@@ -133,13 +166,7 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 	const iris::Mat4 t = ringFrame();
 	const iris::Vec3 centre = t.column(3).toVector3D();
 	iris::Vec3 u, v, n;
-	switch (axis) {
-	case GizmoAxis::X: n = iris::Vec3(1, 0, 0); u = iris::Vec3(0, 1, 0); v = iris::Vec3(0, 0, 1); break;
-	case GizmoAxis::Y: n = iris::Vec3(0, 1, 0); u = iris::Vec3(0, 0, 1); v = iris::Vec3(1, 0, 0); break;
-	// Z and Screen are both the XY circle of their own frame — which for the
-	// screen ring is the camera-facing one ringFrame() just built.
-	default:           n = iris::Vec3(0, 0, 1); u = iris::Vec3(1, 0, 0); v = iris::Vec3(0, 1, 0); break;
-	}
+	ringBasis(n, u, v);
 	const auto toWorldDir = [&t](const iris::Vec3 &d) {
 		return (t * iris::Vec4(d, 0)).toVector3D().normalized();
 	};
@@ -152,11 +179,20 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 	const iris::Vec3 forward = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
 	facing = std::fabs(iris::Vec3::dotProduct(n, forward));
 
+	// THE PICK FOLLOWS THE DRAWN ARC (GIZMO-3 item 1, Blender's rule): only the
+	// camera-facing part of the circle is drawn, so only that part is a handle
+	// — the hidden half is not clickable. The span is the same two numbers the
+	// two drawn copies are placed by, so the circle measured IS the arc on
+	// screen, and the sampling density is the full circle's (one sample per
+	// 360/kRingSamples degrees) whatever the span.
+	const float span = qBound(float(M_PI), 2.0f * arcHalf, float(2.0 * M_PI));
+	const bool whole = span >= float(2.0 * M_PI) - 1e-4f;
+	const int samples = qMax(2, int(std::lround(kRingSamples * span / (2.0 * M_PI))));
 	float best = -1.0f;
 	QPointF firstPx, prevPx;
 	bool havePrev = false, haveFirst = false;
-	for (int i = 0; i < kRingSamples; ++i) {
-		const float a = float(2.0 * M_PI * i / kRingSamples);
+	for (int i = 0; i < samples; ++i) {
+		const float a = arcCentre - span * 0.5f + span * i / (whole ? samples : (samples - 1));
 		QPointF px;
 		if (!gizmo->projectToPixel(centre + u * qCos(a) + v * qSin(a), px)) {
 			havePrev = false;      // that arc crosses behind the eye — no chord
@@ -169,7 +205,7 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 		prevPx = px;
 		havePrev = true;
 	}
-	if (havePrev && haveFirst) {           // close the loop
+	if (whole && havePrev && haveFirst) {  // close the loop (a face-on ring only)
 		const float d = pointToSegmentPx(cursor, prevPx, firstPx);
 		if (best < 0.0f || d < best) best = d;
 	}
@@ -268,13 +304,14 @@ RotationGizmo::RotationGizmo() :
 
 void RotationGizmo::loadAssets()
 {
-	// Procedural rings (gizmomeshes.cpp): one thin circle per axis, plus the
-	// screen-facing outer ring drawItems adds. Unit radius, and picking
-	// projects that same unit circle (screenDistance), so what is drawn and
-	// what is clickable are one description.
-	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::X));
-	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Y));
-	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Z));
+	// Procedural rings (gizmomeshes.cpp): one thin HALF circle per axis — drawn
+	// twice, at the two ends of the camera-facing span (GIZMO-3 item 1) —
+	// plus the full screen-facing outer ring. Unit radius, and picking walks
+	// that same unit circle over that same span (screenDistance), so what is
+	// drawn and what is clickable are one description.
+	handleMeshes.append(GizmoMeshes::rotationRingHalf(GizmoAxis::X));
+	handleMeshes.append(GizmoMeshes::rotationRingHalf(GizmoAxis::Y));
+	handleMeshes.append(GizmoMeshes::rotationRingHalf(GizmoAxis::Z));
 	handleMeshes.append(GizmoMeshes::screenRing());
 
 	// THE DRAG MARKER (GIZMO-2 item 3): built once beside the rings, drawn only
@@ -496,9 +533,59 @@ void RotationGizmo::refreshFrame()
 	// it freezes with everything else, so the outer ring cannot slide under the
 	// cursor mid-drag either.
 	const GizmoPickView &view = pickView();
-	if (view.isValid())
+	if (view.isValid()) {
 		handles[kScreenHandle]->screenAxis =
 			view.camera->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+		// ...and the camera-facing half of each axis ring, from the same
+		// camera, frozen by the same early return above (GIZMO-3 item 1).
+		updateRingArcs(-handles[kScreenHandle]->screenAxis);
+	}
+}
+
+// THE CAMERA-FACING HALF OF EVERY AXIS RING (GIZMO-3 item 1, Blender's rule).
+//
+// Blender clips each dial against the plane through the gizmo's centre whose
+// normal is the camera's own +Z (dial3d_gizmo.c: the clip plane is
+// rv3d->viewinv[2] through matrix_basis[3], nudged back by DIAL_CLIP_BIAS times
+// the dial's scale), so the drawn part of a ring is the points p with
+//
+//     dot(p - centre, toCamera) >= -bias * radius.
+//
+// Write p - centre = radius * (U cos a + V sin a) and let (c, s) be toCamera's
+// components in that basis: the condition is cos(a - atan2(s, c)) >= -bias/m
+// where m = hypot(c, s) is the SINE of the ring's tilt away from face-on. So
+// the drawn part is one arc, centred on atan2(s, c) — the direction of the eye
+// within the ring's own plane — with a half-angle of acos(-bias/m). That is 90
+// degrees for a ring seen edge-on, a little more as it turns towards the
+// camera, and 180 (the whole circle) once m falls to the bias: a face-on ring,
+// whose two halves are the same distance from the eye and cannot be told
+// apart, is drawn whole rather than snapping to a half.
+//
+// `toCamera` is a DIRECTION, not the radial direction to the eye, exactly as
+// Blender's is: all three rings are then cut by ONE plane, which is what makes
+// the picture read as three arcs of a single sphere.
+void RotationGizmo::updateRingArcs(const iris::Vec3 &toCamera)
+{
+	/// Blender's DIAL_CLIP_BIAS: the clip plane sits this fraction of the
+	/// ring's radius BEHIND the centre. It is what makes the span grow
+	/// continuously to a full circle as a ring turns face-on.
+	constexpr float kArcClipBias = 0.02f;
+	if (toCamera.isNull()) return;
+	const iris::Vec3 w = toCamera.normalized();
+	const iris::Mat4 t = trans;
+	const auto toWorldDir = [&t](const iris::Vec3 &d) {
+		return (t * iris::Vec4(d, 0)).toVector3D().normalized();
+	};
+	for (int i = 0; i < 3; ++i) {
+		iris::Vec3 A, U, V;
+		handles[i]->ringBasis(A, U, V);
+		const float c = iris::Vec3::dotProduct(w, toWorldDir(U));
+		const float sN = iris::Vec3::dotProduct(w, toWorldDir(V));
+		const float m = std::sqrt(c * c + sN * sN);
+		handles[i]->arcCentre = (m > 1e-6f) ? std::atan2(sN, c) : 0.0f;
+		handles[i]->arcHalf =
+			std::acos(qBound(-1.0f, m > 1e-6f ? -kArcClipBias / m : -1.0f, 1.0f));
+	}
 }
 
 iris::Mat4 RotationGizmo::getTransform()
@@ -527,16 +614,27 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 	// A caller that draws without ever picking — an overlay test, a stand-in
 	// viewport — still hands a view direction here, so take it when there is no
 	// pick view to read. Never while dragging: the frame is frozen.
-	if (!dragging && !viewDir.isNull() && !pickView().isValid())
+	if (!dragging && !viewDir.isNull() && !pickView().isValid()) {
 		handles[kScreenHandle]->screenAxis = viewDir.normalized();
+		// ...and the camera-facing half of each axis ring, from the same
+		// direction (GIZMO-3 item 1).
+		updateRingArcs(-viewDir.normalized());
+	}
 
 	const QColor highlight(255, 255, 0);
 	// THE DRAWN FRAME, per handle: the gizmo's own for an axis ring, the
 	// camera-facing one for the screen ring — the same frames picking measures.
-	const auto itemFor = [&](int i, const QColor &colour) {
-		iris::Mat4 t = handles[i]->ringFrame();
-		t.scale(getGizmoScale() * handles[i]->handleScale);
-		return GizmoDrawItem{ handleMeshes[i], t, colour };
+	//
+	// An AXIS ring is TWO items (GIZMO-3 item 1): the same half-ring mesh at the
+	// two ends of its camera-facing span, whose union is that span. The screen
+	// ring is one full circle, so it has no second copy.
+	const auto appendItems = [&](QVector<GizmoDrawItem> &out, int i, const QColor &colour) {
+		const int copies = handles[i]->axis == GizmoAxis::Screen ? 1 : 2;
+		for (int copy = 0; copy < copies; ++copy) {
+			iris::Mat4 t = handles[i]->arcFrame(copy);
+			t.scale(getGizmoScale() * handles[i]->handleScale);
+			out.append(GizmoDrawItem{ handleMeshes[i], t, colour });
+		}
 	};
 	if (dragging) {
 		// WHAT A TURN LOOKS LIKE WHILE IT IS HAPPENING (GIZMO-2 item 3, owner
@@ -547,10 +645,12 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 		// the axis the object is turning about is readable at a glance. All
 		// three ride `trans` — the frame frozen at startDragging — through
 		// ringFrame(), so the marker cannot slide under the cursor either, and
-		// all of it is gone at release.
+		// all of it is gone at release. The hub and the arrow ride ringFrame(),
+		// not arcFrame(): a disc in the ring's plane and a line along its axis
+		// are both invariant under the turn ABOUT that axis an arc frame adds.
 		for (int i = 0; i < 4; i++) {
 			if (handles[i] != draggedHandle) continue;
-			items.append(itemFor(i, highlight));
+			appendItems(items, i, highlight);
 			const QColor axisColour = handles[i]->getHandleColor();
 			iris::Mat4 t = handles[i]->ringFrame();
 			t.scale(getGizmoScale() * handles[i]->handleScale);
@@ -565,6 +665,6 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 	// it is the handle that frames the others, and it is the one a tie goes
 	// against, so drawing it last is what makes the picture agree with the pick.
 	for (int i = 0; i < 4; i++)
-		items.append(itemFor(i, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor()));
+		appendItems(items, i, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor());
 	return items;
 }

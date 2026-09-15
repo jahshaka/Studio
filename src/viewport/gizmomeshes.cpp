@@ -26,17 +26,28 @@ namespace
 // ---- the one place the gizmo look is tuned --------------------------------------
 // All values are in handle-local units (scaled by gizmoScale * handleScale later).
 const float kShaftRadius   = 0.0175f; // thin axis line (halved 2026-08-30; before: 0.035, old OBJ girth: 0.211)
-const float kShaftStart    = 0.12f;   // leave the core clear
+/// WHERE A SHAFT STARTS: exactly ON the surface of the core its gizmo draws —
+/// the translate ball's radius and the scale cube's half-extent are the same
+/// number (GizmoMeshes::kCentreBallRadius), so neither gizmo draws a line
+/// inside its own centre and neither leaves a gap around it (GIZMO-3 item 3).
+const float kShaftStart    = GizmoMeshes::kCentreBallRadius;
 const float kConeBase      = 0.115f;  // small arrow head
 const float kConeStart     = 1.56f;
 const float kAxisEnd       = GizmoMeshes::kTranslateEnd;  // same reach as the old translate handle
 const float kCubeHalf      = 0.11f;   // small scale-tip cube
 const float kScaleEnd      = GizmoMeshes::kScaleEnd;      // same reach as the old scale handle
-const float kCoreSphere    = 0.10f;
-const float kCoreCubeHalf  = 0.12f;
-const float kRingMinor     = 0.01f;   // thin rotation circles (halved 2026-08-30; old rings were flat fat bands)
+const float kCoreSphere    = GizmoMeshes::kCentreBallRadius;   // grown from 0.10 by GIZMO-3 item 3
+const float kCoreCubeHalf  = GizmoMeshes::kCentreBallRadius;   // ...to the scale gizmo's cube, unchanged at 0.12
+/// THE WEIGHT OF EVERY LINE THE GIZMOS DRAW (GIZMO-3 item 2, owner: the rings
+/// should read like Blender's). Doubled from 0.01: the rings measured 3 pixels
+/// wide at the shipped size and Blender's are 3-4 at a gizmo two thirds the
+/// size, so its lines are two thirds heavier again relative to the circle they
+/// draw. 0.02 is ~6 pixels at 1080p. Retune HERE: the outer screen ring reads
+/// this number, and so does the plane frames' radius below, so the whole gizmo
+/// family keeps one line weight.
+const float kRingMinor     = 0.02f;
 // the outer ring's radius lives in the header: picking projects the same circle
-const float kScreenRingMinor = 0.007f;  // halved 2026-08-30 (was 0.014)
+const float kScreenRingMinor = kRingMinor;   // the outer ring at the axis rings' weight (GIZMO-3 item 2)
 const int   kSegments      = 20;      // round sections
 const int   kRingSegments  = 64;      // ring smoothness
 const int   kRingSides     = 8;
@@ -207,11 +218,13 @@ void addSphere(Builder &b, float radius, int rings, int segments)
         }
 }
 
-void addTorus(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iris::Vec3 &V,
-              float major, float minor, int segments, int sides)
+/// A torus, or an ARC of one: the ring sweeps `sweep` radians starting at
+/// `start`, measured from +U towards +V. A full circle is start 0, sweep 2*pi.
+void addTorusArc(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iris::Vec3 &V,
+                 float major, float minor, int segments, int sides, float start, float sweep)
 {
     auto point = [&](int si, int ti, iris::Vec3 &n) {
-        const float theta = float(2.0 * M_PI) * si / segments;   // around the ring
+        const float theta = start + sweep * si / segments;       // around the ring
         const float phi = float(2.0 * M_PI) * ti / sides;        // around the tube
         const iris::Vec3 dir = U * qCos(theta) + V * qSin(theta); // outward in the ring plane
         n = dir * qCos(phi) + A * qSin(phi);
@@ -224,6 +237,14 @@ void addTorus(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iris::
             const iris::Vec3 c = point(s + 1, t + 1, nc), d = point(s, t + 1, nd);
             b.quad(a, bb, c, d, na, nb, nc, nd);
         }
+    // No end caps: the overlay material is unlit and two-sided (CULL_NONE),
+    // so an open tube end shows its own inside, in the same flat colour.
+}
+
+void addTorus(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iris::Vec3 &V,
+              float major, float minor, int segments, int sides)
+{
+    addTorusArc(b, A, U, V, major, minor, segments, sides, 0.0f, float(2.0 * M_PI));
 }
 
 } // namespace
@@ -235,7 +256,7 @@ namespace GizmoMeshes
 // (second reader, GIZMO-2 round 2): a ring's tube is kRingMinor of the ROTATION
 // handleScale, and a plane frame is drawn at the TRANSLATE one, so the radius
 // that matches them is kRingMinor * kRotationHandleScale / kHandleScale —
-// 0.014228 at today's tuning. Written this way, retuning kRotationExtentRatio
+// 0.028456 at today's tuning. Written this way, retuning kRotationExtentRatio
 // cannot silently un-match the two.
 const float kPlaneFrameRadius = kRingMinor * kRotationHandleScale / kHandleScale;
 
@@ -273,12 +294,16 @@ iris::MeshPtr centerCube()
     return b.build();
 }
 
-iris::MeshPtr rotationRing(GizmoAxis axis)
+iris::MeshPtr rotationRingHalf(GizmoAxis axis)
 {
     iris::Vec3 A, U, V;
     axisFrame(axis, A, U, V);
     Builder b;
-    addTorus(b, A, U, V, 1.0f, kRingMinor, kRingSegments, kRingSides);
+    // The 180-degree arc CENTRED on +U, i.e. [-90, +90] degrees: half the
+    // segments for half the circle, so the chords stay the same length (and
+    // therefore the same fraction of a pixel off the true circle) as before.
+    addTorusArc(b, A, U, V, 1.0f, kRingMinor, kRingSegments / 2, kRingSides,
+                -float(M_PI) * 0.5f, float(M_PI));
     return b.build();
 }
 
@@ -298,11 +323,18 @@ iris::MeshPtr planeHandle(GizmoAxis axis)
     // every distance, and needs no second draw path in the overlay.
     const float s = kPlaneHandleSpan;
     const float r = kPlaneFrameRadius;
-    const iris::Vec3 o(0, 0, 0), u = U * s, v = V * s, uv = U * s + V * s;
-    addTube(b, o,  u,  r, 8);     // along the first axis, at the second's 0
-    addTube(b, o,  v,  r, 8);     // along the second axis, at the first's 0
-    addTube(b, u,  uv, r, 8);     // the outer side parallel to the second axis
-    addTube(b, v,  uv, r, 8);     // the outer side parallel to the first axis
+    // ...AND THE TWO INNER LEGS START ON THE BALL (GIZMO-3 item 3). The corner
+    // is still the gizmo's origin — the legs still run along the two arrows —
+    // but the part of them that used to be drawn INSIDE the white centre ball
+    // is not drawn: the ball is what the eye reads as the corner, exactly as
+    // the scale gizmo's cube is. Measured before: the two inner legs put 88
+    // teal/purple pixels inside the ball's disc.
+    const float b0 = GizmoMeshes::kCentreBallRadius;
+    const iris::Vec3 u = U * s, v = V * s, uv = U * s + V * s;
+    addTube(b, U * b0, u,  r, 8);     // along the first axis, at the second's 0
+    addTube(b, V * b0, v,  r, 8);     // along the second axis, at the first's 0
+    addTube(b, u,      uv, r, 8);     // the outer side parallel to the second axis
+    addTube(b, v,      uv, r, 8);     // the outer side parallel to the first axis
     return b.build();
 }
 

@@ -21,11 +21,22 @@
 // projected circle, pixel by pixel, from a set of cameras that includes the
 // edge-on case for every axis, and asserts
 //
-//   A. every sampled pixel of every ring hits SOME ring, and the ring it hits
-//      really is under the cursor (within the pick tolerance);
-//   B. each ring wins most of its own pixels (the rest are the crossings, where
-//      two rings are equally under the cursor and the more face-on one wins by
-//      design);
+//   A. every sampled pixel of the DRAWN part of every ring hits SOME ring, and
+//      the ring it hits really is under the cursor (within the pick tolerance);
+//   B. each ring wins most of its own drawn pixels (the rest are the crossings,
+//      where two rings are equally under the cursor and the more face-on one
+//      wins by design);
+//   B2. THE HIDDEN HALF IS NOT A HANDLE (GIZMO-3 item 1, Blender's rule). Since
+//      each ring is drawn as the arc on the camera's side of the plane through
+//      the gizmo's centre perpendicular to the view, the other half is not
+//      there — and a pixel of it that is not also under the DRAWN arc (an
+//      edge-on ring projects its two halves onto the same line, so most of
+//      them are) must not pick that ring. The classification here is derived
+//      from the RULE, not from the gizmo's own numbers: a sample is "drawn"
+//      when dot(p - centre, toCamera) is comfortably positive and "hidden"
+//      when it is comfortably negative, with a quarter-radius band around the
+//      cut left out of both (that band is where the implementation's
+//      Blender-style clip bias lives);
 //   C. no ring is ever dead: from every camera, every ring answers to a healthy
 //      run of its own pixels;
 //   D. pixels away from all three rings (the corners, and the empty middle)
@@ -126,6 +137,34 @@ bool oldAnnulusHit(const iris::Mat4 &gizmoTransform, float scale, const iris::Ve
     return d > 0.8f && d < 1.2f;
 }
 
+/// BLENDER'S RULE, WRITTEN OUT (GIZMO-3 item 1). A ring is drawn where
+///
+///     dot(p - centre, toCamera) >= -bias * radius
+///
+/// (dial3d_gizmo.c clips the dial against the plane through the gizmo's origin
+/// whose normal is the camera's own axis, pushed back by DIAL_CLIP_BIAS times
+/// the dial's scale). Substituting p - centre = radius * (u cos a + v sin a)
+/// and writing (c, s) for toCamera's components in that basis, the condition is
+///
+///     cos(a - atan2(s, c)) >= -bias / hypot(c, s),
+///
+/// i.e. ONE ARC, centred on the eye's direction within the ring's own plane,
+/// with the half-angle this returns (in degrees): 90 for a ring seen edge-on,
+/// a little more as it turns towards the camera, 180 — the whole circle — once
+/// the ring is face-on and its two halves are the same distance from the eye.
+/// `centreDeg` comes back as the arc's centre in the same parameterisation the
+/// samples below use.
+float drawnArc(const iris::Vec3 &u, const iris::Vec3 &v, const iris::Vec3 &toCamera,
+               float bias, float &centreDeg)
+{
+    const float c = iris::Vec3::dotProduct(toCamera, u);
+    const float s = iris::Vec3::dotProduct(toCamera, v);
+    const float m = std::sqrt(c * c + s * s);
+    centreDeg = m > 1e-6f ? float(qRadiansToDegrees(std::atan2(s, c))) : 0.0f;
+    const float cosCut = m > 1e-6f ? -bias / m : -1.0f;
+    return float(qRadiansToDegrees(std::acos(std::max(-1.0f, std::min(1.0f, cosCut)))));
+}
+
 /// Smallest signed difference between two angles in degrees.
 float angleDelta(float a, float b)
 {
@@ -133,6 +172,39 @@ float angleDelta(float a, float b)
     while (d > 180.0f) d -= 360.0f;
     while (d < -180.0f) d += 360.0f;
     return d;
+}
+
+/// How far `cursor` is, in pixels, from the part of a ring that is DRAWN — its
+/// camera-facing arc, walked here independently of the gizmo's own state.
+float drawnArcDistancePx(RotationGizmo &gizmo, const iris::Vec3 &centre, const iris::Vec3 &u,
+                         const iris::Vec3 &v, float radius, float arcCentreDeg, float arcHalfDeg,
+                         const QPointF &cursor)
+{
+    float best = -1.0f;
+    QPointF prev;
+    bool havePrev = false;
+    for (int i = 0; i <= 180; ++i) {
+        const float deg = float(360.0 * i / 180.0);
+        if (std::fabs(angleDelta(deg, arcCentreDeg)) > arcHalfDeg) { havePrev = false; continue; }
+        const float a = float(qDegreesToRadians(deg));
+        const iris::Vec3 off = (u * std::cos(a) + v * std::sin(a)) * radius;
+        QPointF px;
+        if (!gizmo.projectToPixel(centre + off, px)) { havePrev = false; continue; }
+        const double dx = cursor.x() - px.x(), dy = cursor.y() - px.y();
+        float d = float(std::sqrt(dx * dx + dy * dy));
+        if (havePrev) {
+            const double vx = px.x() - prev.x(), vy = px.y() - prev.y();
+            const double wx = cursor.x() - prev.x(), wy = cursor.y() - prev.y();
+            const double len2 = vx * vx + vy * vy;
+            double t = len2 > 1e-12 ? (wx * vx + wy * vy) / len2 : 0.0;
+            t = std::min(1.0, std::max(0.0, t));
+            const double ex = wx - t * vx, ey = wy - t * vy;
+            d = std::min(d, float(std::sqrt(ex * ex + ey * ey)));
+        }
+        if (best < 0.0f || d < best) best = d;
+        prev = px; havePrev = true;
+    }
+    return best;
 }
 
 /// A camera pose in the EDITOR'S OWN convention (EngineSceneViewport's axis
@@ -173,6 +245,13 @@ int main(int argc, char **argv)
     RotationGizmo gizmo;
     gizmo.setSelectedNode(node);
 
+    // One probe handle per ring, on the same gizmo: RotationHandle is the
+    // public description of a ring, so the suite can ask a NAMED ring for its
+    // drag angle instead of asking whichever ring the pick chose.
+    RotationHandle probeX(&gizmo, GizmoAxis::X), probeY(&gizmo, GizmoAxis::Y),
+        probeZ(&gizmo, GizmoAxis::Z);
+    RotationHandle *probes[3] = { &probeX, &probeY, &probeZ };
+
     // The cameras. front/top/right each put TWO rings edge-on (the camera lies
     // in their planes) — precisely the configurations the old test could not
     // hit — and the obliques cover the ordinary case.
@@ -186,10 +265,25 @@ int main(int argc, char **argv)
     };
 
     constexpr int kSamples = 72;          // every 5 degrees around each ring
-    int totalPixels = 0, hitPixels = 0;
+    int totalPixels = 0, drawnPixels = 0, drawnHit = 0;
     // E: how the OLD annulus rule did on the very same pixels, and how often a
     // whole ring was dead from a whole camera — the owner's report, counted.
     int totalOldHits = 0, deadRings = 0;
+    // B2 (GIZMO-3): hidden-half samples that land clear of the drawn arc, and
+    // how many of them wrongly picked their own ring.
+    int hiddenTested = 0, hiddenPicked = 0;
+    /// How far outside the pick tolerance a hidden sample has to be from the
+    /// DRAWN arc before its answer is meaningful (an edge-on ring projects both
+    /// halves onto one line, so most hidden samples sit ON the drawn arc and
+    /// are correctly pickable).
+    constexpr float kHiddenClearPx = kRingPickTolerancePx + 3.0f;
+    /// Blender's DIAL_CLIP_BIAS, as the RULE states it: the clip plane sits
+    /// this fraction of the ring's radius behind the centre (see drawnArc).
+    constexpr float kClipBias = 0.02f;
+    /// ...and how far, IN THE RING'S OWN ANGLE, a sample has to be from the end
+    /// of the drawn arc before it counts as drawn or as hidden. Everything
+    /// within this band of either end is left out of both claims.
+    constexpr float kArcEndMarginDeg = 5.0f;
 
     for (const Camera &c : kCameras) {
         place(cam, c);
@@ -203,9 +297,14 @@ int main(int argc, char **argv)
             cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
 
         std::printf("\n== camera %s ==\n", c.name);
+        const iris::Vec3 toCamera = -forward;      // Blender cuts with the view axis
         for (const Ring &ring : kRings) {
             const float facing = std::fabs(iris::Vec3::dotProduct(ring.normal, forward));
-            int own = 0, any = 0, samples = 0, oldHits = 0;
+            // The arc this ring DRAWS, derived from Blender's rule, not from
+            // the gizmo's own numbers.
+            float arcCentreDeg = 0.0f;
+            const float arcHalfDeg = drawnArc(ring.u, ring.v, toCamera, kClipBias, arcCentreDeg);
+            int own = 0, any = 0, samples = 0, samplesAll = 0, oldHits = 0;
             int longestOwnRun = 0, run = 0;
             float maxAngleStep = 0.0f, oldMaxAngleStep = 0.0f;
             float winding = 0.0f, prevAngle = 0.0f;
@@ -213,17 +312,45 @@ int main(int argc, char **argv)
 
             for (int i = 0; i < kSamples; ++i) {
                 const float a = float(2.0 * M_PI * i / kSamples);
-                const iris::Vec3 world = centre + (ring.u * std::cos(a) + ring.v * std::sin(a)) * scale;
+                const iris::Vec3 off = (ring.u * std::cos(a) + ring.v * std::sin(a)) * scale;
+                const iris::Vec3 world = centre + off;
                 QPointF px;
                 if (!gizmo.projectToPixel(world, px)) continue;      // behind the eye
                 if (px.x() < 0 || px.y() < 0 || px.x() > kWidth || px.y() > kHeight) continue;
-                ++samples; ++totalPixels;
+                ++samplesAll; ++totalPixels;
+                const float fromArcEnd =
+                    std::fabs(angleDelta(float(qRadiansToDegrees(a)), arcCentreDeg));
+                const bool drawnHere  = fromArcEnd <= arcHalfDeg - kArcEndMarginDeg;
+                const bool hiddenHere = fromArcEnd >= arcHalfDeg + kArcEndMarginDeg;
+
+                // The old rule, on the very same pixel, over the WHOLE circle —
+                // it is the pre-S15 pick being measured, not ours.
+                iris::Vec3 rayPos, rayDir;
+                rayFromPixel(cam, px, rayPos, rayDir);
+                if (oldAnnulusHit(gizmoTransform, scale, ring.normal, rayPos, rayDir)) ++oldHits;
+
+                // F: THE DRAG ANGLE is defined all the way round — a drag that
+                // started on the drawn arc may carry the cursor anywhere — so
+                // it is walked over the whole circle, as before, and it is
+                // THIS ring's angle that is walked (a probe handle on the same
+                // gizmo: since GIZMO-3 the pick refuses the hidden half, so
+                // asking the PICKED ring would stop measuring here).
+                {
+                    float angle = 0.0f;
+                    const bool ok = probes[&ring - kRings]->getHitAngle(rayPos, rayDir, angle);
+                    if (!ok || !std::isfinite(angle)) haveAngle = false;
+                    else {
+                        if (!firstAngle) {
+                            const float d = angleDelta(angle, prevAngle);
+                            winding += d;
+                            maxAngleStep = std::max(maxAngleStep, std::fabs(d));
+                        }
+                        prevAngle = angle; firstAngle = false;
+                    }
+                }
 
                 float distancePx = -1.0f;
                 const QString hit = gizmo.ringNameAtPixel(px, distancePx);
-                if (!hit.isEmpty()) { ++any; ++hitPixels; }
-                if (hit == QLatin1String(ring.name)) { ++own; ++run; longestOwnRun = std::max(longestOwnRun, run); }
-                else run = 0;
                 // A: whatever answered really is under the cursor.
                 if (!hit.isEmpty() && distancePx > kRingPickTolerancePx) {
                     std::printf("FAIL: %s ring, pixel %.0f,%.0f: reported '%s' at %.2f px, "
@@ -232,30 +359,32 @@ int main(int argc, char **argv)
                     ++failures;
                 }
 
-                // The old rule, on the very same pixel.
-                iris::Vec3 rayPos, rayDir;
-                rayFromPixel(cam, px, rayPos, rayDir);
-                if (oldAnnulusHit(gizmoTransform, scale, ring.normal, rayPos, rayDir)) ++oldHits;
-
-                // F: the drag angle at this pixel, and how far it moves for a
-                // small cursor step along the ring.
-                auto *handle = gizmo.ringAtPixel(px, distancePx);
-                (void)handle;
-                float angle = 0.0f;
-                float angleNudged = 0.0f;
-                const bool ok = gizmo.getHitHandle(rayPos, rayDir, angle) != nullptr;
-                if (!ok || !std::isfinite(angle)) { haveAngle = false; continue; }
-                if (!firstAngle) {
-                    const float d = angleDelta(angle, prevAngle);
-                    winding += d;
-                    maxAngleStep = std::max(maxAngleStep, std::fabs(d));
+                // B2: THE HIDDEN HALF IS NOT A HANDLE — but only where it is
+                // not also under the drawn arc.
+                if (hiddenHere) {
+                    const float toDrawn = drawnArcDistancePx(gizmo, centre, ring.u, ring.v, scale,
+                                                             arcCentreDeg, arcHalfDeg, px);
+                    if (toDrawn > kHiddenClearPx) {
+                        ++hiddenTested;
+                        if (hit == QLatin1String(ring.name)) {
+                            ++hiddenPicked;
+                            std::printf("FAIL: %s ring, pixel %.0f,%.0f: the HIDDEN half picked "
+                                        "its own ring (%.1f px from anything drawn)\n", ring.name,
+                                        px.x(), px.y(), double(toDrawn));
+                            ++failures;
+                        }
+                    }
+                    continue;                  // not a drawn pixel: A/B skip it
                 }
-                prevAngle = angle; firstAngle = false;
-                (void)angleNudged;
+                if (!drawnHere) continue;      // the cut band: neither claim applies
+                ++samples; ++drawnPixels;
+                if (!hit.isEmpty()) { ++any; ++drawnHit; }
+                if (hit == QLatin1String(ring.name)) { ++own; ++run; longestOwnRun = std::max(longestOwnRun, run); }
+                else run = 0;
             }
 
             totalOldHits += oldHits;
-            if (samples > 0 && any == samples && oldHits == 0) ++deadRings;
+            if (samplesAll > 0 && oldHits == 0) ++deadRings;
 
             // The angle step is printed, not asserted: it walks the ring's 3D
             // parameter, and half of an edge-on ring projects onto the other
@@ -263,16 +392,17 @@ int main(int argc, char **argv)
             // talking, not the drag. What the drag has to do is asserted below
             // (section G) and by the winding claim on a ring the camera can
             // actually see as a ring.
-            std::printf("   ring %s  facing %.3f  pixels %2d  hit %2d  own %2d (longest run %2d)  "
-                        "OLD rule hit %2d  angle step<=%6.2f deg  winding %7.1f\n",
-                        ring.name, double(facing), samples, any, own, longestOwnRun, oldHits,
+            std::printf("   ring %s  facing %.3f  arc %5.1f deg  pixels %2d (drawn %2d)  hit %2d  own %2d "
+                        "(longest run %2d)  OLD rule hit %2d  angle step<=%6.2f deg  "
+                        "winding %7.1f\n", ring.name, double(facing), double(2.0f * arcHalfDeg),
+                        samplesAll, samples, any, own, longestOwnRun, oldHits,
                         double(maxAngleStep), double(winding));
 
-            // A/C: every pixel of the ring is a live click target, and this
-            // ring answers to a healthy run of its own pixels.
+            // A/C: every pixel of the DRAWN arc is a live click target, and
+            // this ring answers to a healthy run of its own pixels.
             if (samples < 8) { std::printf("FAIL: ring %s projected too few pixels to test\n", ring.name); ++failures; }
             if (any != samples) {
-                std::printf("FAIL: ring %s: %d of %d of its own pixels hit NOTHING\n",
+                std::printf("FAIL: ring %s: %d of %d of its own DRAWN pixels hit NOTHING\n",
                             ring.name, samples - any, samples); ++failures;
             }
             if (own * 100 < samples * 60) {
@@ -295,21 +425,30 @@ int main(int argc, char **argv)
         }
     }
 
-    std::printf("\n%d of %d sampled ring pixels hit a ring; the OLD annulus rule took %d of "
-                "them, and left %d whole ring(s) dead from a whole camera\n",
-                hitPixels, totalPixels, totalOldHits, deadRings);
-    CHECK(totalPixels > 500, "the sweep covered a real number of pixels");
-    CHECK(hitPixels == totalPixels, "EVERY pixel on EVERY ring, from EVERY camera, is clickable "
-                                    "(the owner's acceptance for S15)");
+    std::printf("\n%d of %d DRAWN ring pixels hit a ring (of %d sampled all the way round); "
+                "the OLD annulus rule took %d of them, and left %d whole ring(s) dead from a "
+                "whole camera. %d hidden-half pixels clear of everything drawn were tested, "
+                "%d of them wrongly picked their own ring\n",
+                drawnHit, drawnPixels, totalPixels, totalOldHits, deadRings, hiddenTested,
+                hiddenPicked);
+    CHECK(totalPixels > 500 && drawnPixels > 250, "the sweep covered a real number of pixels");
+    CHECK(drawnHit == drawnPixels, "EVERY DRAWN pixel on EVERY ring, from EVERY camera, is "
+                                   "clickable (the owner's acceptance for S15, on the arc "
+                                   "GIZMO-3 draws)");
+    // B2: the other half of that sentence — what is NOT drawn is NOT a handle.
+    CHECK(hiddenTested > 100, "the sweep found a real number of hidden-half pixels clear of the "
+                              "drawn arc to test");
+    CHECK(hiddenPicked == 0, "and NONE of them picks its ring: the half a ring does not draw is "
+                             "not a handle (GIZMO-3 item 1, Blender's rule)");
     // E: THE DEFECT, as numbers. "Sometimes I can't click R, sometimes G or B"
     // is a ring that answers at NO pixel from some camera — and there were
     // such rings, while the screen-space pick answers at every pixel of all of
     // them.
     CHECK(deadRings >= 2, "the old 3D annulus rule left whole rings unclickable from whole "
                           "cameras (the reported defect, reproduced inline)");
-    CHECK(totalOldHits * 4 < hitPixels * 3, "and it rejected a quarter or more of the ring "
-                                            "pixels the screen-space pick accepts (measured: "
-                                            "543 of 1296 taken, 2026-09-11)");
+    CHECK(totalOldHits * 4 < totalPixels * 3, "and it rejected a quarter or more of the ring "
+                                              "pixels the screen-space pick accepts (measured: "
+                                              "543 of 1296 taken, 2026-09-11)");
 
     // ---- G: CLICK AND DRAG, from every camera, on every ring ---------------
     //
@@ -499,24 +638,213 @@ int main(int argc, char **argv)
         const auto dir = [&t](const iris::Vec3 &d) {
             return (t * iris::Vec4(d, 0)).toVector3D().normalized();
         };
+        const iris::Vec3 toCamera =
+            -cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
         int missed = 0, sampled = 0;
         for (const Ring &ring : kRings) {
-            const iris::Vec3 u = dir(ring.u) * scale, v = dir(ring.v) * scale;
+            // The rings are in the NODE's frame here, so the arc is derived in
+            // that frame too — the ring basis the gizmo draws in.
+            const iris::Vec3 uw = dir(ring.u), vw = dir(ring.v);
+            float arcCentreDeg = 0.0f;
+            const float arcHalfDeg = drawnArc(uw, vw, toCamera, 0.02f, arcCentreDeg);
             for (int i = 0; i < 36; ++i) {
-                const float a = float(2.0 * M_PI * i / 36);
+                const float deg = float(360.0 * i / 36);
+                if (std::fabs(angleDelta(deg, arcCentreDeg)) > arcHalfDeg - 5.0f) continue;
+                const float a = float(qDegreesToRadians(deg));
                 QPointF px;
-                if (!gizmo.projectToPixel(centre + u * std::cos(a) + v * std::sin(a), px)) continue;
+                if (!gizmo.projectToPixel(centre + uw * scale * std::cos(a) + vw * scale * std::sin(a), px))
+                    continue;
                 ++sampled;
                 float d = -1.0f;
                 if (gizmo.ringNameAtPixel(px, d).isEmpty()) ++missed;
             }
         }
-        std::printf("\n   local space, node rotated (37,-52,18): %d pixels sampled, %d missed\n",
-                    sampled, missed);
-        CHECK(sampled > 90 && missed == 0,
-              "a LOCAL-space gizmo on a rotated node is pickable all the way round every ring");
+        std::printf("\n   local space, node rotated (37,-52,18): %d drawn pixels sampled, "
+                    "%d missed\n", sampled, missed);
+        CHECK(sampled > 45 && missed == 0,
+              "a LOCAL-space gizmo on a rotated node is pickable all the way along every ring's "
+              "drawn arc");
         gizmo.setTransformSpace(GizmoTransformSpace::Global);
         node->setLocalRot(iris::Quat());
+    }
+
+    // ---- H: A 55-DEGREE SWEEP TURNS THE NODE 55.00 DEGREES -----------------
+    //
+    // The half-ring change moves what is DRAWN and what is PICKED; it must not
+    // move the drag maths by a hundredth of a degree. Driven on a face-on ring,
+    // where the cursor's angle around the circle IS the ring's angle, so the
+    // expected answer is exact rather than a tolerance band.
+    {
+        std::printf("\n== a 55-degree sweep ==\n");
+        node->setLocalRot(iris::Quat());
+        node->update(0.0f);
+        gizmo.setTransformSpace(GizmoTransformSpace::Global);
+        place(cam, { "front", 0.0f, 0.0f, 9.0f });
+        gizmo.updateSize(cam);
+        gizmo.setPickView(cam, kWidth, kHeight);
+        const float scale = gizmo.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
+        const iris::Vec3 centre = gizmo.getTransform().column(3).toVector3D();
+        const iris::Vec3 forward =
+            cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+        const Ring &ring = kRings[2];                    // Z: face-on from the front
+        const auto pixelAt = [&](float degrees, QPointF &px) {
+            const float a = float(qDegreesToRadians(degrees));
+            return gizmo.projectToPixel(
+                centre + (ring.u * std::cos(a) + ring.v * std::sin(a)) * scale, px);
+        };
+        QPointF startPx, endPx;
+        const float startDeg = 20.0f, sweepDeg = 55.0f;
+        if (!pixelAt(startDeg, startPx) || !pixelAt(startDeg + sweepDeg, endPx)) {
+            std::printf("FAIL: the 55-degree sweep could not be projected\n"); ++failures;
+        } else {
+            float d = -1.0f;
+            const QString grabbed = gizmo.ringNameAtPixel(startPx, d);
+            iris::Vec3 rayPos, rayDir;
+            rayFromPixel(cam, startPx, rayPos, rayDir);
+            gizmo.startDragging(rayPos, rayDir, forward);
+            rayFromPixel(cam, endPx, rayPos, rayDir);
+            gizmo.drag(rayPos, rayDir, forward);
+            node->update(0.0f);
+            // READ BEFORE THE RELEASE: with no undo service wired up (this is a
+            // document-only suite) createUndoAction puts the node back where
+            // the drag started and has no command stack to re-apply it from.
+            const iris::Quat q = node->getLocalRot().normalized();
+            const float turned = 2.0f * float(qRadiansToDegrees(
+                std::acos(qBound(-1.0f, std::fabs(q.scalar()), 1.0f))));
+            gizmo.endDragging();
+            std::printf("   grabbed '%s' at %.2f px; a %.0f-degree sweep turned the node "
+                        "%.2f degrees\n", qPrintable(grabbed), double(d), double(sweepDeg),
+                        double(turned));
+            CHECK(grabbed == QLatin1String("z"), "the sweep starts on the face-on Z ring");
+            CHECK(std::fabs(turned - sweepDeg) < 0.05f,
+                  "and a 55-degree sweep turns the node 55.00 degrees (the drag maths is "
+                  "untouched by the half-ring drawing)");
+            node->setLocalRot(iris::Quat());
+            node->update(0.0f);
+        }
+    }
+
+    // ---- I: THE RINGS FOLLOW THE GLOBAL/LOCAL TOGGLE -----------------------
+    //
+    // editor.setGizmoSpace("local"|"global") reaches the gizmo through
+    // Gizmo::setTransformSpace, and Gizmo::getTransform answers the node's
+    // position ALONE in Global space and its position AND rotation in Local —
+    // so the ring PLANES are the world's or the object's. Verified rather than
+    // assumed (GIZMO-3 item 4): a node turned 40 degrees about Y, and both the
+    // drawn ring's own axis and the PICK are checked in each space.
+    {
+        std::printf("\n== the Global/Local toggle ==\n");
+        const float turnDeg = 40.0f;
+        node->setLocalRot(iris::Quat::fromEulerAngles(0.0f, turnDeg, 0.0f));
+        node->update(0.0f);
+        place(cam, { "iso", -35.0f, 45.0f, 9.0f });
+        gizmo.updateSize(cam);
+        gizmo.setPickView(cam, kWidth, kHeight);
+        const iris::Vec3 forward =
+            cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+        const iris::Vec3 toCamera = -forward;
+        // The X ring's axis is world X in Global space and the NODE's X — a
+        // 40-degree turn about Y — in Local.
+        const iris::Vec3 worldX(1, 0, 0);
+        const iris::Vec3 nodeX = node->getGlobalRotation().normalized().rotatedVector(worldX);
+
+        struct Case { const char *name; GizmoTransformSpace space; };
+        const Case kCases[] = { { "Global", GizmoTransformSpace::Global },
+                                { "Local",  GizmoTransformSpace::Local } };
+        for (const Case &c : kCases) {
+            gizmo.setTransformSpace(c.space);
+            gizmo.updateSize(cam);
+            gizmo.setPickView(cam, kWidth, kHeight);
+            const iris::Mat4 t = gizmo.getTransform();
+            const iris::Vec3 centre = t.column(3).toVector3D();
+            const float scale = gizmo.getGizmoScale() * GizmoMeshes::kRotationHandleScale;
+
+            // (a) THE DRAWN RING'S OWN AXIS. Every drawn item carries the frame
+            // it is drawn in; the X ring's mesh is built about +X, so the
+            // item's first column IS that ring's axis in world space. The X
+            // ring is the one in the axis colour 237,66,66.
+            iris::Vec3 drawnAxis;
+            bool haveAxis = false;
+            for (const GizmoDrawItem &item : gizmo.drawItems(iris::Vec3(), iris::Vec3(), forward)) {
+                if (item.colour != QColor(237, 66, 66)) continue;
+                drawnAxis = item.transform.column(0).toVector3D().normalized();
+                haveAxis = true;
+                break;
+            }
+            const iris::Vec3 expected = c.space == GizmoTransformSpace::Global ? worldX : nodeX;
+            const float align = haveAxis ? std::fabs(iris::Vec3::dotProduct(drawnAxis, expected)) : 0.0f;
+            const float offWorld = haveAxis
+                ? float(qRadiansToDegrees(std::acos(qBound(-1.0f,
+                      std::fabs(iris::Vec3::dotProduct(drawnAxis, worldX)), 1.0f)))) : -1.0f;
+            std::printf("   %-6s space: the red ring's axis is %.4f aligned with the %s X axis, "
+                        "and %.1f degrees off the WORLD X\n", c.name, double(align),
+                        c.space == GizmoTransformSpace::Global ? "world" : "object",
+                        double(offWorld));
+            CHECK(haveAxis && align > 0.9999f,
+                  c.space == GizmoTransformSpace::Global
+                      ? "Global: the ring planes are the WORLD's"
+                      : "Local: the ring planes are the OBJECT's");
+            const bool tilted = std::fabs(offWorld - turnDeg) < 0.5f;
+            if (c.space == GizmoTransformSpace::Local)
+                CHECK(tilted, "...and it really is turned with the object (40 degrees off world X)");
+            else
+                CHECK(offWorld < 0.5f, "...and it is NOT turned with the object");
+
+            // (b) THE PICK SAYS THE SAME THING: the drawn arc of the circle in
+            // THIS space is picked as the X ring, and the circle of the OTHER
+            // space is mostly not (the two cross at the turn axis, so a few of
+            // its pixels legitimately land on the drawn ring).
+            const auto sweepCircle = [&](const iris::Vec3 &axis, int &own, int &tested) {
+                own = tested = 0;
+                const iris::Vec3 u = (std::fabs(axis.y()) < 0.9f
+                                          ? iris::Vec3::crossProduct(axis, iris::Vec3(0, 1, 0))
+                                          : iris::Vec3::crossProduct(axis, iris::Vec3(1, 0, 0))).normalized();
+                const iris::Vec3 v = iris::Vec3::crossProduct(axis, u).normalized();
+                float arcCentreDeg = 0.0f;
+                const float arcHalfDeg = drawnArc(u, v, toCamera, 0.02f, arcCentreDeg);
+                for (int i = 0; i < 36; ++i) {
+                    const float deg = float(360.0 * i / 36);
+                    if (std::fabs(angleDelta(deg, arcCentreDeg)) > arcHalfDeg - 5.0f) continue;
+                    const float a = float(qDegreesToRadians(deg));
+                    QPointF px;
+                    if (!gizmo.projectToPixel(centre + (u * std::cos(a) + v * std::sin(a)) * scale, px))
+                        continue;
+                    ++tested;
+                    float d = -1.0f;
+                    if (gizmo.ringNameAtPixel(px, d) == QLatin1String("x")) ++own;
+                }
+            };
+            int ownHere = 0, testedHere = 0, ownOther = 0, testedOther = 0;
+            sweepCircle(expected, ownHere, testedHere);
+            sweepCircle(c.space == GizmoTransformSpace::Global ? nodeX : worldX, ownOther, testedOther);
+            std::printf("   %-6s space: %d of %d pixels of the %s circle pick 'x'; %d of %d of "
+                        "the other space's circle do\n", c.name, ownHere, testedHere,
+                        c.space == GizmoTransformSpace::Global ? "world" : "object",
+                        ownOther, testedOther);
+            CHECK(testedHere > 8 && ownHere * 10 >= testedHere * 6,
+                  "and the PICK follows the same planes as the picture");
+            CHECK(testedOther > 8 && ownOther * 4 <= testedOther,
+                  "...while the circle of the OTHER space is not the X ring here");
+        }
+        gizmo.setTransformSpace(GizmoTransformSpace::Global);
+        node->setLocalRot(iris::Quat());
+        node->update(0.0f);
+    }
+
+    // ---- THE DEFAULT SPACE, AS A FACT --------------------------------------
+    //
+    // Gizmo's constructor leaves every gizmo in LOCAL space and nothing in the
+    // app writes it at startup (no persisted setting exists; MainWindow only
+    // checks whichever toolbar button matches what the gizmos already are). So
+    // a fresh launch rotates in the OBJECT's frame. Pinned here so the value is
+    // a decision rather than an accident — GIZMO-3 reported it upward and did
+    // NOT change it.
+    {
+        RotationGizmo fresh;
+        const bool local = fresh.getTransformSpace() == GizmoTransformSpace::Local;
+        std::printf("\n   a fresh gizmo's transform space is %s\n", local ? "LOCAL" : "GLOBAL");
+        CHECK(local, "the default transform space at a fresh launch is LOCAL (Gizmo::Gizmo; no "
+                     "setting overrides it) — a reported finding, not a change");
     }
 
     // ---- no pick view, no pick ---------------------------------------------

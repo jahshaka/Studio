@@ -65,6 +65,24 @@ int main(int argc, char **argv)
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine"); if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
+    // EVIDENCE ON DISK when asked for it (spikes/gizmo-2): the same buffers the
+    // assertions read, as PNGs. Off unless the environment names a directory, so
+    // the suite writes nothing during a gate.
+    const auto saveShot = [](const Image &src, const char *name) {
+        const QByteArray dir = qgetenv("JAH_GIZMO2_SHOT_DIR");
+        if (dir.isEmpty()) return;
+        QImage out(int(src.width), int(src.height), QImage::Format_RGB888);
+        for (unsigned y = 0; y < src.height; ++y)
+            for (unsigned x = 0; x < src.width; ++x) {
+                const Colour c = src.at(x, y);
+                out.setPixel(int(x), int(y), qRgb(int(std::min(1.0f, c.r) * 255.0f),
+                                                  int(std::min(1.0f, c.g) * 255.0f),
+                                                  int(std::min(1.0f, c.b) * 255.0f)));
+            }
+        const QString path = QString::fromUtf8(dir) + "/" + QString::fromUtf8(name);
+        std::printf("    wrote %s: %d\n", qPrintable(path), int(out.save(path)));
+    };
+
     View *view = engine->createOffscreenView("gizmo", 128, 128, Colour(0.1f, 0.1f, 0.1f));
     Scene *target = engine->createScene("gizmo");
     view->setScene(target);
@@ -169,6 +187,131 @@ int main(int argc, char **argv)
     }
 
     // ------------------------------------------------------------------
+    // THE CENTRE BALL IS A SOLID CENTRE (GIZMO-3 item 3; owner: "the translate
+    // ball should occlude the axis lines meeting inside it, as the scale
+    // gizmo's white cube hides its lines").
+    //
+    // THE DEFECT, measured on the shipped build (spikes/gizmo-size-2026-09-15,
+    // the iso tile): the ball was drawn at 0.10 of the handle scale — 12 pixels
+    // — and the three plane frames' inner legs started at the gizmo's ORIGIN,
+    // so they were drawn straight through it: 42 teal/purple pixels inside the
+    // inner HALF of the ball's disc, with the near shaft ends adding more.
+    // Every gizmo part is drawn depth-less, in item order, so nothing hid them.
+    //
+    // THE FIX is geometric, not a depth trick: the ball is the scale gizmo's
+    // cube's size now, and nothing else the gizmo draws has a single vertex
+    // inside it. That is claim (a) below, which is exact and pose-independent.
+    // Claim (b) is the same thing in pixels from a 3/4 view.
+    {
+        const float scale = gizmo.getGizmoScale() * GizmoMeshes::kHandleScale;
+        const float ballLocal = GizmoMeshes::kCentreBallRadius;
+        gizmo.setSelectedNode(node);
+        gizmo.setPickView(cam, 512.0f, 512.0f);
+        gizmo.updateSize(cam);
+        const auto items = gizmo.drawItems(cam->getGlobalPosition(), iris::Vec3(0, 0, -1),
+                                           iris::Vec3(0, 0, -1));
+        // (a) NOTHING IS DRAWN INSIDE THE BALL. The ball is the item whose own
+        // radius it is; every other item's every vertex must be at least the
+        // ball's radius from the gizmo's origin.
+        int inside = 0, checked = 0;
+        float closest = 1e9f;
+        for (const GizmoDrawItem &item : items) {
+            MeshData md;
+            if (!SceneMirror::toMeshData(item.mesh.data(), md)) continue;
+            float far2 = 0.0f;
+            for (size_t v = 0; v < md.vertexCount(); ++v) {
+                const float x = md.positions[v * 3], y = md.positions[v * 3 + 1],
+                            z = md.positions[v * 3 + 2];
+                far2 = std::max(far2, x * x + y * y + z * z);
+            }
+            if (std::sqrt(far2) <= ballLocal * 1.001f) continue;      // this IS the ball
+            for (size_t v = 0; v < md.vertexCount(); ++v) {
+                const float x = md.positions[v * 3], y = md.positions[v * 3 + 1],
+                            z = md.positions[v * 3 + 2];
+                const float d = std::sqrt(x * x + y * y + z * z);
+                ++checked;
+                closest = std::min(closest, d);
+                if (d < ballLocal - 1e-4f) ++inside;
+            }
+        }
+        std::printf("    the centre ball: radius %.3f of the handle scale; the nearest vertex of "
+                    "anything else is at %.4f (%d vertices checked, %d inside the ball)\n",
+                    double(ballLocal), double(closest), checked, inside);
+        CHECK(checked > 100 && inside == 0,
+              "(a) nothing the translate gizmo draws has a vertex inside the centre ball");
+        CHECK(closest >= ballLocal - 1e-4f && closest < ballLocal * 1.05f,
+              "...and the shafts and the plane frames start exactly ON it, with no gap");
+
+        // (b) THE SAME THING IN PIXELS, from a 3/4 view. The inner 70 % of the
+        // ball's projected disc is read: the outer rim is left out because a
+        // shaft that runs TOWARDS the camera projects its (correctly placed)
+        // near end into the disc's edge, which is what a depth-tested renderer
+        // would draw over the ball as well.
+        // 1024 px tall: the gizmo is screen-CONSTANT, so the only thing that
+        // sets the ball's size in pixels is the height of the view.
+        View *ballView = engine->createOffscreenView("gizmo-ball", 1024, 1024,
+                                                     Colour(0.1f, 0.1f, 0.1f));
+        ballView->setScene(target);
+        const iris::Vec3 savedPos = cam->getLocalPos();
+        cam->setLocalPos(iris::Vec3(5, 4, 5));
+        cam->lookAt(iris::Vec3(0, 0, 0));
+        cam->update(0.0f);
+        mirror.applyCamera(cam, ballView);
+        gizmo.setPickView(cam, 1024.0f, 1024.0f);
+        gizmo.updateSize(cam);
+        GizmoOverlay ballOverlay(target);
+        const iris::Vec3 eye = cam->getGlobalPosition();
+        const iris::Vec3 fwd = (iris::Vec3(0, 0, 0) - eye).normalized();
+        // A pick ray that MISSES the gizmo: a ray at the centre would make the
+        // ball the hovered handle, and a hovered handle is drawn highlighted.
+        const iris::Vec3 miss =
+            cam->getGlobalRotation().rotatedVector(iris::Vec3(1, 0, 0)).normalized();
+        ballOverlay.update(&gizmo, eye, miss, fwd);
+        Image ballImg;
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        ballView->readPixels(ballImg);
+        saveShot(ballImg, "translate-centre-ball.png");
+        // The disc's radius in pixels: the ball's radius taken perpendicular to
+        // the view, projected through the same camera.
+        const iris::Vec3 right =
+            cam->getGlobalRotation().rotatedVector(iris::Vec3(1, 0, 0)).normalized();
+        QPointF centrePx, rimPx;
+        const bool projected =
+            gizmo.projectToPixel(iris::Vec3(0, 0, 0), centrePx) &&
+            gizmo.projectToPixel(right * (GizmoMeshes::kCentreBallRadius * scale), rimPx);
+        const float discPx = projected ? float(QLineF(centrePx, rimPx).length()) : 0.0f;
+        int coloured = 0, white = 0;
+        float worst = 1.0f;
+        if (projected) {
+            const float inner = discPx * 0.70f;
+            for (int y = int(centrePx.y() - discPx) - 1; y <= int(centrePx.y() + discPx) + 1; ++y)
+                for (int x = int(centrePx.x() - discPx) - 1; x <= int(centrePx.x() + discPx) + 1; ++x) {
+                    if (x < 0 || y < 0 || x >= 1024 || y >= 1024) continue;
+                    const double dx = x - centrePx.x(), dy = y - centrePx.y();
+                    if (dx * dx + dy * dy > double(inner) * double(inner)) continue;
+                    const Colour c = ballImg.at(unsigned(x), unsigned(y));
+                    const float lo = std::min(c.r, std::min(c.g, c.b));
+                    if (lo > 0.75f) ++white; else { ++coloured; worst = std::min(worst, lo); }
+                }
+        }
+        std::printf("    the ball projects to a %.1f px disc; its inner 70%%: %d white pixels, "
+                    "%d that are not (before GIZMO-3: 42 teal/purple ones in the inner half)\n",
+                    double(discPx), white, coloured);
+        CHECK(projected && discPx > 8.0f, "the ball is a real disc on screen");
+        CHECK(white > 80 && coloured == 0,
+              "(b) and its inner 70 % is SOLID WHITE: no axis line and no plane frame is drawn "
+              "inside the centre ball");
+        ballOverlay.clear();
+        cam->setLocalPos(savedPos);
+        cam->lookAt(iris::Vec3(0, 0, 0));
+        cam->update(0.0f);
+        mirror.applyCamera(cam, view);
+        engine->destroyView(ballView);
+        gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
+        gizmo.updateSize(cam);
+    }
+
+    // ------------------------------------------------------------------
     // THE FOV SWEEP (fix wave 2026-09-07). updateSize used to feed DEGREES to
     // qTan and then DIVIDE by the result: at fov 75 that is tan(37.5 rad) =
     // -0.199, so gizmoScale went negative — every handle transform mirrored
@@ -231,7 +374,13 @@ int main(int argc, char **argv)
 
     // Rotation and scale gizmos describe their handles too.
     RotationGizmo rot; rot.setSelectedNode(node); rot.updateSize(cam);
-    CHECK(rot.drawItems(cam->getGlobalPosition(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).size() == 4, "rotation gizmo: 3 axis rings + screen-facing outer ring");
+    // SEVEN ITEMS SINCE GIZMO-3 item 1: each axis ring is drawn as its
+    // camera-facing arc, and that arc is the same 180-degree half-ring mesh
+    // placed at the two ends of the span (their union IS the span, and where
+    // they overlap they draw the same opaque tube twice, invisibly). The outer
+    // screen ring faces the camera, so it stays one full circle.
+    CHECK(rot.drawItems(cam->getGlobalPosition(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).size() == 7,
+          "rotation gizmo: 3 axis rings as 2 arc halves each + the screen-facing outer ring");
     ScaleGizmo scl; scl.setSelectedNode(node); scl.updateSize(cam);
     CHECK(scl.drawItems(cam->getGlobalPosition(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).size() == 4, "scale gizmo: 4 handles");
     {
@@ -268,23 +417,6 @@ int main(int argc, char **argv)
     // edge-on and its axis points to the right of the frame), and the arrow is
     // the only red thing to the right of the centre while the ring itself is
     // highlighted yellow.
-    // EVIDENCE ON DISK when asked for it (spikes/gizmo-2): the same buffers the
-    // assertions read, as PNGs. Off unless the environment names a directory, so
-    // the suite writes nothing during a gate.
-    const auto saveShot = [](const Image &src, const char *name) {
-        const QByteArray dir = qgetenv("JAH_GIZMO2_SHOT_DIR");
-        if (dir.isEmpty()) return;
-        QImage out(int(src.width), int(src.height), QImage::Format_RGB888);
-        for (unsigned y = 0; y < src.height; ++y)
-            for (unsigned x = 0; x < src.width; ++x) {
-                const Colour c = src.at(x, y);
-                out.setPixel(int(x), int(y), qRgb(int(std::min(1.0f, c.r) * 255.0f),
-                                                  int(std::min(1.0f, c.g) * 255.0f),
-                                                  int(std::min(1.0f, c.b) * 255.0f)));
-            }
-        const QString path = QString::fromUtf8(dir) + "/" + QString::fromUtf8(name);
-        std::printf("    wrote %s: %d\n", qPrintable(path), int(out.save(path)));
-    };
 
     {
         View *big = engine->createOffscreenView("gizmo-drag", 512, 512, Colour(0.1f, 0.1f, 0.1f));
@@ -314,13 +446,16 @@ int main(int argc, char **argv)
         drag.startDragging(eye, rayDir, viewDir);
         CHECK(drag.isDragging(), "and the gizmo is dragging");
         auto dragItems = drag.drawItems(eye, rayDir, viewDir);
-        std::printf("    dragging: %d draw items (the ring, the hub disc, the axis arrow)\n",
-                    dragItems.size());
-        CHECK(dragItems.size() == 3, "a ring under drag draws the ring plus the two marker parts");
-        if (dragItems.size() == 3) {
-            CHECK(dragItems[0].colour == QColor(255, 255, 0), "the dragged ring stays highlighted");
-            CHECK(dragItems[1].colour == QColor(237, 66, 66) &&
-                  dragItems[2].colour == QColor(237, 66, 66),
+        std::printf("    dragging: %d draw items (the ring's two arc halves, the hub disc, the "
+                    "axis arrow)\n", dragItems.size());
+        CHECK(dragItems.size() == 4, "a ring under drag draws the ring (two arc halves) plus "
+                                     "the two marker parts");
+        if (dragItems.size() == 4) {
+            CHECK(dragItems[0].colour == QColor(255, 255, 0) &&
+                  dragItems[1].colour == QColor(255, 255, 0),
+                  "the dragged ring stays highlighted");
+            CHECK(dragItems[2].colour == QColor(237, 66, 66) &&
+                  dragItems[3].colour == QColor(237, 66, 66),
                   "and the hub and arrow carry the dragged ring's OWN colour (X = red)");
         }
         dragOverlay.update(&drag, eye, rayDir, viewDir);
@@ -372,7 +507,7 @@ int main(int argc, char **argv)
             auto isoItems = iso.drawItems(isoEye, isoDir, isoView);
             std::printf("    3/4 view: the pixel on the Y ring picks '%s'; dragging draws %d "
                         "items\n", qPrintable(isoRing), isoItems.size());
-            CHECK(isoRing == QLatin1String("y") && isoItems.size() == 3,
+            CHECK(isoRing == QLatin1String("y") && isoItems.size() == 4,
                   "the marker draws for a ring grabbed from a 3/4 view too");
             dragOverlay.update(&iso, isoEye, isoDir, isoView);
             Image isoImg;
@@ -385,8 +520,9 @@ int main(int argc, char **argv)
         drag.endDragging();
         auto released = drag.drawItems(eye, rayDir, viewDir);
         std::printf("    released: %d draw items\n", released.size());
-        CHECK(!drag.isDragging() && released.size() == 4,
-              "and at release the marker is gone: the four rings and nothing else");
+        CHECK(!drag.isDragging() && released.size() == 7,
+              "and at release the marker is gone: the four rings (the three axis ones as two "
+              "arc halves each) and nothing else");
         dragOverlay.clear();
         mirror.applyCamera(cam, view);
         engine->destroyView(big);

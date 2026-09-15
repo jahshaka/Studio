@@ -233,6 +233,10 @@ int main(int argc, char **argv)
         const iris::Mat4 frozen = gizmo.getTransform();
         float worstFrozenPx = 0.0f, worstLivePx = 0.0f, turned = 0.0f;
         bool frameHeld = true, ringHeld = true, nameHeld = true, drawnAgrees = true;
+        // GIZMO-3 item 1: the drawn arcs of the dragged ring, captured at the
+        // first step, to prove they do not move for the rest of the drag.
+        QVector<iris::Mat4> firstDrawn;
+        bool halvesHeld = true;
 
         for (int step = 1; step <= 12; ++step) {          // 5 .. 60 degrees
             QPointF px;
@@ -256,13 +260,34 @@ int main(int argc, char **argv)
             if (gizmo.ringNameAtPixel(grabPx, reported) != QLatin1String("x")) nameHeld = false;
             if (reported > kRingPickTolerancePx) ringHeld = false;
 
-            // C: the DRAWN item is the frozen frame too (scaled).
+            // C: the DRAWN items ride the frozen frame too — and, since
+            // GIZMO-3 item 1, that includes WHICH HALF of the ring is drawn.
+            // A ring is two items now (the camera-facing arc's two ends) and
+            // each carries the frozen frame turned about the ring's own axis
+            // by the half the press chose, so the claim is stated twice:
+            //   * the frame's ORIGIN and the ring's own AXIS are the frozen
+            //     ones (a turn about the axis moves neither), and
+            //   * every item's transform is bit-identical to the one it had at
+            //     the first step of the drag — the half does not flip
+            //     mid-drag, which is the owner's "do not let it flip halves".
             const QVector<GizmoDrawItem> items = gizmo.drawItems(rayPos, rayDir, forward);
             if (items.isEmpty()) drawnAgrees = false;
+            iris::Mat4 expect = frozen;
+            expect.scale(gizmo.getGizmoScale() * kHandleScale);
             for (const GizmoDrawItem &item : items) {
-                iris::Mat4 expect = frozen;
-                expect.scale(gizmo.getGizmoScale() * kHandleScale);
-                if (!sameMatrix(item.transform, expect)) drawnAgrees = false;
+                for (int r = 0; r < 4; ++r)
+                    if (item.transform.column(3)[r] != expect.column(3)[r]) drawnAgrees = false;
+                // the X ring is drawn about +X: its first column is its axis
+                const iris::Vec3 axis = item.transform.column(0).toVector3D().normalized();
+                if (std::fabs(iris::Vec3::dotProduct(axis, iris::Vec3(1, 0, 0))) < 0.9999f)
+                    drawnAgrees = false;
+            }
+            if (firstDrawn.isEmpty()) {
+                for (const GizmoDrawItem &item : items) firstDrawn.append(item.transform);
+            } else {
+                if (firstDrawn.size() != items.size()) halvesHeld = false;
+                else for (int k = 0; k < items.size(); ++k)
+                    if (!sameMatrix(items[k].transform, firstDrawn[k])) halvesHeld = false;
             }
 
             // E: HOW FAR THE PICTURE WOULD HAVE MOVED if the frame still
@@ -297,7 +322,11 @@ int main(int argc, char **argv)
         CHECK(worstFrozenPx < 1.0f, "B: the grabbed ring never moves as much as a pixel away "
                                     "from the grab point");
         CHECK(nameHeld && ringHeld, "B: the grab pixel still picks the X ring at every step");
-        CHECK(drawnAgrees, "C: every drawn item uses that same frozen frame");
+        CHECK(drawnAgrees, "C: every drawn item sits at that same frozen frame's origin, about "
+                           "that same ring axis");
+        CHECK(halvesHeld && !firstDrawn.isEmpty(),
+              "C: and every drawn item is bit-identical from the first step of the drag to the "
+              "last — the camera-facing HALF is chosen at the press and held (GIZMO-3)");
         CHECK(turned > 45.0f, "D: and the node really turned (the VALUE is live)");
         if (space.value == GizmoTransformSpace::Local) {
             CHECK(worstLivePx > 4.0f * kRingPickTolerancePx,

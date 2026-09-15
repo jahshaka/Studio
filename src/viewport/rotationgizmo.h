@@ -55,12 +55,61 @@ public:
 	/// it is FROZEN for the length of a drag exactly like the gizmo's frame.
 	iris::Vec3 screenAxis;
 
+	// ---- THE CAMERA-FACING HALF (GIZMO-3 item 1) -------------------------
+	//
+	// Blender draws each axis dial as the part of its circle on the CAMERA's
+	// side of the plane through the gizmo's centre perpendicular to the view
+	// (a clip plane: dial3d_gizmo.c). That is what makes its three rings read
+	// as three arcs of one sphere, each at 90 degrees to the next, instead of
+	// three full ellipses crossing each other twice — the owner's report.
+	//
+	// The arc is [arcCentre - arcHalf, arcCentre + arcHalf] measured from +U
+	// towards +V of this ring's own frame (axisFrame's U/V — the basis the
+	// mesh, the pick and the drag angle are all expressed in), so it is
+	// carried as two numbers and NOT as geometry: the drawn arc is the same
+	// mesh twice (see arcFrame) and the pick walks the same range.
+	//
+	// WHY arcHalf IS NOT ALWAYS 90 DEGREES. Blender offsets the clip plane
+	// behind the centre by a small fraction of the dial's radius
+	// (DIAL_CLIP_BIAS), which makes the drawn span a little MORE than half a
+	// circle — and, as the ring turns face-on and the near half stops being
+	// distinguishable from the far one, grow continuously to the WHOLE circle
+	// instead of snapping to it. A face-on ring (an axis view) is a full
+	// circle, an edge-on one is a half circle whose two halves project on top
+	// of each other anyway, and nothing pops in between. The trigonometry is
+	// one line in RotationGizmo::updateRingArcs.
+	//
+	// Both are written by RotationGizmo::refreshFrame() / updateRingArcs(),
+	// which do nothing while a drag is running: the half a ring shows is
+	// chosen at the press and held to the release, like the frame itself.
+	float arcCentre = 0.0f;
+	float arcHalf = float(M_PI);      ///< a ring with no view is a full circle
+
 	RotationHandle(Gizmo* gizmo, GizmoAxis axis);
 
 	/// The frame this ring is drawn and picked in, relative to the gizmo's own
 	/// frozen frame: identity for an axis ring, the camera-facing turn for the
 	/// screen ring. Unit scale — callers apply gizmoScale * handleScale.
 	iris::Mat4 ringFrame() const;
+
+	/// THE FRAME ONE HALF-RING MESH IS DRAWN IN (GIZMO-3 item 1). The mesh is
+	/// the 180-degree arc centred on +U; `copy` 0 turns it to the START of the
+	/// visible span and `copy` 1 to its END, so the two together cover exactly
+	/// [arcCentre - arcHalf, arcCentre + arcHalf] — the union of two
+	/// half-circles is any span between 180 and 360 degrees, which is why a
+	/// continuously varying span needs no per-frame geometry. Where they
+	/// overlap they draw the same opaque tube twice at the same depth-less
+	/// pixels, so the overlap is invisible.
+	///
+	/// Unit scale, like ringFrame(); the screen ring has no arc (it faces the
+	/// camera, so it is a full circle) and answers ringFrame() for both copies.
+	iris::Mat4 arcFrame(int copy) const;
+
+	/// THE BASIS THIS RING'S CIRCLE IS PARAMETERISED IN, in the ring's own
+	/// frame: gizmomeshes::axisFrame's (A, U, V) for this axis. The point at
+	/// angle a is U cos a + V sin a — the mesh's own parameterisation, the one
+	/// screenDistance walks and the one arcCentre is measured from.
+	void ringBasis(iris::Vec3 &A, iris::Vec3 &U, iris::Vec3 &V) const;
 
 	/// HOW FAR THE CURSOR IS FROM THIS RING, ON SCREEN (smoke S15).
 	///
@@ -95,6 +144,8 @@ public:
 
 class RotationGizmo : public Gizmo
 {
+	/// One HALF ring per axis handle plus the full screen ring, indexed like
+	/// `handles` (GIZMO-3 item 1).
 	QVector<iris::MeshPtr> handleMeshes;
 	/// THE DRAG MARKER (GIZMO-2 item 3): one hub disc per handle and one axis
 	/// arrow per AXIS handle (the screen ring's axis points at the eye, so it
@@ -134,6 +185,13 @@ class RotationGizmo : public Gizmo
 	/// which case the frame captured at startDragging stands. Called at the top
 	/// of everything that draws or picks.
 	void refreshFrame();
+
+	/// THE HALF OF EACH AXIS RING THAT FACES THE CAMERA (GIZMO-3 item 1), from
+	/// `toCamera` — the direction from the gizmo towards the eye, in WORLD
+	/// space. Writes every axis handle's arcCentre/arcHalf. Never called while
+	/// dragging (refreshFrame returns first), so the half is frozen for the
+	/// length of a drag and a ring cannot flip halves under the cursor.
+	void updateRingArcs(const iris::Vec3 &toCamera);
 public:
 	RotationGizmo();
 
