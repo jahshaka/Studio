@@ -2031,6 +2031,162 @@ int main()
         std::printf("ok: destroyed the view and scene with the SSR chain live\n");
     }
 
+    // ---- 13. THE PREPASS MUST HAND BACK THE ROUGHNESS IT WROTE -------------
+    //          (lane HDR-1, ogre-patch 0043)
+    //
+    // Assertion 9 above says the prepass RESTRUCTURE is shading-neutral: with the
+    // roughness cutoff at zero the reflection is empty everywhere, the whole
+    // prepass shape is still in the graph, and the frame comes back within the
+    // normals G-buffer's quantization of the SSR-off frame. It says that on an
+    // UNTEXTURED, fairly rough material. It was NOT true of a MIRROR-SMOOTH one,
+    // and the reason was a real picture defect rather than a test gap.
+    //
+    // In PrePassUse mode the shading pass takes the roughness back out of the
+    // G-buffer, where the prepass packed it as `(alpha - 0.02) * 1.0204` — a
+    // range that starts at 0.02 while the shader's own alpha floor
+    // (SampleRoughnessMap) is 0.001. A material smoother than perceptual 0.141
+    // therefore came back WIDENED, over its whole lit area, purely because SSR
+    // was switched on. ogre-patch 0043 packs over the range the shader can
+    // actually reach, at the same 16 bits.
+    //
+    // THE SAME LINE also decides whether the readback happens at all, and
+    // upstream gates it on the material carrying a roughness MAP. Jahshaka patch
+    // 0022 broke that premise — it folds the screen-space variance of the shading
+    // normal into the GGX alpha, so on any NORMAL-MAPPED surface the roughness is
+    // a per-pixel quantity the material constant does not carry, and a
+    // normal-mapped material with a constant roughness lost its anti-aliasing for
+    // as long as SSR was on (lane SSR-1 round 2 measured that half at 1.48 % of
+    // the picture, peak 161, on the real ShadowMapFromCode port). 0043 widens the
+    // gate to `roughness_map || normal_map_tex`. This fixture carries BOTH maps,
+    // so it measures the encoding directly and holds the gate open by
+    // construction; the gate's own half is not separable on a synthetic fixture
+    // because patch 0022's kernel is ~0 wherever the normal map is well behaved.
+    //
+    // THE MEASUREMENT is the one assertion 9 makes — the prepass at zero
+    // confidence against no prepass at all, so everything that is not the prepass
+    // cancels.
+    {
+        Scene *rs = engine->createScene("ssr-roughness-gate");
+        View  *rv = engine->createOffscreenView("ssr-roughness-gate", 256, 256, Colour(0, 0, 0));
+        if (rs && rv) {
+            rv->setScene(rs);
+            rs->setAmbient(Colour(0.35f, 0.36f, 0.40f), Colour(0.20f, 0.20f, 0.24f));
+
+            // A tangent-space normal map with detail at the texel rate, unmipped
+            // so the normal really does change fast from pixel to pixel - which is
+            // both what patch 0022's anti-aliasing is for and what makes this
+            // fixture's shading depend on the roughness the prepass carried.
+            const unsigned kN = 256;
+            std::vector<unsigned char> nm(kN * kN * 4);
+            for (unsigned y = 0; y < kN; ++y)
+                for (unsigned x = 0; x < kN; ++x) {
+                    const float fx = std::sin(float(x) * 0.41f) * 0.7f;
+                    const float fy = std::sin(float(y) * 0.47f) * 0.7f;
+                    float nx = fx, ny = fy, nz = std::sqrt(std::max(0.0f, 1.0f - fx * fx - fy * fy));
+                    unsigned char *p = &nm[(y * kN + x) * 4];
+                    p[0] = (unsigned char)((nx * 0.5f + 0.5f) * 255.0f);
+                    p[1] = (unsigned char)((ny * 0.5f + 0.5f) * 255.0f);
+                    p[2] = (unsigned char)((nz * 0.5f + 0.5f) * 255.0f);
+                    p[3] = 255;
+                }
+            const TextureId normalTex = rs->createTexture(kN, kN, nm.data(), /*srgb*/ false,
+                                                          /*mipmaps*/ false);
+            const NodeId plane = rs->createNode();
+            PbrParams pp;
+            pp.albedo = Colour(0.9f, 0.9f, 0.9f);
+            pp.metalness = 1.0f;
+            // MIRROR-SMOOTH: alpha = 0.12^2 = 0.0144, below the 0.02 the G-buffer
+            // could say before ogre-patch 0043. This is the number the case turns on.
+            pp.roughness = 0.12f;
+            pp.uvScale[0] = 40.0f; pp.uvScale[1] = 40.0f;   // texel rate ~ pixel rate mid-frame
+            const MaterialId planeMat = rs->createPbrMaterial(pp);
+            // ...and a WHITE roughness map, so the material's own roughness is what
+            // the shader sees (SampleRoughnessMap multiplies material.kS.w by the
+            // texture) while the readback happens on UPSTREAM's own gate - i.e.
+            // this case fails on an unpatched tree for the encoding alone, with no
+            // argument about patch 0022 needed.
+            std::vector<unsigned char> rm(4 * 4 * 4, 255);
+            const TextureId roughTex = rs->createTexture(4, 4, rm.data(), false, false);
+            CHECK(normalTex && roughTex && planeMat &&
+                  rs->setPbrTexture(planeMat, PbrTextureSlot::Normal, normalTex) &&
+                  rs->setPbrTexture(planeMat, PbrTextureSlot::Roughness, roughTex),
+                  "the normal-mapped, mirror-smooth fixture exists");
+            rs->attachMesh(plane, rs->createMesh(enginetest::unitCubeMesh()), planeMat);
+            enginetest::setNodeScale(rs, plane, Vec3(60.0f, 0.2f, 60.0f));
+            enginetest::setNodePosition(rs, plane, Vec3(0.0f, -0.1f, 0.0f));
+            // A POINT light over the plane: a metal surface has no diffuse, so the
+            // only thing in the frame IS the specular lobe - and the lobe's WIDTH is
+            // the quantity patch 0022 changes, which is what makes this measurable.
+            {
+                const NodeId lamp = rs->createNode();
+                LightDesc l;
+                l.type = LightType::Point;
+                l.colour = Colour(1.0f, 0.97f, 0.92f);
+                l.intensity = 400.0f;
+                l.range = 60.0f;
+                rs->setLight(lamp, l);
+                enginetest::setNodePosition(rs, lamp, Vec3(0.0f, 3.0f, -8.0f));
+            }
+            // Low and looking down the plane: it runs away from the camera, so the
+            // normal map's screen-space derivative sweeps the whole range and the
+            // lobe is seen at every angle from near-normal to grazing.
+            enginetest::testCameraLookAt(rv, Vec3(0.0f, 2.2f, 7.0f), Vec3(0.0f, 0.0f, -14.0f));
+
+            Image noPrepass, withPrepass;
+            rv->setPostFx(PostFxDesc());
+            render(engine.get(), 4);
+            CHECK(rv->readPixels(noPrepass), "readPixels (no prepass)");
+            PostFxDesc pfx;
+            pfx.allowOffscreen = true;
+            pfx.ssr = 2;                     // full-res rays, so nothing is half-res
+            pfx.ssrRoughnessCutoff = 0.0f;   // ...and the reflection is empty everywhere
+            rv->setPostFx(pfx);
+            render(engine.get(), 5);
+            CHECK(rv->readPixels(withPrepass), "readPixels (prepass, zero confidence)");
+
+            if (envOn("JAH_SSR_DUMP")) {
+                writePpm(noPrepass, "ssr-roughgate-off.ppm");
+                writePpm(withPrepass, "ssr-roughgate-on.ppm");
+            }
+
+            unsigned moved = 0, big = 0, peak = 0;
+            for (unsigned y = 0; y < noPrepass.height; ++y)
+                for (unsigned x = 0; x < noPrepass.width; ++x) {
+                    const Colour a = noPrepass.at(x, y), b = withPrepass.at(x, y);
+                    const float d = std::max(std::max(std::fabs(a.r - b.r), std::fabs(a.g - b.g)),
+                                             std::fabs(a.b - b.b));
+                    const unsigned lv = unsigned(d * 255.0f + 0.5f);
+                    if (lv > 1) ++moved;
+                    if (lv > 8) ++big;
+                    if (lv > peak) peak = lv;
+                }
+            const unsigned total = noPrepass.width * noPrepass.height;
+            std::printf("    prepass vs no prepass on a normal-mapped, mirror-smooth "
+                        "surface: %u of %u px move by >1/255 (%.2f %%), %u by >8/255, peak %u\n",
+                        moved, total, 100.0f * float(moved) / float(total), big, peak);
+            // THE MEASURE IS THE POPULATION THAT MOVES FAR, not the one that moves
+            // at all: a mirror-smooth lobe is a near-delta, and the prepass' own
+            // R10G10B10A2 normals reposition it by a pixel here and there whatever
+            // the roughness says (1.5 % of the frame at 1/255, four of them at the
+            // full 255 on the highlight's core). A roughness the prepass could not
+            // SAY is a different order of magnitude, and it is flat wrong over the
+            // whole lit area. Measured on this fixture: 5424 of 65536 px past 8/255
+            // without ogre-patch 0043, 5 with it.
+            CHECK_MSG(big * 200u <= total,
+                      "the prepass hands back the roughness it wrote "
+                      "(%u of %u px differ by more than 8/255 = %.2f %%, budget 0.50 %%; "
+                      "%u move at all, peak %u)",
+                      big, total, 100.0f * float(big) / float(total), moved, peak);
+
+            rv->setPostFx(PostFxDesc());
+            render(engine.get(), 2);
+            engine->destroyView(rv);
+            engine->destroyScene(rs);
+        } else {
+            CHECK_MSG(false, "could not build the roughness-gate fixture");
+        }
+    }
+
     std::printf(failures ? "\n%d FAILURE(S)\n" : "\nall SSR checks passed\n", failures);
     return failures ? 1 : 0;
 }
