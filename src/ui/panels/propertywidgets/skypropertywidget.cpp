@@ -243,6 +243,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 				loaded.diffusion = skyDefinition.value("diffusion").toDouble(defaults.diffusion);
 				loaded.horizon   = skyDefinition.value("horizon").toDouble(defaults.horizon);
 				loaded.power     = skyDefinition.value("power").toDouble(defaults.power);
+				loaded.sunHaze   = skyDefinition.value("sunHaze").toDouble(defaults.sunHaze);
 				const QJsonObject colObj = skyDefinition.value("skyColour").toObject();
 				loaded.skyColour = colObj.isEmpty() ? defaults.skyColour
 				                                    : SceneReader::readColor(colObj);
@@ -256,6 +257,12 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			loaded.diffusion = qBound(0.0f,  loaded.diffusion, 4.0f);
 			loaded.horizon   = qBound(0.0f,  loaded.horizon,   0.5f);
 			loaded.power     = qBound(0.0f,  loaded.power,     4.0f);
+			// THE SUN'S OWN AIR (SKY-DENSITY-1) is the atmosphere's turbidity:
+			// 1 is a purely molecular sky (the aerosol term is zero there and
+			// negative below it, so 1 is the floor and not a taste), 2.5 the
+			// clear day the sky's defaults are fitted to, 6 a hazy one. Past
+			// about 10 a sun 20 degrees up is already gone.
+			loaded.sunHaze   = qBound(1.0f,  loaded.sunHaze,   10.0f);
 			if (auto live = liveScene()) live->skyRealistic = loaded;
 
 			// NO SUN DIALS (SKY_LIGHT_SPEC.md §3, owner decision D15). The sky's
@@ -264,6 +271,10 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			skyDiffusion = addFloatValueSlider("Diffusion", 0.f, 4.f, defaults.diffusion);
 			skyHorizon   = addFloatValueSlider("Horizon", 0.f, .5f, defaults.horizon);
 			skyPower     = addFloatValueSlider("Sky Power", 0.f, 4.f, defaults.power);
+			// NOT a sky-look row: it colours the SUNLIGHT and moves no sky pixel
+			// (the row above moves the sky and no sunlight — two quantities,
+			// two dials, since 2026-09-15).
+			sunHaze      = addFloatValueSlider("Sun Haze", 1.f, 10.f, defaults.sunHaze);
 			skyColour    = this->addColorPicker("Sky Colour");
 			addSunReadoutRow();
 
@@ -271,6 +282,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			skyDiffusion->setValue(loaded.diffusion);
 			skyHorizon->setValue(loaded.horizon);
 			skyPower->setValue(loaded.power);
+			sunHaze->setValue(loaded.sunHaze);
 			skyColour->setColorValue(loaded.skyColour);
 
 			// Each dial writes THROUGH its binding (never a second, direct
@@ -283,6 +295,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			           [this](const QVariant &v) { onSkyHorizonChanged(v.toFloat()); });
 			wireSkyRow(skyPower, tr("Sky Power"),
 			           [this](const QVariant &v) { onSkyPowerChanged(v.toFloat()); });
+			wireSkyRow(sunHaze, tr("Sun Haze"),
+			           [this](const QVariant &v) { onSunHazeChanged(v.toFloat()); });
 			wireSkyRow(skyColour->getPicker(), tr("Sky Colour"),
 			           [this](const QVariant &v) { onSkyColourChanged(v.value<QColor>()); });
 
@@ -290,6 +304,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			realisticDefinition.insert("diffusion", double(loaded.diffusion));
 			realisticDefinition.insert("horizon", double(loaded.horizon));
 			realisticDefinition.insert("power", double(loaded.power));
+			realisticDefinition.insert("sunHaze", double(loaded.sunHaze));
 			realisticDefinition.insert("skyColour", SceneWriter::jsonColor(loaded.skyColour));
 			updateAssetAndKeys();
 
@@ -623,6 +638,13 @@ void SkyPropertyWidget::onSkyPowerChanged(float val)
 {
 	realisticDefinition.insert("power", val);
 	if (auto live = liveScene()) live->skyRealistic.power = val;
+	updateAssetAndKeys();
+}
+
+void SkyPropertyWidget::onSunHazeChanged(float val)
+{
+	realisticDefinition.insert("sunHaze", val);
+	if (auto live = liveScene()) live->skyRealistic.sunHaze = val;
 	updateAssetAndKeys();
 }
 
