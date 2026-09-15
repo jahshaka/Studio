@@ -385,3 +385,42 @@ jah_lsan_blocked(shadergraph.pbr_evaluator shadergraph.node_regressions
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(shadergraph.ao_removed shadergraph.bake_output shadergraph.baker_parity shadergraph.blend_verbs shadergraph.node_regressions shadergraph.panel_migration shadergraph.pbr_evaluator shadergraph.selection shadergraph.selection_verbs)
+
+# shadergraph.asset_widget_db — DBPTR-1: the Materials page's shader list keeps
+# the library handle it is given (its setter used to drop it whenever no scene
+# was open at that instant, which — its only caller being EffectsPage's
+# constructor — was ALWAYS). See the suite's header.
+add_executable(test_asset_widget_db
+    test_asset_widget_db.cpp
+    test_asset_widget_db_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/shaderassetwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/shaderlistwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/listwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_asset_widget_db PROPERTIES
+    AUTOMOC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_definitions(test_asset_widget_db PRIVATE EFFECT_BUILD_AS_LIB)
+target_include_directories(test_asset_widget_db PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_asset_widget_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+add_test(NAME shadergraph.asset_widget_db COMMAND test_asset_widget_db
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadergraph.asset_widget_db PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
+jah_no_display(shadergraph.asset_widget_db)

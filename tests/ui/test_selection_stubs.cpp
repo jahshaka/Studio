@@ -32,9 +32,25 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "ui/controls/libraryassetpicker.h"
 
-QVector<AssetRecord> Database::fetchAssetsByType(const int &, const QString &)
+/// The project guid a suite asks with when it wants this stub to ANSWER.
+/// ui.db_handles uses it to prove that the World blade's "Background Ambience"
+/// row appears once the library reaches the blade — every other suite keeps
+/// the empty answer it was written against.
+extern const char *const kStubProjectWithMusic;
+extern const char *const kStubProjectWithMusic = "stub-project-with-music";
+
+QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString &projectGuid)
 {
-    return QVector<AssetRecord>();
+    QVector<AssetRecord> records;
+    if (projectGuid == QLatin1String(kStubProjectWithMusic)) {
+        AssetRecord music;
+        music.name = QStringLiteral("Rain");
+        music.guid = QStringLiteral("stub-music-guid");
+        music.type = type;
+        music.projectGuid = projectGuid;
+        records.append(music);
+    }
+    return records;
 }
 
 QByteArray Database::fetchAssetData(const QString &) const

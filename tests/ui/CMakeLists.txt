@@ -715,6 +715,42 @@ set_tests_properties(ui.properties_filter PROPERTIES
 jah_no_display(ui.properties_filter)
 
 
+# ui.db_handles — A LIBRARY A PANEL NEVER GOT IS A NULL, NOT A GUESS (lane
+# DBPTR-1). The class CLOSE-2's second read found: 24 `Database *` members
+# declared with no initialiser, seven of them filled by a SETTER that runs
+# after construction while the widget's own signals can already reach a
+# dereference — and two never assigned at all. This drives the three hazard
+# sites that live in the properties family with NO library (the World blade's
+# scene bind, the shader blade's combo slot, the material blade's combo slot),
+# asserts the truthful fallback, then hands the handle over and asserts the
+# feature really appears. Same slice and stubs as ui.properties_filter.
+add_executable(test_db_handles
+    test_db_handles.cpp
+    ${JAH_PROPERTIES_PANEL_SOURCES})
+set_target_properties(test_db_handles PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_db_handles PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_db_handles PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_db_handles
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+jah_document_graph(test_db_handles)
+add_test(NAME ui.db_handles COMMAND test_db_handles
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.db_handles PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.db_handles)
+
+
 # ui.project_tile — THE OPEN PROJECT'S DARK BLUE CAPTION BAR (owner request
 # 2026-09-08). Renders two real desktop tiles offscreen, one marked open, and
 # asserts the bar colour IN PIXELS (QWidget::grab) in both themes: dark blue
