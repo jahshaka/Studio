@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <tuple>
 #include <string>
 
 using namespace jahshaka::engine;
@@ -186,18 +187,23 @@ int main()
                         what, double(T), double(onR - offR), double(onR), double(offR),
                         double(onG), st.ifdBound ? "bound" : "ABSENT",
                         double(st.ifdMax.x - st.ifdMin.x), st.cascades.size());
-            return std::make_pair(onR - offR, onG);
+            return std::make_tuple(onR - offR, onG, st.ifdBound);
         };
 
         const auto single = leakOf(false, "single");
         const auto chain = leakOf(true, "chain");
         const GiStatus stChain = s->giStatus();
-        rows[a].fieldSingle = true;   // asserted through the printed line above
-        rows[a].leakSingle = single.first;
-        rows[a].leakChain = chain.first;
-        rows[a].greenChain = chain.second;
-        rows[a].fieldChain = stChain.ifdBound;
+        // BOTH arms must carry a bound field, or the comparative bar below
+        // compares a field against the cone leak (~0.97) and passes trivially.
+        rows[a].fieldSingle = std::get<2>(single);
+        rows[a].leakSingle = std::get<0>(single);
+        rows[a].leakChain = std::get<0>(chain);
+        rows[a].greenChain = std::get<1>(chain);
+        rows[a].fieldChain = std::get<2>(chain) && stChain.ifdBound;
         rows[a].fieldSpan = stChain.ifdMax.x - stChain.ifdMin.x;
+        CHECK(rows[a].fieldSingle,
+              "leak_room: the scene-fitted REFERENCE arm carries a bound field (or the "
+              "comparative bar would grade a field against the cone leak)");
         CHECK(stChain.ifdBound && !stChain.cascades.empty(),
               "the chain arm really has a chain AND a field bound");
         e->destroyScene(s);

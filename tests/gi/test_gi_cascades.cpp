@@ -307,8 +307,10 @@ int main()
         // per hop and re-applies the self-occlusion bias at every entry, which
         // takes a four-cascade chain from 0.00x (black) to 0.51x; the residual
         // needs the travelled distance carried across the hop, which is
-        // PHOTON P1's and is recorded in OGRE_UPSTREAM_ISSUES. It is bounded:
-        // with the irradiance field on, the field REPLACES this term.
+        // PHOTON P1's and is recorded in OGRE_UPSTREAM_ISSUES. With the
+        // irradiance field on, the field replaces this term INSIDE cascade 0
+        // only (E1, G3-a): beyond it the ring keeps the cone term, residual
+        // and all — the field variant of this case measures exactly that.
         CHECK(ambientChain > 0.40f * ambientSingle,
               "a four-cascade chain keeps the measured share of the ambient (>=0.40x, was 0.00x)");
         CHECK(ambientChain > 0.02f, "and it is a lit picture, not a black one");
