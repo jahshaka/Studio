@@ -242,15 +242,29 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
 
     QMetaObject::invokeMethod(mWorker, "runScript", Qt::QueuedConnection,
                               Q_ARG(QString, source), Q_ARG(QString, fileName));
+    bool quitSeen = false;
     while (!done) {
         loop.exec();
+        if (done) break;
         // A LOOP CAN BE EXITED FROM OUTSIDE: QCoreApplication::quit() exits
         // every event loop on this thread, nested ones included, and exec()
         // then returns instantly for ever after. Leaving the wait early is not
         // an option — the worker would hop into a dispatcher whose owner is
-        // being torn down — so fall back to timed slices, which keep servicing
-        // the hops without spinning a core.
-        if (!done) QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+        // being torn down — so keep servicing the hops in timed slices instead
+        // of spinning a core.
+        //
+        // AND STOP THE SCRIPT, ONCE (round 2, M2). Somebody has asked the
+        // process to end; without this a `while (true)` would go on being
+        // served for ever and the process would never exit. That is not
+        // hypothetical — Preferences' "wipe and restart" quits and then starts
+        // a SECOND instance, which is the one-instance hazard wearing a
+        // different hat. Once, not per slice: interrupting repeatedly would
+        // fight a verb that is legitimately still returning.
+        if (!quitSeen) {
+            quitSeen = true;
+            stop();
+        }
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
     }
     watchdog.stop();
     disconnect(finished);
@@ -288,7 +302,11 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
                            "JavaScript is interruptible — a run parked inside a verb "
                            "(editor.frame, graph.bake, an import) runs to completion first.")
                            .arg(timeoutMs);
-    } else if (stopped) {
+    } else if (stopped && !result.ok) {
+        // `&& !result.ok` above (round 2, L1): Stop can land in the instant
+        // between the script's last statement and the worker's report, and a
+        // run that FINISHED must not be told it was stopped — the interrupt
+        // simply arrived too late to do anything.
         result.ok = false;
         result.error = QStringLiteral(
             "script stopped. The edits it had already made are the run's one undo step — "
