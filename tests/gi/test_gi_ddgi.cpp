@@ -287,7 +287,7 @@ int main(int argc, char **argv)
     // term it replaced. It does, at the renderer's raw brightness, which is why
     // the default intensity is 1.0. (The P0 spike reported ~13x dimmer; that
     // reading came from the pass-buffer misalignment this lane found and fixed
-    // — FogHlmsListener::ifdAlignFloats — which was collapsing every irradiance
+    // — the pass-buffer under-report, fixed by ogre-patch 0050 — which was collapsing every irradiance
     // lookup onto a single texel. The number does not survive the fix.)
     ddgi.ddgiIntensity = GiParams().ddgiIntensity;      // the calibrated default
     CHECK(r.scene->setGlobalIllumination(ddgi), "setGlobalIllumination(DDGI, default intensity)");

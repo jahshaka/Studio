@@ -4151,28 +4151,14 @@ void hud_overlay_draws_where_it_says_when_allowed() {
               "the cover's STATIC captions must actually render (the one-shot trap): %zu px",
               titlePixels);
 
-    // ...AND THEY MUST RENDER ON THE FIRST FRAME THEY ARE DRAWN IN, which is
-    // the assertion that keeps the pin honest. The trap was fixed AT THE PIN
-    // (ogre-patch 0014: the font is loaded before OverlayElement::_update()
-    // builds the geometry), which is why the engine no longer re-captions
-    // anything after the first frame — with the font load back in its upstream
-    // place this check fails while the four-frame one above still passes,
-    // because nothing would ever re-flag the geometry.
-    View *v1 = fx.view("hud-first-frame-view", 192, 128, kBlue); REQUIRE(v1);
-    Scene *s1 = fx.scene("hud-first-frame-scene");               REQUIRE(s1);
-    v1->setScene(s1);
-    populate(s1, kOrange);
-    aim(v1);
-    ViewOverlayDesc first = cover;
-    first.coverTitle = "First frame title";
-    first.coverSubtitle = "and its subtitle";
-    v1->setOverlay(first);
-    render(fx.e, 1); Image firstFrame; REQUIRE(v1->readPixels(firstFrame));
-    const size_t firstFramePixels = titleBandPixels(firstFrame);
-    std::printf("    cover captions on frame 1: %zu px\n", firstFramePixels);
-    CHECK_MSG(firstFramePixels > 40,
-              "a STATIC caption must render in the first frame it is drawn in "
-              "(ogre-patch 0014): %zu px", firstFramePixels);
+    // THAT FOUR-FRAME CHECK IS THE GUARD FOR OGRE-PATCH 0014 (the second read of
+    // PATCHES-1, 2026-09-15): the trap was fixed AT THE PIN (0014 loads the font
+    // before OverlayElement::_update() builds the geometry), and since PATCHES-1
+    // deleted the engine's one-shot re-caption nothing re-flags a caption's
+    // geometry after its first build — so with 0014 lost, the captions above
+    // stay empty on every frame and titlePixels reads 0. A separate "first
+    // frame" view proved nothing (the font was already loaded by the render
+    // above, and the captions are process-wide), so it was removed.
 
     // ---- the stats readout: a corner, and only that corner -----------------
     ViewOverlayDesc stats;
