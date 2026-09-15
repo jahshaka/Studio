@@ -15,7 +15,10 @@
 //
 // Three contracts:
 //   1. project.openAsync of a heavy world completes, with the scene really
-//      open, and no UI-thread gap beyond the budget.
+//      open, and no UI-thread gap beyond the budget — a budget that is the
+//      fixed contract OR the box's own measured scheduling noise, whichever is
+//      larger (kControlFactor below; the suite reds under a -j4 gate
+//      otherwise, ledger 416, while the UI thread is not blocked at all).
 //
 // THE FIXTURE IS Matcaps (2026-09-07). It used to be Showroom, because that
 // sample was the biggest world the tree shipped; the Grand Showroom that
@@ -65,6 +68,86 @@ static const double kHeartbeatMs = 250.0;
 static const double kColdCeilingMs = 4000.0;
 static const int kExitBudgetMs = 30000;
 static const int kOpenBudgetMs = 120000;
+
+/// AND A CONTROL, because this is a MEASUREMENT on a shared box (ledger 416).
+/// The failing mode is not a blocked UI thread: at load average 4-8, with
+/// another lane compiling, the same warm open takes ~700 ms and the probe reads
+/// a real 500-600 ms gap — the thread was not blocked, it was not SCHEDULED.
+///
+/// WHAT DOES NOT WORK, measured here before it was written (40 spinners on a
+/// 20-core box, load average 25-36): avatar.responsive's IDLE noise floor. It
+/// read 238-303 ms while the warm open in the same process read 552, 701 and
+/// 732 ms — it under-reports contention by an order of magnitude, and the
+/// reason is physics, not tuning. An idle app's UI thread is runnable for
+/// microseconds every 250 ms and the scheduler hands a long-sleeping task the
+/// CPU almost immediately; the engine even SKIPS still frames, so at rest the
+/// thread barely competes at all. Contention only bites a thread that BURNS
+/// its slice, which is what the thread does while a world opens.
+///
+/// So the baseline is a CONTROL, not an idle reading: the same app, the same
+/// world, the same box, doing UI-THREAD WORK OF THE SAME KIND with no open in
+/// flight — editor.frame() renders frames on this thread exactly as the open's
+/// neighbours do. The control therefore carries the scheduling weather AND the
+/// frame cost, and the assertion becomes what this suite actually means: the
+/// open must not block the thread MORE THAN RUNNING THE APP DOES.
+///
+/// THE RULE, and the numbers behind it (measured on this box, 2026-09-15, with
+/// 40 spin loops on 20 cores at load average 33-44):
+///
+///     budget = min(max(kMaxGapMs, kControlFactor x control), kBudgetCeilingMs)
+///
+///   quiet   control 269 ms  open  237 ms  budget 538
+///   loaded  control 331 ms  open  584 ms  budget 662
+///   loaded  control 425 ms  open  576 ms  budget 850
+///   loaded  control 309 ms  open  545 ms  budget 618
+///
+/// The open costs MORE than the control under load (its frames also mirror a
+/// freshly-built scene and push it to the engine) and slightly less when the
+/// box is quiet, which is why the factor is 2 and not 1. The CEILING is there
+/// so the mechanism cannot degenerate: no amount of box load buys this suite
+/// permission to accept a multi-second block, and the defect it was written for
+/// was 12 500 ms — twenty-five times the highest budget this rule can produce.
+///
+/// AND ONE REPEAT before the red (see the warm case): the gap and the control
+/// are each a single roll of a shared box's scheduler, and at the extreme load
+/// above the two do not always land in the same weather. A blocking regression
+/// is not a roll — it fails every attempt — so a second measurement costs four
+/// seconds on the way to a red and nothing at all on a green run.
+static const double kControlFactor = 2.0;
+static const double kBudgetCeilingMs = 2000.0;
+
+/// THE CONTROL (see kControlFactor): the worst heartbeat gap over ~2 s of
+/// the app rendering the open world on its UI thread, with no open in flight.
+/// editor.frame(1) is one synchronous document->engine sync plus one
+/// renderOneFrame — the same thread doing the same kind of work, under whatever
+/// load the box is under right now.
+static double measureControlGap(McpClient &mcp, const char *label)
+{
+    mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
+    QElapsedTimer timer;
+    timer.start();
+    int frames = 0;
+    while (timer.elapsed() < 2000) {
+        mcp.runScript(QStringLiteral("editor.frame(1)"));
+        ++frames;
+    }
+    const double gapMs = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
+                             .value("result").toObject().value("maxGapMs").toDouble();
+    std::printf("info: [%s] control: %d rendered frames in 2 s, worst UI gap %.1f ms "
+                "(probe period %.0f ms)\n", label, frames, gapMs, kHeartbeatMs);
+    return gapMs;
+}
+
+/// The control, turned into this run's budget (see kControlFactor).
+static double budgetFor(double fixedMs, double controlMs, const char *label)
+{
+    const double budget = qMin(qMax(fixedMs, kControlFactor * controlMs), kBudgetCeilingMs);
+    std::printf("info: [%s] UI-gap budget for this run: %.1f ms "
+                "(fixed %.0f, control %.1f x %.1f, ceiling %.0f)\n",
+                label, budget, fixedMs, controlMs, kControlFactor, kBudgetCeilingMs);
+    return budget;
+}
 
 int main(int argc, char **argv)
 {
@@ -147,6 +230,10 @@ int main(int argc, char **argv)
     // the engine's compile storm and far below the multi-second document
     // blocking this lane removed (the pre-fix Matcaps open spent 12.5 s on
     // this thread).
+    // The cold ceiling stays a FIXED number: it guards a 12.5 s regression with
+    // 4 s, and the worst this box produced with 40 spinners on 20 cores was
+    // 1 002 ms — four times the headroom is enough, and a control measured
+    // before any world is open would be measuring an app that renders nothing.
     CHECK(cold.maxGap > 0.0 && cold.maxGap < kColdCeilingMs,
           "the cold open's worst UI gap stays under the regression ceiling");
 
@@ -171,7 +258,29 @@ int main(int argc, char **argv)
     CHECK(warm.ticks > 0 || warm.elapsedMs < kHeartbeatMs,
           "the UI thread kept ticking during the warm open (or the open finished "
           "inside the first heartbeat interval)");
-    CHECK(warm.maxGap > 0.0 && warm.maxGap < kMaxGapMs,
+    // The control is measured HERE, after the open and with the same world open:
+    // same app, same box, same second, the thread doing the same kind of work
+    // with nothing in flight (see kControlFactor).
+    const double warmBudget = budgetFor(kMaxGapMs, measureControlGap(mcp, "warm"), "warm");
+    bool withinBudget = warm.maxGap > 0.0 && warm.maxGap < warmBudget;
+    if (!withinBudget) {
+        // ONE REPEAT, and only on the way to a red. Both the gap and the
+        // control are single rolls of a shared box's scheduler: at load average
+        // 37-46 the same build measured 486/375, 673/527 and 764/319 in three
+        // consecutive runs — the third is not a different app, it is a
+        // different roll. The defect this asserts against (a synchronous
+        // 12.5 s open) is not a roll: it would fail both attempts, and every
+        // attempt after them. The numbers of both are printed either way.
+        std::printf("info: the warm open's worst gap (%.1f ms) exceeded this run's budget "
+                    "(%.1f ms) — repeating the measurement once\n",
+                    warm.maxGap, warmBudget);
+        CHECK(mcp.runScript(QStringLiteral("project.close()")).value("ok").toBool(),
+              "project.close before the repeated warm open");
+        const auto warm2 = openAsyncAndWait("warm-2");
+        const double budget2 = budgetFor(kMaxGapMs, measureControlGap(mcp, "warm-2"), "warm-2");
+        withinBudget = warm2.done && warm2.maxGap > 0.0 && warm2.maxGap < budget2;
+    }
+    CHECK(withinBudget,
           "no UI-thread gap beyond the budget during a warm threaded open");
 
     // ---- 2. the SYNCHRONOUS verb is unchanged -----------------------------
