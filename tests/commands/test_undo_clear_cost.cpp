@@ -37,9 +37,13 @@
 // on four runs of one afternoon, so it redded under a -j4 gate and once even
 // solo, with the commit count — the actual contract — reading 1 every time.
 // Both shapes are measured in the SAME run on the SAME disk and the clear must
-// be at least 10x cheaper than the one it replaced (it measures ~50x). That
+// be at least 3x cheaper than the one it replaced (it measures 30x-50x, and a
+// regression to per-destructor commits measures 1x — see the factor's note). That
 // catches a regression to per-destructor commits, which is what the bound was
-// for, and cannot be made to fail by a busy machine.
+// for, and cannot be made to fail by a busy machine. On a build dir that lives
+// on tmpfs, where a sync costs nothing, the old shape falls below a 5 ms floor
+// and the ratio is printed instead of asserted — a ratio between two numbers
+// that are both noise proves nothing either way.
 //
 // Framework-free (printf + a failure counter), offscreen, DISPLAY-FREE.
 #include <QApplication>
@@ -260,8 +264,28 @@ int main(int argc, char **argv)
         // of exactly this.
         printf("info: the clear is %.1fx cheaper than the old shape\n",
                clearMicros > 0 ? double(direct.micros) / double(clearMicros) : 0.0);
-        CHECK(clearMicros > 0 && direct.micros > clearMicros * 10,
-              "clearing the stack is at least 10x cheaper than one delete per command");
+        // A FLOOR UNDER THE COMPARISON. On a build directory that lives on
+        // tmpfs an fdatasync costs nothing at all, so 300 of them can come in
+        // under 5 ms and the ratio stops being a measurement of anything — it
+        // would red with the commit counts, which ARE the contract, reading 1
+        // and 300. Say so and move on; the commit assertions above still hold.
+        if (direct.micros < 5000) {
+            printf("info: the old shape took %lld us — under the 5 ms floor "
+                   "(a tmpfs build dir?), the ratio is NOT asserted\n",
+                   static_cast<long long>(direct.micros));
+        } else {
+            // THE FACTOR IS 3, AND THE REASON IS WHAT THE TEST HAS TO
+            // DISTINGUISH. A regression to one commit per destructor makes the
+            // two shapes the SAME shape — a ratio of about 1. Measured here it
+            // is 32x-52x solo, and it fell to 11x once under a -j4 gate,
+            // because the two halves inflate under different contention (the
+            // clear with CPU, the old shape with I/O) and the ratio between
+            // them is therefore not load-invariant. Any factor comfortably
+            // between 1 and the worst honest reading does the job; picking the
+            // tightest one just re-invents the flake the absolute bound was.
+            CHECK(clearMicros > 0 && direct.micros > clearMicros * 3,
+                  "clearing the stack is at least 3x cheaper than one delete per command");
+        }
     }
 
     // -----------------------------------------------------------------------
