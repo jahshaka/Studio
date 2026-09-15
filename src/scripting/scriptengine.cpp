@@ -60,7 +60,15 @@ ScriptEngine::~ScriptEngine()
     // interrupting it is the only way out; in practice evaluate() is
     // synchronous and nothing can be running here.
     if (mWorker && mWorker->engine()) mWorker->engine()->setInterrupted(true);
-    QMetaObject::invokeMethod(mWorker, "teardown", Qt::BlockingQueuedConnection);
+    // QUEUED, NOT BLOCKING (round 2, L5). A blocking teardown would deadlock if
+    // a run were somehow still in flight: the worker would be waiting on a hop
+    // to THIS thread while this thread waited on the worker. Unreachable today
+    // — evaluate() is synchronous, so nothing can be running here — but a
+    // deadlock at shutdown is the worst way to learn that an assumption has
+    // moved. Queued teardown, then quit(), then the join with a ceiling: the
+    // worker processes both events in order and the wait below is the only
+    // thing that blocks, and it gives up.
+    QMetaObject::invokeMethod(mWorker, "teardown", Qt::QueuedConnection);
     mThread->quit();
     if (!mThread->wait(5000))
         qWarning("scripting: the script thread did not stop within 5 s");
