@@ -26,7 +26,10 @@ For more information see the LICENSE file
 
 Gizmo::Gizmo()
 {
-	transformSpace = GizmoTransformSpace::Local;
+	// GLOBAL at a fresh launch (owner, 2026-09-15, Blender's model: the gizmo
+	// aligned to the world axes whatever the object's turn; Local is the toolbar's
+	// other button). It was Local by accident until GIZMO-3 reported it.
+	transformSpace = GizmoTransformSpace::Global;
 	gizmoScale = 1.0f;
 }
 

@@ -831,20 +831,20 @@ int main(int argc, char **argv)
         node->update(0.0f);
     }
 
-    // ---- THE DEFAULT SPACE, AS A FACT --------------------------------------
+    // ---- THE DEFAULT SPACE, AS A DECISION ----------------------------------
     //
-    // Gizmo's constructor leaves every gizmo in LOCAL space and nothing in the
-    // app writes it at startup (no persisted setting exists; MainWindow only
-    // checks whichever toolbar button matches what the gizmos already are). So
-    // a fresh launch rotates in the OBJECT's frame. Pinned here so the value is
-    // a decision rather than an accident — GIZMO-3 reported it upward and did
-    // NOT change it.
+    // A fresh gizmo is in GLOBAL space (Gizmo::Gizmo): the rings and arrows
+    // aligned to the world axes whatever the object's turn, Blender's model
+    // and the owner's call (2026-09-15). Nothing in the app writes the space at
+    // startup (no persisted setting; MainWindow only checks whichever toolbar
+    // button matches what the gizmos already are), so the constructor IS the
+    // default. It was Local by accident until GIZMO-3 reported it.
     {
         RotationGizmo fresh;
-        const bool local = fresh.getTransformSpace() == GizmoTransformSpace::Local;
-        std::printf("\n   a fresh gizmo's transform space is %s\n", local ? "LOCAL" : "GLOBAL");
-        CHECK(local, "the default transform space at a fresh launch is LOCAL (Gizmo::Gizmo; no "
-                     "setting overrides it) — a reported finding, not a change");
+        const bool global = fresh.getTransformSpace() == GizmoTransformSpace::Global;
+        std::printf("\n   a fresh gizmo's transform space is %s\n", global ? "GLOBAL" : "LOCAL");
+        CHECK(global, "the default transform space at a fresh launch is GLOBAL (owner, 2026-09-15: "
+                      "Blender's model; it was Local by accident until GIZMO-3 reported it)");
     }
 
     // ---- no pick view, no pick ---------------------------------------------
