@@ -125,6 +125,21 @@ throws(function () { world.sky("realistic", { sunPosY: 450000 }); },
 assert(world.get().sky.drivesSun === undefined, "world.get() no longer reports a steering");
 assert(world.sun().skyDriven === undefined, "...nor does world.sun()");
 
+// ONE WRITER FOR THE REALISTIC SKY (SKY-WRITE-1). The dials exist in the
+// document twice — the typed fields the renderer reads, and the block
+// world.get() reports and the file carries — and four writers used to keep both
+// halves by hand with two different sets of clamps. The verb clamped only
+// sunHaze, so a scripted density of 50 reached the renderer and was silently
+// corrected the next time somebody opened the sky panel. Both halves now go
+// through iris::Scene::setSkyRealistic, which clamps every dial once.
+world.sky("realistic", { density: 50, diffusion: -3, horizon: 9, power: 99, sunHaze: 0.1 });
+var clamped = world.get().sky.data;
+assert(clamped.density === 1 && clamped.diffusion === 0 && clamped.horizon === 0.5 &&
+       clamped.power === 4 && clamped.sunHaze === 1,
+       "every realistic dial is clamped by the DOCUMENT, and the stored block carries the " +
+       "clamped value — not the asked-for one (" + JSON.stringify(clamped) + ")");
+world.sky("realistic", { density: 0.5, diffusion: 2, horizon: 0.025, power: 1.5, sunHaze: 2.5 });
+
 // ROTATING THE LIGHT MOVES THE SKY. The sky is the engine's analytic model now
 // (SKY-GPU), keyed on the sun direction we push it, so the proof is in pixels:
 // with the sun ahead of the camera the picture differs from the same picture
@@ -395,6 +410,26 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
 // NOT free must stop with it: the three full-view-frustum PSSM passes a
 // directional caster renders, and the disc, which would be a hole in a night
 // sky. Its own scene, because what it counts is the whole view's shadow work.
+//
+// THE SHADOW HALF OF SKY-NIGHT-1 IS HERE (lane SKY-SMALL). The rule that
+// decides when the passes stop is absolute now — the sun's own radiance against
+// one 8-bit output code, with a specular headroom — instead of the old "a
+// thousandth of the noon tint", which crossed at +0.74 degrees of elevation at
+// the default Sun Haze and at +3.6 degrees at haze 6: the shadow went out while
+// the sun was visibly up. scenemirror.cpp carries the derivation; the DISC half
+// of the same rule is pinned as pixels by `mirror.sun_night`.
+//
+// HOW THE COUNTERS ARE READ, and why it matters (SKY-WRITE-1, the diagnosis).
+// `world.shadowStatus` ARMS the per-pass listeners when it is asked and the
+// arming EXPIRES 120 rendered frames after the last read — so the FIRST read
+// after a quiet spell reports the previous, un-instrumented frame, which is 0.
+// This block used to transform, render three frames and read, and it only ever
+// worked because something ELSE had polled recently: the World-panel shadow
+// rows call the same status on every rebind, and a scene edit rebinds them. A
+// lane that stopped the panel rebuilding (ADD-1's held property mount) made
+// this block read 0 passes for a sun 30 degrees up, and the read looked like a
+// document write being lost. Arm, THEN render, THEN read — never a first read
+// as the measurement, and never a wall-clock settle.
 {
     project.create("Sun At Night " + Date.now());
     var nsun = world.sun().light;
@@ -402,11 +437,29 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
     scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
     editor.select("");
     editor.frame(60, 1 / 60);
+    // pitch = elevation - 90: a document light emits down its local -Y.
     function passesAt(pitch) {
         node.transform(nsun, { rotation: { x: pitch, y: 165, z: 0 } });
+        world.shadowStatus();                   // arm the counters for the frames below
         editor.frame(3, 1 / 60);
         return world.shadowStatus().shadowPassesLastFrame;
     }
+    // THE ARMING CONTRACT ITSELF, asserted rather than assumed: 150 frames with
+    // nobody reading detaches the listeners, and the next read reports 0 for a
+    // sun that is plainly casting — then a read after one more rendered frame
+    // reports the truth. If this ever stops being true the block above is
+    // over-careful, not wrong; if it is removed, this block silently rots.
+    node.transform(nsun, { rotation: { x: -60, y: 165, z: 0 } });
+    editor.frame(150, 1 / 60);
+    var coldRead = world.shadowStatus().shadowPassesLastFrame;
+    editor.frame(1, 1 / 60);
+    var warmRead = world.shadowStatus().shadowPassesLastFrame;
+    console.log("counter arming: cold read " + coldRead + ", warm read " + warmRead);
+    assert(coldRead === 0, "world.shadowStatus' first read after 150 unread frames reports 0 " +
+                           "passes — asking is what arms the counters (" + coldRead + ")");
+    assert(warmRead > 0, "...and the read after one rendered frame reports the truth (" +
+                         warmRead + ")");
+
     var dayPasses = passesAt(-60);              // well above the horizon
     var nightPasses = passesAt(-95);            // five degrees BELOW it
     console.log("shadow passes: day " + dayPasses + ", night " + nightPasses);
@@ -414,6 +467,23 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
     assert(nightPasses < dayPasses,
            "...and a sun BELOW it does not (" + nightPasses + ")");
     assert(world.sunDisc().visible === true, "the disc is still switched ON in the World panel");
+
+    // THE REGRESSION, at a hazy dial. At Sun Haze 6 and two degrees of
+    // elevation the atmosphere's transmittance is 3.2e-5 — a thirtieth of the
+    // old rule's cut, so the old rule had taken the shadow away — while the
+    // sun's own radiance is still ten thousand times the step at which it stops
+    // being able to darken a pixel. It casts.
+    world.sky("realistic", { power: 0.02, sunHaze: 6 });
+    var hazyUp = passesAt(-88);                 // +2 degrees
+    var hazyDown = passesAt(-92);               // -2 degrees: the Earth is in the way
+    console.log("haze 6 shadow passes: +2 deg " + hazyUp + ", -2 deg " + hazyDown);
+    assert(hazyUp > 0,
+           "at Sun Haze 6 a sun two degrees up still casts (" + hazyUp + " passes) — the old " +
+           "relative rule had switched its shadow off at +3.6 degrees");
+    assert(hazyDown < hazyUp,
+           "...and two degrees below the horizon it does not (" + hazyDown + ")");
+    world.sky("realistic", { power: 0.02, sunHaze: 2.5 });
+
     // ...and it is not a cheat: the same sun, in the same place, with the row
     // switched off, is back to casting.
     node.setProperty(nsun, "followsAtmosphere", false);

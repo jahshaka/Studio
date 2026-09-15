@@ -51,6 +51,7 @@ For more information see the LICENSE file
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <functional>
 #include <QHideEvent>
 
 class Database;
@@ -107,6 +108,10 @@ protected slots:
     void onSkyHorizonChanged(float val);
     void onSkyPowerChanged(float val);
     void onSunHazeChanged(float val);
+
+    /// One realistic dial, written through iris::Scene::setSkyRealistic — the
+    /// only supported writer of that block (SKY-WRITE-1).
+    void writeRealisticDial(const std::function<void(iris::SkyRealistic &)> &edit);
     void onSkyColourChanged(QColor colour);
 
 	void onGradientTopColorChanged(QColor color);

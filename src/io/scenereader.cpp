@@ -363,32 +363,20 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		}
 
 		case iris::SkyType::REALISTIC: {
-			auto realisticDefinition = scene->skyData.value("Realistic");
-
-			// Per-key defaults are the *model's* working values (VISUAL_PARITY
-			// item 1), matching iris::Scene's constructor: a key missing from an
-			// older document lands on something the analytic sky can use rather
-			// than the legacy panel's degenerate corner.
-			{
-				const iris::SkyRealistic d = iris::SkyRealistic::defaults();
-				scene->skyRealistic.density   = realisticDefinition["density"].toDouble(d.density);
-				scene->skyRealistic.diffusion = realisticDefinition["diffusion"].toDouble(d.diffusion);
-				scene->skyRealistic.horizon   = realisticDefinition["horizon"].toDouble(d.horizon);
-				scene->skyRealistic.power     = realisticDefinition["power"].toDouble(d.power);
-				// The SUN's air (SKY-DENSITY-1). A file written before the dial
-				// existed has no key and opens at the ctor default, which is the
-				// FITTED value — the reader-defaults trap: an absent key must
-				// mean exactly what a new scene means, never 0.
-				scene->skyRealistic.sunHaze   = realisticDefinition["sunHaze"].toDouble(d.sunHaze);
-				const QJsonObject skyColObj = realisticDefinition["skyColour"].toObject();
-				scene->skyRealistic.skyColour =
-					skyColObj.isEmpty() ? d.skyColour : readColor(skyColObj);
-				// The sky's own sunPosX/Y/Z are GONE (D15) and so are the five
-				// Preetham dials (SKY-GPU: the CPU bake they described does not
-				// exist — the sky is the engine's own analytic model). An old
-				// file's keys are simply not read; it opens at the defaults.
-				// No migration exists.
-			}
+			// ONE READER (SKY-WRITE-1). The per-key defaults, the sunHaze
+			// reader-defaults note and the colour fallback all live in
+			// `iris::Scene::skyRealisticFromJson` now — this file, the sky
+			// ASSET reader and the panel's bind each carried their own copy of
+			// them. Written through `setSkyRealistic`, so the typed fields and
+			// the JSON block the file just supplied cannot end up disagreeing.
+			//
+			// The sky's own sunPosX/Y/Z are GONE (D15) and so are the five
+			// Preetham dials (SKY-GPU: the CPU bake they described does not
+			// exist — the sky is the engine's own analytic model). An old
+			// file's keys are simply not read; it opens at the defaults. No
+			// migration exists.
+			scene->setSkyRealistic(
+				iris::Scene::skyRealisticFromJson(scene->skyData.value("Realistic")));
 			break;
 		}
 

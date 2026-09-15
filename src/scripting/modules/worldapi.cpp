@@ -1787,7 +1787,13 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         scene->skyData.insert("Gradient", def);
         scene->skyType = iris::SkyType::GRADIENT;
     } else if (t == "realistic") {
-        auto &r = scene->skyRealistic;
+        // ONE WRITER (SKY-WRITE-1): read the current dials, apply what the call
+        // named, hand the whole block to the document. `setSkyRealistic` clamps
+        // — every dial, not just this one — and writes both representations, so
+        // a verb can no longer leave a value the panel will silently correct on
+        // its next bind. The local clamp and the six hand-built JSON keys that
+        // stood here are gone with it.
+        iris::SkyRealistic r = scene->skyRealistic;
         auto take = [&params](const char *key, float current) {
             return params.contains(key) ? params.value(key).toFloat() : current;
         };
@@ -1795,10 +1801,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         r.diffusion = take("diffusion", r.diffusion);
         r.horizon   = take("horizon", r.horizon);
         r.power     = take("power", r.power);
-        // The SUN's air, not the sky's (SKY-DENSITY-1). Held at or above a
-        // purely molecular atmosphere, where the aerosol term is zero: below
-        // that it would amplify the beam instead of absorbing it.
-        r.sunHaze   = qBound(1.0f, take("sunHaze", r.sunHaze), 10.0f);   // the row's range; above 10 every non-zenith sun is black
+        r.sunHaze   = take("sunHaze", r.sunHaze);
         if (params.contains("skyColour") || params.contains("skyColor")) {
             const QVariant given = params.contains("skyColour") ? params.value("skyColour")
                                                                 : params.value("skyColor");
@@ -1807,14 +1810,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
             if (!ok) return fail(QStringLiteral("world.sky: %1 (skyColour)").arg(colorHelp(given)));
             r.skyColour = c;
         }
-        QJsonObject def;
-        def.insert("density", double(r.density));
-        def.insert("diffusion", double(r.diffusion));
-        def.insert("horizon", double(r.horizon));
-        def.insert("power", double(r.power));
-        def.insert("sunHaze", double(r.sunHaze));
-        def.insert("skyColour", SceneWriter::jsonColor(r.skyColour));
-        scene->skyData.insert("Realistic", def);
+        scene->setSkyRealistic(r);
         scene->skyType = iris::SkyType::REALISTIC;
     } else if (t == "equirectangular" || t == "equirect") {
         if (!requireProject()) return false;   // texture resolution needs the project's pins

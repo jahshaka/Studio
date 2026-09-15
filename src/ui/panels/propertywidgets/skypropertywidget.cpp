@@ -237,33 +237,22 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			// parameters. An old document's Realistic block has none of them
 			// and opens at the defaults (no migrations, ever).
 			const iris::SkyRealistic defaults = iris::SkyRealistic::defaults();
-			iris::SkyRealistic loaded = defaults;
-			if (!skyDefinition.isEmpty()) {
-				loaded.density   = skyDefinition.value("density").toDouble(defaults.density);
-				loaded.diffusion = skyDefinition.value("diffusion").toDouble(defaults.diffusion);
-				loaded.horizon   = skyDefinition.value("horizon").toDouble(defaults.horizon);
-				loaded.power     = skyDefinition.value("power").toDouble(defaults.power);
-				loaded.sunHaze   = skyDefinition.value("sunHaze").toDouble(defaults.sunHaze);
-				const QJsonObject colObj = skyDefinition.value("skyColour").toObject();
-				loaded.skyColour = colObj.isEmpty() ? defaults.skyColour
-				                                    : SceneReader::readColor(colObj);
+			// THE BLOCK, THROUGH THE DOCUMENT'S OWN READER AND WRITER
+			// (SKY-WRITE-1). The per-key defaults, the clamps and the colour
+			// fallback were all spelled out again here — a fourth copy, and the
+			// one that decided what a value a VERB wrote was worth: the panel
+			// re-derived the struct from its stored definition on every bind,
+			// so any writer that had kept only one of the two representations
+			// was silently corrected at the next selection. There is one
+			// representation of the pair now and one function that maps
+			// between them; a bind reads and re-writes the SAME fact.
+			iris::SkyRealistic loaded = iris::Scene::skyRealisticFromJson(skyDefinition);
+			if (auto live = liveScene()) {
+				live->setSkyRealistic(loaded);
+				loaded = live->skyRealistic;         // as clamped
+			} else {
+				loaded = iris::Scene::clampSkyRealistic(loaded);
 			}
-			// The sliders' ranges are the model's own working bands: density
-			// past ~2 is a night sky at noon, diffusion past ~4 flattens the
-			// gradient into a wall, and the horizon limit is a fraction of the
-			// sphere. Clamp the DOCUMENT rather than only the display, so a
-			// value a dial cannot express cannot survive a visit to the panel.
-			loaded.density   = qBound(0.01f, loaded.density,   1.0f);
-			loaded.diffusion = qBound(0.0f,  loaded.diffusion, 4.0f);
-			loaded.horizon   = qBound(0.0f,  loaded.horizon,   0.5f);
-			loaded.power     = qBound(0.0f,  loaded.power,     4.0f);
-			// THE SUN'S OWN AIR (SKY-DENSITY-1) is the atmosphere's turbidity:
-			// 1 is a purely molecular sky (the aerosol term is zero there and
-			// negative below it, so 1 is the floor and not a taste), 2.5 the
-			// clear day the sky's defaults are fitted to, 6 a hazy one. Past
-			// about 10 a sun 20 degrees up is already gone.
-			loaded.sunHaze   = qBound(1.0f,  loaded.sunHaze,   10.0f);
-			if (auto live = liveScene()) live->skyRealistic = loaded;
 
 			// NO SUN DIALS (SKY_LIGHT_SPEC.md §3, owner decision D15). The sky's
 			// sun IS the scene's sun light: rotate the light and the sky moves.
@@ -300,12 +289,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			wireSkyRow(skyColour->getPicker(), tr("Sky Colour"),
 			           [this](const QVariant &v) { onSkyColourChanged(v.value<QColor>()); });
 
-			realisticDefinition.insert("density", double(loaded.density));
-			realisticDefinition.insert("diffusion", double(loaded.diffusion));
-			realisticDefinition.insert("horizon", double(loaded.horizon));
-			realisticDefinition.insert("power", double(loaded.power));
-			realisticDefinition.insert("sunHaze", double(loaded.sunHaze));
-			realisticDefinition.insert("skyColour", SceneWriter::jsonColor(loaded.skyColour));
+			realisticDefinition = iris::Scene::skyRealisticJson(loaded);
 			updateAssetAndKeys();
 
 			break;
@@ -615,43 +599,52 @@ void SkyPropertyWidget::onEquiTextureChanged(QString guid)
 
 void SkyPropertyWidget::onSkyDensityChanged(float val)
 {
-	realisticDefinition.insert("density", val);
-	if (auto live = liveScene()) live->skyRealistic.density = val;
-	updateAssetAndKeys();
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.density = val; });
 }
 
 void SkyPropertyWidget::onSkyDiffusionChanged(float val)
 {
-	realisticDefinition.insert("diffusion", val);
-	if (auto live = liveScene()) live->skyRealistic.diffusion = val;
-	updateAssetAndKeys();
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.diffusion = val; });
 }
 
 void SkyPropertyWidget::onSkyHorizonChanged(float val)
 {
-	realisticDefinition.insert("horizon", val);
-	if (auto live = liveScene()) live->skyRealistic.horizon = val;
-	updateAssetAndKeys();
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.horizon = val; });
 }
 
 void SkyPropertyWidget::onSkyPowerChanged(float val)
 {
-	realisticDefinition.insert("power", val);
-	if (auto live = liveScene()) live->skyRealistic.power = val;
-	updateAssetAndKeys();
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.power = val; });
 }
 
 void SkyPropertyWidget::onSunHazeChanged(float val)
 {
-	realisticDefinition.insert("sunHaze", val);
-	if (auto live = liveScene()) live->skyRealistic.sunHaze = val;
-	updateAssetAndKeys();
+	writeRealisticDial([val](iris::SkyRealistic &r) { r.sunHaze = val; });
 }
 
 void SkyPropertyWidget::onSkyColourChanged(QColor colour)
 {
-	realisticDefinition.insert("skyColour", SceneWriter::jsonColor(colour));
-	if (auto live = liveScene()) live->skyRealistic.skyColour = colour;
+	writeRealisticDial([colour](iris::SkyRealistic &r) { r.skyColour = colour; });
+}
+
+/// ONE DIAL, ONE WRITE (SKY-WRITE-1). Every realistic row used to insert its
+/// own JSON key AND assign its own struct field — six copies of the pair, and
+/// six chances to keep only one half. The row says which field it is; the
+/// document owns the clamp and both representations; the definition this widget
+/// carries is re-read from the document afterwards, so a clamped value shows up
+/// in the stored block too.
+void SkyPropertyWidget::writeRealisticDial(const std::function<void(iris::SkyRealistic &)> &edit)
+{
+	iris::SkyRealistic r = iris::Scene::skyRealisticFromJson(realisticDefinition);
+	if (auto live = liveScene()) r = live->skyRealistic;
+	edit(r);
+	if (auto live = liveScene()) {
+		live->setSkyRealistic(r);
+		r = live->skyRealistic;
+	} else {
+		r = iris::Scene::clampSkyRealistic(r);
+	}
+	realisticDefinition = iris::Scene::skyRealisticJson(r);
 	updateAssetAndKeys();
 }
 

@@ -42,12 +42,11 @@ QVariant captureSky(const ScenePtr &s)
     m["gradientMid"] = s->gradientMid;
     m["gradientBot"] = s->gradientBot;
     m["gradientOffset"] = s->gradientOffset;
-    m["density"] = s->skyRealistic.density;
-    m["diffusion"] = s->skyRealistic.diffusion;
-    m["horizon"] = s->skyRealistic.horizon;
-    m["power"] = s->skyRealistic.power;
-    m["sunHaze"] = s->skyRealistic.sunHaze;
-    m["skyColour"] = s->skyRealistic.skyColour;
+    // THE REALISTIC DIALS ARE ALREADY IN `skyData["Realistic"]` (SKY-WRITE-1).
+    // They used to be captured a SECOND time as six more keys beside it, which
+    // meant a seventh dial added to SkyRealistic and forgotten here would be
+    // reverted by any undo of any sky edit — the two-representations hazard,
+    // inside the undo blob. One copy, restored through the one writer.
     return m;
 }
 
@@ -65,12 +64,11 @@ void applySky(const ScenePtr &s, const QVariant &value)
     s->gradientMid = m.value("gradientMid").value<QColor>();
     s->gradientBot = m.value("gradientBot").value<QColor>();
     s->gradientOffset = m.value("gradientOffset").toFloat();
-    s->skyRealistic.density = m.value("density").toFloat();
-    s->skyRealistic.diffusion = m.value("diffusion").toFloat();
-    s->skyRealistic.horizon = m.value("horizon").toFloat();
-    s->skyRealistic.power = m.value("power").toFloat();
-    s->skyRealistic.sunHaze = m.value("sunHaze").toFloat();
-    s->skyRealistic.skyColour = m.value("skyColour").value<QColor>();
+    // ...and back out of the block that was just restored, through the one
+    // writer, so the typed fields the renderer reads and the JSON the panels
+    // bind from are the same fact by construction.
+    s->setSkyRealistic(iris::Scene::skyRealisticFromJson(
+        s->skyData.value(QStringLiteral("Realistic"))));
 }
 
 QVector<sceneprops::Field> buildFields()
