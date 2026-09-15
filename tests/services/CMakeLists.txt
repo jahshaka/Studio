@@ -7,6 +7,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui Widgets)
 add_executable(test_services test_services.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/uistep.cpp
     ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp)
 set_target_properties(test_services PROPERTIES AUTOMOC ON)
 target_include_directories(test_services PRIVATE

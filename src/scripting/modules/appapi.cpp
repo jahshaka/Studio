@@ -165,9 +165,18 @@ QVector<VerbInfo> AppApi::verbs() const
           "thing --clear-shader-cache does before the engine starts.",
           Needs::Engine },
         { "saveShaderCache", "app.saveShaderCache() -> bool",
-          "Writes the shader cache now instead of waiting for the burst-settle watchdog or a clean "
-          "quit. A no-op returning true when nothing new has been compiled. Mostly for tests: the "
-          "app saves on its own.",
+          "Serializes the shader cache now instead of waiting for the burst-settle watchdog or a "
+          "clean quit, and hands the FILE write to the engine's writer thread — the fsync that "
+          "makes it durable waits behind whatever else the disk is flushing, and no UI thread may "
+          "wait for that. True means 'serialized and handed over'; app.flushShaderCache() waits "
+          "for the bytes to land. A no-op returning true when nothing new has been compiled. "
+          "Mostly for tests: the app saves on its own.",
+          Needs::Engine },
+        { "flushShaderCache", "app.flushShaderCache(budgetMs?) -> bool",
+          "Waits for the write app.saveShaderCache() handed off (default 20 s). True when the "
+          "writer is idle — nothing in flight, or it finished; false when the budget ran out and "
+          "the write is still going. For a test that wants to read the files back; the app itself "
+          "waits at quit.",
           Needs::Engine },
         { "warmUpSet", "app.warmUpSet(action?) -> {path, exists, enabled, sizeBytes, "
                        "shape:{samples, shadows}, recorded?, saved?, built?}",
@@ -579,6 +588,13 @@ bool AppApi::saveShaderCache()
     auto engine = EngineHost::instance().engine();
     if (!engine) return fail("app.saveShaderCache: the engine is not running");
     return engine->saveShaderCache();
+}
+
+bool AppApi::flushShaderCache(int budgetMs)
+{
+    auto engine = EngineHost::instance().engine();
+    if (!engine) return fail("app.flushShaderCache: the engine is not running");
+    return engine->flushShaderCache(unsigned(qMax(0, budgetMs)));
 }
 
 QVariantMap AppApi::warmUpSet(const QString &action)

@@ -26,8 +26,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QFileInfo>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QVector>
 #include <cstdio>
 
 #include "data/database/database.h"
@@ -92,6 +94,8 @@ int main(int argc, char **argv)
     const QByteArray contentX(1500, 'X');
     const QByteArray contentY = QByteArray("PNGISH-").repeated(200);
     const QByteArray contentZ = QByteArray("EDITED-").repeated(300);
+    const QByteArray contentW = QByteArray("STAGED-").repeated(250);     // the two-phase ingest
+    const QByteArray contentV = QByteArray("DROPPED-").repeated(150);    // ... and its abandoned batch
     CHECK(AssetCas::hashFile(QString()).isEmpty(), "hashFile of a missing path returns empty");
 
     // ---- fixture: sources on disk + a fresh full-schema database ----
@@ -160,6 +164,83 @@ int main(int argc, char **argv)
           "ingest of aliased content succeeds");
     CHECK(oidAlias == oidY, "aliased content maps to the same oid");
     CHECK(countRows(conn, "SELECT COUNT(*) FROM files") == 2, "no new files row for aliased content");
+
+    // ---- the two-phase ingest: stage / flushStaged / commitStaged (FSYNC-1) ----
+    //
+    // Same outcome as ingestFile, split so that the hashing, the copying and
+    // the fsync can happen on a worker while the rows stay on the thread that
+    // owns the database connection. What is asserted is the SPLIT's contract:
+    // staging publishes nothing, the flush is what makes the bytes durable,
+    // and the commit is what makes the object and its rows exist.
+    {
+        writeFile(srcDir + "/staged.png", contentW);
+        insertAsset("guidS", 7, "staged.png", 3);
+
+        QVector<AssetCas::Staged> batch;
+        AssetCas::Staged file;
+        file.srcPath = srcDir + "/staged.png";
+        file.role = "source";
+        file.name = "staged.png";
+        batch.append(file);
+
+        CHECK(AssetCas::stage(root, batch[0]), "stage() hashes and stages one file");
+        CHECK(batch[0].oid.size() == 64, "stage() computed the content id");
+        CHECK(!batch[0].present, "stage() knows this content is new to the store");
+        CHECK(!batch[0].tmpPath.isEmpty() && QFileInfo::exists(batch[0].tmpPath),
+              "stage() left the bytes in a temp beside their destination");
+        CHECK(!QFileInfo::exists(AssetStorePaths::objectPathIn(root, batch[0].oid, "png")),
+              "NOTHING is published by staging: no object exists at its final name yet");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM asset_files WHERE asset_guid = 'guidS'") == 0,
+              "and no row references it yet");
+
+        AssetCas::flushStaged(batch);     // the batch's one wait for the device
+
+        QString commitError;
+        CHECK(AssetCas::commitStaged(conn, root, "guidS", batch[0], &commitError),
+              "commitStaged publishes the object and writes the rows");
+        const QString objectPath = AssetStorePaths::objectPathIn(root, batch[0].oid, "png");
+        CHECK(QFileInfo::exists(objectPath), "the object is at the path ingestFile would have used");
+        CHECK(readFile(objectPath) == contentW, "the published bytes are the source's");
+        CHECK(batch[0].tmpPath.isEmpty(), "the temp is gone — renamed, not copied");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM asset_files WHERE asset_guid = 'guidS' "
+                              "AND oid = '" + batch[0].oid + "'") == 1,
+              "the asset_files row names the OID (the row IS the reference)");
+        CHECK(countRows(conn, "SELECT refcount FROM files WHERE oid = '" + batch[0].oid + "'") == 1,
+              "the refcount trigger fired exactly as it does for ingestFile");
+
+        // The same bytes again: the store already has them, so nothing is
+        // copied and the commit is idempotent.
+        QVector<AssetCas::Staged> second;
+        AssetCas::Staged again;
+        again.srcPath = srcDir + "/staged.png";
+        again.role = "source";
+        again.name = "staged.png";
+        second.append(again);
+        CHECK(AssetCas::stage(root, second[0]), "stage() of content already in the store succeeds");
+        CHECK(second[0].present && second[0].tmpPath.isEmpty(),
+              "stage() copies nothing when the store already holds the content");
+        AssetCas::flushStaged(second);
+        CHECK(AssetCas::commitStaged(conn, root, "guidS", second[0], &commitError),
+              "commitStaged is idempotent");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM asset_files WHERE asset_guid = 'guidS'") == 1,
+              "no second row for the same content");
+
+        // An ABANDONED batch leaves nothing behind (a cancelled import).
+        writeFile(srcDir + "/abandoned.png", contentV);
+        QVector<AssetCas::Staged> dropped;
+        AssetCas::Staged doomed;
+        doomed.srcPath = srcDir + "/abandoned.png";
+        doomed.role = "source";
+        doomed.name = "abandoned.png";
+        dropped.append(doomed);
+        CHECK(AssetCas::stage(root, dropped[0]), "stage() of a batch that will be abandoned");
+        const QString abandonedTmp = dropped[0].tmpPath;
+        AssetCas::discardStaged(dropped);
+        CHECK(!abandonedTmp.isEmpty() && !QFileInfo::exists(abandonedTmp),
+              "discardStaged removes the temp a cancelled batch staged");
+        CHECK(!QFileInfo::exists(AssetStorePaths::objectPathIn(root, dropped[0].oid, "png")),
+              "and no object was ever published for it");
+    }
 
     // ---- resolution ----
     const QString resolved = AssetCas::resolveFile(conn, root, "guidB", "dup.bin");
@@ -240,7 +321,10 @@ int main(int argc, char **argv)
     // ---- verify: clean, then corrupted ----
     auto verifyReport = AssetMigration::verify(dbPath, root);
     CHECK(verifyReport.ok, "verify: clean store");
-    CHECK(verifyReport.objects == 3, "verify walked all three objects");
+    // FOUR since the two-phase ingest section above added one (staged.png):
+    // verify walks the `files` rows, and commitStaged writes one exactly as
+    // ingestFile does — which is half the point of asserting it here.
+    CHECK(verifyReport.objects == 4, "verify walked all four objects");
 
     const QString objectY = AssetStorePaths::objectPathIn(root, oidY, "png");
     {

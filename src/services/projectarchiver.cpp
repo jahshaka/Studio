@@ -34,12 +34,20 @@ For more information see the LICENSE file
 #include "io/ziphelper.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/uistep.h"
 
 using exportformat::ExportManifest;
 using exportformat::ManifestAsset;
 using exportformat::ManifestFile;
 
 QVector<ProjectArchiver *> ProjectArchiver::sLive;
+
+bool ProjectArchiver::anyRunning()
+{
+    for (const ProjectArchiver *archiver : sLive)
+        if (archiver->mRunning.load()) return true;
+    return false;
+}
 
 namespace {
 
@@ -324,6 +332,9 @@ bool ProjectArchiver::planImport(const QString &zipPath)
     mNextIngest = 0;
     mGuidMap.clear();
     mBlobDbBase.clear();
+    // The store root, read HERE: this is the UI thread, and the staging pass
+    // that uses it is not.
+    mStoreRoot = AssetStorePaths::root();
 
     if (!db) { mResult.error = QStringLiteral("no database"); return false; }
     if (!QFileInfo::exists(zipPath)) {
@@ -384,13 +395,65 @@ bool ProjectArchiver::workImport()
                 const auto candidates =
                     objectsDir.entryInfoList({ file.oid + ".*", file.oid }, QDir::Files);
                 if (candidates.isEmpty()) continue;
-                plan.files.append({ candidates.first().absoluteFilePath(), file.role, file.name });
+                AssetCas::Staged staged;
+                staged.srcPath = candidates.first().absoluteFilePath();
+                staged.role    = file.role;
+                staged.name    = file.name;
+                // The manifest's oid is NOT trusted as the content id: it names
+                // the file inside the archive and nothing more. stage() hashes
+                // the bytes it actually reads, which is what makes a hostile
+                // archive unable to put anything under a name it chose.
+                plan.files.append(staged);
             }
             mIngest.append(plan);
         }
     }
+    // THE CAS INGEST'S FILE HALF (FSYNC-1). Hashing and copying every object —
+    // and the fsync that makes each one durable — used to happen inside the
+    // install slices, i.e. on the UI thread, which is where the 547-995 ms
+    // freezes came from. It belongs here, with the extract and the zip: this
+    // phase IS "the file half", and the install slices keep only what needs the
+    // database.
+    if (!stageImportObjects()) return false;
     emitProgress(55, QStringLiteral("Importing the catalog…"));
     return !mCanceled.load();
+}
+
+bool ProjectArchiver::stageImportObjects()
+{
+    // WORKER THREAD (or inline, on the synchronous path). No database, no
+    // widgets — AssetCas::stage is hashing and bytes, and the store root was
+    // read on the UI thread.
+    int total = 0, done = 0;
+    for (const IngestAsset &asset : mIngest) total += int(asset.files.size());
+    if (total == 0) return !mCanceled.load();
+
+    for (IngestAsset &asset : mIngest) {
+        for (AssetCas::Staged &file : asset.files) {
+            if (mCanceled.load()) { discardStagedImports(); return false; }
+            if (!AssetCas::stage(mStoreRoot, file)) {
+                mResult.error = file.error;
+                discardStagedImports();
+                return false;
+            }
+            ++done;
+            if ((done % 4) == 0 || done == total)
+                emitProgress(50 + (5 * done) / total,
+                             QStringLiteral("Storing content (%1 of %2)…").arg(done).arg(total));
+        }
+        // ONE FLUSH PER ASSET — which is exactly one install slice, so the
+        // batch that is flushed here is the batch the UI thread publishes in
+        // one turn. Nothing this asset staged is renamed into place before this
+        // returns, which is the durability contract restated: the bytes under a
+        // content-addressed name are on the device before the name exists.
+        AssetCas::flushStaged(asset.files);
+    }
+    return !mCanceled.load();
+}
+
+void ProjectArchiver::discardStagedImports()
+{
+    for (IngestAsset &asset : mIngest) AssetCas::discardStaged(asset.files);
 }
 
 void ProjectArchiver::beginInstallImport()
@@ -416,11 +479,12 @@ void ProjectArchiver::beginInstallImport()
 
 void ProjectArchiver::installImportSlice()
 {
-    // UI THREAD, one asset per event-loop turn. A slice is bounded by one
-    // asset's files, which is what keeps the heartbeat gap inside its budget:
-    // AssetCas::ingestFile hashes and copies, so a single huge texture is the
-    // worst slice this operation can produce and there is nothing smaller to
-    // cut without reaching into the CAS.
+    // UI THREAD, one asset per event-loop turn — and since FSYNC-1 a slice is
+    // the DATABASE half only: the bytes are already in the store, staged and
+    // flushed by the worker, so what happens here is one rename per file (a
+    // directory entry; microseconds, nothing to wait for) and the rows. The
+    // hashing, the copying and the fsync that used to make a slice 547-995 ms
+    // long are gone from this thread.
     if (mCanceled.load() || !mResult.error.isEmpty() || mNextIngest >= mIngest.size()) {
         if (mCanceled.load() && !mResult.projectGuid.isEmpty()) {
             // Roll the catalog back: a cancelled import must not leave a
@@ -428,6 +492,11 @@ void ProjectArchiver::installImportSlice()
             db->deleteProject(mResult.projectGuid);
             mResult.projectGuid.clear();
         }
+        // AND THE STAGED BYTES OF EVERY SLICE THAT WILL NEVER RUN. A published
+        // object is content-addressed and harmless (the next import of the same
+        // bytes reuses it); a TEMP is litter in the store's own directory, and
+        // this is the one place every import path ends.
+        discardStagedImports();
         if (!mThreaded) return;
         if (!mCanceled.load() && mResult.error.isEmpty())
             emitProgress(100, QStringLiteral("Imported."));
@@ -436,22 +505,23 @@ void ProjectArchiver::installImportSlice()
     }
 
     QSqlDatabase conn = QSqlDatabase::database();
-    const QString root = AssetStorePaths::root();
 
-    const IngestAsset &asset = mIngest.at(mNextIngest++);
+    IngestAsset &asset = mIngest[mNextIngest++];
     const QString localGuid = mGuidMap.value(asset.archiveGuid, asset.archiveGuid);
     QString sourceOid;
-    for (const IngestFile &file : asset.files) {
-        QString oid;
-        if (!AssetCas::ingestFile(conn, root, file.path, localGuid,
-                                  file.role, file.name, &oid, &mResult.error)) {
+    // What the heartbeat and the watchdog print if this thread does stop
+    // answering here (UiStep — the archive's blocks used to read "stage: -").
+    UiStep::Scope step("archive: install import slice");
+    for (AssetCas::Staged &file : asset.files) {
+        if (!AssetCas::commitStaged(conn, mStoreRoot, localGuid, file, &mResult.error)) {
             // Same as the pre-threading behaviour: the first ingest failure
             // ends the import, and no pin is written for a half-ingested
             // asset.
+            discardStagedImports();
             if (mThreaded) finish(false);
             return;
         }
-        if (sourceOid.isEmpty()) sourceOid = oid;
+        if (sourceOid.isEmpty()) sourceOid = file.oid;
         ++mResult.objects;
     }
     AssetCas::writePin(conn, mResult.projectGuid, localGuid, sourceOid);

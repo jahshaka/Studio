@@ -77,6 +77,7 @@ For more information see the LICENSE file
 #include <atomic>
 
 #include "export/exportmanifest.h"
+#include "services/assetcas.h"
 
 class Database;
 class Project;
@@ -138,6 +139,12 @@ public:
     /// archiver is idle or msTimeout elapses. Returns true when it is done.
     bool waitForDone(int msTimeout);
 
+    /// Is ANY archive running right now? UI thread only (sLive is). The
+    /// shader-cache watchdog asks before it serializes a save: an export or an
+    /// import is a stretch of seconds where this thread has a progress bar to
+    /// draw, and the save has no deadline (FSYNC-1).
+    static bool anyRunning();
+
     /// Every live archiver, cancelled and joined within msTimeout TOTAL.
     /// Step 2 of the shutdown order (shell/shutdownorder.h) calls this; it is
     /// the archive twin of AssetWidget::shutdownImports.
@@ -161,6 +168,12 @@ private:
 
     bool planImport(const QString &zipPath);
     bool workImport();                 ///< worker thread (or inline)
+    /// The CAS ingest's FILE half: hash every object the manifest named, stage
+    /// its bytes beside their destination, and flush each asset's batch once.
+    /// Worker thread (or inline). False = cancelled or failed.
+    bool stageImportObjects();
+    /// Delete every temp the staging pass left — a cancelled or failed import.
+    void discardStagedImports();
     void installImportSlice();         ///< UI thread, one asset per turn
     void beginInstallImport();
 
@@ -186,10 +199,15 @@ private:
     struct Copy { QString src; QString dst; };
     QVector<Copy> mCopies;                   ///< export: CAS objects to materialize
 
-    // import: what the worker found on disk, ready for the install slices
-    struct IngestFile { QString path; QString role; QString name; };
-    struct IngestAsset { QString archiveGuid; QVector<IngestFile> files; };
+    // import: what the worker found on disk AND put into the store, ready for
+    // the install slices (FSYNC-1 — an AssetCas::Staged carries the source
+    // path, the hash, and the temp its bytes are already flushed into, so a
+    // slice is a rename and two rows).
+    struct IngestAsset { QString archiveGuid; QVector<AssetCas::Staged> files; };
     QVector<IngestAsset> mIngest;
+    /// The asset store's root, read on the UI thread (AssetStorePaths::root()
+    /// is the app's, not this class's) and used by both phases.
+    QString mStoreRoot;
     QFuture<void> mFuture;
     QString mBlobDbBase;
     int mNextIngest = 0;

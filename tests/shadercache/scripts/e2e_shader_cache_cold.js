@@ -5,8 +5,11 @@
 var s = app.shaderCache();
 if (!s.enabled) throw new Error("shader cache disabled in a default session");
 
-// Save on demand, then read the file count back through the same verb.
+// Save on demand, then read the file count back through the same verb. The
+// save SERIALIZES here and writes on the engine's writer thread (FSYNC-1), so
+// the flush is what makes "the files are on disk" a question with an answer.
 if (!app.saveShaderCache()) throw new Error("app.saveShaderCache() failed");
+if (!app.flushShaderCache(30000)) throw new Error("app.flushShaderCache() timed out");
 s.afterSaveFiles = app.shaderCache().files;
 
 // The warm-up set, as the verbs see it (SHADER_CACHE_AUDIT F1a/F1b/F12): it is

@@ -35,6 +35,7 @@
 #include <cstring>
 #include <dirent.h>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -89,6 +90,10 @@ ShaderCacheStats runCycle(const char *what, bool *createdOut = nullptr) {
         for (int i = 0; i < 3; ++i) e->renderOneFrame();
     }
     e->saveShaderCache();
+    // AND WAIT FOR IT (FSYNC-1): the save serializes here and writes on the
+    // engine's writer thread, so the file counts below are a race without this.
+    // Every assertion in this suite is about what reached the DISK.
+    CHECK(e->flushShaderCache(30000), "the shader cache's write finished inside its budget");
     stats = e->shaderCacheStats();
     if (s) e->destroyScene(s);
     if (v) e->destroyView(v);
@@ -335,6 +340,7 @@ static void denominator_is_last_run() {
               "F6: the planted denominator was read back from the manifest");
         e->clearShaderCache();     // forces the next save to write
         e->saveShaderCache();
+        e->flushShaderCache(30000);
         after = e->shaderCacheStats();
         if (s) e->destroyScene(s);
         if (v) e->destroyView(v);
@@ -465,6 +471,92 @@ static void concurrent_processes(const char *self) {
     CHECK(after.compiledThisRun == 0, "the cache survived two concurrent processes intact");
 }
 
+// ---------------------------------------------------------------------------
+// 7. A save abandoned mid-write (FSYNC-1).
+//
+// The write is off the calling thread now, so the process can end while it is
+// happening — a crash, a force-quit, a `kill -9`. What must survive that is the
+// property the whole container rests on: a file named by the manifest contains
+// exactly the bytes the manifest claims. Anything else is what
+// loadMicrocodeCache does with an unvalidated uint32.
+//
+// It cannot be "the cache still loads": a kill between the last file and the
+// manifest legitimately leaves the PREVIOUS manifest naming files that have
+// been replaced, and the next launch is then supposed to reject the whole
+// directory and run cold. That was equally true before this lane (files first,
+// manifest last, on the UI thread). What is asserted is the invariant that
+// makes that rejection safe rather than fatal: nothing is ever HALF a file at
+// its final name, and nothing crashes on the way through.
+static void abandoned_save_leaves_no_torn_file(const char *self) {
+    wipeDir();
+    runCycle("seed");
+
+    const long delaysUs[] = { 0, 1500, 4000, 8000, 15000 };
+    for (int round = 0; round < int(sizeof(delaysUs) / sizeof(delaysUs[0])); ++round) {
+        char delay[32];
+        std::snprintf(delay, sizeof(delay), "%ld", delaysUs[round]);
+        const pid_t pid = fork();
+        if (pid == 0) {
+            char *const argv[] = { const_cast<char *>(self),
+                                   const_cast<char *>("--child-abandon"),
+                                   const_cast<char *>(gCacheDir.c_str()),
+                                   delay, nullptr };
+            execv(self, argv);
+            _exit(127);
+        }
+        int status = 0;
+        waitpid(pid, &status, 0);
+        const int rc = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+        CHECK(rc == 0, "the abandoning child left without a signal");
+
+        // Every file the manifest names is exactly as long as the manifest says.
+        std::ifstream manifest(gCacheDir + "/cache-manifest.txt");
+        int named = 0, wrong = 0;
+        std::string line;
+        while (std::getline(manifest, line)) {
+            if (line.rfind("file ", 0) != 0) continue;
+            std::string tag, name, hash;
+            unsigned long long bytes = 0;
+            std::istringstream ls(line);
+            ls >> tag >> name >> bytes >> hash;
+            ++named;
+            struct stat st {};
+            if (::stat((gCacheDir + "/" + name).c_str(), &st) != 0 ||
+                static_cast<unsigned long long>(st.st_size) != bytes) {
+                std::printf("    round %d: %s is %lld bytes, the manifest says %llu\n", round,
+                            name.c_str(), ::stat((gCacheDir + "/" + name).c_str(), &st) == 0
+                                              ? (long long)st.st_size : -1LL, bytes);
+                ++wrong;
+            }
+        }
+        // EVIDENCE THAT THE KILL LANDED MID-WRITE, not after it: writeAtomic
+        // stages every layer as `<name>.tmp` and a leftover is a write that
+        // never reached its rename. (Zero is possible on a fast disk, and the
+        // assertions below are the contract either way.)
+        int leftovers = 0;
+        if (DIR *d = opendir(gCacheDir.c_str())) {
+            while (dirent *e = readdir(d)) {
+                const std::string n = e->d_name;
+                if (n.size() > 4 && n.compare(n.size() - 4, 4, ".tmp") == 0) ++leftovers;
+            }
+            closedir(d);
+        }
+        std::printf("    round %d: the manifest names %d file(s); %d interrupted temp(s)\n",
+                    round, named, leftovers);
+        // `named` may legitimately be 0: the manifest is written LAST, so a
+        // kill before it leaves a directory with no manifest, which the next
+        // launch reads as "no cache" and rebuilds. That is the safe outcome,
+        // not a failure. The failure would be a manifest that names a file the
+        // process was still writing.
+        CHECK(wrong == 0, "no file at its final name is half-written");
+    }
+
+    // And the directory is still usable: either it loads, or it is rejected and
+    // rebuilt — never a crash, which is the only outcome this cannot tolerate.
+    const ShaderCacheStats after = runCycle("after-abandon");
+    CHECK(after.files > 0, "the cache directory works again after the abandoned saves");
+}
+
 int main(int argc, char **argv) {
     // The cache directory lives beside the binary; ctest gives each suite its
     // own working directory, so nothing here can reach a real user's cache.
@@ -480,9 +572,42 @@ int main(int argc, char **argv) {
         Scene *s = v ? e->createScene("scene") : nullptr;
         if (v && s) { v->setScene(s); for (int i = 0; i < 2; ++i) e->renderOneFrame(); }
         e->saveShaderCache();
+        e->flushShaderCache(30000);
         if (s) e->destroyScene(s);
         if (v) e->destroyView(v);
         return 0;
+    }
+
+    // THE ABANDONED SAVE (FSYNC-1, case 7's child). Saves and then leaves the
+    // process WITHOUT flushing, without destroying the engine and without
+    // running a single destructor — `_exit` from here is a kill -9 landing
+    // wherever the writer thread happens to be, on demand and every time.
+    if (argc > 2 && std::strcmp(argv[1], "--child-abandon") == 0) {
+        gCacheDir = argv[2];
+        std::string error;
+        auto e = Engine::create(cacheConfig(), error);
+        if (!e) { std::printf("child: create failed: %s\n", error.c_str()); return 1; }
+        View *v = e->createOffscreenView("view", 32, 32, Colour(0.0f, 0.0f, 0.0f));
+        Scene *s = v ? e->createScene("scene") : nullptr;
+        if (v && s) { v->setScene(s); for (int i = 0; i < 2; ++i) e->renderOneFrame(); }
+        // A WARM child compiles nothing, and a save with nothing dirty is a
+        // no-op — which would make this case assert nothing at all. clear()
+        // is the engine's own "the next save must write" hook (it empties the
+        // directory and sets mForceSave), so what follows is a full generation
+        // going to disk with the process leaving in the middle of it.
+        e->clearShaderCache();
+        const bool dispatched = e->saveShaderCache();
+        // THE KILL IS WALKED ACROSS THE WRITE. argv[3] is microseconds: zero
+        // lands before the writer has opened its first temp, and the later
+        // rounds land inside a file. A generation is ~1.5 MB and takes single
+        // -digit milliseconds on a quiet disk, so a few thousand microseconds
+        // is the middle of it.
+        const long delayUs = argc > 3 ? std::atol(argv[3]) : 0;
+        std::printf("    child: save dispatched=%d, leaving after %ld us\n",
+                    dispatched ? 1 : 0, delayUs);
+        std::fflush(nullptr);
+        if (delayUs > 0) ::usleep(static_cast<useconds_t>(delayUs));
+        _exit(0);
     }
 
     // --corruption-only: CASES 2-4 AND NOTHING ELSE. That is the sanitised
@@ -508,6 +633,8 @@ int main(int argc, char **argv) {
         std::printf("[ RUN  ] denominator_is_last_run\n");          denominator_is_last_run();
         std::printf("[ RUN  ] pipeline_layer_reports_acceptance\n"); pipeline_layer_reports_acceptance();
         std::printf("[ RUN  ] streams_are_named\n");                streams_are_named();
+        std::printf("[ RUN  ] abandoned_save_leaves_no_torn_file\n");
+        abandoned_save_leaves_no_torn_file(argv[0]);
     }
 
     std::printf("%d check(s), %d failure(s)\n", gChecks, gFailures);

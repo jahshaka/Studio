@@ -25,8 +25,10 @@ For more information see the LICENSE file
 #include <QUndoStack>
 
 #include <cstdio>
+#include <thread>
 
 #include "services/selectionservice.h"
+#include "services/uistep.h"
 #include "services/undoservice.h"
 
 static int failures = 0;
@@ -123,6 +125,36 @@ void testSelectionService()
     CHECK(outer == 1, "selection: re-entrant echo is swallowed by the guard");
 }
 
+/// UiStep — the label the heartbeat and the watchdog print when the UI thread
+/// stops answering outside an open (FSYNC-1). Three contracts: it nests, it
+/// restores, and it is READABLE FROM ANOTHER THREAD, which is the only reason
+/// it is an atomic pointer to a literal instead of a QString.
+void testUiStep()
+{
+    CHECK(UiStep::current().isEmpty(), "uistep: nothing is marked by default");
+    {
+        UiStep::Scope outer("archive: install import slice");
+        CHECK(UiStep::current() == QStringLiteral("archive: install import slice"),
+              "uistep: a scope names the step");
+        {
+            UiStep::Scope inner("shader cache: serializing the save");
+            CHECK(UiStep::current() == QStringLiteral("shader cache: serializing the save"),
+                  "uistep: a nested scope wins");
+
+            // The watchdog reads this from its own thread while the UI thread
+            // is inside the step — that is the whole use.
+            QString seen;
+            std::thread reader([&seen]() { seen = UiStep::current(); });
+            reader.join();
+            CHECK(seen == QStringLiteral("shader cache: serializing the save"),
+                  "uistep: another thread reads the live step");
+        }
+        CHECK(UiStep::current() == QStringLiteral("archive: install import slice"),
+              "uistep: leaving a nested scope restores the outer one");
+    }
+    CHECK(UiStep::current().isEmpty(), "uistep: leaving the last scope clears it");
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -130,6 +162,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     testUndoService();
     testSelectionService();
+    testUiStep();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;
 }

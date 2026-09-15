@@ -97,5 +97,8 @@ console.log("SHADERCACHE-POSTSKY " + JSON.stringify(app.shaderCache()));
 step("sky churn");
 
 console.log("CHURN steps " + steps);
+// The last save of the run is off-thread like every other (FSYNC-1); wait for
+// it so the file counts reported below are the ones on the disk.
+app.flushShaderCache(30000);
 console.log("SHADERCACHE " + JSON.stringify(app.shaderCache()));
 app.quit();
