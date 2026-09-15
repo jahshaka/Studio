@@ -708,6 +708,13 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         auto *undo = mainWindow->studioServices()->undo;
         // One GESTURE is one undo step even when it moved five objects.
         const bool macro = moves.size() > 1 && undo->stack();
+        // The edit gate (ledger §423), before the macro opens: refusing the
+        // commands one at a time would leave an empty macro on the stack.
+        if (editgate::refuse()) {
+            dropEventPtr->setDropAction(Qt::IgnoreAction);
+            dropEventPtr->ignore();
+            return true;
+        }
         if (macro) undo->stack()->beginMacro(tr("Reparent Objects"));
         for (const auto &n : moves) undo->push(new ReparentSceneNodeCommand(n, target));
         if (macro) undo->stack()->endMacro();
@@ -1536,6 +1543,7 @@ void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 
 	auto *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo : nullptr;
 	const bool macro = undo && undo->stack() && nodes.size() > 1;
+	if (editgate::refuse()) return;          // the edit gate, before the macro opens
 	if (macro) undo->stack()->beginMacro(visible ? tr("Show Objects") : tr("Hide Objects"));
 	for (const auto &node : nodes) {
 		if (node->isVisible() == visible) continue;

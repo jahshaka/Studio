@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/timeline/animationwidget.h"
+#include "services/editgate.h"
 #include "ui_animationwidget.h"
 #include <QMenu>
 #include <QAction>
@@ -347,6 +348,17 @@ void AnimationWidget::clearAnimationList()
 void AnimationWidget::pushEdit(QUndoCommand *command)
 {
     if (!command) return;
+    // THE EDIT GATE (owner, ledger §423). Every timeline edit APPLIES first
+    // and records after — the key is inserted, the track removed, the clip
+    // deleted, and the command carries the snapshot to go back to. So a
+    // refusal here is that command's own undo(): the restore it was built to
+    // perform, run instead of stored. (Each of these commands' undo() is a
+    // snapshot restore that does not assume its redo() ever ran.)
+    if (editgate::refuse()) {
+        command->undo();
+        delete command;
+        return;
+    }
     if (services && services->undo) {
         services->undo->push(command);
         return;

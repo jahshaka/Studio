@@ -63,6 +63,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
+#include "services/editgate.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/materialpreset.h"
@@ -1045,6 +1046,13 @@ SceneEditService::deleteNodes(const QList<iris::SceneNodePtr> &nodes)
 {
     DeleteSetResult result;
     if (!scene()) return result;
+    // THE EDIT GATE (owner, ledger §423): asked ONCE, at the gesture's entry,
+    // for the same reason the multi-node branch below opens a macro before its
+    // first command — refusing the commands one at a time would leave an EMPTY
+    // macro on the stack, which is an undo entry that eats the user's next
+    // Ctrl+Z. Keyed on the calling context, so the verb that shares this
+    // funnel is not gated.
+    if (editgate::refuse()) return result;
 
     // THE WORLD ROOT COMES OUT FIRST, before the D5 reduction (D6): every other
     // node in the scene is its descendant, so reducing with the root still in
@@ -1114,6 +1122,7 @@ SceneEditService::duplicateNodes(const QList<iris::SceneNodePtr> &nodes)
 {
     QList<iris::SceneNodePtr> copies;
     if (!scene()) return copies;
+    if (editgate::refuse()) return copies;      // the edit gate, as in deleteNodes
 
     QList<iris::SceneNodePtr> input;      // D6, same reason as deleteNodes
     for (const auto &node : nodes) if (!!node && !node->isRootNode()) input.append(node);
@@ -1194,6 +1203,7 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return;
+    if (editgate::refuse()) return;             // the edit gate, as in deleteNodes
 
     // THE PRESET'S MAPS ARE LIBRARY TEXTURES (plan item 15c). A preset names
     // files the app ships (app/content/materials/presets/...). Each one goes
@@ -1318,6 +1328,7 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
 
 bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target)
 {
+    if (editgate::refuse()) return false;       // the edit gate, as in deleteNodes
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return false;
