@@ -437,6 +437,23 @@ QVector<VerbInfo> EditorApi::verbs() const
           "front; only the rows that tab has MOUNTED are listed, because those are the rows "
           "that exist for the current selection.",
           Needs::Window },
+        { "propertiesStats", "editor.propertiesStats() -> {mounts, refills, rebuilds, rows, "
+                             "pending, deferredHidden, visible}",
+          "WHAT THE PROPERTIES COLUMN HAS COST — the numbers behind \"how expensive is a "
+          "pick\" and \"how expensive is an add\", so a perf claim about either can be made "
+          "from the editor rather than from a stopwatch (ADD-1, 2026-09-15). `mounts` counts "
+          "every (re)mount of the column; a selection only ever RAISES a mount, settled once "
+          "at the end of the event-loop turn, so a script adding sixty-four objects moves this "
+          "by one, not by sixty-four. `refills` and `rebuilds` split the material blade's mesh "
+          "picks: a refill points the rows already on screen at the new material (nothing "
+          "destroyed, no popup rebuilt), a rebuild is the fallback a SHAPE change forces — a "
+          "different material class, a mesh with no material, a node that gained or lost its "
+          "Reset row. `rows` is how many rows the mounted tab holds. `pending` is true while a "
+          "mount is owed to this turn and `deferredHidden` while one is owed to the moment the "
+          "dock becomes visible (a column nobody can see builds nothing). READING THIS BUILDS "
+          "NOTHING: unlike `editor.properties`, it never settles an owed mount, because a "
+          "measurement must not change what it measures.",
+          Needs::Window },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
           "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
           "`translate` in world units — which is also the ground grid's spacing — `rotate` in "
@@ -1827,6 +1844,16 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
     out["current"] = MainWindow::isFrontTab(host.mainWindow->panelDock(name));
     out["tabbed"] = host.mainWindow->trayTabs().contains(name);
     return out;
+}
+
+QVariantMap EditorApi::propertiesStats()
+{
+    if (!host.mainWindow) {
+        fail("editor.propertiesStats: this verb needs the editor window (a --script/--headless "
+             "run has no panels)");
+        return QVariantMap();
+    }
+    return host.mainWindow->propertiesStats();
 }
 
 QVariantMap EditorApi::propertiesTab(const QVariantMap &change)

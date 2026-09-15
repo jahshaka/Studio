@@ -107,6 +107,28 @@ public:
     /// `editor.propertiesStats()` so the coalescing is pinnable.
     bool mountIsPending() const { return mountPending; }
 
+    /// WHAT THE COLUMN HAS BEEN DOING, for `editor.propertiesStats()`. The
+    /// numbers a perf claim about a pick or an add has to be made from, so
+    /// nobody has to read them off a stopwatch: how many times the column was
+    /// mounted, how many material picks REFILLED the rows already there and how
+    /// many had to rebuild them, how many rows the last mount holds, and
+    /// whether a mount is owed right now (to this turn, or to the moment the
+    /// dock opens).
+    struct Stats {
+        int mounts = 0;
+        int refills = 0;
+        int rebuilds = 0;
+        int rows = 0;
+        bool pending = false;
+        bool deferredHidden = false;
+        bool visible = false;
+    };
+    Stats propertiesStats() const;
+    /// The rows the named tab has MOUNTED, counted without building anything:
+    /// unlike propertyRows() this never settles an owed mount, because a
+    /// measurement must not change what it measures.
+    int mountedRowCount(Tab tab) const;
+
     /// THE FILTER BOX BELONGS TO ITS TAB (PROPERTY_FILTER_SPEC, owner decision
     /// 2026-09-15): one box per tab, filtering that tab's rows only. World's
     /// text filters the world rows, Selection's the selected object's, each

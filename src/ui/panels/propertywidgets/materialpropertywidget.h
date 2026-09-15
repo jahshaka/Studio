@@ -74,6 +74,12 @@ public:
     /// so this must be a snapshot of ONE material and never an accumulation.
     const QMap<QString, QString> &shownTextures() const { return existingTextures; }
 
+    /// How many mesh picks this blade answered by REFILLING the rows it already
+    /// had, and how many needed a full rebuild (ADD-1). Reported by
+    /// `editor.propertiesStats()`; never used to make a decision.
+    int refillCount() const { return refills; }
+    int rebuildCount() const { return rebuilds; }
+
 protected slots:
     void materialChanged(int);
     void materialChanged(const QString&);
@@ -121,6 +127,8 @@ private:
     Database *db = nullptr;
     StudioServices *services = nullptr;
     QString meshNodeGuid;
+    int refills = 0;
+    int rebuilds = 0;
     QMap<QString, QString> existingTextures;
 };
 

@@ -359,6 +359,10 @@ public:
     /// THE COLUMN'S OWN ACCOUNT OF ITSELF (`editor.properties`): one entry per
     /// row that tab has mounted, in column order.
     QVariantList propertyRows(const QString &tabName = QString()) const;
+    /// WHAT THE COLUMN HAS COST (`editor.propertiesStats`): mounts, material
+    /// refills vs rebuilds, the mounted row count, and whether a mount is owed.
+    /// Reads nothing into existence — it never settles a pending mount.
+    QVariantMap propertiesStats() const;
     /// Raises a tab by name; false for a name that is not one.
     bool setPropertiesTab(const QString &name);
     /// Whether `dock` is the tab in FRONT of its group (and not closed). Qt

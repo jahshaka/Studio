@@ -491,6 +491,27 @@ SceneNodePropertiesWidget::filterCounts(Tab tab) const
     return counts[int(tab)];
 }
 
+int SceneNodePropertiesWidget::mountedRowCount(Tab tab) const
+{
+    int n = 0;
+    for (const QPointer<QWidget> &blade : std::as_const(mountedBlades[int(tab)]))
+        if (blade) n += PropertyRows::registry().list(blade.data()).size();
+    return n;
+}
+
+SceneNodePropertiesWidget::Stats SceneNodePropertiesWidget::propertiesStats() const
+{
+    Stats out;
+    out.mounts = mounts;
+    out.refills = materialPropView ? materialPropView->refillCount() : 0;
+    out.rebuilds = materialPropView ? materialPropView->rebuildCount() : 0;
+    out.rows = mountedRowCount(currentTab);
+    out.pending = mountPending;
+    out.deferredHidden = mountWhenShown;
+    out.visible = isVisible();
+    return out;
+}
+
 QVector<PropertyRows::Registry::Listing>
 SceneNodePropertiesWidget::propertyRows(Tab tab) const
 {

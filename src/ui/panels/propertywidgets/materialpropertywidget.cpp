@@ -124,8 +124,9 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         return;
     }
 
-    if (rebindTo(newNode, newMaterial)) return;
+    if (rebindTo(newNode, newMaterial)) { ++refills; return; }
 
+    ++rebuilds;
     clearShownRows();
     meshNode = newNode;
     material = newMaterial;

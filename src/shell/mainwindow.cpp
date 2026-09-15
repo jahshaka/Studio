@@ -4894,6 +4894,21 @@ QPair<int, int> MainWindow::propertiesFilterCounts(const QString &tabName) const
     return { c.visible, c.hidden };
 }
 
+QVariantMap MainWindow::propertiesStats() const
+{
+    QVariantMap out;
+    if (!sceneNodePropertiesWidget) return out;
+    const auto s = sceneNodePropertiesWidget->propertiesStats();
+    out[QStringLiteral("mounts")] = s.mounts;
+    out[QStringLiteral("refills")] = s.refills;
+    out[QStringLiteral("rebuilds")] = s.rebuilds;
+    out[QStringLiteral("rows")] = s.rows;
+    out[QStringLiteral("pending")] = s.pending;
+    out[QStringLiteral("deferredHidden")] = s.deferredHidden;
+    out[QStringLiteral("visible")] = s.visible;
+    return out;
+}
+
 QString MainWindow::propertiesTab() const
 {
     return sceneNodePropertiesWidget

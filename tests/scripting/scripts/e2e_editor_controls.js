@@ -963,6 +963,51 @@ try { editor.propertiesTab({ nope: 1 }); } catch (e) { badKeyRefused = true; }
 assert(badKeyRefused, "an unknown key is refused");
 node.remove(aCube);
 
+// ---- WHAT THE PROPERTIES COLUMN COSTS (ADD-1) -------------------------------
+// `scene.addPrimitive` SELECTS the node it makes, and the right column used to
+// rebuild itself for it: 44 ms of a scripted add's 50, for an object the user
+// never asked to look at. A selection raises a mount DEBT now, settled once at
+// the end of the event-loop turn, and a mesh pick between two objects of the
+// same shape REFILLS the rows that are already there instead of destroying
+// them. `editor.propertiesStats()` is how that is pinnable from a script.
+var statsBefore = editor.propertiesStats();
+assert(typeof statsBefore.mounts === "number" && typeof statsBefore.refills === "number"
+    && typeof statsBefore.rebuilds === "number" && typeof statsBefore.rows === "number",
+    "editor.propertiesStats() reports mounts/refills/rebuilds/rows");
+var burst = [];
+for (var bi = 0; bi < 24; bi++)
+    burst.push(scene.addPrimitive("cube", { position: { x: -20 - bi, y: 0, z: -20 } }));
+var statsAfterBurst = editor.propertiesStats();
+assert(statsAfterBurst.mounts === statsBefore.mounts,
+    "24 adds in one turn mount the column ZERO times (" + statsBefore.mounts + " -> "
+    + statsAfterBurst.mounts + ")");
+assert(statsAfterBurst.pending === true,
+    "...and the column knows a mount is owed");
+// ASKING settles the debt - exactly once, whatever the burst was.
+var rows = editor.properties({ tab: "selection" });
+var statsSettled = editor.propertiesStats();
+assert(statsSettled.mounts === statsBefore.mounts + 1,
+    "asking what the column holds settles the whole burst with ONE mount ("
+    + (statsSettled.mounts - statsBefore.mounts) + ")");
+assert(rows.length > 0 && statsSettled.pending === false,
+    "...and the rows are really there (" + rows.length + ")");
+// THE PICK: same-shape meshes reuse their rows.
+var pickA = burst[0], pickB = burst[1];
+editor.select(pickA); editor.properties({ tab: "selection" });
+var pickBase = editor.propertiesStats();
+for (var pi = 0; pi < 10; pi++) {
+    editor.select(pi % 2 ? pickB : pickA);
+    editor.properties({ tab: "selection" });
+}
+var pickAfter = editor.propertiesStats();
+assert(pickAfter.mounts - pickBase.mounts === 10,
+    "ten picks are ten mounts (" + (pickAfter.mounts - pickBase.mounts) + ")");
+assert(pickAfter.refills - pickBase.refills === 10 && pickAfter.rebuilds === pickBase.rebuilds,
+    "...and every one of them REFILLED the material rows rather than rebuilding them ("
+    + (pickAfter.refills - pickBase.refills) + " refills, "
+    + (pickAfter.rebuilds - pickBase.rebuilds) + " rebuilds)");
+for (var ri = 0; ri < burst.length; ri++) node.remove(burst[ri]);
+
 console.log("editor_controls: fly speed, post-fx params, screenshot grades, the "
           + "new-scene defaults, the drop point, the drop TARGET and the "
-          + "properties tabs verified");
+          + "properties tabs and the column mount/refill counters verified");
