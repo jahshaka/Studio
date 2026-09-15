@@ -507,6 +507,53 @@ int main(int argc, char **argv)
                   .toUtf8().constData());
     }
 
+    // ---- 11c. THE SNAPSHOT SURVIVES A REBUILD (F1, second reader) ---------
+    // THE USER PATH: Selection tab, type something, pick a second mesh, clear
+    // the box. The material blade's "Detail Layers" is a nested SECTION and
+    // dies like any row — clearPanel retires it, deleteLater frees it — while
+    // the expand snapshot taken by the first keystroke still names it. With raw
+    // pointers the restore qobject_cast freed memory.
+    //
+    // The assertion is deterministic and does not need a sanitizer: the suite
+    // holds a QPointer to the very section the snapshot named and proves it is
+    // GONE by the time the restore runs (which is what the DeferredDelete flush
+    // is for — a script run never turns the event loop, which is why this path
+    // looked safe from inside a suite).
+    {
+        auto second = iris::MeshNode::create();
+        second->setName(QStringLiteral("mesh2"));
+        second->setMaterial(iris::PbrMaterial::create());
+        scene->getRootNode()->addChild(second.staticCast<iris::SceneNode>());
+
+        panel->setPropertiesFilter(Tab::Selection, QString());
+        panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
+        turn();
+        QPointer<AccordianBladeWidget> nested;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->panelTitle() == QStringLiteral("Detail Layers")) nested = b;
+        CHECK(!nested.isNull(),
+              "properties_filter: the material blade has a nested section to lose");
+
+        panel->setPropertiesFilter(Tab::Selection, QStringLiteral("detail"));   // snapshot
+        turn();
+        panel->setSceneNode(second.staticCast<iris::SceneNode>());              // rebuild
+        turn();
+        QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);        // free
+        CHECK(nested.isNull(),
+              "properties_filter: the snapshotted section is FREED by the pick that "
+              "rebuilt it (the precondition of the use-after-free)");
+
+        panel->setPropertiesFilter(Tab::Selection, QString());                  // restore
+        turn();
+        CHECK(rowShown(panel, QStringLiteral("Roughness")),
+              "properties_filter: the restore skips what is gone and the column is whole");
+        bool rebuilt = false;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->panelTitle() == QStringLiteral("Detail Layers") && b->isVisibleTo(panel))
+                rebuilt = true;
+        CHECK(rebuilt, "properties_filter: ...and the second mesh's own nested section is there");
+    }
+
     // ---- 12. nothing matches, and the box still works ----------------------
     panel->setPropertiesTab(Tab::World);
     panel->setPropertiesFilter(Tab::World, QString());

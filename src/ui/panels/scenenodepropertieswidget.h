@@ -225,7 +225,14 @@ private:
     /// expand snapshot, and the blades that tab has on the layout.
     QString filterText[2];
     FilterCounts counts[2];
-    QHash<QWidget *, bool> expandSnapshot[2];
+    /// THE SNAPSHOT HOLDS GUARDED POINTERS, NOT RAW ONES. A nested section is
+    /// destroyed and rebuilt under the panel all the time — the material
+    /// blade's "Detail Layers" goes with every mesh pick (clearPanel →
+    /// deleteLater) — so a snapshot taken before a pick and restored after one
+    /// would qobject_cast freed memory. QPointer<QWidget> (rather than of the
+    /// blade type) keeps this header free of the accordion's; the restore
+    /// casts what is still alive.
+    QVector<QPair<QPointer<QWidget>, bool>> expandSnapshot[2];
     QVector<QPointer<QWidget>> mountedBlades[2];
 
     /// See mountCount().

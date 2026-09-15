@@ -430,26 +430,46 @@ void SceneNodePropertiesWidget::setPropertiesFilter(Tab tab, const QString &text
     emit propertiesFilterChanged(tab, filterText[t]);
 }
 
+// THE EXPAND SNAPSHOT SURVIVES A REBUILD, because the sections it names do not.
+//
+// A nested section is a ROW of its blade and dies like one: the material
+// blade's "Detail Layers" is destroyed on every mesh pick (clearPanel →
+// deleteLater, freed at the next event-loop turn or by the retired ring three
+// clears later), and the Photon and sky panels rebuild theirs on every edit. A
+// snapshot of raw pointers taken before such a rebuild and restored after it —
+// filter on the Selection tab, pick a second mesh, clear the box — reads freed
+// memory.
+//
+// So: guarded pointers, nulls skipped on restore, and only LIVE sections
+// recorded. `findChildren` also returns the sections still sitting in the
+// blade's retired-row ring (hidden, deleteLater pending, out of the layout),
+// and "is this row still part of the panel" is a question the row registry
+// already answers — a retired row leaves it at the moment it is retired.
 void SceneNodePropertiesWidget::snapshotExpandState(Tab tab)
 {
     const int t = int(tab);
+    const auto &registry = PropertyRows::registry();
     expandSnapshot[t].clear();
     for (const QPointer<QWidget> &blade : std::as_const(mountedBlades[t])) {
         if (!blade) continue;
         if (auto *b = qobject_cast<AccordianBladeWidget *>(blade.data()))
-            expandSnapshot[t].insert(b, b->isExpanded());
-        for (AccordianBladeWidget *nested : blade->findChildren<AccordianBladeWidget *>())
-            expandSnapshot[t].insert(nested, nested->isExpanded());
+            expandSnapshot[t].append({ QPointer<QWidget>(b), b->isExpanded() });
+        for (AccordianBladeWidget *nested : blade->findChildren<AccordianBladeWidget *>()) {
+            if (!registry.isRegistered(nested)) continue;   // retired, or on its way out
+            expandSnapshot[t].append({ QPointer<QWidget>(nested), nested->isExpanded() });
+        }
     }
 }
 
 void SceneNodePropertiesWidget::restoreExpandState(Tab tab)
 {
     const int t = int(tab);
-    for (auto it = expandSnapshot[t].cbegin(); it != expandSnapshot[t].cend(); ++it) {
-        auto *blade = qobject_cast<AccordianBladeWidget *>(it.key());
+    for (const auto &entry : std::as_const(expandSnapshot[t])) {
+        // Gone since the snapshot: a rebuild retired the section. There is
+        // nothing to put back, and nothing to crash on either.
+        auto *blade = qobject_cast<AccordianBladeWidget *>(entry.first.data());
         if (!blade) continue;
-        it.value() ? blade->expand() : blade->collapse();
+        entry.second ? blade->expand() : blade->collapse();
     }
     expandSnapshot[t].clear();
 }
