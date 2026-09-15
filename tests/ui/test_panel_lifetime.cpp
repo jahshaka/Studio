@@ -100,7 +100,7 @@ static TexturePickerWidget *anyPicker(QWidget *panel)
 // own handles (`equiTexture`, `colorTop`, `cubeMapWidget`, …). A switch away
 // from a type retires that type's rows and reassigns only the NEW type's
 // handles, so every other one was left pointing at a retired row — and
-// setEquiMap / setSkyMap (a sky preset, a dropped image, an asset pick) test
+// setEquiMap / setSkyMap (the modeless texture picker's double-click after the row was retired) test
 // exactly those handles for null and then write through them.
 static void testSkyRowsOfAnotherType(const iris::ScenePtr &scene, StudioServices *services)
 {
@@ -123,8 +123,8 @@ static void testSkyRowsOfAnotherType(const iris::ScenePtr &scene, StudioServices
     CHECK(equi && !equi->isVisibleTo(&panel), "sky: ...and hidden");
     CHECK(bladerow::isRetired(equi.data()), "sky: ...and marked retired");
 
-    // 1c. A WRITE THAT ARRIVES AFTER THE REBUILD — a sky preset, a dropped
-    // image, an asset pick. On the base binary the panel's `equiTexture` still
+    // 1c. A WRITE THAT ARRIVES AFTER THE REBUILD — the modeless texture
+    // picker's double-click after the row was retired. On the base binary the panel's `equiTexture` still
     // points at this row and the write lands on it; with the handle there is
     // nothing to write to.
     //
@@ -150,7 +150,7 @@ static void testSkyRowsOfAnotherType(const iris::ScenePtr &scene, StudioServices
                               Q_ARG(QString, QStringLiteral("some-sky-guid")));
     QMetaObject::invokeMethod(&panel, "setSkyMap", Qt::DirectConnection,
                               Q_ARG(QJsonObject, QJsonObject()));
-    CHECK(true, "sky: a sky write after the row is destroyed touches nothing");
+    // (reaching this line alive IS the assertion — the base binary crashes above)
 }
 
 // ---------------------------------------------------------------------------

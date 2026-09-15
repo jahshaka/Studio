@@ -10,8 +10,8 @@
 # (services/sceneopenrunner.h), between a script run's verbs (a worker thread
 # and a nested loop), and wherever a panel defers its own rebuild (the sky
 # panel does, on purpose). The sky panel kept a raw `TexturePickerWidget *` to
-# the row of a sky type it had rebuilt away from, and `setEquiMap` — a sky
-# preset, a dropped image, an asset pick — tested it for null and wrote through
+# the row of a sky type it had rebuilt away from, and `setEquiMap` — the modeless
+# texture picker's double-click after the row was retired — tested it for null and wrote through
 # it: ui.panel_lifetime reproduces that as a heap-use-after-free under ASan
 # (READ of size 8 in TexturePickerWidget::setTexture, freed by
 # ~TexturePickerWidget from a DeferredDelete).

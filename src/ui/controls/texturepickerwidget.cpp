@@ -90,8 +90,12 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 
 void TexturePickerWidget::pickTextureMap()
 {
+	// The picker is MODELESS and outlives this row (a mesh pick or a sky-type
+	// change retires the row a loop turn later); `this` is the connection's
+	// CONTEXT so the double-click can never reach a freed row (PANEL-LIFETIME-1's
+	// second read: the UI route of the sky panel's use-after-free).
 	auto widget = new AssetPickerWidget(ModelTypes::Texture);
-	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
+	connect(widget, &AssetPickerWidget::itemDoubleClicked, this, [=](QListWidgetItem *item) {
 		changeMap(item);
 		});
 }
