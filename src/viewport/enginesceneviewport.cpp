@@ -909,6 +909,29 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
 
 void EngineSceneViewport::dropEvent(QDropEvent *event)
 {
+    // THE EDIT GATE, FOR EVERY DROP TYPE AT ONCE (round 2, item 1). A drop is
+    // a document write whichever branch below it takes — a model, a primitive,
+    // an image plane, an avatar, a clip, a material, a texture, a sky — and
+    // two of those branches do NOT end at the undo spine: the clip drop calls
+    // AvatarApi::loadClip directly (no verb dispatch, so no verb scope), and
+    // it ATTACHES the clips before it pushes, so a refusal at the push left
+    // the clips on the node with no undo step and a "clip added" toast. One
+    // question here covers the lot, including the branches written after this.
+    if (editgate::blocked()) {
+        // The hover preview borrowed the mesh's material while the drag was
+        // over it, and the drag ENDS here — no dragLeaveEvent is coming to put
+        // it back. Restore first, then refuse: a refused drop must leave the
+        // document exactly as the drag found it.
+        if (mDragPreviewNode) {
+            mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
+            mDragPreviewNode.reset();
+            mDragOriginalMaterial.reset();
+            mDragWasHit = false;
+        }
+        editgate::refuse();          // counts it and raises the run's notice
+        event->ignore();
+        return;
+    }
     const QMap<int, QVariant> role = dragRoleData(event->mimeData());
     const int type = role.value(0).toInt();
     if (type == static_cast<int>(ModelTypes::ParticleSystem)) {

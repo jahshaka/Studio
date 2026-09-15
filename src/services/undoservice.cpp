@@ -73,6 +73,15 @@ bool UndoService::endScriptMacro()
 
 void UndoService::undo()
 {
+    // THE EDIT GATE, ON THE WAY BACK TOO (round 2, item 2). An undo is a
+    // document write like any other, and it is the one hand edit that needs no
+    // command of its own to reach the document — so refusing at push() alone
+    // left Ctrl+Z, Ctrl+Y and the MCP undo_redo tool moving the scene under a
+    // running script. Worse before the run's first write: the macro opens
+    // LAZILY, so during a read-only run canUndo() is true and the step it
+    // would reach is the user's own. editor.undo/redo arrive inside a verb
+    // scope and pass, exactly like every other verb.
+    if (editgate::refuse()) return;
     if (!mStack->canUndo()) return;
     mStack->undo();
     if (mStackMoved) mStackMoved();
@@ -80,6 +89,7 @@ void UndoService::undo()
 
 void UndoService::redo()
 {
+    if (editgate::refuse()) return;         // as in undo() above
     if (!mStack->canRedo()) return;
     mStack->redo();
     if (mStackMoved) mStackMoved();

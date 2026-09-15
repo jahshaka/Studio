@@ -1095,6 +1095,56 @@ int main(int argc, char **argv)
         CHECK(!applied, "gate: a command pushed by hand never ran");
         CHECK(stack.index() == stackWas, "gate: ...and never reached the stack");
 
+        // 4b. A REFUSED ROW SHOWS THE DOCUMENT AGAIN (round 2, item 3). The
+        //     control keeps whatever the user dragged it to — the gate stops
+        //     the WRITE, it does not move widgets — so the row and the
+        //     document disagree until something re-reads. That something is
+        //     SceneNodePropertiesWidget::refreshFromDocument(), which the shell
+        //     calls on the run's first refusal (beside the toast) and again
+        //     when the run ends.
+        {
+            Database db;
+            Project project;
+            SceneNodePropertiesWidget host;
+            host.setDatabase(&db);
+            host.setProject(&project);
+            host.setServices(&services);
+            host.setScene(scene);
+            // SHOWN, because the panel only mounts what is on screen
+            // (scheduleMount returns early on an invisible column) — and a row
+            // nobody can see is a row nobody can be refused on. Offscreen QPA:
+            // no window appears.
+            host.show();
+            // The World tab, because that is where the fog row lives and the
+            // panel repaints the tab it is SHOWING (a user can only be refused
+            // on a row they can reach).
+            host.setPropertiesTab(SceneNodePropertiesWidget::Tab::World);
+            pump();
+            HFloatSliderWidget *hosted = sliderWith(&host, QStringLiteral("Fog Density"));
+            CHECK(hosted != nullptr, "gate: the host shows the fog density row");
+            if (hosted) {
+                const float doc = scene->fogDensity;
+                CHECK(drag(hosted, 0.02f, 0.11f), "gate: the hosted row can be dragged");
+                CHECK(qFuzzyCompare(scene->fogDensity, doc),
+                      "gate: ...the document still holds its own value");
+                CHECK(qFuzzyCompare(hosted->getValue(), 0.11f),
+                      "gate: ...and the CONTROL is left showing the refused value");
+                host.refreshFromDocument();
+                // Two turns: the refresh defers its own rebuild, and applyTab
+                // coalesces to the end of the turn after that.
+                pump(); pump(); pump();
+                // The refresh may REBUILD the blade (applyTab), so ask the host
+                // for the row again rather than trusting the old pointer — what
+                // is being asserted is what the user sees, not which widget
+                // object shows it.
+                HFloatSliderWidget *again = sliderWith(&host, QStringLiteral("Fog Density"));
+                CHECK(again != nullptr, "gate: the row is still there after the refresh");
+                if (again)
+                    CHECK(qFuzzyCompare(again->getValue(), doc),
+                          "gate: ...until the panel re-reads the document, which puts the row back");
+            }
+        }
+
         // 5. THE NOTICE: once per run, however many edits were refused.
         CHECK(notices == 1, "gate: the run's notice was raised ONCE, not once per refused event");
         CHECK(editgate::refusals() >= 4, "gate: every refusal was counted");

@@ -505,7 +505,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "verb), never on the thread, and every verb arrives on the UI thread like the hand "
           "does. `scriptRunning` is true whenever a run is in flight (so it is ALWAYS true read "
           "from a script — it is the state verb for a test or an agent, and the answer from "
-          "inside is the trivial one); `refusals` counts the hand edits refused during THIS run; "
+          "inside is the trivial one); `refusals` counts REFUSED WRITES, not gestures: a drag asks the gate on every tick, so one refused slider drag can count a dozen — read it as \"did anything try\", never as a number of user actions; "
           "`notice` says whether the run's one \"Script running\" toast has been raised — once "
           "per run, not once per refused event.",
           Needs::Document },

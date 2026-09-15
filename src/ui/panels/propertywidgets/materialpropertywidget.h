@@ -122,6 +122,11 @@ private:
 
     // for undo/redo
     QVariant startValue;
+    /// True between onPropertyChangeStart and onPropertyChangeEnd — i.e. only
+    /// for a gesture this panel actually saw begin. A gesture that spans the
+    /// end of a script run (the rows are inert while one is in flight) must
+    /// not record a step against a stale startValue.
+    bool gestureOpen = false;
     Database *db = nullptr;
     StudioServices *services = nullptr;
     QString meshNodeGuid;

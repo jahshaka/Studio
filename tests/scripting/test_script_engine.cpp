@@ -431,8 +431,13 @@ int main(int argc, char **argv)
         int notices = 0;
         editgate::setNoticeHook([&notices]() { ++notices; });
 
+        // ONE EDIT THE USER MADE BEFORE THE SCRIPT STARTED — the step a hand
+        // Ctrl+Z during the run would reach if the gate did not stop it.
+        undoService.push(new SetValueCommand(&fake->value, 5));
+        CHECK(fake->value == 5 && undoStack.count() == 1, "a hand edit before the run records");
+
         bool armedDuringRun = false;
-        int valueAfterHand = -1;
+        int valueAfterHand = -1, valueAfterHandUndo = -1, stackAfterHandUndo = -1;
         qulonglong refusalsDuring = 0;
         QTimer hand;
         hand.setSingleShot(true);
@@ -442,6 +447,14 @@ int main(int argc, char **argv)
             undoService.push(new SetValueCommand(&fake->value, 99));
             undoService.push(new SetValueCommand(&fake->value, 98));
             valueAfterHand = fake->value;
+            // ...AND THE HAND EDIT THAT NEEDS NO COMMAND (round 2, item 2):
+            // Ctrl+Z, Ctrl+Y and the MCP undo_redo tool call straight into the
+            // undo service, so refusing at push() alone left them moving the
+            // document under a running script.
+            undoService.undo();
+            undoService.redo();
+            valueAfterHandUndo = fake->value;
+            stackAfterHandUndo = undoStack.index();
             refusalsDuring = editgate::refusals();
         });
         hand.start(20);
@@ -455,13 +468,17 @@ int main(int argc, char **argv)
               "the gate is armed for the run and OPEN inside a verb (context, not thread)");
         CHECK(armedDuringRun, "...and closed to everything else while the run is in flight");
         CHECK(valueAfterHand == 7, "a hand edit during the run left the document untouched");
-        CHECK(refusalsDuring == 2, "...and both refusals were counted");
+        CHECK(valueAfterHandUndo == 7 && stackAfterHandUndo == 1,
+              "...and so did a hand UNDO and REDO, which need no command at all");
+        CHECK(refusalsDuring == 4, "...and all four refusals were counted");
         CHECK(notices == 1, "...and the run's notice was raised ONCE, not once per refused edit");
         CHECK(fake->value == 7, "the script's own write went through");
-        CHECK(undoStack.count() == 1,
-              "one undo entry: the run's own, with no hand edit folded into it");
+        CHECK(undoStack.count() == 2,
+              "two undo entries: the user's own and the run's, with nothing folded together");
         undoStack.undo();
-        CHECK(fake->value == 0, "one Ctrl+Z takes the run back — and there is nothing else left");
+        CHECK(fake->value == 5, "one Ctrl+Z takes the run back, and only the run");
+        undoStack.undo();
+        CHECK(fake->value == 0, "...the next one takes back the edit the user made before it");
 
         CHECK(!editgate::runActive(), "the run gave the document back when it ended");
         undoStack.clear();

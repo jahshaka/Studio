@@ -963,6 +963,10 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 		setItemVisible(item, !item->data(1, Qt::UserRole).toBool());
 	}
     else if (column == 2) {
+        // The edit gate (round 2, item 5): the lock IS the node's `pickable`
+        // flag, written straight onto the document with no command behind it,
+        // so the spine never sees it.
+        if (editgate::refuse()) return;
         if (item->data(2, Qt::UserRole).toBool()) lockItemAndChildren(item);
         else releaseItemAndChildren(item);
     }

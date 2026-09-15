@@ -45,6 +45,13 @@ For more information see the LICENSE file
 // UI THREAD ONLY. Every caller — the dispatcher, the panels, the viewport, the
 // undo spine — runs there; nothing here is synchronised and nothing needs to
 // be.
+//
+// ONE HOLE, KNOWN AND NAMED: a verb that pumps the event loop WITH user input
+// (QEventLoop::AllEvents, a modal dialog) runs inside the verb scope, so the
+// gate is open for whatever that pump delivers — a click landing there would
+// be allowed. No verb does it today (the ones that pump — project.open, the
+// importers, the progress dialog — either exclude user input or are modal over
+// the edit surfaces), and a verb that starts to would have to say so.
 
 #include <functional>
 

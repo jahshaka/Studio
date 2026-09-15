@@ -889,6 +889,12 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
 
 QString SceneEditService::renameNode(const iris::SceneNodePtr &node, const QString &desired)
 {
+    // The edit gate (round 2, item 7). The push below is refused for a hand
+    // edit, but this function ANSWERS with the name it would have given — and
+    // the hierarchy reads that as success and keeps the typed row text. An
+    // empty answer is what every other refusal here reads as. (blocked(), not
+    // refuse(): the push that follows counts it and raises the notice.)
+    if (editgate::blocked()) return QString();
     if (!node || node->isRootNode()) return QString();
     const QString wanted = desired.trimmed();
     if (wanted.isEmpty()) return QString();
@@ -1387,6 +1393,11 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
 bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
 {
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
+    // The edit gate (round 2, item 10), before the work: this verb PINS the
+    // default material's textures into the project database on its way to the
+    // push and emits materialApplied after it — both would have happened
+    // around a command that was refused.
+    if (editgate::refuse()) return false;
     if (!materialdefaults::hasDefault(node)) return false;
     QStringList defaultTextures, newlyPinned;
     auto material = materialdefaults::create(node, db, project, &defaultTextures, &newlyPinned);
