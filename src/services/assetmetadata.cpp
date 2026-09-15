@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/iesprofile.h"
-#include "services/fitsize.h"
+#include "services/extentmeasure.h"
 #include "services/rigsignature.h"
 #include "irisgl/document/assets/avatardefinition.h"
 #include "services/assetstorepaths.h"
@@ -163,24 +163,21 @@ QJsonObject AssetMetadata::forModelScene(const iris::ModelSceneInfo &scene, cons
     meta["rigId"] = rig::rigId(boneNames);
     meta["animations"] = animations;
 
-    // ---- FIT TO SIZE (services/fitsize.h) ---------------------------------
+    // ---- SIZE, AS INFORMATION (services/extentmeasure.h) ------------------
     //
-    // The model's measured size in metres and the fit the size policy infers
-    // from it. Computed HERE — the one import-time model-description site —
-    // so it also comes for free on the lazy backfill (forModelFile) and needs
-    // no migration for rows imported before the feature landed. The extent
-    // is IrisGL's measurement of the canonical (unit-converted) parse; the
-    // declared unit is recorded for the user, never used by the policy.
-    fitsize::Extent extent;
-    extent.x = scene.extentX;
-    extent.y = scene.extentY;
-    extent.z = scene.extentZ;
-    extent.valid = scene.extentValid;
-    fitsize::writeBlock(meta, extent, scene.declaredUnitScale, !boneNames.isEmpty());
-    if (meta.contains("fitReason"))
-        irisLog(QStringLiteral("import: '%1' %2")
-                    .arg(QFileInfo(sourceFile).fileName(),
-                         meta.value("fitReason").toString()));
+    // The model's measured size in metres and what the FILE declared its unit
+    // to be. Computed HERE — the one import-time model-description site — so it
+    // also comes for free on the lazy backfill (forModelFile). The extent is
+    // IrisGL's measurement of the parse this import actually made, i.e. AFTER
+    // the asset's import transform (SPECS/IMPORT_DIALOG_SPEC.md §6): it is the
+    // size the user will see placed, because every instance is placed at
+    // scale 1. No policy reads it; the import dialog shows it.
+    extent::Extent measured;
+    measured.x = scene.extentX;
+    measured.y = scene.extentY;
+    measured.z = scene.extentZ;
+    measured.valid = scene.extentValid;
+    extent::writeBlock(meta, measured, scene.declaredUnitScale);
     return meta;
 }
 
@@ -404,13 +401,12 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
         // recompute once, persist, and every later call is the fast path
         // again. (Ships-as-new-app means no MIGRATIONS; a lazy backfill that
         // already exists for exactly this is not one.)
-        // Same story a second time (fit-to-size, 2026-09-09): a model block
-        // written before the size policy carries no `fitScale`, so an old
-        // library would place every mis-declared model raw forever. `fitScale`
-        // joins `hasSkeleton` as a version marker — one recompute, persisted,
-        // and the fast path is back.
+        // Same story a second time (the import dialog, 2026-09-16): a model
+        // block written before it carries the retired fit keys and may carry no
+        // `extent` at all. `extent` joins `hasSkeleton` as the version marker —
+        // one recompute, persisted, and the fast path is back.
         if (stored.value("kind").toString() != QLatin1String("model")
-            || (stored.contains("hasSkeleton") && stored.contains("fitScale")))
+            || (stored.contains("hasSkeleton") && stored.contains("extent")))
             return stored;
     }
 
@@ -441,54 +437,6 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
 
     props["metadata"] = meta;
     db->updateAssetProperties(guid, QJsonDocument(props).toJson());
-    return meta;
-}
-
-QJsonObject AssetMetadata::writeFit(Database *db, const QString &guid, FitChange change,
-                                    double scale, QString *error, const QString &storeRoot)
-{
-    const auto fail = [error](const QString &message) {
-        if (error) *error = message;
-        return QJsonObject();
-    };
-    if (!db) return fail(QStringLiteral("no library is open"));
-
-    const AssetRecord record = db->fetchAsset(guid);
-    if (record.guid.isEmpty())
-        return fail(QStringLiteral("no asset with guid '%1'").arg(guid));
-    if (record.type != static_cast<int>(ModelTypes::Object))
-        return fail(QStringLiteral("'%1' is not a model asset \u2014 only models carry a "
-                                   "measured size to fit").arg(record.name));
-    if (change == FitChange::Manual && (!(scale > 0.0) || !std::isfinite(scale)))
-        return fail(QStringLiteral("a fit scale must be a positive number"));
-
-    // ensure() first: it backfills a row that has no block at all, which is
-    // what makes Reset and Manual work on a pre-feature library.
-    QJsonObject meta = ensure(db, guid, storeRoot);
-
-    if (change == FitChange::Remeasure) {
-        const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
-        QJsonObject fresh = computeForStore(record.type, QDir(root).filePath(guid));
-        if (fresh.isEmpty()) {
-            const QString source = AssetCas::resolveSource(QSqlDatabase::database(), root, guid);
-            if (!source.isEmpty()) fresh = forModelFile(source);
-        }
-        if (fresh.isEmpty())
-            return fail(QStringLiteral("'%1' has no stored model file to re-measure")
-                            .arg(record.name));
-        meta = fresh;
-    } else if (change == FitChange::Manual) {
-        fitsize::writeOverride(meta, scale);
-    } else {
-        fitsize::writeBlock(meta, fitsize::extentOf(meta),
-                            meta.value(QStringLiteral("unitScale")).toDouble(1.0),
-                            meta.value(QStringLiteral("hasSkeleton")).toBool());
-    }
-
-    QJsonObject props = QJsonDocument::fromJson(record.properties).object();
-    props["metadata"] = meta;
-    if (!db->updateAssetProperties(guid, QJsonDocument(props).toJson()))
-        return fail(QStringLiteral("could not write '%1'").arg(record.name));
     return meta;
 }
 

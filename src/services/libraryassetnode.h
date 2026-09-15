@@ -27,17 +27,13 @@ For more information see the LICENSE file
 //     `assets.refreshThumbnail` already said so in a comment and rebuilt from
 //     the blob, which is why the verb path was textured and the page was not.
 //
-//   * a node read WITHOUT the asset's fit-to-size factor is the authored size,
-//     not the size the editor places (services/fitsize.h): the owner's Dreyar
-//     previewed at 17.2 m with the camera inside its legs and dropped into the
-//     editor at 1.75 m.
-//
-// So both live here, once: read the blob, apply the asset's fit. Every preview
-// surface (the Assets page's import tail, its viewer, the thumbnail routine
-// and `assets.refreshThumbnail`) asks this function, and the editor's
-// instantiation route applies the same fit from the same metadata block
-// (SceneEditService::addMaterialMesh) — which is what makes a preview and a
-// drop the same size.
+// The SECOND reason this function existed — applying the asset's fit-to-size
+// factor so a preview and a drop were the same size — is retired with the fit
+// itself (SPECS/IMPORT_DIALOG_SPEC.md §6): the size is BAKED into the asset at
+// import, so the blob alone IS the size every surface shows and every
+// placement uses. Every preview surface (the Assets page's import tail, its
+// viewer, the thumbnail routine and `assets.refreshThumbnail`) still asks this
+// one function, for the first reason.
 
 #include <QString>
 #include "irisgl/irisglfwd.h"

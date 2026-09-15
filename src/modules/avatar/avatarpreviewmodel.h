@@ -50,7 +50,7 @@ For more information see the LICENSE file
 #include <memory>
 
 #include "irisgl/irisglfwd.h"
-#include "services/fitsize.h"
+#include "services/extentmeasure.h"
 
 namespace avatar
 {
@@ -118,18 +118,18 @@ struct HeightNormalization
     bool  explicitTarget = false; ///< a height was asked for, not inferred
 };
 
-/// AUTO leaves anything in [kMinPlausibleHeight, kMaxPlausibleHeight] alone.
+/// The Avatar ROOM's design height — what its floor-to-ceiling and its camera
+/// framing are authored around, and the reference the space is rescaled by for
+/// a character of another size (rescaleSpace). It is a set-dressing number, not
+/// a policy: NOTHING scales a character to it.
 ///
-/// ONE SET OF NUMBERS (fit-to-size, 2026-09-09): these are the import-time
-/// size policy's character envelope (fitsize::kCharacter), not a second
-/// opinion. The import fits a mis-declared character at the ASSET, and this
-/// rule then measures the fitted result and finds it plausible — so a
-/// character is never scaled twice. Two independently-written bands would
-/// have made "twice" possible the day one of them moved.
-constexpr float kMinPlausibleHeight = float(fitsize::kCharacter.min);
-constexpr float kMaxPlausibleHeight = float(fitsize::kCharacter.max);
-/// What AUTO scales an implausible character TO — and the room's design height.
-constexpr float kTargetCharacterHeight = float(fitsize::kCharacter.target);
+/// (There used to be a plausible-height BAND here as well, shared with the
+/// import-time fit policy, and an AUTO rule that scaled any character outside
+/// it. Both retired with the import dialog, SPECS/IMPORT_DIALOG_SPEC.md §6: a
+/// character's height is decided by a person at import and BAKED, so an avatar
+/// arrives at the size it was imported at and nothing second-guesses it. An
+/// explicit height is still an explicit height — see applyCharacterHeight.)
+constexpr float kTargetCharacterHeight = 1.75f;
 
 /// World-space vertical extent of every mesh under `node`, in metres — the
 /// same measure AvatarMovement::fitCapsuleToNode calls the capsule height, so
@@ -137,13 +137,14 @@ constexpr float kTargetCharacterHeight = float(fitsize::kCharacter.target);
 /// carries no geometry (a skeleton-only file), which is NOT normalizable.
 float measureCharacterHeight(const iris::SceneNodePtr &node);
 
-/// Scales `node` so its measured height becomes `targetHeight` metres, or —
-/// with `targetHeight` <= 0, the AUTO default — so an implausible height
-/// becomes kTargetCharacterHeight and a plausible one is left untouched.
+/// Scales `node` so its measured height becomes `targetHeight` metres. ONLY an
+/// EXPLICIT target: `targetHeight` <= 0 measures and returns, changing nothing.
+/// There is no automatic rule any more (SPECS/IMPORT_DIALOG_SPEC.md §6) —
+/// a character comes in at the size its import settings baked, and a height
+/// asked for by name is the user's own decision, applied on top of it.
 /// MULTIPLIES the existing local scale (a file's own root scale is part of how
 /// tall it is) and logs whenever it changes anything.
-HeightNormalization normalizeCharacterHeight(const iris::SceneNodePtr &node,
-                                             float targetHeight = 0.0f);
+HeightNormalization applyCharacterHeight(const iris::SceneNodePtr &node, float targetHeight);
 
 /// A drawable bone→parent segment, in world space.
 struct BoneSegment

@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include <QGridLayout>
 #include <QLabel>
 
-#include "services/fitsize.h"
+#include "services/extentmeasure.h"
 #include <QPushButton>
 
 #include "ui/panels/transformeditor.h"
@@ -53,7 +53,7 @@ TransformEditor::TransformEditor(QWidget* parent) :
     addRow(grid, 1, "Rotation", xrot, yrot, zrot, kRotStepPerPx);
     addRow(grid, 2, "Scale",    xscale, yscale, zscale, kPosScaleStepPerPx);
 
-    // FIT TO SIZE (services/fitsize.h): what this node actually MEASURES in
+    // THE MEASUREMENT (services/extentmeasure.h): what this node actually MEASURES in
     // the scene, in metres. Read-only, and the only number on this panel that
     // is an answer rather than a control — position/rotation/scale describe
     // the transform, this describes the result, which is what "1 unit = 1
@@ -249,7 +249,7 @@ void TransformEditor::refreshUi()
 		zscale->setValue(scale.z());
 
 		// The measured world size of this node's subtree, in metres.
-		const fitsize::Extent extent = fitsize::measureNode(sceneNode);
+		const extent::Extent extent = extent::measureNode(sceneNode);
 		sizeLabel->setText(extent.valid
 		                       ? QStringLiteral("%1 \u00d7 %2 \u00d7 %3 m")
 		                             .arg(extent.x, 0, 'g', 3)

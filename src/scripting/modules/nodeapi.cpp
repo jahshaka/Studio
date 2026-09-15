@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "viewport/ieditorviewport.h"
-#include "services/fitsize.h"
+#include "services/extentmeasure.h"
 #include "services/planarreflectors.h"
 #include "commands/nodeeditcommand.h"
 #include "commands/reparentscenenodecommand.h"
@@ -96,9 +96,9 @@ QVector<VerbInfo> NodeApi::verbs() const
           "`min` and `max` are that box's corners in WORLD space, so `min.y` is what a node "
           "actually stands on — the reading a placement rule is written against (a dropped "
           "object rests its `min.y` on the surface under the cursor). "
-          "`largest` is max(x, y, z) and `height` is y \u2014 the two dimensions the import-time "
-          "size policy measures a model on (services/fitsize.h: an object on its largest extent, "
-          "a character on its height). All zeros for a node whose subtree carries no geometry "
+          "`largest` is max(x, y, z) and `height` is y \u2014 the two readings a model is usually "
+          "judged on (services/extentmeasure.h), and what the import dialog shows while a size is "
+          "being chosen. All zeros for a node whose subtree carries no geometry "
           "(a light, an empty, a bone) \u2014 that is not an error, it is the measurement.",
           Needs::Document },
         { "property", "node.property(id, key) -> value",
@@ -717,16 +717,16 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
              { "scale", vecToJs(node->getLocalScale()) } };
 }
 
-// FIT TO SIZE (services/fitsize.h): the node's measured world extent. Same
-// walk the Properties panel's Size row and the import-time policy use, so the
-// number a script reads, the number the panel shows and the number the fit was
-// computed against are one number.
+// THE MEASUREMENT (services/extentmeasure.h): the node's measured world extent.
+// The same walk the Properties panel's Size row and the import-time metadata
+// block use, so the number a script reads, the number the panel shows and the
+// number recorded on the asset are one number.
 QVariantMap NodeApi::size(const QString &id)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.size"));
     if (!node) return QVariantMap();
 
-    const fitsize::Extent extent = fitsize::measureNode(node);
+    const extent::Extent extent = extent::measureNode(node);
     QVariantMap out{ { "x", extent.x }, { "y", extent.y }, { "z", extent.z },
                      { "largest", extent.largest() }, { "height", extent.height() } };
     // …AND WHERE THE BOX IS (lane SPACE-2): `min`/`max` are the same measured

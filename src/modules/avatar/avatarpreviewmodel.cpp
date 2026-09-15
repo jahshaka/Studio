@@ -89,7 +89,7 @@ float measureCharacterHeight(const iris::SceneNodePtr &node)
     return height > 0.0f ? height : 0.0f;
 }
 
-HeightNormalization normalizeCharacterHeight(const iris::SceneNodePtr &node, float targetHeight)
+HeightNormalization applyCharacterHeight(const iris::SceneNodePtr &node, float targetHeight)
 {
     HeightNormalization out;
     if (!node) return out;
@@ -97,39 +97,33 @@ HeightNormalization normalizeCharacterHeight(const iris::SceneNodePtr &node, flo
     out.sourceHeight = measureCharacterHeight(node);
     out.height = out.sourceHeight;
     out.explicitTarget = targetHeight > 0.0f;
+    // NO AUTOMATIC RULE (SPECS/IMPORT_DIALOG_SPEC.md §6). A character arrives
+    // at the height its import settings baked into it; the editor does not
+    // second-guess a file it cannot ask. Without an explicit target this is a
+    // measurement and nothing else.
+    if (!out.explicitTarget) return out;
     // No geometry (an animation-only or skeleton-only file) — there is nothing
-    // to measure, and guessing from bone positions would normalize a rig whose
+    // to measure, and guessing from bone positions would scale a rig whose
     // owner never sees it. Leave it exactly as authored.
     if (!(out.sourceHeight > 0.0f)) return out;
 
-    float factor = 1.0f;
-    if (out.explicitTarget) {
-        factor = targetHeight / out.sourceHeight;
-    } else if (out.sourceHeight < kMinPlausibleHeight || out.sourceHeight > kMaxPlausibleHeight) {
-        factor = kTargetCharacterHeight / out.sourceHeight;
-    }
+    const float factor = targetHeight / out.sourceHeight;
     // A factor that rounds to 1 is not worth a scale node or a log line.
     if (std::fabs(factor - 1.0f) < 1e-4f) return out;
 
-    // MULTIPLY: a file may carry its own root scale (that is one of the shapes
-    // a mis-declared package arrives in), and it is part of how tall the thing
-    // measured, so it must survive.
+    // MULTIPLY: a file may carry its own root scale and it is part of how tall
+    // the thing measured, so it must survive.
     const iris::Vec3 scale = node->getLocalScale();
     node->setLocalScale(iris::Vec3(scale.x() * factor, scale.y() * factor, scale.z() * factor));
     out.applied = true;
     out.factor = factor;
     out.height = measureCharacterHeight(node);
 
-    irisLog(QStringLiteral("avatar: '%1' imported %2 m tall — %3 to %4 m (x%5). "
-                           "A character outside %6-%7 m is a unit declaration the file got "
-                           "wrong; re-export or set an explicit height to override.")
+    irisLog(QStringLiteral("avatar: '%1' measured %2 m tall — scaled to the requested %3 m (x%4)")
                 .arg(node->getName())
                 .arg(double(out.sourceHeight), 0, 'f', 3)
-                .arg(out.explicitTarget ? QStringLiteral("set") : QStringLiteral("normalized"))
                 .arg(double(out.height), 0, 'f', 3)
-                .arg(double(out.factor), 0, 'f', 4)
-                .arg(double(kMinPlausibleHeight), 0, 'f', 1)
-                .arg(double(kMaxPlausibleHeight), 0, 'f', 1));
+                .arg(double(factor), 0, 'f', 4));
     return out;
 }
 
@@ -257,25 +251,21 @@ bool AvatarPreviewModel::setCharacterHeight(float metres, QString *error)
                                    "(0.001 .. 1000)").arg(double(metres)));
 
     // Everything is decided against the FILE's height, never against the size
-    // an earlier call left behind. That is what makes "go back to automatic"
-    // mean something: re-running the rule on the CURRENT subject would be a
-    // no-op for every override inside the plausible band — i.e. for every sane
-    // override — and the caller would be told it worked while nothing moved
-    // (found by avatar.document H5, 2026-09-09).
+    // an earlier call left behind. That is what makes "go back to the imported
+    // size" mean something (found by avatar.document H5, 2026-09-09).
     const float source = mNormalization.sourceHeight > 0.0f
                              ? mNormalization.sourceHeight
                              : measureCharacterHeight(mFragment);
     if (!(source > 0.0f))
         return fail(QStringLiteral("'%1' has no geometry to measure").arg(mName));
 
+    // metres <= 0 means "the size it was IMPORTED at" — there is no automatic
+    // rule to fall back to any more (SPECS/IMPORT_DIALOG_SPEC.md §6), and the
+    // imported size is the one the asset's import settings baked.
     const bool explicitTarget = metres > 0.0f;
-    const float target = explicitTarget
-                             ? metres
-                             : ((source < kMinPlausibleHeight || source > kMaxPlausibleHeight)
-                                    ? kTargetCharacterHeight
-                                    : source);
+    const float target = explicitTarget ? metres : source;
 
-    const HeightNormalization step = normalizeCharacterHeight(mFragment, target);
+    const HeightNormalization step = applyCharacterHeight(mFragment, target);
     if (!(step.sourceHeight > 0.0f))
         return fail(QStringLiteral("'%1' has no geometry to measure").arg(mName));
 
@@ -440,12 +430,14 @@ bool AvatarPreviewModel::applySubject(const std::shared_ptr<PreparedSubject> &pr
     mDocument->rootNode->addChild(node);
     mFragment = node;
 
-    // AUTO height normalization, BEFORE the rig is collected and before the
-    // room is scaled, so every number the page and the verbs read afterwards
-    // (bone positions, segments, the room scale) is already in the subject's
-    // final scale. A plausible character is untouched and this costs one AABB
-    // walk; an implausible one is scaled here and nowhere else.
-    mNormalization = normalizeCharacterHeight(node);
+    // MEASURED, not normalized (SPECS/IMPORT_DIALOG_SPEC.md §6): the character
+    // arrives at the height its import settings baked, and the page reports it.
+    // Done BEFORE the rig is collected and before the room is scaled, so every
+    // number afterwards (bone positions, segments, the room scale) is in the
+    // subject's real scale. setHeight is how a person changes it.
+    mNormalization = HeightNormalization();
+    mNormalization.sourceHeight = measureCharacterHeight(node);
+    mNormalization.height = mNormalization.sourceHeight;
 
     collectRig();
     captureRestPose();
