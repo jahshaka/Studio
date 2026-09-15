@@ -59,6 +59,18 @@ public:
 
 private:
     QString resolveGuid(const QString &guidOrName, QString *nameOut = nullptr);
+
+    /// IS A THREADED OPEN IN FLIGHT? THE ONE TRUTH (lane OPEN-FRAMES-1, from
+    /// §497: a lane's control arms died on "an open is already in flight" and
+    /// the predicate was suspected of disagreeing with openState()).
+    ///
+    /// Both the refusal in openAsync() and the answer openState() gives are
+    /// this function now, so the two cannot drift apart — whatever else is
+    /// true, a session that refuses an open reports 'opening', and a session
+    /// that reports 'idle' accepts one. It is MainWindow::isOpeningProject(),
+    /// i.e. "the scene-open runner has slices left", and a session without a
+    /// window has no threaded open at all.
+    bool openInFlight() const;
 };
 
 #endif // SCRIPTING_PROJECTAPI_H

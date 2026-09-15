@@ -57,12 +57,23 @@ QVector<VerbInfo> ProjectApi::verbs() const
           Needs::Window },
         { "openState", "project.openState() -> 'idle' | 'opening'",
           "Whether an asynchronous open (project.openAsync, a desktop tile, an archive import) is still in "
-          "flight.",
+          "flight. THE SAME PREDICATE project.openAsync refuses on, so the two can never disagree: while "
+          "this reads 'opening' a second openAsync is refused, and while it reads 'idle' one is accepted. "
+          "POLL IT WITH A FRAME IN THE LOOP. The install runs one slice per event-loop turn, and a tight "
+          "poll is a chain of posted events that outranks the app's render timer in Qt's dispatcher — so a "
+          "loop of bare openState() calls starves the very install it is waiting for and needs MANY more "
+          "turns to finish (measured: >1500 on a two-world script). Call editor.frame(1) in the poll body, "
+          "or sleep. The open itself is safe either way — the runner advances the renderer's resource "
+          "bookkeeping at every slice boundary whether or not anything drew (app.renderStats() "
+          ".resourceAdvances) — but a poll with no frame is slow and paints nothing.",
           Needs::Window },
         { "save", "project.save() -> bool",
           "Saves the open scene into the project's DB blob. Works headless (blob-only; the thumbnail refreshes only when a viewport can render one).",
           Needs::Document },
         { "close", "project.close() -> bool",
+          "Closes the open project — INCLUDING one that is still opening: a threaded open in flight is "
+          "drained first (its install finishes, then the world closes), so a close can never leave install "
+          "slices queued against a project that is gone. "
           "Closes the open project (physics restored, autosave per settings, undo stack reset) and returns to "
           "the desktop. INSIDE A SCRIPT the run's undo entry is ended first, so the stack really is cleared: "
           "the run's edits become one undo step of the project being closed and die with it, and the rest of "
@@ -238,8 +249,9 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     // as it is for a scripted one, so this verb can never reach the close
     // below with slices still queued. (project.open cannot refuse — its
     // contract is a loaded world — so it drains through waitForOpen instead.)
-    if (host.mainWindow->isOpeningProject())
-        return fail("project.openAsync: an open is already in flight");
+    if (openInFlight())
+        return fail("project.openAsync: an open is already in flight "
+                    "(project.openState() reads 'opening' until it finishes)");
 
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
@@ -257,11 +269,15 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     return true;
 }
 
+bool ProjectApi::openInFlight() const
+{
+    return host.mainWindow && host.mainWindow->isOpeningProject();
+}
+
 QString ProjectApi::openState()
 {
     if (!host.mainWindow) { fail("project: not available in this session"); return QStringLiteral("idle"); }
-    return host.mainWindow->isOpeningProject() ? QStringLiteral("opening")
-                                               : QStringLiteral("idle");
+    return openInFlight() ? QStringLiteral("opening") : QStringLiteral("idle");
 }
 
 bool ProjectApi::save()
@@ -274,6 +290,23 @@ bool ProjectApi::save()
 
 bool ProjectApi::close()
 {
+    // AN OPEN IN FLIGHT IS SOMETHING TO CLOSE (lane OPEN-FRAMES-1). Until this
+    // lane, "is a project open?" meant "has a scene finished being installed?",
+    // so the ONE moment a close matters most — a world half-installed, with
+    // slices still queued that will mount panels and push geometry — was the
+    // one moment this verb refused, and the caller was left with an install it
+    // could not stop. MainWindow::closeProject drains the runner first (the
+    // window-close and shutdown paths always did), so the close is coherent:
+    // the install finishes, then the world closes.
+    //
+    // The undo macro is ended here too, for the same reason as below — the
+    // in-flight project's history dies with it.
+    if (openInFlight()) {
+        host.endRunUndoMacro();
+        host.mainWindow->closeProject();
+        host.beginRunUndoMacro();
+        return true;
+    }
     if (!requireProject()) return false;
     // The run's edits so far become ONE undo step of the project being closed,
     // and the close then clears the stack exactly as a close from the UI does

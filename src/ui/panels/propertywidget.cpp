@@ -31,6 +31,9 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "ui/controls/rowfit.h"
 #include "ui/panels/propertyrows.h"
+#include "ui/controls/bladerow.h"
+#include <QDynamicPropertyChangeEvent>
+#include <QEvent>
 
 PropertyWidget::PropertyWidget(QWidget *parent) : QWidget(parent), ui(new Ui::PropertyWidget)
 {
@@ -528,8 +531,43 @@ iris::Property *PropertyWidget::propertyAt(int slot) const
 // The comparison is deliberately total: anything a row's CONSTRUCTION reads is
 // compared, so a match means the rows would have been built identically. A
 // mismatch falls back to the rebuild, which is always correct.
+// A RETIRED PANEL SHOWS NOTHING AND REMEMBERS NOTHING (lane OPEN-FRAMES-1).
+//
+// `bladerow::markRetired` sets a dynamic property on the row and on every
+// widget inside it, synchronously, the instant AccordianBladeWidget::drainLayout
+// takes the row out of the content pane — which is how a RowPtr to that row
+// starts reading null before the row is destroyed. This is the same moment
+// applied to the OTHER pointers a property panel holds: the raw
+// `iris::Property *` list into the document.
+//
+// QObject::setProperty delivers DynamicPropertyChange with sendEvent, so this
+// runs inside markRetired, on the UI thread, with nothing in between.
+bool PropertyWidget::event(QEvent *e)
+{
+    if (e->type() == QEvent::DynamicPropertyChange) {
+        auto *pe = static_cast<QDynamicPropertyChangeEvent *>(e);
+        if (pe->propertyName() == QByteArray(bladerow::retiredProperty())
+            && bladerow::isRetired(this))
+            forgetProperties();
+    }
+    return QWidget::event(e);
+}
+
+void PropertyWidget::forgetProperties()
+{
+    properties.clear();
+    valueRows.clear();
+    rowByName.clear();
+}
+
 bool PropertyWidget::canRebind(const QList<iris::Property *> &props) const
 {
+    // A PANEL THAT IS NO LONGER ON A BLADE CANNOT SHOW ANYTHING. Its rows are
+    // on their way out of the process and its stored property list has been
+    // dropped; answering "yes, rebind me" would point a dying widget at a live
+    // material. (forgetProperties alone would make the size test below fail,
+    // but the reason belongs in the code and not in an emergent consequence.)
+    if (bladerow::isRetired(this)) return false;
     if (props.size() != properties.size() || props.isEmpty()) return false;
     for (int i = 0; i < props.size(); ++i) {
         const iris::Property *a = props.at(i);

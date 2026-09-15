@@ -41,3 +41,48 @@ set_tests_properties(open.responsive PROPERTIES
 # WALL-CLOCK assertion — under TSan's 5-15x slowdown it can legitimately fail
 # while proving no race; read the race reports, not the verdict.
 jah_tsan_blocked(open.responsive)   # spawns the app: see jah_tsan_blocked
+
+# open.frames — THE THREADED OPEN DRIVES ITS OWN FRAMES (lane OPEN-FRAMES-1).
+#
+# The deterministic half of the async-open crash fix: an open driven by a pump
+# that renders NOTHING (no editor.frame anywhere in the script) must still have
+# the renderer driven at every slice boundary, and must complete. It also pins
+# the two contracts the same lane added around it: closeProject drains an
+# install in flight, and project.openState() is the same predicate
+# project.openAsync refuses on.
+#
+# Engine-up — it asserts real frames were drawn — so it needs the rig's display.
+configure_file(e2e_open_frames.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js @ONLY)
+set(_frames_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-frames)
+file(MAKE_DIRECTORY ${_frames_home}/run)
+add_test(NAME open.frames
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js
+         WORKING_DIRECTORY ${_frames_home}/run)
+# TIMEOUT 300: three opens of the dragon sample plus two archive imports, cold
+# (the home is not wiped between runs, so only the first is a cold bake).
+set_tests_properties(open.frames PROPERTIES
+    ENVIRONMENT "HOME=${_frames_home};JAHSHAKA_DATA_ROOT=${_frames_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "openasync")
+jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
+
+# open.crash_soak — the crash itself, N times, under glibc's heap checks.
+#
+# NIGHTLY, and labelled `benchmark` because that label IS this tree's nightly
+# marker: the MERGE and PUSH tiers both run with
+# -LE "^(benchmark|shadercache-attack)$", so a suite that needs a quiet box and
+# minutes of it carries one of those two labels rather than a third that would
+# have to be added to every tier's command line (docs/TESTING_GATE.md).
+#
+# PROBABILISTIC ON THE BASE, deterministic-ish on the fix: 9 failures in 12 runs
+# before the slice boundary drove a frame, 0 in 12 after, measured twice. Read a
+# single failure as "run it again"; read three as a regression. RUN_SERIAL: it
+# spawns twelve engine processes in sequence and a parallel gate would both slow
+# it and change what it measures.
+add_test(NAME open.crash_soak
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/open_crash_soak.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_SOURCE_DIR}/scenes
+                 ${CMAKE_CURRENT_BINARY_DIR}/soak 12)
+set_tests_properties(open.crash_soak PROPERTIES
+    TIMEOUT 900 RUN_SERIAL TRUE LABELS "benchmark")
+jah_tsan_blocked(open.crash_soak)

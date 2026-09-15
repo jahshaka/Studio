@@ -2101,6 +2101,12 @@ void EngineSceneViewport::renderFrames(int n)
     renderFrames(n, -1.0f);
 }
 
+bool EngineSceneViewport::canRenderFrames() const
+{
+    // The one thing renderFrames() itself tests before doing anything.
+    return mEngine != nullptr;
+}
+
 void EngineSceneViewport::renderFrames(int n, float dt)
 {
     // editor.frame(n, dt): the deterministic document→engine sync + render

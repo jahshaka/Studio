@@ -256,6 +256,58 @@ static void testRetirementMarksTheRow()
     CHECK(handle == nullptr, "blade: the handle still reads null");
 }
 
+// ---------------------------------------------------------------------------
+// 4. THE DOCUMENT POINTERS A PROPERTY PANEL HOLDS (lane OPEN-FRAMES-1).
+//
+// RowPtr guards the ROW WIDGETS. PropertyWidget holds something else as well:
+// a bare `QList<iris::Property *>` INTO the document's material, filled when
+// the rows are built and nulled by nothing. Every row handler reads it, and
+// canRebind() DEREFERENCES the stored side — comparing names, display names and
+// a ListProperty's label vocabulary — so a stale entry is a read through freed
+// memory and, through a value-changed handler, a write through it. One Qt
+// assert of exactly that shape (`str || !len` in QStringView, out of canRebind)
+// was caught with a witness on 2026-09-15.
+//
+// THE RULE IS THE SAME ONE: a retired panel remembers nothing. The retirement
+// mark the blade sets reaches this widget too, so the moment its row leaves the
+// content pane the document pointers go with it.
+static void testPropertyWidgetForgetsOnRetirement()
+{
+    AccordianBladeWidget blade;
+    PropertyWidget *rows = blade.addPropertyWidget();
+
+    auto material = iris::PbrMaterial::create();
+    QList<iris::Property *> props;
+    for (auto *prop : material->properties)
+        if (prop) props.append(prop);
+    CHECK(!props.isEmpty(), "properties: the fixture material declares rows");
+
+    rows->setProperties(props);
+    CHECK(rows->getProperties().size() == props.size(),
+          "properties: the panel is holding the material's property list");
+    CHECK(rows->canRebind(props), "properties: ...and would refill itself with the same shape");
+
+    blade.clearPanel();
+
+    // BEFORE the destruction turn: the mark is set synchronously, and this is
+    // the window in which the old code could still be asked (and answer yes).
+    CHECK(bladerow::isRetired(rows), "properties: the retired panel carries the mark");
+    CHECK(rows->getProperties().isEmpty(),
+          "properties: a retired panel holds NO document pointers (base: it held them all)");
+    CHECK(!rows->canRebind(props),
+          "properties: ...and refuses to refill, so the caller rebuilds (base: it agreed)");
+
+    // AND THE DOCUMENT MAY NOW DIE. The list the panel was holding points into
+    // this material; dropping it here is the case the guard exists for. The
+    // panel outlives it (it is in the retired ring) and must not read it.
+    material.clear();
+    CHECK(rows->getProperties().isEmpty(), "properties: still nothing held after the material dies");
+    CHECK(!rows->canRebind(QList<iris::Property *>()),
+          "properties: an empty list never refills either");
+
+    pump();   // the retired panel is destroyed here, having touched nothing
+}
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
@@ -273,6 +325,7 @@ int main(int argc, char **argv)
     testSkyRowsOfAnotherType(scene, &services);
     testMaterialRefillAfterAClear(&services);
     testLooksSectionRebuild(scene, &services);
+    testPropertyWidgetForgetsOnRetirement();
 
     std::printf(failures ? "ui.panel_lifetime: %d failure(s)\n" : "ui.panel_lifetime: ok\n",
                 failures);

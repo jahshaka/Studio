@@ -844,6 +844,13 @@ public:
     /// turns either into whole grid steps — iris::SimulationClock). A negative
     /// `dt` means "use the wall clock" and is identical to renderFrames(n).
     virtual void renderFrames(int n, float dt) { Q_UNUSED(n); Q_UNUSED(dt); }
+    /// CAN renderFrames() ACTUALLY DRAW? (lane OPEN-FRAMES-1) renderFrames is
+    /// a no-op on a viewport with no engine, and silently: a caller that needs
+    /// to know whether a frame really happened — the scene open's slice
+    /// boundary, which falls back to the engine's bare resource advance when it
+    /// cannot have one — has to ask first. False on every viewport that does
+    /// not implement renderFrames at all.
+    virtual bool canRenderFrames() const { return false; }
 
     // ---- the "nothing is presenting" cover ----
     // Drawn by the ENGINE since owner decision D2 (STATS_OVERLAY_SPEC.md §6):

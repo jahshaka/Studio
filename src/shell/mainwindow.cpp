@@ -740,7 +740,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	// left the process alive — the import.shutdown zombie, wearing a different
 	// hat). Re-entrancy is guarded: the pump can deliver another close.
 	static bool sSettlingOpen = false;
-	if (!sSettlingOpen && isOpeningProject()) {
+	if (sSettlingOpen) return;   // a nested close under the settle: the outer one finishes
+	if (isOpeningProject()) {
 		sSettlingOpen = true;
 		openRunner->waitForDone(5000);
 		if (openRunner->isRunning()) openRunner->requestAbort();
@@ -1824,6 +1825,11 @@ bool MainWindow::isOpeningProject() const
 	return openRunner && openRunner->isRunning();
 }
 
+unsigned MainWindow::openSliceBoundaries() const
+{
+	return openRunner ? openRunner->boundaryRuns() : 0u;
+}
+
 bool MainWindow::waitForOpen()
 {
 	if (!isOpeningProject()) return true;
@@ -1889,6 +1895,47 @@ void MainWindow::startOpenRun(bool playMode)
 		        });
 		connect(openRunner, &SceneOpenRunner::finished, this, [this](bool) {
 			if (pmContainer) pmContainer->hideOpenProgress();
+		});
+		// THE INSTALL DRIVES ITS OWN FRAME (lane OPEN-FRAMES-1, 2026-09-15).
+		// Set once, on the runner this window keeps for its whole life.
+		//
+		// THE INSTALL HAS ALWAYS ASSUMED A FRAME BETWEEN ITS SLICES — that is
+		// the entire reason it runs one slice per event-loop turn — and it has
+		// never been entitled to one. The render tick is a 16 ms QTimer, and a
+		// chain of posted events (a script polling a verb, a user driving a
+		// panel, an MCP client) outranks a timer in Qt's dispatcher, so an open
+		// driven that way installs a whole world with NO frame rendered at all.
+		// The renderer's per-frame machinery then never turns: the texture
+		// worker's command buffer, the staging recycle, and the buffer
+		// manager's delayed-block release (Engine::advanceResources spells out
+		// which). Measured on this lane's build, a scripted open that renders
+		// no frame crashes 9 times in 12 with a corrupt heap; with one frame at
+		// every slice boundary, 0 in 12.
+		//
+		// SO THE BOUNDARY RENDERS THE FRAME, instead of hoping the timer fired.
+		// This is not an extra picture — it is the picture the tick would have
+		// drawn if it had been scheduled, drawn at exactly the moment the
+		// install expected one, and it costs one frame per slice (about a dozen
+		// over an open) on a path already behind the loading cover.
+		//
+		// MEASURED, NOT ASSUMED, AND THE CHEAPER THING WAS TRIED FIRST: the
+		// bare resource advance (Engine::advanceResources, no rendering) at the
+		// same boundaries took the same script from 9/12 to 6/12 — real, and
+		// not a cure. What a frame does beyond it is not yet named; the open
+		// pays for the whole frame until it is (the finding is in the lane's
+		// report and the pin's entry in SPECS/OGRE_UPSTREAM_ISSUES.md).
+		//
+		// WHEN THERE IS NO VIEWPORT TO RENDER (a headless shell, the engine
+		// still starting) the advance is still made: it is strictly less, but
+		// it is what that session can do, and it keeps the boundary's promise
+		// that SOMETHING turned the renderer's bookkeeping.
+		openRunner->setSliceBoundary([this]() {
+			if (sceneView && sceneView->canRenderFrames()) {
+				sceneView->renderFrames(1);
+				++openSliceBoundaryFrameCount;
+				return;
+			}
+			if (auto engine = EngineHost::instance().engine()) engine->advanceResources();
 		});
 	}
 
@@ -1987,6 +2034,43 @@ void MainWindow::startOpenRun(bool playMode)
 
 void MainWindow::closeProject()
 {
+    // AN OPEN IN FLIGHT IS DRAINED FIRST (lane OPEN-FRAMES-1, item 3), the way
+    // the window-close and shutdown paths already do it (closeEvent above,
+    // shutdownBackgroundWork below). Without this a queued install slice could run
+    // AFTER this function tore the project down — it would mount panels on a
+    // document that no longer exists, push a scene that was just destroyed and
+    // switch the page to a world nobody opened. Nothing but ProjectApi's
+    // refusal stood between that and the user, and the refusal only covers the
+    // scripted route: a tile's close control, the menu and the shutdown path
+    // reach here with slices still queued.
+    //
+    // DRAIN, THEN ABANDON. waitForDone pumps the loop the slices run on, so the
+    // healthy case is simply "the open finishes, then it closes" — the same
+    // coherence the close-event settle buys. Only an install that will not
+    // finish inside the budget is abandoned, and requestAbort stops the NEXT
+    // slice rather than interrupting one.
+    //
+    // RE-ENTRANCY IS GUARDED, and it must be: the pump can deliver another
+    // close (a second click, a queued menu action, an MCP request), and this
+    // function is not re-entrant below.
+    static bool sDrainingOpen = false;
+    // A NESTED close arriving through the drain's pump (an MCP project.close,
+    // a queued metacall — not user input, so ExcludeUserInputEvents lets it in)
+    // must RETURN, not fall through to the teardown under the outer drain
+    // (the second read of OPEN-FRAMES-1): the outer close finishes the job.
+    if (sDrainingOpen) return;
+    if (isOpeningProject()) {
+        sDrainingOpen = true;
+        openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+        if (openRunner->isRunning()) {
+            qWarning("project close: the open in flight did not finish inside its budget — "
+                     "abandoning the rest of its install");
+            openRunner->requestAbort();
+            openRunner->waitForDone(2000, kOpenWaitIdleMs);
+        }
+        sDrainingOpen = false;
+    }
+
     // A tile's close control can fire with no scene open (double-fired close,
     // or closing while an open never completed): every line below dereferences
     // `scene`, so the first one crashed on null (crash-1788555267.log,

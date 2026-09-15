@@ -93,14 +93,32 @@ void SceneOpenRunner::runWorker()
     QMetaObject::invokeMethod(this, [this]() { runNextSlice(); }, Qt::QueuedConnection);
 }
 
+/// THE BOUNDARY BETWEEN TWO SLICES (lane OPEN-FRAMES-1): whatever the shell
+/// asked to have run there — in the app, one rendered frame, falling back to
+/// the engine's bare resource advance in a session with no viewport
+/// (MainWindow::startOpenRun sets it). Counted, so that a suite can prove it
+/// happened with no frame of its own (app.openStats().sliceBoundaries).
+void SceneOpenRunner::crossSliceBoundary()
+{
+    if (!mSliceBoundary) return;
+    ++mBoundaryRuns;
+    mSliceBoundary();
+}
+
 void SceneOpenRunner::runNextSlice()
 {
     if (mAborted.load()) {
+        // EVEN AN ABANDONED INSTALL HAS TO HAND BACK WHAT IT ALLOCATED: the
+        // slices that DID run uploaded meshes and textures, and an abort is
+        // usually a close or a quit, i.e. exactly the moment no frame will ever
+        // come again.
+        crossSliceBoundary();
         mRunning.store(false);
         emit finished(true);
         return;
     }
     if (mNextSlice >= mSlices.size()) {
+        crossSliceBoundary();
         mRunning.store(false);
         emit finished(false);
         return;
@@ -117,6 +135,12 @@ void SceneOpenRunner::runNextSlice()
     // noticed instead of guessed.
     if (ms >= 200.0)
         qWarning("[open-profile] slow slice: %.0f ms (%s)", ms, qUtf8Printable(slice.label));
+
+    // AFTER THE SLICE, BEFORE THE TURN. The slice has just uploaded or freed
+    // GPU resources; this is where the renderer is told to recycle them, so
+    // that the install never depends on a frame that a busy event loop may
+    // never let happen (see setSliceBoundary).
+    crossSliceBoundary();
 
     // One slice per event-loop turn: the window paints, moves and answers
     // between them (ImportTailQueue's rule). A QPointer is NOT needed here —

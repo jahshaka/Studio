@@ -93,7 +93,7 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Document },
         { "openStats", "app.openStats({reset:false}) -> {uiThreadParses, uiThreadParseMs, "
           "uiThreadResourceParses, uiThreadResourceParseMs, workerParses, workerParseMs, "
-          "lastUiThreadParse, bakeHits, bakeMisses}",
+          "lastUiThreadParse, bakeHits, bakeMisses, sliceBoundaries, sliceBoundaryFrames}",
           "Model PARSES since the last reset, split by the thread that paid for them "
           "(irisgl/import/parsecensus.h), and the bake reads beside them. A project open must "
           "never parse a model on the UI thread — assimp on a 6 MB mesh is a second of frozen "
@@ -109,7 +109,17 @@ QVector<VerbInfo> AppApi::verbs() const
           "asks for them by name. They are parsed once per process only because the shell PINS "
           "them (iris::Mesh::pinLoadPaths); the load cache itself holds weak references, so "
           "before the pin every open after a close re-parsed them here. Process-wide and always "
-          "on: the cost is one clock read per parse.",
+          "on: the cost is one clock read per parse. "
+          "'sliceBoundaries' and 'sliceBoundaryFrames' are the THREADED open's own drive "
+          "(services/sceneopenrunner.h): the install runs one slice per event-loop turn and "
+          "renders a frame at every boundary between two of them, because the app's 16 ms render "
+          "tick loses to a chain of posted events and an open driven by a polling script or a "
+          "busy panel would otherwise install a whole world with no frame at all — which leaves "
+          "the renderer's per-frame recycling un-run for the length of the install. "
+          "'sliceBoundaries' counts the crossings, 'sliceBoundaryFrames' how many of them really "
+          "drew (a session with no viewport makes the engine's bare resource advance instead). "
+          "Both are monotonic over the window's life, never reset by {reset:true} — only "
+          "differences mean anything.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -256,7 +266,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget}",
+        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
@@ -275,7 +285,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "D-E): the budget is a process-wide knob whose own documentation warns that "
           "one-shot shader techniques may end up uninitialised, which describes every "
           "thumbnail, IBL bake and offscreen pixel suite in this app, so it is left off. A "
-          "non-zero value means somebody turned it on.",
+          "non-zero value means somebody turned it on. "
+          "`resourceAdvances` counts the times the renderer's RESOURCE bookkeeping was advanced "
+          "without drawing anything (Engine::advanceResources) — the texture worker's command "
+          "buffer, the staging recycle and the buffer manager's frame counter, which a frame "
+          "normally turns. It is monotonic and only differences mean anything; it rises during a "
+          "threaded project open, whose install slices advance it themselves so that the open never "
+          "depends on a frame the event loop may never let render.",
           Needs::Engine },
         { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, updatedScenes, stagingScenes, nodes, meshes, materials, textures, datablocks}",
           "A CENSUS of what the renderer is HOLDING — the companion to app.renderStats(), which "
@@ -540,6 +556,13 @@ QVariantMap AppApi::openStats(const QVariantMap &options)
     out.insert(QStringLiteral("lastUiThreadParse"), parses.lastMainThreadPath);
     out.insert(QStringLiteral("bakeHits"), parses.bakeHits);
     out.insert(QStringLiteral("bakeMisses"), parses.bakeMisses);
+    // THE OPEN'S OWN DRIVE (lane OPEN-FRAMES-1). NOT reset with the parse
+    // census: these count the window's life, and a caller measuring one open
+    // subtracts. A session with no window reports zeros.
+    out.insert(QStringLiteral("sliceBoundaries"),
+               host.mainWindow ? host.mainWindow->openSliceBoundaries() : 0u);
+    out.insert(QStringLiteral("sliceBoundaryFrames"),
+               host.mainWindow ? host.mainWindow->openSliceBoundaryFrames() : 0u);
     // Read FIRST, then zero: a caller measuring one open wants the numbers of
     // the window it just closed, not an empty map.
     if (options.value(QStringLiteral("reset")).toBool()) iris::ParseCensus::reset();
@@ -1096,6 +1119,10 @@ QVariantMap AppApi::renderStats()
     out.insert("forwardPlusLights", s.forwardPlusLights);
     out.insert("forwardPlusBudget", s.forwardPlusBudget);
     out.insert("forwardPlusOverBudget", s.forwardPlusOverBudget);
+    // How many times the renderer's resource bookkeeping was advanced WITHOUT
+    // a frame (Engine::advanceResources). Monotonic; only differences mean
+    // anything. See the verb's doc.
+    out.insert("resourceAdvances", QVariant::fromValue(qulonglong(s.resourceAdvances)));
     return out;
 }
 
