@@ -2238,7 +2238,7 @@ int main()
     //     where smoothstep is exactly 0.5, so the reflection must be HALF the
     //     wide-open one. This is the sharp one: r = 0.29 would score 0.65 of
     //     full and r = 0.31 would score 0.35 of it, so a 5 % tolerance on the
-    //     half pins the value the shader read to about 0.300 +/- 0.007.
+    //     half pins the value the shader read to about 0.300 +/- 0.0033.
     //
     // ...and `cutoff = 0.40`, the shipped default, must leave this floor's
     // reflection WHOLE: 0.30 is a feather below the cutoff. That is the lane's
@@ -2322,7 +2322,7 @@ int main()
             CHECK_MSG(std::fabs(mid - 0.5f * wide) <= 0.05f * wide,
                       "at cutoff 0.35 the floor sits at the feather's MIDPOINT and scores half "
                       "the wide-open reflection: %.3f against %.3f/2 = %.3f, which pins the "
-                      "roughness the shader read to 0.300 +/- 0.007 (0.29 would score %.3f, "
+                      "roughness the shader read to 0.300 +/- 0.0033 (0.29 would score %.3f, "
                       "0.31 would score %.3f)",
                       mid, wide, 0.5f * wide, 0.648f * wide, 0.352f * wide);
             // AND THE DEFAULT COSTS THIS SURFACE NOTHING, which is the whole

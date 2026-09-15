@@ -312,7 +312,7 @@ QVector<Row> buildRows()
                                 "it the reflection probes' own blurred photograph answers, which "
                                 "for a rough surface is both cheaper and closer to the truth. The "
                                 "change is feathered: both the screen's march and the ray fade "
-                                "out over the same 10 per cent below the value, so a surface "
+                                "out over the same 10 points of this scale below the value, so a surface "
                                 "whose roughness varies across it has no seam in it. Raising it "
                                 "spends "
                                 "rays and marches on surfaces that will look much the same either "
