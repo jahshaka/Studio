@@ -416,7 +416,7 @@ int main()
     // Lane SKY-FALLBACK-1 / ogre-patch 0048, and the case the patch exists for.
     //
     // Since the grid became a PER PROBE decision (R5-ROOM) a PARTIAL grid is the
-    // normal case — one crate in a new project keeps 7 of 18 candidates — and a
+    // normal case — one crate in a new project keeps 2 of 18 candidates — and a
     // grid of ANY size takes the sky cubemap off every datablock, because the
     // PBS env-probe slot has one occupant and under automatic PCC it is the
     // probe cube ARRAY. Everything the probe boxes do not contain was then left

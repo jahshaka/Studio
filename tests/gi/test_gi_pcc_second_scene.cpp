@@ -171,8 +171,35 @@ int main()
           "B's sky comes back the ordinary way when the grid is released — the binding\n"
           "          follows the singleton for every scene, not only the one that changed");
 
-    engine->destroyScene(b);
+    // ---- and the other way out: A is DESTROYED while its grid is bound -------
+    // A different branch of the same fix, and it needs its own case because it
+    // is the only one that cannot walk the scenes where it stands: teardownVct
+    // runs inside OgreScene::destroy(), where the vector the walk iterates is
+    // the one this scene is about to be erased from. So destroy() flags
+    // `mReleasedPccOnDestroy` and OgreEngine::destroyScene does the walk AFTER
+    // the erase. Without that hand-off B's mirror stays bound to nothing.
+    {
+        GiParams gi;
+        gi.mode = GiMode::VctPccHybrid;
+        gi.quality = GiQuality::Medium;
+        gi.numBounces = 1;
+        gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+        gi.updateBudget = 1;
+        CHECK(a->setGlobalIllumination(gi), "scene A builds its grid one more time");
+    }
+    render(engine.get(), 20);
+    CHECK(a->giStatus().pccBound, "...and it is bound again");
     engine->destroyScene(a);
+    a = nullptr;
+    render(engine.get(), 10);
+    viewB->readPixels(img);
+    const Colour afterDestroy = img.at(64, 64);
+    show("scene B's mirror, A destroyed", afterDestroy);
+    CHECK(afterDestroy.g > afterDestroy.r + 0.15f && afterDestroy.g > afterDestroy.b + 0.15f,
+          "B's sky comes back when the scene holding the grid is DESTROYED — the walk\n"
+          "          happens after the erase, never from inside the dying scene");
+
+    engine->destroyScene(b);
 
     std::printf(failures ? "\nFAILURES: %d\n" : "\nALL PASS\n", failures);
     return failures ? 1 : 0;
