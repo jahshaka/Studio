@@ -859,7 +859,7 @@ static void lodChain()
         // level of a mesh inside one draw call, and a level naming a vertex the
         // mesh does not have would draw garbage the moment the camera backs off.
         for (quint32 v : mesh->lodIndices.at(i))
-            if (int(v) >= mesh->numVerts && int(v) >= baseTris * 3) { ordered = false; break; }
+            if (int(v) >= mesh->numVerts) { ordered = false; break; }
         previousTris = tris;
         previousError = mesh->lodErrors.at(i);
     }

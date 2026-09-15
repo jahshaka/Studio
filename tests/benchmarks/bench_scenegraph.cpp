@@ -906,6 +906,10 @@ int main(int argc, char **argv)
                     gCounters[key + "draws"] = double(on[d].draws);
                     gCounters[key + "frame_ms"] = on[d].frameMs;
                     gCounters[key + "ratio"] = ratio;
+                    // The EQUALITY assumes every level's index buffer sits in the SAME
+                    // immutable VBO pool as level 0's (the pool's VkBuffer is part of the
+                    // vaoName); a chain that straddles a pool boundary costs one more
+                    // command without a defect — a dense fixture would need a tolerance.
                     CHECK(on[d].draws == off[d].draws,
                           (std::string("(f) ") + names[d] +
                            ": the LOD chain costs no extra draw command").c_str());
