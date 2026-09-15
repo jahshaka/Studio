@@ -318,8 +318,8 @@ QVector<Row> buildRows()
                                 "rays and marches on surfaces that will look much the same either "
                                 "way; lowering it hands more of the picture to the probes.");
         r.available = true;
-        r.get = [](const iris::ScenePtr &s) { return s->rayReflectRoughness; };
-        r.set = [](const iris::ScenePtr &s, int v) { s->rayReflectRoughness = v; };
+        r.get = [](const iris::ScenePtr &s) { return s->reflectionRoughnessCutoff; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->reflectionRoughnessCutoff = v; };
         out.append(r);
     }
     {

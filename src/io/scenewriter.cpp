@@ -194,7 +194,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["ssaoRadius"] = scene->ssaoRadius;
     sceneObj["smaaPreset"] = scene->smaaPreset;
     sceneObj["ssrMode"] = scene->ssrMode;
-    sceneObj["rayReflectRoughness"] = scene->rayReflectRoughness;
+    // ONE name, the World row's (lane SMALL-ITEMS D). The old
+    // `rayReflectRoughness` key is still READ (sceneformat.h) and never written
+    // again, so one save retires the old spelling per document.
+    sceneObj["reflectionRoughnessCutoff"] = scene->reflectionRoughnessCutoff;
     sceneObj["refractionsMode"] = scene->refractionsMode;
     sceneObj["distortionMode"] = scene->distortionMode;
     sceneObj["distortionStrength"] = scene->distortionStrength;

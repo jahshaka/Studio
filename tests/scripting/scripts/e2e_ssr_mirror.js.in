@@ -151,7 +151,7 @@ assert(fWorst >= 8,
 // ---- THE MARCH TAKES THE WORLD ROW (lane SSR-3) ---------------------------
 //
 // "Roughness Cutoff" (worldmodes reflectionRoughnessCutoff -> Scene::
-// rayReflectRoughness -> PostFxDesc::rayReflectRoughness) used to drive the
+// reflectionRoughnessCutoff -> PostFxDesc::reflectionRoughnessCutoff) used to drive the
 // TRACED reflections only; the screen-space march carried a second cutoff of
 // its own that nothing in the document could write, and its tooltip could not
 // honestly say the word "marched". It can now, and this is the proof from the

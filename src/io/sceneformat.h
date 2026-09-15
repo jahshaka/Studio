@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define SCENEFORMAT_H
 
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QString>
 #include <QVector>
 #include <QtGlobal>
@@ -117,6 +118,35 @@ inline int versionOf(const QJsonObject &projectObj)
 inline bool isRetiredNodeType(const QString &type)
 {
     return type == QLatin1String("viewer");
+}
+
+/// The reflection roughness cutoff, in whole per cent, out of a scene object —
+/// READING BOTH SPELLINGS (lane SMALL-ITEMS D, ledger §453 finding 4).
+///
+/// The field was `rayReflectRoughness` while a traced ray was the only thing it
+/// gated. Lane SSR-3 gave the screen-space march the same dial, so the name
+/// described half of what the number does, and the World row it comes from had
+/// been spelled `reflectionRoughnessCutoff` all along. The rename made that one
+/// name true everywhere; this function is the one place that still knows the
+/// old one, so that a project saved before it still opens with the value its
+/// author chose instead of silently falling back to the default. The writer
+/// emits the NEW key only, so one save retires the old spelling per document.
+///
+/// ABSENT (either spelling) = 40, which is the renderer's own answer and
+/// therefore what a document written before the row existed means — the
+/// reader-defaults trap: an absent-key fallback that disagrees with the
+/// constructor ships the whole corpus at the wrong value.
+///
+/// Bounds and precedence are asserted by document.characterisation.
+inline int readReflectionRoughnessCutoff(const QJsonObject &sceneObj)
+{
+    // value() and never operator[]: a non-const QJsonObject INSERTS a null on a
+    // subscript read, which would make a later contains() lie (gate fact,
+    // rayontiers lane).
+    QJsonValue v = sceneObj.value(QStringLiteral("reflectionRoughnessCutoff"));
+    if (v.isUndefined() || v.isNull())
+        v = sceneObj.value(QStringLiteral("rayReflectRoughness"));
+    return qBound(5, v.toInt(40), 100);
 }
 
 } // namespace sceneformat

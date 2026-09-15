@@ -29,7 +29,7 @@
 //      six-face re-render to notice; a planar reflector would need its own
 //      extra scene pass. This assertion is the reason the feature exists.
 //   4. THE ROUGHNESS CUTOFF IS HONOURED. Raise the floor's roughness above
-//      PostFxDesc::rayReflectRoughness — the World panel's "Roughness Cutoff"
+//      PostFxDesc::reflectionRoughnessCutoff — the World panel's "Roughness Cutoff"
 //      row, the ONE number both the march and the traced ray gate on since lane
 //      SSR-3 — and the reflection disappears, because a v1 with no
 //      roughness-varying blur must not draw a sharp mirror image on a matte
@@ -401,7 +401,7 @@ int main()
         tuned.ssrMaxDistance = 40.0f;
         tuned.ssrThickness = 0.8f;
         tuned.ssrIntensity = 0.9f;
-        tuned.rayReflectRoughness = 0.55f;   // the World row, mid-drag
+        tuned.reflectionRoughnessCutoff = 0.55f;   // the World row, mid-drag
         view->setPostFx(tuned);
         CHECK(view->workspaceGeneration() == gen,
               "SSR distance/thickness/intensity/roughness-cutoff are UNIFORMS, "
@@ -556,7 +556,7 @@ int main()
         PostFxDesc neutral;
         neutral.allowOffscreen = true;
         neutral.ssr = 1;
-        neutral.rayReflectRoughness = 0.0f;  // reject every surface
+        neutral.reflectionRoughnessCutoff = 0.0f;  // reject every surface
         view->setPostFx(neutral);
         render(engine.get(), 4);
         Image flat;
@@ -2147,7 +2147,7 @@ int main()
             PostFxDesc pfx;
             pfx.allowOffscreen = true;
             pfx.ssr = 2;                     // full-res rays, so nothing is half-res
-            pfx.rayReflectRoughness = 0.0f;  // ...and the reflection is empty everywhere
+            pfx.reflectionRoughnessCutoff = 0.0f;  // ...and the reflection is empty everywhere
             rv->setPostFx(pfx);
             render(engine.get(), 5);
             CHECK(rv->readPixels(withPrepass), "readPixels (prepass, zero confidence)");
@@ -2286,14 +2286,14 @@ int main()
             PostFxDesc base;
             base.allowOffscreen = true;
             base.ssr = 2;                      // full-res rays: no half-res blockiness
-            base.rayReflectRoughness = 1.0f;
+            base.reflectionRoughnessCutoff = 1.0f;
             cv->setPostFx(base);
             render(engine.get(), 5);
             const unsigned genCut = cv->workspaceGeneration();
 
             auto atCutoff = [&](float cutoff, const char *what) {
                 PostFxDesc p = base;
-                p.rayReflectRoughness = cutoff;
+                p.reflectionRoughnessCutoff = cutoff;
                 cv->setPostFx(p);
                 return measure(engine.get(), cv, what, 5);
             };
@@ -2339,12 +2339,12 @@ int main()
 
             if (envOn("JAH_SSR_DUMP")) {
                 PostFxDesc p = base;
-                p.rayReflectRoughness = 1.0f;
+                p.reflectionRoughnessCutoff = 1.0f;
                 cv->setPostFx(p);
                 render(engine.get(), 5);
                 Image img;
                 if (cv->readPixels(img)) writePpm(img, "ssr-cutoff-wide.ppm");
-                p.rayReflectRoughness = 0.29f;
+                p.reflectionRoughnessCutoff = 0.29f;
                 cv->setPostFx(p);
                 render(engine.get(), 5);
                 if (cv->readPixels(img)) writePpm(img, "ssr-cutoff-shut.ppm");

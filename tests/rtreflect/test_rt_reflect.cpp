@@ -32,7 +32,7 @@
 //   4. A GLOSSY SURFACE CONVERGES AND HOLDS STILL. At roughness 0.3 one ray per
 //      pixel per frame is noise; the temporal mean is the integral. Within 16
 //      frames the frame-to-frame change must fall below 2/255 — no flicker.
-//   5. THE ROUGHNESS GATE. Above `PostFxDesc::rayReflectRoughness` — the World
+//   5. THE ROUGHNESS GATE. Above `PostFxDesc::reflectionRoughnessCutoff` — the World
 //      panel's "Roughness Cutoff" row, and since lane SSR-3 the one number the
 //      screen-space march gates on too — the probe's own
 //      photograph is the better answer and no ray is spent: a wall at roughness
@@ -613,11 +613,11 @@ int main()
         // says nothing about tracing. It measured a rise where the trace was
         // OFF, which is how the first form of this was caught.
         //
-        // `rayReflectRoughness` is a UNIFORM. Dropping it to 0.05 closes the
+        // `reflectionRoughnessCutoff` is a UNIFORM. Dropping it to 0.05 closes the
         // gate on every panel in the band and changes nothing else in the
         // frame, so the difference IS the traced share.
         PostFxDesc noTrace = fx;
-        noTrace.rayReflectRoughness = 0.05f;
+        noTrace.reflectionRoughnessCutoff = 0.05f;
         view->setPostFx(noTrace);
         render(e, 48);
         Image img2NoRays;
@@ -770,14 +770,14 @@ int main()
         Image ref;
         {
             PostFxDesc closed = fx;
-            closed.rayReflectRoughness = 0.05f;      // nothing traced at all
+            closed.reflectionRoughnessCutoff = 0.05f;      // nothing traced at all
             view->setPostFx(closed);
             render(e, 48);
             view->readPixels(ref);
         }
         for (int k = 0; k < 7; ++k) {
             PostFxDesc atCut = fx;
-            atCut.rayReflectRoughness = cuts[k];
+            atCut.reflectionRoughnessCutoff = cuts[k];
             view->setPostFx(atCut);
             render(e, 48);
             Image img3;
