@@ -22,7 +22,8 @@ class QString;
 /// Runs the script with the full verb surface (engine mode) or document-only
 /// (--headless). Exit code: 1 on script error, else the script's numeric
 /// completion value (clamped 0-255) or 0.
-int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bool headless);
+int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bool headless,
+                  bool live = false);
 
 /// Writes the registry-generated verb reference (docs/SCRIPTING.md is this
 /// output — generated, never hand-edited). Returns the process exit code.

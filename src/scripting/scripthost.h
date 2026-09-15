@@ -35,6 +35,16 @@ class ProjectManager;
 class QUndoStack;
 struct StudioServices;
 
+/// WHAT A SCRIPT RUN IN FLIGHT IS DOING TO THE RENDER LOOP (SCRIPTING_LIVE_SPEC
+/// §3.1). Lives here, on the one struct both halves of the app share, so the
+/// hook below can carry it without the scripting core knowing what a viewport
+/// is and without the viewport knowing what a script is.
+enum class ScriptRunState {
+    None,   ///< no run: the loop is nobody's business but its own
+    Off,    ///< a run that must see no frame at all between its verbs
+    Live    ///< a run the user is watching: the loop draws, paced
+};
+
 struct ScriptHost
 {
     MainWindow      *mainWindow = nullptr;
@@ -71,9 +81,14 @@ struct ScriptHost
     /// Unset = false: verbs that requireEngine() fail cleanly.
     std::function<bool()> engineReady;
 
-    /// Called with true/false around the per-run undo macro so the app can
-    /// guard operations that must not run inside an open macro (e.g.
-    /// UiManager::clearUndoStack). Optional.
+    /// Called with true/false around the per-run undo macro. It is THE RUN'S
+    /// SCOPE, and since CLOSE-2 the app hangs the database's gesture
+    /// transaction on it (MainWindow: one beginBatch/endBatch pair, so 300
+    /// library writes in a loop cost one commit instead of 300). The undo half
+    /// it was originally written for is gone — UndoService answers "is a run in
+    /// progress?" from the run macro it already arms, not from a flag set here
+    /// — and UiManager, which the old note named, has not existed since the
+    /// architecture cleanup. Optional.
     std::function<void(bool)> macroOpenChanged;
 
     /// THE RUN'S ONE UNDO ENTRY. A script run is one undo step — but the entry
@@ -148,12 +163,40 @@ struct ScriptHost
         beginUndoMacro(runMacroText);
         if (macroOpenChanged) macroOpenChanged(true);
     }
+    /// AFTER THE RUN, NOT BETWEEN TWO VERBS. Some verbs deliberately defer
+    /// their effect "until the script has finished" and used to get that for
+    /// free by posting a queued call: the UI thread was blocked inside the JS,
+    /// so nothing queued could be delivered until the run returned. It is NOT
+    /// free any more — the script runs on a worker and this thread pumps
+    /// between verbs, so a queued call lands MID-RUN. (Found the hard way:
+    /// app.quit() closed the main window, and with it the script engine and the
+    /// host, while the run was still going — a SIGSEGV in app.shutdown_order.)
+    /// Verbs that mean "afterwards" must say so through this. Unset means there
+    /// is no run to wait for: the callback runs on the next event-loop turn.
+    std::function<void(std::function<void()>)> afterRun;
+
+    /// THE RENDER LOOP, for the length of one script run (SCRIPTING_LIVE_SPEC
+    /// §3.1). Called ONCE when a run starts, with its policy, and once with
+    /// None when it ends — one hook, because "does the loop draw" and "how
+    /// often" are two answers to the same question and two flags could
+    /// disagree. Off is what a blocked UI thread used to give for free and what
+    /// every frame-stepping test script still needs; Live draws, paced by the
+    /// display's period. Unset (the CLI's document-only hosts, the unit test)
+    /// means there is no loop to tell.
+    std::function<void(ScriptRunState)> scriptRunState;
 
     /// The last thing a verb refused or threw, whichever came last (ApiModule::
     /// refuse/fail). Read back by app.lastError(): a refusal answers with a
     /// falsy VALUE rather than an exception, so this is where the reason goes.
     /// One session, one slot: it is a diagnostic, not a queue.
     QString lastError;
+
+    /// WHAT THE VERB JUST THREW, waiting to be rethrown in the script (see
+    /// ApiModule::fail). Written by fail(), read and cleared by the script
+    /// bridge around every single verb call, so it never outlives one. Distinct
+    /// from lastError, which is a diagnostic a script can read back at leisure
+    /// and which a refusal writes too.
+    QString pendingError;
 
     bool isProjectOpen() const { return projectOpen && projectOpen(); }
     bool isEngineReady() const { return engineReady && engineReady(); }

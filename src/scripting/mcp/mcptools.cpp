@@ -12,7 +12,9 @@ For more information see the LICENSE file
 #include "scripting/mcp/mcptools.h"
 
 #include <QBuffer>
+#include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QSet>
 #include <QFile>
 #include <QImage>
@@ -112,7 +114,15 @@ QJsonArray McpTools::listTools() const
               "rejected. The engine refuses rather than throws, so those never reach the "
               "script's return value or its error. They are recorded when a frame runs, so "
               "a run that changes the scene without calling editor.frame(n) usually reports "
-              "them on the NEXT run that does. app.engineErrors() has the cumulative record.")
+              "them on the NEXT run that does. app.engineErrors() has the cumulative record.\n"
+              "feedback decides whether the VIEWPORT keeps drawing while the script works. "
+              "'live' (the default) paints as it goes — the user watches the scene being "
+              "built, which is what makes this tool worth watching at all — at the price of "
+              "the frames: expect a run to take one and a half to two times as long as it "
+              "would otherwise, more if it is drawing something expensive. Pass 'off' for a "
+              "batch script that would otherwise brush the timeout, or when nobody is "
+              "looking: the picture holds still, nothing at all happens between two verbs, "
+              "and the run goes at full speed.")
               .arg(moduleNames.join(QStringLiteral(", ")))
               .arg(kDefaultScriptTimeoutMs) },
         { "inputSchema", QJsonObject{
@@ -131,7 +141,14 @@ QJsonArray McpTools::listTools() const
                     { "description",
                       QStringLiteral("Milliseconds before the run is interrupted "
                                      "(default %1, minimum 50, maximum 600000).")
-                          .arg(kDefaultScriptTimeoutMs) } } } } },
+                          .arg(kDefaultScriptTimeoutMs) } } },
+                { "feedback", QJsonObject{
+                    { "type", "string" },
+                    { "enum", QJsonArray{ "live", "off" } },
+                    { "description",
+                      "Whether the viewport keeps drawing while the script runs. "
+                      "'live' (default) paints as it goes and costs the frames; "
+                      "'off' holds the picture and runs at full speed." } } } } },
             { "required", QJsonArray{ "script" } } } } });
 
     tools.append(QJsonObject{
@@ -409,6 +426,20 @@ QString boundedError(const QString &message)
 
 } // namespace
 
+bool McpTools::waitForScriptIdle()
+{
+    if (!mEngine || !mEngine->isRunning()) return true;
+    // The ImportBatchRunner::waitForDone shape: pump, in slices, with a
+    // ceiling. AllEvents on purpose — a live run means the app is answering,
+    // and holding its input back for the length of somebody else's script
+    // would be the freeze this whole change removed.
+    QElapsedTimer waited;
+    waited.start();
+    while (mEngine->isRunning() && waited.elapsed() < kDefaultScriptTimeoutMs)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    return !mEngine->isRunning();
+}
+
 QJsonObject McpTools::call(const QString &name, const QJsonObject &args)
 {
     // EVERY call goes through here, which is why the logging does too (ledger
@@ -502,7 +533,23 @@ QJsonObject McpTools::runScript(const QJsonObject &args)
     QMetaObject::Connection tap = QObject::connect(
         mEngine, &ScriptEngine::consoleOutput,
         [&consoleLines](const QString &line) { consoleLines.append(line); });
-    const ScriptResult result = mEngine->evaluate(source, fileName, true, timeoutMs);
+    // LIVE (decision D2, ledger §374): the owner watches an agent drive the
+    // editor, so an MCP run should paint as it goes, like a console run. The
+    // preference (Preferences > Scripting) covers both callers — and the CALLER
+    // can override it per run (round 2, P2): an agent running a long batch
+    // script that would brush the 30 s default asks for 'off' and gets the full
+    // speed back. An unrecognised value is a refusal, not a silent default: a
+    // typo'd feedback that quietly ran live would be a mystery to debug.
+    ScriptRunPolicy policy = mEngine->interactivePolicy();
+    const QString feedback = args.value(QLatin1String("feedback")).toString();
+    if (!feedback.isEmpty()) {
+        bool ok = false;
+        policy = ScriptEngine::policyFromName(feedback, ok);
+        if (!ok)
+            return textResult(QStringLiteral("run_script: feedback must be 'live' or 'off', "
+                                             "not '%1'").arg(feedback), true);
+    }
+    const ScriptResult result = mEngine->evaluate(source, fileName, true, timeoutMs, policy);
     QObject::disconnect(tap);
 
     QJsonArray engineErrors;
@@ -624,6 +671,10 @@ QJsonObject McpTools::describeScene(const QJsonObject &args)
     if (wantWorld) expr += QStringLiteral(", world: world.get()");
     expr += QStringLiteral(" })");
 
+    if (!waitForScriptIdle())
+        return textResult(QStringLiteral("describe_scene: a script has been running for "
+                                         "longer than this tool waits — try again, or stop it "
+                                         "in the console"), true);
     const ScriptResult result = mEngine->evaluate(expr, QStringLiteral("<describe_scene>"), false);
     if (!result.ok)
         return textResult(QStringLiteral("describe_scene: %1").arg(result.error), true);
@@ -645,6 +696,15 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
 
     const int width = qBound(16, args.value(QLatin1String("width")).toInt(800), 4096);
     const int height = qBound(16, args.value(QLatin1String("height")).toInt(600), 4096);
+
+    // ONCE, HERE, for all three branches below: a screenshot taken while a
+    // script is halfway through building a scene is a picture of nothing in
+    // particular, and the tool has three evaluate() calls (the player render,
+    // the editor render, the camera pose) that would each have to refuse.
+    if (!waitForScriptIdle())
+        return textResult(QStringLiteral("screenshot: a script has been running for longer than "
+                                         "this tool waits — try again, or stop it in the "
+                                         "console"), true);
 
     // THE PLAYER SPACE (verb-coverage audit F1). The tool carries bytes; the
     // VERB carries the capability (player.screenshot renders the player's own
@@ -837,6 +897,10 @@ QJsonObject McpTools::browseAssets(const QJsonObject &args)
     if (args.contains(QLatin1String("drawer")))
         listArgs["drawer"] = args.value(QLatin1String("drawer")).toInt();
 
+    if (!waitForScriptIdle())
+        return textResult(QStringLiteral("browse_assets: a script has been running for longer "
+                                         "than this tool waits — try again, or stop it in the "
+                                         "console"), true);
     const ScriptResult listed = mEngine->evaluate(
         QStringLiteral("assets.list(%1)").arg(QString::fromUtf8(
             QJsonDocument(listArgs).toJson(QJsonDocument::Compact))),

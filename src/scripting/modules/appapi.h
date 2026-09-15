@@ -65,6 +65,7 @@ public:
     Q_INVOKABLE QVariantMap columns();
     Q_INVOKABLE QVariantList docks();
     Q_INVOKABLE QVariant lastError();
+    Q_INVOKABLE QVariantMap scriptPolicy(const QString &mode = QString());
     Q_INVOKABLE QVariantMap theme();
     Q_INVOKABLE QVariantMap styleSheets(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList dialogs();

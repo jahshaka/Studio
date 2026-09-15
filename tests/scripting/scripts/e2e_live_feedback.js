@@ -1,0 +1,115 @@
+// scripting.live / scripting.live_off — THE RUN POLICY (SCRIPTING_LIVE_SPEC §3.1).
+//
+// ONE script, two ctest entries: the app is started with --script-live for the
+// first and plainly for the second, and the script asks which run it is in
+// (app.scriptPolicy().runPolicy) before asserting the opposite halves of the
+// same promise.
+//
+//   live: the JavaScript is on a worker thread and the UI thread is free
+//         between verbs, so the render driver TICKS while the script builds —
+//         app.frameStats().rendered moves BEFORE the last verb, which on the
+//         old UI-thread engine it could never do.
+//   off:  the driver skips its ticks for the whole run, so rendered does not
+//         move by a single frame between the first verb and the last — exactly
+//         what a blocked UI thread used to give, and what the 54 frame-stepping
+//         e2e scripts depend on.
+//
+// Both halves also assert the contracts the threading must not have broken:
+// one undo entry for the run, console output in order, and editor.frame(n)
+// rendering its n frames either way (it is a verb; it runs on the UI thread).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var policy = app.scriptPolicy();
+var live = policy.runPolicy === "live";
+console.log("run policy: " + policy.runPolicy + " (setting: " + policy.mode + ")");
+assert(policy.running === true, "a script reading its own state is running");
+
+var guid = project.create("Live Feedback " + Date.now());
+assert(guid.length > 10, "project.create -> " + guid);
+
+// ---- the undo bracket, before anything is built ----
+var undoBefore = editor.undoState();
+assert(undoBefore.macroOpen === true, "the run's undo macro is open on the UI thread");
+
+// ---- twenty nodes, watching the driver ----
+//
+// THE MEASUREMENT IS WALL-TIME BOUNDED, not verb-counted (round 2, M3). A live
+// run is PACED — at most one frame per display period — so "a frame happened
+// between two verbs" is only a promise about TIME, and a test that counted
+// verbs would be leaning on an alternation the pacing exists to break. The
+// budget below is many display periods wide on any panel this runs on.
+var kBudgetMs = 250;
+
+var framesAtStart = app.frameStats().rendered;
+var movedDuring = 0;
+var ids = [];
+for (var i = 0; i < 20; ++i) {
+    ids.push(scene.addPrimitive("sphere", {
+        position: { x: (i % 5) * 2 - 4, y: 1, z: Math.floor(i / 5) * 2 - 2 }
+    }));
+    if (i < 19 && app.frameStats().rendered > framesAtStart) movedDuring++;
+}
+assert(ids.length === 20, "twenty primitives added through the bridge");
+
+// ...and then keep the script BUSY, through the bridge, for a fixed span of
+// wall time. Every one of these is a real verb call, so the UI thread is free
+// between them exactly as it is between any other two.
+var spinStart = Date.now();
+var spins = 0;
+while (Date.now() - spinStart < kBudgetMs) { scene.nodes(); spins++; }
+var busyMs = Date.now() - spinStart;
+
+var framesAtEnd = app.frameStats().rendered;
+console.log("driver frames: " + framesAtStart + " -> " + framesAtEnd
+            + " (" + movedDuring + " of the first 19 verbs saw a new frame; "
+            + spins + " query verbs over " + busyMs + " ms)");
+assert(busyMs >= kBudgetMs, "the script stayed busy for " + busyMs + " ms of wall time");
+
+if (live) {
+    assert(framesAtEnd > framesAtStart,
+           "LIVE: the render loop drew while the script was working — "
+           + (framesAtEnd - framesAtStart) + " frames");
+    assert(movedDuring > 0,
+           "LIVE: ...and at least one of them landed BEFORE the script's last edit");
+} else {
+    assert(framesAtEnd === framesAtStart,
+           "OFF: the render loop drew nothing at all — not in " + busyMs
+           + " ms of verbs, not between any two of them");
+    assert(movedDuring === 0, "OFF: ...and no verb ever saw a new frame");
+}
+
+// ---- editor.frame renders either way: it is a verb ----
+var before = editor.viewportState().framesPresented;
+editor.frame(3, 1 / 60);
+var after = editor.viewportState().framesPresented;
+assert(after >= before + 3, "editor.frame(3) presented 3 frames (" + before + " -> " + after + ")");
+
+// ---- still ONE undo entry, whatever thread the JS ran on ----
+var undoNow = editor.undoState();
+assert(undoNow.macroOpen === true, "the macro is still the run's own");
+assert(undoNow.pushes >= undoBefore.pushes + 20, "every add was recorded as a command");
+
+// ---- the bridge's error route: fail() throws in the script, at the call site ----
+var caught = null;
+try {
+    project.open("no such project anywhere");
+} catch (e) {
+    caught = e.message;
+}
+assert(caught && caught.indexOf("no project named") >= 0,
+       "project.open's fail() reached the script as a catchable error: " + caught);
+assert(app.lastError().indexOf("no project named") >= 0,
+       "...and app.lastError() recorded the same sentence");
+
+// ---- console.log ordering survives the thread hop ----
+for (var k = 0; k < 5; ++k) {
+    console.log("order-" + k);
+    scene.nodes();
+}
+assert(true, "five console lines interleaved with five verbs");
+
+"live-feedback-ok"

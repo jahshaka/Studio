@@ -13,6 +13,10 @@ add_executable(test_script_engine test_script_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apimodule.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apiregistry.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp
+    # The worker thread + the verb bridge: the script engine IS these three
+    # objects since it moved off the UI thread (SCRIPTING_LIVE_SPEC), and the
+    # unit test drives its fake module through the same dispatch the app uses.
+    ${CMAKE_SOURCE_DIR}/src/scripting/scriptworker.cpp
     # The session log's script-run record (SESSION_LOG_SPEC §5) is emitted from
     # ScriptEngine::evaluate, the one entry point the console dock, --script and
     # MCP run_script all share. JahLog is a LEAF service — Qt plus iris::Logger
@@ -54,6 +58,36 @@ function(add_script_e2e name scriptfile)
         LABELS "scripting"
         TIMEOUT 180)
 endfunction()
+
+# ---- THE RUN POLICY (SCRIPTING_LIVE_SPEC §3.1) --------------------------
+#
+# The same script, twice, with the only difference being --script-live: the
+# live half proves the render loop DRAWS between the script's verbs (which the
+# UI-thread engine could not do at all), the off half proves it draws NOTHING
+# between them — the property every other e2e script here is written against.
+# They are separate ctest entries rather than one, because "what a run's policy
+# does to the driver" is decided when the run starts and cannot be switched
+# from inside it.
+foreach(_variant live off)
+    set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-live_feedback_${_variant})
+    file(MAKE_DIRECTORY ${_home})
+    file(MAKE_DIRECTORY ${_home}/run)
+    if(_variant STREQUAL live)
+        set(_flag --script-live)
+        set(_name scripting.live)
+    else()
+        set(_flag)
+        set(_name scripting.live_off)
+    endif()
+    add_test(NAME ${_name}
+             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_feedback.js ${_flag}
+             WORKING_DIRECTORY ${_home}/run)
+    set_tests_properties(${_name} PROPERTIES
+        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+        LABELS "scripting"
+        TIMEOUT 180)
+endforeach()
 
 add_script_e2e(build_scene e2e_build_scene.js)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl

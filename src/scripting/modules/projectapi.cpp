@@ -13,7 +13,6 @@ For more information see the LICENSE file
 
 #include <QDir>
 #include <QFileInfo>
-#include <QJSEngine>
 #include <QStandardPaths>
 
 #include "export/exportservice.h"
@@ -178,8 +177,11 @@ bool ProjectApi::open(const QString &guidOrName)
     QString name;
     const QString guid = resolveGuid(guidOrName, &name);
     if (guid.isEmpty()) {
-        // resolveGuid already threw for an ambiguous name; add the not-found case.
-        if (QJSEngine *js = qjsEngine(this); !js || !js->hasError())
+        // resolveGuid already threw for an ambiguous name; add the not-found
+        // case. `host.pendingError` is where a fail() waits to be rethrown by
+        // the script bridge (SCRIPTING_LIVE_SPEC) — it replaced reading
+        // hasError() off the engine that used to wrap this module.
+        if (host.pendingError.isEmpty())
             fail(QStringLiteral("project.open: no project named or guid '%1'").arg(guidOrName));
         return false;
     }
@@ -212,7 +214,7 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     QString name;
     const QString guid = resolveGuid(guidOrName, &name);
     if (guid.isEmpty()) {
-        if (QJSEngine *js = qjsEngine(this); !js || !js->hasError())
+        if (host.pendingError.isEmpty())
             fail(QStringLiteral("project.openAsync: no project named or guid '%1'").arg(guidOrName));
         return false;
     }

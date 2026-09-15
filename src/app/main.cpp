@@ -385,7 +385,7 @@ int main(int argc, char *argv[])
         return finalizeAppExit(runDumpApiDocs(window, cli.dumpDocsPath));
 
     if (!cli.scriptPath.isEmpty())
-        return runScriptFile(window, app, cli.scriptPath, cli.headlessScript);
+        return runScriptFile(window, app, cli.scriptPath, cli.headlessScript, cli.liveScript);
 
     if (cli.mcpServe)
         return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);

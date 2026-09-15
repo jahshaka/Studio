@@ -46,6 +46,8 @@ ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
 
     auto *runBtn = new QPushButton(QStringLiteral("Run"), this);
     auto *fileBtn = new QPushButton(QStringLiteral("Run File…"), this);
+    mRunBtn = runBtn;
+    mFileBtn = fileBtn;
     auto *clearBtn = new QPushButton(QStringLiteral("Clear"), this);
     auto *helpBtn = new QPushButton(QStringLiteral("Help"), this);
 
@@ -82,7 +84,11 @@ ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
     ThemeRoles::setMonospace(mLog, 12);
     ThemeRoles::setMonospace(mInput, 12);
 
-    connect(runBtn, &QPushButton::clicked, this, &ScriptConsole::runInput);
+    connect(runBtn, &QPushButton::clicked, this, &ScriptConsole::runOrStop);
+    // The engine drives the button, not the click: an MCP run or a --script
+    // run owns the same engine, and this console must not offer Run while one
+    // of those is in flight either.
+    connect(mEngine, &ScriptEngine::runningChanged, this, &ScriptConsole::setRunningUi);
     connect(fileBtn, &QPushButton::clicked, this, &ScriptConsole::chooseAndRunFile);
     connect(clearBtn, &QPushButton::clicked, mLog, &QPlainTextEdit::clear);
     connect(helpBtn, &QPushButton::clicked, this, [this]() {
@@ -107,8 +113,26 @@ void ScriptConsole::appendLine(const QString &text, const QString &color)
     mLog->verticalScrollBar()->setValue(mLog->verticalScrollBar()->maximum());
 }
 
+void ScriptConsole::setRunningUi(bool running)
+{
+    if (mRunBtn) mRunBtn->setText(running ? QStringLiteral("Stop") : QStringLiteral("Run"));
+    if (mFileBtn) mFileBtn->setEnabled(!running);
+    if (mInput) mInput->setReadOnly(running);
+}
+
+void ScriptConsole::runOrStop()
+{
+    if (mEngine->isRunning()) {
+        appendLine(QStringLiteral("stopping…"), QStringLiteral("#8ec6ff"));
+        mEngine->stop();
+        return;
+    }
+    runInput();
+}
+
 void ScriptConsole::runInput()
 {
+    if (mEngine->isRunning()) return;
     const QString source = mInput->toPlainText().trimmed();
     if (source.isEmpty()) return;
 
@@ -118,7 +142,11 @@ void ScriptConsole::runInput()
     mInput->clear();
 
     appendLine(QStringLiteral("> %1").arg(source), QStringLiteral("#9ad38f"));
-    const auto result = mEngine->evaluate(source, QStringLiteral("<console>"));
+    // LIVE BY DEFAULT: a person is watching this window, and the whole point
+    // of the run policy is that they see the script work (the preference is
+    // Preferences > Scripting, or app.scriptPolicy from a script).
+    const auto result = mEngine->evaluate(source, QStringLiteral("<console>"), true, 0,
+                                          mEngine->interactivePolicy());
     if (result.ok) {
         const QString shown = result.toString();
         if (!shown.isEmpty()) appendLine(shown);
@@ -153,13 +181,18 @@ void ScriptConsole::announce(const QString &text)
 
 void ScriptConsole::runFile(const QString &path)
 {
+    if (mEngine->isRunning()) {
+        appendLine(QStringLiteral("a script is already running"), QStringLiteral("#ff7a6e"));
+        return;
+    }
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         appendLine(QStringLiteral("cannot open %1").arg(path), QStringLiteral("#ff7a6e"));
         return;
     }
     appendLine(QStringLiteral("> run %1").arg(path), QStringLiteral("#9ad38f"));
-    const auto result = mEngine->evaluate(QString::fromUtf8(file.readAll()), path);
+    const auto result = mEngine->evaluate(QString::fromUtf8(file.readAll()), path, true, 0,
+                                          mEngine->interactivePolicy());
     if (result.ok) {
         const QString shown = result.toString();
         if (!shown.isEmpty()) appendLine(shown);

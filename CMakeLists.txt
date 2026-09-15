@@ -195,6 +195,7 @@ set(SRCS
     src/bridge/enginehost.cpp
     src/scripting/apimodule.cpp
     src/scripting/apiregistry.cpp
+    src/scripting/scriptworker.cpp
     src/scripting/scriptengine.cpp
     src/ui/panels/scriptconsole.cpp
     src/scripting/modules/projectapi.cpp
@@ -248,6 +249,7 @@ set(SRCS
     src/scripting/claude/claudechathost.cpp
     src/ui/windows/claudechatwindow.cpp
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
+    src/ui/dialogs/preferences/scriptingsettingswidget.cpp
     src/ui/dialogs/preferences/cachesettingswidget.cpp
     src/ui/dialogs/preferences/perfsettingswidget.cpp
     src/ui/dialogs/preferences/assetssettingswidget.cpp
@@ -489,6 +491,7 @@ set(HEADERS
     src/scripting/scripthost.h
     src/scripting/apimodule.h
     src/scripting/apiregistry.h
+    src/scripting/scriptworker.h
     src/scripting/scriptengine.h
     src/ui/panels/scriptconsole.h
     src/scripting/modules/moduleshared.h
@@ -540,6 +543,7 @@ set(HEADERS
     src/scripting/claude/claudechathost.h
     src/ui/windows/claudechatwindow.h
     src/ui/dialogs/preferences/mcpsettingswidget.h
+    src/ui/dialogs/preferences/scriptingsettingswidget.h
     src/ui/dialogs/preferences/cachesettingswidget.h
     src/ui/dialogs/preferences/perfsettingswidget.h
     src/ui/dialogs/preferences/assetssettingswidget.h

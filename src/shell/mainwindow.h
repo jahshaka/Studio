@@ -170,7 +170,6 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-    void setSceneAnimTime(float time);
     void stopAnimWidget();
 
     void grabOpenGLContextHack();
@@ -606,7 +605,6 @@ public slots:
 
     void addParticleSystem();
 
-    void updateAnim();
 
     void sceneTreeCustomContextMenu(const QPoint&);
     void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
@@ -796,7 +794,6 @@ private:
 
     QSharedPointer<iris::Scene> scene;
 
-    QTimer* timer;
 
     TransformWidget* transformUi;
 

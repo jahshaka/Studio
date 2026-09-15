@@ -60,6 +60,18 @@ public:
     QJsonObject call(const QString &name, const QJsonObject &args);
 
 private:
+    /// A TOOL THAT ONLY READS WAITS FOR A RUN IN FLIGHT instead of failing on
+    /// it (round 2, M4). Before the script engine moved off the UI thread these
+    /// tools could not arrive mid-run at all — the thread was blocked, and the
+    /// request queued behind it — so "a console script is running" was never an
+    /// answer an agent had to handle. It is now, and for a describe_scene or a
+    /// screenshot the honest answer is the one it was always going to get, a
+    /// moment later. Pumps this thread's event loop (the run's verb hops ARE
+    /// events on it; a blocking wait would deadlock), bounded by the same
+    /// budget a run gets. True when the engine is idle and the caller may
+    /// proceed; false means the run outlasted the budget and the tool refuses.
+    bool waitForScriptIdle();
+
     QJsonObject runScript(const QJsonObject &args);
     QJsonObject apiDocs(const QJsonObject &args);
     QJsonObject describeScene(const QJsonObject &args);

@@ -11,94 +11,9 @@ For more information see the LICENSE file
 
 #include "scripting/apiregistry.h"
 
-#include <QJSEngine>
 #include <QJsonObject>
 #include <QMetaMethod>
 
-namespace {
-
-/// The `api` JS global: version, help, verbs. Defined here so the registry stays
-/// a plain class; the object holds a non-owning pointer to its registry.
-class ApiInfoObject : public QObject
-{
-    Q_OBJECT
-    Q_PROPERTY(QString version READ version CONSTANT)
-public:
-    explicit ApiInfoObject(ApiRegistry *registry, QObject *parent = nullptr)
-        : QObject(parent), mRegistry(registry) {}
-
-    QString version() const { return ApiRegistry::apiVersion(); }
-
-    Q_INVOKABLE QString help(const QString &topic = QString()) const
-    {
-        return mRegistry->helpText(topic);
-    }
-
-    Q_INVOKABLE QJsonArray verbs() const
-    {
-        return mRegistry->schema();
-    }
-
-private:
-    ApiRegistry *mRegistry;
-};
-
-/// What the tracing shims call. One per engine, parented like the `api`
-/// object so it dies with the ScriptEngine.
-class VerbTraceSink : public QObject
-{
-    Q_OBJECT
-public:
-    explicit VerbTraceSink(ApiRegistry *registry, QObject *parent = nullptr)
-        : QObject(parent), mRegistry(registry) {}
-
-    Q_INVOKABLE void note(const QString &qualifiedName)
-    {
-        mRegistry->noteVerbCall(qualifiedName);
-    }
-
-private:
-    ApiRegistry *mRegistry;
-};
-
-/// The shim installer. Written as JS because the thing it has to produce is a
-/// JS function per verb that forwards `arguments` to the real QObject method —
-/// `target[v].apply(target, arguments)` keeps the wrapper as `this`, so
-/// overloads, default arguments, thrown JS errors and return values all behave
-/// exactly as they do without it. The global object is passed IN: QJSEngine's
-/// V4 has no `globalThis` (checked, Qt 6.10).
-const char *kInstallShims = R"JS(
-(function(global, sink, modules) {
-    var saved = {};
-    for (var i = 0; i < modules.length; ++i) {
-        (function(entry) {
-            var name = entry.name;
-            var target = global[name];
-            if (!target) return;
-            saved[name] = target;
-            var shim = {};
-            for (var j = 0; j < entry.verbs.length; ++j) {
-                (function(verb) {
-                    shim[verb] = function() {
-                        sink.note(name + '.' + verb);
-                        return target[verb].apply(target, arguments);
-                    };
-                })(entry.verbs[j]);
-            }
-            global[name] = shim;
-        })(modules[i]);
-    }
-    return saved;
-})
-)JS";
-
-const char *kRemoveShims = R"JS(
-(function(global, saved) {
-    for (var name in saved) global[name] = saved[name];
-})
-)JS";
-
-} // namespace
 
 const char *ApiRegistry::apiVersion() { return "0.1.0"; }
 
@@ -124,23 +39,9 @@ ApiModule *ApiRegistry::module(const QString &jsName) const
     return nullptr;
 }
 
-void ApiRegistry::install(QJSEngine &engine)
-{
-    for (auto *m : mModules)
-        engine.globalObject().setProperty(m->jsName(), engine.newQObject(m));
-
-    // `api` — owned by the JS engine via QObject ownership rules? No: parent it
-    // to the module list's world by giving it the engine as parent is not
-    // possible (QJSEngine is not its parent by default). Parent it to the first
-    // module's parent when available so it dies with the ScriptEngine.
-    QObject *owner = mModules.isEmpty() ? nullptr : mModules.first()->parent();
-    auto *info = new ApiInfoObject(this, owner);
-    engine.globalObject().setProperty(QStringLiteral("api"), engine.newQObject(info));
-}
-
 void ApiRegistry::noteVerbCall(const QString &qualifiedName)
 {
-    if (mTracePaused) return;
+    if (!mTracing) return;
     for (auto &entry : mTrace) {
         if (entry.first == qualifiedName) { ++entry.second; return; }
     }
@@ -158,45 +59,6 @@ QStringList ApiRegistry::takeTrace()
                                   : QStringLiteral("%1 x%2").arg(entry.first).arg(entry.second));
     mTrace.clear();
     return out;
-}
-
-void ApiRegistry::setTracing(QJSEngine &engine, bool on)
-{
-    if (on == mTracing) return;
-    // The saved originals live in the JS engine between arm and disarm; a
-    // property on the global object is the one place both halves can reach
-    // (and it is removed again on disarm).
-    static const QString kSavedKey = QStringLiteral("__jahSavedApiModules");
-    static const QString kSinkKey  = QStringLiteral("__jahVerbTraceSink");
-    if (on) {
-        QJSValue sink = engine.globalObject().property(kSinkKey);
-        if (!sink.isQObject()) {
-            QObject *owner = mModules.isEmpty() ? nullptr : mModules.first()->parent();
-            sink = engine.newQObject(new VerbTraceSink(this, owner));
-            engine.globalObject().setProperty(kSinkKey, sink);
-        }
-        QJSValue modules = engine.newArray(uint(mModules.size()));
-        for (int i = 0; i < mModules.size(); ++i) {
-            QJSValue entry = engine.newObject();
-            entry.setProperty(QStringLiteral("name"), mModules[i]->jsName());
-            const QVector<VerbInfo> verbs = mModules[i]->verbs();
-            QJSValue names = engine.newArray(uint(verbs.size()));
-            for (int v = 0; v < verbs.size(); ++v) names.setProperty(uint(v), verbs[v].name);
-            entry.setProperty(QStringLiteral("verbs"), names);
-            modules.setProperty(uint(i), entry);
-        }
-        QJSValue installer = engine.evaluate(QString::fromLatin1(kInstallShims));
-        QJSValue saved = installer.call({ engine.globalObject(), sink, modules });
-        if (saved.isError()) return;   // never break scripting for a log
-        engine.globalObject().setProperty(kSavedKey, saved);
-        mTracing = true;
-        return;
-    }
-    QJSValue saved = engine.globalObject().property(kSavedKey);
-    if (saved.isObject())
-        engine.evaluate(QString::fromLatin1(kRemoveShims)).call({ engine.globalObject(), saved });
-    engine.globalObject().deleteProperty(kSavedKey);
-    mTracing = false;
 }
 
 QStringList ApiRegistry::validate() const
@@ -226,20 +88,18 @@ QStringList ApiRegistry::validate() const
                 problems << QStringLiteral("duplicate verb '%1'").arg(id);
             seenVerbs << v.name;
 
-            // NAMES THE JS WRAPPER OWNS. A module is installed as a QObject
-            // wrapper, and the engine puts its own members on that wrapper:
-            // `destroy` (the QML object-lifetime method) and `toString`
-            // SHADOW an invokable of the same name completely — the verb is
-            // registered, documented, callable, and silently never runs
-            // (found the hard way, 2026-09-10: texture.destroy returned
-            // undefined and destroyed nothing). There is no way to win that
-            // fight from this side, so the registry refuses the name.
-            static const QStringList kShadowed = { QStringLiteral("destroy"),
-                                                   QStringLiteral("toString"),
-                                                   QStringLiteral("objectName") };
+            // NAMES JAVASCRIPT ITSELF OWNS. Modules reach a script as plain JS
+            // objects now (the QObject wrappers died with the UI-thread engine,
+            // SCRIPTING_LIVE_SPEC), so `destroy` and `objectName` are ordinary
+            // names again — the 2026-09-10 trap where texture.destroy returned
+            // undefined and destroyed nothing is closed at the cause. What is
+            // still not a verb name is `toString`: every JS object inherits one
+            // and string coercion would call the verb.
+            static const QStringList kShadowed = { QStringLiteral("toString") };
             if (kShadowed.contains(v.name))
-                problems << QStringLiteral("%1 is shadowed by the JS object wrapper's own "
-                                           "'%2' and can never be called — rename the verb")
+                problems << QStringLiteral("%1 collides with JavaScript's own "
+                                           "'%2' and would be called by string coercion — "
+                                           "rename the verb")
                                 .arg(id, v.name);
 
             // The metadata must describe a method that actually exists on the
@@ -395,7 +255,15 @@ QString ApiRegistry::markdown() const
         "has no Wayland backend and its XCB support object connects at plugin load.\n\n"
         "Each script run is one undo step (Ctrl+Z reverts the whole script) unless\n"
         "wrapped differently with `editor.beginBatch()`/`editor.endBatch()`.\n"
-        "Asset/store operations are NOT undoable — asset mutations are permanent.\n\n");
+        "Asset/store operations are NOT undoable — asset mutations are permanent.\n\n"
+        "THE JAVASCRIPT RUNS ON ITS OWN THREAD and every verb hops to the UI\n"
+        "thread, in order, so the editor keeps answering while a script works and\n"
+        "the console's Run button becomes Stop. Whether the VIEWPORT keeps drawing\n"
+        "between two verbs is the `app.scriptPolicy` setting: live (the console and\n"
+        "Claude's run_script, by default — you watch the script build the scene) or\n"
+        "off (command-line runs, always: the picture holds still and nothing at all\n"
+        "happens between two verbs, which is what a deterministic script needs).\n"
+        "Scripts do not NEST: a run started while one is running is refused.\n\n");
     for (auto *m : mModules) {
         out += QStringLiteral("## %1\n\n").arg(m->jsName());
         out += QStringLiteral("| verb | needs | description |\n|---|---|---|\n");
@@ -410,5 +278,3 @@ QString ApiRegistry::markdown() const
     }
     return out;
 }
-
-#include "apiregistry.moc"

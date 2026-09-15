@@ -52,12 +52,24 @@ protected:
 private slots:
     void runInput();
     void chooseAndRunFile();
+    /// Run while idle, Stop while a script is running — ONE button, because
+    /// "the thing that starts it is the thing that stops it" is the only
+    /// arrangement that cannot be clicked wrong (and the 2x2 block has no room
+    /// for a fifth).
+    void runOrStop();
 
 private:
     void appendLine(const QString &text, const QString &color = QString());
     void historyStep(int direction);
 
+    /// Reflects the engine's running state: Run/Stop text, and the file and
+    /// input widgets disabled while a run owns the engine (a second run is
+    /// refused, so offering it would be a lie).
+    void setRunningUi(bool running);
+
     ScriptEngine *mEngine;
+    QPushButton *mRunBtn = nullptr;
+    QPushButton *mFileBtn = nullptr;
     QPlainTextEdit *mLog;
     QPlainTextEdit *mInput;
     QStringList mHistory;

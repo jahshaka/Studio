@@ -58,6 +58,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--engine-selftest") == 0 && i + 1 < argc) o.selftestPng = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) o.scriptPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
+        else if (qstrcmp(argv[i], "--script-live") == 0) o.liveScript = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
         // 0 is EPHEMERAL, not "off" — see CliOptions::mcpServe. A bare
         // `--mcp-port` with nothing after it is REFUSED rather than ignored
