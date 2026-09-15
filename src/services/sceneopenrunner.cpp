@@ -94,10 +94,10 @@ void SceneOpenRunner::runWorker()
 }
 
 /// THE BOUNDARY BETWEEN TWO SLICES (lane OPEN-FRAMES-1): whatever the shell
-/// asked to have run there — in practice `Engine::advanceResources()`. Counted,
-/// because a suite has to be able to prove it happened without rendering
-/// anything. Never throws out of here: a boundary that fails must not abandon
-/// an install half-done.
+/// asked to have run there — in the app, one rendered frame, falling back to
+/// the engine's bare resource advance in a session with no viewport
+/// (MainWindow::startOpenRun sets it). Counted, so that a suite can prove it
+/// happened with no frame of its own (app.openStats().sliceBoundaries).
 void SceneOpenRunner::crossSliceBoundary()
 {
     if (!mSliceBoundary) return;
