@@ -67,11 +67,13 @@ namespace GizmoMeshes
     /// where three arrows occupy one quadrant; and GIZMO-1's new outer ring had
     /// just pushed the gizmo's extent 18 % past the axis rings it used to end
     /// at. Against the more compact of the other two gizmos — the scale
-    /// handles' 1.46 reach — 1.15 puts the outer ring back at 0.0839 of
-    /// gizmoScale, within 5 % of the 0.08 the gizmo ended at before GIZMO-1,
-    /// and takes 11 % off the whole thing. Retune here, nowhere else.
-    constexpr float kRotationExtentRatio = 1.15f;
-    /// The rotation gizmo's outer extent, per unit of gizmoScale (0.0839).
+    /// handles' 1.46 reach. 1.00 = the outer ring ON the scale gizmo's reach
+    /// (172 px at 1080p; the axis rings 147) — the owner's pick from the
+    /// 2026-09-15 sheet (spikes/gizmo-size-2026-09-15/: 1.00 / 1.15 / 1.30 side
+    /// by side; 1.30 would put the ring on the move arrows' tips). Retune here,
+    /// nowhere else.
+    constexpr float kRotationExtentRatio = 1.00f;
+    /// The rotation gizmo's outer extent, per unit of gizmoScale (0.0730).
     constexpr float kRotationOuterExtent = kScaleReach * kRotationExtentRatio;
     /// ...and therefore the rotation handles' handleScale: the axis rings are
     /// the unit circle of rotationRing(), the screen ring kScreenRingRadius of
