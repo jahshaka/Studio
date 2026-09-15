@@ -77,6 +77,14 @@ int main(int argc, char **argv)
     // graze, so red on the floor is bounced light and nothing else. Low quality
     // 64^3 voxels — the same resolution gi.modes proves a red bounce at.
     auto doc = iris::Scene::create();
+    // THE SINGLE VOLUME, PINNED. Every Photon tier builds the camera-centred
+    // cascade chain since PHOTON_SPEC §7 E2 (6), and a document's `giCascades`
+    // therefore defaults to ON — but what this suite measures is the SINGLE
+    // volume's own behaviour (its automatic fit, its reuse arm, its re-solve
+    // cadence), and the chain's counterpart of each of those is measured by
+    // `gi.cascades` and `gi.cascade_dirty`. Pinning it here keeps each suite
+    // about one arm.
+    doc->giCascades = 0;
     doc->giMode = iris::GiMode::VCT;
     doc->giQuality = iris::GiQuality::MEDIUM;
     // Pinned to what "auto" RESOLVED to at this quality, so the hybrid section
