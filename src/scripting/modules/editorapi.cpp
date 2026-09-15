@@ -438,7 +438,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "that exist for the current selection.",
           Needs::Window },
         { "propertiesStats", "editor.propertiesStats() -> {mounts, refills, rebuilds, rows, "
-                             "pending, deferredHidden, held, visible}",
+                             "pending, deferredHidden, visible}",
           "WHAT THE PROPERTIES COLUMN HAS COST — the numbers behind \"how expensive is a "
           "pick\" and \"how expensive is an add\", so a perf claim about either can be made "
           "from the editor rather than from a stopwatch (ADD-1, 2026-09-15). `mounts` counts "
@@ -450,7 +450,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "different material class, a mesh with no material, a node that gained or lost its "
           "Reset row. `rows` is how many rows the mounted tab holds. `pending` is true while a "
           "mount is owed to this turn and `deferredHidden` while one is owed to the moment the "
-          "dock becomes visible (a column nobody can see builds nothing) or `held` while one is owed to the end of a SCRIPT RUN (a run is one gesture, and the selections inside it are not things to look at). READING THIS BUILDS "
+          "dock becomes visible (a column nobody can see builds nothing). READING THIS BUILDS "
           "NOTHING: unlike `editor.properties`, it never settles an owed mount, because a "
           "measurement must not change what it measures.",
           Needs::Window },

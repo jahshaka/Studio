@@ -94,7 +94,14 @@ struct Ctx
     QStringList warnings;
     QStringList extensions;
     // dedupe
-    QHash<iris::Mesh *, int> meshIndex;
+    // A glTF MESH CARRIES ITS MATERIAL, so the key is the pair (ADD-1,
+    // 2026-09-15). Keyed on the geometry alone, two nodes that share an
+    // iris::Mesh but wear different materials collapsed into ONE glTF mesh and
+    // the second node silently rendered with the first node's material. That
+    // was always reachable (node duplication has always shared a MeshPtr) and
+    // became the common case the moment Mesh::loadMesh started sharing its
+    // parse: five cubes with five materials exported as one.
+    QHash<QPair<iris::Mesh *, int>, int> meshIndex;
     QHash<iris::Material *, int> materialIndex;
     QHash<QString, int> imageIndex;      // signature -> images[] index
     QHash<QString, int> textureIndex;    // image index+transform -> textures[]
@@ -1029,9 +1036,10 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             iris::MeshPtr mesh = meshNode->getMesh();
             if (mesh) {
                 int meshIdx = -1;
-                auto found = c.meshIndex.constFind(mesh.data());
                 const int matIdx = materialFor(c, meshNode->getMaterial().data(),
                                                meshNode->getFaceCullingMode());
+                const QPair<iris::Mesh *, int> meshKey(mesh.data(), matIdx);
+                auto found = c.meshIndex.constFind(meshKey);
                 if (found != c.meshIndex.constEnd()) {
                     meshIdx = found.value();
                 } else {
@@ -1063,7 +1071,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                         gm["primitives"] = prims;
                         c.meshes.append(gm);
                         meshIdx = c.meshes.size() - 1;
-                        c.meshIndex.insert(mesh.data(), meshIdx);
+                        c.meshIndex.insert(meshKey, meshIdx);
                         if (skinned)
                             pendingSkins.push_back({ -1 /* patched below */, mesh, std::move(mb),
                                                      node });

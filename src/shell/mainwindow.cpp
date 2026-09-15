@@ -346,17 +346,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	scriptEngine->setInteractivePolicy(
 		SettingsManager::getDefaultManager()->getValue("script_feedback_live", true).toBool()
 			? ScriptRunPolicy::Live : ScriptRunPolicy::Off);
-	// A SCRIPT RUN IS ONE GESTURE (ADD-1). The Properties column rebuilds for
-	// whatever is selected, and a script that adds sixty-four objects selects
-	// sixty-four of them — none of which anybody asked to look at. The engine
-	// runs on its own thread (SCRIPTING_SPEC §4), so the UI event loop turns
-	// between verbs and the column's own per-turn coalescing would mount once
-	// per add (measured: 64 mounts, 12.7 ms per add). Held for the run, settled
-	// once at its end; a verb that ASKS what the column holds still gets a true
-	// answer while it is held.
-	connect(scriptEngine, &ScriptEngine::runningChanged, this, [this](bool running) {
-		if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->setMountsHeld(running);
-	});
 	if (prefsDialog) prefsDialog->wireScripting(scriptEngine);
 	registerStudioModules(*scriptEngine);
 	for (auto *module : modules) module->registerApi(*scriptEngine);
@@ -4943,7 +4932,6 @@ QVariantMap MainWindow::propertiesStats() const
     out[QStringLiteral("rows")] = s.rows;
     out[QStringLiteral("pending")] = s.pending;
     out[QStringLiteral("deferredHidden")] = s.deferredHidden;
-    out[QStringLiteral("held")] = s.held;
     out[QStringLiteral("visible")] = s.visible;
     return out;
 }

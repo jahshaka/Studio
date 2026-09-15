@@ -385,20 +385,12 @@ QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
 //
 // So a selection raises a DEBT and says nothing about when it is paid. It is
 // paid at the end of the event-loop turn — which is what makes a click one
-// mount and unchanged in feel — UNLESS one of two things says "not yet", and
-// both are the same kind of statement as PROPERTY_FILTER_SPEC's two-inputs law:
+// mount and unchanged in feel — UNLESS one thing says "not yet", which is the
+// same kind of statement as PROPERTY_FILTER_SPEC's two-inputs law:
 //
 //   NOBODY CAN SEE IT. The properties dock is closed, or the panel is behind
 //   another tabified dock. Building a widget tree that is not on screen cost
 //   32 ms of a 50 ms add with the dock shut. The debt moves to the showEvent.
-//
-//   A BATCH IS IN FLIGHT. A script run is one gesture by the user, and the
-//   sixty-four selections inside it are not sixty-four things to look at. The
-//   script engine runs on its own thread now (SCRIPTING_SPEC §4), so the UI
-//   thread's event loop DOES turn between verbs and the per-turn rule alone
-//   would mount once per add again — measured: 64 adds became 64 mounts and
-//   12.7 ms per add. The debt moves to the end of the run (MainWindow wires
-//   ScriptEngine::runningChanged to setMountsHeld).
 //
 // AND EVERY QUESTION PAYS IT FIRST (flushPendingMount): a verb that lists the
 // rows, the filter box, a test that asserts what is mounted. Deferred is never
@@ -410,18 +402,18 @@ void SceneNodePropertiesWidget::applyTab()
 }
 
 /// Arranges for the owed mount to happen at the end of this turn — or does
-/// nothing, because something is going to come back for it (showEvent,
-/// setMountsHeld, or a question).
+/// nothing, because something is going to come back for it (showEvent, or a
+/// question).
 void SceneNodePropertiesWidget::scheduleMount()
 {
     if (!mountOwed || mountScheduled) return;
-    if (!isVisible() || mountsHeld) return;
+    if (!isVisible()) return;
     mountScheduled = true;
     QTimer::singleShot(0, this, [this]() {
         mountScheduled = false;
-        // The reasons can arrive between the selection and the turn's end: the
-        // dock can close, a script can start.
-        if (!mountOwed || !isVisible() || mountsHeld) return;
+        // The reason can arrive between the selection and the turn's end: the
+        // dock can close.
+        if (!mountOwed || !isVisible()) return;
         mountOwed = false;
         mountNow();
     });
@@ -432,14 +424,6 @@ void SceneNodePropertiesWidget::flushPendingMount()
     if (!mountOwed) return;
     mountOwed = false;
     mountNow();
-}
-
-/// A BATCH — a script run, today — is one gesture, not one per verb.
-void SceneNodePropertiesWidget::setMountsHeld(bool held)
-{
-    if (mountsHeld == held) return;
-    mountsHeld = held;
-    if (!held) scheduleMount();
 }
 
 /// THE DOCK OPENED (or the tabified dock came to the front, or the panel was
@@ -521,7 +505,6 @@ SceneNodePropertiesWidget::Stats SceneNodePropertiesWidget::propertiesStats() co
     out.rows = mountedRowCount(currentTab);
     out.pending = mountOwed;
     out.deferredHidden = mountOwed && !isVisible();
-    out.held = mountsHeld;
     out.visible = isVisible();
     return out;
 }

@@ -107,13 +107,6 @@ public:
     /// the moment the dock opens, or to the end of a batch). Reported by
     /// `editor.propertiesStats()` so the coalescing is pinnable.
     bool mountIsPending() const { return mountOwed; }
-    /// HOLDS EVERY MOUNT until it is released (ADD-1). A script run is ONE
-    /// gesture by the user and the selections inside it are not things to look
-    /// at; the script engine runs on its own thread, so without this the column
-    /// would mount once per verb. MainWindow wires it to
-    /// ScriptEngine::runningChanged. A question (editor.properties, the filter)
-    /// still gets a true answer while it is held.
-    void setMountsHeld(bool held);
 
     /// WHAT THE COLUMN HAS BEEN DOING, for `editor.propertiesStats()`. The
     /// numbers a perf claim about a pick or an add has to be made from, so
@@ -129,7 +122,6 @@ public:
         int rows = 0;
         bool pending = false;
         bool deferredHidden = false;
-        bool held = false;
         bool visible = false;
     };
     Stats propertiesStats() const;
@@ -303,8 +295,6 @@ private:
     bool mountOwed = false;
     /// A zero-timer is already posted to settle it at the end of this turn.
     bool mountScheduled = false;
-    /// A batch (a script run) is in flight: the debt waits for its end.
-    bool mountsHeld = false;
     /// The scene the world blades are currently pointed at (see bindScene).
     QSharedPointer<iris::Scene> worldBoundScene;
 
