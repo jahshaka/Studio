@@ -241,6 +241,18 @@ public:
     /// true for a level the database ABANDONED under the caller — see
     /// closeDatabase).
     bool endBatch();
+    /// WHO TELLS THE USER when a batch cannot commit. A whole gesture's rows
+    /// are rolled back then — a script run's library writes, gone — and a warn
+    /// line in the log has an audience of one. The app installs a listener that
+    /// raises it in the scene-issue bar; a hook rather than a direct call
+    /// because half the suites in the tree link this file and none of them may
+    /// be made to link the UI services (the Database::setDependencyListener
+    /// idiom). One process-wide listener, called on EVERY batch commit: `ok`
+    /// false = the gesture's rows were rolled back, true = the library is
+    /// writable and the condition (if any) is over. The sink is idempotent, so
+    /// there is deliberately no state filter here — see announceBatchCommit.
+    using BatchCommitListener = std::function<void(bool ok)>;
+    static void setBatchCommitListener(BatchCommitListener listener);
     /// How many levels are open (editor.undoState().dbBatchDepth).
     int  batchDepth() const { return batchOpenCount; }
     /// True while the batch actually holds a transaction — false between a
@@ -717,6 +729,8 @@ private:
     /// Commits the batch transaction if it is live, leaving the SCOPE open.
     /// The stand-down path and the outermost endBatch both go through it.
     bool commitBatchTransaction();
+    /// Tells the listener that the library's writability CHANGED (H7).
+    void announceBatchCommit(bool ok);
     /// The stand-down hook's per-instance half: commit and go quiet if the
     /// connection about to open a transaction is OURS.
     void standDownBatchFor(const QSqlDatabase &connection);

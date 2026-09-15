@@ -38,7 +38,9 @@
 //   8. The guard count is PER CONNECTION: a transaction on a side connection
 //      wrapped around a main-connection guard does not make that guard look
 //      nested (it would then degrade, which is the failure in 4).
-//   9. A guard still holding a scope when the database closes unwinds without
+//   9. A commit that FAILS is announced to the listener the app turns into a
+//      scene-issue line, and DbBatch::end() reports it to the caller.
+//  10. A guard still holding a scope when the database closes unwinds without
 //      being told it is unbalanced, and its rows are committed, not lost.
 //
 // The COMMIT COUNT comes from sqlite3_commit_hook on the handle Qt's QSQLITE
@@ -402,6 +404,48 @@ int main(int argc, char **argv)
                undo.commits, undo.micros / 1000.0);
         if (counting) CHECK(undo.commits == 1, "undoing it costs ONE commit");
         CHECK(edgeCount(nodeGuid) == 6, "...and the six original edges are back");
+    }
+
+    // -----------------------------------------------------------------------
+    // 5b. A FAILED BATCH COMMIT IS ANNOUNCED, AND SAID SO (H7).
+    //
+    // A gesture's rows are all-or-nothing now, so a commit that fails takes a
+    // whole script run's library writes with it. A warn line in the log has an
+    // audience of one; the app raises a scene-issue line from this listener.
+    // The failure is induced by ending the batch's transaction out from under
+    // it (a raw ROLLBACK on the same connection) — contrived, but it is the
+    // real branch: db.commit() fails, the guard unwinds, the listener hears
+    // false, and DbBatch::end() reports it to the caller.
+    // -----------------------------------------------------------------------
+    {
+        QVector<bool> heard;
+        Database::setBatchCommitListener([&heard](bool ok) { heard.append(ok); });
+
+        {
+            DbBatch batch(&db);
+            db.createAssetEntry(GUIDManager::generateGUID(), QStringLiteral("Announced"),
+                                static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+            CHECK(batch.end(), "a batch that commits reports success to its caller");
+        }
+        CHECK(heard.size() == 1 && heard.last() == true,
+              "...and the listener heard exactly one 'the library is writable'");
+
+        heard.clear();
+        {
+            DbBatch batch(&db);
+            db.createAssetEntry(GUIDManager::generateGUID(), QStringLiteral("Lost"),
+                                static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+            QSqlQuery(QStringLiteral("ROLLBACK"), QSqlDatabase::database());   // the failure
+            CHECK(!batch.end(), "a batch that CANNOT commit reports failure to its caller");
+        }
+        CHECK(heard.size() == 1 && heard.last() == false,
+              "...and the listener heard 'the rows were not saved'");
+        CHECK(assetsNamed(QStringLiteral("Lost")) == 0,
+              "...and the gesture's row really is gone");
+        CHECK(assetsNamed(QStringLiteral("Announced")) == 1,
+              "...while the gesture before it is still there");
+
+        Database::setBatchCommitListener(nullptr);
     }
 
     // -----------------------------------------------------------------------

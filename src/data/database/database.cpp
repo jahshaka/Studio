@@ -352,6 +352,7 @@ bool Database::commitBatchTransaction()
     DbTransaction::noteBatchLive(false);
     if (db.commit()) {
         DbTransaction::noteCommit();
+        announceBatchCommit(true);
         return true;
     }
     // A failed commit leaves the connection mid-transaction otherwise, and the
@@ -359,7 +360,34 @@ bool Database::commitBatchTransaction()
     db.rollback();
     iris::Logger::getSingleton()->warn(
         "The database batch FAILED to commit — the gesture's rows were rolled back.");
+    announceBatchCommit(false);
     return false;
+}
+
+namespace {
+/// The one listener, the Database::setDependencyListener idiom (a function-local
+/// static, so no order-of-initialisation question with the Database instances).
+Database::BatchCommitListener &batchCommitListener()
+{
+    static Database::BatchCommitListener listener;
+    return listener;
+}
+}   // namespace
+
+void Database::setBatchCommitListener(BatchCommitListener listener)
+{
+    batchCommitListener() = std::move(listener);
+}
+
+void Database::announceBatchCommit(bool ok)
+{
+    // EVERY result, not only the changes. The sink is idempotent by design —
+    // raising a live issue id is a no-op and clearing an absent one is too
+    // (services/sceneissues.h) — and a state filter here would go WRONG the
+    // first time something else wiped the store: the scene-issue store is
+    // reset on every project open, and a filter would then keep quiet about a
+    // library that is still failing because it "already said so".
+    if (batchCommitListener()) batchCommitListener()(ok);
 }
 
 // Note that this is the default connection, any queries called without

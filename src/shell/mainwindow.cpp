@@ -1064,6 +1064,27 @@ void MainWindow::setupServices()
     // nothing and a per-frame walk of every light against every mesh would.
     wireSceneIssues();
 
+    // THE LIBRARY ITSELF CAN FAIL, AND THE USER HAS TO BE TOLD (CLOSE-2 round
+    // 2, H7). A gesture's database writes ride one transaction now, so a
+    // commit that fails rolls back EVERYTHING that gesture wrote — a whole
+    // script run's asset rows — and until this line existed the only trace was
+    // a warn in the log, which has an audience of one. It is a scene-issue and
+    // not a toast for the reason the bar exists: it stays up until the
+    // condition is gone, and the condition going away is the very next gesture
+    // committing. No node to select; the action is the only thing to say.
+    Database::setBatchCommitListener([](bool ok) {
+        const QString id = QStringLiteral("library.write");
+        if (ok) { SceneIssues::instance().clear(id); return; }
+        SceneIssue issue;
+        issue.id = id;
+        issue.kind = QStringLiteral("library.write");
+        issue.message = tr("The library could not be saved, so the changes from the last "
+                           "action were not kept.");
+        issue.action = tr("Check that the disk is not full and that the library file is not "
+                          "read-only, then try the action again.");
+        SceneIssues::instance().raise(issue);
+    });
+
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
     undoService->setServices(services);
