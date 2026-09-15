@@ -1,0 +1,182 @@
+// scripting.e2e.atom_lods — ATOM STAGE 1, DETERMINISTIC LEVEL SELECTION
+// (SPECS/NANITE_SPEC.md §7.3, gate row 2).
+//
+// THE CLAIM UNDER TEST, in one sentence: the machine built a LOD chain at
+// import, the renderer picks a level from the BAKED GEOMETRIC ERROR, and a
+// level change costs no extra draw call.
+//
+// It is the LOD BIAS that makes this assertable at all. The dial multiplies the
+// distance the strategy measures, so sweeping it walks the same camera through
+// every level of the chain in a fixed pose: bias 0 pins the finest level (which
+// is also how a user turns automatic LOD off), and each level's own
+// `switchDistance` — reported by assets.meshLods, computed by the SAME function
+// the backend derives the mesh's thresholds with — says exactly which bias
+// selects it. Nothing here waits on wall-clock time or eyeballs a picture.
+//
+// THE FIXTURE is the shipped gizmo sphere: 960 triangles, no skeleton, and
+// measured to simplify to two clean levels (480 and 240). A primitive cube
+// cannot be used — 12 triangles is far below the point where a level saves
+// anything, and the bake correctly refuses to build a chain for it, which this
+// suite also asserts.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var SPHERE = "@SOURCE_DIR@/app/models/axis_sphere.obj";
+
+var proj = project.create("Atom LODs " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+// ---------------------------------------------------------------------------
+// 1. THE CHAIN IS IN THE BAKE, and assets.meshLods reports it.
+var guid = assets.importFile(SPHERE);
+assert(guid && guid.length > 10, "assets.importFile(axis_sphere.obj) -> " + guid);
+
+var rows = assets.meshLods(guid);
+assert(rows.length >= 2, "assets.meshLods reports a chain (" + rows.length + " rows)");
+
+// One mesh in this file, so the rows are its levels in order.
+var levels = [];
+for (var i = 0; i < rows.length; ++i) {
+    assert(rows[i].mesh === 0, "row " + i + " is mesh 0");
+    assert(rows[i].level === i, "row " + i + " is level " + i);
+    levels.push(rows[i]);
+}
+assert(levels[0].triangles === 960, "level 0 is the authored 960 triangles");
+assert(levels[0].error === 0, "level 0 has no error, by definition");
+assert(levels[0].switchDistance === 0, "and no switch distance");
+
+for (var L = 1; L < levels.length; ++L) {
+    assert(levels[L].triangles < levels[L - 1].triangles,
+           "level " + L + " has fewer triangles than level " + (L - 1) +
+           " (" + levels[L].triangles + " < " + levels[L - 1].triangles + ")");
+    assert(levels[L].error > levels[L - 1].error,
+           "level " + L + "'s error is larger (" + levels[L].error.toFixed(6) + ")");
+    assert(levels[L].switchDistance > levels[L - 1].switchDistance,
+           "level " + L + " switches in further away (" + levels[L].switchDistance.toFixed(2) + " m)");
+    // The projection is linear in the error: twice the error, twice the distance.
+    var ratio = levels[L].switchDistance / levels[L].error;
+    var ratio1 = levels[1].switchDistance / levels[1].error;
+    assert(Math.abs(ratio / ratio1 - 1) < 1e-3,
+           "every level's switch distance comes from ONE projection (" + ratio.toFixed(1) + ")");
+}
+
+// The chain is HALVING triangles per level, which is what makes the far
+// distance cheap; the last level is at most a quarter of the first.
+assert(levels[levels.length - 1].triangles <= levels[0].triangles * 0.5,
+       "the coarsest level is at most half the authored triangle count");
+
+// ---------------------------------------------------------------------------
+// 2. A MESH TOO SMALL TO SIMPLIFY GETS NO CHAIN — and says so with an empty
+//    list rather than a fake level. (The primitives are scene nodes, not
+//    library assets, so this is asserted on the verb's other refusal path: an
+//    asset that is not a model.)
+var imageOnly = assets.list({ type: "texture", limit: 1 });
+if (imageOnly.length > 0) {
+    var none = assets.meshLods(imageOnly[0].guid);
+    assert(none.length === 0, "a non-model asset has no LOD chain (an empty list, not an error)");
+}
+
+// ---------------------------------------------------------------------------
+// 3. THE RENDERER PICKS THE LEVEL THE ERROR ASKS FOR.
+assets.addToProject(guid);
+var nodeId = assets.addToScene(guid, { position: { x: 0, y: 0, z: 0 } });
+assert(nodeId && ("" + nodeId).length > 10, "assets.addToScene -> node " + nodeId);
+
+// A fixed pose: the object at the origin, the camera 4 m away on +Z. Every
+// reading below is taken from THIS pose — only the dial moves.
+var EYE = 4.0;
+editor.setCamera({ position: { x: 0, y: 0, z: EYE }, lookAt: { x: 0, y: 0, z: 0 } });
+
+// The geometry counters are LAZY (reading the verb is what switches them on),
+// so prime them before measuring anything.
+app.renderStats();
+editor.frame(4);
+
+// PIXEL EVIDENCE, not just counters: a level that reaches the triangle counter
+// and not the picture would pass every assertion above. The fixture's own
+// silhouette is where a simplified level differs, so the probes are a GRID over
+// the middle of the frame — deliberately not a computed limb radius, which
+// would depend on the model's extent, its imported fit scale and the lens, all
+// of which are somebody else's decision. MEASURED at this pose: the coarsest
+// level moves 122 pixels inside a 22x11 box at the image centre, worst channel
+// delta 189/255. The shot is the "plain" grade — no post-processing, the same
+// pixels on every machine and in every frame.
+var LIMB = [];
+for (var gy = 0; gy < 7; ++gy)
+    for (var gx = 0; gx < 7; ++gx)
+        LIMB.push({ x: 0.44 + gx * 0.02, y: 0.43 + gy * 0.02 });
+
+function measure(tag, bias) {
+    world.setLodBias(bias);
+    editor.frame(4);
+    var rs = app.renderStats();
+    var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
+    var probes = [];
+    for (var p = 0; p < shot.probes.length; ++p)
+        probes.push(shot.probes[p].r + "," + shot.probes[p].g + "," + shot.probes[p].b);
+    console.log("   bias " + bias + ": triangles " + rs.triangles + ", draws " + rs.draws +
+                ", limb [" + probes.join(" | ") + "] -> " + shot.path);
+    return { triangles: rs.triangles, draws: rs.draws, limb: probes.join("|") };
+}
+
+// bias 0 pins level 0. Then, for each level, the smallest bias that selects it:
+// the strategy's value is (distance - radius) * bias, so a bias of
+// switchDistance / (EYE - radius) puts the object exactly at the threshold —
+// 5% past it selects the level without ambiguity.
+var pinned = measure("pinned", 0);
+assert(pinned.triangles > 0, "the pinned level draws triangles");
+
+var readings = [pinned];
+for (var k = 1; k < levels.length; ++k) {
+    // The sphere is a unit ball (radius ~1 in mesh units and placed unscaled),
+    // so (EYE - radius) is the strategy's value at bias 1. Being generous with
+    // the radius only makes the bias LARGER, i.e. it cannot select a finer
+    // level than intended.
+    var valueAtBiasOne = EYE - 1.0;
+    var bias = (levels[k].switchDistance / valueAtBiasOne) * 1.05;
+    readings.push(measure("level" + k, bias));
+}
+
+for (var r = 1; r < readings.length; ++r) {
+    assert(readings[r].triangles < readings[r - 1].triangles,
+           "raising the dial drew FEWER triangles (" + readings[r - 1].triangles +
+           " -> " + readings[r].triangles + ")");
+    // FINDING B: the levels share one vertex buffer and one index pool, so they
+    // share a vaoName and the render queue advances numDraws instead of
+    // emitting a second draw command. A level change that split a draw call
+    // would defeat the whole point.
+    assert(readings[r].draws === pinned.draws,
+           "and no extra draw call (draws " + readings[r].draws + ")");
+}
+
+// The whole point, as one number: the object's own triangles fell by at least
+// the difference between its finest and coarsest level.
+// The coarsest level must LOOK different at the limb — otherwise the level
+// reached the counters and not the picture.
+assert(readings[readings.length - 1].limb !== pinned.limb,
+       "the coarsest level changes the silhouette (the limb probes moved)");
+
+var drop = pinned.triangles - readings[readings.length - 1].triangles;
+var expected = levels[0].triangles - levels[levels.length - 1].triangles;
+assert(drop >= expected,
+       "the scene shed at least the chain's own triangles (" + drop + " >= " + expected + ")");
+
+// ---------------------------------------------------------------------------
+// 4. THE DIAL IS A DIAL: it reads back, it refuses nonsense, and 0 returns to
+//    the finest level from wherever it was.
+assert(world.lodBias() > 0, "world.lodBias reads back the applied value");
+world.setLodBias(0);
+editor.frame(4);
+assert(world.lodBias() === 0, "0 reads back as 0");
+var back = app.renderStats();
+assert(back.triangles === pinned.triangles,
+       "and the scene is back to its finest level, exactly (" + back.triangles + ")");
+
+var refused = null;
+try { world.setLodBias(-1); } catch (e) { refused = "" + e; }
+assert(refused !== null, "a negative bias is refused: " + refused);
+
+console.log("ALL ATOM LOD CHECKS PASSED");

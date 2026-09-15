@@ -1509,3 +1509,26 @@ set_tests_properties(scripting.e2e.screenshot_grades PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 600)
+
+# ATOM STAGE 1 — DETERMINISTIC LEVEL SELECTION (SPECS/NANITE_SPEC.md §7.3).
+# The import-time LOD chain, end to end: assets.meshLods reports what the bake
+# built, world.setLodBias walks the renderer through every level of it in ONE
+# camera pose, the triangle count falls at each step, the DRAW COUNT does not
+# move (finding B — the levels share a vertex buffer and an index pool, so they
+# share a vaoName and the render queue advances numDraws), and bias 0 returns to
+# the finest level exactly.
+#
+# ENGINE-UP AND ON-SCREEN, not --headless: the subject is what the renderer
+# selects and draws. The fixture is the shipped gizmo sphere (960 triangles,
+# static, measured to simplify to 480 and 240), configured in by path.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_atom_lods.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lods)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.atom_lods
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.atom_lods PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)

@@ -35,6 +35,9 @@ For more information see the LICENSE file
 #include "services/assettray.h"
 #include "services/assetstorepaths.h"
 #include "services/meshbakestore.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/vertexbuffer.h"
+#include "jahshaka/engine/Types.h"
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
@@ -121,6 +124,10 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
           "MODELS also carry the FIT-TO-SIZE block (services/fitsize.h): `extent` {x,y,z} — the model's axis-aligned size in METRES, measured at import after the file's declared unit scale; `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none); `fitKind` ('character' when the file carries a skeleton, else 'object'); `fitScale` — what every instantiation multiplies the root node's scale by (1 = the model measured plausible and is placed exactly as authored); `fitReason` — one sentence, present only when a fit was inferred; and `fitSource` ('auto' = the policy, 'manual' = assets.setFit).",
+          Needs::Document },
+        { "meshLods", "assets.meshLods(guid) -> [{mesh, level, triangles, error, switchDistance}]",
+          "The automatic LOD chain a MODEL asset's bake carries (ATOM stage 1, SPECS/NANITE_SPEC.md §7), one row per mesh per level, level 0 (the authored geometry) included. `error` is that level's geometric error as a LENGTH IN THE MODEL'S OWN UNITS — 0 for level 0 — and `switchDistance` is where the renderer swaps to it at LOD bias 1: the distance from the object's bounding sphere at which that error covers one pixel at the reference projection (1080 lines, 45 degree vertical field of view). "
+          "An EMPTY list is the honest answer for a model with no chain, and there are four ways to have none: the asset has no bake yet (assets.bakeAll builds them), the mesh is SKINNED (stage 1 ships static meshes only), it is too small to be worth simplifying, or its topology stopped the simplifier before it could shed a useful fraction. Nothing here is authored: the chain is built at import and the levels are derived, never stored as a user setting.",
           Needs::Document },
         { "setFit", "assets.setFit(guid, {scale} | {reset: true} | {remeasure: true}) -> {extent, fitScale, fitReason, fitSource, fitKind}",
           "Overrides, restores or recomputes a MODEL asset's fit-to-size factor — the Assets page's "
@@ -516,6 +523,54 @@ QVariantList AssetsApi::list(const QVariantMap &options)
                                 { "name", record.name },
                                 { "type", typeName(record.type) },
                                 { "drawer", record.collection } });
+    }
+    return out;
+}
+
+QVariantList AssetsApi::meshLods(const QString &guid)
+{
+    QVariantList out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    const auto record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("assets.meshLods: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    const QString source = storeFileFor(guid);
+    if (source.isEmpty()) {
+        fail(QStringLiteral("assets.meshLods: '%1' has no stored source file").arg(guid));
+        return out;
+    }
+    // The BAKE is where the chain lives — reading it is also the only honest
+    // answer to "what would the renderer get", since a model with no fresh bake
+    // is parsed at open and gets no chain at all.
+    iris::BakedModelPtr baked = MeshBakeStore::load(source);
+    if (!baked) return out;   // no usable bake: an empty list, not an error
+    for (int m = 0; m < baked->meshes.size(); ++m) {
+        const iris::MeshPtr &mesh = baked->meshes.at(m);
+        if (mesh.isNull()) continue;
+        const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
+        const int baseTriangles = (ib && ib->dataSize > 0)
+                                      ? ib->dataSize / int(sizeof(unsigned) * 3) : 0;
+        QVariantMap row;
+        row["mesh"] = m;
+        row["level"] = 0;
+        row["triangles"] = baseTriangles;
+        row["error"] = 0.0;
+        row["switchDistance"] = 0.0;
+        out.append(row);
+        const int levels = std::min(mesh->lodIndices.size(), mesh->lodErrors.size());
+        for (int i = 0; i < levels; ++i) {
+            QVariantMap lod;
+            lod["mesh"] = m;
+            lod["level"] = i + 1;
+            lod["triangles"] = int(mesh->lodIndices.at(i).size() / 3);
+            lod["error"] = double(mesh->lodErrors.at(i));
+            // The SAME function the backend derives the mesh's LOD values with,
+            // so the verb cannot drift from what the renderer does.
+            lod["switchDistance"] = double(jahshaka::engine::lodSwitchDistance(mesh->lodErrors.at(i)));
+            out.append(lod);
+        }
     }
     return out;
 }
