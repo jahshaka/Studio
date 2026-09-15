@@ -55,6 +55,9 @@ static int failures = 0;
 /// headroom. Measured on this machine, the worst slice is the engine's
 /// geometry push.
 static const double kMaxGapMs = 500.0;
+/// The heartbeat probe's interval (app.heartbeat(kHeartbeatMs)); a warm open
+/// shorter than this can produce no tick at all.
+static const double kHeartbeatMs = 250.0;
 /// The cold-process ceiling: the first open of a process also pays the
 /// engine's shader/PSO compilation (see the comment at the cold open).
 static const double kColdCeilingMs = 4000.0;
@@ -183,7 +186,7 @@ int main(int argc, char **argv)
     // after the first reuses the compiled variants, which is what the warm
     // budget below asserts.
     const auto openAsyncAndWait = [&](const char *label) {
-        mcp.runScript(QStringLiteral("app.heartbeat(250)"));
+        mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
         const bool started =
             mcp.runScript(QStringLiteral("project.openAsync('%1')").arg(guid)).value("ok").toBool();
         int polls = 0;
@@ -203,16 +206,18 @@ int main(int argc, char **argv)
                     "heartbeat ticks=%d maxGapMs=%.1f\n",
                     label, int(done), static_cast<long long>(openTimer.elapsed()), polls,
                     stats.value("ticks").toInt(), stats.value("maxGapMs").toDouble());
-        struct R { bool started, done; int polls, ticks; double maxGap; };
+        struct R { bool started, done; int polls, ticks; double maxGap; double elapsedMs; };
         return R{ started, done, polls, stats.value("ticks").toInt(),
-                  stats.value("maxGapMs").toDouble() };
+                  stats.value("maxGapMs").toDouble(), double(openTimer.elapsed()) };
     };
 
     const auto cold = openAsyncAndWait("cold");
     CHECK(cold.started, "project.openAsync accepted (cold)");
     CHECK(cold.done, "the threaded open completed (cold)");
     CHECK(cold.polls >= 2, "the app answered requests WHILE the open was in flight");
-    CHECK(cold.ticks > 0, "the UI thread kept ticking during the cold open");
+    CHECK(cold.ticks > 0 || cold.elapsedMs < kHeartbeatMs,
+          "the UI thread kept ticking during the cold open (or the open finished "
+          "inside the first heartbeat interval — the cold open runs 330-570 ms now)");
     // The cold ceiling is a REGRESSION guard, not the contract: it is above
     // the engine's compile storm and far below the multi-second document
     // blocking this lane removed (the pre-fix Matcaps open spent 12.5 s on
@@ -232,7 +237,15 @@ int main(int argc, char **argv)
           "project.close before the warm open");
     const auto warm = openAsyncAndWait("warm");
     CHECK(warm.done, "the threaded open completed (warm)");
-    CHECK(warm.ticks > 0, "the UI thread kept ticking during the warm open");
+    // A warm open that FINISHES inside the first heartbeat interval cannot be
+    // asked for a tick (the probe fires every kHeartbeatMs; the open path got
+    // faster than that — ~220 ms measured 2026-09-15, which read as "no ticks"
+    // on an unmodified tree, 4/4 solo). The gap reading still covers it:
+    // maxGapMs is max(worst gap, time since the last tick or the start), so a
+    // blocked thread shows there whether or not a tick ever fired.
+    CHECK(warm.ticks > 0 || warm.elapsedMs < kHeartbeatMs,
+          "the UI thread kept ticking during the warm open (or the open finished "
+          "inside the first heartbeat interval)");
     CHECK(warm.maxGap > 0.0 && warm.maxGap < kMaxGapMs,
           "no UI-thread gap beyond the budget during a warm threaded open");
 
