@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "ui/controls/accordionbladewidget.h"
 #include "ui_accordionbladewidget.h"
 
+#include "ui/controls/bladerow.h"
+
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
 #include "ui/controls/colorvaluewidget.h"
@@ -95,17 +97,19 @@ void AccordianBladeWidget::addRow(QWidget *row)
     PropertyRows::registry().add(this, row);
 }
 
-void AccordianBladeWidget::clearPanel(QLayout *layout)
+void AccordianBladeWidget::clearPanel()
 {
-    Q_UNUSED(layout);   // see drainLayout: this always clears the CONTENT PANE
+    // (The dead `QLayout *` parameter every call site passed its own
+    // `this->layout()` to is gone — this clears the CONTENT PANE and always
+    // did; see drainLayout.)
     if (ui->contentpane->layout() == nullptr) return;
 
     // THE GENERATIONS BEFORE LAST GO NOW (MIRROR_SCALE lane, 2026-09-13).
     //
     // These rows used to be retired with deleteLater() alone, and that is a
     // trap in any run that rebuilds a blade many times without returning to the
-    // event loop — which is EVERY script- or MCP-driven scene build, since a
-    // script run is one call that never yields. Nothing collects a
+    // event loop — a scene built in one burst, an undo of a big macro, a drop
+    // of many files. Nothing collects a
     // DeferredDelete until the loop turns, so both the blade's child list and
     // Qt's GLOBAL posted-event list grow by a row per row per rebuild, and Qt
     // scans that list on every widget construction (QApplicationPrivate::
@@ -139,6 +143,24 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
     // function, or the recursion into a child layout) would otherwise consume a
     // generation per nesting level, which is the one shape a fixed headroom
     // cannot absorb. mClearDepth makes it impossible instead of unlikely.
+    //
+    // WHAT THE REST OF THE APPLICATION MAY ASSUME (lane PANEL-LIFETIME-1). The
+    // old note here said a script- or MCP-driven build "is one call that never
+    // yields", and treated that as the reason a retired row could be counted on
+    // to stay alive. IT IS NOT TRUE, and it is not what the ring is for. A
+    // script run is a worker thread and a nested event loop on this one, so the
+    // loop turns between every verb; the threaded scene open runs its install
+    // stages one per turn (services/sceneopenrunner.h); the sky panel defers
+    // its own rebuild by a turn on purpose. A retired row can therefore be
+    // destroyed at ANY point after this returns.
+    //
+    // THE INVARIANT IS THEREFORE ON THE HANDLE, NOT ON THE TIMING: a panel
+    // holds a row as a RowPtr (ui/controls/bladerow.h), which reads null from
+    // the moment the row is retired below — so "is this row still mine" is a
+    // question the pointer answers, and no panel depends on when the event loop
+    // turns. The ring's generations are what they always were: headroom for a
+    // rebuild driven from a retiring row's own slot, on the stack, in THIS
+    // call.
     if (mClearDepth == 0) {
         for (const QPointer<QWidget> &w : std::as_const(mRetired[kRetiredGenerations - 1]))
             if (w) delete w.data();
@@ -178,6 +200,11 @@ void AccordianBladeWidget::drainLayout(QLayout *layout)
             // matched or shown by the filter, and it outlives this call by
             // three generations.
             PropertyRows::registry().retire(widget);
+            // AND OUT OF EVERY PANEL HANDLE, at the same moment and for the
+            // same reason (PANEL-LIFETIME-1): a RowPtr to this row reads null
+            // from here on, so a panel that kept one across the rebuild finds
+            // nothing rather than a row on its way out of the process.
+            bladerow::markRetired(widget);
             widget->deleteLater();
             mRetired[0].append(widget);
         }

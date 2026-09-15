@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "commands/worldmodecommand.h"
 #include "ui/panels/propertywidgets/panelundo.h"
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/controls/bladerow.h"
 #include "irisgl/irisglfwd.h"
 
 class ComboBoxWidget;
@@ -141,27 +142,27 @@ private:
     IEditorViewport *sceneView = nullptr;
     WorldModeCommand::Snapshot editBefore;
     bool editing = false;
-    CheckBoxWidget *photonSwitch = nullptr;
-    ComboBoxWidget *tierSelector = nullptr;
-    ComboBoxWidget *modeSelector = nullptr;
-    ComboBoxWidget *quality = nullptr;
-    ComboBoxWidget *lightSelector = nullptr;
-    HFloatSliderWidget *bounces = nullptr;
-    DragVector3Widget *pccGrid = nullptr;
-    ComboBoxWidget *probeSize = nullptr;
-    LabelWidget *reflectionsRow = nullptr;
+    RowPtr<CheckBoxWidget> photonSwitch;
+    RowPtr<ComboBoxWidget> tierSelector;
+    RowPtr<ComboBoxWidget> modeSelector;
+    RowPtr<ComboBoxWidget> quality;
+    RowPtr<ComboBoxWidget> lightSelector;
+    RowPtr<HFloatSliderWidget> bounces;
+    RowPtr<DragVector3Widget> pccGrid;
+    RowPtr<ComboBoxWidget> probeSize;
+    RowPtr<LabelWidget> reflectionsRow;
     /// Polls refreshReflectionsRow while the panel is visible (see showEvent).
     QTimer *reflectionsPoll = nullptr;
     /// The last text written into `reflectionsRow` (LabelWidget has no getter),
     /// so the poll only touches the widget when the reading actually moved.
     QString reflectionsText;
-    HFloatSliderWidget *updateBudget = nullptr;
-    CheckBoxWidget *ddgiToggle = nullptr;
-    HFloatSliderWidget *ddgiIntensity = nullptr;
-    HFloatSliderWidget *ddgiAmbient = nullptr;
-    ComboBoxWidget *ddgiSource = nullptr;
-    QPushButton *advancedButton = nullptr;
-    QPushButton *resetAdvancedButton = nullptr;
+    RowPtr<HFloatSliderWidget> updateBudget;
+    RowPtr<CheckBoxWidget> ddgiToggle;
+    RowPtr<HFloatSliderWidget> ddgiIntensity;
+    RowPtr<HFloatSliderWidget> ddgiAmbient;
+    RowPtr<ComboBoxWidget> ddgiSource;
+    RowPtr<QPushButton> advancedButton;
+    RowPtr<QPushButton> resetAdvancedButton;
     /// Disclosure state, per session (the panel is rebuilt on every edit).
     bool advancedOpen = false;
 };

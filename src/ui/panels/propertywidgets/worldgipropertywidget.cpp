@@ -105,7 +105,7 @@ void WorldGiPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 // while a pin deviates, the Advanced rows follow the chosen technique.
 void WorldGiPropertyWidget::rebuild()
 {
-    clearPanel(this->layout());
+    clearPanel();
     // The rows just retired (deleteLater) — every pointer below is to one of
     // them, and refreshPins() dereferences whichever this build leaves set.
     photonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/controls/bladerow.h"
 #include "irisgl/irisglfwd.h"
 #include "services/worldmodes.h"
 
@@ -96,15 +97,15 @@ private:
     struct EffectRow
     {
         QString id;
-        CheckBoxWidget *box = nullptr;
-        ComboBoxWidget *combo = nullptr;
-        LabelWidget *unavailable = nullptr;
+        RowPtr<CheckBoxWidget> box;
+        RowPtr<ComboBoxWidget> combo;
+        RowPtr<LabelWidget> unavailable;
     };
     struct ParamField
     {
         QString id;
         QString ownerRowId;
-        DragFloatWidget *field = nullptr;
+        RowPtr<DragFloatWidget> field;
     };
 
     QSharedPointer<iris::Scene> scene;
@@ -113,8 +114,8 @@ private:
     bool loading = false;
     QVector<EffectRow> effectRows;
     QVector<ParamField> paramFields;
-    AccordianBladeWidget *looksSection = nullptr;
-    LabelWidget *looksHeading = nullptr;
+    RowPtr<AccordianBladeWidget> looksSection;
+    RowPtr<LabelWidget> looksHeading;
     /// The stack as it was when the current scrub began (looks parameters have
     /// no start signal of their own — the editor reports the end of one).
     QJsonArray looksBefore;

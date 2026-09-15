@@ -16,6 +16,10 @@ For more information see the LICENSE file
 
 #include "io/assetmanager.h"
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/controls/bladerow.h"
+// ComboBoxWidget is complete here because materialCombo() reads the handle
+// inline (RowPtr::get needs the row's type, like any other use of it).
+#include "ui/controls/comboboxwidget.h"
 #include "irisgl/document/materials/material.h"
 #include "irisgl/core/properties/property.h"
 
@@ -108,19 +112,22 @@ private:
     /// means the combo is current and a refill may keep it.
     QString materialItemsKey() const;
     QString comboItemsKey() const;
-    /// Guarded: clearPanel() deletes the row with every other row.
-    QPointer<QPushButton> resetButton;
+    /// A control INSIDE a row this blade builds, so it is retired with that row
+    /// — RowPtr, like the rows themselves: `resetButton.isNull()` is read by
+    /// canRebind as "this node has no default to reset to", and that question
+    /// is only answerable about a button still on the panel (ADD-1 review F7).
+    RowPtr<QPushButton> resetButton;
     QSharedPointer<iris::MeshNode> meshNode;
     /// Both are destroyed by clearShownRows and rebuilt by the full path; null
     /// between the two (they were uninitialised members reading as garbage on
     /// the first pick of a session — nothing dereferenced them before the
     /// refill path did).
-    ComboBoxWidget* materialSelector = nullptr;
-    PropertyWidget* materialPropWidget = nullptr;
+    RowPtr<ComboBoxWidget> materialSelector;
+    RowPtr<PropertyWidget> materialPropWidget;
     /// The rows of the collapsible "Detail Layers" section (GAP 2). Held so the
     /// listener can tell which widget a change came from; null when the
     /// material declares no detail rows.
-    PropertyWidget* detailPropWidget = nullptr;
+    RowPtr<PropertyWidget> detailPropWidget;
 
     void setupShaderSelector();
     /// Re-reads `existingTextures` from the material currently shown (empty when

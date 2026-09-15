@@ -177,7 +177,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	if (binding == Binding::Scene && !!scene) scene->skyType = type;
 
 	loading = true;
-	clearPanel(this->layout());
+	clearPanel();
 	setMouseTracking(true);
 
 	skySelector = this->addComboBox("Sky Type");
