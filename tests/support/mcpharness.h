@@ -239,6 +239,52 @@ struct McpClient
     int integer(const QString &script) { return value(script).toInt(); }
 };
 
+/// WHAT THE APP SAID ABOUT ITS OWN UI THREAD, printed when a measurement of
+/// that thread fails.
+///
+/// `spawn` below merges the child's stdout and stderr, and nothing after the
+/// boot token ever reads them again — so every responsiveness red this tree
+/// has had threw away the app's own account of the block. The app prints
+/// `[heartbeat] UI thread blocked N ms (stage: ...)` for every gap past
+/// 400 ms and, past two seconds, the WATCHDOG MAKES THE BLOCKED THREAD PRINT
+/// ITS OWN BACKTRACE (services/mainthreadwatchdog.h). That backtrace WAS
+/// produced in the avatar.responsive red of 2026-09-15 and discarded with the
+/// pipe; a lane was then spent guessing at the block (ledger 459). It costs a
+/// `readAll()` per poll to keep it.
+///
+/// `log` is what the suite drained out of the QProcess, and `from` is the
+/// offset the MEASURED WINDOW began at — without it the print carries the
+/// whole process's history and a reader attributes an earlier block to the
+/// window (it did, the first time this was run: a 2 s assimp parse from a
+/// project open two sections earlier). This prints the lines that name the
+/// block and nothing else, so a red stays readable.
+inline void printUiThreadEvidence(const QByteArray &whole, const char *why, int from = 0)
+{
+    const QByteArray log = whole.mid(qBound(0, from, int(whole.size())));
+    std::printf("info: ---- the app's own account of its UI thread (%s) ----\n", why);
+    bool inBacktrace = false;
+    int printed = 0;
+    const QList<QByteArray> lines = log.split('\n');
+    for (const QByteArray &raw : lines) {
+        const QByteArray line = raw.trimmed();
+        if (line.contains("--- UI-thread backtrace")) inBacktrace = true;
+        const bool wanted = inBacktrace || line.contains("[heartbeat]") ||
+                            line.contains("[watchdog]");
+        if (wanted && !line.isEmpty()) {
+            std::printf("info: | %s\n", line.constData());
+            ++printed;
+        }
+        if (line.contains("end of UI-thread backtrace")) inBacktrace = false;
+    }
+    if (printed == 0)
+        std::printf("info: | (nothing: the app reported no gap past its own 400 ms "
+                    "threshold, so the block was not on the UI thread it watches)\n");
+    std::printf("info: ---- end of the app's account (%lld bytes since the window "
+                "opened, %lld since boot) ----\n",
+                static_cast<long long>(log.size()), static_cast<long long>(whole.size()));
+    std::fflush(stdout);
+}
+
 /// Same reason as import.shutdown: keep the close path prompt-free. In a
 /// QT_DEBUG build jahsettings.ini lives beside the BINARY (applicationDirPath),
 /// which a scratch HOME does not isolate — this is the shared file every e2e
