@@ -18,7 +18,10 @@
 //   2. A WALK CARRIES IT. Crossing cascade 0's step re-places the field with the
 //      cascade, in the SAME frame (a frame between the two would sample this
 //      frame's probes through last frame's placement), it stays BOUND, it comes
-//      back CONVERGED, and no frame of the walk costs more than a 30 Hz budget.
+//      back CONVERGED, and no frame of the walk costs more than the tier's own
+//      budget — 16.7 ms, the 60 Hz desktop target of the realtime law, since
+//      PHOTON_SPEC §7 E2 (9) re-anchored these two bars off the 30 Hz placeholder
+//      E1 shipped with (`fieldGi()` is quality High, and High's budget is 60 Hz).
 //   3. IT IS THE SAME LIGHT. A field riding a 10 m box must light the ground
 //      the camera is standing on like the 64 m fitted field did at the same
 //      pose — the whole point being that it does so wherever the camera goes.
@@ -98,6 +101,12 @@ static float dist(const Vec3 &a, const Vec3 &b)
 /// The chain, with the field ON. `updateBudget` 1 is the DEFAULT dial: it is
 /// what decides how fast a re-converge runs, so the suite measures the shipped
 /// speed rather than an unlimited one.
+/// THE TIER'S FRAME BUDGET, in milliseconds (REALTIME_FRAME_SPEC's law:
+/// 60 Hz desktop, 90 Hz VR). `fieldGi()` below is quality HIGH, which is a
+/// desktop tier, so 1/60 s is the bar these cases are held to. It replaced a
+/// 33 ms (30 Hz) placeholder at PHOTON_SPEC §7 E2 (9).
+static const float kTierBudgetMs = 1000.0f / 60.0f;
+
 static GiParams fieldGi()
 {
     GiParams gi;
@@ -281,7 +290,7 @@ int main()
                     recs.size(), worstMs, followRows, followProbes, worstFollowMs, worstFollowGpu,
                     worstCascadeMs, worstCascadeGpu);
         CHECK(followRows > 0, "the re-integration is filed as its own monitor row");
-        CHECK(worstMs < 33.0f, "NO FRAME OF THE WALK COSTS MORE THAN A 30 Hz BUDGET");
+        CHECK(worstMs < kTierBudgetMs, "NO FRAME OF THE WALK COSTS MORE THAN THE TIER'S BUDGET");
     }
 
     // =====================================================================
@@ -503,10 +512,13 @@ int main()
     // pixel count and prints what a frame costs, because a bar in milliseconds
     // is only meaningful against the resolution it was measured at.
     //
-    // ASSERTED: no frame of the walk exceeds a 30 Hz budget. The millisecond
-    // figures themselves are PRINTED, not asserted: they are a property of the
-    // GPU the suite happens to run on, and the gate must not turn a slower box
-    // into a red.
+    // ASSERTED: no frame of the walk exceeds THE TIER'S budget (16.7 ms at
+    // High — the 60 Hz desktop target; E2 (9)). The millisecond figures
+    // themselves are PRINTED, not asserted: they are a property of the GPU the
+    // suite happens to run on, and the gate must not turn a slower box into a
+    // red. For scale, the lane's own measurement of the SHIPPED Showroom at
+    // this tier and this resolution is a p95 of 4.5 ms and a worst of 14.95
+    // over a 4,000-frame 100 m walk (spikes/photon-e2/BASELINE.md).
     std::printf("\n== case 7: 1080p, walking ==\n");
     {
         View *big = e->createOffscreenView("field-1080p", 1920, 1080, Colour(0, 0, 0));
@@ -541,7 +553,7 @@ int main()
                         recs.size(), recs.empty() ? 0.0f : sum / float(recs.size()), worst,
                         nGpu ? sumGpu / float(nGpu) : -1.0f, worstGpu, nGpu);
             CHECK(!recs.empty(), "the monitor recorded the 1080p walk");
-            CHECK(worst < 33.0f, "NO FRAME OF A 1080p WALK EXCEEDS A 30 Hz BUDGET");
+            CHECK(worst < kTierBudgetMs, "NO FRAME OF A 1080p WALK EXCEEDS THE TIER'S BUDGET");
             big->setScene(nullptr);
             e->destroyView(big);
         }

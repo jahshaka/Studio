@@ -540,6 +540,27 @@ add_test(NAME gi.cascades COMMAND test_gi_cascades
 # back a frame at a time.
 set_tests_properties(gi.cascades PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# AN EDIT UNDER THE CHAIN COSTS AT MOST ONE CASCADE PER FRAME (PHOTON_SPEC §7 G1,
+# and E2's own suite row). gi.cascades is about the camera SCROLL; this is about
+# the four kinds of EDIT — geometry, material, spawn, light — each of which used
+# to tear down N voxelisers and rebuild them in ONE frame. RUN_SERIAL like every
+# cascade suite: the chain holds four voxel volumes at once.
+add_executable(test_gi_cascade_dirty test_gi_cascade_dirty.cpp)
+set_target_properties(test_gi_cascade_dirty PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cascade_dirty PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cascade_dirty PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cascade_dirty JahshakaEngineMedia)
+add_test(NAME gi.cascade_dirty COMMAND test_gi_cascade_dirty
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
 # camera walks — in the same frame the cascade moved, bound throughout, and
