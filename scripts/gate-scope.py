@@ -267,6 +267,8 @@ def main():
     ap.add_argument("--files", nargs="*", help="explicit touched paths instead of a range")
     ap.add_argument("--build", default="build-linux")
     ap.add_argument("--run", action="store_true", help="run the selection now (DISPLAY must be set)")
+    ap.add_argument("-j", "--jobs", type=int, default=4,
+                    help="ctest parallelism (default 4 — the tier's contract; a lane beside other live lanes runs 2)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--record-times", metavar="CTEST_LOG", help="snapshot suite seconds from a ctest output log")
     a = ap.parse_args()
@@ -374,9 +376,9 @@ def main():
     names = sorted(selected)
     est = sum(costs.get(n, 10.0) for n in names)
     serial = sum(costs.get(n, 10.0) for n in names if inv[n]["serial"])
-    wall = max(est / 4.0, serial) + 5
+    wall = max(est / float(a.jobs), serial) + 5
     regex = "^(" + "|".join(re.escape(n) for n in names) + ")$"
-    cmd = f"ctest -j4 --timeout 120 --output-on-failure --no-tests=error -R '{regex}'"
+    cmd = f"ctest -j{a.jobs} --timeout 120 --output-on-failure --no-tests=error -R '{regex}'"
 
     if a.json:
         print(json.dumps({"paths": paths, "suites": names, "fallback": fallback, "estimated_seconds": est,
@@ -397,7 +399,7 @@ def main():
         print("\nSCOPED tier: NOTHING to gate — every touched path is docs/scripts/data with no owning suite "
               "(a code path always adds app.startup_quiet + api.contract)")
         return
-    print(f"\nSCOPED tier: {len(names)} suite(s), ~{est:.0f} suite-seconds, ~{wall/60:.1f} min wall at -j4 "
+    print(f"\nSCOPED tier: {len(names)} suite(s), ~{est:.0f} suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} "
           f"(serial islands {serial:.0f} s); costs from scripts/gate-times.txt + the build dir's last run, 10 s assumed otherwise")
     for n in names: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
     print(f"\n{cmd}")
