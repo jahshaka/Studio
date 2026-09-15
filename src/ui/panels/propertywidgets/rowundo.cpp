@@ -13,6 +13,8 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertyrows.h"
 
+#include "services/editgate.h"
+
 #include <memory>
 
 #include <QColor>
@@ -40,7 +42,23 @@ using SessionPtr = std::shared_ptr<Session>;
 
 bool live(const rowundo::Binding &b)
 {
-    return !b.guard || b.guard();
+    // THE PANEL'S OWN GUARD FIRST, ALWAYS. A row POPULATING itself — the
+    // sliders emit from setValue while a selection is being shown — is not an
+    // edit and must not even be OFFERED to the gate below: it would be counted
+    // as a refused hand edit and would pop the run's notice at the person for
+    // something they never did (measured: selecting each of twenty scripted
+    // primitives reached here).
+    if (b.guard && !b.guard()) return false;
+    // THE EDIT GATE (owner, ledger §423; services/editgate.h). While a script
+    // run owns the document every row in every panel is inert — not disabled,
+    // not greyed: it simply writes nothing and records nothing, exactly as a
+    // row whose panel is still populating does. It has to be asked HERE, at
+    // the gesture, and not only at the undo push: a row writes the document
+    // live through the drag and pushes one step at the end, so a refusal that
+    // arrived with the push would leave the dragged value in the document with
+    // no undo step behind it.
+    if (editgate::refuse()) return false;
+    return true;
 }
 
 void begin(const SessionPtr &s, const rowundo::Binding &b)

@@ -420,9 +420,10 @@ QVector<VerbInfo> AppApi::verbs() const
           "what a deterministic script wants and what every test uses. `editor.frame(n, dt)` "
           "renders its n frames either way; it is a verb. The setting applies to the CONSOLE and "
           "to MCP run_script ('applies'); --script and --headless are always 'off'. Called with no "
-          "argument it only reports. It persists (Preferences > Scripting). NOTE while a run is "
-          "live: a hand edit made in the same moment joins the script's undo step, because the run "
-          "IS the open undo entry. `runPolicy` is the policy of the run asking — which is what the "
+          "argument it only reports. It persists (Preferences > Scripting). While a run is in "
+          "flight — under EITHER policy — the editor is NON-EDITABLE BUT FULLY NAVIGABLE: hand "
+          "edits are refused for the run's duration and the camera, panels, tabs and selection go "
+          "on working (editor.editGate reports it). `runPolicy` is the policy of the run asking — which is what the "
           "setting gave THIS run, and is 'off' for a --script run unless it was started with "
           "--script-live.",
           Needs::Document },

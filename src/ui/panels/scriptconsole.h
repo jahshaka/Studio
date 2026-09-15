@@ -18,6 +18,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 
+class QLabel;
 class QPlainTextEdit;
 class QPushButton;
 class ScriptEngine;
@@ -72,6 +73,9 @@ private:
     QPushButton *mFileBtn = nullptr;
     QPlainTextEdit *mLog;
     QPlainTextEdit *mInput;
+    /// "A script is running" — visible for exactly the length of a run (the
+    /// passive half of the edit gate's notice; see setRunningUi).
+    QLabel *mStatus = nullptr;
     QStringList mHistory;
     int mHistoryPos = 0;        // == mHistory.size() when editing a fresh line
     QString mPendingInput;      // the fresh line stashed while browsing history

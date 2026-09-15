@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollBar>
@@ -72,10 +73,22 @@ ScriptConsole::ScriptConsole(ScriptEngine *engine, QWidget *parent)
     inputRow->addWidget(mInput, 1);
     inputRow->addLayout(buttons);
 
+    // THE PASSIVE HALF OF "A SCRIPT IS RUNNING" (owner, ledger §423). The
+    // toast answers the person who TRIED to edit; this answers the person who
+    // is only looking — one line, present for exactly as long as the run, so
+    // "why will nothing move" has an answer on screen and not only in a
+    // notification that has already faded.
+    mStatus = new QLabel(this);
+    mStatus->setObjectName(QStringLiteral("ScriptConsoleStatus"));
+    mStatus->setWordWrap(true);
+    mStatus->setStyleSheet(StyleSheet::MutedInfoText());
+    mStatus->hide();
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(6);
     layout->addWidget(mLog, 1);
+    layout->addWidget(mStatus);
     layout->addLayout(inputRow);
 
     // Classic's console sheet; under Qlementine the log and the input are the
@@ -118,6 +131,12 @@ void ScriptConsole::setRunningUi(bool running)
     if (mRunBtn) mRunBtn->setText(running ? QStringLiteral("Stop") : QStringLiteral("Run"));
     if (mFileBtn) mFileBtn->setEnabled(!running);
     if (mInput) mInput->setReadOnly(running);
+    if (mStatus) {
+        mStatus->setText(running ? tr("Script running — the editor is read-only until it "
+                                      "finishes. Look around all you like; Stop ends the run.")
+                                 : QString());
+        mStatus->setVisible(running);
+    }
 }
 
 void ScriptConsole::runOrStop()

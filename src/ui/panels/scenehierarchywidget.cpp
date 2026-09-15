@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/scenehierarchywidget.h"
+#include "services/editgate.h"
 #include "ui_scenehierarchywidget.h"
 
 #include <QMenu>
@@ -803,6 +804,9 @@ SceneTreeWidget::DropHint SceneHierarchyWidget::dropHintAt(const QList<iris::Sce
 void SceneHierarchyWidget::runFolderEdit(const QString &text, const std::function<bool()> &fn)
 {
     if (!scene || !fn) return;
+    // The edit gate (ledger §423): a folder edit APPLIES and then records, so
+    // the refusal has to come before `fn()` runs.
+    if (editgate::refuse()) return;
     const auto before = scenefolders::snapshot(scene);
     if (!fn()) return;
     repopulateTree();

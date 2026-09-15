@@ -90,6 +90,7 @@ public:
     Q_INVOKABLE QVariantMap setSnapSize(const QVariant &size);
     Q_INVOKABLE bool snapToFloor();
     Q_INVOKABLE QVariantMap undoState();
+    Q_INVOKABLE QVariantMap editGate();
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     Q_INVOKABLE bool play();

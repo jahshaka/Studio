@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QDebug>
 
 #include "ui/panels/propertywidgets/lightpropertywidget.h"
+#include "services/editgate.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/controls/colorvaluewidget.h"
@@ -397,6 +398,9 @@ void LightPropertyWidget::lightAccurateChanged(bool accurate)
 void LightPropertyWidget::lightChannelsChanged(quint32 mask)
 {
     if (loading || !lightNode) return;
+    // The edit gate (ledger §423), as in the mesh panel's channel grid: it
+    // writes the node first and records the step after it.
+    if (editgate::refuse()) return;
     // Document only: the mirror sees the changed LightDesc on the next sync
     // (LightDesc::operator== compares the mask) and pushes it. `lightMask` is a reflected
     // key (SceneNode::setPropertyValue takes both spellings of the 32 bits), so

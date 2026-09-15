@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/core/logger.h"
 #include "services/jahlog.h"
 #include "services/sessionmarkers.h"
+#include "services/editgate.h"
 #include "services/framemonitor.h"
 #include "services/perfsampler.h"
 
@@ -339,6 +340,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// alone (hygiene lane, 2026-09-09).
 	scriptHost->beginUndoMacro = [this](const QString &text) { undoService->beginScriptMacro(text); };
 	scriptHost->endUndoMacro = [this]() { undoService->endScriptMacro(); };
+	// THE RUN'S ONE NOTICE (owner, ledger §423: "a 'script running' toast
+	// later would be cool"). While a script runs the editor is non-editable —
+	// the gate refuses every document write coming from the UI — and a refusal
+	// with nothing said reads as a frozen app. Raised by the gate the FIRST
+	// time an edit is refused in a run and not again until the next one: a
+	// drag is dozens of refused events and a toast per event is its own bug.
+	//
+	// Anchored to the WINDOW, not the viewport: an edit can be refused from
+	// any page (a properties row, the hierarchy, the timeline), and the
+	// viewport anchor is where gesture feedback lives.
+	editgate::setNoticeHook([this]() {
+		if (!snapToast) snapToast = new Toast(this);
+		snapToast->setAnchor(Toast::Anchor::WindowBottom);
+		snapToast->showToast(tr("Script running"),
+		                     tr("The editor is read-only until the script finishes. "
+		                        "You can still look around, select and switch pages."));
+	});
 	scriptEngine = new ScriptEngine(*scriptHost, this);
 	// LIVE SCRIPT FEEDBACK, as the user left it (Preferences > Scripting,
 	// app.scriptPolicy). Live is the default: a person or an agent driving the
@@ -5271,6 +5289,11 @@ void MainWindow::destroyEngineViews()
 MainWindow::~MainWindow()
 {
     JAH_SHUTDOWN_STEP(ShutdownOrder::WindowBody, "~MainWindow body");
+
+    // The edit gate's notice captured this window (ledger §423). The gate
+    // outlives every window — it is process-wide — so the hook goes first,
+    // before anything here can raise it.
+    editgate::setNoticeHook({});
 
     // ORDER IS LOAD-BEARING. Undo commands owe the database work when they die
     // (DeleteSceneNodeCommand finalises the asset row once no undo can reach

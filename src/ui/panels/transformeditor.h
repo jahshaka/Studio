@@ -89,6 +89,9 @@ private:
 
     StudioServices *services = nullptr;
     QSharedPointer<iris::SceneNode> sceneNode;
+    /// The node the value slots may WRITE — `sceneNode`, or nothing while a
+    /// script run owns the document (services/editgate.h).
+    QSharedPointer<iris::SceneNode> editableNode() const;
     QSharedPointer<iris::SceneNode> defaultStateNode;
 
     DragSpinBox* xpos; DragSpinBox* ypos; DragSpinBox* zpos;

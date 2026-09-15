@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include "ui/panels/propertywidget.h"
+
+#include "services/editgate.h"
 #include "ui_propertywidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
@@ -505,6 +507,13 @@ int PropertyWidget::takeSlot(iris::Property *prop, QWidget *valueRow)
 iris::Property *PropertyWidget::propertyAt(int slot) const
 {
     if (rebinding) return nullptr;      // a value being PUT INTO a row is not an edit
+    // ...and neither is a click that arrives while a SCRIPT owns the document
+    // (owner, ledger §423; services/editgate.h). Every handler these rows
+    // install starts by asking for its property here and returns when there is
+    // none, so one answer makes the whole material panel — every type of row,
+    // present and future — inert for the length of a run, before the value
+    // reaches the Property and long before any undo command is pushed.
+    if (editgate::refuse()) return nullptr;
     return properties.value(slot, nullptr);
 }
 

@@ -51,6 +51,7 @@
 #include "viewport/snapsettings.h"
 #include "viewport/freecamerapolicy.h"
 #include "bridge/secondarysurfacetonemap.h"
+#include "services/editgate.h"
 #include "services/engineerrorpump.h"
 #include "services/framemonitor.h"
 #include "services/loadtimeline.h"
@@ -1073,8 +1074,16 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
     if (e->button() == Qt::LeftButton) {
         iris::Vec3 rayPos, rayDir, viewDir;
         const bool haveRay = mouseRay(rayPos, rayDir, viewDir);
-        // A hit on the active gizmo starts a drag and keeps the selection.
-        if (haveRay && mSelectedNode && mGizmo && mGizmo->isHit(rayPos, rayDir)) {
+        // A hit on the active gizmo starts a drag and keeps the selection —
+        // unless a SCRIPT owns the document (owner, ledger §423;
+        // services/editgate.h). The gate is asked before the drag begins, not
+        // when it ends: a drag writes the node live, and letting it run only to
+        // drop its undo step would move the object and then snap it back. The
+        // click still lands as a click (the selection below is a read), and
+        // every camera gesture in this handler is untouched — the editor is
+        // non-editable while a script runs, not frozen.
+        if (haveRay && mSelectedNode && mGizmo && mGizmo->isHit(rayPos, rayDir)
+            && !editgate::refuse()) {
             // Alt+drag duplicates first, then drags the COPY — one undo macro
             // covers duplicate + move (EDITOR_SHORTCUTS_SPEC §4).
             if ((e->modifiers() & Qt::AltModifier) && mServices && mServices->sceneEdit &&
@@ -1660,6 +1669,12 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
 {
     if (camera == mPilot) return true;
 
+    // FLYING A SCENE CAMERA IS AN EDIT — it moves a document node — so it is
+    // refused while a script owns the document (ledger §423). EJECTING is
+    // always allowed (camera is null there): being unable to leave a camera
+    // would be a lock, and the rule is non-editable, not locked.
+    if (camera && editgate::refuse()) return false;
+
     // ---- leaving: one undo command for the whole flight -------------------
     if (mPilot) {
         const iris::Vec3 endPos = mPilot->getLocalPos();
@@ -1671,7 +1686,15 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
                            !qFuzzyCompare(endRot.y(), mPilotStartRot.y()) ||
                            !qFuzzyCompare(endRot.z(), mPilotStartRot.z()) ||
                            !qFuzzyCompare(endRot.scalar(), mPilotStartRot.scalar());
-        if (moved && mServices && mServices->undo) {
+        // A RUN THAT STARTED MID-FLIGHT (the entry above is refused, but a
+        // script can begin while somebody is already piloting): the flight is
+        // not recorded, so the camera goes back to where the flight began
+        // rather than keeping a move with no undo step behind it.
+        if (moved && editgate::blocked()) {
+            mPilot->setLocalPos(mPilotStartPos);
+            mPilot->setLocalRot(mPilotStartRot);
+        }
+        else if (moved && mServices && mServices->undo) {
             // The scale never changes while flying, so both ends carry the
             // node's current one — TransformSceneNodeCommand wants a full TRS.
             const iris::Vec3 scale = mPilot->getLocalScale();
@@ -2914,6 +2937,12 @@ void EngineSceneViewport::setServices(StudioServices *services)
 // rigid body": two objects on a staircase have to land on their own steps.
 bool EngineSceneViewport::snapSelectionToFloor()
 {
+    // The edit gate (ledger §423), asked ONCE for the whole gesture: the
+    // multi-node branch below opens a macro on the stack before the first
+    // node, and an all-refused gesture would leave an empty entry behind. Keyed
+    // on the calling context, so the End key is refused while a script runs and
+    // editor.snapToFloor, arriving inside a verb, is not.
+    if (editgate::refuse()) return false;
     if (mSelectedSet.size() > 1) {
         const auto targets = SceneEditService::effectiveSet(mSelectedSet);
         if (targets.isEmpty()) return false;
@@ -2930,6 +2959,9 @@ bool EngineSceneViewport::snapSelectionToFloor()
 bool EngineSceneViewport::snapNodeToFloor(const iris::SceneNodePtr &node)
 {
     if (!node || !mScene) return false;
+    // The gate again, for the single-member entry point (the question, not the
+    // notice — snapSelectionToFloor above already raised it for the gesture).
+    if (editgate::blocked()) return false;
     node->update(0.0f);
 
     const iris::AABB bounds = preview::worldBoundingBox(node);

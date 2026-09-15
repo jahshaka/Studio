@@ -52,8 +52,9 @@ ScriptingSettingsWidget::ScriptingSettingsWidget(SettingsManager *settings, QWid
         "Applies to the script console and to Claude's run_script. Scripts run from the "
         "command line (--script, --headless) are always off, so their frame counts stay "
         "exact.\n\n"
-        "While a live run is going, an edit you make by hand joins the script's undo step — "
-        "the run is the open undo entry until it ends.", this);
+        "While a script runs the editor is read-only: you can look around, select things and "
+        "switch pages, but an edit made by hand is refused until the run finishes. A toast "
+        "says so the first time you try.", this);
     note->setWordWrap(true);
     note->setStyleSheet(StyleSheet::MutedInfoText());
     layout->addWidget(note);
