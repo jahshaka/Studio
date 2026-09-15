@@ -324,15 +324,44 @@ ScriptBridge::ScriptBridge(VerbDispatcher *dispatcher, QObject *parent)
 {
 }
 
+namespace {
+
+/// NOTHING THE ENGINE OWNS MAY CROSS A THREAD, at any depth (round 2, L6).
+/// QJSValue::toVariant unwraps the structures it knows, but a value it cannot
+/// convert comes back as a QVariant still holding a QJSValue — and that object
+/// belongs to the worker's engine, which is not the thread about to read it.
+/// Ten lines of insurance over a shape we believe cannot occur.
+QVariant scrubJsValues(const QVariant &value)
+{
+    if (value.userType() == qMetaTypeId<QJSValue>())
+        return scrubJsValues(value.value<QJSValue>().toVariant());
+    if (value.typeId() == QMetaType::QVariantList) {
+        QVariantList out;
+        const QVariantList in = value.toList();
+        out.reserve(in.size());
+        for (const QVariant &item : in) out.append(scrubJsValues(item));
+        return out;
+    }
+    if (value.typeId() == QMetaType::QVariantMap) {
+        QVariantMap out;
+        const QVariantMap in = value.toMap();
+        for (auto it = in.constBegin(); it != in.constEnd(); ++it)
+            out.insert(it.key(), scrubJsValues(it.value()));
+        return out;
+    }
+    return value;
+}
+
+} // namespace
+
 QVariant ScriptBridge::call(const QString &module, const QString &verb, const QVariant &args)
 {
     // Flatten on THIS side: a QJSValue belongs to the engine that made it and
     // must never travel. toVariant() turns arrays into QVariantList and objects
     // into QVariantMap, recursively, which is exactly what the verbs' QVariant
-    // parameters expect.
-    QVariant flat = args;
-    if (flat.userType() == qMetaTypeId<QJSValue>()) flat = flat.value<QJSValue>().toVariant();
-    const QVariantList list = flat.toList();
+    // parameters expect — and scrubJsValues walks the result to guarantee that
+    // no QJSValue survived anywhere inside it.
+    const QVariantList list = scrubJsValues(args).toList();
 
     VerbOutcome out;
     if (!mDispatcher) {
