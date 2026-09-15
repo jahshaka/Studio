@@ -186,6 +186,16 @@ bool ProjectApi::open(const QString &guidOrName)
         return false;
     }
 
+    // AN OPEN ALREADY IN FLIGHT FINISHES FIRST, and it has to happen HERE,
+    // before a single pointer moves (MainWindow::waitForOpen). The threaded
+    // open's remaining slices read the project when they RUN — the document
+    // read asks the database for project->getProjectGuid()'s blob — so
+    // closing and re-pointing first and draining afterwards would install a
+    // hybrid world: the old session's assets, the new blob, and a prewarm for
+    // neither, every mesh of it parsed on the UI thread.
+    if (!host.mainWindow->waitForOpen())
+        return fail("project.open: an open already in flight did not finish");
+
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
@@ -222,6 +232,12 @@ bool ProjectApi::openAsync(const QString &guidOrName)
             fail(QStringLiteral("project.openAsync: no project named or guid '%1'").arg(guidOrName));
         return false;
     }
+    // THE SAME RULE AS project.open — nothing moves while an open is in
+    // flight — enforced here by REFUSING instead of waiting, and that is the
+    // whole guard: isOpeningProject() is true for a tile click's open exactly
+    // as it is for a scripted one, so this verb can never reach the close
+    // below with slices still queued. (project.open cannot refuse — its
+    // contract is a loaded world — so it drains through waitForOpen instead.)
     if (host.mainWindow->isOpeningProject())
         return fail("project.openAsync: an open is already in flight");
 

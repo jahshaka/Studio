@@ -1702,6 +1702,16 @@ iris::MeshPrewarmPtr MainWindow::prewarmModelsPumped()
 	// second that used to freeze it, and the stages below then run back to
 	// back exactly as they always have, with the parses already in hand.
 	//
+	// WHY THIS PUMP IS SAFE, BY CONSTRUCTION. Pumping delivers DeferredDelete
+	// events, and a DeferredDelete is only delivered by a sendPostedEvents
+	// running BELOW the loop level it was posted at — so what this pump can
+	// free is what an outer loop has already finished with. It runs BEFORE
+	// openStageBegin, with the previous world still installed and the desktop
+	// still the current page: no panel is being torn down or rebuilt inside
+	// it, so nothing here can free a row that a panel is about to touch. That
+	// ordering is the invariant; moving this call after openStageBegin would
+	// break it.
+	//
 	// WHY NOT THE RUNNER'S SLICES TOO (and this is a measured decision, not a
 	// preference): slicing the INSTALL means returning to the event loop
 	// between the stages, and the properties panel's rows are retired with
@@ -1724,13 +1734,17 @@ iris::MeshPrewarmPtr MainWindow::prewarmModelsPumped()
 
 	std::atomic<bool> done { false };
 	QFuture<void> future = QtConcurrent::run([plan, prewarm, &done]() {
+		// THE FLAG IS FLIPPED BY A SCOPE GUARD, not by the last statement: a
+		// throw out of a parse (assimp's importers do throw) would otherwise
+		// leave `done` false and this thread pumping for the whole budget
+		// before the future rethrew — ninety seconds of "nothing is wrong".
+		struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
 		for (const iris::PrewarmItem &item : plan) {
 			// Named "assimp" for continuity of the ledger, but a bake hit
 			// never reaches assimp — worker:bakeHits is the split.
 			LoadTimeline::Accumulate parse(QStringLiteral("worker:assimp"));
 			prewarm->parse(item);
 		}
-		done.store(true);
 	});
 	LoadTimeline::mark(QStringLiteral("parse(worker)"));
 
@@ -1764,10 +1778,16 @@ void MainWindow::openProject(bool playMode)
 		LoadTimeline::begin(QStringLiteral("open(sync) %1")
 		                        .arg(project ? project->getProjectName() : QString()));
 
-	// A threaded open still running (a tile click whose slices are in flight
-	// when a script asks for another world): let IT finish first, pumped,
-	// rather than tearing one world down through the other's slices.
-	if (isOpeningProject()) openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+	// THE BACKSTOP. A caller that points the project at another world must
+	// drain an in-flight open BEFORE it does so (MainWindow::waitForOpen, and
+	// both project verbs call it there); by the time we are here the pointers
+	// have already moved, so all this can still do is refuse to interleave two
+	// worlds through one set of slices.
+	if (isOpeningProject()) {
+		qWarning("project open: a threaded open was still in flight when a blocking open "
+		         "started — draining it (the caller should have waited first)");
+		openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+	}
 
 	// The models, parsed on a worker while this thread pumps (above).
 	const iris::MeshPrewarmPtr prewarm = prewarmModelsPumped();
@@ -1804,12 +1824,31 @@ bool MainWindow::isOpeningProject() const
 	return openRunner && openRunner->isRunning();
 }
 
+bool MainWindow::waitForOpen()
+{
+	if (!isOpeningProject()) return true;
+	// THE PUMP HERE IS NOT THE SAFE ONE (see prewarmModelsPumped): the slices
+	// it services install a world — they mount panels, bind the properties
+	// tree and switch the page, and they retire panel rows whose owners keep
+	// raw pointers to them. That is the threaded open's own exposure, not one
+	// this call adds: the very same slices run from the very same event loop
+	// when nobody is waiting. What this does add is that they finish BEFORE
+	// the caller tears the project down, which is the hybrid this exists to
+	// prevent.
+	return openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+}
+
 void MainWindow::openProjectAsync(bool playMode)
 {
-	// One open at a time. A second request while one is in flight WAITS for
-	// the first (pumped) rather than interleaving two worlds through the same
-	// slices, which would tear the document apart mid-install.
-	if (isOpeningProject()) openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+	// One open at a time, and the same backstop as the blocking open above:
+	// the caller drains an in-flight open through waitForOpen() before it
+	// re-points the project; this only stops two worlds sharing one set of
+	// slices if one ever gets here anyway.
+	if (isOpeningProject()) {
+		qWarning("project open: a threaded open was still in flight when another started — "
+		         "draining it (the caller should have waited first)");
+		openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+	}
 
 	if (!LoadTimeline::isRunning())
 		LoadTimeline::begin(QStringLiteral("open(async) %1")

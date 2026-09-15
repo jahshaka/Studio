@@ -101,10 +101,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "open of every shipped sample. 'bakeMisses' says why a parse was needed at all (no "
           "bake for that content yet), and 'lastUiThreadParse' names the file when the count is "
           "not zero. Pass {reset:true} to zero the counters AFTER reading them, which is how a "
-          "caller measures ONE open. 'uiThreadResourceParses' counts the built-in primitives "
-          "(':/...') separately: a few kilobytes compiled into the binary, parsed once per "
-          "process and cached, which no worker can hoist because every caller asks for them by "
-          "name. Process-wide and always on: the cost is one clock read per parse.",
+          "caller measures ONE open. 'bakeMisses' counts LOOKUPS, not models — one bake-less "
+          "model is asked for twice on a cold open (the prewarm worker's plan item, then the "
+          "reader's own) — so read it as how often the open had to fall back to a parse. "
+          "'uiThreadResourceParses' counts the built-in primitives (':/...') separately: a few "
+          "kilobytes compiled into the binary, which no worker can hoist because every caller "
+          "asks for them by name. They are parsed once per process only because the shell PINS "
+          "them (iris::Mesh::pinLoadPaths); the load cache itself holds weak references, so "
+          "before the pin every open after a close re-parsed them here. Process-wide and always "
+          "on: the cost is one clock read per parse.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "

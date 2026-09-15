@@ -640,6 +640,17 @@ public slots:
     void openProjectAsync(bool playMode = false);
     /// True while an asynchronous open is in flight.
     bool isOpeningProject() const;
+    /// Runs an in-flight threaded open TO COMPLETION before the caller does
+    /// anything else, with the event loop pumped (user input excluded).
+    ///
+    /// A verb that is about to close the project and point it at another world
+    /// MUST call this FIRST: the runner's remaining slices read the project at
+    /// SLICE time (readProjectScene asks the Database for
+    /// project->getProjectGuid()'s blob), so an open finished after the
+    /// pointers moved would install a hybrid — the old session's assets, the
+    /// new world's blob, and a prewarm for neither, every mesh of it parsed on
+    /// this thread. Returns true when nothing is (or is still) in flight.
+    bool waitForOpen();
     void closeProject();
 
     /// Takes the editor's panels down for a page that is not the editor.
