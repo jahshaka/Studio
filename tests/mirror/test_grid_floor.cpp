@@ -3,34 +3,47 @@
 // today when you turn the grid on it MERGES with the floor; it should always be
 // on top of the floor, but objects on top of it should cover it").
 //
-// WHAT IT USED TO DO. SceneMirror put the floor grid a hair BELOW y=0
-// (mGridFloorOffset = -0.01) so the ground would occlude it instead of
-// z-fighting with it — which means that in any scene with a ground plane the
-// grid was simply INVISIBLE from above the floor (measured on the shipping
-// build for this lane: a plain-grade screenshot of the default project with the
-// grid on contains not one grid pixel), and where it did poke through it fought.
-// A top view had to flip the sign of that offset to see anything at all.
+// WHAT IT USED TO DO. SceneMirror put the floor grid 1 cm BELOW its own plane
+// (mGridFloorOffset = -0.01) so a ground plane would occlude it: invisible from
+// above — the axis views had to flip the sign by hand — and fighting with the
+// ground wherever it poked through, which is the "merges" in the report.
 //
-// WHAT IT DOES NOW. The grid sits at exactly y=0, keeps its depth TEST, and its
-// material carries a depth bias TOWARDS the camera (Scene::setMaterialDepthPriority)
-// — so it wins against the coplanar floor at every angle and distance, and
-// loses to anything genuinely in front of it.
+// WHAT IT DOES NOW. The grid is drawn 1 cm ABOVE its plane, with the depth test
+// on, so geometry standing on the floor still covers it. The sign is the whole
+// change, and the 1 cm is measured (see D below).
 //
-// THE THREE CLAIMS, as pixels:
-//   A. with the grid on, its lines are drawn OVER the floor (they were not);
+// WHY NOT A DEPTH BIAS, which is what a coplanar helper usually wants: a
+// macroblock depth bias does NOTHING here, because Vulkan applies depth bias to
+// POLYGONS and this grid is LINE primitives. Measured on this suite: the same
+// frame, byte for byte, with mDepthBiasConstant at 0, 2, 16, 256 and 100,000,
+// and with the grid moved to its own render queue. Recorded so the next reader
+// does not spend the afternoon again.
+//
+// THE FIVE CLAIMS, as pixels:
+//   A. the grid's lines are drawn over a floor at its own height, WITHOUT
+//      z-fighting — measured against the same scene with the floor dropped out
+//      of the way, so the bar is the grid's own pixel count, not a guess;
 //   B. a box standing on the floor COVERS the grid inside its silhouette;
 //   C. the grid is a HELPER: a view with the editor's furniture switched off
 //      (View::setHelpersVisible(false) — what the Player page is, and what the
-//      user's Scene-grade screenshot does) draws none of it.
+//      user's Scene-grade screenshot does) draws none of it;
+//   D. the lift is at the KNEE of its curve: 1 mm is not enough and 2 cm is no
+//      better (printed as a sweep, so the next tuning starts from data);
+//   E. the ORTHO top view — the case the old offset's sign hid completely.
 //
 // Needs a display (Vulkan); no window (offscreen view + offscreen QPA).
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
+#include <QImage>
 #include <cstdio>
+#include <cstdlib>
+#include <cmath>
+#include <QByteArray>
 
 #include "irisgl/irisglfwd.h"
+#include "irisgl/core/geometry/aabb.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/vertexlayout.h"
@@ -57,30 +70,6 @@ constexpr unsigned kSize = 512;
 bool isGrid(const Colour &c) { return c.r > 0.45f && c.g < 0.30f && c.b < 0.30f; }
 bool isBox(const Colour &c)  { return c.g > 0.25f && c.g > c.r * 1.6f && c.g > c.b * 1.6f; }
 
-/// A flat quad in the XZ plane at exactly y = 0 — the floor, coplanar with the
-/// grid by construction, which is the whole subject of this suite.
-iris::MeshPtr floorQuad(float half)
-{
-    const float h = half;
-    const float pos[] = { -h, 0, -h,   h, 0, -h,   h, 0,  h,
-                          -h, 0, -h,   h, 0,  h,  -h, 0,  h };
-    const float nrm[] = {  0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0 };
-    auto mesh = iris::Mesh::create();
-    iris::VertexLayout posLayout;
-    posLayout.addAttrib(iris::VertexAttribUsage::Position, iris::AttribTypeFloat, 3, sizeof(float) * 3);
-    auto pb = iris::VertexBuffer::create(posLayout);
-    pb->setData((void *)pos, sizeof pos);
-    mesh->addVertexBuffer(pb);
-    iris::VertexLayout nrmLayout;
-    nrmLayout.addAttrib(iris::VertexAttribUsage::Normal, iris::AttribTypeFloat, 3, sizeof(float) * 3);
-    auto nb = iris::VertexBuffer::create(nrmLayout);
-    nb->setData((void *)nrm, sizeof nrm);
-    mesh->addVertexBuffer(nb);
-    mesh->setPrimitiveMode(iris::PrimitiveMode::Triangles);
-    mesh->setVertexCount(6);
-    return mesh;
-}
-
 }  // namespace
 
 int main(int argc, char **argv)
@@ -106,12 +95,33 @@ int main(int argc, char **argv)
     // ---- the document: a floor at y=0 and a box standing on it ----
     auto doc = iris::Scene::create();
 
+    // THE FLOOR: a shipped cube.obj, flattened, with its TOP FACE at exactly
+    // y = 0 — the plane the grid is drawn in.
+    //
+    // A hand-built iris::Mesh is NOT enough here and the first cut of this
+    // suite got it wrong: SceneMirror never mirrored it (the mesh reaches the
+    // engine through the node's mesh SOURCE), so the "floor" rendered nothing
+    // at all and every depth claim below was being made against empty
+    // background. A mesh the document can name is the only floor that exists.
     auto floorNode = iris::MeshNode::create();
     floorNode->setName("floor");
-    floorNode->setMesh(floorQuad(20.0f));
+    floorNode->setMesh(":assets/models/cube.obj");
     auto grey = iris::DefaultMaterial::create();
-    grey->setDiffuseColor(QColor(70, 70, 70));
+    grey->setDiffuseColor(QColor(90, 90, 90));
     floorNode->setMaterial(grey);
+    // THE MESH'S OWN HALF-SIZE, read rather than assumed: getMeshRadius() is 1
+    // for cube.obj and the first cut of this suite took that to mean a
+    // half-extent of 1/sqrt(3), which put the "floor" 7 cm above the grid and
+    // hid it in every case below.
+    const iris::Vec3 cubeHalf = floorNode->getMesh()->getAABB().getHalfSize();
+    std::printf("    cube.obj half-size: (%.3f, %.3f, %.3f), radius %.3f\n",
+                double(cubeHalf.x()), double(cubeHalf.y()), double(cubeHalf.z()),
+                double(floorNode->getMeshRadius()));
+    const float kFloorHalfThickness = 0.10f;
+    floorNode->setLocalScale(iris::Vec3(20.0f / cubeHalf.x(),
+                                        kFloorHalfThickness / cubeHalf.y(),
+                                        20.0f / cubeHalf.z()));
+    floorNode->setLocalPos(iris::Vec3(0.0f, -kFloorHalfThickness, 0.0f));
     doc->getRootNode()->addChild(floorNode);
 
     auto box = iris::MeshNode::create();
@@ -120,11 +130,9 @@ int main(int argc, char **argv)
     auto green = iris::DefaultMaterial::create();
     green->setDiffuseColor(QColor(0, 220, 0));
     box->setMaterial(green);
-    const float radius = box->getMeshRadius();
-    const float s = radius > 0.0f ? 1.0f / radius : 1.0f;   // unit radius
-    box->setLocalScale(iris::Vec3(s, s, s));
-    // A unit-radius cube's half-extent is 1/sqrt(3): stand it ON the floor.
-    box->setLocalPos(iris::Vec3(0.0f, 0.57735f, 0.0f));
+    // A 1 m cube standing ON the floor (its top face at y = 1).
+    box->setLocalScale(iris::Vec3(0.5f / cubeHalf.x(), 0.5f / cubeHalf.y(), 0.5f / cubeHalf.z()));
+    box->setLocalPos(iris::Vec3(0.0f, 0.5f, 0.0f));
     doc->getRootNode()->addChild(box);
 
     auto sun = iris::LightNode::create();
@@ -158,8 +166,36 @@ int main(int argc, char **argv)
         return n;
     };
 
+    // Frames on disk when asked for (spikes/gizmo-2): nothing in a gate.
+    const auto dump = [](const Image &src, const char *name) {
+        const QByteArray dir = qgetenv("JAH_GRID_SHOT_DIR");
+        if (dir.isEmpty()) return;
+        QImage out(int(src.width), int(src.height), QImage::Format_RGB888);
+        for (unsigned y = 0; y < src.height; ++y)
+            for (unsigned x = 0; x < src.width; ++x) {
+                const Colour c = src.at(x, y);
+                out.setPixel(int(x), int(y), qRgb(int(std::min(1.0f, c.r) * 255.0f),
+                                                  int(std::min(1.0f, c.g) * 255.0f),
+                                                  int(std::min(1.0f, c.b) * 255.0f)));
+            }
+        out.save(QString::fromUtf8(dir) + "/" + QString::fromUtf8(name));
+    };
+
     Image img;
     render(img);
+    {   // is the FLOOR actually there? (a neutral grey that is neither the blue
+        // clear colour nor the green box)
+        int grey = 0;
+        for (unsigned y = 0; y < img.height; ++y)
+            for (unsigned x = 0; x < img.width; ++x) {
+                const Colour c = img.at(x, y);
+                if (std::fabs(c.r - c.g) < 0.05f && std::fabs(c.g - c.b) < 0.05f && c.r > 0.05f)
+                    ++grey;
+            }
+        const Colour bottom = img.at(img.width / 2, img.height - 8);
+        std::printf("    the floor: %d neutral pixels; the bottom of the frame reads "
+                    "%.2f %.2f %.2f\n", grey, bottom.r, bottom.g, bottom.b);
+    }
     const int gridOff = count(img, isGrid);
     const int boxPixels = count(img, isBox);
     std::printf("    grid off: %d grid-coloured pixels, %d box pixels\n", gridOff, boxPixels);
@@ -167,16 +203,59 @@ int main(int argc, char **argv)
     CHECK(boxPixels > 500, "the box is in frame (the thing that has to cover the grid)");
 
     // ---- A: the grid draws over the floor ----
-    mirror.setGridColours(Colour(1.0f, 0.0f, 0.0f, 1.0f), Colour(1.0f, 0.0f, 0.0f, 1.0f));
-    mirror.setGridExtent(20.0f);
+    mirror.setGridColours(Colour(1.0f, 0.0f, 0.0f, 0.99f), Colour(1.0f, 0.0f, 0.0f, 0.99f));
+    mirror.setGridExtent(100.0f);                 // the editor's own extent
     mirror.setGrid(true, 1.0f, SceneMirror::GridPlane::Floor);
     render(img);
     const int gridOn = count(img, isGrid);
-    std::printf("    grid on:  %d grid pixels over a floor at exactly the grid's own height\n",
-                gridOn);
-    CHECK(gridOn > 200, "A: the grid is drawn ON the floor it is coplanar with — the depth "
-                        "bias wins the tie (before GIZMO-2 the grid was pushed under the "
-                        "floor and this was zero)");
+    dump(img, "grid-over-floor.png");
+
+    // THE BAR IS THE GRID'S OWN PIXEL COUNT with nothing to fight: the same
+    // scene with the floor dropped a metre out of the way. A z-fighting grid
+    // loses a large fraction of its lines to the floor (measured at 11,218 of
+    // 19,075 with the lift removed — the dashed lines in the frame), so "no
+    // z-fighting" is a comparison, not a threshold somebody chose.
+    floorNode->setLocalPos(iris::Vec3(0.0f, -1.0f - kFloorHalfThickness, 0.0f));
+    Image clear_;
+    render(clear_);
+    const int gridClear = count(clear_, isGrid);
+    floorNode->setLocalPos(iris::Vec3(0.0f, -kFloorHalfThickness, 0.0f));
+    render(img);
+    std::printf("    grid over a floor at its own height: %d pixels; with the floor out of the "
+                "way: %d (%d%%)\n", gridOn, gridClear,
+                gridClear ? gridOn * 100 / gridClear : 0);
+    CHECK(gridOn * 100 > gridClear * 95,
+          "A: the grid is drawn over a floor at its own height with no z-fighting — it keeps "
+          "95 % of the pixels it has with nothing to fight");
+
+    // ---- D: the lift is at the knee of its curve ------------------------
+    //
+    // The mirror's lift is fixed (SceneMirror::kGridFloorLift), so the sweep
+    // moves the FLOOR instead: a floor lifted by the same amount is exactly a
+    // grid lifted less. The numbers are the measurement the constant was
+    // chosen from, kept in the record for the next tuning.
+    {
+        int atLift = 0;
+        for (float lift : { 0.0f, 0.009f, 0.0095f, 0.01f }) {
+            floorNode->setLocalPos(iris::Vec3(0.0f, lift - kFloorHalfThickness, 0.0f));
+            render(img);
+            const int n = count(img, isGrid);
+            std::printf("    floor %+.4f m (grid's effective lift %+.4f): %d grid pixels\n",
+                        double(lift), double(SceneMirror::kGridFloorLift - lift), n);
+            if (lift == 0.0f) atLift = n;
+        }
+        // ...and the shipped ground's own height, which the lift has to clear.
+        floorNode->setLocalPos(iris::Vec3(0.0f, 1e-4f - kFloorHalfThickness, 0.0f));
+        render(img);
+        const int atShipped = count(img, isGrid);
+        std::printf("    floor at +1e-4 m (the shipped ground's height): %d grid pixels\n",
+                    atShipped);
+        CHECK(atShipped * 100 > atLift * 95,
+              "D: a floor at the shipped ground's +1e-4 m changes nothing — the lift clears it "
+              "by two orders of magnitude");
+        floorNode->setLocalPos(iris::Vec3(0.0f, -kFloorHalfThickness, 0.0f));
+        render(img);
+    }
 
     // ---- B: the box covers it ----
     // The box's own silhouette, found by colour, then sampled well inside it:
@@ -220,6 +299,39 @@ int main(int argc, char **argv)
     CHECK(helpersOff == 0, "C: a view with the editor's furniture switched off draws no grid");
     CHECK(count(img, isBox) > 500, "C: ...and still draws the scene");
     view->setHelpersVisible(true);
+
+    // ---- E: the ORTHO top view -------------------------------------------
+    //
+    // The case the old sign hid completely (owner 2026-09-07, "the axis-view
+    // grid is not there"), which is why gridFloorOffsetForView existed at all.
+    // With the grid ABOVE its plane there is nothing left for that function to
+    // decide, and it is deleted.
+    {
+        floorNode->setLocalPos(iris::Vec3(0.0f, 1e-4f - kFloorHalfThickness, 0.0f));
+        box->setVisible(false);
+        cam->setProjection(iris::CameraProjection::Orthogonal);
+        cam->orthoSize = 6.0f;
+        cam->nearClip = 0.1f;
+        cam->farClip = 1000.0f;              // the editor camera's own range
+        cam->setLocalPos(iris::Vec3(0.0f, 20.0f, 0.0f));
+        cam->lookAt(iris::Vec3(0, 0, 0));
+        cam->update(0.0f);
+        mirror.applyCamera(cam, view);
+        render(img);
+        dump(img, "grid-ortho-top.png");
+        const int fromAbove = count(img, isGrid);
+        std::printf("    ortho top view, floor at +1e-4 (the shipped ground's height): "
+                    "%d grid pixels\n", fromAbove);
+        CHECK(fromAbove > 200, "E: the grid is visible from straight above, over a floor at the "
+                               "shipped ground's height — the case the old offset's sign hid");
+        box->setVisible(true);
+        cam->setProjection(iris::CameraProjection::Perspective);
+        cam->setLocalPos(iris::Vec3(0.0f, 4.5f, 7.0f));
+        cam->lookAt(iris::Vec3(0, 0.4f, 0));
+        cam->update(0.0f);
+        mirror.applyCamera(cam, view);
+        floorNode->setLocalPos(iris::Vec3(0.0f, -kFloorHalfThickness, 0.0f));
+    }
 
     mirror.setSource(nullptr);
     engine->destroyView(view);
