@@ -383,8 +383,10 @@ QVector<VerbInfo> AppApi::verbs() const
         { "mcpLogging", "app.mcpLogging({session, source}) -> {session, source, errorLog, sessionLog, sessionId}",
           "What the MCP surface writes down about itself, and where. The ERROR log is always on "
           "and holds failures only — a tool call that came back an error, a run_script's message "
-          "and failing line, a timeout, a refused request — never the script source and never an "
-          "argument's value; it is bounded (1 MiB plus one previous generation). `session` turns "
+          "and failing line, a timeout, a refused request — never the script TEXT and never an "
+          "argument's value, though a JavaScript error message quotes identifiers and carries "
+          "whatever the script threw. It is bounded (1 MiB plus one previous generation). "
+          "`session` turns "
           "on the opt-in RESEARCH record: one JSON line per tool call naming the tool, the "
           "argument keys with their sizes, the registry verbs a script actually called, the "
           "duration and the outcome. `source` additionally records the script text, and is "

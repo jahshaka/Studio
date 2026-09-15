@@ -20,8 +20,15 @@ For more information see the LICENSE file
 //                             that came back isError, a run_script that threw
 //                             (its message and failing LINE), a timeout, a
 //                             refused request (401), a malformed or unknown
-//                             JSON-RPC message. Never the script source, never
-//                             a tool argument's value. This is the file that
+//                             JSON-RPC message. NEVER THE SCRIPT TEXT and never
+//                             a tool argument's value — but note what the
+//                             MESSAGE is: a JS error quotes identifiers
+//                             ("ReferenceError: addCubes is not defined") and
+//                             carries whatever a script chose to throw, so a
+//                             fragment of the author's own naming can appear
+//                             there. That is what §361 asked for (the message
+//                             and the failing line are the point of the file);
+//                             it is stated rather than glossed. This is the file that
 //                             answers "what did the agent try that did not
 //                             work", and it must cost the user nothing to have
 //                             it on, so it is bounded: 1 MiB, one previous
@@ -56,7 +63,9 @@ struct McpCallRecord
     QStringList verbs;           ///< run_script: the registry verbs the script called
     qint64      durationMs = 0;
     bool        ok = true;
-    QString     error;           ///< the message a failed call answered with
+    QString     error;           ///< the message a failed call answered with (a JS
+                                 ///< error message may quote identifiers; it is
+                                 ///< never the script text)
     int         line = 0;        ///< run_script: the failing line, 0 when unknown
     bool        timedOut = false;
     QJsonObject detail;          ///< per-tool facts (grade, size, bytes, rows)

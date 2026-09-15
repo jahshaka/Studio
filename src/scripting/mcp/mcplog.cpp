@@ -204,7 +204,9 @@ void McpLog::recordCall(const McpCallRecord &record)
             { "schema", "jahshaka.mcp.errors/1" },
             { "app", Constants::CONTENT_VERSION },
             { "note", "One object per FAILED MCP tool call or refused request. "
-                      "Never the script source, never an argument's value." } });
+                      "Carries the JS error MESSAGE, which may quote an identifier or "
+                      "whatever the script threw; never the script text, never an "
+                      "argument's value." } });
     }
 
     // ---- the session file: every call, opt-in -----------------------------
@@ -254,7 +256,9 @@ void McpLog::recordRefusal(const QString &kind, const QString &detail)
         { "schema", "jahshaka.mcp.errors/1" },
         { "app", Constants::CONTENT_VERSION },
         { "note", "One object per FAILED MCP tool call or refused request. "
-                  "Never the script source, never an argument's value." } });
+                  "Carries the JS error MESSAGE, which may quote an identifier or "
+                  "whatever the script threw; never the script text, never an "
+                  "argument's value." } });
 }
 
 QString McpLog::privacyNote()
@@ -262,8 +266,10 @@ QString McpLog::privacyNote()
     return QStringLiteral(
         "Nothing is sent anywhere: both files stay on this machine, under the "
         "app's logs folder, and you can read or delete them at any time. The "
-        "error log is always on and records only failures — never the script a "
-        "tool ran. The session recording adds one line per tool call for tool "
+        "error log is always on and records only failures: what a call refused "
+        "with, including the JavaScript error message, which may quote an "
+        "identifier or whatever the script threw — never the script text itself. "
+        "The session recording adds one line per tool call for tool "
         "research: which tools and verbs were used, argument names and sizes, "
         "how long each took. Argument VALUES are not recorded unless you also "
         "turn on \"Include the script source\".");

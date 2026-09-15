@@ -1249,11 +1249,18 @@ int main(int argc, char **argv)
         };
 
         // (1) THE ERROR LOG, always on. A failing script lands in it with its
-        // message and failing LINE — and its SOURCE must not be anywhere in
-        // the file.
-        const QString marker = QStringLiteral("nosuchverb_%1_marker").arg(port);
+        // message and failing LINE — and the SCRIPT TEXT must not.
+        //
+        // The guarantee is exactly that, and no more: a JS error MESSAGE
+        // quotes the identifier that broke ("ReferenceError: x is not
+        // defined"), so a marker inside the failing expression proves nothing.
+        // The script below carries its secret on a line that RUNS FINE and
+        // fails on the next one — the part of a script that is not in its
+        // error message is the part that must never be written down.
+        const QString secret = QStringLiteral("secret_marker_%1").arg(port);
+        const QString twoLiner = QStringLiteral("var %1 = 1;\nnosuchverb_here();").arg(secret);
         callTool(net, url, token, ++id, "run_script",
-                 QJsonObject{ { "script", marker + "()" }, { "label", "a deliberate failure" } });
+                 QJsonObject{ { "script", twoLiner }, { "label", "a deliberate failure" } });
         QList<QJsonObject> errors = jsonLines(errorLog);
         CHECK(!errors.isEmpty()
                   && errors.first().value("schema").toString() == "jahshaka.mcp.errors/1",
@@ -1263,15 +1270,15 @@ int main(int argc, char **argv)
                   && lastError.value("kind").toString() == "tool_error",
               "log: a failed run_script is recorded as a tool error");
         CHECK(lastError.value("error").toString().contains("is not defined")
-                  && lastError.value("line").toInt() == 1
+                  && lastError.value("line").toInt() == 2
                   && !lastError.value("session").toString().isEmpty(),
               "log: ...with the message, the failing line and the session id");
         {
             QFile file(errorLog);
             file.open(QIODevice::ReadOnly);
             const QByteArray whole = file.readAll();
-            CHECK(!whole.contains(marker.toUtf8() + "()"),
-                  "log: THE SCRIPT SOURCE IS NEVER IN THE ERROR LOG");
+            CHECK(!whole.contains(secret.toUtf8()),
+                  "log: THE SCRIPT TEXT IS NEVER IN THE ERROR LOG");
         }
         // A refused request is a failure that never reaches a tool.
         post(net, url, rpc("ping", ++id), QStringLiteral("wrong-on-purpose"));
@@ -1337,7 +1344,7 @@ int main(int argc, char **argv)
         // (4) The source sub-option, which is the only thing that writes it.
         callTool(net, url, token, ++id, "run_script",
                  QJsonObject{ { "script", "app.mcpLogging({source: true})" } });
-        const QString sourceMarker = QStringLiteral("var source_marker_%1 = 1;").arg(port);
+        const QString sourceMarker = QStringLiteral("var opted_in_source_%1 = 1;").arg(port);
         callTool(net, url, token, ++id, "run_script", QJsonObject{ { "script", sourceMarker } });
         lines = jsonLines(sessionLog);
         bool sourceSeen = false;
