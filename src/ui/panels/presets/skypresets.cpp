@@ -70,6 +70,14 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     // rows with those NAMES — the by-name lookup the whole round trip then
     // depended on. An equirect "addSky/applySky" pair sat beside it with no
     // caller and no data; it is gone too.
+    // No library or no open project = nothing to pin the six faces into; say
+    // so in the log rather than hand a null (or, before lane DBPTR-1, an
+    // uninitialised) handle to the import pipeline.
+    if (!db || !project) {
+        irisLog("sky preset: no project library open");
+        return;
+    }
+
     QString error;
     const QStringList guids =
         ShippedAssets::pinSkyPreset(item->data(Qt::UserRole).toString(), db, project, &error);

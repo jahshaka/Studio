@@ -40,7 +40,6 @@ public:
         this->mainWindow = mainWindow;
     }
 
-	Database *db;
 	void setDatabase(Database *db)
 	{
 		this->db = db;
@@ -61,7 +60,10 @@ signals:
 
 private:
     Ui::SkyPresets *ui;
-    MainWindow* mainWindow;
+    MainWindow* mainWindow = nullptr;
+    /// Set by setDatabase after construction (CRUD, lane DBPTR-1: it used to
+    /// be a public member BESIDE its own setter — two doors to one handle).
+    Database *db = nullptr;
 };
 
 #endif // SKYPRESETS_H

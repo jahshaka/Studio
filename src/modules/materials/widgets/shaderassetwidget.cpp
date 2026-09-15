@@ -97,8 +97,13 @@ void ShaderAssetWidget::updateAssetView(const QString & path)
 {
 	assetViewWidget->clear();
 
-	for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), static_cast<int>(ModelTypes::Shader))) 
-		addItem(asset);
+	// No library or no project = nothing to list, and the stacked widget's
+	// "no scene open" page is what the user sees (setWidgetToBeShown decides
+	// which page that is). The truthful empty state, not a skipped refresh.
+	if (db && project) {
+		for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), static_cast<int>(ModelTypes::Shader)))
+			addItem(asset);
+	}
 
 	setWidgetToBeShown();
 }
@@ -154,18 +159,26 @@ void ShaderAssetWidget::addItem(const AssetRecord & assetData)
 
 void ShaderAssetWidget::setUpDatabase(Database * db)
 {
+	// THE HANDLE IS STORED UNCONDITIONALLY (lane DBPTR-1). It used to be kept
+	// only when a scene was open at this moment — and the one caller is
+	// EffectsPage's CONSTRUCTOR (MaterialsModule builds the page, THEN hands it
+	// the scene-open probe), so `sceneOpenProbe` was still empty here every
+	// time and `db` was never assigned at all. The member was uninitialised,
+	// so every later `db->fetchChildAssets(...)` — one per switch into the
+	// Materials space, through refresh() — ran on a wild pointer; it survived
+	// only because that query touches no member of Database (the same accident
+	// that hid AssetPanel::handle, CLOSE-2).
+	this->db = db;
 	//remove noWidget if preset and add assetViewWidget
-	if (sceneOpenProbe && sceneOpenProbe()) {
-		this->db = db;
+	if (sceneOpenProbe && sceneOpenProbe() && project) {
 		updateAssetView(project->getProjectGuid());
 		assetItemShader.selectedGuid = project->getProjectGuid();
-		
 	}
 }
 
 void ShaderAssetWidget::refresh()
 {
-	updateAssetView(project->getProjectGuid());
+	updateAssetView(project ? project->getProjectGuid() : QString());
 }
 
 void ShaderAssetWidget::setWidgetToBeShown()
@@ -201,6 +214,9 @@ void ShaderAssetWidget::configureConnections()
 
 void ShaderAssetWidget::deleteShader(QString guid)
 {
+	// Every branch below is a library write; with no library open there is
+	// nothing to delete (the list this menu came from is empty too).
+	if (!db || !project) return;
 	auto item = assetViewWidget->currentItem();
 
 	// Delete folder and contents
@@ -367,6 +383,7 @@ void ShaderAssetWidget::deleteShader(QString guid)
 
 void ShaderAssetWidget::editingFinishedOnListItem(QListWidgetItem *item)
 {
+	if (!db || !project) return;   // nothing to rename without a library
 	QString newName = item->data(Qt::DisplayRole).toString();
 	const QString guid = item->data(MODEL_GUID_ROLE).toString();
 	const QString oldName = db->fetchAsset(guid).name;
@@ -384,6 +401,7 @@ void ShaderAssetWidget::editingFinishedOnListItem(QListWidgetItem *item)
 
 void ShaderAssetWidget::createFolder()
 {
+	if (!db || !project) return;   // a folder is a library row
 	const QString newFolder = "New Folder";
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
@@ -418,6 +436,7 @@ void ShaderAssetWidget::createFolder()
 
 void ShaderAssetWidget::createShader(QString *shaderName)
 {
+	if (!db || !project) return;   // a shader asset is a library row
 	QString newShader;
 	if (shaderName)	 newShader = *shaderName;
 	else   newShader = "Untitled Shader";
@@ -474,6 +493,7 @@ void ShaderAssetWidget::createShader(QString *shaderName)
 
 QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 {
+	if (!db || !project) return QString();   // a shader asset is a library row
 	const QString newShader = "Untitled Shader";
 	
 	item->setSizeHint(currentSize);
@@ -565,6 +585,7 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 
 QByteArray ShaderAssetWidget::fetchAsset(QString string)
 {
+	if (!db) return QByteArray();
 	return db->fetchAssetData(string);
 }
 

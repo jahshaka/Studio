@@ -53,6 +53,13 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
     auto vertexShader = vertexShaderCombo->getCurrentItemData();
     auto fragmentShader = fragmentShaderCombo->getCurrentItemData();
 
+    // THE COMBOS CAN SPEAK BEFORE THE LIBRARY ARRIVES (lane DBPTR-1). Both
+    // combos are filled in setShaderGuid, whose setCurrentIndex emits straight
+    // into this slot — and the panel host hands the library down in its own
+    // constructor, i.e. while its `db` is still null (see
+    // SceneNodePropertiesWidget::setDatabase). The shader choice still reaches
+    // the in-memory asset below; only the dependency rows, which are library
+    // rows, need the library.
     for (auto asset : AssetManager::getAssets()) {
         if (asset->type == ModelTypes::Shader && asset->assetGuid == shaderGuid) {
             auto shaderObject = asset->getValue().toJsonObject();
@@ -61,7 +68,7 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
 
             asset->setValue(QVariant::fromValue(shaderObject));
 
-            if (!vertexShader.isEmpty() || !fragmentShader.isEmpty()) {
+            if (db && project && (!vertexShader.isEmpty() || !fragmentShader.isEmpty())) {
                 db->removeDependenciesByType(asset->assetGuid, ModelTypes::File);
 
                 if (!vertexShader.startsWith(":")) {
@@ -87,78 +94,6 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
 
                     db->updateAssetAsset(asset->assetGuid, QJsonDocument(shaderObject).toJson());
                 }
-            }
-        }
-    }
-}
-
-void ShaderPropertyWidget::onVertexShaderFileChanged(int index)
-{
-    auto vertexShader = vertexShaderCombo->getCurrentItemData();
-    auto fragmentShader = fragmentShaderCombo->getCurrentItemData();
-    
-    for (auto asset : AssetManager::getAssets()) {
-        if (asset->type == ModelTypes::Shader && asset->assetGuid == shaderGuid) {
-            auto shaderObject = asset->getValue().toJsonObject();
-            shaderObject["vertex_shader"] = vertexShader;
-            shaderObject["fragment_shader"] = fragmentShader;
-            asset->setValue(QVariant::fromValue(shaderObject));
-
-            QFile jsonFile(asset->path);
-            jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
-            jsonFile.write(QJsonDocument(shaderObject).toJson());
-
-            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, project->getProjectGuid())) {
-                db->createDependency(
-                    static_cast<int>(ModelTypes::Shader),
-                    static_cast<int>(ModelTypes::File),
-                    asset->assetGuid,
-                    vertexShader,
-                    project->getProjectGuid()
-                );
-            }
-            else {
-                db->updateGlobalDependencyDependee(
-                    static_cast<int>(ModelTypes::File),
-                    asset->assetGuid,
-                    vertexShader
-                );
-            }
-        }
-    }
-}
-
-void ShaderPropertyWidget::onFragmentShaderFileChanged(int index)
-{
-    auto vertexShader = vertexShaderCombo->getCurrentItemData();
-    auto fragmentShader = fragmentShaderCombo->getCurrentItemData();
-
-    for (auto asset : AssetManager::getAssets()) {
-        if (asset->type == ModelTypes::Shader && asset->assetGuid == shaderGuid) {
-            auto shaderObject = asset->getValue().toJsonObject();
-            shaderObject["vertex_shader"] = vertexShader;
-            shaderObject["fragment_shader"] = fragmentShader;
-            asset->setValue(QVariant::fromValue(shaderObject));
-
-            QFile jsonFile(asset->path);
-            jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
-            jsonFile.write(QJsonDocument(shaderObject).toJson());
-
-            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, project->getProjectGuid())) {
-                db->createDependency(
-                    static_cast<int>(ModelTypes::Shader),
-                    static_cast<int>(ModelTypes::File),
-                    asset->assetGuid,
-                    fragmentShader,
-                    project->getProjectGuid()
-                );
-            }
-            else {
-                db->updateGlobalDependencyDependee(
-                    static_cast<int>(ModelTypes::File),
-                    asset->assetGuid,
-                    fragmentShader
-                );
             }
         }
     }

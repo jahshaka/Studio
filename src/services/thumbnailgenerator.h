@@ -85,7 +85,6 @@ public:
     // must be called to properly shutdown ui components
     void shutdown();
 
-    Database *db;
     void setDatabase(Database *db) {
         this->db = db;
     }
@@ -111,6 +110,11 @@ signals:
 private:
 	static ThumbnailGenerator* instance;
 	ThumbnailGenerator();
+
+    /// Set by setDatabase after construction (CRUD, lane DBPTR-1: it used to
+    /// be a public member BESIDE its own setter — two doors to one handle).
+    /// Nullable: every read site answers with an empty QImage without it.
+    Database *db = nullptr;
 
     // ---- engine path ----
     struct EngineRequest { ThumbnailRequest request; QSize size; };
