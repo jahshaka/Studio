@@ -305,12 +305,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		return sceneView->isInitialized();
 	};
 	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
+	// THE RENDER LOOP FOR THE LENGTH OF A RUN (SCRIPTING_LIVE_SPEC §3.1). A
+	// script runs off the UI thread now, so the driver's timer WOULD fire
+	// between its verbs — which is the live feedback a person wants and the
+	// thing a frame-stepping test must not have. A run whose policy is Off
+	// suspends the tick here for its duration; a Live run leaves it alone.
+	scriptHost->driverSuspended = [](bool suspended) {
+		if (EngineRenderDriver *driver = EngineHost::instance().driver())
+			driver->setTicksSuspended(suspended);
+	};
 	// The run's one undo entry, ARMED here and created by the first command
 	// that lands (UndoService::push) — a query script must leave the stack
 	// alone (hygiene lane, 2026-09-09).
 	scriptHost->beginUndoMacro = [this](const QString &text) { undoService->beginScriptMacro(text); };
 	scriptHost->endUndoMacro = [this]() { undoService->endScriptMacro(); };
 	scriptEngine = new ScriptEngine(*scriptHost, this);
+	// LIVE SCRIPT FEEDBACK, as the user left it (Preferences > Scripting,
+	// app.scriptPolicy). Live is the default: a person or an agent driving the
+	// editor should see it work.
+	scriptEngine->setInteractivePolicy(
+		SettingsManager::getDefaultManager()->getValue("script_feedback_live", true).toBool()
+			? ScriptRunPolicy::Live : ScriptRunPolicy::Off);
+	if (prefsDialog) prefsDialog->wireScripting(scriptEngine);
 	registerStudioModules(*scriptEngine);
 	for (auto *module : modules) module->registerApi(*scriptEngine);
 
@@ -644,6 +660,22 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+	// A SCRIPT IN FLIGHT IS STOPPED FIRST, and the close waits for it
+	// (SCRIPTING_LIVE_SPEC). A run holds the UI thread only between hops now,
+	// so this window CAN be closed while a script is working — and closing it
+	// destroys the script engine, the host and the modules under a worker
+	// thread that is about to hop into them. Stop the run (it ends at its next
+	// JavaScript boundary; a run parked inside a long verb ends when that verb
+	// returns) and re-post the close for when it has, which is the same
+	// promise app.quit() makes.
+	if (scriptEngine && scriptEngine->isRunning()) {
+		scriptEngine->stop();
+		if (scriptHost && scriptHost->afterRun)
+			scriptHost->afterRun([this]() { close(); });
+		event->ignore();
+		return;
+	}
+
 	// An open IN FLIGHT is finished first (services/sceneopenrunner.h). Its
 	// slices are short and waitForDone pumps the loop that runs them, so this
 	// costs at most the rest of one open — and it is what makes the decision
@@ -1937,14 +1969,6 @@ void MainWindow::applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes)
     if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes);
 }
 
-void MainWindow::updateAnim()
-{
-}
-
-void MainWindow::setSceneAnimTime(float time)
-{
-}
-
 void MainWindow::addPlane()
 {
     sceneEditService->addPlane();
@@ -2516,9 +2540,6 @@ void MainWindow::setupDockWidgets()
     // needs the script engine and is handed over where that is built.
     scriptConsoleDock = new QDockWidget(tr("Console"), viewPort);
     scriptConsoleDock->setObjectName(QStringLiteral("scriptConsoleDock"));
-
-    timer = new QTimer(this);
-    connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
     // THE DEFAULT LAYOUT. Presets lives in the RIGHT COLUMN, under Properties
     // (owner layout, 2026-09-08) — it used to open in the BOTTOM area beside

@@ -502,7 +502,11 @@ QJsonObject McpTools::runScript(const QJsonObject &args)
     QMetaObject::Connection tap = QObject::connect(
         mEngine, &ScriptEngine::consoleOutput,
         [&consoleLines](const QString &line) { consoleLines.append(line); });
-    const ScriptResult result = mEngine->evaluate(source, fileName, true, timeoutMs);
+    // LIVE (decision D2, ledger §374): the owner watches an agent drive the
+    // editor, so an MCP run should paint as it goes, like a console run. The
+    // preference (Preferences > Scripting) covers both callers.
+    const ScriptResult result = mEngine->evaluate(source, fileName, true, timeoutMs,
+                                                  mEngine->interactivePolicy());
     QObject::disconnect(tap);
 
     QJsonArray engineErrors;

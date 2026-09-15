@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "ui/style/thememanager.h"
 #include "ui/pages/projectmanager.h"
 #include "scripting/apiregistry.h"
+#include "scripting/scriptengine.h"
 #include "services/engineerrorpump.h"
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
@@ -401,6 +402,21 @@ QVector<VerbInfo> AppApi::verbs() const
           "precondition errors land here too. Null when nothing has failed yet; never cleared, "
           "so read it right after the call you are diagnosing.",
           Needs::Document },
+        { "scriptPolicy", "app.scriptPolicy(mode='') -> {mode, applies, running, runPolicy}",
+          "LIVE SCRIPT FEEDBACK — whether the viewport keeps drawing while a script runs. The "
+          "JavaScript runs on its own thread and every verb hops to the UI thread, so between two "
+          "verbs the app is free: in 'live' the render loop ticks and you watch the script build "
+          "the scene (and the app answers, and Stop works); in 'off' the loop skips its ticks for "
+          "the whole run, so the picture holds still and nothing advances between verbs — which is "
+          "what a deterministic script wants and what every test uses. `editor.frame(n, dt)` "
+          "renders its n frames either way; it is a verb. The setting applies to the CONSOLE and "
+          "to MCP run_script ('applies'); --script and --headless are always 'off'. Called with no "
+          "argument it only reports. It persists (Preferences > Scripting). NOTE while a run is "
+          "live: a hand edit made in the same moment joins the script's undo step, because the run "
+          "IS the open undo entry. `runPolicy` is the policy of the run asking — which is what the "
+          "setting gave THIS run, and is 'off' for a --script run unless it was started with "
+          "--script-live.",
+          Needs::Document },
         { "window", "app.window() -> {x, y, width, height, minWidth, minHeight, visible, fullScreen, fits, screen:{name, width, height, availWidth, availHeight}}",
           "The main window's geometry and the screen it is on, in pixels — the coordinates a rig "
           "synthesising mouse input works in. `fits` is width/height against the screen's AVAILABLE "
@@ -610,9 +626,14 @@ QVariantMap AppApi::warmUpSet(const QString &action)
 bool AppApi::quit()
 {
     if (!host.mainWindow) return fail("app: not available in this session");
-    // Deferred: let the calling script (and its undo macro) finish first.
-    QMetaObject::invokeMethod(host.mainWindow, [w = host.mainWindow]() { w->close(); },
-                              Qt::QueuedConnection);
+    // Deferred: let the calling script (and its undo macro) finish first. It
+    // has to go through the host's afterRun hook — a plain queued call is
+    // delivered BETWEEN TWO VERBS now that the script runs off the UI thread,
+    // which would close the window (and the engine, and this module) underneath
+    // the run that asked for it.
+    auto close = [w = host.mainWindow]() { w->close(); };
+    if (host.afterRun) host.afterRun(close);
+    else QMetaObject::invokeMethod(host.mainWindow, close, Qt::QueuedConnection);
     return true;
 }
 
@@ -887,6 +908,39 @@ QVariantMap AppApi::resizeWindow(int width, int height)
     if (w->isFullScreen() || w->isMaximized()) w->showNormal();
     w->resize(width, height);
     return window();
+}
+
+QVariantMap AppApi::scriptPolicy(const QString &mode)
+{
+    ScriptEngine *engine = host.mainWindow ? host.mainWindow->scripting() : nullptr;
+    if (!engine) {
+        refuse(QStringLiteral("app.scriptPolicy: this session has no script engine"));
+        return {};
+    }
+    if (!mode.isEmpty()) {
+        bool ok = false;
+        const ScriptRunPolicy wanted = ScriptEngine::policyFromName(mode, ok);
+        if (!ok) {
+            fail(QStringLiteral("app.scriptPolicy: '%1' is not a mode — use 'live' or 'off'").arg(mode));
+            return {};
+        }
+        engine->setInteractivePolicy(wanted);
+        // Persisted like every other preference, so the next session opens the
+        // way the user left it.
+        if (SettingsManager *settings = SettingsManager::getDefaultManager())
+            settings->setValue(QStringLiteral("script_feedback_live"),
+                               wanted == ScriptRunPolicy::Live);
+    }
+    QVariantMap out;
+    out["mode"] = ScriptEngine::policyName(engine->interactivePolicy());
+    out["applies"] = QVariantList{ QStringLiteral("console"), QStringLiteral("mcp") };
+    out["running"] = engine->isRunning();
+    // THE RUN YOU ARE IN, which is not the same thing as the setting: a script
+    // reading this is always inside a run, and its policy was fixed when the
+    // run started (the console/MCP take `mode`, --script takes 'off' unless
+    // --script-live said otherwise).
+    out["runPolicy"] = ScriptEngine::policyName(engine->currentRunPolicy());
+    return out;
 }
 
 QVariantMap AppApi::frameStats()

@@ -24,6 +24,8 @@ class QListWidgetItem;
 class SettingsManager;
 class WorldSettingsWidget;
 class McpSettingsWidget;
+class ScriptingSettingsWidget;
+class ScriptEngine;
 class AssetsSettingsWidget;
 class CacheSettingsWidget;
 class McpServer;
@@ -53,6 +55,8 @@ public:
     void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow);
     /// Forwards the MCP server to its settings page (created after the dialog).
     void wireMcp(McpServer *server, MainWindow *mainWindow);
+    /// The Scripting page over the live engine (Live script feedback).
+    void wireScripting(ScriptEngine *engine);
     /// Forwards the shortcut registry to the Shortcuts page (created after the dialog).
     void wireShortcuts(ShortcutRegistry *registry);
     /// Connects the desktop page to the live desktop so Preferences ->
@@ -64,6 +68,7 @@ public:
 
 	WorldSettingsWidget* worldSettings;
 	McpSettingsWidget* mcpSettings = nullptr;
+	ScriptingSettingsWidget* scriptingSettings = nullptr;
 	AssetsSettingsWidget* assetsSettings = nullptr;
 	/// The Cache page (SHADER_CACHE_SPEC §4.5): shader-cache size, location and
 	/// the confirm-guarded rebuild button. Reads the verbs, never the directory.

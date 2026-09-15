@@ -27,6 +27,14 @@ struct CliOptions
     /// --script <file.js> [--headless]: run a script and exit (SCRIPTING_SPEC §3.2).
     QString scriptPath;
     bool headlessScript = false;
+    /// --script-live: give the run the LIVE feedback policy — the render loop
+    /// keeps ticking between its verbs, so the window shows the script working
+    /// (SCRIPTING_LIVE_SPEC §3.1). OFF unless asked for, and that default is
+    /// load-bearing: a command-line run's frame counts must stay exact, which
+    /// is what 54 frame-stepping e2e scripts and 18 frame-counter readers were
+    /// written against. Exists for demos and for the suite that proves the
+    /// live half does what it claims.
+    bool liveScript = false;
     /// --dump-api-docs <file.md>: write the registry-generated verb reference.
     QString dumpDocsPath;
     /// --mcp-port=N: serve MCP on 127.0.0.1:N for this run (implies enabled;

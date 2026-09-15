@@ -80,6 +80,23 @@ public:
 
     Stats stats() const { return mStats; }
 
+    // ---- the script run policy (SCRIPTING_LIVE_SPEC §3.1) -----------------
+    /// SUSPEND THE TICK, per tick, for the length of a script run whose policy
+    /// is Off. Not stop(): the timer keeps running, so resuming costs nothing
+    /// and needs no signal from anybody (the same reason the empty-viewport
+    /// skip below is per tick).
+    ///
+    /// The whole tick is skipped, beforeFrame included, and that is the point:
+    /// this reproduces EXACTLY what a script used to get for free by holding
+    /// the UI thread — no frame, no mirror sync, no simulated time between two
+    /// verbs — which is what 54 frame-stepping e2e scripts and 18 frame-counter
+    /// readers were written against. (The usual warning about skipping
+    /// beforeFrame — its subscribers pull a wall-clock delta, so an idle period
+    /// banks into the first resumed frame — applies and is accepted here: it is
+    /// the behaviour a blocked UI thread already had.)
+    void setTicksSuspended(bool suspended) { mTicksSuspended = suspended; }
+    bool ticksSuspended() const { return mTicksSuspended; }
+
 signals:
     /// Emitted before each frame — animate here.
     void beforeFrame();
@@ -103,6 +120,8 @@ private:
     framepacing::Mode mMode = framepacing::Mode::Display;
     /// 0 until a host tells us (see setRefreshHz) — the fallback interval then.
     double  mRefreshHz = 0.0;
+    /// True while a script run with the Off policy owns the loop.
+    bool    mTicksSuspended = false;
     /// Ring of the last kWorkWindow rendered ticks' durations, ms.
     double  mWork[kWorkWindow] = {};
     int     mWorkNext = 0;

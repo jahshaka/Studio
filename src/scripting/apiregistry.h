@@ -14,9 +14,11 @@ For more information see the LICENSE file
 
 // ApiRegistry — the ONE registry of scripting modules and verbs (SCRIPTING_SPEC §2.2).
 //
-// Four consumers enumerate it: the JS context (install), the console's help() and
-// autocomplete, the generated docs page (markdown), and the v2 MCP tool schemas
-// (schema). A verb that isn't registered doesn't exist, anywhere.
+// Four consumers enumerate it: the SCRIPT BRIDGE (the shim objects the worker
+// engine gets, one function per registered verb — so "a verb that isn't
+// registered doesn't exist" is now enforced by construction, not by convention),
+// the console's help() and autocomplete, the generated docs page (markdown), and
+// the MCP tool schemas (schema).
 
 #include <QJsonArray>
 #include <QString>
@@ -24,8 +26,6 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "scripting/apimodule.h"
-
-class QJSEngine;
 
 class ApiRegistry
 {
@@ -40,10 +40,6 @@ public:
 
     QVector<ApiModule *> modules() const { return mModules; }
     ApiModule *module(const QString &jsName) const;
-
-    /// Installs every module as a JS global plus the `api` info object
-    /// (api.version, api.help([name]), api.verbs()).
-    void install(QJSEngine &engine);
 
     /// Metadata sanity: every verb must have a name, signature and doc string.
     /// Returns human-readable problems; empty list = valid. A test asserts this
@@ -75,15 +71,15 @@ public:
     static QString needsName(Needs needs);
 
     // ---- verb tracing (MCP session logging, ledger §361) -------------------
-    // "which verbs did that script actually call" has no central dispatch to
-    // hook: install() hands each module's QObject wrapper straight to the JS
-    // engine and every call goes engine -> qt_metacall, with nothing of ours
-    // in between. So tracing REPLACES each module global with a thin JS shim
-    // that records `module.verb` and forwards to the real wrapper, and puts
-    // the wrappers back when it is disarmed. It is off by default and costs
-    // nothing while it is: the plain wrappers are exactly what they were.
-    /// Arms/disarms the trace in `engine`. Idempotent; safe before install().
-    void setTracing(QJSEngine &engine, bool on);
+    // "which verbs did that script actually call" HAS a central dispatch to
+    // hook since the script engine moved off the UI thread: every verb call
+    // arrives at VerbDispatcher::dispatch, which records one line here when the
+    // trace is armed. (It used to swap each module global for a forwarding JS
+    // shim, because the modules were QObject wrappers with nothing of ours in
+    // between; that machinery is gone with them.) Off by default, and when it
+    // is off the dispatcher reads one bool per call.
+    /// Arms/disarms the trace. Idempotent.
+    void setTracing(bool on) { mTracing = on; }
     bool tracing() const { return mTracing; }
     /// The verbs called since the last take, in call order, deduplicated with
     /// a count: "scene.addPrimitive x64". Clears the record.

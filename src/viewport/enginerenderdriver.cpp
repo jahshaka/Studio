@@ -40,6 +40,14 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // per texture (P2). Slow frames are logged and, while a scene open is
         // being measured, banked in the ledger, so "opening is still slow"
         // always has a number attached to it.
+        // A SCRIPT RUN WITH THE Off POLICY OWNS THE LOOP (setTicksSuspended).
+        // Nothing at all happens here for the length of that run: the viewport
+        // holds its last picture, no time passes for the document, and a
+        // script's editor.frame(n, dt) renders exactly the n frames it asked
+        // for. The tick is not even counted — app.frameStats() must read the
+        // same before and after, as it did when the run simply blocked this
+        // thread.
+        if (mTicksSuspended) return;
         QElapsedTimer frame;
         frame.start();
         ++mStats.ticks;

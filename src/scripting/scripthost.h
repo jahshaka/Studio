@@ -87,11 +87,38 @@ struct ScriptHost
     std::function<void(const QString &)> beginUndoMacro;
     std::function<void()> endUndoMacro;
 
+    /// AFTER THE RUN, NOT BETWEEN TWO VERBS. Some verbs deliberately defer
+    /// their effect "until the script has finished" and used to get that for
+    /// free by posting a queued call: the UI thread was blocked inside the JS,
+    /// so nothing queued could be delivered until the run returned. It is NOT
+    /// free any more — the script runs on a worker and this thread pumps
+    /// between verbs, so a queued call lands MID-RUN. (Found the hard way:
+    /// app.quit() closed the main window, and with it the script engine and the
+    /// host, while the run was still going — a SIGSEGV in app.shutdown_order.)
+    /// Verbs that mean "afterwards" must say so through this. Unset means there
+    /// is no run to wait for: the callback runs on the next event-loop turn.
+    std::function<void(std::function<void()>)> afterRun;
+
+    /// THE RENDER LOOP, for the length of one script run (SCRIPTING_LIVE_SPEC
+    /// §3.1). Called with true when a run whose policy is Off begins and false
+    /// when it ends: the driver skips its ticks in between, which is what a
+    /// blocked UI thread used to give for free and what every frame-stepping
+    /// test script still needs. Unset (the CLI's document-only hosts, the unit
+    /// test) means there is no loop to suspend.
+    std::function<void(bool)> driverSuspended;
+
     /// The last thing a verb refused or threw, whichever came last (ApiModule::
     /// refuse/fail). Read back by app.lastError(): a refusal answers with a
     /// falsy VALUE rather than an exception, so this is where the reason goes.
     /// One session, one slot: it is a diagnostic, not a queue.
     QString lastError;
+
+    /// WHAT THE VERB JUST THREW, waiting to be rethrown in the script (see
+    /// ApiModule::fail). Written by fail(), read and cleared by the script
+    /// bridge around every single verb call, so it never outlives one. Distinct
+    /// from lastError, which is a diagnostic a script can read back at leisure
+    /// and which a refusal writes too.
+    QString pendingError;
 
     bool isProjectOpen() const { return projectOpen && projectOpen(); }
     bool isEngineReady() const { return engineReady && engineReady(); }

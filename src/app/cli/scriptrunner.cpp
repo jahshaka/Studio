@@ -75,7 +75,8 @@ int finalizeAppExit(int rc)
     return rc;
 }
 
-int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bool headless)
+int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bool headless,
+                  bool live)
 {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -111,7 +112,11 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
         std::fflush(stdout);
     });
 
-    const ScriptResult result = engine->evaluate(source, path);
+    // OFF unless --script-live asked otherwise (SCRIPTING_LIVE_SPEC §3.1): a
+    // command-line run must see no frame it did not ask for.
+    const ScriptResult result = engine->evaluate(source, path, true, 0,
+                                                 live ? ScriptRunPolicy::Live
+                                                      : ScriptRunPolicy::Off);
 
     int rc = 0;
     if (!result.ok) {

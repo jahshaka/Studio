@@ -11,8 +11,6 @@ For more information see the LICENSE file
 
 #include "scripting/apimodule.h"
 
-#include <QJSEngine>
-
 ApiModule::ApiModule(ScriptHost &host, QObject *parent)
     : QObject(parent), host(host)
 {
@@ -21,12 +19,14 @@ ApiModule::ApiModule(ScriptHost &host, QObject *parent)
 bool ApiModule::fail(const QString &message) const
 {
     host.lastError = message;
-    // qjsEngine() finds the QJSEngine that owns this QObject wrapper; the throw
-    // becomes a normal JS exception with this verb's call site in the stack.
-    if (QJSEngine *engine = qjsEngine(this))
-        engine->throwError(message);
-    else
-        qWarning("script API error (no JS engine attached): %s", qPrintable(message));
+    // NO ENGINE WRAPS A MODULE ANY MORE (SCRIPTING_LIVE_SPEC): the JavaScript
+    // runs on a worker thread and the modules stay here, reached through the
+    // bridge. So a failure is RECORDED and the bridge rethrows it on the worker
+    // engine the instant the verb returns — a normal JS exception, at this
+    // verb's own call site, catchable exactly as before. Recording rather than
+    // throwing also means a verb that calls fail() and keeps going (they all
+    // `return fail(...)`) cannot corrupt an engine it does not own.
+    host.pendingError = message;
     return false;
 }
 

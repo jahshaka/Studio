@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QTabWidget>
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 #include "ui/dialogs/preferences/mcpsettingswidget.h"
+#include "ui/dialogs/preferences/scriptingsettingswidget.h"
 #include "ui/dialogs/preferences/cachesettingswidget.h"
 #include "ui/dialogs/preferences/perfsettingswidget.h"
 #include "ui/dialogs/preferences/assetssettingswidget.h"
@@ -51,6 +52,7 @@ void PreferencesDialog::setupPages()
     worldSettings = new WorldSettingsWidget(db, settings);
     assetsSettings = new AssetsSettingsWidget(settings, db);
     mcpSettings = new McpSettingsWidget(settings);
+    scriptingSettings = new ScriptingSettingsWidget(settings);
     cacheSettings = new CacheSettingsWidget(settings);
     perfSettings = new PerfSettingsWidget(settings);
 
@@ -63,6 +65,7 @@ void PreferencesDialog::setupPages()
     tabs->addTab(assetsSettings, "Assets");
     tabs->addTab(cacheSettings, "Cache");
     tabs->addTab(perfSettings, "Performance");
+    tabs->addTab(scriptingSettings, "Scripting");
     tabs->addTab(mcpSettings, "Claude / MCP");
     ui->worldLayout->addWidget(tabs);
 }
@@ -71,6 +74,7 @@ void PreferencesDialog::saveSettings()
 {
 	worldSettings->saveSettings();
 	if (assetsSettings) assetsSettings->saveSettings();
+	if (scriptingSettings) scriptingSettings->saveSettings();
 	if (mcpSettings) mcpSettings->saveSettings();
 	if (cacheSettings) cacheSettings->saveSettings();
 	if (perfSettings) perfSettings->saveSettings();
@@ -85,6 +89,11 @@ void PreferencesDialog::wireEditor(IEditorViewport *viewport, MainWindow *mainWi
 void PreferencesDialog::wireMcp(McpServer *server, MainWindow *mainWindow)
 {
     if (mcpSettings) mcpSettings->wireMcp(server, mainWindow);
+}
+
+void PreferencesDialog::wireScripting(ScriptEngine *engine)
+{
+    if (scriptingSettings) scriptingSettings->wireScripting(engine);
 }
 
 void PreferencesDialog::wireShortcuts(ShortcutRegistry *registry)
