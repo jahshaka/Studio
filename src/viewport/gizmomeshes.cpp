@@ -231,6 +231,14 @@ void addTorus(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iris::
 namespace GizmoMeshes
 {
 
+// THE PLANE FRAMES ARE DRAWN AT THE RINGS' WIDTH, derived rather than copied
+// (second reader, GIZMO-2 round 2): a ring's tube is kRingMinor of the ROTATION
+// handleScale, and a plane frame is drawn at the TRANSLATE one, so the radius
+// that matches them is kRingMinor * kRotationHandleScale / kHandleScale —
+// 0.014228 at today's tuning. Written this way, retuning kRotationExtentRatio
+// cannot silently un-match the two.
+const float kPlaneFrameRadius = kRingMinor * kRotationHandleScale / kHandleScale;
+
 iris::MeshPtr translateHandle(GizmoAxis axis)
 {
     iris::Vec3 A, U, V;
