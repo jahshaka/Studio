@@ -281,7 +281,7 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
     // (AssetPanel::populateFavorites) and used to survive it by never
     // touching a member. Keeping that property here is cheaper than trusting
     // every caller in the tree.
-    const bool unbatchedWrite = DbTransaction::activeGuards() == 0
+    const bool unbatchedWrite = !DbTransaction::anyGuardLive()
                                 && !DbTransaction::anyBatchLive()
                                 && isWriteStatement(query.lastQuery());
 
@@ -334,8 +334,9 @@ void Database::resumeBatchIfNeeded()
     if (batchOpenCount == 0 || batchTxLive) return;
     if (!db.isOpen()) return;
     // Never while somebody else owns a transaction on this connection: the
-    // batch is the thing that YIELDS, it never takes.
-    if (DbTransaction::activeGuards() > 0) return;
+    // batch is the thing that YIELDS, it never takes. Per CONNECTION (H2) —
+    // a guard on an export's own connection is not an owner of ours.
+    if (DbTransaction::activeGuards(db.connectionName()) > 0) return;
     batchTxLive = db.transaction();
     if (batchTxLive) DbTransaction::noteBatchLive(true);
 }

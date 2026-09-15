@@ -54,10 +54,19 @@ public:
         // itself at Database's next statement. Guards nested inside another
         // guard are untouched — their degrade-to-no-op is the intended
         // "one transaction per operation" behaviour and must stay.
-        const bool outermost = (sActive == 0);
+        // OUTERMOST IS PER CONNECTION (CLOSE-2 round 2, H2). A process-wide
+        // count was right only for as long as every guard in the tree lived on
+        // the main connection: the first guard on a SIDE connection (an export
+        // bundle, the catalog rebuild, a version probe) nesting around a
+        // main-connection guard would have made the main one look nested, the
+        // batch would not have stood down, and that guard would have degraded
+        // to the no-op the whole design exists to prevent. A transaction on
+        // another connection cannot be an outer transaction of this one.
+        const QString connection = database.connectionName();
+        const bool outermost = (activeGuards(connection) == 0);
         if (outermost && sBatchYield) sBatchYield(database);
         active = database.transaction();
-        if (active) ++sActive;
+        if (active) retain(connection);
         // Stood the batch down and then failed to begin (a closed connection,
         // or a transaction opened outside this layer): put it back rather than
         // leave it waiting for a release that will never come.
@@ -127,9 +136,18 @@ public:
     static bool anyBatchLive() { return sBatchesLive > 0; }
     static void noteBatchLive(bool live) { sBatchesLive += live ? 1 : -1; }
 
-    /// How many guards currently hold a live transaction. Zero means the next
-    /// guard will be the outermost one.
-    static int activeGuards() { return sActive; }
+    /// How many guards currently hold a live transaction ON `connection`.
+    /// Zero means the next guard there will be the outermost one.
+    static int activeGuards(const QString &connection)
+    {
+        return sActive.value(connection, 0);
+    }
+    /// The same question with no connection in hand, for the durable-commit
+    /// accounting only (Database::executeAndCheckQuery, which must not touch a
+    /// member — see there). Deliberately process-wide: a diagnostic that
+    /// under-counts a write made on one connection while another holds a
+    /// transaction is a better trade than a member read in that funnel.
+    static bool anyGuardLive() { return sActiveTotal > 0; }
 
     /// DURABLE COMMITS — the diagnostic behind `editor.undoState().dbCommits`.
     ///
@@ -144,15 +162,27 @@ public:
     static void noteCommit() { ++sCommits; }
 
 private:
+    static void retain(const QString &connection)
+    {
+        ++sActive[connection];
+        ++sActiveTotal;
+    }
+
     void release()
     {
-        if (--sActive == 0 && sBatchResume) sBatchResume(db);
+        const QString connection = db.connectionName();
+        auto it = sActive.find(connection);
+        if (it != sActive.end() && --it.value() <= 0)
+            sActive.erase(it);   // side connections are named per use — never grow the map
+        --sActiveTotal;
+        if (activeGuards(connection) == 0 && sBatchResume) sBatchResume(db);
     }
 
     QSqlDatabase db;
     bool active;
 
-    inline static int sActive = 0;
+    inline static QHash<QString, int> sActive;
+    inline static int sActiveTotal = 0;
     inline static int sBatchesLive = 0;
     inline static quint64 sCommits = 0;
     inline static BatchYieldHook sBatchYield = BatchYieldHook();

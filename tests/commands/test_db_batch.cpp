@@ -35,6 +35,9 @@
 //   6. ResetMaterialCommand's redo and undo each cost ONE commit.
 //   7. Database::durableCommits() — the counter behind
 //      editor.undoState().dbCommits — agrees with SQLite's own commit hook.
+//   8. The guard count is PER CONNECTION: a transaction on a side connection
+//      wrapped around a main-connection guard does not make that guard look
+//      nested (it would then degrade, which is the failure in 4).
 //
 // The COMMIT COUNT comes from sqlite3_commit_hook on the handle Qt's QSQLITE
 // driver opened (the CLOSE-1 / tests/assettray idiom): ground truth, with no
@@ -284,6 +287,53 @@ int main(int argc, char **argv)
               "the row written before the stand-down survived");
         CHECK(assetsNamed(QStringLiteral("Stand-down rolled")) == 0,
               "...and the nested owner's ROLLBACK really rolled its row back");
+    }
+
+    // -----------------------------------------------------------------------
+    // 4b. A GUARD ON ANOTHER CONNECTION DOES NOT MAKE OURS "NESTED" (H2).
+    //
+    // The guard count is kept PER CONNECTION. When it was process-wide, a
+    // transaction on a side connection — an export bundle, the catalog
+    // rebuild, a .jaf version probe, all of which open their own — wrapped
+    // around a main-connection guard made that guard look nested: the batch
+    // would not have stood down and the guard would have degraded to the
+    // no-op the design exists to prevent. A transaction on another connection
+    // cannot be an outer transaction of this one.
+    // -----------------------------------------------------------------------
+    {
+        const QString sideName = QStringLiteral("db_batch_side");
+        const QString rolled = GUIDManager::generateGUID();
+        {
+            QSqlDatabase side = QSqlDatabase::addDatabase("QSQLITE", sideName);
+            side.setDatabaseName(QStringLiteral("db_batch_side.db"));
+            CHECK(side.open(), "a side connection opened (its own file, its own transactions)");
+            {
+                DbBatch batch(&db);
+                db.createAssetEntry(GUIDManager::generateGUID(), QStringLiteral("Side-batched"),
+                                    static_cast<int>(ModelTypes::Object), projectGuid, projectGuid);
+                DbTransaction outerElsewhere(side);
+                CHECK(outerElsewhere.isActive(), "the side connection's guard is live");
+                {
+                    DbTransaction ours(QSqlDatabase::database());
+                    CHECK(ours.isActive(),
+                          "a main-connection guard INSIDE it is still real, not degraded");
+                    CHECK(!db.batchTransactionLive(),
+                          "...and the batch still stood down for it");
+                    db.createAssetEntry(rolled, QStringLiteral("Side-rolled"),
+                                        static_cast<int>(ModelTypes::Object),
+                                        projectGuid, projectGuid);
+                    ours.rollback();
+                }
+                CHECK(db.batchTransactionLive(),
+                      "...and took its transaction back when that guard let go");
+            }
+            CHECK(assetsNamed(QStringLiteral("Side-batched")) == 1, "the batched row survived");
+            CHECK(assetsNamed(QStringLiteral("Side-rolled")) == 0,
+                  "...and the nested guard's rollback still rolled ITS row back");
+            side.close();
+        }
+        QSqlDatabase::removeDatabase(sideName);
+        QFile::remove(QStringLiteral("db_batch_side.db"));
     }
 
     // -----------------------------------------------------------------------
