@@ -41,6 +41,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
+#include <algorithm>
 #include <cstdio>
 #include <algorithm>
 #include <cstdlib>
@@ -290,6 +291,17 @@ int main()
         render(e, 1); view->readPixels(b);
         float worst = 0.0f, p99 = 0.0f;
         frameDelta(a, b, worst, p99);
+        // ...and the same reading after a longer window, printed beside it: the
+        // bar the brief states is at SIXTEEN frames, and what the number does
+        // with more of them is the difference between "slow" and "wrong".
+        render(e, 48);
+        Image c, d;
+        render(e, 1); view->readPixels(c);
+        render(e, 1); view->readPixels(d);
+        float worst64 = 0.0f, p9964 = 0.0f;
+        frameDelta(c, d, worst64, p9964);
+        std::printf("    ...and after 64 frames: 99th pct %.2f/255, worst %.2f\n", p9964,
+                    worst64);
         CHECK_MSG(p99 < 2.0f,
                   "a roughness-0.3 reflection has CONVERGED after 16 frames: 99th percentile "
                   "frame-to-frame change %.2f/255 (bar 2), worst pixel %.2f",
@@ -311,6 +323,157 @@ int main()
         render(e, 8);
     }
 
+    // ---- 6b: SCREEN FIRST, and it is a BYTE-IDENTICAL claim -----------------
+    // A pixel the march answers with FULL confidence must come out of the frame
+    // unchanged by the ray tier — that is what "the screen keeps every hit it is
+    // confident about" means, and a tolerance would not say it.
+    //
+    // THE FIXTURE IS THE WHOLE ARGUMENT. The mirror wall and the cube behind the
+    // camera both go away; what is left is a glossy floor and a MATTE emissive
+    // cube standing in front of the camera, fully on screen. The march can see
+    // everything the floor reflects, at a face-on arrival, well inside its
+    // distance — its best case — and nothing in the shot is itself traced. If
+    // the ray tier is "screen first" this frame cannot move at all.
+    {
+        s->setNodeVisible(wall, false);
+        s->setNodeVisible(cube, false);
+        const NodeId floor = s->createNode();
+        const MaterialId fm = s->createPbrMaterial(wallParams);   // roughness 0, metal
+        const MeshId fmesh = s->createMesh(enginetest::unitCubeMesh());
+        const NodeId lamp = s->createNode();
+        PbrParams lampParams;
+        lampParams.albedo = Colour(0.05f, 0.05f, 0.05f);
+        lampParams.emissive = Colour(4.0f, 0.0f, 0.0f);
+        lampParams.roughness = 0.9f;                              // MATTE: never traced
+        const MaterialId lm = s->createPbrMaterial(lampParams);
+        CHECK(floor && fm && fmesh && s->attachMesh(floor, fmesh, fm) && lamp && lm &&
+                  s->attachMesh(lamp, fmesh, lm),
+              "the screen-first fixture exists (a glossy floor and a matte emitter above it)");
+        enginetest::setNodeScale(s, floor, Vec3(16.0f, 0.3f, 16.0f));
+        enginetest::setNodePosition(s, floor, Vec3(0.0f, -1.0f, 0.0f));
+        enginetest::setNodeScale(s, lamp, Vec3(2.0f, 2.0f, 2.0f));
+        enginetest::setNodePosition(s, lamp, Vec3(0.0f, 2.0f, 0.0f));
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.2f, -7.0f), Vec3(0.0f, 0.4f, 0.0f));
+        s->refreshGlobalIllumination();
+        render(e, 48);
+        Image withRays;
+        view->readPixels(withRays);
+        unsigned same = 0, moved = 0, worstDiff = 0;
+        // The SAME binary, the same chain, the same frame count — only the
+        // tier's switch moves. (setRayTracing rebuilds the chain, so both arms
+        // are given the same settling budget after it.)
+        e->setRayTracing(false);
+        render(e, 48);
+        Image marchOnly;
+        view->readPixels(marchOnly);
+        e->setRayTracing(true);
+        render(e, 48);
+        for (unsigned y = 0; y < withRays.height; ++y)
+            for (unsigned x = 0; x < withRays.width; ++x) {
+                const Colour &a = withRays.at(x, y), &b = marchOnly.at(x, y);
+                if (a.r == b.r && a.g == b.g && a.b == b.b) { ++same; continue; }
+                ++moved;
+                worstDiff = std::max(worstDiff,
+                                     unsigned(std::abs(a.r - b.r) * 255.0f + 0.5f));
+            }
+        const float movedPct = 100.0f * float(moved) / float(same + moved);
+        // WHERE THE MARCH IS CONFIDENT, measured rather than assumed. The
+        // resolve's weight is not a yes/no: it is the ENVELOPE (distance, the
+        // screen's edge, a reflection pointing back at the camera) times the
+        // roughness ramp times the hit mask's coverage, and over a floor the
+        // envelope is below 1 across most of the reflection. So "the march
+        // answered this pixel" is a matter of degree, and the pixels where it
+        // answered it OUTRIGHT are the bright interior of the reflection —
+        // which is what this measures: over the texels the march alone already
+        // shows a strong reflection on, the ray tier must leave the colour
+        // essentially where it was.
+        //
+        // (A frame-wide byte-identical claim would be false BY DESIGN, and the
+        // design is the one this suite is defending: where the march's envelope
+        // has faded, the ray answers instead of the probe — that is the whole
+        // point of "rays for the rest". The frame-wide split is printed so the
+        // size of that region is never hidden.)
+        double sumDelta = 0.0;
+        unsigned strong = 0, strongWorst = 0;
+        for (unsigned y = 0; y < withRays.height; ++y)
+            for (unsigned x = 0; x < withRays.width; ++x) {
+                const Colour &a = withRays.at(x, y), &b = marchOnly.at(x, y);
+                if (b.r - std::max(b.g, b.b) < 0.25f) continue;   // not a strong march hit
+                ++strong;
+                const float d = std::max(std::max(std::abs(a.r - b.r), std::abs(a.g - b.g)),
+                                         std::abs(a.b - b.b)) * 255.0f;
+                sumDelta += double(d);
+                strongWorst = std::max(strongWorst, unsigned(d + 0.5f));
+            }
+        const float meanDelta = strong ? float(sumDelta / double(strong)) : 0.0f;
+        std::printf("    screen-first fixture: %u px byte-identical, %u moved (%.2f %%), "
+                    "worst red delta %u/255\n", same, moved, movedPct, worstDiff);
+        std::printf("    ...over the %u px the march answers OUTRIGHT: mean delta %.2f/255, "
+                    "worst %u/255\n", strong, meanDelta, strongWorst);
+        CHECK_MSG(strong > 100u, "the march alone really does answer a region (%u px)", strong);
+        CHECK_MSG(meanDelta < 4.0f,
+                  "SCREEN FIRST: where the march answers outright the ray tier leaves the "
+                  "colour alone (mean %.2f/255 over %u px)",
+                  meanDelta, strong);
+        s->setNodeVisible(floor, false);
+        s->setNodeVisible(lamp, false);
+        s->setNodeVisible(wall, true);
+        s->setNodeVisible(cube, true);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
+        s->refreshGlobalIllumination();
+        render(e, 24);
+    }
+
+    // ---- 6c: A MIRROR DOES NOT GHOST UNDER CAMERA MOTION --------------------
+    // (Second reader, H1.) The temporal mean exists for VARIANCE, and a mirror
+    // has none: every sample is the same ray. If the mean kept its floor there,
+    // a pan would drag the reflection of where the camera used to be across the
+    // wall for as long as the mean remembers. The blend is raised toward 1 as
+    // the lobe narrows, so one frame after a pan a mirror must already match a
+    // fresh render of the same pose.
+    {
+        const Vec3 eye(0.0f, 2.0f, -6.0f);
+        enginetest::testCameraLookAt(view, eye, Vec3(0.0f, 2.0f, 5.0f));
+        render(e, 24);
+        // The pose after a 10-degree pan, rendered FRESH (a new view, no
+        // history at all) and then reached by panning the live view.
+        const float rad = 10.0f * 3.14159265f / 180.0f;
+        const Vec3 target(11.0f * std::sin(rad), 2.0f, -6.0f + 11.0f * std::cos(rad));
+        View *fresh = e->createOffscreenView("rtpan", kSize, kSize, Colour(0, 0, 0));
+        Image pannedLive, pannedFresh;
+        if (!fresh) { std::printf("FAIL: pan view\n"); ++failures; }
+        else {
+            fresh->setScene(s);
+            PostFxDesc ffx = fx;
+            fresh->setPostFx(ffx);
+            enginetest::testCameraLookAt(fresh, eye, target);
+            render(e, 24);                       // the fresh view's own mean settles
+            fresh->readPixels(pannedFresh);
+            enginetest::testCameraLookAt(view, eye, target);
+            render(e, 1);                        // ONE frame after the pan
+            view->readPixels(pannedLive);
+            float worst = 0.0f, p99 = 0.0f;
+            frameDelta(pannedLive, pannedFresh, worst, p99);
+            // A BLANK PAIR WOULD AGREE PERFECTLY, which is not the statement:
+            // both frames must contain the reflection before their agreement
+            // means anything.
+            const float liveRed = redExcess(pannedLive), freshRed = redExcess(pannedFresh);
+            std::printf("    one frame after a 10-degree pan vs a fresh render: "
+                        "99th pct %.2f/255, worst %.2f (red %.4f vs %.4f)\n",
+                        p99, worst, liveRed, freshRed);
+            CHECK_MSG(liveRed > 0.01f && freshRed > 0.01f,
+                      "both panned frames actually contain the reflection (%.4f / %.4f)",
+                      liveRed, freshRed);
+            CHECK_MSG(p99 < 6.0f,
+                      "A MIRROR DOES NOT GHOST: one frame after a pan it matches a fresh render "
+                      "to %.2f/255 at the 99th percentile (bar 6)",
+                      p99);
+            e->destroyView(fresh);
+        }
+        enginetest::testCameraLookAt(view, eye, Vec3(0.0f, 2.0f, 5.0f));
+        render(e, 16);
+    }
+
     // ---- 7: THE FEATHER — a roughness gradient has no step in it ------------
     // (Owner, ledger §426.) The wall is replaced by a row of panels whose
     // roughness climbs THROUGH the cutoff, which is a roughness gradient made
@@ -330,7 +493,14 @@ int main()
         enginetest::setNodeScale(s, cube, Vec3(60.0f, 14.0f, 1.0f));
         s->setNodeVisible(wall, false);
         const int kPanels = 9;
-        const float lo = 0.40f - 0.20f, hi = 0.40f + 0.20f;   // the cutoff +- 0.2
+        // THE BAND STRADDLES THE CUTOFF IN PERCEPTUAL ROUGHNESS, which is the
+        // unit `PbrParams::roughness` is authored in, the unit the World row
+        // shows, and — since the C1 fix — the unit the shader gates in. The
+        // first round of this case had all nine panels BELOW the gate (the
+        // shader was comparing a mis-decoded alpha), so what it measured was
+        // the lobe widening, not the feather.
+        const float kCutoff = 0.40f;
+        const float lo = kCutoff - 0.20f, hi = kCutoff + 0.20f;
         std::vector<NodeId> panels;
         for (int i = 0; i < kPanels; ++i) {
             const NodeId n = s->createNode();
@@ -349,11 +519,32 @@ int main()
         render(e, 48);
         Image img2;
         if (!view->readPixels(img2)) { std::printf("FAIL: readPixels (gradient)\n"); ++failures; }
-        // The red profile, one value per panel, over the middle band of rows.
+        // WHERE EACH PANEL ACTUALLY LANDS ON THE SCREEN, derived rather than
+        // assumed (second reader, H2). The row spans x in [-7, +7] at z = +5,
+        // 11 m in front of a camera at z = -6 with a 45-degree vertical field
+        // of view and a 1:1 aspect, so the frame shows +- 11 * tan(22.5) =
+        // +-4.56 m of it: dividing the IMAGE into nine equal columns would put
+        // the gate's column three panels away from where it is.
+        const float kHalfWorld = 7.0f;                  // the row's own half-extent
+        const float kDist = 11.0f;                      // camera z = -6 to the panels at +5
+        const float kHalfView = kDist * std::tan(0.5f * 45.0f * 3.14159265f / 180.0f);
+        const auto columnOf = [&](float worldX) {
+            const float ndc = worldX / kHalfView;       // -1..1 across the frame
+            return (ndc * 0.5f + 0.5f) * float(img2.width);
+        };
         std::vector<float> profile(size_t(kPanels), 0.0f);
+        std::vector<int> visible;
         for (int i = 0; i < kPanels; ++i) {
-            const unsigned x0 = unsigned(float(img2.width) * float(i) / float(kPanels));
-            const unsigned x1 = unsigned(float(img2.width) * float(i + 1) / float(kPanels));
+            const float wx0 = -kHalfWorld + 2.0f * kHalfWorld * float(i) / float(kPanels);
+            const float wx1 = -kHalfWorld + 2.0f * kHalfWorld * float(i + 1) / float(kPanels);
+            const float c0 = columnOf(wx0), c1 = columnOf(wx1);
+            if (c1 <= 2.0f || c0 >= float(img2.width) - 2.0f) continue;   // off frame
+            // Two pixels in from each edge: a panel's own silhouette is not a
+            // measurement of its interior.
+            const unsigned x0 = unsigned(std::max(c0 + 2.0f, 0.0f));
+            const unsigned x1 = unsigned(std::min(c1 - 2.0f, float(img2.width)));
+            if (x1 <= x0) continue;
+            visible.push_back(i);
             double sum = 0.0; unsigned n = 0;
             for (unsigned y = img2.height / 3; y < img2.height * 2 / 3; ++y)
                 for (unsigned x = x0; x < x1 && x < img2.width; ++x) {
@@ -363,12 +554,25 @@ int main()
                 }
             profile[size_t(i)] = n ? float(sum / double(n)) : 0.0f;
         }
-        std::printf("    roughness %.2f..%.2f across %d panels, red profile:", lo, hi, kPanels);
-        for (float v : profile) std::printf(" %.4f", v);
-        std::printf("\n");
+        std::printf("    perceptual roughness %.2f..%.2f across %d panels (cutoff %.2f), "
+                    "red profile by panel:\n     ",
+                    lo, hi, kPanels, kCutoff);
+        for (int i = 0; i < kPanels; ++i) {
+            const float r = lo + (hi - lo) * float(i) / float(kPanels - 1);
+            const bool seen = std::find(visible.begin(), visible.end(), i) != visible.end();
+            std::printf(" [%.2f]%s%.4f", r, seen ? "=" : "~", profile[size_t(i)]);
+        }
+        std::printf("\n    (= measured on screen, ~ off frame)\n");
+        CHECK_MSG(visible.size() >= 4u, "at least four panels are on screen (%zu)",
+                  visible.size());
+        // Steps between ADJACENT VISIBLE panels only.
         std::vector<float> steps;
-        for (size_t i = 1; i < profile.size(); ++i)
-            steps.push_back(std::abs(profile[i] - profile[i - 1]));
+        std::vector<int> stepAt;
+        for (size_t k = 1; k < visible.size(); ++k) {
+            if (visible[k] != visible[k - 1] + 1) continue;
+            steps.push_back(std::abs(profile[size_t(visible[k])] - profile[size_t(visible[k - 1])]));
+            stepAt.push_back(visible[k - 1]);
+        }
         std::vector<float> sorted = steps;
         std::sort(sorted.begin(), sorted.end());
         const float median = sorted.empty() ? 0.0f : sorted[sorted.size() / 2];
@@ -377,10 +581,21 @@ int main()
         // symmetric about the cutoff). The bar is relative and not absolute
         // because the fall-off itself is real: the gate must not make a step
         // that stands out from the ones physics already puts there.
-        const size_t mid = steps.size() / 2;
-        const float gateStep = steps.empty() ? 0.0f : steps[mid];
-        std::printf("    steps: median %.4f, worst %.4f, at the gate %.4f\n", median, worstStep,
-                    gateStep);
+        // THE GATE'S OWN STEP is the one between the panel below the cutoff and
+        // the panel above it — found by roughness, not by assuming it is in the
+        // middle of whatever happens to be on screen.
+        float gateStep = 0.0f;
+        int gatePanel = -1;
+        for (size_t k = 0; k < steps.size(); ++k) {
+            const float rA = lo + (hi - lo) * float(stepAt[k]) / float(kPanels - 1);
+            const float rB = lo + (hi - lo) * float(stepAt[k] + 1) / float(kPanels - 1);
+            if (rA <= kCutoff && rB > kCutoff) { gateStep = steps[k]; gatePanel = stepAt[k]; }
+        }
+        CHECK_MSG(gatePanel >= 0, "the cutoff falls between two panels that are both on screen "
+                                  "(panel %d)", gatePanel);
+        std::printf("    steps between visible panels: median %.4f, worst %.4f, "
+                    "AT THE GATE %.4f (panels %d|%d)\n",
+                    median, worstStep, gateStep, gatePanel, gatePanel + 1);
         CHECK_MSG(gateStep <= worstStep + 1e-6f,
                   "THE FEATHER: the gate's own column is not the largest step in the profile "
                   "(%.4f against a worst of %.4f)",
