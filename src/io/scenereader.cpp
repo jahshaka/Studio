@@ -607,6 +607,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->ssaoRadius = float(qBound(0.05, sceneObj.value("ssaoRadius").toDouble(2.0), 64.0));
     scene->smaaPreset = qBound(-1, sceneObj.value("smaaPreset").toInt(-1), 3);
     scene->ssrMode = qBound(0, sceneObj.value("ssrMode").toInt(0), 2);
+    // ABSENT = 40, which is the renderer's own answer and therefore what a
+    // document written before this row existed means (the reader-defaults trap:
+    // an absent-key fallback that disagrees with the constructor ships the whole
+    // corpus at the wrong value).
+    scene->rayReflectRoughness =
+        qBound(5, sceneObj.value("rayReflectRoughness").toInt(40), 100);
     scene->refractionsMode = qBound(0, sceneObj.value("refractionsMode").toInt(0), 2);
     // Distortion: absent = AUTO, which is what a document written before the
     // feature existed means (it holds no distortion material, so auto costs it

@@ -31,3 +31,29 @@ add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
 set_tests_properties(gi.rt_reflect_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
+# THE COST, at the resolution the bar is stated at. Same binary, same fixture
+# builder, a different question (see costMain).
+add_test(NAME gi.rt_reflect_cost COMMAND test_rt_reflect
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rt_reflect_cost PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAH_RT_REFLECT_COST=1")
+
+if(JAHSHAKA_ASAN)
+    # THE SANITISED TWIN for the new pass. `protect_shadow_gap=0` is already in
+    # JAH_ASAN_ENGINE_OPTIONS and is load-bearing here: the NVIDIA driver
+    # refuses vkCreateDevice with the ray-tracing feature bits enabled under
+    # ASan's default shadow gap (PHOTON R1, deviation (a)) — with the gap
+    # unprotected the device comes up and the 1,900-line raw-Vulkan tier gets
+    # the coverage R1 had to do without.
+    jahshaka_rt_reflect_test(test_rt_reflect_asan)
+    target_link_libraries(test_rt_reflect_asan PRIVATE JahshakaEngineAsan)
+    target_compile_options(test_rt_reflect_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_rt_reflect_asan PRIVATE -fsanitize=address)
+    add_test(NAME gi.rt_reflect_asan COMMAND test_rt_reflect_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_asan PROPERTIES
+                         TIMEOUT 600 LABELS "engine"
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+endif()

@@ -1444,8 +1444,15 @@ file(MAKE_DIRECTORY ${_ssrhome}/run)
 add_test(NAME scripting.e2e.ssr_mirror
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
          WORKING_DIRECTORY ${_ssrhome}/run)
+# THE SCREEN-ONLY CONTRACT, AND IT STAYS THAT (lead ruling, PHOTON R5 round B;
+# the same ruling as tests/ssr/CMakeLists.txt). This suite is lane SSR-2's: it
+# measures that the SCREEN does not overrule the probe across the Mirror Room
+# sphere's limb. With the ray-query tier live that limb is answered by a TRACED
+# reflection, which is the correct picture and not the one this suite is about,
+# so it runs in the picture it was written for and none of its bars moves. The
+# combined picture is `gi.rt_reflect` / `gi.rt_reflect_norays`.
 set_tests_properties(scripting.e2e.ssr_mirror PROPERTIES
-    ENVIRONMENT "HOME=${_ssrhome};JAHSHAKA_DATA_ROOT=${_ssrhome}/.local/share/Jahshaka"
+    ENVIRONMENT "HOME=${_ssrhome};JAHSHAKA_DATA_ROOT=${_ssrhome}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1"
     LABELS "scripting"
     TIMEOUT 600)
 

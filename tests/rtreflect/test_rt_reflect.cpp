@@ -127,6 +127,22 @@ static float measure(Engine *e, View *v, const char *what, int frames, Image *ou
     return r;
 }
 
+/// THE COST ARM (PHOTON_SPEC §7 R5 item 7, `gi.rt_reflect_cost`).
+///
+/// SAME BINARY, SAME FIXTURE BUILDER, a different question — which is why it is
+/// an env-selected path and not a second source file: the cost of a trace is
+/// the cost of THIS trace over THIS geometry, and a second fixture would be
+/// measuring something else. It reports GPU milliseconds from the pass' own
+/// timestamp pair (`giStatus().rayQuery.reflectMs`, the patch-0027 mechanism),
+/// read back with the availability bit several frames later and never with a
+/// wait — so it renders well past the frames-in-flight depth before reading.
+///
+/// MIRROR-HEAVY means what it says: every surface in the shot is inside the
+/// roughness gate, so every pixel of the trace resolution fires a ray and none
+/// of the shader's early-outs (the sky, the gate, a pixel the march already
+/// answered) can make the number flattering.
+static int costMain(Engine *e, const char *plugin, const char *media);
+
 int main()
 {
     std::string err;
@@ -139,6 +155,9 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
+
+    if (getenv("JAH_RT_REFLECT_COST"))
+        return costMain(e, JAHSHAKA_TEST_PLUGIN_DIR, JAHSHAKA_TEST_MEDIA_DIR);
 
     View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtreflect");
@@ -388,6 +407,107 @@ int main()
         view->setPostFx(fx);
         render(e, 8);
     }
+
+    std::printf("%s\n", failures ? "FAILED" : "PASSED");
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+static int costMain(Engine *e, const char *, const char *)
+{
+    // 1080p, because that is the resolution the bar is stated at and the trace
+    // is one ray per pixel of it: a number measured at 192x192 and multiplied
+    // would be arithmetic, not a measurement.
+    View *view = e->createOffscreenView("rtcost", 1920u, 1080u, Colour(0, 0, 0));
+    Scene *s = e->createScene("rtcost");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine — gi.rt_reflect_cost skips cleanly\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
+
+    // A BOX OF MIRRORS around the camera: six walls at roughness 0, so every
+    // pixel of the frame is a traced pixel and every ray hits geometry rather
+    // than escaping to the cheap sky path.
+    PbrParams mirror;
+    mirror.albedo = Colour(1.0f, 1.0f, 1.0f);
+    mirror.metalness = 1.0f;
+    mirror.roughness = 0.0f;
+    const MaterialId mirrorMat = s->createPbrMaterial(mirror);
+    const MeshId cubeMesh = s->createMesh(enginetest::unitCubeMesh());
+    struct Wall { Vec3 scale, pos; };
+    const Wall walls[6] = {
+        { Vec3(24.0f, 12.0f, 0.4f), Vec3(0.0f, 4.0f, 12.0f) },
+        { Vec3(24.0f, 12.0f, 0.4f), Vec3(0.0f, 4.0f, -12.0f) },
+        { Vec3(0.4f, 12.0f, 24.0f), Vec3(12.0f, 4.0f, 0.0f) },
+        { Vec3(0.4f, 12.0f, 24.0f), Vec3(-12.0f, 4.0f, 0.0f) },
+        { Vec3(24.0f, 0.4f, 24.0f), Vec3(0.0f, -1.0f, 0.0f) },
+        { Vec3(24.0f, 0.4f, 24.0f), Vec3(0.0f, 10.0f, 0.0f) },
+    };
+    for (const Wall &w : walls) {
+        const NodeId n = s->createNode();
+        if (!n || !s->attachMesh(n, cubeMesh, mirrorMat)) { std::printf("FAIL: wall\n"); return 1; }
+        enginetest::setNodeScale(s, n, w.scale);
+        enginetest::setNodePosition(s, n, w.pos);
+    }
+    // ...and something in it to reflect, so the rays return different answers
+    // rather than one constant the cache can serve from a single cell.
+    for (int i = 0; i < 12; ++i) {
+        const NodeId n = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.2f + 0.06f * float(i), 0.3f, 0.8f - 0.05f * float(i));
+        p.emissive = Colour(0.0f, 0.0f, float(i % 3) * 1.5f);
+        p.roughness = 0.5f;
+        const MaterialId m = s->createPbrMaterial(p);
+        if (!n || !m || !s->attachMesh(n, cubeMesh, m)) { std::printf("FAIL: prop\n"); return 1; }
+        enginetest::setNodeScale(s, n, Vec3(1.5f, 1.5f, 1.5f));
+        enginetest::setNodePosition(s, n,
+                                    Vec3(-8.0f + 1.6f * float(i), 0.5f + 0.4f * float(i % 4),
+                                         -6.0f + 1.1f * float(i % 7)));
+    }
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.boundsMin = Vec3(-13.0f, -2.0f, -13.0f);
+    gi.boundsMax = Vec3(13.0f, 11.0f, 13.0f);
+    CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the mirror box");
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
+
+    const auto measureMs = [&](int ssrRow, const char *what, float bar) {
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = ssrRow;
+        view->setPostFx(fx);
+        // WELL PAST THE FRAMES-IN-FLIGHT DEPTH: the pair is read with the
+        // availability bit, so the first frames report -1 by construction, and
+        // the value settles once the pipeline is full. The best of the last
+        // readings is taken because a single frame can be charged for a shader
+        // compile or a voxel rebuild that has nothing to do with the trace.
+        float best = -1.0f, last = -1.0f;
+        int seen = 0;
+        for (int i = 0; i < 90; ++i) {
+            e->renderOneFrame();
+            const RayQueryStatus rq = s->rayQueryStatus();
+            if (rq.reflectMs >= 0.0f) {
+                last = rq.reflectMs;
+                ++seen;
+                if (best < 0.0f || last < best) best = last;
+            }
+        }
+        std::printf("    %-40s best %.3f ms, last %.3f ms over %d readings (bar %.2f)\n", what,
+                    best, last, seen, bar);
+        CHECK_MSG(seen > 0, "%s: the timestamp pair was read back at all", what);
+        CHECK_MSG(best >= 0.0f && best <= bar, "%s: %.3f ms against a bar of %.2f ms", what, best,
+                  bar);
+        return best;
+    };
+
+    measureMs(2, "1080p FULL-res, mirror-heavy", 0.8f);
+    measureMs(1, "1080p HALF-res, mirror-heavy", 0.2f);
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

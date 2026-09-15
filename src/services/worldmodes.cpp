@@ -272,6 +272,46 @@ QVector<Row> buildRows()
         out.append(r);
     }
     {
+        // THE ROUGHNESS CUTOFF (PHOTON_SPEC §7 R5; owner, ledger §426). It
+        // belongs beside the reflection rows because it is the one number that
+        // says where reflections stop being worth computing per pixel at all —
+        // the same lobe the row above marches and the ray tier traces.
+        //
+        // WHY IT IS A PROJECT'S NUMBER AND NOT THE RENDERER'S: above the cutoff
+        // a reflection is a wide lobe and a reflection probe's prefiltered
+        // photograph IS a good integral of it, so a ray or a march per pixel
+        // buys a blurrier answer for the same cost. Where that crossover falls
+        // depends on the CONTENT — a polished gallery and a weathered street
+        // stop being worth tracing at different roughnesses — and no constant
+        // can be right for both.
+        //
+        // The same value in EVERY tier column: it is not a quality trade (the
+        // cost of a tier is the resolution and whether rays run at all, both
+        // rows of their own), it is a description of the scene's surfaces. A
+        // tier change must not silently re-author it.
+        Row r;
+        r.id = QStringLiteral("reflectionRoughnessCutoff");
+        r.label = QStringLiteral("Roughness Cutoff");
+        r.group = QStringLiteral("Reflections");
+        r.type = RowType::Int;
+        r.minValue = 5;
+        r.maxValue = 100;
+        r.tier[0] = 40; r.tier[1] = 40; r.tier[2] = 40; r.tier[3] = 40;
+        r.cost = QStringLiteral("How rough a surface may be and still get a computed reflection, "
+                                "in per cent. Below it the renderer marches the screen and (on a "
+                                "ray-capable machine) traces what the screen cannot see; above "
+                                "it the reflection probes' own blurred photograph answers, which "
+                                "for a rough surface is both cheaper and closer to the truth. "
+                                "The change is feathered either side of the value, so a surface "
+                                "whose roughness varies across it has no seam in it. Raising it "
+                                "spends rays on surfaces that will look much the same either "
+                                "way; lowering it hands more of the picture to the probes.");
+        r.available = true;
+        r.get = [](const iris::ScenePtr &s) { return s->rayReflectRoughness; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->rayReflectRoughness = v; };
+        out.append(r);
+    }
+    {
         Row r;
         r.id = QStringLiteral("refractions");
         r.label = QStringLiteral("Refractive Glass");
