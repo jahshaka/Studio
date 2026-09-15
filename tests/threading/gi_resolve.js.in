@@ -1,0 +1,96 @@
+// threading.gi_resolve — THE COLD-COMPILE GUARD for the GI re-solve
+// (PHOTON_SPEC.md §7 E1 "ITEM 0"; ledger §373, §38x).
+//
+// WHAT IT GUARDS, AND WHY threading.mode CANNOT.
+//   threading.mode opens Matcaps at Epic with a cold shader cache and compares
+//   the parallel and serial compile branches byte for byte. It does NOT ask the
+//   engine to RE-SOLVE global illumination one frame after that compile burst,
+//   and that one frame is the whole subject: COLDGI-1 (2026-09-15) proved that a
+//   GI re-solve issued exactly ONE rendered frame after Ogre's inline (serial)
+//   shader compile bakes a WRONG picture, while the same re-solve two frames
+//   later, or under the parallel compile queue, is right. COLDGI-1 removed the
+//   TRIGGER (the mirror's wall-clock settle, which fired an extra re-solve on the
+//   slow half) but not the defect, and with the settle counting frames
+//   threading.mode's two halves no longer run different GI histories — so it is
+//   blind to it. This script reproduces the shape deliberately.
+//
+//   The user-visible symptom the guard exists for: on a cold shader cache, a
+//   material edit or a light drag in the first second of a scene can bake a
+//   wrong voxel volume and a wrong irradiance field, and it stays wrong until
+//   something else re-solves.
+//
+// THE SHAPE, and every step is load-bearing:
+//   1. a VIRGIN HOME per half, so both really compile (the ctest fixtures wipe);
+//   2. Matcaps at Epic — the one shipped sample that is open-to-open pixel
+//      deterministic (perf.epic_steady_state's argument), and Epic is where the
+//      voxel arm and the irradiance field are both live;
+//   3. editor.frame(1) — EXACTLY one rendered frame: this is the compile burst,
+//      inline on the serial half;
+//   4. world.refreshGi() — the re-solve, issued in that one-frame window;
+//   5. editor.frame(2) then a fixed-size screenshot.
+//   The PARALLEL half is the correct picture; the serial half must match it.
+//
+// WHAT "WRONG" LOOKS LIKE when it fires (measured on this scene, RTX 4080S):
+//   parallel centre pixel (54,36,1), serial (46,32,1) — the serial half has NO
+//   voxel bounce at all, because VctVoxelizer's VCT/AabbCalculator dispatch reads
+//   a foreign uniform texel buffer for `inMeshBuffer`, every mesh reports zero
+//   indices, every mesh AABB comes back as the +/-FLT_MAX sentinel, and the
+//   voxelization writes zero voxels.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var ZIP = "@SOURCE_DIR@/scenes/Matcaps.zip";
+var SHOT = "threading_gi_resolve.png";
+var SHOT_W = 640, SHOT_H = 360;
+var DT = 1.0 / 60.0;
+
+app.engineErrors(true);
+
+var t = app.threading();
+var serial = t.hlmsThreads <= 1;
+console.log("threading: " + J(t));
+console.log(serial ? "this run: SERIAL (JAHSHAKA_SCENE_THREADS=1)"
+                   : "this run: PARALLEL (hlmsThreads=" + t.hlmsThreads + ")");
+assert(t.multithreadedShaderCompilation === true,
+       "the engine supports multithreaded shader compilation " +
+       "(re-run ./irisgl/scripts/build-ogre.sh if this is false)");
+
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10,
+       "importArchive(Matcaps) -> " + (imported ? imported.guid : "null"));
+assert(project.open(imported.guid) === true, "project.open");
+assert(world.mode({ mode: "epic" }) === "epic", "world.mode -> epic");
+
+var mirror = editor.mirrorStats();
+if (!mirror.available) {
+    console.log("this session's viewport is a document-only stand-in — " +
+                "nothing to compile and nothing to compare; skipping");
+} else {
+    // ONE frame: the compile burst. Then the re-solve inside that window.
+    editor.frame(1, DT);
+    var cache = app.shaderCache();
+    console.log("shaderCache after frame 1: compiled=" + cache.compiledThisRun +
+                " fromCache=" + cache.loadedThisRun);
+    assert(cache.compiledThisRun > 0,
+           "the run really compiled shaders (" + cache.compiledThisRun + ") — " +
+           "a warm cache would make this suite prove nothing");
+
+    assert(world.refreshGi() === true, "world.refreshGi() one frame after the burst");
+    editor.frame(2, DT);
+
+    var shot = editor.screenshot(SHOT, SHOT_W, SHOT_H);
+    assert(shot && shot.width === SHOT_W && shot.height === SHOT_H,
+           "screenshot -> " + SHOT + " " + J(shot));
+    console.log("centre pixel: " + J(shot.center));
+
+    var errs = app.engineErrors();
+    console.log("engineErrors: " + J(errs));
+    assert(errs.recorded === 0,
+           "no engine error was pumped (" + J(errs.entries) + ")");
+}
+
+console.log("threading.gi_resolve: PASSED");
