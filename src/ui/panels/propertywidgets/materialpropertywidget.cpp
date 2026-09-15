@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "services/sceneeditservice.h"
 #include "services/materialdefaults.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 #include "commands/changematerialpropertycommand.h"
 
 #include "io/scenewriter.h"
@@ -79,24 +80,133 @@ void MaterialPropertyWidget::snapshotTextures()
             existingTextures.insert(prop->name, prop->getValue().toString());
 }
 
+// SHOWING ANOTHER MESH'S MATERIAL IS A REFILL, NOT A REBUILD (ADD-1, 2026-09-15).
+//
+// THE MEASUREMENT: a pick between two cubes cost 44.3 ms and changed nothing on
+// screen but the numbers. All of it was here — the Material combo built again
+// with its forty items, its popup view and its item delegate; a fresh
+// PropertyWidget with twenty-five rows; the destruction of the previous
+// twenty-five; and the text shaping of every label of both. Every scripted
+// `scene.addPrimitive` paid it too, because an add selects the node it makes.
+//
+// A material's rows are decided by its property list's SHAPE, and every
+// primitive in a scene has the same shape, so the rows that are already here
+// are the rows the next mesh needs. The refill points them at the new
+// material's properties (PropertyWidget::rebind), sets the combo's current item
+// without rebuilding its list, and leaves the "Detail Layers" section exactly
+// where it is. Nothing is destroyed, so the property-row registry, the live
+// filter and the expand snapshot never notice a pick happened.
+//
+// A SHAPE CHANGE still rebuilds — a different material class, a mesh with no
+// material at all, a node that gained or lost its "Reset to <provider>" row,
+// or a library that has grown a new material asset since the combo was filled.
+// The rebuild is the same code it always was, so the fallback is never a
+// second implementation.
 void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!(!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh)) {
         meshNode.clear();
         material.clear();
         snapshotTextures();
+        clearShownRows();
         return;
     }
 
-    meshNode = sceneNode.staticCast<iris::MeshNode>();
-    material = meshNode->getMaterial();
+    const auto newNode = sceneNode.staticCast<iris::MeshNode>();
+    const iris::MaterialPtr newMaterial = newNode->getMaterial();
+
+    if (!newMaterial) {
+        meshNode = newNode;
+        material.clear();
+        meshNodeGuid = newNode->getGUID();
+        snapshotTextures();
+        clearShownRows();
+        return;
+    }
+
+    if (rebindTo(newNode, newMaterial)) return;
+
+    clearShownRows();
+    meshNode = newNode;
+    material = newMaterial;
     meshNodeGuid = meshNode->getGUID();
     snapshotTextures();
-    if (!material) return;
 
     setupShaderSelector();
     addResetRow();
     setWidgetProperties();
+}
+
+/// The rows this blade is showing go away. The one place that drops them, so
+/// the "who cleared the panel" question has one answer (it used to be the
+/// properties panel HOST, reaching in before every mesh pick).
+void MaterialPropertyWidget::clearShownRows()
+{
+    materialSelector = nullptr;
+    materialPropWidget = nullptr;
+    detailPropWidget = nullptr;
+    resetButton = nullptr;
+    clearPanel(this->layout());
+}
+
+/// The base and detail halves of a material's rows, split by the document's own
+/// naming rule (PbrMaterial::detailRow) — see setWidgetProperties.
+void MaterialPropertyWidget::splitRows(const iris::MaterialPtr &mat,
+                                       QList<iris::Property *> &base,
+                                       QList<iris::Property *> &details)
+{
+    if (!mat) return;
+    for (auto *prop : mat->properties) {
+        if (!prop) continue;
+        (prop->name.startsWith(QStringLiteral("detail")) ? details : base).append(prop);
+    }
+}
+
+bool MaterialPropertyWidget::rebindTo(const QSharedPointer<iris::MeshNode> &node,
+                                      const iris::MaterialPtr &mat)
+{
+    if (!materialPropWidget || !materialSelector) return false;
+
+    QList<iris::Property *> base, details;
+    splitRows(mat, base, details);
+    if (!materialPropWidget->canRebind(base)) return false;
+    // The detail section is built only when the material declares detail rows,
+    // so its PRESENCE is part of the shape.
+    if (details.isEmpty() != (detailPropWidget == nullptr)) return false;
+    if (detailPropWidget && !detailPropWidget->canRebind(details)) return false;
+    // "Reset to <provider>" is the NODE's row, not the material's.
+    if (materialdefaults::providerName(node).isEmpty() != resetButton.isNull()) return false;
+    if (!resetButton.isNull()
+        && resetButton->text() != tr("Reset to %1").arg(materialdefaults::providerName(node)))
+        return false;
+    // THE COMBO'S ITEM LIST is the builtin presets plus the project's material
+    // assets, and the library can grow while this blade is alive. Cheap to
+    // count, and a miscount is only ever a rebuild.
+    if (materialSelector->getWidget()->count() != materialItemCount()) return false;
+
+    meshNode = node;
+    material = mat;
+    meshNodeGuid = node->getGUID();
+    snapshotTextures();
+    materialPropWidget->rebind(base);
+    if (detailPropWidget) detailPropWidget->rebind(details);
+    {
+        // setCurrentItemData drives currentIndexChanged into materialChanged(int),
+        // which would rebuild the panel and rewrite the project's dependency
+        // rows — this is a refill, not a pick.
+        const QSignalBlocker block(materialSelector);
+        materialSelector->setCurrentItemData(material->getGuid());
+    }
+    return true;
+}
+
+/// How many entries setupShaderSelector would put in the Material combo.
+int MaterialPropertyWidget::materialItemCount() const
+{
+    int n = Constants::Reserved::BuiltinShaders.size();
+    for (auto asset : AssetManager::getAssets())
+        if (asset->type == ModelTypes::Shader) ++n;
+    return n;
 }
 
 void MaterialPropertyWidget::addResetRow()
@@ -150,14 +260,11 @@ void MaterialPropertyWidget::setWidgetProperties()
     // (PbrMaterial::detailRow), not by index or position: adding a base row
     // later must not silently push a detail row into the wrong section.
     QList<iris::Property *> base, details;
-    for (auto *prop : mat->properties) {
-        if (!prop) continue;
-        const bool isDetail = prop->name.startsWith(QStringLiteral("detail"));
-        (isDetail ? details : base).append(prop);
-    }
+    splitRows(mat, base, details);
 
     materialPropWidget->setProperties(base);
 
+    detailPropWidget = nullptr;
     if (!details.isEmpty()) {
         auto *section = this->addSection(tr("Detail Layers"));
         detailPropWidget = section->addPropertyWidget();
@@ -188,8 +295,12 @@ void MaterialPropertyWidget::materialChanged(int index)
 {
     Q_UNUSED(index);
     if (!meshNode) return;
+    // READ THE COMBO BEFORE IT GOES. clearShownRows retires this row with the
+    // rest, and reading a retired widget later (the panel did, for the name)
+    // only worked because deleteLater had not run yet.
     const QString guid = materialSelector->getCurrentItemData();
-    clearPanel(this->layout());
+    const QString pickedName = materialSelector->getCurrentItem();
+    clearShownRows();
 
     MaterialReader reader;
     reader.setProject(project);
@@ -199,9 +310,9 @@ void MaterialPropertyWidget::materialChanged(int index)
                                    : reader.parseShaderAsPbr(guid, db);
     // A graph asset with no baked material yet (a definition predating the
     // evaluator) must not silently blank the mesh: keep what it had.
-    if (!picked) { setupShaderSelector(); setWidgetProperties(); return; }
+    if (!picked) { setupShaderSelector(); addResetRow(); setWidgetProperties(); return; }
 
-    picked->setName(materialSelector->getCurrentItem());
+    picked->setName(pickedName);
     picked->setGuid(guid);
     material = picked;
     // The shown material just changed, so the texture-row snapshot describes
@@ -209,6 +320,12 @@ void MaterialPropertyWidget::materialChanged(int index)
     snapshotTextures();
     meshNode->setMaterial(material);
     setupShaderSelector();
+    // ...AND THE RESET ROW COMES BACK. clearShownRows drops it with every other
+    // row, and this path never rebuilt it: picking a material from the dropdown
+    // left the default floor without its "Reset to Floor" button until the next
+    // selection change put it back (found by ADD-1's shape comparison, which
+    // needs the two build paths to produce the SAME panel).
+    addResetRow();
 
     // THE PICK ALWAYS REACHES THE NODE; the library bookkeeping below needs a
     // library (lane DBPTR-1). This blade is built on the first mesh selection

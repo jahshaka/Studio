@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "irisgl/core/properties/property.h"
 
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
+#include "ui/panels/propertyrows.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/colorvaluewidget.h"
 #include "ui/controls/colorpickerwidget.h"
@@ -643,11 +644,85 @@ static void testResetActionOnlyOnTheDefaultFloor()
     CHECK(reset && reset->text() == QStringLiteral("Reset to Default Floor"),
           "reset: it names what it resets to");
 
-    // Back to an ordinary mesh: the action goes with the floor.
-    rig.panel.clearPanel(rig.panel.layout());
+    // Back to an ordinary mesh: the action goes with the floor. No reach-in
+    // clearPanel any more — the blade decides for itself whether a pick is a
+    // refill or a rebuild (ADD-1), and "this node has a default of its own and
+    // that one does not" is precisely a rebuild.
     rig.panel.setSceneNode(rig.node);
     CHECK(rig.panel.resetMaterialButton() == nullptr,
           "reset: selecting an ordinary mesh again drops the action");
+}
+
+// THE REFILL (ADD-1, 2026-09-15): showing another mesh's material of the same
+// SHAPE reuses the rows that are already there.
+//
+// What it replaced: a pick between two cubes destroyed twenty-five rows and a
+// forty-item combo and built them again — 44 ms, of which the user saw only
+// changed numbers. What must be true for the refill to be allowed to do that:
+//
+//   * the row WIDGETS are the same objects (that is the whole saving);
+//   * they show the new material's values;
+//   * and an edit afterwards writes to the NEW material, with one undo entry.
+//
+// The third is the one with teeth. Every row's handler used to capture the
+// iris::Property* it was built from, so re-pointing a row without re-pointing
+// its handler would write into the material the panel had LEFT — and into freed
+// memory once that material died. The rows bind to a SLOT now
+// (PropertyWidget::takeSlot); this proves it.
+static void testRefillKeepsTheRows()
+{
+    PanelRig rig;
+    auto *first = sliderRow(&rig.panel, propId(rig.pbr, "roughness"));
+    CHECK(first != nullptr, "refill: the first material's Roughness row exists");
+    const int rowsBefore = rig.panel.findChildren<HFloatSliderWidget *>().size();
+    auto *comboBefore = rig.panel.findChild<ComboBoxWidget *>();
+
+    auto secondMat = iris::PbrMaterial::create();
+    secondMat->setValue(QStringLiteral("roughness"), 0.25f);
+    auto secondNode = iris::MeshNode::create();
+    secondNode->setMaterial(secondMat);
+    rig.panel.setSceneNode(secondNode);
+
+    const bool wasRegistered = PropertyRows::registry().isRegistered(first);
+    auto *after = sliderRow(&rig.panel, propId(secondMat, "roughness"));
+    CHECK(after == first, "refill: the Roughness row is the SAME widget, not a new one");
+    // THE ROW REGISTRY MUST NOT SEE A PICK AT ALL (PROPERTY_FILTER_SPEC §6.2).
+    // A retired row leaves the registry, and a filter's expand snapshot holds
+    // guarded pointers to the sections it named — so a refill that churned the
+    // registry would drop a live filter's rows and lose the user's open
+    // sections on every pick.
+    CHECK(wasRegistered && PropertyRows::registry().isRegistered(first),
+          "refill: the row never leaves the property-row registry");
+    CHECK(rig.panel.findChildren<HFloatSliderWidget *>().size() == rowsBefore,
+          "refill: no row was created and none was destroyed");
+    CHECK(rig.panel.findChild<ComboBoxWidget *>() == comboBefore,
+          "refill: the Material combo (and its popup, and its delegate) is the same one");
+    auto *box = after ? after->findChild<QDoubleSpinBox *>() : nullptr;
+    CHECK(box && qAbs(box->value() - 0.25) < 1e-3,
+          "refill: ...and it shows the SECOND material's roughness");
+
+    // THE EDIT GOES TO THE MATERIAL ON SCREEN.
+    const int before = rig.stack.count();
+    auto *slider = after ? after->findChild<QSlider *>() : nullptr;
+    CHECK(slider != nullptr, "refill: the reused row still has its slider");
+    if (slider) {
+        slider->setSliderDown(true);
+        slider->setValue(700);                       // roughness 0..1 -> 0.7
+        slider->setSliderDown(false);
+        CHECK(qAbs(secondMat->roughnessFactor - 0.7f) < 1e-3f,
+              "refill: an edit on a reused row writes to the material now shown");
+        CHECK(qAbs(rig.pbr->roughnessFactor - 0.5f) < 1e-3f,
+              "refill: ...and NOT to the one the panel left behind");
+        CHECK(rig.stack.count() == before + 1,
+              "refill: ...as exactly one undo entry");
+    }
+
+    // A SHAPE CHANGE IS STILL A REBUILD: a mesh with no material has no rows.
+    auto bare = iris::MeshNode::create();
+    rig.panel.setSceneNode(bare);
+    CHECK(sliderRow(&rig.panel, propId(secondMat, "roughness")) == nullptr
+              || !sliderRow(&rig.panel, propId(secondMat, "roughness"))->isVisibleTo(&rig.panel),
+          "refill: a mesh with no material clears the rows (the fallback still works)");
 }
 
 int main(int argc, char *argv[])
@@ -667,6 +742,7 @@ int main(int argc, char *argv[])
     testShadingModelRowConstraints();
     testTextureSnapshotDoesNotAccumulate();
     testResetActionOnlyOnTheDefaultFloor();
+    testRefillKeepsTheRows();
 
     printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;

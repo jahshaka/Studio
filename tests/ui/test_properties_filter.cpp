@@ -553,9 +553,15 @@ int main(int argc, char **argv)
     // is for — a script run never turns the event loop, which is why this path
     // looked safe from inside a suite).
     {
+        // THE SECOND MESH HAS NO MATERIAL, and that is what makes this a
+        // REBUILD (ADD-1, 2026-09-15): showing another mesh's material of the
+        // same shape is a refill now — the same rows, pointed at another
+        // property list, nothing destroyed — so a second ordinary cube would no
+        // longer free the section this case is about. A mesh whose material is
+        // gone has no rows at all, which is the shape change a user really
+        // produces and the one that still retires them.
         auto second = iris::MeshNode::create();
         second->setName(QStringLiteral("mesh2"));
-        second->setMaterial(iris::PbrMaterial::create());
         scene->getRootNode()->addChild(second.staticCast<iris::SceneNode>());
 
         panel->setPropertiesFilter(Tab::Selection, QString());
@@ -578,13 +584,18 @@ int main(int argc, char **argv)
 
         panel->setPropertiesFilter(Tab::Selection, QString());                  // restore
         turn();
-        CHECK(rowShown(panel, QStringLiteral("Roughness")),
+        CHECK(rowShown(panel, QStringLiteral("Transform")) || shownRowCount(panel) > 0,
               "properties_filter: the restore skips what is gone and the column is whole");
+        // ...and the column comes back whole for a mesh that HAS a material:
+        // the blade rebuilds its rows, nested section included.
+        panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
+        turn();
         bool rebuilt = false;
         for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
             if (b->panelTitle() == QStringLiteral("Detail Layers") && b->isVisibleTo(panel))
                 rebuilt = true;
-        CHECK(rebuilt, "properties_filter: ...and the second mesh's own nested section is there");
+        CHECK(rebuilt && rowShown(panel, QStringLiteral("Roughness")),
+              "properties_filter: ...and a mesh with a material gets its nested section back");
     }
 
     // ---- 11d. AN ELIDED SECTION TITLE (F2, second reader) ----------------

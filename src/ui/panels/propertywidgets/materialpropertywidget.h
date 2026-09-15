@@ -80,11 +80,28 @@ protected slots:
 
 private:
     void addResetRow();
+    /// Drops every row this blade is showing (and forgets the widgets that went
+    /// with them). The ONE place that clears this panel.
+    void clearShownRows();
+    /// Points the rows already on screen at another mesh's material, when they
+    /// can show it (ADD-1). False means "rebuild" and is always safe.
+    bool rebindTo(const QSharedPointer<iris::MeshNode> &node, const iris::MaterialPtr &mat);
+    /// The base / "detail*" split of a material's property list, by the
+    /// document's own naming rule.
+    static void splitRows(const iris::MaterialPtr &mat,
+                          QList<iris::Property *> &base,
+                          QList<iris::Property *> &details);
+    /// How many entries the Material combo would hold if it were filled now.
+    int materialItemCount() const;
     /// Guarded: clearPanel() deletes the row with every other row.
     QPointer<QPushButton> resetButton;
     QSharedPointer<iris::MeshNode> meshNode;
-    ComboBoxWidget* materialSelector;
-    PropertyWidget* materialPropWidget;
+    /// Both are destroyed by clearShownRows and rebuilt by the full path; null
+    /// between the two (they were uninitialised members reading as garbage on
+    /// the first pick of a session — nothing dereferenced them before the
+    /// refill path did).
+    ComboBoxWidget* materialSelector = nullptr;
+    PropertyWidget* materialPropWidget = nullptr;
     /// The rows of the collapsible "Detail Layers" section (GAP 2). Held so the
     /// listener can tell which widget a change came from; null when the
     /// material declares no detail rows.

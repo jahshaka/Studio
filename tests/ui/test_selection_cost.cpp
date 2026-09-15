@@ -424,6 +424,20 @@ int main(int argc, char **argv)
     // The assertion is a SHAPE, not a millisecond budget: the retired-row
     // population is bounded however many rebuilds happen without a turn.
     {
+        // A REBUILD NEEDS A SHAPE CHANGE (ADD-1). Showing another mesh's
+        // material is a REFILL now — the same rows, pointed at another property
+        // list — and a refill retires nothing, which is most of why a pick got
+        // cheap. The thing this case is about is the REBUILD, so it drives the
+        // one a user really produces: a mesh whose material is gone (a
+        // material that failed to load, a node built without one) has no rows
+        // at all, so every switch between it and a normal mesh rebuilds.
+        auto bareMesh = iris::MeshNode::create();
+        bareMesh->setName(QStringLiteral("mesh-without-material"));
+        scene->getRootNode()->addChild(bareMesh);
+        const QVector<iris::SceneNodePtr> rebuilders = {
+            nodes[0], bareMesh.staticCast<iris::SceneNode>()
+        };
+
         panel->setSceneNode(nodes[0]);       // a mesh: the material blade is up
         turn();
         auto retiredRows = [&]() {
@@ -442,7 +456,7 @@ int main(int argc, char **argv)
         // would produce ONE rebuild and prove nothing about the ring. The
         // subject here is the rebuild, so the rebuilds are driven explicitly;
         // the coalescing has its own case below.
-        for (int i = 0; i < 60; ++i) { panel->setSceneNode(nodes[i % 5]); panel->flushPendingMount(); }
+        for (int i = 0; i < 60; ++i) { panel->setSceneNode(rebuilders[i % 2]); panel->flushPendingMount(); }
         const double noTurnMs = double(noTurn.elapsed());
         const int after60 = retiredRows();
         // ...and THREE TIMES AS MANY, which is what makes this a shape and not
@@ -450,7 +464,7 @@ int main(int argc, char **argv)
         // ring (AccordianBladeWidget::kRetiredGenerations), so it must not
         // depend on how many rebuilds happened. Before the fix it was one
         // generation PER REBUILD — 180 rows at 60 rebuilds, 540 at 180.
-        for (int i = 0; i < 120; ++i) { panel->setSceneNode(nodes[i % 5]); panel->flushPendingMount(); }
+        for (int i = 0; i < 120; ++i) { panel->setSceneNode(rebuilders[i % 2]); panel->flushPendingMount(); }
         const int after180 = retiredRows();
         std::printf("  no-event-loop rebuilds: retired rows %d after 1, %d after 60, %d after 180"
                     "  (%.0f ms for the first 60)\n", afterOne, after60, after180, noTurnMs);
@@ -502,11 +516,11 @@ int main(int argc, char **argv)
                         if (!qobject_cast<AccordianBladeWidget *>(w)) out.append(w);
                 return out;
             };
-            panel->setSceneNode(nodes[0]);
+            panel->setSceneNode(rebuilders[0]);
             turn();
             QList<QPointer<QWidget>> wereVisible;
             for (QWidget *w : deepRows()) if (w->isVisible()) wereVisible.append(w);
-            panel->setSceneNode(nodes[1]);          // shift 1: they are retired now
+            panel->setSceneNode(rebuilders[1]);     // shift 1: they are retired now
             panel->flushPendingMount();
             QPointer<QWidget> victim;
             for (const QPointer<QWidget> &w : wereVisible)
@@ -520,7 +534,7 @@ int main(int argc, char **argv)
                     // One shift is already spent (the rebuild that retired it),
                     // so the promise leaves kRetiredGenerations - 1 here.
                     for (int i = 0; i < AccordianBladeWidget::kRetiredGenerations - 1; ++i) {
-                        panel->setSceneNode(nodes[(i + 2) % 5]);
+                        panel->setSceneNode(rebuilders[i % 2]);
                         panel->flushPendingMount();   // drive a real rebuild (ADD-1)
                         ++drove;
                     }

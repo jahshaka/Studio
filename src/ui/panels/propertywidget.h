@@ -45,6 +45,16 @@ public:
 
     void addProperty(const iris::Property*);
     void setProperties(QList<iris::Property*>);
+
+    /// CAN THESE ROWS SHOW THAT LIST? (ADD-1) True when `props` has the same
+    /// SHAPE as the list on screen — the same order, types, names, labels,
+    /// ranges and enum vocabularies — i.e. when the rows this panel already
+    /// holds would have been built identically for it.
+    bool canRebind(const QList<iris::Property *> &props) const;
+    /// Points the EXISTING rows at another property list: nothing destroyed,
+    /// nothing created, no popup rebuilt, no row retired from the property-row
+    /// registry. Only legal when canRebind() says so.
+    void rebind(const QList<iris::Property *> &props);
     QList<iris::Property*> getProperties() { return properties; }
     int getHeight();
 
@@ -82,8 +92,20 @@ signals:
 
 private:
     QList<iris::Property*> properties;
+    /// The CONTROL each property built, in slot order (the row added to the
+    /// layout may be a holder around it — the vector rows). Aligned with
+    /// `properties`; this is what rebind() writes into.
+    QList<QWidget*> valueRows;
+    /// True while rebind() is putting values into the rows: the handlers are
+    /// inert, so filling a slider is not an edit of the material it reads from.
+    bool rebinding = false;
     iris::PropertyListener *listener;
     int progressiveHeight, stretch;
+
+    /// Records a property's row and returns its slot (see propertyAt).
+    int takeSlot(iris::Property *prop, QWidget *valueRow);
+    /// The property a row is bound to RIGHT NOW — null while rebinding.
+    iris::Property *propertyAt(int slot) const;
 
     /// The row widget each property built, by property name. Only needed by
     /// rows that CONSTRAIN other rows (see applyRowConstraints).

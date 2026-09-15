@@ -755,10 +755,12 @@ void SceneNodePropertiesWidget::mountSelectionBlades()
                 materialPropView->setDatabase(db);
                 materialPropView->setProject(project);
                 materialPropView->setServices(services);
-                // Drop the previous node's rows (deleteLater, so nothing is
-                // freed under a signal that is still on the stack) before
-                // the new ones are appended.
-                materialPropView->clearPanel(materialPropView->layout());
+                // THE BLADE CLEARS ITSELF, when it has to (ADD-1). This used to
+                // clearPanel() here, unconditionally, before every mesh pick —
+                // which is why showing another cube's material meant destroying
+                // twenty-five rows and a forty-item combo and building them
+                // again. setSceneNode decides: the same shape is a refill, a
+                // different one is the rebuild this line used to force.
 
                 physicsPropView->setSceneNode(sceneNode);
                 physicsPropView->setSceneView(sceneView);

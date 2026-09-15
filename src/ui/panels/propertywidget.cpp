@@ -114,37 +114,51 @@ void PropertyWidget::addFloatProperty(iris::Property *prop)
     fltWidget->index = prop->id;
     fltWidget->setValue(fltProp->getValue().toFloat());
     addRow(fltWidget);
-    properties.append(prop);
+    // THE ROW BINDS TO A SLOT, NOT TO A POINTER (ADD-1, 2026-09-15). Every
+    // handler below used to capture the iris::Property* it was built from,
+    // which is what made a row single-use: showing another material's rows
+    // meant destroying these and building new ones (44 ms of a mesh pick). A
+    // slot is the row's INDEX in this panel's property list, so rebind() can
+    // point the same rows at another material's properties and every handler
+    // follows. It is also the end of a real hazard: a captured Property* whose
+    // material was replaced was a dangling write waiting for a drag.
+    const int slot = takeSlot(prop, fltWidget);
     rowByName.insert(prop->name, fltWidget);
 
-    connect(fltWidget, &HFloatSliderWidget::valueChanged, this, [this, fltProp](float value) {
-        fltProp->value = value;
+    connect(fltWidget, &HFloatSliderWidget::valueChanged, this, [this, slot](float value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(value));
 
         if (listener) {
-            listener->onPropertyChanged(fltProp);
+            listener->onPropertyChanged(p);
         }
 
-        emit onPropertyChanged(fltProp);
+        emit onPropertyChanged(p);
     });
 
-    connect(fltWidget, &HFloatSliderWidget::valueChangeStart, this, [this, fltProp](float value) {
-        fltProp->value = value;
+    connect(fltWidget, &HFloatSliderWidget::valueChangeStart, this, [this, slot](float value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(value));
 
         if (listener) {
-            listener->onPropertyChangeStart(fltProp);
+            listener->onPropertyChangeStart(p);
         }
 
-        emit onPropertyChanged(fltProp);
+        emit onPropertyChanged(p);
     });
 
-    connect(fltWidget, &HFloatSliderWidget::valueChangeEnd, this, [this, fltProp](float value) {
-        fltProp->value = value;
+    connect(fltWidget, &HFloatSliderWidget::valueChangeEnd, this, [this, slot](float value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(value));
 
         if (listener) {
-            listener->onPropertyChangeEnd(fltProp);
+            listener->onPropertyChangeEnd(p);
         }
 
-        emit onPropertyChanged(fltProp);
+        emit onPropertyChanged(p);
     });
 }
 
@@ -171,16 +185,18 @@ void PropertyWidget::addEnumProperty(iris::Property *prop)
     combo->setCurrentIndex(listProp->getValue().toInt());
     progressiveHeight += combo->height() + stretch;
     addRow(combo);
-    properties.append(prop);
+    const int slot = takeSlot(prop, combo);   // see addFloatProperty
     rowByName.insert(prop->name, combo);
 
     connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
-            this, [this, listProp](int idx) {
+            this, [this, slot](int idx) {
+        auto *listProp = static_cast<iris::ListProperty *>(propertyAt(slot));
+        if (!listProp) return;
         if (listProp->getValue().toInt() == idx) return;
         // Start must see the OLD value (it records the undo baseline),
         // End the new one — a combo pick is a complete one-shot gesture.
         if (listener) listener->onPropertyChangeStart(listProp);
-        listProp->value = idx;
+        listProp->setValue(QVariant(idx));
         if (listener) {
             listener->onPropertyChanged(listProp);
             listener->onPropertyChangeEnd(listProp);
@@ -200,39 +216,45 @@ void PropertyWidget::addIntProperty(iris::Property *prop)
     intWidget->index = prop->id;
     intWidget->setValue(float(intProp->getValue().toInt()));
     addRow(intWidget);
-    properties.append(prop);
+    const int slot = takeSlot(prop, intWidget);   // see addFloatProperty
     rowByName.insert(prop->name, intWidget);
 
     // Same wiring as the float rows (this row had none at all - the panel's int
     // properties, e.g. a material's Alpha Mode, silently did nothing).
-    connect(intWidget, &HFloatSliderWidget::valueChanged, this, [this, intProp](float value) {
-        intProp->value = qRound(value);
+    connect(intWidget, &HFloatSliderWidget::valueChanged, this, [this, slot](float value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(qRound(value)));
 
         if (listener) {
-            listener->onPropertyChanged(intProp);
+            listener->onPropertyChanged(p);
         }
 
-        emit onPropertyChanged(intProp);
+        emit onPropertyChanged(p);
     });
 
-    connect(intWidget, &HFloatSliderWidget::valueChangeStart, this, [this, intProp](float value) {
-        intProp->value = qRound(value);
+    connect(intWidget, &HFloatSliderWidget::valueChangeStart, this, [this, slot](float value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(qRound(value)));
 
         if (listener) {
-            listener->onPropertyChangeStart(intProp);
+            listener->onPropertyChangeStart(p);
         }
 
-        emit onPropertyChanged(intProp);
+        emit onPropertyChanged(p);
     });
 
-    connect(intWidget, &HFloatSliderWidget::valueChangeEnd, this, [this, intProp](float value) {
-        intProp->value = qRound(value);
+    connect(intWidget, &HFloatSliderWidget::valueChangeEnd, this, [this, slot](float value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(qRound(value)));
 
         if (listener) {
-            listener->onPropertyChangeEnd(intProp);
+            listener->onPropertyChangeEnd(p);
         }
 
-        emit onPropertyChanged(intProp);
+        emit onPropertyChanged(p);
     });
 }
 
@@ -244,28 +266,30 @@ void PropertyWidget::addColorProperty(iris::Property *prop)
     colorWidget->index = prop->id;
     colorWidget->setColorValue(colorProp->getValue().value<QColor>());
     addRow(colorWidget);
-    properties.append(prop);
+    const int slot = takeSlot(prop, colorWidget);   // see addFloatProperty
     rowByName.insert(prop->name, colorWidget);
 
     connect(colorWidget->getPicker(), &ColorPickerWidget::onColorChanged, this,
-           [this, colorProp](QColor value)
+           [this, slot](QColor value)
     {
-        colorProp->value = value;
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(value));
 
         if (listener) {
-            listener->onPropertyChanged(colorProp);
+            listener->onPropertyChanged(p);
         }
 
-        emit onPropertyChanged(colorProp);
+        emit onPropertyChanged(p);
     });
 
     // The popup session brackets the live changes above into one undo entry
     // (start fires before any change, so the listener records the old colour).
-    connect(colorWidget->getPicker(), &ColorPickerWidget::pickingStarted, this, [this, colorProp]() {
-        if (listener) listener->onPropertyChangeStart(colorProp);
+    connect(colorWidget->getPicker(), &ColorPickerWidget::pickingStarted, this, [this, slot]() {
+        if (auto *p = propertyAt(slot)) if (listener) listener->onPropertyChangeStart(p);
     });
-    connect(colorWidget->getPicker(), &ColorPickerWidget::pickingEnded, this, [this, colorProp]() {
-        if (listener) listener->onPropertyChangeEnd(colorProp);
+    connect(colorWidget->getPicker(), &ColorPickerWidget::pickingEnded, this, [this, slot]() {
+        if (auto *p = propertyAt(slot)) if (listener) listener->onPropertyChangeEnd(p);
     });
 }
 
@@ -277,21 +301,23 @@ void PropertyWidget::addBoolProperty(iris::Property *prop)
     boolWidget->index = prop->id;
     boolWidget->setValue(boolProp->getValue().toBool());
     addRow(boolWidget);
-    properties.append(prop);
+    const int slot = takeSlot(prop, boolWidget);   // see addFloatProperty
     rowByName.insert(prop->name, boolWidget);
 
-    connect(boolWidget, &CheckBoxWidget::valueChanged, this, [this, boolProp](bool value) {
+    connect(boolWidget, &CheckBoxWidget::valueChanged, this, [this, slot](bool value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
         // A checkbox toggle is one discrete gesture - one undo entry.
-        if (listener) listener->onPropertyChangeStart(boolProp);
+        if (listener) listener->onPropertyChangeStart(p);
 
-        boolProp->value = value;
+        p->setValue(QVariant(value));
 
         if (listener) {
-            listener->onPropertyChanged(boolProp);
-            listener->onPropertyChangeEnd(boolProp);
+            listener->onPropertyChanged(p);
+            listener->onPropertyChangeEnd(p);
         }
 
-        emit onPropertyChanged(boolProp);
+        emit onPropertyChanged(p);
     });
 }
 
@@ -306,25 +332,27 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
 
     textureWidget->setTexture(texturePath);
     addRow(textureWidget);
-    properties.append(prop);
+    const int slot = takeSlot(prop, textureWidget);   // see addFloatProperty
     rowByName.insert(prop->name, textureWidget);
 
     connect(textureWidget, &TexturePickerWidget::valueChanged, this,
-           [this, textureProp](QString value)
+           [this, slot](QString value)
     {
+        auto *p = propertyAt(slot);
+        if (!p) return;
         // Picking a texture is a single discrete gesture: bracket it with
         // change start/end so it lands as one undo entry. Start must run
         // BEFORE the write - the listener records the old value from the prop.
-        if (listener) listener->onPropertyChangeStart(textureProp);
+        if (listener) listener->onPropertyChangeStart(p);
 
-        textureProp->value = value;
+        p->setValue(QVariant(value));
 
         if (listener) {
-            listener->onPropertyChanged(textureProp);
-            listener->onPropertyChangeEnd(textureProp);
+            listener->onPropertyChanged(p);
+            listener->onPropertyChangeEnd(p);
         }
 
-        emit onPropertyChanged(textureProp);
+        emit onPropertyChanged(p);
     });
 }
 
@@ -336,16 +364,18 @@ void PropertyWidget::addFileProperty(iris::Property *prop)
     fileWidget->index = prop->id;
     fileWidget->setFilepath(fileProp->getValue().toString());
     addRow(fileWidget);
-    properties.append(prop);
+    const int slot = takeSlot(prop, fileWidget);   // see addFloatProperty
 
-    connect(fileWidget, &FilePickerWidget::onPathChanged, this, [this, fileProp](QString value) {
-        fileProp->value = value;
+    connect(fileWidget, &FilePickerWidget::onPathChanged, this, [this, slot](QString value) {
+        auto *p = propertyAt(slot);
+        if (!p) return;
+        p->setValue(QVariant(value));
 
         if (listener) {
-            listener->onPropertyChanged(fileProp);
+            listener->onPropertyChanged(p);
         }
 
-        emit onPropertyChanged(fileProp);
+        emit onPropertyChanged(p);
     });
 }
 
@@ -355,12 +385,14 @@ void PropertyWidget::addVector2Property(iris::Property *prop)
 	auto widget = addVector2Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y());
 	auto holder = addWidgetHolder(vecProp->displayName, widget);
 	addRow(holder);
-	properties.append(vecProp);
+	const int slot = takeSlot(vecProp, widget);   // see addFloatProperty
 
-	connect(widget, &Widget2D::valueChanged, [=](iris::Vec2 value) {
-		vecProp->value = iris::toQt(value);
-		if (listener) listener->onPropertyChanged(vecProp);
-		emit onPropertyChanged(vecProp);
+	connect(widget, &Widget2D::valueChanged, this, [this, slot](iris::Vec2 value) {
+		auto *p = static_cast<iris::Vec2Property *>(propertyAt(slot));
+		if (!p) return;
+		p->value = iris::toQt(value);
+		if (listener) listener->onPropertyChanged(p);
+		emit onPropertyChanged(p);
 	});
 
 }
@@ -371,12 +403,14 @@ void PropertyWidget::addVector3Property(iris::Property *prop)
 	auto widget = addVector3Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z());
 	auto holder = addWidgetHolder(vecProp->displayName, widget);
 	addRow(holder);
-	properties.append(vecProp);
+	const int slot = takeSlot(vecProp, widget);   // see addFloatProperty
 
-	connect(widget, &Widget3D::valueChanged, [=](iris::Vec3 value) {
-		vecProp->value = iris::toQt(value);
-		if (listener) listener->onPropertyChanged(vecProp);
-		emit onPropertyChanged(vecProp);
+	connect(widget, &Widget3D::valueChanged, this, [this, slot](iris::Vec3 value) {
+		auto *p = static_cast<iris::Vec3Property *>(propertyAt(slot));
+		if (!p) return;
+		p->value = iris::toQt(value);
+		if (listener) listener->onPropertyChanged(p);
+		emit onPropertyChanged(p);
 	});
 
 }
@@ -387,12 +421,14 @@ void PropertyWidget::addVector4Property(iris::Property *prop)
 	auto widget = addVector4Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z(), vecProp->value.w());
 	auto holder = addWidgetHolder(vecProp->displayName, widget);
 	addRow(holder);
-	properties.append(vecProp);
+	const int slot = takeSlot(vecProp, widget);   // see addFloatProperty
 
-	connect(widget, &Widget4D::valueChanged, [=](iris::Vec4 value) {
-		vecProp->value = iris::toQt(value);
-		if (listener) listener->onPropertyChanged(vecProp);
-		emit onPropertyChanged(vecProp);
+	connect(widget, &Widget4D::valueChanged, this, [this, slot](iris::Vec4 value) {
+		auto *p = static_cast<iris::Vec4Property *>(propertyAt(slot));
+		if (!p) return;
+		p->value = iris::toQt(value);
+		if (listener) listener->onPropertyChanged(p);
+		emit onPropertyChanged(p);
 	});
 
 }
@@ -456,9 +492,144 @@ void PropertyWidget::updatePane()
 
 }
 
+/// The row's slot: its index in this panel's property list. Recorded at
+/// creation, used by every handler, and the thing rebind() re-points.
+int PropertyWidget::takeSlot(iris::Property *prop, QWidget *valueRow)
+{
+    const int slot = properties.size();
+    properties.append(prop);
+    valueRows.append(valueRow);
+    return slot;
+}
+
+iris::Property *PropertyWidget::propertyAt(int slot) const
+{
+    if (rebinding) return nullptr;      // a value being PUT INTO a row is not an edit
+    return properties.value(slot, nullptr);
+}
+
+// CAN THESE ROWS SHOW THAT PROPERTY LIST? (ADD-1, 2026-09-15)
+//
+// A material's rows are decided entirely by its property list's SHAPE — the
+// order, the types, the names, the labels, the ranges and an enum's vocabulary.
+// Two materials with the same shape (every primitive in a scene, every default
+// PbrMaterial) need the SAME widgets showing different numbers, and building a
+// second set of them is what cost 44 ms of every mesh pick.
+//
+// The comparison is deliberately total: anything a row's CONSTRUCTION reads is
+// compared, so a match means the rows would have been built identically. A
+// mismatch falls back to the rebuild, which is always correct.
+bool PropertyWidget::canRebind(const QList<iris::Property *> &props) const
+{
+    if (props.size() != properties.size() || props.isEmpty()) return false;
+    for (int i = 0; i < props.size(); ++i) {
+        const iris::Property *a = props.at(i);
+        const iris::Property *b = properties.at(i);
+        if (!a || !b || !valueRows.value(i)) return false;
+        if (a->type != b->type || a->name != b->name || a->displayName != b->displayName)
+            return false;
+        switch (a->type) {
+            case iris::PropertyType::Float: {
+                auto *fa = static_cast<const iris::FloatProperty *>(a);
+                auto *fb = static_cast<const iris::FloatProperty *>(b);
+                if (fa->minValue != fb->minValue || fa->maxValue != fb->maxValue) return false;
+                break;
+            }
+            case iris::PropertyType::Int: {
+                auto *ia = static_cast<const iris::IntProperty *>(a);
+                auto *ib = static_cast<const iris::IntProperty *>(b);
+                if (ia->minValue != ib->minValue || ia->maxValue != ib->maxValue) return false;
+                break;
+            }
+            case iris::PropertyType::List: {
+                // The vocabulary IS the combo's item list (addEnumProperty).
+                if (static_cast<const iris::ListProperty *>(a)->labels !=
+                    static_cast<const iris::ListProperty *>(b)->labels) return false;
+                break;
+            }
+            case iris::PropertyType::File: {
+                if (static_cast<const iris::FileProperty *>(a)->suffix !=
+                    static_cast<const iris::FileProperty *>(b)->suffix) return false;
+                break;
+            }
+            default: break;
+        }
+    }
+    return true;
+}
+
+// THE SAME ROWS, SHOWING SOMETHING ELSE.
+//
+// Nothing is destroyed and nothing is created: the property list is replaced,
+// every row is told its new value, and the cross-row constraints are re-judged.
+// `rebinding` makes the handlers inert while the values go in, so putting a
+// number into a slider is not an edit of the material it came from.
+//
+// THE ROW REGISTRY SEES NOTHING AT ALL, which is the point: the rows are the
+// same objects, still registered, still carrying their keys and their place in
+// the section chain, so a live filter and the expand snapshot survive a pick
+// (PROPERTY_FILTER_SPEC §6.2 — a retired row leaves the registry, and no row is
+// retired here).
+void PropertyWidget::rebind(const QList<iris::Property *> &props)
+{
+    Q_ASSERT(canRebind(props));
+    rebinding = true;
+    properties = props;
+    rowByName.clear();
+    for (int i = 0; i < props.size(); ++i) {
+        iris::Property *prop = props.at(i);
+        QWidget *row = valueRows.at(i);
+        rowByName.insert(prop->name, row);
+        switch (prop->type) {
+            case iris::PropertyType::Float:
+                static_cast<HFloatSliderWidget *>(row)->setValue(prop->getValue().toFloat());
+                break;
+            case iris::PropertyType::Int:
+                static_cast<HFloatSliderWidget *>(row)->setValue(float(prop->getValue().toInt()));
+                break;
+            case iris::PropertyType::Color:
+                static_cast<ColorValueWidget *>(row)->setColorValue(prop->getValue().value<QColor>());
+                break;
+            case iris::PropertyType::Bool:
+                static_cast<CheckBoxWidget *>(row)->setValue(prop->getValue().toBool());
+                break;
+            case iris::PropertyType::Texture:
+                static_cast<TexturePickerWidget *>(row)->setTexture(prop->getValue().toString());
+                break;
+            case iris::PropertyType::File:
+                static_cast<FilePickerWidget *>(row)->setFilepath(prop->getValue().toString());
+                break;
+            case iris::PropertyType::List:
+                static_cast<ComboBoxWidget *>(row)->setCurrentIndex(prop->getValue().toInt());
+                break;
+            case iris::PropertyType::Vec2: {
+                const QVector2D v = static_cast<iris::Vec2Property *>(prop)->value;
+                static_cast<Widget2D *>(row)->setValues(v.x(), v.y());
+                break;
+            }
+            case iris::PropertyType::Vec3: {
+                const QVector3D v = static_cast<iris::Vec3Property *>(prop)->value;
+                static_cast<Widget3D *>(row)->setValues(v.x(), v.y(), v.z());
+                break;
+            }
+            case iris::PropertyType::Vec4: {
+                const QVector4D v = static_cast<iris::Vec4Property *>(prop)->value;
+                static_cast<Widget4D *>(row)->setValues(v.x(), v.y(), v.z(), v.w());
+                break;
+            }
+            case iris::PropertyType::None:
+            default: break;
+        }
+    }
+    rebinding = false;
+    applyRowConstraints();
+}
+
 void PropertyWidget::setProperties(QList<iris::Property*> properties)
 {
     rowByName.clear();
+    this->properties.clear();
+    valueRows.clear();
     for (auto prop : properties) {
         // THE ROW'S KEY IS THE PROPERTY'S NAME (PROPERTY_FILTER_SPEC §3.2).
         // Set here rather than in ten adders: addRow() is the one place the row
@@ -513,7 +684,9 @@ void PropertyWidget::setProperties(QList<iris::Property*> properties)
 
     updatePane();
 
-    this->properties = properties;
+    // `this->properties` was filled slot by slot as the rows were built
+    // (takeSlot) — it is the same list, in the same order.
+    Q_ASSERT(this->properties.size() == properties.size());
     applyRowConstraints();
 }
 
