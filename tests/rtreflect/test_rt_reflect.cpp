@@ -40,10 +40,9 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cmath>
-#include <algorithm>
 #include <cstdio>
-#include <algorithm>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -323,10 +322,13 @@ int main()
         render(e, 8);
     }
 
-    // ---- 6b: SCREEN FIRST, and it is a BYTE-IDENTICAL claim -----------------
-    // A pixel the march answers with FULL confidence must come out of the frame
-    // unchanged by the ray tier — that is what "the screen keeps every hit it is
-    // confident about" means, and a tolerance would not say it.
+    // ---- 6b: SCREEN FIRST -----------------------------------------------------
+    // Where the march answers a pixel OUTRIGHT the ray tier must leave it
+    // alone. The claim is stated as a bound (a mean under 4/255 over the region
+    // the march owns) rather than as byte-equality, because the region is
+    // selected by COLOUR and a colour test cannot prove bit-equality of the
+    // pixels it selects — what the bound is worth is the number it measures,
+    // and that number is 0.00 (third reader, item 8).
     //
     // THE FIXTURE IS THE WHOLE ARGUMENT. The mirror wall and the cube behind the
     // camera both go away; what is left is a glossy floor and a MATTE emissive
@@ -474,6 +476,82 @@ int main()
         render(e, 16);
     }
 
+    // ---- 6d: A GRAZING FLOOR KEEPS ITS KERNEL -------------------------------
+    // (Third reader, item 4.) Every other fixture here is FACE-ON, and a
+    // face-on surface hides the one way a depth-guided filter fails: on a floor
+    // seen from eye height the depth changes half a per cent to one per cent
+    // per pixel, so a filter that rejects taps by a flat relative window admits
+    // only the row it is standing on and quietly becomes a 1-D horizontal blur
+    // — exactly where a glossy floor needs it most. The gradient-predicted
+    // (SVGF) form is flat on any slope, and this is how that is measured: the
+    // filtered result must differ from what a horizontal-only kernel produces.
+    //
+    // A 1-D blur is emulated on the CPU from the SAME frame rather than from a
+    // second shader: if the shader's vertical taps contributed, blurring the
+    // shader's own output horizontally cannot reproduce it.
+    {
+        s->setNodeVisible(wall, false);
+        const NodeId gfloor = s->createNode();
+        PbrParams glossy = wallParams;
+        glossy.roughness = 0.30f;                 // inside the gate, radius saturated
+        const MaterialId gm = s->createPbrMaterial(glossy);
+        const MeshId gmesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(gfloor && gm && gmesh && s->attachMesh(gfloor, gmesh, gm),
+              "the grazing glossy floor exists");
+        enginetest::setNodeScale(s, gfloor, Vec3(24.0f, 0.3f, 40.0f));
+        enginetest::setNodePosition(s, gfloor, Vec3(0.0f, -0.15f, 4.0f));
+        // A BAR ACROSS THE VIEW, so the floor's reflection carries a HORIZONTAL
+        // edge. Without one the reflection is a smooth gradient that any kernel
+        // reproduces and the comparison below would be vacuous: a horizontal-
+        // only blur leaves a horizontal edge exactly where it was, and a kernel
+        // with vertical reach softens it. The edge IS the measurement.
+        const NodeId bar = s->createNode();
+        PbrParams barParams;
+        barParams.albedo = Colour(0.05f, 0.05f, 0.05f);
+        barParams.emissive = Colour(5.0f, 0.0f, 0.0f);
+        barParams.roughness = 0.9f;
+        const MaterialId bm = s->createPbrMaterial(barParams);
+        CHECK(bar && bm && s->attachMesh(bar, gmesh, bm), "the emissive bar exists");
+        enginetest::setNodeScale(s, bar, Vec3(22.0f, 0.8f, 0.8f));
+        enginetest::setNodePosition(s, bar, Vec3(0.0f, 3.0f, 11.0f));
+        // Eye height, looking down the floor: the near edge is a metre or two
+        // away and the far edge fifteen-plus, so the depth gradient across the
+        // frame is large and the FACE-ON assumption is gone.
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.5f, -8.0f), Vec3(0.0f, 0.2f, 7.0f));
+        s->refreshGlobalIllumination();
+        render(e, 64);
+        Image g;
+        view->readPixels(g);
+        // A HORIZONTAL-ONLY blur of the shader's own output, same radius.
+        const int r = 3;
+        double sumDiff = 0.0;
+        unsigned counted = 0, worst = 0;
+        for (unsigned y = g.height / 2; y < g.height; ++y)
+            for (unsigned x = unsigned(r); x + unsigned(r) < g.width; ++x) {
+                float acc = 0.0f;
+                int n = 0;
+                for (int dx = -r; dx <= r; ++dx) { acc += g.at(x + unsigned(dx), y).r; ++n; }
+                const float oneD = acc / float(n);
+                const float d = std::abs(g.at(x, y).r - oneD) * 255.0f;
+                sumDiff += double(d);
+                worst = std::max(worst, unsigned(d + 0.5f));
+                ++counted;
+            }
+        const float meanDiff = counted ? float(sumDiff / double(counted)) : 0.0f;
+        std::printf("    grazing floor: the shader's output vs a horizontal-only blur of it — "
+                    "mean %.2f/255, worst %u/255 over %u px\n", meanDiff, worst, counted);
+        CHECK_MSG(meanDiff > 0.20f,
+                  "A GRAZING FLOOR KEEPS ITS KERNEL: the filter's vertical taps contribute "
+                  "(mean %.2f/255 against a horizontal-only blur)",
+                  meanDiff);
+        s->setNodeVisible(gfloor, false);
+        s->setNodeVisible(bar, false);
+        s->setNodeVisible(wall, true);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
+        s->refreshGlobalIllumination();
+        render(e, 24);
+    }
+
     // ---- 7: THE FEATHER — a roughness gradient has no step in it ------------
     // (Owner, ledger §426.) The wall is replaced by a row of panels whose
     // roughness climbs THROUGH the cutoff, which is a roughness gradient made
@@ -490,7 +568,14 @@ int main()
         // feathering could be seen through it. A source that fills the
         // reflected hemisphere makes the profile a function of ROUGHNESS
         // alone, which is the variable the feather is about.
-        enginetest::setNodeScale(s, cube, Vec3(60.0f, 14.0f, 1.0f));
+        // INSIDE THE VOXEL VOLUME (third reader, item 5). The first form of
+        // this case used a 60 m emitter against a +-14 m volume, so every
+        // grazing ray toward its overhang found geometry the voxels could not
+        // shade — and before round D that reset the temporal mean, which is
+        // what made panel 7 move by 0.23 between two runs of identical code.
+        // 26 m spans the frame at this distance and stays two metres inside the
+        // volume on every axis.
+        enginetest::setNodeScale(s, cube, Vec3(26.0f, 12.0f, 1.0f));
         s->setNodeVisible(wall, false);
         const int kPanels = 9;
         // THE BAND STRADDLES THE CUTOFF IN PERCEPTUAL ROUGHNESS, which is the
@@ -509,23 +594,48 @@ int main()
             const MaterialId m = s->createPbrMaterial(p);
             const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
             if (!n || !m || !mesh || !s->attachMesh(n, mesh, m)) { ++failures; break; }
-            enginetest::setNodeScale(s, n, Vec3(14.0f / float(kPanels), 9.0f, 0.3f));
+            enginetest::setNodeScale(s, n, Vec3(6.0f / float(kPanels), 9.0f, 0.3f));
             enginetest::setNodePosition(
-                s, n,
-                Vec3(-7.0f + 14.0f * (float(i) + 0.5f) / float(kPanels), 2.0f, 5.0f));
+                s, n, Vec3(-3.0f + 6.0f * (float(i) + 0.5f) / float(kPanels), 2.0f, 5.0f));
             panels.push_back(n);
         }
         s->refreshGlobalIllumination();
         render(e, 48);
         Image img2;
         if (!view->readPixels(img2)) { std::printf("FAIL: readPixels (gradient)\n"); ++failures; }
+        // WHAT THE TRACE ACTUALLY CONTRIBUTES PER PANEL, and it is measured by
+        // moving the CUTOFF, not by switching the tier off. Switching the tier
+        // off rebuilds the whole post chain (`rayReflect` is a graph term), and
+        // a rebuild resets the HDR adaptation and the SSR colour history — so
+        // the difference between the two frames is dominated by the rebuild and
+        // says nothing about tracing. It measured a rise where the trace was
+        // OFF, which is how the first form of this was caught.
+        //
+        // `rayReflectRoughness` is a UNIFORM. Dropping it to 0.05 closes the
+        // gate on every panel in the band and changes nothing else in the
+        // frame, so the difference IS the traced share.
+        PostFxDesc noTrace = fx;
+        noTrace.rayReflectRoughness = 0.05f;
+        view->setPostFx(noTrace);
+        render(e, 48);
+        Image img2NoRays;
+        view->readPixels(img2NoRays);
+        view->setPostFx(fx);
+        render(e, 48);
         // WHERE EACH PANEL ACTUALLY LANDS ON THE SCREEN, derived rather than
         // assumed (second reader, H2). The row spans x in [-7, +7] at z = +5,
         // 11 m in front of a camera at z = -6 with a 45-degree vertical field
         // of view and a 1:1 aspect, so the frame shows +- 11 * tan(22.5) =
         // +-4.56 m of it: dividing the IMAGE into nine equal columns would put
         // the gate's column three panels away from where it is.
-        const float kHalfWorld = 7.0f;                  // the row's own half-extent
+        // THE ROW IS NARROW ON PURPOSE (round D). A +-7 m row of panels at 11 m
+        // fans its OFF-AXIS reflections out past +-12 m, and the emitter is
+        // +-13 — so the sharpest panels, which sit at the ends of the row,
+        // reflected past its edge and read as untraced. That is a fixture
+        // measuring the emitter's extent, not the gate. +-3 m keeps every
+        // panel's reflected cone inside the emitter AND puts all nine on
+        // screen.
+        const float kHalfWorld = 3.0f;                  // the row's own half-extent
         const float kDist = 11.0f;                      // camera z = -6 to the panels at +5
         const float kHalfView = kDist * std::tan(0.5f * 45.0f * 3.14159265f / 180.0f);
         const auto columnOf = [&](float worldX) {
@@ -533,6 +643,7 @@ int main()
             return (ndc * 0.5f + 0.5f) * float(img2.width);
         };
         std::vector<float> profile(size_t(kPanels), 0.0f);
+        std::vector<float> traced(size_t(kPanels), 0.0f);   // |rays on - rays off|, per panel
         std::vector<int> visible;
         for (int i = 0; i < kPanels; ++i) {
             const float wx0 = -kHalfWorld + 2.0f * kHalfWorld * float(i) / float(kPanels);
@@ -553,6 +664,15 @@ int main()
                     ++n;
                 }
             profile[size_t(i)] = n ? float(sum / double(n)) : 0.0f;
+            double tracedSum = 0.0;
+            unsigned tn = 0;
+            for (unsigned y = img2.height / 3; y < img2.height * 2 / 3; ++y)
+                for (unsigned x = x0; x < x1 && x < img2.width; ++x) {
+                    const Colour &a = img2.at(x, y), &b = img2NoRays.at(x, y);
+                    tracedSum += std::abs(double(a.r) - double(b.r));
+                    ++tn;
+                }
+            traced[size_t(i)] = tn ? float(tracedSum / double(tn)) : 0.0f;
         }
         std::printf("    perceptual roughness %.2f..%.2f across %d panels (cutoff %.2f), "
                     "red profile by panel:\n     ",
@@ -560,17 +680,27 @@ int main()
         for (int i = 0; i < kPanels; ++i) {
             const float r = lo + (hi - lo) * float(i) / float(kPanels - 1);
             const bool seen = std::find(visible.begin(), visible.end(), i) != visible.end();
-            std::printf(" [%.2f]%s%.4f", r, seen ? "=" : "~", profile[size_t(i)]);
+            std::printf(" [%.2f]%s%.4f/t%.3f", r, seen ? "=" : "~", profile[size_t(i)],
+                        traced[size_t(i)]);
         }
-        std::printf("\n    (= measured on screen, ~ off frame)\n");
+        std::printf("\n    (= measured on screen, ~ off frame; t = the traced share, "
+                    "|rays on - rays off| mean over the panel)\n");
         CHECK_MSG(visible.size() >= 4u, "at least four panels are on screen (%zu)",
                   visible.size());
         // Steps between ADJACENT VISIBLE panels only.
+        // THE FEATHER IS MEASURED ON THE TRACED SHARE, not on the picture.
+        // The picture's own profile rises steeply through this band for a
+        // reason that has nothing to do with the gate — the VCT specular cone
+        // widens with roughness and finds far more of a large emitter — and no
+        // feather could be seen through that. What the feather shapes is how
+        // much of the answer the RAY supplies, so that is what is measured; the
+        // picture's profile is printed beside it because a reader needs to see
+        // both.
         std::vector<float> steps;
         std::vector<int> stepAt;
         for (size_t k = 1; k < visible.size(); ++k) {
             if (visible[k] != visible[k - 1] + 1) continue;
-            steps.push_back(std::abs(profile[size_t(visible[k])] - profile[size_t(visible[k - 1])]));
+            steps.push_back(std::abs(traced[size_t(visible[k])] - traced[size_t(visible[k - 1])]));
             stepAt.push_back(visible[k - 1]);
         }
         std::vector<float> sorted = steps;
@@ -593,17 +723,95 @@ int main()
         }
         CHECK_MSG(gatePanel >= 0, "the cutoff falls between two panels that are both on screen "
                                   "(panel %d)", gatePanel);
-        std::printf("    steps between visible panels: median %.4f, worst %.4f, "
-                    "AT THE GATE %.4f (panels %d|%d)\n",
+        std::printf("    steps in the TRACED SHARE between visible panels: median %.4f, "
+                    "worst %.4f, AT THE GATE %.4f (panels %d|%d)\n",
                     median, worstStep, gateStep, gatePanel, gatePanel + 1);
+        // WHAT THIS PROFILE IS AND IS NOT. It is a reading of the FIXTURE as
+        // much as of the renderer: the picture's red climbs through the band
+        // because the VCT specular cone widens with roughness and finds far
+        // more of a large emitter, and the traced share climbs with it because
+        // an off-axis sharp panel reflects a narrow pencil that mostly misses
+        // the emitter while a rough one gathers it. Nine panels at nine
+        // roughnesses are nine different geometries, and no feather can be seen
+        // through that. It is printed because it is worth seeing; it is NOT
+        // asserted as the feather.
+        //
+        // THE FEATHER IS MEASURED BELOW instead, by sweeping the CUTOFF across
+        // ONE panel: the same geometry, the same lobe, the same lighting at
+        // every sample, so the only thing that changes is the gate — and what
+        // the gate does is then the whole of the measurement.
         CHECK_MSG(gateStep <= worstStep + 1e-6f,
-                  "THE FEATHER: the gate's own column is not the largest step in the profile "
-                  "(%.4f against a worst of %.4f)",
-                  gateStep, worstStep);
-        CHECK_MSG(gateStep < std::max(2.5f * median, 0.01f),
-                  "...and it is inside 2.5x the median step (%.4f vs %.4f)", gateStep,
-                  2.5f * median);
+                  "the gate's column is not the largest step in the traced share "
+                  "(%.4f against a worst of %.4f, median %.4f)",
+                  gateStep, worstStep, median);
         for (NodeId n : panels) s->setNodeVisible(n, false);
+
+        // ---- THE FEATHER, with the geometry held still ----------------------
+        const NodeId one = s->createNode();
+        PbrParams oneParams = wallParams;
+        oneParams.roughness = 0.35f;
+        const MaterialId oneMat = s->createPbrMaterial(oneParams);
+        const MeshId oneMesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(one && oneMat && oneMesh && s->attachMesh(one, oneMesh, oneMat),
+              "the single-panel feather fixture exists");
+        enginetest::setNodeScale(s, one, Vec3(12.0f, 9.0f, 0.3f));
+        enginetest::setNodePosition(s, one, Vec3(0.0f, 2.0f, 5.0f));
+        s->refreshGlobalIllumination();
+        // Cutoffs either side of the panel's own roughness. The gate's ramp is
+        // `1 - smoothstep(cut - 0.1, cut + 0.1, 0.35)`, so the traced share must
+        // go from 0 (cut = 0.20, the panel is past the far edge) to 1
+        // (cut = 0.50, it is inside the near edge) and be MONOTONE and SMOOTH
+        // in between — a step anywhere in it IS the seam the feather exists to
+        // remove.
+        const float cuts[7] = { 0.20f, 0.25f, 0.30f, 0.35f, 0.40f, 0.45f, 0.50f };
+        float sweep[7] = { 0.0f };
+        Image ref;
+        {
+            PostFxDesc closed = fx;
+            closed.rayReflectRoughness = 0.05f;      // nothing traced at all
+            view->setPostFx(closed);
+            render(e, 48);
+            view->readPixels(ref);
+        }
+        for (int k = 0; k < 7; ++k) {
+            PostFxDesc atCut = fx;
+            atCut.rayReflectRoughness = cuts[k];
+            view->setPostFx(atCut);
+            render(e, 48);
+            Image img3;
+            view->readPixels(img3);
+            double sum = 0.0;
+            unsigned n = 0;
+            for (unsigned y = img3.height / 3; y < img3.height * 2 / 3; ++y)
+                for (unsigned x = img3.width / 3; x < img3.width * 2 / 3; ++x) {
+                    sum += std::abs(double(img3.at(x, y).r) - double(ref.at(x, y).r));
+                    ++n;
+                }
+            sweep[k] = n ? float(sum / double(n)) : 0.0f;
+        }
+        view->setPostFx(fx);
+        std::printf("    ONE panel at roughness 0.35, cutoff swept 0.20..0.50 — traced share:");
+        for (int k = 0; k < 7; ++k) std::printf(" %.3f", sweep[k]);
+        std::printf("\n");
+        bool monotone = true;
+        float biggest = 0.0f, smallestRise = 1.0f;
+        for (int k = 1; k < 7; ++k) {
+            const float d = sweep[k] - sweep[k - 1];
+            if (d < -0.02f) monotone = false;
+            biggest = std::max(biggest, std::abs(d));
+            if (sweep[6] > 0.02f) smallestRise = std::min(smallestRise, std::abs(d));
+        }
+        CHECK_MSG(sweep[0] < 0.02f && sweep[6] > 0.05f,
+                  "the sweep really crosses the gate (%.3f closed -> %.3f open)", sweep[0],
+                  sweep[6]);
+        CHECK(monotone, "THE FEATHER is MONOTONE: opening the cutoff never takes the ray away");
+        // A STEP would be a single sample carrying most of the rise. Six
+        // intervals over the ramp: no one of them may carry more than half.
+        CHECK_MSG(biggest < 0.5f * sweep[6],
+                  "THE FEATHER IS SMOOTH: the largest single step across the ramp is %.3f of a "
+                  "total rise of %.3f — no seam",
+                  biggest, sweep[6]);
+        s->setNodeVisible(one, false);
         enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
         s->setNodeVisible(wall, true);
         s->refreshGlobalIllumination();
@@ -702,23 +910,34 @@ static int costMain(Engine *e, const char *, const char *)
         // the value settles once the pipeline is full. The best of the last
         // readings is taken because a single frame can be charged for a shader
         // compile or a voxel rebuild that has nothing to do with the trace.
-        float best = -1.0f, last = -1.0f;
-        int seen = 0;
+        // THE BAR IS ON THE MEDIAN OF THE LAST THIRTY READINGS, not on the
+        // minimum of all of them (third reader, item 7). A minimum over ninety
+        // frames is the luckiest frame the GPU had — a budget is not kept with
+        // the best case — while the last thirty are the steady state after the
+        // shader compiles and the voxel build have drained out. The minimum is
+        // still printed, because the spread between the two is itself the
+        // reading that says whether the number is stable.
+        std::vector<float> readings;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
             const RayQueryStatus rq = s->rayQueryStatus();
-            if (rq.reflectMs >= 0.0f) {
-                last = rq.reflectMs;
-                ++seen;
-                if (best < 0.0f || last < best) best = last;
-            }
+            if (rq.reflectMs >= 0.0f) readings.push_back(rq.reflectMs);
         }
-        std::printf("    %-40s best %.3f ms, last %.3f ms over %d readings (bar %.2f)\n", what,
-                    best, last, seen, bar);
+        const int seen = int(readings.size());
+        float best = -1.0f, median = -1.0f;
+        if (!readings.empty()) {
+            best = *std::min_element(readings.begin(), readings.end());
+            std::vector<float> tail(readings.end() - std::min<size_t>(30u, readings.size()),
+                                    readings.end());
+            std::sort(tail.begin(), tail.end());
+            median = tail[tail.size() / 2];
+        }
+        std::printf("    %-40s median(last 30) %.3f ms, min %.3f ms over %d readings "
+                    "(bar %.2f)\n", what, median, best, seen, bar);
         CHECK_MSG(seen > 0, "%s: the timestamp pair was read back at all", what);
-        CHECK_MSG(best >= 0.0f && best <= bar, "%s: %.3f ms against a bar of %.2f ms", what, best,
-                  bar);
-        return best;
+        CHECK_MSG(median >= 0.0f && median <= bar, "%s: %.3f ms (median of the last 30) against "
+                  "a bar of %.2f ms", what, median, bar);
+        return median;
     };
 
     measureMs(2, "1080p FULL-res, mirror-heavy", 0.8f);
