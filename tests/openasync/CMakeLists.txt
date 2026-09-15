@@ -5,7 +5,8 @@
 # probe records the worst gap between its own ticks, and asserts:
 #   * the open completes and really loaded the world,
 #   * the app answered requests while it was in flight,
-#   * no UI-thread gap beyond the budget (500 ms),
+#   * no UI-thread gap beyond the budget (500 ms, or twice what the app's own
+#     frame loop costs on this box right now — see kControlFactor in the suite),
 #   * the synchronous project.open still opens the same world unchanged,
 #   * quitting with an open in flight terminates the process cleanly.
 find_package(Qt6 REQUIRED COMPONENTS Core Network)

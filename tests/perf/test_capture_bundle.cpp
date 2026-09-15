@@ -50,7 +50,7 @@ For more information see the LICENSE file
 // This phase spawns the real binary over MCP, starts a long capture, and quits
 // through app.quit() — the ordinary close — then reads the bundle the same way
 // phase 1 does.
-#include "mcpharness.h"
+#include "../support/mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -490,6 +490,10 @@ int main(int argc, char **argv)
             McpClient mcp;
             mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
             mcp.token = token;
+            mcp.clientName = QStringLiteral("capture-bundle-test");
+            // A 900 s suite that boots the binary three times: a request may wait on a
+            // cold-cache engine start, so the per-request budget is raised.
+            mcp.transferTimeoutMs = 240000;
             mcp.initialize();
 
             mcp.runScript(QStringLiteral("project.create('CaptureQuit')"));
@@ -506,7 +510,7 @@ int main(int argc, char **argv)
                       .value("result").toObject().value("recording").toBool(),
                   "phase 2: ...and still recording when the window closes");
 
-            mcp.runScript(QStringLiteral("app.quit()"));
+            mcp.quit();
             const bool exited = app2.waitForFinished(60000);
             log += app2.readAll();
             CHECK(exited, "phase 2: the app exited through the normal close path");
@@ -614,6 +618,8 @@ int main(int argc, char **argv)
             McpClient mcp3;
             mcp3.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port3));
             mcp3.token = token3;
+            mcp3.clientName = QStringLiteral("capture-bundle-test");
+            mcp3.transferTimeoutMs = 240000;
             mcp3.initialize();
             const QString root = mcp3.runScript(QStringLiteral("perf.status()"))
                                      .value("result").toObject().value("root").toString();
@@ -623,7 +629,7 @@ int main(int argc, char **argv)
             CHECK(QDir::cleanPath(root) == expected,
                   qPrintable(QStringLiteral("the default capture root follows --data-root "
                                             "(%1)").arg(root)));
-            mcp3.runScript(QStringLiteral("app.quit()"));
+            mcp3.quit();
             if (!app3.waitForFinished(60000)) { app3.kill(); app3.waitForFinished(5000); }
         } else {
             CHECK(false, "the second app booted for the capture-root check");

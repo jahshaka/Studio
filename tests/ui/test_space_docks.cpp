@@ -36,7 +36,7 @@ For more information see the LICENSE file
 // between the space switch and the measurement — a --script run holds the loop
 // for its whole run and cannot see them. And rule 2 needs a real
 // MainWindow::closeEvent, which only a real quit produces.
-#include "../shutdown/mcpharness.h"
+#include "../support/mcpharness.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -166,6 +166,11 @@ int main(int argc, char **argv)
         McpClient mcp;
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
         mcp.token = token;
+        mcp.clientName = QStringLiteral("space-docks-test");
+        // app.space() brings up a second View — the request that outlived the old
+        // 30 s default under four Vulkan instances (ledger 404). A 600 s suite can
+        // afford to wait far longer than the harness default before it gives up.
+        mcp.transferTimeoutMs = 240000;
         mcp.initialize();
 
         const QJsonObject created = mcp.runScript(QStringLiteral("project.create('SpaceDocks')"));
@@ -311,7 +316,7 @@ int main(int argc, char **argv)
         // ---- quit FROM THE PLAYER: the exit that wrote "no panels" ---------
         mcp.runScript(QStringLiteral("app.space('player')"));
         settle(mcp);
-        mcp.runScript(QStringLiteral("app.quit()"));
+        mcp.quit();
         const bool exited = jahshaka.waitForFinished(60000);
         if (!exited) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
         CHECK(exited, "run 1: the app quit from the player space (closeEvent saved the layout)");
@@ -330,6 +335,8 @@ int main(int argc, char **argv)
         McpClient mcp;
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
         mcp.token = token;
+        mcp.clientName = QStringLiteral("space-docks-test");
+        mcp.transferTimeoutMs = 240000;
         mcp.initialize();
 
         // THE BOOT STATE, BEFORE ANY SPACE SWITCH (round-2 review). The
@@ -366,7 +373,7 @@ int main(int argc, char **argv)
                   "the restart: all three tabs are in the bar");
         }
 
-        mcp.runScript(QStringLiteral("app.quit()"));
+        mcp.quit();
         if (!jahshaka.waitForFinished(60000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
     }
 

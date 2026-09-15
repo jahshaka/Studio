@@ -111,12 +111,11 @@ add_executable(test_capture_bundle test_capture_bundle.cpp)
 set_target_properties(test_capture_bundle PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# Qt6::Network and the shutdown suites' MCP harness: phase 2 drives a REAL
-# window close (app.quit over MCP) with a capture running, which is the path
-# --script can never take.
+# Qt6::Network and the shared MCP harness (tests/support/mcpharness.h, included
+# by path): phase 2 drives a REAL window close (app.quit over MCP) with a
+# capture running, which is the path --script can never take.
 find_package(Qt6 REQUIRED COMPONENTS Network)
 target_link_libraries(test_capture_bundle PRIVATE Qt6::Core Qt6::Network)
-target_include_directories(test_capture_bundle PRIVATE ${CMAKE_SOURCE_DIR}/tests/shutdown)
 target_compile_definitions(test_capture_bundle PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
     JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"

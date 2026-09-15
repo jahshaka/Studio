@@ -23,7 +23,7 @@
 //
 // Why the real binary over MCP: the tour needs pages that only exist in a
 // shown window with a turning event loop (the ui.column_law harness).
-#include "../shutdown/mcpharness.h"
+#include "../support/mcpharness.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -116,13 +116,14 @@ bool bootApp(QProcess &jahshaka, McpClient &mcp)
     if (!spawn(jahshaka, port, &token, &log) || token.isEmpty()) return false;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("theme-sheets-test");
     mcp.initialize();
     return true;
 }
 
 void quitApp(QProcess &jahshaka, McpClient &mcp)
 {
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
     if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
 }
 

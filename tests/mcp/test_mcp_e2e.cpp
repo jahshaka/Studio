@@ -79,15 +79,30 @@ static HttpResult post(QNetworkAccessManager &net, const QUrl &url,
     if (!token.isEmpty())
         request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
 
+    // The budget, spelled out. This suite keeps its own client (it asserts on
+    // HTTP status codes and auth failures, which the shared harness hides), so
+    // it carries the same explicit timeout tests/support/mcpharness.h does and
+    // for the same reason: Qt >= 6.7 cancels a request after 30 s BY DEFAULT,
+    // which used to be an empty body with no message (ledger 404). 90 s is far
+    // above any request here and far below this suite's own 240 s ctest budget.
+    // The event-loop guard sits ABOVE the transfer timeout so the network layer
+    // is what gives up, with a reason.
+    request.setTransferTimeout(90000);
     QNetworkReply *reply = net.post(request, QJsonDocument(message).toJson(QJsonDocument::Compact));
     QEventLoop loop;
-    QTimer::singleShot(30000, &loop, &QEventLoop::quit);
+    QTimer::singleShot(95000, &loop, &QEventLoop::quit);
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     loop.exec();
 
     HttpResult result;
     result.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     result.body = reply->readAll();
+    // A 202 with no body is a notification being accepted; anything else that
+    // comes back empty says why, instead of failing a check with no message.
+    if (result.body.isEmpty() && result.status != 202 && result.status != 204)
+        printf("info: empty reply (HTTP %d, %s) to %s\n", result.status,
+               qUtf8Printable(reply->errorString()),
+               qUtf8Printable(message.value("method").toString()));
     reply->deleteLater();
     return result;
 }
