@@ -200,15 +200,19 @@ int main(int argc, char **argv)
                 state.value("result").toString() == QLatin1String("idle")) { done = true; break; }
             QThread::msleep(50);
         }
+        // The open's duration is read BEFORE the stats round trip: read after
+        // it, a 229 ms open could show > 250 ms elapsed with 0 ticks (the tick
+        // fires while the stats are answered) and fail both halves.
+        const double elapsedMs = double(openTimer.elapsed());
         const QJsonObject stats = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
                                       .value("result").toObject();
         std::printf("info: [%s] open finished=%d after %lld ms, %d polls; "
                     "heartbeat ticks=%d maxGapMs=%.1f\n",
-                    label, int(done), static_cast<long long>(openTimer.elapsed()), polls,
+                    label, int(done), static_cast<long long>(elapsedMs), polls,
                     stats.value("ticks").toInt(), stats.value("maxGapMs").toDouble());
         struct R { bool started, done; int polls, ticks; double maxGap; double elapsedMs; };
         return R{ started, done, polls, stats.value("ticks").toInt(),
-                  stats.value("maxGapMs").toDouble(), double(openTimer.elapsed()) };
+                  stats.value("maxGapMs").toDouble(), elapsedMs };
     };
 
     const auto cold = openAsyncAndWait("cold");
