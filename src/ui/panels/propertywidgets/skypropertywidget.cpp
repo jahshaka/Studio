@@ -463,7 +463,7 @@ void SkyPropertyWidget::addSunReadoutRow()
 	sunReadout->setToolTip(QStringLiteral(
 		"The sky's sun is the scene's SUN — its primary directional light (the lowest Forward "
 		"Shading Priority; the World panel's Sun row says which one and lets you pin another). "
-		"Rotate that light and this sky's sun, its haze and the sun disc all follow. A scene with "
+		"Rotate that light and this sky's sun, its tint (the air's transmittance at that elevation) and the sun disc all follow. A scene with "
 		"no directional light has no sun, and the analytic sky bakes its own night."));
 }
 

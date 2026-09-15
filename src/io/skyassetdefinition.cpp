@@ -59,11 +59,15 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
         // rather than on zero (VISUAL_PARITY item 1). The sun keys are GONE
         // (SKY_LIGHT_SPEC §3): a preset's sun is the scene's sun light.
         const iris::SkyRealistic d = iris::SkyRealistic::defaults();
-        iris::SkyRealistic r;
+        iris::SkyRealistic r = d;   // EVERY field starts at its working value —
+                                    // a key this reader forgets is a default,
+                                    // never an uninitialised float (SKY-DENSITY-1's
+                                    // second reader found sunHaze indeterminate here)
         r.density   = float(skyData.value("density").toDouble(d.density));
         r.diffusion = float(skyData.value("diffusion").toDouble(d.diffusion));
         r.horizon   = float(skyData.value("horizon").toDouble(d.horizon));
         r.power     = float(skyData.value("power").toDouble(d.power));
+        r.sunHaze   = float(skyData.value("sunHaze").toDouble(d.sunHaze));
         const QJsonObject skyColObj = skyData.value("skyColour").toObject();
         r.skyColour = skyColObj.isEmpty() ? d.skyColour : AssetIOBase::readColor(skyColObj);
         scene->skyRealistic = r;

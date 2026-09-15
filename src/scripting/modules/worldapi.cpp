@@ -351,7 +351,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "light. Given null, \"\" or \"auto\" it drops the pin and the priority order decides "
           "again. One undo step either way. world.sun() is the same answer with its reasoning and "
           "its secondaries attached. THE SKY FOLLOWS THIS LIGHT: the realistic sky's sun position, "
-          "its haze and the sun disc are all taken from wherever it points — rotate the light "
+          "its tint (the air's transmittance at that elevation) and the sun disc are all taken from wherever it points — rotate the light "
           "(node.transform) and the sky moves with it.",
           Needs::Document },
         { "sun", "world.sun() -> {light, name, explicit, reason, priority, castsShadows, direction, secondaries, nextPriority}",
@@ -1754,7 +1754,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         // The SUN's air, not the sky's (SKY-DENSITY-1). Held at or above a
         // purely molecular atmosphere, where the aerosol term is zero: below
         // that it would amplify the beam instead of absorbing it.
-        r.sunHaze   = qMax(1.0f, take("sunHaze", r.sunHaze));
+        r.sunHaze   = qBound(1.0f, take("sunHaze", r.sunHaze), 10.0f);   // the row's range; above 10 every non-zenith sun is black
         if (params.contains("skyColour") || params.contains("skyColor")) {
             const QVariant given = params.contains("skyColour") ? params.value("skyColour")
                                                                 : params.value("skyColor");

@@ -114,8 +114,8 @@ int main()
     // absolutely instead (there the sRGB primaries no longer contain the beam).
     struct Row { float elev; float ref[3]; float tol; };
     const Row rows[] = {
-        { 60.0f, { 0.9666f, 0.9571f, 0.9335f }, 0.10f },
-        { 45.0f, { 0.9131f, 0.8893f, 0.8318f }, 0.10f },
+        { 60.0f, { 0.9666f, 0.9571f, 0.9335f }, 0.03f },
+        { 45.0f, { 0.9131f, 0.8893f, 0.8318f }, 0.05f },
         { 30.0f, { 0.8035f, 0.7534f, 0.6415f }, 0.12f },
         { 20.0f, { 0.6581f, 0.5809f, 0.4269f }, 0.16f },
         { 15.0f, { 0.5391f, 0.4473f, 0.2834f }, 0.22f },
