@@ -56,6 +56,10 @@ public:
             { "engineOnly", "fake.engineOnly()", "Requires the engine (always fails here).", Needs::Engine },
             { "projectOnly", "fake.projectOnly()", "Requires an open project.", Needs::Document },
             { "info", "fake.info() -> {sum, list}", "Returns a JSON object.", Needs::Document },
+            // What project.close/open/create do to the run's undo entry and to
+            // the database's gesture batch, with none of their machinery
+            // (CLOSE-2 round 2, H4).
+            { "boundary", "fake.boundary()", "Crosses a project boundary.", Needs::Document },
         };
     }
 
@@ -72,6 +76,13 @@ public:
     Q_INVOKABLE QVariantMap info()
     {
         return { { "sum", 3 }, { "list", QVariantList{ 1, 2 } } };
+    }
+    /// EXACTLY what ProjectApi::close/open/openAsync/create do around their
+    /// MainWindow call, and nothing else.
+    Q_INVOKABLE void boundary()
+    {
+        host.endRunUndoMacro();
+        host.beginRunUndoMacro();
     }
 };
 
@@ -206,6 +217,41 @@ int main(int argc, char **argv)
     CHECK(r.ok && undoStack.count() == 1, "a mixed run is still ONE entry");
     undoStack.undo();
     CHECK(fake->value == 0, "and that one entry reverts both of its commands");
+
+    // ---- THE PROJECT BOUNDARY IS A NO-OP IN A RUN WITH NO UNDO ENTRY -------
+    //
+    // CLOSE-2 round 2, H4. The project verbs end the run's undo entry and open
+    // a fresh one around a close/open (ScriptHost::endRunUndoMacro), and the
+    // same bracket carries the database's gesture batch — a COUNTED scope. The
+    // MCP tools evaluate small internal expressions with wrapUndoMacro FALSE
+    // (scripting/mcp/mcptools.cpp), and such a run has no entry: the "end"
+    // half correctly did nothing, but the "begin" half used to open a macro
+    // and a batch that nothing would ever close — a transaction held for the
+    // rest of the session. Both halves check the run's wrap flag now.
+    {
+        undoStack.clear();
+        int batchDepth = 0;
+        host.macroOpenChanged = [&batchDepth](bool open) { batchDepth += open ? 1 : -1; };
+
+        // A run WITHOUT an entry: the boundary must move nothing at all.
+        r = engine.evaluate("fake.boundary()", "nomacro-boundary.js", false);
+        CHECK(r.ok, "a wrapUndoMacro=false run reached the project boundary");
+        CHECK(batchDepth == 0,
+              "...and it opened no database scope (both halves of the bracket stood down)");
+        CHECK(!undoService.isScriptMacroOpen(), "...and no run macro is left open");
+
+        // A run WITH one: the boundary ends the entry and opens a fresh one,
+        // and the scope is balanced again by the end of the run.
+        fake->value = 0;
+        r = engine.evaluate("fake.set(1); fake.boundary(); fake.set(2)", "boundary.js", true);
+        CHECK(r.ok, "a wrapped run reached the boundary");
+        CHECK(batchDepth == 0, "...and its database scope is balanced at the end of the run");
+        CHECK(undoStack.count() == 2,
+              "...and the boundary split the run into TWO undo entries, not one");
+        CHECK(!undoService.isScriptMacroOpen(), "...with nothing left armed");
+        host.macroOpenChanged = nullptr;
+        undoStack.clear();
+    }
 
     // ---- registry metadata ----
     CHECK(engine.registry().validate().isEmpty(), "the real module set validates clean");
