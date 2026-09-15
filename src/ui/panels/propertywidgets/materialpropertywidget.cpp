@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QJsonObject>
 #include <QDirIterator>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QPushButton>
 
@@ -181,9 +182,15 @@ bool MaterialPropertyWidget::rebindTo(const QSharedPointer<iris::MeshNode> &node
         && resetButton->text() != tr("Reset to %1").arg(materialdefaults::providerName(node)))
         return false;
     // THE COMBO'S ITEM LIST is the builtin presets plus the project's material
-    // assets, and the library can grow while this blade is alive. Cheap to
-    // count, and a miscount is only ever a rebuild.
-    if (materialSelector->getWidget()->count() != materialItemCount()) return false;
+    // assets, and the library moves while this blade is alive. Comparing the
+    // COUNT alone was wrong (COMBO-FP-1, from the ADD-1 second read): a renamed
+    // asset keeps the count and the combo kept the old label; a deleted one
+    // replaced by another kept the count too, and then
+    // setCurrentItemData(guid) of a guid no longer in the list is findData
+    // -1 — a BLANK Material combo on a node whose material was perfectly
+    // fine. What decides staleness is the (guid, label) LIST, so that is what
+    // is compared; a miscompare is only ever a rebuild.
+    if (comboItemsKey() != materialItemsKey()) return false;
 
     meshNode = node;
     material = mat;
@@ -201,13 +208,36 @@ bool MaterialPropertyWidget::rebindTo(const QSharedPointer<iris::MeshNode> &node
     return true;
 }
 
-/// How many entries setupShaderSelector would put in the Material combo.
-int MaterialPropertyWidget::materialItemCount() const
+/// The entries setupShaderSelector would put in the Material combo right now,
+/// guid and label, in its order — see the header. The separators are ASCII unit
+/// and record separators so no name or guid can forge a boundary.
+QString MaterialPropertyWidget::materialItemsKey() const
 {
-    int n = Constants::Reserved::BuiltinShaders.size();
-    for (auto asset : AssetManager::getAssets())
-        if (asset->type == ModelTypes::Shader) ++n;
-    return n;
+    QString key;
+    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+    while (it.hasNext()) {
+        it.next();
+        key += it.key() + QLatin1Char('\x1f') + QFileInfo(it.value()).baseName()
+             + QLatin1Char('\x1e');
+    }
+    for (auto asset : AssetManager::getAssets()) {
+        if (!asset || asset->type != ModelTypes::Shader) continue;
+        key += asset->assetGuid + QLatin1Char('\x1f') + QFileInfo(asset->fileName).baseName()
+             + QLatin1Char('\x1e');
+    }
+    return key;
+}
+
+/// The same list, read off the combo that is on screen.
+QString MaterialPropertyWidget::comboItemsKey() const
+{
+    QString key;
+    QComboBox *box = materialSelector ? materialSelector->getWidget() : nullptr;
+    if (!box) return key;
+    for (int i = 0; i < box->count(); ++i)
+        key += box->itemData(i).toString() + QLatin1Char('\x1f') + box->itemText(i)
+             + QLatin1Char('\x1e');
+    return key;
 }
 
 void MaterialPropertyWidget::addResetRow()

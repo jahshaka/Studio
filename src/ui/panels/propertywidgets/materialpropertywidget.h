@@ -26,6 +26,7 @@ namespace iris {
 }
 
 class PropertyWidget;
+class ComboBoxWidget;
 class Database;
 struct StudioServices;
 
@@ -79,6 +80,12 @@ public:
     int refillCount() const { return refills; }
     int rebuildCount() const { return rebuilds; }
 
+    /// THE MATERIAL COMBO — the presets and library materials this blade offers,
+    /// and which of them is selected. Public so COMBO-FP-1's contract is
+    /// assertable: what the combo holds must follow the LIBRARY, not just its
+    /// item count (ui.material_panel).
+    ComboBoxWidget *materialCombo() const { return materialSelector; }
+
 protected slots:
     void materialChanged(int);
 
@@ -95,8 +102,12 @@ private:
     static void splitRows(const iris::MaterialPtr &mat,
                           QList<iris::Property *> &base,
                           QList<iris::Property *> &details);
-    /// How many entries the Material combo would hold if it were filled now.
-    int materialItemCount() const;
+    /// THE MATERIAL COMBO'S ENTRIES, AS A STRING (COMBO-FP-1). `materialItemsKey`
+    /// is the (guid, label) list setupShaderSelector would build RIGHT NOW;
+    /// `comboItemsKey` is the list the combo on screen actually holds. Equal
+    /// means the combo is current and a refill may keep it.
+    QString materialItemsKey() const;
+    QString comboItemsKey() const;
     /// Guarded: clearPanel() deletes the row with every other row.
     QPointer<QPushButton> resetButton;
     QSharedPointer<iris::MeshNode> meshNode;

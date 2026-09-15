@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/controls/texturepickerwidget.h"
 #include "ui/controls/comboboxwidget.h"
+#include "io/assetmanager.h"
 #include "ui/controls/checkboxwidget.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -725,6 +726,98 @@ static void testRefillKeepsTheRows()
           "refill: a mesh with no material clears the rows (the fallback still works)");
 }
 
+
+// THE MATERIAL COMBO FOLLOWS THE LIBRARY, NOT ITS ITEM COUNT (COMBO-FP-1, from
+// the ADD-1 second read).
+//
+// The refill decides whether it may keep the rows it has. For the Material
+// combo — the builtin presets plus the project's material assets — it asked one
+// question: does the combo hold as many items as the library would fill it
+// with? Two perfectly ordinary edits keep that number and move the LIST:
+//
+//   * RENAMING a material asset. The combo went on showing the old name, for
+//     the rest of the session, on every mesh.
+//   * DELETING one and ADDING another. Same count, so the combo kept the dead
+//     asset's guid and never learned the new one — and then
+//     setCurrentItemData(<the new guid>) is findData() == -1, which is a BLANK
+//     Material combo on a node whose material is perfectly fine.
+//
+// What is compared now is the (guid, label) LIST. These cases are both "the
+// count did not move", so a count-only guard fails every assertion below.
+static void testMaterialComboFollowsTheLibrary()
+{
+    AssetManager::clearAssetList();
+    auto *brick = new AssetShader;
+    brick->assetGuid = QStringLiteral("mat-brick");
+    brick->fileName  = QStringLiteral("Brick.material");
+    auto *chrome = new AssetShader;
+    chrome->assetGuid = QStringLiteral("mat-chrome");
+    chrome->fileName  = QStringLiteral("Chrome.material");
+    AssetManager::addAsset(brick);
+    AssetManager::addAsset(chrome);
+
+    PanelRig rig;
+    auto *combo = rig.panel.materialCombo();
+    CHECK(combo != nullptr, "combo: the blade carries a Material combo");
+    if (!combo) { AssetManager::clearAssetList(); return; }
+    const int libraryCount = combo->getWidget()->count();
+    CHECK(combo->findData(QStringLiteral("mat-brick")) >= 0
+              && combo->findData(QStringLiteral("mat-chrome")) >= 0,
+          "combo: the project's two material assets are offered");
+
+    // A node whose material IS one of them, picked the way the panel is used.
+    auto chromeMat = iris::PbrMaterial::create();
+    chromeMat->setGuid(QStringLiteral("mat-chrome"));
+    auto chromeNode = iris::MeshNode::create();
+    chromeNode->setMaterial(chromeMat);
+    rig.panel.setSceneNode(chromeNode);
+    CHECK(rig.panel.materialCombo()->getWidget()->currentText() == QStringLiteral("Chrome"),
+          "combo: the node's own material is the one selected");
+
+    // ---- THE RENAME ------------------------------------------------------
+    brick->fileName = QStringLiteral("Sandstone.material");
+    rig.panel.setSceneNode(rig.node);            // an ordinary re-pick
+    rig.panel.setSceneNode(chromeNode);
+    combo = rig.panel.materialCombo();
+    CHECK(combo && combo->getWidget()->count() == libraryCount,
+          "rename: the library still holds the same NUMBER of materials");
+    CHECK(combo && combo->findData(QStringLiteral("mat-brick")) >= 0
+              && combo->getWidget()->itemText(combo->findData(QStringLiteral("mat-brick")))
+                     == QStringLiteral("Sandstone"),
+          "rename: ...and the combo shows the renamed material's new name");
+    CHECK(combo && combo->getWidget()->currentText() == QStringLiteral("Chrome"),
+          "rename: ...with the node's own material still selected");
+
+    // ---- DELETE ONE, ADD ANOTHER (the count never moves) -----------------
+    auto *velvet = new AssetShader;
+    velvet->assetGuid = QStringLiteral("mat-velvet");
+    velvet->fileName  = QStringLiteral("Velvet.material");
+    AssetManager::replaceAssets(QStringLiteral("mat-chrome"), velvet);
+
+    auto velvetMat = iris::PbrMaterial::create();
+    velvetMat->setGuid(QStringLiteral("mat-velvet"));
+    auto velvetNode = iris::MeshNode::create();
+    velvetNode->setMaterial(velvetMat);
+    rig.panel.setSceneNode(velvetNode);
+    combo = rig.panel.materialCombo();
+    CHECK(combo && combo->getWidget()->count() == libraryCount,
+          "swap: one material deleted and one added leaves the COUNT untouched");
+    CHECK(combo && combo->findData(QStringLiteral("mat-chrome")) < 0,
+          "swap: ...the deleted material is gone from the combo");
+    CHECK(combo && combo->findData(QStringLiteral("mat-velvet")) >= 0,
+          "swap: ...the new one is in it");
+    CHECK(combo && combo->getWidget()->currentIndex() >= 0
+              && combo->getWidget()->currentText() == QStringLiteral("Velvet"),
+          "swap: ...and the node's material is SELECTED, not a blank combo");
+
+    // The rows themselves are unaffected by any of this: a library edit is not
+    // a material change, and the material's own rows still work.
+    CHECK(sliderRow(&rig.panel, propId(velvetMat, "roughness")) != nullptr,
+          "swap: the material's rows are there after the combo rebuild");
+
+    AssetManager::clearAssetList();
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -743,6 +836,7 @@ int main(int argc, char *argv[])
     testTextureSnapshotDoesNotAccumulate();
     testResetActionOnlyOnTheDefaultFloor();
     testRefillKeepsTheRows();
+    testMaterialComboFollowsTheLibrary();
 
     printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;
