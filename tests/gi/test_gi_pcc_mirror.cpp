@@ -87,7 +87,6 @@ static const char *modeName(GiMode m)
 {
     switch (m) {
     case GiMode::Off:              return "off";
-    case GiMode::InstantRadiosity: return "instant_radiosity";
     case GiMode::Vct:              return "vct";
     case GiMode::VctPccHybrid:     return "vct_pcc_hybrid";
     }

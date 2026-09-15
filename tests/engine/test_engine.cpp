@@ -5507,7 +5507,8 @@ void monitor_survives_rebuilds_and_view_destruction() {
 
     // (b) A GI REBUILD recreates every probe workspace.
     GiParams gi;
-    gi.mode = GiMode::InstantRadiosity;
+    gi.mode = GiMode::Vct;          // the only voxel arm there is (IR deleted, E2 (4))
+    gi.quality = GiQuality::Low;    // 32^3: this case is about the EVENT, not the picture
     rig.s->setGlobalIllumination(gi);
     render(fx.e, 3);
     evs.clear();

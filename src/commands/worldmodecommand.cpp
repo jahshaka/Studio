@@ -21,6 +21,8 @@ WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene
     snap.worldMode = scene->worldMode;
     snap.photonTier = scene->giTier;
     snap.overrides = scene->worldOverrides;
+    snap.cascadeSet = scene->giCascadeSet;
+    snap.cascadeInstanceCap = scene->giCascadeInstanceCap;
     for (const worldmodes::Row &r : worldmodes::rows())
         if (r.get) snap.rowValues.insert(r.id, r.get(scene));
     return snap;
@@ -29,7 +31,8 @@ WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene
 bool WorldModeCommand::same(const Snapshot &a, const Snapshot &b)
 {
     return a.worldMode == b.worldMode && a.photonTier == b.photonTier &&
-           a.overrides == b.overrides && a.rowValues == b.rowValues;
+           a.overrides == b.overrides && a.rowValues == b.rowValues &&
+           a.cascadeSet == b.cascadeSet && a.cascadeInstanceCap == b.cascadeInstanceCap;
 }
 
 WorldModeCommand::WorldModeCommand(const QString &text, const iris::ScenePtr &scene,
@@ -56,6 +59,8 @@ void WorldModeCommand::apply(const Snapshot &snap)
     // had none, and a row with no backing field pins itself unconditionally.
     scene->worldOverrides = snap.overrides;
     scene->worldMode = snap.worldMode;
+    scene->giCascadeSet = snap.cascadeSet;
+    scene->giCascadeInstanceCap = snap.cascadeInstanceCap;
     // The Photon tier last: the `photon` row's setter writes it too, but only
     // when the row is ON — an undo back into "Photon off" would otherwise lose
     // which quality the scene comes back at.

@@ -236,11 +236,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 
     // Global illumination (world panel). Mode/quality are written as stable
     // strings — the enum ints must stay free to be reordered.
-    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
+    static const char *giModeNames[] = { "off", "vct", "vct_pcc_hybrid" };
     static const char *giQualityNames[] = { "low", "medium", "high" };
-    sceneObj["giMode"] = giModeNames[qBound(0, static_cast<int>(scene->giMode), 3)];
+    sceneObj["giMode"] = giModeNames[qBound(0, static_cast<int>(scene->giMode), 2)];
     sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 2)];
-    sceneObj["giLight"] = scene->giLightGuid;
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giUpdateBudget"] = scene->giUpdateBudget;   // FIX WAVE B1
     sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);
@@ -258,6 +257,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // PHOTON cascades. The flag always; the table only when a scene PINNED one,
     // so a document that leaves the tier in charge carries no empty array.
     sceneObj["giCascades"] = scene->giCascades;
+    sceneObj["giCascadeInstanceCap"] = scene->giCascadeInstanceCap;
     if (!scene->giCascadeSet.isEmpty()) {
         QJsonArray set;
         for (const iris::Vec3 &c : scene->giCascadeSet)

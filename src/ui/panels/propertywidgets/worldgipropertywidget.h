@@ -89,7 +89,6 @@ protected slots:
     void modeChanged(int row);
     void onQualityChanged(int row);
     void onProbeSizeChanged(int row);
-    void onLightChanged(int row);
     void onBouncesChanged(float value);
     void onDdgiToggled(bool on);
     void onDdgiSourceChanged(int index);
@@ -146,7 +145,6 @@ private:
     RowPtr<ComboBoxWidget> tierSelector;
     RowPtr<ComboBoxWidget> modeSelector;
     RowPtr<ComboBoxWidget> quality;
-    RowPtr<ComboBoxWidget> lightSelector;
     RowPtr<HFloatSliderWidget> bounces;
     RowPtr<DragVector3Widget> pccGrid;
     RowPtr<ComboBoxWidget> probeSize;

@@ -148,7 +148,6 @@ const char *giModeName(GiMode m)
 {
     switch (m) {
     case GiMode::Off:              return "off";
-    case GiMode::InstantRadiosity: return "instant_radiosity";
     case GiMode::Vct:              return "vct";
     case GiMode::VctPccHybrid:     return "vct_pcc_hybrid";
     }
@@ -636,6 +635,7 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "rebuilds", double(c.rebuilds) },
             { "pending", c.pending },
             { "items", c.items },
+            { "attached", int(c.attached) },
             { "lastCpuMs", double(c.lastCpuMs) } });
     QJsonObject o{
         { "live", s.live },
@@ -652,7 +652,6 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
         { "giParams", QJsonObject{
             { "mode", QLatin1String(giModeName(s.giParams.mode)) },
             { "quality", QLatin1String(giQualityName(s.giParams.quality)) },
-            { "irLight", double(s.giParams.irLight) },
             { "numBounces", s.giParams.numBounces },
             { "pccProbes", QJsonArray{ s.giParams.pccProbesX, s.giParams.pccProbesY,
                                        s.giParams.pccProbesZ } },

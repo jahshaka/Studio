@@ -19,7 +19,7 @@ assert(skyLight0.light !== "", "a new scene ships with a Sky Light");
 node.setProperty(skyLight0.light, "intensity", 1.4);
 world.fog({ enabled: true, color: "#a0a0a0", start: 50, end: 150 });
 world.gravity(12);
-world.gi({ mode: "instant_radiosity", quality: "high", bounces: 2 });
+world.gi({ mode: "vct", quality: "high", bounces: 2 });
 world.shadows({ enabled: true });
 var w = world.get();
 assert(w.skyLight.light !== "" && near(w.skyLight.intensity, 1.4, 0.001),
@@ -35,7 +35,7 @@ assert(near(wf.density, 0.05) && near(wf.heightDensity, 0.02) && near(wf.heightF
        near(wf.heightLevel, -1) && near(wf.breakMinBrightness, 0.3) && near(wf.breakFalloff, 0.2),
        "exponential + height fog round-trip");
 assert(near(w.gravity, 12), "gravity round-trips");
-assert(w.gi.mode === "instant_radiosity" && w.gi.quality === "high" && w.gi.bounces === 2, "gi round-trips");
+assert(w.gi.mode === "vct" && w.gi.quality === "high" && w.gi.bounces === 2, "gi round-trips");
 world.gi({ mode: "vct_pcc_hybrid", pccGrid: { x: 2, y: 1, z: 2 } });
 var g = world.get().gi;
 assert(g.mode === "vct_pcc_hybrid" && g.pccGrid.x === 2 && g.pccGrid.y === 1 && g.pccGrid.z === 2,

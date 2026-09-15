@@ -30,6 +30,7 @@ For more information see the LICENSE file
 // backing field is ALWAYS the resolved value".
 
 #include <QHash>
+#include <QVector>
 #include <QJsonObject>
 #include <QString>
 
@@ -37,6 +38,7 @@ For more information see the LICENSE file
 
 #include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
+#include "irisgl/core/math/vec.h"
 
 class WorldModeCommand : public StudioCommand
 {
@@ -51,6 +53,15 @@ public:
         int photonTier = 3;
         QJsonObject overrides;
         QHash<QString, int> rowValues;   ///< rowId -> backing-field value
+        /// PHOTON'S CASCADE FIELDS THAT ARE NOT ROWS (audit D12, PHOTON_SPEC
+        /// §7 E2 (7)). `giCascades` IS a registry row since the tier table
+        /// adopted it, so `rowValues` carries it; the table a scene may pin and
+        /// the per-cascade instance budget are not rows and would otherwise
+        /// survive an undo of the edit that set them — which is the one thing
+        /// this command exists to prevent ("going Epic -> High to see what it
+        /// looked like was a one-way door").
+        QVector<iris::Vec3> cascadeSet;
+        int cascadeInstanceCap = 0;
     };
 
     static Snapshot capture(const iris::ScenePtr &scene);
