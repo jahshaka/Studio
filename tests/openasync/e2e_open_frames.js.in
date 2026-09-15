@@ -1,0 +1,106 @@
+// open.frames — THE THREADED OPEN DRIVES ITS OWN FRAMES (lane OPEN-FRAMES-1,
+// 2026-09-15).
+//
+// THE DEFECT THIS PINS. The install runs one slice per event-loop turn and has
+// always ASSUMED a frame between two of them — that is what makes an open
+// responsive instead of one long block. It was never entitled to one: the
+// render tick is a 16 ms QTimer, and a chain of posted events outranks a timer
+// in Qt's dispatcher, so an open driven by a polling script (or a user on a
+// panel, or an MCP client) installs a whole world with NO frame rendered at
+// all. The renderer's per-frame recycling then never runs for the length of the
+// install, and the process came out of it with a corrupt heap: 9 crashes in 12
+// runs of the minimal repro, 0 in 12 once the boundary rendered the frame
+// itself (the soak suite beside this one is that measurement, kept nightly).
+//
+// SO THIS IS THE DETERMINISTIC HALF, and it is deliberately NOT a crash test:
+// it drives an open with a pump that renders NOTHING — no editor.frame
+// anywhere in this file — and asserts that the renderer was driven anyway, at
+// every slice boundary, and that the open completed. A regression that takes
+// the drive back out fails here in seconds instead of failing a soak one run in
+// three.
+//
+// Engine-up: it needs a real viewport, because the point is that frames were
+// really drawn (sliceBoundaryFrames), not that a counter moved.
+
+var SCENES = "@CMAKE_SOURCE_DIR@/scenes";
+
+var failures = 0;
+function ok(cond, msg) {
+    if (cond) { console.log("ok:   " + msg); }
+    else { console.log("FAIL: " + msg); ++failures; }
+}
+
+// ---- the fixture: the heaviest sample the tree ships (the Stanford dragon),
+// so the install has real slices and real uploads to recycle.
+var imported = project.importArchive(SCENES + "/Matcaps.zip");
+ok(!!imported && !!imported.guid, "the Matcaps sample imported");
+
+// A poll that lets the loop turn but NEVER draws — the traffic that starves the
+// render tick. editor.properties is the verb the crash repro used; any verb
+// that hops to the UI thread has the same effect.
+function starvingPoll() {
+    try { editor.properties({ tab: "world" }); } catch (e) {}
+}
+
+// ---- 1. an open driven with no frames at all -------------------------------
+var before = app.openStats();
+ok(typeof before.sliceBoundaries === "number", "app.openStats reports sliceBoundaries");
+ok(typeof before.sliceBoundaryFrames === "number", "app.openStats reports sliceBoundaryFrames");
+
+var started = project.openAsync(imported.guid);
+ok(started === true, "project.openAsync started the threaded open");
+ok(project.openState() === "opening", "project.openState reads 'opening' while it is in flight");
+
+var turns = 0;
+var risesSeen = 0;
+var lastBoundaries = before.sliceBoundaries;
+while (project.openState() === "opening") {
+    starvingPoll();
+    var now = app.openStats();
+    if (now.sliceBoundaries > lastBoundaries) { ++risesSeen; lastBoundaries = now.sliceBoundaries; }
+    if (++turns > 40000) break;
+}
+ok(project.openState() === "idle", "the open finished (openState back to 'idle') with no frame driven from here");
+
+var after = app.openStats();
+var boundaries = after.sliceBoundaries - before.sliceBoundaries;
+var frames = after.sliceBoundaryFrames - before.sliceBoundaryFrames;
+console.log("info: " + turns + " poll turns, " + boundaries + " slice boundaries, "
+            + frames + " of them rendered a frame, " + risesSeen + " rises seen in flight");
+
+// The install is at least: prepare assets, the session-asset batches, read,
+// bind, panels, geometry, environment, the two shader slices and the reveal —
+// ten even on the smallest world, plus the one crossing at the end.
+ok(boundaries >= 10, "the install crossed at least ten slice boundaries (" + boundaries + ")");
+ok(frames === boundaries, "EVERY boundary rendered a frame (" + frames + " of " + boundaries + ")");
+ok(risesSeen >= 1, "the boundaries were observed rising WHILE the open was in flight");
+
+var opened = project.current();
+ok(!!opened && opened.guid === imported.guid, "the world this asked for is the one that is open");
+ok(scene.nodes().length > 0, "the opened scene has nodes");
+
+// ---- 2. closing DURING an open drains the install first ---------------------
+// A queued slice must never run after the project it installs has been torn
+// down. closeProject drains the runner the way the window-close and shutdown
+// paths do; the observable contract is that the close returns with nothing in
+// flight.
+var second = project.importArchive(SCENES + "/World Background.zip");
+ok(!!second && !!second.guid, "a second sample imported");
+
+ok(project.openAsync(second.guid) === true, "a second threaded open started");
+ok(project.openState() === "opening", "…and it is in flight");
+ok(project.close() === true, "project.close() succeeded with an open in flight");
+ok(project.openState() === "idle", "the close DRAINED the open — nothing is in flight after it");
+
+// ---- 3. a second open is refused while one is in flight, and openState agrees
+ok(project.openAsync(imported.guid) === true, "a third open started");
+var refused = false;
+try { project.openAsync(second.guid); } catch (e) { refused = true; }
+ok(refused, "a second openAsync while one is in flight is refused");
+ok(project.openState() === "opening", "…and openState says 'opening' — the same predicate");
+var guard = 0;
+while (project.openState() === "opening") { starvingPoll(); if (++guard > 40000) break; }
+ok(project.openState() === "idle", "the third open finished too");
+
+if (failures) throw new Error(failures + " assertion(s) failed");
+console.log("open.frames: all assertions passed");

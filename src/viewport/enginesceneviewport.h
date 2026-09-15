@@ -199,6 +199,7 @@ public:
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
+    bool canRenderFrames() const override;
     MirrorStats mirrorStats() const override;
     RigStatsInfo rigStats() const override;
     QString dumpMaterial(const QString &nodeGuid) const override;

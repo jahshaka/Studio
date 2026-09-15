@@ -55,7 +55,36 @@ public:
     /// nothing created, no popup rebuilt, no row retired from the property-row
     /// registry. Only legal when canRebind() says so.
     void rebind(const QList<iris::Property *> &props);
+
+    /// THE DOCUMENT POINTERS GO (lane OPEN-FRAMES-1, from the §497 witness).
+    ///
+    /// `properties` is a bare list of `iris::Property *` INTO the document's
+    /// material — a panel's window onto objects it does not own and is not
+    /// told about when they die. Every handler these rows install reads it
+    /// (propertyAt) and canRebind DEREFERENCES the stored side, comparing
+    /// names, labels and enum vocabularies. A dangling entry is therefore both
+    /// a read and, through a row's value-changed handler, a WRITE into freed
+    /// memory: one Qt assert of this shape (`str || !len` in QStringView, out
+    /// of canRebind) was caught with a witness on 2026-09-15.
+    ///
+    /// This drops them. Afterwards propertyAt() answers null for every slot —
+    /// so the rows are inert rather than dangerous — and canRebind() answers
+    /// false, so the panel rebuilds, which is always correct.
+    ///
+    /// Called automatically when the blade RETIRES this widget (see the
+    /// QEvent::DynamicPropertyChange handler in event(): a retired row reads
+    /// null through RowPtr, and this is the same rule applied to the document
+    /// pointers the row is holding). Callable by hand by anything that knows
+    /// the list is about to die.
+    void forgetProperties();
     QList<iris::Property*> getProperties() { return properties; }
+
+protected:
+    /// Watches for the blade's retirement mark (bladerow::markRetired sets a
+    /// dynamic property, synchronously) and drops the document pointers then.
+    bool event(QEvent *e) override;
+
+public:
     int getHeight();
 
     HFloatSliderWidget  *addFloatValueSlider(const QString&, float min, float max);

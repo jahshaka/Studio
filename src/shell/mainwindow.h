@@ -640,6 +640,16 @@ public slots:
     void openProjectAsync(bool playMode = false);
     /// True while an asynchronous open is in flight.
     bool isOpeningProject() const;
+    /// THE OPEN'S SLICE-BOUNDARY COUNTERS (lane OPEN-FRAMES-1), reported by
+    /// app.openStats(). `openSliceBoundaries()` is how many times the install
+    /// crossed a slice boundary in this window's life — where the renderer is
+    /// driven so that the open never depends on the app's render tick — and
+    /// `openSliceBoundaryFrames()` how many of those crossings really rendered
+    /// a frame (the rest made the engine's bare resource advance, which is what
+    /// a session with no viewport can do). Monotonic: only differences mean
+    /// anything.
+    unsigned openSliceBoundaries() const;
+    unsigned openSliceBoundaryFrames() const { return openSliceBoundaryFrameCount; }
     /// Runs an in-flight threaded open TO COMPLETION before the caller does
     /// anything else, with the event loop pumped (user input excluded).
     ///
@@ -802,6 +812,9 @@ private:
     iris::MeshPrewarmPtr prewarmModelsPumped();
 
     class SceneOpenRunner *openRunner = nullptr;
+    /// See openSliceBoundaryFrames(). Counted here rather than in the runner
+    /// because only the shell knows whether its viewport drew.
+    unsigned openSliceBoundaryFrameCount = 0;
 
     void applySelectionToUi(iris::SceneNodePtr sceneNode);
     void applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes);
