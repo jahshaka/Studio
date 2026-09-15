@@ -3360,8 +3360,11 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
 }
 
 // THE SUN FOLLOWS THE ATMOSPHERE (SUN_FOLLOWS_ATMOSPHERE, lane ENGINE-7 item
-// 6). The engine's half: Scene::atmosphereSunTint, the scattering model's own
-// colour looking at the sun over its colour with the sun at the zenith.
+// 6). The engine's half: Scene::atmosphereSunTint, the direct beam's
+// transmittance at the sun's elevation over its value at the zenith (lane
+// SKY-DENSITY-1 made that a derivation from the atmosphere's turbidity instead
+// of a read-out of the sky preset; sky.sun_transmittance gates the model
+// itself, this case gates the behaviour around it).
 //
 // White at noon (the user's picked colour IS the noon value), red-shifted and
 // dimmer at a low sun, and exactly white for every sky that is not the
@@ -3415,9 +3418,12 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     CHECK_MSG(mid.b > low.b && mid.b <= noon.b,
               "30 degrees sits between the horizon and the zenith (b %.3f)", mid.b);
 
-    // THE SKY IS UNDISTURBED BY THE QUESTION. The component is stateful and the
-    // query has to push, read and put back; if it did not, asking would MOVE
-    // the sun. The pixels either side of a query must be identical.
+    // THE SKY IS UNDISTURBED BY THE QUESTION. It is a CONTRACT, not an
+    // implementation detail: the tint used to be read out of the stateful sky
+    // component (push, read, put back — and asking would have MOVED the sun if
+    // the put-back were ever dropped), and it is derived from the atmosphere's
+    // own dial now. The pixels either side of a query must be identical either
+    // way.
     Image before, after;
     render(fx.e); REQUIRE(v->readPixels(before));
     (void)s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
@@ -3522,17 +3528,38 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
                   p.name, cct, double(p.minCct));
     }
 
-    // ...AND THE SUNLIGHT IS NEAR WHITE AT THE SAME SUN. The tint is the same
-    // preset's own transmittance (atmosphereSunTint); the shipped preset took
-    // 15% of the blue out of a 36-degree sun, which is the other half of
-    // "warmer". Rayleigh physics for this elevation is 0.95 / 0.93 / 0.86.
+    // ...AND THE SUNLIGHT IS STILL DAYLIGHT AT THE SAME SUN. The shipped preset
+    // took 15% of the blue out of a 36-degree sun, which was the other half of
+    // "warmer".
+    //
+    // RE-BASED BY LANE SKY-DENSITY-1, and the old numbers were wrong about
+    // WHICH ATMOSPHERE. The tint is no longer the sky preset's own absorption
+    // term — it is the direct beam's transmittance through the atmosphere the
+    // sky above is FITTED to (Preetham at turbidity 2.5: Rayleigh AND aerosol
+    // AND ozone), from its own dial (sunHaze). The bar here quoted
+    // "Rayleigh physics 0.95 / 0.93 / 0.86" — that is a molecular atmosphere
+    // with no aerosol at all, which no clear sky is and this fit's reference
+    // never was; at turbidity 2.5 the same elevation is 0.858 / 0.820 / 0.732
+    // spectrally, a spread of 0.125 rather than 0.09. So the old
+    // `spread <= 0.08` could not have been met by the physics either, and it
+    // is re-based on the reference instead of on a hand-picked bar.
+    // sky.sun_transmittance is where the tint is gated against that reference
+    // across eight elevations; here it only has to stay DAYLIGHT.
     const Colour tint = s->atmosphereSunTint(Vec3(0.0f, 0.587785f, -0.809017f));
     std::printf("    sun tint at 36 degrees  %.3f %.3f %.3f\n", tint.r, tint.g, tint.b);
-    CHECK_MSG(tint.r >= 0.90f && tint.g >= 0.90f && tint.b >= 0.90f,
-              "a 36-degree sun is near white (%.3f %.3f %.3f)", tint.r, tint.g, tint.b);
+    const float ref36[3] = { 0.8575f, 0.8198f, 0.7322f };   // the spectral reference
+    bool near36 = true;
+    for (int c = 0; c < 3; ++c) {
+        const float got = (c == 0) ? tint.r : (c == 1) ? tint.g : tint.b;
+        near36 = near36 && std::fabs(got - ref36[c]) <= 0.05f;
+    }
+    CHECK_MSG(near36,
+              "a 36-degree sun is daylight, within 0.05 of the reference "
+              "(%.3f %.3f %.3f against %.3f %.3f %.3f)",
+              tint.r, tint.g, tint.b, double(ref36[0]), double(ref36[1]), double(ref36[2]));
     const float spread = std::max(tint.r, std::max(tint.g, tint.b)) -
                          std::min(tint.r, std::min(tint.g, tint.b));
-    CHECK_MSG(spread <= 0.08f, "...and barely reddened (spread %.3f)", spread);
+    CHECK_MSG(spread <= 0.16f, "...and not GOLDEN (spread %.3f, the reference's is 0.125)", spread);
 
     // THE SUNSET IS STILL THERE, which is what stops the fit from simply
     // deleting the atmosphere: 5 degrees up is unmistakably warm.

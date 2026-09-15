@@ -46,6 +46,7 @@ QVariant captureSky(const ScenePtr &s)
     m["diffusion"] = s->skyRealistic.diffusion;
     m["horizon"] = s->skyRealistic.horizon;
     m["power"] = s->skyRealistic.power;
+    m["sunHaze"] = s->skyRealistic.sunHaze;
     m["skyColour"] = s->skyRealistic.skyColour;
     return m;
 }
@@ -68,6 +69,7 @@ void applySky(const ScenePtr &s, const QVariant &value)
     s->skyRealistic.diffusion = m.value("diffusion").toFloat();
     s->skyRealistic.horizon = m.value("horizon").toFloat();
     s->skyRealistic.power = m.value("power").toFloat();
+    s->skyRealistic.sunHaze = m.value("sunHaze").toFloat();
     s->skyRealistic.skyColour = m.value("skyColour").value<QColor>();
 }
 

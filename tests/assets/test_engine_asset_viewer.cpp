@@ -276,6 +276,11 @@ int main(int argc, char **argv)
                   std::fabs(doc->skyRealistic.density - 0.8f) < 1e-4f &&
                   std::fabs(doc->skyRealistic.power - 1.2f) < 1e-4f,
                   "sky asset: the realistic keys land on the document");
+            // A key the definition does not carry lands on the model's
+            // default, never on an uninitialised float (sunHaze was one).
+            CHECK(std::fabs(doc->skyRealistic.sunHaze
+                            - iris::SkyRealistic::defaults().sunHaze) < 1e-4f,
+                  "sky asset: an absent sunHaze key is the default (2.5), not garbage");
             // The preview's own sun: the sky takes its direction from the
             // scene's first directional light and from nowhere else.
             {

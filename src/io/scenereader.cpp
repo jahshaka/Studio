@@ -365,6 +365,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 				scene->skyRealistic.diffusion = realisticDefinition["diffusion"].toDouble(d.diffusion);
 				scene->skyRealistic.horizon   = realisticDefinition["horizon"].toDouble(d.horizon);
 				scene->skyRealistic.power     = realisticDefinition["power"].toDouble(d.power);
+				// The SUN's air (SKY-DENSITY-1). A file written before the dial
+				// existed has no key and opens at the ctor default, which is the
+				// FITTED value — the reader-defaults trap: an absent key must
+				// mean exactly what a new scene means, never 0.
+				scene->skyRealistic.sunHaze   = realisticDefinition["sunHaze"].toDouble(d.sunHaze);
 				const QJsonObject skyColObj = realisticDefinition["skyColour"].toObject();
 				scene->skyRealistic.skyColour =
 					skyColObj.isEmpty() ? d.skyColour : readColor(skyColObj);

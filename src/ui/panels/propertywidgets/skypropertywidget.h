@@ -106,6 +106,7 @@ protected slots:
     void onSkyDiffusionChanged(float val);
     void onSkyHorizonChanged(float val);
     void onSkyPowerChanged(float val);
+    void onSunHazeChanged(float val);
     void onSkyColourChanged(QColor colour);
 
 	void onGradientTopColorChanged(QColor color);
@@ -171,6 +172,9 @@ private:
     HFloatSliderWidget *skyDiffusion = nullptr;
     HFloatSliderWidget *skyHorizon = nullptr;
     HFloatSliderWidget *skyPower = nullptr;
+    /// The SUN's transmittance dial (the atmosphere's turbidity) — a sky-block
+    /// row that changes no sky pixel: it colours the direct sunlight.
+    HFloatSliderWidget *sunHaze = nullptr;
     ColorValueWidget   *skyColour = nullptr;
     LabelWidget *sunReadout = nullptr;            // which light the sky's sun is (§3)
 

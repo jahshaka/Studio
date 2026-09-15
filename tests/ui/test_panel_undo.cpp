@@ -436,12 +436,35 @@ int main(int argc, char **argv)
             pump();
         }
 
+        // THE SUN'S OWN AIR IS A ROW OF ITS OWN (lane SKY-DENSITY-1) and it is
+        // NOT a sky-look row: it is the atmosphere's turbidity, the one input
+        // to the sunlight's transmittance (sky.sun_transmittance gates the
+        // model). Here it only has to be a row like every other one — one
+        // drag, one undo step, the live field and the blob together.
+        HFloatSliderWidget *haze = sliderWith(&panel, QStringLiteral("Sun Haze"));
+        CHECK(haze != nullptr, "sky: the Sun Haze row is on the blade");
+        if (haze) {
+            const int steps = stack.index();
+            const float hazeWas = scene->skyRealistic.sunHaze;
+            CHECK(drag(haze, 2.5f, 5.0f), "sky: the Sun Haze row can be dragged");
+            CHECK(qAbs(scene->skyRealistic.sunHaze - 5.0f) < 0.1f,
+                  "sky: the drag moved the haze live");
+            CHECK(stack.index() == steps + 1, "sky: as ONE step");
+            stack.undo();
+            pump();
+            CHECK(qAbs(scene->skyRealistic.sunHaze - hazeWas) < 0.1f,
+                  "sky: undo restored the haze");
+        }
+
         // The blob the scene SAVES carries the same value: an undo that put back
         // the live field and not the blob would reappear on the next open.
         const QJsonObject stored = scene->skyData.value(QStringLiteral("Realistic"));
         CHECK(qAbs(stored.value(QStringLiteral("density")).toDouble()
                        - double(scene->skyRealistic.density)) < 0.01,
               "sky: and the serialized blob agrees with the live field");
+        CHECK(qAbs(stored.value(QStringLiteral("sunHaze")).toDouble()
+                       - double(scene->skyRealistic.sunHaze)) < 0.01,
+              "sky: ...and so does the sun's haze");
     }
 
     // ---- 6. A NODE ROW: THE LIGHT PANEL ------------------------------------
