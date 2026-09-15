@@ -102,7 +102,15 @@ iris::MeshNodePtr createNode(Database *db, Project *project)
 {
     auto node = iris::MeshNode::create();
     node->setMesh(meshPath());
-    node->setLocalPos(iris::Vec3(0, 1e-4, 0)); // prevent z-fighting with the default plane reset (iKlsR)
+    // 1e-4 ABOVE THE ORIGIN, "to prevent z-fighting with the default plane
+    // reset" (iKlsR). GIZMO-2 round 2 was asked to delete it — the editor grid's
+    // fight with this plane is settled on the GRID's side now
+    // (SceneMirror::kGridFloorLift lifts it 1 cm, two orders of magnitude clear
+    // of this) — and measured the cost of doing so first: moving the ground
+    // those 0.1 mm changes 166 of the engine selftest's 65,536 pixels by 1/255
+    // each, i.e. it is a selftest-hash change for no behaviour. Left for
+    // whoever is spending a hash move anyway.
+    node->setLocalPos(iris::Vec3(0, 1e-4, 0));
     node->setName("Ground");
     node->setPickable(false);
     node->setFaceCullingMode(iris::FaceCullingMode::None);

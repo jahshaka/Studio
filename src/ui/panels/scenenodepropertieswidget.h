@@ -13,10 +13,14 @@ For more information see the LICENSE file
 #define SCENENODEPROPERTYWIDGET_H
 
 #include <QWidget>
+#include <QHash>
 #include <QListWidgetItem>
+#include <QPointer>
 #include <QVBoxLayout>
 #include <QSharedPointer>
 #include <QVector>
+
+#include "ui/panels/propertyrows.h"
 
 namespace iris {
     class SceneNode;
@@ -94,6 +98,29 @@ public:
     /// ui.properties_tabs; never used to make a decision.
     int mountCount() const { return mounts; }
 
+    /// THE FILTER BOX BELONGS TO ITS TAB (PROPERTY_FILTER_SPEC, owner decision
+    /// 2026-09-15): one box per tab, filtering that tab's rows only. World's
+    /// text filters the world rows, Selection's the selected object's, each
+    /// keeps its own text for the session (never persisted), and neither ever
+    /// looks at the other's rows.
+    QString propertiesFilter(Tab tab) const;
+    /// Sets a tab's filter text. Applied immediately when it is the tab on
+    /// screen; stored (and applied on the next mount) when it is not.
+    void setPropertiesFilter(Tab tab, const QString &text);
+
+    /// What the last apply of that tab's filter left on screen. `visible` +
+    /// `hidden` count the ROWS the filter judged — rows the panel itself hides
+    /// (a spot row on a point light) are in neither.
+    struct FilterCounts { int visible = 0; int hidden = 0; };
+    FilterCounts filterCounts(Tab tab) const;
+
+    /// EVERY ROW THAT TAB HAS MOUNTED, in column order — what `editor.properties`
+    /// answers with (PROPERTY_FILTER_SPEC §3.5). It is the column's own account
+    /// of itself: section chain, name, key, keywords and both halves of the
+    /// visibility law, so a script (or Claude) can ask what is on the Properties
+    /// panel without a screenshot.
+    QVector<PropertyRows::Registry::Listing> propertyRows(Tab tab) const;
+
     /// The name the verbs and the tab bar use ("world" / "selection").
     static QString tabName(Tab tab);
     static bool tabFromName(const QString &name, Tab &out);
@@ -101,6 +128,8 @@ public:
 signals:
     /// The tab actually changed (the strip follows this; it never polls).
     void propertiesTabChanged(SceneNodePropertiesWidget::Tab tab);
+    /// A tab's filter text changed (the strip follows this the same way).
+    void propertiesFilterChanged(SceneNodePropertiesWidget::Tab tab, const QString &text);
 
 public:
     void setAssetItem(QListWidgetItem *item);
@@ -190,6 +219,34 @@ private:
     void mountSelectionBlades();
     /// The scene the World tab binds to, whatever is selected.
     QSharedPointer<iris::Scene> worldScene() const;
+
+    /// Re-runs the CURRENT tab's filter over the blades that tab has mounted.
+    /// Called at the end of every applyTab (so a pick, an undo and a tab switch
+    /// all re-filter without a flash) and, coalesced, whenever the registry
+    /// reports new rows (the Photon and sky panels rebuild theirs on an edit).
+    void applyRowFilter();
+    /// The expand state of every section of `tab`'s blades, taken when its
+    /// filter goes non-empty and put back when it is cleared (§3.4.5).
+    void snapshotExpandState(Tab tab);
+    void restoreExpandState(Tab tab);
+
+    /// Per TAB, never shared: the filter text, what its last apply counted, the
+    /// expand snapshot, and the blades that tab has on the layout.
+    QString filterText[2];
+    FilterCounts counts[2];
+    /// THE SNAPSHOT HOLDS GUARDED POINTERS, NOT RAW ONES. A nested section is
+    /// destroyed and rebuilt under the panel all the time — the material
+    /// blade's "Detail Layers" goes with every mesh pick (clearPanel →
+    /// deleteLater) — so a snapshot taken before a pick and restored after one
+    /// would qobject_cast freed memory. QPointer<QWidget> (rather than of the
+    /// blade type) keeps this header free of the accordion's; the restore
+    /// casts what is still alive.
+    QVector<QPair<QPointer<QWidget>, bool>> expandSnapshot[2];
+    /// A TAB WHOSE FILTER WAS CLEARED WHILE IT WAS NOT ON SCREEN still owes its
+    /// sections their expand state back — the restore can only run where the
+    /// blades are mounted. Paid at that tab's next applyTab.
+    bool restorePending[2] = { false, false };
+    QVector<QPointer<QWidget>> mountedBlades[2];
 
     /// See mountCount().
     int mounts = 0;

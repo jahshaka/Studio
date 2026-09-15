@@ -87,6 +87,67 @@ struct ScriptHost
     std::function<void(const QString &)> beginUndoMacro;
     std::function<void()> endUndoMacro;
 
+    /// The text the run's macro carries, set by ScriptEngine::evaluate for the
+    /// run it is about to start. It lives here, not in ScriptEngine, because a
+    /// verb can END the run's entry and start a fresh one mid-run (below) and
+    /// the replacement has to be named the same thing.
+    QString runMacroText;
+
+    // ---- THE PROJECT BOUNDARY INSIDE A RUN (CLOSE-2 item 2) ----------------
+    //
+    // A script run is one undo entry. That is right until the run CLOSES the
+    // project: UndoService::clear() is a no-op while the run's macro is open
+    // (clearing a stack mid-macro corrupts QUndoStack's macro accounting), so
+    // a scripted project.close() used to leave the ENTIRE undo stack alive
+    // across the close — commands holding SceneNodePtrs and asset guids of a
+    // document that no longer exists, reachable by Ctrl+Z the moment the run
+    // ended. The undo history of a closed project is not history the user can
+    // have back; keeping it is a dangling-document hazard, not a feature.
+    //
+    // So the project verbs END the run's entry first and open a fresh one
+    // after: the run's edits up to that point become ONE undo step of the OLD
+    // project, which is then closed and its stack cleared as any close clears
+    // it, and the rest of the script records into a new entry in the new
+    // project. Refusing the close instead was the alternative and is worse —
+    // "build a scene, save it, open the next one" is an ordinary script, and a
+    // verb that fails on the second project would break every batch job.
+    //
+    // The same boundary ends the database's gesture batch (the editor wires
+    // both to macroOpenChanged), which is what keeps a transaction from
+    // spanning two projects.
+    /// DOES THE RUN IN FLIGHT OWN AN UNDO ENTRY AT ALL? Set by
+    /// ScriptEngine::evaluate from its own `wrapUndoMacro` argument, and BOTH
+    /// halves below check it.
+    ///
+    /// Not every evaluation is a user's script run: the MCP tools evaluate
+    /// small internal expressions with wrapUndoMacro FALSE
+    /// (scripting/mcp/mcptools.cpp), and such a run must touch neither the undo
+    /// stack nor the database's gesture batch. Without this flag a project verb
+    /// reached from one of them would have found `runMacroActive` false and
+    /// correctly done nothing at the end — and then OPENED a macro and a batch
+    /// on the way out that nothing would ever close: a transaction held for the
+    /// rest of the session.
+    bool runWrapsUndoMacro = false;
+
+    /// True between beginRunUndoMacro and endRunUndoMacro. The pair is
+    /// STATEFUL because both halves have side effects that must balance — the
+    /// undo guard and the database's gesture batch (a counted scope).
+    bool runMacroActive = false;
+
+    void endRunUndoMacro()
+    {
+        if (!runWrapsUndoMacro || !runMacroActive) return;
+        runMacroActive = false;
+        if (macroOpenChanged) macroOpenChanged(false);
+        if (endUndoMacro) endUndoMacro();
+    }
+    void beginRunUndoMacro()
+    {
+        if (!runWrapsUndoMacro || runMacroActive || !beginUndoMacro) return;
+        runMacroActive = true;
+        beginUndoMacro(runMacroText);
+        if (macroOpenChanged) macroOpenChanged(true);
+    }
     /// AFTER THE RUN, NOT BETWEEN TWO VERBS. Some verbs deliberately defer
     /// their effect "until the script has finished" and used to get that for
     /// free by posting a queued call: the UI thread was blocked inside the JS,

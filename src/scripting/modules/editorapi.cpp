@@ -405,6 +405,38 @@ QVector<VerbInfo> EditorApi::verbs() const
           "A deselect keeps the tab it is on. Called with no argument it reads. Same "
           "implementation as the tab bar and the Ctrl+Shift+P toggle.",
           Needs::Window },
+        { "propertiesFilter", "editor.propertiesFilter({tab, text}) -> {tab, text, visible, hidden}",
+          "THE RIGHT COLUMN'S FILTER BOX — one per tab, filtering that tab's rows only "
+          "(PROPERTY_FILTER_SPEC; owner decision 2026-09-15 \"the box belongs to its tab\"). "
+          "`text` is matched case-insensitively against each row's NAME, its stable key and its "
+          "keywords, plus the titles of the sections it sits in: every whitespace-separated word "
+          "must match somewhere, so \"sun disc\" keeps the three Sun Disc rows and \"ssr\" finds "
+          "Screen-Space Reflections through its key. A word-start match wins — if anything in the "
+          "column matches at the start of a word, mid-word coincidences are dropped. A section "
+          "with a match OPENS; a section with none keeps its header, greyed and closed, so the "
+          "column still says where its settings are. `tab` is \"world\" or "
+          "\"selection\" and defaults to the tab on screen; each tab keeps its own text for the "
+          "session (nothing is persisted). `visible` and `hidden` count the rows that tab's last "
+          "apply judged — rows the panel itself hides (a spot row on a point light) are in "
+          "neither. Called with no argument it reads. Rows are hidden and shown, never rebuilt: "
+          "the same call the box makes on every keystroke.",
+          Needs::Window },
+        { "properties", "editor.properties({tab}) -> [{tab, section, label, key, keywords, "
+                        "panelVisible, filteredOut, visible}]",
+          "WHAT IS ON THE PROPERTIES COLUMN RIGHT NOW, row by row, in the order the column "
+          "holds them (PROPERTY_FILTER_SPEC §3.5) — the answer to \"which rows exist\" and "
+          "\"why can I not see that row\" without a screenshot. `section` is the title chain "
+          "the row sits in, outermost first (a nested section like Detail Layers adds a "
+          "second entry); `label` is the row's NAME even when the header elided it on a "
+          "narrow dock; `key` is its stable name where it has one (\"world.override:ssr\", "
+          "\"postFx.exposure\", a material property's own name) and `keywords` the synonyms "
+          "curated beside it. VISIBILITY HAS TWO INPUTS and both are reported: "
+          "`panelVisible` is the panel's own intent (a spot row on a point light is false), "
+          "`filteredOut` is the filter box's verdict, and `visible` is the AND of them — the "
+          "row on screen. `tab` is \"world\" or \"selection\", defaulting to the tab in "
+          "front; only the rows that tab has MOUNTED are listed, because those are the rows "
+          "that exist for the current selection.",
+          Needs::Window },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
           "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
           "`translate` in world units — which is also the ground grid's spacing — `rotate` in "
@@ -423,7 +455,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "snapToFloor", "editor.snapToFloor() -> bool",
           "Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable.",
           Needs::Engine },
-        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes, pendingAssetDeletes}",
+        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes, pendingAssetDeletes, dbBatchDepth, dbCommits}",
           "The undo stack, for scripts that need to assert that an action was RECORDED rather "
           "than merely performed. `count`/`index` are the stack's own; `macroOpen` is true inside "
           "a script run. Read `pushes` — the total number of commands ever pushed — to bracket an "
@@ -434,7 +466,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "delete command queues its asset row instead of writing it when it dies, and the queue "
           "is applied in one transaction when the stack is cleared (project close, quit), so this "
           "reads non-zero only between those two moments — it is how a test proves the rows were "
-          "scrubbed after a close without one fdatasync per command on the UI thread.",
+          "scrubbed after a close without one fdatasync per command on the UI thread. `dbBatchDepth` is the "
+          "database's gesture transaction: a script run opens one (so it reads 1 inside a run), and every "
+          "library write the run makes rides it, which is why 300 scene.addPrimitive calls cost one commit "
+          "instead of 300. `dbCommits` counts this process's durable write commits so far — read it before "
+          "and after an action and the difference is the number of disk syncs that action cost.",
           Needs::Document },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
@@ -1818,6 +1854,54 @@ QVariantMap EditorApi::propertiesTab(const QVariantMap &change)
     return out;
 }
 
+QVariantMap EditorApi::propertiesFilter(const QVariantMap &change)
+{
+    if (!host.mainWindow) {
+        fail("editor.propertiesFilter: this verb needs the editor window (a --script/--headless "
+             "run has no panels)");
+        return QVariantMap();
+    }
+    static const QStringList known = { QStringLiteral("tab"), QStringLiteral("text") };
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("editor.propertiesFilter"),
+                                                         change, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+
+    const QString tab = change.value(QStringLiteral("tab")).toString();
+    if (!host.mainWindow->isPropertiesTab(tab)) {
+        fail(QStringLiteral("editor.propertiesFilter: unknown tab '%1' (world|selection)").arg(tab));
+        return QVariantMap();
+    }
+    if (change.contains(QStringLiteral("text")))
+        host.mainWindow->setPropertiesFilter(tab, change.value(QStringLiteral("text")).toString());
+    const QPair<int, int> counts = host.mainWindow->propertiesFilterCounts(tab);
+    QVariantMap out;
+    out[QStringLiteral("tab")] = tab.isEmpty() ? host.mainWindow->propertiesTab() : tab.trimmed().toLower();
+    out[QStringLiteral("text")] = host.mainWindow->propertiesFilter(tab);
+    out[QStringLiteral("visible")] = counts.first;
+    out[QStringLiteral("hidden")] = counts.second;
+    return out;
+}
+
+QVariantList EditorApi::properties(const QVariantMap &args)
+{
+    if (!host.mainWindow) {
+        fail("editor.properties: this verb needs the editor window (a --script/--headless "
+             "run has no panels)");
+        return QVariantList();
+    }
+    static const QStringList known = { QStringLiteral("tab") };
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("editor.properties"),
+                                                         args, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantList(); }
+
+    const QString tab = args.value(QStringLiteral("tab")).toString();
+    if (!host.mainWindow->isPropertiesTab(tab)) {
+        fail(QStringLiteral("editor.properties: unknown tab '%1' (world|selection)").arg(tab));
+        return QVariantList();
+    }
+    return host.mainWindow->propertyRows(tab);
+}
+
 QVariantMap EditorApi::snapSize()
 {
     return QVariantMap{ { QStringLiteral("translate"), double(SnapSettings::translateSize()) },
@@ -1905,6 +1989,12 @@ QVariantMap EditorApi::undoState()
     // The deferred library work the dying commands queued (CLOSE-1). Zero
     // after every clear; a database-less host reports zero too.
     out["pendingAssetDeletes"] = host.db ? host.db->pendingAssetDeleteCount() : 0;
+    // ONE GESTURE, ONE COMMIT (CLOSE-2). `dbBatchDepth` is the counted
+    // transaction scope the run holds; `dbCommits` is the process's durable
+    // write commits so far, so a script can bracket an action and prove the
+    // rows cost one commit instead of one per row.
+    out["dbBatchDepth"] = host.db ? host.db->batchDepth() : 0;
+    out["dbCommits"]    = QVariant::fromValue(qulonglong(Database::durableCommits()));
     return out;
 }
 

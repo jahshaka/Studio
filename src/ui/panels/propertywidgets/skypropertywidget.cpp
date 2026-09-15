@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/skypropertywidget.h"
+#include "ui/panels/propertyrows.h"
 #include "data/project.h"
 #include "irisgl/core/irisutils.h"
 
@@ -180,6 +181,9 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	setMouseTracking(true);
 
 	skySelector = this->addComboBox("Sky Type");
+	PropertyRows::identify(skySelector, QStringLiteral("sky.type"),
+	                       { QStringLiteral("environment"), QStringLiteral("hdri"),
+	                         QStringLiteral("background") });
 	skySelector->addItem("Single Color");
 	skySelector->addItem("Cubemap");
 	skySelector->addItem("Equirectangular");

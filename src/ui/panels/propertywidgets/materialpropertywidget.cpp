@@ -123,7 +123,8 @@ void MaterialPropertyWidget::addResetRow()
         if (meshNode && services && services->sceneEdit)
             services->sceneEdit->resetMaterial(meshNode);
     });
-    this->addWidgetToContent(row);
+    this->addWidgetToContent(row, tr("Material"),
+                             { QStringLiteral("reset"), QStringLiteral("assign") });
 }
 
 void MaterialPropertyWidget::forceShaderRefresh(const QString &materialName)

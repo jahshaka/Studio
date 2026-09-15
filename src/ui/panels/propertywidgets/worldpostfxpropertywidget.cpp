@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/panelundo.h"
 #include "ui/panels/propertywidgets/rowundo.h"
 #include "services/worldmodes.h"
+#include "ui/panels/propertyrows.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/dragvaluewidgets.h"
@@ -53,6 +54,28 @@ void WorldPostFxPropertyWidget::setSceneView(IEditorViewport *sceneView)
 // them — so this blade is built on the first scene and refreshed from then on
 // (debt L6: the rebuild-per-edit was what destroyed the control that raised the
 // edit, and what made a page switch repaint half-built rows).
+/// A POST-CHAIN ROW'S IDENTITY (PROPERTY_FILTER_SPEC §3.2). The registry row's
+/// own id is the key — which is what makes "ssr" find Screen-Space Reflections
+/// — and its group is a synonym, so "reflections" finds it too.
+void WorldPostFxPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row &r)
+{
+    if (!row) return;
+    QStringList keywords{ r.group };
+    // CURATED SYNONYMS (PROPERTY_FILTER_SPEC D5), beside the row, deleted with
+    // it: the short names people actually type for rows whose label spells the
+    // thing out in full.
+    if (r.id == QLatin1String("ssr"))
+        keywords << QStringLiteral("screen space reflections") << QStringLiteral("reflections");
+    else if (r.id == QLatin1String("ssao"))
+        keywords << QStringLiteral("ao") << QStringLiteral("ambient occlusion");
+    else if (r.id == QLatin1String("hdr"))
+        keywords << QStringLiteral("tonemap") << QStringLiteral("tone mapping")
+                 << QStringLiteral("exposure");
+    else if (r.id == QLatin1String("photon"))
+        keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
+    PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);
+}
+
 void WorldPostFxPropertyWidget::build()
 {
     if (!effectRows.isEmpty() || !scene) return;
@@ -70,9 +93,11 @@ void WorldPostFxPropertyWidget::build()
             // cannot be set to something the renderer would ignore.
             row.unavailable = this->addLabel(r->label, QStringLiteral("not available yet"));
             if (row.unavailable) row.unavailable->setToolTip(r->cost);
+            identifyRow(row.unavailable, *r);
         } else if (r->type == worldmodes::RowType::Bool) {
             row.box = this->addCheckBox(r->label, false);
             row.box->setToolTip(r->cost);
+            identifyRow(row.box, *r);
             const QString id = r->id;
             const QString label = r->label;
             connect(row.box, &CheckBoxWidget::valueChanged, this, [this, id, label](bool on) {
@@ -86,6 +111,7 @@ void WorldPostFxPropertyWidget::build()
             for (const worldmodes::EnumOption &o : r->options)
                 row.combo->addItem(o.label, o.value);
             row.combo->setToolTip(r->cost);
+            identifyRow(row.combo, *r);
             const QString id = r->id;
             const QString label = r->label;
             ComboBoxWidget *combo = row.combo;
@@ -111,6 +137,10 @@ void WorldPostFxPropertyWidget::build()
             pf.field = this->addDragFloat(p.label, p.get ? p.get(scene) : 0.0, p.minValue,
                                           p.maxValue, p.perPixelStep, p.decimals);
             pf.field->setToolTip(p.doc);
+            // The parameter's own key, and the effect it belongs to as a
+            // synonym: "bloom" finds the Bloom row AND its threshold.
+            PropertyRows::identify(pf.field, QStringLiteral("postFx.") + p.id,
+                                   { r->label, r->id });
 
             // ONE UNDO STEP PER SCRUB: rowundo brackets the gesture (first tick
             // to editingDone) and the write goes through the sceneprops table,

@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include "data/database/database.h"
 #include "ui/controls/rowfit.h"
+#include "ui/panels/propertyrows.h"
 
 PropertyWidget::PropertyWidget(QWidget *parent) : QWidget(parent), ui(new Ui::PropertyWidget)
 {
@@ -49,6 +50,12 @@ void PropertyWidget::addRow(QWidget *row)
     if (!row) return;
     RowFit::fitRow(row);
     ui->contentpane->layout()->addWidget(row);
+    // THE SECOND CHOKE POINT (PROPERTY_FILTER_SPEC §3.2). This widget is itself
+    // a row in the material blade, so it registers as a CONTAINER: its property
+    // rows chain to it, and their key is the property's own name — "roughness"
+    // finds the roughness row whatever the material calls it on screen.
+    PropertyRows::registry().add(this, row);
+    if (!pendingKey.isEmpty()) PropertyRows::registry().identify(row, pendingKey);
 }
 
 HFloatSliderWidget* PropertyWidget::addFloatValueSlider(const QString& name, float min, float max)
@@ -452,7 +459,12 @@ void PropertyWidget::updatePane()
 void PropertyWidget::setProperties(QList<iris::Property*> properties)
 {
     rowByName.clear();
-    for (auto prop : properties)
+    for (auto prop : properties) {
+        // THE ROW'S KEY IS THE PROPERTY'S NAME (PROPERTY_FILTER_SPEC §3.2).
+        // Set here rather than in ten adders: addRow() is the one place the row
+        // reaches the registry, and every branch below goes through it exactly
+        // once. `roughness` finds the row whose displayName is "Roughness".
+        pendingKey = prop->name;
         switch (prop->type) {
             case iris::PropertyType::Float:
                 addFloatProperty(prop);
@@ -496,6 +508,8 @@ void PropertyWidget::setProperties(QList<iris::Property*> properties)
             case iris::PropertyType::None:
             default: break;
         }
+        pendingKey.clear();
+    }
 
     updatePane();
 

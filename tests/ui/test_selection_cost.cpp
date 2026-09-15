@@ -343,6 +343,47 @@ int main(int argc, char **argv)
     CHECK(counter.frameReDerivations == 0,
           "storm: no focus frame is re-derived by a selection change");
 
+    // ---- THE SAME 200 SWITCHES UNDER A LIVE FILTER ------------------------
+    // Every mount re-applies the property filter (PROPERTY_FILTER_SPEC §6.1),
+    // which walks the registry's entries for the mounted blades — ~250 rows at
+    // the widest selection — and hides or shows each one. That is per PICK, so
+    // it belongs in this suite's budget rather than in a micro-benchmark: a
+    // filtered column must not make clicking around the scene slower in kind.
+    {
+        panel->setPropertiesFilter(SceneNodePropertiesWidget::Tab::Selection,
+                                   QStringLiteral("sha"));   // matches a few rows everywhere
+        turn();
+        QVector<double> filteredMs(kSwitches, 0.0);
+        QElapsedTimer filteredTimer;
+        for (int i = 0; i < kSwitches; ++i) {
+            filteredTimer.start();
+            panel->setSceneNode(nodes[i % nodes.size()]);
+            filteredMs[i] = filteredTimer.nsecsElapsed() / 1e6;
+            turn();
+        }
+        const double filteredFirst = average(filteredMs, 0, 50);
+        const double filteredLast = average(filteredMs, kSwitches - 50, 50);
+        double filteredTotal = 0;
+        for (double v : filteredMs) filteredTotal += v;
+        std::printf("  UNDER A LIVE FILTER:             first50 avg %.2f ms, last50 avg %.2f ms, "
+                    "total %.0f ms (unfiltered setSceneNode last50 %.2f ms)\n",
+                    filteredFirst, filteredLast, filteredTotal, lastSwitchAvg);
+
+        CHECK(filteredLast <= 1.5 * filteredFirst,
+              "cost: under a live filter the last 50 switches cost no more than 1.5x the first 50");
+        CHECK(filteredTotal < 60000.0,
+              "cost: 200 switches under a live filter finish well inside a minute");
+        // The filter is a walk and a hide, not a rebuild: a pick with one live
+        // must stay the same ORDER of work as a pick without one. (Generous, so
+        // this is a shape assertion and not a machine-speed one.)
+        CHECK(filteredLast <= qMax(3.0, 4.0 * lastSwitchAvg),
+              QStringLiteral("cost: a filtered pick stays in the same order as an unfiltered "
+                             "one (%1 ms vs %2 ms)").arg(filteredLast, 0, 'f', 2)
+                  .arg(lastSwitchAvg, 0, 'f', 2).toUtf8().constData());
+        panel->setPropertiesFilter(SceneNodePropertiesWidget::Tab::Selection, QString());
+        turn();
+    }
+
     // ...and the panel still WORKS: the right blades are on screen for the node
     // that is selected. (Cheap end-to-end sanity, not a UI spec — that is
     // ui.material_panel's and ui.photon_panel's job.)

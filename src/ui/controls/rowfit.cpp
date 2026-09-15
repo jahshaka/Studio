@@ -36,6 +36,9 @@ public:
     explicit ElideFilter(QLabel *label) : QObject(label), mLabel(label)
     {
         mFull = label->text();
+        label->setProperty(RowFit::kFullTextProperty, mFull);
+        // Nothing is elided yet, so what is on screen IS the name.
+        label->setProperty(RowFit::kShownTextProperty, mFull);
         label->installEventFilter(this);
         apply();
     }
@@ -66,7 +69,13 @@ private:
     {
         if (mInside) return;                    // setText() re-enters through Paint
         const QString current = mLabel->text();
-        if (current != mWrote) mFull = current; // a new value arrived from the panel
+        if (current != mWrote) {
+            mFull = current;                    // a new value arrived from the panel
+            // ...and the NAME goes with it: the row registry matches text
+            // against the full name, never the elided picture (rowfit.h).
+            mLabel->setProperty(RowFit::kFullTextProperty, mFull);
+            mLabel->setProperty(RowFit::kShownTextProperty, mFull);
+        }
 
         const QMargins m = mLabel->contentsMargins();
         const int avail = mLabel->width() - m.left() - m.right() - 2 * mLabel->margin();
@@ -84,6 +93,7 @@ private:
         mInside = true;
         mWrote = elided;
         mLabel->setText(elided);
+        mLabel->setProperty(RowFit::kShownTextProperty, elided);
         // The name stays reachable when it does not fit — but never at the cost
         // of a tooltip the PANEL set (those explain the setting; this one only
         // repeats the name).
@@ -137,6 +147,21 @@ void shrinkable(QWidget *w, int minimum)
 }   // namespace
 
 namespace RowFit {
+
+QString fullText(const QLabel *label)
+{
+    if (!label) return QString();
+    const QVariant full = label->property(kFullTextProperty);
+    if (!full.isValid()) return label->text();      // never fitted
+    // IS THIS LABEL STILL SHOWING WHAT WE PUT THERE? If not, the panel has
+    // re-labelled it since and has not been elided yet — which is the ordinary
+    // case for a row whose tab is not on screen (no paint, no resize, no
+    // elision), and the stored name is stale. The text on the label wins.
+    const QVariant shown = label->property(kShownTextProperty);
+    if (shown.isValid() && shown.toString() != label->text()) return label->text();
+    return full.toString().isEmpty() ? label->text() : full.toString();
+}
+
 
 void fitLabel(QLabel *label)
 {

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/assetcas.h"
+#include "ui/panels/propertyrows.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
@@ -179,8 +180,11 @@ void WorldPropertyWidget::refreshRows()
         musicFilesAvailableFromDatabase =
             db->fetchAssetsByType(static_cast<int>(ModelTypes::Music), project->getProjectGuid());
 
-    if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
-    else ambientMusicSelector->show();
+    // THE PANEL'S INTENT, not a raw hide (PROPERTY_FILTER_SPEC §3.3): the row
+    // registry ANDs it with the filter's verdict, so a refresh under a live
+    // filter can no longer put a filtered-out row back on screen.
+    PropertyRows::setPanelVisible(ambientMusicSelector,
+                                  !musicFilesAvailableFromDatabase.isEmpty());
 
     ambientMusicSelector->clear();
     ambientMusicSelector->addItem("None", "");

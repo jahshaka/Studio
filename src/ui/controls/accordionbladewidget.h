@@ -36,6 +36,7 @@ class DragVector3Widget;
 
 #include <QLayout>
 #include <QPointer>
+#include <QStringList>
 
 class Project;
 
@@ -57,19 +58,19 @@ public:
     TextInputWidget*        addTextInput(const QString&);
     LabelWidget*            addLabel(const QString&, const QString&);
     FilePickerWidget*       addFilePicker(const QString&);
-	Widget2D*				addVector2Widget(const QString&, float xValue, float yValue);
-	Widget3D*				addVector3Widget(const QString&, float xValue, float yValue, float zValue);
 	/// The COMPACT, SCRUBBABLE rows (ui/controls/dragvaluewidgets.h) — the
-	/// transform editor's shape, for panels that want a labelled number rather
-	/// than the unlabelled full-width spinboxes addVector3Widget produces (it
-	/// ignores its name argument entirely). New panel rows should use these.
+	/// transform editor's shape, and the ONLY vector rows a blade offers now:
+	/// the three addVector*Widget helpers that stood beside them built
+	/// unlabelled full-width spin boxes and ignored their name argument
+	/// outright, which is a row the property filter could never find by name.
+	/// They had no call sites and are gone (lane PROPERTY-FILTER-1); the
+	/// material list keeps its own, whose rows carry a titled holder.
 	DragFloatWidget*		addDragFloat(const QString &title, double value,
 	                                     double min, double max,
 	                                     double perPixelStep = 0.02, int decimals = 3);
 	DragVector3Widget*		addDragVector3(const QString &title, const iris::Vec3 &value,
 	                                       double min = -100000.0, double max = 100000.0,
 	                                       double perPixelStep = 0.02, int decimals = 3);
-	Widget4D*				addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
 	CubeMapWidget*			addCubeMapWidget(QStringList list);
 	CubeMapWidget*			addCubeMapWidget();
 	CubeMapWidget*			addCubeMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back);
@@ -88,6 +89,10 @@ public:
     /// the add*() helpers put theirs. For rows the generic controls do not
     /// cover (the light panel's two asset-binding rows).
     void                    addWidgetToContent(QWidget *widget);
+    /// The same, naming the row so the property filter can find it by text
+    /// (PROPERTY_FILTER_SPEC §3.4.6 — an unnamed row is section-bound).
+    void                    addWidgetToContent(QWidget *widget, const QString &label,
+                                               const QStringList &keywords = QStringList());
 
     /// The one live Project (Phase 4: was the Globals::project static). Set by
     /// whoever creates the panel; the add*() helpers above forward it to the
@@ -96,8 +101,20 @@ public:
     virtual void setProject(Project *p) { project = p; }
 
     void setPanelTitle(const QString&);
+    /// The section's name and the QLabel that holds it — the property-row
+    /// registry reads the label LIVE (titles and row labels mutate).
+    QString panelTitle() const;
+    class QLabel *titleLabel() const;
     void collapse();
     void expand();
+    /// Whether the content pane is open (the filter's expand snapshot).
+    bool isExpanded() const;
+    /// GREYS THE HEADER — the property filter's "nothing in here matches"
+    /// (PROPERTY_FILTER_SPEC D7a, the owner's pick): the section keeps its
+    /// header so the user can see WHERE the column went thin, muted and closed
+    /// rather than gone. A palette tone, never a sheet; a no-op under Classic.
+    void setHeaderMuted(bool muted);
+    bool isHeaderMuted() const { return headerMuted; }
 
     /// Retires every row in the content pane. `layout` is IGNORED and has
     /// always been (the pane is the only thing this clears); it stays only
@@ -156,6 +173,8 @@ private:
     /// a rebuild driven from a row's slot mid-clear) must not consume a
     /// generation of its own.
     int mClearDepth = 0;
+    /// See setHeaderMuted.
+    bool headerMuted = false;
 };
 
 #endif // ACCORDIANBLADEWIDGET_H

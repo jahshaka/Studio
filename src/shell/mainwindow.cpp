@@ -304,7 +304,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		if (!engineHost.isRunning() || engineHost.engine()->isHeadless()) return false;
 		return sceneView->isInitialized();
 	};
-	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
+	// THE RUN'S DATABASE SCOPE (CLOSE-2 item 1). A script run is one undo
+	// macro, which is the gesture boundary the library writes want too:
+	// without this, every scene.addPrimitive in a loop autocommitted its asset
+	// row on its own (journal, write, fdatasync, unlink — 300 primitives paid
+	// it 300+ times, on the UI thread). The undo half of this hook is gone
+	// (round 2, C1): UndoService answers "is a run in progress?" from the run
+	// macro it already arms, rather than from a second flag set here. The
+	// project verbs close and reopen the scope at a project boundary
+	// (ScriptHost::endRunUndoMacro), which is what keeps a transaction from
+	// spanning two projects.
+	scriptHost->macroOpenChanged = [this](bool open) {
+		if (!db) return;
+		if (open) db->beginBatch();
+		else      db->endBatch();
+	};
 	// THE RENDER LOOP FOR THE LENGTH OF A RUN (SCRIPTING_LIVE_SPEC §3.1). A
 	// script runs off the UI thread now, so the driver's timer WOULD fire
 	// between its verbs — which is the live feedback a person wants and the
@@ -1082,6 +1096,27 @@ void MainWindow::setupServices()
     // is already live is a no-op by construction, so a second of latency costs
     // nothing and a per-frame walk of every light against every mesh would.
     wireSceneIssues();
+
+    // THE LIBRARY ITSELF CAN FAIL, AND THE USER HAS TO BE TOLD (CLOSE-2 round
+    // 2, H7). A gesture's database writes ride one transaction now, so a
+    // commit that fails rolls back EVERYTHING that gesture wrote — a whole
+    // script run's asset rows — and until this line existed the only trace was
+    // a warn in the log, which has an audience of one. It is a scene-issue and
+    // not a toast for the reason the bar exists: it stays up until the
+    // condition is gone, and the condition going away is the very next gesture
+    // committing. No node to select; the action is the only thing to say.
+    Database::setBatchCommitListener([](bool ok) {
+        const QString id = QStringLiteral("library.write");
+        if (ok) { SceneIssues::instance().clear(id); return; }
+        SceneIssue issue;
+        issue.id = id;
+        issue.kind = QStringLiteral("library.write");
+        issue.message = tr("The library could not be saved, so the changes from the last "
+                           "action were not kept.");
+        issue.action = tr("Check that the disk is not full and that the library file is not "
+                          "read-only, then try the action again.");
+        SceneIssues::instance().raise(issue);
+    });
 
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
@@ -4076,6 +4111,24 @@ void MainWindow::setupShortcuts()
                 ? SceneNodePropertiesWidget::Tab::Selection
                 : SceneNodePropertiesWidget::Tab::World);
     });
+    // THE PROPERTY FILTER'S BOX (PROPERTY_FILTER_SPEC D1): Ctrl+F, which is the
+    // universal find key and was free in the registry — the only "Ctrl+F" in
+    // src/ is the Ctrl+F4 render-capture tooltip, and plain F (camera.focus) is
+    // a different chord. It focuses the box of the tab ON SCREEN, since each
+    // tab has its own filter. (A QLineEdit accepts the ShortcutOverride for
+    // unmodified printable keys, so typing "f" into the box does not fire
+    // camera.focus.)
+    reg.add("properties.filter", "Properties: Filter Rows", "Windows",
+            QKeySequence(Qt::CTRL | Qt::Key_F), this, [this]() {
+        if (!propertiesTabStrip) return;
+        if (sceneNodePropertiesDock && !sceneNodePropertiesDock->isVisible())
+            setPanelOpen(QStringLiteral("properties"), true);
+        propertiesTabStrip->focusFilter();
+    });
+    // Esc is a widget-level key inside the box, not a registry binding — the
+    // row exists so the Preferences table says so.
+    reg.addFixed("properties.filter.clear", "Properties: Clear the Filter", "Windows",
+                 "Esc (while the filter box has focus)");
     reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
     reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,
@@ -4796,6 +4849,62 @@ QDockWidget *MainWindow::panelDock(const QString &name) const
     if (wanted == QLatin1String("timeline"))   return animationDock;
     if (wanted == QLatin1String("console"))    return scriptConsoleDock;
     return nullptr;
+}
+
+QVariantList MainWindow::propertyRows(const QString &tabName) const
+{
+    QVariantList out;
+    if (!sceneNodePropertiesWidget) return out;
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.trimmed().isEmpty()
+        && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return out;
+    const QString name = SceneNodePropertiesWidget::tabName(tab);
+    for (const auto &row : sceneNodePropertiesWidget->propertyRows(tab)) {
+        QVariantMap entry;
+        entry[QStringLiteral("tab")] = name;
+        entry[QStringLiteral("section")] = row.sections;
+        entry[QStringLiteral("label")] = row.label;
+        entry[QStringLiteral("key")] = row.key;
+        entry[QStringLiteral("keywords")] = row.keywords;
+        entry[QStringLiteral("panelVisible")] = row.panelVisible;
+        entry[QStringLiteral("filteredOut")] = row.filteredOut;
+        entry[QStringLiteral("visible")] = row.visible;
+        out.append(entry);
+    }
+    return out;
+}
+
+bool MainWindow::isPropertiesTab(const QString &tabName) const
+{
+    if (tabName.trimmed().isEmpty()) return true;
+    SceneNodePropertiesWidget::Tab tab;
+    return SceneNodePropertiesWidget::tabFromName(tabName, tab);
+}
+
+QString MainWindow::propertiesFilter(const QString &tabName) const
+{
+    if (!sceneNodePropertiesWidget) return QString();
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return QString();
+    return sceneNodePropertiesWidget->propertiesFilter(tab);
+}
+
+bool MainWindow::setPropertiesFilter(const QString &tabName, const QString &text)
+{
+    if (!sceneNodePropertiesWidget) return false;
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return false;
+    sceneNodePropertiesWidget->setPropertiesFilter(tab, text);
+    return true;
+}
+
+QPair<int, int> MainWindow::propertiesFilterCounts(const QString &tabName) const
+{
+    if (!sceneNodePropertiesWidget) return { 0, 0 };
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return { 0, 0 };
+    const auto c = sceneNodePropertiesWidget->filterCounts(tab);
+    return { c.visible, c.hidden };
 }
 
 QString MainWindow::propertiesTab() const

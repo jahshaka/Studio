@@ -72,8 +72,10 @@ void UndoService::clear()
 {
     // Clearing inside an open macro corrupts QUndoStack's macro accounting
     // ("endMacro(): no matching beginMacro()"); a script run stays one undo
-    // step instead, which is the scripting contract anyway.
-    if (mScriptMacroOpen) return;
+    // step instead, which is the scripting contract anyway. The project verbs
+    // END the run's entry before closing or switching projects, so a scripted
+    // close really does clear (CLOSE-2 item 2).
+    if (mMacroArmed) return;
     mStack->clear();
     // Every command that just died appended its asset-row cleanup instead of
     // writing it (CLOSE-1). One transaction for the lot, here, where the

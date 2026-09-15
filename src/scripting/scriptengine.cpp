@@ -193,9 +193,21 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     // run that only reads leaves the stack exactly as it found it. Opened and
     // closed HERE, on the UI thread, around the whole run.
     const bool useMacro = wrapUndoMacro && mHost.beginUndoMacro && mHost.endUndoMacro;
+    // The host's two halves both check this, so a verb that ends and reopens
+    // the run's entry at a project boundary is a NO-OP in a run that has no
+    // entry (an MCP internal expression). Saved and restored rather than
+    // cleared: belt and braces now that a run started inside another one is
+    // refused outright (a nested evaluation must not disarm the outer run's
+    // bracket, and there is no longer a way to reach one).
+    const bool outerWrapsUndoMacro = mHost.runWrapsUndoMacro;
+    mHost.runWrapsUndoMacro = useMacro;
     if (useMacro) {
-        mHost.beginUndoMacro(QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName()));
-        if (mHost.macroOpenChanged) mHost.macroOpenChanged(true);
+        // Through the host's own bracket, because a verb can close the entry
+        // and open the next one mid-run at a project boundary (ScriptHost::
+        // endRunUndoMacro) and both ends have to agree on the name and on the
+        // order of the two hooks.
+        mHost.runMacroText = QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName());
+        mHost.beginRunUndoMacro();
     }
 
     // THE RUN POLICY. Off suspends the render driver's tick for the duration —
@@ -246,10 +258,8 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
 
     if (suspendDriver && mHost.driverSuspended) mHost.driverSuspended(false);
 
-    if (useMacro) {
-        if (mHost.macroOpenChanged) mHost.macroOpenChanged(false);
-        mHost.endUndoMacro();
-    }
+    if (useMacro) mHost.endRunUndoMacro();
+    mHost.runWrapsUndoMacro = outerWrapsUndoMacro;
 
     const bool stopped = mStopped;
     mRunning = false;

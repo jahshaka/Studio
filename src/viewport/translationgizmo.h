@@ -71,7 +71,19 @@ class TranslationHandle : public GizmoHandle
 	/// a handle that is not a plane, when there is no pick view, when a corner
 	/// falls behind the eye, or when the plane is within kPlaneEdgeOnDegrees of
 	/// edge-on (where it is not drawn either).
-	bool planeDistance(const QPointF& cursor, float& distancePx) const;
+	///
+	/// `onAxisBand`, when given, comes back TRUE where the cursor is on one of
+	/// the two ARROW SHAFTS the square's inner sides run along (GIZMO-2 round 2,
+	/// second reader). Since item 1 anchored the square at the origin, its two
+	/// inner sides ARE the X/Y/Z shafts between 0 and kPlaneHandleSpan, and a
+	/// square answers 0 px over its whole area — so without this a press on the
+	/// drawn shaft could never reach the arrow, and worse, an axis lies in TWO
+	/// squares that both answer 0, which handed the drag to whichever came
+	/// first in handle order (XY for X and Y, YZ for Z): the object moved in a
+	/// plane the user did not aim at. The callers use it to let the ARROWS
+	/// answer first there.
+	bool planeDistance(const QPointF& cursor, float& distancePx,
+	                   bool* onAxisBand = nullptr) const;
 	/// True while this plane handle is worth drawing and clicking — the
 	/// edge-on rule, read from the pick view's camera.
 	bool planeFacesCamera() const;

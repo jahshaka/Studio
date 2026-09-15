@@ -9,6 +9,7 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
@@ -234,6 +235,7 @@ add_executable(test_photon_panel
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
@@ -318,6 +320,7 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
@@ -429,6 +432,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
@@ -553,6 +557,7 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
@@ -677,6 +682,37 @@ add_test(NAME ui.properties_tabs COMMAND test_properties_tabs
 set_tests_properties(ui.properties_tabs PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.properties_tabs)
+
+
+# ui.properties_filter — THE FILTER BOX INSIDE EACH TAB (lane PROPERTY-FILTER-1,
+# PROPERTY_FILTER_SPEC): every row registers an identity at the two choke points,
+# one box per tab filters that tab's rows by text, and a keystroke hides and shows
+# rows instead of rebuilding them. Same source set and shape as ui.properties_tabs.
+add_executable(test_properties_filter
+    test_properties_filter.cpp
+    ${JAH_PROPERTIES_PANEL_SOURCES})
+set_target_properties(test_properties_filter PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_properties_filter PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_properties_filter PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_properties_filter
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+jah_document_graph(test_properties_filter)
+add_test(NAME ui.properties_filter COMMAND test_properties_filter
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.properties_filter PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.properties_filter)
 
 
 # ui.project_tile — THE OPEN PROJECT'S DARK BLUE CAPTION BAR (owner request
@@ -1082,3 +1118,41 @@ add_test(NAME ui.mcp_prefs COMMAND test_mcp_prefs
 set_tests_properties(ui.mcp_prefs PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "ui")
 jah_no_display(ui.mcp_prefs)   # offscreen widgets only, no X needed
+# ---------------------------------------------------------------------------
+# ui.presets_favorites — CLOSE-2 (round 2, D1): the Models/Materials presets
+# tabs read the library when their Database ARRIVES, not while they are being
+# built. Both constructors used to call addFavorites() through an unassigned
+# `AssetPanel::handle`; null-guarding that read alone would have silently
+# emptied both tabs for every user. Link stubs for Database (the tests/ui
+# idiom) — the subject is the call order, so a fake library that counts its
+# reads proves more than a real one.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
+add_executable(test_presets_favorites
+    test_presets_favorites.cpp
+    test_presets_favorites_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmodelpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmaterialpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/materialpresetreader.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp)
+set_target_properties(test_presets_favorites PROPERTIES
+    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_presets_favorites PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_presets_favorites PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+add_test(NAME ui.presets_favorites COMMAND test_presets_favorites
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.presets_favorites PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.presets_favorites)

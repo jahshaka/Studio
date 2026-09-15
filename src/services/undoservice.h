@@ -64,7 +64,7 @@ public:
     /// unset in headless hosts, which have no library to scrub.
     void setDeferredFlushHook(std::function<void()> hook) { mDeferredFlush = std::move(hook); }
 
-    /// Clears the stack — unless a script run's macro is open (the guard that
+    /// Clears the stack — unless a script run is in progress (the guard that
     /// used to be UiManager::scriptMacroOpen + clearUndoStack).
     ///
     /// THE COST OF A CLEAR IS MEMORY, NOT SYNCS (CLOSE-1): every command the
@@ -90,8 +90,15 @@ public:
 
     /// True while a script run is in progress (whether or not the run has
     /// recorded anything yet — see beginScriptMacro).
-    bool isScriptMacroOpen() const { return mScriptMacroOpen; }
-    void setScriptMacroOpen(bool open) { mScriptMacroOpen = open; }
+    ///
+    /// ONE FLAG, not two (CLOSE-2 round 2, C1). There used to be a separate
+    /// `mScriptMacroOpen` that the host set through its own hook, alongside the
+    /// lazy macro's `mMacroArmed` — two answers to one question, set from two
+    /// places, and nothing but convention keeping them equal. The run's macro
+    /// being ARMED *is* "a script run is in progress": beginScriptMacro arms it
+    /// at the start of the run and endScriptMacro disarms it at the end,
+    /// whether or not anything was ever recorded.
+    bool isScriptMacroOpen() const { return mMacroArmed; }
 
     // ---- the script run's ONE undo entry, opened LAZILY ---------------------
     //
@@ -140,9 +147,9 @@ public:
 private:
     QUndoStack *mStack = nullptr;
     StudioServices *mServices = nullptr;
-    bool mScriptMacroOpen = false;
-    /// The lazy script macro: armed by beginScriptMacro, opened by the first
-    /// push (or ensureScriptMacroOpen), closed by endScriptMacro.
+    /// The lazy script macro, and the ONE answer to "is a run in progress":
+    /// armed by beginScriptMacro, opened by the first push (or
+    /// ensureScriptMacroOpen), closed by endScriptMacro.
     bool mMacroArmed = false;
     bool mMacroOpen = false;
     QString mMacroText;

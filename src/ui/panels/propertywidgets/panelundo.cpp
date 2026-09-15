@@ -36,6 +36,7 @@ rowundo::Binding SceneRows::operator()(const QString &key, const QString &text,
     std::function<void()> refresh = mRefresh;
 
     rowundo::Binding b;
+    b.key = key;                     // the property filter's row key (rowundo.h)
     b.guard = mGuard;
     b.read = [sceneFn, key]() { return sceneprops::get(sceneFn(), key); };
     b.write = [sceneFn, key, toDocument](const QVariant &value) {
@@ -62,6 +63,7 @@ rowundo::Binding NodeRows::operator()(const QString &key,
     ServicesFn servicesFn = mServices;
 
     rowundo::Binding b;
+    b.key = key;                     // the property filter's row key (rowundo.h)
     b.guard = mGuard;
     b.read = [nodeFn, key]() -> QVariant {
         auto node = nodeFn();

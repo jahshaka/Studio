@@ -62,8 +62,9 @@ AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
 
     setStyleSheet(StyleSheet::PresetsListPanel());
 
+    // The starter tiles only. The FAVOURITES need the database, which arrives
+    // with setDatabaseHandle after this returns (CLOSE-2).
     addDefaultItems();
-    addFavorites();
 }
 
 AssetMaterialPanel::~AssetMaterialPanel()
