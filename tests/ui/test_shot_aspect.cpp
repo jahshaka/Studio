@@ -35,7 +35,7 @@ For more information see the LICENSE file
 // The window is re-shaped with app.resizeWindow, and everything is measured a
 // request later: layout happens on the event loop, which a --script run holds
 // (the ui.column_law harness, for the same reason).
-#include "../shutdown/mcpharness.h"
+#include "../support/mcpharness.h"
 
 #include <QDir>
 #include <QImage>
@@ -114,6 +114,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("shot-aspect-test");
     mcp.initialize();
 
     // A deterministic frame: no GI (a probe field converges over frames, which
@@ -195,7 +196,7 @@ int main(int argc, char **argv)
     CHECK(qAbs(rows - 268) <= 2,
           "the shot is letterboxed at the AUTHORED 2.39, selection and gizmo notwithstanding");
 
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
     if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
 
     std::printf(failures == 0 ? "ui.shot_aspect: ALL PASS\n" : "ui.shot_aspect: %d FAILURES\n",

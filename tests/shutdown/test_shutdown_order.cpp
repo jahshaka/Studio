@@ -18,7 +18,7 @@
 // sites, so the avatar module's documented "the document model goes before the
 // engine does" guarantee did not hold. It runs BEFORE EngineHostRelease, which
 // is the whole point, and steps 4-8 shifted up by one.
-#include "mcpharness.h"
+#include "../support/mcpharness.h"
 
 #include <QFile>
 #include <QRegularExpression>
@@ -46,6 +46,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("shutdown-order-test");
     mcp.initialize();
 
     // A project is opened first so the teardown has something real to take
@@ -53,13 +54,67 @@ int main(int argc, char **argv)
     // entries — which is exactly the state the two incidents happened in.
     const QJsonObject created = mcp.runScript(QStringLiteral("project.create('ShutdownOrder')"));
     CHECK(created.value("ok").toBool(), "a project was created for the teardown to unwind");
-    mcp.runScript(QStringLiteral("node.add('cube')"));
+    // `node.add` HAS NEVER EXISTED (the node module edits nodes; scene.addPrimitive
+    // creates them) — the call failed with a TypeError on every run since this
+    // suite was written and nobody read the reply, so the undo stack the comment
+    // above promises was empty. Asserted now, which is the whole point.
+    CHECK(mcp.runScript(QStringLiteral("scene.addPrimitive('cube')")).value("ok").toBool(),
+          "a node was added, so the undo stack has an entry to unwind");
+
+    // ---- THE HARNESS'S OWN TRANSPORT CONTRACT (ledger 404) ----------------
+    //
+    // Every app-spawning suite in this tree posts through tests/support/
+    // mcpharness.h, and until 2026-09-15 it posted through a plain
+    // QNetworkAccessManager: Qt >= 6.7 cancels a request after 30 s by
+    // default, the harness threw the cancellation away, and the caller read a
+    // BLANK object whose .value("ok") is false — a failed verb with no
+    // message. ui.window_minimum lost a gate to it.
+    //
+    // Proving it needs a request that outlives its budget without costing the
+    // gate 30 s: a DELIBERATELY short transfer timeout on a second client
+    // against a verb that really does keep the UI thread (and with it the MCP
+    // server) busy for longer. 1 500 ms of block stays under the watchdog's
+    // 2 000 ms stall threshold, so this case adds no stall report to the log
+    // the sequence assertions below read.
+    {
+        McpClient slow;
+        slow.url = mcp.url;
+        slow.token = mcp.token;
+        slow.clientName = QStringLiteral("shutdown-order-transport-test");
+        slow.transferTimeoutMs = 400;
+        // The APP keeps its ordinary budget on purpose: only the CLIENT gives
+        // up early, which is the situation being reproduced.
+        slow.scriptTimeoutMs = 30000;
+        std::printf("info: the FAIL(transport) line that follows is THIS case's, "
+                    "deliberately provoked — the checks under it are the verdict\n");
+        QElapsedTimer t;
+        t.start();
+        const QJsonObject late = slow.runScript(QStringLiteral("app.blockUiThread(1500)"));
+        const qint64 tookMs = t.elapsed();
+        std::printf("info: the short-budget request gave up after %lld ms: %s\n",
+                    static_cast<long long>(tookMs),
+                    QJsonDocument(late).toJson(QJsonDocument::Compact).constData());
+        CHECK(tookMs < 1400, "a request that outlives the transfer timeout RETURNS at the timeout");
+        CHECK(!late.isEmpty(), "... and does not return a blank object");
+        CHECK(!late.value("ok").toBool(), "... it reads as a failure");
+        CHECK(late.value("error").toString().contains(QStringLiteral("no reply within")),
+              "... whose message says no reply arrived within the budget");
+        CHECK(late.value("error").toString().contains(QStringLiteral("app.blockUiThread(1500)")),
+              "... and names the verb that went unanswered");
+        CHECK(slow.transportFailures == 1 &&
+                  slow.lastTransportError.contains(QStringLiteral("no reply within")),
+              "the client counted exactly one transport failure and kept its text");
+        // The app is fine: the block ends and the ordinary client carries on.
+        CHECK(mcp.runScript(QStringLiteral("1 + 1")).value("result").toInt() == 2,
+              "the app answers the next request normally after the abandoned one");
+        CHECK(mcp.transportFailures == 0, "... and nothing failed on the suite's own client");
+    }
 
     // Nothing has shut down yet.
     log += jahshaka.readAll();
     CHECK(!log.contains("[shutdown] step "), "no shutdown step fires before the quit");
 
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
 
     QElapsedTimer exitTimer;
     exitTimer.start();

@@ -15,7 +15,7 @@
 // The contract asserted is the hard one: the process is GONE within
 // kExitBudgetMs of app.quit(), exit code 0 (a logged forced exit also
 // returns the real code — better than a zombie, and still bounded).
-#include "../support/seedsettings.h"
+#include "../support/mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -36,107 +36,11 @@
 #include <cstdio>
 
 static int failures = 0;
+using namespace mcpharness;
+
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 static const int kExitBudgetMs = 30000;   // watchdog fires at 20s; give slack
-
-struct McpClient
-{
-    QNetworkAccessManager net;
-    QUrl url;
-    QString token;
-    int id = 0;
-
-    QJsonObject post(const QJsonObject &body)
-    {
-        QNetworkRequest request(url);
-        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-        request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
-        QNetworkReply *reply = net.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
-        QEventLoop loop;
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
-        const QByteArray data = reply->readAll();
-        reply->deleteLater();
-        return QJsonDocument::fromJson(data).object();
-    }
-
-    void initialize()
-    {
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "initialize" },
-                          { "params", QJsonObject{
-                                { "protocolVersion", "2025-06-18" },
-                                { "capabilities", QJsonObject{} },
-                                { "clientInfo", QJsonObject{ { "name", "shutdown-test" }, { "version", "0" } } } } } });
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "method", "notifications/initialized" } });
-    }
-
-    /// Runs a script through the run_script tool; returns the parsed
-    /// {ok, result, ...} payload (empty object on transport failure).
-    QJsonObject runScript(const QString &script)
-    {
-        const QJsonObject reply = post(QJsonObject{
-            { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "tools/call" },
-            { "params", QJsonObject{ { "name", "run_script" },
-                                     { "arguments", QJsonObject{ { "script", script } } } } } });
-        const QJsonArray content = reply.value("result").toObject().value("content").toArray();
-        if (content.isEmpty()) return {};
-        return QJsonDocument::fromJson(
-            content.first().toObject().value("text").toString().toUtf8()).object();
-    }
-};
-
-/// Merge (never overwrite) the one key the close path still reads: autosave,
-/// which keeps the unsaved-changes prompt off the scripted quit.
-///
-/// THE DONATE DIALOG IS NO LONGER ONE OF THEM. It used to be seeded here as
-/// well, and that seeding was a workaround for a real defect on THIS suite's
-/// subject: `DonateDialog::exec()` ran inside MainWindow::closeEvent, so a
-/// nested modal event loop sat in the middle of the quit path and swallowed
-/// `app.quit()` until the exit budget expired. The first time this suite met a
-/// RelWithDebInfo build the seeding missed the settings file the app actually
-/// read, both cases failed, and the failure looked like an import-shutdown bug.
-/// The dialog moved to FIRST LAUNCH (owner decision D3, 2026-09-12 —
-/// src/app/firstrun.h) and is suppressed outright for any driven run, so the
-/// workaround is deleted: THIS SUITE NOW PROVES THE QUIT PATH WITH NOTHING
-/// SEEDED ABOUT IT. If a modal dialog ever creeps back into closeEvent, this is
-/// the suite that reds.
-static void seedSettings()
-{
-    testsupport::seedSettingsForSpawnedApp(QStringLiteral(JAHSHAKA_BINARY));
-}
-
-static bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut)
-{
-    jahshaka.setProcessChannelMode(QProcess::MergedChannels);
-    jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
-                   { QStringLiteral("--mcp-port=%1").arg(port) });
-    if (!jahshaka.waitForStarted(15000)) return false;
-    QByteArray bootLog;
-    QElapsedTimer timer;
-    timer.start();
-    while (timer.elapsed() < 120000 && jahshaka.state() == QProcess::Running) {
-        jahshaka.waitForReadyRead(500);
-        bootLog += jahshaka.readAll();
-        const int at = bootLog.indexOf("MCP: token ");
-        if (at >= 0) {
-            const int end = bootLog.indexOf('\n', at);
-            if (end > at) {
-                *tokenOut = QString::fromUtf8(bootLog.mid(at + 11, end - at - 11)).trimmed();
-                return true;
-            }
-        }
-    }
-    std::printf("---- boot log ----\n%s\n", bootLog.constData());
-    return false;
-}
-
-static quint16 freePort()
-{
-    QTcpServer probe;
-    probe.listen(QHostAddress::LocalHost, 0);
-    return probe.serverPort();
-}
 
 /// app.quit() then assert the PROCESS terminates within the budget.
 static void quitAndAssertExit(QProcess &jahshaka, McpClient &mcp, const char *label)
@@ -144,7 +48,7 @@ static void quitAndAssertExit(QProcess &jahshaka, McpClient &mcp, const char *la
     // The reply can lose the race with the queued close (the app is allowed
     // to go away mid-response), so the reply is informational only — the
     // assertion that matters is that the PROCESS goes away.
-    const QJsonObject quit = mcp.runScript(QStringLiteral("app.quit()"));
+    const QJsonObject quit = mcp.quit();
     std::printf("info: %s: app.quit() reply ok=%s\n", label,
                 quit.value("ok").toBool() ? "true" : "false/none");
 
@@ -172,7 +76,7 @@ static void quitAndAssertExit(QProcess &jahshaka, McpClient &mcp, const char *la
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    seedSettings();
+    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
 
     const QString cwd = QDir::currentPath();
     const QString fixture =
@@ -200,6 +104,10 @@ int main(int argc, char **argv)
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp")
                            .arg(jahshaka.arguments().first().split('=').last()));
         mcp.token = token;
+        mcp.clientName = QStringLiteral("import-shutdown-test");
+        // A 480 s suite whose verbs import a whole directory synchronously: half of
+        // its own budget per request, well above the harness default.
+        mcp.transferTimeoutMs = 240000;
         mcp.initialize();
 
         CHECK(mcp.runScript(QStringLiteral("project.create('shutdown_during')")).value("ok").toBool(),
@@ -236,6 +144,8 @@ int main(int argc, char **argv)
         mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp")
                            .arg(jahshaka.arguments().first().split('=').last()));
         mcp.token = token;
+        mcp.clientName = QStringLiteral("import-shutdown-test");
+        mcp.transferTimeoutMs = 240000;
         mcp.initialize();
 
         CHECK(mcp.runScript(QStringLiteral("project.create('shutdown_after')")).value("ok").toBool(),

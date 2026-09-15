@@ -23,7 +23,7 @@
 //
 // And correctness is not allowed to move: what comes back out of an archive
 // this wrote is the same world, and a cancelled import leaves no orphan.
-#include "../support/seedsettings.h"
+#include "../support/mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QDirIterator>
@@ -49,6 +49,8 @@
 #include "io/ziphelper.h"
 
 static int failures = 0;
+using namespace mcpharness;
+
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 /// THE BUDGET, and why this number.
@@ -67,90 +69,6 @@ static int failures = 0;
 static const double kMaxGapMs = 750.0;
 static const int kOpBudgetMs = 180000;
 static const int kExitBudgetMs = 30000;
-
-struct McpClient
-{
-    QNetworkAccessManager net;
-    QUrl url;
-    QString token;
-    int id = 0;
-
-    QJsonObject post(const QJsonObject &body)
-    {
-        QNetworkRequest request(url);
-        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-        request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
-        QNetworkReply *reply = net.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
-        QEventLoop loop;
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
-        const QByteArray data = reply->readAll();
-        reply->deleteLater();
-        return QJsonDocument::fromJson(data).object();
-    }
-
-    void initialize()
-    {
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "initialize" },
-                          { "params", QJsonObject{
-                                { "protocolVersion", "2025-06-18" },
-                                { "capabilities", QJsonObject{} },
-                                { "clientInfo", QJsonObject{ { "name", "archive-test" }, { "version", "0" } } } } } });
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "method", "notifications/initialized" } });
-    }
-
-    QJsonObject runScript(const QString &script)
-    {
-        const QJsonObject reply = post(QJsonObject{
-            { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "tools/call" },
-            { "params", QJsonObject{ { "name", "run_script" },
-                                     { "arguments", QJsonObject{ { "script", script } } } } } });
-        const QJsonArray content = reply.value("result").toObject().value("content").toArray();
-        if (content.isEmpty()) return {};
-        return QJsonDocument::fromJson(
-            content.first().toObject().value("text").toString().toUtf8()).object();
-    }
-};
-
-/// Same reason as import.shutdown: keep the close path prompt-free. In a
-/// QT_DEBUG build jahsettings.ini lives beside the BINARY, which a scratch
-/// HOME does not isolate.
-static void seedSettings(const QString &binary)
-{
-    testsupport::seedSettingsForSpawnedApp(binary);
-}
-
-static quint16 freePort()
-{
-    QTcpServer probe;
-    probe.listen(QHostAddress::LocalHost, 0);
-    return probe.serverPort();
-}
-
-static bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut)
-{
-    jahshaka.setProcessChannelMode(QProcess::MergedChannels);
-    jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
-                   { QStringLiteral("--mcp-port=%1").arg(port) });
-    if (!jahshaka.waitForStarted(15000)) return false;
-    QByteArray bootLog;
-    QElapsedTimer timer;
-    timer.start();
-    while (timer.elapsed() < 120000 && jahshaka.state() == QProcess::Running) {
-        jahshaka.waitForReadyRead(500);
-        bootLog += jahshaka.readAll();
-        const int at = bootLog.indexOf("MCP: token ");
-        if (at >= 0) {
-            const int end = bootLog.indexOf('\n', at);
-            if (end > at) {
-                *tokenOut = QString::fromUtf8(bootLog.mid(at + 11, end - at - 11)).trimmed();
-                return true;
-            }
-        }
-    }
-    std::printf("---- boot log ----\n%s\n", bootLog.constData());
-    return false;
-}
 
 struct RunStats { bool started = false, done = false; int polls = 0, ticks = 0; double maxGap = 0.0; };
 
@@ -241,6 +159,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("archive-test");
     mcp.initialize();
 
     // ---- 1. the THREADED import, with the UI thread under measurement -----
@@ -397,7 +316,7 @@ int main(int argc, char **argv)
     // to mean a modal "Unsaved Changes" box at quit — the close-path zombie
     // this lane fixed in MainWindow::closeEvent. Quitting from here is
     // therefore part of the assertion, not an accident.
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
     QElapsedTimer exitTimer;
     exitTimer.start();
     const bool exited = jahshaka.waitForFinished(kExitBudgetMs);

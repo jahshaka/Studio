@@ -13,7 +13,7 @@
 //   * a 100 ms block produces nothing.
 // Plus the safeguards that keep the mechanism from being the crash: the
 // feature is off outside a dev build, and app.blockUiThread refuses there.
-#include "mcpharness.h"
+#include "../support/mcpharness.h"
 
 #include <QThread>
 
@@ -44,6 +44,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("watchdog-stall-test");
     mcp.initialize();
 
     // DELIBERATELY NO PROJECT. This suite quits a session that never opened
@@ -206,7 +207,7 @@ int main(int argc, char **argv)
     CHECK(mcp.runScript(QStringLiteral("scene.nodes().length")).value("ok").toBool(),
           "the app still answers scripts after being signalled");
 
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
     const bool exited = jahshaka.waitForFinished(30000);
     log += jahshaka.readAll();
     CHECK(exited, "process terminated after the watchdog fired");

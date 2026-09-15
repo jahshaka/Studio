@@ -28,7 +28,7 @@
 //      still opens the same world — unchanged behaviour, deliberately.
 //   3. Quitting with an open IN FLIGHT terminates the process, bounded and
 //      clean (the import.shutdown zombie, applied to the open runner).
-#include "../support/seedsettings.h"
+#include "../support/mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -48,6 +48,8 @@
 #include <cstdio>
 
 static int failures = 0;
+using namespace mcpharness;
+
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 /// The gap budget. GNOME's "not responding" prompt follows ~5 s of unanswered
@@ -63,88 +65,6 @@ static const double kHeartbeatMs = 250.0;
 static const double kColdCeilingMs = 4000.0;
 static const int kExitBudgetMs = 30000;
 static const int kOpenBudgetMs = 120000;
-
-struct McpClient
-{
-    QNetworkAccessManager net;
-    QUrl url;
-    QString token;
-    int id = 0;
-
-    QJsonObject post(const QJsonObject &body)
-    {
-        QNetworkRequest request(url);
-        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-        request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
-        QNetworkReply *reply = net.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
-        QEventLoop loop;
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
-        const QByteArray data = reply->readAll();
-        reply->deleteLater();
-        return QJsonDocument::fromJson(data).object();
-    }
-
-    void initialize()
-    {
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "initialize" },
-                          { "params", QJsonObject{
-                                { "protocolVersion", "2025-06-18" },
-                                { "capabilities", QJsonObject{} },
-                                { "clientInfo", QJsonObject{ { "name", "openasync-test" }, { "version", "0" } } } } } });
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "method", "notifications/initialized" } });
-    }
-
-    QJsonObject runScript(const QString &script)
-    {
-        const QJsonObject reply = post(QJsonObject{
-            { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "tools/call" },
-            { "params", QJsonObject{ { "name", "run_script" },
-                                     { "arguments", QJsonObject{ { "script", script } } } } } });
-        const QJsonArray content = reply.value("result").toObject().value("content").toArray();
-        if (content.isEmpty()) return {};
-        return QJsonDocument::fromJson(
-            content.first().toObject().value("text").toString().toUtf8()).object();
-    }
-};
-
-/// Same reason as import.shutdown: keep the close path prompt-free.
-static void seedSettings(const QString &binary)
-{
-    testsupport::seedSettingsForSpawnedApp(binary);
-}
-
-static quint16 freePort()
-{
-    QTcpServer probe;
-    probe.listen(QHostAddress::LocalHost, 0);
-    return probe.serverPort();
-}
-
-static bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut)
-{
-    jahshaka.setProcessChannelMode(QProcess::MergedChannels);
-    jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
-                   { QStringLiteral("--mcp-port=%1").arg(port) });
-    if (!jahshaka.waitForStarted(15000)) return false;
-    QByteArray bootLog;
-    QElapsedTimer timer;
-    timer.start();
-    while (timer.elapsed() < 120000 && jahshaka.state() == QProcess::Running) {
-        jahshaka.waitForReadyRead(500);
-        bootLog += jahshaka.readAll();
-        const int at = bootLog.indexOf("MCP: token ");
-        if (at >= 0) {
-            const int end = bootLog.indexOf('\n', at);
-            if (end > at) {
-                *tokenOut = QString::fromUtf8(bootLog.mid(at + 11, end - at - 11)).trimmed();
-                return true;
-            }
-        }
-    }
-    std::printf("---- boot log ----\n%s\n", bootLog.constData());
-    return false;
-}
 
 int main(int argc, char **argv)
 {
@@ -164,6 +84,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("openasync-test");
     mcp.initialize();
 
     // ---- import the world once; both opens below use it -------------------
@@ -284,7 +205,7 @@ int main(int argc, char **argv)
     const QJsonObject inFlight = mcp.runScript(QStringLiteral("project.openState()"));
     std::printf("info: state when the quit was issued: %s\n",
                 qUtf8Printable(inFlight.value("result").toString()));
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
 
     QElapsedTimer exitTimer;
     exitTimer.start();

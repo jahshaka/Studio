@@ -34,7 +34,7 @@ For more information see the LICENSE file
 // WHY THE REAL BINARY OVER MCP (the ui.column_law harness): minimums and
 // column widths come out of LAYOUT, which only happens in a shown window with
 // the event loop turning between requests; a --script run holds the loop.
-#include "../shutdown/mcpharness.h"
+#include "../support/mcpharness.h"
 
 #include <QJsonDocument>
 #include <QThread>
@@ -86,6 +86,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("window-minimum-test");
     mcp.initialize();
 
     const QJsonObject created = mcp.runScript(QStringLiteral("project.create('WindowMinimum')"));
@@ -160,7 +161,7 @@ int main(int argc, char **argv)
           "the editor viewport keeps at least 400 px of width at 1366x680");
     CHECK(vp.value("height").toInt() > 0, "…and a visible height");
 
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
     if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
 
     std::printf(failures == 0 ? "ui.window_minimum: ALL PASS\n"

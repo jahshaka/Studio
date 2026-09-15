@@ -40,7 +40,7 @@
 // the UI thread, and a blocked UI thread cannot tick. Every poll below is an
 // HTTP request the app can only answer between slices, so the polls are a
 // second, independent proof.
-#include "../support/seedsettings.h"
+#include "../support/mcpharness.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -59,6 +59,8 @@
 #include <cstdio>
 
 static int failures = 0;
+using namespace mcpharness;
+
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 /// THE BUDGET. The largest block the avatar paths may still put on the UI
@@ -83,95 +85,6 @@ static const double kMaxGapMs = 750.0;
 static const double kNoiseFloorFactor = 3.0;
 static const int kOpBudgetMs = 300000;
 static const int kExitBudgetMs = 30000;
-
-struct McpClient
-{
-    QNetworkAccessManager net;
-    QUrl url;
-    QString token;
-    int id = 0;
-
-    QJsonObject post(const QJsonObject &body)
-    {
-        QNetworkRequest request(url);
-        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-        request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
-        QNetworkReply *reply = net.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
-        QEventLoop loop;
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
-        const QByteArray data = reply->readAll();
-        reply->deleteLater();
-        return QJsonDocument::fromJson(data).object();
-    }
-
-    void initialize()
-    {
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "initialize" },
-                          { "params", QJsonObject{
-                                { "protocolVersion", "2025-06-18" },
-                                { "capabilities", QJsonObject{} },
-                                { "clientInfo", QJsonObject{ { "name", "avatar-test" }, { "version", "0" } } } } } });
-        post(QJsonObject{ { "jsonrpc", "2.0" }, { "method", "notifications/initialized" } });
-    }
-
-    QJsonObject runScript(const QString &script)
-    {
-        const QJsonObject reply = post(QJsonObject{
-            { "jsonrpc", "2.0" }, { "id", ++id }, { "method", "tools/call" },
-            { "params", QJsonObject{ { "name", "run_script" },
-                                     { "arguments", QJsonObject{ { "script", script } } } } } });
-        const QJsonArray content = reply.value("result").toObject().value("content").toArray();
-        if (content.isEmpty()) return {};
-        return QJsonDocument::fromJson(
-            content.first().toObject().value("text").toString().toUtf8()).object();
-    }
-
-    /// The script's `result` as a value / string / int, with the ok flag
-    /// printed when a call failed (a refusal is a test finding, not silence).
-    QJsonValue value(const QString &script)
-    {
-        const QJsonObject reply = runScript(script);
-        if (!reply.value("ok").toBool(true))
-            std::printf("info: script refused: %s -> %s\n", script.toUtf8().constData(),
-                        QJsonDocument(reply).toJson(QJsonDocument::Compact).constData());
-        return reply.value("result");
-    }
-    QString string(const QString &script) { return value(script).toString(); }
-    int integer(const QString &script) { return value(script).toInt(); }
-};
-
-static quint16 freePort()
-{
-    QTcpServer probe;
-    probe.listen(QHostAddress::LocalHost, 0);
-    return probe.serverPort();
-}
-
-static bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut)
-{
-    jahshaka.setProcessChannelMode(QProcess::MergedChannels);
-    jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
-                   { QStringLiteral("--mcp-port=%1").arg(port) });
-    if (!jahshaka.waitForStarted(15000)) return false;
-    QByteArray bootLog;
-    QElapsedTimer timer;
-    timer.start();
-    while (timer.elapsed() < 180000 && jahshaka.state() == QProcess::Running) {
-        jahshaka.waitForReadyRead(500);
-        bootLog += jahshaka.readAll();
-        const int at = bootLog.indexOf("MCP: token ");
-        if (at >= 0) {
-            const int end = bootLog.indexOf('\n', at);
-            if (end > at) {
-                *tokenOut = QString::fromUtf8(bootLog.mid(at + 11, end - at - 11)).trimmed();
-                return true;
-            }
-        }
-    }
-    std::printf("---- boot log ----\n%s\n", bootLog.constData());
-    return false;
-}
 
 struct JobStats { bool done = false; int polls = 0, ticks = 0; double maxGap = 0.0; QJsonObject last; };
 
@@ -258,12 +171,17 @@ int main(int argc, char **argv)
     QProcess jahshaka;
     QString token;
     const quint16 port = freePort();
-    CHECK(spawn(jahshaka, port, &token), "app booted and printed the MCP token");
+    CHECK(spawn(jahshaka, port, &token, QStringList(), 180000), "app booted and printed the MCP token");
     if (token.isEmpty()) return 1;
 
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("avatar-test");
+    // The avatar suite's own budget is 900 s and its verbs are the slowest in the
+    // tree (a synchronous import of the owner's rig), so it raises the harness's
+    // per-request budget rather than risking a real call being cut short.
+    mcp.transferTimeoutMs = 300000;
     mcp.initialize();
     mcp.runScript(QStringLiteral("project.create('avatar async')"));
 
@@ -548,9 +466,14 @@ int main(int argc, char **argv)
     // seconds took the process out from under the module: no ordered shutdown,
     // and the pending write simply gone. Both halves are asserted here.
     mcp.runScript(QStringLiteral("avatar.open('%1')").arg(asyncAvatar));
+    // ReplyOptional for the same reason McpClient::quit() uses it: the script
+    // ENDS in app.quit(), so the queued close may win the race with the
+    // response and a missing reply is the expected outcome, not a transport
+    // failure.
     mcp.runScript(QStringLiteral("avatar.setClipOptions('%1', {looping: true});"
                                  "avatar.importAvatar('%2', {async: true});"
-                                 "app.quit();").arg(clip, rig));
+                                 "app.quit();").arg(clip, rig),
+                  McpClient::ReplyOptional);
     QElapsedTimer exitTimer;
     exitTimer.start();
     const bool exited = jahshaka.waitForFinished(kExitBudgetMs);
@@ -594,11 +517,13 @@ int main(int argc, char **argv)
     QProcess second;
     QString secondToken;
     const quint16 secondPort = freePort();
-    CHECK(spawn(second, secondPort, &secondToken), "the app booted a second time on the same library");
+    CHECK(spawn(second, secondPort, &secondToken, QStringList(), 180000), "the app booted a second time on the same library");
     if (!secondToken.isEmpty()) {
         McpClient restarted;
         restarted.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(secondPort));
         restarted.token = secondToken;
+        restarted.clientName = QStringLiteral("avatar-test");
+        restarted.transferTimeoutMs = 300000;
         restarted.initialize();
         const QJsonObject reopened =
             restarted.runScript(QStringLiteral("avatar.open('%1')").arg(asyncAvatar))
@@ -626,7 +551,7 @@ int main(int argc, char **argv)
               "the definition edit made inside the coalescing window SURVIVED the quit");
         CHECK(restarted.string(QStringLiteral("avatar.asset().definition.defaultClip")) == clip,
               "... and it is still the default clip");
-        restarted.runScript(QStringLiteral("app.quit()"));
+        restarted.quit();
         if (!second.waitForFinished(kExitBudgetMs)) { second.kill(); second.waitForFinished(5000); }
     }
 

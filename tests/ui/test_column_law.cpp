@@ -26,7 +26,7 @@
 // what PanelMetrics says (`metrics`) beside what the page did (`left`/`right`),
 // so a page that forgot the constant fails here, per page, at the real laid-out
 // width.
-#include "../shutdown/mcpharness.h"
+#include "../support/mcpharness.h"
 
 #include <QJsonDocument>
 #include <QThread>
@@ -76,6 +76,7 @@ int main(int argc, char **argv)
     McpClient mcp;
     mcp.url = QUrl(QStringLiteral("http://127.0.0.1:%1/mcp").arg(port));
     mcp.token = token;
+    mcp.clientName = QStringLiteral("column-law-test");
     mcp.initialize();
 
     const QJsonObject created = mcp.runScript(QStringLiteral("project.create('ColumnLaw')"));
@@ -254,7 +255,7 @@ int main(int argc, char **argv)
     const QJsonObject bogus = mcp.runScript(QStringLiteral("editor.tray({tab: 'nope'})"));
     CHECK(!bogus.value("ok").toBool(), "an unknown tab name is refused, not guessed at");
 
-    mcp.runScript(QStringLiteral("app.quit()"));
+    mcp.quit();
     if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
 
     std::printf(failures == 0 ? "ui.column_law: ALL PASS\n" : "ui.column_law: %d FAILURES\n",
