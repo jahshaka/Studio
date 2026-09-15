@@ -321,6 +321,10 @@ void Database::beginBatch()
 bool Database::endBatch()
 {
     if (batchOpenCount == 0) {
+        // A level the CLOSE dropped under a live guard is not an imbalance:
+        // the guard is unwinding through a teardown it never asked for
+        // (closeDatabase). Absorb one and say nothing.
+        if (batchScopesAbandoned > 0) { --batchScopesAbandoned; return true; }
         iris::Logger::getSingleton()->warn(
             "Database::endBatch() with no batch open — an unbalanced DbBatch.");
         return false;
@@ -346,7 +350,10 @@ bool Database::commitBatchTransaction()
     if (!batchTxLive) return true;
     batchTxLive = false;
     DbTransaction::noteBatchLive(false);
-    if (db.commit()) { DbTransaction::noteCommit(); return true; }
+    if (db.commit()) {
+        DbTransaction::noteCommit();
+        return true;
+    }
     // A failed commit leaves the connection mid-transaction otherwise, and the
     // next statement would then run inside a transaction nobody owns.
     db.rollback();
@@ -387,6 +394,10 @@ void Database::closeDatabase()
     // through a close, and its endBatch() must not find a stale depth.
     if (batchOpenCount > 0 || batchTxLive) {
         commitBatchTransaction();
+        // The scope goes, but it is REMEMBERED: whoever holds the DbBatch is
+        // still going to unwind through endBatch() and must not be told it is
+        // unbalanced for a close it did not perform (round 2, H5).
+        batchScopesAbandoned += batchOpenCount;
         batchOpenCount = 0;
     }
 

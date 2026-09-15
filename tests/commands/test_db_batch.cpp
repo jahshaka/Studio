@@ -38,6 +38,8 @@
 //   8. The guard count is PER CONNECTION: a transaction on a side connection
 //      wrapped around a main-connection guard does not make that guard look
 //      nested (it would then degrade, which is the failure in 4).
+//   9. A guard still holding a scope when the database closes unwinds without
+//      being told it is unbalanced, and its rows are committed, not lost.
 //
 // The COMMIT COUNT comes from sqlite3_commit_hook on the handle Qt's QSQLITE
 // driver opened (the CLOSE-1 / tests/assettray idiom): ground truth, with no
@@ -424,6 +426,49 @@ int main(int argc, char **argv)
         CHECK(found == 1, "...and the row written inside it was COMMITTED, not rolled back");
         reopened.closeDatabase();
     }
+
+    // -----------------------------------------------------------------------
+    // 7. A LIVE GUARD UNWINDING THROUGH A CLOSE IS NOT AN IMBALANCE (H5).
+    //
+    // closeDatabase() drops the scope — it must, or the driver's teardown
+    // rolls the gesture's rows back — and the DbBatch that owns that scope is
+    // still going to run its destructor afterwards. It must not be told it is
+    // unbalanced for a close it never performed.
+    //
+    // LAST, and on its OWN Database: every Database instance takes the DEFAULT
+    // QSqlDatabase connection (initializeDatabase -> addDatabase with no name),
+    // so building a second one mid-suite takes the first one's connection away.
+    // -----------------------------------------------------------------------
+    {
+        Database closing;
+        const QString path = QStringLiteral("db_batch_closing.db");
+        QFile::remove(path);
+        CHECK(closing.initializeDatabase(path), "a second database opened for the close case");
+        closing.createAllTables();
+        const QString guid = GUIDManager::generateGUID();
+        {
+            DbBatch batch(&closing);
+            closing.createAssetEntry(guid, QStringLiteral("Closed under a guard"),
+                                     static_cast<int>(ModelTypes::Object), QString(), QString());
+            CHECK(closing.batchDepth() == 1, "the guard's scope is open");
+            closing.closeDatabase();
+            CHECK(closing.batchDepth() == 0, "...and the close dropped it");
+            CHECK(batch.end(),
+                  "...and the guard unwinding afterwards reports success, not an imbalance");
+        }
+        {
+            Database reopened;
+            CHECK(reopened.initializeDatabase(path), "reopened to check the write");
+            QSqlQuery q;
+            q.prepare("SELECT COUNT(*) FROM assets WHERE guid = ?");
+            q.addBindValue(guid);
+            const int found = (q.exec() && q.next()) ? q.value(0).toInt() : -1;
+            CHECK(found == 1, "...and the row the guard wrote was COMMITTED by the close");
+            reopened.closeDatabase();
+        }
+        QFile::remove(path);
+    }
+
 
     printf("\n%d checks, %d failure(s)\n", checks, failures);
     return failures == 0 ? 0 : 1;

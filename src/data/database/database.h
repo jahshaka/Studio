@@ -237,7 +237,9 @@ public:
     // nodes that died with the process.
     void beginBatch();
     /// Closes one level. The outermost close commits; the return value is that
-    /// commit's success (true for an inner level, which commits nothing).
+    /// commit's success (true for an inner level, which commits nothing, and
+    /// true for a level the database ABANDONED under the caller — see
+    /// closeDatabase).
     bool endBatch();
     /// How many levels are open (editor.undoState().dbBatchDepth).
     int  batchDepth() const { return batchOpenCount; }
@@ -703,6 +705,11 @@ private:
     /// owner, and true again at the next statement.
     int  batchOpenCount = 0;
     bool batchTxLive = false;
+    /// Levels the database DROPPED while their guards were still alive
+    /// (closeDatabase). The next endBatch calls absorb them silently: the
+    /// guard is unwinding through a close it never asked for, and warning it
+    /// about an imbalance it did not cause is noise.
+    int  batchScopesAbandoned = 0;
     /// Opens the batch transaction if the scope is open and it is not live
     /// (and nothing else owns a transaction on this connection). Called when
     /// the batch is opened and whenever the last guard lets go.
@@ -732,7 +739,19 @@ class DbBatch
 {
 public:
     explicit DbBatch(Database *database) : db(database) { if (db) db->beginBatch(); }
-    ~DbBatch() { if (db) db->endBatch(); }
+    ~DbBatch() { end(); }
+
+    /// Ends the scope NOW and reports whether the commit it owned succeeded
+    /// (true for an inner level, and for no database at all). Idempotent; the
+    /// destructor calls it. A caller that must know whether the gesture's rows
+    /// survived — rather than leaving it to the listener — uses this.
+    bool end()
+    {
+        if (!db) return true;
+        Database *owner = db;
+        db = nullptr;
+        return owner->endBatch();
+    }
 
     DbBatch(const DbBatch &) = delete;
     DbBatch &operator=(const DbBatch &) = delete;
