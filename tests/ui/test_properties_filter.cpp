@@ -629,6 +629,35 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- 11b-2. THE "NOTHING SELECTED" LINE IS NOT A SECTION (F8) ---------
+    // With nothing picked the Selection tab says so. That line is the panel's
+    // message about the SELECTION, not a section with rows — a filter must not
+    // take it away and leave a blank, wordless tab.
+    {
+        panel->setSceneNode(iris::SceneNodePtr());
+        panel->setPropertiesTab(Tab::Selection);
+        panel->setPropertiesFilter(Tab::Selection, QString());
+        turn();
+        auto hintShown = [panel]() {
+            QLayout *l = panel->layout();
+            for (int i = 0; l && i < l->count(); ++i) {
+                QWidget *w = l->itemAt(i)->widget();
+                if (qobject_cast<AccordianBladeWidget *>(w)) continue;
+                if (auto *label = qobject_cast<QLabel *>(w))
+                    if (label->isVisibleTo(panel) && !label->text().isEmpty()) return true;
+            }
+            return false;
+        };
+        CHECK(hintShown(), "properties_filter: an empty Selection tab says nothing is selected");
+        panel->setPropertiesFilter(Tab::Selection, QStringLiteral("roughness"));
+        turn();
+        CHECK(hintShown(),
+              "properties_filter: ...and a filter does not take that line away");
+        panel->setPropertiesFilter(Tab::Selection, QString());
+        panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
+        turn();
+    }
+
     // ---- 11c-2. A FILTER CLEARED OFF SCREEN STILL OWES THE SECTIONS (F7) --
     // A verb (or the other tab's box) can filter and clear a tab that is not in
     // front, where neither the apply nor the restore can run. The clear used to

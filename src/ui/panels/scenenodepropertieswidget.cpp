@@ -530,13 +530,20 @@ void SceneNodePropertiesWidget::applyRowFilter()
     for (const QPointer<QWidget> &ptr : std::as_const(mountedBlades[t])) {
         QWidget *blade = ptr.data();
         if (!blade) continue;
+        // NOT EVERYTHING ON THIS LAYOUT IS A SECTION. The Selection tab's
+        // "Nothing selected — pick an object…" line is mounted like a blade and
+        // holds no rows; it is the panel's own message about the SELECTION, not
+        // a section the filter has an opinion about, so the filter leaves it
+        // exactly as the panel mounted it. (It used to be hidden by any
+        // non-empty Selection filter, which left the tab blank and wordless.)
+        auto *b = qobject_cast<AccordianBladeWidget *>(blade);
+        if (!b) continue;
         const PropertyRows::Result r = registry.apply(blade, terms, strongOnly);
         total.visible += r.visible;
         total.hidden  += r.hidden;
-        auto *b = qobject_cast<AccordianBladeWidget *>(blade);
         if (terms.isEmpty()) {
             blade->show();
-            if (b) b->setHeaderMuted(false);
+            b->setHeaderMuted(false);
             continue;
         }
         // A SECTION WITH A MATCH OPENS, so the row that matched is on screen
@@ -548,10 +555,8 @@ void SceneNodePropertiesWidget::applyRowFilter()
         // panel that failed to load.
         const bool keep = r.anyVisible || r.titleMatch;
         blade->show();
-        if (b) {
-            b->setHeaderMuted(!keep);
-            keep ? b->expand() : b->collapse();
-        }
+        b->setHeaderMuted(!keep);
+        keep ? b->expand() : b->collapse();
     }
     counts[t] = total;
 }
