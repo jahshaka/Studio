@@ -134,8 +134,13 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 
 	installEventFilter(this);
 
+	// The handle is stored WHATEVER it is (lane DBPTR-1): the member used to be
+	// assigned only inside this `if`, so a page built without a library kept an
+	// uninitialised pointer that renameShader/saveShader dereference. A null
+	// library is a real state (headless hosts, the module suites) and the
+	// member must say so.
+	dataBase = database;
 	if (database) {
-		dataBase = database;
 		setAssetWidgetDatabase(database);
 		TextureManager::getSingleton()->setDatabase(database);
 	}

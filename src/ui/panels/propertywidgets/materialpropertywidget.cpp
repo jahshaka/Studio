@@ -210,23 +210,31 @@ void MaterialPropertyWidget::materialChanged(int index)
     meshNode->setMaterial(material);
     setupShaderSelector();
 
-    QJsonObject node;
-    SceneWriter::writeSceneNode(node, meshNode, false);
+    // THE PICK ALWAYS REACHES THE NODE; the library bookkeeping below needs a
+    // library (lane DBPTR-1). This blade is built on the first mesh selection
+    // and `setDatabase` is called on it right after — but it is a combo slot,
+    // so it can fire in any host that never handed one down, and the member
+    // used to be uninitialised rather than null.
+    if (db && project) {
+        QJsonObject node;
+        SceneWriter::writeSceneNode(node, meshNode, false);
 
-    db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toJson());
-    db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
+        db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toJson());
+        db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
 
-    // Don't create dependencies to builtins — they ship with the app.
-    if (!BuiltinMaterials::isBuiltin(guid)) {
-        db->createDependency(
-            static_cast<int>(ModelTypes::Object),
-            static_cast<int>(ModelTypes::Shader),
-            meshNodeGuid, guid,
-            project->getProjectGuid()
-        );
+        // Don't create dependencies to builtins — they ship with the app.
+        if (!BuiltinMaterials::isBuiltin(guid)) {
+            db->createDependency(
+                static_cast<int>(ModelTypes::Object),
+                static_cast<int>(ModelTypes::Shader),
+                meshNodeGuid, guid,
+                project->getProjectGuid()
+            );
+        }
     }
 
     for (auto prop : material->properties) {
+        if (!project) break;
         if (prop->type != iris::PropertyType::Texture) continue;
         auto guidValue = prop->getValue().toString();
         if (guidValue.isEmpty() || QFile::exists(guidValue)) continue;

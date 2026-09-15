@@ -302,6 +302,9 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* 
 	else {
 		// Stop using asset manager... (iKlsR)
 		// TODO remove all usage of such
+		// No library = no stored definition (every caller guards `db` today;
+		// this keeps the function honest on its own — lane DBPTR-1).
+		if (!db) return QJsonObject();
 		auto shader = db->fetchAssetData(shaderGuid);
         QJsonObject shaderDefinition = QJsonDocument::fromJson(shader).object();
 

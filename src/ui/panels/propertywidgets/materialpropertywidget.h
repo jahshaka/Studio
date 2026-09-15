@@ -101,7 +101,7 @@ private:
 
     // for undo/redo
     QVariant startValue;
-    Database *db;
+    Database *db = nullptr;
     StudioServices *services = nullptr;
     QString meshNodeGuid;
     QMap<QString, QString> existingTextures;

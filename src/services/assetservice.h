@@ -104,7 +104,7 @@ public:
     }
 
 private:
-    Database *db;
+    Database *db = nullptr;
     Project *project;   // the live Project (Phase 4: was Globals::project)
     std::vector<PinChangedFn> pinSubscribers;
     std::vector<LibraryChangedFn> librarySubscribers;

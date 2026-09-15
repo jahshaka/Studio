@@ -21,10 +21,19 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "io/materialreader.h"
 #include "io/scenewriter.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+
+// CALL COUNTERS — ui.db_handles asserts that the library bookkeeping a panel
+// skips without a library really happens once the library arrives. Every other
+// suite ignores them.
+int gStubCreateDependencyCalls = 0;
+int gStubRemoveDependenciesCalls = 0;
+int gStubUpdateAssetAssetCalls = 0;
 
 bool Database::createDependency(const int &, const int &, const QString &,
                                 const QString &, const QString &)
 {
+    ++gStubCreateDependencyCalls;
     return false;
 }
 
@@ -35,11 +44,13 @@ bool Database::deleteDependency(const QString &, const QString &)
 
 bool Database::removeDependenciesByType(const QString &, const ModelTypes &)
 {
+    ++gStubRemoveDependenciesCalls;
     return false;
 }
 
 bool Database::updateAssetAsset(const QString &, const QByteArray &)
 {
+    ++gStubUpdateAssetAssetCalls;
     return false;
 }
 
@@ -59,8 +70,16 @@ iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString, Datab
     return iris::PbrMaterialPtr();
 }
 
-iris::MaterialPtr MaterialReader::parseShaderAsPbr(const QString &, Database *)
+/// The one guid this stub answers for (ui.db_handles): the material blade's
+/// combo slot only reaches its library bookkeeping when the pick RESOLVES, so
+/// a suite about that slot needs one material that does.
+extern const char *const kStubResolvableMaterialGuid;
+extern const char *const kStubResolvableMaterialGuid = "stub-resolvable-material";
+
+iris::MaterialPtr MaterialReader::parseShaderAsPbr(const QString &guid, Database *)
 {
+    if (guid == QLatin1String(kStubResolvableMaterialGuid))
+        return iris::PbrMaterial::create().staticCast<iris::Material>();
     return iris::MaterialPtr();
 }
 

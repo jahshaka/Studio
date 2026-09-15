@@ -874,6 +874,12 @@ void SceneNodePropertiesWidget::setDatabase(Database *db)
     // re-pushed HERE, and the ctor's call stays only as the "born with
     // whatever we have" case.
     if (lightPropView) lightPropView->setDatabase(db);
+    // The World blade was MISSING from this list (lane DBPTR-1) and nothing
+    // else in the tree called WorldPropertyWidget::setDatabase — so its `db`
+    // was uninitialised for the life of the window, refreshRows() tested a
+    // wild pointer, and its "Background Ambience" row (which is shown only
+    // when the project HAS music assets) could never appear.
+    if (worldPropView) worldPropView->setDatabase(db);
     if (skyPropView) skyPropView->setDatabase(db);
     if (emitterPropView) emitterPropView->setDatabase(db);
     if (shaderPropView) shaderPropView->setDatabase(db);

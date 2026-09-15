@@ -75,7 +75,7 @@ private:
 	ComboBoxWidget *ambientMusicSelector;
 	HFloatSliderWidget *ambientMusicVolume;
 
-	Database *db;
+	Database *db = nullptr;
 };
 
 #endif // WORLDPROPERTYWIDGET_H

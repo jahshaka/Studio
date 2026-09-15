@@ -113,7 +113,7 @@ private:
     bool commitStagedAsset(const ImportRequest &request, StagedAsset &staged,
                            ImportResult &result, const ImportProgressFn &progress);
 
-    Database *db;
+    Database *db = nullptr;
     Project *project;
     QVector<AssetImporterBase *> mImporters;
 };

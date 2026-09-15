@@ -51,7 +51,7 @@ private:
     void applyRoot(const QString &path, bool move);
 
     SettingsManager *mSettings;
-    Database *mDb;
+    Database *mDb = nullptr;
 
     QLabel *mRoot;
     QLabel *mFreeSpace;

@@ -181,7 +181,7 @@ private:
     /// Writes the payload and refreshes the cache.
     ClipboardCopyResult publish(const clipboardformat::Envelope &envelope, int items);
 
-    Database *db;
+    Database *db = nullptr;
     Project *project;
     SceneEditService *sceneEdit;
     SelectionService *selection;

@@ -18,3 +18,13 @@ add_test(NAME source.no_raw_transaction
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.no_raw_transaction PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_raw_transaction)
+
+# source.db_pointers_initialised — DBPTR-1: a declared `Database *` is an
+# initialised one, and the two handles that are filled by a setter after
+# construction stay wired to their caller. See the script's header for the
+# class (24 members; two never assigned at all).
+add_test(NAME source.db_pointers_initialised
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/db_pointers_initialised.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.db_pointers_initialised PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.db_pointers_initialised)

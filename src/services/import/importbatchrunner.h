@@ -108,7 +108,7 @@ signals:
 private:
     void runBatch();   // worker-thread body
 
-    Database *db;
+    Database *db = nullptr;
     Project *project;
     AssetImportService *mService;
     QVector<ImportRequest> mRequests;

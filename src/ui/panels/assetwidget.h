@@ -369,7 +369,7 @@ private:
     Ui::AssetWidget *ui;
     QPoint startPos;
 
-    Database *db;
+    Database *db = nullptr;
     StudioServices *services = nullptr;
     Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)
 	ProgressDialog *progressDialog;

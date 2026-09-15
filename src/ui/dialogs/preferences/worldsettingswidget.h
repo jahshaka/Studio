@@ -46,7 +46,7 @@ public:
 	bool openInPlayer;
 	bool autoUpdate;
 
-	Database *db;
+	Database *db = nullptr;
 
 
 private:

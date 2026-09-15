@@ -34,9 +34,9 @@ public:
     void leaveEvent(QEvent*) override;
 
 protected slots:
+    /// Both combos land here (the per-combo slots beside it were never
+    /// connected to anything and are gone — lane DBPTR-1, CRUD).
     void onShaderFileChanged(int);
-    void onVertexShaderFileChanged(int);
-    void onFragmentShaderFileChanged(int);
 
 private:
     QStringList vertexShaders;
@@ -48,7 +48,7 @@ private:
 
     QString shaderGuid;
     QStringList builtinShaders;
-    Database *db;
+    Database *db = nullptr;
 };
 
 #endif // NODEPROPERTY_H
