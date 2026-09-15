@@ -63,6 +63,12 @@ ALLOWED = {
     "setStagingScene": "iris::graph's process-wide device handle",
     "setSkyTexture": "iris::Scene's sky; applySky keeps its own SkySource signature",
     "setSkyColor": "iris::Scene's sky; same signature",
+    "setSkyRealistic": "iris::Scene's sky, and the ONE writer of the realistic dials "
+                       "(SKY-WRITE-1) — SceneMirror::applySky rebuilds its SkySource from "
+                       "these five floats and the colour EVERY frame and compares, so the "
+                       "change is seen without a mark, exactly like setSkyColor beside it. "
+                       "It is also called from the Scene CONSTRUCTOR, before any dirty set "
+                       "exists to mark into",
     "setAmbientMusic": "audio; the renderer has no opinion about it",
     "setAmbientMusicVolume": "audio",
     "setCamera": "iris::Scene's VIEWPORT camera — applyCamera pushes it every frame",
