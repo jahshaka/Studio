@@ -24,6 +24,15 @@
 //   4. Corruption. Truncated at every length, bit-flipped, empty, wrong
 //      magic, wrong version: every one returns an invalid model and nothing
 //      crashes. The open path then parses, exactly as it always did.
+//   6. THE KEY (BAKEKEY-1). The fingerprint's producer term hashes only the
+//      files that WRITE a bake; the document-side classes it used to hash ride
+//      the hand-bumped format version instead. This section proves the
+//      narrowing is real and testable WITHOUT a rebuild: the C++
+//      re-implementation of CMake's hash reproduces the compiled-in term on
+//      the real tree, an edit to a file OUTSIDE the list cannot change the
+//      key, an edit to meshbake.cpp's text does, and a bake carrying the
+//      PREVIOUS key is refused (header-level and through the store).
+//
 //   5. The store. Through the REAL import pipeline: importing a model writes
 //      a `bake`-role file into the CAS under both the Object and the Mesh
 //      row, MeshBakeStore resolves it back, a load returns the same geometry,
@@ -67,6 +76,7 @@
 #include "irisgl/import/graphicshelper.h"
 #include "irisgl/import/importflags.h"
 #include "irisgl/import/meshbake.h"
+#include "irisgl/import/modelsceneinfo.h"
 
 static int failures = 0;
 static int checks = 0;
@@ -406,6 +416,159 @@ static void determinismAndFailureModes()
 }
 
 // ---------------------------------------------------------------------------
+// 6. the key: what is hashed, what is hand-bumped, and what a stale key does
+// ---------------------------------------------------------------------------
+
+/// The fingerprint a build ONE FORMAT VERSION AGO produced for `oid`, composed
+/// exactly the way MeshBake::producerId composes today's — the honest stand-in
+/// for "a bake already in the user's library", which is what a version bump
+/// must invalidate.
+static QString previousGenerationFingerprint(const QString &oid)
+{
+    const QString producer = QStringLiteral("v%1|%2|assimp%3|flags%4")
+                                 .arg(iris::MeshBake::formatVersion() - 1)
+                                 .arg(iris::MeshBake::producerHash())
+                                 .arg(iris::ModelSceneInfo::importerVersion())
+                                 .arg(quint64(iris::ImportFlags::Canonical));
+    return QString::fromLatin1(QCryptographicHash::hash(
+        (producer + QLatin1Char('|') + oid).toUtf8(), QCryptographicHash::Sha256).toHex());
+}
+
+static bool copyInto(const QString &from, const QString &to)
+{
+    QDir().mkpath(QFileInfo(to).absolutePath());
+    QFile::remove(to);
+    return QFile::copy(from, to);
+}
+
+static bool appendComment(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::Append)) return false;
+    f.write("\n// a comment that changes no behaviour at all\n");
+    return true;
+}
+
+static void theKey()
+{
+    // 6a. THE LIST. The three files that write a bake are hashed; the
+    // document-side classes that only describe what it holds are not.
+    const QStringList hashed = iris::MeshBake::hashedSources();
+    CHECK_LOUD(!hashed.isEmpty(),
+               "the build reports which files its producer term hashes");
+    CHECK_LOUD(hashed.contains(QStringLiteral("import/meshbake.cpp")) &&
+                   hashed.contains(QStringLiteral("import/meshbake.h")),
+               "the builder/serializer pair is hashed (it writes every byte)");
+    CHECK_LOUD(hashed.contains(QStringLiteral("import/materialhelper.cpp")),
+               "materialhelper.cpp is hashed (extractMaterialData fills every material record)");
+
+    const QStringList versionCovered = {
+        QStringLiteral("document/assets/mesh.cpp"),   QStringLiteral("document/assets/mesh.h"),
+        QStringLiteral("document/assets/skeleton.cpp"), QStringLiteral("document/assets/skeleton.h"),
+        QStringLiteral("document/scenegraph/meshnode.cpp"),
+        QStringLiteral("core/geometry/trimesh.cpp"),
+        QStringLiteral("import/graphicshelper.cpp"),
+        QStringLiteral("import/importflags.h"),       QStringLiteral("import/importflags.cpp")};
+    QStringList leaked;
+    for (const QString &rel : versionCovered)
+        if (hashed.contains(rel)) leaked.append(rel);
+    CHECK_LOUD(leaked.isEmpty(),
+               "no version-covered file is in the producer hash "
+               "(they ride kFormatVersion + source.bake_key_guard)");
+    if (!leaked.isEmpty())
+        std::printf("info: still hashed: %s\n", qUtf8Printable(leaked.join(", ")));
+
+    // The version really is the key's first term, so a hand bump invalidates.
+    CHECK_LOUD(iris::MeshBake::producerId().startsWith(
+                   QStringLiteral("v%1|").arg(iris::MeshBake::formatVersion())),
+               "the format version is the leading term of the producer id");
+
+    // 6b. THE ALGORITHM. producerHashOf is the same hash CMake computed, or the
+    // rest of this section proves nothing about the real key.
+    const QString irisRoot = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/irisgl");
+    QStringList realPaths;
+    for (const QString &rel : hashed) realPaths.append(irisRoot + QLatin1Char('/') + rel);
+    const QString recomputed = iris::MeshBake::producerHashOf(realPaths);
+    if (iris::MeshBake::producerHash() == QStringLiteral("dev")) {
+        std::printf("info: this build carries no CMake producer term ('dev') — "
+                    "skipping the CMake/C++ agreement check\n");
+    } else {
+        CHECK_LOUD(!recomputed.isEmpty() && recomputed == iris::MeshBake::producerHash(),
+                   "producerHashOf reproduces the producer term CMake compiled in");
+    }
+
+    // 6c. NARROWNESS, measured on copies: an edit to a file OUTSIDE the list
+    // cannot move the key; an edit to meshbake.cpp's text must.
+    QTemporaryDir scratch;
+    if (!scratch.isValid()) { std::printf("FAIL: no scratch dir for the key test\n"); ++failures; return; }
+    QStringList copies;
+    bool copied = true;
+    for (const QString &rel : hashed) {
+        const QString to = scratch.filePath(rel);
+        copied = copyInto(irisRoot + QLatin1Char('/') + rel, to) && copied;
+        copies.append(to);
+    }
+    // A file that is NOT hashed, copied in beside them: mesh.cpp is the class
+    // that actually builds the vertex data, and it is deliberately out.
+    const QString meshCopy = scratch.filePath(QStringLiteral("document/assets/mesh.cpp"));
+    copied = copyInto(irisRoot + QStringLiteral("/document/assets/mesh.cpp"), meshCopy) && copied;
+    CHECK_LOUD(copied, "the hashed sources copied into the scratch tree");
+
+    const QString scratchId = iris::MeshBake::producerHashOf(copies);
+    CHECK_LOUD(!scratchId.isEmpty() && scratchId == recomputed,
+               "the same bytes in another directory hash to the same producer term");
+
+    CHECK_LOUD(appendComment(meshCopy), "the non-hashed copy was edited");
+    CHECK_LOUD(iris::MeshBake::producerHashOf(copies) == scratchId,
+               "a comment-only edit to document/assets/mesh.cpp does NOT change the key");
+
+    CHECK_LOUD(appendComment(scratch.filePath(QStringLiteral("import/meshbake.cpp"))),
+               "the hashed copy was edited");
+    CHECK_LOUD(iris::MeshBake::producerHashOf(copies) != scratchId,
+               "an edit to import/meshbake.cpp's text DOES change the key");
+
+    // 6d. A BAKE UNDER THE PREVIOUS KEY IS IGNORED — at the header, which is
+    // all the resolver reads.
+    const QString oid = QStringLiteral("abcdef01").repeated(8);
+    const QString current = iris::MeshBake::fingerprintFor(oid);
+    const QString previous = previousGenerationFingerprint(oid);
+    CHECK_LOUD(!current.isEmpty() && current != previous,
+               "bumping the format version changes the fingerprint of every source");
+
+    const QString path = fixture(QStringLiteral("tests/importer/fixtures/textured_pbr_quad.glb"));
+    QTemporaryDir staging;
+    iris::MeshBake::Model stale =
+        iris::MeshBake::buildFromFile(path, previous, staging.path());
+    CHECK_LOUD(stale.valid, "a bake was built carrying the previous generation's fingerprint");
+    const QByteArray staleBlob = iris::MeshBake::serialize(stale);
+    CHECK_LOUD(!iris::MeshBake::deserialize(staleBlob, current).valid,
+               "a bake made under the previous key is refused by this build");
+
+    const QString staleFile = scratch.filePath(QStringLiteral("stale.jmb"));
+    QString writeError;
+    CHECK(iris::MeshBake::write(staleFile, stale, &writeError), "the stale bake was written");
+    CHECK_LOUD(!iris::MeshBake::headerMatches(staleFile, current),
+               "the header probe rejects the previous generation without reading the payload");
+    CHECK_LOUD(!iris::MeshBake::read(staleFile, current).valid,
+               "reading a previous-generation bake is a clean miss, so the source is re-baked");
+
+    // And the FORMAT VERSION field itself is enforced, not merely reflected in
+    // the fingerprint: a blob from one version ago is refused even if its
+    // recorded fingerprint were to match.
+    QByteArray oneVersionBack = iris::MeshBake::serialize(
+        iris::MeshBake::buildFromFile(path, current, staging.path()));
+    CHECK(oneVersionBack.size() > 8, "a current blob to patch");
+    if (oneVersionBack.size() > 8) {
+        const qint32 back = qint32(iris::MeshBake::formatVersion() - 1);
+        // configure(): little endian, so the version's four bytes sit at 4..7.
+        for (int i = 0; i < 4; ++i)
+            oneVersionBack[4 + i] = char((quint32(back) >> (8 * i)) & 0xFFu);
+        CHECK_LOUD(!iris::MeshBake::deserialize(oneVersionBack, current).valid,
+                   "a blob stamped with the previous format version is refused");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 5. the store: the real import pipeline
 // ---------------------------------------------------------------------------
 
@@ -520,6 +683,61 @@ static void storeIntegration()
     CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath),
                "the rebuilt bake is fresh again");
 
+    // THE UPGRADE PATH (BAKEKEY-1): a bake from the previous generation is not
+    // corrupt — it is a perfectly good blob under a key this build no longer
+    // accepts, recorded as its OWN object (the bake's display name derives from
+    // the SOURCE oid, so generations coexist under one name). It must be
+    // ignored, land back on assets.bakeAll's list, and re-bake.
+    {
+        const QString sourceOid = QFileInfo(sourcePath).completeBaseName().toLower();
+        const QString freshOid = QFileInfo(plan.bakePath).completeBaseName().toLower();
+        const QString previous = previousGenerationFingerprint(sourceOid);
+
+        QTemporaryDir staging;
+        iris::MeshBake::Model stale =
+            iris::MeshBake::buildFromFile(sourcePath, previous, staging.path());
+        const QString stalePath = staging.filePath(iris::MeshBake::fileNameFor(sourceOid));
+        QString writeError;
+        CHECK(stale.valid && iris::MeshBake::write(stalePath, stale, &writeError),
+              "a previous-generation bake was built and written");
+
+        // The library BEFORE this build ran: the stale generation is recorded,
+        // the new one is not.
+        bool ingested = true;
+        for (const QString &guid : {result.assetGuid, result.meshGuid}) {
+            QString casError;
+            ingested = AssetCas::ingestFile(conn, storeRoot.path(), stalePath, guid,
+                                            iris::MeshBake::casRole(),
+                                            iris::MeshBake::fileNameFor(sourceOid),
+                                            nullptr, &casError) && ingested;
+        }
+        QSqlQuery drop(conn);
+        drop.prepare("DELETE FROM asset_files WHERE role = ? AND oid = ?");
+        drop.addBindValue(iris::MeshBake::casRole());
+        drop.addBindValue(freshOid);
+        CHECK(ingested && drop.exec(), "the library was rewound to the previous generation");
+
+        CHECK_LOUD(!MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath),
+                   "a bake from the previous key is not fresh for this build");
+        CHECK_LOUD(!MeshBakeStore::modelSourcesNeedingBake(conn, storeRoot.path()).isEmpty(),
+                   "a previous-key bake puts the asset back on assets.bakeAll's list");
+
+        // THROUGH THE VERB'S OWN CALLS: assets.bakeAll (and Preferences ->
+        // Assets -> Bake All, which runs the same implementation) walks
+        // modelSourcesNeedingBake and calls bakeSource on each — not the
+        // per-asset entry point the corrupt case above exercised.
+        QString rerror;
+        const bool reok = MeshBakeStore::bakeSource(conn, storeRoot.path(), sourcePath, &rerror);
+        CHECK_LOUD(reok, "assets.bakeAll's per-source re-bake ran");
+        if (!reok) std::printf("info: upgrade rebake error: %s\n", qUtf8Printable(rerror));
+        MeshBakeStore::clear();
+        CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath),
+                   "the re-baked asset is fresh under the new key, with the stale "
+                   "generation still in the catalog");
+        CHECK_LOUD(MeshBakeStore::modelSourcesNeedingBake(conn, storeRoot.path()).isEmpty(),
+                   "assets.bakeAll converges: nothing is left needing a bake");
+    }
+
     // DETERMINISM, END TO END: assets.checkConsistency re-runs the whole
     // convert stage on the stored source and diffs the produced object set
     // against the catalog. The bake is IN that set, so this only passes if a
@@ -616,6 +834,9 @@ int main(int argc, char **argv)
 
     std::printf("== 2-4. determinism, staleness, corruption ==\n");
     determinismAndFailureModes();
+
+    std::printf("== 6. the key ==\n");
+    theKey();
 
     std::printf("== 5. the store ==\n");
     storeIntegration();

@@ -40,3 +40,16 @@ add_test(NAME source.panel_rows_guarded
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.panel_rows_guarded PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.panel_rows_guarded)
+# source.bake_key_guard — BAKEKEY-1: the mesh-bake key's hand-bumped half.
+# The producer hash covers the three files that WRITE a bake; the document-side
+# classes it used to hash (25 of 408 irisgl commits touched one, on 10 of 11
+# working days, staling every library's bakes for edits that could not move a
+# baked byte) ride the hand-bumped kFormatVersion instead. A hand bump that can
+# be forgotten needs a gate: see the script's header for the rule, the base
+# mechanism (the last commit that touched the version line — no branch, tag or
+# recorded sha required) and the `bake-output: unchanged` acknowledgement.
+add_test(NAME source.bake_key_guard
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/bake_key_guard.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.bake_key_guard PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.bake_key_guard)
