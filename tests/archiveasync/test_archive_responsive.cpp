@@ -67,17 +67,127 @@ using namespace mcpharness;
 /// number below covers the first and only run in a cold process, engine
 /// shader compilation included.
 static const double kMaxGapMs = 750.0;
+/// The heartbeat probe's interval (app.heartbeat(kHeartbeatMs)) — every gap
+/// this suite reads carries this period as a floor, because a 250 ms probe
+/// never fires early.
+static const double kHeartbeatMs = 250.0;
 static const int kOpBudgetMs = 180000;
 static const int kExitBudgetMs = 30000;
 
-struct RunStats { bool started = false, done = false; int polls = 0, ticks = 0; double maxGap = 0.0; };
+/// AND A CONTROL, because 750 ms is a MEASUREMENT on a shared box and this
+/// suite reds under a -j4 gate while the UI thread is not blocked at all
+/// (ledger 416: 1 734.6 ms against the 750 above, in HARNESS-1's gate, with
+/// every byte of the archive work on a worker).
+///
+/// The baseline is NOT an idle reading. HARNESS-1 measured that one directly
+/// (open.responsive's header carries the numbers): an idle app's UI thread is
+/// runnable for microseconds every probe period and the scheduler hands a
+/// long-sleeping task the CPU almost immediately, so an idle floor
+/// under-reports contention by ~2.3x. Contention bites a thread that BURNS its
+/// slice — which is what this thread does while an archive runs: it renders
+/// the editor, answers every poll, and takes the install slices.
+///
+/// So the baseline is a CONTROL: the same app, the same box, the same second,
+/// the UI thread doing work of the same kind with NOTHING in flight —
+/// editor.frame(1) is one document->engine sync plus one renderOneFrame, the
+/// import's and export's neighbour on that thread. The assertion becomes what
+/// this suite means: an archive must not block the thread more than running
+/// the app does.
+///
+///     budget = min(max(kMaxGapMs, kControlFactor x control), kBudgetCeilingMs)
+///
+/// The factor is 2 and not 1 because the probe period is a floor inside both
+/// numbers (quiet: 750 + 2 x (control - 250)).
+///
+/// THE CEILING bounds the degenerate case, and 2 000 ms is where it belongs
+/// for a reason worth writing down, because the obvious tighter number is
+/// wrong. The regression this suite exists to catch is the archiver's work
+/// back on the UI thread — ProjectArchiver used to run the catalog sweep, the
+/// CAS materialization, the zip/unzip and the catalog commit there — and what
+/// that shows as is the OPERATION'S OWN WALL TIME, which runArchive prints on
+/// every run. On this box, warm: import ~1 900-2 600 ms, export ~1 315 ms
+/// quiet and ~5 000 ms under 40 spinners.
+///
+/// So the quiet-box regression signal (~1 315 ms) is SMALLER than the largest
+/// budget this mechanism legitimately produced under load (control 940.3 ms
+/// x 2 = 1 881 ms, measured here at load average 42-48). A ceiling between the
+/// two would clip a loaded run's budget to catch a regression that cannot
+/// happen at that load — because under the weather that produced that control,
+/// the export took 4 959 ms and a regression would have shown five seconds,
+/// not 1.3. The two constraints only conflict across weathers, never within
+/// one.
+///
+/// The fixed 750 ms floor is what refuses a quiet-box regression (1 315 > 750,
+/// and a quiet control here reads 260-345 ms, so the floor is the whole
+/// budget); the ceiling's job is only to stop a pathological control from
+/// buying multi-second permission under load, where the regression signal is
+/// multiple seconds anyway. 2 000 ms does both: above every budget this box
+/// produced with 40 spinners on 20 cores, and well under what the work coming
+/// back to this thread would cost at that load.
+static const double kControlFactor = 2.0;
+static const double kBudgetCeilingMs = 2000.0;
+
+/// THE CONTROL (see kControlFactor): the worst heartbeat gap over ~2 s of the
+/// app rendering on its UI thread with no archive in flight.
+static double measureControlGap(McpClient &mcp, const char *label)
+{
+    mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
+    QElapsedTimer timer;
+    timer.start();
+    int frames = 0;
+    while (timer.elapsed() < 2000) {
+        mcp.runScript(QStringLiteral("editor.frame(1)"));
+        ++frames;
+    }
+    const double gapMs = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
+                             .value("result").toObject().value("maxGapMs").toDouble();
+    std::printf("info: [%s] control: %d rendered frames in 2 s, worst UI gap %.1f ms "
+                "(probe period %.0f ms)\n", label, frames, gapMs, kHeartbeatMs);
+    return gapMs;
+}
+
+/// The control, turned into this run's budget (see kControlFactor).
+static double budgetFor(double controlMs, const char *label)
+{
+    const double budget = qMin(qMax(kMaxGapMs, kControlFactor * controlMs), kBudgetCeilingMs);
+    std::printf("info: [%s] UI-gap budget for this run: %.1f ms "
+                "(fixed %.0f, control %.1f x %.1f, ceiling %.0f)\n",
+                label, budget, kMaxGapMs, controlMs, kControlFactor, kBudgetCeilingMs);
+    return budget;
+}
+
+/// Was this run's worst gap inside this run's budget? Measures the control
+/// right after the operation it judges (same second, same weather), and on the
+/// way to a red re-rolls THE CONTROL once.
+///
+/// The repeat re-rolls the control and not the operation, which is the one
+/// place this differs from open.responsive: an archive run here is tens of
+/// seconds and re-importing would leave a project the later sections count,
+/// while a warm open is 220 ms and free to repeat. The control is the half
+/// that is a single roll of a shared box's scheduler (HARNESS-1 measured
+/// 486/375, 673/527 and 764/319 in three consecutive runs of the same build),
+/// and the ceiling means a second roll can never rescue a real regression:
+/// work back on the UI thread is a multi-second block at any control value.
+static bool withinControlBudget(McpClient &mcp, double maxGap, const char *label)
+{
+    const double control = measureControlGap(mcp, label);
+    if (maxGap > 0.0 && maxGap < budgetFor(control, label)) return true;
+    std::printf("info: [%s] the worst gap (%.1f ms) exceeded this run's budget — "
+                "re-rolling the control once\n", label, maxGap);
+    const double control2 = measureControlGap(mcp, label);
+    return maxGap > 0.0 && maxGap < budgetFor(qMax(control, control2), label);
+}
+
+struct RunStats { bool started = false, done = false; int polls = 0, ticks = 0;
+                  double maxGap = 0.0, elapsedMs = 0.0; };
 
 /// Start an async archive verb, poll project.archiveState() until idle, and
 /// report what the UI thread did while it ran.
 static RunStats runArchive(McpClient &mcp, const QString &startScript, const char *label)
 {
     RunStats r;
-    mcp.runScript(QStringLiteral("app.heartbeat(250)"));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
     const QJsonObject start = mcp.runScript(startScript);
     r.started = start.value("ok").toBool() && start.value("result").toBool();
     if (!r.started)
@@ -92,6 +202,11 @@ static RunStats runArchive(McpClient &mcp, const QString &startScript, const cha
             state.value("result").toString() == QLatin1String("idle")) { r.done = true; break; }
         QThread::msleep(50);
     }
+    // Read BEFORE the stats round trip: an operation shorter than the probe
+    // period could otherwise show > kHeartbeatMs elapsed with 0 ticks (the tick
+    // fires while the stats are answered) and fail both halves (open.responsive
+    // learned this the hard way).
+    r.elapsedMs = double(timer.elapsed());
     const QJsonObject stats = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
                                   .value("result").toObject();
     r.ticks = stats.value("ticks").toInt();
@@ -162,14 +277,55 @@ int main(int argc, char **argv)
     mcp.clientName = QStringLiteral("archive-test");
     mcp.initialize();
 
+    // ---- 0. THE BOOT CONTROL, which is also the warm-up -------------------
+    //
+    // AND IT IS THE BIGGEST NUMBER THIS SUITE PRINTS, by a factor of three.
+    // Measured on this box, quiet, 2026-09-15: this control — the app doing
+    // NOTHING but rendering its own empty editor, two seconds after boot, with
+    // no archive anywhere near it — reads ~1 780 ms. That is the engine's cold
+    // shader/PSO compile storm on the first frames of a process (Ogre's Hlms
+    // builds a variant per material/pass permutation inside renderOneFrame,
+    // and this pin persists none of it), and it is UI-thread work this lane
+    // neither owns nor can slice.
+    //
+    // The import used to run INSIDE that window, because it was the first
+    // thing the suite did after boot, and the storm was read as the
+    // archiver's: 1 184 ms with every byte of the archive work on a worker,
+    // against a 750 ms contract, on a quiet box. Warming first drops the same
+    // import to 632 ms and its wall time from 4 512 to 2 598 ms (the UI thread
+    // is no longer compiling shaders while the worker runs). HARNESS-1's
+    // -j4 gate red on this suite was 1 734.6 ms — the same number as this
+    // control, not a contention number.
+    //
+    // So the storm is paid HERE, once, before anything is measured, and what
+    // follows measures the archive. The cold-process case has an owner already:
+    // open.responsive asserts it against its own kColdCeilingMs, where the
+    // subject is the engine's compilation rather than the archiver's file
+    // work. This number is printed and not asserted for exactly that reason —
+    // a suite should not red on a cost it does not own.
+    measureControlGap(mcp, "boot");
+    std::printf("info: (the number above is the ENGINE's boot compile storm, not the "
+                "archiver's — see the comment at this call)\n");
+
     // ---- 1. the THREADED import, with the UI thread under measurement -----
     const RunStats imported =
         runArchive(mcp, QStringLiteral("project.importArchiveAsync('%1')").arg(sample), "import");
     CHECK(imported.started, "project.importArchiveAsync accepted");
     CHECK(imported.done, "the threaded import completed");
     CHECK(imported.polls >= 2, "the app answered requests WHILE the import was in flight");
-    CHECK(imported.ticks > 0, "the UI thread kept ticking during the import");
-    CHECK(imported.maxGap > 0.0 && imported.maxGap < kMaxGapMs,
+    // OR the operation finished inside one probe interval and could not be
+    // asked for a tick. That is a live case since the warm-up above: an import
+    // that used to run 2.6-4.5 s (with the UI thread compiling shaders beside
+    // it) now runs 420-470 ms against a 250 ms probe, so one tick is a normal
+    // reading and zero is possible. The GAP still covers it either way —
+    // maxGapMs is max(worst gap, time since the last tick or the start).
+    CHECK(imported.ticks > 0 || imported.elapsedMs < kHeartbeatMs,
+          "the UI thread kept ticking during the import (or the import finished "
+          "inside the first heartbeat interval)");
+    // The control is measured HERE, right after the import and before anything
+    // else touches the app: same app, same box, same second, the UI thread
+    // doing the same kind of work with nothing in flight (see kControlFactor).
+    CHECK(withinControlBudget(mcp, imported.maxGap, "import"),
           "no UI-thread gap beyond the budget during the threaded import");
 
     const QJsonObject importResult = mcp.runScript(QStringLiteral("project.archiveResult()"))
@@ -211,8 +367,10 @@ int main(int argc, char **argv)
     CHECK(exported.started, "project.exportArchiveAsync accepted");
     CHECK(exported.done, "the threaded export completed");
     CHECK(exported.polls >= 2, "the app answered requests WHILE the export was in flight");
-    CHECK(exported.ticks > 0, "the UI thread kept ticking during the export");
-    CHECK(exported.maxGap > 0.0 && exported.maxGap < kMaxGapMs,
+    CHECK(exported.ticks > 0 || exported.elapsedMs < kHeartbeatMs,
+          "the UI thread kept ticking during the export (or the export finished "
+          "inside the first heartbeat interval)");
+    CHECK(withinControlBudget(mcp, exported.maxGap, "export"),
           "no UI-thread gap beyond the budget during the threaded export");
 
     const QJsonObject exportResult = mcp.runScript(QStringLiteral("project.archiveResult()"))

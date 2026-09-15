@@ -73,16 +73,47 @@ using namespace mcpharness;
 /// pre-fix measurement on the owner's file was 12 438 ms (lane AV1, on this
 /// box, ASan Debug).
 ///
-/// AND A NOISE FLOOR, because this is a MEASUREMENT and the box is shared: at
-/// -j4 beside a sibling lane's gate the same run read 1 338 ms with the import
-/// fully threaded — the UI thread was not blocked, it was not SCHEDULED. The
-/// suite therefore measures what the app does with NO work in flight first and
-/// allows the larger of the fixed budget and 3x that floor, so a slow host
-/// relaxes the number without anyone hand-editing it and a REGRESSION (work
-/// back on the UI thread) still reds: the defect this covers was sixteen times
-/// the fixed budget.
+/// AND A CONTROL, because this is a MEASUREMENT and the box is shared: at -j4
+/// beside a sibling lane's gate the same run read 1 338 ms — and 853.5 ms in
+/// HARNESS-1's gate — with the import fully threaded. The UI thread was not
+/// blocked, it was not SCHEDULED.
+///
+/// THE BASELINE IS NOT AN IDLE READING, and this suite used to take one (an
+/// idle noise floor, x3). HARNESS-1 measured that mechanism directly on this
+/// box with 40 spin loops on 20 cores: the idle floor read 238-303 ms while a
+/// warm open in the same process read 552, 701 and 732 ms — it under-reports
+/// contention by ~2.3x, and the reason is physics, not tuning. An idle app's
+/// UI thread is runnable for microseconds every probe period and the scheduler
+/// hands a long-sleeping task the CPU almost immediately; the engine even
+/// SKIPS still frames, so at rest the thread barely competes at all.
+/// Contention only bites a thread that BURNS its slice — which is what this
+/// thread does while an avatar imports: it renders the editor, answers every
+/// poll, and takes the commit slices.
+///
+/// So the baseline is a CONTROL: the same app, the same box, the same second,
+/// the UI thread doing work OF THE SAME KIND with nothing in flight —
+/// editor.frame(1) is one document->engine sync plus one renderOneFrame. The
+/// assertion becomes what this suite means: an avatar import must not block
+/// the thread more than running the app does.
+///
+///     budget = min(max(kMaxGapMs, kControlFactor x control), kBudgetCeilingMs)
+///
+/// The factor is 2 and not 1 because the probe period is a floor inside both
+/// numbers (a 100 ms probe never fires early).
+///
+/// THE CEILING bounds the degenerate case: no pathological control may buy
+/// this suite permission to accept a multi-second block. 2 000 ms is 6.2x
+/// under the 12 438 ms the defect actually cost (above), and above every
+/// budget this box produced with 40 spinners on 20 cores at load average
+/// 42-48 (worst control 473.5 ms, budget 947.1; worst job gap 284.3 ms). It is
+/// also under the wall time of the jobs themselves — an async import here runs
+/// 1.0 s quiet and 2.7-3.9 s loaded — so the work coming back to this thread
+/// cannot slip under it.
 static const double kMaxGapMs = 750.0;
-static const double kNoiseFloorFactor = 3.0;
+static const double kControlFactor = 2.0;
+static const double kBudgetCeilingMs = 2000.0;
+/// The heartbeat probe's interval (app.heartbeat(kHeartbeatMs)).
+static const double kHeartbeatMs = 100.0;
 static const int kOpBudgetMs = 300000;
 static const int kExitBudgetMs = 30000;
 
@@ -113,22 +144,56 @@ static JobStats waitForJob(McpClient &mcp, const char *label)
     return r;
 }
 
-/// The host's own scheduling noise: the worst heartbeat gap over ~2 s of the
-/// same polling this suite does, with NOTHING running in the app.
-static double measureNoiseFloor(McpClient &mcp)
+/// THE CONTROL (see kControlFactor): the worst heartbeat gap over ~2 s of the
+/// app rendering on its UI thread with no avatar job in flight.
+static double measureControlGap(McpClient &mcp, const char *label)
 {
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-    mcp.runScript(QStringLiteral("app.heartbeat(100)"));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
     QElapsedTimer timer;
     timer.start();
+    int frames = 0;
     while (timer.elapsed() < 2000) {
-        mcp.runScript(QStringLiteral("avatar.progress()"));
-        QThread::msleep(50);
+        mcp.runScript(QStringLiteral("editor.frame(1)"));
+        ++frames;
     }
-    const double floorMs = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
-                               .value("result").toObject().value("maxGapMs").toDouble();
-    std::printf("info: idle noise floor: %.1f ms\n", floorMs);
-    return floorMs;
+    const double gapMs = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
+                             .value("result").toObject().value("maxGapMs").toDouble();
+    std::printf("info: [%s] control: %d rendered frames in 2 s, worst UI gap %.1f ms "
+                "(probe period %.0f ms)\n", label, frames, gapMs, kHeartbeatMs);
+    return gapMs;
+}
+
+/// The control, turned into this run's budget (see kControlFactor).
+static double budgetFor(double controlMs, const char *label)
+{
+    const double budget = qMin(qMax(kMaxGapMs, kControlFactor * controlMs), kBudgetCeilingMs);
+    std::printf("info: [%s] UI-gap budget for this run: %.1f ms "
+                "(fixed %.0f, control %.1f x %.1f, ceiling %.0f)\n",
+                label, budget, kMaxGapMs, controlMs, kControlFactor, kBudgetCeilingMs);
+    return budget;
+}
+
+/// Was this run's worst gap inside this run's budget? The control is measured
+/// RIGHT AFTER the job it judges — same second, same weather — and on the way
+/// to a red the CONTROL is re-rolled once.
+///
+/// The repeat re-rolls the control and not the job, which is where this differs
+/// from open.responsive: an avatar import here is tens of seconds and a repeat
+/// would leave library rows the later sections count, while a warm open is
+/// 220 ms and free to repeat. The control is the half that is a single roll of
+/// a shared box's scheduler (HARNESS-1 measured 486/375, 673/527 and 764/319 in
+/// three consecutive runs of one build), and the ceiling means a second roll can
+/// never rescue a regression: work back on this thread is a multi-second block
+/// at any control value.
+static bool withinControlBudget(McpClient &mcp, double maxGap, const char *label)
+{
+    const double control = measureControlGap(mcp, label);
+    if (maxGap > 0.0 && maxGap < budgetFor(control, label)) return true;
+    std::printf("info: [%s] the worst gap (%.1f ms) exceeded this run's budget — "
+                "re-rolling the control once\n", label, maxGap);
+    const double control2 = measureControlGap(mcp, label);
+    return maxGap > 0.0 && maxGap < budgetFor(qMax(control, control2), label);
 }
 
 static QStringList clipNames(McpClient &mcp, const QString &expression)
@@ -185,11 +250,24 @@ int main(int argc, char **argv)
     mcp.initialize();
     mcp.runScript(QStringLiteral("project.create('avatar async')"));
 
+    // ---- 0. THE BOOT CONTROL, which is also the warm-up -------------------
+    // The first frames of a PROCESS pay the engine's shader/PSO compile storm
+    // inside renderOneFrame — UI-thread work this lane neither owns nor can
+    // slice, and the cost is real: archive.responsive measured ~1 780 ms of it
+    // on a quiet box and spent months reading it as its own subject (see the
+    // boot control there). This suite wipes its data root — which IS the
+    // engine's shader + pipeline cache — at the top of every run, so EVERY run
+    // is cold and pays the storm; the only question is whether a measurement
+    // is taken inside it. Pay it here, before anything is measured. Printed,
+    // never asserted: open.responsive owns the cold case.
+    measureControlGap(mcp, "boot");
+
     // ---- 1. the ASYNC IMPORT, with the UI thread under measurement --------
-    const double budget = qMax(kMaxGapMs, kNoiseFloorFactor * measureNoiseFloor(mcp));
-    std::printf("info: UI-gap budget for this run: %.1f ms\n", budget);
+    // (The budget is no longer computed here: the control that sets it is
+    // measured AFTER each job, in the same weather the job ran in — see
+    // kControlFactor.)
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-    mcp.runScript(QStringLiteral("app.heartbeat(100)"));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
     QElapsedTimer verbTimer;
     verbTimer.start();
     const QJsonObject started =
@@ -205,7 +283,7 @@ int main(int argc, char **argv)
     CHECK(imported.done, "the threaded avatar import completed");
     CHECK(imported.polls >= 2, "the app answered requests WHILE the import was in flight");
     CHECK(imported.ticks > 0, "the UI thread kept ticking during the import");
-    CHECK(imported.maxGap > 0.0 && imported.maxGap < budget,
+    CHECK(withinControlBudget(mcp, imported.maxGap, "import"),
           "no UI-thread gap beyond the budget during the threaded import");
 
     const QJsonObject result = imported.last.value("result").toObject();
@@ -269,7 +347,7 @@ int main(int argc, char **argv)
     // blocks the UI thread BY DESIGN — that is what the script/headless route
     // is — and its gap would otherwise be read as this section's.)
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-    mcp.runScript(QStringLiteral("app.heartbeat(100)"));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
     const int assetsBefore = mcp.integer(QStringLiteral("assets.list().length"));
     // Start AND cancel in one script run: the worker cannot have passed its
     // first progress callback yet, so the cancel is delivered inside prepare
@@ -292,7 +370,7 @@ int main(int argc, char **argv)
 
     // ---- 4. the ASYNC SWITCH ----------------------------------------------
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-    mcp.runScript(QStringLiteral("app.heartbeat(100)"));
+    mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
     verbTimer.restart();
     mcp.runScript(QStringLiteral("avatar.open('%1', {async: true})").arg(asyncAvatar));
     const qint64 openMs = verbTimer.elapsed();
@@ -305,7 +383,7 @@ int main(int argc, char **argv)
     CHECK(openMs < 1000, "... and returned immediately instead of parsing inline");
     const JobStats switched = waitForJob(mcp, "switch");
     CHECK(switched.done, "the threaded avatar switch completed");
-    CHECK(switched.maxGap > 0.0 && switched.maxGap < budget,
+    CHECK(withinControlBudget(mcp, switched.maxGap, "switch"),
           "no UI-thread gap beyond the budget during the switch");
     CHECK(mcp.integer(QStringLiteral("avatar.preview().bones")) > 10,
           "the switched-to character is loaded in the preview");

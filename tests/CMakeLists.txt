@@ -312,3 +312,4 @@ add_subdirectory(apppaths)
 # WHO IS ALLOWED TO SEE A MODAL WINDOW (owner decision D3): the first-launch
 # greeting's driven-session predicate, src/app/firstrun.h.
 add_subdirectory(firstrun)
+add_subdirectory(update)

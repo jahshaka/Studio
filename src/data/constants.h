@@ -71,8 +71,6 @@ namespace Constants
 	extern QString ASSET_EXT;
 
     extern QString UPDATE_CHECK_URL;
-    extern QString PLAYER_CHECK_URL;
-    extern QString APP_CHECK_URL;
 
 
 
