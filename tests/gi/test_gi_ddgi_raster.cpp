@@ -235,7 +235,7 @@ static GiParams base()
 {
     GiParams gi;
     gi.mode = GiMode::Vct; gi.quality = GiQuality::Medium; gi.numBounces = 2;
-    gi.boundsMin = Vec3(-6.0f, -1.0f, -6.0f); gi.boundsMax = Vec3(6.0f, 5.0f, 6.0f);
+    gi.testBoundsMin = Vec3(-6.0f, -1.0f, -6.0f); gi.testBoundsMax = Vec3(6.0f, 5.0f, 6.0f);
     gi.ddgi = GiToggle::On; gi.ddgiAmbient = 0.0f;
     // Budget 64: one budget unit buys ONE raster probe per frame (measured
     // ~3.4 ms each, OgreGi.cpp kIfdRasterProbesPerBudget), so 64 keeps a
@@ -521,7 +521,7 @@ int main()
         const unsigned ox = 64, oy = 118;     // gi.ddgi_ambient's open-floor probe
         GiParams calV;
         calV.mode = GiMode::Vct; calV.quality = GiQuality::Medium; calV.numBounces = 2;
-        calV.boundsMin = Vec3(-9.0f, -1.5f, -9.0f); calV.boundsMax = Vec3(9.0f, 7.5f, 9.0f);
+        calV.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f); calV.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
         calV.ddgi = GiToggle::On; calV.ddgiAmbient = 1.0f; calV.updateBudget = 64;
         CHECK(cs->setGlobalIllumination(calV), "calibration: voxel field, ambient proxy on");
         render(e, 6);

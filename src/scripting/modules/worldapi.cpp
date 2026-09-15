@@ -588,7 +588,8 @@ bool WorldApi::gi(const QVariantMap &params)
         // script or a suite asks for explicitly.
         QStringLiteral("ddgi"),      QStringLiteral("ddgiIntensity"),
         QStringLiteral("ddgiAmbient"), QStringLiteral("ddgiSource"),
-        QStringLiteral("cascades"), QStringLiteral("cascadeSet")
+        QStringLiteral("cascades"), QStringLiteral("cascadeSet"),
+        QStringLiteral("cascadeInstanceCap")
     };
     // THE LIT VOLUME IS THE RENDERER'S (owner decision D8, 2026-09-13). The
     // three keys that used to pin it — and cap its automatic fit — are refused

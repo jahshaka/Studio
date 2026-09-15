@@ -126,8 +126,8 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
-    gi.boundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-    gi.boundsMax = Vec3(9.0f, 7.5f, 9.0f);
+    gi.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
+    gi.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
     return gi;
 }
 
@@ -215,8 +215,8 @@ int main()
         ref.mode = GiMode::Vct;
         ref.quality = GiQuality::Low;        // isotropic: see the header above
         ref.numBounces = 2;
-        ref.boundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-        ref.boundsMax = Vec3(9.0f, 7.5f, 9.0f);
+        ref.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
+        ref.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
         CHECK(s->setGlobalIllumination(ref), "VCT (isotropic) builds over the open scene");
         render(e, 6);
         o.view->readPixels(img);
@@ -488,8 +488,8 @@ int main()
         enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 3.4f), Vec3(0.0f, 1.6f, -1.0f));
 
         GiParams room = vctBase();
-        room.boundsMin = Vec3(-5.0f, -1.0f, -5.0f);
-        room.boundsMax = Vec3(5.0f, 6.0f, 5.0f);
+        room.testBoundsMin = Vec3(-5.0f, -1.0f, -5.0f);
+        room.testBoundsMax = Vec3(5.0f, 6.0f, 5.0f);
         room.ddgi = GiToggle::On;
         room.ddgiAmbient = 0.0f;
         CHECK(s->setGlobalIllumination(room), "the sealed room binds a field with the fix off");

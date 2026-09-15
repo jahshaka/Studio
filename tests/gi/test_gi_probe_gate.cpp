@@ -227,8 +227,8 @@ int main()
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
-    gi.boundsMin = Vec3(-4.6f, -0.6f, -4.6f);
-    gi.boundsMax = Vec3( 4.6f,  5.6f,  4.6f);
+    gi.testBoundsMin = Vec3(-4.6f, -0.6f, -4.6f);
+    gi.testBoundsMax = Vec3( 4.6f,  5.6f,  4.6f);
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     const bool ok = s->setGlobalIllumination(gi);
     if (!ok) std::printf("   engine error: %s\n", engine->lastError().c_str());

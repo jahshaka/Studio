@@ -150,8 +150,8 @@ static void sectionA(Engine *engine)
     gi.numBounces = 2;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;     // 4 probes
     gi.updateBudget = 1;
-    gi.boundsMin = Vec3(-4.6f, -0.6f, -4.6f);
-    gi.boundsMax = Vec3(4.6f, 5.6f, 4.6f);
+    gi.testBoundsMin = Vec3(-4.6f, -0.6f, -4.6f);
+    gi.testBoundsMax = Vec3(4.6f, 5.6f, 4.6f);
     CHECK(s->setGlobalIllumination(gi), "the hybrid arm builds");
 
     const auto frame = [&]() { engine->renderOneFrame(); };
@@ -548,8 +548,8 @@ static void sectionC(Engine *engine)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Low;          // isotropic: the bounces are readable
     gi.numBounces = 4;          // the engine's ceiling: the widest gap to measure
-    gi.boundsMin = Vec3(-6.5f, -0.6f, -6.5f);
-    gi.boundsMax = Vec3(6.5f, 6.6f, 6.5f);
+    gi.testBoundsMin = Vec3(-6.5f, -0.6f, -6.5f);
+    gi.testBoundsMax = Vec3(6.5f, 6.6f, 6.5f);
     CHECK(s->setGlobalIllumination(gi), "VCT at the full bounce count");
     for (int i = 0; i < 6; ++i) engine->renderOneFrame();
     Image img;

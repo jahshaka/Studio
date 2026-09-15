@@ -140,8 +140,8 @@ int main()
         vct.numBounces = 2;
         // EXPLICIT bounds covering floor + wall (also exercises the document's
         // gi.bounds parameter): geometry that leaves them stops voxelizing.
-        vct.boundsMin = Vec3(-9.0f, -1.5f, -9.0f);
-        vct.boundsMax = Vec3(9.0f, 7.5f, 9.0f);
+        vct.testBoundsMin = Vec3(-9.0f, -1.5f, -9.0f);
+        vct.testBoundsMax = Vec3(9.0f, 7.5f, 9.0f);
         const bool vctOk = s->setGlobalIllumination(vct);
         if (!vctOk) std::printf("   engine error: %s\n", engine->lastError().c_str());
         CHECK(vctOk, "setGlobalIllumination(Vct) succeeds");

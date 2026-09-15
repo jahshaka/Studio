@@ -127,8 +127,8 @@ static void roomCase(Engine *engine, View *view, const char *label, float shell,
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     if (!autoBounds) {
         const float outer = 4.0f + shell + margin;
-        gi.boundsMin = Vec3(-outer, -shell - margin, -outer);
-        gi.boundsMax = Vec3( outer, 5.0f + shell + margin, outer);
+        gi.testBoundsMin = Vec3(-outer, -shell - margin, -outer);
+        gi.testBoundsMax = Vec3( outer, 5.0f + shell + margin, outer);
     }
     std::printf("-- %s (shell %.1f, %s)\n", label, shell,
                 autoBounds ? "auto bounds" : "explicit bounds");

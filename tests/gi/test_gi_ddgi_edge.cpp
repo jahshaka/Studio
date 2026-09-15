@@ -258,10 +258,10 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
-    gi.boundsMin = Vec3(-5.0f, -1.0f, -5.0f);
+    gi.testBoundsMin = Vec3(-5.0f, -1.0f, -5.0f);
     // THE WORST CASE, and today's automatic answer: the top of the volume sits
     // INSIDE the ceiling slab (5.0 - 5.5).
-    gi.boundsMax = Vec3(5.0f, 5.25f, 5.0f);
+    gi.testBoundsMax = Vec3(5.0f, 5.25f, 5.0f);
     return gi;
 }
 
@@ -370,7 +370,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 3: bounds enclosing the shell (the roof is inside the volume) ==\n");
     GiParams enc = vctBase();
-    enc.boundsMax = Vec3(5.5f, 6.0f, 5.5f);          // above the roof's outer face (5.5)
+    enc.testBoundsMax = Vec3(5.5f, 6.0f, 5.5f);          // above the roof's outer face (5.5)
     CHECK(b.scene->setGlobalIllumination(enc), "VCT without DDGI, enclosing bounds");
     const Reading encOff = measure(e, b);
     showStats("roof, enclosing bounds, field off", encOff.roof);

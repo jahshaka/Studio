@@ -561,6 +561,29 @@ add_test(NAME gi.cascade_dirty COMMAND test_gi_cascade_dirty
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT, NOT OF ITS OWN HISTORY
+# (ogre-patch 0060). The pin binds the EXTRA CASCADES' light voxels once and
+# never again, while every cascade swaps its own on every bounce iteration, so
+# at an ODD per-cascade count — which is what Photon's Epic tier produces,
+# 1/3/7 on a four-cascade chain — the cross-cascade term integrates the previous
+# injection's radiance. RUN_SERIAL like every cascade suite.
+add_executable(test_gi_cascade_bounce_bindings test_gi_cascade_bounce_bindings.cpp)
+set_target_properties(test_gi_cascade_bounce_bindings PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cascade_bounce_bindings PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cascade_bounce_bindings PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cascade_bounce_bindings JahshakaEngineMedia)
+add_test(NAME gi.cascade_bounce_bindings COMMAND test_gi_cascade_bounce_bindings
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cascade_bounce_bindings PROPERTIES
+    TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
 # camera walks — in the same frame the cascade moved, bound throughout, and

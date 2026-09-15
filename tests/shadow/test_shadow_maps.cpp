@@ -424,8 +424,8 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
     e->setShadowMapBudget(2u);          // hold the derivation still
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     // DELIBERATELY THE CHEAPEST HYBRID THAT STILL SHADOWS ITS PROBES: Low
     // quality (a small voxel volume) with probeShadows pinned On rather than
     // left to follow the dial, and a 2x1x2 probe grid. This case is about a
@@ -1404,8 +1404,8 @@ static void t3_cache_probe(Engine *e, View *v)
     wallCacheRoom(r.scene, r);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
@@ -1629,8 +1629,8 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     wallCacheRoom(r.scene, r);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
@@ -1785,8 +1785,8 @@ static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
     wallCacheRoom(r.scene, r);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
@@ -1838,8 +1838,8 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
     wallCacheRoom(a.scene, a);   // this case needs probes: see the helper
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
-    gi.boundsMin = Vec3(-6.0f, -0.5f, -6.0f);
-    gi.boundsMax = Vec3( 6.0f,  6.0f,  6.0f);
+    gi.testBoundsMin = Vec3(-6.0f, -0.5f, -6.0f);
+    gi.testBoundsMax = Vec3( 6.0f,  6.0f,  6.0f);
     gi.quality = GiQuality::Low;
     gi.probeShadows = GiToggle::On;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;

@@ -225,8 +225,8 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.boundsMin = Vec3(-14.0f, -2.0f, -14.0f);
-    gi.boundsMax = Vec3(14.0f, 10.0f, 7.0f);
+    gi.testBoundsMin = Vec3(-14.0f, -2.0f, -14.0f);
+    gi.testBoundsMax = Vec3(14.0f, 10.0f, 7.0f);
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the whole fixture");
 
     // The camera stands BETWEEN the cube and the wall and looks at the wall.
@@ -897,8 +897,8 @@ static int costMain(Engine *e, const char *, const char *)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
-    gi.boundsMin = Vec3(-13.0f, -2.0f, -13.0f);
-    gi.boundsMax = Vec3(13.0f, 11.0f, 13.0f);
+    gi.testBoundsMin = Vec3(-13.0f, -2.0f, -13.0f);
+    gi.testBoundsMax = Vec3(13.0f, 11.0f, 13.0f);
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the mirror box");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
 
