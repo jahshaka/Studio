@@ -18,6 +18,7 @@ For more information see the LICENSE file
 
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
+#include "services/worldmodes.h"
 
 class ComboBoxWidget;
 class CheckBoxWidget;
@@ -65,6 +66,8 @@ private:
     /// deleted the very control that raised it, and repainted a whole blade
     /// for a value change.
     void build();
+    /// The row's filter key and synonyms (PROPERTY_FILTER_SPEC §3.2).
+    void identifyRow(QWidget *row, const worldmodes::Row &r);
     /// Re-reads every row's value, its pin mark and the tier from the document.
     void refreshRows();
     void applied();

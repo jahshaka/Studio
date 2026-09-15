@@ -11,9 +11,12 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/rowundo.h"
 
+#include "ui/panels/propertyrows.h"
+
 #include <memory>
 
 #include <QColor>
+#include <QWidget>
 #include <QVector3D>
 
 #include "ui/controls/checkboxwidget.h"
@@ -71,6 +74,18 @@ void tick(const SessionPtr &s, const rowundo::Binding &b, const QVariant &value)
     if (atomic) end(s, b);
 }
 
+/// THE ROW'S NAME REACHES THE FILTER HERE (PROPERTY_FILTER_SPEC §3.2). Every
+/// panel that binds a row through panelundo::SceneRows has already named it —
+/// "gravity", "sunDiscSize", "postFx.exposure" — so one call at the bind covers
+/// every sceneprops row in the app and no panel keeps a second list in step.
+/// The control may be INSIDE the row (the picker of a colour row): rowFor()
+/// walks up to the row the blade registered.
+void nameRow(QWidget *control, const rowundo::Binding &binding)
+{
+    if (!control || binding.key.isEmpty()) return;
+    PropertyRows::identifyControl(control, binding.key);
+}
+
 }   // namespace
 
 namespace rowundo {
@@ -78,6 +93,7 @@ namespace rowundo {
 void bind(HFloatSliderWidget *slider, const Binding &binding)
 {
     if (!slider) return;
+    nameRow(slider, binding);
     auto session = std::make_shared<Session>();
     QObject::connect(slider, &HFloatSliderWidget::valueChangeStart, slider,
                      [session, binding](float) { begin(session, binding); });
@@ -90,6 +106,7 @@ void bind(HFloatSliderWidget *slider, const Binding &binding)
 void bind(DragFloatWidget *field, const Binding &binding)
 {
     if (!field) return;
+    nameRow(field, binding);
     auto session = std::make_shared<Session>();
     QObject::connect(field, &DragFloatWidget::valueChanged, field,
                      [session, binding](double v) {
@@ -107,6 +124,7 @@ void bind(DragFloatWidget *field, const Binding &binding)
 void bind(DragVector3Widget *field, const Binding &binding)
 {
     if (!field) return;
+    nameRow(field, binding);
     auto session = std::make_shared<Session>();
     QObject::connect(field, &DragVector3Widget::valueChanged, field,
                      [session, binding](const iris::Vec3 &v) {
@@ -122,6 +140,7 @@ void bind(DragVector3Widget *field, const Binding &binding)
 void bind(ColorPickerWidget *picker, const Binding &binding)
 {
     if (!picker) return;
+    nameRow(picker, binding);
     auto session = std::make_shared<Session>();
     QObject::connect(picker, &ColorPickerWidget::pickingStarted, picker,
                      [session, binding]() { begin(session, binding); });
@@ -137,6 +156,7 @@ void bind(ColorPickerWidget *picker, const Binding &binding)
 void bind(CheckBoxWidget *box, const Binding &binding)
 {
     if (!box) return;
+    nameRow(box, binding);
     auto session = std::make_shared<Session>();
     QObject::connect(box, &CheckBoxWidget::valueChanged, box,
                      [session, binding](bool v) { tick(session, binding, QVariant(v)); });
@@ -145,6 +165,7 @@ void bind(CheckBoxWidget *box, const Binding &binding)
 void bind(ComboBoxWidget *combo, const Binding &binding)
 {
     if (!combo) return;
+    nameRow(combo, binding);
     auto session = std::make_shared<Session>();
     QObject::connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), combo,
                      [session, binding](int row) {

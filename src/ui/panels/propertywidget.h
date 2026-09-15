@@ -99,8 +99,13 @@ private:
     void updatePane();
 
     /// The one place a property row enters this panel; fits it to the dock
-    /// (ui/controls/rowfit.h) on the way in.
+    /// (ui/controls/rowfit.h) on the way in, and hands it to the property-row
+    /// registry with the key below.
     void addRow(QWidget *row);
+    /// The property whose row is being built right now — its `name` becomes the
+    /// row's filter key (PROPERTY_FILTER_SPEC §3.2). Empty outside
+    /// setProperties().
+    QString pendingKey;
 
     Ui::PropertyWidget *ui;
 };

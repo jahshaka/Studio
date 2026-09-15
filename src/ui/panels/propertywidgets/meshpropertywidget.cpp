@@ -101,7 +101,8 @@ MeshPropertyWidget::MeshPropertyWidget()
         tr("Only lights that share a channel with this object light it. Shadows are NOT "
            "filtered: an unlit object still casts a shadow from that light - switch Cast "
            "Shadow off above to stop that."));
-    this->addWidgetToContent(lightChannels);
+    this->addWidgetToContent(lightChannels, tr("Lighting Channels"),
+                             { QStringLiteral("channels") });
     connect(lightChannels, &LightChannelsWidget::maskChanged,
             this, &MeshPropertyWidget::onLightChannelsChanged);
 

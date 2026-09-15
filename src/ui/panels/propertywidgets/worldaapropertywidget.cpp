@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldaapropertywidget.h"
+#include "ui/panels/propertyrows.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 
@@ -62,6 +63,9 @@ void WorldAaPropertyWidget::build()
     if (samplesSelector) return;   // the rows are built once and refilled
 
     samplesSelector = this->addComboBox("MSAA");
+    PropertyRows::identify(samplesSelector, QStringLiteral("world.msaa"),
+                           { QStringLiteral("aa"), QStringLiteral("anti-aliasing"),
+                             QStringLiteral("antialiasing"), QStringLiteral("samples") });
     for (int i = 0; i < kAaRowCount; ++i)
         samplesSelector->addItem(aaName(kAaSamples[i]));
     connect(samplesSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
@@ -72,7 +76,9 @@ void WorldAaPropertyWidget::build()
     // rather than being added and removed — a row that comes and goes is what
     // makes a panel rebuild itself, which is what this lane is removing.
     achievedRow = this->addLabel("Driver Delivers", QString());
-    if (achievedRow) achievedRow->hide();
+    PropertyRows::identify(achievedRow, QStringLiteral("world.msaaAchieved"),
+                           { QStringLiteral("msaa"), QStringLiteral("aa") });
+    if (achievedRow) PropertyRows::setPanelVisible(achievedRow, false);
 }
 
 void WorldAaPropertyWidget::refreshRows()
@@ -88,7 +94,7 @@ void WorldAaPropertyWidget::refreshRows()
     if (achievedRow) {
         const bool clamped = achieved != scene->antiAliasing;
         achievedRow->setText(aaName(achieved));
-        achievedRow->setVisible(clamped);
+        PropertyRows::setPanelVisible(achievedRow, clamped);
     }
     loading = false;
 }

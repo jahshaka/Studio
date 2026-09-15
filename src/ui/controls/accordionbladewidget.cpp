@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "ui_filepickerwidget.h"
 #include "ui/panels/propertywidget.h"
 #include "ui_propertywidget.h"
+#include "ui/panels/propertyrows.h"
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 #include "ui/controls/rowfit.h"
@@ -86,6 +87,12 @@ void AccordianBladeWidget::addRow(QWidget *row)
     if (!row) return;
     RowFit::fitRow(row);
     ui->contentpane->layout()->addWidget(row);
+    // ...AND IT IS WHERE A ROW GETS ITS IDENTITY (PROPERTY_FILTER_SPEC §3.2):
+    // section, live label, and — where the panel knows one — a key and
+    // keywords, added beside the creation site with PropertyRows::identify().
+    // Registering here is what keeps the 175 creation sites untouched and makes
+    // a panel that rebuilds its rows re-register by construction.
+    PropertyRows::registry().add(this, row);
 }
 
 void AccordianBladeWidget::clearPanel(QLayout *layout)
@@ -166,6 +173,11 @@ void AccordianBladeWidget::drainLayout(QLayout *layout)
             // clearLayout has hidden its blades for the same reason since the
             // selection-cost fix; this is the row-level twin of it.
             widget->hide();
+            // OUT OF THE REGISTRY AT RETIREMENT, not at destruction (§6.2): a
+            // row in the retired ring is off the panel and must not be counted,
+            // matched or shown by the filter, and it outlives this call by
+            // three generations.
+            PropertyRows::registry().retire(widget);
             widget->deleteLater();
             mRetired[0].append(widget);
         }
@@ -189,7 +201,7 @@ int AccordianBladeWidget::retiredRowCount() const
 
 void AccordianBladeWidget::onPanelToggled()
 {
-    if (ui->contentpane->isVisible()) {
+    if (isExpanded()) {
 		collapse();
     } else {
         expand();
@@ -199,6 +211,30 @@ void AccordianBladeWidget::onPanelToggled()
 void AccordianBladeWidget::setPanelTitle(const QString& title)
 {
     ui->content_title->setText(title);
+}
+
+QLabel *AccordianBladeWidget::titleLabel() const
+{
+    return ui->content_title;
+}
+
+QString AccordianBladeWidget::panelTitle() const
+{
+    return ui->content_title->text();
+}
+
+/// OPEN OR CLOSED — AND NEVER "my parent is hidden".
+///
+/// QWidget::isVisible() is false for every child of a hidden widget, and a
+/// blade is hidden whenever its tab is not the one on screen (the panel's
+/// blades are permanent children, mounted and unmounted by tab). Reading
+/// isVisible() here therefore said "collapsed" for every section of the other
+/// tab — which the property filter's expand SNAPSHOT would then restore,
+/// closing every section of a tab the user had never filtered. isHidden() is
+/// the explicit state collapse()/expand() write, and it is what this means.
+bool AccordianBladeWidget::isExpanded() const
+{
+    return !ui->contentpane->isHidden();
 }
 
 TransformEditor* AccordianBladeWidget::addTransformControls()
@@ -380,6 +416,18 @@ void AccordianBladeWidget::addWidgetToContent(QWidget *widget)
     if (!widget) return;
     minimum_height += widget->sizeHint().height() + stretch;
     addRow(widget);
+}
+
+/// The same, for a caller-built row that HAS a name worth filtering by (the
+/// light panel's asset rows, the Photon disclosure): a row with no label of its
+/// own is section-bound, and that is the right answer for a ramp or a reset
+/// button but the wrong one for a row a user can look for by name.
+void AccordianBladeWidget::addWidgetToContent(QWidget *widget, const QString &label,
+                                              const QStringList &keywords)
+{
+    if (!widget) return;
+    addWidgetToContent(widget);
+    PropertyRows::registry().nameRow(widget, label, keywords);
 }
 
 ComboBoxWidget* AccordianBladeWidget::addComboBox(const QString& title)

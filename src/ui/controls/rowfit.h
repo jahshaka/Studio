@@ -46,6 +46,13 @@ class QLineEdit;
 
 namespace RowFit {
 
+/// A fitted QLabel's text ON SCREEN is the ELIDED one — that is the whole point
+/// of fitLabel. Anything that needs the NAME rather than the picture (the
+/// property-row registry, PROPERTY_FILTER_SPEC §3.1: a row whose label reads
+/// "Sun D…" must still be found by "disc") reads it from this widget property,
+/// which fitLabel keeps in step with every setText the panel makes.
+constexpr const char *kFullTextProperty = "jahRowFullText";
+
 /// The floor a fitted control is allowed to shrink to. Small on purpose: the
 /// dock's minimum width is the real contract (ui/style/panelmetrics.h), and a
 /// control that keeps a generous minimum of its own is exactly what breaks it.

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertyrows.h"
 #include <QWidget>
 #include <QDebug>
 
@@ -79,7 +80,7 @@ QWidget *makeBindingRow(const QString &title, QLabel **valueOut, QPushButton **p
     note->setWordWrap(true);
     note->setStyleSheet(StyleSheet::WarningNote());
     ThemeRoles::setTone(note, ThemeRoles::Tone::Warning);
-    note->hide();
+    PropertyRows::setPanelVisible(note, false);
     outer->addWidget(note);
 
     *valueOut = value; *pickOut = pick; *clearOut = clear; *noteOut = note;
@@ -142,9 +143,11 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     // LightBindings, which is also what the scripting verbs call.
     profileRow = makeBindingRow(tr("IES Profile"), &profileLabel, &profilePick,
                                 &profileClear, &profileNote);
-    this->addWidgetToContent(profileRow);
+    this->addWidgetToContent(profileRow, tr("IES Profile"),
+                             { QStringLiteral("photometric"), QStringLiteral("ies") });
     maskRow = makeBindingRow(tr("Light Mask"), &maskLabel, &maskPick, &maskClear, &maskNote);
-    this->addWidgetToContent(maskRow);
+    this->addWidgetToContent(maskRow, tr("Light Mask"),
+                             { QStringLiteral("gobo"), QStringLiteral("cookie") });
     connect(profilePick, &QPushButton::clicked, this, &LightPropertyWidget::pickProfile);
     connect(profileClear, &QPushButton::clicked, this, &LightPropertyWidget::clearProfile);
     connect(maskPick, &QPushButton::clicked, this, &LightPropertyWidget::pickMask);
@@ -160,7 +163,8 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
            "filtered: an object this light does not light still casts a shadow from it. Turn "
            "off Cast Shadow on the object itself - the row of that name on its Mesh blade - "
            "to stop that."));
-    this->addWidgetToContent(lightChannels);
+    this->addWidgetToContent(lightChannels, tr("Lighting Channels"),
+                             { QStringLiteral("channels") });
     connect(lightChannels, &LightChannelsWidget::maskChanged,
             this, &LightPropertyWidget::lightChannelsChanged);
 
@@ -231,8 +235,8 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 	// ignored the colour too). Hide the controls in engine mode; legacy keeps them.
 	mShadowTintSupported = false;  // engine viewport: HlmsPbs has no shadow tint
 	if (!mShadowTintSupported) {
-		shadowAlpha->hide();
-		shadowColor->hide();
+		PropertyRows::setPanelVisible(shadowAlpha, false);
+		PropertyRows::setPanelVisible(shadowColor, false);
 	}
 	// The legacy renderer never shadowed point lights, so the panel hid their
 	// shadow controls. The engine renders point shadows (focused/DPSM maps), so
@@ -309,16 +313,16 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         // the world, which this one does not — it is the sky.
         const bool isSky = lightNode->getLightType() == iris::LightType::Sky;
         lightColor->setLabel(isSky ? tr("Tint") : tr("Color"));
-        distance->setVisible(!isSky);
-        lightChannels->setVisible(!isSky);
+        PropertyRows::setPanelVisible(distance, !isSky);
+        PropertyRows::setPanelVisible(lightChannels, !isSky);
         if (lightNode->getLightType()==iris::LightType::Spot) {
-            spotCutOff->show();
-            spotCutOffSoftness->show();
-            spotFalloff->show();
+            PropertyRows::setPanelVisible(spotCutOff, true);
+            PropertyRows::setPanelVisible(spotCutOffSoftness, true);
+            PropertyRows::setPanelVisible(spotFalloff, true);
         } else {
-            spotCutOff->hide();
-            spotCutOffSoftness->hide();
-            spotFalloff->hide();
+            PropertyRows::setPanelVisible(spotCutOff, false);
+            PropertyRows::setPanelVisible(spotCutOffSoftness, false);
+            PropertyRows::setPanelVisible(spotFalloff, false);
         }
 
         // Area lights: the emitting rectangle replaces the cone controls.
@@ -327,15 +331,15 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
             rectHeight->setValue(lightNode->rectHeight);
             doubleSided->setValue(lightNode->doubleSided);
             accurate->setValue(lightNode->accurate);
-            rectWidth->show();
-            rectHeight->show();
-            doubleSided->show();
-            accurate->show();
+            PropertyRows::setPanelVisible(rectWidth, true);
+            PropertyRows::setPanelVisible(rectHeight, true);
+            PropertyRows::setPanelVisible(doubleSided, true);
+            PropertyRows::setPanelVisible(accurate, true);
         } else {
-            rectWidth->hide();
-            rectHeight->hide();
-            doubleSided->hide();
-            accurate->hide();
+            PropertyRows::setPanelVisible(rectWidth, false);
+            PropertyRows::setPanelVisible(rectHeight, false);
+            PropertyRows::setPanelVisible(doubleSided, false);
+            PropertyRows::setPanelVisible(accurate, false);
         }
 
         refreshBindingRows();
@@ -351,27 +355,27 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
             lightNode->getLightType()==iris::LightType::Area) {
             // Neither can shadow: an area light because Ogre-Next cannot, a Sky
             // Light because it has no place to cast from. Hide every control.
-            shadowSize->hide();
-            shadowType->hide();
-            shadowColor->hide();
-            shadowAlpha->hide();
+            PropertyRows::setPanelVisible(shadowSize, false);
+            PropertyRows::setPanelVisible(shadowType, false);
+            PropertyRows::setPanelVisible(shadowColor, false);
+            PropertyRows::setPanelVisible(shadowAlpha, false);
         } else if (lightNode->getLightType()==iris::LightType::Point) {
             if (mPointShadowsSupported) {
-                shadowSize->show();
-                shadowType->show();
+                PropertyRows::setPanelVisible(shadowSize, true);
+                PropertyRows::setPanelVisible(shadowType, true);
             } else {
-                shadowSize->hide();
-                shadowType->hide();
+                PropertyRows::setPanelVisible(shadowSize, false);
+                PropertyRows::setPanelVisible(shadowType, false);
             }
-			shadowColor->hide();
-			shadowAlpha->hide();
+			PropertyRows::setPanelVisible(shadowColor, false);
+			PropertyRows::setPanelVisible(shadowAlpha, false);
             //shadowBias->hide();
         } else {
-            shadowSize->show();
-            shadowType->show();
+            PropertyRows::setPanelVisible(shadowSize, true);
+            PropertyRows::setPanelVisible(shadowType, true);
 			if (mShadowTintSupported) {
-				shadowColor->show();
-				shadowAlpha->show();
+				PropertyRows::setPanelVisible(shadowColor, true);
+				PropertyRows::setPanelVisible(shadowAlpha, true);
 			}
             //shadowBias->show();
         }
@@ -411,8 +415,8 @@ void LightPropertyWidget::refreshBindingRows()
 {
     if (!profileRow || !maskRow) return;
     if (!lightNode) {
-        profileRow->hide();
-        maskRow->hide();
+        PropertyRows::setPanelVisible(profileRow, false);
+        PropertyRows::setPanelVisible(maskRow, false);
         return;
     }
     const auto type = lightNode->getLightType();
@@ -420,7 +424,7 @@ void LightPropertyWidget::refreshBindingRows()
     // A profile is a spot/point affordance only: directional and area lights
     // have no profile term in the renderer at all, so the row is not shown.
     const bool profileRelevant = type == iris::LightType::Spot || type == iris::LightType::Point;
-    profileRow->setVisible(profileRelevant);
+    PropertyRows::setPanelVisible(profileRow, profileRelevant);
     if (profileRelevant) {
         setBindingLabel(profileLabel, lightNode->iesProfileGuid,
                         lightNode->iesProfilePath, db);
@@ -432,7 +436,7 @@ void LightPropertyWidget::refreshBindingRows()
         const bool shadows = lightNode->shadowMap &&
                              lightNode->shadowMap->shadowType != iris::ShadowMapType::None;
         const bool lost = type == iris::LightType::Point && shadows;
-        profileNote->setVisible(lost);
+        PropertyRows::setPanelVisible(profileNote, lost);
         if (lost)
             profileNote->setText(tr("Shadow-casting point lights ignore their IES profile — "
                                     "the renderer has no photometric term on that path. Set "
@@ -443,13 +447,13 @@ void LightPropertyWidget::refreshBindingRows()
     // A mask is an area-light affordance, and only the fast approximation
     // samples it.
     const bool maskRelevant = type == iris::LightType::Area;
-    maskRow->setVisible(maskRelevant);
+    PropertyRows::setPanelVisible(maskRow, maskRelevant);
     if (maskRelevant) {
         setBindingLabel(maskLabel, lightNode->lightTextureGuid,
                         lightNode->lightTexturePath, db);
         maskClear->setEnabled(!lightNode->lightTextureGuid.isEmpty());
         const bool lost = lightNode->accurate;
-        maskNote->setVisible(lost);
+        PropertyRows::setPanelVisible(maskNote, lost);
         if (lost)
             maskNote->setText(tr("Accurate (LTC) area lights ignore their mask — only the fast "
                                  "approximation samples it. Turn Accurate off to use the mask."));
@@ -469,7 +473,7 @@ void LightPropertyWidget::bindProfile(const QString &guid)
     if (before == guid) return;
     QString error;
     if (!LightBindings::bindProfile(lightNode, guid, db, project, &error)) {
-        if (profileNote) { profileNote->setText(error); profileNote->show(); }
+        if (profileNote) { profileNote->setText(error); PropertyRows::setPanelVisible(profileNote, true); }
         refreshBindingRows();
         return;
     }
@@ -493,7 +497,7 @@ void LightPropertyWidget::bindMask(const QString &guid)
     if (before == guid) return;
     QString error;
     if (!LightBindings::bindTexture(lightNode, guid, db, project, &error)) {
-        if (maskNote) { maskNote->setText(error); maskNote->show(); }
+        if (maskNote) { maskNote->setText(error); PropertyRows::setPanelVisible(maskNote, true); }
         refreshBindingRows();
         return;
     }
@@ -544,13 +548,13 @@ void LightPropertyWidget::refreshSunRows()
 {
     if (!sunReadout || !forwardShadingPriority || !followsAtmosphere) return;
     if (!lightNode || lightNode->lightType != iris::LightType::Directional) {
-        sunReadout->hide();
-        forwardShadingPriority->hide();
-        followsAtmosphere->hide();
+        PropertyRows::setPanelVisible(sunReadout, false);
+        PropertyRows::setPanelVisible(forwardShadingPriority, false);
+        PropertyRows::setPanelVisible(followsAtmosphere, false);
         return;
     }
-    sunReadout->show();
-    forwardShadingPriority->show();
+    PropertyRows::setPanelVisible(sunReadout, true);
+    PropertyRows::setPanelVisible(forwardShadingPriority, true);
     forwardShadingPriority->setValue(lightNode->forwardShadingPriority);
 
     auto scene = lightNode->getScene();
@@ -560,7 +564,7 @@ void LightPropertyWidget::refreshSunRows()
     // secondary directional is not the sun — it draws no disc and casts no
     // shadow, so the row on one would say nothing true (round-2 review item
     // 11). It follows the RESOLVER, like the readout below.
-    followsAtmosphere->setVisible(isSun);
+    PropertyRows::setPanelVisible(followsAtmosphere, isSun);
     followsAtmosphere->setValue(lightNode->followsAtmosphere);
 
     const QString reason = scene ? scene->sunReason() : QStringLiteral("none");

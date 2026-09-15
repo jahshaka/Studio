@@ -36,6 +36,7 @@ class DragVector3Widget;
 
 #include <QLayout>
 #include <QPointer>
+#include <QStringList>
 
 class Project;
 
@@ -88,6 +89,10 @@ public:
     /// the add*() helpers put theirs. For rows the generic controls do not
     /// cover (the light panel's two asset-binding rows).
     void                    addWidgetToContent(QWidget *widget);
+    /// The same, naming the row so the property filter can find it by text
+    /// (PROPERTY_FILTER_SPEC §3.4.6 — an unnamed row is section-bound).
+    void                    addWidgetToContent(QWidget *widget, const QString &label,
+                                               const QStringList &keywords = QStringList());
 
     /// The one live Project (Phase 4: was the Globals::project static). Set by
     /// whoever creates the panel; the add*() helpers above forward it to the
@@ -96,8 +101,14 @@ public:
     virtual void setProject(Project *p) { project = p; }
 
     void setPanelTitle(const QString&);
+    /// The section's name and the QLabel that holds it — the property-row
+    /// registry reads the label LIVE (titles and row labels mutate).
+    QString panelTitle() const;
+    class QLabel *titleLabel() const;
     void collapse();
     void expand();
+    /// Whether the content pane is open (the filter's expand snapshot).
+    bool isExpanded() const;
 
     /// Retires every row in the content pane. `layout` is IGNORED and has
     /// always been (the pane is the only thing this clears); it stays only

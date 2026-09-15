@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
+#include "ui/panels/propertyrows.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -86,6 +87,9 @@ void WorldShadowPropertyWidget::build()
     if (qualitySelector) return;   // built once, refilled from here on
 
     qualitySelector = this->addComboBox("Shadow Quality");
+    PropertyRows::identify(qualitySelector, QStringLiteral("world.shadowResolution"),
+                           { QStringLiteral("shadows"), QStringLiteral("resolution"),
+                             QStringLiteral("atlas") });
     qualitySelector->addItem("Auto (from lights)");
     qualitySelector->addItem("1024");
     qualitySelector->addItem("2048");
@@ -102,7 +106,7 @@ void WorldShadowPropertyWidget::build()
     memoryRow = this->addLabel("Atlas Memory", QString());
     mapsRow = this->addLabel("Shadow Maps", QString());
     for (LabelWidget *row : { sunRow, secondaryRow, autoRow, memoryRow, mapsRow })
-        if (row) row->hide();
+        if (row) PropertyRows::setPanelVisible(row, false);
 }
 
 // The READ-BACK rows, re-read in place. Nothing here is created or destroyed:
@@ -135,12 +139,12 @@ void WorldShadowPropertyWidget::refreshRows()
                                 .arg(sun->getName())
                                 .arg(sun->forwardShadingPriority));
         }
-        sunRow->show();
+        PropertyRows::setPanelVisible(sunRow, true);
     }
     if (secondaryRow) {
         const auto others = scene->secondaryDirectionals();
         if (others.isEmpty()) {
-            secondaryRow->hide();
+            PropertyRows::setPanelVisible(secondaryRow, false);
         } else {
             QStringList names;
             for (const auto &l : others)
@@ -151,7 +155,7 @@ void WorldShadowPropertyWidget::refreshRows()
                                "Shading Priority on a light to choose.")
                     .arg(others.size() + 1)
                     .arg(names.join(QStringLiteral(", "))));
-            secondaryRow->show();
+            PropertyRows::setPanelVisible(secondaryRow, true);
         }
     }
 
@@ -163,7 +167,7 @@ void WorldShadowPropertyWidget::refreshRows()
     }
     if (autoRow) {
         // Auto has to say what it derived or the row is a mystery.
-        autoRow->setVisible(scene->shadowResolution == 0);
+        PropertyRows::setPanelVisible(autoRow, scene->shadowResolution == 0);
         autoRow->setText(derived > 0
                              ? QStringLiteral("%1 (largest light request)").arg(effective)
                              : QStringLiteral("no shadow-casting light yet"));
@@ -186,14 +190,14 @@ void WorldShadowPropertyWidget::refreshRows()
                 text += QStringLiteral("; %1 MB of it for mirrors")
                             .arg(int(st.reflectAtlasBytes / (1024 * 1024)));
             memoryRow->setText(text + QStringLiteral(")"));
-            memoryRow->show();
+            PropertyRows::setPanelVisible(memoryRow, true);
         } else if (effective > 0) {
             memoryRow->setText(QStringLiteral("~%1 MB VRAM (%2 x %3)")
                                    .arg(atlasMegabytes(effective))
                                    .arg(effective).arg(qRound(effective * 3.5)));
-            memoryRow->show();
+            PropertyRows::setPanelVisible(memoryRow, true);
         } else {
-            memoryRow->hide();
+            PropertyRows::setPanelVisible(memoryRow, false);
         }
     }
 
@@ -208,13 +212,13 @@ void WorldShadowPropertyWidget::refreshRows()
                                             "no shadow. Raise Shadow Map Budget in World Modes, "
                                             "or turn off Cast Shadows on distant lights.")
                                  .arg(st.casters - unmapped).arg(st.casters).arg(unmapped));
-            mapsRow->show();
+            PropertyRows::setPanelVisible(mapsRow, true);
         } else if (st.available && st.casters > 0) {
             mapsRow->setText(QStringLiteral("%1 of %1 shadow-casting lights have a map")
                                  .arg(st.casters));
-            mapsRow->show();
+            PropertyRows::setPanelVisible(mapsRow, true);
         } else {
-            mapsRow->hide();
+            PropertyRows::setPanelVisible(mapsRow, false);
         }
     }
     loading = false;

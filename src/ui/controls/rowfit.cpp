@@ -36,6 +36,7 @@ public:
     explicit ElideFilter(QLabel *label) : QObject(label), mLabel(label)
     {
         mFull = label->text();
+        label->setProperty(RowFit::kFullTextProperty, mFull);
         label->installEventFilter(this);
         apply();
     }
@@ -66,7 +67,12 @@ private:
     {
         if (mInside) return;                    // setText() re-enters through Paint
         const QString current = mLabel->text();
-        if (current != mWrote) mFull = current; // a new value arrived from the panel
+        if (current != mWrote) {
+            mFull = current;                    // a new value arrived from the panel
+            // ...and the NAME goes with it: the row registry matches text
+            // against the full name, never the elided picture (rowfit.h).
+            mLabel->setProperty(RowFit::kFullTextProperty, mFull);
+        }
 
         const QMargins m = mLabel->contentsMargins();
         const int avail = mLabel->width() - m.left() - m.right() - 2 * mLabel->margin();

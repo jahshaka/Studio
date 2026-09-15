@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/vec.h"
+#include "ui/panels/propertyrows.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -121,6 +122,9 @@ void WorldGiPropertyWidget::rebuild()
 
     // ---- 1. THE SWITCH ------------------------------------------------------
     photonSwitch = this->addCheckBox(QStringLiteral("Photon"), on);
+    PropertyRows::identify(photonSwitch, QStringLiteral("world.photon"),
+                           { QStringLiteral("gi"), QStringLiteral("global illumination"),
+                             QStringLiteral("indirect"), QStringLiteral("bounce") });
     // addCheckBox ignores its `value` argument (accordionbladewidget.cpp never
     // calls setValue) — every panel that cares sets it itself.
     photonSwitch->setValue(on);
@@ -134,6 +138,8 @@ void WorldGiPropertyWidget::rebuild()
 
     // ---- 2. THE QUALITY TIER ------------------------------------------------
     tierSelector = this->addComboBox(QStringLiteral("Quality"));
+    PropertyRows::identify(tierSelector, QStringLiteral("world.photonTier"),
+                           { QStringLiteral("gi"), QStringLiteral("photon") });
     const QStringList tierNames = worldmodes::photonTierNames();
     tierSelector->addItem(QStringLiteral("Low"));
     tierSelector->addItem(QStringLiteral("Medium"));
@@ -191,7 +197,7 @@ void WorldGiPropertyWidget::rebuild()
                "grid of photographs of it: that is \"Sky\", and it is the right answer rather "
                "than a failure. Add walls and a ceiling — or pin the GI bounds under Advanced — "
                "and the probes appear."));
-        reflectionsRow->hide();
+        PropertyRows::setPanelVisible(reflectionsRow, false);
     }
 
     // ---- 3. THE UPDATE BUDGET ----------------------------------------------
@@ -250,7 +256,8 @@ void WorldGiPropertyWidget::rebuild()
                                   "time. Changing one PINS it: it keeps its value through tier "
                                   "switches until you reset it."));
     connect(advancedButton, &QPushButton::toggled, this, &WorldGiPropertyWidget::onAdvancedToggled);
-    this->addWidgetToContent(advancedButton);
+    this->addWidgetToContent(advancedButton, tr("Advanced"),
+                             { QStringLiteral("photon"), QStringLiteral("gi") });
     if (!advancedOpen) return;
 
     // The technique. Off is reachable here too — it is the same field the
@@ -478,10 +485,13 @@ void WorldGiPropertyWidget::rebuild()
 void WorldGiPropertyWidget::refreshReflectionsRow()
 {
     if (!reflectionsRow) return;
-    if (!scene || !sceneView || !sceneView->isInitialized()) { reflectionsRow->hide(); return; }
+    if (!scene || !sceneView || !sceneView->isInitialized()) {
+        PropertyRows::setPanelVisible(reflectionsRow, false);
+        return;
+    }
     const IEditorViewport::GiStatusInfo st = sceneView->giStatus();
     if (!st.available || st.mode != QStringLiteral("vct_pcc_hybrid")) {
-        reflectionsRow->hide();     // no probe arm in this technique: nothing to report
+        PropertyRows::setPanelVisible(reflectionsRow, false);     // no probe arm in this technique: nothing to report
         return;
     }
     const QString text = st.probeGridRefused
@@ -492,7 +502,7 @@ void WorldGiPropertyWidget::refreshReflectionsRow()
     // and a setText per second would repaint the row forever. LabelWidget has
     // no getter, so the last value written is kept here.
     if (reflectionsText != text) { reflectionsText = text; reflectionsRow->setText(text); }
-    reflectionsRow->show();
+    PropertyRows::setPanelVisible(reflectionsRow, true);
 }
 
 // THE POLL (round-3 item 5). What this row reports is decided by the LAYOUT of
@@ -545,7 +555,8 @@ void WorldGiPropertyWidget::addResetAdvancedButton()
             this, &WorldGiPropertyWidget::onResetAdvancedClicked);
     // The button is the LAST thing rebuild() adds, so appending it later lands
     // it in the same place.
-    this->addWidgetToContent(resetAdvancedButton);
+    this->addWidgetToContent(resetAdvancedButton, tr("Reset Advanced"),
+                             { QStringLiteral("pinned"), QStringLiteral("photon") });
 }
 
 // What a slider tick may change besides its own backing field: the row's pin

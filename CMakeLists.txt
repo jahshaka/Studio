@@ -380,7 +380,8 @@ set(SRCS
     src/ui/panels/propertywidgets/meshpropertywidget.cpp
     src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     src/ui/panels/propertywidgets/shaderpropertywidget.cpp 
-    src/ui/panels/propertywidget.cpp 
+    src/ui/panels/propertywidget.cpp
+    src/ui/panels/propertyrows.cpp 
     src/ui/dialogs/newprojectdialog.cpp 
     src/ui/panels/assetwidget.cpp 
     src/io/assetmanager.cpp 

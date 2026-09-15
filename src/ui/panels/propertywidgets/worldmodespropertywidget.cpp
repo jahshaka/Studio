@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/worldmodes.h"
+#include "ui/panels/propertyrows.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/labelwidget.h"
@@ -69,6 +70,9 @@ void WorldModesPropertyWidget::build()
     // refreshRows(), which is also where it is selected.
     modeSelector = this->addComboBox("World Mode");
     for (const QString &n : worldmodes::modeNames()) modeSelector->addItem(titled(n));
+    PropertyRows::identify(modeSelector, QStringLiteral("world.mode"),
+                           { QStringLiteral("quality"), QStringLiteral("tier"),
+                             QStringLiteral("scalability") });
     modeSelector->setToolTip(
         QStringLiteral("One scalability tier for the whole scene. Picking a mode sets every row "
                        "below to that tier's value, except rows you have changed yourself — those "
@@ -86,6 +90,7 @@ void WorldModesPropertyWidget::build()
             // cannot be set to something the renderer would ignore.
             auto *lbl = this->addLabel(r.label, QStringLiteral("not available yet"));
             if (lbl) lbl->setToolTip(r.cost);
+            identifyRow(lbl, r);
             rowControls.append(nullptr);
             continue;
         }
@@ -93,6 +98,7 @@ void WorldModesPropertyWidget::build()
         if (r.type == worldmodes::RowType::Bool) {
             auto *box = this->addCheckBox(r.label, false);
             box->setToolTip(r.cost);
+            identifyRow(box, r);
             const int index = i;
             connect(box, &CheckBoxWidget::valueChanged, this, [this, index](bool on) {
                 const auto &table = worldmodes::rows();
@@ -115,6 +121,7 @@ void WorldModesPropertyWidget::build()
                 combo->addItem(QString::number(v), v);
         }
         combo->setToolTip(r.cost);
+        identifyRow(combo, r);
         connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldModesPropertyWidget::onRowChanged);
         rowControls.append(combo);
@@ -125,11 +132,36 @@ void WorldModesPropertyWidget::build()
     resetRow = this->addCheckBox(QStringLiteral("Reset All Pinned Rows"), false);
     resetRow->setValue(false);
     resetRow->setToolTip(QStringLiteral("Drops every pinned row (*) and re-applies the mode."));
+    PropertyRows::identify(resetRow, QStringLiteral("world.resetOverrides"),
+                           { QStringLiteral("pinned"), QStringLiteral("reset") });
     connect(resetRow, &CheckBoxWidget::valueChanged, this, [this](bool on) {
         if (loading || !on || !scene) return;
         runUndoable(tr("Reset Pinned Quality Rows"),
                     [this]() { worldmodes::clearOverrides(scene); });
     });
+}
+
+/// THE TIER TABLE'S ROWS ARE THE SAME ROWS THE POST-PROCESS SECTION SHOWS, so
+/// they carry the same key (PROPERTY_FILTER_SPEC §3.2): "ssr" finds
+/// Screen-Space Reflections in both places, which is exactly what the owner
+/// asked the box for.
+void WorldModesPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row &r)
+{
+    if (!row) return;
+    QStringList keywords{ r.group };
+    // CURATED SYNONYMS (PROPERTY_FILTER_SPEC D5), beside the row, deleted with
+    // it: the short names people actually type for rows whose label spells the
+    // thing out in full.
+    if (r.id == QLatin1String("ssr"))
+        keywords << QStringLiteral("screen space reflections") << QStringLiteral("reflections");
+    else if (r.id == QLatin1String("ssao"))
+        keywords << QStringLiteral("ao") << QStringLiteral("ambient occlusion");
+    else if (r.id == QLatin1String("hdr"))
+        keywords << QStringLiteral("tonemap") << QStringLiteral("tone mapping")
+                 << QStringLiteral("exposure");
+    else if (r.id == QLatin1String("photon"))
+        keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
+    PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);
 }
 
 void WorldModesPropertyWidget::refreshRows()
@@ -173,7 +205,7 @@ void WorldModesPropertyWidget::refreshRows()
     }
 
     if (resetRow) {
-        resetRow->setVisible(!scene->worldOverrides.isEmpty());
+        PropertyRows::setPanelVisible(resetRow, !scene->worldOverrides.isEmpty());
         resetRow->setValue(false);
     }
     loading = false;

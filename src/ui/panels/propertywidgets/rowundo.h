@@ -48,6 +48,7 @@ For more information see the LICENSE file
 
 #include <functional>
 
+#include <QString>
 #include <QVariant>
 
 class HFloatSliderWidget;
@@ -61,6 +62,12 @@ namespace rowundo {
 
 struct Binding
 {
+    /// THE ROW'S STABLE NAME, for the property filter (PROPERTY_FILTER_SPEC
+    /// §3.2). Every panel that binds a row through panelundo::SceneRows already
+    /// names it — "sunDiscSize", "postFx.exposure", "gravity" — so bind() hands
+    /// that name to the row registry and the box finds the row by it without a
+    /// second list to keep in step.
+    QString key;
     /// False while the panel is POPULATING its rows rather than showing a user
     /// edit. HFloatSliderWidget::setValue and ColorPickerWidget::setColor both
     /// emit, so without this a selection change would write every row's value

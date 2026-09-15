@@ -18,6 +18,7 @@ For more information see the LICENSE file
 
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
+#include "services/worldmodes.h"
 
 class IEditorViewport;
 class CheckBoxWidget;
@@ -78,6 +79,9 @@ private:
     /// (debt L6: an edit refreshes them, it does not rebuild the blade — the
     /// control the user just touched must survive its own signal).
     void build();
+    /// Gives a post-chain row its filter key and synonyms (the registry row's
+    /// id and group) — PROPERTY_FILTER_SPEC §3.2.
+    void identifyRow(QWidget *row, const worldmodes::Row &r);
     /// Re-reads every row, its pin mark and its enabled state, in place.
     void refreshRows();
     /// The ordered LOOKS stack (POST_LOOKS_SPEC.md §4.1) — the one part of this

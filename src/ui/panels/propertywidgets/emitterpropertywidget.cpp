@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
+#include "ui/panels/propertyrows.h"
 #include "data/project.h"
 
 #include "ui/controls/texturepickerwidget.h"
@@ -209,9 +210,11 @@ EmitterPropertyWidget::EmitterPropertyWidget()
              QStringLiteral("Per particle, by life fraction — this is what makes fire."));
 
     colourRamp = new ParticleColourRampWidget();
-    addWidgetToContent(colourRamp);
+    addWidgetToContent(colourRamp, QStringLiteral("Colour Over Life"),
+                       { QStringLiteral("ramp"), QStringLiteral("gradient") });
     scaleRamp = new ParticleScaleRampWidget();
-    addWidgetToContent(scaleRamp);
+    addWidgetToContent(scaleRamp, QStringLiteral("Scale Over Life"),
+                       { QStringLiteral("ramp"), QStringLiteral("size") });
 
     dissipate    = addCheckBox("Shrink Over Time", false);
     dissipateInv = addCheckBox("Grow Over Time", false);
@@ -473,8 +476,8 @@ void EmitterPropertyWidget::updateShapeRows()
     const bool area = ps && ps->shape != iris::ParticleEmitterShape::Point;
     const bool hollow = ps && (ps->shape == iris::ParticleEmitterShape::Ring ||
                                ps->shape == iris::ParticleEmitterShape::HollowEllipsoid);
-    for (auto *w : { extentX, extentY, extentZ }) w->setVisible(area);
-    for (auto *w : { innerX, innerY }) w->setVisible(hollow);
+    for (auto *w : { extentX, extentY, extentZ }) PropertyRows::setPanelVisible(w, area);
+    for (auto *w : { innerX, innerY }) PropertyRows::setPanelVisible(w, hollow);
 }
 
 void EmitterPropertyWidget::refresh()
