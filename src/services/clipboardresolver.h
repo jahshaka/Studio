@@ -123,7 +123,7 @@ private:
                        const QVector<QPair<clipboardformat::ClipFile, QString>> &files,
                        QString *errorOut) const;
 
-    Database *db;
+    Database *db = nullptr;
     Project *project;
 };
 

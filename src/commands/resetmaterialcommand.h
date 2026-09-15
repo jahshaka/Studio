@@ -49,7 +49,7 @@ public:
     void undo() override;
 
 private:
-    Database *db;
+    Database *db = nullptr;
     Project *project;
     iris::MeshNodePtr meshNode;
     iris::MaterialPtr oldMaterial;

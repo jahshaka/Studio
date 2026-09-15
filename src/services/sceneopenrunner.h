@@ -119,7 +119,7 @@ private:
     void runWorker();     ///< worker-thread body
     void runNextSlice();  ///< UI thread, one slice per event-loop turn
 
-    Database *db;
+    Database *db = nullptr;
     Project *project;
 
     QStringList mModelPaths;

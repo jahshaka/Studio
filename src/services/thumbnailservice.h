@@ -35,7 +35,7 @@ public:
     void refreshObjectThumbnail(const QString &guid);
 
 private:
-    Database *db;
+    Database *db = nullptr;
     Project *project;
 };
 

@@ -127,7 +127,7 @@ public:
 
 private:
     bool sceneOpen = false;
-    Database *db;
+    Database *db = nullptr;
     Project *project;
     ProjectManager *projectManager;
     SettingsManager *settings;

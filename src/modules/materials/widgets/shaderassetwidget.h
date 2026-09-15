@@ -58,7 +58,7 @@ public:
 private:
 	void setWidgetToBeShown();
 	QWidget *noWidget;
-	Database *db;
+	Database *db = nullptr;
 	QSize currentSize = QSize(90, 90);
 	QPushButton* closeBtn;
 

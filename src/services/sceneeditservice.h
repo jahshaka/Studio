@@ -392,7 +392,7 @@ private:
                              const std::optional<iris::Vec3> &position = std::nullopt,
                              surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
 
-    Database *db;
+    Database *db = nullptr;
     Project *project;
     UndoService *undo;
     SelectionService *selection;

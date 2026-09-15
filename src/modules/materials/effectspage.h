@@ -293,7 +293,7 @@ private:
 	QLineEdit *projectName;
 #if(EFFECT_BUILD_AS_LIB)
 	ShaderAssetWidget *assetWidget;
-	Database *dataBase;
+	Database *dataBase = nullptr;
 #endif
 };
 

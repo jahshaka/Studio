@@ -71,7 +71,7 @@ public:
 	/// The Performance page (CLEANUP-1 item 11): the render monitor's capture
 	/// length, where its recordings are written, and how long they are kept.
 	class PerfSettingsWidget* perfSettings = nullptr;
-	Database *db;
+	Database *db = nullptr;
 
 protected:
     void mousePressEvent(QMouseEvent *evt) {

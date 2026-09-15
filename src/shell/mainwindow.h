@@ -822,7 +822,7 @@ private:
     QActionGroup* transformSpaceGroup;
     QActionGroup* cameraGroup;
 
-    Database *db;
+    Database *db = nullptr;
 
     /// The THREADED project-archive export (STABILITY_PROGRAM_SPEC Lane 4).
     /// Created on first use, parented here; shutdownBackgroundWork cancels and

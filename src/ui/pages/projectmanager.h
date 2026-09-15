@@ -213,7 +213,7 @@ private:
     QTimer *searchTimer;
     QString searchTerm;
 
-    Database *db;
+    Database *db = nullptr;
     Project *project;
 
 	QPointer<ProgressDialog> progressDialog;

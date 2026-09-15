@@ -253,7 +253,7 @@ private:
         QStringList &textureList,
         QJsonObject &mat);
 
-	Database *db;
+	Database *db = nullptr;
 	Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)
 	class Toast *mToast = nullptr;
 	/// The last asset an import batch committed — what the batch selects when
