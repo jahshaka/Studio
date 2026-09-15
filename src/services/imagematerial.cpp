@@ -122,6 +122,13 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
         }
     }
 
+    // ONE GESTURE, ONE COMMIT (CLOSE-2 item 1). The row and its dependency
+    // edge belong to one user action ("add this image to the project", or
+    // materials.createFromImage) and used to autocommit separately — two
+    // journal + fdatasync cycles, and a window in which the row exists with
+    // no edge naming its texture. The guard commits when it leaves scope.
+    DbBatch batch(db);
+
     const QString materialGuid = GUIDManager::generateGUID();
     db->createAssetEntry(materialGuid, matName,
                          static_cast<int>(ModelTypes::Material),

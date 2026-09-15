@@ -304,7 +304,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		if (!engineHost.isRunning() || engineHost.engine()->isHeadless()) return false;
 		return sceneView->isInitialized();
 	};
-	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
+	// THE RUN'S SCOPE — the undo guard AND the database's gesture batch
+	// (CLOSE-2 item 1). A script run is one undo macro, which is the gesture
+	// boundary the library writes want too: without this, every
+	// scene.addPrimitive in a loop autocommitted its asset row on its own
+	// (journal, write, fdatasync, unlink — 300 primitives paid it 300+ times,
+	// on the UI thread). One scope, so the pair can never drift apart; the
+	// project verbs close and reopen it together at a project boundary
+	// (ScriptHost::endRunUndoMacro).
+	scriptHost->macroOpenChanged = [this](bool open) {
+		undoService->setScriptMacroOpen(open);
+		if (!db) return;
+		if (open) db->beginBatch();
+		else      db->endBatch();
+	};
 	// The run's one undo entry, ARMED here and created by the first command
 	// that lands (UndoService::push) — a query script must leave the stack
 	// alone (hygiene lane, 2026-09-09).

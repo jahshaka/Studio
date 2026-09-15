@@ -196,6 +196,12 @@ public:
     ~AssetPanel() {}
 
     void populateFavorites() {
+        // `handle` is set by setDatabaseHandle, which runs AFTER construction
+        // — and both subclasses' constructors call addFavorites(), i.e. this,
+        // so the call went through an UNINITIALISED pointer on every startup.
+        // It survived only because Database::fetchFavorites happened to touch
+        // no member of `this` (found by CLOSE-2, when one of them began to).
+        if (!handle) return;
         favoriteAssets = handle->fetchFavorites();
     }
 
@@ -209,7 +215,7 @@ protected:
     QVector<AssetRecord> favoriteAssets;
     QListWidget *listView;
     MainWindow *mainWindow;
-    Database *handle;
+    Database *handle = nullptr;
 
     // Drag state for the panels' event filters — MEMBERS, deliberately.
     // Both panels used to declare `QPoint startPos;` as a LOCAL inside

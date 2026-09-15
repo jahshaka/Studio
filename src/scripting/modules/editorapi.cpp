@@ -423,7 +423,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "snapToFloor", "editor.snapToFloor() -> bool",
           "Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable.",
           Needs::Engine },
-        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes, pendingAssetDeletes}",
+        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes, pendingAssetDeletes, dbBatchDepth, dbCommits}",
           "The undo stack, for scripts that need to assert that an action was RECORDED rather "
           "than merely performed. `count`/`index` are the stack's own; `macroOpen` is true inside "
           "a script run. Read `pushes` — the total number of commands ever pushed — to bracket an "
@@ -434,7 +434,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "delete command queues its asset row instead of writing it when it dies, and the queue "
           "is applied in one transaction when the stack is cleared (project close, quit), so this "
           "reads non-zero only between those two moments — it is how a test proves the rows were "
-          "scrubbed after a close without one fdatasync per command on the UI thread.",
+          "scrubbed after a close without one fdatasync per command on the UI thread. `dbBatchDepth` is the "
+          "database's gesture transaction: a script run opens one (so it reads 1 inside a run), and every "
+          "library write the run makes rides it, which is why 300 scene.addPrimitive calls cost one commit "
+          "instead of 300. `dbCommits` counts this process's durable write commits so far — read it before "
+          "and after an action and the difference is the number of disk syncs that action cost.",
           Needs::Document },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
@@ -1905,6 +1909,12 @@ QVariantMap EditorApi::undoState()
     // The deferred library work the dying commands queued (CLOSE-1). Zero
     // after every clear; a database-less host reports zero too.
     out["pendingAssetDeletes"] = host.db ? host.db->pendingAssetDeleteCount() : 0;
+    // ONE GESTURE, ONE COMMIT (CLOSE-2). `dbBatchDepth` is the counted
+    // transaction scope the run holds; `dbCommits` is the process's durable
+    // write commits so far, so a script can bracket an action and prove the
+    // rows cost one commit instead of one per row.
+    out["dbBatchDepth"] = host.db ? host.db->batchDepth() : 0;
+    out["dbCommits"]    = QVariant::fromValue(qulonglong(Database::durableCommits()));
     return out;
 }
 

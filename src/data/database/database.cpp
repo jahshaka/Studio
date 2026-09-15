@@ -33,6 +33,9 @@ For more information see the LICENSE file
 #include <QObject>
 #include <QUuid>
 
+#include <algorithm>
+#include <vector>
+
 namespace
 {
 // RAII for a NAMED side connection — the export/import bundle writers each
@@ -74,6 +77,16 @@ private:
     QString name;
 };
 } // namespace
+
+namespace {
+/// Every live Database, for the batch stand-down hook (see the constructor).
+/// Tiny and only ever walked from a transaction start.
+std::vector<Database *> &liveDatabases()
+{
+    static std::vector<Database *> instances;
+    return instances;
+}
+}   // namespace
 
 Database::Database()
 {
@@ -193,6 +206,35 @@ Database::Database()
 	// Schema updates
 	version080SchemaUpdate = "ALTER TABLE assets ADD COLUMN view_filter INTEGER;";
 	version080SchemaDowngrade = "ALTER TABLE assets DROP COLUMN view_filter;";
+
+    // THE BATCH STANDS DOWN FOR A REAL OWNER (CLOSE-2 — see beginBatch and
+    // DbTransaction's constructor). The registry, not a captured `this`: a
+    // process can hold several Database instances at once (the upgrader's
+    // schema check, a suite's), the hook is ONE static slot, and a captured
+    // `this` would mean the last instance constructed speaks for every batch
+    // — including, after that instance died, for a dangling pointer. The
+    // registry is walked instead and each instance answers for its OWN
+    // connection.
+    liveDatabases().push_back(this);
+    DbTransaction::setBatchYieldHook([](const QSqlDatabase &connection) {
+        for (Database *instance : liveDatabases()) instance->standDownBatchFor(connection);
+    });
+    DbTransaction::setBatchResumeHook([](const QSqlDatabase &connection) {
+        for (Database *instance : liveDatabases()) instance->resumeBatchFor(connection);
+    });
+}
+
+void Database::standDownBatchFor(const QSqlDatabase &connection)
+{
+    if (!batchTxLive) return;
+    if (connection.connectionName() != db.connectionName()) return;
+    commitBatchTransaction();
+}
+
+void Database::resumeBatchFor(const QSqlDatabase &connection)
+{
+    if (connection.connectionName() != db.connectionName()) return;
+    resumeBatchIfNeeded();
 }
 
 Database::~Database()
@@ -207,10 +249,42 @@ Database::~Database()
     // initializeDatabase() holds a default-constructed QSqlDatabase whose
     // connectionName() is empty, and closeDatabase() no-ops on that.
     closeDatabase();
+
+    auto &live = liveDatabases();
+    live.erase(std::remove(live.begin(), live.end(), this), live.end());
 }
+
+namespace {
+/// Does this statement WRITE? Only the first keyword is looked at, which is
+/// all SQLite needs to decide whether an autocommit transaction is opened for
+/// it — and the only reason we ask is the durable-commit accounting.
+bool isWriteStatement(const QString &sql)
+{
+    const QString head = sql.trimmed().left(7).toUpper();
+    return head.startsWith(QLatin1String("INSERT"))
+           || head.startsWith(QLatin1String("UPDATE"))
+           || head.startsWith(QLatin1String("DELETE"))
+           || head.startsWith(QLatin1String("REPLACE"))
+           || head.startsWith(QLatin1String("CREATE"))
+           || head.startsWith(QLatin1String("DROP"))
+           || head.startsWith(QLatin1String("ALTER"));
+}
+}   // namespace
 
 bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
 {
+    // THE SYNC ACCOUNTING (editor.undoState().dbCommits). A write with no
+    // transaction open is its own transaction: one journal, one fdatasync.
+    // Inside a batch or a guard it costs nothing until the commit, which
+    // counts itself. STATICS ONLY, deliberately: this funnel is reached
+    // through at least one uninitialised Database pointer today
+    // (AssetPanel::populateFavorites) and used to survive it by never
+    // touching a member. Keeping that property here is cheaper than trusting
+    // every caller in the tree.
+    const bool unbatchedWrite = DbTransaction::activeGuards() == 0
+                                && !DbTransaction::anyBatchLive()
+                                && isWriteStatement(query.lastQuery());
+
     if (!query.exec()) {
         // LOUD, and at warn level: a failed query here silently no-ops a user
         // action (the 2026-09-03 defect: every asset delete at shutdown failed
@@ -232,7 +306,52 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
         return false;
     }
 
+    if (unbatchedWrite) DbTransaction::noteCommit();
     return true;
+}
+
+// ---- the gesture batch (CLOSE-2 item 1; the contract is in database.h) -----
+
+void Database::beginBatch()
+{
+    if (batchOpenCount++ > 0) return;   // an inner level rides the outer one
+    resumeBatchIfNeeded();
+}
+
+bool Database::endBatch()
+{
+    if (batchOpenCount == 0) {
+        iris::Logger::getSingleton()->warn(
+            "Database::endBatch() with no batch open — an unbalanced DbBatch.");
+        return false;
+    }
+    if (--batchOpenCount > 0) return true;   // the outermost level owns the commit
+    return commitBatchTransaction();
+}
+
+void Database::resumeBatchIfNeeded()
+{
+    if (batchOpenCount == 0 || batchTxLive) return;
+    if (!db.isOpen()) return;
+    // Never while somebody else owns a transaction on this connection: the
+    // batch is the thing that YIELDS, it never takes.
+    if (DbTransaction::activeGuards() > 0) return;
+    batchTxLive = db.transaction();
+    if (batchTxLive) DbTransaction::noteBatchLive(true);
+}
+
+bool Database::commitBatchTransaction()
+{
+    if (!batchTxLive) return true;
+    batchTxLive = false;
+    DbTransaction::noteBatchLive(false);
+    if (db.commit()) { DbTransaction::noteCommit(); return true; }
+    // A failed commit leaves the connection mid-transaction otherwise, and the
+    // next statement would then run inside a transaction nobody owns.
+    db.rollback();
+    iris::Logger::getSingleton()->warn(
+        "The database batch FAILED to commit — the gesture's rows were rolled back.");
+    return false;
 }
 
 // Note that this is the default connection, any queries called without
@@ -260,6 +379,16 @@ bool Database::initializeDatabase(const QString &pathToBlob)
 
 void Database::closeDatabase()
 {
+    // A BATCH NEVER OUTLIVES THE CONNECTION (CLOSE-2). Closing with one open
+    // would roll the gesture's rows back inside the driver's teardown, and
+    // the flush below would then run inside a transaction nobody owns. The
+    // SCOPE is dropped as well: whoever holds the DbBatch is unwinding
+    // through a close, and its endBatch() must not find a stale depth.
+    if (batchOpenCount > 0 || batchTxLive) {
+        commitBatchTransaction();
+        batchOpenCount = 0;
+    }
+
     // LAST CHANCE for the deferred asset deletes (CLOSE-1): every exit path
     // ends here with the connection still open — ~MainWindow drains the undo
     // stack at step 5 and the CLI exits destroy the Database — and a queued
@@ -1406,6 +1535,8 @@ int Database::flushPendingAssetDeletes()
     // somebody else's transaction the guard degrades to a no-op — and riding a
     // commit we do not control would apply the scrubs over rows an outer
     // rollback could bring back, so we simply wait for the next flush point.
+    // (A GESTURE BATCH is not "somebody else": it stands down for this guard
+    // and reopens afterwards — CLOSE-2. So a flush inside a script run works.)
     DbTransaction tx(db);
     if (!tx.isActive()) return 0;
 
