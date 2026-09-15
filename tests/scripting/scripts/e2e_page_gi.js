@@ -84,8 +84,10 @@ assert(st0.mode === "vct_pcc_hybrid", "the default project runs the VCT + probes
 // WHAT THIS SCENE'S PROBE GRID IS, since R5-ROOM (2026-09-15) replaced the
 // scene-wide enclosure rule with a per-probe one: a ground and a cube keep the
 // probes that can SEE them and drop the ones photographing distance — measured
-// 7 of 18 kept here, with the rest dropped, where the retired rule refused the
-// whole grid. The owner's sentence (2026-09-13 Q3: "a user starts in the editor
+// 7 of 18 kept here by R5-ROOM and 2 of 18 since SKY-FALLBACK-1 placed the grid
+// at the scout's resolution (the count is a measurement, not the assertion —
+// only "some kept, some dropped" is asserted), where the retired rule refused
+// the whole grid. The owner's sentence (2026-09-13 Q3: "a user starts in the editor
 // in a new project with an open scene ... I would think the sky is your first
 // reflection asset") is still what the engine does for a scene with nothing in
 // it (gi.probe_open case 4b asserts it in pixels); adding objects is exactly
