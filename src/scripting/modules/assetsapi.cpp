@@ -44,7 +44,6 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "services/import/assetimportservice.h"
 #include "services/assetmetadata.h"
-#include "services/fitsize.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
 #include "data/database/database.h"
@@ -110,6 +109,31 @@ QString storeFileFor(const QString &guid)
     return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
+/// THE IMPORT-SETTINGS OPTIONS, from a verb's option map to the JSON record
+/// (SPECS/IMPORT_DIALOG_SPEC.md §3/§7). Returns false with `errorOut` set when
+/// a key is unknown or a value is refused — the SAME refusal
+/// iris::ImportSettings::fromJson makes, so a script and the dialog cannot be
+/// told different things.
+bool importSettingsFromOptions(const QString &verb, const QVariantMap &options,
+                               QJsonObject *recordOut, QString *errorOut)
+{
+    QJsonObject record;
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        const QVariant value = scriptmod::normalizeJs(it.value());
+        record.insert(it.key(), QJsonValue::fromVariant(value));
+    }
+    QString error;
+    const iris::ImportSettings parsed = iris::ImportSettings::fromJson(record, &error);
+    if (!error.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("%1: %2").arg(verb, error);
+        return false;
+    }
+    // The COMPLETE record, not the caller's subset: one shape on the row, one
+    // shape read back by assets.importSettings, one hash.
+    if (recordOut) *recordOut = parsed.toJson();
+    return true;
+}
+
 } // namespace
 
 QVector<VerbInfo> AssetsApi::verbs() const
@@ -123,25 +147,11 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
-          "MODELS also carry the FIT-TO-SIZE block (services/fitsize.h): `extent` {x,y,z} — the model's axis-aligned size in METRES, measured at import after the file's declared unit scale; `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none); `fitKind` ('character' when the file carries a skeleton, else 'object'); `fitScale` — what every instantiation multiplies the root node's scale by (1 = the model measured plausible and is placed exactly as authored); `fitReason` — one sentence, present only when a fit was inferred; and `fitSource` ('auto' = the policy, 'manual' = assets.setFit).",
+          "MODELS also carry their SIZE, as information (services/extentmeasure.h): `extent` {x,y,z} — the model's axis-aligned size in METRES as this asset was IMPORTED, i.e. after its import settings (scale, units, rotation) were baked in, which is the size every placement of it has; and `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none), which is what the import dialog shows so a user can disagree with the file. Nothing reads these to scale anything: an asset's size is decided once, at import (assets.importSettings / assets.reimport), and every instance is placed at scale 1. (The retired fit-to-size block — fitKind/fitScale/fitReason/fitSource, and the assets.setFit verb behind it — guessed a size from an envelope on every instantiation; a stale row may still carry those keys and nothing reads them.)",
           Needs::Document },
         { "meshLods", "assets.meshLods(guid) -> [{mesh, level, triangles, error, switchDistance}]",
           "The automatic LOD chain a MODEL asset's bake carries (ATOM stage 1, SPECS/NANITE_SPEC.md §7), one row per mesh per level, level 0 (the authored geometry) included. `error` is that level's simplifier error (position + attribute quadrics, >= the geometric error) as a LENGTH IN THE MODEL'S OWN UNITS — 0 for level 0 — and `switchDistance` is where the renderer swaps to it at LOD bias 1: the distance from the object's bounding sphere at which that error covers one pixel at the reference projection (1080 lines, 45 degree vertical field of view). "
           "An EMPTY list is the honest answer for a model with no chain, and there are four ways to have none: the asset has no bake yet (assets.bakeAll builds them), the mesh is SKINNED (stage 1 ships static meshes only), it is too small to be worth simplifying, or its topology stopped the simplifier before it could shed a useful fraction. Nothing here is authored: the chain is built at import and the levels are derived, never stored as a user setting.",
-          Needs::Document },
-        { "setFit", "assets.setFit(guid, {scale} | {reset: true} | {remeasure: true}) -> {extent, fitScale, fitReason, fitSource, fitKind}",
-          "Overrides, restores or recomputes a MODEL asset's fit-to-size factor — the Assets page's "
-          "\"Imported size\" row, as a verb. Exactly one option: `scale` is a positive multiplier "
-          "recorded as a MANUAL fit (fitSource 'manual'); `reset: true` throws the manual override "
-          "away and recomputes the automatic fit from the recorded extent; `remeasure: true` "
-          "re-measures the model from its stored source file and recomputes the fit from that "
-          "(the page's Re-measure — for a row imported before this feature existed, or one whose "
-          "source was replaced). Returns the resulting block, so a caller never has to re-read it. "
-          "The fit is a property of the ASSET, applied at the root node wherever the asset is "
-          "instantiated, so this changes every FUTURE placement and no node already in a scene. "
-          "Refuses a non-model asset, an unknown guid, a non-positive scale, and any combination "
-          "other than exactly one of the three. NOT undoable — asset mutations never are "
-          "(SCRIPTING_SPEC §1.6.5).",
           Needs::Document },
         { "rename", "assets.rename(guid, name) -> bool",
           "Renames a library asset — the Assets page's name field + Update button, as a verb. "
@@ -161,12 +171,19 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "tags", "assets.tags(guid) -> [tags]",
           "The asset's tags, [] when it has none (also in assets.metadata's read).",
           Needs::Document },
-        { "import", "assets.import(path) -> guid",
+        { "import", "assets.import(path, {units, scale, axes, rotate, translate, skeleton, clips, materials}) -> guid",
           "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable. "
           "THE TYPE FOLLOWS THE FILE, not the extension: a model file that carries animation and NO geometry — a Mixamo download 'without skin', a .bvh capture — is stored as an ANIMATION asset (its own library type; every mesh path refuses a zero-mesh file), while a file with meshes stays an object even when it also carries clips. "
-          "Read the type back with assets.metadata(guid).kind or assets.list({type: 'animation'}).",
+          "Read the type back with assets.metadata(guid).kind or assets.list({type: 'animation'}). "
+          "THE OPTIONS ARE THE IMPORT SETTINGS (SPECS/IMPORT_DIALOG_SPEC.md): what the import dialog asks, as a verb. They are BAKED INTO THE ASSET — the geometry, the skeleton and the clips are transformed once, at import — so every instance of the asset is placed at scale 1 and nothing rescales it later. "
+          "`units` ('auto' | 'm' | 'cm' | 'mm' | 'in' | 'ft'): 'auto' trusts the file's own declaration (an FBX UnitScaleFactor; every other format at this pin declares nothing and means metres), anything else OVERRIDES it — 'cm' on a file that wrongly says metres means 'treat its numbers as centimetres'. "
+          "`scale`: a positive uniform multiplier on top of the unit. "
+          "`axes` {up, forward}: the axes THE FILE uses, as signed names ('+X'..'-Z'); our convention is up '+Y', forward '-Z', which is the identity. They must be perpendicular. "
+          "`rotate` [x,y,z]: a free rotation in degrees, applied after the axis fix. `translate` [x,y,z]: an origin shift in METRES, applied last. "
+          "`skeleton`, `clips` (true | false | a list of clip names) and `materials` ('import' | 'none') are recorded and are part of the asset's bake key; the pipeline builds all of them today. "
+          "An unknown key or a refused value FAILS the import rather than importing at the wrong size. Read the record back with assets.importSettings(guid) and change it with assets.reimport(guid, {...}).",
           Needs::Document },
-        { "importFile", "assets.importFile(path, drawerId?, {typeHint}) -> guid",
+        { "importFile", "assets.importFile(path, drawerId?, {typeHint, units, scale, axes, rotate, translate, skeleton, clips, materials}) -> guid",
           "Imports any library-supported file (models, animation clips, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
           "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, animation, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list.",
           Needs::Document },
@@ -296,9 +313,32 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "storeStatus", "assets.storeStatus() -> {root, online, missing}",
           "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it.",
           Needs::Document },
-        { "importSettings", "assets.importSettings(guid) -> {sourceOid, importer, importerVersion, assimp, settings}",
+        { "importSettings", "assets.importSettings(guid) -> {sourceOid, importer, importerVersion, assimp, settings, defaults}",
           "The determinism record the ONE import pipeline stamped on the asset: content id of the source, "
-          "importer name/version, assimp version and the request settings.",
+          "importer name/version, assimp version, and `settings` — the COMPLETE import-settings record "
+          "this asset was imported under (assets.import documents every key). A row imported before the "
+          "import dialog carries no settings and reads back as the defaults, which is exactly what was "
+          "applied to it. "
+          "`defaults` is what the FILE ITSELF says, for a dialog or a test that wants to show the user "
+          "what they are overriding: `declaredUnitScale` (metres per source unit as the file declares — "
+          "FBX UnitScaleFactor/100, 1 for the formats that declare none) and `extent` {x,y,z}, the "
+          "measured size in metres AS IMPORTED. Absent for a non-model asset.",
+          Needs::Document },
+        { "reimport", "assets.reimport(guid, {units, scale, axes, rotate, translate, skeleton, clips, materials}) -> {guid, settings, extent, bakeOid}",
+          "RE-READS a model asset's stored SOURCE with new import settings and rebuilds everything derived "
+          "from it: the mesh bake (the LOD chain with it), the measured extent, the recorded settings and "
+          "the thumbnail. The options are MERGED over the stored record, so a caller sends only what it is "
+          "changing. "
+          "A reimport is NOT a new import: the source content id, the row's guid, its member Texture rows "
+          "and every project's pin are unchanged, because a pin freezes source BYTES and those bytes did "
+          "not move. The old bake drops to no references and `assets.gc` reaps it. Meshes already placed in "
+          "the OPEN scene are swapped to the new geometry in place; their node transforms are untouched, "
+          "which is right because every placement is at scale 1. "
+          "ONE EXCEPTION, stated because it cannot be migrated: a scene saved BEFORE the fit-to-size policy "
+          "retired holds that fit as a REAL node scale, so such a scene renders the old fit multiplied by "
+          "the new bake. Ships-as-new-app — re-place the node. "
+          "Refuses a non-model row, a row with no stored source, and the same unknown keys and bad values "
+          "assets.import refuses. NOT undoable — asset mutations never are (SCRIPTING_SPEC §1.6.5).",
           Needs::Document },
         { "checkConsistency", "assets.checkConsistency(guid) -> {consistent, expected, produced, ...}",
           "Re-runs the import pipeline's convert stage on the stored source and diffs the produced object "
@@ -622,58 +662,6 @@ QVariantList AssetsApi::pins(const QString &guid)
     return out;
 }
 
-// FIT TO SIZE (services/fitsize.h): the override half. The measurement and the
-// automatic policy run at import; this is how a user disagrees with them, and
-// how a library imported before the feature existed gets measured.
-QVariantMap AssetsApi::setFit(const QString &guid, const QVariantMap &options)
-{
-    QVariantMap out;
-    if (!host.db) { fail("assets: not available in this session"); return out; }
-
-    static const QStringList known = { "scale", "reset", "remeasure" };
-    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
-        if (!known.contains(it.key())) {
-            fail(QStringLiteral("assets.setFit: unknown option '%1' (known: %2)")
-                     .arg(it.key(), known.join(", ")));
-            return out;
-        }
-    }
-    const bool wantScale = options.contains(QStringLiteral("scale"));
-    const bool wantReset = normalizeJs(options.value(QStringLiteral("reset"))).toBool();
-    const bool wantRemeasure = normalizeJs(options.value(QStringLiteral("remeasure"))).toBool();
-    if (int(wantScale) + int(wantReset) + int(wantRemeasure) != 1) {
-        fail("assets.setFit: pass exactly one of {scale}, {reset: true} or {remeasure: true}");
-        return out;
-    }
-
-    double scale = 0.0;
-    if (wantScale) {
-        bool ok = false;
-        scale = normalizeJs(options.value(QStringLiteral("scale"))).toDouble(&ok);
-        if (!ok || !(scale > 0.0) || !std::isfinite(scale)) {
-            fail("assets.setFit: 'scale' must be a positive number");
-            return out;
-        }
-    }
-
-    const auto change = wantScale     ? AssetMetadata::FitChange::Manual
-                      : wantRemeasure ? AssetMetadata::FitChange::Remeasure
-                                      : AssetMetadata::FitChange::Reset;
-    QString error;
-    // ONE write (AssetMetadata::writeFit) — the Assets page's "Imported size"
-    // row calls the same one, so a clicked change and a scripted one cannot
-    // produce different blocks.
-    const QJsonObject meta = AssetMetadata::writeFit(host.db, guid, change, scale, &error);
-    if (meta.isEmpty()) {
-        fail(QStringLiteral("assets.setFit: %1").arg(error));
-        return out;
-    }
-
-    out = meta.toVariantMap();
-    out["guid"] = guid;
-    return out;
-}
-
 bool AssetsApi::rename(const QString &guid, const QString &name)
 {
     if (!host.db) return fail("assets: not available in this session");
@@ -731,10 +719,17 @@ QVariantList AssetsApi::tags(const QString &guid)
     return out;
 }
 
-QString AssetsApi::import(const QString &path)
+QString AssetsApi::import(const QString &path, const QVariantMap &options)
 {
     if (!host.services || !host.services->assets) { fail("assets: not available in this session"); return QString(); }
-    const auto result = host.services->assets->importMesh(path);
+    QJsonObject settings;
+    QString settingsError;
+    if (!importSettingsFromOptions(QStringLiteral("assets.import"), options, &settings,
+                                   &settingsError)) {
+        fail(settingsError);
+        return QString();
+    }
+    const auto result = host.services->assets->importMesh(path, settings);
     if (!result.ok()) {
         fail(QStringLiteral("assets.import: %1").arg(result.error));
         return QString();
@@ -758,10 +753,23 @@ QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantM
     // The pipeline has always had a typeHint on its ImportRequest (the .jaf
     // and drag-drop paths set it); nothing on the verb surface could reach it
     // (F18), so a file the sniffer reads wrong had no scripted way in.
-    static const QStringList knownOptions = { QStringLiteral("typeHint") };
+    static const QStringList knownOptions = {
+        QStringLiteral("typeHint"), QStringLiteral("version"), QStringLiteral("units"),
+        QStringLiteral("scale"),    QStringLiteral("axes"),    QStringLiteral("rotate"),
+        QStringLiteral("translate"),QStringLiteral("skeleton"),QStringLiteral("clips"),
+        QStringLiteral("materials") };
     const QString refusal = refuseUnknownKeys(QStringLiteral("assets.importFile"), options,
                                               knownOptions);
     if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+    QVariantMap settingsOptions = options;
+    settingsOptions.remove(QStringLiteral("typeHint"));
+    QJsonObject settings;
+    QString settingsError;
+    if (!importSettingsFromOptions(QStringLiteral("assets.importFile"), settingsOptions,
+                                   &settings, &settingsError)) {
+        fail(settingsError);
+        return QString();
+    }
     int typeHint = -1;
     if (options.contains(QStringLiteral("typeHint"))) {
         const QString hint = options.value(QStringLiteral("typeHint")).toString();
@@ -773,7 +781,7 @@ QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantM
             return QString();
         }
     }
-    const auto result = host.services->assets->importFile(path, drawerId, typeHint);
+    const auto result = host.services->assets->importFile(path, drawerId, typeHint, settings);
     if (!result.ok()) {
         fail(QStringLiteral("assets.importFile: %1").arg(result.error));
         return QString();
@@ -1433,9 +1441,116 @@ QVariantMap AssetsApi::importSettings(const QString &guid)
     QVariantMap out;
     if (!host.db) { fail("assets: not available in this session"); return out; }
     AssetImportService service(host.db, host.project);
-    const QJsonObject record = service.importSettings(guid);
+    QJsonObject record = service.importSettings(guid);
     if (record.isEmpty()) { fail(QStringLiteral("assets.importSettings: no import record for '%1'").arg(guid)); return out; }
+
+    // The COMPLETE settings record, always. A row imported before the import
+    // dialog has none, and "none" IS the defaults — that is what was applied to
+    // it — so a caller never has to know this class's defaults to read one.
+    record[QStringLiteral("settings")] = iris::ImportSettings::fromJson(
+        record.value(QStringLiteral("settings")).toObject()).toJson();
+
+    // …AND WHAT THE FILE ITSELF SAYS (§7), so a dialog and a test read one
+    // truth instead of measuring their own: the declared unit and the size this
+    // asset actually imported at.
+    const AssetRecord row = host.db->fetchAsset(guid);
+    if (row.type == static_cast<int>(ModelTypes::Object)) {
+        const QJsonObject meta = AssetMetadata::ensure(host.db, guid);
+        QJsonObject defaults;
+        defaults[QStringLiteral("declaredUnitScale")] =
+            meta.value(QStringLiteral("unitScale")).toDouble(1.0);
+        if (meta.contains(QStringLiteral("extent")))
+            defaults[QStringLiteral("extent")] = meta.value(QStringLiteral("extent"));
+        record[QStringLiteral("defaults")] = defaults;
+    }
     return record.toVariantMap();
+}
+
+// THE OPEN SCENE'S HALF OF A REIMPORT (§5). A MeshNode records the MESH MEMBER
+// guid it was built from (SceneReader::createMesh writes it to `meshPath`), so
+// the sweep is by guid and never by file name. The mesh is re-read from the new
+// bake — MeshBakeStore::clear() above dropped the cached model — and set on the
+// node; the mirror re-attaches on a mesh POINTER change (scenemirror.cpp), so
+// nothing else has to be told.
+//
+// Node TRANSFORMS are untouched, deliberately: every placement is at scale 1
+// since the import dialog, and the new geometry is the new size.
+int AssetsApi::refreshPlacedMeshes(const QString &meshGuid, const QString &sourcePath)
+{
+    if (meshGuid.isEmpty() || sourcePath.isEmpty()) return 0;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene || !scene->getRootNode()) return 0;
+
+    const iris::BakedModelPtr baked = MeshBakeStore::load(sourcePath, meshGuid);
+    int swapped = 0;
+    std::function<void(const iris::SceneNodePtr &)> walk =
+        [&](const iris::SceneNodePtr &node) {
+            if (!node) return;
+            if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                auto meshNode = node.staticCast<iris::MeshNode>();
+                if (meshNode->meshPath == meshGuid) {
+                    iris::MeshPtr mesh;
+                    if (baked && meshNode->meshIndex >= 0
+                        && meshNode->meshIndex < baked->meshes.size())
+                        mesh = baked->meshes.at(meshNode->meshIndex);
+                    if (mesh) { meshNode->setMesh(mesh); ++swapped; }
+                }
+            }
+            for (const iris::SceneNodePtr &child : node->children()) walk(child);
+        };
+    walk(scene->getRootNode());
+
+    // The SESSION registrations (ProjectAssets::registerSessionAsset) hold
+    // built fragments the editor's drag-drop route places; they are rebuilt
+    // from the catalog on the next open, and dropping the bake cache is what
+    // makes the NEXT placement use the new geometry.
+    return swapped;
+}
+
+// REIMPORT (SPECS/IMPORT_DIALOG_SPEC.md §5) — the verb behind the Assets page's
+// "Import settings…" button. The service does the work; this is the option
+// surface and the OPEN-SCENE half, which is Studio's alone.
+QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+
+    QJsonObject settings;
+    QString settingsError;
+    if (!importSettingsFromOptions(QStringLiteral("assets.reimport"), options, &settings,
+                                   &settingsError)) {
+        fail(settingsError);
+        return out;
+    }
+    // MERGED over the stored record by the service — so only the keys the
+    // CALLER wrote may override, not the full defaulted set this parse made.
+    QJsonObject wanted;
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        wanted.insert(it.key(), settings.value(it.key()));
+
+    AssetImportService service(host.db, host.project);
+    const auto result = service.reimport(guid, wanted);
+    if (!result.ok()) {
+        fail(QStringLiteral("assets.reimport: %1").arg(result.error));
+        return out;
+    }
+
+    // THE OPEN SCENE (§5): every MeshNode built from this asset is swapped to
+    // the new geometry in place. The mirror re-attaches on a mesh POINTER
+    // change, and the session's AssetNodeObject registrations are refreshed by
+    // the same sweep, so a later drag-drop of the tile places the new bake too.
+    MeshBakeStore::clear();
+    const int swapped = refreshPlacedMeshes(result.meshGuid, result.sourcePath);
+
+    out["guid"] = guid;
+    out["settings"] = result.settings.toVariantMap();
+    out["extent"] = result.metadata.value(QStringLiteral("extent")).toObject().toVariantMap();
+    out["bakeOid"] = result.bakeOid;
+    out["previousBakeOid"] = result.previousBakeOid;
+    out["swappedNodes"] = swapped;
+    if (host.isEngineReady()) refreshThumbnail(guid);
+    return out;
 }
 
 QVariantMap AssetsApi::bakeAll(const QVariantMap &options)

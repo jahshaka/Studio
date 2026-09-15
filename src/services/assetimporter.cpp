@@ -23,11 +23,12 @@ For more information see the LICENSE file
 // src/services/import/; these wrappers keep the verb layer's signatures.
 
 AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Database *db,
-                                                Project *project)
+                                                Project *project, const QJsonObject &settings)
 {
     AssetImportService service(db, project);
     ImportRequest request;
     request.sourcePath = filePath;
+    request.settings = settings;
     // NO TYPE HINT, deliberately (it used to pin ModelTypes::Mesh): this entry
     // point means "import this MODEL FILE", and which library type a model
     // file becomes is a property of its CONTENTS, not of the caller's
@@ -58,13 +59,15 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
 }
 
 AssetImporter::Result AssetImporter::importFile(const QString &filePath, Database *db,
-                                                Project *project, int drawerId, int typeHint)
+                                                Project *project, int drawerId, int typeHint,
+                                                const QJsonObject &settings)
 {
     AssetImportService service(db, project);
     ImportRequest request;
     request.sourcePath = filePath;
     request.drawerId = drawerId;
     request.typeHint = typeHint;
+    request.settings = settings;
     const ImportResult imported = service.import(request);
 
     Result result;

@@ -24,6 +24,7 @@ For more information see the LICENSE file
 // project or the editor scene's clock. avatar.spawn/list/info/setClipRole are
 // Part 1's.
 
+#include <QJsonObject>
 #include <QHash>
 #include <QImage>
 #include <QPointer>
@@ -35,6 +36,7 @@ For more information see the LICENSE file
 #include "scripting/apimodule.h"
 
 #include "modules/avatar/avatarpreviewmodel.h"   // HeightNormalization (a member)
+#include "irisgl/import/importsettings.h"
 #include "services/avatarassets.h"                // the open-asset scope + definition
 
 namespace avatar { class AvatarPreviewModel; }
@@ -280,7 +282,7 @@ private:
     void abandonPreviewLoad();
 
     bool startImport(const QString &path, AvatarAssets::Scope scope, int drawerId,
-                     const QString &name);
+                     const QString &name, const QJsonObject &settings = QJsonObject());
     void finishImport(bool cancelled);
     /// The definition half of `open` (cheap, UI thread). Fills mOpen and
     /// returns the preview's model path, empty when there is nothing to show.

@@ -178,22 +178,15 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "spawn: the character is already in the scene and the message says what did not land. "
           "Spawning DURING play registers the avatar with the running physics world on the spot "
           "rather than refusing (spec R6), so a scripted spawn mid-play walks immediately. "
-          "HEIGHT: a character measuring outside 0.5..3.0 m is scaled to 1.75 m before the "
-          "capsule is fitted (the same rule the Avatar page's preview applies, and for the same "
-          "reason: a package whose unit declaration is wrong arrives 10x or 100x off). `height` "
-          "sets an exact height in metres instead. The result is on the node's own scale and is "
-          "SERIALIZED, so reopening the scene does not normalize again. avatar.movement reports "
-          "what happened. "
-          "SINCE FIT-TO-SIZE (services/fitsize.h) the ASSET is measured and fitted at IMPORT, and "
-          "that fit is applied by the shared instantiation this verb calls — so a mis-declared "
-          "character usually arrives here ALREADY the right size and this rule finds nothing to "
-          "do (avatar.movement then reports normalized:false with a plausible sourceHeight, which "
-          "is the no-double-scaling story, not a failure to normalize). `normalize: false` "
-          "therefore skips THIS MODULE'S rule only; it does NOT undo the asset's fit, because the "
-          "fit belongs to the asset and every placement route — drag-drop, assets.addToScene, "
-          "this verb — has to agree about how big a model is. To place a model at the size its "
-          "FILE was authored at, clear the fit on the asset (assets.setFit(guid, {scale: 1})) and "
-          "spawn with normalize:false. "
+          "HEIGHT: a character arrives at the size its IMPORT SETTINGS baked into the asset "
+          "(SPECS/IMPORT_DIALOG_SPEC.md) and NOTHING here second-guesses it — the automatic "
+          "\"outside 0.5..3.0 m, scale to 1.75 m\" rule is retired, because a model's size is a "
+          "decision a person makes once, at import, looking at it. `height` still sets an exact "
+          "height in metres, applied on top of the imported size before the capsule is fitted; the "
+          "result is on the node's own scale and is SERIALIZED, so reopening the scene does not "
+          "scale again, and avatar.movement reports what happened. `normalize` is accepted and "
+          "IGNORED (there is no automatic rule left to switch off). To change how big a model is "
+          "for every future placement, reimport it: assets.reimport(guid, {scale: ...}). "
           "The knobs afterwards are avatar.movement / avatar.setMovement. Undoable.",
           Needs::Document },
         { "loadClip", "avatar.loadClip(nodeId, pathOrAssetGuid, {name?}) -> {asset, file, node, added, clips:[name], match:{channels, boneChannels, matched}}",
@@ -364,7 +357,7 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "avatar is made FROM a model, the model stays a model. NOT undoable — asset "
           "mutations never are (SCRIPTING_SPEC \u00a71.6.5).",
           Needs::Document },
-        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name, async}) -> {asset, avatar, name, open} | {started, async}",
+        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name, async, units, scale, axes, rotate, translate, skeleton, clips, materials}) -> {asset, avatar, name, open} | {started, async}",
           "THE way a character enters Jahshaka (\u00a74 D7: every load is an import — "
           "avatar.loadPreview is retired). Imports a rigged model file through the ONE import "
           "pipeline, mints an avatar asset from it AND OPENS IT for editing, in one call — the "
@@ -1064,14 +1057,17 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
             return QString();
         }
     }
-    bool autoNormalize = true;
+    // `normalize` survives as an ACCEPTED, IGNORED option: there is no
+    // automatic height rule left to switch off (SPECS/IMPORT_DIALOG_SPEC.md
+    // §6), and refusing a key every existing script passes would break them for
+    // nothing. It is still type-checked, because a silently-wrong type is what
+    // the surrounding note is about.
     if (options.contains(QStringLiteral("normalize"))) {
         const QVariant raw = scriptmod::normalizeJs(options.value(QStringLiteral("normalize")));
         if (raw.typeId() != QMetaType::Bool) {
             record(QStringLiteral("avatar.spawn: 'normalize' must be true or false"));
             return QString();
         }
-        autoNormalize = raw.toBool();
     }
 
     // THE TWO SPAWN PATHS (AVATAR_ASSET_SPEC §5.4 / D10).
@@ -1142,24 +1138,19 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     // `parent` option cannot silently teleport the character.
     if (parent) parent->addChild(node);
 
-    // HEIGHT NORMALIZATION, before the capsule is fitted (the fit measures the
-    // geometry, so it has to measure the FINAL geometry). Same rule and the
-    // same code as the Avatar page's preview: a character outside the plausible
-    // human band is a wrong unit declaration, not an art decision, and the
-    // scale lands on the character's own node so its rig, its mesh and every
-    // clip that plays on it move together. It is SERIALIZED with the node, and
-    // nothing on the OPEN path normalizes, so reopening never scales twice.
-    //
-    // NOT TWICE, EITHER (fit-to-size, 2026-09-09 — the other half of the note
-    // in SceneEditService::addMaterialMesh): addMaterialMesh above has ALREADY
-    // applied the asset's `fitScale` at the root. So this measures the fitted
-    // character, reads a plausible height and does nothing — the ORDER is what
-    // makes that true, and the two rules share one band
-    // (avatar::kMinPlausibleHeight == fitsize::kCharacter.min). An explicit
-    // `height` still wins: it is applied on top of the fit, as a ratio.
+    // AN EXPLICIT HEIGHT ONLY, before the capsule is fitted (the fit measures
+    // the geometry, so it has to measure the FINAL geometry). The AUTOMATIC
+    // rule is retired with the fit-to-size policy
+    // (SPECS/IMPORT_DIALOG_SPEC.md §6): a character's size is decided at
+    // import, by a person, and baked into the asset, so every placement route —
+    // drag-drop, assets.addToScene, this verb — places it at scale 1 and agrees
+    // by construction. A `height` asked for by name is the user's own decision
+    // and still applies, on the character's own node, serialized with it.
     avatar::HeightNormalization norm;
-    if (explicitHeight > 0.0 || autoNormalize)
-        norm = avatar::normalizeCharacterHeight(node, float(explicitHeight));
+    if (explicitHeight > 0.0)
+        norm = avatar::applyCharacterHeight(node, float(explicitHeight));
+    else
+        norm.sourceHeight = norm.height = avatar::measureCharacterHeight(node);
     mNormalized.insert(node->getGUID(), norm);
 
     // The COMPONENT goes on the wrapper the import produced — the node the
@@ -2381,13 +2372,36 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
         return out;
     }
 
-    static const QStringList known = { "scope", "drawer", "name", "async" };
+    // The IMPORT-SETTINGS keys ride through to the same pipeline
+    // (SPECS/IMPORT_DIALOG_SPEC.md §7): a character's size, orientation and
+    // origin are baked at import here exactly as they are for any other model,
+    // which is what replaced the module's old spawn-time height rule.
+    static const QStringList known = { "scope", "drawer", "name", "async",
+                                       "units", "scale", "axes", "rotate", "translate",
+                                       "skeleton", "clips", "materials" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
             record(QStringLiteral("avatar.importAvatar: unknown option '%1' (known: %2)")
                        .arg(it.key(), known.join(QStringLiteral(", "))));
             return out;
         }
+    QJsonObject settings;
+    {
+        QJsonObject raw;
+        static const QStringList settingKeys = { "units", "scale", "axes", "rotate", "translate",
+                                                 "skeleton", "clips", "materials" };
+        for (const QString &key : settingKeys)
+            if (options.contains(key))
+                raw.insert(key, QJsonValue::fromVariant(
+                                    scriptmod::normalizeJs(options.value(key))));
+        QString settingsError;
+        const iris::ImportSettings parsed = iris::ImportSettings::fromJson(raw, &settingsError);
+        if (!settingsError.isEmpty()) {
+            record(QStringLiteral("avatar.importAvatar: %1").arg(settingsError));
+            return out;
+        }
+        if (!raw.isEmpty()) settings = parsed.toJson();
+    }
     AvatarAssets::Scope scope = AvatarAssets::Scope::Library;
     if (options.contains(QStringLiteral("scope"))
         && !AvatarAssets::scopeFromName(options.value(QStringLiteral("scope")).toString(), scope)) {
@@ -2411,7 +2425,7 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     if (options.value(QStringLiteral("async")).toBool()) {
         if (!startImport(info.absoluteFilePath(), scope,
                          options.value(QStringLiteral("drawer"), -1).toInt(),
-                         options.value(QStringLiteral("name")).toString()))
+                         options.value(QStringLiteral("name")).toString(), settings))
             return out;
         out["started"] = true;
         out["async"] = true;
@@ -2423,7 +2437,7 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     // file that turns out not to be rigged still lands in the library as the
     // perfectly good model it is, and only the AVATAR is refused.
     const auto result = host.services->assets->importFile(
-        path, options.value(QStringLiteral("drawer"), -1).toInt());
+        path, options.value(QStringLiteral("drawer"), -1).toInt(), -1, settings);
     if (result.objectGuid.isEmpty()) {
         record(QStringLiteral("avatar.importAvatar: '%1' could not be imported: %2")
                    .arg(info.fileName(), result.error));
@@ -2503,7 +2517,7 @@ void AvatarApi::abandonPreviewLoad()
 }
 
 bool AvatarApi::startImport(const QString &path, AvatarAssets::Scope scope, int drawerId,
-                            const QString &name)
+                            const QString &name, const QJsonObject &settings)
 {
     if (mJob.running) {
         record("avatar.importAvatar: an avatar import is already running");
@@ -2523,6 +2537,7 @@ bool AvatarApi::startImport(const QString &path, AvatarAssets::Scope scope, int 
     ImportRequest request;
     request.sourcePath = path;
     request.drawerId = drawerId;
+    request.settings = settings;
     // NO TYPE HINT — the pipeline sniffs, exactly as the synchronous
     // AssetImporter::importFile does for this verb (a rigged file is an
     // Object; a clip-only file becomes an Animation and the avatar is refused

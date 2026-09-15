@@ -19,6 +19,7 @@ For more information see the LICENSE file
 // import; AssetView's add/delete/rename sweeps drain into it in later phases
 // (audit §3.3 "AssetService" row). Constructor-injected, QObject-free.
 
+#include <QJsonObject>
 #include <QString>
 #include <functional>
 #include <vector>
@@ -35,9 +36,10 @@ public:
 
     /// Imports a mesh file (obj/fbx/dae/blend/glb/gltf) into the global asset
     /// store. Pure document/DB work — safe headless.
-    AssetImporter::Result importMesh(const QString &filePath)
+    AssetImporter::Result importMesh(const QString &filePath,
+                                     const QJsonObject &settings = QJsonObject())
     {
-        auto result = AssetImporter::importMesh(filePath, db, project);
+        auto result = AssetImporter::importMesh(filePath, db, project, settings);
         if (result.ok()) announceLibraryChanged(result.objectGuid);
         return result;
     }
@@ -48,9 +50,11 @@ public:
     /// `typeHint` (a ModelTypes value, -1 = sniff from the file) rides through
     /// to the pipeline's ImportRequest — assets.importFile's {typeHint}.
     AssetImporter::Result importFile(const QString &filePath, int drawerId = -1,
-                                     int typeHint = -1)
+                                     int typeHint = -1,
+                                     const QJsonObject &settings = QJsonObject())
     {
-        auto result = AssetImporter::importFile(filePath, db, project, drawerId, typeHint);
+        auto result = AssetImporter::importFile(filePath, db, project, drawerId, typeHint,
+                                                settings);
         if (result.ok()) announceLibraryChanged(result.objectGuid);
         return result;
     }
