@@ -145,8 +145,16 @@ console.log("   the rest of the frame: worst SSR delta " + fWorst);
 // band's worst fell 20 -> 11, measured, with a noise floor of ZERO between two
 // shots of one open (spikes/ssr-3/). The bar is 8: still a statement that the
 // feature is in the picture, with the headroom the old 10 no longer had.
-assert(fWorst >= 8,
-       "screen-space reflections are still IN this picture (worst delta " + fWorst + ")");
+// NO ASSERTION ON fWorst (lead, 2026-09-15, ledger §507). It was `fWorst >= 8`,
+// a presence check on ONE sample of a sparse floor grid: measured on this box
+// three runs at exactly 8 — 1 of 192 samples at 8, 4 at >= 4, mean 0.21 — i.e.
+// zero headroom, and it redded gates under load (a starved temporal history).
+// At the DEFAULT cutoff the probe fallback agrees with the screen's answer
+// across most of this grid (R5-ROOM's placement), so "different from SSR off"
+// is not a presence test there. SSR's presence in this picture IS asserted
+// below, at the top of the cutoff row, by the footprint over the whole frame
+// (wide.far >= 6 against 12-28 measured) and by its monotonic response to the
+// row. The number above stays as a measurement.
 
 // ---- THE MARCH TAKES THE WORLD ROW (lane SSR-3) ---------------------------
 //
