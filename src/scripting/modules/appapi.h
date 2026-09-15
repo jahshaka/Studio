@@ -36,6 +36,7 @@ public:
     Q_INVOKABLE bool heartbeat(int intervalMs = 250);
     Q_INVOKABLE QVariantMap heartbeatStats();
     Q_INVOKABLE QVariantMap watchdogStats();
+    Q_INVOKABLE QVariantMap watchdog(int stallMs);
     Q_INVOKABLE bool blockUiThread(int ms);
     Q_INVOKABLE QVariantMap shaderCache();
     Q_INVOKABLE bool clearShaderCache();

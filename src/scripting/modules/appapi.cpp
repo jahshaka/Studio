@@ -99,7 +99,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "The heartbeat probe's readings (see app.heartbeat). maxGapMs is the longest the UI thread went "
           "without servicing its event loop since the probe started.",
           Needs::Window },
-        { "watchdogStats", "app.watchdogStats() -> {supported, running, enabled, stallMs, reports, lastStallMs, cooldownMs, sinceLastReportMs}",
+        { "watchdogStats", "app.watchdogStats() -> {supported, running, enabled, stallMs, minStallMs, defaultStallMs, reports, lastStallMs, cooldownMs, sinceLastReportMs}",
           "The main-thread watchdog (services/mainthreadwatchdog.h): a thread of our own that polls the "
           "heartbeat's last-tick atomic and, when the UI thread has not ticked for stallMs, makes THAT thread "
           "print its own backtrace (a watchdog thread calling backtrace() would photograph itself). 'reports' "
@@ -109,7 +109,24 @@ QVector<VerbInfo> AppApi::verbs() const
           "cooldown can tell a dropped report from a missed one — which is exactly what made app.watchdog_stall "
           "flake on a cold cache, where a boot stall from shader compilation swallowed the suite's own. A "
           "DEVELOPMENT-BUILD feature: 'supported' is false in a release build, and a dev build can still turn "
-          "it off with the watchdog_enabled preference or --watchdog=off.",
+          "it off with the watchdog_enabled preference or --watchdog=off. 'stallMs' is the LIVE threshold: "
+          "app.watchdog(stallMs) and --watchdog-stall=N move it, and 'minStallMs'/'defaultStallMs' are its "
+          "floor and the shipped value.",
+          Needs::Window },
+        { "watchdog", "app.watchdog(stallMs) -> {supported, running, enabled, stallMs, minStallMs, defaultStallMs, reports, lastStallMs, cooldownMs, sinceLastReportMs}",
+          "Sets the main-thread watchdog's STALL THRESHOLD for the rest of the session and returns the "
+          "stats it would have returned anyway (app.watchdogStats). The threshold shipped hardcoded at "
+          "2000 ms — right for 'the user noticed a freeze', wrong for a diagnosis: a 1,439 ms block in the "
+          "archive export produced no backtrace because it was under the fence. Lower it around the step "
+          "you are measuring and put it back afterwards. The floor is 200 ms, the watchdog's own poll "
+          "interval, and a smaller value is REFUSED rather than clamped (the returned stallMs would "
+          "otherwise be a number nobody asked for); 'minStallMs' and 'defaultStallMs' are reported so a "
+          "caller need not hardcode either. The change takes effect within one poll, with no restart. "
+          "WHAT IT DOES NOT CHANGE is the rate limit: the backtrace is taken AT MOST ONCE PER STALL, and "
+          "after a report the watchdog drops everything for cooldownMs (5000) with a cap of 20 reports per "
+          "session — so a short stall inside the cooldown still produces nothing, and 'sinceLastReportMs' "
+          "is how a caller tells that from a stall the watchdog missed. `--watchdog-stall=N` does the same "
+          "thing for a whole launch. A DEVELOPMENT-BUILD feature: it fails in a release build.",
           Needs::Window },
         { "blockUiThread", "app.blockUiThread(ms) -> bool",
           "Blocks the UI thread for ms milliseconds WITHOUT servicing the event loop — a deliberate freeze, so "
@@ -494,6 +511,19 @@ QVariantMap AppApi::heartbeatStats()
 
 QVariantMap AppApi::watchdogStats()
 {
+    return MainThreadWatchdog::stats();
+}
+
+QVariantMap AppApi::watchdog(int stallMs)
+{
+    if (!MainThreadWatchdog::isSupported()) {
+        fail("app.watchdog: development builds only");
+        return MainThreadWatchdog::stats();
+    }
+    if (!MainThreadWatchdog::setStallMs(stallMs))
+        fail(QStringLiteral("app.watchdog: the stall threshold must be at least %1 ms "
+                            "(the watchdog's own poll interval)")
+                 .arg(MainThreadWatchdog::kMinStallMs));
     return MainThreadWatchdog::stats();
 }
 
