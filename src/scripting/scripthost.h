@@ -81,9 +81,14 @@ struct ScriptHost
     /// Unset = false: verbs that requireEngine() fail cleanly.
     std::function<bool()> engineReady;
 
-    /// Called with true/false around the per-run undo macro so the app can
-    /// guard operations that must not run inside an open macro (e.g.
-    /// UiManager::clearUndoStack). Optional.
+    /// Called with true/false around the per-run undo macro. It is THE RUN'S
+    /// SCOPE, and since CLOSE-2 the app hangs the database's gesture
+    /// transaction on it (MainWindow: one beginBatch/endBatch pair, so 300
+    /// library writes in a loop cost one commit instead of 300). The undo half
+    /// it was originally written for is gone — UndoService answers "is a run in
+    /// progress?" from the run macro it already arms, not from a flag set here
+    /// — and UiManager, which the old note named, has not existed since the
+    /// architecture cleanup. Optional.
     std::function<void(bool)> macroOpenChanged;
 
     /// THE RUN'S ONE UNDO ENTRY. A script run is one undo step — but the entry
