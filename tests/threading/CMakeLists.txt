@@ -119,17 +119,18 @@ set_tests_properties(threading.mode_pixels PROPERTIES
 # `world.refreshGi()` issued EXACTLY ONE rendered frame after the compile burst.
 # The script's header explains the defect and what "wrong" looks like.
 #
-# ALL THREE ARE REGISTERED **DISABLED** AND MUST STAY SO UNTIL THE DEFECT IS FIXED.
-# The defect is live at this commit: the serial half bakes a picture with no voxel
-# bounce at all (centre pixel 54,36,1 parallel against 46,32,1 serial on Matcaps at
-# Epic, 3/3 reproducible on an RTX 4080S) because VctVoxelizer's VCT/AabbCalculator
-# compute dispatch is handed a foreign uniform texel buffer for `inMeshBuffer`
-# (Vulkan core validation: VUID-vkCmdDispatch-format-07753, "requires UINT component
-# type, but bound descriptor format is VK_FORMAT_R32G32_SFLOAT"), so every mesh AABB
-# comes back as the +/-FLT_MAX sentinel and the voxelization writes zero voxels.
-# A red test is not a guard, so the rig lands here ready and switched off rather
-# than as prose in a report. THE FLIP WHEN THE FIX LANDS: delete the three
-# `DISABLED TRUE` properties below — nothing else changes.
+# WHAT IT CAUGHT, AND WHAT FIXED IT (Ogre patch 0041). The defect was NOT in the
+# irradiance field where the search started: VctVoxelizer's VCT/AabbCalculator compute
+# dispatch was handed a foreign uniform texel buffer for `inMeshBuffer` — Vulkan core
+# validation, "requires UINT component type, but bound descriptor format is
+# VK_FORMAT_R32G32_SFLOAT", VUID-vkCmdDispatch-format-07753 — because HlmsManager's
+# descriptor-set cache is keyed on a raw BufferPacked* and the voxelizer's new mesh
+# table had been handed the ADDRESS of the irradiance field's destroyed
+# integration-taps buffer. Every mesh AABB then came back as the sentinel and the
+# voxelization wrote ZERO voxels: centre pixel 54,36,1 parallel against 46,32,1
+# serial. Patch 0041 gives BufferPacked a creation serial that the descriptor slots
+# carry and compare, so a recycled address can never be mistaken for the dead buffer.
+# Both halves now read 54,36,1 and the PNGs are byte-identical.
 configure_file(gi_resolve.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js @ONLY)
 
 set(_gir_home_par ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_gi_resolve)
@@ -155,7 +156,7 @@ set_tests_properties(threading.gi_resolve PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_par};JAHSHAKA_DATA_ROOT=${_gir_home_par}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_gi_resolve
     FIXTURES_SETUP threading_shot_gi_parallel
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300 DISABLED TRUE)
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
 
 add_test(NAME threading.gi_resolve_serial
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -165,7 +166,7 @@ set_tests_properties(threading.gi_resolve_serial PROPERTIES
     ENVIRONMENT "HOME=${_gir_home_ser};JAHSHAKA_DATA_ROOT=${_gir_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
     FIXTURES_REQUIRED threading_home_gi_resolve_serial
     FIXTURES_SETUP threading_shot_gi_serial
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300 DISABLED TRUE)
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
 
 add_test(NAME threading.gi_resolve_pixels
          COMMAND ${CMAKE_COMMAND} -E compare_files
@@ -173,7 +174,7 @@ add_test(NAME threading.gi_resolve_pixels
                  ${_gir_home_ser}/run/threading_gi_resolve.png)
 set_tests_properties(threading.gi_resolve_pixels PROPERTIES
     FIXTURES_REQUIRED "threading_shot_gi_parallel;threading_shot_gi_serial"
-    LABELS "threading" TIMEOUT 60 DISABLED TRUE)
+    LABELS "threading" TIMEOUT 60)
 
 jah_tsan_blocked(threading.gi_resolve threading.gi_resolve_serial)
 
