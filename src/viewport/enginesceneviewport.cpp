@@ -781,22 +781,34 @@ IEditorViewport::GizmoPickResult EngineSceneViewport::gizmoHitTest(const QPointF
     // THE TRANSLATE GIZMO (GIZMO-1 item 3). Its PLANE handles are picked in
     // pixels like the rotation rings, so they answer with a distance; its
     // arrows and its centre are picked in 3D against their own geometry, so
-    // they answer with a NAME and no distance (-1). Both go through the very
-    // call a press takes, which is the promise this verb makes.
+    // they answer with a NAME and no distance (-1).
+    //
+    // THE PRESS'S OWN CALL DECIDES (GIZMO-2 round 2). This used to ask
+    // planeNameAtPixel FIRST and return its answer, which is not the order a
+    // press takes: getHitHandle tries the CENTRE BALL before the planes, so
+    // every pixel where the ball wins — the inner part of all three squares,
+    // since item 1 anchored them at the origin — was reported as a plane while
+    // a click there grabbed the ball. One call now answers both, and
+    // planeDistance is asked afterwards only to fill in the pixel distance a
+    // plane result carries.
     if (mGizmo == mTranslateGizmo) {
         out.tolerancePx = kPlanePickTolerancePx;
-        float distancePx = -1.0f;
-        out.handle = mTranslateGizmo->planeNameAtPixel(local, distancePx);
-        out.distancePx = distancePx;
-        if (!out.handle.isEmpty()) return out;
         iris::Vec3 a, b;
         pictureSegment(cam, point, a, b);
         const iris::Vec3 viewDir = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
         iris::Vec3 hit;
         if (auto *handle = mTranslateGizmo->getHitHandle(a, (b - a).normalized(), viewDir, hit)) {
             out.handle = handle->axisName();
-            out.distancePx = -1.0f;      // a 3D pick has no pixel distance
+            float distancePx = -1.0f;    // a 3D pick (ball, arrow) has none
+            if (handle->isPlane()) handle->planeDistance(local, distancePx);
+            out.distancePx = distancePx;
+            return out;
         }
+        // A MISS still reports how far the nearest plane handle is — the one
+        // measurable distance this gizmo has.
+        float distancePx = -1.0f;
+        mTranslateGizmo->planeNameAtPixel(local, distancePx);
+        out.distancePx = distancePx;
         return out;
     }
     return out;

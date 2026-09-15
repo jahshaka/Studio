@@ -346,14 +346,26 @@ int main(int argc, char **argv)
         CHECK(handleAt(diag * (0.5f * (ballPick + span * std::sqrt(2.0f)))) ==
                   QLatin1String("xz"),
               "F: past the ball's sphere, inside the square, the plane answers");
-        // The arrows: inside the span the square owns the pixel, beyond it the
-        // arrow does. (0.25 is inside the square AND on the X shaft; 1.20 is
-        // past the square's 0.50 and well short of the tip.)
-        std::printf("   on the +X shaft: %.2f out -> '%s'; %.2f out -> '%s'\n", 0.25,
-                    qPrintable(handleAt(iris::Vec3(0.25f, 0, 0))), 1.20,
-                    qPrintable(handleAt(iris::Vec3(1.20f, 0, 0))));
-        CHECK(handleAt(iris::Vec3(1.20f, 0, 0)) == QLatin1String("x"),
-              "F: and the arrow owns everything beyond the square's span (74 % of it)");
+        // THE SHAFTS BELONG TO THE ARROWS (GIZMO-2 round 2, second reader). The
+        // square's two inner sides ARE the two shafts it lies between, and it
+        // answers 0 px over its whole area — so before the axis bands a press
+        // on the drawn X shaft inside the span could never reach X, and since
+        // the X axis lies in BOTH the XY and the XZ square (both answering 0,
+        // the strict `<` keeping the first in handle order) it grabbed XY: the
+        // object moved in a plane the user had not aimed at. 0.25 is on the
+        // shaft and inside the square; 1.20 is past the square's 0.50.
+        for (const char *axis : { "x", "y", "z" }) {
+            const iris::Vec3 dir(axis[0] == 'x' ? 1.0f : 0.0f, axis[0] == 'y' ? 1.0f : 0.0f,
+                                 axis[0] == 'z' ? 1.0f : 0.0f);
+            const QString onShaft = handleAt(dir * 0.25f);
+            const QString beyond  = handleAt(dir * 1.20f);
+            std::printf("   the +%s shaft: 0.25 out -> '%s' (inside two squares), 1.20 out -> "
+                        "'%s'\n", axis, qPrintable(onShaft), qPrintable(beyond));
+            CHECK(onShaft == QLatin1String(axis),
+                  "F: a press on a drawn shaft INSIDE the squares picks that arrow, not a plane");
+            CHECK(beyond == QLatin1String(axis),
+                  "F: and the arrow owns everything beyond the square's span (74 % of it)");
+        }
 
         // HOW MUCH OF EACH SQUARE IS ACTUALLY THE PLANE. The ball's sphere eats
         // the inner part of it, and how much depends on how the square is
