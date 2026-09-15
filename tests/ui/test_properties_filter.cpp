@@ -629,6 +629,37 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- 11d-2. A ROW RE-LABELLED WHILE ITS TAB IS HIDDEN (F5) ------------
+    // Panels rename rows (the sky panel's sun row, a light's Tint). A row whose
+    // tab is not on screen gets no paint and no resize, so RowFit never elides
+    // the new name — and the stored full text is the OLD one until it does.
+    // fullText() has to prefer what is actually on the label in that state.
+    {
+        panel->setPropertiesTab(Tab::Selection);
+        panel->setPropertiesFilter(Tab::World, QString());
+        turn();
+        QLabel *gravity = nullptr;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>()) {
+            if (b->panelTitle() != QStringLiteral("World")) continue;
+            for (QLabel *l : b->findChildren<QLabel *>(QStringLiteral("label")))
+                if (RowFit::fullText(l) == QStringLiteral("Gravity")) gravity = l;
+        }
+        CHECK(gravity != nullptr, "properties_filter: a World row to re-label");
+        if (gravity) {
+            gravity->setText(QStringLiteral("Pull Of The Earth"));   // hidden tab: no elision
+            CHECK(RowFit::fullText(gravity) == QStringLiteral("Pull Of The Earth"),
+                  "properties_filter: a row re-labelled while hidden reports the NEW name");
+            panel->setPropertiesTab(Tab::World);
+            panel->setPropertiesFilter(Tab::World, QStringLiteral("pull"));
+            turn();
+            CHECK(rowShown(panel, QStringLiteral("Pull Of The Earth")),
+                  "properties_filter: ...and the filter finds it by that name");
+            panel->setPropertiesFilter(Tab::World, QString());
+            gravity->setText(QStringLiteral("Gravity"));
+            turn();
+        }
+    }
+
     // ---- 11e. A BLADE THAT DIES LEAVES NOTHING BEHIND (F4) ----------------
     // The registry keys its row lists by RAW pointer, and a TOP-LEVEL blade is
     // a container that is nobody's row — so nothing but its own destruction can

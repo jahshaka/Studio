@@ -55,6 +55,11 @@ namespace RowFit {
 /// "Photon — Realt…" at a 300 px dock must still be found by "illumination")
 /// asks fullText() for it.
 constexpr const char *kFullTextProperty = "jahRowFullText";
+/// What fitLabel last PUT on screen. It is the difference between "this label
+/// is showing my elision" and "the panel has rewritten it since" — a row
+/// re-labelled while its tab is hidden never gets a paint, so nothing elides it
+/// and the stored full text is a stale name until it does.
+constexpr const char *kShownTextProperty = "jahRowShownText";
 
 /// THE NAME A FITTED LABEL CARRIES, whatever it is showing right now. Works on
 /// any QLabel: one that was never fitted, or fitted and not elided, simply
