@@ -194,6 +194,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["ssaoRadius"] = scene->ssaoRadius;
     sceneObj["smaaPreset"] = scene->smaaPreset;
     sceneObj["ssrMode"] = scene->ssrMode;
+    sceneObj["rayReflectRoughness"] = scene->rayReflectRoughness;
     sceneObj["refractionsMode"] = scene->refractionsMode;
     sceneObj["distortionMode"] = scene->distortionMode;
     sceneObj["distortionStrength"] = scene->distortionStrength;

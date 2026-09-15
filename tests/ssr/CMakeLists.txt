@@ -26,9 +26,18 @@ endfunction()
 
 jahshaka_ssr_test(test_ssr)
 target_link_libraries(test_ssr PRIVATE JahshakaEngine)
+# THE SCREEN-ONLY CONTRACT, AND IT STAYS THAT (lead ruling, PHOTON R5 round B).
+# This suite was written to measure the SCREEN-SPACE technique — patch 0036's
+# composite, the roughness cutoff, the firefly clamp, the ortho branch — on
+# fixtures whose floors are mirrors. With the ray-query tier live those same
+# fixtures show TRACED reflections as well, and the measurements stop being
+# about the march. So the suite runs in the picture it was written for; not one
+# of its bars is re-anchored. The COMBINED picture (march + rays, and the
+# fallback beside it) is `gi.rt_reflect` / `gi.rt_reflect_norays`.
 add_test(NAME ssr.engine COMMAND test_ssr
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 if(JAHSHAKA_ASAN)
     jahshaka_ssr_test(test_ssr_asan)
@@ -39,7 +48,7 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
+    # ...and the same ruling for the sanitised twin (see ssr.engine above).
     set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
-
-                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS};JAHSHAKA_NO_RAY_QUERY=1")
 endif()
