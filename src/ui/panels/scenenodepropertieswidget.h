@@ -103,9 +103,17 @@ public:
     /// caller who is about to READ the column's widgets (a test, the row
     /// listing verb) is exactly such a question.
     void flushPendingMount();
-    /// True while a mount is owed to this turn. Reported by
+    /// True while the column is out of date — a mount is owed (to this turn, to
+    /// the moment the dock opens, or to the end of a batch). Reported by
     /// `editor.propertiesStats()` so the coalescing is pinnable.
-    bool mountIsPending() const { return mountPending; }
+    bool mountIsPending() const { return mountOwed; }
+    /// HOLDS EVERY MOUNT until it is released (ADD-1). A script run is ONE
+    /// gesture by the user and the selections inside it are not things to look
+    /// at; the script engine runs on its own thread, so without this the column
+    /// would mount once per verb. MainWindow wires it to
+    /// ScriptEngine::runningChanged. A question (editor.properties, the filter)
+    /// still gets a true answer while it is held.
+    void setMountsHeld(bool held);
 
     /// WHAT THE COLUMN HAS BEEN DOING, for `editor.propertiesStats()`. The
     /// numbers a perf claim about a pick or an add has to be made from, so
@@ -121,6 +129,7 @@ public:
         int rows = 0;
         bool pending = false;
         bool deferredHidden = false;
+        bool held = false;
         bool visible = false;
     };
     Stats propertiesStats() const;
@@ -235,6 +244,8 @@ private:
     /// end in "mount the world blades" or "mount the node blades" ends here.
     /// MOUNTING IS NOT BINDING: this only moves blades on and off the layout.
     void applyTab();
+    /// Posts the end-of-turn settlement, when nothing says "not yet".
+    void scheduleMount();
     /// The mount itself — clearLayout, the tab's blade set, the filter. Never
     /// called directly by a selection: applyTab() coalesces the calls and this
     /// runs once per turn.
@@ -287,12 +298,13 @@ private:
 
     /// See mountCount().
     int mounts = 0;
-    /// A mount is owed to this turn of the event loop (see applyTab).
-    bool mountPending = false;
-    /// A mount is owed to the moment this column becomes VISIBLE — the dock is
-    /// closed, or the panel is behind another tabified dock, or it has not been
-    /// realised yet. The second of the two inputs.
-    bool mountWhenShown = false;
+    /// THE DEBT: the column does not match the selection it claims to show.
+    /// Cleared only by a mount (see applyTab for when one happens).
+    bool mountOwed = false;
+    /// A zero-timer is already posted to settle it at the end of this turn.
+    bool mountScheduled = false;
+    /// A batch (a script run) is in flight: the debt waits for its end.
+    bool mountsHeld = false;
     /// The scene the world blades are currently pointed at (see bindScene).
     QSharedPointer<iris::Scene> worldBoundScene;
 

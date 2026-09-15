@@ -981,8 +981,8 @@ var statsAfterBurst = editor.propertiesStats();
 assert(statsAfterBurst.mounts === statsBefore.mounts,
     "24 adds in one turn mount the column ZERO times (" + statsBefore.mounts + " -> "
     + statsAfterBurst.mounts + ")");
-assert(statsAfterBurst.pending === true,
-    "...and the column knows a mount is owed");
+assert(statsAfterBurst.pending === true && statsAfterBurst.held === true,
+    "...and the column knows a mount is owed, held for the run");
 // ASKING settles the debt - exactly once, whatever the burst was.
 var rows = editor.properties({ tab: "selection" });
 var statsSettled = editor.propertiesStats();

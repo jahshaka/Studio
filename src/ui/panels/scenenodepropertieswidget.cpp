@@ -245,7 +245,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
         if (filterText[int(currentTab)].trimmed().isEmpty()) return;
         // A mount owed to this turn re-filters at its end anyway (applyTab), and
         // it would be filtering the blade set that is about to be replaced.
-        if (mountPending) return;
+        if (mountOwed) return;
         applyRowFilter();
     });
 
@@ -374,64 +374,77 @@ QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
     return QSharedPointer<iris::Scene>();
 }
 
-// ONE MOUNT PER TURN OF THE EVENT LOOP (ADD-1, 2026-09-15).
+// THE COLUMN IS OUT OF DATE — AND THAT IS ALL A SELECTION SAYS (ADD-1, 2026-09-15).
 //
-// THE MEASUREMENT THIS EXISTS FOR: `scene.addPrimitive` costs 44 ms of its 50
-// in here, because the add's undo command SELECTS the node it just made
+// THE MEASUREMENT THIS EXISTS FOR: `scene.addPrimitive` cost 44 ms of its 50 in
+// here, because the add's undo command SELECTS the node it just made
 // (AddSceneNodeCommand::redo -> SelectionService::select ->
 // MainWindow::applySelectionToUi), and this column rebuilt itself for an object
 // the user never asked to look at. A script adding 64 spheres rebuilt it 64
 // times and only the LAST one was ever seen.
 //
-// So a selection RAISES A DEBT instead of paying it: repeated selections inside
-// one turn of the event loop collapse into a single mount of the last one, at
-// the turn's end. Nothing interactive changes — a click is one turn, so the
-// user's pick still mounts before the next frame paints — and a scripted build
-// mounts once for the whole run (a `--script` run never yields, so the timer
-// fires when it ends).
+// So a selection raises a DEBT and says nothing about when it is paid. It is
+// paid at the end of the event-loop turn — which is what makes a click one
+// mount and unchanged in feel — UNLESS one of two things says "not yet", and
+// both are the same kind of statement as PROPERTY_FILTER_SPEC's two-inputs law:
 //
-// EVERY QUESTION ABOUT THE COLUMN PAYS THE DEBT FIRST (flushPendingMount): a
-// verb that lists the rows, the filter box, a test that asserts what is
-// mounted. Deferred is never "not built" to anyone who asks.
+//   NOBODY CAN SEE IT. The properties dock is closed, or the panel is behind
+//   another tabified dock. Building a widget tree that is not on screen cost
+//   32 ms of a 50 ms add with the dock shut. The debt moves to the showEvent.
 //
-// AND NOTHING IS BUILT FOR A COLUMN NOBODY CAN SEE. The properties dock is
-// closable, and with it closed an add still cost 32 ms of its 50: the panel
-// built its whole blade column into a widget tree that was not on screen. So
-// VISIBILITY IS THE SECOND INPUT, kept apart from the first exactly as
-// PROPERTY_FILTER_SPEC's two-inputs law keeps the panel's own reason apart from
-// the filter's: the panel's reason is "the selection moved", the dock's is "is
-// anyone looking", and the debt is owed to whichever comes last. A hidden
-// column owes its mount to its showEvent; a question owes it to the asker.
+//   A BATCH IS IN FLIGHT. A script run is one gesture by the user, and the
+//   sixty-four selections inside it are not sixty-four things to look at. The
+//   script engine runs on its own thread now (SCRIPTING_SPEC §4), so the UI
+//   thread's event loop DOES turn between verbs and the per-turn rule alone
+//   would mount once per add again — measured: 64 adds became 64 mounts and
+//   12.7 ms per add. The debt moves to the end of the run (MainWindow wires
+//   ScriptEngine::runningChanged to setMountsHeld).
+//
+// AND EVERY QUESTION PAYS IT FIRST (flushPendingMount): a verb that lists the
+// rows, the filter box, a test that asserts what is mounted. Deferred is never
+// "not built" to anyone who asks — including during a script run.
 void SceneNodePropertiesWidget::applyTab()
 {
-    if (!isVisible()) {
-        // Nobody can see this column: the debt moves from this turn to the
-        // moment it is shown. (A query still forces it — flushPendingMount.)
-        mountWhenShown = true;
-        mountPending = false;
-        return;
-    }
-    if (mountPending) return;       // already owed for this turn — the LAST state wins
-    mountPending = true;
+    mountOwed = true;
+    scheduleMount();
+}
+
+/// Arranges for the owed mount to happen at the end of this turn — or does
+/// nothing, because something is going to come back for it (showEvent,
+/// setMountsHeld, or a question).
+void SceneNodePropertiesWidget::scheduleMount()
+{
+    if (!mountOwed || mountScheduled) return;
+    if (!isVisible() || mountsHeld) return;
+    mountScheduled = true;
     QTimer::singleShot(0, this, [this]() {
-        if (!mountPending) return;
-        mountPending = false;
-        // The dock may have closed between the selection and the turn's end.
-        if (!isVisible()) { mountWhenShown = true; return; }
+        mountScheduled = false;
+        // The reasons can arrive between the selection and the turn's end: the
+        // dock can close, a script can start.
+        if (!mountOwed || !isVisible() || mountsHeld) return;
+        mountOwed = false;
         mountNow();
     });
 }
 
 void SceneNodePropertiesWidget::flushPendingMount()
 {
-    if (!mountPending && !mountWhenShown) return;
-    mountPending = false;
-    mountWhenShown = false;
+    if (!mountOwed) return;
+    mountOwed = false;
     mountNow();
 }
 
+/// A BATCH — a script run, today — is one gesture, not one per verb.
+void SceneNodePropertiesWidget::setMountsHeld(bool held)
+{
+    if (mountsHeld == held) return;
+    mountsHeld = held;
+    if (!held) scheduleMount();
+}
+
 /// THE DOCK OPENED (or the tabified dock came to the front, or the panel was
-/// realised for the first time). Whatever the column owes, it owes now.
+/// realised for the first time). Whatever the column owes, it owes now — in
+/// this turn, so the dock is never seen holding the previous selection.
 void SceneNodePropertiesWidget::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
@@ -506,8 +519,9 @@ SceneNodePropertiesWidget::Stats SceneNodePropertiesWidget::propertiesStats() co
     out.refills = materialPropView ? materialPropView->refillCount() : 0;
     out.rebuilds = materialPropView ? materialPropView->rebuildCount() : 0;
     out.rows = mountedRowCount(currentTab);
-    out.pending = mountPending;
-    out.deferredHidden = mountWhenShown;
+    out.pending = mountOwed;
+    out.deferredHidden = mountOwed && !isVisible();
+    out.held = mountsHeld;
     out.visible = isVisible();
     return out;
 }
