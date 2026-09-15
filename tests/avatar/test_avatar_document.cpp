@@ -623,48 +623,50 @@ int main(int argc, char **argv)
                   "H1: ... with its authored root scale untouched");
         }
 
-        // H2 — THE DREYAR CASE: 17.25 m in, 1.75 m out, factor reported.
+        // H2 — THE DREYAR CASE, after the import dialog: 17.25 m in, 17.25 m
+        // out. The AUTOMATIC rule is retired (SPECS/IMPORT_DIALOG_SPEC.md §6):
+        // a character's size is decided by a person at IMPORT and baked into
+        // the asset, so the module loads what it is given and reports it. This
+        // block used to assert the opposite, which is the whole change.
         {
             avatar::AvatarPreviewModel m;
             CHECK(m.load(kGiant), "H2: the 17.25 m rig loads");
             const auto &n = m.normalization();
-            CHECK(n.applied, "H2: a 17.25 m character IS normalized");
+            CHECK(!n.applied && close(n.factor, 1.0f, 1e-6f),
+                  "H2: a 17.25 m character is NOT scaled — nothing guesses a size");
             CHECK(close(n.sourceHeight, 17.25f, 0.01f),
                   qUtf8Printable(QStringLiteral("H2: source height read as %1 m (expected 17.25)")
                                      .arg(double(n.sourceHeight))));
-            CHECK(close(n.height, 1.75f, 0.01f),
-                  qUtf8Printable(QStringLiteral("H2: normalized to %1 m (expected 1.75)")
+            CHECK(close(n.height, 17.25f, 0.01f),
+                  qUtf8Printable(QStringLiteral("H2: and reported as %1 m (expected 17.25)")
                                      .arg(double(n.height))));
-            CHECK(close(n.factor, 1.75f / 17.25f, 1e-4f),
-                  qUtf8Printable(QStringLiteral("H2: factor %1 (expected 0.1014)")
-                                     .arg(double(n.factor))));
-            CHECK(close(avatar::measureCharacterHeight(m.fragment()), 1.75f, 0.01f),
-                  "H2: ... and the geometry really is 1.75 m now");
-            // THE RIG MOVED WITH IT. jointTip binds one unit above jointRoot in
-            // rig2.glb, i.e. 8.625 units in the giant: after normalization its
-            // WORLD position must be 8.625 * 0.1014 = 0.875 m, which is what
-            // makes the clips (authored at the file's scale) still fit.
+            CHECK(close(avatar::measureCharacterHeight(m.fragment()), 17.25f, 0.01f),
+                  "H2: ... and the geometry is the file's own 17.25 m");
+            // jointTip binds one unit above jointRoot in rig2.glb, i.e. 8.625
+            // units in the giant, and nothing moved it.
             const auto bones = m.bones();
-            CHECK(bones.size() == 2, "H2: both bones survive normalization");
+            CHECK(bones.size() == 2, "H2: both bones load");
             if (bones.size() == 2)
-                CHECK(close(bones[1].position.y(), 0.875f, 0.01f),
-                      qUtf8Printable(QStringLiteral("H2: jointTip sits at y=%1 m (expected 0.875) "
-                                                    "— the rig scaled with the mesh")
+                CHECK(close(bones[1].position.y(), 8.625f, 0.01f),
+                      qUtf8Printable(QStringLiteral("H2: jointTip sits at y=%1 m (expected 8.625) "
+                                                    "— the rig is as authored")
                                          .arg(double(bones[1].position.y()))));
         }
 
-        // H3 — the other end: a 10 cm rig is scaled UP.
+        // H3 — the other end, same answer: a 10 cm rig loads as a 10 cm rig.
         {
             avatar::AvatarPreviewModel m;
             CHECK(m.load(kTiny), "H3: the 0.10 m rig loads");
             const auto &n = m.normalization();
-            CHECK(n.applied && close(n.height, 1.75f, 0.01f) && n.factor > 1.0f,
-                  qUtf8Printable(QStringLiteral("H3: 0.10 m normalized UP to %1 m (x%2)")
+            CHECK(!n.applied && close(n.height, 0.10f, 0.01f),
+                  qUtf8Printable(QStringLiteral("H3: 0.10 m stays 0.10 m (%1 m, x%2)")
                                      .arg(double(n.height)).arg(double(n.factor))));
         }
 
-        // H4 — the explicit override (the owner's "he really is an ogre" case),
-        // and H5 — going back to AUTO. The record stays anchored to the FILE.
+        // H4 — the EXPLICIT height (the owner's "he really is an ogre" case) is
+        // a person's decision and still applies, and H5 — asking for no height
+        // goes back to the size the file was IMPORTED at. The record stays
+        // anchored to the file either way.
         {
             avatar::AvatarPreviewModel m;
             m.load(kGiant);
@@ -676,12 +678,13 @@ int main(int argc, char **argv)
             CHECK(close(m.normalization().sourceHeight, 17.25f, 0.01f) &&
                       close(m.normalization().factor, 2.4f / 17.25f, 1e-3f),
                   "H4: ... with the report still anchored to the file's 17.25 m");
-            CHECK(m.setCharacterHeight(0.0f, &error), "H5: setCharacterHeight(0) re-runs AUTO");
-            CHECK(close(avatar::measureCharacterHeight(m.fragment()), 1.75f, 0.01f),
-                  "H5: ... back to 1.75 m");
-            CHECK(close(m.normalization().factor, 1.75f / 17.25f, 1e-3f) &&
+            CHECK(m.setCharacterHeight(0.0f, &error),
+                  "H5: setCharacterHeight(0) goes back to the imported size");
+            CHECK(close(avatar::measureCharacterHeight(m.fragment()), 17.25f, 0.01f),
+                  "H5: ... which is the file's 17.25 m, not an invented 1.75");
+            CHECK(close(m.normalization().factor, 1.0f, 1e-3f) &&
                       !m.normalization().explicitTarget,
-                  "H5: ... with the file-anchored factor, and no longer flagged explicit");
+                  "H5: ... with nothing applied, and no longer flagged explicit");
             CHECK(!m.setCharacterHeight(100000.0f, &error),
                   "H5: a height that is not a length is refused");
         }

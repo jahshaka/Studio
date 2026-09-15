@@ -99,7 +99,8 @@ void endScope();
 void clear();
 
 /// True when this build can read the bake recorded for `sourcePath`.
-bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath);
+bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+             const QString &assetGuid = QString());
 
 /// Build (or rebuild) the bake for ONE Object/Mesh asset and record it in the
 /// CAS under `guid` and its mesh member. Returns false with `errorOut` set on
@@ -126,7 +127,7 @@ QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root);
 /// asset row that names that content. Parses the file — this is the expensive
 /// direction, for the lazy re-bake and `assets.bakeAll`.
 bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePath,
-                QString *errorOut);
+                QString *errorOut, const QString &assetGuid = QString());
 
 // --- Lazy re-bake (MESH_BAKE_SPEC phase 1, "existing libraries") -----------
 //

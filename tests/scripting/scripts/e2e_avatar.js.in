@@ -236,36 +236,42 @@ assert(refusedRetired, "avatar.loadPreview is GONE — there is no second way to
     assert(!!loadRig(RIG), "reload the glTF rig for the remaining checks");
 }
 
-// ---- HEIGHT: the unit fix, normalization, and the ceiling -----------------
+// ---- HEIGHT: as imported, an explicit override, and the ceiling ----------
 // Owner report 2026-09-08: "Dreyar is massively huge, head touches the
-// ceiling". Two faults, one visible symptom — FBX unit scale (fixed at the
-// importer) and a package whose unit DECLARATION is wrong (fixed here, by
-// scaling the subject). This runs the whole thing through the verbs.
+// ceiling". The FBX unit half is fixed at the importer; the "the package's
+// declaration is wrong" half is a decision a person makes at IMPORT and it is
+// baked into the asset (SPECS/IMPORT_DIALOG_SPEC.md §6) — so this module scales
+// NOTHING by itself any more, and a height asked for by name still works.
 {
     var here = avatar.preview();          // the 2 m glTF rig, reloaded above
     assert(Math.abs(here.height - 2.0) < 0.02,
            "the 2 m rig measures " + here.height.toFixed(3) + " m");
     assert(here.normalized === false && Math.abs(here.normalizeFactor - 1) < 1e-6,
-           "a plausible character is left EXACTLY as authored");
+           "and is left EXACTLY as authored");
 
     var giant = loadRig(GIANT);
     assert(Math.abs(giant.sourceHeight - 17.25) < 0.05,
            "the giant fixture imports at " + giant.sourceHeight.toFixed(2) + " m (Dreyar's size)");
-    assert(giant.normalized === true && Math.abs(giant.height - 1.75) < 0.02,
-           "... and is normalized to " + giant.height.toFixed(3) + " m (x" +
-           giant.normalizeFactor.toFixed(4) + ")");
-    // THE OWNER'S ORACLE (the debug-runner's REPRO script): head vs ceiling.
-    assert(giant.ceilingHeight > giant.height,
-           "head " + giant.height.toFixed(2) + " m clears the ceiling at " +
-           giant.ceilingHeight.toFixed(2) + " m");
+    assert(giant.normalized === false && Math.abs(giant.height - 17.25) < 0.05,
+           "... and STAYS there — nothing guesses a character's size (" +
+           giant.height.toFixed(3) + " m, x" + giant.normalizeFactor.toFixed(4) + ")");
 
     var tall = avatar.setCharacterHeight(2.4);
     assert(Math.abs(tall.height - 2.4) < 0.02,
            "avatar.setCharacterHeight(2.4) -> " + tall.height.toFixed(3) + " m");
     assert(Math.abs(tall.sourceHeight - 17.25) < 0.05,
            "... with the report still anchored to the file's height");
+    // THE OWNER'S ORACLE (the debug-runner's REPRO script): head vs ceiling.
+    // The room is rescaled to the SUBJECT, so it holds at any size the user
+    // chooses — which is the property that survives the retirement.
+    var sized = avatar.preview();
+    assert(sized.ceilingHeight > sized.height,
+           "head " + sized.height.toFixed(2) + " m clears the ceiling at " +
+           sized.ceilingHeight.toFixed(2) + " m");
+
     var back = avatar.setCharacterHeight(0);
-    assert(Math.abs(back.height - 1.75) < 0.02, "avatar.setCharacterHeight(0) re-runs AUTO");
+    assert(Math.abs(back.height - 17.25) < 0.05,
+           "avatar.setCharacterHeight(0) goes back to the IMPORTED size, not to a guess");
 
     // The FBX half, through the real app: pivot_rig.fbx DECLARES metres
     // (UnitScaleFactor 100), so the unit fix leaves it at metre scale — a file

@@ -348,9 +348,10 @@ void clear()
 }
 
 
-bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath)
+bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+             const QString &assetGuid)
 {
-    const iris::PrewarmItem item = planFor(conn, root, sourcePath);
+    const iris::PrewarmItem item = planFor(conn, root, sourcePath, assetGuid);
     if (item.bakePath.isEmpty()) return false;
     return iris::MeshBake::read(item.bakePath, item.bakeFingerprint).valid;
 }
@@ -405,16 +406,20 @@ bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QStri
     const QString sourceOid = oidFromStorePath(root, sourcePath);
     if (sourceOid.isEmpty()) return true;   // legacy-folder bytes: no content id to key on
 
-    if (isFresh(conn, root, sourcePath)) return true;
+    // BY THE ROW, not by the path (IMPORT-1): this asset's import settings are
+    // half the bake key, and a sibling row over the same bytes may want other
+    // settings. bakeAsset knows which row it is baking for; the content-first
+    // sweep behind assets.bakeAll does not, and gets that content's default.
+    if (isFresh(conn, root, sourcePath, guid)) return true;
     if (neededOut) *neededOut = true;
     if (dryRun) return true;
-    if (!bakeSource(conn, root, sourcePath, errorOut)) return false;
+    if (!bakeSource(conn, root, sourcePath, errorOut, guid)) return false;
     clear();
     return true;
 }
 
 bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePath,
-                QString *errorOut)
+                QString *errorOut, const QString &assetGuid)
 {
     const QString sourceOid = oidFromStorePath(root, sourcePath);
     if (sourceOid.isEmpty()) {
@@ -433,10 +438,10 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
         return false;
     }
 
-    const QString settings = settingsHashFor(conn, root, sourcePath);
+    const QString settings = settingsHashFor(conn, root, sourcePath, assetGuid);
     iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
         sourcePath, iris::MeshBake::fingerprintFor(sourceOid, settings), scratch.path(),
-        transformFor(conn, root, sourcePath));
+        transformFor(conn, root, sourcePath, assetGuid));
     if (!model.valid) {
         if (errorOut)
             *errorOut = QStringLiteral("could not parse '%1' for baking").arg(sourcePath);
