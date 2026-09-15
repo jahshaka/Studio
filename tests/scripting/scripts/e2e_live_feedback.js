@@ -36,6 +36,14 @@ var undoBefore = editor.undoState();
 assert(undoBefore.macroOpen === true, "the run's undo macro is open on the UI thread");
 
 // ---- twenty nodes, watching the driver ----
+//
+// THE MEASUREMENT IS WALL-TIME BOUNDED, not verb-counted (round 2, M3). A live
+// run is PACED — at most one frame per display period — so "a frame happened
+// between two verbs" is only a promise about TIME, and a test that counted
+// verbs would be leaning on an alternation the pacing exists to break. The
+// budget below is many display periods wide on any panel this runs on.
+var kBudgetMs = 250;
+
 var framesAtStart = app.frameStats().rendered;
 var movedDuring = 0;
 var ids = [];
@@ -46,16 +54,31 @@ for (var i = 0; i < 20; ++i) {
     if (i < 19 && app.frameStats().rendered > framesAtStart) movedDuring++;
 }
 assert(ids.length === 20, "twenty primitives added through the bridge");
+
+// ...and then keep the script BUSY, through the bridge, for a fixed span of
+// wall time. Every one of these is a real verb call, so the UI thread is free
+// between them exactly as it is between any other two.
+var spinStart = Date.now();
+var spins = 0;
+while (Date.now() - spinStart < kBudgetMs) { scene.nodes(); spins++; }
+var busyMs = Date.now() - spinStart;
+
 var framesAtEnd = app.frameStats().rendered;
 console.log("driver frames: " + framesAtStart + " -> " + framesAtEnd
-            + " (" + movedDuring + " of the first 19 verbs saw a new frame)");
+            + " (" + movedDuring + " of the first 19 verbs saw a new frame; "
+            + spins + " query verbs over " + busyMs + " ms)");
+assert(busyMs >= kBudgetMs, "the script stayed busy for " + busyMs + " ms of wall time");
 
 if (live) {
+    assert(framesAtEnd > framesAtStart,
+           "LIVE: the render loop drew while the script was working — "
+           + (framesAtEnd - framesAtStart) + " frames");
     assert(movedDuring > 0,
-           "LIVE: the render loop drew at least one frame BEFORE the last verb");
+           "LIVE: ...and at least one of them landed BEFORE the script's last edit");
 } else {
     assert(framesAtEnd === framesAtStart,
-           "OFF: the render loop drew nothing at all between the verbs");
+           "OFF: the render loop drew nothing at all — not in " + busyMs
+           + " ms of verbs, not between any two of them");
     assert(movedDuring === 0, "OFF: ...and no verb ever saw a new frame");
 }
 
