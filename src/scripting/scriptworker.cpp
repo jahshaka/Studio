@@ -134,6 +134,25 @@ VerbOutcome VerbDispatcher::dispatch(const QString &moduleName, const QString &v
         return out;
     }
 
+    // THE REGISTRY IS THE ALLOWLIST (round 2, L4). `__bridge` is a global a
+    // script can reach, and a dispatcher that took any public method by name
+    // would expose every QObject slot the modules inherit —
+    // __bridge.call("app", "deleteLater", []) would have deleted the module.
+    // The generated shims only ever name registered verbs, so this costs
+    // nothing in the ordinary path; it closes the door the bridge object opens.
+    // It also makes the law literal rather than conventional: a verb that is
+    // not in verbs() does not exist, by any route.
+    bool registered = false;
+    for (const VerbInfo &info : module->verbs()) {
+        if (info.name == verb) { registered = true; break; }
+    }
+    if (!registered) {
+        out.threw = true;
+        out.error = QStringLiteral("%1.%2 is not a verb (api.help('%1') lists the module)")
+                        .arg(moduleName, verb);
+        return out;
+    }
+
     // JS has no arity: `editor.frame(5)` and `editor.frame(5, undefined)` mean
     // the same thing, and moc emits one method per default-argument prefix
     // (frame(int,double), frame(int), frame()). Trim the trailing nothings and
