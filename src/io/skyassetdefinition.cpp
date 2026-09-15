@@ -53,24 +53,12 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
         return true;
 
     case iris::SkyType::REALISTIC: {
-        // The same keys, with the same per-key defaults, that
-        // SceneReader::readScene reads for a project scene: a definition
-        // written before a key existed lands on the model's working value
-        // rather than on zero (VISUAL_PARITY item 1). The sun keys are GONE
-        // (SKY_LIGHT_SPEC §3): a preset's sun is the scene's sun light.
-        const iris::SkyRealistic d = iris::SkyRealistic::defaults();
-        iris::SkyRealistic r = d;   // EVERY field starts at its working value —
-                                    // a key this reader forgets is a default,
-                                    // never an uninitialised float (SKY-DENSITY-1's
-                                    // second reader found sunHaze indeterminate here)
-        r.density   = float(skyData.value("density").toDouble(d.density));
-        r.diffusion = float(skyData.value("diffusion").toDouble(d.diffusion));
-        r.horizon   = float(skyData.value("horizon").toDouble(d.horizon));
-        r.power     = float(skyData.value("power").toDouble(d.power));
-        r.sunHaze   = float(skyData.value("sunHaze").toDouble(d.sunHaze));
-        const QJsonObject skyColObj = skyData.value("skyColour").toObject();
-        r.skyColour = skyColObj.isEmpty() ? d.skyColour : AssetIOBase::readColor(skyColObj);
-        scene->skyRealistic = r;
+        // ONE READER (SKY-WRITE-1): the same per-key defaults the project
+        // reader uses, because it is literally the same function now — this
+        // reader's own copy of them is what let `sunHaze` be read as an
+        // indeterminate float once. The sun keys are GONE (SKY_LIGHT_SPEC §3):
+        // a preset's sun is the scene's sun light.
+        scene->setSkyRealistic(iris::Scene::skyRealisticFromJson(skyData));
         return true;
     }
 

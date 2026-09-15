@@ -194,3 +194,24 @@ add_test(NAME document.mesh_cache COMMAND test_mesh_cache
 set_tests_properties(document.mesh_cache PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.mesh_cache)
+
+# document.sky_write — ONE WRITER FOR THE REALISTIC SKY (SKY-SMALL /
+# SKY-WRITE-1). The dials exist twice in the document (typed fields the renderer
+# reads, a JSON block the panels bind from and the writer serialises); four
+# writers used to keep both halves by hand, with two different sets of clamps.
+# This pins the single path, the clamp, the round trip and — the part that keeps
+# the class from coming back — that `skyRealisticInSync()` actually reports a
+# bypass. Document only: NULL render system, no display.
+add_executable(test_sky_write test_sky_write.cpp)
+set_target_properties(test_sky_write PROPERTIES AUTOMOC OFF)
+target_include_directories(test_sky_write PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_sky_write PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_sky_write)
+add_test(NAME document.sky_write COMMAND test_sky_write
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.sky_write PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.sky_write)
