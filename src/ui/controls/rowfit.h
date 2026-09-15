@@ -38,6 +38,8 @@ For more information see the LICENSE file
 // through fitRow(), including the ones panels build themselves and hand to
 // addWidgetToContent(). Row classes do NOT have to opt in.
 
+#include <QString>
+
 class QWidget;
 class QLabel;
 class QComboBox;
@@ -49,9 +51,15 @@ namespace RowFit {
 /// A fitted QLabel's text ON SCREEN is the ELIDED one — that is the whole point
 /// of fitLabel. Anything that needs the NAME rather than the picture (the
 /// property-row registry, PROPERTY_FILTER_SPEC §3.1: a row whose label reads
-/// "Sun D…" must still be found by "disc") reads it from this widget property,
-/// which fitLabel keeps in step with every setText the panel makes.
+/// "Sun D…" must still be found by "disc", and a SECTION whose title reads
+/// "Photon — Realt…" at a 300 px dock must still be found by "illumination")
+/// asks fullText() for it.
 constexpr const char *kFullTextProperty = "jahRowFullText";
+
+/// THE NAME A FITTED LABEL CARRIES, whatever it is showing right now. Works on
+/// any QLabel: one that was never fitted, or fitted and not elided, simply
+/// answers with its own text.
+QString fullText(const QLabel *label);
 
 /// The floor a fitted control is allowed to shrink to. Small on purpose: the
 /// dock's minimum width is the real contract (ui/style/panelmetrics.h), and a

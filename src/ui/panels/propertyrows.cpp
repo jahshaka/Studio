@@ -87,13 +87,11 @@ bool matchesAll(const QStringList &terms, const QString &hay, bool *allAtWordSta
 QString Entry::label() const
 {
     if (!labelWidget) return staticLabel;
-    // THE NAME, NOT THE PICTURE. A fitted label's text() is elided to whatever
-    // width the dock gave it ("Sun D…"), so the full name comes from the
-    // property RowFit keeps beside it (rowfit.h kFullTextProperty).
-    const QVariant full = labelWidget->property(RowFit::kFullTextProperty);
-    const QString text = full.isValid() && !full.toString().isEmpty()
-                             ? full.toString() : labelWidget->text();
-    return stripMarks(text);
+    // THE NAME, NOT THE PICTURE: a fitted label's text() is elided to whatever
+    // width the dock gave it ("Sun D…"). RowFit::fullText is the ONE reader of
+    // that distinction — Entry::label, sectionTitle and the blade's panelTitle
+    // all go through it, because a section title elides exactly like a row's.
+    return stripMarks(RowFit::fullText(labelWidget));
 }
 
 QString Entry::haystack() const
@@ -230,7 +228,7 @@ QString Registry::sectionTitle(const QWidget *section)
     auto *blade = qobject_cast<AccordianBladeWidget *>(const_cast<QWidget *>(section));
     if (!blade) return QString();
     QLabel *title = blade->titleLabel();
-    return title ? stripMarks(title->text()) : QString();
+    return title ? stripMarks(RowFit::fullText(title)) : QString();
 }
 
 void Registry::purge(QWidget *container)

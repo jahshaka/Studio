@@ -218,9 +218,12 @@ QLabel *AccordianBladeWidget::titleLabel() const
     return ui->content_title;
 }
 
+/// THE SECTION'S NAME, not what fits in the header. The title is fitted like
+/// every row (the ctor calls RowFit::fitLabel on it), so at a narrow dock its
+/// text() is "Photon — Realt…" — and the property filter matches section titles.
 QString AccordianBladeWidget::panelTitle() const
 {
-    return ui->content_title->text();
+    return RowFit::fullText(ui->content_title);
 }
 
 /// OPEN OR CLOSED — AND NEVER "my parent is hidden".

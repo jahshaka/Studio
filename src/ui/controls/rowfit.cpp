@@ -144,6 +144,15 @@ void shrinkable(QWidget *w, int minimum)
 
 namespace RowFit {
 
+QString fullText(const QLabel *label)
+{
+    if (!label) return QString();
+    const QVariant full = label->property(kFullTextProperty);
+    if (!full.isValid()) return label->text();      // never fitted
+    return full.toString().isEmpty() ? label->text() : full.toString();
+}
+
+
 void fitLabel(QLabel *label)
 {
     if (!markFitted(label)) return;

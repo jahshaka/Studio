@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QTabBar>
 #include <QUndoStack>
@@ -552,6 +553,48 @@ int main(int argc, char **argv)
             if (b->panelTitle() == QStringLiteral("Detail Layers") && b->isVisibleTo(panel))
                 rebuilt = true;
         CHECK(rebuilt, "properties_filter: ...and the second mesh's own nested section is there");
+    }
+
+    // ---- 11d. AN ELIDED SECTION TITLE (F2, second reader) ----------------
+    // A section title is fitted like every row (the blade's ctor calls
+    // RowFit::fitLabel on it), so when the header is narrower than the name it
+    // reads "Photon — Realt…" — and the filter matches section TITLES. Reading
+    // text() there loses the section for every word past the ellipsis.
+    //
+    // The width at which that happens is a font metric, so the suite drives the
+    // MECHANISM instead of guessing a dock width: the header label is given a
+    // width the name cannot fit in, which is exactly what a 300 px column does.
+    {
+        panel->setPropertiesTab(Tab::World);
+        panel->setPropertiesFilter(Tab::World, QString());
+        turn();
+        AccordianBladeWidget *photon = nullptr;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->panelTitle().startsWith(QStringLiteral("Photon"))) photon = b;
+        CHECK(photon != nullptr, "properties_filter: the Photon section is there");
+        if (photon) {
+            QLabel *title = photon->titleLabel();
+            // The header label is given a width its name cannot fit in — which
+            // is what a narrow dock does to it through the layout. Asserted
+            // WITHOUT turning the event loop: the blade's layout would put the
+            // width straight back, and RowFit would un-elide with it.
+            title->resize(90, title->height());
+            QResizeEvent resize(title->size(), QSize(263, title->height()));
+            QApplication::sendEvent(title, &resize);
+            std::printf("      elided header at %d px: \"%s\" — name \"%s\"\n",
+                        title->width(), qPrintable(title->text()),
+                        qPrintable(photon->panelTitle()));
+            CHECK(title->text() != photon->panelTitle(),
+                  "properties_filter: a header too narrow for its name is elided");
+            CHECK(photon->panelTitle() ==
+                      QStringLiteral("Photon — Realtime Global Illumination"),
+                  "properties_filter: ...and the section still KNOWS its name");
+            panel->setPropertiesFilter(Tab::World, QStringLiteral("illumination"));
+            CHECK(sectionShown(panel, QStringLiteral("Photon")),
+                  "properties_filter: ...so a word past the ellipsis still finds it");
+            panel->setPropertiesFilter(Tab::World, QString());
+            turn();
+        }
     }
 
     // ---- 12. nothing matches, and the box still works ----------------------
