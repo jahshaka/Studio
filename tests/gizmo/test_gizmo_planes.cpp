@@ -97,10 +97,10 @@ const Plane kPlanes[3] = {
 /// A point WELL INSIDE a plane handle's square, in world units, at the gizmo's
 /// scale. The square runs [0, kPlaneHandleSpan] on both axes since GIZMO-2
 /// item 1 — its inner corner IS the gizmo's origin — so the inner part of it
-/// belongs to the centre ball, whose pick sphere is CENTER_CIRCLE_RADIUS
-/// (0.015) of gizmoScale = 0.30 of these handle units, three times the ball's
-/// drawn 0.10 radius. 0.70 of the span on each axis is 0.495 handle units from
-/// the origin, comfortably outside it (the crossover is asserted below).
+/// belongs to the centre ball, whose pick sphere is
+/// GizmoMeshes::kCentreBallPickLocal (0.20) of these handle units, twice the
+/// ball's drawn 0.10 radius. 0.70 of the span on each axis is 0.495 handle
+/// units from the origin, well outside it (the crossover is asserted below).
 constexpr float kGrabFraction = 0.70f;
 iris::Vec3 squareGrab(const Plane &p, float scale)
 {
@@ -306,8 +306,7 @@ int main(int argc, char **argv)
     // The numbers, in HANDLE-LOCAL units (multiply by handleScale * gizmoScale
     // for world units): the square spans [0, 0.50] on both axes, so its outer
     // corner is 0.707 out; the centre ball is DRAWN at radius 0.10 and PICKED
-    // at CENTER_CIRCLE_RADIUS / handleScale = 0.015 / 0.05 = 0.30; the arrow
-    // runs to 1.90. This walks the xz square's diagonal from the origin out
+    // at kCentreBallPickLocal = 0.010 / 0.05 = 0.20; the arrow runs to 1.90. This walks the xz square's diagonal from the origin out
     // past the arrow's tip and prints who answers where.
     {
         place(cam, iris::Vec3(6, 6, 6));
@@ -321,7 +320,7 @@ int main(int argc, char **argv)
         const float scale = gizmo.getGizmoScale() * kHandleScale;
         const iris::Vec3 forward =
             cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
-        const float ballPick = 0.015f / kHandleScale;            // CENTER_CIRCLE_RADIUS
+        const float ballPick = GizmoMeshes::kCentreBallPickLocal;   // 0.010 / 0.05
         const float span = GizmoMeshes::kPlaneHandleSpan;
 
         auto handleAt = [&](const iris::Vec3 &local) {

@@ -92,10 +92,26 @@ namespace GizmoMeshes
     /// PIXELS (project these four corners): the square the cursor is tested
     /// against IS the square drawn.
     constexpr float kPlaneHandleSpan = 0.50f;
-    /// The frame's line thickness, chosen so it draws the same width as the
-    /// rotation rings do: their tube is 0.01 at handleScale 0.0712, i.e.
-    /// 0.000712 of gizmoScale, and 0.0142 * 0.05 is the same number.
-    constexpr float kPlaneFrameRadius = 0.0142f;
+    /// The frame's line thickness, DERIVED so it draws the same width as the
+    /// rotation rings do at any tuning of kRotationExtentRatio: the rings' tube
+    /// is kRingMinor of THEIR handleScale, and a plane frame is drawn at the
+    /// translate gizmo's. Defined in gizmomeshes.cpp beside kRingMinor, which
+    /// is the number it follows (0.014228 today).
+    extern const float kPlaneFrameRadius;
+
+    /// THE CENTRE BALL'S PICK RADIUS, in units of gizmoScale — twice the ball's
+    /// DRAWN radius (kCoreSphere * kHandleScale = 0.005), i.e. about a 19-pixel
+    /// disc for a 9-pixel ball at the sizes Gizmo::updateSize holds.
+    ///
+    /// It lives HERE, beside the geometry it has to stay clear of, because the
+    /// plane frames' inner corner is the gizmo's ORIGIN (item 1): the ball's
+    /// sphere sits inside all three squares, so this number and
+    /// kPlaneHandleSpan are one decision, not two. It was a 0.015 #define in
+    /// translationgizmo.cpp and a hand-copied literal in the suite.
+    constexpr float kCentreBallPickRadius = 0.010f;
+    /// ...and the same radius in HANDLE-LOCAL units (0.20), the units the
+    /// square's span and the arrows' reach are in.
+    constexpr float kCentreBallPickLocal = kCentreBallPickRadius / kHandleScale;
 
     /// Thin shaft ending in a small cone along +axis (translate handle).
     iris::MeshPtr translateHandle(GizmoAxis axis);

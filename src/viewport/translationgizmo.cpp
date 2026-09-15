@@ -33,22 +33,19 @@ For more information see the LICENSE file
 #include <QLineF>
 #include <cmath>
 
-// THE CENTRE BALL'S PICK RADIUS, in units of gizmoScale — the ball is DRAWN at
-// kCoreSphere * handleScale = 0.10 * 0.05 = 0.005 of it, so this is twice its
-// drawn size (about a 19-pixel disc for a 9-pixel ball at the sizes
-// Gizmo::updateSize holds).
+// THE CENTRE BALL'S PICK RADIUS lives in gizmomeshes.h, beside the geometry it
+// has to stay clear of (GizmoMeshes::kCentreBallPickRadius): the plane frames'
+// inner corner is the gizmo's ORIGIN since item 1, so the ball's sphere sits
+// inside all three squares and the two numbers are one decision.
 //
-// It was 0.015 — THREE times the drawn ball — and GIZMO-2 item 1 made that
-// untenable: the plane frames' inner corner is the gizmo's ORIGIN now, so the
-// ball's sphere sits inside all three squares, and a ray cast at a square whose
-// diagonal runs towards the camera (the ground square from any 3/4 view is the
-// worst case: only 0.577 of its length survives the projection) passed within
-// 0.015 of the origin as far out as 0.52 of the square's 0.71 diagonal — the
-// ball swallowed most of every plane handle. At 0.010 the ball keeps the pixels
-// a user aims at its ball and the frames keep the rest of their area; the
-// crossover, and what it costs the worst-placed square, are printed by
-// gizmo.plane_handles section F.
-#define CENTER_CIRCLE_RADIUS (0.010f)
+// It was a 0.015 #define here — THREE times the ball's drawn 0.005 — and item 1
+// made that untenable: a ray cast at a square whose diagonal runs towards the
+// camera (the ground square from any 3/4 view is the worst case: only 0.577 of
+// its length survives the projection) passed within 0.015 of the origin as far
+// out as 0.52 of the square's 0.71 diagonal — the ball swallowed most of every
+// plane handle. At 0.010 the ball keeps the pixels a user aims at it and the
+// frames keep the rest; the crossover is printed by gizmo.plane_handles F.
+#define CENTER_CIRCLE_RADIUS (GizmoMeshes::kCentreBallPickRadius)
 
 TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 {
