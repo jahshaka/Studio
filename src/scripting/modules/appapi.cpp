@@ -120,7 +120,9 @@ QVector<VerbInfo> AppApi::verbs() const
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
                          "microcodeEntries, hlmsCachesLoaded, "
-                         "compiledThisRun, loadedThisRun, expectedShaders, lastSaved}",
+                         "compiledThisRun, loadedThisRun, expectedShaders, lastSaved, "
+                         "passCacheEntries, passCacheCapacity, renderableCacheEntries, "
+                         "renderableCacheCapacity}",
           "The persistent shader cache (SHADER_CACHE_SPEC.md): what is on disk and what this run "
           "did with it. compiledThisRun counts shaders the compiler actually built; loadedThisRun "
           "counts shaders served straight from the cache, so a warm launch shows the second number "
@@ -131,7 +133,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "rejected / silent happened ('outdated' is the ordinary cost of a driver update; "
           "'silent' means the render system has the broken-pipeline-cache workaround on and this "
           "layer does nothing at all on this device). The counters work whether or not the cache "
-          "itself is enabled.",
+          "itself is enabled. "
+          "passCacheEntries and renderableCacheEntries are the LIVE SIZES of the two caches "
+          "Ogre's 32-bit shader hash addresses — the pass property sets and the material/mesh "
+          "property sets this process has produced so far — reported for the fullest Hlms, with "
+          "the capacity each field can address beside them. Neither cache is ever evicted, so "
+          "these only rise; a session whose passCacheEntries climbs without settling has a pass "
+          "property carrying a unique name (a render target's, a probe's), which is exactly how "
+          "the 2026-09-14 editor crash happened while the field was eight bits wide.",
           Needs::Engine },
         { "rayTracing", "app.rayTracing([\"auto\"|\"off\"]) -> {mode, available, enabled, live}",
           "HARDWARE RAY TRACING for this MACHINE (SPECS/PHOTON_SPEC.md §7 R1) — an application preference, persisted, the same one Preferences > Rendering shows. Called with no argument it reads; called with \"auto\" or \"off\" it sets, applies it to the running engine, and reads back. "
@@ -557,6 +566,10 @@ QVariantMap AppApi::shaderCache()
     m["loadedThisRun"]       = s.loadedThisRun;
     m["expectedShaders"]     = s.expectedShaders;
     m["lastSaved"]           = QVariant::fromValue(qlonglong(s.lastSavedUnixMs));
+    m["passCacheEntries"]        = s.passCacheEntries;
+    m["passCacheCapacity"]       = s.passCacheCapacity;
+    m["renderableCacheEntries"]  = s.renderableCacheEntries;
+    m["renderableCacheCapacity"] = s.renderableCacheCapacity;
     return m;
 }
 
