@@ -242,6 +242,9 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     connect(&PropertyRows::registry(), &PropertyRows::Registry::rowsChanged,
             this, [this]() {
         if (filterText[int(currentTab)].trimmed().isEmpty()) return;
+        // A mount owed to this turn re-filters at its end anyway (applyTab), and
+        // it would be filtering the blade set that is about to be replaced.
+        if (mountPending) return;
         applyRowFilter();
     });
 
@@ -370,7 +373,40 @@ QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
     return QSharedPointer<iris::Scene>();
 }
 
+// ONE MOUNT PER TURN OF THE EVENT LOOP (ADD-1, 2026-09-15).
+//
+// THE MEASUREMENT THIS EXISTS FOR: `scene.addPrimitive` costs 44 ms of its 50
+// in here, because the add's undo command SELECTS the node it just made
+// (AddSceneNodeCommand::redo -> SelectionService::select ->
+// MainWindow::applySelectionToUi), and this column rebuilt itself for an object
+// the user never asked to look at. A script adding 64 spheres rebuilt it 64
+// times and only the LAST one was ever seen.
+//
+// So a selection RAISES A DEBT instead of paying it: repeated selections inside
+// one turn of the event loop collapse into a single mount of the last one, at
+// the turn's end. Nothing interactive changes — a click is one turn, so the
+// user's pick still mounts before the next frame paints — and a scripted build
+// mounts once for the whole run (a `--script` run never yields, so the timer
+// fires when it ends).
+//
+// EVERY QUESTION ABOUT THE COLUMN PAYS THE DEBT FIRST (flushPendingMount): a
+// verb that lists the rows, the filter box, a test that asserts what is
+// mounted. Deferred is never "not built" to anyone who asks.
 void SceneNodePropertiesWidget::applyTab()
+{
+    if (mountPending) return;       // already owed for this turn — the LAST state wins
+    mountPending = true;
+    QTimer::singleShot(0, this, [this]() { flushPendingMount(); });
+}
+
+void SceneNodePropertiesWidget::flushPendingMount()
+{
+    if (!mountPending) return;
+    mountPending = false;
+    mountNow();
+}
+
+void SceneNodePropertiesWidget::mountNow()
 {
     ++mounts;                       // see mountCount()
     widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
@@ -415,12 +451,18 @@ QString SceneNodePropertiesWidget::propertiesFilter(Tab tab) const
 SceneNodePropertiesWidget::FilterCounts
 SceneNodePropertiesWidget::filterCounts(Tab tab) const
 {
+    // A QUESTION IS A REASON TO MOUNT (see applyTab): these counts describe the
+    // rows the column HOLDS, and a mount owed to this turn has not built them
+    // yet. const_cast because "answer truthfully" is the const contract here,
+    // not "touch nothing".
+    const_cast<SceneNodePropertiesWidget *>(this)->flushPendingMount();
     return counts[int(tab)];
 }
 
 QVector<PropertyRows::Registry::Listing>
 SceneNodePropertiesWidget::propertyRows(Tab tab) const
 {
+    const_cast<SceneNodePropertiesWidget *>(this)->flushPendingMount();   // see filterCounts
     QVector<PropertyRows::Registry::Listing> out;
     for (const QPointer<QWidget> &blade : std::as_const(mountedBlades[int(tab)])) {
         if (!blade) continue;
@@ -431,6 +473,9 @@ SceneNodePropertiesWidget::propertyRows(Tab tab) const
 
 void SceneNodePropertiesWidget::setPropertiesFilter(Tab tab, const QString &text)
 {
+    // The expand snapshot below is taken from the MOUNTED blades, so an owed
+    // mount has to happen before it, not after (see applyTab).
+    flushPendingMount();
     const int t = int(tab);
     const QString trimmed = text.trimmed();
     if (filterText[t] == trimmed) return;

@@ -273,16 +273,20 @@ int main(int argc, char **argv)
         turn();
         int before = panel->mountCount();
         panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
-        const int sameTab = panel->mountCount() - before;
+        // THE MOUNT IS OWED TO THE TURN, NOT TO THE CALL (ADD-1): a selection
+        // coalesces into one mount at the end of the event-loop turn, so the
+        // count is read after the turn. The assertion is unchanged — one pick,
+        // one mount — and it now also proves the debt is really paid.
         turn();
+        const int sameTab = panel->mountCount() - before;
 
         // THE CASE: from the World tab, so the pick crosses.
         panel->setPropertiesTab(Tab::World);
         turn();
         before = panel->mountCount();
         panel->setSceneNode(mesh.staticCast<iris::SceneNode>());
-        const int crossing = panel->mountCount() - before;
         turn();
+        const int crossing = panel->mountCount() - before;
         CHECK(sameTab == 1,
               QStringLiteral("properties_tabs: a same-tab pick mounts the column once (%1)")
                   .arg(sameTab).toUtf8().constData());
@@ -295,6 +299,7 @@ int main(int argc, char **argv)
         turn();
         before = panel->mountCount();
         panel->setSceneNode(scene->getRootNode());
+        turn();
         CHECK(panel->mountCount() - before == 1,
               QStringLiteral("properties_tabs: editor.select(root) from Selection mounts once (%1)")
                   .arg(panel->mountCount() - before).toUtf8().constData());

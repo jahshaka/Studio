@@ -97,6 +97,15 @@ public:
     /// 2026-09-15) and nothing about that was visible from outside. Read by
     /// ui.properties_tabs; never used to make a decision.
     int mountCount() const { return mounts; }
+    /// PAY AN OWED MOUNT NOW (ADD-1). A selection raises a debt that is settled
+    /// at the end of the event-loop turn (see applyTab), and every question
+    /// about the column settles it first — this is that call, public because a
+    /// caller who is about to READ the column's widgets (a test, the row
+    /// listing verb) is exactly such a question.
+    void flushPendingMount();
+    /// True while a mount is owed to this turn. Reported by
+    /// `editor.propertiesStats()` so the coalescing is pinnable.
+    bool mountIsPending() const { return mountPending; }
 
     /// THE FILTER BOX BELONGS TO ITS TAB (PROPERTY_FILTER_SPEC, owner decision
     /// 2026-09-15): one box per tab, filtering that tab's rows only. World's
@@ -202,6 +211,10 @@ private:
     /// end in "mount the world blades" or "mount the node blades" ends here.
     /// MOUNTING IS NOT BINDING: this only moves blades on and off the layout.
     void applyTab();
+    /// The mount itself — clearLayout, the tab's blade set, the filter. Never
+    /// called directly by a selection: applyTab() coalesces the calls and this
+    /// runs once per turn.
+    void mountNow();
     /// Points the eight world blades at `scene` — which REBUILDS the rows of
     /// the five that build from the scene (World Mode, Photon, Post Process,
     /// Anti-Aliasing, Shadows). Idempotent by `worldBoundScene`, so it costs
@@ -250,6 +263,8 @@ private:
 
     /// See mountCount().
     int mounts = 0;
+    /// A mount is owed to this turn of the event loop (see applyTab).
+    bool mountPending = false;
     /// The scene the world blades are currently pointed at (see bindScene).
     QSharedPointer<iris::Scene> worldBoundScene;
 

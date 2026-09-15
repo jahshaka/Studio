@@ -1954,6 +1954,14 @@ iris::SceneNodePtr MainWindow::selectedSceneNode() const
     return selectionService->selected();
 }
 
+// WHAT A SELECTION COSTS (ADD-1, 2026-09-15). Three of these four are cheap and
+// IMMEDIATE — the outline and gizmo in the viewport, the highlighted row in the
+// Hierarchy, the timeline's subject. The fourth, the Properties column, is the
+// expensive one (44 ms of a scripted add's 50 before this lane), and it is the
+// only one nobody can see until the frame paints: it settles its rebuild at the
+// end of the event-loop turn instead, coalescing repeated selections into one
+// mount (SceneNodePropertiesWidget::applyTab). A click is one turn, so the pick
+// is unchanged in feel; a script adding 64 objects mounts once for the run.
 void MainWindow::applySelectionToUi(iris::SceneNodePtr sceneNode)
 {
     sceneView->setSelectedNode(sceneNode);

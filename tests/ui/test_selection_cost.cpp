@@ -436,7 +436,13 @@ int main(int argc, char **argv)
         QElapsedTimer noTurn; noTurn.start();
         // NO turn() in this loop, on purpose. 60 rebuilds is what a script
         // adding 30 primitives produces (each add rebuilds the blade twice).
-        for (int i = 0; i < 60; ++i) panel->setSceneNode(nodes[i % 5]);
+        //
+        // flushPendingMount() after each: a selection only RAISES a mount debt
+        // now (ADD-1), and the debt is one per turn — so without this the loop
+        // would produce ONE rebuild and prove nothing about the ring. The
+        // subject here is the rebuild, so the rebuilds are driven explicitly;
+        // the coalescing has its own case below.
+        for (int i = 0; i < 60; ++i) { panel->setSceneNode(nodes[i % 5]); panel->flushPendingMount(); }
         const double noTurnMs = double(noTurn.elapsed());
         const int after60 = retiredRows();
         // ...and THREE TIMES AS MANY, which is what makes this a shape and not
@@ -444,7 +450,7 @@ int main(int argc, char **argv)
         // ring (AccordianBladeWidget::kRetiredGenerations), so it must not
         // depend on how many rebuilds happened. Before the fix it was one
         // generation PER REBUILD — 180 rows at 60 rebuilds, 540 at 180.
-        for (int i = 0; i < 120; ++i) panel->setSceneNode(nodes[i % 5]);
+        for (int i = 0; i < 120; ++i) { panel->setSceneNode(nodes[i % 5]); panel->flushPendingMount(); }
         const int after180 = retiredRows();
         std::printf("  no-event-loop rebuilds: retired rows %d after 1, %d after 60, %d after 180"
                     "  (%.0f ms for the first 60)\n", afterOne, after60, after180, noTurnMs);
@@ -501,6 +507,7 @@ int main(int argc, char **argv)
             QList<QPointer<QWidget>> wereVisible;
             for (QWidget *w : deepRows()) if (w->isVisible()) wereVisible.append(w);
             panel->setSceneNode(nodes[1]);          // shift 1: they are retired now
+            panel->flushPendingMount();
             QPointer<QWidget> victim;
             for (const QPointer<QWidget> &w : wereVisible)
                 if (w && w->isHidden()) { victim = w; break; }
@@ -514,6 +521,7 @@ int main(int argc, char **argv)
                     // so the promise leaves kRetiredGenerations - 1 here.
                     for (int i = 0; i < AccordianBladeWidget::kRetiredGenerations - 1; ++i) {
                         panel->setSceneNode(nodes[(i + 2) % 5]);
+                        panel->flushPendingMount();   // drive a real rebuild (ADD-1)
                         ++drove;
                     }
                 });
@@ -531,6 +539,90 @@ int main(int argc, char **argv)
             panel->setSceneNode(nodes[0]);
             turn();
         }
+    }
+
+    // ---- THE COALESCED MOUNT (ADD-1) --------------------------------------
+    //
+    // WHAT IT COSTS TO ADD AN OBJECT. `scene.addPrimitive` selects the node it
+    // just made (AddSceneNodeCommand::redo -> SelectionService::select), so a
+    // script adding 64 spheres rebuilt this column 64 times — 44 ms of each
+    // add's 50 — and only the last of the 64 was ever seen by anybody. A
+    // selection raises a mount DEBT now, settled once at the end of the turn.
+    //
+    // The assertion is the mechanism, not a millisecond: 64 selections inside
+    // ONE turn of the event loop mount the column ONCE, and what it mounts is
+    // the LAST selection, not the first.
+    {
+        panel->setSceneNode(nodes[0]);
+        turn();
+        const int before = panel->mountCount();
+        for (int i = 0; i < 64; ++i) panel->setSceneNode(nodes[i % nodes.size()]);
+        const int during = panel->mountCount() - before;
+        CHECK(during == 0,
+              QStringLiteral("coalesce: 64 selections in one turn mount NOTHING while the turn "
+                             "lasts (%1)").arg(during).toUtf8().constData());
+        CHECK(panel->mountIsPending(), "coalesce: ...the column knows a mount is owed");
+        turn();
+        const int after = panel->mountCount() - before;
+        CHECK(after == 1,
+              QStringLiteral("coalesce: ...and the turn ends with exactly ONE mount (%1)")
+                  .arg(after).toUtf8().constData());
+        CHECK(!panel->mountIsPending(), "coalesce: ...with no debt left over");
+
+        // THE LAST SELECTION IS THE ONE MOUNTED. nodes[5] is a light and
+        // nodes[0] a mesh, so the blade set says which one won.
+        panel->setSceneNode(nodes[0]);            // a mesh
+        panel->setSceneNode(nodes[5]);            // ...then a light, same turn
+        turn();
+        bool lightSection = false, materialSection = false;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>()) {
+            if (!b->isVisibleTo(panel)) continue;
+            if (b->panelTitle() == QStringLiteral("Light")) lightSection = true;
+            if (b->panelTitle() == QStringLiteral("Material")) materialSection = true;
+        }
+        CHECK(lightSection && !materialSection,
+              "coalesce: the LAST selection of the turn is the one mounted");
+
+        // A QUESTION PAYS THE DEBT. Nothing may ever read a column that has not
+        // been built for the selection it claims to describe.
+        panel->setSceneNode(nodes[0]);            // a mesh, debt owed
+        const auto listing = panel->propertyRows(SceneNodePropertiesWidget::Tab::Selection);
+        CHECK(!panel->mountIsPending() && !listing.isEmpty(),
+              "coalesce: asking what the column holds settles the owed mount first");
+        turn();
+    }
+
+    // ---- THE TWO PICK NUMBERS (ADD-1) -------------------------------------
+    //
+    // Reported, not asserted in milliseconds (this box is shared): the cost of
+    // the two pick shapes the panel has, because they are different kinds of
+    // work. A SAME-TYPE pick (mesh -> mesh) can reuse every row it has; a
+    // TYPE-CHANGE pick (mesh -> light) has to mount a different blade set.
+    {
+        auto pickCost = [&](const iris::SceneNodePtr &a, const iris::SceneNodePtr &b) {
+            panel->setSceneNode(a);
+            panel->flushPendingMount();
+            QElapsedTimer t;
+            double worst = 0, sum = 0;
+            const int n = 40;
+            for (int i = 0; i < n; ++i) {
+                t.start();
+                panel->setSceneNode(i % 2 ? b : a);
+                panel->flushPendingMount();
+                const double ms = t.nsecsElapsed() / 1e6;
+                sum += ms;
+                worst = qMax(worst, ms);
+            }
+            return QPair<double, double>(sum / n, worst);
+        };
+        const auto sameType = pickCost(nodes[0], nodes[1]);      // mesh -> mesh
+        const auto typeChange = pickCost(nodes[0], nodes[5]);    // mesh -> light
+        std::printf("  PICK COST: same-type (mesh->mesh) %.2f ms mean / %.2f worst; "
+                    "type-change (mesh->light) %.2f ms mean / %.2f worst\n",
+                    sameType.first, sameType.second, typeChange.first, typeChange.second);
+        CHECK(sameType.first >= 0.0 && typeChange.first >= 0.0,
+              "pick: both pick shapes are measured and reported");
+        turn();
     }
 
     // PIXELS. Hiding blades instead of orphaning them is a LIFETIME change, and
