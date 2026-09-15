@@ -110,6 +110,73 @@ set_tests_properties(threading.mode_pixels PROPERTIES
     FIXTURES_REQUIRED "threading_shot_parallel;threading_shot_serial"
     LABELS "threading" TIMEOUT 60)
 
+# threading.gi_resolve / .gi_resolve_serial / .gi_resolve_pixels — THE COLD-COMPILE
+# GUARD FOR THE GI RE-SOLVE (PHOTON_SPEC.md §7 E1 "ITEM 0"; ledger §373).
+#
+# Same three-entry shape and the same reasons as the trio above (two virgin HOMEs
+# so both halves really compile; engine up; RUN_SERIAL; a byte compare with no
+# tolerance). What it adds is the one frame threading.mode does not exercise: a
+# `world.refreshGi()` issued EXACTLY ONE rendered frame after the compile burst.
+# The script's header explains the defect and what "wrong" looks like.
+#
+# ALL THREE ARE REGISTERED **DISABLED** AND MUST STAY SO UNTIL THE DEFECT IS FIXED.
+# The defect is live at this commit: the serial half bakes a picture with no voxel
+# bounce at all (centre pixel 54,36,1 parallel against 46,32,1 serial on Matcaps at
+# Epic, 3/3 reproducible on an RTX 4080S) because VctVoxelizer's VCT/AabbCalculator
+# compute dispatch is handed a foreign uniform texel buffer for `inMeshBuffer`
+# (Vulkan core validation: VUID-vkCmdDispatch-format-07753, "requires UINT component
+# type, but bound descriptor format is VK_FORMAT_R32G32_SFLOAT"), so every mesh AABB
+# comes back as the +/-FLT_MAX sentinel and the voxelization writes zero voxels.
+# A red test is not a guard, so the rig lands here ready and switched off rather
+# than as prose in a report. THE FLIP WHEN THE FIX LANDS: delete the three
+# `DISABLED TRUE` properties below — nothing else changes.
+configure_file(gi_resolve.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js @ONLY)
+
+set(_gir_home_par ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_gi_resolve)
+set(_gir_home_ser ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_gi_resolve_serial)
+
+add_test(NAME threading.freshhome.gi_resolve
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_gir_home_par}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(threading.freshhome.gi_resolve PROPERTIES
+    FIXTURES_SETUP threading_home_gi_resolve LABELS "threading")
+
+add_test(NAME threading.freshhome.gi_resolve_serial
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_gir_home_ser}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(threading.freshhome.gi_resolve_serial PROPERTIES
+    FIXTURES_SETUP threading_home_gi_resolve_serial LABELS "threading")
+
+add_test(NAME threading.gi_resolve
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
+         WORKING_DIRECTORY ${_gir_home_par}/run)
+set_tests_properties(threading.gi_resolve PROPERTIES
+    ENVIRONMENT "HOME=${_gir_home_par};JAHSHAKA_DATA_ROOT=${_gir_home_par}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED threading_home_gi_resolve
+    FIXTURES_SETUP threading_shot_gi_parallel
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300 DISABLED TRUE)
+
+add_test(NAME threading.gi_resolve_serial
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
+         WORKING_DIRECTORY ${_gir_home_ser}/run)
+set_tests_properties(threading.gi_resolve_serial PROPERTIES
+    ENVIRONMENT "HOME=${_gir_home_ser};JAHSHAKA_DATA_ROOT=${_gir_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
+    FIXTURES_REQUIRED threading_home_gi_resolve_serial
+    FIXTURES_SETUP threading_shot_gi_serial
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300 DISABLED TRUE)
+
+add_test(NAME threading.gi_resolve_pixels
+         COMMAND ${CMAKE_COMMAND} -E compare_files
+                 ${_gir_home_par}/run/threading_gi_resolve.png
+                 ${_gir_home_ser}/run/threading_gi_resolve.png)
+set_tests_properties(threading.gi_resolve_pixels PROPERTIES
+    FIXTURES_REQUIRED "threading_shot_gi_parallel;threading_shot_gi_serial"
+    LABELS "threading" TIMEOUT 60 DISABLED TRUE)
+
+jah_tsan_blocked(threading.gi_resolve threading.gi_resolve_serial)
+
 # The race lane again: all three of these drive the REAL Jahshaka binary, which
 # cannot start under GCC 15's libtsan at all (jah_tsan_blocked in
 # tests/CMakeLists.txt documents the upstream sanitizer bug). They are eligible
