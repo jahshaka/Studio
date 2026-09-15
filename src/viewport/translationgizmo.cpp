@@ -499,7 +499,8 @@ bool TranslationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 // CENTRE first (it always did: the smallest target, and it sits under
 // everything) — and since GIZMO-2 item 1 that matters more than it did: the
 // plane frames' inner corner is AT the origin, so the ball's pick sphere
-// (CENTER_CIRCLE_RADIUS * gizmoScale = 0.010, twice its drawn 0.005 radius)
+// (CENTER_CIRCLE_RADIUS * gizmoScale = 0.010; the ball is DRAWN at kCentreBallRadius
+// 0.12 of the handle scale = 0.006 of gizmoScale, so the pick sphere still exceeds it)
 // sits INSIDE all three squares and wins there, which is what keeps a click on
 // the white ball a click on the ball.
 //

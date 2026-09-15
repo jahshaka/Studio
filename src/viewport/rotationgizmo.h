@@ -99,7 +99,10 @@ public:
 	/// half-circles is any span between 180 and 360 degrees, which is why a
 	/// continuously varying span needs no per-frame geometry. Where they
 	/// overlap they draw the same opaque tube twice at the same depth-less
-	/// pixels, so the overlap is invisible.
+	/// pixels, so the overlap is invisible — WHILE EVERY HANDLE IS OPAQUE. Give
+	/// a ring an alpha (GizmoOverlay's blended path, GIZMO-2 item 4) and the
+	/// overlap (up to 180° of the span) blends twice while the two ~3° ends
+	/// come out lighter: a translucent ring needs one mesh per span, not two.
 	///
 	/// Unit scale, like ringFrame(); the screen ring has no arc (it faces the
 	/// camera, so it is a full circle) and answers ringFrame() for both copies.

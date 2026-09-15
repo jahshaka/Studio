@@ -158,7 +158,7 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 	const float radius = ringRadius * handleScale * gizmo->getGizmoScale();
 	if (!(radius > 0.0f)) return false;
 
-	// THE RING AS IT IS DRAWN. gizmomeshes::rotationRing builds the unit circle
+	// THE RING AS IT IS DRAWN. gizmomeshes::rotationRingHalf builds a half of the unit circle
 	// in the plane spanned by (U, V) of the axis frame, i.e. the plane whose
 	// normal is this handle's `plane`; drawItems renders it under the gizmo's
 	// transform scaled by handleScale * gizmoScale. Both are read from the same
