@@ -121,7 +121,7 @@ void CameraPostFxPropertyWidget::rebuild()
     // being destroyed can emit on the way out (the sky panel sets its guard
     // before clearing for the same reason).
     loading = true;
-    clearPanel(this->layout());
+    clearPanel();
     if (!camera) { loading = false; return; }
 
     // ---- §4, the exposure block -------------------------------------------

@@ -342,7 +342,7 @@ void CubeMapButton::mousePressEvent(QMouseEvent* e)
 void CubeMapButton::selectImage()
 {
 	auto widget = new AssetPickerWidget(ModelTypes::Texture);
-	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
+	connect(widget, &AssetPickerWidget::itemDoubleClicked, this, [=](QListWidgetItem * item) {
 		// The picked row's guid travels with its path, exactly as a drop's does:
 		// the slot used to keep whatever guid the last DROP left behind, so a
 		// pick after a drop reported the dropped asset.

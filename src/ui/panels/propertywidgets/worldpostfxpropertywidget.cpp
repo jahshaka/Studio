@@ -231,7 +231,7 @@ void WorldPostFxPropertyWidget::refreshRows()
 void WorldPostFxPropertyWidget::rebuildLooks()
 {
     if (!scene || !looksSection) return;
-    looksSection->clearPanel(looksSection->layout());
+    looksSection->clearPanel();
 
     lookstack::build(
         looksSection, iris::normalizeLookStack(scene->looks),

@@ -43,6 +43,10 @@ AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     ui->assetView->setIconSize(QSize(32, 32));
     ui->assetView->setSpacing(4);
 
+    // A modeless dialog nobody owns: it deletes itself when closed (it used to
+    // leak, one window per pick), and every connection INTO it is made with the
+    // caller as context, so a closed picker and a retired caller are both safe.
+    setAttribute(Qt::WA_DeleteOnClose);
     this->show();
 }
 

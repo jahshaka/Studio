@@ -524,6 +524,124 @@ set_tests_properties(ui.panel_undo PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
 jah_no_display(ui.panel_undo)
 
+# ui.panel_lifetime — A PANEL NEVER TOUCHES A ROW IT HAS RETIRED
+# (PANEL-LIFETIME-1). The blade retires rows with deleteLater() and the event
+# loop turns in places the panels never had in mind — between a threaded open's
+# install stages, between a script run's verbs, wherever a panel defers its own
+# rebuild — so a raw pointer to a retired row is a pointer whose validity
+# depends on what the application does next. The rows are held as RowPtr now
+# (src/ui/controls/bladerow.h) and read null the moment they are retired; this
+# suite is that invariant, driven through the two panels where the raw pointers
+# were real. It compiles the same panel slice ui.panel_undo does.
+add_executable(test_panel_lifetime
+    test_panel_lifetime.cpp
+    test_stubs.cpp
+    test_selection_stubs.cpp
+    # The row-undo spine (debt L6): every panel row's gesture and the command it
+    # becomes.
+    test_undo_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/rowundo.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/panelundo.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/scenepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldaapropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/camerapostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lightpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/decalpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/emitterpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/meshpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/physicspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/textinputwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/labelwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/filepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragvaluewidgets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/particlerampwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    # Headers whose Q_OBJECT classes have no .cpp of their own in this target:
+    # AUTOMOC only pairs a header with a source of the same name, so the two
+    # signal-only classes the panels connect to have to be named here.
+    ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/basepropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_panel_lifetime PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_panel_lifetime PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_panel_lifetime PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_panel_lifetime
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+jah_document_graph(test_panel_lifetime)
+add_test(NAME ui.panel_lifetime COMMAND test_panel_lifetime
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.panel_lifetime PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+jah_no_display(ui.panel_lifetime)
+
+
 
 
 # ui.properties_width — THE PROPERTIES PANEL FITS ITS DOCK (owner report

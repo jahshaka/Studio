@@ -28,3 +28,15 @@ add_test(NAME source.db_pointers_initialised
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.db_pointers_initialised PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.db_pointers_initialised)
+
+# source.panel_rows_guarded — PANEL-LIFETIME-1: a panel that retires rows holds
+# no raw pointer to one. The retirement is a deleteLater and the event loop
+# turns between the threaded open's install stages, between a script run's
+# verbs and wherever a panel defers a rebuild, so the handle (RowPtr,
+# src/ui/controls/bladerow.h) is what knows whether a row is still on the
+# panel. See the script's header for the use-after-free this closed.
+add_test(NAME source.panel_rows_guarded
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/panel_rows_guarded.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.panel_rows_guarded PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.panel_rows_guarded)

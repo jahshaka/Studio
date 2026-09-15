@@ -148,7 +148,7 @@ void MaterialPropertyWidget::clearShownRows()
     materialPropWidget = nullptr;
     detailPropWidget = nullptr;
     resetButton = nullptr;
-    clearPanel(this->layout());
+    clearPanel();
 }
 
 /// The base and detail halves of a material's rows, split by the document's own

@@ -116,10 +116,19 @@ public:
     void setHeaderMuted(bool muted);
     bool isHeaderMuted() const { return headerMuted; }
 
-    /// Retires every row in the content pane. `layout` is IGNORED and has
-    /// always been (the pane is the only thing this clears); it stays only
-    /// because every call site passes `this->layout()`.
-    void clearPanel(QLayout *layout);
+    /// Retires every row in the content pane: out of the layout, hidden, out
+    /// of the row registry, MARKED RETIRED (so every RowPtr to one reads null
+    /// — ui/controls/bladerow.h) and deleteLater()'d.
+    ///
+    /// A PANEL THAT CALLS THIS HOLDS ITS ROWS AS RowPtr, never as raw pointers:
+    /// the rows it is retiring may be destroyed at any later turn of the event
+    /// loop, and the handle is the only thing that can know (the gate is
+    /// source.panel_rows_guarded).
+    ///
+    /// Public because a panel clears a SUB-SECTION it owns as well as itself
+    /// (the post-chain's Looks section) — and because the invariant above does
+    /// not care who calls it.
+    void clearPanel();
     /// How many retired rows are still alive (see clearPanel's note on the
     /// generations). A diagnostic, and the thing ui.selection_cost asserts on.
     int retiredRowCount() const;
@@ -164,9 +173,10 @@ private:
     Ui::AccordianBladeWidget *ui;
     /// Rows retired by the last kRetiredGenerations top-level clearPanel()
     /// calls, newest first — see that function for why a ring and not one list.
-    /// QPointer because deleteLater() may have collected them first (an
-    /// interactive session turns the event loop; a script run does not, which
-    /// is the whole reason this exists).
+    /// QPointer because the event loop may have collected them first: it turns
+    /// between the threaded open's install stages, between a script run's
+    /// verbs, and wherever a panel defers a rebuild, so WHEN a retired row dies
+    /// is not this class's decision (PANEL-LIFETIME-1).
     QList<QPointer<QWidget>> mRetired[kRetiredGenerations];
     /// Re-entrancy depth. The generation shift happens once per TOP-LEVEL call;
     /// a clear entered from inside another one (the child-layout recursion, or

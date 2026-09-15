@@ -45,6 +45,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/controls/bladerow.h"
 #include "ui/panels/propertywidgets/panelundo.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -159,29 +160,29 @@ private:
     QString skyGuid;              ///< Asset binding: the library row being edited
     bool loading = false;
 
-    ComboBoxWidget *skySelector = nullptr;
+    RowPtr<ComboBoxWidget> skySelector;
 
-    ColorValueWidget *singleColor = nullptr;
+    RowPtr<ColorValueWidget> singleColor;
 
-    TexturePickerWidget *equiTexture = nullptr;
+    RowPtr<TexturePickerWidget> equiTexture;
 
-    ColorValueWidget *colorTop = nullptr;
-    ColorValueWidget *colorMid = nullptr;
-    ColorValueWidget *colorBot = nullptr;
-    HFloatSliderWidget *offset = nullptr;
+    RowPtr<ColorValueWidget> colorTop;
+    RowPtr<ColorValueWidget> colorMid;
+    RowPtr<ColorValueWidget> colorBot;
+    RowPtr<HFloatSliderWidget> offset;
 
     // The analytic sky's own dials (SKY-GPU): the ENGINE's parameters, not the
     // retired CPU bake's. "Sky Detail" went with the bake — there is nothing
     // to be detailed about a shader.
-    HFloatSliderWidget *skyDensity = nullptr;
-    HFloatSliderWidget *skyDiffusion = nullptr;
-    HFloatSliderWidget *skyHorizon = nullptr;
-    HFloatSliderWidget *skyPower = nullptr;
+    RowPtr<HFloatSliderWidget> skyDensity;
+    RowPtr<HFloatSliderWidget> skyDiffusion;
+    RowPtr<HFloatSliderWidget> skyHorizon;
+    RowPtr<HFloatSliderWidget> skyPower;
     /// The SUN's transmittance dial (the atmosphere's turbidity) — a sky-block
     /// row that changes no sky pixel: it colours the direct sunlight.
-    HFloatSliderWidget *sunHaze = nullptr;
-    ColorValueWidget   *skyColour = nullptr;
-    LabelWidget *sunReadout = nullptr;            // which light the sky's sun is (§3)
+    RowPtr<HFloatSliderWidget> sunHaze;
+    RowPtr<ColorValueWidget> skyColour;
+    RowPtr<LabelWidget> sunReadout;            // which light the sky's sun is (§3)
 
 	QJsonObject singleColorDefinition;
 	QJsonObject cubeMapDefinition;
@@ -189,7 +190,7 @@ private:
 	QJsonObject gradientDefinition;
 	QJsonObject realisticDefinition;
 
-	class CubeMapWidget *cubeMapWidget = nullptr;
+	RowPtr<class CubeMapWidget> cubeMapWidget;
 };
 
 #endif // SKYPROPERTYWIDGET_H
