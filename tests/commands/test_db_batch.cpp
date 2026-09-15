@@ -32,7 +32,8 @@
 //      import's rows ride the batch's commit.
 //   5. closeDatabase() never leaves a batch open (the rows would be rolled
 //      back inside the driver's teardown).
-//   6. Database::durableCommits() — the counter behind
+//   6. ResetMaterialCommand's redo and undo each cost ONE commit.
+//   7. Database::durableCommits() — the counter behind
 //      editor.undoState().dbCommits — agrees with SQLite's own commit hook.
 //
 // The COMMIT COUNT comes from sqlite3_commit_hook on the handle Qt's QSQLITE
@@ -50,15 +51,32 @@
 #include <QVariant>
 #include <cstdio>
 
+#include "commands/resetmaterialcommand.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 #include "../support/documentgraph.h"
+#include "services/projectassets.h"
 
 #ifdef JAH_HAVE_SQLITE3
 #include <sqlite3.h>
 #endif
+
+// LINK STUB (the tests/commands idiom). ResetMaterialCommand re-pins the
+// default's own textures through ProjectAssets, whose real implementation
+// drags the asset store, the material reader and the mesh-bake cache into a
+// suite whose subject is transaction shape. The suite passes an EMPTY
+// `newlyPinned` list, so the real body is never reached — only the symbol is.
+ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database *, Project *,
+                                                  ProjectAssets::AddKind)
+{
+    ProjectAssets::Result result;
+    result.guid = guid;
+    return result;
+}
 
 static int failures = 0;
 static int checks = 0;
@@ -119,6 +137,14 @@ int assetsNamed(const QString &prefix)
     QSqlQuery q;
     q.prepare("SELECT COUNT(*) FROM assets WHERE name LIKE ?");
     q.addBindValue(prefix + QStringLiteral("%"));
+    return (q.exec() && q.next()) ? q.value(0).toInt() : -1;
+}
+
+int edgeCount(const QString &depender)
+{
+    QSqlQuery q;
+    q.prepare("SELECT COUNT(*) FROM dependencies WHERE depender = ?");
+    q.addBindValue(depender);
     return (q.exec() && q.next()) ? q.value(0).toInt() : -1;
 }
 
@@ -261,7 +287,73 @@ int main(int argc, char **argv)
     }
 
     // -----------------------------------------------------------------------
-    // 5. closeDatabase() never leaves a batch open.
+    // 5. ResetMaterialCommand: one click of Reset, one commit each way.
+    // -----------------------------------------------------------------------
+    {
+        const QString nodeGuid = GUIDManager::generateGUID();
+        QStringList defaultTextures;
+        for (int i = 0; i < 6; ++i) {
+            const QString tex = GUIDManager::generateGUID();
+            db.createAssetEntry(tex, QStringLiteral("Reset tex %1").arg(i),
+                                static_cast<int>(ModelTypes::Texture), projectGuid, projectGuid);
+            defaultTextures.append(tex);
+        }
+        // What the node uses TODAY: six edges the reset has to drop.
+        QStringList oldTextures;
+        for (int i = 0; i < 6; ++i) {
+            const QString tex = GUIDManager::generateGUID();
+            db.createAssetEntry(tex, QStringLiteral("Old tex %1").arg(i),
+                                static_cast<int>(ModelTypes::Texture), projectGuid, projectGuid);
+            db.createDependency(static_cast<int>(ModelTypes::Object),
+                                static_cast<int>(ModelTypes::Texture), nodeGuid, tex, projectGuid);
+            oldTextures.append(tex);
+        }
+        CHECK(edgeCount(nodeGuid) == 6, "the node starts with six texture edges");
+
+        // THE SHAPE IT REPLACED, measured on the same disk: the identical
+        // twelve edge writes with no batch. Not an assertion (it is a
+        // measurement of this machine's disk), but it is what the one commit
+        // below is one commit INSTEAD of.
+        {
+            const QString scratch = GUIDManager::generateGUID();
+            const Measured loose12 = measure([&]{
+                for (const QString &tex : oldTextures)
+                    db.createDependency(static_cast<int>(ModelTypes::Object),
+                                        static_cast<int>(ModelTypes::Texture), scratch, tex,
+                                        projectGuid);
+                for (const QString &tex : oldTextures) db.deleteDependency(scratch, tex);
+            });
+            printf("      the same 12 edge writes, autocommit: %d commit(s), %.2f ms\n",
+                   loose12.commits, loose12.micros / 1000.0);
+        }
+
+        auto meshNode = iris::MeshNode::create();
+        meshNode->setGUID(nodeGuid);
+        meshNode->setMaterial(iris::PbrMaterial::create());
+
+        Project project;
+        project.setProjectGuid(projectGuid);
+
+        // `newlyPinned` empty on purpose: the pin half needs the asset store,
+        // and the subject here is the ROW WORK's transaction shape.
+        ResetMaterialCommand reset(&db, &project, meshNode, iris::PbrMaterial::create(),
+                                   defaultTextures, QStringList());
+
+        const Measured redo = measure([&]{ reset.redo(); });
+        printf("      reset redo (6 textures): %d commit(s), %.2f ms\n",
+               redo.commits, redo.micros / 1000.0);
+        if (counting) CHECK(redo.commits == 1, "a six-texture material Reset costs ONE commit");
+        CHECK(edgeCount(nodeGuid) == 6, "...and the node now uses the six default textures");
+
+        const Measured undo = measure([&]{ reset.undo(); });
+        printf("      reset undo (6 textures): %d commit(s), %.2f ms\n",
+               undo.commits, undo.micros / 1000.0);
+        if (counting) CHECK(undo.commits == 1, "undoing it costs ONE commit");
+        CHECK(edgeCount(nodeGuid) == 6, "...and the six original edges are back");
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. closeDatabase() never leaves a batch open.
     // -----------------------------------------------------------------------
     const QString survivor = GUIDManager::generateGUID();
     {

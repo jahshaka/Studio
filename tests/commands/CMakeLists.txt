@@ -123,15 +123,19 @@ jah_no_display(commands.undo_clear_cost)
 # The create-side half of CLOSE-1. An asset row written outside a transaction
 # is autocommitted, and an autocommit is a real transaction (journal, write,
 # fdatasync, unlink): 300 scripted primitives paid it 300+ times. The suite
-# pins the counted batch scope (Database::beginBatch/DbBatch) and its stand-down
+# pins the counted batch scope (Database::beginBatch/DbBatch), its stand-down
 # for a real transaction owner — the property that keeps the import rollback
-# honest.
+# honest — and ResetMaterialCommand's one commit per Reset.
 #
 # Same shape as its sibling above: the REAL database.cpp, and SQLite's own
 # commit hook as ground truth.
 find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia)
 add_executable(test_db_batch
     test_db_batch.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/resetmaterialcommand.cpp
+    # ProjectMembership is a QObject with a signal (AUTOMOC needs the header).
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.h
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     # the real library, and database.cpp's link closure (the sibling's list)
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
