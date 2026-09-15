@@ -71,6 +71,17 @@ step("cleared");
 // logs "has more than 256 distinct pass property combinations"; after it (a
 // RECYCLED name — irisgl EnginePrivate.h recycledName) it does not, and the
 // two assertions the driver makes about this run's output are what say so.
+//
+// THE MEASUREMENT IS A DELTA (lane SMALL-ITEMS D, ledger §417). The regression
+// is "each sky capture mints a permanent pass-cache entry", which is a RATE,
+// and the absolute count at the end of this script is that rate plus a
+// BASELINE nobody controls: the World-row churn above, the player round trips,
+// and the disk cache runs 1-4 left behind. An absolute fence therefore fails
+// the day somebody legitimately adds a pass property — a change with no
+// regression in it — while the thing it guards is the step across this loop.
+// So the state is reported TWICE, either side of the sky loop, and the driver
+// asserts the difference.
+console.log("SHADERCACHE-PRESKY " + JSON.stringify(app.shaderCache()));
 var t0 = Date.now();
 for (var sky = 0; sky < 300; ++sky) {
     world.sky("color", { color: { r: (sky * 7) % 255, g: (sky * 13) % 255,
@@ -79,6 +90,10 @@ for (var sky = 0; sky < 300; ++sky) {
     if (sky % 100 === 99) step("sky " + sky);
 }
 console.log("CHURN sky captures 300 in " + (Date.now() - t0) + " ms");
+// The second half of the delta is read BEFORE the save: a save compiles
+// nothing, but reading it here keeps the two samples separated by the sky loop
+// and nothing else.
+console.log("SHADERCACHE-POSTSKY " + JSON.stringify(app.shaderCache()));
 step("sky churn");
 
 console.log("CHURN steps " + steps);
