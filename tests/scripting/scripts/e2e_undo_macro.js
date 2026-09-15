@@ -123,4 +123,58 @@ assert(node.remove(owedId), "the primitive is deleted");
 assert(editor.undoState().pendingAssetDeletes === 0,
        "a delete that is still UNDOABLE queues nothing (its command is alive)");
 
+// ---- CLOSE-2: ONE GESTURE, ONE COMMIT — AND THE PROJECT BOUNDARY -----------
+//
+// A script run is one undo macro; it is now also ONE database transaction, so
+// the library rows a run writes cost one commit instead of one fdatasync each
+// (the owner's scripted-sphere runs). `dbBatchDepth` is that scope and
+// `dbCommits` is the process's durable write commits, so the cost of an action
+// is assertable from a script instead of timed.
+var batchState = editor.undoState();
+assert(batchState.dbBatchDepth === 1, "a script run holds ONE database batch");
+
+var commitsBefore = batchState.dbCommits;
+var many = scene.addPrimitive("cube", { count: 20 });
+assert(many.length === 20, "twenty primitives added in one call");
+assert(editor.undoState().dbCommits === commitsBefore,
+       "...and their twenty library rows cost ZERO commits (they ride the run's batch)");
+
+// THE PROJECT BOUNDARY. UndoService::clear() is a no-op while the run's macro
+// is open, so a scripted project.close() used to leave the WHOLE undo stack
+// alive across the close — commands holding nodes and asset guids of a
+// document that no longer existed, reachable by Ctrl+Z the moment the run
+// ended. The verb ends the run's entry first: the edits so far become one undo
+// step of the project being closed, and they die with it.
+assert(editor.undoState().pushes > 0, "the run has recorded steps before the close");
+// A deleted primitive whose command is still ALIVE on the stack: its library
+// row is finalised by the command's DESTRUCTOR, so the row surviving the close
+// is the visible proof that the stack survived it too.
+var doomed = scene.addPrimitive("cube");
+assert(node.remove(doomed), "a primitive deleted, its command alive on the stack");
+assert(assets.metadata(doomed).guid === doomed,
+       "...and its library row is still there while the command lives");
+assert(project.close(), "project closed from inside the run");
+var afterClose = editor.undoState();
+assert(afterClose.count === 0, "the undo stack is EMPTY after a scripted close");
+assert(afterClose.macroOpen === true,
+       "...and a fresh run entry is open for the rest of the script");
+assert(afterClose.dbBatchDepth === 1, "...with a fresh database batch");
+assert(afterClose.pendingAssetDeletes === 0,
+       "...and the library work the dead commands owed was flushed, not stranded");
+editor.undo();   // nothing to reach, and nothing to crash on
+assert(editor.undoState().count === 0, "undo after the close finds nothing and survives");
+
+// The run continues in a NEW project, recording into the fresh entry.
+var secondGuid = project.create("Undo Macro Test B " + Date.now());
+assert(secondGuid.length > 10, "a second project created after the close");
+var afterOpen = editor.undoState();
+assert(afterOpen.macroOpen === true, "the run's entry is open again in the new project");
+assert(afterOpen.dbBatchDepth === 1, "...and so is the database batch");
+var stale = false;
+try { assets.metadata(doomed); } catch (e) { stale = true; }
+assert(stale, "the closed project's deleted row went with it — no command outlived the close");
+var reborn = scene.addPrimitive("cube");
+assert(typeof reborn === "string" && reborn.length > 10,
+       "and the run can still edit: a primitive added in the second project");
+
 console.log("e2e_undo_macro: ALL OK");

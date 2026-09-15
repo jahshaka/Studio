@@ -184,8 +184,12 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     // must not cost the user their next Ctrl+Z.
     const bool useMacro = wrapUndoMacro && mHost.beginUndoMacro && mHost.endUndoMacro;
     if (useMacro) {
-        mHost.beginUndoMacro(QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName()));
-        if (mHost.macroOpenChanged) mHost.macroOpenChanged(true);
+        // Through the host's own bracket, because a verb can close the entry
+        // and open the next one mid-run at a project boundary (ScriptHost::
+        // endRunUndoMacro) and both ends have to agree on the name and on the
+        // order of the two hooks.
+        mHost.runMacroText = QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName());
+        mHost.beginRunUndoMacro();
     }
 
     QStringList stackTrace;
@@ -202,10 +206,7 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     }
     mJs.setInterrupted(false);
 
-    if (useMacro) {
-        if (mHost.macroOpenChanged) mHost.macroOpenChanged(false);
-        mHost.endUndoMacro();
-    }
+    if (useMacro) mHost.endRunUndoMacro();
 
     if (value.isError() || !stackTrace.isEmpty()) {
         result.ok = false;
