@@ -18,36 +18,55 @@
 //
 // THE RULE NOW is absolute and is about the picture: the disc is drawn while
 // its own radiance — colour, intensity, the disc-size normalisation and the
-// air, all of it — can still move an 8-bit output code, and the shadow is cast
-// while the sun's own radiance can (with a stated specular headroom, because a
-// smooth surface concentrates a beam). scenemirror.cpp carries the derivation
-// of the constant; the crossings it produces, measured:
+// air, all of it — can still move an 8-bit output code AFTER THE VIEW'S
+// EXPOSURE, and the shadow is cast while the sun's own radiance can, with the
+// pipeline's own specular clamp as the headroom (a smooth surface concentrates
+// a beam). scenemirror.cpp carries the derivation.
 //
-//     haze        disc off below     shadow off below
-//      1.0          -0.80 deg          -0.83 deg
-//      2.5          -0.21              -0.74
-//      4.0          +0.92              -0.12
-//      6.0          +2.13              +0.88
-//     10.0          +4.20              +2.49
+// THE CROSSINGS IT PRODUCES, and note they MOVE WITH THE GRADE, which is the
+// whole point of carrying the exposure: one 8-bit code of output is a smaller
+// slice of scene radiance the further the chain opens up.
 //
-// WHERE THE TWO HALVES ARE TESTED. This suite is the DISC, in pixels. The
-// SHADOW half of the same rule is in `scripting.e2e.sun_light`, because an
-// OFFSCREEN view renders no shadow maps at all — measured here: at a sun 60
-// degrees up, with both meshes casting, the engine reports 0 casters and 0
-// shadow passes for an offscreen view, so there is nothing for this suite to
-// read. The e2e drives the editor's own viewport, which has a shadow node, and
-// reads the passes the rule decides the cost of.
+//     haze |     old rule | disc off below | shadow off below
+//          |              |  gain 1 / 1.70 / 30.9
+//      1.0 |   -0.66 deg  | -0.79 / -0.80 / -0.83 | -0.83 / -0.84 / -0.84
+//      2.5 |   +0.74      | -0.13 / -0.27 / -0.64 | -0.82 / -0.82 / -0.83
+//      4.0 |   +2.08      | +1.00 / +0.85 / +0.19 | -0.58 / -0.62 / -0.76
+//      6.0 |   +3.61      | +2.24 / +2.05 / +1.24 | +0.26 / +0.19 / -0.16
+//     10.0 |   +6.27      | +4.35 / +4.08 / +2.97 | +1.67 / +1.58 / +1.15
 //
-// WHAT IS ASSERTED, as pixels:
+// (gain 1 = HDR off, which is what THIS suite's offscreen view runs at; 1.70 =
+// the default HDR grade; 30.9 = exposure +2 with exposureMax +4, a perfectly
+// ordinary bright grade. At that last one a disc at haze 6 and +2.13 degrees —
+// where a rule frozen at the default gain would have dropped it — is still
+// worth 23 output codes, which is the pop this lane exists to remove.)
+//
+// BOTH HALVES OF THE RULE ARE HERE. The disc is measured in pixels; the shadow
+// is measured as the renderer's own pass count, because at the elevations this
+// rule is about the sun's light is a thousandth of an output code — there is no
+// shadow left to photograph, and what the rule decides is whether three
+// full-view-frustum passes are rendered for it. (`scripting.e2e.sun_light`
+// covers the shadow half a second time, in the editor's own viewport.)
+//
+// A NOTE FOR THE NEXT READER, because this suite's first cut got it wrong and
+// wrote the mistake down as an engine fact: an offscreen view renders shadows
+// perfectly well. `OgreView::mShadows` simply defaults to FALSE and the HOST
+// turns it on (enginesceneviewport.cpp:620) — a suite that forgets
+// `view->setShadows(true)` measures its own setup, not the engine.
+//
+// WHAT IS ASSERTED:
 //   A. the sweep from +8 to -2 degrees at haze 2.5, 6 and 10: the disc is
 //      drawn above the derived crossing and gone at -2 for every haze;
 //   B. it is MONOTONE — once the disc is gone it never comes back as the sun
 //      goes down (the old rule was monotone too; a threshold on a product is
 //      easy to get non-monotone, so it is pinned);
 //   C. THE REGRESSION ITSELF, three cases the old rule got wrong and this one
-//      gets right: haze 2.5 at +1, haze 6 at +4 and haze 10 at +6 all draw a
-//      disc, and all three were dark before this lane;
-//   D. the disc's cut is about RADIANCE and not about the air: the same sun,
+//      gets right — a bright sun at the elevation where the tint is 9e-4, just
+//      under the old rule's 1e-3 cut, at each of the three hazes;
+//   D. THE SHADOW: cast at +4 degrees at haze 2.5 and 6, gone two degrees below
+//      the horizon at every haze, and — the regression — still cast at haze 6
+//      two degrees up, where the old relative rule had stopped it at +3.6;
+//   E. the disc's cut is about RADIANCE and not about the air: the same sun,
 //      at an elevation where it draws, stops drawing when its intensity is
 //      turned down far enough — which the old rule could not express at all.
 //
@@ -107,6 +126,10 @@ int main(int argc, char **argv)
     Scene *target = engine->createScene("sunnight");
     if (!view || !target) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(target);
+    // THE HOST'S CALL, which a suite has to make for itself (see the header):
+    // without it this view has no shadow node and the shadow half below would
+    // be measuring the setup rather than the rule.
+    view->setShadows(true);
 
     // ---- the document ----------------------------------------------------
     auto doc = iris::Scene::create();
@@ -119,7 +142,14 @@ int main(int argc, char **argv)
     // for a disc that is plainly drawn. `scripting.e2e.sun_light` turns the sky
     // down for the same reason. It changes no rule: the disc's radiance, which
     // is what the rule tests, does not depend on the sky's power.
-    doc->skyRealistic.power = 0.02f;
+    {
+        // THROUGH THE ONE WRITER (SKY-WRITE-1), like every other write of these
+        // dials — a suite that bypasses the law it sits beside is the next
+        // reader's counter-example.
+        iris::SkyRealistic r = doc->skyRealistic;
+        r.power = 0.02f;
+        doc->setSkyRealistic(r);
+    }
 
     // A floor and a box, so the sun has something to cast a shadow with. (The
     // shadow is read from the renderer's accounting, not from these pixels —
@@ -220,7 +250,7 @@ int main(int argc, char **argv)
     const float sweep[] = { 8.0f, 6.0f, 4.0f, 2.0f, 1.0f, 0.0f, -1.0f, -2.0f };
 
     for (const Expect &e : expects) {
-        doc->skyRealistic.sunHaze = e.haze;
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = e.haze; doc->setSkyRealistic(r); }
         std::printf("    --- haze %.1f ---\n", double(e.haze));
         std::vector<int> counts;
         for (float elev : sweep) counts.push_back(discPixels(elev));
@@ -255,9 +285,59 @@ int main(int argc, char **argv)
               "alone cannot do", double(e.haze), dimAt);
     }
 
-    // ---- D: it is RADIANCE, not the air -----------------------------------
+    // ---- D: the shadow ----------------------------------------------------
+    //
+    // The renderer's own answer, not a pixel count: the engine's shadow-pass
+    // counters are OPT-IN and asking is what arms them, so every reading here
+    // is arm -> render -> read. (A first read reports countersMeasured = false
+    // and null counters; this helper never measures off one.)
+    auto sunCastPasses = [&](float elevationDeg) {
+        sun->setLocalRot(iris::Quat::fromEulerAngles(pitchFor(elevationDeg), 0.0f, 0.0f));
+        Image img;
+        engine->shadowStatus();          // arm
+        render(img);                     // ...and render a frame under the listeners
+        const ShadowStatus st = engine->shadowStatus();
+        if (!st.countersMeasured) { std::printf("FAIL: counters not armed\n"); ++failures; }
+        std::printf("      elev %+6.2f: %u shadow passes\n",
+                    double(elevationDeg), st.shadowPassesLastFrame);
+        return st.shadowPassesLastFrame;
+    };
     {
-        doc->skyRealistic.sunHaze = 2.5f;
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 2.5f; doc->setSkyRealistic(r); }
+        const unsigned up25 = sunCastPasses(4.0f);
+        const unsigned down25 = sunCastPasses(-2.0f);
+        CHECK(up25 > 0, "D: haze 2.5 — the sun casts at +4 degrees (%u passes)", up25);
+        CHECK(down25 < up25,
+              "D: haze 2.5 — and casts less two degrees below the horizon (%u)", down25);
+
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 6.0f; doc->setSkyRealistic(r); }
+        const unsigned up6 = sunCastPasses(4.0f);
+        // THE REGRESSION. At haze 6 and two degrees up the air has taken the
+        // transmittance to 3.2e-5 — a thirtieth of the old rule's cut, so the
+        // old rule had stopped the shadow — while the sun's radiance is still
+        // four thousand times the step at which it stops being able to darken a
+        // pixel (4,212x at a gain of one, 7,166x at the default HDR grade).
+        const unsigned regression6 = sunCastPasses(2.0f);
+        const unsigned down6 = sunCastPasses(-2.0f);
+        CHECK(up6 > 0, "D: haze 6 — the sun casts at +4 degrees (%u passes)", up6);
+        CHECK(regression6 > 0,
+              "D: haze 6 — THE REGRESSION: it still casts two degrees up (%u passes), where "
+              "the old relative rule had stopped its shadow at +3.6 degrees", regression6);
+        CHECK(down6 < regression6,
+              "D: haze 6 — and casts less two degrees below the horizon (%u)", down6);
+
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 10.0f; doc->setSkyRealistic(r); }
+        const unsigned up10 = sunCastPasses(8.0f);
+        const unsigned down10 = sunCastPasses(-2.0f);
+        CHECK(down10 < up10,
+              "D: haze 10 — nothing is cast two degrees below the horizon (%u against %u up)",
+              down10, up10);
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 2.5f; doc->setSkyRealistic(r); }
+    }
+
+    // ---- E: it is RADIANCE, not the air -----------------------------------
+    {
+        { iris::SkyRealistic r = doc->skyRealistic; r.sunHaze = 2.5f; doc->setSkyRealistic(r); }
         const int bright = discPixels(8.0f);
         CHECK(bright > 0, "a full-intensity sun at +8 degrees draws its disc (%d pixels)", bright);
         sun->intensity = 1e-6f;

@@ -511,7 +511,18 @@ void SkyPropertyWidget::updateAssetAndKeys()
 	for (const QString &key : source->keys()) skyProperties.insert(key, source->value(key));
 
 	if (binding == Binding::Scene) {
-		if (scene) scene->skyData.insert(skyDataKey(currentSky), skyProperties);
+		if (scene) {
+			// THE REALISTIC BLOCK GOES THROUGH THE ONE WRITER (SKY-WRITE-1).
+			// Every other sky type has a single representation and this direct
+			// insert is the whole of it; the realistic sky has two, and a raw
+			// insert here would put the panel's copy into the document without
+			// the clamp and without the typed fields the renderer reads — the
+			// exact bypass iris::Scene::skyRealisticInSync() exists to catch.
+			if (currentSky == iris::SkyType::REALISTIC)
+				scene->setSkyRealistic(iris::Scene::skyRealisticFromJson(skyProperties));
+			else
+				scene->skyData.insert(skyDataKey(currentSky), skyProperties);
+		}
 		return;
 	}
 

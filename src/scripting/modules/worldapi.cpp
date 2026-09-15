@@ -284,13 +284,13 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
-        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, reflectAtlasBytes, probeAtlasBytes, mapped:[{slot, node, cached, dirty, pssm, passes}], unmapped:[guid], shadowPassesLastFrame, cachedMapRendersLastFrame, reflectPassesLastFrame, probePassesLastFrame, reflectLampPassesLastFrame, probeLampPassesLastFrame, cachedInstances, uncachedInstances, viewCached, mapsDirtiedLastFrame, atlasRebuilds, casterWalkItems, shaderLightMismatches, sun, secondaryDirectionals}",
+        { "shadowStatus", "world.shadowStatus() -> {live, resolution, maps, pssmSplits, focusedMaps, casters, budget, requestedBudget, atlasWidth, atlasHeight, atlasBytes, reflectAtlasBytes, probeAtlasBytes, mapped:[{slot, node, cached, dirty, pssm, passes}], unmapped:[guid], countersMeasured, shadowPassesLastFrame, cachedMapRendersLastFrame, reflectPassesLastFrame, probePassesLastFrame, reflectLampPassesLastFrame, probeLampPassesLastFrame, cachedInstances, uncachedInstances, viewCached, mapsDirtiedLastFrame, atlasRebuilds, casterWalkItems, shaderLightMismatches, sun, secondaryDirectionals}",
           "What the SHADOW ATLAS is actually doing, as opposed to what was asked for — the same \"the renderer beats the request\" reading as world.giStatus() and world.antiAliasing(). "
           "It exists because the renderer keeps a fixed number of point/spot shadow maps and fills them with the casters closest to the camera, DROPPING the rest without a word: 'casters' is how many shadow-casting point and spot lights the scene has, 'focusedMaps' how many of them can have a map at once, and 'unmapped' NAMES the lights that got none — the lights whose shadows are silently missing. Empty is the healthy state. "
           "'budget' is the ceiling actually in force (world.shadows' mapBudget, clamped by what the resolution can afford: 16 maps at 1024, 8 at 2048, 4 at 4096, 2 at 8192), 'requestedBudget' what was asked for before that clamp. 'maps' counts TEXTURE rectangles (pssmSplits + focusedMaps) while 'mapped' has one entry per LIGHT SLOT — three of the rectangles belong to the one directional light, which is why slot 0 is flagged 'pssm'. Each entry names the light's guid, whether its map is 'cached' (rendered once and kept), whether it is 'dirty' (scheduled to re-render) and the 'passes' the last frame spent on it (0 for a cached lamp at rest; 8 when a point lamp re-renders). "
           "EVERY point and spot shadow map is CACHED: the renderer re-renders a lamp's map only when that lamp moves or changes reach, range or cone, or when something that casts shadows moves, appears, disappears or changes shape inside that lamp's reach — per lamp, in the frame it happens; the camera, gizmos and helpers never re-render one, and neither does a colour or intensity edit. The sun's (directional) splits follow the camera and render every frame. The one exception is a view with more lamps than maps: it stays on the closest-to-camera choice and re-renders every frame ('viewCached' false, 'uncachedInstances' counts it). "
           "'atlasWidth'/'atlasHeight' are the viewport's depth atlas, the texture all of this is packed into; 'atlasBytes' is that atlas PLUS every planar mirror slot's own half-resolution atlas ('reflectAtlasBytes', the same number of lamp maps as the viewport's), and 'probeAtlasBytes' is the reflection probes' quarter-resolution atlases (one per shadowed probe, not in atlasBytes). The point-light cube scratch (one per atlas) is not counted anywhere. "
-          "The cost readings, for the last rendered frame: 'shadowPassesLastFrame' = the shadow-node passes of the viewport, 'cachedMapRendersLastFrame' = how many of those re-rendered a cached lamp map (0 at rest — the whole point); 'reflectPassesLastFrame'/'reflectLampPassesLastFrame' the same for the planar mirrors' shadow maps and 'probePassesLastFrame'/'probeLampPassesLastFrame' for the reflection probes' (a probe capture renders a dirty lamp map on its first face and reuses it on the other five); 'cachedInstances' = shadow-map sets (the viewport, each mirror, each probe) whose lamps are cached, 'mapsDirtiedLastFrame' = lamp maps marked to re-render. ASKING TURNS THE COUNTERS ON (a per-pass listener is not free) and they switch themselves off again about 120 frames after the last call, so the FIRST call reports 0 and every call after a rendered frame reports the truth, exactly like app.stats' metricsRecording. "
+          "The cost readings, for the last rendered frame: 'shadowPassesLastFrame' = the shadow-node passes of the viewport, 'cachedMapRendersLastFrame' = how many of those re-rendered a cached lamp map (0 at rest — the whole point); 'reflectPassesLastFrame'/'reflectLampPassesLastFrame' the same for the planar mirrors' shadow maps and 'probePassesLastFrame'/'probeLampPassesLastFrame' for the reflection probes' (a probe capture renders a dirty lamp map on its first face and reuses it on the other five); 'cachedInstances' = shadow-map sets (the viewport, each mirror, each probe) whose lamps are cached, 'mapsDirtiedLastFrame' = lamp maps marked to re-render. THE PER-FRAME COUNTERS ARE OPT-IN AND THE OPT-IN EXPIRES — read this before you measure anything with them. A per-pass listener is not free, so the engine attaches one only while somebody is reading: ASKING is what arms it, 120 rendered frames without a read detach it again, and the frame before your first ask was therefore never instrumented. In that state every per-frame counter here ('shadowPassesLastFrame', 'cachedMapRendersLastFrame', the four reflect/probe ones and 'mapsDirtiedLastFrame') is reported as null, meaning NOT MEASURED — never 0, because 0 is a real reading ('this frame rendered no shadow passes') and the two used to be indistinguishable. 'countersMeasured' says which state you are in. THE MEASUREMENT RECIPE, therefore: call world.shadowStatus() once to arm, render at least one frame (editor.frame), then call it again and read the numbers. Counting frames is the whole of it — do not settle on wall-clock time, and do not measure off the first call. ('shaderLightMismatches' and 'atlasRebuilds' are cumulative session counters, not per-frame readings, and are true whether or not anybody is polling.) "
           "'atlasRebuilds' is the exception and the HITCH counter: how many times this process has rebuilt the shadow atlas, cumulative and always true. A rebuild swaps the shadow-node definitions, so every workspace that names one — every viewport, every planar mirror slot, every reflection probe, whose GI arm is then rebuilt from scratch — is dropped and recreated. A world that opens with casting lamps costs ONE; it should not move again while that world is open. "
           "'casterWalkItems' is cumulative too, and it is the STILL-FRAME counter: how many items the lamp-map cache's caster walk has looked at, ever, over every live scene. That walk is what notices a caster moving, posing, changing shape or ceasing to cast, and it costs O(items) — so it runs only when something it reads could have changed (a transform write, or one of the pushed events that change a caster without moving it). On a scene nobody is touching this number must not move at all between frames; a count that climbs at rest is the defect, not the reading. "
           "'shaderLightMismatches' is the cache's own SELF-CHECK, cumulative for the session: the number of "
@@ -1219,17 +1219,19 @@ QVariantMap WorldApi::shadowStatus()
         out[QStringLiteral("probeAtlasBytes")] = 0;
         out[QStringLiteral("mapped")] = QVariantList();
         out[QStringLiteral("unmapped")] = QVariantList();
-        out[QStringLiteral("shadowPassesLastFrame")] = 0;
-        out[QStringLiteral("cachedMapRendersLastFrame")] = 0;
+        // No engine to ask, so nothing was measured either — the same `null`
+        // the live branch reports for an un-instrumented frame, for the same
+        // reason: 0 would be a reading nobody took.
+        out[QStringLiteral("countersMeasured")] = false;
+        for (const char *k : { "shadowPassesLastFrame", "cachedMapRendersLastFrame",
+                               "reflectPassesLastFrame", "probePassesLastFrame",
+                               "reflectLampPassesLastFrame", "probeLampPassesLastFrame" })
+            out[QLatin1String(k)] = QVariant::fromValue(nullptr);
         out[QStringLiteral("shaderLightMismatches")] = 0;
-        out[QStringLiteral("reflectPassesLastFrame")] = 0;
-        out[QStringLiteral("probePassesLastFrame")] = 0;
-        out[QStringLiteral("reflectLampPassesLastFrame")] = 0;
-        out[QStringLiteral("probeLampPassesLastFrame")] = 0;
         out[QStringLiteral("cachedInstances")] = 0;
         out[QStringLiteral("uncachedInstances")] = 0;
         out[QStringLiteral("viewCached")] = false;
-        out[QStringLiteral("mapsDirtiedLastFrame")] = 0;
+        out[QStringLiteral("mapsDirtiedLastFrame")] = QVariant::fromValue(nullptr);
         // CUMULATIVE and honest even when the rest is not live: the counters are
         // the engine's own, not this frame's reading.
         out[QStringLiteral("atlasRebuilds")] = int(st.atlasRebuilds);
@@ -1263,17 +1265,41 @@ QVariantMap WorldApi::shadowStatus()
     QVariantList unmapped;
     for (const QString &g : st.unmapped) unmapped.append(g);
     out[QStringLiteral("unmapped")] = unmapped;
-    out[QStringLiteral("shadowPassesLastFrame")] = st.shadowPassesLastFrame;
-    out[QStringLiteral("cachedMapRendersLastFrame")] = st.cachedMapRendersLastFrame;
+    // THE PER-FRAME COUNTERS ARE null WHEN NOBODY WAS COUNTING (SKY-SMALL).
+    //
+    // The engine's pass listeners are opt-in — a callback per compositor pass
+    // per frame is not free — and ASKING is what arms them, so the frame before
+    // the first ask was never instrumented. Reporting 0 for that frame gave the
+    // counters two indistinguishable zeroes, and a suite duly read "this sun
+    // stopped casting" off a sun 30 degrees up (the only reason it had ever
+    // worked was that the World panel's shadow rows poll the same status on
+    // every rebind, so an unrelated UI refresh kept the arming alive). `null`
+    // is the honest answer for "not measured": a reader gets it once, renders a
+    // frame, and asks again.
+    //
+    // `shaderLightMismatches` is NOT in this set — it is a cumulative session
+    // counter, not a per-frame reading, and it is true whether or not anybody
+    // is polling.
+    // A NULL, NOT AN EMPTY QVariant: an empty one reaches a script as
+    // `undefined`, and "this key does not exist" is a third meaning nobody
+    // wants here. QVariant::fromValue(nullptr) carries std::nullptr_t, which
+    // QJSEngine converts to a real JavaScript null.
+    const auto counter = [&out, &st](const char *key, unsigned value) {
+        if (st.countersMeasured) out[QLatin1String(key)] = value;
+        else                     out[QLatin1String(key)] = QVariant::fromValue(nullptr);
+    };
+    out[QStringLiteral("countersMeasured")] = st.countersMeasured;
+    counter("shadowPassesLastFrame", st.shadowPassesLastFrame);
+    counter("cachedMapRendersLastFrame", st.cachedMapRendersLastFrame);
     out[QStringLiteral("shaderLightMismatches")] = st.shaderLightMismatches;
-    out[QStringLiteral("reflectPassesLastFrame")] = st.reflectPassesLastFrame;
-    out[QStringLiteral("probePassesLastFrame")] = st.probePassesLastFrame;
-    out[QStringLiteral("reflectLampPassesLastFrame")] = st.reflectLampPassesLastFrame;
-    out[QStringLiteral("probeLampPassesLastFrame")] = st.probeLampPassesLastFrame;
+    counter("reflectPassesLastFrame", st.reflectPassesLastFrame);
+    counter("probePassesLastFrame", st.probePassesLastFrame);
+    counter("reflectLampPassesLastFrame", st.reflectLampPassesLastFrame);
+    counter("probeLampPassesLastFrame", st.probeLampPassesLastFrame);
     out[QStringLiteral("cachedInstances")] = st.cachedInstances;
     out[QStringLiteral("uncachedInstances")] = st.uncachedInstances;
     out[QStringLiteral("viewCached")] = st.viewCached;
-    out[QStringLiteral("mapsDirtiedLastFrame")] = st.mapsDirtiedLastFrame;
+    counter("mapsDirtiedLastFrame", st.mapsDirtiedLastFrame);
     out[QStringLiteral("atlasRebuilds")] = int(st.atlasRebuilds);
     out[QStringLiteral("casterWalkItems")] = double(st.casterWalkItems);
     return out;

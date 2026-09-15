@@ -422,7 +422,9 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
 // HOW THE COUNTERS ARE READ, and why it matters (SKY-WRITE-1, the diagnosis).
 // `world.shadowStatus` ARMS the per-pass listeners when it is asked and the
 // arming EXPIRES 120 rendered frames after the last read — so the FIRST read
-// after a quiet spell reports the previous, un-instrumented frame, which is 0.
+// after a quiet spell is of a frame nobody instrumented. It reports that as
+// `null` now, with `countersMeasured` false, instead of the 0 that made the two
+// states indistinguishable and sent this lane looking for a lost document write.
 // This block used to transform, render three frames and read, and it only ever
 // worked because something ELSE had polled recently: the World-panel shadow
 // rows call the same status on every rebind, and a scene edit rebinds them. A
@@ -451,14 +453,22 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
     // over-careful, not wrong; if it is removed, this block silently rots.
     node.transform(nsun, { rotation: { x: -60, y: 165, z: 0 } });
     editor.frame(150, 1 / 60);
-    var coldRead = world.shadowStatus().shadowPassesLastFrame;
+    var cold = world.shadowStatus();
     editor.frame(1, 1 / 60);
-    var warmRead = world.shadowStatus().shadowPassesLastFrame;
-    console.log("counter arming: cold read " + coldRead + ", warm read " + warmRead);
-    assert(coldRead === 0, "world.shadowStatus' first read after 150 unread frames reports 0 " +
-                           "passes — asking is what arms the counters (" + coldRead + ")");
-    assert(warmRead > 0, "...and the read after one rendered frame reports the truth (" +
-                         warmRead + ")");
+    var warm = world.shadowStatus();
+    console.log("counter arming: cold " + JSON.stringify(cold.shadowPassesLastFrame) +
+                " (measured " + cold.countersMeasured + "), warm " +
+                warm.shadowPassesLastFrame + " (measured " + warm.countersMeasured + ")");
+    assert(cold.countersMeasured === false,
+           "after 150 frames with nobody reading, world.shadowStatus reports countersMeasured " +
+           "false — the per-pass listeners came off the render path");
+    assert(cold.shadowPassesLastFrame === null,
+           "...and the pass counters read null, NOT 0: the frame was never instrumented, and a " +
+           "0 there is a real reading ('this frame cast nothing') that this state is not (" +
+           cold.shadowPassesLastFrame + ")");
+    assert(warm.countersMeasured === true && warm.shadowPassesLastFrame > 0,
+           "...while the read after ONE rendered frame is a measurement, and reports the truth (" +
+           warm.shadowPassesLastFrame + ")");
 
     var dayPasses = passesAt(-60);              // well above the horizon
     var nightPasses = passesAt(-95);            // five degrees BELOW it
@@ -471,8 +481,9 @@ assert(node.setProperty(sun, "forwardShadingPriority", 0) === true, "back to the
     // THE REGRESSION, at a hazy dial. At Sun Haze 6 and two degrees of
     // elevation the atmosphere's transmittance is 3.2e-5 — a thirtieth of the
     // old rule's cut, so the old rule had taken the shadow away — while the
-    // sun's own radiance is still ten thousand times the step at which it stops
-    // being able to darken a pixel. It casts.
+    // sun's own radiance is still four thousand times the step at which it
+    // stops being able to darken a pixel (4,212x at a gain of one, 7,166x at
+    // the default HDR grade). It casts.
     world.sky("realistic", { power: 0.02, sunHaze: 6 });
     var hazyUp = passesAt(-88);                 // +2 degrees
     var hazyDown = passesAt(-92);               // -2 degrees: the Earth is in the way

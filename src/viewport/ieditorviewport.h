@@ -664,6 +664,12 @@ public:
         qint64 probeAtlasBytes = 0;
         QVector<ShadowMapEntry> mapped;
         QStringList unmapped;    ///< guids of casters with no map — the silent failures
+        /// Whether the *PassesLastFrame counters below are a MEASUREMENT at
+        /// all. The engine's pass listeners are opt-in and the opt-in expires
+        /// 120 rendered frames after the last read, so a plain 0 has two
+        /// meanings; false here is "nobody was counting" (ShadowStatus::
+        /// countersMeasured). world.shadowStatus reports them as null then.
+        bool countersMeasured = false;
         int shadowPassesLastFrame = 0;
         int cachedMapRendersLastFrame = 0;
         int shaderLightMismatches = 0;   ///< the cache's self-check; 0 is the only healthy value
