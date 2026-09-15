@@ -463,6 +463,16 @@ int main()
         CHECK(st.probeCount > 0 && st.pccBound,
               "4c: a grid exists — so the sky cubemap is OFF every datablock and the\n"
               "          only sky left is ogre-patch 0048's pass-level slot");
+        // THE SIZE OF THE TEXTURE THE SHADER SAMPLES, and it is asserted here
+        // because this is the case where the grid is RE-CREATED after the drop
+        // (the placement runs at the scout's 32 px and the grid is rebuilt at
+        // the tier's size). `probeCaptureSize` reads the bind texture's width
+        // now, not the local that asked for it — for one round this lane shipped
+        // a grid whose array was 32 px at every tier, and not one assertion in
+        // this suite could see it, because every probe assertion is a HUE check.
+        CHECK(st.probeCaptureSize == 256,
+              "4c: ...and the grid the shader samples is at the TIER's size, 256 for\n"
+              "          Medium, not the resolution the placement was measured at");
 
         Image img;
         // Case 13's camera and pixel: from above, the cube's TOP face reflects
@@ -487,6 +497,32 @@ int main()
               "          the sky is the environment wherever no probe is (patch 0048)");
         engine->destroyScene(s);
     }
+
+    // ---- 4d. WHY THERE IS NO CASE HERE FOR THE ESCAPE SWAP -----------------
+    // ogre-patch 0048's composite is a SWAP — the cone's own answer is kept and
+    // only its flat-ambient escape share becomes the sky — and the natural case
+    // for it would be a glossy surface INSIDE the voxel volume that no probe box
+    // covers, showing both a neighbour's reflection and the sky.
+    //
+    // That scene could not be built on this pin's fit, and the reason is worth
+    // recording because it is the same geometry fact as the step in note (4) of
+    // the lane's report. The probes' parallax boxes are shrink-fitted and then
+    // CLAMPED TO THE PROBE REGION, and the region is what the scout photographs
+    // from the centre — which, measured on every scene in this file that keeps a
+    // grid, comes back EQUAL to the lit volume (a roofless room's +Y face sees
+    // sky and saturates; the ground beyond the walls fills the horizontal ones).
+    // So "inside the volume, outside every box" is the sliver between the region
+    // and the volume: 0.57 m on case 4c's ±8 pin. Widening the volume does not
+    // help — the grid is then dropped entirely (measured: a ±25 pin over the same
+    // room keeps nothing) and the composite does not run at all.
+    //
+    // What IS asserted, and covers the swap's two endpoints: 4c's outside mirror
+    // reads the sky at FULL strength (the escape fraction is 1 where the cone
+    // never ran, which is the units question — the escape weight the cone
+    // exports carries upstream's 1/pi and the sky's does not), and
+    // scripting.e2e.default_ground's grazing margin reads 5/255, the value it
+    // had when the sky was bound straight to the datablock. A purpose-built rig
+    // for the middle of that range is recorded for a later lane.
 
     // ---- 5. GROUND AND ONE LARGE OBJECT ------------------------------------
     // An imported car, parked on the ground. Big, and no kind of room.
@@ -939,6 +975,12 @@ int main()
         render(engine.get(), 10);
         const GiStatus st = s->giStatus();
         CHECK(st.probeCount == 4, "capture size: ...with its grid");
+        // READ OFF THE BIND TEXTURE (lane SKY-FALLBACK-1): giStatus reports the
+        // width of the cube array the shader samples, not the local the build
+        // asked for. The two disagreed for exactly one round of this lane — the
+        // placement's resolution reached the array and every probe in every
+        // scene rendered at 32 px, invisibly, because every other probe
+        // assertion in this file is a hue check.
         CHECK(st.probeCaptureSize == 256, "capture size: Medium captures at 256 px");
         // ...AND HIGH CAPTURES AT 512 (owner, 2026-09-15, ledger §324 — the
         // 2026-09-13 halving of High reversed after the rig measured both ends

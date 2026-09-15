@@ -480,6 +480,25 @@ set_tests_properties(gi.probe_visibility PROPERTIES TIMEOUT 180 LABELS "engine")
 
 # NO ENCLOSURE MEANS NO PROBE GRID (owner 2026-09-13 Q3): an open scene builds
 # no probes and reflects the sky; adding walls builds them.
+# gi.pcc_second_scene — the PROCESS-WIDE probe binding against a second scene's
+# own sky cubemap (lane SKY-FALLBACK-1). RUN_SERIAL is not needed: it owns both
+# of its scenes and touches the HlmsPbs binding only through them.
+add_executable(test_gi_pcc_second_scene test_gi_pcc_second_scene.cpp)
+set_target_properties(test_gi_pcc_second_scene PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pcc_second_scene PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pcc_second_scene PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pcc_second_scene JahshakaEngineMedia)
+add_test(NAME gi.pcc_second_scene COMMAND test_gi_pcc_second_scene
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pcc_second_scene PROPERTIES TIMEOUT 180 LABELS "engine")
+
 add_executable(test_gi_probe_open test_gi_probe_open.cpp)
 set_target_properties(test_gi_probe_open PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
