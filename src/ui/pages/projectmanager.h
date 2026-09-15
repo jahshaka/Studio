@@ -100,12 +100,6 @@ public:
     int sliderRows() const;
     int setSliderRows(int rows);
 
-    /// Synchronous, dialog-free version of loadProjectAssets() for the scripting
-    /// API (project.open): same DB sweeps and AssetManager registrations as the
-    /// concurrent path, sequentially on the caller's thread, no modal progress
-    /// dialog, no fileToOpen signal — the caller decides what happens next.
-    void loadProjectAssetsSync();
-
     /// Session AssetManager registrations shared by both load paths.
     /// `prewarm` (optional) carries model files a worker already parsed, so
     /// pinned Objects hydrate without running assimp on this thread.
@@ -182,7 +176,6 @@ private:
     bool openInPlayMode;
 
 signals:
-    void fileToOpen(bool playMode);
     void fileToCreate(const QString &name, const QString &path);
     void importProject();
     void exportProject();

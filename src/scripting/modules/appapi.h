@@ -33,6 +33,7 @@ public:
     Q_INVOKABLE bool space(const QString &name);
     Q_INVOKABLE bool quit();
     Q_INVOKABLE QVariantList openTimings();
+    Q_INVOKABLE QVariantMap openStats(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool heartbeat(int intervalMs = 250);
     Q_INVOKABLE QVariantMap heartbeatStats();
     Q_INVOKABLE QVariantMap watchdogStats();

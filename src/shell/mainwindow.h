@@ -624,17 +624,33 @@ public slots:
     void newScene();
 
     void newProject(const QString&, const QString&);
+    /// The BLOCKING open: returns with the world open, which is the contract
+    /// `project.open()` and every headless script are written against.
+    ///
+    /// Its MODEL PARSES run on a worker while this thread pumps
+    /// (prewarmModelsPumped; OPEN-ASSIMP-1) — measured 1 086 ms of assimp for
+    /// the Matcaps sample, 986 ms for World Background, all of it on the UI
+    /// thread before this — and the install stages then run back to back as
+    /// they always have.
     void openProject(bool playMode = false);
-    /// The RESPONSIVE open (services/sceneopenrunner.h): the model parses run
-    /// on a worker thread and the install runs one slice per event-loop turn,
-    /// so the window keeps pumping. Returns immediately; the open completes
-    /// through the event loop. Falls back to the synchronous openProject()
-    /// when no runner can be built (no project, or a run already in flight).
-    /// The synchronous path stays EXACTLY as it was — it is what
-    /// project.open() and every headless script use.
+    /// The RESPONSIVE open (services/sceneopenrunner.h): the same worker parse,
+    /// and the install run one slice per event-loop turn so the window keeps
+    /// pumping. Returns immediately; the open completes through the event loop.
+    /// What a tile click uses.
     void openProjectAsync(bool playMode = false);
     /// True while an asynchronous open is in flight.
     bool isOpeningProject() const;
+    /// Runs an in-flight threaded open TO COMPLETION before the caller does
+    /// anything else, with the event loop pumped (user input excluded).
+    ///
+    /// A verb that is about to close the project and point it at another world
+    /// MUST call this FIRST: the runner's remaining slices read the project at
+    /// SLICE time (readProjectScene asks the Database for
+    /// project->getProjectGuid()'s blob), so an open finished after the
+    /// pointers moved would install a hybrid — the old session's assets, the
+    /// new world's blob, and a prewarm for neither, every mesh of it parsed on
+    /// this thread. Returns true when nothing is (or is still) in flight.
+    bool waitForOpen();
     void closeProject();
 
     /// Takes the editor's panels down for a page that is not the editor.
@@ -771,6 +787,19 @@ private:
     void openStagePanels();
     /// The page switch, the root selection and autoplay. Always last.
     void openStageReveal(bool playMode);
+
+    /// Plans and STARTS the THREADED open (the worker parse + the install
+    /// slices, one per event-loop turn). openProjectAsync's whole body.
+    void startOpenRun(bool playMode);
+
+    /// Every model file the opening project needs, resolved on the thread that
+    /// owns the database connection. Shared by both open paths.
+    QStringList plannedOpenModelPaths();
+
+    /// The synchronous open's parse: the plan resolved here, the FILES read on
+    /// a worker, this thread pumping (user input excluded) until it is done.
+    /// Never returns null; an empty prewarm simply means nothing to parse.
+    iris::MeshPrewarmPtr prewarmModelsPumped();
 
     class SceneOpenRunner *openRunner = nullptr;
 

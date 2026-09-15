@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
 
+#include "irisgl/document/assets/mesh.h"
+
 #include <functional>
 
 #include <algorithm>
@@ -102,6 +104,7 @@ SceneEditService::SceneEditService(Database *db,
       db(db), project(project), undo(undo), selection(selection),
       viewport(viewport), sceneProvider(std::move(sceneProvider))
 {
+    pinBuiltinPrimitives();
 }
 
 void SceneEditService::notifyNodeInserted(const iris::SceneNodePtr &node) { emit nodeInserted(node); }
@@ -183,6 +186,22 @@ const PrimitiveDef kPrimitiveDefs[] = {
     { "Steps",    ":/content/primitives/steps.obj",     "Steps"    },
 };
 }   // namespace
+
+void SceneEditService::pinBuiltinPrimitives()
+{
+    // THE SHIPPED MODELS ARE HELD (irisgl/document/assets/mesh.h pinLoadPaths;
+    // OPEN-ASSIMP-1). Every world the user opens stands on these — a ground,
+    // some cubes — and the mesh cache holds WEAK references, so closing a
+    // world dropped them and the next open re-parsed them ON THE UI THREAD:
+    // measured 1-4 parses and 17-95 ms per open of a shipped sample, which is
+    // the largest UI-thread parse left once a project's own models are on the
+    // worker. They are a few kilobytes each, compiled into the binary, and
+    // there is a fixed number of them — the one case where holding the parse
+    // is right. Registering does not parse: the first add or load does.
+    QStringList paths;
+    for (const auto &def : kPrimitiveDefs) paths << QLatin1String(def.mesh);
+    iris::Mesh::pinLoadPaths(paths);
+}
 
 void SceneEditService::addPrimitive(const QString &text,
                                     const std::optional<iris::Vec3> &position,

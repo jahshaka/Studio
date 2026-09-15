@@ -186,6 +186,16 @@ bool ProjectApi::open(const QString &guidOrName)
         return false;
     }
 
+    // AN OPEN ALREADY IN FLIGHT FINISHES FIRST, and it has to happen HERE,
+    // before a single pointer moves (MainWindow::waitForOpen). The threaded
+    // open's remaining slices read the project when they RUN — the document
+    // read asks the database for project->getProjectGuid()'s blob — so
+    // closing and re-pointing first and draining afterwards would install a
+    // hybrid world: the old session's assets, the new blob, and a prewarm for
+    // neither, every mesh of it parsed on the UI thread.
+    if (!host.mainWindow->waitForOpen())
+        return fail("project.open: an open already in flight did not finish");
+
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
@@ -197,10 +207,14 @@ bool ProjectApi::open(const QString &guidOrName)
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
     // The ledger starts HERE, not in MainWindow::openProject: the session
-    // registrations prepareOpen runs are part of what an open costs.
+    // registrations are part of what an open costs and they happen inside it.
     LoadTimeline::begin(QStringLiteral("open(script) %1").arg(name.isEmpty() ? guid : name));
-    // Point the current project + synchronous preload, then the reader half.
-    host.services->project->prepareOpen(guid, name);
+    // Point the current project, then the open — which registers the session
+    // assets itself, in its slices, with the worker's parsed models in hand
+    // (OPEN-ASSIMP-1: the synchronous verb and the threaded open are ONE path
+    // now, so the preload that used to run here — and parse on this thread —
+    // is gone).
+    host.services->project->pointAtProject(guid, name);
     host.mainWindow->openProject(false);
     host.beginRunUndoMacro();
     return true;
@@ -218,6 +232,12 @@ bool ProjectApi::openAsync(const QString &guidOrName)
             fail(QStringLiteral("project.openAsync: no project named or guid '%1'").arg(guidOrName));
         return false;
     }
+    // THE SAME RULE AS project.open — nothing moves while an open is in
+    // flight — enforced here by REFUSING instead of waiting, and that is the
+    // whole guard: isOpeningProject() is true for a tile click's open exactly
+    // as it is for a scripted one, so this verb can never reach the close
+    // below with slices still queued. (project.open cannot refuse — its
+    // contract is a loaded world — so it drains through waitForOpen instead.)
     if (host.mainWindow->isOpeningProject())
         return fail("project.openAsync: an open is already in flight");
 
@@ -229,8 +249,8 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
     LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
-    // NOT prepareOpen: the runner's first slice does the session registrations
-    // itself, with the worker's parsed models in hand.
+    // The open's first slices do the session registrations themselves, with
+    // the worker's parsed models in hand.
     host.services->project->pointAtProject(guid, name);
     host.mainWindow->openProjectAsync(false);
     host.beginRunUndoMacro();

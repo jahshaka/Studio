@@ -988,14 +988,13 @@ void ProjectManager::loadProjectAssets()
 	// slice does the registrations, after a worker has parsed the models).
 	// Without a shell — headless scripts, tests — the synchronous shape is
 	// kept exactly: registrations here, then the signal.
-	if (mainWindow) {
-		mainWindow->openProjectAsync(openInPlayMode);
-		return;
-	}
-	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
-	AssetManager::clearAssetList();
-	registerProjectSessionAssets();
-	emit fileToOpen(openInPlayMode);
+	// ONE open path (OPEN-ASSIMP-1): the shell's open registers the session
+	// assets itself, in its slices, after a worker has parsed the models. The
+	// `if (mainWindow)` that used to stand here had a second, windowless leg
+	// that did the registrations inline and emitted `fileToOpen` — dead since
+	// the ProjectManager is only ever built by MainWindow, which sets the
+	// pointer in the next statement (CRUD).
+	mainWindow->openProjectAsync(openInPlayMode);
 }
 
 void ProjectManager::showOpenProgress(int percent, const QString &text)
@@ -1018,14 +1017,6 @@ void ProjectManager::hideOpenProgress()
 	// Back to the legacy behaviour for the remaining synchronous flows
 	// (archive import) that repaint by pumping.
 	progressDialog->setPumpsEventLoop(true);
-}
-
-void ProjectManager::loadProjectAssetsSync()
-{
-	// Headless twin of loadProjectAssets(): same registrations, no signal.
-	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
-	AssetManager::clearAssetList();
-	registerProjectSessionAssets();
 }
 
 QStringList ProjectManager::plannedSessionModelPaths()

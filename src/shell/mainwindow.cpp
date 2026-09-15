@@ -76,6 +76,10 @@ For more information see the LICENSE file
 
 #include <QPushButton>
 #include <QTimer>
+#include <QtConcurrent>
+#include <QFuture>
+#include <QThread>
+#include <atomic>
 #include <math.h>
 #include <QDesktopServices>
 #include <QShortcut>
@@ -1510,6 +1514,17 @@ void MainWindow::saveScene()
 
 // ---- the open, in stages ---------------------------------------------------
 //
+/// How long MainWindow::openProject pumps for its own open before it gives up
+/// and says so. Ninety seconds against a worst measured open of ~3 s: this is
+/// a deadlock guard, not a budget — a caller that waits is a caller that was
+/// promised a loaded world.
+static const int kOpenWaitBudgetMs = 90000;
+/// The pump's idle nap. The runner puts ONE millisecond between its slices, so
+/// a five-millisecond sleep per turn would add five to every slice of every
+/// scripted open; one keeps the wait honest (measured: ~15 slices).
+static const int kOpenWaitIdleMs = 1;
+
+//
 // ORDER MATTERS HERE (the viewport desktop-bleed defect, 2026-09-03).
 // Everything that can be done before the page switch IS done before it: the
 // document read, the session registrations (the project panel did those
@@ -1656,6 +1671,104 @@ void MainWindow::openStageReveal(bool playMode)
 	}
 }
 
+QStringList MainWindow::plannedOpenModelPaths()
+{
+	// Every model file this open will need, resolved on the thread that owns
+	// the database connection: the session membership's Objects and the
+	// scene blob's mesh sources. ONE definition, used by the threaded open's
+	// plan and by the synchronous open's prewarm.
+	QStringList paths = pmContainer ? pmContainer->plannedSessionModelPaths() : QStringList();
+	if (projectService)
+		for (const QString &path : projectService->plannedModelPaths())
+			if (!paths.contains(path)) paths.append(path);
+	return paths;
+}
+
+iris::MeshPrewarmPtr MainWindow::prewarmModelsPumped()
+{
+	// THE PARSE, OFF THIS THREAD, WITH THE CALLER STILL BLOCKED
+	// (OPEN-ASSIMP-1). The synchronous open owes its caller a loaded world
+	// when it returns — that is what `project.open()`, every headless script
+	// and every e2e suite are written against — but it does not owe anyone an
+	// assimp parse on the thread that draws. Measured on the eight shipped
+	// samples (2026-09-15, spikes/open-assimp-1/): 1 086 ms of parse inside a
+	// 1 872 ms unbroken UI-thread block for Matcaps, 986 / 1 998 for World
+	// Background, 391 / 1 104 for Skeletal Animation.
+	//
+	// So the plan is resolved here (database work, per-thread connection), the
+	// files are read on a worker, and this thread PUMPS while it waits — user
+	// input excluded, the pattern ProjectArchiver and SceneOpenRunner already
+	// use. The window keeps painting and answering its heartbeat through the
+	// second that used to freeze it, and the stages below then run back to
+	// back exactly as they always have, with the parses already in hand.
+	//
+	// WHY THIS PUMP IS SAFE, BY CONSTRUCTION. Pumping delivers DeferredDelete
+	// events, and a DeferredDelete is only delivered by a sendPostedEvents
+	// running BELOW the loop level it was posted at — so what this pump can
+	// free is what an outer loop has already finished with. It runs BEFORE
+	// openStageBegin, with the previous world still installed and the desktop
+	// still the current page: no panel is being torn down or rebuilt inside
+	// it, so nothing here can free a row that a panel is about to touch. That
+	// ordering is the invariant; moving this call after openStageBegin would
+	// break it.
+	//
+	// WHY NOT THE RUNNER'S SLICES TOO (and this is a measured decision, not a
+	// preference): slicing the INSTALL means returning to the event loop
+	// between the stages, and the properties panel's rows are retired with
+	// deleteLater() while raw pointers to them are kept — a window that only
+	// closes when the loop turns (ui/controls/accordionbladewidget.cpp says so
+	// in as many words: "EVERY script- or MCP-driven scene build ... is one
+	// call that never yields"). A sliced synchronous open turned that latent
+	// lifetime defect into a crash in five of the eight shipped samples
+	// (spikes/open-assimp-1/, the decoded backtraces), while the same eight
+	// pass with the parse hoisted and the install left alone. The defect is
+	// real and is reported; it is not this lane's to fix under it.
+	auto prewarm = std::make_shared<iris::MeshPrewarm>();
+	const QStringList modelPaths = plannedOpenModelPaths();
+	if (modelPaths.isEmpty()) return prewarm;
+
+	LoadTimeline::mark(QStringLiteral("plan"));
+	QVector<iris::PrewarmItem> plan;
+	plan.reserve(modelPaths.size());
+	for (const QString &path : modelPaths) plan.append(MeshBakeStore::planFor(path));
+
+	std::atomic<bool> done { false };
+	QFuture<void> future = QtConcurrent::run([plan, prewarm, &done]() {
+		// THE FLAG IS FLIPPED BY A SCOPE GUARD, not by the last statement: a
+		// throw out of a parse (assimp's importers do throw) would otherwise
+		// leave `done` false and this thread pumping for the whole budget
+		// before the future rethrew — ninety seconds of "nothing is wrong".
+		struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
+		for (const iris::PrewarmItem &item : plan) {
+			// Named "assimp" for continuity of the ledger, but a bake hit
+			// never reaches assimp — worker:bakeHits is the split.
+			LoadTimeline::Accumulate parse(QStringLiteral("worker:assimp"));
+			prewarm->parse(item);
+		}
+	});
+	LoadTimeline::mark(QStringLiteral("parse(worker)"));
+
+	QElapsedTimer waited;
+	waited.start();
+	while (!done.load() && waited.elapsed() < kOpenWaitBudgetMs) {
+		// Timers and posted events, no user input: the heartbeat ticks, the
+		// engine paints, nothing re-enters the editor from the outside.
+		QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
+		if (done.load()) break;
+		QThread::msleep(static_cast<unsigned long>(kOpenWaitIdleMs));
+	}
+	// The join is not optional: the worker writes into `prewarm` and into two
+	// stack locals. A budget this large (90 s against a worst measured parse
+	// of ~1.1 s) is a deadlock guard, and blocking without the pump is still
+	// better than reading a half-filled prewarm.
+	if (!done.load())
+		qWarning("project open: the model parse is still running after %d ms — waiting for it "
+		         "without pumping", kOpenWaitBudgetMs);
+	future.waitForFinished();
+	LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, prewarm->bakedCount());
+	return prewarm;
+}
+
 void MainWindow::openProject(bool playMode)
 {
 	// The ledger (services/loadtimeline.h). Both open paths mark the same
@@ -1664,8 +1777,31 @@ void MainWindow::openProject(bool playMode)
 	if (!LoadTimeline::isRunning())
 		LoadTimeline::begin(QStringLiteral("open(sync) %1")
 		                        .arg(project ? project->getProjectName() : QString()));
+
+	// THE BACKSTOP. A caller that points the project at another world must
+	// drain an in-flight open BEFORE it does so (MainWindow::waitForOpen, and
+	// both project verbs call it there); by the time we are here the pointers
+	// have already moved, so all this can still do is refuse to interleave two
+	// worlds through one set of slices.
+	if (isOpeningProject()) {
+		qWarning("project open: a threaded open was still in flight when a blocking open "
+		         "started — draining it (the caller should have waited first)");
+		openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+	}
+
+	// The models, parsed on a worker while this thread pumps (above).
+	const iris::MeshPrewarmPtr prewarm = prewarmModelsPumped();
+
 	openStageBegin();
-	openStageReadDocument(playMode, iris::MeshPrewarmPtr());
+	// The session registrations, in the threaded open's order and with the
+	// worker's models in hand — this is the "synchronous preload" that used to
+	// run in ProjectService::prepareOpen BEFORE the open and parse every
+	// pinned Object on this thread (deleted with this change).
+	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
+	AssetManager::clearAssetList();
+	if (pmContainer) pmContainer->registerProjectSessionAssets(prewarm);
+
+	openStageReadDocument(playMode, prewarm);
 	openStagePanels();
 	// The LAST thing before the page switch: push the whole document into the
 	// renderer (meshes, materials, textures) while the desktop page is still
@@ -1688,19 +1824,51 @@ bool MainWindow::isOpeningProject() const
 	return openRunner && openRunner->isRunning();
 }
 
+bool MainWindow::waitForOpen()
+{
+	if (!isOpeningProject()) return true;
+	// THE PUMP HERE IS NOT THE SAFE ONE (see prewarmModelsPumped): the slices
+	// it services install a world — they mount panels, bind the properties
+	// tree and switch the page, and they retire panel rows whose owners keep
+	// raw pointers to them. That is the threaded open's own exposure, not one
+	// this call adds: the very same slices run from the very same event loop
+	// when nobody is waiting. What this does add is that they finish BEFORE
+	// the caller tears the project down, which is the hybrid this exists to
+	// prevent.
+	return openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+}
+
 void MainWindow::openProjectAsync(bool playMode)
 {
-	// One open at a time. A second request while one is in flight falls back
-	// to the synchronous path rather than interleaving two worlds through the
-	// same slices (which would tear the document apart mid-install).
-	if (isOpeningProject() || !projectService || !pmContainer) {
-		openProject(playMode);
-		return;
+	// One open at a time, and the same backstop as the blocking open above:
+	// the caller drains an in-flight open through waitForOpen() before it
+	// re-points the project; this only stops two worlds sharing one set of
+	// slices if one ever gets here anyway.
+	if (isOpeningProject()) {
+		qWarning("project open: a threaded open was still in flight when another started — "
+		         "draining it (the caller should have waited first)");
+		openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
 	}
 
 	if (!LoadTimeline::isRunning())
 		LoadTimeline::begin(QStringLiteral("open(async) %1")
 		                        .arg(project ? project->getProjectName() : QString()));
+	startOpenRun(playMode);
+}
+
+/// THE ONE OPEN (OPEN-ASSIMP-1). Plans the model parses, starts the worker and
+/// queues the install slices; the caller decides whether to wait.
+void MainWindow::startOpenRun(bool playMode)
+{
+	// Without a project service there is no document to read and the stages
+	// below would dereference it; without a project manager there is simply no
+	// session membership to register (a shell that never built its desktop).
+	// Neither happens in a running app — both are built in the constructor —
+	// and neither is a reason to fall back to a second open path.
+	if (!projectService) {
+		qWarning("project open: no project service — nothing was opened");
+		return;
+	}
 
 	// The cover goes up NOW, not in the first slice: the parse phase runs on
 	// a worker for up to a second, and opening a world from inside the editor
@@ -1711,9 +1879,7 @@ void MainWindow::openProjectAsync(bool playMode)
 
 	// ---- plan: the DB half, here, on the thread that owns the connection ----
 	LoadTimeline::mark(QStringLiteral("plan"));
-	QStringList modelPaths = pmContainer->plannedSessionModelPaths();
-	for (const QString &path : projectService->plannedModelPaths())
-		if (!modelPaths.contains(path)) modelPaths.append(path);
+	const QStringList modelPaths = plannedOpenModelPaths();
 
 	if (!openRunner) {
 		openRunner = new SceneOpenRunner(db, project, this);
@@ -1732,7 +1898,7 @@ void MainWindow::openProjectAsync(bool playMode)
 	// install step whose cost grows with the project (49 assets in the
 	// Showroom sample), and a single 200 ms slice plus an engine frame is
 	// most of the responsiveness budget on its own.
-	const QStringList sessionGuids = pmContainer->sessionAssetGuids();
+	const QStringList sessionGuids = pmContainer ? pmContainer->sessionAssetGuids() : QStringList();
 	const int kAssetsPerSlice = 8;
 
 	QVector<SceneOpenRunner::Slice> slices;
@@ -1747,7 +1913,7 @@ void MainWindow::openProjectAsync(bool playMode)
 		slices.append({ QStringLiteral("Preparing assets (%1 of %2)…")
 		                    .arg(at + batch.size()).arg(sessionGuids.size()),
 		                pct, [this, batch]() {
-			pmContainer->registerSessionAssetGuids(batch, openRunner->prewarm());
+			if (pmContainer) pmContainer->registerSessionAssetGuids(batch, openRunner->prewarm());
 		} });
 	}
 	slices.append({ QStringLiteral("Reading the scene…"), 60,
@@ -3757,7 +3923,6 @@ void MainWindow::setupDesktop()
 	avatarView = avatarModule->createPage();
 	ui->stackedWidget->addWidget(avatarView);
 
-	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
 	connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
 	connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));

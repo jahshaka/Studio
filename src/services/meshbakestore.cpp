@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "irisgl/core/logger.h"
 #include "irisgl/import/meshbake.h"
+#include "irisgl/import/parsecensus.h"
 
 namespace
 {
@@ -37,6 +38,7 @@ namespace
 QMutex sLock;
 int sScopeDepth = 0;
 QHash<QString, iris::BakedModelPtr> sCache;
+
 
 /// The sha256 a store object's file name IS. Empty for anything that is not a
 /// store object (a legacy folder file, an out-of-store path) — such a source
@@ -187,6 +189,10 @@ iris::BakedModelPtr load(const QString &sourcePath)
         if (model.valid)
             result = std::make_shared<const iris::MeshBake::Model>(std::move(model));
     }
+    // THE HIT/MISS SPLIT (app.openStats()), reported to the SAME census the
+    // prewarm worker reports to (irisgl/import/parsecensus.h) — an open reads
+    // bakes from both threads and one number has to cover both.
+    iris::ParseCensus::recordBake(result != nullptr);
 
     QMutexLocker locked(&sLock);
     // Negative results are cached too: a model with no bake must not re-query
@@ -213,6 +219,7 @@ void clear()
     QMutexLocker locked(&sLock);
     sCache.clear();
 }
+
 
 bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath)
 {

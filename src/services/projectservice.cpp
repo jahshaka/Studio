@@ -104,14 +104,6 @@ void ProjectService::pointAtProject(const QString &guid, const QString &name)
     project->setProjectGuid(guid);
 }
 
-void ProjectService::prepareOpen(const QString &guid, const QString &name)
-{
-    pointAtProject(guid, name);
-
-    // Synchronous preload (no modal dialog, no QtConcurrent).
-    projectManager->loadProjectAssetsSync();
-}
-
 bool ProjectService::removeProject(const QString &guid)
 {
     QDir dirToRemove(QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid));

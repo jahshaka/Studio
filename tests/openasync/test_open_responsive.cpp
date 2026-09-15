@@ -39,6 +39,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QVector>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -66,6 +67,8 @@ static const double kHeartbeatMs = 250.0;
 /// The cold-process ceiling: the first open of a process also pays the
 /// engine's shader/PSO compilation (see the comment at the cold open).
 static const double kColdCeilingMs = 4000.0;
+/// The per-sample ceiling of case 2b (see the case for why it is this wide).
+static const double kSampleCeilingMs = 10000.0;
 static const int kExitBudgetMs = 30000;
 static const int kOpenBudgetMs = 120000;
 
@@ -300,6 +303,218 @@ int main(int argc, char **argv)
     // Same world, same content: the two paths are not allowed to diverge.
     CHECK(syncNodes.value("result").toInt() == nodes.value("result").toInt(),
           "both open paths produce the same node count");
+
+    // ---- 2b. EVERY SHIPPED SAMPLE, OPENED BY THE SYNCHRONOUS VERB -------
+    //
+    // THE CONTRACT: no project open parses a model on the UI thread.
+    //
+    // It used to, for every script, every headless run and every suite that
+    // calls project.open: the synchronous open was a SECOND implementation
+    // that read the document inline with no prewarm, so assimp ran on the
+    // thread that draws. The watchdog caught it with its own backtrace on
+    // 2026-09-15 (ledger 468: ObjFileParser::parseFile <- SceneReader::
+    // createMesh <- readProjectScene, 2 049 ms), and the eight shipped
+    // samples measured like this through the synchronous verb, first open
+    // after an import, worst UI-thread gap / of which assimp ON THIS THREAD
+    // (spikes/open-assimp-1/):
+    //
+    //     Matcaps            1 872 / 1 086      Showroom 2     1 780 / 0
+    //     Mirror Room        1 901 /     0      Showroom       2 009 / 0
+    //     Particles            931 /     9      Skeletal Anim  1 104 / 391
+    //     Physics              813 /    83      World Backgr.  1 998 / 986
+    //
+    // AND THE TWO CASES UNDER THIS ONE: a REOPEN parses nothing at all (the
+    // shipped primitives are pinned), and a synchronous open issued WHILE a
+    // threaded one is in flight still lands the world the script asked for
+    // with nothing parsed here.
+    //
+    // The same eight, after: ZERO assimp on the UI thread in every one of
+    // them — the parse is on a worker (Matcaps 996 ms, World Background
+    // 997 ms, Skeletal Animation 370-640 ms, Physics 148 ms) while the open
+    // pumps.
+    //
+    // WHAT THIS ASSERTS is the parse count, not a gap budget, and the numbers
+    // above say why: the three samples with no model file at all (Mirror
+    // Room, Showroom, Showroom 2) block for seconds on a COLD process either
+    // way, inside the engine's first frames — the watchdog's backtrace puts
+    // them in RenderQueue::render behind a pthread_barrier, i.e. the shader
+    // compile storm this lane cannot move (ledger 468's other defect), and it
+    // is the noisiest number in this suite (the same Showroom open measured
+    // 2 009, 2 020 and 5 376 ms across three runs of the same binary). The
+    // gap is read, printed and held under a wide ceiling as a regression
+    // guard; the parse count is the contract.
+    struct Sample { const char *name; QString guid; };
+    QVector<Sample> samples{
+        { "Matcaps", guid },        // already imported above
+        { "Mirror Room", {} },      { "Particles", {} },
+        { "Physics", {} },          { "Showroom 2", {} },
+        { "Showroom", {} },         { "Skeletal Animation", {} },
+        { "World Background", {} },
+    };
+    {
+        int parsedOnUiThread = 0;
+        // Case 2 left the fixture open, and project.open on the world that is
+        // already open is a page switch, not an open — close first or the
+        // first sample below measures nothing.
+        mcp.runScript(QStringLiteral("project.close()"));
+        for (Sample &sample : samples) {
+            const QString zip = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/scenes/%1.zip")
+                                    .arg(QString::fromLatin1(sample.name));
+            if (sample.guid.isEmpty()) {
+                if (!QFileInfo::exists(zip)) {
+                    std::printf("FAIL: shipped sample missing: %s\n", qUtf8Printable(zip));
+                    ++failures;
+                    continue;
+                }
+                const QJsonObject in = mcp.runScript(
+                    QStringLiteral("project.importArchive('%1')").arg(zip));
+                sample.guid = in.value("result").toObject().value("guid").toString();
+                if (sample.guid.length() <= 10) {
+                    std::printf("FAIL: could not import %s: %s\n", sample.name,
+                                QJsonDocument(in).toJson(QJsonDocument::Compact).constData());
+                    ++failures;
+                    continue;
+                }
+                mcp.runScript(QStringLiteral("project.close()"));
+            }
+
+            // The census is zeroed HERE, so the numbers below belong to this
+            // open and to nothing else (the app parses its own default scene
+            // at boot, on this thread, as it must).
+            mcp.runScript(QStringLiteral("app.openStats({reset:true})"));
+            mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+            mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kHeartbeatMs)));
+            QElapsedTimer openTimer;
+            openTimer.start();
+            const bool opened = mcp.runScript(QStringLiteral("project.open('%1')").arg(sample.guid))
+                                    .value("ok").toBool();
+            const double elapsedMs = double(openTimer.elapsed());
+            const QJsonObject stats =
+                mcp.runScript(QStringLiteral("JSON.parse(JSON.stringify(app.openStats()))"))
+                    .value("result").toObject();
+            const double gap = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
+                                   .value("result").toObject().value("maxGapMs").toDouble();
+            const int nodeCount = mcp.runScript(QStringLiteral("scene.nodes().length"))
+                                      .value("result").toInt();
+            mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+
+            const int uiParses = stats.value("uiThreadParses").toInt();
+            parsedOnUiThread += uiParses;
+            std::printf("info: [%-18s] open %5.0f ms, worst UI gap %6.1f ms, nodes %3d | "
+                        "UI parses %d (%.0f ms)%s%s | worker parses %d (%.0f ms) | "
+                        "builtin %d (%.0f ms) | bakes %d hit / %d miss\n",
+                        sample.name, elapsedMs, gap, nodeCount,
+                        uiParses, stats.value("uiThreadParseMs").toDouble(),
+                        uiParses ? " <- " : "",
+                        uiParses ? qUtf8Printable(stats.value("lastUiThreadParse").toString()) : "",
+                        stats.value("workerParses").toInt(),
+                        stats.value("workerParseMs").toDouble(),
+                        stats.value("uiThreadResourceParses").toInt(),
+                        stats.value("uiThreadResourceParseMs").toDouble(),
+                        stats.value("bakeHits").toInt(), stats.value("bakeMisses").toInt());
+            std::fflush(stdout);
+
+            if (!opened || nodeCount <= 1) {
+                std::printf("FAIL: the synchronous open of %s did not load the world "
+                            "(ok=%d, nodes=%d)\n", sample.name, int(opened), nodeCount);
+                ++failures;
+            }
+            // A CEILING, NOT A BUDGET, and a wide one on purpose: these are
+            // eight COLD first opens in one process, and the three samples
+            // with no model file spend seconds inside the engine's first
+            // frames compiling shaders — measured on this box at 1 742,
+            // 2 009, 3 121 and 5 376 ms for the SAME two samples on the same
+            // binary, on the threaded path as well as this one. What this
+            // guards is the defect's return (the open that froze the window
+            // for 12 500 ms), and it does that with room for the storm.
+            if (gap <= 0.0 || gap >= kSampleCeilingMs) {
+                std::printf("FAIL: %s: worst UI gap %.1f ms is outside (0, %.0f)\n",
+                            sample.name, gap, kSampleCeilingMs);
+                ++failures;
+            }
+            mcp.runScript(QStringLiteral("project.close()"));
+        }
+        CHECK(parsedOnUiThread == 0,
+              "NO shipped sample parsed a model on the UI thread through project.open");
+
+        // THE BUILT-IN PRIMITIVES ARE PINNED (iris::Mesh::pinLoadPaths). The
+        // load cache holds WEAK references, so before the pin every open
+        // after a close re-parsed the ground and the cubes ON THIS THREAD —
+        // measured 1-4 parses and 17-95 ms per sample open, the largest
+        // UI-thread parse left once a project's own models are on the worker.
+        // A REOPEN is what proves it: the first open of a session may parse a
+        // primitive (nothing has asked for it yet), the second may not.
+        const Sample &last = samples.last();
+        if (!last.guid.isEmpty()) {
+            mcp.runScript(QStringLiteral("app.openStats({reset:true})"));
+            const bool reopened =
+                mcp.runScript(QStringLiteral("project.open('%1')").arg(last.guid))
+                    .value("ok").toBool();
+            const QJsonObject again =
+                mcp.runScript(QStringLiteral("JSON.parse(JSON.stringify(app.openStats()))"))
+                    .value("result").toObject();
+            std::printf("info: [reopen %s] UI parses %d, builtin %d (%.0f ms)\n",
+                        last.name, again.value("uiThreadParses").toInt(),
+                        again.value("uiThreadResourceParses").toInt(),
+                        again.value("uiThreadResourceParseMs").toDouble());
+            CHECK(reopened && again.value("uiThreadParses").toInt() == 0 &&
+                      again.value("uiThreadResourceParses").toInt() == 0,
+                  "a REOPEN parses nothing at all on the UI thread — models on the worker, "
+                  "the shipped primitives pinned");
+            mcp.runScript(QStringLiteral("project.close()"));
+        }
+    }
+
+    // ---- 2c. A THREADED OPEN IN FLIGHT, AND A SCRIPT OPENS ANOTHER WORLD --
+    //
+    // What a tile click plus a script does, and the one ordering that makes
+    // it a hybrid: the runner's remaining slices read the project AT SLICE
+    // TIME (readProjectScene asks the database for the CURRENT project's
+    // blob), so a verb that closes and re-points first, then drains the
+    // runner, installs the old session's assets over the new world's blob
+    // with a prewarm for neither — and every mesh of it parses on the UI
+    // thread. project.open drains an open in flight BEFORE it touches
+    // anything (MainWindow::waitForOpen); this is that, measured.
+    {
+        const QString other = samples.size() > 1 ? samples.at(1).guid : QString();
+        if (!other.isEmpty()) {
+            CHECK(mcp.runScript(QStringLiteral("project.openAsync('%1')").arg(guid))
+                      .value("ok").toBool(),
+                  "a threaded open started (the tile-click path)");
+            // NO WAIT: the next request is sent while the slices are queued —
+            // the app answers it between them, which is the whole point of
+            // the threaded open and the whole risk of this case.
+            mcp.runScript(QStringLiteral("app.openStats({reset:true})"));
+            const bool opened = mcp.runScript(QStringLiteral("project.open('%1')").arg(other))
+                                    .value("ok").toBool();
+            const QJsonObject stats =
+                mcp.runScript(QStringLiteral("JSON.parse(JSON.stringify(app.openStats()))"))
+                    .value("result").toObject();
+            const QString openName = mcp.runScript(QStringLiteral("project.current().name"))
+                                         .value("result").toString();
+            const int nodeCount = mcp.runScript(QStringLiteral("scene.nodes().length"))
+                                      .value("result").toInt();
+            std::printf("info: [in-flight] open=%d project='%s' nodes=%d | UI parses %d "
+                        "(%.0f ms)%s%s | worker parses %d\n",
+                        int(opened), qUtf8Printable(openName), nodeCount,
+                        stats.value("uiThreadParses").toInt(),
+                        stats.value("uiThreadParseMs").toDouble(),
+                        stats.value("uiThreadParses").toInt() ? " <- " : "",
+                        stats.value("uiThreadParses").toInt()
+                            ? qUtf8Printable(stats.value("lastUiThreadParse").toString()) : "",
+                        stats.value("workerParses").toInt());
+            CHECK(opened && nodeCount > 1,
+                  "a synchronous open ISSUED WHILE A THREADED ONE WAS IN FLIGHT loaded its "
+                  "world");
+            CHECK(openName == QLatin1String(samples.at(1).name),
+                  "...and the project that ended up open is the one the script asked for");
+            CHECK(stats.value("uiThreadParses").toInt() == 0,
+                  "...with NO model parsed on the UI thread (the hybrid open's signature)");
+            mcp.runScript(QStringLiteral("project.close()"));
+        }
+    }
+    CHECK(mcp.runScript(QStringLiteral("project.open('%1')").arg(guid)).value("ok").toBool(),
+          "project.open (synchronous) re-opens the fixture for the cases below");
 
     // The ledger is populated and names its stages (the profiling contract).
     const QJsonObject timings = mcp.runScript(QStringLiteral(

@@ -70,13 +70,10 @@ public:
     /// (shell or ProjectApi) follows with the new-scene UI flow.
     QString createProjectShell(const QString &name);
 
-    /// Points the current project at an existing project and preloads its
-    /// assets synchronously (the scripted open's data half).
-    void prepareOpen(const QString &guid, const QString &name);
-
-    /// The pointer half of prepareOpen with NO preload — for the threaded
-    /// open, whose first slice does the session registrations itself (with a
-    /// worker's parsed models in hand).
+    /// Points the current project at an existing project. NO preload: the
+    /// open registers the session assets in its own slices, with a worker's
+    /// parsed models in hand (OPEN-ASSIMP-1 — the `prepareOpen` that used to
+    /// sit beside this and parse on the calling thread is gone).
     void pointAtProject(const QString &guid, const QString &name);
 
     /// Deletes a project: folder tree first (like the widget), then the DB

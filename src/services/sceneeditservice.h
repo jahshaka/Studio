@@ -117,6 +117,11 @@ public:
     /// where the mouse is"). Absent — the menus, the presets panel — keeps the
     /// funnel's own placement (in front of the camera, stepped clear of
     /// whatever already stands there).
+    /// Holds the SHIPPED primitive models for the life of the process
+    /// (iris::Mesh::pinLoadPaths) — see the definition for the measurement.
+    /// Called by the constructor; idempotent, and safe to call again.
+    static void pinBuiltinPrimitives();
+
     void addPrimitive(const QString &name,
                       const std::optional<iris::Vec3> &position = std::nullopt,
                       surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);

@@ -132,7 +132,7 @@ void SceneOpenRunner::runNextSlice()
     QTimer::singleShot(1, this, [this]() { runNextSlice(); });
 }
 
-bool SceneOpenRunner::waitForDone(int msTimeout)
+bool SceneOpenRunner::waitForDone(int msTimeout, int idleSleepMs)
 {
     QPointer<SceneOpenRunner> self(this);
     QElapsedTimer timer;
@@ -144,7 +144,7 @@ bool SceneOpenRunner::waitForDone(int msTimeout)
         // nothing re-enters the UI mid-shutdown.
         QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
         if (self.isNull() || !self->mRunning.load()) return true;
-        QThread::msleep(5);
+        QThread::msleep(static_cast<unsigned long>(qMax(0, idleSleepMs)));
     }
     return self.isNull() || !self->mRunning.load();
 }

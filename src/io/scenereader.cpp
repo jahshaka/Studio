@@ -1236,7 +1236,14 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
                              << "did not resolve to a file — the node loads with no mesh";
     }
     if (!source.isEmpty()) {
-        auto mesh = getMesh(source, meshIndex);
+        // A ":"-prefixed source is a BUILT-IN PRIMITIVE and MeshNode loads it
+        // from the resource itself (below). getMesh used to run on it too —
+        // and assimp cannot open a Qt resource path, so every primitive in
+        // every scene cost a failed parse whose result was then thrown away
+        // (measured 2026-09-15: 5 of them per open of the Mirror Room sample,
+        // 6 per Showroom). They were cheap; they were also counted as UI-thread
+        // parses, which is the one number this path is not allowed to dirty.
+        auto mesh = source.startsWith(":") ? iris::MeshPtr() : getMesh(source, meshIndex);
 
         if (source.startsWith(":")) {
             meshNode->setMesh(source);
