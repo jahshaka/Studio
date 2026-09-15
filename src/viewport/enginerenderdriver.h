@@ -17,6 +17,7 @@
 // quantize instead of slide.
 //
 // Runs on the thread that owns the Engine (its thread-affinity rule).
+#include <QElapsedTimer>
 #include <QObject>
 #include "jahshaka/engine/Engine.h"
 #include "services/framepacing.h"
@@ -81,21 +82,41 @@ public:
     Stats stats() const { return mStats; }
 
     // ---- the script run policy (SCRIPTING_LIVE_SPEC §3.1) -----------------
-    /// SUSPEND THE TICK, per tick, for the length of a script run whose policy
-    /// is Off. Not stop(): the timer keeps running, so resuming costs nothing
-    /// and needs no signal from anybody (the same reason the empty-viewport
-    /// skip below is per tick).
-    ///
-    /// The whole tick is skipped, beforeFrame included, and that is the point:
-    /// this reproduces EXACTLY what a script used to get for free by holding
-    /// the UI thread — no frame, no mirror sync, no simulated time between two
-    /// verbs — which is what 54 frame-stepping e2e scripts and 18 frame-counter
-    /// readers were written against. (The usual warning about skipping
-    /// beforeFrame — its subscribers pull a wall-clock delta, so an idle period
-    /// banks into the first resumed frame — applies and is accepted here: it is
-    /// the behaviour a blocked UI thread already had.)
-    void setTicksSuspended(bool suspended) { mTicksSuspended = suspended; }
-    bool ticksSuspended() const { return mTicksSuspended; }
+    /// What a script run in flight is doing to this loop. ONE setter, called
+    /// once when a run starts and once when it ends, because the two policies
+    /// are two answers to the same question and a second flag could disagree
+    /// with the first.
+    enum class ScriptRun {
+        None,   ///< no script is running: the loop is nobody's business but its own
+        /// A run whose policy is Off owns the loop: the tick does NOTHING for
+        /// the length of it. Not stop() — the timer keeps running, so resuming
+        /// costs nothing and needs no signal from anybody (the same reason the
+        /// empty-viewport skip below is per tick). The whole tick is skipped,
+        /// beforeFrame included, and that is the point: it reproduces EXACTLY
+        /// what a script used to get for free by holding the UI thread — no
+        /// frame, no mirror sync, no simulated time between two verbs — which
+        /// is what 54 frame-stepping e2e scripts and 18 frame-counter readers
+        /// were written against. (The usual warning about skipping beforeFrame
+        /// — its subscribers pull a wall-clock delta, so an idle period banks
+        /// into the first resumed frame — applies and is accepted: it is the
+        /// behaviour a blocked UI thread already had.)
+        Off,
+        /// A run whose policy is Live wants the picture to move, and it is
+        /// PACED BY TIME while it does. Without pacing the loop and the script
+        /// strictly alternate — one frame per verb, whatever the verb costs —
+        /// because the worker can only post its next hop after the previous one
+        /// returns, and in that gap an overdue timer always wins. Measured: a
+        /// trivial verb cost 8.1 ms instead of 30 us, a 270x tax on a
+        /// query-dense script. At most one frame per DISPLAY PERIOD while a
+        /// live run is in flight puts that back to the honest price of the
+        /// frames the user asked to see.
+        Live
+    };
+    /// Called once at the start and once at the end of a run. Gated strictly on
+    /// Live, so a session with no script running is byte-identical to one with
+    /// no pacing code at all — frame stats, the render monitor, everything.
+    void setScriptRun(ScriptRun run) { mScriptRun = run; }
+    ScriptRun scriptRun() const { return mScriptRun; }
 
 signals:
     /// Emitted before each frame — animate here.
@@ -113,6 +134,9 @@ private:
     /// Re-times the timer from mMode/mRefreshHz, if it is running, and emits
     /// pacingChanged(). The one place the interval is ever written.
     void applyPacing();
+    /// One display period, in ms — the ceiling on how often a LIVE script run
+    /// is allowed to cost a frame.
+    double scriptPacePeriodMs() const;
 
     jahshaka::engine::Engine *mEngine;
     QTimer *mTimer;
@@ -120,8 +144,13 @@ private:
     framepacing::Mode mMode = framepacing::Mode::Display;
     /// 0 until a host tells us (see setRefreshHz) — the fallback interval then.
     double  mRefreshHz = 0.0;
-    /// True while a script run with the Off policy owns the loop.
-    bool    mTicksSuspended = false;
+    /// What the script run in flight (if any) is doing to this loop.
+    ScriptRun mScriptRun = ScriptRun::None;
+    /// Since the END of the last rendered tick, for the Live pacing above.
+    /// From the END, not the start: a 33 ms Debug frame measured from its start
+    /// is already past a 16.7 ms period the instant it finishes, and the
+    /// alternation this exists to break would survive untouched.
+    QElapsedTimer mSinceFrameEnd;
     /// Ring of the last kWorkWindow rendered ticks' durations, ms.
     double  mWork[kWorkWindow] = {};
     int     mWorkNext = 0;

@@ -322,11 +322,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// THE RENDER LOOP FOR THE LENGTH OF A RUN (SCRIPTING_LIVE_SPEC §3.1). A
 	// script runs off the UI thread now, so the driver's timer WOULD fire
 	// between its verbs — which is the live feedback a person wants and the
-	// thing a frame-stepping test must not have. A run whose policy is Off
-	// suspends the tick here for its duration; a Live run leaves it alone.
-	scriptHost->driverSuspended = [](bool suspended) {
-		if (EngineRenderDriver *driver = EngineHost::instance().driver())
-			driver->setTicksSuspended(suspended);
+	// thing a frame-stepping test must not have. Off suspends the tick for the
+	// run's duration; Live paces it to one frame per display period (round 2,
+	// H1 — unpaced, the loop and the script alternate one frame per verb).
+	scriptHost->scriptRunState = [](ScriptRunState state) {
+		EngineRenderDriver *driver = EngineHost::instance().driver();
+		if (!driver) return;
+		switch (state) {
+		case ScriptRunState::None: driver->setScriptRun(EngineRenderDriver::ScriptRun::None); break;
+		case ScriptRunState::Off:  driver->setScriptRun(EngineRenderDriver::ScriptRun::Off);  break;
+		case ScriptRunState::Live: driver->setScriptRun(EngineRenderDriver::ScriptRun::Live); break;
+		}
 	};
 	// The run's one undo entry, ARMED here and created by the first command
 	// that lands (UndoService::push) — a query script must leave the stack

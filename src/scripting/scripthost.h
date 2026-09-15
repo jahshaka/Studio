@@ -35,6 +35,16 @@ class ProjectManager;
 class QUndoStack;
 struct StudioServices;
 
+/// WHAT A SCRIPT RUN IN FLIGHT IS DOING TO THE RENDER LOOP (SCRIPTING_LIVE_SPEC
+/// §3.1). Lives here, on the one struct both halves of the app share, so the
+/// hook below can carry it without the scripting core knowing what a viewport
+/// is and without the viewport knowing what a script is.
+enum class ScriptRunState {
+    None,   ///< no run: the loop is nobody's business but its own
+    Off,    ///< a run that must see no frame at all between its verbs
+    Live    ///< a run the user is watching: the loop draws, paced
+};
+
 struct ScriptHost
 {
     MainWindow      *mainWindow = nullptr;
@@ -161,12 +171,14 @@ struct ScriptHost
     std::function<void(std::function<void()>)> afterRun;
 
     /// THE RENDER LOOP, for the length of one script run (SCRIPTING_LIVE_SPEC
-    /// §3.1). Called with true when a run whose policy is Off begins and false
-    /// when it ends: the driver skips its ticks in between, which is what a
-    /// blocked UI thread used to give for free and what every frame-stepping
-    /// test script still needs. Unset (the CLI's document-only hosts, the unit
-    /// test) means there is no loop to suspend.
-    std::function<void(bool)> driverSuspended;
+    /// §3.1). Called ONCE when a run starts, with its policy, and once with
+    /// None when it ends — one hook, because "does the loop draw" and "how
+    /// often" are two answers to the same question and two flags could
+    /// disagree. Off is what a blocked UI thread used to give for free and what
+    /// every frame-stepping test script still needs; Live draws, paced by the
+    /// display's period. Unset (the CLI's document-only hosts, the unit test)
+    /// means there is no loop to tell.
+    std::function<void(ScriptRunState)> scriptRunState;
 
     /// The last thing a verb refused or threw, whichever came last (ApiModule::
     /// refuse/fail). Read back by app.lastError(): a refusal answers with a

@@ -40,14 +40,26 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // per texture (P2). Slow frames are logged and, while a scene open is
         // being measured, banked in the ledger, so "opening is still slow"
         // always has a number attached to it.
-        // A SCRIPT RUN WITH THE Off POLICY OWNS THE LOOP (setTicksSuspended).
+        // A SCRIPT RUN WITH THE Off POLICY OWNS THE LOOP (setScriptRun).
         // Nothing at all happens here for the length of that run: the viewport
         // holds its last picture, no time passes for the document, and a
         // script's editor.frame(n, dt) renders exactly the n frames it asked
         // for. The tick is not even counted — app.frameStats() must read the
         // same before and after, as it did when the run simply blocked this
         // thread.
-        if (mTicksSuspended) return;
+        if (mScriptRun == ScriptRun::Off) return;
+        // A LIVE RUN IS PACED BY TIME (round 2, H1). The worker can only post
+        // its next verb after the previous one returns, and an overdue timer
+        // always wins that gap — so unpaced, the loop and the script alternate
+        // one frame per verb and a trivial verb costs a whole frame (measured:
+        // 8.1 ms instead of 30 us). At most one frame per display period while
+        // a live run is in flight, measured from the END of the last rendered
+        // tick. The period is the DISPLAY's, deliberately, not
+        // pacedIntervalMs(): under Unlimited pacing that is 0 and would pace
+        // nothing at all.
+        if (mScriptRun == ScriptRun::Live && mSinceFrameEnd.isValid()
+            && mSinceFrameEnd.elapsed() < scriptPacePeriodMs())
+            return;
         QElapsedTimer frame;
         frame.start();
         ++mStats.ticks;
@@ -106,6 +118,10 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
         if (anythingToDraw) { mEngine->renderOneFrame(); ++mStats.rendered; }
         else                { ++mStats.skipped; }
+        // The Live pacing clock, restarted from the END of the frame (see the
+        // header). Unconditional and two instructions, so the no-script loop
+        // reads exactly as it did.
+        mSinceFrameEnd.restart();
         // The session log's frame column (SESSION_LOG_SPEC §3.7) — what turns
         // "these three warnings" into "these three warnings IN THE SAME FRAME".
         // ONE relaxed atomic store, no log call: the discipline is zero LOG
@@ -178,6 +194,14 @@ void EngineRenderDriver::setRefreshHz(double hz)
     if (qFuzzyCompare(hz + 1.0, mRefreshHz + 1.0)) return;
     mRefreshHz = hz;
     applyPacing();
+}
+
+double EngineRenderDriver::scriptPacePeriodMs() const
+{
+    // The DISPLAY's period, not the loop's interval: pacedIntervalMs() is 0
+    // under Unlimited pacing (vsync off, beat as fast as you can), and a live
+    // script paced to 0 ms is not paced.
+    return mRefreshHz > 0.0 ? 1000.0 / mRefreshHz : 16.7;
 }
 
 void EngineRenderDriver::applyPacing()

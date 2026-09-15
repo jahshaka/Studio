@@ -210,11 +210,13 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
         mHost.beginRunUndoMacro();
     }
 
-    // THE RUN POLICY. Off suspends the render driver's tick for the duration —
-    // which is what a blocked UI thread used to do for free, and what the 54
-    // frame-stepping e2e scripts and the 18 frame-counter readers depend on.
-    const bool suspendDriver = (policy == ScriptRunPolicy::Off);
-    if (suspendDriver && mHost.driverSuspended) mHost.driverSuspended(true);
+    // THE RUN POLICY, handed to the render loop as one state. Off suspends the
+    // driver's tick for the duration — which is what a blocked UI thread used
+    // to do for free, and what the 54 frame-stepping e2e scripts and the 18
+    // frame-counter readers depend on. Live lets it draw, paced.
+    if (mHost.scriptRunState)
+        mHost.scriptRunState(policy == ScriptRunPolicy::Off ? ScriptRunState::Off
+                                                            : ScriptRunState::Live);
 
     // WAIT BY PUMPING, never by blocking: the verb hops are events on THIS
     // thread, so a mutex wait here would deadlock on the very first one.
@@ -256,7 +258,7 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     result = mWorker->result();
     mWorker->engine()->setInterrupted(false);
 
-    if (suspendDriver && mHost.driverSuspended) mHost.driverSuspended(false);
+    if (mHost.scriptRunState) mHost.scriptRunState(ScriptRunState::None);
 
     if (useMacro) mHost.endRunUndoMacro();
     mHost.runWrapsUndoMacro = outerWrapsUndoMacro;
