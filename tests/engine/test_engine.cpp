@@ -4135,16 +4135,44 @@ void hud_overlay_draws_where_it_says_when_allowed() {
     CHECK_MSG(near(corner4, cover.coverFill, 6),
               "the cover must fill the whole view: %d %d %d", corner4.r, corner4.g, corner4.b);
     // The cover's TEXT is the one-shot-caption trap's blast radius: a static
-    // caption that never re-flags renders nothing at all, silently. Count
-    // pixels in the title band that are neither the fill nor the scene.
-    size_t titlePixels = 0;
-    for (unsigned y = withCover.height / 2 - 14; y < withCover.height / 2 + 14; ++y)
-        for (unsigned x = 0; x < withCover.width; ++x)
-            if (!near(px(withCover, x, y), cover.coverFill, 24)) ++titlePixels;
+    // caption whose geometry is built once, against an unloaded font, renders
+    // nothing at all, silently. Count pixels in the title band that are neither
+    // the fill nor the scene.
+    auto titleBandPixels = [&](const Image &img) {
+        size_t n = 0;
+        for (unsigned y = img.height / 2 - 14; y < img.height / 2 + 14; ++y)
+            for (unsigned x = 0; x < img.width; ++x)
+                if (!near(px(img, x, y), cover.coverFill, 24)) ++n;
+        return n;
+    };
+    const size_t titlePixels = titleBandPixels(withCover);
     std::printf("    cover title/subtitle pixels: %zu\n", titlePixels);
     CHECK_MSG(titlePixels > 40,
               "the cover's STATIC captions must actually render (the one-shot trap): %zu px",
               titlePixels);
+
+    // ...AND THEY MUST RENDER ON THE FIRST FRAME THEY ARE DRAWN IN, which is
+    // the assertion that keeps the pin honest. The trap was fixed AT THE PIN
+    // (ogre-patch 0014: the font is loaded before OverlayElement::_update()
+    // builds the geometry), which is why the engine no longer re-captions
+    // anything after the first frame — with the font load back in its upstream
+    // place this check fails while the four-frame one above still passes,
+    // because nothing would ever re-flag the geometry.
+    View *v1 = fx.view("hud-first-frame-view", 192, 128, kBlue); REQUIRE(v1);
+    Scene *s1 = fx.scene("hud-first-frame-scene");               REQUIRE(s1);
+    v1->setScene(s1);
+    populate(s1, kOrange);
+    aim(v1);
+    ViewOverlayDesc first = cover;
+    first.coverTitle = "First frame title";
+    first.coverSubtitle = "and its subtitle";
+    v1->setOverlay(first);
+    render(fx.e, 1); Image firstFrame; REQUIRE(v1->readPixels(firstFrame));
+    const size_t firstFramePixels = titleBandPixels(firstFrame);
+    std::printf("    cover captions on frame 1: %zu px\n", firstFramePixels);
+    CHECK_MSG(firstFramePixels > 40,
+              "a STATIC caption must render in the first frame it is drawn in "
+              "(ogre-patch 0014): %zu px", firstFramePixels);
 
     // ---- the stats readout: a corner, and only that corner -----------------
     ViewOverlayDesc stats;
