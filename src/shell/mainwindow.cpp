@@ -740,7 +740,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	// left the process alive — the import.shutdown zombie, wearing a different
 	// hat). Re-entrancy is guarded: the pump can deliver another close.
 	static bool sSettlingOpen = false;
-	if (!sSettlingOpen && isOpeningProject()) {
+	if (sSettlingOpen) return;   // a nested close under the settle: the outer one finishes
+	if (isOpeningProject()) {
 		sSettlingOpen = true;
 		openRunner->waitForDone(5000);
 		if (openRunner->isRunning()) openRunner->requestAbort();
@@ -2035,7 +2036,7 @@ void MainWindow::closeProject()
 {
     // AN OPEN IN FLIGHT IS DRAINED FIRST (lane OPEN-FRAMES-1, item 3), the way
     // the window-close and shutdown paths already do it (closeEvent above,
-    // shutdownWorkers below). Without this a queued install slice could run
+    // shutdownBackgroundWork below). Without this a queued install slice could run
     // AFTER this function tore the project down — it would mount panels on a
     // document that no longer exists, push a scene that was just destroyed and
     // switch the page to a world nobody opened. Nothing but ProjectApi's
@@ -2053,7 +2054,12 @@ void MainWindow::closeProject()
     // close (a second click, a queued menu action, an MCP request), and this
     // function is not re-entrant below.
     static bool sDrainingOpen = false;
-    if (!sDrainingOpen && isOpeningProject()) {
+    // A NESTED close arriving through the drain's pump (an MCP project.close,
+    // a queued metacall — not user input, so ExcludeUserInputEvents lets it in)
+    // must RETURN, not fall through to the teardown under the outer drain
+    // (the second read of OPEN-FRAMES-1): the outer close finishes the job.
+    if (sDrainingOpen) return;
+    if (isOpeningProject()) {
         sDrainingOpen = true;
         openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
         if (openRunner->isRunning()) {

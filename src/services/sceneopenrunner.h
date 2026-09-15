@@ -99,10 +99,12 @@ public:
     /// bookkeeping and why). A frame is a 16 ms timer, and a chain of posted
     /// events — a script polling a verb, a user driving a panel — outranks a
     /// timer in Qt's dispatcher: measured, NO frame at all renders between the
-    /// slices of an open driven that way, and the backend accumulates the
-    /// entire install until its own 512 MB emergency threshold force-flushes
-    /// from inside an allocation and leaves the process heap corrupt (33 of 59
-    /// scripted opens crashed; 0 of 24 with one frame per turn).
+    /// slices of an open driven that way; the backend then runs the whole
+    /// install with nothing advanced — and the process ends up with a corrupt
+    /// heap (the 512 MB emergency flush one sees in the log is a SYMPTOM that
+    /// fires in clean runs too; the writer is unnamed). A frame per slice
+    /// cures it (the diagnosis: 33 of 59 frameless scripted opens crashed, 0 of
+    /// 24 with one frame per turn; the lane: 9/12 base, 0/12 with the frame).
     ///
     /// So the runner advances the renderer ITSELF, at every slice boundary,
     /// instead of hoping somebody drew. The shell supplies the call (this class

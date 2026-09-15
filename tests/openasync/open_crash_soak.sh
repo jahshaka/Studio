@@ -6,7 +6,9 @@
 # (~/Developer/spikes/async-open-crash/phase2) — import one sample, open it
 # through the threaded path, and poll with a verb that renders NOTHING — N
 # times, each in a fresh process with a fresh data root, under glibc's own heap
-# checks (MALLOC_CHECK_=3 aborts on a corrupt chunk header at the next
+# checks (glibc's built-in ones + MALLOC_PERTURB_; MALLOC_CHECK_=3 is effective
+# only with libc_malloc_debug.so.0 preloaded, an opt-in here because the NVIDIA
+# GLX library aborts under it — see below; they abort on a corrupt chunk at the next
 # malloc/free; MALLOC_PERTURB_ fills freed memory so a use-after-free reads
 # poison instead of plausible data).
 #
@@ -39,7 +41,17 @@ i=1
 while [ "$i" -le "$N" ]; do
     home="$ROOT/run-$i"
     rm -rf "$home"; mkdir -p "$home/run" "$home/dr"
-    ( cd "$home/run" && HOME="$home" MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
+    # glibc >= 2.34 moved MALLOC_CHECK_ into libc_malloc_debug.so.0: without the
+    # preload the variable is INERT (measured on this box's 2.43 — the second
+    # read of OPEN-FRAMES-1). BUT the preload ABORTS THE APP INSIDE THE NVIDIA
+    # GLX LIBRARY'S OWN CONSTRUCTOR (a realloc of one of its chunks fails the
+    # checker: "double free or corruption (out)" in libnvidia-glcore, 12/12,
+    # before a line of ours runs — the lead, 2026-09-15). So the soak runs on
+    # glibc's BUILT-IN chunk checks + MALLOC_PERTURB_ (what caught every crash
+    # so far); the real checker is an OPT-IN for a driver that tolerates it:
+    dbg=/usr/lib/x86_64-linux-gnu/libc_malloc_debug.so.0
+    pre=""; [ -n "${JAH_SOAK_MALLOC_DEBUG:-}" ] && [ -f "$dbg" ] && pre="LD_PRELOAD=$dbg"
+    ( cd "$home/run" && env $pre HOME="$home" MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
       "$BIN" --data-root "$home/dr" --script "$ROOT/soak.js" > "$ROOT/run-$i.log" 2>&1 )
     rc=$?
     if [ "$rc" -ne 0 ]; then
