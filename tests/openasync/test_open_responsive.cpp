@@ -77,7 +77,8 @@ static const int kOpenBudgetMs = 120000;
 /// WHAT DOES NOT WORK, measured here before it was written (40 spinners on a
 /// 20-core box, load average 25-36): avatar.responsive's IDLE noise floor. It
 /// read 238-303 ms while the warm open in the same process read 552, 701 and
-/// 732 ms — it under-reports contention by an order of magnitude, and the
+/// 732 ms — it under-reports contention by ~2.3x on those numbers (its 100 ms
+/// probe already carried ~150 ms of contention above its quiet ~108), and the
 /// reason is physics, not tuning. An idle app's UI thread is runnable for
 /// microseconds every 250 ms and the scheduler hands a long-sleeping task the
 /// CPU almost immediately; the engine even SKIPS still frames, so at rest the
@@ -89,7 +90,11 @@ static const int kOpenBudgetMs = 120000;
 /// flight — editor.frame() renders frames on this thread exactly as the open's
 /// neighbours do. The control therefore carries the scheduling weather AND the
 /// frame cost, and the assertion becomes what this suite actually means: the
-/// open must not block the thread MORE THAN RUNNING THE APP DOES.
+/// open must not block the thread MORE THAN RUNNING THE APP DOES — read
+/// honestly: a 250 ms probe never fires early, so every gap carries the probe
+/// PERIOD as a floor, and the factor doubles that period along with the
+/// contention (quiet: 500 + 2 x (control - 250) ~ 540). The CEILING below is
+/// the guard against a real regression, not the factor.
 ///
 /// THE RULE, and the numbers behind it (measured on this box, 2026-09-15, with
 /// 40 spin loops on 20 cores at load average 33-44):

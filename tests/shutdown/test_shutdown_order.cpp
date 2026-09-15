@@ -89,17 +89,17 @@ int main(int argc, char **argv)
                     "deliberately provoked — the checks under it are the verdict\n");
         QElapsedTimer t;
         t.start();
-        const QJsonObject late = slow.runScript(QStringLiteral("app.blockUiThread(1500)"));
+        const QJsonObject late = slow.runScript(QStringLiteral("app.blockUiThread(1000)"));
         const qint64 tookMs = t.elapsed();
         std::printf("info: the short-budget request gave up after %lld ms: %s\n",
                     static_cast<long long>(tookMs),
                     QJsonDocument(late).toJson(QJsonDocument::Compact).constData());
-        CHECK(tookMs < 1400, "a request that outlives the transfer timeout RETURNS at the timeout");
+        CHECK(tookMs < 900, "a request that outlives the transfer timeout RETURNS at the timeout");
         CHECK(!late.isEmpty(), "... and does not return a blank object");
         CHECK(!late.value("ok").toBool(), "... it reads as a failure");
         CHECK(late.value("error").toString().contains(QStringLiteral("no reply within")),
               "... whose message says no reply arrived within the budget");
-        CHECK(late.value("error").toString().contains(QStringLiteral("app.blockUiThread(1500)")),
+        CHECK(late.value("error").toString().contains(QStringLiteral("app.blockUiThread(1000)")),
               "... and names the verb that went unanswered");
         CHECK(slow.transportFailures == 1 &&
                   slow.lastTransportError.contains(QStringLiteral("no reply within")),
