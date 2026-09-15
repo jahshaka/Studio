@@ -38,6 +38,9 @@ other Vulkan gates (or the owner's app plus one) are live.
 
 ## 3. The SCOPED tier — `scripts/gate-scope.sh`
 
+`-j N` / `--jobs N` sets the ctest parallelism (default 4, the tier's contract). A lane gating beside other live lanes runs `-j 2`
+(the concurrency law); the printed command and the wall estimate follow the value, so a lane never has to re-type the selection.
+
 ```
 scripts/gate-scope.sh <base>..<tip>            # a lane: its base commit .. its tip
 scripts/gate-scope.sh --files src/x.cpp ...    # a file list instead of a range

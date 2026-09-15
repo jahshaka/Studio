@@ -144,6 +144,9 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["sunDiscVisible"] = scene->sunDiscVisible;
     sceneObj["sunDiscInProbes"] = scene->sunDiscInProbes;
     sceneObj["sunDiscSize"] = scene->sunDiscSize;
+    // HARDWARE RAY TRACING (ledger §425), as the stable string the enum's ints
+    // must stay free of — "off" / "auto" / "on".
+    sceneObj["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
@@ -191,6 +194,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["ssaoRadius"] = scene->ssaoRadius;
     sceneObj["smaaPreset"] = scene->smaaPreset;
     sceneObj["ssrMode"] = scene->ssrMode;
+    sceneObj["rayReflectRoughness"] = scene->rayReflectRoughness;
     sceneObj["refractionsMode"] = scene->refractionsMode;
     sceneObj["distortionMode"] = scene->distortionMode;
     sceneObj["distortionStrength"] = scene->distortionStrength;

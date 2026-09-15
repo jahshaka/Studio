@@ -37,8 +37,6 @@ public:
     Q_INVOKABLE QVariantMap heartbeatStats();
     Q_INVOKABLE QVariantMap watchdogStats();
     Q_INVOKABLE bool blockUiThread(int ms);
-    /// THE HARDWARE RAY-TRACING PREFERENCE (SPECS/PHOTON_SPEC.md §7 R1).
-    Q_INVOKABLE QVariantMap rayTracing(const QString &mode = QString());
     Q_INVOKABLE QVariantMap shaderCache();
     Q_INVOKABLE bool clearShaderCache();
     Q_INVOKABLE bool saveShaderCache();

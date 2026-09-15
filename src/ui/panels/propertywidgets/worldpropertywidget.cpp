@@ -114,6 +114,31 @@ WorldPropertyWidget::WorldPropertyWidget()
         return QVariant(int(mode));
     }));
 
+    // HARDWARE RAY TRACING (owner, 2026-09-15; ledger §425). A PROJECT fact,
+    // saved with the scene and travelling with it — not an application
+    // preference (it was one for two days, and a machine-wide switch meant the
+    // same project rendered differently depending on something that was not in
+    // it), and not a World Mode row either: the tier table is the SCALABILITY
+    // registry, and "what this project was authored for" is not a quality
+    // trade a tier switch may overwrite.
+    rayTracingSelector = this->addComboBox("Ray Tracing");
+    rayTracingSelector->addItem("Off", QStringLiteral("off"));
+    rayTracingSelector->addItem("Auto", QStringLiteral("auto"));
+    rayTracingSelector->addItem("On", QStringLiteral("on"));
+    rayTracingSelector->setToolTip(QStringLiteral(
+        "What this project was authored for. Nothing here can give a machine ray-tracing "
+        "hardware it does not have. Auto (the default) uses the hardware wherever it exists and "
+        "falls back silently everywhere else, so the same file looks right on a ray-capable "
+        "desktop and on a Mac. Off never traces, even where the GPU can — for a scene that must "
+        "look and cost the same on every machine. On renders exactly like Auto and additionally "
+        "tells you, in the scene errors above the viewport, when the machine you are on has no "
+        "ray tracing and is therefore not showing you what you built. Saved with the scene."));
+    PropertyRows::describe(rayTracingSelector,
+                           { QStringLiteral("ray tracing"), QStringLiteral("raytracing"),
+                             QStringLiteral("rt"), QStringLiteral("rays"),
+                             QStringLiteral("hardware"), QStringLiteral("reflections"),
+                             QStringLiteral("rendering") });
+
 	ambientMusicSelector = this->addComboBox("Background Ambience");
 	ambientMusicVolume = this->addFloatValueSlider("Volume", 1, 100, 50);
 
@@ -125,6 +150,17 @@ WorldPropertyWidget::WorldPropertyWidget()
 	rowundo::bind(sunDiscVisible, rows(QStringLiteral("sunDiscVisible"), tr("Sun Disc")));
 	rowundo::bind(sunDiscInProbes, rows(QStringLiteral("sunDiscInProbes"), tr("Sun Disc in Reflections")));
 	rowundo::bind(sunDiscSize, rows(QStringLiteral("sunDiscSize"), tr("Sun Disc Size")));
+    // The combo carries the STATE NAME as item data, exactly like Play Mode
+    // above: the row index means nothing to the document, and the enum's ints
+    // stay free to be reordered.
+    rowundo::bind(rayTracingSelector, rows(QStringLiteral("rayTracing"),
+                                           tr("Ray Tracing"),
+                                           [this](const QVariant &row) {
+        iris::RayTracingMode mode = iris::RayTracingMode::Auto;
+        iris::rayTracingModeFromName(
+            rayTracingSelector->getItemData(row.toInt()).toString(), mode);
+        return QVariant(int(mode));
+    }));
 }
 
 void WorldPropertyWidget::setDatabase(Database *db)
@@ -174,6 +210,8 @@ void WorldPropertyWidget::refreshRows()
     ambientMusicVolume->setValue(scene->ambientMusicVolume);
     playModeSelector->setCurrentItemData(
         QString::fromLatin1(iris::playModeName(scene->getPlayMode())));
+    rayTracingSelector->setCurrentItemData(
+        QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing)));
 
     QVector<AssetRecord> musicFilesAvailableFromDatabase;
     if (db && project)

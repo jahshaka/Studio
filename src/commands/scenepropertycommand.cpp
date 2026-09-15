@@ -98,6 +98,17 @@ QVector<sceneprops::Field> buildFields()
             s->sunDiscSize = float(qBound(double(iris::kMinSunDiscSize), v.toDouble(),
                                           double(iris::kMaxSunDiscSize)));
         });
+    // HARDWARE RAY TRACING (ledger §425) — the project's own state, as the
+    // enum's int. Auto is 0, so a blob that lost the value restores the
+    // documented default rather than the most restrictive state; anything
+    // outside the three known states reads as Auto for the same reason.
+    add("rayTracing", [](const ScenePtr &s) { return QVariant(int(s->rayTracing)); },
+        [](const ScenePtr &s, const QVariant &v) {
+            const int i = v.toInt();
+            s->rayTracing = (i == int(iris::RayTracingMode::Off))  ? iris::RayTracingMode::Off
+                          : (i == int(iris::RayTracingMode::On))   ? iris::RayTracingMode::On
+                                                                   : iris::RayTracingMode::Auto;
+        });
     // setWorldGravity, never the raw field: it drives the Bullet world too.
     add("gravity", [](const ScenePtr &s) { return QVariant(s->gravity); },
         [](const ScenePtr &s, const QVariant &v) { s->setWorldGravity(v.toFloat()); });

@@ -241,22 +241,6 @@ void WorldSettingsWidget::shadowMeshOptimizationChanged(bool on)
 		engine->setShadowMeshOptimization(on);
 }
 
-void WorldSettingsWidget::rayTracingChanged(int index)
-{
-	const bool on = (index == 0);
-	settings->setValue("hardware_ray_tracing", on);
-	// Durable now, not whenever QSettings flushes: this preference is read at
-	// ENGINE INIT on the next launch, and an unsynced write is a setting the
-	// user chose and the app then ignored.
-	if (settings->settings) settings->settings->sync();
-	// The SAME capability the app.rayTracing verb calls (SCRIPTING_SPEC §2.3:
-	// the page calls the verb's path, it does not reimplement it). Scenes drawn
-	// after this rebuild or drop their structures; the device itself is only
-	// re-created at the next launch, which is why "Off" here is the preference
-	// and --no-ray-query is the one-run override that also reaches vkCreateDevice.
-	if (editorViewport) editorViewport->setRayTracing(on);
-}
-
 void WorldSettingsWidget::enableOpenInPlayer(bool state)
 {
 	settings->setValue("open_in_player", openInPlayer = state);
@@ -333,9 +317,6 @@ void WorldSettingsWidget::configureViewport()
 	// cannot honestly be a per-scene (World Mode) row — a mesh built while it was
 	// on keeps its optimized shadow buffers in every scene that uses it.
 	auto optimizeShadowMeshes = new QLabel("Optimize Shadow Meshes :");
-	auto rayTracingLabel = new QLabel("Hardware Ray Tracing :");
-	setSizePolicyForWidgets(rayTracingLabel);
-
 	setSizePolicyForWidgets(selectionOutlineColor);
 	setSizePolicyForWidgets(primaryOutlineColor);
 	setSizePolicyForWidgets(selectionOutlineWidth);
@@ -363,27 +344,6 @@ void WorldSettingsWidget::configureViewport()
 	checkboxLayout->addStretch();
 	checkboxLayout->addWidget(checkbox);
 
-	// HARDWARE RAY TRACING (SPECS/PHOTON_SPEC.md §7 R1) — an APPLICATION
-	// preference and not a scene setting, because ray tracing is a capability of
-	// the GPU in this machine: the same project opened on a ray-capable desktop
-	// and on a Mac is the same project, and a picture that changed with the file
-	// open would be a second authoring path.
-	auto rayTracingCombo = new QComboBox;
-	rayTracingCombo->addItem("Auto");
-	rayTracingCombo->addItem("Off");
-	rayTracingCombo->setToolTip(
-		"Use the GPU's ray-tracing hardware where it exists. The renderer keeps a "
-		"ray-traceable copy of the scene, built from the same geometry it draws; the "
-		"lighting stages that consume it arrive in their own updates, so today this "
-		"changes no picture. Off renders exactly what a machine without ray-tracing "
-		"hardware renders — which is also what a Mac does, and what the tests use to "
-		"prove that fallback. Takes effect for scenes drawn after the change.");
-
-	auto rayTracingLayout = new QHBoxLayout;
-	rayTracingLayout->setContentsMargins(0, 0, 0, 0);
-	rayTracingLayout->addStretch();
-	rayTracingLayout->addWidget(rayTracingCombo);
-
 	auto shadowMeshLayout = new QHBoxLayout;
 	shadowMeshLayout->setContentsMargins(0, 0, 0, 0);
 	shadowMeshLayout->addStretch();
@@ -391,7 +351,7 @@ void WorldSettingsWidget::configureViewport()
 
 	StyleSheet::setStyle({ selectionOutlineColor,primaryOutlineColor,selectionOutlineWidth,
 	                       enableAutoSave,optimizeShadowMeshes,spinbox,checkbox,
-	                       shadowMeshCheckbox,rayTracingLabel,rayTracingCombo });
+	                       shadowMeshCheckbox });
 
 	layout->addWidget(selectionOutlineWidth, 0, 0);
 	layout->addWidget(spinbox, 0, 2);
@@ -403,8 +363,6 @@ void WorldSettingsWidget::configureViewport()
 	layout->addLayout(checkboxLayout, 3, 2);
 	layout->addWidget(optimizeShadowMeshes, 4, 0);
 	layout->addLayout(shadowMeshLayout, 4, 2);
-	layout->addWidget(rayTracingLabel, 5, 0);
-	layout->addLayout(rayTracingLayout, 5, 2);
 
 	// ---- the camera preview inset (CAMERAS_SPEC D3) ----------------------
 	// Two rows, both persisted, both written through IEditorViewport — which
@@ -431,14 +389,17 @@ void WorldSettingsWidget::configureViewport()
 	pipSpin->setToolTip("How wide the preview is, as a percentage of the viewport's width. "
 	                    "Its height follows the camera's aspect ratio.");
 	StyleSheet::setStyle({ pipLabel, pipSizeLabel, pipCheckbox, pipSpin });
-	// Rows 6 and 7: row 5 belongs to Hardware Ray Tracing (PHOTON-R1). Two
-	// widgets in one grid cell do not stack — they are DRAWN ON TOP OF EACH
-	// OTHER, which is what "Eardwra rBaeyTracing" looked like on the shipped
-	// page. Every row below moved down by one with them.
-	layout->addWidget(pipLabel, 6, 0);
-	layout->addLayout(pipLayout, 6, 2);
-	layout->addWidget(pipSizeLabel, 7, 0);
-	layout->addWidget(pipSpin, 7, 2);
+	// Rows 5 and 6. The Hardware Ray Tracing row that used to sit on row 5 is
+	// GONE — ray tracing is a property of the PROJECT now (world.rayTracing,
+	// the World panel's row), not of this machine — and every row below it
+	// moved back up by one. Two widgets in one grid cell do not stack, they are
+	// DRAWN ON TOP OF EACH OTHER, which is what "Eardwra rBaeyTracing" looked
+	// like on the shipped page: re-pack the rows, never leave a hole and never
+	// double up.
+	layout->addWidget(pipLabel, 5, 0);
+	layout->addLayout(pipLayout, 5, 2);
+	layout->addWidget(pipSizeLabel, 6, 0);
+	layout->addWidget(pipSpin, 6, 2);
 	// The stored values, read the same way the viewport reads them at startup
 	// (the page may open before a viewport exists).
 	pipCheckbox->setChecked(settings->getValue("camera/pip", true).toBool());
@@ -474,8 +435,8 @@ void WorldSettingsWidget::configureViewport()
 		"off: frames go out as fast as they are made, with tearing. Changing this rebuilds "
 		"the viewport's swapchain, so expect one dropped frame.");
 	StyleSheet::setStyle({ pacingLabel, pacingCombo });
-	layout->addWidget(pacingLabel, 8, 0);
-	layout->addWidget(pacingCombo, 8, 2);
+	layout->addWidget(pacingLabel, 7, 0);
+	layout->addWidget(pacingCombo, 7, 2);
 	{
 		bool ok = false;
 		const framepacing::Mode stored = framepacing::modeFromName(
@@ -517,8 +478,8 @@ void WorldSettingsWidget::configureViewport()
 		"it costs a handful of counter reads once per interval and never touches the "
 		"frame path. 0 turns it off.");
 	StyleSheet::setStyle({ perfLabel, perfSpin });
-	layout->addWidget(perfLabel, 9, 0);
-	layout->addWidget(perfSpin, 9, 2);
+	layout->addWidget(perfLabel, 8, 0);
+	layout->addWidget(perfSpin, 8, 2);
 	perfSpin->setValue(qBound(0, settings->getValue("log/perfSampleSeconds",
 	                                                PerfSampler::defaultSeconds()).toInt(), 3600));
 	connect(perfSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int seconds) {
@@ -550,8 +511,8 @@ void WorldSettingsWidget::configureViewport()
 		"again to stop early. Nothing is drawn over the viewport while it records, and "
 		"nothing at all runs when it is off.");
 	StyleSheet::setStyle({ captureLabel, captureSpin });
-	layout->addWidget(captureLabel, 10, 0);
-	layout->addWidget(captureSpin, 10, 2);
+	layout->addWidget(captureLabel, 9, 0);
+	layout->addWidget(captureSpin, 9, 2);
 	captureSpin->setValue(int(FrameMonitor::preferredSeconds()));
 	connect(captureSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [](int seconds) {
 		FrameMonitor::setPreferredSeconds(double(seconds));
@@ -573,16 +534,12 @@ void WorldSettingsWidget::configureViewport()
 	primaryColorPicker->setColor(outlinesettings::primaryColor());
 	checkbox->setChecked(settings->getValue("auto_save", true).toBool());
 	shadowMeshCheckbox->setChecked(settings->getValue("shadow_mesh_optimization", true).toBool());
-	rayTracingCombo->setCurrentIndex(
-		settings->getValue("hardware_ray_tracing", true).toBool() ? 0 : 1);
-
 	connect(spinbox, SIGNAL(valueChanged(double)), this, SLOT(outlineWidthChanged(double)));
 	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QColor)));
 	connect(primaryColorPicker, SIGNAL(onColorChanged(QColor)),
 	        this, SLOT(outlinePrimaryColorChanged(QColor)));
 	connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(enableAutoSave(bool)));
 	connect(shadowMeshCheckbox, SIGNAL(toggled(bool)), this, SLOT(shadowMeshOptimizationChanged(bool)));
-	connect(rayTracingCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(rayTracingChanged(int)));
 
 }
 

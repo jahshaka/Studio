@@ -58,6 +58,9 @@ public:
     Q_INVOKABLE QVariantMap skyLight();
     /// THE SUN DISC, a scene-level switch pair (§3, owner picks 2 and 4).
     Q_INVOKABLE QVariantMap sunDisc(const QVariantMap &params = QVariantMap());
+    /// HARDWARE RAY TRACING, a property of the PROJECT (ledger §425). Reads
+    /// with no argument; refuses anything but "off", "auto" and "on".
+    Q_INVOKABLE QString rayTracing(const QString &mode = QString());
     Q_INVOKABLE QVariantMap planarReflections();
     Q_INVOKABLE QVariantMap setPlanarReflections(const QVariantMap &params);
     Q_INVOKABLE bool sky(const QString &type, const QVariantMap &params = QVariantMap());

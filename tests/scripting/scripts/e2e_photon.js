@@ -239,4 +239,43 @@ var good = world.gi({ cascadeSet: [ { halfSize: 5, resolution: 128 },
 assert(!!good, "a table that grows outward is accepted");
 world.gi({ cascadeSet: [] });
 
+// ---------------------------------------------------------------------------
+// THE REFLECTION ROUGHNESS CUTOFF (PHOTON_SPEC §7 R5; owner, ledger §426).
+//
+// API-FIRST: the row is reached through the SAME generic verb every other World
+// row is (`world.override` / `world.clearOverride`), so what is asserted here is
+// the capability the panel's row will call — not a second path beside it.
+var cut = world.override({ id: "reflectionRoughnessCutoff", value: 65 });
+assert(cut.value === 65, "the reflection roughness cutoff takes a value: " + JSON.stringify(cut));
+assert(world.settings().reflectionRoughnessCutoff.value === 65,
+       "...and world.settings reads it back");
+
+// THE RANGE IS THE ROW'S, and it is enforced where every other row's is — by
+// REFUSING, loudly, rather than clamping: a silently clamped value is a setting
+// the user typed and the renderer did not take.
+var refused = false;
+try { world.override({ id: "reflectionRoughnessCutoff", value: 0 }); }
+catch (e) { refused = true; }
+assert(refused, "a value below the row's minimum is refused");
+assert(world.settings().reflectionRoughnessCutoff.value === 65,
+       "...and the refusal left the pinned value alone");
+
+// (UNDO is not asserted here. The row writes through `WorldModeCommand`, whose
+// snapshot is generic over `worldmodes::rows()` — a new row is inside it by
+// construction — and a SCRIPT RUN IS ONE UNDO MACRO, so an `editor.undo()` in
+// the middle of this file would be undoing the macro this file is still
+// building. `scripting.e2e.undo_macro` is where that path is measured.)
+
+// ...AND IT IS NOT A QUALITY TRADE. Every tier column carries 40: the cost of a
+// tier is the resolution and whether rays run at all, both rows of their own.
+// Moving the world mode must not silently re-author a description of the
+// scene's surfaces.
+world.override({ id: "reflectionRoughnessCutoff", value: 20 });
+world.mode({ mode: "epic" });
+assert(world.settings().reflectionRoughnessCutoff.value === 20,
+       "a pinned cutoff survives a tier change");
+world.clearOverride({ id: "reflectionRoughnessCutoff" });
+assert(world.settings().reflectionRoughnessCutoff.value === 40,
+       "clearing the pin returns it to 40 in every tier");
+
 console.log("e2e_photon: ALL OK");

@@ -21,10 +21,40 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/sceneextents.h"
+#include "bridge/enginehost.h"
+#include "jahshaka/engine/Engine.h"
 
 namespace {
 
 qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
+
+/// WHAT THIS MACHINE CAN DO ABOUT RAYS: 1 yes, 0 no, -1 we do not know yet.
+///
+/// The document half of the ray-tracing row is the project's business; this is
+/// the other half, and it is the RENDERER's answer — the device either
+/// advertises Vulkan ray queries or it does not, and nothing in the editor can
+/// move that. Asked at scan time rather than cached, because the answer only
+/// becomes meaningful once a Vulkan device exists (Ogre creates it with the
+/// first render target, not with Root) and this scanner runs on a 1 Hz timer
+/// from before that.
+///
+/// UNKNOWN IS THE SAFE ANSWER and it is why this is a tri-state: a headless
+/// process, a document-only session and the moments before the device exists
+/// must raise NOTHING. An issue that says "this machine has no ray tracing" on
+/// a machine that has it would be worse than saying nothing at all.
+int machineRayTracing()
+{
+    const auto engine = EngineHost::instance().engine();
+    if (!engine) return -1;
+    // No capabilities object = no device yet (OgreLogBridge.cpp deviceInfo).
+    if (engine->deviceInfo().deviceName.empty()) return -1;
+    // The process latch (--no-ray-query / JAHSHAKA_NO_RAY_QUERY) is a genuine
+    // "this run has no ray tracing": patch 0038 keeps the extensions off the
+    // device entirely, so this run IS a machine without the hardware, and the
+    // row's promise to say so applies to it.
+    if (!engine->rayTracing()) return 0;
+    return engine->rayQueryAvailable() ? 1 : 0;
+}
 
 /// Every mesh node under `root` that actually blocks light: visible, and a
 /// shadow caster. The built-in GROUND is the one exclusion — it is in every
@@ -293,11 +323,37 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         }
     }
 
+    // ---- rays.absent: the project asked for rays this machine has not -----
+    // The one issue here that is not about an OBJECT: it is about the project,
+    // so it names no node and the bar shows it as a line with nothing to
+    // select. That is exactly what the "On" state was added for (ledger §425) —
+    // On and Auto render the identical picture, and the whole difference
+    // between them is this sentence. Auto never raises it (falling back
+    // silently is what Auto MEANS) and Off never raises it (a scene that asked
+    // not to trace is not disappointed by a machine that cannot).
+    {
+        const int machine = machineRayTracing();
+        if (scene->rayTracing == iris::RayTracingMode::On && machine == 0) {
+            SceneIssue issue;
+            issue.kind = QStringLiteral("rays.absent");
+            issue.message = tr("This project expects hardware ray tracing; this machine has "
+                               "none. It is rendering the fallback picture.");
+            issue.action = tr("Nothing is broken — the scene renders without rays. Open it on a "
+                              "machine with a ray-tracing GPU to see what it was authored for, "
+                              "or set World > Ray Tracing to Auto if this project "
+                              "should simply use rays wherever they exist.");
+            issue.id = issue.kind;
+            raise(issue);
+            live << issue.id;
+        }
+    }
+
     // ---- clear what the scene no longer justifies -------------------------
     // Only the kinds this scanner owns: an issue raised by a verb or by another
     // producer is not ours to forget.
     static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak"),
-                                       QStringLiteral("sky.duplicate") };
+                                       QStringLiteral("sky.duplicate"),
+                                       QStringLiteral("rays.absent") };
     bool removed = false;
     for (int i = mIssues.size() - 1; i >= 0; --i) {
         if (!kScanned.contains(mIssues[i].kind)) continue;

@@ -803,6 +803,39 @@ set_tests_properties(scripting.e2e.photon PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# HARDWARE RAY TRACING IS A PROJECT ROW (owner, 2026-09-15; ledger §425):
+# world.rayTracing("off"|"auto"|"on"), saved with the scene, one undo step per
+# gesture, a loud refusal for anything else — and the SCENE ISSUE that is the
+# whole difference between "on" and "auto" (on and auto render the identical
+# picture; on TELLS YOU when the machine has no ray hardware).
+#
+# THE SAME SCRIPT TWICE, which is the only way to prove both answers on one GPU:
+# `ray_row` as this machine is, and `ray_row_norays` under the --no-ray-query
+# latch (JAHSHAKA_NO_RAY_QUERY=1), which builds the Vulkan device with none of
+# the ray extensions asked for. The script branches on
+# world.giStatus().rayQuery.available and asserts the matching half, so on a Mac
+# (no ray queries at all) both entries take the no-rays branch and both still
+# mean something. NOT --headless and NOT in jah_no_display: the issue half asks
+# the DEVICE a question, and there is no device without a display.
+foreach(_variant rays norays)
+    set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ray_row_${_variant})
+    file(MAKE_DIRECTORY ${_home}/run)
+    if(_variant STREQUAL norays)
+        set(_name scripting.e2e.ray_row_norays)
+        set(_env "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1")
+    else()
+        set(_name scripting.e2e.ray_row)
+        set(_env "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka")
+    endif()
+    add_test(NAME ${_name}
+             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js
+             WORKING_DIRECTORY ${_home}/run)
+    set_tests_properties(${_name} PROPERTIES
+        ENVIRONMENT "${_env}"
+        LABELS "scripting"
+        TIMEOUT 240)
+endforeach()
+
 # OUTLINER FOLDERS (SCENEGRAPH_SPEC.md §6b): scene.folders/createFolder/
 # renameFolder/removeFolder + node.setFolder/folder. The two LAWS are the point
 # of the suite — filing a node never reparents it, removing a folder never
@@ -1444,8 +1477,15 @@ file(MAKE_DIRECTORY ${_ssrhome}/run)
 add_test(NAME scripting.e2e.ssr_mirror
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
          WORKING_DIRECTORY ${_ssrhome}/run)
+# THE SCREEN-ONLY CONTRACT, AND IT STAYS THAT (lead ruling, PHOTON R5 round B;
+# the same ruling as tests/ssr/CMakeLists.txt). This suite is lane SSR-2's: it
+# measures that the SCREEN does not overrule the probe across the Mirror Room
+# sphere's limb. With the ray-query tier live that limb is answered by a TRACED
+# reflection, which is the correct picture and not the one this suite is about,
+# so it runs in the picture it was written for and none of its bars moves. The
+# combined picture is `gi.rt_reflect` / `gi.rt_reflect_norays`.
 set_tests_properties(scripting.e2e.ssr_mirror PROPERTIES
-    ENVIRONMENT "HOME=${_ssrhome};JAHSHAKA_DATA_ROOT=${_ssrhome}/.local/share/Jahshaka"
+    ENVIRONMENT "HOME=${_ssrhome};JAHSHAKA_DATA_ROOT=${_ssrhome}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1"
     LABELS "scripting"
     TIMEOUT 600)
 

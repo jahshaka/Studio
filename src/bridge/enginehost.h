@@ -107,10 +107,11 @@ private:
 };
 
 /// THE --no-ray-query LATCH (SPECS/PHOTON_SPEC.md §7 R1). main() sets it from
-/// the command line before any engine exists; EngineHost::resolveConfig ANDs it
-/// with the persisted preference. It is deliberately a one-run override and
-/// never writes the preference: a suite that forces the fallback must not
-/// change what the user chose.
+/// the command line before any engine exists, and EngineHost::resolveConfig
+/// turns it into EngineConfig::rayTracing. There is no preference beside it any
+/// more (ledger §425): what a project asks for is world.rayTracing, saved with
+/// the scene, and this is the one-run diagnostic that overrides it downward
+/// without touching the document.
 void setCliNoRayQuery(bool on);
 bool cliNoRayQuery();
 
