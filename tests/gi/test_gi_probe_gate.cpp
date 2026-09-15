@@ -244,13 +244,13 @@ int main()
     show("sheen panel", onSheen); show("wall above", onCeil);
 
     const GiStatus st = s->giStatus();
-    std::printf("   probes=%d pccBound=%s refused=%s enclosedAxes=%d captureSize=%d\n",
+    std::printf("   probes=%d pccBound=%s dropped=%d captureSize=%d\n",
                 st.probeCount, st.pccBound ? "true" : "false",
-                st.probeGridRefused ? "true" : "false", st.probeEnclosedAxes, st.probeCaptureSize);
+                st.probesDropped, st.probeCaptureSize);
     CHECK(st.probeCount == 4 && st.pccBound,
-          "the probe grid is built and bound (a sealed room encloses all three axes)");
-    CHECK(st.probeEnclosedAxes == 3 && !st.probeGridRefused,
-          "and the enclosure measurement says so");
+          "the probe grid is built and bound (every probe in this room sees its walls)");
+    CHECK(st.probesDropped == 0,
+          "and not one of the four was dropped for seeing nothing");
 
     // (c) the gate must not touch a reflective material.
     CHECK(onMirror.r > 0.30f && onMirror.r - onMirror.g > 0.20f,

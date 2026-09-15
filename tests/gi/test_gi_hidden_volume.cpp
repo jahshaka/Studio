@@ -287,8 +287,8 @@ static void hiddenParentBounce(Engine *engine, View *view)
                 "(probes %d, ifd converged %d)\n",
                 noModel.r, noModel.g, withModel.r, withModel.g,
                 shownSt.probeCount, int(shownSt.ifdConverged));
-    CHECK(shownSt.probeCount > 0 && !shownSt.probeGridRefused,
-          "pinned bounds stand the enclosure rule down, so the probes are live here");
+    CHECK(shownSt.probeCount > 0,
+          "the probes in this room saw its geometry and are live here");
     const float bounceOn = (withModel.r - withModel.g) - (noModel.r - noModel.g);
     std::printf("   bounce ON = %+.4f\n", bounceOn);
     // Measured +0.0980 here against a +0.0001 noise floor; the ratio below is

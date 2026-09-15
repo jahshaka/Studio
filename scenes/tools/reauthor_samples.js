@@ -157,7 +157,7 @@ function giLine(tag) {
     log(tag + " GI: bounds " + vec(st.boundsMin) + " .. " + vec(st.boundsMax) +
         " size " + size(st.boundsMin, st.boundsMax) + " voxelMetres " + r2(st.voxelMetres) +
         " | probes " + st.probeCount + " region " + vec(st.probeRegionMin) + " .. " +
-        vec(st.probeRegionMax) + " enclosedAxes " + st.probeEnclosedAxes +
+        vec(st.probeRegionMax) + " dropped " + st.probesDropped +
         " clamped " + st.probesClampedToRegion + " mode " + st.mode);
     return st;
 }

@@ -179,24 +179,26 @@ void WorldGiPropertyWidget::rebuild()
     // CORRECT, not an error. So the renderer's decision is DATA here: one line,
     // never a toast and never a scene-issue row.
     //
-    // A reflection probe is a photograph of an enclosure. The renderer measures
-    // whether this scene has one (OgreGi's facing-slab reading) and declines the
-    // grid in an open scene, leaving the sky cubemap bound instead — cheaper
-    // and sharper than 18-32 captures of the sky. That decision is invisible
+    // Each candidate reflection probe photographs its own surroundings as it is
+    // placed, and the renderer keeps the ones that SAW something (OgreGi's
+    // depth rule, R5-ROOM). A scene whose probes all saw nothing but distance
+    // gets no grid and keeps the sky cubemap bound instead — cheaper and
+    // sharper than 18-32 captures of the sky. That decision is invisible
     // otherwise: probeCount 0 in the hybrid looks exactly like the silent build
     // failure gi.pcc_mirror exists to catch. This reads the same GiStatus
-    // world.giStatus() publishes (probeGridRefused / probeCount).
+    // world.giStatus() publishes (probesDropped / probeCount).
     reflectionsRow = this->addLabel(tr("Reflections"), QString());
     if (reflectionsRow) {
         reflectionsRow->setToolTip(
             tr("Where this scene's reflections are actually coming from.\n\n"
-               "A reflection probe is a photograph of an enclosure taken from a point, so the "
-               "renderer measures whether the scene HAS one — a floor and a ceiling, or two "
-               "facing walls — before building a grid of them. In an open scene there is nothing "
-               "to photograph but the sky, and the sky itself is both cheaper and sharper than a "
-               "grid of photographs of it: that is \"Sky\", and it is the right answer rather "
-               "than a failure. Add walls and a ceiling — or pin the GI bounds under Advanced — "
-               "and the probes appear."));
+               "A reflection probe is a photograph taken from a point, so the renderer places "
+               "candidate probes through the scene, lets each one photograph its own "
+               "surroundings, and keeps only those that SAW something near enough to be worth "
+               "reprojecting. Where nothing is near, there is nothing to photograph but the sky, "
+               "and the sky itself is both cheaper and sharper than a grid of photographs of it: "
+               "that is \"Sky\", and it is the right answer rather than a failure. Build "
+               "something for the reflections to stand in — walls, a vehicle, a room — and the "
+               "probes that can see it appear."));
         PropertyRows::setPanelVisible(reflectionsRow, false);
     }
 
@@ -494,10 +496,14 @@ void WorldGiPropertyWidget::refreshReflectionsRow()
         PropertyRows::setPanelVisible(reflectionsRow, false);     // no probe arm in this technique: nothing to report
         return;
     }
-    const QString text = st.probeGridRefused
-                             ? tr("Sky")
+    // "Sky" is the DECIDED answer — every candidate probe was photographed and
+    // dropped — while probeCount 0 with nothing dropped is a build that failed
+    // and must not read as a decision (gi.pcc_mirror's subject).
+    const QString text = st.probeCount == 0
+                             ? (st.probesDropped > 0 ? tr("Sky") : QString())
                              : (st.probeCount == 1 ? tr("1 probe")
                                                    : tr("%1 probes").arg(st.probeCount));
+    if (text.isEmpty()) { PropertyRows::setPanelVisible(reflectionsRow, false); return; }
     // Only write when it MOVED: this runs on a timer while the panel is open,
     // and a setText per second would repaint the row forever. LabelWidget has
     // no getter, so the last value written is kept here.
@@ -505,12 +511,11 @@ void WorldGiPropertyWidget::refreshReflectionsRow()
     PropertyRows::setPanelVisible(reflectionsRow, true);
 }
 
-// THE POLL (round-3 item 5). What this row reports is decided by the LAYOUT of
-// the scene — the renderer measures the walls and either builds a probe grid or
-// leaves the sky bound — and the panel hears about none of that: rebuild() runs
-// on setScene and after a World-GI edit only, so adding four walls to an open
-// scene left the row saying "Sky" while the grid was already live, which is
-// exactly the row a puzzled author would be reading. Same shape as the MSAA
+// THE POLL (round-3 item 5). What this row reports is decided by what the
+// renderer's probes SAW when they were placed — and the panel hears about none
+// of that: rebuild() runs on setScene and after a World-GI edit only, so adding
+// four walls to an open scene left the row saying "Sky" while the grid was
+// already live, which is exactly the row a puzzled author would be reading. Same shape as the MSAA
 // section's achieved row (one cheap read of the viewport's status struct), with
 // a timer because the input is not an edit this panel can connect to.
 //

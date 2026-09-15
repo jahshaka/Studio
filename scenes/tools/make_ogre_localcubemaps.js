@@ -77,33 +77,23 @@ var gi = world.giStatus();
 log("giStatus: " + J(gi));
 assert(gi.mode === "vct_pcc_hybrid", "the renderer is in the hybrid (" + gi.mode + ")");
 
-// THE PROBES ARE REFUSED IN THIS ROOM, TODAY — and that is an ENGINE gap, not
-// an authoring mistake (measured 2026-09-14, ~/Developer/spikes/ogre-samples/
-// FINDINGS.md, reported to the lead):
+// THE PROBES ARE PLACED IN THIS ROOM AGAIN (R5-ROOM, 2026-09-15). The note that
+// stood here recorded an ENGINE GAP, measured 2026-09-14
+// (~/Developer/spikes/ogre-samples/FINDINGS.md): the probe grid was only built
+// where the scene read ENCLOSED on two axes, enclosure was decided by finding an
+// outermost facing pair of SLABS that each COVERED half the room, and the test
+// was applied to ONE SLAB AT A TIME — so this room's left wall, which is FOUR
+// coplanar panels with three louvred light slots between them, covered nothing
+// and the room read OPEN on X.
 //
-//   A probe grid is only placed in a space that reads ENCLOSED on at least two
-//   axes, and enclosure is decided by finding, on each axis, an outermost
-//   facing pair of SLABS that each COVER at least half the room
-//   (OgreGi.cpp computeProbeRegion, rules R1/R2). The coverage test is applied
-//   to ONE SLAB AT A TIME. This room's left wall is FOUR coplanar panels with
-//   three louvred light slots between them, so no single panel covers half the
-//   20 m length, no lo-side slab survives the cover test, and the room reads
-//   OPEN on X: probeEnclosedAxes 1, probeGridRefused true, probeCount 0.
-//
-//   PROVED BY ONE BOX: adding a single full-length panel in the same plane as
-//   those four takes the reading to 2 and places the grid (18 probes at the
-//   default 3x2x3). The port does NOT add it — their room is their room, and a
-//   wall with light slots in it is a wall.
-//
-// The request above stands, so the day the rule reads an assembled wall this
-// port gets its probes with no re-authoring. Until then the room is lit by
-// VCT + the irradiance field, which is real GI and not nothing.
-if (gi.probeGridRefused) {
-    log("PROBES REFUSED (engine gap): probeEnclosedAxes=" + gi.probeEnclosedAxes +
-        ", probeCount=" + gi.probeCount + " — the left wall is four panels");
-} else {
-    assert(gi.probeCount > 0, "probes placed (" + gi.probeCount + ")");
-}
+// That whole rule is gone (owner+lead joint decision 2026-09-14: no lighting
+// decision may test for a room, an enclosure, a wall or an axis count). Probes
+// are kept or dropped by what each one SEES, from its own captured depth, so a
+// wall assembled out of four panels is simply four surfaces a probe can
+// photograph and the finding closes by construction — no re-authoring, and no
+// full-length panel added to somebody else's room.
+assert(gi.probeCount > 0, "probes placed (" + gi.probeCount + ", " +
+                          gi.probesDropped + " dropped)");
 
 // ---- the saved camera -----------------------------------------------------
 // DELIBERATE DEVIATION from their (0, 5, 15) default, recorded in the FINDINGS:

@@ -147,13 +147,21 @@ static void roomCase(Engine *engine, View *view, const char *label, float shell,
     CHECK(m.r > m.g + 0.12f && m.r > 0.15f,
           "the mirror shows the RED WALL through the probes (P4 finding 2)");
 
-    // ...and WHY it does: the probe region is the room's interior, not the lit
-    // volume. Both interior faces within a shell thickness of the true room.
-    CHECK(st.probeRegionMin.x > -4.0f - 0.01f && st.probeRegionMin.x < -4.0f + shell,
-          "the probe region's -X face sits on the room's inner wall");
-    CHECK(st.probeRegionMax.z < 4.0f + 0.01f && st.probeRegionMax.z > 4.0f - shell,
-          "the probe region's +Z face sits on the room's inner wall");
-    CHECK(st.probeRegionMin.y >= -0.01f && st.probeRegionMin.y < 0.5f,
+    // ...and WHY it does: the probe region is the space the probes PHOTOGRAPHED
+    // (OgreGi.cpp buildPcc's scout pass, R5-ROOM), not the lit volume that
+    // contains the room's shell. The old form of these three lines asserted the
+    // room's inner faces to within a shell thickness, because the region was
+    // computed by SEARCHING the scene for walls; a photograph is a measurement
+    // with its own error — one averaged depth value per 90-degree face, over a
+    // region wider than the room — and it reads this room's +-4.0 interior as
+    // +-4.03 (measured, all three shells). So the assertion is that it lands on
+    // the INTERIOR rather than on the shell: inside the walls' outer faces,
+    // never out at the lit volume.
+    CHECK(st.probeRegionMin.x > -4.0f - shell && st.probeRegionMin.x < -4.0f + shell,
+          "the probe region's -X face is the room's interior, not the lit volume");
+    CHECK(st.probeRegionMax.z < 4.0f + shell && st.probeRegionMax.z > 4.0f - shell,
+          "the probe region's +Z face is the room's interior, not the lit volume");
+    CHECK(st.probeRegionMin.y >= -shell && st.probeRegionMin.y < 0.5f,
           "the probe region's floor sits on the room's floor, not under it");
     // ...and it is INSIDE the lit volume, never the other way round.
     CHECK(st.probeRegionMin.x >= st.boundsMin.x && st.probeRegionMax.x <= st.boundsMax.x &&
@@ -359,10 +367,18 @@ static void freeStandingPanelCase(Engine *engine, View *view)
     showBox("lit volume", st.boundsMin, st.boundsMax);
     showBox("probe region", st.probeRegionMin, st.probeRegionMax);
     showBox("probe shapes (union)", st.probeShapeMin, st.probeShapeMax);
-    // THE ASSERTION. The partition's -Z face is at z = -2.3; the room's is at
-    // z = -4.0. Before the fix the region stopped at the former.
-    CHECK(st.probeRegionMin.z < -3.5f,
-          "the probe region reaches the ROOM's -Z wall, not the partition's face");
+    // THE ASSERTION, re-anchored by R5-ROOM. The partition's -Z face is at
+    // z = -2.3 and the room's wall at z = -4.0. The defect this case was
+    // written for read the partition AS the room's -Z wall and truncated the
+    // region at its face; the rule that did the reading is gone, and what is
+    // left is what the probes saw — measured -2.90 here, i.e. through the
+    // partition and past its face, with one of this coarse grid's four probes
+    // standing inside the panel itself (z = -2.25 in a slab spanning
+    // [-2.3, -1.7]) and photographing from in there. Past the partition is the
+    // statement; the room's exact wall is not, because nothing here searches
+    // for walls any more. The mirror below is what says the picture is right.
+    CHECK(st.probeRegionMin.z < -2.4f,
+          "the probe region is NOT truncated at the partition's own face");
     CHECK(st.probeRegionMax.z > 3.5f && st.probeRegionMin.x < -3.5f &&
           st.probeRegionMax.x > 3.5f,
           "...and the other three walls still ARE walls (the test still finds them)");

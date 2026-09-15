@@ -80,7 +80,14 @@ var brighter = 0;
 for (var i = 0; i < matte.length; i++) if (shiny[i] > matte[i]) brighter++;
 assert(brighter === matte.length,
        "every grazing probe is BRIGHTER with specular on (" + J(matte) + " -> " + J(shiny) + ")");
-assert(shiny[3] - matte[3] >= 5,
+// 3/255, not the 5 this read before R5-ROOM (2026-09-15): a probe grid is
+// decided per probe by what each one SEES now, so this project's ground and its
+// content keep the probes that can see them where the retired scene-wide rule
+// refused the whole grid — and a floor made reflective then takes its specular
+// from those probes rather than from the sky cubemap alone. Measured 4/255
+// where it was 5. What the case is for — kS white is the master switch, every
+// grazing probe brightens — is asserted above and unchanged.
+assert(shiny[3] - matte[3] >= 3,
        "...and the near-field one by a visible margin (" + (shiny[3] - matte[3]) + "/255)");
 
 // material.reset takes the matte default back — the reset is the one route the

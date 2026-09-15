@@ -626,15 +626,36 @@ int main(int argc, char **argv)
     {
         const Colour ref = mirrorPixel();
         Scene *other = engine->createScene("probe_inputs_other");
-        const NodeId n = other->createNode();
+        // A ROOM, not a lone cube (R5-ROOM): the probe grid a scene gets is now
+        // decided by what its probes can SEE, and four probes around a single
+        // 2 m cube in a 6 m box see it on one face each and sky everywhere else
+        // — measured spans 1.58-1.91 against the keep line at 1.0, so that
+        // scene correctly gets no grid at all and could not take a binding it
+        // never built. Six slabs, and its probes have something to photograph.
         const MeshId mesh = other->createMesh(enginetest::unitCubeMesh());
         const MaterialId mat = other->createPbrMaterial(PbrParams());
-        CHECK(n && mesh && mat && other->attachMesh(n, mesh, mat), "P10: a second scene with geometry");
-        other->setNodeTransform(n, Vec3(0.0f, 1.0f, 0.0f), Quat(), Vec3(2.0f, 2.0f, 2.0f));
+        bool built = mesh && mat;
+        const auto shell = [&](const Vec3 &p, const Vec3 &sc) {
+            const NodeId id = other->createNode();
+            built = built && id && other->attachMesh(id, mesh, mat);
+            other->setNodeTransform(id, p, Quat(), sc);
+        };
+        shell(Vec3(0.0f, -0.2f, 0.0f), Vec3(6.0f, 0.4f, 6.0f));     // floor
+        shell(Vec3(0.0f, 3.2f, 0.0f), Vec3(6.0f, 0.4f, 6.0f));      // ceiling
+        shell(Vec3(-2.8f, 1.5f, 0.0f), Vec3(0.4f, 3.4f, 6.0f));     // -X
+        shell(Vec3( 2.8f, 1.5f, 0.0f), Vec3(0.4f, 3.4f, 6.0f));     // +X
+        shell(Vec3(0.0f, 1.5f, -2.8f), Vec3(6.0f, 3.4f, 0.4f));     // -Z
+        shell(Vec3(0.0f, 1.5f,  2.8f), Vec3(6.0f, 3.4f, 0.4f));     // +Z
+        CHECK(built, "P10: a second scene with geometry");
         GiParams gi;
         gi.mode = GiMode::VctPccHybrid;
         gi.quality = GiQuality::Low;
-        gi.pccProbesX = gi.pccProbesY = gi.pccProbesZ = 1;
+        // 2x1x2 AND NOT 1x1x1 (R5-ROOM): a single probe lands at the centre of
+        // the pinned box, which is INSIDE this cube, and a probe inside a solid
+        // object photographs nothing at all — back faces are culled, so its six
+        // faces see the sky through the cube and the depth rule drops it (as it
+        // should). Four probes stand clear of the cube and see it.
+        gi.pccProbesX = gi.pccProbesZ = 2; gi.pccProbesY = 1;
         gi.boundsMin = Vec3(-3.0f, -1.0f, -3.0f);
         gi.boundsMax = Vec3(3.0f, 4.0f, 3.0f);
         CHECK(other->setGlobalIllumination(gi), "P10: the second scene builds its own hybrid");
