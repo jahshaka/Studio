@@ -149,6 +149,18 @@ void Registry::add(QWidget *container, QWidget *row)
     // BORN UNDER THE LIVE FILTER (§6.1). The Photon and sky panels rebuild
     // every row they own inside an edit; without this the new rows would appear
     // for one event-loop turn before the coalesced re-apply took them away.
+    //
+    // THE JUDGEMENT HERE IS DELIBERATELY THE NARROW ONE, and it is NOT a bug to
+    // "fix" (F9, second reader): a row is matched against its OWN text only —
+    // no section-title chain, no word-start pass over the column, because
+    // neither is knowable from inside an add(). It can therefore hide a row
+    // that the full pass a moment later will show (one whose section title is
+    // what matched). That is the safe direction: the row is corrected in the
+    // SAME event-loop turn by the coalesced rowsChanged re-apply, before
+    // anything is painted, whereas showing it first and taking it away is a
+    // visible flash. Tightening this into "the real verdict" would mean
+    // reaching for the container chain and re-scanning the column on every
+    // single row construction — the cost this whole registry exists to avoid.
     if (!liveTerms.isEmpty()) {
         const QString hay = entries[row].haystack();
         if (!hay.isEmpty() && !matchesAll(liveTerms, hay)) {
