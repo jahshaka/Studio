@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertyrows.h"
 #include "ui/panels/scenenodepropertieswidget.h"
 #include "ui/panels/transformeditor.h"
 #include "ui/style/themeroles.h"
@@ -157,6 +158,14 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     transformPropView->setPanelTitle("Transformation");
     transformWidget = transformPropView->addTransformControls();
     transformPropView->expand();
+    // THE TRANSFORM EDITOR IS ONE ROW holding a grid of fields (position,
+    // rotation, scale, size, reset) — it has no label of its own, so it is
+    // named here or it would be reachable only through its section.
+    PropertyRows::nameRow(transformWidget, tr("Transform"),
+                          { QStringLiteral("position"), QStringLiteral("rotation"),
+                            QStringLiteral("scale"), QStringLiteral("size"),
+                            QStringLiteral("move"), QStringLiteral("translate"),
+                            QStringLiteral("xyz") });
 
     // MOVEMENT (REALTIME_REFLECTIONS_SPEC §3.3), right under Transformation:
     // "does this move?" is a property of the OBJECT, not of its mesh, so it is
@@ -225,6 +234,17 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     emptySelectionLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     adoptBlade(emptySelectionLabel);
 
+    // ROWS THAT ARRIVE WITHOUT A MOUNT (§6.1). Five of the world panels rebuild
+    // every row they own inside an edit, and the material blade refills on a
+    // material pick — under a live filter those rows have to be judged too. The
+    // registry coalesces its own signal to one per event-loop turn, so a Photon
+    // edit that rebuilds five sections re-filters ONCE.
+    connect(&PropertyRows::registry(), &PropertyRows::Registry::rowsChanged,
+            this, [this]() {
+        if (filterText[int(currentTab)].trimmed().isEmpty()) return;
+        applyRowFilter();
+    });
+
     setLayout(widgetPropertyLayout);
 }
 
@@ -262,6 +282,10 @@ void SceneNodePropertiesWidget::mount(QWidget *blade)
     Q_ASSERT(blade->parentWidget() == this);
     widgetPropertyLayout->addWidget(blade);
     blade->show();
+    // WHAT THIS TAB IS SHOWING, for the filter: the tab's own blade list, so a
+    // filter applies to exactly the rows on screen and the other tab's rows are
+    // never touched (the two boxes are independent by construction).
+    mountedBlades[int(currentTab)].append(QPointer<QWidget>(blade));
 }
 
 // THE SCENE CHANGED — including to NOTHING.
@@ -351,6 +375,7 @@ void SceneNodePropertiesWidget::applyTab()
     ++mounts;                       // see mountCount()
     widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
     clearLayout(this->layout());
+    mountedBlades[int(currentTab)].clear();
 
     if (currentTab == Tab::World) {
         const auto sc = worldScene();
@@ -368,7 +393,103 @@ void SceneNodePropertiesWidget::applyTab()
     }
 
     widgetPropertyLayout->addStretch();
+    // THE FILTER IS RE-APPLIED ON EVERY MOUNT, before this returns: a pick, an
+    // undo, a tab switch and a scene open all land with the box's text still in
+    // force and no frame in between showing the unfiltered column.
+    applyRowFilter();
     warnIfWiderThanDock();
+}
+
+QString SceneNodePropertiesWidget::propertiesFilter(Tab tab) const
+{
+    return filterText[int(tab)];
+}
+
+SceneNodePropertiesWidget::FilterCounts
+SceneNodePropertiesWidget::filterCounts(Tab tab) const
+{
+    return counts[int(tab)];
+}
+
+void SceneNodePropertiesWidget::setPropertiesFilter(Tab tab, const QString &text)
+{
+    const int t = int(tab);
+    const QString trimmed = text.trimmed();
+    if (filterText[t] == trimmed) return;
+    const bool was = !filterText[t].isEmpty();
+    const bool now = !trimmed.isEmpty();
+    // THE EXPAND SNAPSHOT (§3.4.5). A section with a match opens so the row can
+    // be seen; clearing the box puts every section back the way the user had
+    // it, not the way the filter left it.
+    if (!was && now) snapshotExpandState(tab);
+    filterText[t] = trimmed;
+    if (tab == currentTab) {
+        applyRowFilter();
+        if (was && !now) restoreExpandState(tab);
+    }
+    emit propertiesFilterChanged(tab, filterText[t]);
+}
+
+void SceneNodePropertiesWidget::snapshotExpandState(Tab tab)
+{
+    const int t = int(tab);
+    expandSnapshot[t].clear();
+    for (const QPointer<QWidget> &blade : std::as_const(mountedBlades[t])) {
+        if (!blade) continue;
+        if (auto *b = qobject_cast<AccordianBladeWidget *>(blade.data()))
+            expandSnapshot[t].insert(b, b->isExpanded());
+        for (AccordianBladeWidget *nested : blade->findChildren<AccordianBladeWidget *>())
+            expandSnapshot[t].insert(nested, nested->isExpanded());
+    }
+}
+
+void SceneNodePropertiesWidget::restoreExpandState(Tab tab)
+{
+    const int t = int(tab);
+    for (auto it = expandSnapshot[t].cbegin(); it != expandSnapshot[t].cend(); ++it) {
+        auto *blade = qobject_cast<AccordianBladeWidget *>(it.key());
+        if (!blade) continue;
+        it.value() ? blade->expand() : blade->collapse();
+    }
+    expandSnapshot[t].clear();
+}
+
+// THE FILTER, over the rows of the tab on screen and nothing else.
+//
+// Rows are HIDDEN AND SHOWN, never created or destroyed: a keystroke costs one
+// walk of the registry's entries for the mounted blades (~250 at the widest
+// selection) and the layout pass that follows, which is why the box can filter
+// as the user types.
+void SceneNodePropertiesWidget::applyRowFilter()
+{
+    const int t = int(currentTab);
+    const QStringList terms = PropertyRows::Registry::termsFor(filterText[t]);
+    auto &registry = PropertyRows::registry();
+
+    // "ssr" means the row CALLED ssr: if anything in the column matches every
+    // term at a word start, mid-word coincidences are dropped.
+    bool strongOnly = false;
+    if (!terms.isEmpty()) {
+        for (const QPointer<QWidget> &blade : std::as_const(mountedBlades[t])) {
+            if (blade && registry.hasStrongMatch(blade.data(), terms)) { strongOnly = true; break; }
+        }
+    }
+
+    FilterCounts total;
+    for (const QPointer<QWidget> &ptr : std::as_const(mountedBlades[t])) {
+        QWidget *blade = ptr.data();
+        if (!blade) continue;
+        const PropertyRows::Result r = registry.apply(blade, terms, strongOnly);
+        total.visible += r.visible;
+        total.hidden  += r.hidden;
+        if (terms.isEmpty()) { blade->show(); continue; }
+        // A SECTION WHOSE ROWS ALL HID GOES WITH THEM; one with a match opens
+        // so the row that matched is on screen without a click.
+        const bool keep = r.anyVisible || r.titleMatch;
+        blade->setVisible(keep);
+        if (auto *b = qobject_cast<AccordianBladeWidget *>(blade)) { if (keep) b->expand(); }
+    }
+    counts[t] = total;
 }
 
 // THE EXPENSIVE HALF, run once per scene (see the header). Five of these

@@ -346,6 +346,16 @@ public:
     /// The one implementation behind the tab bar, the Ctrl+Shift+P toggle and
     /// the `editor.propertiesTab` verb.
     QString propertiesTab() const;
+    /// The right column's per-tab FILTER (`editor.propertiesFilter`). An empty
+    /// `tabName` means the tab on screen; an unknown one is refused (false /
+    /// an empty string).
+    QString propertiesFilter(const QString &tabName = QString()) const;
+    /// Whether `tabName` names a tab ("world" / "selection"); an empty name is
+    /// "the tab on screen" and is always valid.
+    bool isPropertiesTab(const QString &tabName) const;
+    bool setPropertiesFilter(const QString &tabName, const QString &text);
+    /// {rows the filter kept, rows it removed} for that tab's last apply.
+    QPair<int, int> propertiesFilterCounts(const QString &tabName = QString()) const;
     /// Raises a tab by name; false for a name that is not one.
     bool setPropertiesTab(const QString &name);
     /// Whether `dock` is the tab in FRONT of its group (and not closed). Qt

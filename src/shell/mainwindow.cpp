@@ -4055,6 +4055,24 @@ void MainWindow::setupShortcuts()
                 ? SceneNodePropertiesWidget::Tab::Selection
                 : SceneNodePropertiesWidget::Tab::World);
     });
+    // THE PROPERTY FILTER'S BOX (PROPERTY_FILTER_SPEC D1): Ctrl+F, which is the
+    // universal find key and was free in the registry — the only "Ctrl+F" in
+    // src/ is the Ctrl+F4 render-capture tooltip, and plain F (camera.focus) is
+    // a different chord. It focuses the box of the tab ON SCREEN, since each
+    // tab has its own filter. (A QLineEdit accepts the ShortcutOverride for
+    // unmodified printable keys, so typing "f" into the box does not fire
+    // camera.focus.)
+    reg.add("properties.filter", "Properties: Filter Rows", "Windows",
+            QKeySequence(Qt::CTRL | Qt::Key_F), this, [this]() {
+        if (!propertiesTabStrip) return;
+        if (sceneNodePropertiesDock && !sceneNodePropertiesDock->isVisible())
+            setPanelOpen(QStringLiteral("properties"), true);
+        propertiesTabStrip->focusFilter();
+    });
+    // Esc is a widget-level key inside the box, not a registry binding — the
+    // row exists so the Preferences table says so.
+    reg.addFixed("properties.filter.clear", "Properties: Clear the Filter", "Windows",
+                 "Esc (while the filter box has focus)");
     reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
     reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,
@@ -4775,6 +4793,39 @@ QDockWidget *MainWindow::panelDock(const QString &name) const
     if (wanted == QLatin1String("timeline"))   return animationDock;
     if (wanted == QLatin1String("console"))    return scriptConsoleDock;
     return nullptr;
+}
+
+bool MainWindow::isPropertiesTab(const QString &tabName) const
+{
+    if (tabName.trimmed().isEmpty()) return true;
+    SceneNodePropertiesWidget::Tab tab;
+    return SceneNodePropertiesWidget::tabFromName(tabName, tab);
+}
+
+QString MainWindow::propertiesFilter(const QString &tabName) const
+{
+    if (!sceneNodePropertiesWidget) return QString();
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return QString();
+    return sceneNodePropertiesWidget->propertiesFilter(tab);
+}
+
+bool MainWindow::setPropertiesFilter(const QString &tabName, const QString &text)
+{
+    if (!sceneNodePropertiesWidget) return false;
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return false;
+    sceneNodePropertiesWidget->setPropertiesFilter(tab, text);
+    return true;
+}
+
+QPair<int, int> MainWindow::propertiesFilterCounts(const QString &tabName) const
+{
+    if (!sceneNodePropertiesWidget) return { 0, 0 };
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab)) return { 0, 0 };
+    const auto c = sceneNodePropertiesWidget->filterCounts(tab);
+    return { c.visible, c.hidden };
 }
 
 QString MainWindow::propertiesTab() const

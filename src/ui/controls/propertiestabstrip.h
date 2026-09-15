@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "ui/panels/scenenodepropertieswidget.h"
 
 class QTabBar;
+class QLineEdit;
 
 /// THE RIGHT COLUMN'S TAB BAR (PROPERTY_FILTER_SPEC §2): World | Selection.
 ///
@@ -32,7 +33,12 @@ class QTabBar;
 /// what it measured before. The bar elides and never expands, so the strip's own
 /// minimum stays far below PanelMetrics::rightColumnMinWidth.
 ///
-/// (The filter box of lane A lands in this strip, under the bar.)
+/// UNDER THE BAR SITS THE FILTER BOX (owner decision 2026-09-15: "put the
+/// filter box under the tab; it belongs to its tab"). ONE box, showing the
+/// CURRENT tab's text — World's text filters the world rows, Selection's the
+/// selected object's, and each keeps its own while the other is on screen. The
+/// panel owns both strings for exactly the reason it owns the tab: the verb,
+/// the Ctrl+F shortcut, the offscreen suite and this box all drive one thing.
 class PropertiesTabStrip : public QWidget
 {
     Q_OBJECT
@@ -40,12 +46,22 @@ public:
     explicit PropertiesTabStrip(SceneNodePropertiesWidget *panel, QWidget *parent = nullptr);
 
     QTabBar *tabBar() const { return bar; }
+    QLineEdit *filterBox() const { return box; }
+
+    /// Ctrl+F: the box of the tab on screen takes the keyboard.
+    void focusFilter();
+
+protected:
+    /// Esc in the box clears it and gives the keyboard back to the viewport.
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void showTab(SceneNodePropertiesWidget::Tab tab);
+    void showFilter(SceneNodePropertiesWidget::Tab tab, const QString &text);
 
     SceneNodePropertiesWidget *panel = nullptr;
     QTabBar *bar = nullptr;
+    QLineEdit *box = nullptr;
     bool applying = false;
 };
 
