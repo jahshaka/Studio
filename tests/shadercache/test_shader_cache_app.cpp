@@ -29,6 +29,8 @@
 //                 run a REGRESSION test rather than a hope: before the fix
 //                 (lane shadercache-2) those 300 captures minted 300 permanent
 //                 Hlms pass-cache entries and the warning fired at 256.
+//                 (The field is 13 bits since ogre-patch 0046 and run 5 asserts
+//                 the live count instead of the warning — see run 5.)
 #include <QCoreApplication>
 #include <QDir>
 #include <QJsonDocument>
@@ -209,16 +211,33 @@ int main(int argc, char **argv)
     //   * the process SURVIVES it (before 0035 an out-of-range index was a
     //     SIGSEGV, not a skipped entry),
     //   * the guard never had to fire, and
-    //   * the pass cache stayed inside its eight bits. That last one is the
-    //     regression: with the capture cube named uniquely again, 300 sky
-    //     changes cross 256 and the warning fires (measured, A/B).
+    //   * the pass cache stayed SMALL. That last one is the regression: with the
+    //     capture cube named uniquely again, 300 sky changes mint 300 permanent
+    //     pass-cache entries (measured, A/B).
+    //
+    // IT IS A NUMBER NOW, NOT THE ABSENCE OF A WARNING (lane HLMSBITS-1).
+    // ogre-patch 0046 rebalanced the shader hash to [3][16][13], so the pass
+    // field holds 8,192 entries and 300 stray ones would no longer trip any
+    // log line — the assertion that caught this regression would have gone
+    // quiet while still printing "ok". app.shaderCache() reports the live cache
+    // sizes, so the bound is stated directly, and it is deliberately 256: the
+    // size of the field that actually overflowed, which the churn must stay
+    // inside whatever the hash's split becomes later.
     const QJsonObject churn = runApp(home, scripts + "e2e_shader_cache_churn.js", {}, &rc);
     CHECK(rc == 0, "run 5 survived the churn and exited cleanly");
     CHECK(!churn.isEmpty(), "run 5 reported its cache state after the churn");
     CHECK(!gLastOutput.contains(QStringLiteral("skipping shader cache entry")),
           "no shader-cache entry had an out-of-range index or a missing PSO during the churn");
+    const int passEntries = churn.value(QStringLiteral("passCacheEntries")).toInt(-1);
+    const int passCapacity = churn.value(QStringLiteral("passCacheCapacity")).toInt(-1);
+    std::printf("      pass cache after the churn: %d of %d\n", passEntries, passCapacity);
+    CHECK(passEntries > 0 && passEntries < 256,
+          "the pass cache stayed inside 256 entries through 300 sky captures "
+          "(the recycled capture name)");
+    CHECK(passCapacity >= 8192,
+          "the shader hash's pass field addresses at least 8192 entries (ogre-patch 0046)");
     CHECK(!gLastOutput.contains(QStringLiteral("distinct pass property combinations")),
-          "the pass cache stayed inside the 8 bits the shader hash gives it");
+          "no Hlms reported its pass cache filling up");
     CHECK(!gLastOutput.contains(QStringLiteral("save already in progress")),
           "no re-entrant save was attempted");
 
