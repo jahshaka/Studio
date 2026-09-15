@@ -1118,3 +1118,41 @@ add_test(NAME ui.mcp_prefs COMMAND test_mcp_prefs
 set_tests_properties(ui.mcp_prefs PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "ui")
 jah_no_display(ui.mcp_prefs)   # offscreen widgets only, no X needed
+# ---------------------------------------------------------------------------
+# ui.presets_favorites — CLOSE-2 (round 2, D1): the Models/Materials presets
+# tabs read the library when their Database ARRIVES, not while they are being
+# built. Both constructors used to call addFavorites() through an unassigned
+# `AssetPanel::handle`; null-guarding that read alone would have silently
+# emptied both tabs for every user. Link stubs for Database (the tests/ui
+# idiom) — the subject is the call order, so a fake library that counts its
+# reads proves more than a real one.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
+add_executable(test_presets_favorites
+    test_presets_favorites.cpp
+    test_presets_favorites_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmodelpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmaterialpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/materialpresetreader.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp)
+set_target_properties(test_presets_favorites PROPERTIES
+    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_presets_favorites PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_presets_favorites PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+add_test(NAME ui.presets_favorites COMMAND test_presets_favorites
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.presets_favorites PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.presets_favorites)

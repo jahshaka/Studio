@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QVariantList>
 
 #include "services/assetstorepaths.h"
+#include "data/database/database.h"   // DbTransaction
 
 namespace AssetGc
 {
@@ -389,7 +390,15 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
     // survives a failed row delete is garbage the next sweep re-finds, while a
     // row that survives a successful unlink is a catalog pointing at nothing.
     if (!report.unreferencedObjects.items.isEmpty()) {
-        const bool inTransaction = conn.transaction();
+        // A GUARD, NOT A RAW BEGIN (CLOSE-2 round 2, H1). A raw
+        // conn.transaction() cannot start one while the editor's gesture batch
+        // holds this connection — `inTransaction` reads false, these deletes
+        // ride the batch's commit, and a partial failure has nothing to roll
+        // back: the dropped `files` rows would be committed while their
+        // objects stayed on disk. A DbTransaction makes the batch stand down
+        // and hands this sweep a real transaction of its own (database.h).
+        DbTransaction tx(conn);
+        const bool inTransaction = tx.isActive();
         bool rowsOk = true;
         for (const Item &item : report.unreferencedObjects.items) {
             QSqlQuery del(conn);
@@ -402,8 +411,8 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
             }
         }
         if (inTransaction) {
-            if (rowsOk) rowsOk = conn.commit();
-            else conn.rollback();
+            if (rowsOk) rowsOk = tx.commit();
+            else tx.rollback();
         }
         if (rowsOk) unlinkFiles(report.unreferencedObjects);
         else report.failures << QStringLiteral(
@@ -414,7 +423,8 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
     // and a failure here must not stop the file classes below from being
     // reclaimed. The `id` is "<projectGuid>/<assetGuid>" — split once.
     if (!report.deadPins.items.isEmpty()) {
-        const bool inTransaction = conn.transaction();
+        DbTransaction tx(conn);   // as above (H1)
+        const bool inTransaction = tx.isActive();
         bool rowsOk = true;
         for (const Item &item : report.deadPins.items) {
             const int slash = item.id.indexOf(QLatin1Char('/'));
@@ -430,8 +440,8 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
             }
         }
         if (inTransaction) {
-            if (rowsOk) rowsOk = conn.commit();
-            else conn.rollback();
+            if (rowsOk) rowsOk = tx.commit();
+            else tx.rollback();
         }
         if (rowsOk) {
             report.deadPins.removed = report.deadPins.items.size();

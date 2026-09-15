@@ -39,17 +39,22 @@ QVector<VerbInfo> ProjectApi::verbs() const
 {
     return {
         { "create", "project.create(name) -> guid",
-          "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and opens it in the editor.",
+          "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
+          "opens it in the editor. INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
+          "did up to here becomes one undo step of the project being left, whose stack is then cleared with "
+          "it, and the rest of the run records into a fresh entry in the new project.",
           Needs::Document },
         { "open", "project.open(guidOrName) -> bool",
-          "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, switches to the editor.",
+          "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
+          "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
+          "the closed project's undo history goes with it, and the rest of the run records into a fresh entry.",
           Needs::Document },
         { "openAsync", "project.openAsync(guidOrName) -> bool",
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "
           "install runs one slice per event-loop turn (services/sceneopenrunner.h), which is what the desktop "
           "tile and the archive-import open now do. Returns as soon as the open is under way — poll "
           "project.openState() for completion. Needs a window; headless sessions get project.open's "
-          "synchronous behaviour.",
+          "synchronous behaviour. Inside a script it ends the run's undo entry first, like project.open.",
           Needs::Window },
         { "openState", "project.openState() -> 'idle' | 'opening'",
           "Whether an asynchronous open (project.openAsync, a desktop tile, an archive import) is still in "
@@ -59,7 +64,10 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "Saves the open scene into the project's DB blob. Works headless (blob-only; the thumbnail refreshes only when a viewport can render one).",
           Needs::Document },
         { "close", "project.close() -> bool",
-          "Closes the open project (physics restored, autosave per settings, undo stack reset) and returns to the desktop.",
+          "Closes the open project (physics restored, autosave per settings, undo stack reset) and returns to "
+          "the desktop. INSIDE A SCRIPT the run's undo entry is ended first, so the stack really is cleared: "
+          "the run's edits become one undo step of the project being closed and die with it, and the rest of "
+          "the run records into a fresh entry. Nothing on the stack ever names a closed project's nodes.",
           Needs::Document },
         { "rename", "project.rename(guid, newName) -> bool",
           "Renames a project in the database.",
@@ -153,7 +161,12 @@ QString ProjectApi::create(const QString &name)
         return QString();
     }
 
+    // A PROJECT BOUNDARY ENDS THE RUN'S UNDO ENTRY (CLOSE-2 item 2 — the
+    // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
+    // stack, and that clear is a no-op while the run's macro is open.
+    host.endRunUndoMacro();
     host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder());
+    host.beginRunUndoMacro();
     return guid;
 }
 
@@ -175,6 +188,10 @@ bool ProjectApi::open(const QString &guidOrName)
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
     }
+    // The OLD project's undo history dies with the old project (CLOSE-2
+    // item 2): end the run's entry so closeProject's clear() is not a no-op,
+    // and open a fresh one for what the script does in the new project.
+    host.endRunUndoMacro();
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
     // The ledger starts HERE, not in MainWindow::openProject: the session
@@ -183,6 +200,7 @@ bool ProjectApi::open(const QString &guidOrName)
     // Point the current project + synchronous preload, then the reader half.
     host.services->project->prepareOpen(guid, name);
     host.mainWindow->openProject(false);
+    host.beginRunUndoMacro();
     return true;
 }
 
@@ -205,6 +223,7 @@ bool ProjectApi::openAsync(const QString &guidOrName)
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
     }
+    host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
     LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
@@ -212,6 +231,7 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     // itself, with the worker's parsed models in hand.
     host.services->project->pointAtProject(guid, name);
     host.mainWindow->openProjectAsync(false);
+    host.beginRunUndoMacro();
     return true;
 }
 
@@ -233,7 +253,13 @@ bool ProjectApi::save()
 bool ProjectApi::close()
 {
     if (!requireProject()) return false;
+    // The run's edits so far become ONE undo step of the project being closed,
+    // and the close then clears the stack exactly as a close from the UI does
+    // (CLOSE-2 item 2). Without this the whole stack survived the close,
+    // holding commands that name a document that no longer exists.
+    host.endRunUndoMacro();
     host.mainWindow->closeProject();
+    host.beginRunUndoMacro();
     return true;
 }
 

@@ -51,6 +51,15 @@ void ResetMaterialCommand::redo()
     if (!meshNode) return;
     meshNode->setMaterial(defaultMaterial);
 
+    // ONE GESTURE, ONE COMMIT (CLOSE-2 item 3). Everything below is row work
+    // for a single user action — a pin per default texture, an edge deleted
+    // per dropped map, an edge created per default map — and each of those
+    // autocommitted on its own: a six-texture material cost a dozen journal +
+    // fdatasync + unlink cycles on the UI thread for one click of Reset.
+    // Bounded, so never the 33 s freeze CLOSE-1 chased, but the same shape.
+    // The guard is null-safe and the batch commits when it leaves scope.
+    DbBatch batch(db);
+
     droppedEdges.clear();
     createdDefaultEdges.clear();
     const QString projectGuid = project ? project->getProjectGuid() : QString();
@@ -87,6 +96,8 @@ void ResetMaterialCommand::undo()
 {
     if (!meshNode) return;
     meshNode->setMaterial(oldMaterial);
+
+    DbBatch batch(db);   // one commit for the whole undo, as redo (CLOSE-2)
 
     const QString projectGuid = project ? project->getProjectGuid() : QString();
     if (!db || projectGuid.isEmpty()) return;

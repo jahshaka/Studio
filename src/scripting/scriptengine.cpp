@@ -206,9 +206,20 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     // exactly as it found it, which is the whole point: describing a scene
     // must not cost the user their next Ctrl+Z.
     const bool useMacro = wrapUndoMacro && mHost.beginUndoMacro && mHost.endUndoMacro;
+    // The host's two halves both check this, so a verb that ends and reopens
+    // the run's entry at a project boundary is a NO-OP in a run that has no
+    // entry (an MCP internal expression). Saved and restored rather than
+    // cleared: an evaluation reached from inside another one must not disarm
+    // the outer run's bracket.
+    const bool outerWrapsUndoMacro = mHost.runWrapsUndoMacro;
+    mHost.runWrapsUndoMacro = useMacro;
     if (useMacro) {
-        mHost.beginUndoMacro(QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName()));
-        if (mHost.macroOpenChanged) mHost.macroOpenChanged(true);
+        // Through the host's own bracket, because a verb can close the entry
+        // and open the next one mid-run at a project boundary (ScriptHost::
+        // endRunUndoMacro) and both ends have to agree on the name and on the
+        // order of the two hooks.
+        mHost.runMacroText = QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName());
+        mHost.beginRunUndoMacro();
     }
 
     QStringList stackTrace;
@@ -225,10 +236,8 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     }
     mJs.setInterrupted(false);
 
-    if (useMacro) {
-        if (mHost.macroOpenChanged) mHost.macroOpenChanged(false);
-        mHost.endUndoMacro();
-    }
+    if (useMacro) mHost.endRunUndoMacro();
+    mHost.runWrapsUndoMacro = outerWrapsUndoMacro;
 
     if (value.isError() || !stackTrace.isEmpty()) {
         result.ok = false;

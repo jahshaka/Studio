@@ -38,13 +38,46 @@ class DbTransaction
 {
 public:
     explicit DbTransaction(QSqlDatabase database)
-        : db(database), active(database.transaction())
+        : db(database), active(false)
     {
+        // THE BATCH STANDS DOWN FOR A REAL OWNER (CLOSE-2 item 1).
+        //
+        // Database::beginBatch keeps a transaction open for a whole gesture so
+        // the gesture costs ONE commit. That transaction must never become the
+        // "already in one" that silently degrades somebody else's guard: the
+        // import commit (services/import/assetimportservice.cpp) unwinds a
+        // failed import through tx.rollback(), and a degraded guard turns that
+        // rollback into a no-op — the failed import's rows would then ride the
+        // batch's commit. So a TOP-LEVEL guard (sActive == 0, i.e. no guard of
+        // ours is live and this one is about to be the outermost) tells the
+        // batch to commit what it has and stand down first; the batch reopens
+        // itself at Database's next statement. Guards nested inside another
+        // guard are untouched — their degrade-to-no-op is the intended
+        // "one transaction per operation" behaviour and must stay.
+        // OUTERMOST IS PER CONNECTION (CLOSE-2 round 2, H2). A process-wide
+        // count was right only for as long as every guard in the tree lived on
+        // the main connection: the first guard on a SIDE connection (an export
+        // bundle, the catalog rebuild, a version probe) nesting around a
+        // main-connection guard would have made the main one look nested, the
+        // batch would not have stood down, and that guard would have degraded
+        // to the no-op the whole design exists to prevent. A transaction on
+        // another connection cannot be an outer transaction of this one.
+        const QString connection = database.connectionName();
+        const bool outermost = (activeGuards(connection) == 0);
+        if (outermost && sBatchYield) sBatchYield(database);
+        active = database.transaction();
+        if (active) retain(connection);
+        // Stood the batch down and then failed to begin (a closed connection,
+        // or a transaction opened outside this layer): put it back rather than
+        // leave it waiting for a release that will never come.
+        else if (outermost && sBatchResume) sBatchResume(database);
     }
 
     ~DbTransaction()
     {
-        if (active) db.rollback();
+        if (!active) return;
+        db.rollback();
+        release();
     }
 
     // On a FAILED commit the guard rolls back itself, so the connection is
@@ -55,9 +88,10 @@ public:
     {
         if (!active) return true;
         active = false;
-        if (db.commit()) return true;
-        db.rollback();
-        return false;
+        const bool ok = db.commit();
+        if (ok) noteCommit(); else db.rollback();
+        release();
+        return ok;
     }
 
     // Explicit early rollback: ends the transaction NOW instead of at
@@ -70,6 +104,7 @@ public:
         if (!active) return;
         active = false;
         db.rollback();
+        release();
     }
 
     /// True while this guard owns a live transaction (false when it degraded
@@ -79,9 +114,79 @@ public:
     DbTransaction(const DbTransaction &) = delete;
     DbTransaction &operator=(const DbTransaction &) = delete;
 
+    // ---- the batch hook and the sync accounting (CLOSE-2) ------------------
+
+    /// Installed by Database's constructor. Called with the connection a new
+    /// TOP-LEVEL guard is about to open a transaction on, so an open batch on
+    /// that same connection can commit and stand down (see the constructor).
+    /// A std::function rather than a call into Database because this class is
+    /// header-only and is instantiated in translation units that do not link
+    /// database.cpp.
+    using BatchYieldHook = std::function<void(const QSqlDatabase &)>;
+    static void setBatchYieldHook(BatchYieldHook hook) { sBatchYield = std::move(hook); }
+    /// The other half: called when the LAST guard on a connection lets go, so
+    /// a batch that stood down can take its transaction back. Event-driven on
+    /// purpose — the alternative (reopening lazily before each statement) put
+    /// a member read into Database::executeAndCheckQuery, and that funnel is
+    /// reached today through at least one uninitialised Database pointer
+    /// (AssetPanel::populateFavorites, fixed alongside this).
+    static void setBatchResumeHook(BatchYieldHook hook) { sBatchResume = std::move(hook); }
+    /// Is a gesture batch holding a transaction right now? Process-wide, for
+    /// the durable-commit accounting only.
+    static bool anyBatchLive() { return sBatchesLive > 0; }
+    static void noteBatchLive(bool live) { sBatchesLive += live ? 1 : -1; }
+
+    /// How many guards currently hold a live transaction ON `connection`.
+    /// Zero means the next guard there will be the outermost one.
+    static int activeGuards(const QString &connection)
+    {
+        return sActive.value(connection, 0);
+    }
+    /// The same question with no connection in hand, for the durable-commit
+    /// accounting only (Database::executeAndCheckQuery, which must not touch a
+    /// member — see there). Deliberately process-wide: a diagnostic that
+    /// under-counts a write made on one connection while another holds a
+    /// transaction is a better trade than a member read in that funnel.
+    static bool anyGuardLive() { return sActiveTotal > 0; }
+
+    /// DURABLE COMMITS — the diagnostic behind `editor.undoState().dbCommits`.
+    ///
+    /// One count per commit that reached the disk: every successful
+    /// DbTransaction::commit(), every Database batch commit, and every WRITE
+    /// statement that ran with no transaction open at all (SQLite autocommits
+    /// it — one transaction, one fdatasync). It is what makes "one gesture,
+    /// one commit" an assertion instead of a stopwatch reading. Process-wide
+    /// and approximate by design: it counts what goes through this layer, so a
+    /// raw QSqlQuery::exec() somewhere else is invisible to it.
+    static quint64 commitCount() { return sCommits; }
+    static void noteCommit() { ++sCommits; }
+
 private:
+    static void retain(const QString &connection)
+    {
+        ++sActive[connection];
+        ++sActiveTotal;
+    }
+
+    void release()
+    {
+        const QString connection = db.connectionName();
+        auto it = sActive.find(connection);
+        if (it != sActive.end() && --it.value() <= 0)
+            sActive.erase(it);   // side connections are named per use — never grow the map
+        --sActiveTotal;
+        if (activeGuards(connection) == 0 && sBatchResume) sBatchResume(db);
+    }
+
     QSqlDatabase db;
     bool active;
+
+    inline static QHash<QString, int> sActive;
+    inline static int sActiveTotal = 0;
+    inline static int sBatchesLive = 0;
+    inline static quint64 sCommits = 0;
+    inline static BatchYieldHook sBatchYield = BatchYieldHook();
+    inline static BatchYieldHook sBatchResume = BatchYieldHook();
 };
 
 // Every project-scoped function takes the project guid explicitly — the data
@@ -102,6 +207,59 @@ public:
     // MANAGE ===============================================================================
     bool initializeDatabase(const QString &pathToBlob);
     void closeDatabase();
+
+    // ---- ONE GESTURE, ONE COMMIT (CLOSE-2 item 1) -------------------------
+    //
+    // SQLite autocommits every statement that runs outside a transaction, and
+    // an autocommit is a real transaction: journal, write, fdatasync, journal
+    // unlink. Adding a built-in primitive writes an asset row
+    // (SceneEditService::addBuiltinPrimitive -> createAssetEntry), so a script
+    // that adds 300 of them used to pay 300+ of them one at a time, on the UI
+    // thread, interleaved with the engine work.
+    //
+    // beginBatch()/endBatch() are a COUNTED scope over one transaction, so
+    // nested users compose (the outermost pair owns the commit). The editor
+    // opens one for the lifetime of a SCRIPT RUN — the run is already one undo
+    // macro, which is exactly the "one gesture" boundary — and single-gesture
+    // paths (the Add menu, a drag-drop: one row) stay autocommit, where one
+    // commit is the right answer anyway.
+    //
+    // WHAT A BATCH DOES NOT DO: it never holds somebody else's transaction
+    // hostage. A top-level DbTransaction opened while a batch is live makes
+    // the batch commit what it has and stand down (DbTransaction's
+    // constructor); the batch reopens itself at this Database's next
+    // statement. So an import inside a script run still owns a real
+    // transaction it can roll back.
+    //
+    // FAILURE POLICY: a run that ends with the batch still open commits — the
+    // rows describe nodes that exist. A run that throws commits too, for the
+    // same reason. Only a hard kill loses them, and then the rows describe
+    // nodes that died with the process.
+    void beginBatch();
+    /// Closes one level. The outermost close commits; the return value is that
+    /// commit's success (true for an inner level, which commits nothing, and
+    /// true for a level the database ABANDONED under the caller — see
+    /// closeDatabase).
+    bool endBatch();
+    /// WHO TELLS THE USER when a batch cannot commit. A whole gesture's rows
+    /// are rolled back then — a script run's library writes, gone — and a warn
+    /// line in the log has an audience of one. The app installs a listener that
+    /// raises it in the scene-issue bar; a hook rather than a direct call
+    /// because half the suites in the tree link this file and none of them may
+    /// be made to link the UI services (the Database::setDependencyListener
+    /// idiom). One process-wide listener, called on EVERY batch commit: `ok`
+    /// false = the gesture's rows were rolled back, true = the library is
+    /// writable and the condition (if any) is over. The sink is idempotent, so
+    /// there is deliberately no state filter here — see announceBatchCommit.
+    using BatchCommitListener = std::function<void(bool ok)>;
+    static void setBatchCommitListener(BatchCommitListener listener);
+    /// How many levels are open (editor.undoState().dbBatchDepth).
+    int  batchDepth() const { return batchOpenCount; }
+    /// True while the batch actually holds a transaction — false between a
+    /// stand-down and the next statement. Diagnostics only.
+    bool batchTransactionLive() const { return batchTxLive; }
+    /// The process's durable write commits so far (DbTransaction::commitCount).
+    static quint64 durableCommits() { return DbTransaction::commitCount(); }
 
     // CREATE ===============================================================================
     bool createProjectsTable();
@@ -553,6 +711,32 @@ private:
 
     QSqlDatabase db;
 
+    /// The gesture batch (see beginBatch). `batchOpenCount` is the counted
+    /// scope; `batchTxLive` says whether the transaction behind it is open
+    /// right now — it goes false when the batch stands down for a nested
+    /// owner, and true again at the next statement.
+    int  batchOpenCount = 0;
+    bool batchTxLive = false;
+    /// Levels the database DROPPED while their guards were still alive
+    /// (closeDatabase). The next endBatch calls absorb them silently: the
+    /// guard is unwinding through a close it never asked for, and warning it
+    /// about an imbalance it did not cause is noise.
+    int  batchScopesAbandoned = 0;
+    /// Opens the batch transaction if the scope is open and it is not live
+    /// (and nothing else owns a transaction on this connection). Called when
+    /// the batch is opened and whenever the last guard lets go.
+    void resumeBatchIfNeeded();
+    /// Commits the batch transaction if it is live, leaving the SCOPE open.
+    /// The stand-down path and the outermost endBatch both go through it.
+    bool commitBatchTransaction();
+    /// Tells the listener that the library's writability CHANGED (H7).
+    void announceBatchCommit(bool ok);
+    /// The stand-down hook's per-instance half: commit and go quiet if the
+    /// connection about to open a transaction is OURS.
+    void standDownBatchFor(const QSqlDatabase &connection);
+    /// …and the resume half, when that connection's last guard lets go.
+    void resumeBatchFor(const QSqlDatabase &connection);
+
     /// The deferred-delete queue (see enqueueAssetDelete). Guid + the hard
     /// delete flag, in the order the commands died.
     struct PendingAssetDelete
@@ -561,6 +745,33 @@ private:
         bool    force = false;
     };
     QVector<PendingAssetDelete> pendingAssetDeletes;
+};
+
+/// RAII over Database::beginBatch/endBatch — the way callers should open one.
+/// Null-safe (a host with no database is common in this codebase), copy-free.
+class DbBatch
+{
+public:
+    explicit DbBatch(Database *database) : db(database) { if (db) db->beginBatch(); }
+    ~DbBatch() { end(); }
+
+    /// Ends the scope NOW and reports whether the commit it owned succeeded
+    /// (true for an inner level, and for no database at all). Idempotent; the
+    /// destructor calls it. A caller that must know whether the gesture's rows
+    /// survived — rather than leaving it to the listener — uses this.
+    bool end()
+    {
+        if (!db) return true;
+        Database *owner = db;
+        db = nullptr;
+        return owner->endBatch();
+    }
+
+    DbBatch(const DbBatch &) = delete;
+    DbBatch &operator=(const DbBatch &) = delete;
+
+private:
+    Database *db;
 };
 
 #endif // DATABASE_H

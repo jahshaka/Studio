@@ -65,11 +65,18 @@ void testUndoService()
     undo.redo();
     CHECK(redos == 2, "undo: redo runs it again");
 
-    // The script-macro guard: clear() must not clear while a macro is open.
-    undo.setScriptMacroOpen(true);
+    // The script-macro guard: clear() must not clear while a run is in
+    // progress. There is ONE flag for that now (CLOSE-2 round 2) — the run's
+    // own macro, armed by beginScriptMacro — so the guard is exercised through
+    // the run bracket the app really uses, not through a setter that existed
+    // only to say the same thing twice.
+    undo.beginScriptMacro("script: guard");
+    CHECK(undo.isScriptMacroOpen(), "undo: arming the run macro opens the guard");
     undo.clear();
     CHECK(stack.count() == 1, "undo: clear() is blocked while the script macro is open");
-    undo.setScriptMacroOpen(false);
+    CHECK(undo.endScriptMacro() == false,
+          "undo: a run that recorded nothing leaves no entry (nothing was pushed since)");
+    CHECK(!undo.isScriptMacroOpen(), "undo: ...and the guard is closed again");
     undo.clear();
     CHECK(stack.count() == 0, "undo: clear() clears once the macro closes");
 
