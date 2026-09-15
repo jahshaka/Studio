@@ -70,6 +70,7 @@ public:
             // the database's gesture batch, with none of their machinery
             // (CLOSE-2 round 2, H4).
             { "boundary", "fake.boundary()", "Crosses a project boundary.", Needs::Document },
+            { "kinds", "fake.kinds(i, b, m) -> string", "Reports what the bridge converted.", Needs::Document },
             { "boom", "fake.boom()", "Throws a C++ exception.", Needs::Document },
             { "defaults", "fake.defaults(a, b, c) -> string", "Exercises default arguments.", Needs::Document },
             { "reenter", "fake.reenter() -> string", "Starts a second run from inside a verb.", Needs::Document },
@@ -96,6 +97,11 @@ public:
     {
         host.endRunUndoMacro();
         host.beginRunUndoMacro();
+    }
+    /// What the bridge made of three JavaScript values (round 2, M1).
+    Q_INVOKABLE QString kinds(int i, bool b, const QVariantMap &m)
+    {
+        return QStringLiteral("%1/%2/%3").arg(i).arg(b ? "true" : "false").arg(m.size());
     }
     /// Throws from C++ INSIDE a verb. On the old wrapping engine this would
     /// have unwound through V4's frames; the bridge catches it and the script
@@ -305,6 +311,32 @@ int main(int argc, char **argv)
     r = engine.evaluate("try { fake.boom() } catch (e) { 'caught:' + e.message }", "bridge.js", false);
     CHECK(r.ok && r.value.toString().contains("verb exploded"),
           "a C++ exception inside a verb becomes a catchable JS error");
+
+    // ---- ARGUMENT CONVERSION SPEAKS JAVASCRIPT, not QVariant (round 2, M1) ---
+    //
+    // V4 used to marshal these arguments. QVariant::convert disagrees with it,
+    // and two of the disagreements are wrong answers a script would never see
+    // coming: convert ROUNDS a double into an int (so editor.frame(3.7) would
+    // render four frames where it used to render three) and REFUSES JS null
+    // outright (so an agent passing null for "no opinion" would get a thrown
+    // error from twenty int-typed verbs instead of the default they document).
+    fake->value = 0;
+    r = engine.evaluate("fake.set(3.7); fake.get()", "convert.js", false);
+    CHECK(r.ok && r.value.toInt() == 3, "a double into an int TRUNCATES toward zero, as JS does");
+    r = engine.evaluate("fake.set(-3.7); fake.get()", "convert.js", false);
+    CHECK(r.ok && r.value.toInt() == -3, "...toward zero on the negative side too, not down");
+    r = engine.evaluate("fake.set(null); fake.get()", "convert.js", false);
+    CHECK(r.ok && r.value.toInt() == 0, "JS null into an int is the parameter's default, not a throw");
+    r = engine.evaluate("fake.kinds(null, null, null)", "convert.js", false);
+    CHECK(r.ok && r.value.toString() == "0/false/0",
+          "...and into a bool and a map as well: 0, false, empty");
+    r = engine.evaluate("fake.kinds(2.9, true, {a:1})", "convert.js", false);
+    CHECK(r.ok && r.value.toString() == "2/true/1", "the ordinary case is unchanged");
+    // THE ONE DELIBERATE DIFFERENCE, pinned so it cannot drift silently: a
+    // string into a bool follows Qt, not JavaScript's truthiness.
+    r = engine.evaluate("fake.kinds(0, 'false', {})", "convert.js", false);
+    CHECK(r.ok && r.value.toString() == "0/false/0",
+          "a string into a bool reads the WORD (Qt), not JS truthiness — documented");
 
     // ---- console.log ORDER survives the thread hop ---------------------------
     //

@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "scripting/scriptworker.h"
 
+#include <cmath>
 #include <exception>
 
 #include <QJSEngine>
@@ -179,20 +180,51 @@ VerbOutcome VerbDispatcher::dispatch(const QString &moduleName, const QString &v
 
     // CONVERT ONCE, INTO A STABLE VECTOR: the pointers below alias these
     // elements, so nothing may reallocate after this loop.
+    //
+    // THE CONVERSION HAS TO SPEAK JAVASCRIPT, not QVariant (round 2, M1). V4
+    // used to marshal these arguments and QVariant::convert does not agree with
+    // it on three shapes that scripts and MCP agents really produce — so the
+    // two that matter are corrected here and the third is documented as the one
+    // deliberate difference (see the header).
     std::vector<QVariant> boxed;
     boxed.reserve(size_t(chosenCount));
     for (int i = 0; i < chosenCount; ++i) {
         const QMetaType want = chosen.parameterMetaType(i);
         QVariant value = i < args.size() ? args.at(i) : QVariant();
         if (want.id() != QMetaType::QVariant) {
+            // JS `null` IS a value, and QVariant::convert refuses to turn it
+            // into an int, a bool or a map — where V4 coerced it to 0 / false /
+            // empty. Twenty int-typed verbs take it (editor.frame, the drawer
+            // ids, setAntiAliasing, setShadowResolution) and an agent passes
+            // null for "no opinion" all the time. Treat it as `undefined`:
+            // the parameter's own default, which is what an omitted argument
+            // and a C++ default argument both give.
+            if (value.typeId() == QMetaType::Nullptr) value = QVariant();
             // `undefined`/missing becomes the parameter type's default, which is
             // what a C++ default argument would have produced anyway.
             if (!value.isValid()) value = QVariant(want);
-            else if (value.metaType() != want && !value.convert(want)) {
-                out.threw = true;
-                out.error = QStringLiteral("%1.%2: argument %3 cannot be read as %4")
-                                .arg(moduleName, verb).arg(i + 1).arg(QLatin1String(want.name()));
-                return out;
+            else if (value.metaType() != want) {
+                // A DOUBLE INTO AN INTEGER TRUNCATES TOWARD ZERO, as
+                // JavaScript's ToInt32 does — QVariant::convert ROUNDS, so
+                // editor.frame(3.7) would have rendered four frames where it
+                // used to render three. Every JS number arrives as a double,
+                // so this is not an edge case, it is the common path.
+                const bool integral = (want.id() == QMetaType::Int || want.id() == QMetaType::UInt
+                                       || want.id() == QMetaType::LongLong
+                                       || want.id() == QMetaType::ULongLong
+                                       || want.id() == QMetaType::Short || want.id() == QMetaType::UShort
+                                       || want.id() == QMetaType::Long || want.id() == QMetaType::ULong);
+                if (integral && (value.typeId() == QMetaType::Double
+                                 || value.typeId() == QMetaType::Float)) {
+                    const double d = value.toDouble();
+                    value = QVariant(std::trunc(d));
+                }
+                if (!value.convert(want)) {
+                    out.threw = true;
+                    out.error = QStringLiteral("%1.%2: argument %3 cannot be read as %4")
+                                    .arg(moduleName, verb).arg(i + 1).arg(QLatin1String(want.name()));
+                    return out;
+                }
             }
         }
         boxed.push_back(value);

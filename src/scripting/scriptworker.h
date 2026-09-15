@@ -68,7 +68,20 @@ public:
 
     /// UI THREAD ONLY. Looks the verb up by name and arity, converts each
     /// argument to the parameter's metatype, invokes it, and turns a pending
-    /// fail() into `threw`. `module` == "api" is the registry's own metadata
+    /// fail() into `threw`.
+    ///
+    /// ARGUMENT CONVERSION SPEAKS JAVASCRIPT, not QVariant. V4 used to marshal
+    /// these arguments and QVariant::convert disagrees with it in three places:
+    /// a double into an integer parameter TRUNCATES toward zero here (convert
+    /// would round: editor.frame(3.7) means three frames, not four), and JS
+    /// `null` is read as "no argument" — the parameter's default, 0/false/empty
+    /// — because convert refuses it outright and an agent passes null for "no
+    /// opinion" all the time. THE ONE DELIBERATE DIFFERENCE that remains: a
+    /// non-empty STRING into a bool parameter follows Qt, so "false" and "0"
+    /// are false, where JavaScript's truthiness would make every non-empty
+    /// string true. Qt's reading is the one a person typing
+    /// world.photon({enabled: "false"}) means, and no verb documents a string
+    /// where it wants a bool. `module` == "api" is the registry's own metadata
     /// object (api.help / api.verbs), which is dispatched here for one reason:
     /// so that EVERY C++ call a script makes happens on the UI thread, with no
     /// second rule to remember.
