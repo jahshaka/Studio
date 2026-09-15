@@ -41,6 +41,7 @@ target_include_directories(test_mesh_bake PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_mesh_bake PRIVATE

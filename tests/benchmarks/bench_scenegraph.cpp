@@ -141,6 +141,7 @@
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/meshbake.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -807,6 +808,127 @@ int main(int argc, char **argv)
         mirror.setSource(nullptr);   // unbind before the engine scene dies
         view->setScene(nullptr);
         engine->destroyScene(es);
+    }
+
+    // ---- (f) THE TRIANGLE BUDGET (ATOM stage 1; NANITE_SPEC §12/§14) -----
+    //
+    //   f.tri_budget.<distance>.triangles_lod0   drawn triangles, LOD dial OFF
+    //   f.tri_budget.<distance>.triangles        drawn triangles, dial at the reference
+    //   f.tri_budget.<distance>.draws            draw COMMANDS, both ways (they must agree)
+    //   f.tri_budget.<distance>.frame_ms         frame cost with the dial on
+    //
+    // THE COMPARISON IS WITHIN ONE RUN, AND THAT IS THE POINT. "Triangles at
+    // four distances" on its own is not a measurement of LOD: moving the camera
+    // changes what the frustum contains, so the four numbers differ for two
+    // reasons at once. Setting the dial to 0 PINS every object at its finest
+    // level, which is exactly the renderer this feature replaced — so at each
+    // fixed pose the pair (dial off, dial on) isolates the LOD effect and
+    // nothing else. No baseline file is needed for a ratio taken twice in one
+    // second on one box, which is why this section asserts in --smoke too.
+    //
+    // FINDING B is asserted here as an EQUALITY, not a tendency: the levels
+    // share one vertex buffer and one index pool, so they share a vaoName and
+    // RenderQueue::render advances numDraws instead of emitting another draw
+    // command. A LOD chain that split draw calls would trade a triangle win for
+    // a draw-call loss, which on this renderer is the wrong trade.
+    std::printf("\n== (f) triangle budget: the LOD chain at four distances ==\n");
+    {
+        // A mesh with a real chain: the shipped high-poly sphere (1,536
+        // triangles), simplified by the SAME code the importer bakes with
+        // (MeshBake::buildLodChain) rather than a second implementation of the
+        // policy. Loaded from the source tree because IrisGL's own qrc carries
+        // only the 12-triangle cube.
+        iris::MeshPtr dense =
+            iris::Mesh::loadMesh(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
+        CHECK(!dense.isNull(), "(f) the dense fixture mesh loaded");
+        if (!dense.isNull()) {
+            iris::MeshBake::buildLodChain(dense);
+            const int levels = int(dense->lodIndices.size());
+            std::printf("    fixture: %d triangles, %d LOD level(s)\n",
+                        dense->getIndexBuffer() ? dense->getIndexBuffer()->dataSize / 12 : 0, levels);
+            CHECK(levels >= 1, "(f) the fixture has a LOD chain to measure");
+            gCounters["f.tri_budget.levels"] = double(levels);
+
+            Scene *es = engine->createScene("tribudget", gWorkerThreads);
+            CHECK(es != nullptr, "(f) engine scene");
+            if (es && levels >= 1) {
+                es->setAmbient(Colour(0.35f, 0.35f, 0.35f), Colour(0.2f, 0.2f, 0.2f));
+                view->setScene(es);
+
+                // 256 instances on an 8x4x8 grid: enough that the triangle
+                // count is the number that matters and enough instances that
+                // the draw-call equality is a real assertion (they auto-instance
+                // into a handful of draw commands).
+                auto doc = iris::Scene::create();
+                const float spacing = 3.0f;
+                for (int i = 0; i < 256; ++i) {
+                    const int gx = i % 8, gy = (i / 8) % 4, gz = i / 32;
+                    auto mn = iris::MeshNode::create();
+                    mn->setMesh(dense);
+                    mn->setMaterial(gMaterial);
+                    mn->setLocalPos(iris::Vec3((float(gx) - 3.5f) * spacing,
+                                               (float(gy) - 1.5f) * spacing,
+                                               (float(gz) - 3.5f) * spacing));
+                    mn->setName(QString("s%1").arg(i));
+                    doc->getRootNode()->addChild(mn, false);
+                }
+                SceneMirror mirror(es);
+                mirror.setSource(doc);
+                mirror.sync();
+
+                struct Reading { unsigned long long triangles = 0, draws = 0; double frameMs = 0.0; };
+                const char *names[4] = { "near", "mid", "far", "extreme" };
+                const float dists[4] = { 12.0f, 40.0f, 120.0f, 400.0f };
+                Reading off[4], on[4];
+                for (int d = 0; d < 4; ++d) {
+                    enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, dists[d]), Vec3(0, 0, 0));
+                    for (int pass = 0; pass < 2; ++pass) {
+                        es->setLodBias(pass == 0 ? 0.0f : 1.0f);
+                        // Ogre's LOD update runs inside the scene pass, so the
+                        // first frame after a dial change still draws the old
+                        // level; three frames is settled and cheap.
+                        for (int f = 0; f < 3; ++f) engine->renderOneFrame();
+                        RenderStats rs;
+                        if (!engine->renderStats(rs)) continue;
+                        Reading &r = (pass == 0 ? off[d] : on[d]);
+                        r.triangles = rs.triangles;
+                        r.draws = rs.draws;
+                        r.frameMs = rs.frameMs;
+                    }
+                    const double ratio = off[d].triangles ? double(on[d].triangles) / double(off[d].triangles) : 1.0;
+                    std::printf("BENCH %-28s dist=%-6.0f triangles %8llu -> %8llu (%5.1f%%)  draws %llu -> %llu\n",
+                                (std::string("f.tri_budget.") + names[d]).c_str(), dists[d],
+                                off[d].triangles, on[d].triangles, ratio * 100.0,
+                                off[d].draws, on[d].draws);
+                    const std::string key = std::string("f.tri_budget.") + names[d] + ".";
+                    gCounters[key + "triangles_lod0"] = double(off[d].triangles);
+                    gCounters[key + "triangles"] = double(on[d].triangles);
+                    gCounters[key + "draws"] = double(on[d].draws);
+                    gCounters[key + "frame_ms"] = on[d].frameMs;
+                    gCounters[key + "ratio"] = ratio;
+                    // The EQUALITY assumes every level's index buffer sits in the SAME
+                    // immutable VBO pool as level 0's (the pool's VkBuffer is part of the
+                    // vaoName); a chain that straddles a pool boundary costs one more
+                    // command without a defect — a dense fixture would need a tolerance.
+                    CHECK(on[d].draws == off[d].draws,
+                          (std::string("(f) ") + names[d] +
+                           ": the LOD chain costs no extra draw command").c_str());
+                }
+                // THE ACCEPTANCE (§7.3): at the far distance the chain must shed
+                // at least 40% of the triangles the un-LOD'd scene draws.
+                const double farRatio = off[2].triangles ? double(on[2].triangles) / double(off[2].triangles) : 1.0;
+                CHECK(farRatio <= 0.60,
+                      ("(f) far: at least 40% fewer triangles with the dial on (" +
+                       std::to_string(int(farRatio * 100.0)) +
+                       "% of the un-LOD'd count)").c_str());
+                CHECK(off[0].triangles >= on[0].triangles,
+                      "(f) near: the dial never ADDS triangles");
+                es->setLodBias(1.0f);
+                mirror.setSource(nullptr);
+                view->setScene(nullptr);
+                engine->destroyScene(es);
+            }
+        }
     }
 
     // ---- the scale sweep: metrics (a), (b), (c) --------------------------
