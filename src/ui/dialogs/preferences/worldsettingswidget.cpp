@@ -431,10 +431,14 @@ void WorldSettingsWidget::configureViewport()
 	pipSpin->setToolTip("How wide the preview is, as a percentage of the viewport's width. "
 	                    "Its height follows the camera's aspect ratio.");
 	StyleSheet::setStyle({ pipLabel, pipSizeLabel, pipCheckbox, pipSpin });
-	layout->addWidget(pipLabel, 5, 0);
-	layout->addLayout(pipLayout, 5, 2);
-	layout->addWidget(pipSizeLabel, 6, 0);
-	layout->addWidget(pipSpin, 6, 2);
+	// Rows 6 and 7: row 5 belongs to Hardware Ray Tracing (PHOTON-R1). Two
+	// widgets in one grid cell do not stack — they are DRAWN ON TOP OF EACH
+	// OTHER, which is what "Eardwra rBaeyTracing" looked like on the shipped
+	// page. Every row below moved down by one with them.
+	layout->addWidget(pipLabel, 6, 0);
+	layout->addLayout(pipLayout, 6, 2);
+	layout->addWidget(pipSizeLabel, 7, 0);
+	layout->addWidget(pipSpin, 7, 2);
 	// The stored values, read the same way the viewport reads them at startup
 	// (the page may open before a viewport exists).
 	pipCheckbox->setChecked(settings->getValue("camera/pip", true).toBool());
@@ -470,8 +474,8 @@ void WorldSettingsWidget::configureViewport()
 		"off: frames go out as fast as they are made, with tearing. Changing this rebuilds "
 		"the viewport's swapchain, so expect one dropped frame.");
 	StyleSheet::setStyle({ pacingLabel, pacingCombo });
-	layout->addWidget(pacingLabel, 7, 0);
-	layout->addWidget(pacingCombo, 7, 2);
+	layout->addWidget(pacingLabel, 8, 0);
+	layout->addWidget(pacingCombo, 8, 2);
 	{
 		bool ok = false;
 		const framepacing::Mode stored = framepacing::modeFromName(
@@ -513,8 +517,8 @@ void WorldSettingsWidget::configureViewport()
 		"it costs a handful of counter reads once per interval and never touches the "
 		"frame path. 0 turns it off.");
 	StyleSheet::setStyle({ perfLabel, perfSpin });
-	layout->addWidget(perfLabel, 8, 0);
-	layout->addWidget(perfSpin, 8, 2);
+	layout->addWidget(perfLabel, 9, 0);
+	layout->addWidget(perfSpin, 9, 2);
 	perfSpin->setValue(qBound(0, settings->getValue("log/perfSampleSeconds",
 	                                                PerfSampler::defaultSeconds()).toInt(), 3600));
 	connect(perfSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int seconds) {
@@ -546,8 +550,8 @@ void WorldSettingsWidget::configureViewport()
 		"again to stop early. Nothing is drawn over the viewport while it records, and "
 		"nothing at all runs when it is off.");
 	StyleSheet::setStyle({ captureLabel, captureSpin });
-	layout->addWidget(captureLabel, 9, 0);
-	layout->addWidget(captureSpin, 9, 2);
+	layout->addWidget(captureLabel, 10, 0);
+	layout->addWidget(captureSpin, 10, 2);
 	captureSpin->setValue(int(FrameMonitor::preferredSeconds()));
 	connect(captureSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [](int seconds) {
 		FrameMonitor::setPreferredSeconds(double(seconds));

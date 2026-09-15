@@ -25,6 +25,8 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QImage>
+#include <QLabel>
+#include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
 #include <QSettings>
@@ -1012,6 +1014,126 @@ static void testWindow(const QString &scratch)
     }
 }
 
+// ------------------------------------------------- the user's own question ----
+// §362: "the chat window shows only the assistant's responses, not my own
+// questions". The bubble is added before the message is sent
+// (ClaudeChatWindow::sendCurrentInput), so a question that does not appear is
+// either a bubble that never got its sheet rule (an unpolished label keeps the
+// generic `QLabel { color: #e8e8ea; background: transparent }` and reads as an
+// empty gap) or a label that was handed the question as AutoText and rendered
+// it as MARKUP — one unterminated tag empties a correctly sized bubble.
+// This drives the REAL send path (type into the input, press Send) and then
+// asserts PIXELS: the question's text colour must actually appear inside the
+// bubble it was drawn in.
+static void testUserBubbleVisible(const QString &scratch)
+{
+    QSettings ini(scratch + "/bubble.ini", QSettings::IniFormat);
+    ClaudeCliProbe::Result present;
+    present.status = ClaudeCliProbe::Status::Found;
+    present.version = "9.9.9";
+
+    // A host with no project folder: sendMessage returns at its first line, so
+    // no CLI is spawned and nothing is asserted about the answer — this test is
+    // about what the window does with the question BEFORE it sends it.
+    ClaudeChatHost host;
+    ClaudeChatWindow window(&ini, &host);
+    window.setCliState(present);
+    window.setProjectOpen(true);
+    window.setMcpRunning(true);
+    window.resize(420, 560);
+    window.show();
+    qApp->processEvents();
+
+    auto *input = window.findChild<QPlainTextEdit *>("claudeInput");
+    auto *send = window.findChild<QPushButton *>("claudeSend");
+    CHECK(input && send, "bubble: the input row is there to type into");
+    if (!input || !send) return;
+
+    // A question with markup in it, because that is the one the old AutoText
+    // label ate: the user must see exactly what they typed.
+    const QString question = QStringLiteral("make the wall <b>red</b> and the light <Node");
+    input->setPlainText(question);
+    send->click();
+    qApp->processEvents();
+
+    const QList<QLabel *> bubbles = window.findChildren<QLabel *>("claudeBubbleUser");
+    CHECK(bubbles.size() == 1, "bubble: sending adds exactly one user bubble");
+    if (bubbles.isEmpty()) return;
+    QLabel *bubble = bubbles.last();
+
+    CHECK(bubble->text() == question, "bubble: the bubble carries the question verbatim");
+    CHECK(bubble->textFormat() == Qt::PlainText,
+          "bubble: as PLAIN TEXT — a typed \"<b>\" is the user's characters, not markup");
+    CHECK(input->toPlainText().isEmpty(), "bubble: ...and the input box is cleared");
+
+    // The sheet rule reached the label: its foreground and its background are
+    // the window's own (and they are not the same colour, which is the whole
+    // point — an unstyled label would keep the generic pair).
+    const QColor fg = bubble->palette().color(QPalette::WindowText);
+    const QColor bg = bubble->palette().color(QPalette::Window);
+    CHECK(fg != bg, "bubble: the label's text colour differs from its background");
+    CHECK(bg.name() == QLatin1String("#2f4f77") && fg.name() == QLatin1String("#eef2f8"),
+          "bubble: ...and both come from the window's claudeBubbleUser rule");
+
+    // PIXELS. Everything above can hold while nothing draws; this is the check
+    // that fails if the question is invisible for any reason at all.
+    window.resize(421, 561);   // one layout pass with the bubble in it
+    qApp->processEvents();
+    const QImage shot = window.grab().toImage().convertToFormat(QImage::Format_RGB32);
+    const QPoint topLeft = bubble->mapTo(&window, QPoint(0, 0));
+    const QRect box(topLeft, bubble->size());
+    CHECK(box.width() > 20 && box.height() > 10, "bubble: the bubble has a real size");
+    // Glyphs are antialiased: most of a letter's pixels are a blend of the two
+    // colours, so "ink" is every pixel nearer the text colour than the
+    // background one. An empty bubble scores zero, whatever the font is.
+    int inkPixels = 0, backgroundPixels = 0;
+    for (int y = box.top(); y <= box.bottom() && y < shot.height(); ++y) {
+        for (int x = box.left(); x <= box.right() && x < shot.width(); ++x) {
+            if (x < 0 || y < 0) continue;
+            const QColor c = shot.pixelColor(x, y);
+            const int toText = qAbs(c.red() - fg.red()) + qAbs(c.green() - fg.green())
+                             + qAbs(c.blue() - fg.blue());
+            const int toBack = qAbs(c.red() - bg.red()) + qAbs(c.green() - bg.green())
+                             + qAbs(c.blue() - bg.blue());
+            if (toText < toBack) ++inkPixels;
+            else if (toBack < 30) ++backgroundPixels;
+        }
+    }
+    CHECK(backgroundPixels > 200, "bubble: the bubble's background is painted");
+    CHECK(inkPixels > 50, "bubble: THE QUESTION'S TEXT IS PAINTED INSIDE IT (§362)");
+    std::printf("   (ink %d px, background %d px, box %dx%d at %d,%d)\n", inkPixels,
+                backgroundPixels, box.width(), box.height(), box.x(), box.y());
+
+    // §362's OTHER hypothesis, closed: the transcript is wiped by a
+    // projectChanged that the MCP connection state (or any other
+    // refreshClaudeChatContext caller) re-fires with the SAME folder. A
+    // configure() to the folder it already has must emit nothing at all, so
+    // the question stays on screen.
+    QTemporaryDir projectDir;
+    host.configure(projectDir.path(), false, 0, QString());
+    host.configure(projectDir.path(), true, 8639, QStringLiteral("tok"));
+    host.configure(projectDir.path(), false, 0, QString());
+    qApp->processEvents();
+    CHECK(window.findChildren<QLabel *>("claudeBubbleUser").size() == 1,
+          "bubble: re-configuring the SAME project leaves the question on screen");
+    CHECK(window.findChildren<QLabel *>("claudeBubbleUser").first()->text() == question,
+          "bubble: ...unchanged");
+
+    // The error bubble is made by the same one function now (it used to be an
+    // assistant bubble renamed and re-polished by hand at three call sites).
+    host.parser()->feed("{\"type\":\"result\",\"subtype\":\"error_during_execution\","
+                        "\"is_error\":true,\"result\":\"boom <Node\"}\n");
+    qApp->processEvents();
+    const QList<QLabel *> errors = window.findChildren<QLabel *>("claudeBubbleError");
+    CHECK(errors.size() == 1 && errors.first()->text() == QLatin1String("boom <Node")
+              && errors.first()->textFormat() == Qt::PlainText,
+          "bubble: an error bubble is named, plain and verbatim too");
+    CHECK(!errors.isEmpty()
+              && errors.first()->palette().color(QPalette::Window).name()
+                     == QLatin1String("#4a2b2b"),
+          "bubble: ...and polished under its own rule");
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1032,6 +1154,7 @@ int main(int argc, char **argv)
     testPdeathsig(scratch.path());
     testInterruptResume(scratch.path());
     testWindow(scratch.path());
+    testUserBubbleVisible(scratch.path());
 
     std::printf(failures ? "claude.chat: %d FAILURES\n" : "claude.chat: all checks passed\n",
                 failures);

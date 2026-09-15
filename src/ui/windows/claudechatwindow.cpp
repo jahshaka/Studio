@@ -299,6 +299,7 @@ void ClaudeChatWindow::buildUi()
     installBody->setWordWrap(true);
     mInstallDetail = new QLabel(installPage);
     mInstallDetail->setObjectName(QStringLiteral("claudeStatus"));
+    mInstallDetail->setTextFormat(Qt::PlainText);   // the CLI's own stderr
     mInstallDetail->setAlignment(Qt::AlignCenter);
     mInstallDetail->setWordWrap(true);
     auto *retryBtn = new QPushButton(tr("Check again"), installPage);
@@ -352,12 +353,7 @@ void ClaudeChatWindow::connectHost()
             &ClaudeChatWindow::addToolLine);
     connect(parser, &ClaudeStreamParser::toolResult, this,
             [this](const QString &snippet, bool isError) {
-                if (isError) {
-                    auto *bubble = addBubble(tr("Tool error: %1").arg(snippet), false);
-                    bubble->setObjectName(QStringLiteral("claudeBubbleError"));
-                    bubble->style()->unpolish(bubble);
-                    bubble->style()->polish(bubble);
-                }
+                if (isError) addBubble(tr("Tool error: %1").arg(snippet), BubbleKind::Error);
             });
     // The screenshots and thumbnails the tools return — the transcript's one
     // remaining gap versus a terminal.
@@ -404,18 +400,12 @@ void ClaudeChatWindow::connectHost()
                     addInfoLine(tr("stopped"));
                     return;
                 }
-                auto *bubble = addBubble(
-                    resultText.isEmpty() ? tr("The turn failed.") : resultText, false);
-                bubble->setObjectName(QStringLiteral("claudeBubbleError"));
-                bubble->style()->unpolish(bubble);
-                bubble->style()->polish(bubble);
+                addBubble(resultText.isEmpty() ? tr("The turn failed.") : resultText,
+                          BubbleKind::Error);
             });
     connect(mHost, &ClaudeChatHost::busyChanged, this, &ClaudeChatWindow::updateBusyUi);
     connect(mHost, &ClaudeChatHost::processFailed, this, [this](const QString &detail) {
-        auto *bubble = addBubble(tr("Claude Code failed: %1").arg(detail), false);
-        bubble->setObjectName(QStringLiteral("claudeBubbleError"));
-        bubble->style()->unpolish(bubble);
-        bubble->style()->polish(bubble);
+        addBubble(tr("Claude Code failed: %1").arg(detail), BubbleKind::Error);
     });
     connect(mHost, &ClaudeChatHost::turnAborted, this, [this]() {
         mStopRequested = false;   // the kill fallback fired; no result is coming
@@ -524,14 +514,27 @@ void ClaudeChatWindow::applyModelChoice(const QString &modelId, bool announce)
 
 // ---- message list ----
 
-QWidget *ClaudeChatWindow::addBubble(const QString &text, bool user)
+QLabel *ClaudeChatWindow::addBubble(const QString &text, BubbleKind kind)
 {
+    const bool user = kind == BubbleKind::User;
     auto *row = new QWidget();
     auto *rowLayout = new QHBoxLayout(row);
     rowLayout->setContentsMargins(0, 0, 0, 0);
-    auto *bubble = new QLabel(text, row);
-    bubble->setObjectName(user ? QStringLiteral("claudeBubbleUser")
-                               : QStringLiteral("claudeBubbleAssistant"));
+    auto *bubble = new QLabel(row);
+    bubble->setObjectName(kind == BubbleKind::User    ? QStringLiteral("claudeBubbleUser")
+                          : kind == BubbleKind::Error ? QStringLiteral("claudeBubbleError")
+                                                      : QStringLiteral("claudeBubbleAssistant"));
+    // PLAIN TEXT, ALWAYS. A QLabel defaults to Qt::AutoText, which runs
+    // Qt::mightBeRichText over the string and renders anything that looks like
+    // markup AS markup: a question typed as "make it <b>bold</b>" came out
+    // bold with the tags eaten (measured on the rig), and an UNTERMINATED tag
+    // ("<Node" with no closing bracket) drops the whole remainder of the text,
+    // leaving a correctly sized, EMPTY bubble — invisible text with a visible
+    // box. Nothing carried by a bubble is our own markup: the user's question
+    // is theirs verbatim, and the assistant's finished reply opts back in to
+    // Markdown explicitly in finalizeAssistantBubble.
+    bubble->setTextFormat(Qt::PlainText);
+    bubble->setText(text);
     bubble->setWordWrap(true);
     bubble->setTextInteractionFlags(Qt::TextSelectableByMouse);
     bubble->setMaximumWidth(560);
@@ -543,6 +546,12 @@ QWidget *ClaudeChatWindow::addBubble(const QString &text, bool user)
         rowLayout->addStretch(1);
     }
     mMessages->insertWidget(mMessages->count() - 1, row);
+    // The sheet's `QLabel#claudeBubble*` rule can only reach a label that was
+    // polished UNDER the name it carries. Insertion is what puts the label
+    // under this window's QStyleSheetStyle, so the re-polish belongs AFTER it —
+    // and it belongs HERE, once, rather than at the call sites that remembered.
+    bubble->style()->unpolish(bubble);
+    bubble->style()->polish(bubble);
     ++mMessageCount;
     scrollToBottom();
     return bubble;
@@ -550,8 +559,12 @@ QWidget *ClaudeChatWindow::addBubble(const QString &text, bool user)
 
 void ClaudeChatWindow::addInfoLine(const QString &text)
 {
-    auto *label = new QLabel(text);
+    auto *label = new QLabel();
     label->setObjectName(QStringLiteral("claudeInfoLine"));
+    // Plain, for the same reason the bubbles are: an info row quotes the CLI
+    // ("unreadable line from Claude Code: %1") and a tool name from the model.
+    label->setTextFormat(Qt::PlainText);
+    label->setText(text);
     label->setAlignment(Qt::AlignCenter);
     label->setWordWrap(true);
     mMessages->insertWidget(mMessages->count() - 1, label);
@@ -661,8 +674,10 @@ void ClaudeChatWindow::addToolLine(const QString &name, const QString &inputJson
 
     // The detail keeps the protocol truth: the namespaced tool name and the
     // whole input, so nothing the friendly row summarised is lost.
-    auto *detail = new QLabel(name + QStringLiteral("\n") + inputJson.trimmed(), container);
+    auto *detail = new QLabel(container);
     detail->setObjectName(QStringLiteral("claudeToolDetail"));
+    detail->setTextFormat(Qt::PlainText);   // the model's raw JSON, never markup
+    detail->setText(name + QStringLiteral("\n") + inputJson.trimmed());
     detail->setWordWrap(true);
     detail->setTextInteractionFlags(Qt::TextSelectableByMouse);
     detail->hide();
@@ -684,7 +699,7 @@ void ClaudeChatWindow::beginAssistantBubble()
 {
     if (mStreamingBubble) return; // consecutive blocks share one bubble
     mStreamingText.clear();
-    mStreamingBubble = qobject_cast<QLabel *>(addBubble(QString(), false));
+    mStreamingBubble = addBubble(QString(), BubbleKind::Assistant);
 }
 
 void ClaudeChatWindow::appendAssistantDelta(const QString &text)
@@ -699,7 +714,7 @@ void ClaudeChatWindow::appendAssistantDelta(const QString &text)
 void ClaudeChatWindow::finalizeAssistantBubble(const QString &fullText)
 {
     QLabel *bubble = mStreamingBubble;
-    if (!bubble) bubble = qobject_cast<QLabel *>(addBubble(QString(), false));
+    if (!bubble) bubble = addBubble(QString(), BubbleKind::Assistant);
     // The complete message replaces the streamed text (authoritative), and
     // upgrades to markdown rendering.
     bubble->setTextFormat(Qt::MarkdownText);
@@ -724,7 +739,7 @@ void ClaudeChatWindow::sendCurrentInput()
     if (!mHost || mHost->isBusy()) return;
     const QString text = mInput->toPlainText().trimmed();
     if (text.isEmpty() || !mProjectOpen || !mCliFound) return;
-    addBubble(text, true);
+    addBubble(text, BubbleKind::User);
     mInput->clear();
     mStopRequested = false;
     mHost->sendMessage(text);

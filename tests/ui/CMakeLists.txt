@@ -1053,3 +1053,32 @@ jah_lsan_blocked(ui.shot_aspect)   # spawns the app
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(ui.drag_owner ui.light_channels ui.material_panel ui.media_lazy ui.project_tile ui.property_anim)
+
+# ui.mcp_prefs — the Claude/MCP preferences page does not write back STALE
+# state (round-2 review of MCP-LOG-1). OK saves every page of a dialog that is
+# built once and shown many times, so a control still showing what it was
+# built with silently reverts whatever changed in between: a scripted
+# app.mcpLogging({session:true}), and a server started from --mcp-port (which
+# an untouched OK used to STOP). The page is a slice with link stubs for the
+# server, the window and the theme — no Sql, no engine, no MainWindow.
+find_package(Qt6 REQUIRED COMPONENTS Widgets HttpServer)
+add_executable(test_mcp_prefs
+    test_mcp_prefs.cpp
+    test_mcp_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/scripting/mcp/mcpserver.h   # AUTOMOC: the stub needs its moc
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/preferences/mcpsettingswidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/scripting/mcp/mcplog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_mcp_prefs PROPERTIES AUTOMOC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_mcp_prefs PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_mcp_prefs PRIVATE Qt6::Widgets Qt6::HttpServer qlementine)
+add_test(NAME ui.mcp_prefs COMMAND test_mcp_prefs
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(ui.mcp_prefs PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "ui")
+jah_no_display(ui.mcp_prefs)   # offscreen widgets only, no X needed
