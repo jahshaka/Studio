@@ -629,6 +629,36 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- 11c-2. A FILTER CLEARED OFF SCREEN STILL OWES THE SECTIONS (F7) --
+    // A verb (or the other tab's box) can filter and clear a tab that is not in
+    // front, where neither the apply nor the restore can run. The clear used to
+    // drop the debt: the sections stayed the way the filter had left them, with
+    // an empty box, and the next filter overwrote the snapshot with that state.
+    {
+        panel->setPropertiesTab(Tab::World);
+        panel->setPropertiesFilter(Tab::World, QString());
+        turn();
+        AccordianBladeWidget *sky = nullptr;
+        for (AccordianBladeWidget *b : panel->findChildren<AccordianBladeWidget *>())
+            if (b->panelTitle() == QStringLiteral("Sky")) sky = b;
+        CHECK(sky && sky->isExpanded(),
+              "properties_filter: the Sky section is open before the filter");
+        panel->setPropertiesFilter(Tab::World, QStringLiteral("ssr"));   // closes it
+        turn();
+        CHECK(sky && !sky->isExpanded(), "properties_filter: ...and closed by it");
+        panel->setPropertiesTab(Tab::Selection);                         // leave the tab
+        turn();
+        panel->setPropertiesFilter(Tab::World, QString());               // cleared off screen
+        turn();
+        panel->setPropertiesTab(Tab::World);                             // come back
+        turn();
+        CHECK(sky && sky->isExpanded(),
+              "properties_filter: a clear that happened off screen is paid at the next "
+              "mount — the section is open again");
+        CHECK(sky && !sky->isHeaderMuted(),
+              "properties_filter: ...and its header is no longer greyed");
+    }
+
     // ---- 11d-2. A ROW RE-LABELLED WHILE ITS TAB IS HIDDEN (F5) ------------
     // Panels rename rows (the sky panel's sun row, a light's Tint). A row whose
     // tab is not on screen gets no paint and no resize, so RowFit never elides

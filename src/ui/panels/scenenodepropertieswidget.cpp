@@ -397,6 +397,13 @@ void SceneNodePropertiesWidget::applyTab()
     // undo, a tab switch and a scene open all land with the box's text still in
     // force and no frame in between showing the unfiltered column.
     applyRowFilter();
+    // ...and a filter CLEARED while this tab was off screen gets its sections
+    // back here, which is the first moment they exist to put back.
+    const int t = int(currentTab);
+    if (restorePending[t] && filterText[t].isEmpty()) {
+        restorePending[t] = false;
+        restoreExpandState(currentTab);
+    }
     warnIfWiderThanDock();
 }
 
@@ -432,11 +439,24 @@ void SceneNodePropertiesWidget::setPropertiesFilter(Tab tab, const QString &text
     // THE EXPAND SNAPSHOT (§3.4.5). A section with a match opens so the row can
     // be seen; clearing the box puts every section back the way the user had
     // it, not the way the filter left it.
-    if (!was && now) snapshotExpandState(tab);
+    //
+    // A TAB THAT IS NOT ON SCREEN can be filtered and cleared by a verb or the
+    // other box's shortcut, and neither the apply nor the restore can run there
+    // — the blades are not mounted. The clear therefore leaves a DEBT, paid at
+    // that tab's next applyTab; without it the snapshot survived into the next
+    // filter and was overwritten with the state the previous filter had left,
+    // losing the user's open sections for good.
+    if (!was && now) {
+        if (restorePending[t]) restorePending[t] = false;   // the debt IS the snapshot
+        else snapshotExpandState(tab);
+    }
     filterText[t] = trimmed;
     if (tab == currentTab) {
         applyRowFilter();
         if (was && !now) restoreExpandState(tab);
+    }
+    else if (was && !now) {
+        restorePending[t] = true;
     }
     emit propertiesFilterChanged(tab, filterText[t]);
 }

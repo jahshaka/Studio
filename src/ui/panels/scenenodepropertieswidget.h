@@ -242,6 +242,10 @@ private:
     /// blade type) keeps this header free of the accordion's; the restore
     /// casts what is still alive.
     QVector<QPair<QPointer<QWidget>, bool>> expandSnapshot[2];
+    /// A TAB WHOSE FILTER WAS CLEARED WHILE IT WAS NOT ON SCREEN still owes its
+    /// sections their expand state back — the restore can only run where the
+    /// blades are mounted. Paid at that tab's next applyTab.
+    bool restorePending[2] = { false, false };
     QVector<QPointer<QWidget>> mountedBlades[2];
 
     /// See mountCount().
