@@ -171,6 +171,17 @@ assert(fWorst >= 8,
 // the bottom because this sample's surfaces sit at 0.02, 0.03, 0.25, 0.40 and
 // 0.80 roughness: the default already excludes the walls, so the default and
 // the minimum differ by little, while the two ends differ by all of it.
+//
+// AND THE MEASURE IS THE LOCAL ONE, which cost this suite a red to learn
+// (SSR-3 round 2). The total MASS of the difference is NOT a footprint: with
+// the reflections gone the frame is still not the SSR-off frame, because the
+// auto-exposure meters a slightly different picture and shifts the WHOLE image.
+// Measured here, mean signed delta against the SSR-off shot: +1.25/255 at the
+// row's minimum with 2232 of 3072 samples brighter and SIX darker (a frame-wide
+// lift, worst 6), against -0.02/255 at its maximum with 163 brighter and 196
+// darker and a worst of 24 (a reflection: local, and both ways). So mass is
+// printed for the record and the COUNT PAST 10/255 is what is asserted - the
+// same 10/255 the limb band above uses, and for the same reason.
 function footprint(tag, probes, off) {
     var mass = 0, far = 0;
     for (var i = 0; i < probes.length; ++i) {
@@ -213,20 +224,19 @@ world.clearOverride({ id: "ssr" });
 // THE TWO ENDS OF THE ROW, and the row's own physics as the assertion: closing
 // the cutoff can only take surfaces OUT of the marched set, so the footprint at
 // 5 % must be a fraction of the one at 100 %. Measured on this sample at the
-// owner's pose (spikes/ssr-3/): mass 929 at 100 %, 481 at 5 %, 507 at the
-// default 40 %; 12 samples past 10/255 against 1. The room's walls are authored
-// at roughness 0.8 and its GreenTeapot at 0.40, which is what the top of the
-// row reaches and the bottom does not. A march that ignored the row would
-// return the same two numbers.
-assert(wide.mass > 0 && wide.far > 0,
-       "SSR has a footprint at the top of the row (mass " + wide.mass + ", " +
-       wide.far + " samples past 10/255)");
-assert(tight.mass * 13 < wide.mass * 10,
+// owner's pose (spikes/ssr-3/): 12 samples past 10/255 at 100 %, ZERO at 5 %,
+// 2 at the default 40 %. The room's walls are authored at roughness 0.8 and its
+// GreenTeapot at 0.40, which is what the top of the row reaches and the bottom
+// does not. A march that ignored the row would return the same two counts.
+// The count at the top of the row drifts a little open to open (12 and 14 in
+// two runs, against a flat zero at the bottom both times), which is why the
+// budget is a DIFFERENCE of 6 and not a ratio.
+assert(wide.far >= 6,
+       "SSR has a footprint at the top of the row (" + wide.far +
+       " samples past 10/255, mass " + wide.mass + ")");
+assert(tight.far + 6 <= wide.far,
        "the WORLD ROW drives the screen-space march: closing the cutoff from 100 % to 5 % " +
-       "shrinks the marched footprint from mass " + wide.mass + " to " + tight.mass +
-       " (budget: the tight one under 0.77 of the wide one)");
-assert(tight.far + 4 <= wide.far,
-       "...and it removes whole SAMPLES, not just amplitude: " + wide.far + " samples past " +
-       "10/255 at 100 %, " + tight.far + " at 5 %");
+       "takes the marched footprint from " + wide.far + " samples past 10/255 down to " +
+       tight.far + " (budget: at least 6 samples of difference; measured 12-14 against 0)");
 
 console.log("scripting.e2e.ssr_mirror complete");

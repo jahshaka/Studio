@@ -311,8 +311,10 @@ QVector<Row> buildRows()
                                 "screen answers what it can see and a ray answers the rest; above "
                                 "it the reflection probes' own blurred photograph answers, which "
                                 "for a rough surface is both cheaper and closer to the truth. The "
-                                "change is feathered around the value, so a surface whose "
-                                "roughness varies across it has no seam in it. Raising it spends "
+                                "change is feathered: both the screen's march and the ray fade "
+                                "out over the same 10 per cent below the value, so a surface "
+                                "whose roughness varies across it has no seam in it. Raising it "
+                                "spends "
                                 "rays and marches on surfaces that will look much the same either "
                                 "way; lowering it hands more of the picture to the probes.");
         r.available = true;

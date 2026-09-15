@@ -2214,23 +2214,36 @@ int main()
     // disappeared, just at the wrong roughness.
     //
     // HOW A PIXEL SUITE PINS A DECODE. The shader hands out no numbers, so the
-    // cutoff itself is the probe: the resolve's ramp is
-    // `1 - smoothstep(cutoff/2, cutoff, roughness)`, so for a floor authored at
-    // a known roughness r the screen's contribution is EXACTLY FULL while
-    // `cutoff >= 2r` and EXACTLY ZERO while `cutoff <= r`. Two shots bracket r
-    // from both sides, and the bracket is tight enough to separate the right
-    // answer from both wrong ones:
+    // cutoff itself is the probe. The resolve's roughness ramp is
+    //
+    //     roughFade = 1 - smoothstep( cutoff - feather, cutoff, roughness )
+    //
+    // with `feather` = kRayReflectFeather = 0.1, the one the traced half fades
+    // over (EnginePrivate.h). The march is skipped outright above the cutoff, so
+    // for a floor authored at a known roughness r the screen's contribution is
+    // EXACTLY FULL while `cutoff - 0.1 >= r`, EXACTLY ZERO while `cutoff <= r`,
+    // and in between it is a known fraction of full. That is three different
+    // shapes of evidence about one number:
     //
     //     the floor is authored at   r          = 0.300 (perceptual)
     //     a correct read gives                    0.300
     //     reading the raw packed alpha gives      0.090
     //     the pre-0043 decode of it gives         0.107
     //
-    // At `cutoff = 0.29` a correct read marches NOTHING; both wrong reads are
-    // far below half the cutoff and would march at FULL strength. At
-    // `cutoff = 0.62` a correct read is at full strength and must match the
-    // wide-open shot exactly — which says the value read is not above 0.31
-    // either. Together: 0.29 <= what the shader read <= 0.31.
+    //   * `cutoff = 0.29` — a correct read marches NOTHING. Both wrong reads sit
+    //     below `cutoff - 0.1` and would march at FULL strength. So r >= 0.29.
+    //   * `cutoff = 0.41` — the ramp's full-strength edge lands at 0.31, so a
+    //     correct read must match the wide-open shot exactly. So r <= 0.31.
+    //   * `cutoff = 0.35` — the floor sits at the ramp's MIDPOINT (0.25..0.35),
+    //     where smoothstep is exactly 0.5, so the reflection must be HALF the
+    //     wide-open one. This is the sharp one: r = 0.29 would score 0.65 of
+    //     full and r = 0.31 would score 0.35 of it, so a 5 % tolerance on the
+    //     half pins the value the shader read to about 0.300 +/- 0.007.
+    //
+    // ...and `cutoff = 0.40`, the shipped default, must leave this floor's
+    // reflection WHOLE: 0.30 is a feather below the cutoff. That is the lane's
+    // round-2 change in one assertion — with the old `cutoff/2` ramp the same
+    // surface kept only half of it (measured, 0.424 against 0.847).
     //
     // AND THE ROW IS A UNIFORM. The five shots below run through five cutoffs
     // on one workspace; a drag of the World panel's slider must not rebuild a
@@ -2286,17 +2299,17 @@ int main()
             };
 
             const float wide  = atCutoff(1.00f, "cutoff 1.00, wide open");
-            const float full  = atCutoff(0.62f, "cutoff 0.62, the ramp is still exactly 1 at r=0.30");
+            const float full  = atCutoff(0.41f, "cutoff 0.41, the feather's full-strength edge at 0.31");
             const float shut  = atCutoff(0.29f, "cutoff 0.29, just below the floor's roughness");
-            const float oldBd = atCutoff(0.35f, "cutoff 0.35, the deleted constant read as perceptual");
+            const float mid   = atCutoff(0.35f, "cutoff 0.35, the floor at the feather's midpoint");
             const float dflt  = atCutoff(0.40f, "cutoff 0.40, the shipped default");
 
             CHECK_MSG(wide > 0.10f,
                       "the 0.30-roughness floor reflects the cube at all (red excess %.3f)", wide);
             // THE UPPER BRACKET.
             CHECK_MSG(std::fabs(full - wide) <= 0.01f,
-                      "at cutoff 0.62 the ramp is still exactly 1, so the frame matches the "
-                      "wide-open one: the roughness the shader read is at most 0.31 "
+                      "at cutoff 0.41 the feather's full-strength edge is 0.31, so the frame "
+                      "matches the wide-open one: the roughness the shader read is at most 0.31 "
                       "(%.3f vs %.3f)", full, wide);
             // THE LOWER BRACKET, and the one that kills both wrong decodes.
             CHECK_MSG(shut < 0.06f,
@@ -2304,14 +2317,21 @@ int main()
                       "least 0.29, so it is neither the raw packed alpha (0.090) nor the "
                       "pre-0043 decode of it (0.107) — either would have marched at full "
                       "strength here (red excess %.3f)", shut);
-            // ...and the ramp really is a ramp in that number.
-            CHECK_MSG(oldBd > shut && oldBd < wide,
-                      "and between the two the hand-over is a RAMP, not a step "
-                      "(cutoff 0.35 -> %.3f, between %.3f and %.3f)", oldBd, shut, wide);
-            std::printf("    the shipped default (0.40) on this floor: %.3f of the wide-open "
-                        "%.3f; the deleted constant's band reached perceptual 0.581, where "
-                        "this floor scored the full %.3f\n",
-                        dflt, wide, wide);
+            // THE SHARP ONE: the floor sits at the ramp's midpoint, where
+            // smoothstep is exactly 0.5 whatever the fixture's brightness is.
+            CHECK_MSG(std::fabs(mid - 0.5f * wide) <= 0.05f * wide,
+                      "at cutoff 0.35 the floor sits at the feather's MIDPOINT and scores half "
+                      "the wide-open reflection: %.3f against %.3f/2 = %.3f, which pins the "
+                      "roughness the shader read to 0.300 +/- 0.007 (0.29 would score %.3f, "
+                      "0.31 would score %.3f)",
+                      mid, wide, 0.5f * wide, 0.648f * wide, 0.352f * wide);
+            // AND THE DEFAULT COSTS THIS SURFACE NOTHING, which is the whole
+            // point of sharing the ray tier's feather instead of halving the
+            // cutoff: 0.30 is a feather below 0.40.
+            CHECK_MSG(std::fabs(dflt - wide) <= 0.01f,
+                      "at the SHIPPED DEFAULT of 0.40 a satin floor at 0.30 keeps its screen "
+                      "reflection WHOLE (%.3f vs %.3f) - with the old cutoff/2 ramp the same "
+                      "surface kept half of it (0.424 of 0.847, measured)", dflt, wide);
             // THE DRAG.
             CHECK_MSG(cv->workspaceGeneration() == genCut,
                       "five cutoffs on one workspace: dragging the Roughness Cutoff row is a "
