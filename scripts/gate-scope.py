@@ -43,18 +43,25 @@ AREA_RULES = [
     (r"^irisgl/mirror/",
      ["mirror", "skeletal", "sockets", "cameras", "gizmo", "player", "thumbnails",
       "materialpreview", "samples", "picking", "particles", "*vulkan-scripts"], []),
+    # `hygiene` rides irisgl/import, irisgl/document and irisgl/core because
+    # source.bake_key_guard (BAKEKEY-1) watches files in all three: the mesh
+    # bake's format version is HAND-bumped, and the lane that has to bump it is
+    # exactly a lane whose scoped selection comes from these rules. Four
+    # display-free shell scripts, well under a second.
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
-      "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails"],
+      "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene"],
      ["assets", "avatar", "anim"]),
     (r"^irisgl/document/(physics|animation)/",
      ["document", "skeletal", "avatar", "particles", "player", "cameras", "samples",
       "*headless-scripts"], ["node", "anim", "avatar", "player", "scene"]),
     (r"^irisgl/document/",
      ["document", "math", "input", "gizmo", "picking", "commands", "skeletal", "sockets",
-      "cameras", "mirror", "samples", "reopen", "export", "meshbake", "*headless-scripts"],
+      "cameras", "mirror", "samples", "reopen", "export", "meshbake", "hygiene",
+      "*headless-scripts"],
      []),
-    (r"^irisgl/core/", ["document", "math", "input", "gizmo", "cameras", "*headless-scripts"], []),
+    (r"^irisgl/core/",
+     ["document", "math", "input", "gizmo", "cameras", "hygiene", "*headless-scripts"], []),
     (r"^irisgl/docs/", [], []),                                   # documentation: no suite at all
     (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
