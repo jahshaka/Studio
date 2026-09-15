@@ -106,6 +106,10 @@ assert(editor.setCamera({ position: { x: 6, y: 6, z: 6 }, lookAt: { x: 0, y: 0, 
 editor.frame(2);
 var planes = {}, planeHits = 0, planeOver = 0;
 var phalf = Math.min(view.width, view.height) * 0.45;
+// How far from the gizmo's centre each handle answers. The cube is at the
+// origin and the camera looks at it, so the gizmo's centre IS the middle of the
+// viewport — which makes these radii directly comparable (GIZMO-2 round 2).
+var nearest = {}, farthest = {};
 for (var py = view.height / 2 - phalf; py <= view.height / 2 + phalf; py += 4) {
     for (var px = view.width / 2 - phalf; px <= view.width / 2 + phalf; px += 4) {
         var t = editor.gizmoHitTest(px, py);
@@ -113,6 +117,10 @@ for (var py = view.height / 2 - phalf; py <= view.height / 2 + phalf; py += 4) {
         planeHits++;
         if (t.distancePx > t.tolerancePx) planeOver++;
         planes[t.handle] = (planes[t.handle] || 0) + 1;
+        var dx = px - view.width / 2, dy = py - view.height / 2;
+        var r = Math.sqrt(dx * dx + dy * dy);
+        if (nearest[t.handle] === undefined || r < nearest[t.handle]) nearest[t.handle] = r;
+        if (farthest[t.handle] === undefined || r > farthest[t.handle]) farthest[t.handle] = r;
     }
 }
 console.log("   translate: xy=" + (planes.xy || 0) + " yz=" + (planes.yz || 0) +
@@ -124,6 +132,25 @@ assert((planes.xy || 0) > 5 && (planes.yz || 0) > 5 && (planes.xz || 0) > 5,
        "ALL THREE plane handles are clickable");
 assert((planes.x || 0) > 0 && (planes.y || 0) > 0 && (planes.z || 0) > 0,
        "and the three arrows still answer beside them");
+
+// ---- THE SHAFTS INSIDE THE SQUARES BELONG TO THE ARROWS -------------------
+//
+// GIZMO-2 round 2 (second reader). Each plane square's two inner sides ARE the
+// two arrow shafts it lies between, and a square answers 0 px over its whole
+// area — so a press on a drawn shaft could not reach the arrow, and since every
+// axis lies in TWO squares that both answered 0, the drag went to whichever
+// came first in handle order: the object moved in a plane nobody aimed at.
+//
+// Measured against the squares themselves rather than a pixel guess: the
+// squares reach `planeReach` from the centre, so an arrow that answers CLOSER
+// than that is answering on the stretch of shaft the squares cover.
+var planeReach = Math.max(farthest.xy || 0, farthest.yz || 0, farthest.xz || 0);
+console.log("   the squares reach " + planeReach.toFixed(1) + " px from the centre; the " +
+            "nearest arrow answer is x=" + (nearest.x || -1).toFixed(1) + " y=" +
+            (nearest.y || -1).toFixed(1) + " z=" + (nearest.z || -1).toFixed(1) + " px");
+assert(planeReach > 10, "the plane squares answer out to a measurable radius");
+assert(nearest.x < planeReach && nearest.y < planeReach && nearest.z < planeReach,
+       "every arrow answers INSIDE the squares' own reach — the shafts are the arrows'");
 var translateCorner = editor.gizmoHitTest(1, 1);
 assert(translateCorner.handle === null, "a viewport corner grabs no translate handle either");
 

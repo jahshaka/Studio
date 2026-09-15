@@ -158,6 +158,12 @@ void ScriptEngine::installApi()
     )JS"), QStringLiteral("<bootstrap>"));
 }
 
+void ScriptEngine::setVerbTracing(bool on)
+{
+    if (on) installApi();          // the shims replace globals that must exist
+    mRegistry.setTracing(mJs, on);
+}
+
 ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileName,
                                     bool wrapUndoMacro, int timeoutMs)
 {
@@ -165,6 +171,23 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
 
     ScriptResult result;
     result.fileName = fileName;
+
+    // THE CONSOLE IS NOT THE AGENT (round-2 review item 5). A traced MCP run
+    // can spin the event loop (project.open does), and the user's console dock
+    // can run a script inside that window — the shims are global, so those
+    // verbs would land in the agent's record. Pause the trace for the duration
+    // of a console run; restore whatever the state was (runs nest).
+    struct TracePause
+    {
+        ApiRegistry &registry;
+        bool previous;
+        explicit TracePause(ApiRegistry &r, bool pause)
+            : registry(r), previous(r.tracePaused())
+        {
+            if (pause) registry.setTracePaused(true);
+        }
+        ~TracePause() { registry.setTracePaused(previous); }
+    } tracePause(mRegistry, fileName == QLatin1String("<console>"));
 
     // The SCRIPT RUN RECORD (SESSION_LOG_SPEC §5). This is the single entry
     // point for the console dock, --script and the MCP run_script tool, so one

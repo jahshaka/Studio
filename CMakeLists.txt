@@ -241,6 +241,7 @@ set(SRCS
     src/scripting/modules/studiomodules.cpp
     src/scripting/mcp/mcpserver.cpp
     src/scripting/mcp/mcptools.cpp
+    src/scripting/mcp/mcplog.cpp
     src/scripting/claude/claudecliprobe.cpp
     src/scripting/claude/claudelaunchconfig.cpp
     src/scripting/claude/claudestreamparser.cpp

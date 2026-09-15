@@ -122,7 +122,12 @@ private:
     void saveGeometryNow();
 
     // Message list helpers.
-    QWidget *addBubble(const QString &text, bool user);
+    /// Which rule in the window's own sheet a bubble is painted by. It is a
+    /// parameter, not a bool, because the ERROR bubble used to be made by
+    /// adding an assistant bubble and renaming + re-polishing it by hand at
+    /// three call sites — one forgotten re-polish is an unstyled bubble.
+    enum class BubbleKind { User, Assistant, Error };
+    QLabel *addBubble(const QString &text, BubbleKind kind);
     void addInfoLine(const QString &text);
     void addToolLine(const QString &name, const QString &inputJson);
     void addImage(const QByteArray &imageData, const QString &mimeType);

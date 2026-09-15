@@ -22,7 +22,12 @@
 //   C. a plane within 10 degrees of edge-on is neither drawn nor pickable
 //      (it would be a line to aim at and a grazing intersection to drag);
 //   D. the multi-select group delta applies, like any other handle;
-//   E. the three arrows and the centre ball still answer beside them.
+//   E. the three arrows and the centre ball still answer beside them;
+//   F. GIZMO-2 item 1 (owner §366/§368): the square's INNER CORNER is the
+//      gizmo's origin and its sides run out along the two arrows — so the ball
+//      keeps the origin (its pick sphere is 0.30 handle units, the square's
+//      outer corner 0.71), the plane owns the rest of the square including the
+//      arrows' inner stretch, and each arrow keeps everything beyond the span.
 //
 // Runs on the headless document graph: no display, no GPU, no pixels.
 
@@ -89,11 +94,17 @@ const Plane kPlanes[3] = {
     { "xz", iris::Vec3(1, 0, 0), iris::Vec3(0, 0, 1), iris::Vec3(0, 1, 0) },
 };
 
-/// The middle of a plane handle's square, in world units, at the gizmo's scale.
-iris::Vec3 squareCentre(const Plane &p, float scale)
+/// A point WELL INSIDE a plane handle's square, in world units, at the gizmo's
+/// scale. The square runs [0, kPlaneHandleSpan] on both axes since GIZMO-2
+/// item 1 — its inner corner IS the gizmo's origin — so the inner part of it
+/// belongs to the centre ball, whose pick sphere is
+/// GizmoMeshes::kCentreBallPickLocal (0.20) of these handle units, twice the
+/// ball's drawn 0.10 radius. 0.70 of the span on each axis is 0.495 handle
+/// units from the origin, well outside it (the crossover is asserted below).
+constexpr float kGrabFraction = 0.70f;
+iris::Vec3 squareGrab(const Plane &p, float scale)
 {
-    const float mid = 0.5f * (GizmoMeshes::kPlaneHandleNear + GizmoMeshes::kPlaneHandleFar);
-    return (p.u + p.v) * mid * scale;
+    return (p.u + p.v) * (kGrabFraction * GizmoMeshes::kPlaneHandleSpan) * scale;
 }
 
 }  // namespace
@@ -129,7 +140,7 @@ int main(int argc, char **argv)
         const float scale = gizmo.getGizmoScale() * kHandleScale;
 
         QPointF grabPx;
-        if (!gizmo.projectToPixel(squareCentre(plane, scale), grabPx)) {
+        if (!gizmo.projectToPixel(squareGrab(plane, scale), grabPx)) {
             std::printf("FAIL: %s square does not project\n", plane.name); ++failures; continue;
         }
         float d = -1.0f;
@@ -160,7 +171,7 @@ int main(int argc, char **argv)
         gizmo.drag(rayPos, rayDir, forward);
         node->update(0.0f);
         const iris::Vec3 moved = node->getGlobalPosition();
-        const iris::Vec3 expect = target - squareCentre(plane, scale);
+        const iris::Vec3 expect = target - squareGrab(plane, scale);
         const float offAxis = std::fabs(iris::Vec3::dotProduct(moved, plane.normal));
 
         std::printf("   %s: grabbed '%s' at %.2f px; the node moved to (%.3f, %.3f, %.3f), "
@@ -199,7 +210,7 @@ int main(int argc, char **argv)
         int hidden = 0, shown = 0;
         for (const Plane &plane : kPlanes) {
             QPointF px;
-            if (!gizmo.projectToPixel(squareCentre(plane, scale), px)) continue;
+            if (!gizmo.projectToPixel(squareGrab(plane, scale), px)) continue;
             float d = -1.0f;
             const bool picks = gizmo.planeNameAtPixel(px, d) == QLatin1String(plane.name);
             const bool edgeOn = std::fabs(iris::Vec3::dotProduct(plane.normal, forward)) <
@@ -239,7 +250,7 @@ int main(int argc, char **argv)
 
         QPointF grabPx, targetPx;
         const iris::Vec3 target = kPlanes[2].u * 2.0f + kPlanes[2].v * 1.0f;   // xz
-        const bool have = gizmo.projectToPixel(squareCentre(kPlanes[2], scale), grabPx) &&
+        const bool have = gizmo.projectToPixel(squareGrab(kPlanes[2], scale), grabPx) &&
                           gizmo.projectToPixel(target, targetPx);
         CHECK(have, "D: the xz square and its drag target project");
         if (have) {
@@ -288,6 +299,95 @@ int main(int argc, char **argv)
             if (h && h->axisName() == QLatin1String(axis)) ++arrowsFound;
         }
         CHECK(arrowsFound == 3, "E: and all three arrows are still grabbable at their tips");
+    }
+
+    // ---- F: the corner-at-the-centre square (GIZMO-2 item 1) --------------
+    //
+    // The numbers, in HANDLE-LOCAL units (multiply by handleScale * gizmoScale
+    // for world units): the square spans [0, 0.50] on both axes, so its outer
+    // corner is 0.707 out; the centre ball is DRAWN at radius 0.10 and PICKED
+    // at kCentreBallPickLocal = 0.010 / 0.05 = 0.20; the arrow runs to 1.90. This walks the xz square's diagonal from the origin out
+    // past the arrow's tip and prints who answers where.
+    {
+        place(cam, iris::Vec3(6, 6, 6));
+        node->setLocalPos(iris::Vec3(0, 0, 0));
+        node->update(0.0f);
+
+        TranslationGizmo gizmo;
+        gizmo.setSelectedNode(node);
+        gizmo.updateSize(cam);
+        gizmo.setPickView(cam, kWidth, kHeight);
+        const float scale = gizmo.getGizmoScale() * kHandleScale;
+        const iris::Vec3 forward =
+            cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+        const float ballPick = GizmoMeshes::kCentreBallPickLocal;   // 0.010 / 0.05
+        const float span = GizmoMeshes::kPlaneHandleSpan;
+
+        auto handleAt = [&](const iris::Vec3 &local) {
+            QPointF px;
+            if (!gizmo.projectToPixel(local * scale, px)) return QString();
+            iris::Vec3 rayPos, rayDir, hit;
+            rayFromPixel(cam, px, rayPos, rayDir);
+            auto *h = gizmo.getHitHandle(rayPos, rayDir, forward, hit);
+            return h ? h->axisName() : QString();
+        };
+
+        // Along the xz square's diagonal (u = v = t), t in handle units.
+        const iris::Vec3 diag = (kPlanes[2].u + kPlanes[2].v).normalized();
+        std::printf("   the square's diagonal (ball picks to %.2f, square's outer corner at "
+                    "%.3f):\n", double(ballPick), double(span * std::sqrt(2.0f)));
+        for (float t : { 0.0f, 0.15f, 0.25f, 0.40f, 0.50f, 0.65f, 0.70f }) {
+            const QString who = handleAt(diag * t);
+            std::printf("      %.2f out: '%s'\n", double(t), qPrintable(who));
+        }
+        CHECK(handleAt(iris::Vec3(0, 0, 0)) == QLatin1String("center"),
+              "F: the frame's inner corner is the origin, and the origin is the BALL "
+              "(a click on the white ball is the ball)");
+        CHECK(handleAt(diag * (0.5f * (ballPick + span * std::sqrt(2.0f)))) ==
+                  QLatin1String("xz"),
+              "F: past the ball's sphere, inside the square, the plane answers");
+        // THE SHAFTS BELONG TO THE ARROWS (GIZMO-2 round 2, second reader). The
+        // square's two inner sides ARE the two shafts it lies between, and it
+        // answers 0 px over its whole area — so before the axis bands a press
+        // on the drawn X shaft inside the span could never reach X, and since
+        // the X axis lies in BOTH the XY and the XZ square (both answering 0,
+        // the strict `<` keeping the first in handle order) it grabbed XY: the
+        // object moved in a plane the user had not aimed at. 0.25 is on the
+        // shaft and inside the square; 1.20 is past the square's 0.50.
+        for (const char *axis : { "x", "y", "z" }) {
+            const iris::Vec3 dir(axis[0] == 'x' ? 1.0f : 0.0f, axis[0] == 'y' ? 1.0f : 0.0f,
+                                 axis[0] == 'z' ? 1.0f : 0.0f);
+            const QString onShaft = handleAt(dir * 0.25f);
+            const QString beyond  = handleAt(dir * 1.20f);
+            std::printf("   the +%s shaft: 0.25 out -> '%s' (inside two squares), 1.20 out -> "
+                        "'%s'\n", axis, qPrintable(onShaft), qPrintable(beyond));
+            CHECK(onShaft == QLatin1String(axis),
+                  "F: a press on a drawn shaft INSIDE the squares picks that arrow, not a plane");
+            CHECK(beyond == QLatin1String(axis),
+                  "F: and the arrow owns everything beyond the square's span (74 % of it)");
+        }
+
+        // HOW MUCH OF EACH SQUARE IS ACTUALLY THE PLANE. The ball's sphere eats
+        // the inner part of it, and how much depends on how the square is
+        // turned to the camera (the ground square from a 3/4 view is the worst:
+        // its diagonal runs towards the eye). Sampled over the square's own
+        // (u, v) in a 17x17 grid, as a number rather than an opinion.
+        for (const Plane &plane : kPlanes) {
+            int inPlane = 0, inBall = 0, other = 0;
+            for (int iu = 0; iu <= 16; ++iu)
+                for (int iv = 0; iv <= 16; ++iv) {
+                    const float u = float(iu) / 16.0f * span, v = float(iv) / 16.0f * span;
+                    const QString who = handleAt(plane.u * u + plane.v * v);
+                    if (who == QLatin1String(plane.name)) ++inPlane;
+                    else if (who == QLatin1String("center")) ++inBall;
+                    else ++other;
+                }
+            std::printf("   %s square: %d%% of it picks the plane, %d%% the centre ball, "
+                        "%d%% an arrow\n", plane.name, inPlane * 100 / 289, inBall * 100 / 289,
+                        other * 100 / 289);
+            CHECK(inPlane * 2 > 289, "F: over half of every square's area still grabs the plane "
+                                     "(the centre ball keeps the rest)");
+        }
     }
 
     std::printf("\n%s\n", failures == 0 ? "PASS" : "FAILURES");

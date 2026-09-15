@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QVector>
 #include <QtMath>
+#include <cmath>
 
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexbuffer.h"
@@ -28,9 +29,9 @@ const float kShaftRadius   = 0.0175f; // thin axis line (halved 2026-08-30; befo
 const float kShaftStart    = 0.12f;   // leave the core clear
 const float kConeBase      = 0.115f;  // small arrow head
 const float kConeStart     = 1.56f;
-const float kAxisEnd       = 1.90f;   // same reach as the old translate handle
+const float kAxisEnd       = GizmoMeshes::kTranslateEnd;  // same reach as the old translate handle
 const float kCubeHalf      = 0.11f;   // small scale-tip cube
-const float kScaleEnd      = 1.46f;   // same reach as the old scale handle
+const float kScaleEnd      = GizmoMeshes::kScaleEnd;      // same reach as the old scale handle
 const float kCoreSphere    = 0.10f;
 const float kCoreCubeHalf  = 0.12f;
 const float kRingMinor     = 0.01f;   // thin rotation circles (halved 2026-08-30; old rings were flat fat bands)
@@ -132,6 +133,32 @@ void addCylinder(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iri
     }
 }
 
+/// A thin tube between two arbitrary points — the "line" the plane frames are
+/// drawn as (GIZMO-2 item 1). A cross-section frame is derived from the
+/// segment's own direction, so the caller does not have to supply one.
+void addTube(Builder &b, const iris::Vec3 &p0, const iris::Vec3 &p1, float radius, int segments)
+{
+    iris::Vec3 A = p1 - p0;
+    const float len = A.length();
+    if (len < 1e-6f) return;
+    A /= len;
+    // Any vector not parallel to A gives a stable cross section.
+    const iris::Vec3 seed = std::fabs(A.x()) < 0.9f ? iris::Vec3(1, 0, 0) : iris::Vec3(0, 1, 0);
+    const iris::Vec3 U = iris::Vec3::crossProduct(A, seed).normalized();
+    const iris::Vec3 V = iris::Vec3::crossProduct(A, U).normalized();
+    for (int i = 0; i < segments; ++i) {
+        const float a0 = float(2.0 * M_PI * i / segments);
+        const float a1 = float(2.0 * M_PI * (i + 1) / segments);
+        const iris::Vec3 r0 = U * qCos(a0) + V * qSin(a0);
+        const iris::Vec3 r1 = U * qCos(a1) + V * qSin(a1);
+        b.quad(p0 + r0 * radius, p0 + r1 * radius, p1 + r1 * radius, p1 + r0 * radius,
+               r0, r1, r1, r0);
+        // caps: the frames meet at right angles, so the ends are visible
+        b.tri(p0, p0 + r1 * radius, p0 + r0 * radius, -A, -A, -A);
+        b.tri(p1, p1 + r0 * radius, p1 + r1 * radius,  A,  A,  A);
+    }
+}
+
 void addCone(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iris::Vec3 &V,
              float tBase, float tTip, float radius, int segments)
 {
@@ -204,6 +231,14 @@ void addTorus(Builder &b, const iris::Vec3 &A, const iris::Vec3 &U, const iris::
 namespace GizmoMeshes
 {
 
+// THE PLANE FRAMES ARE DRAWN AT THE RINGS' WIDTH, derived rather than copied
+// (second reader, GIZMO-2 round 2): a ring's tube is kRingMinor of the ROTATION
+// handleScale, and a plane frame is drawn at the TRANSLATE one, so the radius
+// that matches them is kRingMinor * kRotationHandleScale / kHandleScale —
+// 0.014228 at today's tuning. Written this way, retuning kRotationExtentRatio
+// cannot silently un-match the two.
+const float kPlaneFrameRadius = kRingMinor * kRotationHandleScale / kHandleScale;
+
 iris::MeshPtr translateHandle(GizmoAxis axis)
 {
     iris::Vec3 A, U, V;
@@ -252,14 +287,67 @@ iris::MeshPtr planeHandle(GizmoAxis axis)
     iris::Vec3 U, V;
     Builder b;
     if (!planeAxes(axis, U, V)) return b.build();
-    const float n = kPlaneHandleNear, f = kPlaneHandleFar;
-    const iris::Vec3 a = U * n + V * n, bb = U * f + V * n;
-    const iris::Vec3 c = U * f + V * f, d = U * n + V * f;
-    const iris::Vec3 nrm = iris::Vec3::crossProduct(U, V).normalized();
-    // BOTH SIDES: the handle is reached for from wherever the camera happens
-    // to be, and an unlit gizmo part with one winding vanishes from behind.
-    b.quad(a, bb, c, d, nrm, nrm, nrm, nrm);
-    b.quad(a, d, c, bb, -nrm, -nrm, -nrm, -nrm);
+    // THE FRAME OF THE PLANE IT REPRESENTS (owner §368): four thin lines, the
+    // inner corner at the origin, the two sides running out along the two
+    // arrows' axes. Nothing inside it — the square is still what is PICKED
+    // (TranslationHandle::planeDistance), the frame is what is drawn.
+    //
+    // Tubes rather than a line primitive because the whole gizmo is a triangle
+    // soup drawn through one unlit material: the rotation rings are tubes of
+    // the same drawn width, so a frame drawn this way matches them exactly at
+    // every distance, and needs no second draw path in the overlay.
+    const float s = kPlaneHandleSpan;
+    const float r = kPlaneFrameRadius;
+    const iris::Vec3 o(0, 0, 0), u = U * s, v = V * s, uv = U * s + V * s;
+    addTube(b, o,  u,  r, 8);     // along the first axis, at the second's 0
+    addTube(b, o,  v,  r, 8);     // along the second axis, at the first's 0
+    addTube(b, u,  uv, r, 8);     // the outer side parallel to the second axis
+    addTube(b, v,  uv, r, 8);     // the outer side parallel to the first axis
+    return b.build();
+}
+
+// ---- the drag marker (GIZMO-2 item 3) --------------------------------------
+// In handle-local units, where the axis ring is the unit circle: the hub is a
+// filled disc of kDragHubRadius in the ring's own plane, the arrow a thin shaft
+// from the hub's edge to kDragHead ending in a cone that stops exactly ON
+// the ring. The shaft is the rings' own thickness so the marker reads as part
+// of the same drawing.
+namespace {
+const float kDragHubRadius   = 0.15f;
+const float kDragShaftRadius = 0.012f;
+const float kDragHead        = 0.78f;   // where the arrowhead starts
+const float kDragConeBase    = 0.075f;  // the arrowhead's radius
+}
+
+iris::MeshPtr dragHub(GizmoAxis axis)
+{
+    iris::Vec3 A, U, V;
+    axisFrame(axis == GizmoAxis::Screen ? GizmoAxis::Z : axis, A, U, V);
+    Builder b;
+    // A filled disc in the plane the ring lies in, both sides: the marker is
+    // looked at from wherever the camera happens to be.
+    const int segments = 24;
+    for (int i = 0; i < segments; ++i) {
+        const float a0 = float(2.0 * M_PI * i / segments);
+        const float a1 = float(2.0 * M_PI * (i + 1) / segments);
+        const iris::Vec3 r0 = (U * qCos(a0) + V * qSin(a0)) * kDragHubRadius;
+        const iris::Vec3 r1 = (U * qCos(a1) + V * qSin(a1)) * kDragHubRadius;
+        b.tri(iris::Vec3(0, 0, 0), r0, r1,  A,  A,  A);
+        b.tri(iris::Vec3(0, 0, 0), r1, r0, -A, -A, -A);
+    }
+    return b.build();
+}
+
+iris::MeshPtr dragArrow(GizmoAxis axis)
+{
+    Builder b;
+    if (axis != GizmoAxis::X && axis != GizmoAxis::Y && axis != GizmoAxis::Z) return b.build();
+    iris::Vec3 A, U, V;
+    axisFrame(axis, A, U, V);
+    addCylinder(b, A, U, V, kDragHubRadius, kDragHead, kDragShaftRadius, kSegments);
+    // The head stops at 1.0 — the axis ring's own radius, so the arrow points
+    // from the centre out TO the ring being dragged.
+    addCone(b, A, U, V, kDragHead, 1.0f, kDragConeBase, kSegments);
     return b.build();
 }
 

@@ -33,7 +33,19 @@ For more information see the LICENSE file
 #include <QLineF>
 #include <cmath>
 
-#define CENTER_CIRCLE_RADIUS (0.015f)
+// THE CENTRE BALL'S PICK RADIUS lives in gizmomeshes.h, beside the geometry it
+// has to stay clear of (GizmoMeshes::kCentreBallPickRadius): the plane frames'
+// inner corner is the gizmo's ORIGIN since item 1, so the ball's sphere sits
+// inside all three squares and the two numbers are one decision.
+//
+// It was a 0.015 #define here — THREE times the ball's drawn 0.005 — and item 1
+// made that untenable: a ray cast at a square whose diagonal runs towards the
+// camera (the ground square from any 3/4 view is the worst case: only 0.577 of
+// its length survives the projection) passed within 0.015 of the origin as far
+// out as 0.52 of the square's 0.71 diagonal — the ball swallowed most of every
+// plane handle. At 0.010 the ball keeps the pixels a user aims at it and the
+// frames keep the rest; the crossover is printed by gizmo.plane_handles F.
+#define CENTER_CIRCLE_RADIUS (GizmoMeshes::kCentreBallPickRadius)
 
 TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 {
@@ -102,6 +114,11 @@ QString TranslationHandle::axisName() const
 
 namespace {
 
+/// THE DRAWN ARROW SHAFT'S HALF-WIDTH, in handle-local units — gizmomeshes.cpp's
+/// kShaftRadius, which is private to the mesh builder and is the width of the
+/// LINE a user aims at. The axis bands below are this plus the pick tolerance.
+constexpr float kArrowShaftRadius = 0.0175f;
+
 /// Distance in pixels from a point to a segment (Qt has no such call on QLineF
 /// that answers for a SEGMENT rather than an infinite line).
 float pointToSegmentPx(const QPointF &p, const QPointF &a, const QPointF &b)
@@ -134,24 +151,50 @@ bool TranslationHandle::planeFacesCamera() const
 	       std::sin(float(qDegreesToRadians(kPlaneEdgeOnDegrees)));
 }
 
-bool TranslationHandle::planeDistance(const QPointF& cursor, float& distancePx) const
+bool TranslationHandle::planeDistance(const QPointF& cursor, float& distancePx,
+                                      bool* onAxisBand) const
 {
 	distancePx = -1.0f;
+	if (onAxisBand) *onAxisBand = false;
 	if (!planeFacesCamera()) return false;
 	const float scale = handleScale * gizmo->getGizmoScale();
 	if (!(scale > 0.0f)) return false;
 
-	// THE SQUARE AS IT IS DRAWN: gizmomeshes::planeHandle builds it from the
-	// same two axes and the same two offsets, under the same transform.
+	// THE SQUARE THE FRAME OUTLINES: gizmomeshes::planeHandle draws its four
+	// sides from the same two axes over the same [0, span], under the same
+	// transform — so the area measured here is the area the frame encloses,
+	// and a cursor INSIDE the frame is a hit at 0 px (GIZMO-2 item 1: "the
+	// frame is what is drawn, the plane is what is picked").
 	const iris::Mat4 t = gizmo->getTransform();
-	const float n = GizmoMeshes::kPlaneHandleNear, f = GizmoMeshes::kPlaneHandleFar;
+	const float f = GizmoMeshes::kPlaneHandleSpan;
 	const iris::Vec3 corners[4] = {
-		planeU * n + planeV * n, planeU * f + planeV * n,
-		planeU * f + planeV * f, planeU * n + planeV * f,
+		iris::Vec3(0, 0, 0),         planeU * f,
+		planeU * f + planeV * f,     planeV * f,
 	};
 	QPointF px[4];
 	for (int i = 0; i < 4; ++i)
 		if (!gizmo->projectToPixel(t * (corners[i] * scale), px[i])) return false;
+
+	// THE TWO ARROW SHAFTS THE SQUARE IS BUILT ON (GIZMO-2 round 2). px[0] is
+	// the origin, px[1] and px[3] the ends of the two inner sides — which are
+	// the X/Y/Z shafts themselves. A cursor within the drawn shaft's own
+	// half-width plus the pick tolerance of either one is ON AN ARROW, and the
+	// callers hand it to the arrows rather than to this square.
+	//
+	// The half-width is converted to pixels with the local scale ACROSS the
+	// axis in question — the projected length of the OTHER inner side, which is
+	// the direction the band is measured in — so the band follows the
+	// foreshortening of the very square it is carved out of.
+	if (onAxisBand) {
+		const float spanPx[2] = { float(QLineF(px[0], px[1]).length()),
+		                          float(QLineF(px[0], px[3]).length()) };
+		const float shaftPx[2] = { kArrowShaftRadius * spanPx[1] / f,   // across U: V's scale
+		                           kArrowShaftRadius * spanPx[0] / f }; // across V: U's scale
+		const float dU = pointToSegmentPx(cursor, px[0], px[1]);
+		const float dV = pointToSegmentPx(cursor, px[0], px[3]);
+		*onAxisBand = dU <= shaftPx[0] + kPlanePickTolerancePx ||
+		              dV <= shaftPx[1] + kPlanePickTolerancePx;
+	}
 
 	// Inside the projected quad? A convex quadrilateral: the cursor is inside
 	// when it is on the same side of all four edges.
@@ -454,10 +497,16 @@ bool TranslationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 // WHAT A PRESS GRABS, in three passes with an explicit precedence.
 //
 // CENTRE first (it always did: the smallest target, and it sits under
-// everything). Then the PLANE handles (GIZMO-1 item 3): a plane square is drawn
-// on top of the inner stretch of the two arrows it lies between, so a pixel
-// inside one is unambiguous — reaching for the square and getting an arrow is
-// the mistake this ordering prevents. Then the arrows, nearest first.
+// everything) — and since GIZMO-2 item 1 that matters more than it did: the
+// plane frames' inner corner is AT the origin, so the ball's pick sphere
+// (CENTER_CIRCLE_RADIUS * gizmoScale = 0.010, twice its drawn 0.005 radius)
+// sits INSIDE all three squares and wins there, which is what keeps a click on
+// the white ball a click on the ball.
+//
+// Then the PLANE handles: each square spans [0, kPlaneHandleSpan] on its two
+// axes, so it now COVERS the inner quarter of the two arrows it lies between —
+// a press there grabs the plane, and each arrow keeps the outer 74 % of its
+// length (0.50..1.90 of 1.90) to itself. Then the arrows, nearest first.
 //
 // The arrows' pass also fixes a stale read that was there since 2016: `dist`
 // was measured from `hitPos`, the caller's OUT parameter, before this call had
@@ -474,6 +523,13 @@ TranslationHandle* TranslationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 
 
 	TranslationHandle* nearestPlane = nullptr;
 	float nearestPlanePx = -1.0f;
+	// A PLANE WHOSE ANSWER SITS ON AN ARROW SHAFT (GIZMO-2 round 2). The
+	// square's two inner sides ARE the shafts, so a press there has to reach
+	// the arrow — but if no arrow answers at that pixel (the arrows are picked
+	// in 3D against their own tube, this square in pixels), the plane still
+	// takes it rather than leaving a dead pixel on a drawn handle.
+	TranslationHandle* bandPlane = nullptr;
+	float bandPlanePx = -1.0f;
 	QPointF cursor;
 	const bool havePixel =
 		rayPixel(rayPos, rayDir, getTransform().column(3).toVector3D(), cursor);
@@ -481,8 +537,13 @@ TranslationHandle* TranslationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 
 		for (auto i = 0; i < handles.size(); i++) {
 			if (!handles[i]->isPlane()) continue;
 			float d = -1.0f;
-			if (!handles[i]->planeDistance(cursor, d)) continue;
+			bool onAxis = false;
+			if (!handles[i]->planeDistance(cursor, d, &onAxis)) continue;
 			if (d > kPlanePickTolerancePx) continue;
+			if (onAxis) {
+				if (!bandPlane || d < bandPlanePx) { bandPlane = handles[i]; bandPlanePx = d; }
+				continue;
+			}
 			if (!nearestPlane || d < nearestPlanePx) { nearestPlane = handles[i]; nearestPlanePx = d; }
 		}
 	}
@@ -506,6 +567,10 @@ TranslationHandle* TranslationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 
 			}
 		}
 	}
+	if (!closestHandle && bandPlane) {
+		hitPos = bandPlane->getHitPos(rayPos, rayDir, viewDir);
+		return bandPlane;
+	}
 
 	return closestHandle;
 }
@@ -518,7 +583,14 @@ QString TranslationGizmo::planeNameAtPixel(const QPointF& cursor, float& distanc
 	for (auto i = 0; i < handles.size(); i++) {
 		if (!handles[i]->isPlane()) continue;
 		float d = -1.0f;
-		if (!handles[i]->planeDistance(cursor, d)) continue;
+		bool onAxis = false;
+		if (!handles[i]->planeDistance(cursor, d, &onAxis)) continue;
+		// ON A SHAFT IS THE ARROW'S PIXEL (GIZMO-2 round 2): the verb's caller
+		// (EngineSceneViewport::gizmoHitTest) asks this first and falls through
+		// to getHitHandle when it answers nothing, which is where the arrows —
+		// and the band's own fallback — are. Reporting a plane here would say
+		// one thing and the press would do another.
+		if (onAxis) continue;
 		if (distancePx < 0.0f || d < distancePx) { distancePx = d; nearest = handles[i]; }
 	}
 	if (!nearest) return QString();

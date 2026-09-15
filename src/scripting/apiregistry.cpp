@@ -43,6 +43,61 @@ private:
     ApiRegistry *mRegistry;
 };
 
+/// What the tracing shims call. One per engine, parented like the `api`
+/// object so it dies with the ScriptEngine.
+class VerbTraceSink : public QObject
+{
+    Q_OBJECT
+public:
+    explicit VerbTraceSink(ApiRegistry *registry, QObject *parent = nullptr)
+        : QObject(parent), mRegistry(registry) {}
+
+    Q_INVOKABLE void note(const QString &qualifiedName)
+    {
+        mRegistry->noteVerbCall(qualifiedName);
+    }
+
+private:
+    ApiRegistry *mRegistry;
+};
+
+/// The shim installer. Written as JS because the thing it has to produce is a
+/// JS function per verb that forwards `arguments` to the real QObject method —
+/// `target[v].apply(target, arguments)` keeps the wrapper as `this`, so
+/// overloads, default arguments, thrown JS errors and return values all behave
+/// exactly as they do without it. The global object is passed IN: QJSEngine's
+/// V4 has no `globalThis` (checked, Qt 6.10).
+const char *kInstallShims = R"JS(
+(function(global, sink, modules) {
+    var saved = {};
+    for (var i = 0; i < modules.length; ++i) {
+        (function(entry) {
+            var name = entry.name;
+            var target = global[name];
+            if (!target) return;
+            saved[name] = target;
+            var shim = {};
+            for (var j = 0; j < entry.verbs.length; ++j) {
+                (function(verb) {
+                    shim[verb] = function() {
+                        sink.note(name + '.' + verb);
+                        return target[verb].apply(target, arguments);
+                    };
+                })(entry.verbs[j]);
+            }
+            global[name] = shim;
+        })(modules[i]);
+    }
+    return saved;
+})
+)JS";
+
+const char *kRemoveShims = R"JS(
+(function(global, saved) {
+    for (var name in saved) global[name] = saved[name];
+})
+)JS";
+
 } // namespace
 
 const char *ApiRegistry::apiVersion() { return "0.1.0"; }
@@ -81,6 +136,67 @@ void ApiRegistry::install(QJSEngine &engine)
     QObject *owner = mModules.isEmpty() ? nullptr : mModules.first()->parent();
     auto *info = new ApiInfoObject(this, owner);
     engine.globalObject().setProperty(QStringLiteral("api"), engine.newQObject(info));
+}
+
+void ApiRegistry::noteVerbCall(const QString &qualifiedName)
+{
+    if (mTracePaused) return;
+    for (auto &entry : mTrace) {
+        if (entry.first == qualifiedName) { ++entry.second; return; }
+    }
+    // Bounded: a script that calls a thousand DIFFERENT verbs is not a thing,
+    // but a runaway that builds names is, and this list goes into a log line.
+    if (mTrace.size() < 256) mTrace.append({ qualifiedName, 1 });
+}
+
+QStringList ApiRegistry::takeTrace()
+{
+    QStringList out;
+    out.reserve(mTrace.size());
+    for (const auto &entry : mTrace)
+        out << (entry.second == 1 ? entry.first
+                                  : QStringLiteral("%1 x%2").arg(entry.first).arg(entry.second));
+    mTrace.clear();
+    return out;
+}
+
+void ApiRegistry::setTracing(QJSEngine &engine, bool on)
+{
+    if (on == mTracing) return;
+    // The saved originals live in the JS engine between arm and disarm; a
+    // property on the global object is the one place both halves can reach
+    // (and it is removed again on disarm).
+    static const QString kSavedKey = QStringLiteral("__jahSavedApiModules");
+    static const QString kSinkKey  = QStringLiteral("__jahVerbTraceSink");
+    if (on) {
+        QJSValue sink = engine.globalObject().property(kSinkKey);
+        if (!sink.isQObject()) {
+            QObject *owner = mModules.isEmpty() ? nullptr : mModules.first()->parent();
+            sink = engine.newQObject(new VerbTraceSink(this, owner));
+            engine.globalObject().setProperty(kSinkKey, sink);
+        }
+        QJSValue modules = engine.newArray(uint(mModules.size()));
+        for (int i = 0; i < mModules.size(); ++i) {
+            QJSValue entry = engine.newObject();
+            entry.setProperty(QStringLiteral("name"), mModules[i]->jsName());
+            const QVector<VerbInfo> verbs = mModules[i]->verbs();
+            QJSValue names = engine.newArray(uint(verbs.size()));
+            for (int v = 0; v < verbs.size(); ++v) names.setProperty(uint(v), verbs[v].name);
+            entry.setProperty(QStringLiteral("verbs"), names);
+            modules.setProperty(uint(i), entry);
+        }
+        QJSValue installer = engine.evaluate(QString::fromLatin1(kInstallShims));
+        QJSValue saved = installer.call({ engine.globalObject(), sink, modules });
+        if (saved.isError()) return;   // never break scripting for a log
+        engine.globalObject().setProperty(kSavedKey, saved);
+        mTracing = true;
+        return;
+    }
+    QJSValue saved = engine.globalObject().property(kSavedKey);
+    if (saved.isObject())
+        engine.evaluate(QString::fromLatin1(kRemoveShims)).call({ engine.globalObject(), saved });
+    engine.globalObject().deleteProperty(kSavedKey);
+    mTracing = false;
 }
 
 QStringList ApiRegistry::validate() const

@@ -276,6 +276,17 @@ void RotationGizmo::loadAssets()
 	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Y));
 	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Z));
 	handleMeshes.append(GizmoMeshes::screenRing());
+
+	// THE DRAG MARKER (GIZMO-2 item 3): built once beside the rings, drawn only
+	// while a ring is being dragged. The screen ring gets a hub and no arrow —
+	// its axis is the direction the camera looks, so an arrow along it would
+	// project to a point.
+	for (int i = 0; i < 4; ++i) {
+		hubMeshes.append(GizmoMeshes::dragHub(handles[i]->axis));
+		arrowMeshes.append(handles[i]->axis == GizmoAxis::Screen
+		                       ? iris::MeshPtr()
+		                       : GizmoMeshes::dragArrow(handles[i]->axis));
+	}
 }
 
 bool RotationGizmo::isDragging()
@@ -528,8 +539,24 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 		return GizmoDrawItem{ handleMeshes[i], t, colour };
 	};
 	if (dragging) {
-		for (int i = 0; i < 4; i++)
-			if (handles[i] == draggedHandle) items.append(itemFor(i, highlight));
+		// WHAT A TURN LOOKS LIKE WHILE IT IS HAPPENING (GIZMO-2 item 3, owner
+		// §366/§371 — Unreal's shape): the ring being dragged, highlighted as
+		// before, plus a small disc at the centre and a line with an arrowhead
+		// running out along that ring's AXIS to the ring's radius, in the
+		// ring's own colour (X red, Y green, Z blue, the screen ring grey) so
+		// the axis the object is turning about is readable at a glance. All
+		// three ride `trans` — the frame frozen at startDragging — through
+		// ringFrame(), so the marker cannot slide under the cursor either, and
+		// all of it is gone at release.
+		for (int i = 0; i < 4; i++) {
+			if (handles[i] != draggedHandle) continue;
+			items.append(itemFor(i, highlight));
+			const QColor axisColour = handles[i]->getHandleColor();
+			iris::Mat4 t = handles[i]->ringFrame();
+			t.scale(getGizmoScale() * handles[i]->handleScale);
+			if (!hubMeshes[i].isNull()) items.append({ hubMeshes[i], t, axisColour });
+			if (!arrowMeshes[i].isNull()) items.append({ arrowMeshes[i], t, axisColour });
+		}
 		return items;
 	}
 	float hitAngle = 0.0f;
