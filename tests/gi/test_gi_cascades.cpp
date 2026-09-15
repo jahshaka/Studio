@@ -307,11 +307,43 @@ int main()
         // per hop and re-applies the self-occlusion bias at every entry, which
         // takes a four-cascade chain from 0.00x (black) to 0.51x; the residual
         // needs the travelled distance carried across the hop, which is
-        // PHOTON P1's and is recorded in OGRE_UPSTREAM_ISSUES. It is bounded:
-        // with the irradiance field on, the field REPLACES this term.
+        // PHOTON P1's and is recorded in OGRE_UPSTREAM_ISSUES. With the
+        // irradiance field on, the field replaces this term INSIDE cascade 0
+        // only (E1, G3-a): beyond it the ring keeps the cone term, residual
+        // and all — the field variant of this case measures exactly that.
         CHECK(ambientChain > 0.40f * ambientSingle,
               "a four-cascade chain keeps the measured share of the ambient (>=0.40x, was 0.00x)");
         CHECK(ambientChain > 0.02f, "and it is a lit picture, not a black one");
+
+        // ---- THE FIELD VARIANT (PHOTON_SPEC §13 G3, audit B1's own test) ----
+        //
+        // The bar G3 exists for. An irradiance field makes HlmsPbs switch the
+        // cone-traced diffuse off scene-wide (it assumes the field covers what
+        // the cones cover). Under a chain the field rides CASCADE 0, so with
+        // that rule in force every pixel out here — 60 m from the content, in
+        // the outer cascade — would lose its diffuse bounce entirely and the
+        // outer cascades would be computing something nothing reads. G3-a
+        // re-opens the gate under a chain (FogHlmsListener::propertiesMerged-
+        // PreGenerationStep) and blends the two terms by the field's own
+        // confidence in JahIfd: the field inside cascade 0, the cones outside.
+        //
+        // So: the same two arms as above, both with the field ON.
+        GiParams singleF = single; singleF.ddgi = GiToggle::On; singleF.updateBudget = 1;
+        GiParams chainF  = cascadeGi(); chainF.ddgi = GiToggle::On; chainF.updateBudget = 1;
+        const float fieldSingle = measureArm(singleF, "the single volume with the field on");
+        const bool singleFieldBound = scene->giStatus().ifdBound;
+        const float fieldChain = measureArm(chainF, "the chain with the field on");
+        const GiStatus fst = scene->giStatus();
+        std::printf("   WITH THE FIELD: single volume %.4f | chain %.4f (%.2fx of the single "
+                    "volume, %.2fx of GI off) | field bound: single %s chain %s, %d probes\n",
+                    fieldSingle, fieldChain,
+                    fieldSingle > 0.0f ? fieldChain / fieldSingle : 0.0f,
+                    ambientOff > 0.0f ? fieldChain / ambientOff : 0.0f,
+                    singleFieldBound ? "y" : "n", fst.ifdBound ? "y" : "n", fst.ifdProbes);
+        CHECK(singleFieldBound && fst.ifdBound, "both arms really have a field bound");
+        CHECK(fieldChain > 0.40f * fieldSingle,
+              "A PIXEL BEYOND CASCADE 0 KEEPS THE CHAIN'S BOUNCE WITH THE FIELD BOUND (>=0.40x)");
+        CHECK(fieldChain > 0.02f, "...and it is a lit picture, not a black one");
     }
 
     // =====================================================================
