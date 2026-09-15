@@ -13,19 +13,19 @@
 // enclosure, a wall or an axis count (PHOTON_SPEC §13, owner+lead joint
 // decision 2026-09-14).
 //
-// WHAT RUNS INSTEAD (OgreGi.cpp buildPcc, "the scout pass"): candidate probes
-// are spread through the scene's fitted box and each one photographs its
-// surroundings once, cheaply. The placement reads one averaged depth value per
-// cube face; ogre-patch 0047 hands those six numbers back, each the distance
-// that face could see as a multiple of the distance from that probe's camera to
-// the region's face in the same direction (1 = on the region's face, 2 =
-// nothing within twice it — what a face full of sky returns). From them the
-// probe's fitted box follows, and one number per axis says how much of the
-// region it spans: BELOW 1 the probe photographed something closer than the box
-// it was placed in and is worth building, at 1 or above it saw nothing there.
-// The kept probes' own boxes then say where the space is, and the real grid is
-// built in their union. Per probe, positionless, scale-free; no scene-wide
-// shape is ever asked for.
+// WHAT RUNS INSTEAD (OgreGi.cpp buildPcc): the grid is placed in a box ONE
+// viewpoint at the scene's centre photographed (cheaply, 32 px, read
+// symmetrically about itself), and then every probe is kept or dropped by what
+// IT sees. The placement reads one averaged depth value per cube face;
+// ogre-patch 0047 hands those six numbers back, each the distance that face
+// could see as a multiple of the distance from that probe's camera to the
+// region's face in the same direction — 1 is "on that face" and 2 is the
+// encoding's saturation, "nothing within twice that distance", which is what a
+// face full of sky returns. From the six the probe's fitted box follows, and
+// its VOLUME against the volume the renderer LIT is the verdict: below 1 the
+// probe measured a smaller space than the world it stands in and is worth
+// building, at 1 or above what it saw is no nearer than the world itself.
+// Per probe, positionless, scale-free; no scene-wide shape is ever asked for.
 //
 // THIS SUITE IS THE CONTRACT, as a table. Every case stands on the SAME default
 // 100 m ground the editor gives a new project, with NO pinned GI bounds, which
@@ -56,13 +56,22 @@
 // a refusal flag, and a probe region pulled onto the rooms' inner walls by a
 // slab search. The two giStatus fields that carried them (probeEnclosedAxes,
 // probeGridRefused) are deleted; `probesDropped` — how many candidates the
-// scout photographed and discarded — is what says WHY a scene has no grid.
+// renderer photographed and discarded — is what says WHY a scene has no grid.
 //
-// MEASURED IN THE LANE, the numbers the threshold stands on (worst axis span,
-// per probe, over these scenes): probes inside a room read 0.41 - 0.96, probes
-// with nothing near them read 1.07 - 1.65. The line is at 1.0, which is both
-// the physical statement ("its box spans its whole region: it saw nothing
-// nearer") and, to within one per cent, the middle of the measured gap.
+// MEASURED IN THE LANE, the numbers the threshold stands on (the box's volume
+// against the LIT VOLUME's, per probe, over these scenes): probes inside a
+// room read 0.10 - 0.55, probes with nothing near them 1.3 - 6.0. The line is
+// at 1.0, which is the statement itself — at 1 the box a probe's six faces
+// measured IS the world the renderer lit.
+//
+// AND IT IS RELATIVE TO THAT VOLUME, which is a stopgap and is stated as one:
+// the same roofless 10 m room keeps its four probes over the automatic +-7.43
+// fit and loses them over a +-5.5 volume pinned tight around it (case 13 pins
+// the room's own +-8 for that reason), and case 2's 30 m yard keeps none of
+// the shipped grid's 18. The coupling exists because a grid, once it exists at
+// all, takes the sky cubemap off every material in the scene (one environment
+// slot — SKY-FALLBACK-1); with the sky kept as the fallback the line could be
+// drawn far more generously, and R2's rays retire the question.
 //
 // Two further contract rows — the Mirror Room's free-standing MirrorPanel
 // (defect A1) and the Grand Showroom's columns (defect A2) — live in

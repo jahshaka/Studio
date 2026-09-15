@@ -36,8 +36,11 @@
 // Two independent knobs were confirmed to move it, which is what identifies the
 // mechanism rather than merely correlating with it: shrinking the probe region
 // back onto the room restores it, and so does widening the PCC-vs-VCT trust
-// window. The fix takes the first (computeProbeRegion), because it is the one
-// that makes the probes CORRECT rather than merely trusted.
+// window. The fix takes the first (the probe region), because it is the one
+// that makes the probes CORRECT rather than merely trusted. (That region was
+// computed by a rule that measured the scene for a room until R5-ROOM,
+// 2026-09-15; it is photographed now — see OgreGi.cpp buildPcc — and this
+// suite's numbers moved by centimetres, not by kind.)
 //
 // A SECOND, INDEPENDENT DEFECT was measured on the way and is NOT fixed here
 // (it is upstream shader code, and this tree is patches-only): with N probes
@@ -317,10 +320,12 @@ static void excludeFlagCase(Engine *engine, View *view)
 //
 // The Mirror Room sample's reflections went BLACK, and this is why. Its
 // MirrorPanel is a 5.2 x 3.0 x 0.24 slab standing in the MIDDLE of the room
-// (z = -2.2, walls at z = +-5.25). computeProbeRegion's wall test asked only
-// "is this item big on the other two axes, and on this side of the centre?" —
-// which the panel answers yes to — so the panel became the room's -Z wall and
-// the probe region stopped at its face. Measured on the shipped sample before
+// (z = -2.2, walls at z = +-5.25). The retired wall test (R5-ROOM deleted it)
+// asked only "is this item big on the other two axes, and on this side of the
+// centre?" — which the panel answers yes to — so the panel became the room's
+// -Z wall and the probe region stopped at its face. The region is a photograph
+// now and the same thing can happen to it, which is why the one viewpoint that
+// takes it reads its two sides symmetrically (OgreGi.cpp buildPcc). Measured on the shipped sample before
 // the fix: probeRegionMin.z came back EQUAL to the panel's own zMax to five
 // decimals. Every probe was then placed and fitted inside a third of a room.
 //

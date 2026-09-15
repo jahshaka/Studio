@@ -487,9 +487,10 @@ public:
         bool probeHdr = false, probeShadows = false;
         int  probeCaptureSize = 0;
         /// How many candidate probes the renderer photographed and DROPPED
-        /// because they saw nothing within twice their own region. `probeCount`
-        /// 0 with this non-zero is the open-scene answer (the sky reflects);
-        /// with it zero, in the hybrid, it is a build failure.
+        /// because the box their six faces measured was no smaller, by volume,
+        /// than the volume the renderer lit. `probeCount` 0 with this non-zero
+        /// is the open-scene answer (the sky reflects); with it zero, in the
+        /// hybrid, it is a build failure.
         int  probesDropped = 0;
         /// Material edits that CROSSED the reflection-probe gate on this scene
         /// (ogre-patch 0028): the one material edit that rebuilds a shader.
