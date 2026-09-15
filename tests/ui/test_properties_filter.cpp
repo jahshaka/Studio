@@ -629,6 +629,31 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- 11e. A BLADE THAT DIES LEAVES NOTHING BEHIND (F4) ----------------
+    // The registry keys its row lists by RAW pointer, and a TOP-LEVEL blade is
+    // a container that is nobody's row — so nothing but its own destruction can
+    // drop its list, and retire() used to return before it got there (the
+    // `entries` lookup missed). A stale list keyed by a freed address is
+    // inherited by whatever Qt allocates there next.
+    {
+        auto &registry = PropertyRows::registry();
+        const int before = registry.trackedContainers();
+        {
+            auto *scratch = new AccordianBladeWidget;
+            scratch->setPanelTitle(QStringLiteral("Scratch"));
+            scratch->addCheckBox(QStringLiteral("Scratch Row"), false);
+            auto *nested = scratch->addSection(QStringLiteral("Scratch Section"));
+            nested->addCheckBox(QStringLiteral("Nested Row"), false);
+            CHECK(registry.trackedContainers() == before + 2,
+                  "properties_filter: a blade and its nested section are tracked");
+            delete scratch;
+        }
+        CHECK(registry.trackedContainers() == before,
+              QStringLiteral("properties_filter: ...and BOTH are gone when the blade dies "
+                             "(%1, was %2)").arg(registry.trackedContainers()).arg(before)
+                  .toUtf8().constData());
+    }
+
     // ---- 12. nothing matches, and the box still works ----------------------
     panel->setPropertiesTab(Tab::World);
     panel->setPropertiesFilter(Tab::World, QString());

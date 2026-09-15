@@ -112,6 +112,11 @@ public:
     /// is not a registered row, so a call site never has to ask.
     void setPanelVisible(QWidget *row, bool visible);
     bool isRegistered(const QWidget *row) const;
+    /// How many CONTAINERS (blades, nested sections, material lists) the
+    /// registry is holding row lists for. A diagnostic, and the thing
+    /// ui.properties_filter asserts does not grow: these are raw pointers used
+    /// as keys, and Qt reuses addresses.
+    int trackedContainers() const { return containers.size(); }
     /// The registered ROW `w` belongs to — `w` itself, or the nearest ancestor
     /// that is a row. (A binding is often made on a control INSIDE the row: the
     /// colour picker inside a ColorValueWidget.) Null if none.

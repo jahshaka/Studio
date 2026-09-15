@@ -131,7 +131,13 @@ void Registry::add(QWidget *container, QWidget *row)
     e.widget = row;
     e.container = container;
     e.labelWidget = rowLabelWidget(row);
+    // A CONTAINER'S OWN LIFETIME. A top-level blade is a key here and is
+    // nobody's row, so nothing else would ever drop its row list — and these
+    // are raw pointers used as keys, which Qt hands out again.
+    const bool newContainer = !containers.contains(container);
     containers[container].rows.append(QPointer<QWidget>(row));
+    if (newContainer)
+        connect(container, &QObject::destroyed, this, [this, container]() { retire(container); });
     entries.insert(row, e);
     // A ROW THAT DIES WITHOUT BEING RETIRED (a blade destroyed with the window,
     // a control freed by its own parent) must leave the registry anyway: these
@@ -156,23 +162,34 @@ void Registry::add(QWidget *container, QWidget *row)
 void Registry::retire(QWidget *row)
 {
     if (!row) return;
-    auto it = entries.find(row);
-    if (it == entries.end()) return;
-    if (QWidget *c = it->container) {
-        auto node = containers.find(c);
-        if (node != containers.end())
-            node->rows.removeIf([row](const QPointer<QWidget> &p) { return p.data() == row; });
-    }
-    entries.erase(it);
-    // A retired CONTAINER takes its rows with it (a nested section, or the
-    // material PropertyWidget).
+
+    // THE CONTAINER HALF GOES FIRST, and unconditionally. A retired container
+    // takes its rows with it (a nested section, the material PropertyWidget) —
+    // and a TOP-LEVEL BLADE is a container that is nobody's ROW, so it has no
+    // `entries` record at all. Testing `entries` first therefore returned
+    // before dropping the blade's whole row list, leaving it keyed by a pointer
+    // Qt is free to hand to the next widget it allocates.
+    bool changed = false;
     auto own = containers.find(row);
     if (own != containers.end()) {
         const QVector<QPointer<QWidget>> rows = own->rows;
         containers.erase(own);
+        changed = true;
         for (const QPointer<QWidget> &w : rows) if (w) retire(w.data());
     }
-    scheduleChanged();
+
+    auto it = entries.find(row);
+    if (it != entries.end()) {
+        if (QWidget *c = it->container) {
+            auto node = containers.find(c);
+            if (node != containers.end())
+                node->rows.removeIf([row](const QPointer<QWidget> &p) { return p.data() == row; });
+        }
+        entries.erase(it);
+        changed = true;
+    }
+
+    if (changed) scheduleChanged();
 }
 
 void Registry::identify(QWidget *row, const QString &key, const QStringList &keywords)
