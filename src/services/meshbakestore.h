@@ -36,18 +36,53 @@ For more information see the LICENSE file
 #include <QStringList>
 
 #include "irisgl/import/meshprewarm.h"
+#include "irisgl/import/importsettings.h"
 
 class Database;
 
 namespace MeshBakeStore
 {
+/// THE IMPORT SETTINGS BEHIND A RESOLVED SOURCE PATH (IMPORT-1,
+/// SPECS/IMPORT_DIALOG_SPEC.md §4.4). A store object's bake — and every parse
+/// that stands in for one — is keyed on the asset's import settings, and the
+/// only thing a path carries is its content id. This is the inverse lookup:
+/// path -> oid -> the asset row(s) that name that content -> the record at
+/// `properties.import.settings`. An absent or `{}` record is IDENTITY, which
+/// is what every row imported before the import dialog carries.
+///
+/// `transformFor` additionally hands the file's own declared unit scale
+/// (`properties.metadata.unitScale`) to the transform, so a UNIT OVERRIDE
+/// costs no probe parse on a row the library has already measured.
+///
+/// A PATH IS NOT A COMPLETE IDENTITY ANY MORE, which is why `assetGuid` is
+/// here: the store is content-addressed, so two library rows imported from the
+/// SAME FILE with DIFFERENT settings share one store object and one path, and
+/// they are two different geometries. A caller that knows which ROW it is
+/// asking about — the scene reader (the node carries its mesh guid), the
+/// session registration, the reimport — passes it and gets the right answer.
+/// A caller that only has a path (the open prewarm's plan, assets.bakeAll)
+/// gets the DEFAULT variant for that content: deterministic (the first row
+/// found, newest-first), and the reader re-resolves per node anyway.
+///
+/// UI-THREAD/DB-THREAD, like planFor: it reads the catalog on the caller's
+/// per-thread connection. Memoised per (path, guid) for the life of a scope.
+QString settingsHashFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+                        const QString &assetGuid = QString());
+QString settingsHashFor(const QString &sourcePath, const QString &assetGuid = QString());
+iris::ImportTransform transformFor(QSqlDatabase conn, const QString &root,
+                                   const QString &sourcePath,
+                                   const QString &assetGuid = QString());
+iris::ImportTransform transformFor(const QString &sourcePath,
+                                   const QString &assetGuid = QString());
+
 /// Where the bake for a resolved model file should be, and the fingerprint it
 /// must carry. `bakePath` empty = this build has no bake for that content
 /// (never baked, or the file is not a store object).
-iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString &sourcePath);
+iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+                          const QString &assetGuid = QString());
 
 /// Same, on the default connection and the active store root.
-iris::PrewarmItem planFor(const QString &sourcePath);
+iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid = QString());
 
 /// Resolve + read. Null when there is no usable bake — every failure mode
 /// (absent, stale fingerprint, wrong version, truncated, corrupt) is a null
@@ -55,7 +90,7 @@ iris::PrewarmItem planFor(const QString &sourcePath);
 ///
 /// Cached while a scope is open, so the scene reader and the session
 /// registration share ONE deserialized model.
-iris::BakedModelPtr load(const QString &sourcePath);
+iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid = QString());
 
 /// Refcounted cache window. An open brackets itself with these; outside a
 /// scope `load` still works, it just does not retain.

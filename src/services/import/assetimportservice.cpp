@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
+#include "irisgl/import/meshbake.h"
 #include "irisgl/import/modelsceneinfo.h"
 
 #include "data/database/database.h"
@@ -266,7 +267,11 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
         { "importer", importer->name() },
         { "importerVersion", importer->version() },
         { "assimp", iris::ModelSceneInfo::importerVersion() },
-        { "settings", request.settings },
+        // The record the importer APPLIED where it has one (a model's scale,
+        // orientation, origin and tuning — importtypes.h), the caller's raw
+        // request otherwise.
+        { "settings", staged.appliedSettings.isEmpty() ? request.settings
+                                                       : staged.appliedSettings },
     };
 
     // Prepay the content hashing (the CPU cost of the store stage) so the
@@ -536,6 +541,139 @@ QJsonObject AssetImportService::importSettings(const QString &guid) const
     const auto record = db->fetchAsset(guid);
     const QJsonObject props = QJsonDocument::fromJson(record.properties).object();
     return props.value(QStringLiteral("import")).toObject();
+}
+
+AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
+                                                            const QJsonObject &settings)
+{
+    Reimported out;
+    out.guid = guid;
+    const auto fail = [&out](const QString &why) { out.error = why; return out; };
+    if (!db) return fail(QStringLiteral("no library is open"));
+
+    const AssetRecord record = db->fetchAsset(guid);
+    if (record.guid.isEmpty())
+        return fail(QStringLiteral("no asset with guid '%1'").arg(guid));
+    if (record.type != static_cast<int>(ModelTypes::Object))
+        return fail(QStringLiteral("'%1' is not a model asset — only a model is imported with "
+                                   "settings").arg(record.name));
+
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    QString sourceName;
+    const QString sourcePath = AssetCas::resolveSource(conn, root, guid, &sourceName);
+    if (sourcePath.isEmpty())
+        return fail(QStringLiteral("'%1' has no stored source file to reimport").arg(record.name));
+    out.sourcePath = sourcePath;
+
+    // MERGED over the stored record, key by key: a caller sends only what it is
+    // changing, exactly as the dialog does when a user touches one field.
+    QJsonObject props = QJsonDocument::fromJson(record.properties).object();
+    QJsonObject importRecord = props.value(QStringLiteral("import")).toObject();
+    QJsonObject merged = importRecord.value(QStringLiteral("settings")).toObject();
+    for (auto it = settings.constBegin(); it != settings.constEnd(); ++it)
+        merged.insert(it.key(), it.value());
+
+    // The object path is oid-named — the importer sniffs by EXTENSION, so the
+    // re-read goes through a staging copy named as the recorded display name
+    // (the checkConsistency recipe).
+    QTemporaryDir staging;
+    if (!staging.isValid()) return fail(QStringLiteral("cannot create a reimport staging dir"));
+    const QString linked = QDir(staging.path()).filePath(
+        sourceName.isEmpty() ? QFileInfo(sourcePath).fileName() : sourceName);
+    if (!QFile::copy(sourcePath, linked))
+        return fail(QStringLiteral("could not stage '%1' for reimport").arg(record.name));
+
+    ImportRequest request;
+    request.sourcePath = linked;
+    request.settings = merged;
+    request.projectGuid = project ? project->getProjectGuid() : QString();
+
+    QString error;
+    AssetImporterBase *importer = pickImporter(request, &error);
+    if (!importer || importer->modelType() != static_cast<int>(ModelTypes::Mesh))
+        return fail(error.isEmpty()
+                        ? QStringLiteral("'%1' is not a model file this build imports")
+                              .arg(record.name)
+                        : error);
+
+    QTemporaryDir convertStaging;
+    StagedAsset staged;
+    if (!importer->convert(request, convertStaging.path(), db, project, staged, &error, {}))
+        return fail(error.isEmpty() ? QStringLiteral("reimport failed") : error);
+
+    // ---- commit ONLY the derived products ---------------------------------
+    //
+    // A reimport is not a new import. The source bytes did not change, so the
+    // source oid, this row's guid, its member Texture rows and every project's
+    // pin stay exactly as they are; what is replaced is what was DERIVED from
+    // those bytes under the old settings.
+    // The MESH MEMBER row — the guid a scene node actually names
+    // (SceneReader::createMesh writes it to MeshNode::meshPath), which is why
+    // the bake has to be recorded under it too and why the open-scene swap
+    // finds nodes by it. Same lookup SceneEditService::addMaterialMesh uses.
+    const QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object),
+                                                 static_cast<int>(ModelTypes::Mesh));
+    out.meshGuid = meshGuid;
+
+    // The previous bake, remembered before it is unlinked so a caller can say
+    // what assets.gc will reap.
+    {
+        QSqlQuery old(conn);
+        old.prepare("SELECT oid FROM asset_files WHERE asset_guid = ? AND role = ?");
+        old.addBindValue(guid);
+        old.addBindValue(iris::MeshBake::casRole());
+        if (old.exec() && old.next()) out.previousBakeOid = old.value(0).toString();
+    }
+
+    QString bakePath;
+    QString bakeName;
+    for (const StagedFile &file : staged.files) {
+        if (file.role != iris::MeshBake::casRole()) continue;
+        bakePath = file.path;
+        bakeName = file.name;
+        break;
+    }
+
+    // Unlink the OLD bake rows FIRST: the bake's name carries the settings
+    // hash, so the new one is a different row and a stale row would otherwise
+    // sit in front of it in the newest-first candidate walk forever.
+    QSqlQuery drop(conn);
+    drop.prepare("DELETE FROM asset_files WHERE asset_guid IN (?, ?) AND role = ?");
+    drop.addBindValue(guid);
+    drop.addBindValue(meshGuid);
+    drop.addBindValue(iris::MeshBake::casRole());
+    if (!drop.exec())
+        return fail(QStringLiteral("could not retire the old bake of '%1'").arg(record.name));
+
+    if (!bakePath.isEmpty()) {
+        QString oid;
+        if (!AssetCas::ingestFile(conn, root, bakePath, guid, iris::MeshBake::casRole(),
+                                  bakeName, &oid, &error))
+            return fail(error);
+        out.bakeOid = oid;
+        if (!meshGuid.isEmpty()
+            && !AssetCas::ingestFile(conn, root, bakePath, meshGuid, iris::MeshBake::casRole(),
+                                     bakeName, &oid, &error))
+            return fail(error);
+    }
+
+    // The metadata block (the extent is re-measured from the transformed parse
+    // the convert stage just made) and the settings record.
+    out.metadata = staged.metadata;
+    out.settings = staged.appliedSettings;
+    if (!out.metadata.isEmpty()) props[QStringLiteral("metadata")] = out.metadata;
+    importRecord[QStringLiteral("settings")] = out.settings;
+    importRecord[QStringLiteral("importerVersion")] = importer->version();
+    props[QStringLiteral("import")] = importRecord;
+    if (!db->updateAssetProperties(guid, QJsonDocument(props).toJson()))
+        return fail(QStringLiteral("could not record the new settings on '%1'").arg(record.name));
+
+    QString casError;
+    AssetCas::writeSidecar(conn, root, guid, &casError);
+    if (!meshGuid.isEmpty()) AssetCas::writeSidecar(conn, root, meshGuid, &casError);
+    if (!casError.isEmpty()) irisLog("reimport: " + casError);
+    return out;
 }
 
 QJsonObject AssetImportService::checkConsistency(const QString &guid)

@@ -1243,7 +1243,9 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         // (measured 2026-09-15: 5 of them per open of the Mirror Room sample,
         // 6 per Showroom). They were cheap; they were also counted as UI-thread
         // parses, which is the one number this path is not allowed to dirty.
-        auto mesh = source.startsWith(":") ? iris::MeshPtr() : getMesh(source, meshIndex);
+        auto mesh = source.startsWith(":")
+                        ? iris::MeshPtr()
+                        : getMesh(source, meshIndex, nodeObj["mesh"].toString());
 
         if (source.startsWith(":")) {
             meshNode->setMesh(source);
@@ -1793,9 +1795,23 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 // as an archaeological hazard.)
 }
 
-void SceneReader::extractAssetsFromAssimpScene(QString filePath)
+QString SceneReader::assetCacheKey(const QString &filePath, const QString &assetGuid) const
 {
-    if (!assimpScenes.contains(filePath)) {
+    return filePath + QLatin1Char('|') + MeshBakeStore::settingsHashFor(filePath, assetGuid);
+}
+
+void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &assetGuid)
+{
+    const QString cacheKey = assetCacheKey(filePath, assetGuid);
+    // The PREWARM is planned from PATHS alone (the open's plan is a path list),
+    // so it holds this content's DEFAULT variant. A node whose row asks for
+    // different settings must not take it — it would get the other variant's
+    // geometry, silently.
+    const bool prewarmUsable =
+        assetGuid.isEmpty()
+        || MeshBakeStore::settingsHashFor(filePath, assetGuid)
+               == MeshBakeStore::settingsHashFor(filePath, QString());
+    if (!assimpScenes.contains(cacheKey)) {
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
 
@@ -1809,15 +1825,16 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
         // file would report 0 ms and prove nothing. A miss is counted too —
         // it is one catalog query, and it is honest to see it.
         LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sceneReader"));
-        iris::BakedModelPtr baked = prewarm ? prewarm->baked(filePath) : iris::BakedModelPtr();
-        if (!baked) baked = MeshBakeStore::load(filePath);
+        iris::BakedModelPtr baked = (prewarm && prewarmUsable) ? prewarm->baked(filePath)
+                                                               : iris::BakedModelPtr();
+        if (!baked) baked = MeshBakeStore::load(filePath, assetGuid);
         if (baked) {
             meshList = baked->meshes;
             animationss = baked->animations;
             for (auto &anim : animationss) anim->source = filePath;
-            meshes.insert(filePath, meshList);
-            assimpScenes.insert(filePath);
-            animations.insert(filePath, animationss);
+            meshes.insert(cacheKey, meshList);
+            assimpScenes.insert(cacheKey);
+            animations.insert(cacheKey, animationss);
             return;
         }
         bakeAttempt.stop();   // a miss must not bank the parse below
@@ -1825,14 +1842,14 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
         // The threaded open parses these on a worker BEFORE the reader runs
         // (irisgl/import/meshprewarm.h): consume that and this whole stage is
         // a copy out of a parsed scene instead of a parse.
-        if (prewarm) {
+        if (prewarm && prewarmUsable) {
             if (const iris::SceneSource *ready = prewarm->source(filePath)) {
                 LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sceneReaderHit"));
                 iris::GraphicsHelper::loadAllMeshesAndAnimationsFromSource(*ready, filePath,
                                                                           meshList, animationss);
-                meshes.insert(filePath, meshList);
-                assimpScenes.insert(filePath);
-                animations.insert(filePath, animationss);
+                meshes.insert(cacheKey, meshList);
+                assimpScenes.insert(cacheKey);
+                animations.insert(cacheKey, animationss);
                 return;
             }
         }
@@ -1845,11 +1862,16 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
         // asset pipeline — every Object entry is a built fragment — so the
         // search always fell through to this read.
         LoadTimeline::Accumulate parse(QStringLiteral("assimp:sceneReader"));
-        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
+        // THE ASSET'S IMPORT TRANSFORM (IMPORT-1): a fallback parse stands in
+        // for the bake, so it has to produce the same geometry the bake holds —
+        // the asset's baked scale, orientation and origin included.
+        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(
+            filePath, meshList, animationss,
+            MeshBakeStore::transformFor(filePath, assetGuid));
 
-        meshes.insert(filePath, meshList);
-        assimpScenes.insert(filePath);
-        animations.insert(filePath, animationss);
+        meshes.insert(cacheKey, meshList);
+        assimpScenes.insert(cacheKey);
+        animations.insert(cacheKey, animationss);
     }
 }
 
@@ -1860,12 +1882,12 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
  * @param index
  * @return
  */
-iris::MeshPtr SceneReader::getMesh(QString filePath, int index)
+iris::MeshPtr SceneReader::getMesh(QString filePath, int index, const QString &assetGuid)
 {
-    extractAssetsFromAssimpScene(filePath);
+    extractAssetsFromAssimpScene(filePath, assetGuid);
 
     // if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh=
-    auto meshList = meshes[filePath];
+    auto meshList = meshes[assetCacheKey(filePath, assetGuid)];
     if (index < meshList.size()) return meshList[index];
 
     // maybe the mesh was modified after the file was saved
@@ -1911,8 +1933,8 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, Q
     QString resolvedByGuid;
     if (!assetGuid.isEmpty()) resolvedByGuid = resolveAssetPath(assetGuid);
     if (!resolvedByGuid.isEmpty() && QFileInfo::exists(resolvedByGuid)) {
-        extractAssetsFromAssimpScene(resolvedByGuid);
-        auto byGuid = animations[resolvedByGuid];
+        extractAssetsFromAssimpScene(resolvedByGuid, assetGuid);
+        auto byGuid = animations[assetCacheKey(resolvedByGuid, assetGuid)];
         for (auto anim : byGuid) anim->source = relPath;
         if (byGuid.contains(animName)) return byGuid[animName];
         if (byGuid.size() == 1) return byGuid.first();
@@ -1931,9 +1953,9 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, Q
         const QString resolved = resolveAssetPath(ownModelGuid);
         if (!resolved.isEmpty()) filePath = resolved;
     }
-    extractAssetsFromAssimpScene(filePath);
+    extractAssetsFromAssimpScene(filePath, ownModelGuid);
 
-    auto animMap = animations[filePath];
+    auto animMap = animations[assetCacheKey(filePath, ownModelGuid)];
 
     //reset relative paths for animations since they have the absolute path
     for(auto anim : animMap)

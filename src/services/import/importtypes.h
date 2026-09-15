@@ -116,6 +116,13 @@ struct StagedAsset
     QStringList warnings;
     std::function<void()> registerSession;   // AssetManager adds; runs after commit
 
+    /// The COMPLETE import-settings record this import actually applied
+    /// (irisgl/import/importsettings.h), when the importer has one. Empty for
+    /// every importer that takes no settings (media, .jaf). The spine records
+    /// it in the determinism record instead of the caller's partial request,
+    /// so `assets.importSettings` and the re-bake lookup read one shape.
+    QJsonObject appliedSettings;
+
     /// sha256 of the ORIGINAL source file, when the importer already computed
     /// it (MeshImporter needs it to key the mesh bake). prepare() reuses this
     /// for the determinism record instead of hashing the same file twice.

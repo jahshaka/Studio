@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QJsonArray>
 
 #include "irisgl/irisglfwd.h"
+#include "irisgl/import/importsettings.h"
 #include "data/constants.h"
 #include "data/project.h"
 #include "data/database/database.h"
@@ -55,7 +56,9 @@ public:
                                                                  bool& hasEmbeddedTexture,
                                                                  QJsonObject *modelStats = nullptr,
                                                                  const QString &extractDir = QString(),
-                                                                 iris::SceneSource *keepScene = nullptr);
+                                                                 iris::SceneSource *keepScene = nullptr,
+                                                                 const iris::ImportTransform &xf
+                                                                     = iris::ImportTransform());
 
     /// Process-wide count of extractTexturesAndMaterialFromMesh runs — each
     /// is one full assimp parse of a model file. Instrumentation for the

@@ -89,6 +89,31 @@ public:
     /// The recorded determinism block for an asset ("import" in properties).
     QJsonObject importSettings(const QString &guid) const;
 
+    /// REIMPORT (SPECS/IMPORT_DIALOG_SPEC.md §5): re-read this asset's stored
+    /// SOURCE with new import settings and replace only what is DERIVED from
+    /// it — the mesh bake, the metadata block (extent re-measured), the
+    /// recorded settings and the thumbnail. The source oid, the row guids, the
+    /// texture members and every project pin are UNCHANGED, because a reimport
+    /// is not a new import: the pin freezes source BYTES, and those bytes did
+    /// not move.
+    ///
+    /// `settings` is MERGED over the stored record key by key, so a caller may
+    /// send only what it is changing. The old bake drops to refcount 0 and
+    /// `assets.gc` reaps it. NOT undoable — asset mutations never are.
+    struct Reimported
+    {
+        QString guid;
+        QString meshGuid;          ///< the mesh MEMBER row, when the asset has one
+        QJsonObject settings;      ///< the complete record now recorded
+        QJsonObject metadata;      ///< the new metadata block (extent included)
+        QString bakeOid;           ///< the new bake object, empty when none was produced
+        QString previousBakeOid;
+        QString sourcePath;        ///< the store object the re-read came from
+        QString error;
+        bool ok() const { return error.isEmpty(); }
+    };
+    Reimported reimport(const QString &guid, const QJsonObject &settings);
+
     /// The registered importers, in sniff order (animation, mesh, image,
     /// audio, video, shader, material, ies, jaf, file).
     const QVector<AssetImporterBase *> &importers() const { return mImporters; }

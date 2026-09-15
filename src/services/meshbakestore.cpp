@@ -13,6 +13,9 @@ For more information see the LICENSE file
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QPair>
 #include <QFileInfo>
 #include <QFutureWatcher>
 #include <QHash>
@@ -58,6 +61,56 @@ QString oidFromStorePath(const QString &root, const QString &path)
     return oid.length() == 64 ? oid : QString();
 }
 
+/// The import-settings record recorded for the content at `oid` — the inverse
+/// lookup MeshBakeStore::settingsHashFor documents. Several rows can name one
+/// object (an import records the model under both the Object and the Mesh
+/// member); they carry the SAME import record, so the first row that has one
+/// wins and a row with none reads as identity.
+QJsonObject importRecordForOid(QSqlDatabase conn, const QString &oid)
+{
+    if (oid.isEmpty()) return QJsonObject();
+    QSqlQuery query(conn);
+    query.prepare("SELECT A.properties FROM asset_files AF "
+                  "JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ?");
+    query.addBindValue(oid);
+    if (!query.exec()) return QJsonObject();
+    QJsonObject best;
+    while (query.next()) {
+        const QJsonObject props =
+            QJsonDocument::fromJson(query.value(0).toByteArray()).object();
+        const QJsonObject record = props.value(QStringLiteral("import")).toObject();
+        if (record.isEmpty()) continue;
+        if (best.isEmpty()) best = props;
+        if (!record.value(QStringLiteral("settings")).toObject().isEmpty()) return props;
+    }
+    return best;
+}
+
+/// The import record of ONE row, by guid — the unambiguous half of the lookup
+/// above.
+///
+/// UP TO THE OWNER when the row itself has none: an import writes the record on
+/// the OBJECT row, and the thing a scene node names is the MESH MEMBER row
+/// under it. A member's import settings are its owner's, by construction — they
+/// came out of the same import of the same file — so the walk is to `parent`
+/// and is bounded (the catalog is two levels deep; the loop guards anyway).
+/// A row with no record anywhere above it reads as identity, exactly as every
+/// row imported before the import dialog does.
+QJsonObject importRecordForGuid(QSqlDatabase conn, const QString &guid)
+{
+    QString at = guid;
+    for (int hop = 0; hop < 8 && !at.isEmpty(); ++hop) {
+        QSqlQuery query(conn);
+        query.prepare("SELECT properties, parent FROM assets WHERE guid = ?");
+        query.addBindValue(at);
+        if (!query.exec() || !query.next()) return QJsonObject();
+        const QJsonObject props = QJsonDocument::fromJson(query.value(0).toByteArray()).object();
+        if (!props.value(QStringLiteral("import")).toObject().isEmpty()) return props;
+        at = query.value(1).toString();
+    }
+    return QJsonObject();
+}
+
 /// Record a written bake in the catalog under EVERY asset row that names the
 /// source content, so it is reachable from each of them (Object + Mesh member)
 /// and dies with the last one — the same shape the source itself has, which is
@@ -98,7 +151,71 @@ bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid
 namespace MeshBakeStore
 {
 
-iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString &sourcePath)
+namespace
+{
+/// Memo for the two lookups below: one open asks for the same path once per
+/// mesh node. Cleared with the model cache (clear()).
+QMutex sSettingsLock;
+QHash<QString, QPair<QString, iris::ImportTransform>> sSettingsCache;
+
+QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const QString &root,
+                                                     const QString &sourcePath,
+                                                     const QString &assetGuid)
+{
+    const QString key = sourcePath + QLatin1Char('|') + assetGuid;
+    {
+        QMutexLocker locked(&sSettingsLock);
+        const auto hit = sSettingsCache.constFind(key);
+        if (hit != sSettingsCache.constEnd()) return hit.value();
+    }
+    QPair<QString, iris::ImportTransform> out(iris::ImportSettings::identityHash(),
+                                              iris::ImportTransform());
+    const QString oid = oidFromStorePath(root, sourcePath);
+    if (!oid.isEmpty()) {
+        const QJsonObject props = assetGuid.isEmpty() ? importRecordForOid(conn, oid)
+                                                      : importRecordForGuid(conn, assetGuid);
+        const QJsonObject record = props.value(QStringLiteral("import")).toObject();
+        const QJsonObject settings = record.value(QStringLiteral("settings")).toObject();
+        const iris::ImportSettings parsed = iris::ImportSettings::fromJson(settings);
+        // The file's own declaration, already measured at import: a unit
+        // OVERRIDE then costs no probe parse (irisgl/import/scenesource.h).
+        const double declared = props.value(QStringLiteral("metadata")).toObject()
+                                     .value(QStringLiteral("unitScale")).toDouble(0.0);
+        out.first = parsed.hash();
+        out.second = parsed.transform(declared);
+    }
+    QMutexLocker locked(&sSettingsLock);
+    sSettingsCache.insert(key, out);
+    return out;
+}
+}   // namespace
+
+QString settingsHashFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+                        const QString &assetGuid)
+{
+    return resolveSettings(conn, root, sourcePath, assetGuid).first;
+}
+
+QString settingsHashFor(const QString &sourcePath, const QString &assetGuid)
+{
+    return settingsHashFor(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath,
+                           assetGuid);
+}
+
+iris::ImportTransform transformFor(QSqlDatabase conn, const QString &root,
+                                   const QString &sourcePath, const QString &assetGuid)
+{
+    return resolveSettings(conn, root, sourcePath, assetGuid).second;
+}
+
+iris::ImportTransform transformFor(const QString &sourcePath, const QString &assetGuid)
+{
+    return transformFor(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath, assetGuid);
+}
+
+
+iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+                          const QString &assetGuid)
 {
     iris::PrewarmItem item;
     item.path = sourcePath;
@@ -121,15 +238,17 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     // row). Found by the 2026-09-06 pre-push gate when the sockets merge
     // bumped the producer id. read() validates the fingerprint, so the scan
     // stops at the first row that is actually the current generation.
+    const QString settings = settingsHashFor(conn, root, sourcePath, assetGuid);
+    item.transform = transformFor(conn, root, sourcePath, assetGuid);
     QSqlQuery query(conn);
     query.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
                   "LEFT JOIN files F ON AF.oid = F.oid "
                   "WHERE AF.role = ? AND AF.name = ? ORDER BY AF.rowid DESC");
     query.addBindValue(iris::MeshBake::casRole());
-    query.addBindValue(iris::MeshBake::fileNameFor(sourceOid));
+    query.addBindValue(iris::MeshBake::fileNameFor(sourceOid, settings));
     if (!query.exec()) return item;
 
-    const QString fingerprint = iris::MeshBake::fingerprintFor(sourceOid);
+    const QString fingerprint = iris::MeshBake::fingerprintFor(sourceOid, settings);
     int stale = 0;
     while (query.next()) {
         const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
@@ -168,21 +287,25 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     return item;
 }
 
-iris::PrewarmItem planFor(const QString &sourcePath)
+iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid)
 {
-    return planFor(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath);
+    return planFor(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath, assetGuid);
 }
 
-iris::BakedModelPtr load(const QString &sourcePath)
+iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid)
 {
     if (sourcePath.isEmpty()) return iris::BakedModelPtr();
+    // KEYED BY (path, settings): identical bytes imported twice under different
+    // settings are two different geometries and must not share a cache slot.
+    const QString cacheKey =
+        sourcePath + QLatin1Char('|') + settingsHashFor(sourcePath, assetGuid);
     {
         QMutexLocker locked(&sLock);
-        const auto hit = sCache.constFind(sourcePath);
+        const auto hit = sCache.constFind(cacheKey);
         if (hit != sCache.constEnd()) return hit.value();
     }
 
-    const iris::PrewarmItem item = planFor(sourcePath);
+    const iris::PrewarmItem item = planFor(sourcePath, assetGuid);
     iris::BakedModelPtr result;
     if (!item.bakePath.isEmpty()) {
         iris::MeshBake::Model model = iris::MeshBake::read(item.bakePath, item.bakeFingerprint);
@@ -197,7 +320,7 @@ iris::BakedModelPtr load(const QString &sourcePath)
     QMutexLocker locked(&sLock);
     // Negative results are cached too: a model with no bake must not re-query
     // the catalog for every mesh node that references it.
-    if (sScopeDepth > 0) sCache.insert(sourcePath, result);
+    if (sScopeDepth > 0) sCache.insert(cacheKey, result);
     return result;
 }
 
@@ -216,6 +339,10 @@ void endScope()
 
 void clear()
 {
+    {
+        QMutexLocker locked(&sSettingsLock);
+        sSettingsCache.clear();
+    }
     QMutexLocker locked(&sLock);
     sCache.clear();
 }
@@ -306,15 +433,17 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
         return false;
     }
 
+    const QString settings = settingsHashFor(conn, root, sourcePath);
     iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
-        sourcePath, iris::MeshBake::fingerprintFor(sourceOid), scratch.path());
+        sourcePath, iris::MeshBake::fingerprintFor(sourceOid, settings), scratch.path(),
+        transformFor(conn, root, sourcePath));
     if (!model.valid) {
         if (errorOut)
             *errorOut = QStringLiteral("could not parse '%1' for baking").arg(sourcePath);
         return false;
     }
 
-    const QString bakeName = iris::MeshBake::fileNameFor(sourceOid);
+    const QString bakeName = iris::MeshBake::fileNameFor(sourceOid, settings);
     const QString bakePath = QDir(scratch.path()).filePath(bakeName);
     if (!iris::MeshBake::write(bakePath, model, errorOut)) return false;
     return recordBake(conn, root, sourceOid, bakePath, errorOut);
@@ -373,15 +502,21 @@ void startNext()
     // The PARSE runs on a worker: it is the cost the bake exists to remove and
     // it must not be paid on the UI thread just because it is being removed.
     // The lambda touches nothing but its captured values.
-    watcher->setFuture(QtConcurrent::run([sourcePath, sourceOid]() -> BakeOutput {
+    // The settings are resolved HERE, on the UI thread, because the lookup is a
+    // catalog read and QSqlDatabase connections are per-thread; the worker gets
+    // plain values (the same split planFor/PrewarmItem already uses).
+    const QString settings = settingsHashFor(QSqlDatabase::database(), root, sourcePath);
+    const iris::ImportTransform xf = transformFor(QSqlDatabase::database(), root, sourcePath);
+    watcher->setFuture(QtConcurrent::run([sourcePath, sourceOid, settings, xf]() -> BakeOutput {
         BakeOutput out;
         out.sourceOid = sourceOid;
         auto dir = std::make_shared<QTemporaryDir>();
         if (!dir->isValid()) return out;
         iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
-            sourcePath, iris::MeshBake::fingerprintFor(sourceOid), dir->path());
+            sourcePath, iris::MeshBake::fingerprintFor(sourceOid, settings), dir->path(), xf);
         if (!model.valid) return out;
-        const QString path = QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(sourceOid));
+        const QString path =
+            QDir(dir->path()).filePath(iris::MeshBake::fileNameFor(sourceOid, settings));
         QString error;
         if (!iris::MeshBake::write(path, model, &error)) return out;
         out.dir = dir;

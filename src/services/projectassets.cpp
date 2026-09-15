@@ -156,8 +156,15 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             // the whole of what the parse branch below costs, so the two are
             // directly comparable in the ledger.
             LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sessionAsset"));
-            iris::BakedModelPtr baked = prewarm ? prewarm->baked(path) : iris::BakedModelPtr();
-            if (!baked) baked = MeshBakeStore::load(path);
+            // The prewarm is planned from PATHS, which is this content's
+            // DEFAULT settings variant; a member whose row asks for other
+            // settings must resolve its own (IMPORT-1).
+            const bool prewarmUsable =
+                MeshBakeStore::settingsHashFor(path, member)
+                == MeshBakeStore::settingsHashFor(path, QString());
+            iris::BakedModelPtr baked = (prewarm && prewarmUsable) ? prewarm->baked(path)
+                                                                   : iris::BakedModelPtr();
+            if (!baked) baked = MeshBakeStore::load(path, member);
             if (!baked) bakeAttempt.stop();   // a miss must not bank the parse below
             if (baked) {
                 auto node = iris::MeshBake::buildFragment(*baked, path, makeMaterial);
@@ -173,7 +180,8 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
                 break;
             }
 
-            const iris::SceneSource *ready = prewarm ? prewarm->source(path) : nullptr;
+            const iris::SceneSource *ready =
+                (prewarm && prewarmUsable) ? prewarm->source(path) : nullptr;
             if (ready) {
                 LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sessionAssetHit"));
                 auto node = iris::MeshNode::loadAsSceneFragment(path, *ready, makeMaterial);
@@ -189,10 +197,12 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
                 break;
             }
             LoadTimeline::Accumulate parse(QStringLiteral("assimp:sessionAsset"));
+            // The asset's import transform (IMPORT-1): this parse stands in for
+            // the bake and must produce the geometry the bake holds.
             auto node = iris::MeshNode::loadAsSceneFragment(
                 path, [](iris::MeshPtr, iris::MeshMaterialData &data) {
                     return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
-                });
+                }, nullptr, nullptr, QString(), MeshBakeStore::transformFor(path, member));
             if (!node) break;
             const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
             AssetHelper::updateNodeMaterial(node, definition, db);
