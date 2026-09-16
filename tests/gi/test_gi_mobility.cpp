@@ -592,10 +592,23 @@ static void sectionC(Engine *engine)
     std::printf("   against the full-count reference: in motion %u px differ (worst %.1f/255), "
                 "at rest %u px (worst %.1f/255)\n",
                 movedPixels, movedWorst, restedPixels, restedWorst);
-    CHECK(movedPixels > 200u,
+    // THE GUARD THAT THIS CASE IS MEASURING SOMETHING, re-anchored with its reason
+    // (PHOTON_SPEC §7 E2 round 2). The REFERENCE moved: the at-rest re-injection
+    // now runs two sweeps over a cascade chain, because a chain's radiance is a
+    // fixed point over coupled volumes and one sweep is one Jacobi iteration from
+    // whatever the volumes held — so the at-rest picture is the full solve EXACTLY
+    // rather than nearly. The in-motion picture is untouched; what changed is what
+    // it is being held against, and the gap it opens measures 155 px here where
+    // the old reference gave over 200. The threshold is the guard's floor, not a
+    // budget: it exists so that a case which accidentally compared a picture with
+    // itself could not pass.
+    CHECK(movedPixels > 100u,
           "the in-motion injection really is a cheaper picture (the economy is measurable)");
-    CHECK(restedWorst <= 1.0f,
-          "and the at-rest injection is the full-count picture again, within 1/255");
+    // ...AND THE AT-REST ONE IS THE FULL-COUNT PICTURE, now BIT FOR BIT rather
+    // than within 1/255 — the second sweep is what made that true, and asserting
+    // the stronger thing is the point of having measured it.
+    CHECK(restedPixels == 0u && restedWorst == 0.0f,
+          "and the at-rest injection IS the full-count picture, pixel for pixel");
 
     engine->destroyView(v);
     engine->destroyScene(s);
