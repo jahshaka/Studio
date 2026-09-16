@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include "services/import/importbatchrunner.h"
 #include "services/import/importtypes.h"
 #include "services/assetstorepaths.h"
+#include "services/meshbakestore.h"
 #include "services/projectassets.h"
 #include "services/rigsignature.h"
 #include "services/sceneeditservice.h"
@@ -66,9 +67,6 @@ AvatarApi::AvatarApi(ScriptHost &host, avatar::AvatarPreviewModel *model, QObjec
 QVector<VerbInfo> AvatarApi::verbs() const
 {
     return {
-        { "setCharacterHeight", "avatar.setCharacterHeight(metres) -> {height, sourceHeight, normalized, normalizeFactor, ...}",
-          "Scales the loaded preview subject so it measures `metres` tall, overriding the automatic normalization the load applied. A value of 0 (or negative) RESETS to automatic — the rule is re-run against the height the FILE imported at, not against the size a previous override left, so resetting a 2.4 m override on a 17.25 m file really does return it to 1.75 m (and a file that was plausible to begin with returns to its authored size). This is the escape hatch for a character that really is 2.4 m of ogre, and for a package the automatic rule cannot judge. Scales the SUBJECT — the rig, the mesh and every clip that plays on it move together — never the room. Returns the same map avatar.preview does.",
-          Needs::Document },
         { "loadAnimation", "avatar.loadAnimation(pathOrAssetGuid, {name}) -> {file, asset, name, added, clips:[...], match:{channels, boneChannels, matched}}",
           "Loads a SEPARATE animation file onto the character in the preview and appends its clips "
           "— the Mixamo workflow (one character download, then one file per animation). Accepts "
@@ -98,7 +96,7 @@ QVector<VerbInfo> AvatarApi::verbs() const
         { "clearPreview", "avatar.clearPreview() -> bool",
           "Removes the previewed model and deletes its scratch extract dir.",
           Needs::Document },
-        { "preview", "avatar.preview() -> {name, file, bones, meshes, vertices, influences, height, sourceHeight, normalized, normalizeFactor, roomScale, ceilingHeight, clips, activeClip, time, duration, playing, looping, meshVisible, skeletonVisible, rigVisible, rigPoints} | undefined",
+        { "preview", "avatar.preview() -> {name, file, bones, meshes, vertices, influences, height, roomScale, ceilingHeight, clips, activeClip, time, duration, playing, looping, meshVisible, skeletonVisible, rigVisible, rigPoints} | undefined",
           "Everything the page shows about the loaded model, including transport and toggle state. Undefined (falsy) when nothing is loaded.",
           Needs::Document },
         { "setMeshVisible", "avatar.setMeshVisible(on) -> bool",
@@ -164,7 +162,7 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "avatar verb that touches the editor scene rather than the module's own preview. "
           "Undoable.",
           Needs::Document },
-        { "spawn", "avatar.spawn(assetGuid, {position?, parent?, clips?, locomotionAsset?, height?, normalize?}) -> nodeId",
+        { "spawn", "avatar.spawn(assetGuid, {position?, parent?, clips?, locomotionAsset?}) -> nodeId",
           "Instantiates an OBJECT asset from the open project as a playable AVATAR "
           "(AVATAR_LOCOMOTION_SPEC §6): the same instantiation assets.addToScene does, plus the "
           "movement component on the wrapper node with its capsule fitted (in WORLD metres) to "
@@ -179,14 +177,12 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "Spawning DURING play registers the avatar with the running physics world on the spot "
           "rather than refusing (spec R6), so a scripted spawn mid-play walks immediately. "
           "HEIGHT: a character arrives at the size its IMPORT SETTINGS baked into the asset "
-          "(SPECS/IMPORT_DIALOG_SPEC.md) and NOTHING here second-guesses it — the automatic "
-          "\"outside 0.5..3.0 m, scale to 1.75 m\" rule is retired, because a model's size is a "
-          "decision a person makes once, at import, looking at it. `height` still sets an exact "
-          "height in metres, applied on top of the imported size before the capsule is fitted; the "
-          "result is on the node's own scale and is SERIALIZED, so reopening the scene does not "
-          "scale again, and avatar.movement reports what happened. `normalize` is accepted and "
-          "IGNORED (there is no automatic rule left to switch off). To change how big a model is "
-          "for every future placement, reimport it: assets.reimport(guid, {scale: ...}). "
+          "(SPECS/IMPORT_DIALOG_SPEC.md) and NOTHING here changes it — every placement of a model "
+          "is at scale 1, whichever route placed it. The old per-spawn `height` and `normalize` "
+          "options are RETIRED and are REFUSED rather than ignored, because a caller that passes "
+          "one believes it did something: a model's size is a decision a person makes once, at "
+          "import, looking at it. To change how big a model is — for every placement of it at "
+          "once — reimport it: assets.reimport(guid, {scale: ...}). "
           "The knobs afterwards are avatar.movement / avatar.setMovement. Undoable.",
           Needs::Document },
         { "loadClip", "avatar.loadClip(nodeId, pathOrAssetGuid, {name?}) -> {asset, file, node, added, clips:[name], match:{channels, boneChannels, matched}}",
@@ -208,14 +204,13 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "glb, gltf, obj, ply, stl) — a mocap .bvh has no importer, so it cannot become an "
           "asset and is the Avatar page's preview-only path (avatar.loadAnimation). Undoable.",
           Needs::Document },
-        { "movement", "avatar.movement(nodeId) -> {walkSpeed, runSpeed, ..., capsuleAuto, capsuleRadius, capsuleHeight, characterHeight, normalized, normalizeFactor, sourceHeight}",
+        { "movement", "avatar.movement(nodeId) -> {walkSpeed, runSpeed, ..., capsuleAuto, capsuleRadius, capsuleHeight, characterHeight}",
           "The movement knobs on an avatar node (spec §6.2), plus what the character MEASURES: "
-          "`characterHeight` is its geometry's world height in metres right now, and "
-          "`normalized`/`normalizeFactor`/`sourceHeight` report the height normalization "
-          "avatar.spawn applied (see spawn). Those three are SESSION state: a character spawned "
-          "in this session reports what its spawn did, and one that came off disk reports "
-          "normalized:false with its live height — correctly, because the scale it was given is "
-          "already in the saved transform and nothing re-scales it on open. Empty (falsy) for a "
+          "`characterHeight` is its geometry's world height in metres right now. There is nothing "
+          "else to report — a character's size is an IMPORT setting baked into the asset and "
+          "every placement is at scale 1 (SPECS/IMPORT_DIALOG_SPEC.md §12.3), so the old "
+          "`normalized`/`normalizeFactor`/`sourceHeight` keys are gone with the spawn-time rule "
+          "that produced them. Empty (falsy) for a "
           "node that carries no avatar component — which is every node but an avatar wrapper.",
           Needs::Document },
         { "setMovement", "avatar.setMovement(nodeId, {...}) -> object",
@@ -377,8 +372,8 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "being prepared for the preview; `result` carries what the synchronous verb would have "
           "returned once it is done (running false). Idle before the first async call. "
           "WHILE IT REPORTS running THE MODULE REFUSES DEFINITION EDITS (loadAnimation, "
-          "removeClip, setClipOptions, setDefaultClip, setClip/playClip by name, "
-          "setCharacterHeight) and refuses an open during an IMPORT: between an async open's "
+          "removeClip, setClipOptions, setDefaultClip, setClip/playClip by name) "
+          "and refuses an open during an IMPORT: between an async open's "
           "return and its parse landing the definition is the new avatar's while the preview is "
           "still the old character, so an edit made in that window would be matched against the "
           "wrong skeleton and stored in the wrong avatar's file. An open during a preview parse "
@@ -485,15 +480,12 @@ QVariantMap AvatarApi::previewState() const
     out["vertices"] = mModel->vertexCount();
     out["influences"] = mModel->influencesPerVertex();
     out["hasSkeleton"] = mModel->hasSkeleton();
-    // The height contract (the FBX unit-scale fix, 2026-09-08). `height` is
-    // what the subject measures NOW, in metres; `sourceHeight` is what the file
-    // imported as; `normalized` says the two differ because the module scaled
-    // it, and `normalizeFactor` is by how much.
-    const avatar::HeightNormalization &norm = mModel->normalization();
-    out["height"] = double(norm.height);
-    out["sourceHeight"] = double(norm.sourceHeight);
-    out["normalized"] = norm.applied;
-    out["normalizeFactor"] = double(norm.factor);
+    // THE HEIGHT, MEASURED. Nothing in this module scales a character any more
+    // (SPECS/IMPORT_DIALOG_SPEC.md §12.3), so there is one number and it is
+    // what the asset's import settings baked: `sourceHeight`, `normalized` and
+    // `normalizeFactor` are gone with the rule that produced them, rather than
+    // left reporting a constant.
+    out["height"] = double(mModel->characterHeight());
     // The room the subject stands in, so "does the head clear the ceiling" is
     // a scriptable assertion and not a screenshot (owner report 2026-09-08).
     out["roomScale"] = double(mModel->roomScale());
@@ -518,6 +510,35 @@ QVariantMap AvatarApi::previewState() const
     return out;
 }
 
+// THE RIG'S IMPORT RECIPE, from a character NODE (IMPORT-1). A scene node
+// records the MESH MEMBER guid it was built from (SceneReader::createMesh
+// writes it to MeshNode::meshPath), and that guid resolves to the store object
+// the geometry came from — which is exactly what MeshBakeStore's lookup keys
+// on. Identity for a character that is not a library asset (a procedural rig, a
+// fixture loaded from a loose path), which is the right answer for one.
+iris::ImportTransform AvatarApi::rigImportTransform(const iris::SceneNodePtr &character) const
+{
+    if (!character) return iris::ImportTransform();
+    QString meshGuid;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        if (!n || !meshGuid.isEmpty()) return;
+        if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            const QString candidate = n.staticCast<iris::MeshNode>()->meshPath;
+            // A ":"-prefixed path is a built-in primitive, not a library row.
+            if (!candidate.isEmpty() && !candidate.startsWith(QLatin1Char(':')))
+                meshGuid = candidate;
+        }
+        for (const iris::SceneNodePtr &child : n->children()) walk(child);
+    };
+    walk(character);
+    if (meshGuid.isEmpty()) return iris::ImportTransform();
+
+    const QString path = AssetCas::resolveSource(QSqlDatabase::database(),
+                                                 AssetStorePaths::root(), meshGuid);
+    if (path.isEmpty()) return iris::ImportTransform();
+    return MeshBakeStore::transformFor(path, meshGuid);
+}
+
 bool AvatarApi::record(const QString &message)
 {
     mLastError = message;
@@ -525,21 +546,6 @@ bool AvatarApi::record(const QString &message)
     // pending JS exception behind for the next script to trip over.
     if (mSilent) return false;
     return fail(message);
-}
-
-QVariant AvatarApi::setCharacterHeight(double metres)
-{
-    if (!mModel) { fail("avatar: not available in this session"); return QVariant(); }
-    // The subject is about to be replaced (see requireIdle): scaling the one
-    // on screen would be scaling the wrong character.
-    if (!requireIdle("avatar.setCharacterHeight")) return QVariant();
-    QString error;
-    if (!mModel->setCharacterHeight(float(metres), &error)) {
-        record(QStringLiteral("avatar.setCharacterHeight: %1").arg(error));
-        return QVariant();
-    }
-    notifySubjectChanged();
-    return previewState();
 }
 
 QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariantMap &options)
@@ -1047,27 +1053,20 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     // silently-ignored `height: "tall"` or `normalize: "false"` (QVariant's
     // toBool says TRUE for any non-empty string) would be exactly the kind of
     // quiet wrong answer this whole fix is about.
-    double explicitHeight = 0.0;
-    if (options.contains(QStringLiteral("height"))) {
-        bool ok = false;
-        explicitHeight = scriptmod::normalizeJs(options.value(QStringLiteral("height")))
-                             .toDouble(&ok);
-        if (!ok || !(explicitHeight > 0.0)) {
-            record(QStringLiteral("avatar.spawn: 'height' must be a positive number of metres"));
-            return QString();
-        }
-    }
-    // `normalize` survives as an ACCEPTED, IGNORED option: there is no
-    // automatic height rule left to switch off (SPECS/IMPORT_DIALOG_SPEC.md
-    // §6), and refusing a key every existing script passes would break them for
-    // nothing. It is still type-checked, because a silently-wrong type is what
-    // the surrounding note is about.
-    if (options.contains(QStringLiteral("normalize"))) {
-        const QVariant raw = scriptmod::normalizeJs(options.value(QStringLiteral("normalize")));
-        if (raw.typeId() != QMetaType::Bool) {
-            record(QStringLiteral("avatar.spawn: 'normalize' must be true or false"));
-            return QString();
-        }
+    // HEIGHT AND NORMALIZE ARE REFUSED, LOUDLY (SPECS/IMPORT_DIALOG_SPEC.md
+    // §12.3, the owner's strict pick). A character's size is an IMPORT setting,
+    // decided once by a person looking at the model and baked into the asset,
+    // so every placement of it is at scale 1 and a per-spawn override would put
+    // two answers in the world again. Silently accepting either key would be
+    // worse than refusing it: the caller would believe it did something.
+    for (const char *retired : { "height", "normalize" }) {
+        if (!options.contains(QLatin1String(retired))) continue;
+        record(QStringLiteral("avatar.spawn: '%1' is retired — a character's size is an IMPORT "
+                              "setting, baked into the asset, and every placement is at scale 1. "
+                              "Change it for every placement at once with "
+                              "assets.reimport(guid, {scale: ...}).")
+                   .arg(QLatin1String(retired)));
+        return QString();
     }
 
     // THE TWO SPAWN PATHS (AVATAR_ASSET_SPEC §5.4 / D10).
@@ -1138,20 +1137,10 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     // `parent` option cannot silently teleport the character.
     if (parent) parent->addChild(node);
 
-    // AN EXPLICIT HEIGHT ONLY, before the capsule is fitted (the fit measures
-    // the geometry, so it has to measure the FINAL geometry). The AUTOMATIC
-    // rule is retired with the fit-to-size policy
-    // (SPECS/IMPORT_DIALOG_SPEC.md §6): a character's size is decided at
-    // import, by a person, and baked into the asset, so every placement route —
-    // drag-drop, assets.addToScene, this verb — places it at scale 1 and agrees
-    // by construction. A `height` asked for by name is the user's own decision
-    // and still applies, on the character's own node, serialized with it.
-    avatar::HeightNormalization norm;
-    if (explicitHeight > 0.0)
-        norm = avatar::applyCharacterHeight(node, float(explicitHeight));
-    else
-        norm.sourceHeight = norm.height = avatar::measureCharacterHeight(node);
-    mNormalized.insert(node->getGUID(), norm);
+    // NOTHING SCALES THE CHARACTER HERE (§12.3). Its size came out of the
+    // import and every placement route — drag-drop, assets.addToScene, this
+    // verb — puts it in the scene at scale 1, so they agree by construction and
+    // the capsule below measures the only geometry there is.
 
     // The COMPONENT goes on the wrapper the import produced — the node the
     // movement writes a transform to — and the SOCKETS go on the rigged mesh
@@ -1451,8 +1440,14 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     // the file's UNIT FACTOR still applies, because a clip's translation keys
     // are in the file's units and the character was parsed with it
     // (ImportFlags::ClipNamesOnly via GraphicsHelper::loadAnimationsFromClipFile, the FBX unit-scale fix).
+    // …AND WITH THE RIG'S OWN UNIFORM FACTOR (IMPORT-1, IMPORT_DIALOG_SPEC §10):
+    // the character's import settings are baked into its geometry, so a clip
+    // read at its own file's scale would drive a rescaled rig with the wrong
+    // offsets. keysOnly() carries the factor and not the rotation or origin —
+    // those transform the character's ROOT NODE and a clip has no geometry.
     QString readError;
-    const auto anims = iris::GraphicsHelper::loadAnimationsFromClipFile(absolutePath, &readError);
+    const auto anims = iris::GraphicsHelper::loadAnimationsFromClipFile(
+        absolutePath, &readError, rigImportTransform(character).keysOnly());
     if (!readError.isEmpty()) {
         record(QStringLiteral("%1: could not read the clip file (%2)").arg(v, readError));
         return false;
@@ -1679,16 +1674,10 @@ QVariantMap AvatarApi::movement(const QString &nodeId)
     }
     if (!node->hasAvatarComponent()) return out;   // not an avatar: empty, not an error
     out = paramsToJs(node->avatar()->params());
-    // What the character MEASURES, and what normalization did to it. The height
-    // is read live (it is a property of the node, not of the spawn); the
-    // normalization record is session state, so a reopened scene reports the
-    // honest "not normalized in this session, and here is how tall it is".
-    const float live = avatar::measureCharacterHeight(node);
-    const avatar::HeightNormalization norm = mNormalized.value(nodeId);
-    out["characterHeight"] = double(live);
-    out["normalized"] = norm.applied;
-    out["normalizeFactor"] = double(norm.factor);
-    out["sourceHeight"] = double(norm.applied ? norm.sourceHeight : live);
+    // What the character MEASURES, read live — it is a property of the node,
+    // and nothing scales it at spawn any more (§12.3), so there is nothing
+    // else to report.
+    out["characterHeight"] = double(avatar::measureCharacterHeight(node));
     return out;
 }
 
@@ -2611,17 +2600,20 @@ void AvatarApi::finishImport(bool cancelled)
     // AND OPENS IT (§4 D7-A) — the definition now, the preview on the worker:
     // the second half of the freeze was this open re-parsing the model.
     QString rowName;
-    const QString modelPath = openDefinition(avatarGuid, mPendingImport.scope, &rowName);
+    QString modelGuid;
+    const QString modelPath =
+        openDefinition(avatarGuid, mPendingImport.scope, &rowName, &modelGuid);
     mJob.result.insert(QStringLiteral("open"), asset());
     if (modelPath.isEmpty()) {
         endJob(false, QString());
         return;
     }
     mJob.kind = QStringLiteral("open");
-    startPreviewLoad(modelPath, rowName);
+    startPreviewLoad(modelPath, rowName, modelGuid);
 }
 
-void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowName)
+void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowName,
+                                 const QString &modelGuid)
 {
     mJob.running = true;
     mJob.stage = QStringLiteral("preview");
@@ -2668,8 +2660,13 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
         }
         endJob(false, error);
     });
-    watcher->setFuture(QtConcurrent::run([modelPath, rowName]() {
-        return avatar::AvatarPreviewModel::prepareSubject(modelPath, rowName);
+    // The character asset's import recipe, resolved HERE on the UI thread: the
+    // lookup reads the catalog and QSqlDatabase connections are per-thread, so
+    // the worker gets a plain value (the same split the mesh prewarm uses).
+    // Without it the page would preview a different size from the scene.
+    const iris::ImportTransform xf = MeshBakeStore::transformFor(modelPath, modelGuid);
+    watcher->setFuture(QtConcurrent::run([modelPath, rowName, xf]() {
+        return avatar::AvatarPreviewModel::prepareSubject(modelPath, rowName, xf);
     }));
 }
 
@@ -2768,7 +2765,7 @@ void AvatarApi::detachModel()
 // becomes the module's open asset, and the model file the preview will need is
 // resolved. Returns that path — empty when there is nothing to preview.
 QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope,
-                                  QString *rowNameOut)
+                                  QString *rowNameOut, QString *modelGuidOut)
 {
     // NOTHING UNSAVED IS EVER DROPPED (owner 2026-09-13): definition edits are
     // written through, and a coalesced one still in its window is FLUSHED here
@@ -2795,6 +2792,10 @@ QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope
 
     if (rowNameOut)
         *rowNameOut = loaded.definition.name.isEmpty() ? loaded.name : loaded.definition.name;
+    // The MODEL ROW behind the preview (IMPORT-1): its import settings are what
+    // the parse below has to be given, or the page shows a different size from
+    // the scene.
+    if (modelGuidOut) *modelGuidOut = loaded.definition.modelAsset;
     if (!mModel) return QString();
 
     // The PREVIEW follows the definition: the module's centre panel shows the
@@ -2852,7 +2853,8 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
     const bool supersededParse = mJob.running;
 
     QString rowName;
-    const QString modelPath = openDefinition(guid, scope, &rowName);
+    QString modelGuid;
+    const QString modelPath = openDefinition(guid, scope, &rowName, &modelGuid);
     if (!mOpen.isOpen() || mOpen.guid != guid) return out;   // openDefinition recorded why
 
     if (modelPath.isEmpty()) {
@@ -2872,7 +2874,7 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
         mJob.file = rowName;
         mJob.result = asset();
         emit busyStarted(QStringLiteral("Loading %1").arg(rowName), false);
-        startPreviewLoad(modelPath, rowName);
+        startPreviewLoad(modelPath, rowName, modelGuid);
         notifyChanged();
         return asset();
     }
@@ -2881,7 +2883,7 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
     // THE ROW'S NAME, not the file's: a store object is named after its
     // sha256, so the subject (and every junk-named clip in it) would otherwise
     // be called "c826b4bf…".
-    if (!mModel->load(modelPath, &loadError, rowName))
+    if (!mModel->load(modelPath, &loadError, rowName, modelGuid))
         record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
                               "previewed: %2").arg(rowName, loadError));
     notifySubjectChanged();

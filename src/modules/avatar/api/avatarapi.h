@@ -35,7 +35,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 #include "scripting/apimodule.h"
 
-#include "modules/avatar/avatarpreviewmodel.h"   // HeightNormalization (a member)
+#include "modules/avatar/avatarpreviewmodel.h"   // the preview model (a member)
 #include "irisgl/import/importsettings.h"
 #include "services/avatarassets.h"                // the open-asset scope + definition
 
@@ -74,7 +74,6 @@ public:
 
     /// Explicit height override for the preview subject (metres); <= 0 re-runs
     /// the automatic rule. Returns the same map `preview()` does.
-    Q_INVOKABLE QVariant setCharacterHeight(double metres);
     Q_INVOKABLE QVariant loadAnimation(const QString &pathOrAssetGuid,
                                        const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool clearPreview();
@@ -286,8 +285,13 @@ private:
     void finishImport(bool cancelled);
     /// The definition half of `open` (cheap, UI thread). Fills mOpen and
     /// returns the preview's model path, empty when there is nothing to show.
-    QString openDefinition(const QString &guid, AvatarAssets::Scope scope, QString *rowNameOut);
-    void startPreviewLoad(const QString &modelPath, const QString &rowName);
+    /// `modelGuidOut` (optional) receives the MODEL ROW the definition names —
+    /// the row whose import settings the preview parse must be given, or the
+    /// page shows a different size from the scene (IMPORT-1).
+    QString openDefinition(const QString &guid, AvatarAssets::Scope scope, QString *rowNameOut,
+                           QString *modelGuidOut = nullptr);
+    void startPreviewLoad(const QString &modelPath, const QString &rowName,
+                          const QString &modelGuid = QString());
     void endJob(bool cancelled, const QString &error, const QVariantMap &result = QVariantMap());
 
     /// loadClip's halves, shared with spawn's `clips` option.
@@ -315,6 +319,11 @@ private:
     void notifySubjectChanged();
     /// fail(), plus a copy of the message the widgets can read back.
     bool record(const QString &message);
+
+    /// The RIG's import recipe, from a character node (IMPORT-1): the factor a
+    /// clip file loaded against it has to be read with. Identity for a
+    /// character that is not a library asset.
+    iris::ImportTransform rigImportTransform(const iris::SceneNodePtr &character) const;
 
     /// SHELL-DRIVEN entry points do not throw. `ApiModule::fail` calls
     /// `QJSEngine::throwError`, which OUTSIDE a script evaluation leaves a
@@ -386,7 +395,6 @@ private:
     /// What avatar.spawn's height normalization did, per spawned node guid.
     /// SESSION state on purpose: the scale itself lives on the node and is
     /// serialized, so this is only the story of how it got there.
-    QHash<QString, avatar::HeightNormalization> mNormalized;
 
     avatar::AvatarPreviewModel *mModel = nullptr;
     SnapshotFn mSnapshot;

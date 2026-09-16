@@ -181,12 +181,35 @@ QJsonObject AssetMetadata::forModelScene(const iris::ModelSceneInfo &scene, cons
     return meta;
 }
 
-QJsonObject AssetMetadata::forModelFile(const QString &filePath)
+namespace
+{
+AssetMetadata::ImportTransformResolver sImportTransformResolver;
+}   // namespace
+
+void AssetMetadata::setImportTransformResolver(ImportTransformResolver resolver)
+{
+    sImportTransformResolver = std::move(resolver);
+}
+
+iris::ImportTransform AssetMetadata::importTransformFor(const QString &sourcePath,
+                                                        const QString &assetGuid)
+{
+    if (!sImportTransformResolver) return iris::ImportTransform();
+    return sImportTransformResolver(sourcePath, assetGuid);
+}
+
+QJsonObject AssetMetadata::forModelFile(const QString &filePath, const QString &assetGuid)
 {
     // THE canonical preset (ASSET_PIPELINE_SPEC §3.2.2), inside IrisGL:
     // metadata counts must match the geometry import and every load produce —
     // a third flag set here used to yield vertex/index counts matching neither.
-    const iris::ModelSceneInfo scene = iris::ModelSceneInfo::read(filePath);
+    //
+    // …AND THE ASSET'S OWN IMPORT RECIPE (IMPORT-1, the second read's F7): the
+    // `extent` this records is what the asset MEASURES, so a backfill that
+    // parsed with identity would report the file's authored size for an asset
+    // the import scaled — and that number is what the Assets page shows.
+    const iris::ModelSceneInfo scene =
+        iris::ModelSceneInfo::read(filePath, importTransformFor(filePath, assetGuid));
     if (!scene.parsed) return forGenericFile(filePath);   // still format/size, never nothing
     return forModelScene(scene, filePath);
 }
@@ -327,11 +350,15 @@ QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFo
     const QDir dir(storeFolder);
     if (!dir.exists()) return QJsonObject();
 
+    // The legacy per-guid view names its folder after the asset, which is how
+    // a model described from it still gets its own import recipe (F7).
+    const QString guid = QFileInfo(storeFolder).fileName();
+
     switch (static_cast<ModelTypes>(assetType)) {
     case ModelTypes::Object:
     case ModelTypes::Mesh: {
         const QString model = findByExtension(storeFolder, Constants::MODEL_EXTS);
-        if (!model.isEmpty()) return forModelFile(model);
+        if (!model.isEmpty()) return forModelFile(model, guid);
         break;
     }
     case ModelTypes::Texture: {
@@ -419,7 +446,7 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
         if (!source.isEmpty()) {
             switch (static_cast<ModelTypes>(record.type)) {
             case ModelTypes::Object:
-            case ModelTypes::Mesh: meta = forModelFile(source); break;
+            case ModelTypes::Mesh: meta = forModelFile(source, guid); break;
             case ModelTypes::Texture: meta = forImageFile(source); break;
             case ModelTypes::Music: meta = forAudioFile(source); break;
             case ModelTypes::Video: meta = forVideoFile(source); break;

@@ -13,6 +13,9 @@ For more information see the LICENSE file
 #define ASSETMETADATA_H
 
 #include <QJsonObject>
+#include <functional>
+
+#include "irisgl/import/importsettings.h"
 #include <QString>
 
 class Database;
@@ -65,7 +68,27 @@ public:
 
     // Backfill path: one canonical parse of the file (iris::ModelSceneInfo::read
     // — no GPU, no iris document).
-    static QJsonObject forModelFile(const QString &filePath);
+    /// `assetGuid` names the ROW, so the describe parses with that asset's own
+    /// import recipe — the recorded `extent` is the size the asset MEASURES,
+    /// not the size its file was authored at (IMPORT-1).
+    static QJsonObject forModelFile(const QString &filePath,
+                                    const QString &assetGuid = QString());
+
+    // ---- THE IMPORT RECIPE, as a seam (IMPORT-1) --------------------------
+    //
+    // A model's describe has to parse the file the way the ASSET was imported,
+    // or the `extent` it records is the file's authored size and not the size
+    // every placement has. The lookup lives in MeshBakeStore (it is a catalog
+    // query), and this service is linked on its own into a dozen small suites
+    // that have no catalog at all — so it is a HOOK rather than a call, set
+    // once by the app and left at identity everywhere else. Identity is exactly
+    // what those suites had before, and what a library with no import settings
+    // resolves to anyway.
+    using ImportTransformResolver =
+        std::function<iris::ImportTransform(const QString &sourcePath, const QString &assetGuid)>;
+    static void setImportTransformResolver(ImportTransformResolver resolver);
+    static iris::ImportTransform importTransformFor(const QString &sourcePath,
+                                                    const QString &assetGuid);
 
     static QJsonObject forImageFile(const QString &filePath);   // header-only decode
     static QJsonObject forAudioFile(const QString &filePath);   // RIFF parse for wav

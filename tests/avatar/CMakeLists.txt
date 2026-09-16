@@ -59,6 +59,9 @@ add_custom_target(beta_walk ALL DEPENDS "${JAHSHAKA_BETA_WALK_DAE}")
 # through it. Same set tests/assetmeta links.
 set(AVATAR_LOAD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarpreviewmodel.cpp
+    # IMPORT-1: the preview parses the character with the ASSET's import
+    # recipe, which MeshBakeStore resolves from the catalog.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarsockets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
