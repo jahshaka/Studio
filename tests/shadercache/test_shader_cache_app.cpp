@@ -186,13 +186,18 @@ int main(int argc, char **argv)
     const QJsonObject steady = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
     CHECK(rc == 0, "run 3 exited cleanly");
     // THE NUMBER, PRINTED, because "NOTHING AT ALL" with no count sends the next
-    // reader back to the logs to find out what three shaders they were. (Measured
-    // 2026-09-16: with Photon's cascade chain on at every tier this is 3, and they
-    // are `20/33/44LightVctBounceInject_cs` — COMPUTE permutations of the bounce
-    // injection, which the Hlms disk cache structurally cannot hold:
-    // `Ogre::HlmsTypes` has no compute member and `HlmsCompute` is reached through
-    // `getComputeHlms()`, outside the range this cache's save and load loops walk.
-    // Recorded in spikes/photon-e2/PROGRESS.md; the fix is a shader-cache lane's.)
+    // reader back to the logs to find out which shaders they were.
+    //
+    // It was 3 for the length of one lane (PHOTON-E2 → SHADERCACHE-3, 2026-09-16),
+    // and they were `20/33/44LightVctBounceInject_cs` — the 4-, 3- and 2-cascade
+    // permutations of the VCT bounce injection. NOT because compute shaders are
+    // uncacheable (eighteen of them come out of the microcode cache on every warm
+    // launch, the 1-cascade `13LightVctBounceInject_cs` among them) but because
+    // those three set `uses_array_bindings`, which made Ogre reflect their own
+    // SPIR-V to find their root layout, which upstream's microcode cache refused
+    // to hold on either end. ogre-patch 0063 stores the reflected bindings beside
+    // the SPIR-V and the number is 0 again. If it ever prints 3 once more, that
+    // patch is missing from the tree's engine — re-run build-ogre.sh.
     std::printf("   run 3: compiled %d, loaded %d\n", steady.value("compiledThisRun").toInt(),
                 steady.value("loadedThisRun").toInt());
     CHECK(steady.value("compiledThisRun").toInt() == 0, "run 3 compiled NOTHING AT ALL");
