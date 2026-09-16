@@ -56,6 +56,48 @@ static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec
     return node;
 }
 
+/// ONE FLAT QUAD WITH A CHOSEN NORMAL — the smallest thing that can be put in a
+/// voxel facing a direction of our choosing.
+static MeshData tiltedQuadMesh(float nx, float ny, float nz, float size)
+{
+    const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+    const float w[3] = { nx / len, ny / len, nz / len };
+    const float up[3] = { std::fabs(w[1]) < 0.9f ? 0.0f : 1.0f,
+                          std::fabs(w[1]) < 0.9f ? 1.0f : 0.0f, 0.0f };
+    float u[3] = { up[1] * w[2] - up[2] * w[1], up[2] * w[0] - up[0] * w[2],
+                   up[0] * w[1] - up[1] * w[0] };
+    const float ul = std::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    u[0] /= ul; u[1] /= ul; u[2] /= ul;
+    // v = w x u, so u x v = w and the winding below is counter-clockwise from +w.
+    const float v[3] = { w[1] * u[2] - w[2] * u[1], w[2] * u[0] - w[0] * u[2],
+                         w[0] * u[1] - w[1] * u[0] };
+    const float h = size * 0.5f;
+    const float sgn[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+    MeshData d;
+    for (int i = 0; i < 4; ++i) {
+        for (int c = 0; c < 3; ++c)
+            d.positions.push_back((u[c] * sgn[i][0] + v[c] * sgn[i][1]) * h);
+        d.normals.insert(d.normals.end(), { w[0], w[1], w[2] });
+    }
+    d.indices.insert(d.indices.end(), { 0u, 1u, 2u, 0u, 2u, 3u });
+    return d;
+}
+
+static NodeId addMesh(Scene *s, const MeshData &md, const Colour &albedo, const Vec3 &pos,
+                      const Vec3 &scale)
+{
+    const NodeId node = s->createNode();
+    const MeshId mesh = s->createMesh(md);
+    PbrParams p;
+    p.albedo = albedo;
+    p.metalness = 0.0f;
+    p.roughness = 0.9f;
+    const MaterialId mat = s->createPbrMaterial(p);
+    if (!node || !mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
+    s->setNodeTransform(node, pos, Quat(), scale);
+    return node;
+}
+
 /// Mean red and green of a centred block, so one texel of noise cannot move a
 /// number. The block is the same one the spike measured with.
 static void meanRG(const Image &img, float &r, float &g)
@@ -239,6 +281,144 @@ int main()
                       "(%.4f vs %.4f)", double(thicknesses[a]), double(rows[a].leakChain),
                       double(rows[a].leakSingle));
         CHECK(rows[a].leakChain <= rows[a].leakSingle * 1.15f + 0.002f, msg);
+    }
+
+    // =====================================================================
+    // THE FOLD'S SEAM — a curved SINGLE-SIDED surface is one surface
+    // (ogre-patch 0065; the review's F1)
+    // =====================================================================
+    //
+    // The voxelisation decides "this voxel holds surfaces facing opposite ways"
+    // from two sums: the raw one and a FOLDED one, folded into a half-space by
+    // the sign of the normal's largest component. The fold's seam runs along the
+    // six arcs where that largest component changes, and a smooth surface
+    // crosses those arcs everywhere — so "the two groups are both non-empty"
+    // calls a sphere's voxels two-sided, the injection takes abs(NdotL), and the
+    // sphere's FAR side is lit by a lamp that is behind it. That is the leak
+    // class, and no other suite sees it: this file's rooms and
+    // gi.cascade_determinism's plates are all axis-aligned, where the seam is
+    // never crossed.
+    //
+    // THE INSTRUMENT is the far side of the subject itself. One lamp, nothing
+    // else in the scene, ambient black, shadows on: the DIRECT term on the far
+    // side is zero whatever the voxels say (the pixel shader uses the mesh
+    // normal), so every photon the camera sees there came out of the voxel
+    // volume. A sphere's far side must stay dark; a plate thinner than a voxel
+    // IS two-sided and its far side must NOT — that is the pin's behaviour and
+    // the half of the test that stops the fix from being "never flag anything".
+    std::printf("\n== the fold's seam: a curved single-sided surface is ONE surface ==\n");
+    {
+        // A FIXED GRADE, or this measures the auto-exposure instead of the light:
+        // the scene is one lamp over a black void, so the 1x1 luminance history
+        // opens all the way up on the dark side and reads a black frame as white
+        // (measured: the sphere's unlit side came back at 1.0000 and its LIT side
+        // at 0.2609 before this was pinned). tonemapFixed is the same filmic
+        // curve with the metering taken out.
+        PostFxDesc fx = view->postFx();
+        fx.allowOffscreen = true;
+        fx.hdr = true;
+        fx.tonemapFixed = true;
+        fx.exposure = 0.0f;
+        view->setPostFx(fx);
+
+        // THE TWO SUBJECTS ARE THE SAME TWO QUADS, 2 mm APART — far less than a
+        // voxel, so both live in the same voxels — and they differ in ONE thing:
+        // the second quad's normal.
+        //
+        //   SEAM: normals (0.72, 0, -0.69) and (0.69, 0, -0.72). The first has
+        //     its largest component in x and is kept; the second has it in z,
+        //     negative, and is FOLDED. Two groups, six and a half degrees apart:
+        //     one surface, which the pin's 120-degree rule never flagged.
+        //   TWO-SIDED: normals (0.707, 0, -0.707) and its exact opposite. Two
+        //     groups, 180 degrees apart: two surfaces, which the pin DID flag,
+        //     and which must still be flagged or "fix the seam" could be
+        //     satisfied by never flagging anything.
+        //
+        // THE INSTRUMENT is the camera on the side both subjects' first quad
+        // faces, with the lamp BEHIND. The direct term there is zero for both
+        // (the pixel shader uses the mesh normal), so the difference between the
+        // bounce on and the bounce off is light that was injected into a voxel
+        // facing away from the lamp — which is the flag, and nothing else.
+        const float k = 0.70710678f;
+        const Vec3 frontEye(k * 3.4f, 0.0f, -k * 3.4f);
+        const Vec3 behind(-k * 3.0f, 0.0f, k * 3.0f), inFront(k * 3.0f, 0.0f, -k * 3.0f);
+        const auto measure = [&](bool seam, float &frontGi, float &frontLit) {
+            Scene *s = e->createScene(seam ? "seam-pair" : "twosided-pair");
+            view->setScene(s);
+            s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+            const float d = 0.002f;
+            addMesh(s, tiltedQuadMesh(0.72180f, 0.0f, -0.69207f, 3.0f), Colour(0.9f, 0.9f, 0.9f),
+                    Vec3(k * d, 0.0f, -k * d), Vec3(1, 1, 1));
+            if (seam)
+                addMesh(s, tiltedQuadMesh(0.69207f, 0.0f, -0.72180f, 3.0f),
+                        Colour(0.9f, 0.9f, 0.9f), Vec3(-k * d, 0.0f, k * d), Vec3(1, 1, 1));
+            else
+                addMesh(s, tiltedQuadMesh(-k, 0.0f, k, 3.0f), Colour(0.9f, 0.9f, 0.9f),
+                        Vec3(-k * d, 0.0f, k * d), Vec3(1, 1, 1));
+
+            const NodeId lamp = s->createNode();
+            LightDesc ld;
+            ld.type = LightType::Point;
+            ld.colour = Colour(1, 1, 1);
+            ld.intensity = 40.0f;
+            ld.range = 20.0f;
+            ld.castShadows = true;
+            const auto placeLamp = [&](const Vec3 &at) {
+                s->setNodeTransform(lamp, at, Quat(), Vec3(1, 1, 1));
+                s->setLight(lamp, ld);
+            };
+            const auto readFront = [&]() {
+                enginetest::testCameraLookAt(view, frontEye, Vec3(0, 0, 0));
+                render(e, 10);
+                Image img; view->readPixels(img);
+                float r = 0.0f, g = 0.0f; meanRG(img, r, g);
+                return g;
+            };
+            const auto setGi = [&](bool on) {
+                GiParams gi;
+                gi.mode = on ? GiMode::Vct : GiMode::Off;
+                gi.quality = GiQuality::High;
+                gi.ddgi = GiToggle::Off;     // the cone bounce, read directly
+                gi.updateBudget = 0;
+                gi.numBounces = 1;
+                if (!s->setGlobalIllumination(gi))
+                    std::printf("   engine error: %s\n", e->lastError().c_str());
+                render(e, 6);
+            };
+
+            placeLamp(behind);
+            setGi(false);
+            const float off = readFront();
+            setGi(true);
+            const float on = readFront();
+            frontGi = on - off;
+            // ...and the same camera with the lamp IN FRONT, so a subject that
+            // simply is not there cannot pass by reading zero twice.
+            placeLamp(inFront);
+            setGi(false);
+            frontLit = readFront();
+            std::printf("   %-9s lamp behind: GI off %.4f, GI on %.4f -> bounce %.4f | "
+                        "lamp in front: %.4f\n", seam ? "seam" : "two-sided", double(off),
+                        double(on), double(frontGi), double(frontLit));
+            e->destroyScene(s);
+        };
+
+        float seamFront = 0.0f, seamLit = 0.0f, twoFront = 0.0f, twoLit = 0.0f;
+        measure(true, seamFront, seamLit);
+        measure(false, twoFront, twoLit);
+        CHECK(seamLit > 0.05f && twoLit > 0.05f,
+              "both subjects are there and face the camera (the lamp in front lights them)");
+        char msg[256];
+        std::snprintf(msg, sizeof(msg),
+                      "A SINGLE-SIDED SURFACE THAT CROSSES THE FOLD'S SEAM IS NOT LIT FROM "
+                      "BEHIND: the seam pair's unlit side gains %.4f from the bounce against "
+                      "the genuinely two-sided pair's %.4f", double(seamFront), double(twoFront));
+        CHECK(seamFront < twoFront * 0.25f + 0.004f, msg);
+        std::snprintf(msg, sizeof(msg),
+                      "...and a genuinely two-sided pair still IS, which is the pin's answer "
+                      "and the half that stops the fix being \"never flag anything\" (%.4f)",
+                      double(twoFront));
+        CHECK(twoFront > 0.02f, msg);
     }
 
     view->setScene(nullptr);
