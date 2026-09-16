@@ -2003,7 +2003,7 @@ void AssetWidget::importAssetB()
 bool AssetWidget::importFiles(const QStringList &files)
 {
 	if (importRunner && importRunner->isRunning()) return false;
-	importAsset(files);
+	importAsset(files, false);   // no modal question on a scripted import
 	return true;
 }
 
@@ -2021,7 +2021,7 @@ bool AssetWidget::shutdownImports(int msTimeout)
 	return false;
 }
 
-void AssetWidget::importAsset(const QStringList &fileNames)
+void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettings)
 {
 	// ONE pipeline + reference-with-pin (phases 3+4): a project-panel drop
 	// is a library import through AssetImportService followed by a pin into
@@ -2069,8 +2069,9 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 	// asks, asked by the same shell code. Media never prompts; a skipped file
 	// drops out and the rest of the drop still imports.
 	QStringList modelFiles;
-	for (const ImportRequest &request : requests)
-		if (isModelImportPath(request.sourcePath)) modelFiles.append(request.sourcePath);
+	if (askImportSettings)
+		for (const ImportRequest &request : requests)
+			if (isModelImportPath(request.sourcePath)) modelFiles.append(request.sourcePath);
 	if (!modelFiles.isEmpty()) {
 		const QHash<QString, QJsonObject> records =
 		    ImportSettingsDialog::askForFiles(modelFiles, this);

@@ -718,7 +718,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Closes the macro opened by editor.beginBatch().",
           Needs::Document },
         { "importAssets", "editor.importAssets([paths]) -> bool",
-          "Starts the interactive THREADED import of the given files — the same ImportBatchRunner + progress dialog the project panel's Import button and drops use — and returns once the batch has started (it does not wait). assets.importFile is the synchronous, dialog-free verb.",
+          "Starts the interactive THREADED import of the given files — the same ImportBatchRunner + progress dialog the project panel's Import button and drops use — and returns once the batch has started (it does not wait). It does NOT open the import-settings dialog a person's drop gets (a script cannot answer a modal question): every file imports with the identity record. To import a model at a chosen scale, unit or orientation, pass them: assets.import(path, {scale, units, axes, ...}). assets.importFile is the synchronous, dialog-free verb.",
           Needs::Window },
     };
 }

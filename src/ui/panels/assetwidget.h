@@ -250,6 +250,13 @@ public:
     /// Public entry to the interactive threaded import (editor.importAssets
     /// verb; same path as the Import button and panel drops). Returns false
     /// while a batch is already running.
+    /// THE VERB'S ENTRY (editor.importAssets, through
+    /// MainWindow::startInteractiveImport): the same threaded batch and the
+    /// same progress dialog the panel's own gestures run, but WITHOUT the
+    /// import-settings dialog — a script cannot answer a modal question, and a
+    /// verb that stopped on one would hang the run and everything queued
+    /// behind it (found by import.shutdown, IMPORT-2). A script that wants
+    /// import settings passes them: assets.import(path, {...}).
     bool importFiles(const QStringList &files);
 
     /// Shutdown teardown: close the progress dialog, abort a running import
@@ -367,7 +374,10 @@ protected slots:
     void createSky();
     void createFolder();
     void importAssetB();
-    void importAsset(const QStringList &path);
+    /// `askImportSettings` opens the import dialog once per MODEL file first
+    /// (SPECS/IMPORT_DIALOG_SPEC.md §8). True for the panel's own gestures — a
+    /// drop, the Import Asset row — and false for the verb (above).
+    void importAsset(const QStringList &path, bool askImportSettings = true);
 
     void onThumbnailResult(const ThumbnailResult &result);
 
