@@ -2098,6 +2098,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.tlasBuilds   = quint64(rq.tlasBuilds);
         out.rayQuery.tlasRefits   = quint64(rq.tlasRefits);
         out.rayQuery.blasBuilds   = quint64(rq.blasBuilds);
+        out.rayQuery.reflect      = rq.reflect;
+        out.rayQuery.reflectRays  = rq.reflectRays;
+        out.rayQuery.reflectMs    = rq.reflectMs;
     }
     return out;
 }

@@ -648,6 +648,9 @@ public:
             quint64 tlasBuilds = 0;
             quint64 tlasRefits = 0;
             quint64 blasBuilds = 0;
+            bool    reflect = false;  ///< the reflect trace ran this frame (needs an SSR chain)
+            int     reflectRays = 0;  ///< rays the last reflect dispatch traced (its own resolution)
+            float   reflectMs = -1.0f;///< GPU ms of that dispatch; -1 until measured
         };
         RayQueryInfo rayQuery;
     };
