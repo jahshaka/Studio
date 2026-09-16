@@ -39,7 +39,6 @@ For more information see the LICENSE file
 #include "ui/dialogs/renameprojectdialog.h"
 #include "ui/dialogs/screenshotwidget.h"
 #include "ui/dialogs/softwareupdatedialog.h"
-#include "data/database/database.h"
 #include "scripting/modules/assetsapi.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -172,10 +171,18 @@ void MainWindow::applyDialogOptions(const QString &name, QWidget *widget,
     if (name != QLatin1String("importSettings") || !dialog) return;
 
     if (options.contains(QStringLiteral("settings"))) {
-        QString error;
-        const QJsonObject record =
+        // MERGED OVER WHAT THE DIALOG ALREADY HOLDS, key by key — the same rule
+        // assets.reimport follows, and for the same reason: {scale: 2} on its
+        // own is not a record. Parsed standalone it would RESET the units, the
+        // axes, the rotation, the origin and the clip choice the asset came in
+        // with, silently, on the way to changing one number.
+        QJsonObject merged = dialog->record();
+        const QJsonObject given =
             QJsonObject::fromVariantMap(options.value(QStringLiteral("settings")).toMap());
-        const iris::ImportSettings parsed = iris::ImportSettings::fromJson(record, &error);
+        for (auto it = given.constBegin(); it != given.constEnd(); ++it)
+            merged.insert(it.key(), it.value());
+        QString error;
+        const iris::ImportSettings parsed = iris::ImportSettings::fromJson(merged, &error);
         if (!error.isEmpty()) {
             if (extra) extra->insert(QStringLiteral("error"), error);
             return;
@@ -219,20 +226,19 @@ ImportSettingsDialog *MainWindow::openImportSettings(const QString &guid, QStrin
         return refuse(tr("There is no asset to reopen the import decision for."));
     ScriptHost &host = scriptEngine->scriptHost();
 
+    // THE VERB, THROUGH THE SHELL-CALLER CONVENTION (ApiModule::quietly): a
+    // refusal comes back as a string instead of waiting in the host's pending
+    // slot for a bridge that is never going to run.
     AssetsApi assets(host);
-    host.lastError.clear();
-    const QVariantMap record = assets.importSettings(guid);
-    const QString readError = host.lastError;
-    host.pendingError.clear();
+    const QVariantMap record = assets.quietly([&] { return assets.importSettings(guid); });
     if (record.isEmpty())
-        return refuse(readError.isEmpty() ? tr("This asset has no import record.") : readError);
-
-    const AssetRecord row = host.db ? host.db->fetchAsset(guid) : AssetRecord();
+        return refuse(assets.lastError().isEmpty() ? tr("This asset has no import record.")
+                                                   : assets.lastError());
 
     auto *dialog = new ImportSettingsDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose, true);
     dialog->setMode(ImportSettingsDialog::Mode::Reimport);
-    dialog->setSubject(row.name);
+    dialog->setSubject(record.value(QStringLiteral("name")).toString());
     dialog->setSettings(iris::ImportSettings::fromJson(
         QJsonObject::fromVariantMap(record.value(QStringLiteral("settings")).toMap())));
 
@@ -240,24 +246,22 @@ ImportSettingsDialog *MainWindow::openImportSettings(const QString &guid, QStrin
     // worker — the same pre-read an import does, so the units row, the clip
     // list and the extent preview mean the same thing in both modes. The store
     // names its objects by content hash, so the read carries the recorded
-    // display name's extension as its format hint.
-    QString sourceName;
+    // source file's extension as its format hint — both of them from the verb
+    // (`sourceName`), not from a reach past it into the database and the CAS.
     const QString source = AssetCas::resolveSource(QSqlDatabase::database(),
-                                                   AssetStorePaths::root(), guid, &sourceName);
+                                                   AssetStorePaths::root(), guid);
     if (!source.isEmpty() && QFileInfo::exists(source))
-        dialog->startPreRead(source, QFileInfo(sourceName.isEmpty() ? row.name : sourceName)
-                                         .suffix());
+        dialog->startPreRead(
+            source, QFileInfo(record.value(QStringLiteral("sourceName")).toString()).suffix());
 
     dialog->setCommitHandler([this, guid](const QJsonObject &settings, QString *error) {
         if (!scriptEngine) return false;
-        ScriptHost &h = scriptEngine->scriptHost();
-        AssetsApi api(h);
-        h.lastError.clear();
-        const QVariantMap result = api.reimport(guid, settings.toVariantMap());
-        h.pendingError.clear();
+        AssetsApi api(scriptEngine->scriptHost());
+        const QVariantMap result =
+            api.quietly([&] { return api.reimport(guid, settings.toVariantMap()); });
         if (result.isEmpty()) {
-            if (error) *error = h.lastError;
-            mDialogError = h.lastError;
+            if (error) *error = api.lastError();
+            mDialogError = api.lastError();
             return false;
         }
         emit assetReimported(guid);

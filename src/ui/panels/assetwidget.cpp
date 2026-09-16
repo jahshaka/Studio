@@ -2002,7 +2002,9 @@ void AssetWidget::importAssetB()
 
 bool AssetWidget::importFiles(const QStringList &files)
 {
-	if (importRunner && importRunner->isRunning()) return false;
+	// A QUESTION IS AN IMPORT (see importAsset): the verb answers "already
+	// importing" rather than starting a second batch behind the user's dialog.
+	if (mAsking || (importRunner && importRunner->isRunning())) return false;
 	importAsset(files, false);   // no modal question on a scripted import
 	return true;
 }
@@ -2043,20 +2045,14 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 
 	if (expanded.isEmpty()) return;
 
-	// THREADED (UI-freeze fix): the pipeline's heavy half runs on
-	// ImportBatchRunner's worker with one cancellable dialog for the whole
-	// drop; the pin + panel refresh land back here per file / at the end.
-	if (importRunner && importRunner->isRunning()) return;
+	// ONE IMPORT AT A TIME, AND AN OPEN QUESTION COUNTS AS ONE. `isRunning()` is
+	// false while the modal dialog below is up, so without mAsking a scripted
+	// editor.importAssets arriving during a user's dialog would replace the
+	// runner and start it — and the outer call would then setRequests on a
+	// RUNNING runner, connect every signal twice and start() again, which is a
+	// Q_ASSERT(!mRunning) abort in a Debug build.
+	if (mAsking || (importRunner && importRunner->isRunning())) return;
 
-	progressDialog->resetCancel();
-	progressDialog->setCancelVisible(true);
-	progressDialog->setRange(0, 0);
-	progressDialog->setValue(0);
-	progressDialog->setLabelText(tr("Preparing import…"));
-	progressDialog->setStageText(QString());
-	progressDialog->show();
-
-	importRunner = new ImportBatchRunner(db, project, this);
 	QVector<ImportRequest> requests;
 	for (const QString &fileName : expanded) {
 		ImportRequest request;
@@ -2065,16 +2061,19 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 	}
 
 	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per
-	// MODEL file before anything is read — the same question the Assets page
-	// asks, asked by the same shell code. Media never prompts; a skipped file
-	// drops out and the rest of the drop still imports.
+	// MODEL file BEFORE anything is read and before any progress dialog is up —
+	// a busy bar spinning under a question is a lie about what the app is
+	// doing. Media never prompts; a skipped file drops out and the rest of the
+	// drop still imports; "Skip the rest" drops the tail.
 	QStringList modelFiles;
 	if (askImportSettings)
 		for (const ImportRequest &request : requests)
 			if (isModelImportPath(request.sourcePath)) modelFiles.append(request.sourcePath);
 	if (!modelFiles.isEmpty()) {
+		mAsking = true;
 		const QHash<QString, QJsonObject> records =
 		    ImportSettingsDialog::askForFiles(modelFiles, this);
+		mAsking = false;
 		QVector<ImportRequest> kept;
 		for (ImportRequest request : requests) {
 			if (!isModelImportPath(request.sourcePath)) { kept.append(request); continue; }
@@ -2084,13 +2083,20 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 		}
 		requests = kept;
 	}
-	if (requests.isEmpty()) {          // every file was skipped
-		progressDialog->hide();
-		auto *runner = importRunner;
-		importRunner = nullptr;
-		if (runner) runner->deleteLater();
-		return;
-	}
+	if (requests.isEmpty()) return;          // every file was skipped
+
+	// THREADED (UI-freeze fix): the pipeline's heavy half runs on
+	// ImportBatchRunner's worker with one cancellable dialog for the whole
+	// drop; the pin + panel refresh land back here per file / at the end.
+	progressDialog->resetCancel();
+	progressDialog->setCancelVisible(true);
+	progressDialog->setRange(0, 0);
+	progressDialog->setValue(0);
+	progressDialog->setLabelText(tr("Preparing import…"));
+	progressDialog->setStageText(QString());
+	progressDialog->show();
+
+	importRunner = new ImportBatchRunner(db, project, this);
 	importRunner->setRequests(requests);
 
 	connect(progressDialog, &ProgressDialog::canceled,

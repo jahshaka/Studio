@@ -382,6 +382,12 @@ protected slots:
     void onThumbnailResult(const ThumbnailResult &result);
 
 private:
+    /// True while the import-settings dialog is up. It is part of the
+    /// one-import-at-a-time guard: ImportBatchRunner::isRunning() is false
+    /// while a modal question waits, and a second batch started behind it
+    /// aborts the Debug build (SPECS/IMPORT_DIALOG_SPEC.md §8).
+    bool mAsking = false;
+
     Ui::AssetWidget *ui;
     QPoint startPos;
 

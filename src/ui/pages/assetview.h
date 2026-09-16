@@ -350,6 +350,11 @@ private:
 	// looking at the model, and baked into the asset; the one button reopens
 	// that decision — the import-settings dialog in reimport mode, opened by
 	// the shell (§8) so its OK commits through the assets.reimport verb.
+	/// True while the import-settings dialog is up (SPECS/IMPORT_DIALOG_SPEC.md
+	/// §8): an open question is an import in progress, and a second one must
+	/// not start behind it.
+	bool mAsking = false;
+
 	QWidget *fitRow = nullptr;
 	QLabel *fitLabel = nullptr;
 	QPushButton *importSettingsButton = nullptr;

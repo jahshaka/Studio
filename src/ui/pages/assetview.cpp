@@ -1576,17 +1576,21 @@ void AssetView::importFiles(const QStringList &fileNames)
 	if (requests.isEmpty()) return;
 
 	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per
-	// MODEL file, before anything is read. Media never prompts. A file the
-	// user skipped drops out of the batch — the rest of the drop still
-	// imports. The shell owns the dialog; a page with no shell behind it (a
-	// test harness) imports with the identity record, which is exactly what
-	// happened before the dialog existed.
+	// MODEL file, before anything is read and before any progress dialog is
+	// up. Media never prompts. A file the user skipped drops out of the batch —
+	// the rest of the drop still imports, and "Skip the rest" drops the tail.
 	QStringList modelFiles;
 	for (const ImportRequest &request : requests)
 		if (isModelImportPath(request.sourcePath)) modelFiles.append(request.sourcePath);
 	if (!modelFiles.isEmpty()) {
+		// AN OPEN QUESTION IS AN IMPORT IN PROGRESS. Nothing else may start one
+		// while a modal dialog of ours is up — see AssetWidget::importAsset for
+		// the abort this guards against.
+		if (mAsking) return;
+		mAsking = true;
 		const QHash<QString, QJsonObject> records =
 		    ImportSettingsDialog::askForFiles(modelFiles, this);
+		mAsking = false;
 		QVector<ImportRequest> kept;
 		for (ImportRequest request : requests) {
 			if (!isModelImportPath(request.sourcePath)) { kept.append(request); continue; }
