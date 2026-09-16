@@ -604,6 +604,9 @@ public:
             /// add up to.
             QVector<int> lodLevels;
             qint64    voxelTriangles = 0;
+            /// How many compute dispatches that rebuild cost — the MATERIAL-COUNT
+            /// half of its bill (ogre-patch 0065; engine GiStatus::CascadeStatus).
+            qint64    voxelDispatches = 0;
         };
         QVector<CascadeInfo> cascades;
         /// Whole-chain rebuilds the teleport guards forced, and cascade
