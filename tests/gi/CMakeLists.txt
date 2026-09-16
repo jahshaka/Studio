@@ -607,6 +607,32 @@ add_test(NAME gi.cascade_bounce_bindings COMMAND test_gi_cascade_bounce_bindings
 set_tests_properties(gi.cascade_bounce_bindings PROPERTIES
     TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# THE CHAIN'S AT-REST INJECTION LANDS ON ITS FIXED POINT (LAMPREST-2). A
+# re-injection of a cascade chain is one Jacobi iteration of its coupled
+# radiance — each cascade reads the ones outside it and the volume it is
+# injecting into — so a tick that stops short leaves the state it started from in
+# the picture: measured at 4/255 in this room with two passes and at 0/255 with
+# three, the engine's shipped count. The suite is a HISTORY test (the same lamp,
+# the same pose, reached two ways) and it drives the engine's own
+# JAHSHAKA_GI_SWEEPS diagnostic to prove the count is what makes it pass.
+# RUN_SERIAL like every cascade suite.
+add_executable(test_gi_chain_converge test_gi_chain_converge.cpp)
+set_target_properties(test_gi_chain_converge PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_chain_converge PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_chain_converge PRIVATE JahshakaEngine)
+add_dependencies(test_gi_chain_converge JahshakaEngineMedia)
+add_test(NAME gi.chain_converge COMMAND test_gi_chain_converge
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.chain_converge PROPERTIES
+    TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # THE SAME SCENE VOXELISES TO THE SAME PICTURE (ogre-patches 0061 and 0062): a
 # cascade SCROLLED to a place renders what a cascade BUILT at it renders, two
 # builds of one scene agree, and the attach order does not decide the answer.

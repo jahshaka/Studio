@@ -617,6 +617,8 @@ public:
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;
+        /// Injection passes the last light tick spent over the chain (LAMPREST-2).
+        int     chainSweeps = 0;
         /// THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1) — what the
         /// renderer HOLDS, reported here because it is read beside the GI
         /// figures and by the same "what it achieved, not what was asked for"
