@@ -520,9 +520,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
         // written before the flag existed, and the default is the arm those
         // documents were authored against — there is nothing to migrate.
-        // TRI-STATE, and it must survive both spellings: the key is absent in
-        // every document written before the column existed, was a BOOL for the
-        // first day of P0's flag, and is an int (-1 auto / 0 / 1) now.
+        // THE KEY IS ABSENT in every document written before the column existed
+        // and was a BOOL for the first day of P0's flag; -1 was written for one
+        // afternoon by a tri-state that is gone (scene.h says why). All four
+        // spellings read here; only "absent" is left unresolved, and the block
+        // after worldMode is read resolves it through the tier.
         {
             const QJsonValue casc = sceneObj.value("giCascades");
             scene->giCascades = casc.isUndefined() || casc.isNull() ? -1

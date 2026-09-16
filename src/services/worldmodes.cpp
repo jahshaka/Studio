@@ -663,13 +663,7 @@ QVector<Row> buildRows()
                                 "scene larger than the ceiling is voxelised at metres per cell. "
                                 "Off is the right answer for one room that the camera stays inside; "
                                 "On is the right answer for everything else.");
-        // -1 (auto) is what a document written before this column carries, and
-        // the RESOLVED reading of it is the tier's own value — the same shape
-        // the irradiance-field row above uses.
-        r.get = [](const iris::ScenePtr &s) {
-            if (!s) return 0;
-            return s->giCascades < 0 ? photonCascades(photonTier(s)) : (s->giCascades > 0 ? 1 : 0);
-        };
+        r.get = [](const iris::ScenePtr &s) { return s && s->giCascades > 0 ? 1 : 0; };
         r.set = [](const iris::ScenePtr &s, int v) { if (s) s->giCascades = v ? 1 : 0; };
         out.append(r);
     }
@@ -998,7 +992,7 @@ void photonHave(const iris::ScenePtr &s, int have[kPhotonRowCount])
     have[2] = s->giDdgi > 0 ? 1 : 0;
     have[3] = qBound(1, s->giNumBounces, 4);
     have[4] = qBound(0, s->giProbeCaptureSize, 1024);
-    have[5] = s->giCascades < 0 ? photonCascades(photonTier(s)) : (s->giCascades > 0 ? 1 : 0);
+    have[5] = s->giCascades > 0 ? 1 : 0;
 }
 }   // namespace
 

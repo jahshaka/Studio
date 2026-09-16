@@ -2013,10 +2013,7 @@ QVariantMap WorldApi::get()
                              // tier row like the four above it, so -1 ("the tier
                              // decides", what a pre-column document carries)
                              // reads as the tier's own answer and never as off.
-                             { "cascades", scene->giCascades < 0
-                                               ? worldmodes::photonCascades(
-                                                     worldmodes::photonTier(scene)) > 0
-                                               : scene->giCascades > 0 },
+                             { "cascades", scene->giCascades > 0 },
                              { "cascadeInstanceCap", scene->giCascadeInstanceCap },
                              // PHOTON's quality tier (GI_UNIFIED_SPEC §2): the
                              // dial the three fields above resolve through.
