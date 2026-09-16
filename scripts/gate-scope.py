@@ -72,7 +72,7 @@ AREA_RULES = [
     (r"^src/services/import/", ["importer", "importasync", "assetdelete", "assetgc", "assetmeta",
                                 "assetmigrate", "assetpaths", "assets", "drawers", "thumbnails",
                                 "meshbake", "samples"], ["assets", "project"]),
-    (r"^src/services/(asset|projectassets|thumbnail|meshbake|audiopeaks|videoutils|rigsignature|animationfile|avatarassets|fitsize)",
+    (r"^src/services/(asset|projectassets|thumbnail|meshbake|audiopeaks|videoutils|rigsignature|animationfile|avatarassets|extentmeasure)",
      ["assetdelete", "assetgc", "assetmeta", "assetmigrate", "assetpaths", "assets", "drawers",
       "thumbnails", "importer", "importasync", "export", "avatar", "reopen", "samples"],
      ["assets", "project", "avatar"]),

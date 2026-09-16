@@ -75,12 +75,6 @@ public:
     Q_INVOKABLE QVariantMap reimport(const QString &guid,
                                      const QVariantMap &options = QVariantMap());
 
-private:
-    /// Swaps every MeshNode in the OPEN scene that was built from `meshGuid`
-    /// to the geometry at `sourcePath`'s current bake. Returns how many moved.
-    int refreshPlacedMeshes(const QString &meshGuid, const QString &sourcePath);
-
-public:
     Q_INVOKABLE QVariantMap checkConsistency(const QString &guid);
     Q_INVOKABLE QVariantMap verify(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap rebuildCatalog(const QString &dbPath, const QVariantMap &options = QVariantMap());

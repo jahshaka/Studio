@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assetcas.h"
+#include "services/meshbakestore.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimporters.h"
 #include "services/jahlog.h"
@@ -616,6 +617,16 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
                                                  static_cast<int>(ModelTypes::Mesh));
     out.meshGuid = meshGuid;
 
+    // ONE TRANSACTION over the whole commit (the second read's F4): unlinking
+    // the old bake, ingesting the new one under both rows and writing the
+    // record are one change, and a failure halfway used to leave an asset with
+    // NO bake and its old settings still recorded — which parses on every open
+    // and says the wrong thing about why. The object BYTES are not
+    // transactional (the same half-transactional story `commit` documents at
+    // length), but a bake object with no row naming it is exactly what
+    // assets.gc reaps, so the worst case is collectable rather than wrong.
+    DbTransaction tx(conn);
+
     // The previous bake, remembered before it is unlinked so a caller can say
     // what assets.gc will reap.
     {
@@ -668,6 +679,15 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
     props[QStringLiteral("import")] = importRecord;
     if (!db->updateAssetProperties(guid, QJsonDocument(props).toJson()))
         return fail(QStringLiteral("could not record the new settings on '%1'").arg(record.name));
+    if (!tx.commit())
+        return fail(QStringLiteral("could not commit the reimport of '%1'").arg(record.name));
+
+    // THE MEMO, dropped HERE and not by the caller (the second read's F5):
+    // MeshBakeStore's settings cache is keyed by (path, guid) and is never
+    // otherwise invalidated, so a caller that forgot this — lane 2's dialog
+    // calling the service directly — would serve the OLD transform for the
+    // rest of the session.
+    MeshBakeStore::clear();
 
     QString casError;
     AssetCas::writeSidecar(conn, root, guid, &casError);

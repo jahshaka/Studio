@@ -41,9 +41,25 @@ assert(proj.length > 10, "project.create");
 // SAME settings in an earlier run still references the same bake object. The
 // reimport section below asserts that a RETIRED bake becomes garbage, which is
 // only true when nothing else names it — so every import here carries a
-// run-unique ORIGIN SHIFT of well under a micron. It changes the settings hash
-// (and therefore the bake) and changes no measurement.
+// run-unique ORIGIN SHIFT of at most 100 micrometres — small enough that every
+// measurement below is unaffected at the 1 cm tolerances they use, large enough
+// to be exactly representable. It changes the settings hash, and therefore the
+// bake, and nothing else. Section 0 above imports with NO settings at all, so
+// the identity path is covered end to end too.
 var UNIQ = [0, 0, (Date.now() % 100000) / 1e9];
+
+// ---- 0. AN IDENTITY IMPORT, end to end ------------------------------------
+// Every row imported before the dialog carries no settings at all, and that is
+// by far the common case — so one import here passes NOTHING and is asserted to
+// key as identity and place as the file.
+var asIs = assets.import(PLAIN);
+var asIsRecord = assets.importSettings(asIs);
+assert(asIsRecord.settings.scale === 1 && asIsRecord.settings.units === "auto"
+       && asIsRecord.settings.skeleton === true && asIsRecord.settings.clips === true
+       && asIsRecord.settings.materials === "import",
+       "assets.import(path) with no options records the IDENTITY record");
+assert(near(assets.metadata(asIs).extent.y, 2.0),
+       "and it measures the file's authored 2 m (" + assets.metadata(asIs).extent.y + ")");
 
 // ---- 1. a plain import is the file, as authored ---------------------------
 var plain = assets.import(PLAIN, { translate: UNIQ });
@@ -119,6 +135,17 @@ assert(near(node.size(afterNode).height, 4.0), "a placement made after the reimp
 var sweep = assets.gc({ dryRun: true });
 var reaped = JSON.stringify(sweep).indexOf(again.previousBakeOid) >= 0;
 assert(reaped, "assets.gc's sweep names the retired bake as unreferenced");
+
+// ---- 3b. a TUNING switch is a different asset too -------------------------
+// The switches decide what is BUILT from the parse (§4.3) and they are in the
+// bake key, so changing one is a new bake — not a silently-reused old one.
+var tuned = assets.reimport(plain, { clips: false });
+assert(tuned.bakeOid !== tuned.previousBakeOid,
+       "assets.reimport({clips:false}) produces a DIFFERENT bake");
+assert(assets.importSettings(plain).settings.clips === false,
+       "and the record says the clips are off");
+assert(near(tuned.extent.y, 4.0),
+       "…while the geometry keeps the scale the earlier reimport set (" + tuned.extent.y + ")");
 
 // ---- 4. refusals and the retired verb -------------------------------------
 mustThrow(function () { assets.reimport("no-such-guid", {}); }, "an unknown guid is refused");

@@ -236,42 +236,33 @@ assert(refusedRetired, "avatar.loadPreview is GONE — there is no second way to
     assert(!!loadRig(RIG), "reload the glTF rig for the remaining checks");
 }
 
-// ---- HEIGHT: as imported, an explicit override, and the ceiling ----------
+// ---- HEIGHT: as imported, and NOBODY ELSE'S BUSINESS ---------------------
 // Owner report 2026-09-08: "Dreyar is massively huge, head touches the
 // ceiling". The FBX unit half is fixed at the importer; the "the package's
-// declaration is wrong" half is a decision a person makes at IMPORT and it is
-// baked into the asset (SPECS/IMPORT_DIALOG_SPEC.md §6) — so this module scales
-// NOTHING by itself any more, and a height asked for by name still works.
+// declaration is wrong" half is a decision a person makes at IMPORT, baked into
+// the asset (SPECS/IMPORT_DIALOG_SPEC.md §6/§12.3) — so this module scales
+// NOTHING, has no height verb left, and assets.reimport is how a size changes.
 {
     var here = avatar.preview();          // the 2 m glTF rig, reloaded above
     assert(Math.abs(here.height - 2.0) < 0.02,
            "the 2 m rig measures " + here.height.toFixed(3) + " m");
-    assert(here.normalized === false && Math.abs(here.normalizeFactor - 1) < 1e-6,
-           "and is left EXACTLY as authored");
+    assert(here.normalized === undefined && here.normalizeFactor === undefined
+           && here.sourceHeight === undefined,
+           "the retired normalization keys are GONE from avatar.preview, not left "
+           + "reporting a constant");
 
     var giant = loadRig(GIANT);
-    assert(Math.abs(giant.sourceHeight - 17.25) < 0.05,
-           "the giant fixture imports at " + giant.sourceHeight.toFixed(2) + " m (Dreyar's size)");
-    assert(giant.normalized === false && Math.abs(giant.height - 17.25) < 0.05,
-           "... and STAYS there — nothing guesses a character's size (" +
-           giant.height.toFixed(3) + " m, x" + giant.normalizeFactor.toFixed(4) + ")");
-
-    var tall = avatar.setCharacterHeight(2.4);
-    assert(Math.abs(tall.height - 2.4) < 0.02,
-           "avatar.setCharacterHeight(2.4) -> " + tall.height.toFixed(3) + " m");
-    assert(Math.abs(tall.sourceHeight - 17.25) < 0.05,
-           "... with the report still anchored to the file's height");
+    assert(Math.abs(giant.height - 17.25) < 0.05,
+           "the giant fixture loads at " + giant.height.toFixed(2) + " m and STAYS there");
     // THE OWNER'S ORACLE (the debug-runner's REPRO script): head vs ceiling.
-    // The room is rescaled to the SUBJECT, so it holds at any size the user
+    // The room is rescaled to the SUBJECT, so it holds at any size a person
     // chooses — which is the property that survives the retirement.
-    var sized = avatar.preview();
-    assert(sized.ceilingHeight > sized.height,
-           "head " + sized.height.toFixed(2) + " m clears the ceiling at " +
-           sized.ceilingHeight.toFixed(2) + " m");
+    assert(giant.ceilingHeight > giant.height,
+           "head " + giant.height.toFixed(2) + " m clears the ceiling at " +
+           giant.ceilingHeight.toFixed(2) + " m");
 
-    var back = avatar.setCharacterHeight(0);
-    assert(Math.abs(back.height - 17.25) < 0.05,
-           "avatar.setCharacterHeight(0) goes back to the IMPORTED size, not to a guess");
+    assert(typeof avatar.setCharacterHeight !== "function",
+           "avatar.setCharacterHeight is RETIRED — a size is an import setting");
 
     // The FBX half, through the real app: pivot_rig.fbx DECLARES metres
     // (UnitScaleFactor 100), so the unit fix leaves it at metre scale — a file
@@ -279,7 +270,7 @@ assert(refusedRetired, "avatar.loadPreview is GONE — there is no second way to
     var fbx = loadRig(PIVOT_FBX);
     assert(fbx.height > 0.5 && fbx.height < 3.0,
            "the metre-declared FBX imports at " + fbx.height.toFixed(3) + " m");
-    assert(fbx.normalized === false, "... so it is not normalized either");
+    assert(fbx.normalized === undefined, "... and nothing reports a normalization any more");
     assert(!!loadRig(RIG), "reload the glTF rig for the remaining checks");
 }
 
@@ -321,11 +312,13 @@ assert(knobs.orientRotationToMovement === true, "... orient-to-movement on");
 assert(knobs.capsuleAuto === true, "... and the capsule auto-fitted");
 assert(knobs.capsuleHeight > 0 && knobs.capsuleRadius > 0,
        "... to real dimensions: r=" + knobs.capsuleRadius + " h=" + knobs.capsuleHeight);
-// The height contract on the SCENE side: a plausible character spawns untouched.
+// The height contract on the SCENE side: a character spawns at the size it was
+// imported at, and there is nothing else to report.
 assert(Math.abs(knobs.characterHeight - 2.0) < 0.02,
        "... and avatar.movement reports the character's height: " + knobs.characterHeight);
-assert(knobs.normalized === false && Math.abs(knobs.normalizeFactor - 1) < 1e-6,
-       "... unnormalized, because 2 m is a plausible character");
+assert(knobs.normalized === undefined && knobs.normalizeFactor === undefined
+       && knobs.sourceHeight === undefined,
+       "... with the retired normalization keys GONE from avatar.movement");
 
 // The spawn installed the module's built-in sockets on the rigged mesh inside.
 var socketed = 0;
@@ -424,26 +417,21 @@ assert(node.collision(groundAfter) === false,
     var big = avatar.spawn(gGuid, { position: { x: 4, y: 0, z: 0 } });
     var bigKnobs = avatar.movement(big);
     console.log("spawned giant: " + JSON.stringify(bigKnobs));
-    assert(bigKnobs.normalized === false && bigKnobs.characterHeight > 17,
+    assert(bigKnobs.normalized === undefined && bigKnobs.characterHeight > 17,
            "the spawned character stands " + bigKnobs.characterHeight.toFixed(2)
                + " m — the size it was IMPORTED at, not a guess");
     assert(Math.abs(bigKnobs.capsuleHeight - bigKnobs.characterHeight) < 0.05,
            "... and the CAPSULE was fitted to that body");
 
-    // ---- (b) an EXPLICIT height is the user's own decision, and still works.
-    var exact = avatar.spawn(gGuid, { position: { x: 6, y: 0, z: 0 }, height: 2.2 });
-    var exactKnobs = avatar.movement(exact);
-    assert(Math.abs(exactKnobs.characterHeight - 2.2) < 0.02,
-           "avatar.spawn({height: 2.2}) sets an exact height");
-    assert(exactKnobs.normalized === true && Math.abs(exactKnobs.sourceHeight - 17.25) < 0.05,
-           "... measured from the imported 17.25 m");
-    assert(Math.abs(exactKnobs.capsuleHeight - 2.2) < 0.02,
-           "... and the CAPSULE was fitted to the scaled body");
-
-    // `normalize` is accepted and ignored: there is no automatic rule to skip.
-    var kept = avatar.spawn(gGuid, { position: { x: 8, y: 0, z: 0 }, normalize: false });
-    assert(Math.abs(avatar.movement(kept).characterHeight - bigKnobs.characterHeight) < 0.05,
-           "avatar.spawn({normalize: false}) changes nothing — there is no rule left to skip");
+    // ---- (b) THE RETIRED OPTIONS ARE REFUSED, not ignored: a caller that
+    // passes one believes it did something.
+    var refused = 0;
+    try { avatar.spawn(gGuid, { position: { x: 6, y: 0, z: 0 }, height: 2.2 }); }
+    catch (e) { refused++; }
+    try { avatar.spawn(gGuid, { position: { x: 8, y: 0, z: 0 }, normalize: false }); }
+    catch (e) { refused++; }
+    assert(refused === 2,
+           "avatar.spawn({height}) and ({normalize}) are REFUSED — a size is an import setting");
 
     // ---- (c) THE WAY to change how big a model is: reimport it.
     var reimported = assets.reimport(gGuid, { scale: 1.75 / 17.25 });
@@ -454,8 +442,27 @@ assert(node.collision(groundAfter) === false,
     var humanKnobs = avatar.movement(human);
     assert(Math.abs(humanKnobs.characterHeight - 1.75) < 0.02,
            "and a spawn after it stands " + humanKnobs.characterHeight.toFixed(3) + " m");
-    assert(humanKnobs.normalized === false,
-           "... with NOTHING in the module having scaled it");
+    assert(humanKnobs.normalized === undefined,
+           "... with no normalization to report — the module scales nothing");
+
+    // ---- (d) AND THE PAGE FOLLOWS THE ASSET (the second read's F1). The
+    // Avatar page used to parse a library character with IDENTITY settings, so
+    // a reimported character previewed at the OLD size while the scene placed
+    // the new one. The preview is loaded through the same asset, so its height
+    // has to move with the reimport.
+    var avGuid = avatar.createAsset(gGuid);
+    assert(typeof avGuid === "string" && avGuid.length > 10,
+           "an Avatar asset is minted from the reimported model");
+    assert(!!avatar.open(avGuid), "avatar.open(the avatar)");
+    var page = avatar.preview();
+    assert(Math.abs(page.height - 1.75) < 0.03,
+           "the PAGE previews the reimported 1.75 m (" + page.height.toFixed(3) + ")");
+    assets.reimport(gGuid, { scale: (1.75 / 17.25) * 2 });
+    assert(!!avatar.open(avGuid), "re-open after a second reimport");
+    var page2 = avatar.preview();
+    assert(Math.abs(page2.height - 3.5) < 0.06,
+           "and it DOUBLES with the asset (" + page2.height.toFixed(3)
+               + ") — the page parses with the asset's import settings");
 }
 
 console.log("e2e_avatar: OK");

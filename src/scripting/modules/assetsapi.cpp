@@ -334,6 +334,9 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "not move. The old bake drops to no references and `assets.gc` reaps it. Meshes already placed in "
           "the OPEN scene are swapped to the new geometry in place; their node transforms are untouched, "
           "which is right because every placement is at scale 1. "
+          "The swap is NOT UNDOABLE and is outside the undo stack, like every asset mutation: undoing "
+          "a structural edit made before the reimport restores a node holding the OLD mesh, which "
+          "the next reimport or reopen replaces. "
           "ONE EXCEPTION, stated because it cannot be migrated: a scene saved BEFORE the fit-to-size policy "
           "retired holds that fit as a REAL node scale, so such a scene renders the old fit multiplied by "
           "the new bake. Ships-as-new-app — re-place the node. "
@@ -583,8 +586,10 @@ QVariantList AssetsApi::meshLods(const QString &guid)
     }
     // The BAKE is where the chain lives — reading it is also the only honest
     // answer to "what would the renderer get", since a model with no fresh bake
-    // is parsed at open and gets no chain at all.
-    iris::BakedModelPtr baked = MeshBakeStore::load(source);
+    // is parsed at open and gets no chain at all. BY THIS ROW (the second
+    // read's F9): a path alone resolves that content's DEFAULT settings
+    // variant, which is a different bake for an asset with its own settings.
+    iris::BakedModelPtr baked = MeshBakeStore::load(source, guid);
     if (!baked) return out;   // no usable bake: an empty list, not an error
     for (int m = 0; m < baked->meshes.size(); ++m) {
         const iris::MeshPtr &mesh = baked->meshes.at(m);
@@ -770,6 +775,13 @@ QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantM
         fail(settingsError);
         return QString();
     }
+    // ONLY A MODEL CARRIES THEM (the second read's F8). The record is a
+    // complete model-import recipe, and stamping one onto every image, sound
+    // and video row would say something false about those assets — and about
+    // a bake that will never exist for them. A caller that passes a key for a
+    // media file is refused above; one that passes none gets none.
+    if (!Constants::MODEL_EXTS.contains(QFileInfo(path).suffix().toLower()))
+        settings = QJsonObject();
     int typeHint = -1;
     if (options.contains(QStringLiteral("typeHint"))) {
         const QString hint = options.value(QStringLiteral("typeHint")).toString();
@@ -1466,48 +1478,6 @@ QVariantMap AssetsApi::importSettings(const QString &guid)
     return record.toVariantMap();
 }
 
-// THE OPEN SCENE'S HALF OF A REIMPORT (§5). A MeshNode records the MESH MEMBER
-// guid it was built from (SceneReader::createMesh writes it to `meshPath`), so
-// the sweep is by guid and never by file name. The mesh is re-read from the new
-// bake — MeshBakeStore::clear() above dropped the cached model — and set on the
-// node; the mirror re-attaches on a mesh POINTER change (scenemirror.cpp), so
-// nothing else has to be told.
-//
-// Node TRANSFORMS are untouched, deliberately: every placement is at scale 1
-// since the import dialog, and the new geometry is the new size.
-int AssetsApi::refreshPlacedMeshes(const QString &meshGuid, const QString &sourcePath)
-{
-    if (meshGuid.isEmpty() || sourcePath.isEmpty()) return 0;
-    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
-                                                             : iris::ScenePtr();
-    if (!scene || !scene->getRootNode()) return 0;
-
-    const iris::BakedModelPtr baked = MeshBakeStore::load(sourcePath, meshGuid);
-    int swapped = 0;
-    std::function<void(const iris::SceneNodePtr &)> walk =
-        [&](const iris::SceneNodePtr &node) {
-            if (!node) return;
-            if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                auto meshNode = node.staticCast<iris::MeshNode>();
-                if (meshNode->meshPath == meshGuid) {
-                    iris::MeshPtr mesh;
-                    if (baked && meshNode->meshIndex >= 0
-                        && meshNode->meshIndex < baked->meshes.size())
-                        mesh = baked->meshes.at(meshNode->meshIndex);
-                    if (mesh) { meshNode->setMesh(mesh); ++swapped; }
-                }
-            }
-            for (const iris::SceneNodePtr &child : node->children()) walk(child);
-        };
-    walk(scene->getRootNode());
-
-    // The SESSION registrations (ProjectAssets::registerSessionAsset) hold
-    // built fragments the editor's drag-drop route places; they are rebuilt
-    // from the catalog on the next open, and dropping the bake cache is what
-    // makes the NEXT placement use the new geometry.
-    return swapped;
-}
-
 // REIMPORT (SPECS/IMPORT_DIALOG_SPEC.md §5) — the verb behind the Assets page's
 // "Import settings…" button. The service does the work; this is the option
 // surface and the OPEN-SCENE half, which is Studio's alone.
@@ -1516,32 +1486,36 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
     QVariantMap out;
     if (!host.db) { fail("assets: not available in this session"); return out; }
 
+    // PARSED MERGED OVER THE STORED RECORD (the second read's F8), never
+    // standalone: `{axes: {up: "+Z"}}` on its own is not a valid record —
+    // the axis pair must be perpendicular and a partial axes object would
+    // reset the other axis to the default — but merged over what the asset
+    // already carries it is exactly the one-field edit the dialog makes.
+    AssetImportService service(host.db, host.project);
+    QJsonObject wanted = service.importSettings(guid).value(QStringLiteral("settings")).toObject();
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        wanted.insert(it.key(), QJsonValue::fromVariant(scriptmod::normalizeJs(it.value())));
     QJsonObject settings;
     QString settingsError;
-    if (!importSettingsFromOptions(QStringLiteral("assets.reimport"), options, &settings,
-                                   &settingsError)) {
+    if (!importSettingsFromOptions(QStringLiteral("assets.reimport"), wanted.toVariantMap(),
+                                   &settings, &settingsError)) {
         fail(settingsError);
         return out;
     }
-    // MERGED over the stored record by the service — so only the keys the
-    // CALLER wrote may override, not the full defaulted set this parse made.
-    QJsonObject wanted;
-    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
-        wanted.insert(it.key(), settings.value(it.key()));
 
-    AssetImportService service(host.db, host.project);
-    const auto result = service.reimport(guid, wanted);
+    const auto result = service.reimport(guid, settings);
     if (!result.ok()) {
         fail(QStringLiteral("assets.reimport: %1").arg(result.error));
         return out;
     }
 
-    // THE OPEN SCENE (§5): every MeshNode built from this asset is swapped to
-    // the new geometry in place. The mirror re-attaches on a mesh POINTER
-    // change, and the session's AssetNodeObject registrations are refreshed by
-    // the same sweep, so a later drag-drop of the tile places the new bake too.
-    MeshBakeStore::clear();
-    const int swapped = refreshPlacedMeshes(result.meshGuid, result.sourcePath);
+    // THE OPEN SCENE (§5), through the SERVICE so the lane-2 dialog reuses the
+    // same walk (SceneEditService::refreshAssetMeshes). The service's reimport
+    // already dropped MeshBakeStore's caches, so this reads the new bake.
+    const int swapped =
+        (host.services && host.services->sceneEdit)
+            ? host.services->sceneEdit->refreshAssetMeshes(result.meshGuid, result.sourcePath)
+            : 0;
 
     out["guid"] = guid;
     out["settings"] = result.settings.toVariantMap();
@@ -1561,14 +1535,20 @@ QVariantMap AssetsApi::bakeAll(const QVariantMap &options)
 
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
-    const QStringList needing = MeshBakeStore::modelSourcesNeedingBake(conn, root);
+    // BY (file, ROW): an asset's import settings are half the bake key, so two
+    // rows over one store object with different settings are two bakes and a
+    // by-content sweep would leave one of them parsing on every open forever
+    // (the second read's F3).
+    const QVector<MeshBakeStore::BakeTarget> needing =
+        MeshBakeStore::modelBakesNeeded(conn, root);
 
     QVariantList errors;
     int baked = 0, failed = 0;
     if (!dryRun) {
-        for (const QString &path : needing) {
+        for (const MeshBakeStore::BakeTarget &target : needing) {
+            const QString &path = target.path;
             QString error;
-            if (MeshBakeStore::bakeSource(conn, root, path, &error)) {
+            if (MeshBakeStore::bakeSource(conn, root, path, &error, target.assetGuid)) {
                 ++baked;
             } else {
                 ++failed;

@@ -30,6 +30,16 @@
 //      fully-defaulted one are ONE constant — so every row imported before the
 //      dialog keys exactly as it always did — and a bad record is refused
 //      rather than silently imported at the wrong size.
+//   5b. THE SINGLE-MESH FOLD, including the MIRROR. A one-mesh file's node
+//      transform is baked into its vertices and the root comes out identity;
+//      a NEGATIVE-determinant node also has its face winding reversed, because
+//      once the scale is in the vertices there is no node left for the renderer
+//      to flip culling on.
+//   5. THE TUNING SWITCHES (§4.3), on the same skinned fixture: skeleton:false
+//      bakes it as static geometry, clips filters by name, materials:"none"
+//      reads no material data. Asserted on the BAKE, which is the product they
+//      act on — and the parse fallback builds the same three things the same
+//      way (meshbake.roundtrip compares the two trees).
 #include <QApplication>
 #include <QDir>
 #include <QFile>
@@ -40,6 +50,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <QSet>
 
 #include "../support/documentgraph.h"
 #include "data/database/database.h"
@@ -48,6 +59,7 @@
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/import/importsettings.h"
 #include "irisgl/import/meshbake.h"
@@ -235,6 +247,28 @@ int main(int argc, char **argv)
                   .toUtf8().constData());
     }
     {
+        // THE AXES FIX, which is the same rotation stated as a convention: a
+        // file whose up axis is +Z and whose forward is +Y is carried onto our
+        // +Y up / -Z forward, so a 2 m tall rig comes out 2 m DEEP.
+        const QString rig = fixture("tests/avatar/fixtures/rig2.glb");
+        Imported plain = importModel(service, projectGuid, db, rig);
+        QJsonObject settings;
+        QJsonObject axes;
+        axes["up"] = "+Z";
+        axes["forward"] = "+Y";
+        settings["axes"] = axes;
+        Imported fixed = importModel(service, projectGuid, db, rig, settings);
+        const extent::Extent a = extent::extentOf(plain.meta);
+        const extent::Extent b = extent::extentOf(fixed.meta);
+        CHECK(a.valid && b.valid && approx(b.z, a.y, 1e-2) && approx(b.y, a.z, 1e-2),
+              QString("{axes:{up:'+Z',forward:'+Y'}} carries the file's frame onto ours "
+                      "(%1x%2x%3 -> %4x%5x%6)")
+                  .arg(a.x).arg(a.y).arg(a.z).arg(b.x).arg(b.y).arg(b.z).toUtf8().constData());
+        CHECK(fixed.settings.value("axes").toObject().value("up").toString()
+                  == QLatin1String("+Z"),
+              "…and the record reads the axes back");
+    }
+    {
         // The origin: +1.5 m on Y is 1.5 METRES, whatever k is (the lane's
         // spike proved the ordering; this is the document-level statement).
         const QString rig = fixture("tests/avatar/fixtures/rig2.glb");
@@ -291,6 +325,7 @@ int main(int argc, char **argv)
 
             bool keysScaled = !plain.animations.isEmpty()
                               && plain.animations.size() == scaled.animations.size();
+            bool rotKeysIdentical = keysScaled;
             CHECK(keysScaled, "both bakes carry the same clips");
             for (auto it = plain.animations.constBegin();
                  keysScaled && it != plain.animations.constEnd(); ++it) {
@@ -306,13 +341,26 @@ int main(int argc, char **argv)
                     const auto &kb = otherBone.value()->posKeys->keys;
                     if (ka.size() != kb.size()) { keysScaled = false; break; }
                     for (int i = 0; i < ka.size(); ++i) {
-                        if (!approx(double(kb[i]->value.y()), double(ka[i]->value.y()) * 2.0,
-                                    1e-4))
+                        if (!approx(double(kb[i]->value.x()), double(ka[i]->value.x()) * 2.0, 1e-4)
+                            || !approx(double(kb[i]->value.y()), double(ka[i]->value.y()) * 2.0,
+                                       1e-4)
+                            || !approx(double(kb[i]->value.z()), double(ka[i]->value.z()) * 2.0,
+                                       1e-4))
                             keysScaled = false;
                     }
+                    // …AND THE ROTATIONS ARE BIT-IDENTICAL, which is the half
+                    // the whole design rests on (the spike measured it at the
+                    // assimp level; this is the document-level statement).
+                    const auto &ra = boneIt.value()->rotKeys->keys;
+                    const auto &rb = otherBone.value()->rotKeys->keys;
+                    if (ra.size() != rb.size()) { rotKeysIdentical = false; }
+                    else for (int i = 0; i < ra.size(); ++i)
+                        if (std::memcmp(&ra[i]->value, &rb[i]->value, sizeof(iris::Quat)) != 0)
+                            rotKeysIdentical = false;
                 }
             }
             CHECK(keysScaled, "every clip POSITION key scales by k");
+            CHECK(rotKeysIdentical, "every clip ROTATION key is bit-identical");
         }
     }
 
@@ -361,6 +409,115 @@ int main(int argc, char **argv)
         const ImportResult refused = service.import(request);
         CHECK(!refused.ok() && refused.error.contains("scale"),
               "an import with a refused record FAILS rather than importing at the wrong size");
+    }
+
+    // ---- 5. THE TUNING SWITCHES ------------------------------------------
+    std::printf("--- section 5: the tuning switches\n");
+    {
+        const QString rig = fixture("tests/avatar/fixtures/rig2.glb");
+        // rig2.glb: one skinned mesh, 2 bones, 2 clips ("Idle", "mixamo.com"),
+        // one material.
+        const auto bakeWith = [&](const iris::ImportSettings &settings) {
+            return iris::MeshBake::buildFromFile(rig, QStringLiteral("fp"), QString(),
+                                                 settings.transform());
+        };
+        const iris::MeshBake::Model all = bakeWith(iris::ImportSettings());
+        CHECK(all.valid && !all.meshes.isEmpty() && !!all.meshes.first()->getSkeleton()
+                  && all.animations.size() == 2 && all.materials.size() == 1,
+              "the control bakes a skeleton, both clips and one material");
+
+        iris::ImportSettings noSkeleton;
+        noSkeleton.skeleton = false;
+        const iris::MeshBake::Model stat = bakeWith(noSkeleton);
+        CHECK(stat.valid && !stat.meshes.isEmpty() && !stat.meshes.first()->getSkeleton(),
+              "{skeleton:false} bakes NO skeleton");
+        {
+            // …and no bone index/weight vertex arrays either: the mesh really
+            // is static geometry, not a skinned mesh with a missing skeleton.
+            const int allBuffers = all.meshes.first()->getVertexBuffers().size();
+            const int statBuffers = stat.meshes.first()->getVertexBuffers().size();
+            CHECK(statBuffers < allBuffers,
+                  QString("{skeleton:false} drops the bone index/weight vertex arrays "
+                          "(%1 buffers vs %2)").arg(statBuffers).arg(allBuffers)
+                      .toUtf8().constData());
+        }
+
+        iris::ImportSettings oneClip;
+        oneClip.clipNames = QStringList{ QStringLiteral("Idle") };
+        const iris::MeshBake::Model filtered = bakeWith(oneClip);
+        CHECK(filtered.valid && filtered.animations.size() == 1
+                  && filtered.animations.contains(QStringLiteral("Idle")),
+              QString("{clips:[\"Idle\"]} bakes that ONE clip (%1)")
+                  .arg(QStringList(filtered.animations.keys()).join(QStringLiteral(", ")))
+                  .toUtf8().constData());
+
+        iris::ImportSettings noClips;
+        noClips.clips = false;
+        const iris::MeshBake::Model silent = bakeWith(noClips);
+        CHECK(silent.valid && silent.animations.isEmpty(), "{clips:false} bakes no clip at all");
+
+        iris::ImportSettings noMaterials;
+        noMaterials.materials = iris::ImportSettings::MaterialMode::None;
+        const iris::MeshBake::Model bare = bakeWith(noMaterials);
+        CHECK(bare.valid && !bare.materials.isEmpty(), "{materials:'none'} still records a slot");
+        CHECK(bare.valid && !bare.materials.isEmpty()
+                  && !bare.materials.first().hasPbr
+                  && bare.materials.first().diffuseTexture.isEmpty(),
+              "…with NO material data read from the file");
+
+        // Every switch is in the KEY, so each of these is a different bake.
+        QSet<QString> hashes;
+        for (const iris::ImportSettings &settings :
+             { iris::ImportSettings(), noSkeleton, oneClip, noClips, noMaterials })
+            hashes.insert(settings.hash());
+        CHECK(hashes.size() == 5,
+              QString("each tuning switch is its own bake key (%1 distinct of 5)")
+                  .arg(hashes.size()).toUtf8().constData());
+    }
+
+    // ---- 5b. THE SINGLE-MESH FOLD -----------------------------------------
+    std::printf("--- section 5b: the single-mesh fold, and the mirror\n");
+    {
+        // mirrored_node.gltf: one CCW quad in the XY plane with +Z normals,
+        // under a node scaled (-1, 1, 1) — the fold's whole reason, and the one
+        // case it cannot do naively.
+        const QString mirrored = fixture("tests/importer/fixtures/mirrored_node.gltf");
+        const iris::MeshBake::Model model =
+            iris::MeshBake::buildFromFile(mirrored, QStringLiteral("fp"), QString());
+        CHECK(model.valid && model.singleMesh && !model.meshes.isEmpty(),
+              "the mirrored fixture takes the single-mesh shortcut");
+        if (model.valid && model.singleMesh && !model.meshes.isEmpty()) {
+            // THE FOLD: the authored node transform is in the VERTICES and the
+            // baked root is identity, so the placed node reads scale 1.
+            CHECK(approx(double(model.root.scale.x()), 1.0, 1e-6)
+                      && approx(double(model.root.scale.y()), 1.0, 1e-6)
+                      && approx(double(model.root.pos.x()), 0.0, 1e-6),
+                  QString("the fragment root is IDENTITY (scale %1, %2)")
+                      .arg(double(model.root.scale.x())).arg(double(model.root.scale.y()))
+                      .toUtf8().constData());
+            const iris::AABB box = model.meshes.first()->getAABB();
+            CHECK(approx(double(box.getMin().x()), -1.0, 1e-4)
+                      && approx(double(box.getMax().x()), 0.0, 1e-4),
+                  QString("…and the -X mirror is in the geometry (x %1 .. %2)")
+                      .arg(double(box.getMin().x())).arg(double(box.getMax().x()))
+                      .toUtf8().constData());
+
+            // THE WINDING: the first triangle's own cross product must still
+            // agree with the normal the file authored (+Z). Reversed geometry
+            // with unreversed indices points the other way — a mesh that draws
+            // inside out, silently, because nothing flips culling for it now.
+            iris::TriMesh *tri = model.meshes.first()->getTriMesh();
+            CHECK(tri && tri->triangles.size() == 2, "the quad bakes two triangles");
+            if (tri && !tri->triangles.isEmpty()) {
+                const iris::Triangle &t = tri->triangles.first();
+                const iris::Vec3 faceNormal =
+                    iris::Vec3::crossProduct(t.b - t.a, t.c - t.a).normalized();
+                CHECK(double(faceNormal.z()) > 0.5,
+                      QString("the face winding was REVERSED with the mirror "
+                              "(face normal z = %1, authored +Z)")
+                          .arg(double(faceNormal.z())).toUtf8().constData());
+            }
+        }
     }
 
     std::printf(failures ? "\nimporter.extent: %d FAILURES\n" : "\nimporter.extent: all ok\n",

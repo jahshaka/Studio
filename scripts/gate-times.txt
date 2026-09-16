@@ -91,7 +91,7 @@ import.async 0.16
 import.shutdown 20.86
 importer.animation 0.06
 importer.fbx 0.01
-importer.fitsize 0.44
+importer.extent 0.60
 importer.glb 0.62
 importer.materials 0.9
 importer.meshformats 0.78
@@ -185,7 +185,7 @@ scripting.e2e.duplicate_material 6.91
 scripting.e2e.editor_controls 10.12
 scripting.e2e.export_raw 3.28
 scripting.e2e.export_web 3.44
-scripting.e2e.fitsize 2.96
+scripting.e2e.import_settings 3.10
 scripting.e2e.fixed_clock 25.47
 scripting.e2e.folders 3.22
 scripting.e2e.fragments 7.56

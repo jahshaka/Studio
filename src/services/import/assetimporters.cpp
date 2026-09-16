@@ -214,7 +214,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         const QString bakePath = QDir(stagingDir).filePath(bakeName);
         iris::MeshBake::Model baked = iris::MeshBake::buildFromScene(
             modelScene, request.sourcePath,
-            iris::MeshBake::fingerprintFor(out.sourceOid, settingsHash), stagingDir);
+            iris::MeshBake::fingerprintFor(out.sourceOid, settingsHash), stagingDir, xf);
         QString bakeError;
         if (baked.valid && iris::MeshBake::write(bakePath, baked, &bakeError)) {
             out.files.append({ bakePath, out.mainGuid, iris::MeshBake::casRole(), bakeName });

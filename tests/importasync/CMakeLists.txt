@@ -8,6 +8,9 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 add_executable(test_import_async test_import_async.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
+    # the bake on the asset's import settings.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
     # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp

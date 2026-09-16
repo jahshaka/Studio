@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 
 #include "irisgl/import/meshprewarm.h"
 #include "irisgl/import/importsettings.h"
@@ -121,6 +122,24 @@ bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QStri
 /// to bake" over a library with no bakes in it (found by this lane's pixel
 /// run, 2026-09-04). Asking the FILES which of them are models has neither
 /// failure mode.
+/// A bake to build: the model FILE, and the library ROW whose import settings
+/// key it. Since the import dialog the pair is the unit, not the path — the
+/// store is content-addressed, so two rows over one object with DIFFERENT
+/// settings are two different bakes, and a sweep that deduplicated by content
+/// alone would build one of them and leave the other parsing on every open,
+/// forever (the second read's F3).
+struct BakeTarget
+{
+    QString path;
+    QString assetGuid;
+};
+
+/// Every (model file, owning row) pair in the store with no fresh bake, one
+/// entry per DISTINCT set of import settings over one object.
+QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root);
+
+/// The paths of the above, for a caller that only wants to know how much work
+/// there is. Kept because the shape reads better at a call site that reports.
 QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root);
 
 /// Bake ONE model FILE (a resolved store object) and record it under every
@@ -139,8 +158,14 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
 // pays for it is the one that was already going to parse; every open after it
 // is a load.
 
-/// Queue the model files in `paths` that have no fresh bake. Returns how many
-/// were queued. Safe to call with paths that are already baked or queued.
+/// Queue the bakes in `targets` that are not fresh. Returns how many were
+/// queued. Safe to call with targets that are already baked or queued.
+int scheduleBakes(const QVector<BakeTarget> &targets);
+
+/// Path-only form, for the OPEN-TIME warm-up: the scene's model paths with no
+/// row attached, so each gets that content's DEFAULT settings variant. That is
+/// the right answer there — an open warms what it just read — and
+/// `assets.bakeAll` is the sweep that covers every row.
 int scheduleBakes(const QStringList &paths);
 
 /// How many bakes are queued or in flight (tests, and the honest answer for a

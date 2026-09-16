@@ -70,8 +70,12 @@ QJsonObject importRecordForOid(QSqlDatabase conn, const QString &oid)
 {
     if (oid.isEmpty()) return QJsonObject();
     QSqlQuery query(conn);
+    // NEWEST FIRST, as the header promises: with no ORDER BY the answer was
+    // SQLite's index order, so "the default variant for this content" was not
+    // even stable between two runs over one library (the second read's F6).
     query.prepare("SELECT A.properties FROM asset_files AF "
-                  "JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ?");
+                  "JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ? "
+                  "ORDER BY AF.rowid DESC");
     query.addBindValue(oid);
     if (!query.exec()) return QJsonObject();
     QJsonObject best;
@@ -459,7 +463,7 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
 namespace
 {
 
-QStringList sQueue;                 ///< UI thread only
+QVector<BakeTarget> sQueue;         ///< UI thread only; a PAIR, not a path
 bool sBakeInFlight = false;         ///< UI thread only
 bool sCancelled = false;
 
@@ -479,11 +483,15 @@ void startNext()
     if (sBakeInFlight || sQueue.isEmpty() || sCancelled) return;
     if (!QCoreApplication::instance()) { sQueue.clear(); return; }
 
-    const QString sourcePath = sQueue.takeFirst();
+    const BakeTarget target = sQueue.takeFirst();
+    const QString sourcePath = target.path;
     const QString root = AssetStorePaths::root();
     const QString sourceOid = oidFromStorePath(root, sourcePath);
     if (sourceOid.isEmpty()) { pumpQueue(); return; }
-    if (isFresh(QSqlDatabase::database(), root, sourcePath)) { pumpQueue(); return; }
+    if (isFresh(QSqlDatabase::database(), root, sourcePath, target.assetGuid)) {
+        pumpQueue();
+        return;
+    }
 
     sBakeInFlight = true;
     auto *watcher = new QFutureWatcher<BakeOutput>();
@@ -510,8 +518,10 @@ void startNext()
     // The settings are resolved HERE, on the UI thread, because the lookup is a
     // catalog read and QSqlDatabase connections are per-thread; the worker gets
     // plain values (the same split planFor/PrewarmItem already uses).
-    const QString settings = settingsHashFor(QSqlDatabase::database(), root, sourcePath);
-    const iris::ImportTransform xf = transformFor(QSqlDatabase::database(), root, sourcePath);
+    const QString settings =
+        settingsHashFor(QSqlDatabase::database(), root, sourcePath, target.assetGuid);
+    const iris::ImportTransform xf =
+        transformFor(QSqlDatabase::database(), root, sourcePath, target.assetGuid);
     watcher->setFuture(QtConcurrent::run([sourcePath, sourceOid, settings, xf]() -> BakeOutput {
         BakeOutput out;
         out.sourceOid = sourceOid;
@@ -538,22 +548,34 @@ void pumpQueue()
 
 }   // namespace
 
-int scheduleBakes(const QStringList &paths)
+int scheduleBakes(const QVector<BakeTarget> &targets)
 {
     if (!QCoreApplication::instance()) return 0;
     sCancelled = false;
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     int queued = 0;
-    for (const QString &path : paths) {
-        if (path.isEmpty() || sQueue.contains(path)) continue;
-        if (oidFromStorePath(root, path).isEmpty()) continue;
-        if (isFresh(conn, root, path)) continue;
-        sQueue.append(path);
+    for (const BakeTarget &target : targets) {
+        if (target.path.isEmpty()) continue;
+        bool already = false;
+        for (const BakeTarget &q : sQueue)
+            if (q.path == target.path && q.assetGuid == target.assetGuid) { already = true; break; }
+        if (already) continue;
+        if (oidFromStorePath(root, target.path).isEmpty()) continue;
+        if (isFresh(conn, root, target.path, target.assetGuid)) continue;
+        sQueue.append(target);
         ++queued;
     }
     if (queued) pumpQueue();
     return queued;
+}
+
+int scheduleBakes(const QStringList &paths)
+{
+    QVector<BakeTarget> targets;
+    targets.reserve(paths.size());
+    for (const QString &path : paths) targets.append({ path, QString() });
+    return scheduleBakes(targets);
 }
 
 int pendingBakes() { return sQueue.size() + (sBakeInFlight ? 1 : 0); }
@@ -564,30 +586,49 @@ void cancelPendingBakes()
     sQueue.clear();
 }
 
-QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)
+QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root)
 {
-    QStringList out;
-    // Every recorded file whose DISPLAY NAME is a model, deduplicated by
-    // content: one object backs however many asset rows name it, and it needs
-    // exactly one bake.
+    QVector<BakeTarget> out;
+    // Every recorded file whose DISPLAY NAME is a model, with the ROW that
+    // names it — one entry per distinct (content, import settings) pair, since
+    // that pair is what a bake is keyed on. Deduplicating by content alone
+    // (what this did until the second read's F3) built one variant and left
+    // every other row parsing on every open, forever.
     QSqlQuery query(conn);
-    query.prepare("SELECT DISTINCT AF.oid, AF.name, F.ext FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role <> ?");
+    query.prepare("SELECT AF.oid, AF.name, F.ext, AF.asset_guid FROM asset_files AF "
+                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role <> ? "
+                  "ORDER BY AF.rowid");
     query.addBindValue(iris::MeshBake::casRole());
     if (!query.exec()) return out;
-    QSet<QString> seen;
+    QSet<QString> seen;          // "<oid>|<settingsHash>"
+    QHash<QString, QString> pathForOid;
     while (query.next()) {
         const QString oid = query.value(0).toString();
-        if (seen.contains(oid)) continue;
         if (!Constants::MODEL_EXTS.contains(
                 QFileInfo(query.value(1).toString()).suffix().toLower()))
             continue;
-        seen.insert(oid);
-        const QString path = AssetStorePaths::objectPathIn(root, oid, query.value(2).toString());
-        if (!QFileInfo::exists(path)) continue;   // offline/purged object
-        if (isFresh(conn, root, path)) continue;
-        out.append(path);
+        QString path = pathForOid.value(oid);
+        if (path.isEmpty()) {
+            path = AssetStorePaths::objectPathIn(root, oid, query.value(2).toString());
+            if (!QFileInfo::exists(path)) { pathForOid.insert(oid, QString()); continue; }
+            pathForOid.insert(oid, path);
+        }
+        if (path.isEmpty()) continue;   // offline/purged object, already judged
+        const QString guid = query.value(3).toString();
+        const QString key = oid + QLatin1Char('|') + settingsHashFor(conn, root, path, guid);
+        if (seen.contains(key)) continue;
+        seen.insert(key);
+        if (isFresh(conn, root, path, guid)) continue;
+        out.append({ path, guid });
     }
+    return out;
+}
+
+QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)
+{
+    QStringList out;
+    for (const BakeTarget &target : modelBakesNeeded(conn, root))
+        if (!out.contains(target.path)) out.append(target.path);
     return out;
 }
 

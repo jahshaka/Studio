@@ -98,6 +98,9 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
+    # the bake on the asset's import settings.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
     # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
@@ -152,6 +155,9 @@ set_tests_properties(importer.meshformats PROPERTIES
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 add_executable(test_importer_security test_importer_security.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
+    # the bake on the asset's import settings.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
     # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
@@ -210,6 +216,9 @@ jah_no_display(importer.security)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 add_executable(test_importer_animation test_importer_animation.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
+    # the bake on the asset's import settings.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
@@ -324,6 +333,9 @@ set_tests_properties(importer.materials PROPERTIES
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 add_executable(test_importer_texture_guids test_importer_texture_guids.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
+    # the bake on the asset's import settings.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
@@ -379,6 +391,9 @@ jah_no_display(importer.texture_guids)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 add_executable(test_importer_extent test_importer_extent.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
+    # the bake on the asset's import settings.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetimporter.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp

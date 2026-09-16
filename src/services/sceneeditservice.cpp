@@ -65,6 +65,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
+#include "services/meshbakestore.h"
 #include "services/editgate.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -372,6 +373,36 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
 
     addNodeToScene(node);
     return node;
+}
+
+int SceneEditService::refreshAssetMeshes(const QString &meshGuid, const QString &sourcePath)
+{
+    if (meshGuid.isEmpty() || sourcePath.isEmpty()) return 0;
+    auto live = scene();
+    if (!live || !live->getRootNode()) return 0;
+
+    // The bake the asset holds NOW — MeshBakeStore's model cache was dropped by
+    // the reimport that called us, so this reads the new blob.
+    const iris::BakedModelPtr baked = MeshBakeStore::load(sourcePath, meshGuid);
+    int swapped = 0;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (!node) return;
+        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            auto meshNode = node.staticCast<iris::MeshNode>();
+            if (meshNode->meshPath == meshGuid) {
+                iris::MeshPtr mesh;
+                if (baked && meshNode->meshIndex >= 0
+                    && meshNode->meshIndex < baked->meshes.size())
+                    mesh = baked->meshes.at(meshNode->meshIndex);
+                // The mirror re-attaches on a mesh POINTER change
+                // (scenemirror.cpp), so nothing else has to be told.
+                if (mesh) { meshNode->setMesh(mesh); ++swapped; }
+            }
+        }
+        for (const iris::SceneNodePtr &child : node->children()) walk(child);
+    };
+    walk(live->getRootNode());
+    return swapped;
 }
 
 void SceneEditService::addMesh(const QString &path, bool ignore, iris::Vec3 position)
