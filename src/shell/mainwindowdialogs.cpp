@@ -129,8 +129,14 @@ QWidget *MainWindow::openDialog(const QString &name, const QVariantMap &options,
         // commit, exactly like newProject's.
         const QString guid = options.value(QStringLiteral("guid")).toString();
         if (!guid.isEmpty()) {
-            ImportSettingsDialog *reimport = openImportSettings(guid);
-            if (!reimport) return nullptr;
+            // A VERB opened this, so a refusal comes back as a string — never
+            // as a modal box nothing can answer.
+            QString why;
+            ImportSettingsDialog *reimport = openImportSettings(guid, &why);
+            if (!reimport) {
+                if (extra) extra->insert(QStringLiteral("error"), why);
+                return nullptr;
+            }
             scriptDialogs.insert(name, reimport);
             applyDialogOptions(name, reimport, options, extra);
             return reimport;
@@ -200,22 +206,26 @@ void MainWindow::applyDialogOptions(const QString &name, QWidget *widget,
 // pages stay free of the scripting layer, and the commit goes through the VERB
 // (assets.reimport), so the open-scene mesh swap and the bake-store memo clear
 // happen exactly as they do for a script.
-ImportSettingsDialog *MainWindow::openImportSettings(const QString &guid)
+ImportSettingsDialog *MainWindow::openImportSettings(const QString &guid, QString *errorOut)
 {
-    if (guid.isEmpty() || !scriptEngine) return nullptr;
+    // A REFUSAL IS REPORTED THE WAY THE CALLER CAN SURVIVE (see the header): a
+    // message box for a button press, a string for a verb.
+    const auto refuse = [this, errorOut](const QString &why) -> ImportSettingsDialog * {
+        if (errorOut) *errorOut = why;
+        else QMessageBox::warning(this, tr("Import settings"), why);
+        return nullptr;
+    };
+    if (guid.isEmpty() || !scriptEngine)
+        return refuse(tr("There is no asset to reopen the import decision for."));
     ScriptHost &host = scriptEngine->scriptHost();
 
     AssetsApi assets(host);
+    host.lastError.clear();
     const QVariantMap record = assets.importSettings(guid);
-    if (record.isEmpty()) {
-        QMessageBox::warning(this, tr("Import settings"),
-                             host.lastError.isEmpty()
-                                 ? tr("This asset has no import record.")
-                                 : host.lastError);
-        host.pendingError.clear();
-        return nullptr;
-    }
+    const QString readError = host.lastError;
     host.pendingError.clear();
+    if (record.isEmpty())
+        return refuse(readError.isEmpty() ? tr("This asset has no import record.") : readError);
 
     const AssetRecord row = host.db ? host.db->fetchAsset(guid) : AssetRecord();
 

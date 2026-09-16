@@ -1457,14 +1457,17 @@ QVariantMap AppApi::dialog(const QString &name, const QVariant &openOrOptions)
     }
     QVariantMap extra;
     QWidget *w = host.mainWindow->openDialog(name, options, &extra);
-    if (!w) {
-        fail(QStringLiteral("app.dialog: '%1' could not be opened in this session").arg(name));
-        return out;
-    }
+    // THE DIALOG'S OWN MESSAGE FIRST, whether or not it opened: a refusal with
+    // a reason ("this asset has no import record") is worth more than "could
+    // not be opened in this session".
     const QString dialogError = extra.take(QStringLiteral("error")).toString();
     for (auto it = extra.constBegin(); it != extra.constEnd(); ++it) out[it.key()] = it.value();
     if (!dialogError.isEmpty()) {
         fail(QStringLiteral("app.dialog('%1'): %2").arg(name, dialogError));
+        return out;
+    }
+    if (!w) {
+        fail(QStringLiteral("app.dialog: '%1' could not be opened in this session").arg(name));
         return out;
     }
     out["open"] = w->isVisible();

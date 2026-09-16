@@ -104,4 +104,18 @@ mustThrow(function () { app.dialog("importSettings", { settings: { scale: 0 } })
 app.dialog("importSettings", false);
 mustThrow(function () { app.dialog("noSuchDialog"); }, "an unknown dialog name is refused");
 
+// A ROW WITH NO IMPORT RECORD is refused with a REASON, and — the part that
+// matters — refused as a STRING. A verb that stopped on a modal message box
+// would hang the run and everything queued behind it (the same defect
+// import.shutdown caught on the interactive-import path), so this assertion is
+// really "the call came back at all".
+var light = scene.addLight("point");
+var noRecord = false;
+try { app.dialog("importSettings", { guid: "no-such-asset" }); }
+catch (e) { noRecord = String(e).indexOf("import record") >= 0
+                      || String(e).indexOf("assets.importSettings") >= 0; }
+assert(noRecord, "a guid with no import record is refused with a reason, not a modal box");
+assert(app.dialogs().filter(function (d) { return d.name === "importSettings"; })[0].open === false,
+       "…and no dialog was left open");
+
 console.log("scripting.e2e.import_dialog: all assertions passed");

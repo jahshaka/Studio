@@ -437,9 +437,16 @@ public:
     /// The ONE entry point behind the Assets page's "Import settings…" button,
     /// the tray's and the page's "Reimport…" rows and
     /// `app.dialog('importSettings', {guid})` — pages never reach for the
-    /// scripting layer themselves. Returns the dialog (null when the asset has
-    /// no import record, with a message already shown).
-    class ImportSettingsDialog *openImportSettings(const QString &guid);
+    /// scripting layer themselves. Returns null when the asset has no import
+    /// record to reopen.
+    ///
+    /// `errorOut` decides HOW that refusal is delivered, and it matters: a
+    /// button press gets a message box (errorOut null), a VERB gets the string
+    /// (errorOut set) — a verb that stopped on a modal box would hang the run
+    /// and everything queued behind it, which is exactly the defect
+    /// import.shutdown caught on the interactive-import path.
+    class ImportSettingsDialog *openImportSettings(const QString &guid,
+                                                   QString *errorOut = nullptr);
 
     /// Orderly teardown of every background worker the window owns (import
     /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
