@@ -35,6 +35,16 @@
 //      shape — order-independence — expressed the one way a suite in this process
 //      can express it (two allocation orders in two processes cannot be staged
 //      from inside one, so the order that CAN be varied is the one we control).
+//   4. ...AND NOT WHEN IT DECIDES THE DISPATCH PARTITION EITHER (ogre-patch
+//      0065). Case 3's four objects fit one material pool, so the order only
+//      varies what happens INSIDE one dispatch. Two hundred objects each owning
+//      a material — what the editor actually produces — spread over several
+//      pools, and which pool a material lands in is its creation order, so the
+//      attach order decides WHICH DISPATCH each object is voxelised by. That is
+//      what patch 0062 bought determinism from by giving every material its own
+//      dispatch (86 -> 321 ms on a dense scene) and what 0065 fixes at the cause
+//      instead: the per-voxel merge accumulates exact integer sums and resolves
+//      them once, so no partition and no order changes a voxel.
 //
 // Its own binary like every GI suite: the voxel lighting binds process-wide to
 // HlmsPbs, so this scene must not share a process with another arm's.
@@ -265,6 +275,81 @@ int main()
         CHECK(apart(before, reversed) <= kOneVoxelStep,
               "THE SAME GEOMETRY ATTACHED IN THE OPPOSITE ORDER IS THE SAME PICTURE "
               "(to the voxel's own 8-bit step)");
+    }
+
+    // =====================================================================
+    // CASE 4 — TWO HUNDRED OBJECTS, EACH WITH ITS OWN MATERIAL, IN TWO ORDERS
+    // =====================================================================
+    // Case 3's four objects fit in one material pool, so the voxeliser groups
+    // them into ONE dispatch either way and only the order INSIDE it varies.
+    // This is the other half, and it is the shape the editor actually produces:
+    // every primitive gets its own material, so two hundred objects are two
+    // hundred materials spread over several pools — and WHICH POOL a material
+    // lands in is decided by the order it was created in. So the attach order
+    // decides the PARTITION of the instances between dispatches, not just the
+    // order within one.
+    //
+    // They are thin plates stacked in pairs, deliberately: a plate thinner than
+    // the outer cascades' cell puts both of its faces in one voxel, which is the
+    // case the voxelisation has to decide "these surfaces face opposite ways"
+    // about — the decision that used to be made by whichever triangle a thread
+    // reached first (ogre-patch 0065).
+    std::printf("\n== case 4: 200 objects, 200 materials, two orders (0065) ==\n");
+    {
+        struct Plate { Vec3 pos; Colour albedo; };
+        std::vector<Plate> plates;
+        for (int x = 0; x < 10; ++x)
+            for (int z = 0; z < 10; ++z)
+                for (int y = 0; y < 2; ++y) {
+                    // A different albedo per PLATE — bound to the plate and not to
+                    // the loop, so the reversed arm is the SAME SCENE built in the
+                    // other order and not a different one.
+                    const float t = float(plates.size()) / 200.0f;
+                    plates.push_back({ Vec3(float(x) * 0.6f - 2.7f, 0.6f + float(y) * 0.5f,
+                                            float(z) * 0.6f - 2.7f),
+                                       Colour(0.2f + 0.7f * t, 0.8f - 0.6f * t, 0.5f) });
+                }
+        const Vec3 plateScale(0.5f, 0.06f, 0.5f);
+        const auto build = [&](bool reverse) {
+            std::vector<NodeId> made;
+            made.reserve(plates.size());
+            for (size_t i = 0; i < plates.size(); ++i) {
+                const Plate &pl = plates[reverse ? plates.size() - 1u - i : i];
+                // Every object gets its OWN material (addTestCube creates one per
+                // call), which is what the editor gives every primitive.
+                const NodeId n = enginetest::addTestCube(scene, pl.albedo, 0.0f, 0.6f);
+                enginetest::setNodePosition(scene, n, pl.pos);
+                enginetest::setNodeScale(scene, n, plateScale);
+                made.push_back(n);
+            }
+            return made;
+        };
+
+        std::vector<NodeId> forward = build(false);
+        render(e, 2);
+        rebuildWhole();
+        const Image forwardPic = picture();
+        const GiStatus fwdSt = scene->giStatus();
+        long long dispatches = 0;
+        for (const auto &c : fwdSt.cascades) dispatches += c.voxelDispatches;
+        std::printf("   forward: %zu objects, %lld dispatches over the chain\n", forward.size(),
+                    dispatches);
+
+        for (NodeId n : forward) scene->removeNode(n);
+        render(e, 2);
+        std::vector<NodeId> reversed = build(true);
+        render(e, 2);
+        rebuildWhole();
+        const Image reversedPic = picture();
+
+        std::printf("   apart %.5f (%.2f of 255)\n", apart(forwardPic, reversedPic),
+                    apart(forwardPic, reversedPic) * 255.0f);
+        CHECK(dispatches > 0, "the chain reported how many dispatches it spent");
+        CHECK(apart(forwardPic, reversedPic) <= kOneVoxelStep,
+              "TWO HUNDRED OBJECTS WITH TWO HUNDRED MATERIALS RENDER THE SAME PICTURE "
+              "IN EITHER ATTACH ORDER");
+        for (NodeId n : reversed) scene->removeNode(n);
+        render(e, 2);
     }
 
     GiParams off; off.mode = GiMode::Off;

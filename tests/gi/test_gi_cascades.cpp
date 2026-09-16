@@ -1133,6 +1133,7 @@ int main()
         const int caps[3] = { 0, 64, 16 };
         int attachedAtCap[3] = { 0, 0, 0 };
         int itemsAtCap[3] = { 0, 0, 0 };
+        long long dispatchesAtCap[3] = { 0, 0, 0 };
         for (int ci = 0; ci < 3; ++ci) {
             GiParams gi = cascadeGi();
             gi.cascadeInstanceCap = caps[ci];
@@ -1146,14 +1147,15 @@ int main()
             bool capHeld = true;
             for (size_t i = 0; i < st.cascades.size(); ++i) {
                 const GiStatus::CascadeStatus &c = st.cascades[i];
-                std::printf("  c%zu attached %4d items %4d %6.2f ms CPU |", i, c.attached,
-                            c.items, c.lastCpuMs);
+                std::printf("  c%zu attached %4d items %4d disp %4lld %6.2f ms CPU |", i,
+                            c.attached, c.items, c.voxelDispatches, c.lastCpuMs);
                 if (caps[ci] > 0 && (c.attached > caps[ci] || c.items > caps[ci]))
                     capHeld = false;
             }
             std::printf("\n");
             attachedAtCap[ci] = st.cascades.back().attached;
             itemsAtCap[ci] = st.cascades.back().items;
+            dispatchesAtCap[ci] = st.cascades.back().voxelDispatches;
             if (caps[ci] > 0)
                 CHECK(capHeld, "no cascade attaches or voxelises more than the budget");
         }
@@ -1164,6 +1166,21 @@ int main()
               "a smaller budget attaches strictly fewer objects (0 = no budget = the most)");
         CHECK(itemsAtCap[0] > itemsAtCap[2],
               "...and voxelises strictly fewer");
+        // THE DISPATCH COUNT IS NOT THE OBJECT COUNT (ogre-patch 0065), and this
+        // is the regression guard for the 3.6x patch 0062 cost on dense content.
+        // A voxelisation dispatch is sized by the WHOLE VOLUME however few
+        // instances it holds, and these 216 objects each own a material — so a
+        // bucket key that names the material SLOT gives 216 whole-volume
+        // dispatches per cascade, while one that names the material POOL (1024
+        // materials per pool) gives a handful. `voxelDispatches` is the reading
+        // that tells them apart, and it must stay in the handful.
+        std::printf("   uncapped: the outermost cascade attached %d objects in %lld dispatches\n",
+                    attachedAtCap[0], dispatchesAtCap[0]);
+        CHECK(dispatchesAtCap[0] > 0 && dispatchesAtCap[0] <= 8,
+              "A CASCADE VOXELISES A HUNDRED-MATERIAL SCENE IN A HANDFUL OF DISPATCHES, "
+              "NOT ONE PER MATERIAL");
+        CHECK(dispatchesAtCap[0] < attachedAtCap[0],
+              "...and strictly fewer dispatches than it has objects");
         for (NodeId n : dense) scene->removeNode(n);
         render(e, 2);
         GiParams back = cascadeGi();
