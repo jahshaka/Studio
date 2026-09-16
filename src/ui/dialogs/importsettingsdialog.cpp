@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -54,6 +56,19 @@ const UnitRow kUnitRows[] = {
 QString formatMetres(double v)
 {
     return QString::number(v, 'g', 3);
+}
+
+/// Do two clip lists name the same clips, ignoring order and case — which is
+/// exactly what ImportTransform::wantsClip asks of them?
+bool sameClipSet(const QStringList &a, const QStringList &b)
+{
+    if (a.size() != b.size()) return false;
+    QStringList x, y;
+    for (const QString &s : a) x << s.toLower();
+    for (const QString &s : b) y << s.toLower();
+    x.sort();
+    y.sort();
+    return x == y;
 }
 
 iris::Vec3 axisVector(const QString &name)
@@ -123,6 +138,11 @@ void ImportSettingsDialog::originTranslation(Origin origin, const Box &box, doub
     out[0] = -box.centre(0);
     out[2] = -box.centre(2);
     out[1] = origin == Origin::Centre ? -box.centre(1) : -box.min[1];
+    // ON THE FIELD'S GRID (kOffsetDecimals): a helper whose answer the offset
+    // field cannot spell is a helper the dialog forgets the moment the row is
+    // reopened.
+    const double grid = std::pow(10.0, kOffsetDecimals);
+    for (int a = 0; a < 3; ++a) out[a] = std::round(out[a] * grid) / grid;
 }
 
 ImportSettingsDialog::Origin ImportSettingsDialog::originOf(const iris::ImportSettings &settings,
@@ -138,7 +158,9 @@ ImportSettingsDialog::Origin ImportSettingsDialog::originOf(const iris::ImportSe
                              ? std::max({ std::fabs(box.size(0)), std::fabs(box.size(1)),
                                           std::fabs(box.size(2)), 1e-6 })
                              : 1.0;
-    const double tol = 1e-6 * scale;
+    // At least half the offset field's own quantum, so a value that came back
+    // through the field still reads as the helper that produced it.
+    const double tol = std::max(0.5 * std::pow(10.0, -kOffsetDecimals), 1e-6 * scale);
     for (Origin candidate : { Origin::Centre, Origin::BottomCentre }) {
         double want[3];
         originTranslation(candidate, box, want);
@@ -229,6 +251,7 @@ void ImportSettingsDialog::buildUi()
 
     // ---- SIZE ------------------------------------------------------------
     auto *sizeBox = new QGroupBox(tr("Size"), this);
+    mSizeBox = sizeBox;
     auto *sizeForm = new QFormLayout(sizeBox);
 
     mUnits = new QComboBox(sizeBox);
@@ -250,6 +273,7 @@ void ImportSettingsDialog::buildUi()
 
     // ---- ORIENTATION -----------------------------------------------------
     auto *axisBox = new QGroupBox(tr("Orientation"), this);
+    mAxisBox = axisBox;
     auto *axisForm = new QFormLayout(axisBox);
 
     mUp = new QComboBox(axisBox);
@@ -288,6 +312,7 @@ void ImportSettingsDialog::buildUi()
 
     // ---- ORIGIN ----------------------------------------------------------
     auto *originBox = new QGroupBox(tr("Origin"), this);
+    mOriginBox = originBox;
     auto *originForm = new QFormLayout(originBox);
 
     mOrigin = new QComboBox(originBox);
@@ -364,6 +389,13 @@ void ImportSettingsDialog::buildUi()
 
     mButtons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     mOkButton = mButtons->button(QDialogButtonBox::Ok);
+    // THE THIRD ANSWER. The spec is one dialog per model file (§12.5), so a
+    // ten-file drop needs a way out that is not ten Cancels. Reject role: it
+    // closes the dialog exactly as Cancel does, and the batch reads
+    // skipRemaining() to learn the user meant the whole tail, not this file.
+    mSkipAllButton = mButtons->addButton(tr("Skip the rest"), QDialogButtonBox::RejectRole);
+    mSkipAllButton->setVisible(false);
+    connect(mSkipAllButton, &QPushButton::clicked, this, [this]() { mSkipRemaining = true; });
     outer->addWidget(mButtons);
     connect(mButtons, &QDialogButtonBox::accepted, this, &ImportSettingsDialog::accept);
     connect(mButtons, &QDialogButtonBox::rejected, this, &ImportSettingsDialog::reject);
@@ -374,24 +406,37 @@ void ImportSettingsDialog::buildUi()
         readFieldsIntoSettings();
         refreshPreview();
     };
-    connect(mUnits, &QComboBox::currentIndexChanged, this, changed);
-    connect(mScale, &QDoubleSpinBox::valueChanged, this, changed);
-    connect(mUp, &QComboBox::currentIndexChanged, this, [this, changed]() {
+    // ANY FIELD THAT MOVES THE BOX MOVES THE HELPER'S OFFSET WITH IT. Units,
+    // scale, the axes and the free rotation all do — and the normal order of
+    // work is exactly the one that used to break it: pick Bottom-centre, then
+    // fix the unit the suggestion line just told you about. The offset stayed
+    // where the old unit put it while the combo still claimed "Bottom centre".
+    const auto geometryChanged = [this, changed]() {
+        changed();
+        applyOriginHelper();
+    };
+    connect(mUnits, &QComboBox::currentIndexChanged, this, [this, geometryChanged]() {
+        if (mUpdating) return;
+        geometryChanged();
+    });
+    connect(mScale, &QDoubleSpinBox::valueChanged, this, [this, geometryChanged]() {
+        if (mUpdating) return;
+        geometryChanged();
+    });
+    connect(mUp, &QComboBox::currentIndexChanged, this, [this, geometryChanged]() {
         if (mUpdating) return;
         keepAxesPerpendicular(true);
-        changed();
+        geometryChanged();
     });
-    connect(mForward, &QComboBox::currentIndexChanged, this, [this, changed]() {
+    connect(mForward, &QComboBox::currentIndexChanged, this, [this, geometryChanged]() {
         if (mUpdating) return;
         keepAxesPerpendicular(false);
-        changed();
+        geometryChanged();
     });
     for (int i = 0; i < 3; ++i) {
-        connect(mRotate[i], &QDoubleSpinBox::valueChanged, this, [this, changed]() {
+        connect(mRotate[i], &QDoubleSpinBox::valueChanged, this, [this, geometryChanged]() {
             if (mUpdating) return;
-            // A rotation moves the box, so a helper's offset has to follow it.
-            changed();
-            applyOriginHelper();
+            geometryChanged();
         });
         // A typed offset is a CUSTOM origin — the combo says so rather than
         // lying about which helper produced it.
@@ -451,6 +496,12 @@ void ImportSettingsDialog::setRemaining(int n)
     mRemaining = std::max(0, n);
     if (!mRemainingBox) return;
     mRemainingBox->setVisible(mRemaining > 0 && mMode == Mode::Import);
+    if (mSkipAllButton) {
+        mSkipAllButton->setVisible(mRemaining > 0 && mMode == Mode::Import);
+        mSkipAllButton->setText(mRemaining == 1
+                                    ? tr("Skip both")
+                                    : tr("Skip the remaining %1").arg(mRemaining + 1));
+    }
     mRemainingBox->setText(mRemaining == 1
                                ? tr("Use these settings for the other model file too")
                                : tr("Use these settings for the remaining %1 model files")
@@ -506,13 +557,16 @@ void ImportSettingsDialog::setPreRead(const iris::ModelPreRead &facts)
 void ImportSettingsDialog::setBusy(bool busy)
 {
     mBusy = busy;
-    if (mOkButton) mOkButton->setEnabled(!busy);
+    // A reimport whose source could not be read stays refused: the read is the
+    // thing OK would do again.
+    if (mOkButton) mOkButton->setEnabled(!busy && !(mPreReadFailed && mMode == Mode::Reimport));
     refreshPreview();
 }
 
 void ImportSettingsDialog::startPreRead(const QString &path, const QString &formatHint)
 {
     const quint64 generation = ++mPreReadGeneration;
+    mPreReadFailed = false;
     setBusy(true);
     // A worker, because a large FBX is seconds even for the light parse — the
     // dialog stays alive and cancellable throughout. The watcher is a child of
@@ -525,8 +579,22 @@ void ImportSettingsDialog::startPreRead(const QString &path, const QString &form
                 watcher->deleteLater();
                 if (generation != mPreReadGeneration) return;   // superseded
                 setPreRead(facts);
-                if (!facts.parsed)
+                if (facts.parsed) return;
+                mPreReadFailed = true;
+                if (mMode == Mode::Reimport) {
+                    // A REIMPORT RE-READS THESE VERY BYTES. The commonest cause
+                    // is a source that is MORE THAN ONE FILE — a .gltf whose
+                    // geometry lives in a sibling .bin — and the library stores
+                    // only the file that was imported, so the sibling is not
+                    // there to find (measured, IMPORT-2 F7). Say it here rather
+                    // than let OK fail one level down with a worse message.
+                    setStatus(tr("This asset cannot be reimported: %1\n\nIts source file "
+                                 "references other files that the library does not store "
+                                 "alongside it.").arg(facts.error), true);
+                    if (mOkButton) mOkButton->setEnabled(false);
+                } else {
                     setStatus(tr("This file could not be read: %1").arg(facts.error), true);
+                }
             });
     watcher->setFuture(QtConcurrent::run(&iris::ModelPreRead::read, path, formatHint));
 }
@@ -566,6 +634,12 @@ void ImportSettingsDialog::readFieldsIntoSettings()
             const QListWidgetItem *item = mClipList->item(row);
             if (item->checkState() == Qt::Checked) mSettings.clipNames.append(item->text());
         }
+        // THE SAME SET IS THE SAME RECORD. The list is built in FILE order with
+        // the FILE's spelling, and wantsClip matches case-insensitively — so a
+        // stored ["run", "Walk"] would come back as ["Walk", "Run"] after any
+        // touch at all, moving the hash and re-baking an asset nobody changed.
+        // When the ticked set is what came in, what came in is what goes out.
+        if (sameClipSet(mSettings.clipNames, keptNames)) mSettings.clipNames = keptNames;
         // An empty choice IS "no clips" — the record says so explicitly
         // rather than silently meaning "all of them".
         if (mSettings.clipNames.isEmpty()) mSettings.clips = false;
@@ -573,29 +647,37 @@ void ImportSettingsDialog::readFieldsIntoSettings()
     }
 }
 
+// A RECORD IS NOT A WIDGET'S OPINION. A number the field cannot spell — a
+// script's scale of 0.000037 against four decimals, a 33.333 degree rotation
+// against two — would be silently rounded the moment any other field moved, and
+// a rounded record is a different bake. Widen the field for the value instead;
+// the ordinary 1.0 and 0.00 still read as they always did.
+void ImportSettingsDialog::fitField(QDoubleSpinBox *field, double value)
+{
+    if (!field) return;
+    const double magnitude = std::fabs(value);
+    while (field->decimals() < 9
+           && std::fabs(QString::number(value, 'f', field->decimals()).toDouble() - value)
+                  > 1e-12 * std::max(magnitude, 1.0))
+        field->setDecimals(field->decimals() + 1);
+    if (value < field->minimum()) field->setMinimum(value);
+    if (value > field->maximum()) field->setMaximum(value);
+}
+
 void ImportSettingsDialog::writeSettingsIntoFields()
 {
     if (!mScale) return;
     mUpdating = true;
-    // A RECORD IS NOT A WIDGET'S OPINION: a scale the spin box cannot represent
-    // exactly would be silently rounded the moment any other field moved. Widen
-    // the box for the value instead — the common 1.0 still reads "1.0000".
-    if (mSettings.scale > 0.0) {
-        while (mScale->decimals() < 9
-               && std::fabs(QString::number(mSettings.scale, 'f', mScale->decimals()).toDouble()
-                            - mSettings.scale)
-                      > 1e-12 * mSettings.scale)
-            mScale->setDecimals(mScale->decimals() + 1);
-        if (mSettings.scale < mScale->minimum()) mScale->setMinimum(mSettings.scale);
-        if (mSettings.scale > mScale->maximum()) mScale->setMaximum(mSettings.scale);
-    }
+    if (mSettings.scale > 0.0) fitField(mScale, mSettings.scale);
     mScale->setValue(mSettings.scale);
     mUnits->setCurrentIndex(
         std::max(0, mUnits->findData(QLatin1String(iris::ImportSettings::unitName(mSettings.units)))));
     mUp->setCurrentIndex(std::max(0, mUp->findData(mSettings.up)));
     mForward->setCurrentIndex(std::max(0, mForward->findData(mSettings.forward)));
     for (int i = 0; i < 3; ++i) {
+        fitField(mRotate[i], mSettings.rotate[i]);
         mRotate[i]->setValue(mSettings.rotate[i]);
+        fitField(mTranslate[i], mSettings.translate[i]);
         mTranslate[i]->setValue(mSettings.translate[i]);
     }
     mSkeleton->setChecked(mSettings.skeleton);
@@ -657,7 +739,14 @@ void ImportSettingsDialog::applyOriginHelper()
     double t[3];
     originTranslation(wanted, placedBox(mSettings, mFacts), t);
     mUpdating = true;
-    for (int i = 0; i < 3; ++i) mTranslate[i]->setValue(t[i]);
+    for (int i = 0; i < 3; ++i) {
+        // The FIELD is what the record is read back from, so it has to be able
+        // to spell the helper's answer exactly — otherwise the offset the user
+        // sees, the offset stored, and the offset originOf compares against are
+        // three different numbers and the combo forgets which helper it was.
+        fitField(mTranslate[i], t[i]);
+        mTranslate[i]->setValue(t[i]);
+    }
     mUpdating = false;
     readFieldsIntoSettings();
     refreshPreview();
@@ -734,12 +823,31 @@ void ImportSettingsDialog::refreshPreview()
         mFileFacts->setText(facts.join(tr(" · ")));
     }
 
+    // AN ANIMATION-ONLY FILE HAS NOTHING TO SIZE (a Mixamo clip is geometry-free
+    // by design). The size, orientation and origin groups are about geometry,
+    // so they go quiet rather than inviting a decision that cannot apply — the
+    // clip half of the dialog still works and OK imports exactly as before.
+    const bool clipsOnly = mFacts.parsed && mFacts.meshes == 0 && !mFacts.clipNames.isEmpty();
+    for (QGroupBox *group : { mSizeBox, mAxisBox, mOriginBox })
+        if (group) group->setEnabled(!clipsOnly);
+    if (clipsOnly) {
+        mExtent->setText(tr("Animation clips only \u2014 there is no geometry to size."));
+        ThemeRoles::setTone(mExtent, ThemeRoles::Tone::Muted);
+    }
+
     QString advice;
     const Suggestion state = suggestionFor(mSettings, mFacts, &advice);
     mSuggestion->setVisible(state != Suggestion::None);
     mSuggestion->setText(advice);
     ThemeRoles::setTone(mSuggestion, state == Suggestion::Plausible ? ThemeRoles::Tone::Success
                                                                     : ThemeRoles::Tone::Warning);
+}
+
+QString ImportSettingsDialog::statusText() const
+{
+    // isVisibleTo, not isVisible: a dialog that has not been shown yet still
+    // HAS its answer, and a test reads it without putting a window up.
+    return mStatus && mStatus->isVisibleTo(this) ? mStatus->text() : QString();
 }
 
 void ImportSettingsDialog::setStatus(const QString &text, bool problem)
@@ -761,6 +869,10 @@ void ImportSettingsDialog::accept()
     if (mMode == Mode::Reimport && mCommit) {
         setStatus(tr("Reimporting…"), false);
         if (mOkButton) mOkButton->setEnabled(false);
+        // The commit is synchronous and can take seconds (a re-parse and a
+        // re-bake), so the label needs ONE event turn to reach the screen or it
+        // never appears at all. User input stays out: the dialog is mid-answer.
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
         QString error;
         const bool ok = mCommit(record(), &error);
         if (mOkButton) mOkButton->setEnabled(true);
@@ -793,10 +905,13 @@ QHash<QString, QJsonObject> ImportSettingsDialog::askForFiles(const QStringList 
         dialog.setSubject(QFileInfo(file).fileName());
         dialog.setRemaining(batch.remaining());
         dialog.startPreRead(file);
-        if (dialog.exec() == QDialog::Accepted)
+        if (dialog.exec() == QDialog::Accepted) {
             batch.accept(dialog.record(), dialog.applyToRemaining());
-        else
+        } else if (dialog.skipRemaining()) {
+            batch.skipAll();
+        } else {
             batch.skip();
+        }
     }
     for (const QString &file : batch.accepted()) out.insert(file, batch.recordFor(file));
     return out;
@@ -843,4 +958,12 @@ void ImportSettingsBatch::skip()
     // question off, they did not answer it for this file.
     mSkipped.append(mFiles.at(mIndex));
     ++mIndex;
+}
+
+void ImportSettingsBatch::skipAll()
+{
+    // The user is done with this DROP, not with this file (§12.5's one dialog
+    // per model file needs an exit that is not N cancels). Everything already
+    // answered stands.
+    while (!atEnd()) skip();
 }

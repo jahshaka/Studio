@@ -64,6 +64,7 @@ class QCheckBox;
 class QComboBox;
 class QDialogButtonBox;
 class QDoubleSpinBox;
+class QGroupBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -113,6 +114,10 @@ public:
     void setRemaining(int n);
     int remaining() const { return mRemaining; }
     bool applyToRemaining() const;
+    /// True when the dialog was closed by "Skip the remaining N" rather than by
+    /// Cancel: the user is done with this drop, not with this file. Meaningful
+    /// only after a rejected exec().
+    bool skipRemaining() const { return mSkipRemaining; }
 
     /// Pre-fill / read back. `settings()` is what the dialog holds right now,
     /// whether or not it has been accepted.
@@ -126,6 +131,14 @@ public:
     const iris::ModelPreRead &preRead() const { return mFacts; }
     void setBusy(bool busy);
     bool isBusy() const { return mBusy; }
+
+    /// True when a pre-read was attempted and the file could not be read. In
+    /// REIMPORT mode that is fatal and the dialog says so: a reimport re-reads
+    /// the very bytes the pre-read just failed on (SPECS/IMPORT_DIALOG_SPEC.md
+    /// §5), so OK could only fail one level down with a worse message.
+    bool sourceUnreadable() const { return mPreReadFailed; }
+    /// The refusal the dialog is showing, empty when it is showing none.
+    QString statusText() const;
 
     /// Read `path` on a worker and feed the result to setPreRead() when it
     /// lands. Safe to call again (the earlier read's answer is dropped) and
@@ -188,7 +201,8 @@ public:
     static Box placedBox(const iris::ImportSettings &settings,
                          const iris::ModelPreRead &facts);
 
-    /// The `translate` an origin helper asks for, given that box.
+    /// The `translate` an origin helper asks for, given that box — on the
+    /// kOffsetDecimals grid, so the record and the offset field agree.
     static void originTranslation(Origin origin, const Box &box, double out[3]);
 
     /// Which helper `settings.translate` corresponds to (Custom when it is
@@ -206,6 +220,16 @@ public:
     static constexpr double kMaxCharacterHeight = 3.0;
     static constexpr double kTypicalCharacterHeight = 1.75;
 
+    /// AN OFFSET IS AUTHORED TO MICROMETRES. The origin helpers compute a full
+    /// double and the offset FIELD can only spell so many digits, so a helper's
+    /// answer would not survive a save-and-reopen: the record would carry
+    /// -0.199994996 while the field wrote -0.2, and originOf would read the row
+    /// back as "Custom" — the dialog forgetting its own decision. So the helper
+    /// ROUNDS to the same grid the field uses, and the two agree exactly.
+    /// Micrometres, because it has to be fine enough for a centimetre-sized
+    /// asset and coarse enough to be a stable number.
+    static constexpr int kOffsetDecimals = 6;
+
 public slots:
     void accept() override;
 
@@ -217,6 +241,10 @@ private:
     void refreshClipList();
     void keepAxesPerpendicular(bool upChanged);
     void applyOriginHelper();
+    /// Widen a field so it can spell `value` exactly, instead of rounding a
+    /// record nobody asked it to change (see kOffsetDecimals for the same
+    /// argument about the origin helpers).
+    static void fitField(QDoubleSpinBox *field, double value);
     void setStatus(const QString &text, bool problem);
 
     Mode mMode = Mode::Import;
@@ -228,6 +256,7 @@ private:
     iris::ModelPreRead mFacts;
     Commit mCommit;
     quint64 mPreReadGeneration = 0;
+    bool mPreReadFailed = false;
 
     QLabel *mHeader = nullptr;
     QLabel *mFileFacts = nullptr;
@@ -246,6 +275,11 @@ private:
     QLabel *mSuggestion = nullptr;
     QLabel *mStatus = nullptr;
     QCheckBox *mRemainingBox = nullptr;
+    QPushButton *mSkipAllButton = nullptr;
+    bool mSkipRemaining = false;
+    QGroupBox *mSizeBox = nullptr;
+    QGroupBox *mAxisBox = nullptr;
+    QGroupBox *mOriginBox = nullptr;
     QDialogButtonBox *mButtons = nullptr;
     QPushButton *mOkButton = nullptr;
 };
@@ -286,6 +320,9 @@ public:
 
     void accept(const QJsonObject &record, bool useForRemaining);
     void skip();
+    /// "Skip the rest": this file and every one after it. The drop's media and
+    /// the files already answered are untouched.
+    void skipAll();
 
     QJsonObject recordFor(const QString &file) const { return mRecords.value(file); }
     QStringList accepted() const { return mAccepted; }
