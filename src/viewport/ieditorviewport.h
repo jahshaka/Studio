@@ -598,6 +598,12 @@ public:
             int       items = 0;
             int       attached = 0;
             float     lastCpuMs = -1.0f;
+            /// ATOM stage 1's far-field proxy, as this cascade spent it: the
+            /// histogram of BAKED LOD LEVELS it voxelised (entry L = objects at
+            /// level L, 0 the authored geometry) and the triangles those levels
+            /// add up to.
+            QVector<int> lodLevels;
+            qint64    voxelTriangles = 0;
         };
         QVector<CascadeInfo> cascades;
         /// Whole-chain rebuilds the teleport guards forced, and cascade

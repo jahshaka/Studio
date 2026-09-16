@@ -540,6 +540,29 @@ add_test(NAME gi.cascades COMMAND test_gi_cascades
 # back a frame at a time.
 set_tests_properties(gi.cascades PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# ATOM STAGE 1'S CONSUMER: WHICH MESH LOD A CASCADE VOXELISES (NANITE_SPEC §7
+# stage 1's hand-off, ogre-patch 0064). A cascade hands the voxeliser the
+# coarsest baked level whose error is below half its own cell — the authored
+# geometry at the finest cell, a simplified one at the coarse ones — and the LOD
+# BIAS, which is a dial over what is drawn, must not reach it. The A/B is in one
+# process (GiParams::cascadeVoxelLod). RUN_SERIAL like every cascade suite: the
+# chain holds four voxel volumes at once.
+add_executable(test_gi_cascade_lod test_gi_cascade_lod.cpp)
+set_target_properties(test_gi_cascade_lod PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cascade_lod PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cascade_lod PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cascade_lod JahshakaEngineMedia)
+add_test(NAME gi.cascade_lod COMMAND test_gi_cascade_lod
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cascade_lod PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # AN EDIT UNDER THE CHAIN COSTS AT MOST ONE CASCADE PER FRAME (PHOTON_SPEC §7 G1,
 # and E2's own suite row). gi.cascades is about the camera SCROLL; this is about
 # the four kinds of EDIT — geometry, material, spawn, light — each of which used
