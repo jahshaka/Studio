@@ -273,9 +273,9 @@ void WorldGiPropertyWidget::rebuild()
     modeSelector->addItem(tr("Voxel + Reflections"));
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
     modeSelector->setToolTip(tr("Which technique Photon uses, if you want to choose it yourself. "
-                                "Bounced Light is Instant Radiosity; Voxel Lighting cone-traces "
-                                "the bounce out of a voxelization of the lit volume; Voxel + "
-                                "Reflections adds the parallax-corrected probe grid."));
+                                "Voxel Lighting cone-traces the bounce out of a voxelization of "
+                                "the lit volume; Voxel + Reflections adds the parallax-corrected "
+                                "probe grid."));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldGiPropertyWidget::modeChanged);
 

@@ -195,7 +195,7 @@ world.sunDisc({ visible: true });             // the disc drawn where the sun po
 world.fog({ enabled: true, color: "#aabbcc", start: 20, end: 120 });
 world.shadows({ enabled: true });
 world.sky("gradient", { top: "#2a4d6e", mid: "#87a5c0", bottom: "#d8c8a8" });
-world.gi({ mode: "instant_radiosity", quality: "medium", bounces: 2 });
+world.gi({ mode: "vct", quality: "medium", bounces: 2 });
 world.get();                                  // read everything back
 ```
 

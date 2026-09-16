@@ -5522,6 +5522,11 @@ void monitor_survives_rebuilds_and_view_destruction() {
     // this is the same statement about the monitor with no assumption about
     // which refresh path the engine chose.
     gi.quality = GiQuality::Medium;
+    // THE CAUSE, AUTHORED BY THIS CASE rather than inherited. The event carries
+    // the reason that last staled the grid, so a test that asserts a specific one
+    // has to be the thing that staled it — otherwise it is pinning whatever the
+    // fixture happened to do last (it was `Light`, from the rig's own setup).
+    rig.s->setAmbient(Colour(0.21f, 0.21f, 0.21f), Colour(0.19f, 0.19f, 0.19f));
     rig.s->setGlobalIllumination(gi);
     rig.s->refreshGlobalIllumination();
     render(fx.e, 6);
@@ -5535,11 +5540,16 @@ void monitor_survives_rebuilds_and_view_destruction() {
     for (const MonitorEvent &e : evs)
         if (e.kind == MonitorEventKind::GiRebuild) {
             giRebuild = true;
-            if (e.reason != WorkReason::None) giHasReason = true;
+            // THE REASON THIS CASE AUTHORED. The rebuild reports the input that
+            // last staled the grid, which the line above makes the ambient —
+            // asserting the specific value is the point of the case, and "not
+            // None" would pass on any of them (it was `Refresh` while the
+            // deleted Instant Radiosity arm answered a host-asked re-trace).
+            if (e.reason == WorkReason::Ambient) giHasReason = true;
             std::printf("    gi rebuild event: %.2f ms, reason %d\n", e.ms, int(e.reason));
         }
     CHECK_MSG(giRebuild, "a GI rebuild must appear in events");
-    CHECK_MSG(giHasReason, "a GI rebuild carries a reason, never None");
+    CHECK_MSG(giHasReason, "a GI rebuild carries the reason that asked for it (the ambient this case moved)");
     gi.mode = GiMode::Off;
     rig.s->setGlobalIllumination(gi);
     render(fx.e, 2);

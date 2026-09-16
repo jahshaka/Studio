@@ -11,12 +11,18 @@
 // texture that cascade has just stopped writing: the cross-cascade term of the
 // bounce integrates the PREVIOUS injection's radiance.
 //
-// WHY IT IS REACHABLE HERE AND NOT UPSTREAM: upstream's own cascade manager
-// gives every cascade the same bounce count, and an EVEN number of swaps comes
-// back to where it started (a swap is an involution). Our per-cascade
-// stabilisation — which is upstream's own formula, a coarser cascade gets more
-// bounces — resolves to 1 / 3 / 7 on a four-cascade chain at THREE total
-// bounces, which is three odd counts out of three. That is Photon's Epic tier.
+// AND THE SECOND DEFECT THE SAME PATCH CLOSES, which is the one this suite
+// actually measures: "VCT/LightVctBounceInject" is found BY NAME, so every
+// VctLighting in the process shares ONE compute job, and `buildCascadeArm`
+// builds OUTERMOST FIRST — so cascade 0 configures that job last and every outer
+// cascade had been dispatching its bounces through cascade 0's voxels. At any
+// count above one bounce that is a whole-picture corruption.
+//
+// (The parity half is real and reachable but is NOT what reds here: measured,
+// the per-cascade stabilisation resolves to 1 / 2 / 4 / 8 on the four-cascade
+// table at three total bounces — only cascade 0 is odd, and cascade 0's own
+// light voxel is the one slot upstream already re-binds after its swap. Two
+// total bounces gives 1 / 1 / 2 / 4, where the outer odd counts do fire.)
 //
 // THE OBSERVABLE, and why it is this one. "Reads the previous injection's
 // radiance" is a statement about HISTORY, so the assertion is a history test and

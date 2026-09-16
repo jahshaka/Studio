@@ -664,6 +664,11 @@ bool WorldApi::gi(const QVariantMap &params)
     // and a tier cannot adopt a number nobody has measured.
     if (params.contains("cascades")) {
         scene->giCascades = params.value("cascades").toBool() ? 1 : 0;
+        // ...AND IT PINS, like every other Photon tier row (mode, quality, ddgi,
+        // bounces, probeSize all do). Without the pin the next tier application
+        // put the chain straight back, so `world.gi({cascades:false})` read as
+        // done and was undone by the following world.photon({tier}).
+        worldmodes::pinRowValue(scene, QStringLiteral("giCascades"), scene->giCascades);
     }
     if (params.contains("cascadeInstanceCap")) {
         const int v = params.value("cascadeInstanceCap").toInt();

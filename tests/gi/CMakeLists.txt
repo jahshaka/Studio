@@ -584,6 +584,27 @@ add_test(NAME gi.cascade_bounce_bindings COMMAND test_gi_cascade_bounce_bindings
 set_tests_properties(gi.cascade_bounce_bindings PROPERTIES
     TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# THE SAME SCENE VOXELISES TO THE SAME PICTURE (ogre-patches 0061 and 0062): a
+# cascade SCROLLED to a place renders what a cascade BUILT at it renders, two
+# builds of one scene agree, and the attach order does not decide the answer.
+# RUN_SERIAL like every cascade suite.
+add_executable(test_gi_cascade_determinism test_gi_cascade_determinism.cpp)
+set_target_properties(test_gi_cascade_determinism PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cascade_determinism PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cascade_determinism PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cascade_determinism JahshakaEngineMedia)
+add_test(NAME gi.cascade_determinism COMMAND test_gi_cascade_determinism
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cascade_determinism PROPERTIES
+    TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
 # camera walks — in the same frame the cascade moved, bound throughout, and
