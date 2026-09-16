@@ -66,6 +66,15 @@ assert(opened.open === true, "app.dialog('importSettings', {guid}) opens on the 
 assert(opened.settings !== undefined, "…and reports the record it holds");
 assert(opened.settings.units === "auto" && opened.settings.scale === 1,
        "…pre-filled from assets.importSettings: the record this asset was imported with");
+// The dialog's title and its pre-read both come from the VERB, not from a reach
+// past it into the database and the content store.
+var readBack = assets.importSettings(guid);
+assert(readBack.name !== undefined && readBack.name.length > 0,
+       "assets.importSettings reports the row's display name");
+assert(readBack.sourceName !== undefined
+       && readBack.sourceName.toLowerCase().indexOf(".fbx") > 0,
+       "…and the stored source file's name, whose extension a reader of the "
+       + "hash-named object needs (" + readBack.sourceName + ")");
 assert(near(opened.settings.translate[2], UNIQ[2], 1e-12),
        "…including the translation the import carried");
 
@@ -78,6 +87,15 @@ assert(accepted.settings.units === "m", "…and the record it committed says so"
 var after = assets.importSettings(guid);
 assert(after.settings.units === "m",
        "the ASSET now carries the dialog's record (assets.importSettings reads it back)");
+// THE ONE-FIELD EDIT IS ONE FIELD. {settings:{units:'m'}} is MERGED over what
+// the dialog holds, exactly as assets.reimport merges over the stored record —
+// parsed standalone it would have reset the units, axes, rotation, ORIGIN and
+// clip choice on the way to changing one number.
+assert(near(after.settings.translate[2], UNIQ[2], 1e-12),
+       "…and the translation the import carried is still there, untouched by a one-key edit");
+assert(after.settings.scale === 1 && after.settings.axes.up === "+Y"
+       && after.settings.clips === true && after.settings.skeleton === true,
+       "…as is every other key the edit did not name");
 assert(after.sourceOid === before,
        "…and the source content id did not move: a reimport is not a new import");
 assert(near(assets.metadata(guid).extent.y, 1.0, 1e-3),
@@ -117,5 +135,18 @@ catch (e) { noRecord = String(e).indexOf("import record") >= 0
 assert(noRecord, "a guid with no import record is refused with a reason, not a modal box");
 assert(app.dialogs().filter(function (d) { return d.name === "importSettings"; })[0].open === false,
        "…and no dialog was left open");
+
+// ---- 7. ONE IMPORT AT A TIME ----------------------------------------------
+// The abort the second read found: ImportBatchRunner::isRunning() is false
+// while a question (or a just-started batch) is pending, and a second batch
+// started behind the first does setRequests on a RUNNING runner, connects every
+// signal twice and start()s again — Q_ASSERT(!mRunning) in a Debug build. The
+// verb has to REFUSE instead. (The modal-question half of the same guard cannot
+// be reached from a script — a script cannot raise the tray's own dialog — so
+// what is asserted here is the runner half, which is the one that aborts.)
+assert(editor.importAssets([CUBE]) === true, "editor.importAssets starts a batch");
+var refused = false;
+try { editor.importAssets([CUBE]); } catch (e) { refused = String(e).indexOf("already") >= 0; }
+assert(refused, "…and a second one, while it runs, is REFUSED rather than started behind it");
 
 console.log("scripting.e2e.import_dialog: all assertions passed");

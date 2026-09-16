@@ -38,6 +38,10 @@ For more information see the LICENSE file
 // Offscreen QPA, no database, no engine, no display.
 
 #include <QApplication>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
+#include <QThread>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -339,9 +343,14 @@ int main(int argc, char **argv)
         stored.scale = 0.000037;                // finer than the field's 4 decimals
         dialog.setSettings(stored);
 
-        // touch an unrelated field, as a user would
-        auto *scale = nth<QDoubleSpinBox>(&dialog, 0);
-        if (scale) scale->setValue(scale->value());
+        // TOUCH AN UNRELATED FIELD FOR REAL. setValue(value()) emits nothing
+        // (measured: 0 valueChanged), so readFieldsIntoSettings would never run
+        // and this case would pass with both guards deleted — which is what the
+        // second read caught. A checkbox toggled and toggled back is two real
+        // signals and leaves the record's own value alone.
+        auto *skeleton = dialog.findChildren<QCheckBox *>().value(0);
+        CHECK(skeleton && skeleton->isChecked(), "the skeleton box is on, as the record says");
+        if (skeleton) { skeleton->setChecked(false); skeleton->setChecked(true); }
         const iris::ImportSettings now = dialog.settings();
         CHECK(now.clipNames == stored.clipNames && now.clips,
               "an unread clip list does not erase the record's clip choice");
@@ -350,6 +359,170 @@ int main(int argc, char **argv)
                              .arg(now.scale, 0, 'g', 12)));
         CHECK(dialog.settings().canonicalJson() == stored.canonicalJson(),
               "…so the whole record is still byte-identical to the stored one");
+    }
+
+    // ---- 7c. AN ORIGIN HELPER FOLLOWS THE BOX ------------------------------
+    // The normal order of work is the one that used to break it: pick
+    // Bottom-centre, THEN fix the unit the suggestion line just told you about.
+    // Every field that moves the box (units, scale, the axes, the rotation) has
+    // to move the helper's offset with it, or the combo goes on claiming
+    // "Bottom centre" while the model floats.
+    {
+        ImportSettingsDialog dialog;
+        dialog.setPreRead(cm);                          // a cm-declared cube
+        dialog.setOrigin(ImportSettingsDialog::Origin::BottomCentre);
+        const auto expect = [&]() {
+            double want[3];
+            ImportSettingsDialog::originTranslation(
+                ImportSettingsDialog::Origin::BottomCentre,
+                ImportSettingsDialog::placedBox(dialog.settings(), cm), want);
+            const iris::ImportSettings s = dialog.settings();
+            return near_(s.translate[0], want[0], 1e-9) && near_(s.translate[1], want[1], 1e-9)
+                   && near_(s.translate[2], want[2], 1e-9);
+        };
+        CHECK(expect(), "Bottom-centre sits the cube on the ground as imported");
+        // X, not Y: this cube's box starts at y = 0, so its BOTTOM offset is
+        // zero at every scale — the X centring is what visibly moves.
+        const double first = dialog.settings().translate[0];
+
+        QComboBox *units = nullptr;
+        for (QComboBox *c : dialog.findChildren<QComboBox *>())
+            if (c->findData(QStringLiteral("cm")) >= 0) units = c;
+        CHECK(units, "the dialog has a units combo");
+        if (units) units->setCurrentIndex(units->findData(QStringLiteral("m")));
+        CHECK(expect(), "…and FOLLOWS a unit change (m: the box is 100x bigger)");
+        CHECK(!near_(dialog.settings().translate[0], first, 1e-9),
+              qPrintable(QStringLiteral("…which means it MOVED (%1 -> %2)")
+                             .arg(first).arg(dialog.settings().translate[0])));
+        CHECK(dialog.origin() == ImportSettingsDialog::Origin::BottomCentre,
+              "…and the combo still, honestly, says Bottom centre");
+
+        auto *scale = nth<QDoubleSpinBox>(&dialog, 0);
+        if (scale) scale->setValue(2.0);
+        CHECK(expect(), "…and follows a SCALE change too");
+
+        auto *rot = dialog.findChildren<QDoubleSpinBox *>().value(1);   // rotation X
+        if (rot) rot->setValue(90.0);
+        CHECK(expect(), "…and a rotation, which was the one case that already worked");
+    }
+
+    // ---- 7d. A HELPER'S OFFSET SURVIVES THE FIELD --------------------------
+    // originTranslation writes on the offset field's own grid, so a record
+    // written by a helper reads back AS that helper — a dialog that forgot its
+    // own decision on reopening would send every user to "Custom".
+    {
+        ImportSettingsDialog dialog;
+        dialog.setPreRead(rigged);
+        dialog.setOrigin(ImportSettingsDialog::Origin::Centre);
+        const iris::ImportSettings written = dialog.settings();
+
+        ImportSettingsDialog reopened;               // as a reimport would
+        reopened.setSettings(written);
+        reopened.setPreRead(rigged);
+        CHECK(reopened.origin() == ImportSettingsDialog::Origin::Centre,
+              "a Centre offset written by the dialog reads back as Centre, not Custom");
+        CHECK(reopened.settings().canonicalJson() == written.canonicalJson(),
+              "…and reopening changed nothing in the record");
+
+        // …AND ON A BOX WHOSE CENTRE IS NOT A ROUND NUMBER, which is the case
+        // the offset field's decimals would otherwise eat.
+        iris::ModelPreRead awkward;
+        awkward.parsed = true;
+        awkward.aabbValid = true;
+        awkward.aabbMin[0] = -0.3711117; awkward.aabbMax[0] = 0.9134449;
+        awkward.aabbMin[1] = 0.0193337;  awkward.aabbMax[1] = 1.7712223;
+        awkward.aabbMin[2] = -0.5511119; awkward.aabbMax[2] = 0.1233331;
+        ImportSettingsDialog odd;
+        odd.setPreRead(awkward);
+        odd.setOrigin(ImportSettingsDialog::Origin::BottomCentre);
+        const iris::ImportSettings oddWritten = odd.settings();
+        ImportSettingsDialog oddReopened;
+        oddReopened.setSettings(oddWritten);
+        oddReopened.setPreRead(awkward);
+        CHECK(oddReopened.origin() == ImportSettingsDialog::Origin::BottomCentre,
+              qPrintable(QStringLiteral("…and on an awkward box too (offset %1, %2, %3)")
+                             .arg(oddWritten.translate[0], 0, 'g', 10)
+                             .arg(oddWritten.translate[1], 0, 'g', 10)
+                             .arg(oddWritten.translate[2], 0, 'g', 10)));
+        CHECK(oddReopened.settings().canonicalJson() == oddWritten.canonicalJson(),
+              "…byte for byte");
+    }
+
+    // ---- 7e. THE SAME CLIPS ARE THE SAME RECORD ----------------------------
+    // The checklist is built in FILE order with the FILE's spelling while
+    // wantsClip matches case-insensitively, so a stored list in another order
+    // or case would come back rewritten — a moved hash, and a re-bake of an
+    // asset nobody changed.
+    if (rigged.clipNames.size() >= 2) {
+        iris::ImportSettings stored;
+        stored.clipNames = QStringList{ rigged.clipNames.at(1).toUpper(),
+                                        rigged.clipNames.at(0).toLower() };
+        ImportSettingsDialog dialog;
+        dialog.setSettings(stored);
+        dialog.setPreRead(rigged);
+        auto *skeleton = dialog.findChildren<QCheckBox *>().value(0);
+        if (skeleton) { skeleton->setChecked(false); skeleton->setChecked(true); }
+        CHECK(dialog.settings().clipNames == stored.clipNames,
+              qPrintable(QStringLiteral("a stored clip list keeps its order and spelling "
+                                        "(%1 vs %2)")
+                             .arg(dialog.settings().clipNames.join(','),
+                                  stored.clipNames.join(','))));
+        CHECK(dialog.settings().hash() == stored.hash(),
+              "…so the bake key does not move and nothing is re-baked");
+    }
+
+    // ---- 7f. A ROTATION THE FIELD CANNOT SPELL -----------------------------
+    {
+        iris::ImportSettings stored;
+        stored.rotate[1] = 33.333;                 // against the field's 2 decimals
+        stored.translate[0] = 0.0001234;           // against the offset field's
+        ImportSettingsDialog dialog;
+        dialog.setSettings(stored);
+        auto *skeleton = dialog.findChildren<QCheckBox *>().value(0);
+        if (skeleton) { skeleton->setChecked(false); skeleton->setChecked(true); }
+        CHECK(dialog.settings().canonicalJson() == stored.canonicalJson(),
+              "a rotation and an offset finer than the fields' decimals survive a touch");
+    }
+
+    // ---- 7g. A SOURCE THAT CANNOT BE READ IS REFUSED, NOT ATTEMPTED --------
+    // A .gltf whose geometry lives in a sibling .bin: the library stores only
+    // the file that was imported, so a read of the STORED bytes cannot find the
+    // sibling (measured, IMPORT-2 F7 — the reimport verb fails the same way one
+    // level down). The dialog says so instead of offering an OK that cannot
+    // work.
+    {
+        QTemporaryDir alone;
+        const QString lonely = QDir(alone.path()).filePath(QStringLiteral("orphan.gltf"));
+        QFile::copy(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR
+                                   "/tests/importer/fixtures/external_buffer.gltf"), lonely);
+        const iris::ModelPreRead orphan = iris::ModelPreRead::read(lonely);
+        CHECK(!orphan.parsed, "a .gltf without its .bin cannot be read");
+        std::printf("    orphan error: %s\n", qPrintable(orphan.error));
+
+        ImportSettingsDialog dialog;
+        dialog.setMode(ImportSettingsDialog::Mode::Reimport);
+        dialog.startPreRead(lonely);
+        // the worker's answer, on this thread
+        for (int i = 0; i < 400 && dialog.isBusy(); ++i) {
+            QApplication::processEvents();
+            QThread::msleep(5);
+        }
+        CHECK(!dialog.isBusy(), "the pre-read finished");
+        CHECK(dialog.sourceUnreadable(), "…and the dialog knows the source could not be read");
+        CHECK(dialog.statusText().contains(QStringLiteral("cannot be reimported")),
+              qPrintable(QStringLiteral("…and says so: \"%1\"")
+                             .arg(dialog.statusText().simplified())));
+        auto *buttons = dialog.findChild<QDialogButtonBox *>();
+        CHECK(buttons && !buttons->button(QDialogButtonBox::Ok)->isEnabled(),
+              "…with OK refused, rather than failing one level down");
+
+        // The same file WITH its sibling reads fine — so the refusal is about
+        // the missing file, not about the fixture.
+        const iris::ModelPreRead whole = iris::ModelPreRead::read(
+            QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR
+                           "/tests/importer/fixtures/external_buffer.gltf"));
+        CHECK(whole.parsed && near_(whole.aabbMax[1] - whole.aabbMin[1], 1.0, 1e-4),
+              "the same .gltf beside its .bin reads as a 1 m cube");
     }
 
     // ---- 8. THE BATCH STATE MACHINE ---------------------------------------
@@ -392,6 +565,20 @@ int main(int argc, char **argv)
             CHECK(batch.recordFor(QStringLiteral("c.obj")) == twice.toJson(),
                   "…byte for byte");
             CHECK(batch.skipped().isEmpty(), "…with nothing skipped");
+        }
+
+        // (b2) "Skip the rest" — the third answer (§12.5 is one dialog per
+        // model file, so a ten-file drop needs an exit that is not ten Cancels)
+        {
+            ImportSettingsBatch batch;
+            batch.setFiles(files);
+            batch.accept(twice.toJson(), false);
+            batch.skipAll();
+            CHECK(batch.atEnd(), "\"Skip the rest\" finishes the batch");
+            CHECK(batch.accepted() == QStringList{ QStringLiteral("a.fbx") },
+                  "…keeping what was already answered");
+            CHECK(batch.skipped().size() == 2,
+                  "…and skipping the whole tail, not just the current file");
         }
 
         // (c) Cancel skips THAT FILE ONLY
