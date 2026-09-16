@@ -208,7 +208,7 @@ static bool buildScene(Ogre::Root *root, SpikeScene &out, unsigned w, unsigned h
         Item *item = out.sceneMgr->createItem(box, SCENE_DYNAMIC);
         item->setDatablock("spikeBox");
         SceneNode *n = out.sceneMgr->getRootSceneNode()->createChildSceneNode();
-        n->setPosition(0, 0.5f, -2.0f);
+        n->setPosition(0, 1.3f, -2.0f);   // eye height in STAGE space, 2 m ahead
         n->setScale(1.0f, 1.0f, 1.0f);
         n->attachObject(item);
     }
@@ -353,7 +353,7 @@ static void reportCaps(Ogre::Root *root, const char *tag) {
 // runtime, so the two pictures are comparable byte for byte.
 static void setParityPose(Ogre::Camera *cam) {
     cam->setPosition(Ogre::Vector3(0.6f, 1.5f, 2.4f));
-    cam->lookAt(Ogre::Vector3(0.0f, 0.5f, -2.0f));
+    cam->lookAt(Ogre::Vector3(0.0f, 1.3f, -2.0f));
     cam->setCustomProjectionMatrix(false);
     cam->setAspectRatio(1.0f);
     cam->setFOVy(Ogre::Degree(70.0f));
@@ -864,8 +864,25 @@ static int runXr(const std::string &outDir, int wantFrames) {
     XR_TRY(xrCreateSession(xr.instance, &sci, &xr.session), "xrCreateSession");
     say("SESSION created on the Ogre device");
 
+    // STAGE space when the runtime has one (its origin is on the FLOOR, so a
+    // scene authored with the ground at y = 0 puts the wearer's head where a
+    // head is), LOCAL otherwise. Phase 1b measured why: in LOCAL space on
+    // WiVRn the Quest Pro's eyes were located at y = -0.70 m, i.e. BELOW the
+    // spike's ground plane, and the owner saw the ground from underneath and
+    // no cube at all (ledger 585). The simulated HMD never showed it because
+    // its head sits at the origin.
+    XrReferenceSpaceType spaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+    {
+        uint32_t nSpaces = 0;
+        xrEnumerateReferenceSpaces(xr.session, 0, &nSpaces, nullptr);
+        std::vector<XrReferenceSpaceType> spaces(nSpaces);
+        if (nSpaces) xrEnumerateReferenceSpaces(xr.session, nSpaces, &nSpaces, spaces.data());
+        for (XrReferenceSpaceType t : spaces)
+            if (t == XR_REFERENCE_SPACE_TYPE_STAGE) spaceType = t;
+    }
+    say("SPACE  %s", spaceType == XR_REFERENCE_SPACE_TYPE_STAGE ? "STAGE (floor origin)" : "LOCAL (the runtime offers no STAGE)");
     XrReferenceSpaceCreateInfo rsci{ XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
-    rsci.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+    rsci.referenceSpaceType = spaceType;
     rsci.poseInReferenceSpace.orientation.w = 1.0f;
     XR_TRY(xrCreateReferenceSpace(xr.session, &rsci, &xr.space), "xrCreateReferenceSpace");
 
