@@ -161,6 +161,10 @@ namespace Contants
 			// got an empty MODEL_GUID_ROLE in the drawer.
 			{ "00000000-0000-0000-0000-000000002028", "Glass PBR" },
 			{ "00000000-0000-0000-0000-000000002029", "Silver PBR" },
+			// The Grand Showroom's mirror spheres (white metal, roughness 0.03)
+			// and the Mirror Room's panel (roughness 0.02) as presets (owner, 2026-09-17).
+			{ "00000000-0000-0000-0000-000000002030", "Chrome PBR" },
+			{ "00000000-0000-0000-0000-000000002031", "Mirror PBR" },
          };
 
         QString SHADER_DEFAULT = "00000000-0000-0000-0000-000000000001";

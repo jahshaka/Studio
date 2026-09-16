@@ -176,9 +176,9 @@ const PrimitiveDef kPrimitiveDefs[] = {
     { "Cylinder", ":/content/primitives/cylinder.obj",  "Cylinder" },
     { "Sphere",   ":/content/primitives/sphere.obj",    "Sphere"   },
     { "Torus",    ":/content/primitives/torus.obj",     "Torus"    },
-    // "Plane" is not a typo: the pre-extraction addCapsule() named its node
-    // Plane and the extraction preserved it bit-for-bit.
-    { "Capsule",  ":/content/primitives/capsule.obj",   "Plane"    },
+    // Named "Plane" from the original addCapsule() until 2026-09-17 (the
+    // extraction preserved it; the render audit's A10 caught it).
+    { "Capsule",  ":/content/primitives/capsule.obj",   "Capsule"  },
     { "Gear",     ":/content/primitives/gear.obj",      "Gear"     },
     { "Pyramid",  ":/content/primitives/pyramid.obj",   "Pyramid"  },
     { "Teapot",   ":/content/primitives/teapot.obj",    "Teapot"   },
