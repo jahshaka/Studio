@@ -1167,10 +1167,10 @@ int main()
         CHECK(itemsAtCap[0] > itemsAtCap[2],
               "...and voxelises strictly fewer");
         // THE DISPATCH COUNT IS NOT THE OBJECT COUNT (ogre-patch 0065), and this
-        // is the regression guard for the 3.6x patch 0062 cost on dense content.
+        // is the regression guard for the 3.9x patch 0062 cost on dense content.
         // A voxelisation dispatch is sized by the WHOLE VOLUME however few
-        // instances it holds, and these 216 objects each own a material — so a
-        // bucket key that names the material SLOT gives 216 whole-volume
+        // instances it holds, and these 220 objects each own a material — so a
+        // bucket key that names the material SLOT gives 220 whole-volume
         // dispatches per cascade, while one that names the material POOL (1024
         // materials per pool) gives a handful. `voxelDispatches` is the reading
         // that tells them apart, and it must stay in the handful.
