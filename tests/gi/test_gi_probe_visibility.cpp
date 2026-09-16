@@ -140,8 +140,8 @@ int main()
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
-    gi.boundsMin = Vec3(-4.6f, -0.6f, -4.6f);
-    gi.boundsMax = Vec3( 4.6f,  5.6f,  4.6f);
+    gi.testBoundsMin = Vec3(-4.6f, -0.6f, -4.6f);
+    gi.testBoundsMax = Vec3( 4.6f,  5.6f,  4.6f);
     gi.pccProbesX = 1; gi.pccProbesY = 1; gi.pccProbesZ = 1;   // ONE probe, in the red half
     // Force the fitted parallax box back out to the whole region, so the cheap
     // box test cannot be what excludes the sealed half (see the header).
@@ -229,8 +229,8 @@ int main()
     gi2.mode = GiMode::VctPccHybrid;
     gi2.quality = GiQuality::Medium;
     gi2.numBounces = 2;
-    gi2.boundsMin = Vec3(-10.6f, -0.6f, -4.6f);
-    gi2.boundsMax = Vec3( 10.6f,  5.6f,  4.6f);
+    gi2.testBoundsMin = Vec3(-10.6f, -0.6f, -4.6f);
+    gi2.testBoundsMax = Vec3( 10.6f,  5.6f,  4.6f);
     gi2.pccProbesX = 2; gi2.pccProbesY = 1; gi2.pccProbesZ = 1;   // both probes off-centre in X
     const bool ok2 = s2->setGlobalIllumination(gi2);
     if (!ok2) std::printf("   engine error: %s\n", engine->lastError().c_str());

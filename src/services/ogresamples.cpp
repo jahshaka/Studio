@@ -66,8 +66,6 @@ const QVector<Entry> &table()
           QStringLiteral("Area lights never cast shadows — on either side.") },
         { QStringLiteral("ScreenSpaceReflections"), QStringLiteral("Screen Space Reflections"),
           QString() },
-        { QStringLiteral("InstantRadiosity"), QStringLiteral("Instant Radiosity"),
-          QString() },
         { QStringLiteral("Decals"), QStringLiteral("Decals"),
           QString() },
         // ---- round 2 (2026-09-14) ----------------------------------------

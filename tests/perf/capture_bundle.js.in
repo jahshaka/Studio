@@ -55,7 +55,14 @@ assert(second.started === false, "a second capture while one runs is refused");
 perf.mark("bundle-marker");
 editor.frame(6);
 
-// A GI refresh inside the window: the engine tags it as an event with its cause.
+// A GI REBUILD inside the window: the engine tags it as an event with its cause.
+// It has to be asked for as a REBUILD and not as a refresh — since PHOTON_SPEC
+// §7 E2 (6) every tier builds the camera-centred cascade chain, and a refresh
+// under a chain marks the cascades the edit reaches and spends them one per
+// frame (G1), which files `vct.cascadeN` WORK rows and no `gi.rebuild` EVENT.
+// That is the whole point of the chain and the wrong thing for this suite to
+// depend on; a quality change is a from-scratch rebuild by definition.
+world.gi({ quality: "medium" });
 world.refreshGi();
 editor.frame(8);
 

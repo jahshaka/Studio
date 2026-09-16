@@ -77,6 +77,14 @@ int main(int argc, char **argv)
     // graze, so red on the floor is bounced light and nothing else. Low quality
     // 64^3 voxels — the same resolution gi.modes proves a red bounce at.
     auto doc = iris::Scene::create();
+    // THE SINGLE VOLUME, PINNED. Every Photon tier builds the camera-centred
+    // cascade chain since PHOTON_SPEC §7 E2 (6), and a document's `giCascades`
+    // therefore defaults to ON — but what this suite measures is the SINGLE
+    // volume's own behaviour (its automatic fit, its reuse arm, its re-solve
+    // cadence), and the chain's counterpart of each of those is measured by
+    // `gi.cascades` and `gi.cascade_dirty`. Pinning it here keeps each suite
+    // about one arm.
+    doc->giCascades = 0;
     doc->giMode = iris::GiMode::VCT;
     doc->giQuality = iris::GiQuality::MEDIUM;
     // Pinned to what "auto" RESOLVED to at this quality, so the hybrid section
@@ -697,29 +705,6 @@ int main(int argc, char **argv)
               "...and its bounce still follows it on the cheap re-inject cadence");
         sun->setMobility(iris::Mobility::Auto);
         for (int f = 0; f < 30; ++f) frame();
-    }
-
-    // ---- Instant Radiosity (Photon Low) re-traces on a MATERIAL edit ----------
-    // (code review 2026-09-12, item 7). IR's trace reads the same diffuse
-    // colours VCT converts, and nothing re-traced it on an albedo edit: the
-    // material generation now covers IR too, through the mirror's own
-    // material term — one re-trace when the edit settles, no re-inject cadence.
-    {
-        doc->giMode = iris::GiMode::INSTANT_RADIOSITY;
-        for (int f = 0; f < 30; ++f) frame();
-        const quint64 before = mirror.giRefreshCount();
-        const quint64 injects = mirror.giLightRefreshCount();
-        wallMat->setBaseColor(QColor(13, 13, 255));
-        for (int f = 0; f < 30; ++f) frame();
-        std::printf("   IR albedo edit: re-traces = %llu, light re-injects = %llu\n",
-                    (unsigned long long)(mirror.giRefreshCount() - before),
-                    (unsigned long long)(mirror.giLightRefreshCount() - injects));
-        CHECK(mirror.giRefreshCount() - before == 1,
-              "IR: an albedo edit on traced geometry re-traces exactly once on settle");
-        CHECK(mirror.giLightRefreshCount() == injects,
-              "IR: ...with no per-frame cheap path while it waits");
-        for (int f = 0; f < 20; ++f) frame();
-        CHECK(mirror.giRefreshCount() - before == 1, "IR: and never again while nothing changes");
     }
 
     doc->giMode = iris::GiMode::OFF;

@@ -168,8 +168,8 @@ int main()
             if (!cascades) {
                 // The single-volume arm keeps the spike's explicit bounds so the
                 // reference number is the spike's number; the chain fits itself.
-                gi.boundsMin = Vec3(-6.5f, -1.0f, -6.5f);
-                gi.boundsMax = Vec3( 6.5f,  5.5f,  6.5f);
+                gi.testBoundsMin = Vec3(-6.5f, -1.0f, -6.5f);
+                gi.testBoundsMax = Vec3( 6.5f,  5.5f,  6.5f);
             }
             if (!s->setGlobalIllumination(gi))
                 std::printf("   engine error: %s\n", e->lastError().c_str());

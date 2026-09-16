@@ -40,9 +40,9 @@ For more information see the LICENSE file
 
 namespace {
 // Combo rows in display order -> document modes (rows are NOT the enum values).
+// Instant Radiosity's row went with the technique (PHOTON_SPEC E2 (4)).
 const iris::GiMode kGiRows[] = {
-    iris::GiMode::OFF, iris::GiMode::INSTANT_RADIOSITY,
-    iris::GiMode::VCT, iris::GiMode::VCT_PCC_HYBRID,
+    iris::GiMode::OFF, iris::GiMode::VCT, iris::GiMode::VCT_PCC_HYBRID,
 };
 const int kGiRowCount = int(sizeof(kGiRows) / sizeof(kGiRows[0]));
 
@@ -109,7 +109,7 @@ void WorldGiPropertyWidget::rebuild()
     // The rows just retired (deleteLater) — every pointer below is to one of
     // them, and refreshPins() dereferences whichever this build leaves set.
     photonSwitch = nullptr; tierSelector = nullptr; modeSelector = nullptr;
-    quality = nullptr; lightSelector = nullptr; bounces = nullptr;
+    quality = nullptr; bounces = nullptr;
     pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr; reflectionsText.clear();
     updateBudget = nullptr; ddgiToggle = nullptr;
     ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
@@ -266,63 +266,22 @@ void WorldGiPropertyWidget::rebuild()
     // The technique. Off is reachable here too — it is the same field the
     // switch above writes, and that is deliberate: there is no second flag.
     modeSelector = this->addComboBox(tr("Technique") + pinMark(scene, "giMode"));
+    // THE ROWS ARE kGiRows, in order — "Bounced Light" (Instant Radiosity) went
+    // with the technique (PHOTON_SPEC §7 E2 (4)).
     modeSelector->addItem(tr("Off"));
-    modeSelector->addItem(tr("Bounced Light"));
     modeSelector->addItem(tr("Voxel Lighting"));
     modeSelector->addItem(tr("Voxel + Reflections"));
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
     modeSelector->setToolTip(tr("Which technique Photon uses, if you want to choose it yourself. "
-                                "Bounced Light is Instant Radiosity; Voxel Lighting cone-traces "
-                                "the bounce out of a voxelization of the lit volume; Voxel + "
-                                "Reflections adds the parallax-corrected probe grid."));
+                                "Voxel Lighting cone-traces the bounce out of a voxelization of "
+                                "the lit volume; Voxel + Reflections adds the parallax-corrected "
+                                "probe grid."));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldGiPropertyWidget::modeChanged);
 
     switch (scene->giMode) {
     case iris::GiMode::OFF:
         break;
-
-    case iris::GiMode::INSTANT_RADIOSITY: {
-        // Bounced Light: sunlight (or any light) bounces once off surfaces and
-        // spills its colour into the shadows. Live in the engine viewport.
-        quality = this->addComboBox(tr("Quality") + pinMark(scene, "giQuality"));
-        quality->addItem(tr("Low"));
-        quality->addItem(tr("Medium"));
-        quality->addItem(tr("High"));
-        quality->setCurrentIndex(qBound(0, static_cast<int>(scene->giQuality), 2));
-        connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
-                this, &WorldGiPropertyWidget::onQualityChanged);
-
-        lightSelector = this->addComboBox(tr("Bounce From"));
-        lightSelector->addItem(tr("Automatic"), QString());
-        int row = 0, current = 0;
-        for (const auto &light : scene->lights) {
-            if (light.isNull()) continue;
-            // NOT a Sky Light: it has no position to bounce FROM — it is the
-            // ambient (SKY_LIGHT_SPEC.md §2), and the mirror's resolver skips
-            // it too. Offering it would be a row that does nothing.
-            if (light->lightType == iris::LightType::Sky) continue;
-            lightSelector->addItem(light->getName(), light->getGUID());
-            ++row;
-            if (!scene->giLightGuid.isEmpty() && light->getGUID() == scene->giLightGuid)
-                current = row;
-        }
-        lightSelector->setCurrentIndex(current);
-        // "Bounce From" carries the light's GUID as item data (the row index is
-        // meaningless to the document), so the row maps its own value.
-        {
-            ComboBoxWidget *picker = lightSelector;
-            wirePlainRow(lightSelector, QStringLiteral("giLightGuid"), tr("Photon Bounce Light"),
-                         [picker](const QVariant &row) {
-                             return QVariant(picker->getItemData(row.toInt()).toString());
-                         });
-        }
-
-        bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
-                                            1.0f, 4.0f, float(scene->giNumBounces));
-        wirePhotonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Photon Light Bounces"));
-        break;
-    }
 
     case iris::GiMode::VCT:
     case iris::GiMode::VCT_PCC_HYBRID: {
@@ -745,11 +704,6 @@ void WorldGiPropertyWidget::onProbeSizeChanged(int row)
     // the pin to Automatic, which is what probeSizeValue would answer for it.
     if (row < 0 || row >= kProbeSizeRowCount) return;
     editPhotonRow(QStringLiteral("giProbeSize"), probeSizeValue(row), tr("Photon Probe Capture Size"));
-}
-
-void WorldGiPropertyWidget::onLightChanged(int row)
-{
-    Q_UNUSED(row)   // the row is wired through wirePlainRow (giLightGuid)
 }
 
 void WorldGiPropertyWidget::onBouncesChanged(float value)

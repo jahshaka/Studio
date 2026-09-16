@@ -87,7 +87,6 @@ static const char *modeName(GiMode m)
 {
     switch (m) {
     case GiMode::Off:              return "off";
-    case GiMode::InstantRadiosity: return "instant_radiosity";
     case GiMode::Vct:              return "vct";
     case GiMode::VctPccHybrid:     return "vct_pcc_hybrid";
     }
@@ -237,7 +236,7 @@ int main()
     vct.mode = GiMode::Vct;
     vct.quality = GiQuality::Medium;      // 64^3 voxels
     vct.numBounces = 2;
-    vct.boundsMin = giMin; vct.boundsMax = giMax;
+    vct.testBoundsMin = giMin; vct.testBoundsMax = giMax;
     const bool vctOk = s->setGlobalIllumination(vct);
     if (!vctOk) std::printf("   engine error: %s\n", engine->lastError().c_str());
     CHECK(vctOk, "setGlobalIllumination(Vct) succeeds");

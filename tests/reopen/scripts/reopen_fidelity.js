@@ -65,9 +65,25 @@ function snapshot() {
 
 // The ground, dead centre-bottom of the framed view. 0.8 is below the cube and
 // on the tiled floor in this framing.
+// SETTLED, NOT TIMED. A fixed frame count is a wall-clock settle in disguise and
+// it measures nothing (the cameras.exposure lesson, CLAUDE.md): with Photon's
+// camera-centred cascades on at every tier the irradiance field re-places itself
+// when cascade 0 moves — which is what `focusSelection` does — and re-converges
+// progressively at the update budget. This waits for the renderer to say it is
+// done: the field converged and no probe still owes a capture. The cap is a
+// guard, not a budget.
+function settle() {
+    for (var i = 0; i < 40; i++) {
+        editor.frame(10, 1 / 60);
+        var st = world.giStatus();
+        if (st.ifdConverged !== false && !st.staleProbes) return i;
+    }
+    return -1;
+}
 function probe(tag) {
     var cube = scene.find("Cube");
-    editor.select(cube); editor.frame(2); editor.focusSelection(); editor.frame(30, 1 / 60);
+    editor.select(cube); editor.frame(2); editor.focusSelection();
+    settle();
     var shot = editor.screenshot(tag + ".png", 640, 480, [{ x: 0.5, y: 0.8 }]);
     var p = shot.probes[0];
     console.log("probe " + tag + ": rgb " + p.r + "," + p.g + "," + p.b);

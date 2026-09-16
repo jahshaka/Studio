@@ -452,8 +452,8 @@ int main()
         // A budget, not 0: a probe that never captures reflects nothing, and the
         // "inside" half would then read black for the reason case 13 documents.
         gi.updateBudget = 1;
-        gi.boundsMin = Vec3(-8.0f, -0.5f, -8.0f);
-        gi.boundsMax = Vec3( 8.0f,  7.0f,  8.0f);
+        gi.testBoundsMin = Vec3(-8.0f, -0.5f, -8.0f);
+        gi.testBoundsMax = Vec3( 8.0f,  7.0f,  8.0f);
         CHECK(s->setGlobalIllumination(gi), "4c: the hybrid builds over the pinned room");
         render(engine.get(), 20);
         const GiStatus st = s->giStatus();
@@ -778,8 +778,8 @@ int main()
         // pinned bounds for determinism and needs the grid to exist, so it pins
         // the room's own +-8, which is what the automatic fit would give it
         // anyway. Case 1 is where the placement itself is asserted.
-        gi.boundsMin = Vec3(-8.0f, -0.5f, -8.0f);
-        gi.boundsMax = Vec3( 8.0f,  7.0f,  8.0f);
+        gi.testBoundsMin = Vec3(-8.0f, -0.5f, -8.0f);
+        gi.testBoundsMax = Vec3( 8.0f,  7.0f,  8.0f);
         CHECK(s->setGlobalIllumination(gi), "13: the hybrid builds over the roofless room");
         render(engine.get(), 20);
         {
@@ -942,8 +942,8 @@ int main()
         gi.numBounces = 1;
         gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
         gi.updateBudget = 0;
-        gi.boundsMin = Vec3(-6.0f, -0.4f, -6.0f);
-        gi.boundsMax = Vec3( 6.0f,  5.0f,  6.0f);
+        gi.testBoundsMin = Vec3(-6.0f, -0.4f, -6.0f);
+        gi.testBoundsMax = Vec3( 6.0f,  5.0f,  6.0f);
         CHECK(s->setGlobalIllumination(gi), "pinned: the hybrid builds");
         render(engine.get(), 10);
         const GiStatus st = s->giStatus();

@@ -1987,7 +1987,6 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.available = true;
     switch (st.mode) {
     case jahshaka::engine::GiMode::Off:              out.mode = QStringLiteral("off"); break;
-    case jahshaka::engine::GiMode::InstantRadiosity: out.mode = QStringLiteral("instant_radiosity"); break;
     case jahshaka::engine::GiMode::Vct:              out.mode = QStringLiteral("vct"); break;
     case jahshaka::engine::GiMode::VctPccHybrid:     out.mode = QStringLiteral("vct_pcc_hybrid"); break;
     }
@@ -2067,6 +2066,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         ci.rebuilds   = quint64(c.rebuilds);
         ci.pending    = c.pending;
         ci.items      = c.items;
+        ci.attached   = c.attached;
         ci.lastCpuMs  = c.lastCpuMs;
         out.cascades.append(ci);
     }

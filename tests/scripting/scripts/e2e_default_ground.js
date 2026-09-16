@@ -220,7 +220,12 @@ assert(scene.nodes().length === 4,
 // ---- 3. the lighting is untouched -------------------------------------------
 // The numbers L3 pinned, read from the renderer: a 100 m ground clamped to the
 // 64 m automatic ceiling, centred on the content.
-world.gi({ mode: "vct", quality: "high" });
+// THE SINGLE VOLUME, PINNED, because that is what this section measures: the
+// AUTOMATIC FIT around a 100 m ground plane. Every tier builds the camera-centred
+// CHAIN since PHOTON_SPEC §7 E2 (6), and under a chain `boundsMin/boundsMax` are
+// the OUTERMOST cascade's 120 m box by construction (world.giStatus says so) —
+// a fit test that let the tier decide would be measuring the cascade table.
+world.gi({ mode: "vct", quality: "high", cascades: false });
 editor.frame(180, 1 / 60);
 var st = world.giStatus();
 console.log("giStatus: " + J({ voxelMetres: st.voxelMetres, min: st.boundsMin, max: st.boundsMax,

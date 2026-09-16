@@ -401,8 +401,8 @@ int main(int argc, char **argv)
     gi.numBounces = 2;
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 1;
-    gi.boundsMin = Vec3(-4.6f, -0.6f, -4.6f);
-    gi.boundsMax = Vec3(4.6f, 5.6f, 4.6f);
+    gi.testBoundsMin = Vec3(-4.6f, -0.6f, -4.6f);
+    gi.testBoundsMax = Vec3(4.6f, 5.6f, 4.6f);
 
     const auto timeMs = [&](int reps, bool scratch) {
         // Warm once so neither number pays for a first-touch allocation.

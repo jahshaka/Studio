@@ -1090,6 +1090,87 @@ int main()
         render(e, 2);
     }
 
+    // =====================================================================
+    // CASE 14 — THE PER-CASCADE INSTANCE BUDGET (PHOTON_SPEC §7 E2 (1))
+    // =====================================================================
+    // The raster voxeliser's price is the geometry INSIDE the region and
+    // nothing else, so a dense world's outer cascade is the most expensive
+    // thing the chain does — measured on the 8,026-instance lattice at 88.9 ms
+    // of GPU for ONE rebuild (spikes/photon-e2/BASELINE.md). The budget is the
+    // patch-free lever: each cascade voxelises at most `cascadeInstanceCap`
+    // objects, ranked by how much of ITS OWN voxel each one fills.
+    //
+    // THREE CAPS, and what each must hold:
+    //   * the attach set never exceeds the cap (`cascades[].attached`);
+    //   * what a rebuild voxelises never exceeds it either (`[].items`);
+    //   * 0 is NO budget and must be the shipped arm exactly — same attach set,
+    //     same enclosed count;
+    //   * the CPU cost per cascade is PRINTED at every cap, never asserted: it
+    //     is a property of the box, and the lane's own four-cap measurement on
+    //     the real lattice is in the report.
+    //
+    // The dense scene here is 6x6x6 = 216 unit cubes rather than the lane's
+    // 8,404-node lattice: this is a CONTRACT test that has to run inside a
+    // gate's budget, and the contract ("never more than the cap, and 0 changes
+    // nothing") does not need the big scene to be true. The big scene is what
+    // the NUMBERS come from.
+    std::printf("\n== case 14: the per-cascade instance budget ==\n");
+    {
+        std::vector<NodeId> dense;
+        for (int x = 0; x < 6; ++x)
+            for (int y = 0; y < 6; ++y)
+                for (int z = 0; z < 6; ++z) {
+                    const NodeId n = enginetest::addTestCube(scene, Colour(0.7f, 0.7f, 0.7f),
+                                                             0.0f, 0.8f);
+                    enginetest::setNodePosition(scene, n, Vec3(float(x) - 2.5f, float(y) + 0.5f,
+                                                               float(z) - 2.5f));
+                    dense.push_back(n);
+                }
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 3.0f, 12.0f),
+                                                         Vec3(0.0f, 2.0f, 0.0f)));
+        render(e, 2);
+
+        const int caps[3] = { 0, 64, 16 };
+        int attachedAtCap[3] = { 0, 0, 0 };
+        int itemsAtCap[3] = { 0, 0, 0 };
+        for (int ci = 0; ci < 3; ++ci) {
+            GiParams gi = cascadeGi();
+            gi.cascadeInstanceCap = caps[ci];
+            CHECK(scene->setGlobalIllumination(gi),
+                  caps[ci] ? "the chain builds under an instance budget"
+                           : "the chain builds with no budget (the shipped arm)");
+            render(e, 6);
+            const GiStatus st = scene->giStatus();
+            if (st.cascades.empty()) { CHECK(false, "the chain is up at this cap"); continue; }
+            std::printf("   cap %-4d :", caps[ci]);
+            bool capHeld = true;
+            for (size_t i = 0; i < st.cascades.size(); ++i) {
+                const GiStatus::CascadeStatus &c = st.cascades[i];
+                std::printf("  c%zu attached %4d items %4d %6.2f ms CPU |", i, c.attached,
+                            c.items, c.lastCpuMs);
+                if (caps[ci] > 0 && (c.attached > caps[ci] || c.items > caps[ci]))
+                    capHeld = false;
+            }
+            std::printf("\n");
+            attachedAtCap[ci] = st.cascades.back().attached;
+            itemsAtCap[ci] = st.cascades.back().items;
+            if (caps[ci] > 0)
+                CHECK(capHeld, "no cascade attaches or voxelises more than the budget");
+        }
+        // 0 IS THE SHIPPED ARM, and the outermost cascade is where that shows:
+        // it encloses the whole dense block, so an uncapped run must attach and
+        // voxelise more of it than either budget allowed.
+        CHECK(attachedAtCap[0] > attachedAtCap[1] && attachedAtCap[1] > attachedAtCap[2],
+              "a smaller budget attaches strictly fewer objects (0 = no budget = the most)");
+        CHECK(itemsAtCap[0] > itemsAtCap[2],
+              "...and voxelises strictly fewer");
+        for (NodeId n : dense) scene->removeNode(n);
+        render(e, 2);
+        GiParams back = cascadeGi();
+        CHECK(scene->setGlobalIllumination(back), "the unbudgeted arm comes back");
+        render(e, 4);
+    }
+
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
     GiParams off; off.mode = GiMode::Off;

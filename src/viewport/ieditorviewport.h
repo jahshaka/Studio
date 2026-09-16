@@ -463,7 +463,7 @@ public:
     /// merely zero, exactly like MirrorStats.
     struct GiStatusInfo {
         bool    available = false;
-        QString mode;          ///< off | instant_radiosity | vct | vct_pcc_hybrid
+        QString mode;          ///< off | vct | vct_pcc_hybrid
         int     probeCount = 0;///< live parallax-corrected cubemap probes
         bool    pccBound = false;  ///< this scene's probe grid is bound to the PBR shader
         bool    vctBound = false;  ///< this scene's voxel lighting is bound to the PBR shader
@@ -596,6 +596,7 @@ public:
             quint64   rebuilds = 0;
             int       pending = 0;
             int       items = 0;
+            int       attached = 0;
             float     lastCpuMs = -1.0f;
         };
         QVector<CascadeInfo> cascades;

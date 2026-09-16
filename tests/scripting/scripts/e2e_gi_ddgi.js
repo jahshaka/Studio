@@ -37,12 +37,12 @@ editor.frame(2);
 // UPDATED BY THE PHOTON UNIFICATION (GI_UNIFIED_SPEC §2 / P2, owner decision
 // D2). This phase used to assert that the field defaults to the string "auto"
 // and resolves OFF "while there is no quality tier". The tier exists now, new
-// scenes are born on its top rung, and every voxel tier turns the field on
-// (owner option (b), 2026-09-09: Medium/High DDGI-fed; only Low, which has no
-// voxel volume, resolves it off) — so a NEW scene's default is a resolved
-// `true`. An EXISTING document derives its tier and its untouched field
-// follows it (gi.tiers' migration cases; the sample re-pin is in the
-// rayontiers lane report).
+// scenes are born on its top rung, and EVERY tier turns the field on — Low
+// included since PHOTON_SPEC §7 E2 (4) made it a voxel tier (two cascades at
+// 64^3) instead of the CPU ray trace that had no volume to feed a field from.
+// So a NEW scene's default is a resolved `true`, and "off" is now only ever an
+// explicit pin. An EXISTING document derives its tier and its untouched field
+// follows it (gi.tiers' migration cases).
 var gi = world.get().gi;
 console.log("gi defaults = " + JSON.stringify(gi));
 assert(gi.tier === "epic", "a new scene is born at the Epic tier: " + gi.tier);
@@ -51,23 +51,24 @@ assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
        "ddgiIntensity defaults to 1.0 (the renderer's raw brightness, measured to be the "
        + "right one: the field lands at ~86% of the cone-traced diffuse it replaces)");
 
-// The rest of this suite is about the VERB, so the scene is put on a VCT
-// technique whose TIER resolves the field off: since option (b) that is the
-// Low tier (its column is off — Instant Radiosity has no voxel volume) with
-// the technique pinned to VCT, which is exactly the "vct + low" shape gi.tiers
-// derives for a hand-set pre-Photon document. That the tier alone turns the
-// field off — no explicit ddgi key anywhere — is itself the write-through
-// statement this phase makes.
-assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1 }),
-       "world.gi(vct at the Low tier)");
-assert(world.get().gi.ddgi === false, "the Low tier resolves the field OFF");
+// The rest of this suite is about the VERB, so the scene is put on plain VCT
+// with the field explicitly OFF. It used to reach that state through the Low
+// TIER, whose column was off; no tier's column is off any more (E2 (4)), so
+// the pin is the honest way to say it — and a pin against the tier is exactly
+// what world.gi's contract promises, which this line therefore also proves.
+// The cascade chain is pinned off with it: this phase reads `ifdProbes` and the
+// single volume is the arm those numbers were measured on.
+assert(world.gi({ tier: "low", mode: "vct", quality: "low", bounces: 1,
+                  cascades: false, ddgi: false }),
+       "world.gi(vct at the Low tier, the field and the chain pinned off)");
+assert(world.get().gi.ddgi === false, "the pin resolves the field OFF");
 editor.frame(4);
 var st = world.giStatus();
 console.log("giStatus(vct, field off) = " + JSON.stringify(st));
 assert(st.live === true, "giStatus is LIVE (the engine viewport answered)");
 assert(st.vctBound === true, "VCT is bound");
 assert(st.ifdBound === false,
-       "and no field is bound at Low — the tier's column, written through");
+       "and no field is bound — the pin, written through");
 assert(st.ifdProbes === 0 && st.ifdProbesPerFrame === 0 && st.ifdConverged === false,
        "no field means no probes, no batch, and nothing converged");
 
@@ -154,10 +155,11 @@ editor.frame(4);
 // "auto" is an INPUT spelling, not a stored state: it drops the pin and hands
 // the decision back to the Photon tier, which then WRITES ITS ANSWER THROUGH
 // (services/worldmodes.h — a backing field is always the resolved value). The
-// scene is on Low here, so the answer is off.
-assert(world.get().gi.ddgi === false,
+// scene is on Low here, and since PHOTON_SPEC §7 E2 (4) Low's answer is ON —
+// which is the point of the line either way: the TIER decided, not the pin.
+assert(world.get().gi.ddgi === true,
        "auto hands the decision to the tier, and the tier's answer is what the document holds");
-assert(world.giStatus().ifdBound === false, "so the field is unbound again");
+assert(world.giStatus().ifdBound === true, "so the field is bound again — the tier said on");
 assert(world.gi({ ddgi: "on" }), "world.gi({ddgi:\"on\"}) — the string form");
 editor.frame(4);
 assert(world.giStatus().ifdBound === true, "\"on\" binds it");
@@ -165,17 +167,27 @@ assert(world.giStatus().ifdBound === true, "\"on\" binds it");
 // NO DDGI-ONLY MODE, and this is a deliberate refusal recorded in the verb's
 // own documentation: with no voxel lighting bound the shader's ambient gate
 // disappears and the sky/flat ambient would be counted twice on top of the
-// field. Asking for DDGI outside a VCT mode is therefore honoured as
-// "requested, not bound" rather than as a second GI technique.
-assert(world.gi({ mode: "instant_radiosity", ddgi: true }),
-       "world.gi({mode:'instant_radiosity', ddgi:true}) is accepted...");
+// field. Asking for DDGI with GI OFF is therefore honoured as "requested, not
+// bound" rather than as a second GI technique. (The case used to ask for it
+// under Instant Radiosity, which was the one other non-voxel mode; the
+// technique is deleted — PHOTON_SPEC E2 (4) — and `off` makes the same point
+// with the one arm there is.)
+assert(world.gi({ mode: "off", ddgi: true }),
+       "world.gi({mode:'off', ddgi:true}) is accepted...");
 editor.frame(4);
 st = world.giStatus();
-console.log("giStatus(IR + ddgi) = " + JSON.stringify(st));
+console.log("giStatus(off + ddgi) = " + JSON.stringify(st));
 assert(st.ifdBound === false && st.ifdProbes === 0,
        "...and builds NO field: there is no voxel volume to feed one, and a DDGI-only mode "
        + "would double-count the ambient (P0 spike §5)");
 assert(world.get().gi.ddgi === true, "the request is still remembered on the document");
+
+// ...AND THE MODE IS REFUSED BY NAME, not silently remapped: a script asking for
+// a deleted technique must be told what replaced it.
+var irRefused = false;
+try { world.gi({ mode: "instant_radiosity" }); } catch (e) { irRefused = true; }
+assert(irRefused || world.get().gi.mode !== "instant_radiosity",
+       "world.gi({mode:'instant_radiosity'}) is refused by name");
 
 // ---- phase E: the round trip --------------------------------------------
 assert(world.gi({ mode: "vct", ddgi: true, ddgiIntensity: 1.75 }), "set up for the round trip");

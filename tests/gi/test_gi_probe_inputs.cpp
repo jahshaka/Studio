@@ -656,8 +656,8 @@ int main(int argc, char **argv)
         // faces see the sky through the cube and the depth rule drops it (as it
         // should). Four probes stand clear of the cube and see it.
         gi.pccProbesX = gi.pccProbesZ = 2; gi.pccProbesY = 1;
-        gi.boundsMin = Vec3(-3.0f, -1.0f, -3.0f);
-        gi.boundsMax = Vec3(3.0f, 4.0f, 3.0f);
+        gi.testBoundsMin = Vec3(-3.0f, -1.0f, -3.0f);
+        gi.testBoundsMax = Vec3(3.0f, 4.0f, 3.0f);
         CHECK(other->setGlobalIllumination(gi), "P10: the second scene builds its own hybrid");
         const GiStatus stolen = escene->giStatus();
         CHECK(!stolen.pccBound && !stolen.vctBound && other->giStatus().pccBound,

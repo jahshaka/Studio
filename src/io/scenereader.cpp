@@ -470,8 +470,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // Global illumination: absent (older scenes) or unknown values mean OFF.
     {
         const QString giMode = sceneObj.value("giMode").toString("off");
-        if (giMode == "instant_radiosity") scene->giMode = iris::GiMode::INSTANT_RADIOSITY;
-        else if (giMode == "vct") scene->giMode = iris::GiMode::VCT;
+        // "instant_radiosity" IS READ, and reads as VCT (PHOTON_SPEC E2 (4)).
+        // The technique is deleted; the scenes that named it are not, and what
+        // its tier means now IS the voxel arm — so an old document opens lit
+        // rather than dark. It is never written again.
+        if (giMode == "vct" || giMode == "instant_radiosity") scene->giMode = iris::GiMode::VCT;
         else if (giMode == "vct_pcc_hybrid") scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
         else scene->giMode = iris::GiMode::OFF;
         const QString giQuality = sceneObj.value("giQuality").toString("medium");
@@ -483,7 +486,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // a scene that pinned a volume OPENS UNPINNED, with the automatic fit,
         // which is the only behaviour left. Deliberately no tolerance and no
         // migration — there is nothing the pin could be migrated to.
-        scene->giLightGuid = sceneObj.value("giLight").toString();
         scene->giNumBounces = qBound(1, sceneObj.value("giNumBounces").toInt(1), 4);
         // THE GI UPDATE BUDGET (FIX WAVE B1), with the legacy mapping: a
         // document written before the fix wave carries the giAutoRefresh bool
@@ -518,7 +520,20 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
         // written before the flag existed, and the default is the arm those
         // documents were authored against — there is nothing to migrate.
-        scene->giCascades = sceneObj.value("giCascades").toBool(false);
+        // THE KEY IS ABSENT in every document written before the column existed
+        // and was a BOOL for the first day of P0's flag; -1 was written for one
+        // afternoon by a tri-state that is gone (scene.h says why). All four
+        // spellings read here; only "absent" is left unresolved, and the block
+        // after worldMode is read resolves it through the tier.
+        {
+            const QJsonValue casc = sceneObj.value("giCascades");
+            scene->giCascades = casc.isUndefined() || casc.isNull() ? -1
+                              : casc.isBool()                      ? (casc.toBool() ? 1 : 0)
+                              : casc.toInt(-1) < 0                 ? -1
+                              : (casc.toInt(0) != 0 ? 1 : 0);
+        }
+        scene->giCascadeInstanceCap =
+            qBound(0, sceneObj.value("giCascadeInstanceCap").toInt(0), 1 << 20);
         scene->giCascadeSet.clear();
         for (const QJsonValue &v : sceneObj.value("giCascadeSet").toArray()) {
             const QJsonArray row = v.toArray();
@@ -692,6 +707,19 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // has always done, and preserving its old GI settings as pins would
             // pin every row of every old document for ever.
             if (!sceneObj.contains("giTier")) worldmodes::derivePhotonFromDocument(scene);
+            // A TIER COLUMN THAT DID NOT EXIST WHEN THIS FILE WAS WRITTEN
+            // FOLLOWS THE TIER (PHOTON_SPEC §7 E2 (6), the cascade chain).
+            // Without this every document written before the column — which is
+            // every document that exists, the eight shipped samples included —
+            // would come up with the chain OFF and, worse, would read as
+            // "Custom" for ever, because `photonDeviations` compares the stored
+            // value against the tier's and would find a deviation nobody
+            // authored. It is keyed on the KEY BEING ABSENT and not on its
+            // value, so it can never re-normalise a scene that made a choice
+            // (the re-application trap the deleted comment below records), and
+            // it writes no pin.
+            if (scene->giCascades < 0)
+                scene->giCascades = worldmodes::photonCascades(worldmodes::photonTier(scene));
             // (THE TIER TABLE'S OPTION-(b) BUMP LIVED HERE and is DELETED,
             // 2026-09-12.) It re-applied the tier to any document that carried
             // a `giTier` but no `giDynamicProbes` — the one-day P2 table's

@@ -208,8 +208,10 @@ int main(int argc, char **argv)
         // An Advanced edit PINS: the technique combo is the second one (the
         // tier is first, by construction of rebuild()).
         QComboBox *technique = combos.value(1)->getWidget();
-        CHECK(technique && technique->count() == 4, "the technique picker offers all four modes");
-        if (technique) technique->setCurrentIndex(3);   // VCT + Probes
+        CHECK(technique && technique->count() == 3,
+              "the technique picker offers the three modes there are (Instant Radiosity "
+              "was deleted with PHOTON_SPEC E2 (4))");
+        if (technique) technique->setCurrentIndex(2);   // VCT + Probes
         pump();
         CHECK(scene->giMode == iris::GiMode::VCT_PCC_HYBRID, "picking one writes it through");
         CHECK(panel.findChildren<DragVector3Widget *>().size() == 1,
@@ -235,8 +237,8 @@ int main(int argc, char **argv)
         if (reset) reset->click();
         pump();
         CHECK(!scene->worldOverrides.contains(QStringLiteral("giMode")) &&
-                  scene->giMode == iris::GiMode::INSTANT_RADIOSITY,
-              "and it hands the technique back to the tier (Low = Instant Radiosity)");
+                  scene->giMode == iris::GiMode::VCT,
+              "and it hands the technique back to the tier (Low = VCT, two cascades at 64^3)");
         CHECK(buttonWith(&panel, QStringLiteral("Reset Advanced")) == nullptr,
               "after which the reset is not offered any more");
     }

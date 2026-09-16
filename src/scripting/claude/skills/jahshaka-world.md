@@ -72,7 +72,7 @@ The rows, with their value spellings:
 | Rendering | `refractions` | `off`, `auto`, `on` |
 | Shadows | `shadowResolution` | pixel sizes, or Auto |
 | Shadows | `shadowFilter` | `auto`, `hard`, `soft`, `verysoft` |
-| Global Illumination | `giMode` | `off`, `instant_radiosity`, `vct`, `vct_pcc_hybrid` |
+| Global Illumination | `giMode` | `off`, `vct`, `vct_pcc_hybrid` |
 | Global Illumination | `giQuality` | `low`, `medium`, `high` |
 | Reflections | `planarBudget` | how many mirror planes may render |
 

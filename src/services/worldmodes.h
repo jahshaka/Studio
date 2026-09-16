@@ -205,6 +205,10 @@ int photonBounces(PhotonTier t);
 /// quality dial). Every tier is 0 today — the column exists so a scene can pin
 /// one, which is the owner's 2026-09-13 Q4 decision.
 int photonProbeSize(PhotonTier t);
+/// The CASCADE CHAIN column (0/1) — Photon's camera-centred voxel cascades.
+/// On in every tier since PHOTON_SPEC §7 E2 (6): the bounce follows the camera
+/// unless a scene pins `giCascades` off.
+int photonCascades(PhotonTier t);
 
 /// Applies a Photon state: records the tier, writes each `photonTiered` row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes

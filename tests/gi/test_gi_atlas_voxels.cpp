@@ -128,8 +128,8 @@ static GiParams hybridGi(bool cascades)
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 2;                // a live budget: the stale set is spendable
-    gi.boundsMin = Vec3(-5.5f, -0.5f, -5.5f);
-    gi.boundsMax = Vec3( 5.5f,  5.5f,  5.5f);
+    gi.testBoundsMin = Vec3(-5.5f, -0.5f, -5.5f);
+    gi.testBoundsMax = Vec3( 5.5f,  5.5f,  5.5f);
     gi.cascades = cascades;
     return gi;
 }

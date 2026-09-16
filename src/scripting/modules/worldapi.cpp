@@ -198,12 +198,18 @@ const QStringList &fogKeys()
     return keys;
 }
 
+/// THE GI MODE NAMES, ONCE. Four private copies of this table lived in this
+/// file (audit A F2) and every one of them was positional, so deleting Instant
+/// Radiosity from the enum would have re-labelled every mode by one without a
+/// single compiler error. One table, in enum order, `GiMode::VctPccHybrid` last.
+const char *const kGiModeNames[] = { "off", "vct", "vct_pcc_hybrid" };
+
 /// The world.gi fields that are NOT quality-registry rows (those ride the
 /// registry snapshot: giMode, giQuality, giBounces, giDdgi).
 const QStringList &giPlainKeys()
 {
     static const QStringList keys = {
-        QStringLiteral("giLightGuid"),
+        QStringLiteral("giCascadeInstanceCap"),
         QStringLiteral("giPccGrid"), QStringLiteral("giUpdateBudget"),
         QStringLiteral("giDdgiIntensity"), QStringLiteral("giDdgiAmbient"),
         QStringLiteral("giDdgiSource"),
@@ -256,10 +262,10 @@ QVector<VerbInfo> WorldApi::verbs() const
           "lights. The resolution is world.setShadowResolution and the per-light filter/bias rows "
           "are node.setProperty on the light; any other key here is REFUSED.",
           Needs::Document },
-        { "gi", "world.gi({tier, mode, quality, bounces, light, pccGrid, updateBudget, probeSize, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity, ddgiAmbient, ddgiSource}) -> bool",
+        { "gi", "world.gi({tier, mode, quality, bounces, cascades, cascadeSet, cascadeInstanceCap, pccGrid, updateBudget, probeSize, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity, ddgiAmbient, ddgiSource}) -> bool",
           "Global illumination — the full surface, of which world.photon is the product-named shorthand. "
-          "'tier' is PHOTON'S QUALITY TIER (low|medium|high|epic) and it is the setting to reach for first: it picks the technique, the voxel/probe quality, the irradiance field, the bounce count and the dynamic probes, all at once — THE TIER TABLE: low = Instant Radiosity (1 bounce, no field); medium = VCT 64^3 feeding the irradiance field (voxel source); high = VCT 128^3 + reflection probes with HDR shadowed captures, field on; epic = high plus 3 light bounces (no tier reserves dynamic probes since 2026-09-12: moving things are reflected every frame by screen-space reflections and planar mirrors, not by re-capturing probes). world.settings() lists every row with its four columns (tierSpace 'photon'). Setting it does NOT turn GI on or off (world.photon({enabled}) or 'mode' do that) and it never overwrites a setting you pinned yourself: any of the keys below, set explicitly, stays pinned through tier switches until world.clearOverride drops it. "
-          "The individual knobs: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4 (a tier row: epic 3, the rest 1 — each bounce past the first is another light-propagation pass over the whole voxel volume on every re-solve, and the irradiance field is fed from that volume so it sees them too), light = driving light guid ('' = auto, instant_radiosity only). THE LIT VOLUME IS AUTOMATIC AND THERE IS NO KNOB FOR IT: the renderer fits it to the scene's content on every solve, under its own ceiling, and 'boundsMin', 'boundsMax' and 'autoBoundsMax' are gone and refused by name. Read what the fit decided with world.giStatus().boundsMin / .boundsMax, and .voxelMetres for the metres per voxel it resolved to — the number that says whether the GI in a scene means anything. One object can be kept out of the fit with node.setProperty(id, \"giBoundsExcluded\", true). pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). cascades = PHOTON's camera-centred voxel cascades (SPECS/PHOTON_SPEC.md P0): false (the default) fits ONE voxel box around the scene's content, so a camera that walks out of it walks out of the bounce; true builds a chain of boxes centred on the camera instead — fine cells near the eye, coarse ones far away — so the bounce follows the camera and what escapes the outermost cascade reads the Sky Light rather than going dark. The chain re-centres itself as the camera travels, at most one cascade per frame. It is measured, flagged and OFF by default: with cascades on the irradiance field is not built (it can only be generated over a volume that stands still, so the diffuse is cone-traced and leaks through thin walls), and reflection probes are unaffected — they are still placed in the room. cascadeSet = [{halfSize, resolution, stepCells?}, ...], at most 8, pins the table: halfSize is the HALF-extent in metres of that cascade's cube, resolution its voxel count per axis (16..256), stepCells how many cells the camera may travel before it re-centres (0 or absent derives it so every cascade steps the same distance; a pinned one is held between one cell and half the resolution, since below that the volume re-centres for nothing and above it the camera leaves the box before it re-centres). The table must GROW OUTWARD — every row a bigger halfSize AND a bigger cell than the one before it, because each cascade hands the ray march over to the coarser one behind it — and one that does not is refused whole, never honoured halfway. Omit it and the quality tier decides. world.giStatus().cascades reports what was actually built. "
+          "'tier' is PHOTON'S QUALITY TIER (low|medium|high|epic) and it is the setting to reach for first: it picks the technique, the voxel/probe quality, the irradiance field, the bounce count and the dynamic probes, all at once — THE TIER TABLE: every tier is a VOXEL tier with the irradiance field on and the camera cascades on — low = two cascades at 64^3, 1 bounce, no probes; medium = the chain at 64^3 feeding the field (voxel source); high = 128^3 + reflection probes with HDR shadowed captures; epic = high plus 3 light bounces (no tier reserves dynamic probes since 2026-09-12: moving things are reflected every frame by screen-space reflections and planar mirrors, not by re-capturing probes). world.settings() lists every row with its four columns (tierSpace 'photon'). Setting it does NOT turn GI on or off (world.photon({enabled}) or 'mode' do that) and it never overwrites a setting you pinned yourself: any of the keys below, set explicitly, stays pinned through tier switches until world.clearOverride drops it. "
+          "The individual knobs: mode off|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4 (a tier row: epic 3, the rest 1 — each bounce past the first is another light-propagation pass over the whole voxel volume on every re-solve, and the irradiance field is fed from that volume so it sees them too). THE LIT VOLUME IS AUTOMATIC AND THERE IS NO KNOB FOR IT: the renderer fits it to the scene's content on every solve, under its own ceiling, and 'boundsMin', 'boundsMax' and 'autoBoundsMax' are gone and refused by name. Read what the fit decided with world.giStatus().boundsMin / .boundsMax, and .voxelMetres for the metres per voxel it resolved to — the number that says whether the GI in a scene means anything. One object can be kept out of the fit with node.setProperty(id, \"giBoundsExcluded\", true). pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). cascades = PHOTON's camera-centred voxel cascades, and it is a PHOTON TIER ROW: every tier turns it ON, so setting it here PINS it. On, the renderer builds a chain of voxel boxes centred on the camera — fine cells near the eye, coarse ones far away — and re-centres them as you travel, at most one box per frame, so the bounce follows the camera and what escapes the outermost cascade reads the Sky Light rather than going dark; the irradiance field rides cascade 0 and is re-placed with it, and reflection probes are unaffected. Off fits ONE box around the scene's content under a 64 m ceiling instead: inside it the bounce is identical and slightly cheaper per pixel (one volume to cone-trace instead of four — measured at 1.6 vs 2.7 ms of a 1080p frame on the Showroom), outside it there is no bounce at all, and a scene larger than the ceiling is voxelised at metres per cell. cascadeInstanceCap = how many objects ONE cascade may voxelise, 0 (the default) meaning no budget: the renderer keeps the ones that fill most of that cascade's own voxels, largest first and nearest first among equals, which is the lever for a scene dense enough that a whole re-voxelisation does not fit in a frame (world.giStatus().cascades[].attached against [].items says whether it is biting). cascadeSet = [{halfSize, resolution, stepCells?}, ...], at most 8, pins the table: halfSize is the HALF-extent in metres of that cascade's cube, resolution its voxel count per axis (16..256), stepCells how many cells the camera may travel before it re-centres (0 or absent derives it so every cascade steps the same distance; a pinned one is held between one cell and half the resolution, since below that the volume re-centres for nothing and above it the camera leaves the box before it re-centres). The table must GROW OUTWARD — every row a bigger halfSize AND a bigger cell than the one before it, because each cascade hands the ray march over to the coarser one behind it — and one that does not is refused whole, never honoured halfway. Omit it and the quality tier decides. world.giStatus().cascades reports what was actually built. "
           "The rest are vct_pcc_hybrid probe-capture knobs. 'probeSize' is the pixel size of ONE probe cube face and the grid's biggest memory lever: a probe is six faces plus a mip chain, so memory goes with the SQUARE of it (256 = 4.0 MB per probe in HDR, 512 = 16.0 MB). 0 (the default) follows the quality dial — 128 at low, 256 at medium, 512 at high and epic — and any other value must be a power of two in 64..1024; it is a Photon tier row, so setting it PINS it against the tier. 'probeHdr' captures probes in floating point instead of 8-bit, so a light or emissive surface brighter than white keeps its brightness in the reflection instead of clipping to flat white; it doubles probe VRAM. 'probeShadows' renders the scene's shadows into every probe face, so reflections show the room's shadows; it multiplies the capture cost by the shadow passes. Both are true|false|\"auto\", and \"auto\" (the default) means FOLLOW THE QUALITY DIAL — on at high, off below — so most scenes never set them. 'overlap' (0..8, default 1.25) is how far each probe's influence stretches past its share of the region: 1.0 leaves visible seams between probes, higher blends more smoothly and puts more probes over each pixel. 'snapDeviation', 'snapSidesMin' and 'snapSidesMax' (defaults 0.05/0.25/0.25) are relative tolerances for snapping a probe's depth-fitted shape back out to the region — raise them when the walls of a room have no reflections, 0 disables snapping. "
           "'updateBudget' (0..512, default 1) is the GI UPDATE BUDGET: how many reflection probes the renderer may re-capture per FRAME. It replaced the old 'autoRefresh' switch, and the two generations of 'dynamicProbes' that came before it (the nearest-N one of 2026-09-07 and Epic's moved-covering reservation, deleted 2026-09-12 — moving objects are not captured by the probes at all any more, and are reflected every frame by screen-space and planar reflections instead). 0 PAUSES global illumination — no probe re-captures and nothing re-solves automatically, so the picture is whatever was last built until world.refreshGi() asks for more. Reflection probes are a CACHE: they re-capture only when something they can see changes (a GI rebuild or re-solve, STILL geometry moving, arriving, leaving or being shown or hidden, an object's Movement setting changing, a light, material, sky, ambient or fog edit), so a still scene spends nothing at all — and a scene full of MOVING things spends nothing either, because moving objects are not in a probe capture — and time-varying content (a particle system, a clock-driven material, a live or video texture, a posing character) is FROZEN in the probes at their last capture, while screen-space and planar reflections show it live; world.giStatus()'s staleProbes and lastStaleReason say what is owed and why. 1 (the default) is a realtime editor: at most one probe's six faces per frame while probes are stale, about 2 ms in a debug build, with the whole grid caught up within (probes / budget) frames of a change and the probes nearest you — and the ones covering whatever just moved — updated first. Higher trades frame time for catch-up latency, linearly. world.giStatus().probeUpdatesPerFrame reports the resolved figure. NOTE, because it changes the picture: above 0 the renderer trusts the probes over cone-traced reflections inside the probe region, so ROUGH metal takes its reflections from the probes; mirror-sharp surfaces are unaffected. "
           "'rayMarchStepScale' (>= 1.0, default 1.0) is how coarsely voxel light injection ray-marches towards each light when working out what is shadowed: bigger is faster and starts losing shadow contact in the bounce. It is the AT-REST value; while you drag something the renderer raises it on its own for the cheap re-injections it throws away a moment later. "
@@ -276,7 +282,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "photon", "world.photon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, bounces, row, ddgiIntensity, ddgiAmbient, ddgiSource, updateBudget}",
           "PHOTON — realtime global illumination, as one switch and one quality dial. This is the surface the World panel shows and the shortest way to say what a scene should look like; world.gi is the same model with every individual knob exposed, and world.settings()/world.override are the same model again as registry rows. "
-          "'enabled' true|false turns it on and off. Off is the renderer's GI mode set to off and nothing else — no second flag to disagree with it — and the tier is remembered, so turning it back on restores the quality you had. 'tier' is low|medium|high|epic: low bounces one light off the scene (Instant Radiosity, no voxels, and emissive surfaces and area lights contribute nothing to it); medium voxelizes the lit volume and feeds the irradiance field from it, which REPLACES the cone-traced diffuse with probe-stored bounce that cannot leak through walls; high adds a grid of parallax-corrected reflection probes captured in HDR with shadows; epic adds three light bounces. (No tier reserves dynamic probes: that column was deleted on 2026-09-12 — moving things are reflected every frame by screen-space reflections and planar mirrors, never by re-capturing probes.) New scenes are born epic. "
+          "'enabled' true|false turns it on and off. Off is the renderer's GI mode set to off and nothing else — no second flag to disagree with it — and the tier is remembered, so turning it back on restores the quality you had. 'tier' is low|medium|high|epic: low voxelizes what is around the camera in two coarse steps and feeds the irradiance field from it, which REPLACES the cone-traced diffuse with probe-stored bounce that cannot leak through walls; medium does the same at twice the resolution; high adds a grid of parallax-corrected reflection probes captured in HDR with shadows; epic adds three light bounces. Every tier builds the camera-centred CASCADE CHAIN, so the bounce follows you through a world of any size. (No tier reserves dynamic probes: that column was deleted on 2026-09-12 — moving things are reflected every frame by screen-space reflections and planar mirrors, never by re-capturing probes.) New scenes are born epic. "
           "Called with no argument it reads. 'custom' is true when a setting you pinned deviates from what the tier would give it, and 'deviations' names those settings — the tier is still the tier, your pin still wins, and world.clearOverride({id}) hands one back (ids: giMode, giQuality, giDdgi, giBounces, photon). 'technique', 'quality', 'ddgi' and 'bounces' are what the tier and your pins RESOLVED to, in world.gi's spelling, and 'row' is the tier's own column set {technique, quality, ddgi, bounces} before any pin — the effective table row, so a script can see tier against resolution. "
           "The ambient gap epic used to have — the field replacing the cone diffuse also removed the only live ambient term inside the voxel volume, reading as a 15-25% darker mid-ground on OPEN scenes — is CLOSED: the renderer rebuilds that term from the field's own depth probes. world.gi's 'ddgiAmbient' is the strength, and 0 restores the old behaviour if a scene wants it. "
           "Writes are undoable as one step, exactly like world.mode.",
@@ -588,7 +594,8 @@ bool WorldApi::gi(const QVariantMap &params)
         // script or a suite asks for explicitly.
         QStringLiteral("ddgi"),      QStringLiteral("ddgiIntensity"),
         QStringLiteral("ddgiAmbient"), QStringLiteral("ddgiSource"),
-        QStringLiteral("cascades"), QStringLiteral("cascadeSet")
+        QStringLiteral("cascades"), QStringLiteral("cascadeSet"),
+        QStringLiteral("cascadeInstanceCap")
     };
     // THE LIT VOLUME IS THE RENDERER'S (owner decision D8, 2026-09-13). The
     // three keys that used to pin it — and cap its automatic fit — are refused
@@ -636,11 +643,18 @@ bool WorldApi::gi(const QVariantMap &params)
     }
     if (params.contains("mode")) {
         const QString m = params.value("mode").toString().trimmed().toLower();
-        if (m == "off")                    scene->giMode = iris::GiMode::OFF;
-        else if (m == "instant_radiosity") scene->giMode = iris::GiMode::INSTANT_RADIOSITY;
-        else if (m == "vct")               scene->giMode = iris::GiMode::VCT;
-        else if (m == "vct_pcc_hybrid")    scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
-        else return fail(QStringLiteral("world.gi: unknown mode '%1' (off, instant_radiosity, vct, vct_pcc_hybrid)").arg(m));
+        if (m == "off")                 scene->giMode = iris::GiMode::OFF;
+        else if (m == "vct")            scene->giMode = iris::GiMode::VCT;
+        else if (m == "vct_pcc_hybrid") scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        else if (m == "instant_radiosity")
+            // DELETED, AND SAID SO (PHOTON_SPEC E2 (4)). A refusal by name beats
+            // a silent remap here: a script that asks for it is asking for a
+            // technique with different physics (one light, no emissives, a CPU
+            // re-trace per light move), and the honest answer is what replaced it.
+            return fail(QStringLiteral(
+                "world.gi: 'instant_radiosity' was deleted — Photon's Low tier is two "
+                "camera-centred voxel cascades with the irradiance field on. Use 'vct'."));
+        else return fail(QStringLiteral("world.gi: unknown mode '%1' (off, vct, vct_pcc_hybrid)").arg(m));
         worldmodes::pinRowValue(scene, QStringLiteral("giMode"), int(scene->giMode));
     }
     if (params.contains("quality")) {
@@ -655,7 +669,19 @@ bool WorldApi::gi(const QVariantMap &params)
     // tier row yet: P0 is the lane that measures what it costs under motion,
     // and a tier cannot adopt a number nobody has measured.
     if (params.contains("cascades")) {
-        scene->giCascades = params.value("cascades").toBool();
+        scene->giCascades = params.value("cascades").toBool() ? 1 : 0;
+        // ...AND IT PINS, like every other Photon tier row (mode, quality, ddgi,
+        // bounces, probeSize all do). Without the pin the next tier application
+        // put the chain straight back, so `world.gi({cascades:false})` read as
+        // done and was undone by the following world.photon({tier}).
+        worldmodes::pinRowValue(scene, QStringLiteral("giCascades"), scene->giCascades);
+    }
+    if (params.contains("cascadeInstanceCap")) {
+        const int v = params.value("cascadeInstanceCap").toInt();
+        if (v < 0)
+            return fail(QStringLiteral(
+                "world.gi: cascadeInstanceCap must be 0 or more (0 = no budget)"));
+        scene->giCascadeInstanceCap = v;
     }
     if (params.contains("cascadeSet")) {
         const QVariantList rows = params.value("cascadeSet").toList();
@@ -747,7 +773,11 @@ bool WorldApi::gi(const QVariantMap &params)
         worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), scene->giNumBounces);
     }
     if (params.contains("light"))
-        scene->giLightGuid = params.value("light").toString();
+        // The Instant Radiosity driving light. Refused by name, like the bounds
+        // keys above it (PHOTON_SPEC E2 (4)): every light is a voxel light now.
+        return fail(QStringLiteral(
+            "world.gi: 'light' is gone with Instant Radiosity — every light in the scene "
+            "is injected into the voxel volume, so there is no driving light to choose."));
     if (params.contains("pccGrid")) {
         const iris::Vec3 g = vecFromJs(params.value("pccGrid"), scene->giPccGrid);
         scene->giPccGrid = iris::Vec3(qBound(1, qRound(g.x()), 8), qBound(1, qRound(g.y()), 8),
@@ -901,12 +931,11 @@ bool WorldApi::gi(const QVariantMap &params)
 
 QVariantMap WorldApi::photonRow(worldmodes::PhotonTier tier)
 {
-    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
     static const char *qualityNames[] = { "low", "medium", "high" };
     return QVariantMap{
         { QStringLiteral("tier"), worldmodes::photonTierName(tier) },
         { QStringLiteral("technique"),
-          QString::fromLatin1(giModeNames[qBound(0, worldmodes::photonTechnique(tier), 3)]) },
+          QString::fromLatin1(kGiModeNames[qBound(0, worldmodes::photonTechnique(tier), 2)]) },
         { QStringLiteral("quality"),
           QString::fromLatin1(qualityNames[qBound(0, worldmodes::photonQuality(tier), 2)]) },
         { QStringLiteral("ddgi"), worldmodes::photonDdgi(tier) > 0 },
@@ -916,7 +945,6 @@ QVariantMap WorldApi::photonRow(worldmodes::PhotonTier tier)
 
 QVariantMap WorldApi::photonState(const iris::ScenePtr &scene)
 {
-    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
     static const char *qualityNames[] = { "low", "medium", "high" };
     if (!scene) return QVariantMap();
     const bool on = worldmodes::photonEnabled(scene);
@@ -928,7 +956,7 @@ QVariantMap WorldApi::photonState(const iris::ScenePtr &scene)
         { QStringLiteral("custom"), !deviations.isEmpty() },
         { QStringLiteral("deviations"), deviations },
         { QStringLiteral("technique"),
-          QString::fromLatin1(giModeNames[qBound(0, int(scene->giMode), 3)]) },
+          QString::fromLatin1(kGiModeNames[qBound(0, int(scene->giMode), 2)]) },
         { QStringLiteral("quality"),
           QString::fromLatin1(qualityNames[qBound(0, int(scene->giQuality), 2)]) },
         { QStringLiteral("ddgi"), scene->giDdgi > 0 },
@@ -1029,8 +1057,7 @@ QVariantMap WorldApi::giStatus()
 {
     auto scene = sceneOrFail(QStringLiteral("world.giStatus"));
     if (!scene) return QVariantMap();
-    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
-    const QString requested = QString::fromLatin1(giModeNames[qBound(0, int(scene->giMode), 3)]);
+    const QString requested = QString::fromLatin1(kGiModeNames[qBound(0, int(scene->giMode), 2)]);
     const int requestedProbes = (scene->giMode == iris::GiMode::VCT_PCC_HYBRID)
         ? qBound(1, qRound(scene->giPccGrid.x()), 8) * qBound(1, qRound(scene->giPccGrid.y()), 8) *
           qBound(1, qRound(scene->giPccGrid.z()), 8)
@@ -1102,6 +1129,7 @@ QVariantMap WorldApi::giStatus()
             { QStringLiteral("rebuilds"), double(c.rebuilds) },
             { QStringLiteral("pending"), c.pending },
             { QStringLiteral("items"), c.items },
+            { QStringLiteral("attached"), c.attached },
             { QStringLiteral("lastCpuMs"), double(c.lastCpuMs) } });
     return QVariantMap{ { QStringLiteral("mode"), st.mode },
                         { QStringLiteral("requestedMode"), requested },
@@ -1993,12 +2021,10 @@ QVariantMap WorldApi::get()
                               { "atmosphere", scene->fogAtmosphere },
                               { "start", scene->fogStart },
                               { "end", scene->fogEnd } };
-    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
     static const char *giQualityNames[] = { "low", "medium", "high" };
-    out["gi"] = QVariantMap{ { "mode", giModeNames[qBound(0, int(scene->giMode), 3)] },
+    out["gi"] = QVariantMap{ { "mode", kGiModeNames[qBound(0, int(scene->giMode), 2)] },
                              { "quality", giQualityNames[qBound(0, int(scene->giQuality), 2)] },
                              { "bounces", scene->giNumBounces },
-                             { "light", scene->giLightGuid },
                              { "pccGrid", vecToJs(scene->giPccGrid) },
                              // The old spelling, kept as a READER only: a
                              // settings dump that dropped it would silently
@@ -2018,6 +2044,12 @@ QVariantMap WorldApi::get()
                              { "ddgiIntensity", scene->giDdgiIntensity },
                              { "ddgiAmbient", scene->giDdgiAmbient },
                              { "ddgiSource", giSourceToJs(scene->giDdgiSource) },
+                             // PHOTON'S CAMERA CASCADES, RESOLVED (E2 (6)): a
+                             // tier row like the four above it, so -1 ("the tier
+                             // decides", what a pre-column document carries)
+                             // reads as the tier's own answer and never as off.
+                             { "cascades", scene->giCascades > 0 },
+                             { "cascadeInstanceCap", scene->giCascadeInstanceCap },
                              // PHOTON's quality tier (GI_UNIFIED_SPEC §2): the
                              // dial the three fields above resolve through.
                              { "tier", worldmodes::photonTierName(worldmodes::photonTier(scene)) } };

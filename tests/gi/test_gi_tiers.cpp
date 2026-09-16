@@ -73,25 +73,31 @@ static void testTierTable()
     // every tier = "follow the engine's quality dial", because the halving that
     // decision asked for is the engine's default now (High 512 -> 256). The
     // column exists so a scene can PIN a size, which case 3 gates.
-    struct Want { PhotonTier tier; int mode, quality, ddgi, bounces, probeSize; const char *name; };
+    // The SIXTH is PHOTON'S CAMERA CASCADES (PHOTON_SPEC §7 E2 (6)): ON in
+    // every tier, which is what "the boundary is gone for users" means.
+    // The TECHNIQUE ordinals moved with Instant Radiosity's deletion (E2 (4)):
+    // GiMode is Off 0 / VCT 1 / VCT + Probes 2, and Low is a voxel tier now.
+    struct Want { PhotonTier tier; int mode, quality, ddgi, bounces, probeSize, cascades; const char *name; };
     const Want wants[] = {
-        { PhotonTier::Low,    1, 0, 0, 1, 0, "Low = Instant Radiosity, low quality, no field, 1 bounce, automatic probe size" },
-        { PhotonTier::Medium, 2, 1, 1, 1, 0, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
-        { PhotonTier::High,   3, 2, 1, 1, 0, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
-        { PhotonTier::Epic,   3, 2, 1, 3, 0, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces (the FOUR-column table: movers are reflected by SSR + planar, never by a probe re-capture)" },
+        { PhotonTier::Low,    1, 0, 1, 1, 0, 1, "Low = VCT, two cascades at 64^3, FIELD ON, 1 bounce, no probes" },
+        { PhotonTier::Medium, 1, 1, 1, 1, 0, 1, "Medium = VCT 64^3, FIELD ON (DDGI-fed), 1 bounce" },
+        { PhotonTier::High,   2, 2, 1, 1, 0, 1, "High = VCT + probes 128^3, FIELD ON, 1 bounce" },
+        { PhotonTier::Epic,   2, 2, 1, 3, 0, 1, "Epic = VCT + probes 128^3, FIELD ON, THREE bounces" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
         worldmodes::setPhoton(s, true, w.tier);
         CHECK(giMode(s) == w.mode && giQuality(s) == w.quality && giDdgi(s) == w.ddgi &&
-                  giBounces(s) == w.bounces && s->giProbeCaptureSize == w.probeSize, w.name);
+                  giBounces(s) == w.bounces && s->giProbeCaptureSize == w.probeSize &&
+                  s->giCascades == (w.cascades != 0), w.name);
         // The accessors ARE the table (one owner): what they say per column
         // must be what the tier wrote.
         CHECK(worldmodes::photonTechnique(w.tier) == w.mode &&
                   worldmodes::photonQuality(w.tier) == w.quality &&
                   worldmodes::photonDdgi(w.tier) == w.ddgi &&
                   worldmodes::photonBounces(w.tier) == w.bounces &&
-                  worldmodes::photonProbeSize(w.tier) == w.probeSize,
+                  worldmodes::photonProbeSize(w.tier) == w.probeSize &&
+                  worldmodes::photonCascades(w.tier) == w.cascades,
               "the column accessors agree with the write-through");
         CHECK(s->giTier == int(w.tier), "the tier is recorded on the document");
         CHECK(worldmodes::photonEnabled(s), "and Photon reads enabled");
@@ -106,7 +112,7 @@ static void testTierTable()
                   qPrintable(QStringLiteral("write-through holds for %1").arg(id)));
         }
     }
-    CHECK(worldmodes::photonRowIds().size() == 5, "the tier writes exactly five rows through");
+    CHECK(worldmodes::photonRowIds().size() == 6, "the tier writes exactly six rows through");
     // 5 x 4: EVERY cell of every photonTiered row is the table's cell. The rows
     // derive their tier[] from kPhotonTable (worldmodes.cpp photonColumns) and
     // the public readers read the same table one column at a time, so a cell
@@ -114,11 +120,11 @@ static void testTierTable()
     // the rayontiers review found (13 of 20 cells untested while hand-copied).
     {
         using Reader = int (*)(PhotonTier);
-        const Reader readers[5] = { worldmodes::photonTechnique, worldmodes::photonQuality,
+        const Reader readers[6] = { worldmodes::photonTechnique, worldmodes::photonQuality,
                                     worldmodes::photonDdgi, worldmodes::photonBounces,
-                                    worldmodes::photonProbeSize };
+                                    worldmodes::photonProbeSize, worldmodes::photonCascades };
         const QStringList ids = worldmodes::photonRowIds();
-        for (int c = 0; c < 5 && c < ids.size(); ++c) {
+        for (int c = 0; c < 6 && c < ids.size(); ++c) {
             const worldmodes::Row *r = worldmodes::row(ids[c]);
             for (int t = 0; t < 4; ++t) {
                 const int want = readers[c](PhotonTier(t));
@@ -171,7 +177,7 @@ static void testSwitch()
     std::printf("\n-- 2. the switch --\n");
     auto s = freshScene();
     worldmodes::setPhoton(s, true, PhotonTier::High);
-    CHECK(giMode(s) == 3, "Photon on at High = the hybrid");
+    CHECK(giMode(s) == 2, "Photon on at High = the hybrid");
 
     worldmodes::setPhoton(s, false, worldmodes::photonTier(s));
     CHECK(giMode(s) == 0, "off is giMode OFF — the renderer's own switch, not a second flag");
@@ -180,7 +186,7 @@ static void testSwitch()
     CHECK(!worldmodes::photonCustom(s), "an off scene is never 'Custom' (nothing to deviate from)");
 
     worldmodes::setPhoton(s, true, worldmodes::photonTier(s));
-    CHECK(giMode(s) == 3 && giQuality(s) == 2,
+    CHECK(giMode(s) == 2 && giQuality(s) == 2,
           "turning it back on restores the remembered quality");
 
     // A pinned technique cannot outlive an off: the pin and the enable share
@@ -191,7 +197,7 @@ static void testSwitch()
     CHECK(!s->worldOverrides.contains(QStringLiteral("giMode")),
           "turning Photon off drops the technique pin");
     worldmodes::setPhoton(s, true, worldmodes::photonTier(s));
-    CHECK(giMode(s) == 3, "and turning it on gives the tier's technique back");
+    CHECK(giMode(s) == 2, "and turning it on gives the tier's technique back");
 }
 
 // ---------------------------------------------------------------------------
@@ -212,10 +218,10 @@ static void testPins()
 
     // THE CONTRACT: a tier switch moves everything EXCEPT the pin.
     worldmodes::setPhoton(s, true, PhotonTier::Medium);
-    CHECK(giMode(s) == 2, "the tier switch moved the technique");
+    CHECK(giMode(s) == 1, "the tier switch moved the technique");
     CHECK(giQuality(s) == 1, "and left the pinned quality alone");
     worldmodes::setPhoton(s, true, PhotonTier::Epic);
-    CHECK(giMode(s) == 3 && giDdgi(s) == 1, "back at Epic, the unpinned rows follow again");
+    CHECK(giMode(s) == 2 && giDdgi(s) == 1, "back at Epic, the unpinned rows follow again");
     CHECK(giQuality(s) == 1, "the pin SURVIVED both switches");
 
     // And it can be handed back, one row or all of them.
@@ -244,9 +250,9 @@ static void testPins()
     // nothing re-introduces it quietly.
     CHECK(!worldmodes::setRowValue(s, QStringLiteral("giDynamicProbes"), 4),
           "the retired dynamic-probe row is gone from the registry");
-    CHECK(worldmodes::photonRowIds().size() == 5 &&
+    CHECK(worldmodes::photonRowIds().size() == 6 &&
           !worldmodes::photonRowIds().contains(QStringLiteral("giDynamicProbes")),
-          "Photon is a FIVE-column table (the probe capture size joined it)");
+          "Photon is a SIX-column table (the cascade chain joined it, E2 (6))");
     // THE PROBE CAPTURE SIZE ROW (owner 2026-09-13 Q4) — a tier row with a pin
     // like every other: an explicit size survives a tier switch, is named as a
     // deviation, and Reset hands it back to Automatic.
@@ -280,8 +286,8 @@ static void testWorldModeOwnership()
     const Want wants[] = {
         { worldmodes::Mode::Low,    0, 0, 0, 1, 0, "World Low leaves GI off, as it always did" },
         { worldmodes::Mode::Medium, 0, 1, 0, 1, 0, "World Medium leaves GI off, as it always did" },
-        { worldmodes::Mode::High,   1, 0, 0, 1, 0, "World High is Instant Radiosity at low quality, as it always did" },
-        { worldmodes::Mode::Epic,   3, 2, 1, 3, 0, "World Epic is Photon Epic: the hybrid, high, the field, 3 bounces" },
+        { worldmodes::Mode::High,   1, 0, 1, 1, 0, "World High is Photon Low: VCT, two cascades at 64^3, the field on" },
+        { worldmodes::Mode::Epic,   2, 2, 1, 3, 0, "World Epic is Photon Epic: the hybrid, high, the field, 3 bounces" },
     };
     for (const Want &w : wants) {
         auto s = freshScene();
@@ -296,10 +302,10 @@ static void testWorldModeOwnership()
     auto s = freshScene();
     worldmodes::setMode(s, worldmodes::Mode::Epic);
     CHECK(worldmodes::setRowValue(s, worldmodes::photonRowId(), 2), "pin the Photon dial to Medium");
-    CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
+    CHECK(giMode(s) == 1 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
           "the pin resolved Medium through (VCT, medium, DDGI-fed, 1 bounce)");
     worldmodes::setMode(s, worldmodes::Mode::Low);
-    CHECK(giMode(s) == 2 && giQuality(s) == 1,
+    CHECK(giMode(s) == 1 && giQuality(s) == 1,
           "and World Low did NOT switch it off — the pin won");
     CHECK(s->antiAliasing == 2 && s->shadowResolution == 512,
           "while the unpinned world rows followed Low");
@@ -319,7 +325,7 @@ static void testNewSceneDefault()
     worldmodes::setMode(s, worldmodes::Mode::Epic);
     CHECK(worldmodes::photonEnabled(s), "a NEW scene is born with Photon ON");
     CHECK(worldmodes::photonTier(s) == PhotonTier::Epic, "at Epic");
-    CHECK(giMode(s) == 3 && giQuality(s) == 2 && giDdgi(s) == 1,
+    CHECK(giMode(s) == 2 && giQuality(s) == 2 && giDdgi(s) == 1,
           "which is the hybrid, high quality, irradiance field on");
     CHECK(giBounces(s) == 3, "with three bounces (Epic's column)");
     CHECK(s->giDdgiIntensity == 1.0f, "at the calibrated intensity 1.0");
@@ -352,9 +358,9 @@ static void testMigration()
         const char *why;
     };
     const Sample samples[] = {
-        { "Matcaps",           2, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
-        { "Particles",         2, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
-        { "Physics",           2, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
+        { "Matcaps",           1, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
+        { "Particles",         1, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
+        { "Physics",           1, 1, -1, 1, PhotonTier::Medium, "vct + medium -> Medium" },
     };
     for (const Sample &sm : samples) {
         auto s = freshScene();
@@ -401,7 +407,7 @@ static void testMigration()
         s->worldMode = int(worldmodes::Mode::Epic);
         s->worldOverrides.insert(worldmodes::photonRowId(), 2);
         worldmodes::setPhoton(s, worldmodes::photonEnabled(s), worldmodes::photonTier(s));
-        CHECK(giMode(s) == 2 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
+        CHECK(giMode(s) == 1 && giQuality(s) == 1 && giDdgi(s) == 1 && giBounces(s) == 1,
               "Skeletal/World Background: the re-applied Medium tier turns the field on, nothing else moves");
         CHECK(!worldmodes::photonCustom(s) && s->worldOverrides.value(worldmodes::photonRowId()).toInt() == 2,
               "reads as Medium (not Custom), dial pin kept");

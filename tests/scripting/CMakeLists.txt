@@ -262,6 +262,13 @@ add_script_e2e(page_gi e2e_page_gi.js)
 # sampling one" are different readings, and only the renderer knows the second.
 # The pixel half is the gi.ddgi engine suite.
 add_script_e2e(gi_ddgi e2e_gi_ddgi.js)
+# PHOTON_SPEC §7 E2 (9): the irradiance field rides CASCADE 0 at EVERY TIER.
+# Engine UP for the same reason as gi_ddgi — "the tier says on" and "the shader
+# is sampling a field whose volume is cascade 0's box" are different readings —
+# and in the scripting tier rather than as an engine suite because the tier
+# table is the Studio registry's and a second copy of it is the defect this
+# lane deleted five of.
+add_script_e2e(field_every_tier e2e_field_every_tier.js)
 # PARTICLES_FX2_SPEC §11 phase 2: the emitter verbs. scene.addParticles with a
 # recipe, every scalar row through the shared node.setProperty, the two over-life
 # ramps (which no Property kind can carry), the scene clock, the save round trip

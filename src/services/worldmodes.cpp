@@ -60,22 +60,36 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// after the change and would make every scene already saved read as Custom,
 /// since its stored 0 would no longer match the tier — so the column stays 0
 /// and exists for an AUTHOR to pin a size per scene.
-struct PhotonRow { int technique, quality, ddgi, bounces, probeSize; };
+/// THE ORDINALS MOVED WITH INSTANT RADIOSITY (PHOTON_SPEC §7 E2 (4)): the
+/// technique column is `iris::GiMode` and that enum is now Off 0 / VCT 1 /
+/// VCT + Probes 2. Low is a VOXEL tier now — two camera-centred cascades at
+/// 64^3 with the irradiance field on and no probes — which is cheaper on the
+/// frame than the CPU ray trace it replaces, sees every light instead of one,
+/// and is the same arm as the tiers above it.
+/// THE SIXTH COLUMN IS THE CASCADE CHAIN, AND IT IS ON IN EVERY TIER
+/// (PHOTON_SPEC §7 E2 (6), 2026-09-15). Photon's whole point is that the bounce
+/// follows the camera: a single scene-fitted voxel box means a scene bigger than
+/// the renderer's 64 m ceiling is voxelised at metres per cell, and a camera
+/// that walks out of it walks out of the bounce. The chain is the shipped answer
+/// from this tier table on; `world.gi({cascades:false})` is still a per-scene
+/// PIN, like every other row here, for anyone who wants the one box back.
+struct PhotonRow { int technique, quality, ddgi, bounces, probeSize, cascades; };
 const PhotonRow kPhotonTable[4] = {
-    /* Low    */ { 1, 0, 0, 1, 0 },   // Instant Radiosity, low; nothing to feed a field from
-    /* Medium */ { 2, 1, 1, 1, 0 },   // VCT 64^3, DDGI-fed (voxel source)
-    /* High   */ { 3, 2, 1, 1, 0 },   // VCT + probes 128^3, HDR + shadowed captures, DDGI-fed
-    /* Epic   */ { 3, 2, 1, 3, 0 },   // ... plus 3 bounces
+    /* Low    */ { 1, 0, 1, 1, 0, 1 },   // VCT, 2 cascades @ 64^3, the field on, no probes
+    /* Medium */ { 1, 1, 1, 1, 0, 1 },   // VCT, the chain at 64^3, DDGI-fed (voxel source)
+    /* High   */ { 2, 2, 1, 1, 0, 1 },   // + probes, the chain's High table, HDR + shadowed
+    /* Epic   */ { 2, 2, 1, 3, 0, 1 },   // ... plus 3 bounces
 };
 /// The photonTiered row ids, in kPhotonTable column order.
-const int kPhotonRowCount = 5;
+const int kPhotonRowCount = 6;
 int photonColumn(const PhotonRow &r, int i) {
     switch (i) {
     case 0: return r.technique;
     case 1: return r.quality;
     case 2: return r.ddgi;
     case 3: return r.bounces;
-    default: return r.probeSize;
+    case 4: return r.probeSize;
+    default: return r.cascades;
     }
 }
 /// Fills a photonTiered row's four tier cells from the table's column `column`.
@@ -478,27 +492,33 @@ QVector<Row> buildRows()
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 2 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   3 },
                       { QStringLiteral("epic"),   QStringLiteral("Epic"),   4 } };
-        // THE WORLD MODE'S OPINION ABOUT PHOTON, and it is the OLD table read
-        // through the new dial — deliberately, so that switching a scene's
-        // World Mode keeps doing what it did:
-        //   Low/Medium had GI off             -> Photon off
-        //   High had Instant Radiosity + low  -> Photon Low (the same two fields)
-        //   Epic had the hybrid               -> Photon Epic
-        // Epic is the one column that MOVES, and moving it is the point of this
-        // phase (owner decision D2: a new scene is born Realtime-Epic, which is
-        // hybrid + high + DDGI where it used to be hybrid + medium).
+        // THE WORLD MODE'S OPINION ABOUT PHOTON:
+        //   Low/Medium  -> Photon off
+        //   High        -> Photon Low
+        //   Epic        -> Photon Epic
+        //
+        // World High STAYS on Photon Low, and that is a re-decision and not
+        // inertia (PHOTON_SPEC E2 (4) asks for one). The column was written
+        // when Photon Low WAS Instant Radiosity at low quality — a CPU ray
+        // trace from one light. Low is now two camera-centred voxel cascades at
+        // 64^3 with the irradiance field on, which is a different technique with
+        // the same intent: the cheapest thing that still bounces light
+        // everywhere. Moving World High to `off` would take bounced light away
+        // from every scene on that mode, and moving it up to Medium would put a
+        // 64^3 scene-fitted volume and its probes on a tier whose whole meaning
+        // is "not the expensive one". So the mapping is unchanged and what it
+        // buys is better.
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 4;
         r.cost = QStringLiteral("Photon — realtime global illumination: light that bounces off "
                                 "surfaces and colours everything it lands on, recomputed live "
                                 "instead of baked. The quality tier picks the techniques for you: "
-                                "Low bounces one light off the scene (cheapest, no voxels); Medium "
-                                "voxelizes the lit volume and feeds an irradiance field from it — "
-                                "probe-stored bounce that cannot leak through walls; High adds a "
-                                "grid of reflection probes with HDR, shadowed captures; Epic adds "
-                                "three light bounces and dynamic reflection probes that follow "
-                                "whatever moves, frame by frame. Every knob a tier sets is still "
-                                "reachable one by one under Advanced, and anything you set there "
-                                "stays set.");
+                                "Low voxelizes what is around the camera in two coarse steps and "
+                                "feeds an irradiance field from it (the cheapest tier that still "
+                                "bounces light everywhere); Medium voxelizes at twice the "
+                                "resolution; High adds a grid of reflection probes with HDR, "
+                                "shadowed captures; Epic adds three light bounces. Every knob a "
+                                "tier sets is still reachable one by one under Advanced, and "
+                                "anything you set there stays set.");
         r.get = [](const iris::ScenePtr &s) {
             if (!s || s->giMode == iris::GiMode::OFF) return 0;
             return qBound(0, s->giTier, 3) + 1;
@@ -518,17 +538,15 @@ QVector<Row> buildRows()
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
         r.photonTiered = true;
-        r.options = { { QStringLiteral("off"),              QStringLiteral("Off"),               0 },
-                      { QStringLiteral("instant_radiosity"), QStringLiteral("Instant Radiosity"), 1 },
-                      { QStringLiteral("vct"),              QStringLiteral("VCT"),               2 },
-                      { QStringLiteral("vct_pcc_hybrid"),   QStringLiteral("VCT + Probes"),      3 } };
+        r.options = { { QStringLiteral("off"),            QStringLiteral("Off"),          0 },
+                      { QStringLiteral("vct"),            QStringLiteral("VCT"),          1 },
+                      { QStringLiteral("vct_pcc_hybrid"), QStringLiteral("VCT + Probes"), 2 } };
         // PHOTON columns (Low, Medium, High, Epic) — not world-mode ones —
-        // read from kPhotonTable. Low keeps Instant Radiosity (spec §9 D1: "low
-        // is really low"); the top two tiers are the hybrid and differ in the
+        // read from kPhotonTable. Low and Medium are VCT and differ in the
+        // voxel resolution; the top two are the hybrid and differ in the
         // giBounces row below, not here.
         photonColumns(r, 0);
-        r.cost = QStringLiteral("Which technique Photon uses. Instant Radiosity re-traces on light "
-                                "moves and sees only the driving light; VCT re-voxelizes on "
+        r.cost = QStringLiteral("Which technique Photon uses. VCT re-voxelizes on "
                                 "geometry edits (editing latency, not frame time) and lights from "
                                 "everything; VCT + Probes adds sharp reflections near geometry — "
                                 "six renders per reflection probe on every re-solve (18 probes by "
@@ -620,6 +638,35 @@ QVector<Row> buildRows()
         r.set = [](const iris::ScenePtr &s, int v) { s->giProbeCaptureSize = qBound(0, v, 1024); };
         out.append(r);
     }
+    // THE CASCADE CHAIN, as a tier row (PHOTON_SPEC §7 E2 (6)). A photonTiered
+    // Enum like the technique above it, so an edit here PINS the chain on or off
+    // against the tier, and every tier's column is 1.
+    {
+        Row r;
+        r.id = QStringLiteral("giCascades");
+        r.label = QStringLiteral("Photon Camera Cascades");
+        r.group = QStringLiteral("Global Illumination");
+        r.type = RowType::Enum;
+        r.photonTiered = true;
+        r.options = { { QStringLiteral("off"), QStringLiteral("Off"), 0 },
+                      { QStringLiteral("on"),  QStringLiteral("On"),  1 } };
+        photonColumns(r, 5);
+        r.cost = QStringLiteral("Where the voxels are. On (every tier) the renderer builds a chain "
+                                "of voxel boxes CENTRED ON THE CAMERA — fine cells near the eye, "
+                                "coarse ones far away — and re-centres them as you travel, at most "
+                                "one box per frame, so bounced light follows you through a world of "
+                                "any size and what escapes the outermost box reads the Sky Light "
+                                "rather than going dark. Off fits ONE box around the scene's "
+                                "content instead, under a 64 m ceiling: inside it the bounce is "
+                                "identical and slightly cheaper per pixel (one volume to cone-trace "
+                                "instead of four), outside it there is no bounce at all, and a "
+                                "scene larger than the ceiling is voxelised at metres per cell. "
+                                "Off is the right answer for one room that the camera stays inside; "
+                                "On is the right answer for everything else.");
+        r.get = [](const iris::ScenePtr &s) { return s && s->giCascades > 0 ? 1 : 0; };
+        r.set = [](const iris::ScenePtr &s, int v) { if (s) s->giCascades = v ? 1 : 0; };
+        out.append(r);
+    }
     {
         Row r;
         r.id = QStringLiteral("giBounces");
@@ -633,8 +680,7 @@ QVector<Row> buildRows()
                                 "light-propagation pass over the whole voxel volume on every "
                                 "re-solve (128^3 at High/Epic), and the irradiance field is fed "
                                 "from that volume, so the extra bounces reach the probe-stored "
-                                "diffuse too. Epic's column: 3; every other tier 1. Under "
-                                "Instant Radiosity it is the ray bounce count instead.");
+                                "diffuse too. Epic's column: 3; every other tier 1.");
         r.get = [](const iris::ScenePtr &s) { return qBound(1, s->giNumBounces, 4); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giNumBounces = qBound(1, v, 4); };
         out.append(r);
@@ -892,7 +938,7 @@ QStringList photonRowIds()
 {
     return { QStringLiteral("giMode"), QStringLiteral("giQuality"),
              QStringLiteral("giDdgi"), QStringLiteral("giBounces"),
-             QStringLiteral("giProbeSize") };
+             QStringLiteral("giProbeSize"), QStringLiteral("giCascades") };
 }
 
 QString photonTierName(PhotonTier t)
@@ -935,6 +981,7 @@ int photonQuality(PhotonTier t)   { return kPhotonTable[tierIndex(t)].quality; }
 int photonDdgi(PhotonTier t)      { return kPhotonTable[tierIndex(t)].ddgi; }
 int photonBounces(PhotonTier t)   { return kPhotonTable[tierIndex(t)].bounces; }
 int photonProbeSize(PhotonTier t) { return kPhotonTable[tierIndex(t)].probeSize; }
+int photonCascades(PhotonTier t)  { return kPhotonTable[tierIndex(t)].cascades; }
 
 namespace {
 /// The four values a scene RENDERS, in kPhotonTable column order.
@@ -945,6 +992,7 @@ void photonHave(const iris::ScenePtr &s, int have[kPhotonRowCount])
     have[2] = s->giDdgi > 0 ? 1 : 0;
     have[3] = qBound(1, s->giNumBounces, 4);
     have[4] = qBound(0, s->giProbeCaptureSize, 1024);
+    have[5] = s->giCascades > 0 ? 1 : 0;
 }
 }   // namespace
 
@@ -972,12 +1020,13 @@ void setPhoton(const iris::ScenePtr &scene, bool enabled, PhotonTier tier)
     if (!pinned(scene, "giDdgi"))    scene->giDdgi = row.ddgi;
     if (!pinned(scene, "giBounces")) scene->giNumBounces = row.bounces;
     if (!pinned(scene, "giProbeSize")) scene->giProbeCaptureSize = qBound(0, row.probeSize, 1024);
-    if (!pinned(scene, "giMode")) scene->giMode = iris::GiMode(qBound(1, row.technique, 3));
+    if (!pinned(scene, "giCascades")) scene->giCascades = row.cascades;
+    if (!pinned(scene, "giMode")) scene->giMode = iris::GiMode(qBound(1, row.technique, 2));
     else if (scene->giMode == iris::GiMode::OFF) {
         // A pin of "off" is what an Advanced technique picker set to Off would
         // record; turning Photon on means the tier's technique, so the pin goes.
         scene->worldOverrides.remove(QStringLiteral("giMode"));
-        scene->giMode = iris::GiMode(qBound(1, row.technique, 3));
+        scene->giMode = iris::GiMode(qBound(1, row.technique, 2));
     }
 }
 
@@ -1015,7 +1064,7 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
 {
     if (!scene) return;
     // WHAT THE DOCUMENT RENDERS, read before anything is written.
-    const int technique = qBound(0, int(scene->giMode), 3);
+    const int technique = qBound(0, int(scene->giMode), 2);
     const int quality   = qBound(0, int(scene->giQuality), 2);
     const bool enabled  = technique != 0;
 
@@ -1025,11 +1074,15 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     // derives High, never Epic: Epic's column (three bounces) did not exist
     // before the tier table, so no pre-tier document rendered it — a P1-era
     // explicit field opt-in IS the new High row.
+    // (THE TECHNIQUE ORDINALS MOVED with Instant Radiosity's deletion — VCT is
+    // 1 and the hybrid 2 — so VCT alone can no longer tell Low from Medium.
+    // The QUALITY does, and it is the field those two tiers actually differ in:
+    // Low is 32^3 (the cascade chain's own Low row is 64), Medium 64^3.)
     PhotonTier tier = PhotonTier::Medium;
     if (enabled) {
-        tier = technique == 1 ? PhotonTier::Low
-             : technique == 2 ? PhotonTier::Medium
-                              : PhotonTier::High;
+        tier = technique == 2 ? PhotonTier::High
+             : quality == 0   ? PhotonTier::Low
+                              : PhotonTier::Medium;
     } else {
         tier = quality == 0 ? PhotonTier::Low
              : quality == 1 ? PhotonTier::Medium
@@ -1045,6 +1098,10 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     // ONLY rendered value this derivation may move). An explicit 0/1 is what
     // the document rendered and is preserved like every other field.
     if (scene->giDdgi < 0) scene->giDdgi = want.ddgi;
+    // ...and the CASCADE column, the same way and for the same reason: -1 means
+    // the file predates the column (PHOTON_SPEC §7 E2 (6)), so it follows the
+    // tier — which is ON — rather than reading as a deviation nobody authored.
+    if (scene->giCascades < 0) scene->giCascades = want.cascades;
 
     // PIN WHAT DEVIATES, DROP WHAT DOES NOT. A pin whose value is the tier's
     // own is noise: it would freeze that field through every future tier switch

@@ -41,6 +41,13 @@ var tallTop = node.transform(tall).position.y + node.size(tall).height / 2;
 console.log("    tall part top y = " + tallTop);
 
 function settle() {
+    // THE SINGLE VOLUME, PINNED, because this suite reads the automatic FIT:
+    // every tier builds the camera-centred chain since PHOTON_SPEC §7 E2 (6),
+    // and under a chain `boundsMin/boundsMax` are the OUTERMOST cascade's box
+    // by construction (world.giStatus says so), which has nothing to do with
+    // what the scene's hidden parts contribute. The subject here is "a hidden
+    // node is out of the lit volume", and the lit volume it means is the fit.
+    world.gi({ cascades: false });
     editor.frame(3);
     world.refreshGi();
     editor.frame(6);

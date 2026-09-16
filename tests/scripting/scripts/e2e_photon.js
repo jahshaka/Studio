@@ -57,13 +57,15 @@ assert(gs.dynamicProbes === undefined && gs.dynamicProbeUpdates === undefined,
 assert(world.get().photon.tier === "epic", "world.get().photon agrees too");
 
 // ---- 2. the tier switch moves the knobs -------------------------------------
-// THE TABLE (owner option (b)): Medium and High are DDGI-fed; Epic's column
-// is the bounces — the only one left since R2 deleted the dynamic probes.
+// THE TABLE (PHOTON_SPEC §7 E2 (4) and (6)): every tier is a VOXEL tier with
+// the irradiance field on and the CAMERA CASCADES on — Low included, which is
+// what deleting Instant Radiosity bought. Low and Medium differ in the voxel
+// resolution, High adds the reflection probes, Epic adds the bounces.
 var expect = {
-    low:    { technique: "instant_radiosity", quality: "low",    ddgi: false, bounces: 1 },
-    medium: { technique: "vct",               quality: "medium", ddgi: true,  bounces: 1 },
-    high:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 1 },
-    epic:   { technique: "vct_pcc_hybrid",    quality: "high",   ddgi: true,  bounces: 3 }
+    low:    { technique: "vct",            quality: "low",    ddgi: true, bounces: 1 },
+    medium: { technique: "vct",            quality: "medium", ddgi: true, bounces: 1 },
+    high:   { technique: "vct_pcc_hybrid", quality: "high",   ddgi: true, bounces: 1 },
+    epic:   { technique: "vct_pcc_hybrid", quality: "high",   ddgi: true, bounces: 3 }
 };
 for (var t in expect) {
     var got = world.photon({ tier: t });
@@ -75,6 +77,11 @@ for (var t in expect) {
     assert(got.bounces === want.bounces, "  bounces -> " + got.bounces);
     assert(got.row.bounces === want.bounces && got.row.ddgi === want.ddgi,
            "  and the row readback matches the table");
+    // THE CASCADE COLUMN (PHOTON_SPEC §7 E2 (6)): on at EVERY tier, and it is
+    // written through to the document field the mirror reads — a tier that only
+    // said "on" without writing it would leave the renderer on the single box.
+    assert(world.get().gi.cascades === true,
+           "  the camera cascades are ON at the " + t + " tier");
     // The write-through invariant, seen from the OTHER verb: the backing
     // fields the mirror and the serializer read are the resolved values.
     var w = world.get().gi;
@@ -206,8 +213,14 @@ assert(byId["giDdgi"].tierSpace === "photon", "and the irradiance-field row");
 assert(byId["giBounces"].tierSpace === "photon", "and Epic's column row");
 assert(!byId["giDynamicProbes"], "the retired dynamic-probe row is not in the registry at all");
 assert(byId["giDdgi"].tiers.medium.valueId === "on" && byId["giDdgi"].tiers.high.valueId === "on" &&
-       byId["giDdgi"].tiers.low.valueId === "off",
-       "the registry's field column: on from Medium up, off at Low");
+       byId["giDdgi"].tiers.low.valueId === "on" && byId["giDdgi"].tiers.epic.valueId === "on",
+       "the registry's field column: ON at every tier (Low became a voxel tier, E2 (4))");
+assert(byId["giCascades"] && byId["giCascades"].tierSpace === "photon" &&
+       byId["giCascades"].tiers.low.valueId === "on" &&
+       byId["giCascades"].tiers.medium.valueId === "on" &&
+       byId["giCascades"].tiers.high.valueId === "on" &&
+       byId["giCascades"].tiers.epic.valueId === "on",
+       "and the CASCADE column is a Photon row, on at every tier (E2 (6))");
 assert(byId["giBounces"].tiers.epic.value === 3 && byId["giBounces"].tiers.high.value === 1,
        "and Epic's column reads 3 bounces against High's 1");
 assert(byId["giMode"].tiers.epic.valueId === "vct_pcc_hybrid",

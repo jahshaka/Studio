@@ -147,6 +147,48 @@ editor.select(null);
 // Four spellings of "give me nothing": the default, the word every suite in the
 // tree was written with, the new name that says what it is, and the boolean the
 // pixel corpus passes. All four must be the SAME picture, pixel for pixel.
+// THE SINGLE VOLUME, PINNED, and it is the subject that asks for it. Every SHOT
+// below renders a frame, and a frame is where the renderer spends queued work:
+// since PHOTON_SPEC §7 E2 (6) every tier builds the camera-centred cascade chain
+// and the pose set above queues a re-centre per cascade, one per frame. Four
+// shots taken back to back would be four moments of the same scroll — a true
+// statement about the renderer and a useless one about the GRADES this file
+// compares, which are a property of the compositor chain and not of GI. So the
+// scene is put on the one volume, which stands still, and every phase below
+// compares grades against grades.
+world.gi({ cascades: false });
+// ...AND SETTLED, which the push itself makes necessary: a GI push is a re-solve
+// and a re-solve stales the whole reflection-probe grid, which then re-captures
+// at the update budget — one probe per frame. Every SHOT renders a frame, so
+// four shots taken mid-catch-up are four different pictures of the same scene
+// and phase A would be comparing the catch-up, not the grades. Render until the
+// renderer says nothing is owed. (The cameras.exposure lesson again: a fixed
+// frame count is a wall-clock settle in disguise.)
+// SETTLE ON THE PICTURE, not on a frame count and not on a single counter.
+// Two things in this renderer converge over frames and neither is a GI counter:
+// the reflection-probe catch-up (one probe per frame at the update budget) and
+// the HDR EXPOSURE, which adapts per frame and is charged through the fixed
+// clock — the `cameras.exposure` lesson, CLAUDE.md: "a wall-clock settle
+// measures nothing in this engine; count frames, or read until the value stops
+// moving". This reads until the value stops moving: shoot, step, shoot, and
+// stop when two consecutive pictures are identical. Every phase below compares
+// pictures taken several renders apart, so this is what makes those comparisons
+// about the GRADES.
+function settleGi(tag) {
+    var prev = null;
+    for (var r = 0; r < 40; r++) {
+        editor.frame(10, 1 / 60);
+        var now = editor.screenshot("settle-" + tag.replace(/[^a-z]/g, "") + ".png", W, H, PROBES);
+        if (prev && maxDelta(prev, now) === 0) {
+            console.log("settled (" + tag + ") after " + r + " rounds of 10 frames");
+            return;
+        }
+        prev = now;
+    }
+    console.log("settled (" + tag + ") NEVER — the picture is still moving");
+}
+settleGi("phase A");
+
 console.log("---- phase A: the plain grade ----");
 var noGrade = editor.screenshot("shot-a-default.png", W, H, PROBES);
 var raw     = shoot("raw");
@@ -392,9 +434,33 @@ function camShot(options) {
     return camera.screenshot(camId, "cam-shot-" + (++SHOTS) + ".png", options);
 }
 
+// SETTLED AGAIN before the camera doors: this phase takes six shots of one pose
+// and compares the first against the last, and every shot renders a frame — so
+// anything the renderer still owes (a probe re-capture after the edits above)
+// would land between them and read as a grade difference.
+settleGi("camera doors");
+// THE TWO PICTURES THIS PHASE COMPARES ARE TAKEN BACK TO BACK, and that is not
+// tidiness: a SCENE CAMERA has its own view and therefore its own HDR adaptation
+// state, which advances only when that view renders — i.e. once per camShot. The
+// comparison below used to be the FIRST shot against the SIXTH, with four
+// spelling checks in between, so it was reading five frames of exposure
+// adaptation as a grade difference (the `cameras.exposure` lesson: read until
+// the value stops moving, or compare adjacent reads). The spelling checks follow.
+// ...AND THE CAMERA'S OWN VIEW IS SETTLED FIRST. It is a SECOND view with its
+// own HDR adaptation state, and that state advances only when IT renders — once
+// per camShot — so its first few pictures are its exposure converging and
+// nothing else. Shoot until two consecutive pictures are identical.
 var camPlain = camShot({ grade: "plain" });
+for (var camRound = 0; camRound < 40; camRound++) {
+    var next = camShot({ grade: "plain" });
+    if (maxDelta(camPlain, next) === 0) break;
+    camPlain = next;
+}
+console.log("camera view settled after " + camRound + " shots");
+var camRaw   = camShot({ grade: "raw" });
 assert(camPlain.width === W && camPlain.probes.length === PROBES.length,
        "camera.screenshot({grade:'plain'}) renders and probes like the other doors");
+assert(maxDelta(camPlain, camRaw) === 0, "\"raw\" and \"plain\" are the same picture");
 // EVERY documented spelling parses — a verb whose parser is narrower than its
 // own documentation is how player.screenshot's `scene` branch once shipped
 // unreachable.
@@ -402,15 +468,17 @@ assert(camPlain.width === W && camPlain.probes.length === PROBES.length,
     var shot = camShot({ grade: word });
     assert(shot.width === W, "camera.screenshot accepts grade \"" + word + "\"");
 });
-var camRaw = camShot({ grade: "raw" });
-assert(maxDelta(camPlain, camRaw) === 0, "\"raw\" and \"plain\" are the same picture");
+var camPlain2 = camShot({ grade: "plain" });
 var camScene = camShot({ grade: "scene" });
-assert(maxDelta(camPlain, camScene) > 2,
+assert(maxDelta(camPlain2, camScene) > 2,
        "\"scene\" through a scene camera is a GRADED picture (delta " +
-       maxDelta(camPlain, camScene) + ")");
+       maxDelta(camPlain2, camScene) + ")");
 // The older boolean spelling still means what it always meant: false = plain,
 // true = viewport. The pixel suites pass it that way.
-assert(maxDelta(camShot({ postFx: false }), camPlain) === 0,
+// EVERY COMPARISON IN THIS PHASE IS BETWEEN ADJACENT SHOTS, for the reason at
+// the top of it: the reference is re-taken beside the picture it is compared
+// against, never carried across the spelling checks.
+assert(maxDelta(camShot({ postFx: false }), camShot({ grade: "plain" })) === 0,
        "postFx:false is still the exact readback");
 assert(maxDelta(camShot({ postFx: true }), camShot({ grade: "viewport" })) === 0,
        "postFx:true is still the \"viewport\" grade");

@@ -37,7 +37,14 @@ assert(ground.length > 10 && a.length > 10 && c.length > 10, "four objects added
 editor.frame(2);
 
 // ---- the automatic fit ---------------------------------------------------
-assert(world.gi({ mode: "vct", quality: "low", bounces: 1 }), "world.gi(vct)");
+// THE CHAIN IS PINNED OFF HERE, and that is the subject and not a workaround:
+// this suite is about the AUTOMATIC FIT — the one box the renderer puts around
+// the scene's content — and since PHOTON_SPEC §7 E2 (6) every tier builds the
+// camera-centred CHAIN instead, whose `boundsMin/boundsMax` are the OUTERMOST
+// cascade's 120 m box by construction (world.giStatus's own documentation says
+// so). A fit test that let the tier decide would be measuring the cascade table.
+assert(world.gi({ mode: "vct", quality: "low", bounces: 1, cascades: false }),
+       "world.gi(vct, the single volume)");
 editor.frame(4);
 var st = world.giStatus();
 console.log("giStatus = " + JSON.stringify(st));

@@ -276,8 +276,8 @@ static void hiddenParentBounce(Engine *engine, View *view)
     gi.quality = GiQuality::High;
     gi.numBounces = 3;
     gi.ddgi = GiToggle::On;
-    gi.boundsMin = Vec3(-7.5f, -0.4f, -7.5f);   // PINNED: see the header above
-    gi.boundsMax = Vec3( 7.5f,  7.0f,  7.5f);
+    gi.testBoundsMin = Vec3(-7.5f, -0.4f, -7.5f);   // PINNED: see the header above
+    gi.testBoundsMax = Vec3( 7.5f,  7.0f,  7.5f);
     CHECK(s->setGlobalIllumination(gi), "Epic's GI arms (hybrid, High, 3 bounces, field on)");
     render(engine, 6);
     view->readPixels(img);
@@ -490,7 +490,7 @@ static void volumeCeiling(Engine *engine, View *view)
     // THE KNOB. 0 removes the ceiling, and the volume goes back to the plane —
     // which is also the proof that the assertion above is measuring the ceiling
     // and not some other clamp.
-    gi.autoBoundsMax = 0.0f;
+    gi.testAutoBoundsMax = 0.0f;
     CHECK(s->setGlobalIllumination(gi), "autoBoundsMax = 0 re-pushes");
     render(engine, 4);
     st = s->giStatus();
@@ -501,9 +501,9 @@ static void volumeCeiling(Engine *engine, View *view)
 
     // A PINNED VOLUME IGNORES THE CEILING: that is how a scene bigger than the
     // cap asks for more, and it must not be quietly overruled.
-    gi.autoBoundsMax = 64.0f;
-    gi.boundsMin = Vec3(-150.0f, -10.0f, -150.0f);
-    gi.boundsMax = Vec3(150.0f, 10.0f, 150.0f);
+    gi.testAutoBoundsMax = 64.0f;
+    gi.testBoundsMin = Vec3(-150.0f, -10.0f, -150.0f);
+    gi.testBoundsMax = Vec3(150.0f, 10.0f, 150.0f);
     CHECK(s->setGlobalIllumination(gi), "an explicit volume re-pushes");
     render(engine, 4);
     st = s->giStatus();
