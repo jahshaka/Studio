@@ -67,7 +67,6 @@ class QDoubleSpinBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
-template <typename T> class QFutureWatcher;
 
 class ImportSettingsDialog : public QDialog
 {
@@ -249,7 +248,6 @@ private:
     QCheckBox *mRemainingBox = nullptr;
     QDialogButtonBox *mButtons = nullptr;
     QPushButton *mOkButton = nullptr;
-    QFutureWatcher<iris::ModelPreRead> *mWatcher = nullptr;
 };
 
 /// THE BATCH (SPECS/IMPORT_DIALOG_SPEC.md §8, owner pick §12.5): a drop of

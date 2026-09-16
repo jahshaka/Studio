@@ -488,10 +488,18 @@ void ImportSettingsDialog::setPreRead(const iris::ModelPreRead &facts)
     mFacts = facts;
     setBusy(false);
     refreshClipList();
-    // A record that came in before the facts did may name an origin helper;
-    // now that the box is known, re-apply it so the offset is right.
+    // THE BOX IS ONLY KNOWN NOW. A helper the user picked while the read was in
+    // flight computed nothing (there was no box) — apply it for real; otherwise
+    // name whichever helper the offset the record carries turns out to be.
     const Origin named = origin();
-    if (named == Origin::Centre || named == Origin::BottomCentre) applyOriginHelper();
+    if (named == Origin::Centre || named == Origin::BottomCentre) {
+        applyOriginHelper();
+    } else {
+        mUpdating = true;
+        mOrigin->setCurrentIndex(std::max(
+            0, mOrigin->findData(int(originOf(mSettings, placedBox(mSettings, mFacts))))));
+        mUpdating = false;
+    }
     refreshPreview();
 }
 
@@ -511,12 +519,10 @@ void ImportSettingsDialog::startPreRead(const QString &path, const QString &form
     // this dialog, so a dialog closed mid-read simply stops listening; the
     // generation counter drops a superseded read's answer.
     auto *watcher = new QFutureWatcher<iris::ModelPreRead>(this);
-    mWatcher = watcher;
     connect(watcher, &QFutureWatcher<iris::ModelPreRead>::finished, watcher,
             [this, watcher, generation]() {
                 const iris::ModelPreRead facts = watcher->result();
                 watcher->deleteLater();
-                if (mWatcher == watcher) mWatcher = nullptr;
                 if (generation != mPreReadGeneration) return;   // superseded
                 setPreRead(facts);
                 if (!facts.parsed)
@@ -540,11 +546,21 @@ void ImportSettingsDialog::readFieldsIntoSettings()
     mSettings.skeleton = mSkeleton->isChecked();
     mSettings.materials = mMaterials->isChecked() ? iris::ImportSettings::MaterialMode::Import
                                                   : iris::ImportSettings::MaterialMode::None;
+    const bool keptClips = mSettings.clips;
+    const QStringList keptNames = mSettings.clipNames;
     mSettings.clipNames.clear();
     switch (mClipMode->currentIndex()) {
     case 0: mSettings.clips = true; break;
     case 1: mSettings.clips = false; break;
     default:
+        // A list with NO ROWS is "the pre-read has not landed yet", not "the
+        // user unticked everything": reading it would erase the clip choice a
+        // reimport came in with, silently, the moment any other field moved.
+        if (mClipList->count() == 0) {
+            mSettings.clips = keptClips;
+            mSettings.clipNames = keptNames;
+            break;
+        }
         mSettings.clips = true;
         for (int row = 0; row < mClipList->count(); ++row) {
             const QListWidgetItem *item = mClipList->item(row);
@@ -561,6 +577,18 @@ void ImportSettingsDialog::writeSettingsIntoFields()
 {
     if (!mScale) return;
     mUpdating = true;
+    // A RECORD IS NOT A WIDGET'S OPINION: a scale the spin box cannot represent
+    // exactly would be silently rounded the moment any other field moved. Widen
+    // the box for the value instead — the common 1.0 still reads "1.0000".
+    if (mSettings.scale > 0.0) {
+        while (mScale->decimals() < 9
+               && std::fabs(QString::number(mSettings.scale, 'f', mScale->decimals()).toDouble()
+                            - mSettings.scale)
+                      > 1e-12 * mSettings.scale)
+            mScale->setDecimals(mScale->decimals() + 1);
+        if (mSettings.scale < mScale->minimum()) mScale->setMinimum(mSettings.scale);
+        if (mSettings.scale > mScale->maximum()) mScale->setMaximum(mSettings.scale);
+    }
     mScale->setValue(mSettings.scale);
     mUnits->setCurrentIndex(
         std::max(0, mUnits->findData(QLatin1String(iris::ImportSettings::unitName(mSettings.units)))));

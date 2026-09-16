@@ -327,6 +327,31 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- 7b. A RECORD IS NOT LOST WHILE THE PRE-READ IS IN FLIGHT ---------
+    // Reimport mode fills the fields from the stored record LONG before the
+    // file has been read: an empty clip list and a scale the spin box cannot
+    // spell must not quietly rewrite what the asset already carries.
+    {
+        ImportSettingsDialog dialog;            // no setPreRead: nothing read yet
+        dialog.setMode(ImportSettingsDialog::Mode::Reimport);
+        iris::ImportSettings stored;
+        stored.clipNames = QStringList{ QStringLiteral("Walk") };
+        stored.scale = 0.000037;                // finer than the field's 4 decimals
+        dialog.setSettings(stored);
+
+        // touch an unrelated field, as a user would
+        auto *scale = nth<QDoubleSpinBox>(&dialog, 0);
+        if (scale) scale->setValue(scale->value());
+        const iris::ImportSettings now = dialog.settings();
+        CHECK(now.clipNames == stored.clipNames && now.clips,
+              "an unread clip list does not erase the record's clip choice");
+        CHECK(near_(now.scale, stored.scale, 1e-12),
+              qPrintable(QStringLiteral("…and the scale survives to the last digit (%1)")
+                             .arg(now.scale, 0, 'g', 12)));
+        CHECK(dialog.settings().canonicalJson() == stored.canonicalJson(),
+              "…so the whole record is still byte-identical to the stored one");
+    }
+
     // ---- 8. THE BATCH STATE MACHINE ---------------------------------------
     {
         const QStringList files = { QStringLiteral("a.fbx"), QStringLiteral("b.glb"),
