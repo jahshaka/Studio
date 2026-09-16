@@ -821,3 +821,22 @@ add_test(NAME gi.reenable COMMAND test_gi_reenable
 # holds several voxel volumes at once (the VRAM-contention class, CLAUDE.md) and
 # this suite builds the arm six times over.
 set_tests_properties(gi.reenable PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# gi.chain_face — PHOTON-E3 item 0 (ii): the chain-to-world face and the faces
+# inside the chain, under a REAL sky (audit B8). Its own binary like every GI
+# suite (the voxel lighting binds process-wide to HlmsPbs).
+add_executable(test_gi_chain_face test_gi_chain_face.cpp)
+set_target_properties(test_gi_chain_face PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_chain_face PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_chain_face PRIVATE JahshakaEngine)
+add_dependencies(test_gi_chain_face JahshakaEngineMedia)
+add_test(NAME gi.chain_face COMMAND test_gi_chain_face
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL TRUE)
