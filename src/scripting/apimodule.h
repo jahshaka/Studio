@@ -82,6 +82,37 @@ protected:
     static QVariant jsNull();
 
     ScriptHost &host;
+
+public:
+    /// RUN A VERB AS A SHELL CALLER — a button, a menu row, a drop — rather
+    /// than as a script (the convention AvatarApi has had since AV1, here for
+    /// every module).
+    ///
+    /// It matters for two reasons. A failure normally waits in the host's
+    /// PENDING slot for the bridge to rethrow on the worker; nobody is going to
+    /// rethrow this one, so it is taken here instead of left lying about. And a
+    /// widget caller needs the message as a STRING it can put in a box or a
+    /// toast — a verb's refusal must never reach a person as nothing at all.
+    ///
+    ///     AssetsApi api(host);
+    ///     const QVariantMap r = api.quietly([&] { return api.reimport(guid, opts); });
+    ///     if (r.isEmpty()) show(api.lastError());
+    template <typename Fn>
+    auto quietly(Fn &&fn) -> decltype(fn())
+    {
+        host.lastError.clear();
+        host.pendingError.clear();
+        auto result = fn();
+        mQuietError = host.pendingError.isEmpty() ? host.lastError : host.pendingError;
+        host.pendingError.clear();
+        return result;
+    }
+
+    /// What the last quietly() call failed with, empty when it did not.
+    QString lastError() const { return mQuietError; }
+
+private:
+    QString mQuietError;
 };
 
 #endif // APIMODULE_H

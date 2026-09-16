@@ -313,12 +313,14 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "storeStatus", "assets.storeStatus() -> {root, online, missing}",
           "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it.",
           Needs::Document },
-        { "importSettings", "assets.importSettings(guid) -> {sourceOid, importer, importerVersion, assimp, settings, defaults}",
+        { "importSettings", "assets.importSettings(guid) -> {name, sourceName, sourceOid, importer, importerVersion, assimp, settings, defaults}",
           "The determinism record the ONE import pipeline stamped on the asset: content id of the source, "
           "importer name/version, assimp version, and `settings` — the COMPLETE import-settings record "
           "this asset was imported under (assets.import documents every key). A row imported before the "
           "import dialog carries no settings and reads back as the defaults, which is exactly what was "
           "applied to it. "
+          "`name` is the row's display name and `sourceName` the stored source file's, whose EXTENSION "
+          "is what a reader of the stored bytes needs (the content store names its objects by hash). "
           "`defaults` is what the FILE ITSELF says, for a dialog or a test that wants to show the user "
           "what they are overriding: `declaredUnitScale` (metres per source unit as the file declares — "
           "FBX UnitScaleFactor/100, 1 for the formats that declare none) and `extent` {x,y,z}, the "
@@ -1466,6 +1468,18 @@ QVariantMap AssetsApi::importSettings(const QString &guid)
     // truth instead of measuring their own: the declared unit and the size this
     // asset actually imported at.
     const AssetRecord row = host.db->fetchAsset(guid);
+    // THE ROW'S OWN NAMES, so a caller that wants to TALK about this asset —
+    // the import dialog's title, and the extension its pre-read of the stored
+    // source needs, because the store names objects by content hash — reads
+    // them from the verb instead of reaching past it into the database and the
+    // CAS (API-first, SCRIPTING_SPEC §2.3).
+    record[QStringLiteral("name")] = row.name;
+    {
+        QString sourceName;
+        AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid,
+                                &sourceName);
+        record[QStringLiteral("sourceName")] = sourceName.isEmpty() ? row.name : sourceName;
+    }
     if (row.type == static_cast<int>(ModelTypes::Object)) {
         const QJsonObject meta = AssetMetadata::ensure(host.db, guid);
         QJsonObject defaults;
