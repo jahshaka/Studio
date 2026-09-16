@@ -158,9 +158,20 @@ int main()
     // well; the CHAIN's faces are E3's measurement, pinned loosely (they are a
     // known artefact with a number, not a target) so that a regression which
     // doubles them reds and an improvement never does.
+    // RE-ANCHORED BY SEAM-1 (2026-09-16, ogre-patch 0066: the cascade march
+    // carries the cone's escape opacity and its age across a hop). Before it the
+    // chain's faces ran 0.591-1.328 and there was one at EVERY cascade — a
+    // staircase, a factor 1.9 from the far world to the eye. After it they run
+    // 0.821-1.252 and only two are left: the cascade-0 face, which is now the
+    // field's own convention meeting the cone's (1.000-1.003x where the two
+    // ambient conventions coincide, 1.086-1.252x under a real sky, which is
+    // audit B8's 2-band/9-band difference finally visible on its own), and the
+    // 128^3 -> 64^3 cell-size jump in the tier's cascade table (0.821-0.839x),
+    // which is a table question and not a march one. The bracket is tight around
+    // those: a regression toward the old staircase reds.
     const float kSingleFaceMax = 1.05f;      // measured 1.007-1.029 over four ambients
-    const float kChainFaceMax  = 1.40f;      // measured 1.031-1.328 over four ambients
-    const float kChainFaceMin  = 0.55f;      // the c0 face with the field bound: 0.591-0.821
+    const float kChainFaceMax  = 1.35f;      // measured 0.821-1.252 over four ambients
+    const float kChainFaceMin  = 0.75f;
     const auto measure = [&](const char *what, bool chain, const Amb &a, float camX, float orthoHalf) {
         r.camX = camX; r.orthoHalf = orthoHalf; placeCamera(r);
         GiParams gi;
