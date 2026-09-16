@@ -76,6 +76,7 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/graphicshelper.h"
 #include "irisgl/import/importflags.h"
+#include "irisgl/import/importsettings.h"
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/modelsceneinfo.h"
 
@@ -365,6 +366,45 @@ static void determinismAndFailureModes()
                "no expectation given = read whatever the blob says it is");
     CHECK_LOUD(iris::MeshBake::fingerprintFor(QString()).isEmpty(),
                "a source with no content id has no fingerprint (and so never matches)");
+
+    // 3b. THE SETTINGS TERM (IMPORT-1, SPECS/IMPORT_DIALOG_SPEC.md §4.4). An
+    // asset's import settings are half the key, because the same source bytes
+    // legitimately produce different geometry under different settings. An
+    // ABSENT record — every row imported before the import dialog, every
+    // shipped sample, every .jaf archive — is IDENTITY and must key exactly as
+    // a fully-defaulted record does, or an upgrade would orphan every bake in
+    // every library for a second reason.
+    {
+        const QString oid = QStringLiteral("deadbeef").repeated(8);
+        const QString identity = iris::ImportSettings::identityHash();
+        CHECK_LOUD(iris::MeshBake::fingerprintFor(oid)
+                       == iris::MeshBake::fingerprintFor(oid, identity),
+                   "an ABSENT settings record keys exactly as an identity one");
+        CHECK_LOUD(iris::MeshBake::fingerprintFor(oid)
+                       == iris::MeshBake::fingerprintFor(
+                              oid, iris::ImportSettings::hashOf(QJsonObject())),
+                   "and so does an EMPTY {} record");
+        iris::ImportSettings twice;
+        twice.scale = 2.0;
+        CHECK_LOUD(iris::MeshBake::fingerprintFor(oid)
+                       != iris::MeshBake::fingerprintFor(oid, twice.hash()),
+                   "different settings are a different bake");
+        CHECK_LOUD(iris::MeshBake::fileNameFor(oid)
+                       != iris::MeshBake::fileNameFor(oid, twice.hash()),
+                   "…and a different bake FILE, so the two can coexist in one store");
+        CHECK_LOUD(iris::MeshBake::fileNameFor(oid).endsWith(identity + QStringLiteral(".jmb")),
+                   "the bake's name carries the settings hash");
+
+        // An identity TRANSFORM must also produce byte-identical geometry to no
+        // transform at all: the choke point writes assimp's scale property on
+        // every call, so "identity" has to mean identity.
+        const QByteArray plain = bakeBlob(path, fp);
+        QTemporaryDir scratch;
+        iris::MeshBake::Model withIdentity = iris::MeshBake::buildFromFile(
+            path, fp, scratch.path(), iris::ImportSettings().transform());
+        CHECK_LOUD(withIdentity.valid && iris::MeshBake::serialize(withIdentity) == plain,
+                   "an identity import transform bakes byte-identical geometry");
+    }
 
     // 4. Corruption. TRUNCATION at every length: a torn write, a half-copied
     // file, a store on a full disk. Not one of them may be accepted, and not

@@ -53,3 +53,13 @@ add_test(NAME source.bake_key_guard
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.bake_key_guard PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.bake_key_guard)
+
+# source.one_readfile — IMPORT-1: every assimp parse of a model path goes
+# through iris::readSceneFile, which is where the asset's baked import
+# transform (scale, rotation, origin) is applied. A parse that skips it renders
+# a different size from the asset's own bake, silently. See the script's header.
+add_test(NAME source.one_readfile
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_readfile.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_readfile PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_readfile)

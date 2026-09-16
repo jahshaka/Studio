@@ -50,7 +50,8 @@ For more information see the LICENSE file
 #include <memory>
 
 #include "irisgl/irisglfwd.h"
-#include "services/fitsize.h"
+#include "irisgl/import/importsettings.h"
+#include "services/extentmeasure.h"
 
 namespace avatar
 {
@@ -103,47 +104,27 @@ struct BoneInfo
 // root node, so the rig, the mesh and every clip that plays on it move
 // together) instead of leaving the page to cope.
 //
-// The bounds are deliberately wide: everything from a toddler (0.5 m) to a
-// three-metre ogre is left EXACTLY as authored, because a character that size
-// is a legitimate art decision. Outside them the file is wrong by orders of
-// magnitude, never by taste.
+// NOBODY HERE DECIDES HOW TALL A CHARACTER IS (owner pick, IMPORT_DIALOG_SPEC
+// §12.3, strict): a character's height is an IMPORT SETTING, decided once by a
+// person looking at the model, and baked into the asset — so every placement is
+// at scale 1 and this module MEASURES and reports, nothing else. The automatic
+// plausible-height band, the explicit avatar.setCharacterHeight /
+// avatar.spawn({height}) override and the `normalize` switch are all deleted;
+// assets.reimport(guid, {scale}) is the one way to change how big a model is,
+// and it changes it for every placement at once.
 
-/// What normalization did, for the verb readback and the log line.
-struct HeightNormalization
-{
-    bool  applied = false;      ///< the subject was scaled
-    float factor = 1.0f;        ///< what its root scale was multiplied by
-    float sourceHeight = 0.0f;  ///< metres, as the file imported
-    float height = 0.0f;        ///< metres, after (== sourceHeight when not applied)
-    bool  explicitTarget = false; ///< a height was asked for, not inferred
-};
-
-/// AUTO leaves anything in [kMinPlausibleHeight, kMaxPlausibleHeight] alone.
-///
-/// ONE SET OF NUMBERS (fit-to-size, 2026-09-09): these are the import-time
-/// size policy's character envelope (fitsize::kCharacter), not a second
-/// opinion. The import fits a mis-declared character at the ASSET, and this
-/// rule then measures the fitted result and finds it plausible — so a
-/// character is never scaled twice. Two independently-written bands would
-/// have made "twice" possible the day one of them moved.
-constexpr float kMinPlausibleHeight = float(fitsize::kCharacter.min);
-constexpr float kMaxPlausibleHeight = float(fitsize::kCharacter.max);
-/// What AUTO scales an implausible character TO — and the room's design height.
-constexpr float kTargetCharacterHeight = float(fitsize::kCharacter.target);
+/// The Avatar ROOM's design height — what its floor-to-ceiling and its camera
+/// framing are authored around, and the REFERENCE the space is rescaled by for
+/// a character of another size (`rescaleSpace` computes height /
+/// kTargetCharacterHeight). It is a set-dressing number and it is still needed;
+/// NOTHING scales a character to it.
+constexpr float kTargetCharacterHeight = 1.75f;
 
 /// World-space vertical extent of every mesh under `node`, in metres — the
 /// same measure AvatarMovement::fitCapsuleToNode calls the capsule height, so
 /// the page, the capsule and this agree by construction. 0 when the subtree
-/// carries no geometry (a skeleton-only file), which is NOT normalizable.
+/// carries no geometry (a skeleton-only file).
 float measureCharacterHeight(const iris::SceneNodePtr &node);
-
-/// Scales `node` so its measured height becomes `targetHeight` metres, or —
-/// with `targetHeight` <= 0, the AUTO default — so an implausible height
-/// becomes kTargetCharacterHeight and a plausible one is left untouched.
-/// MULTIPLIES the existing local scale (a file's own root scale is part of how
-/// tall it is) and logs whenever it changes anything.
-HeightNormalization normalizeCharacterHeight(const iris::SceneNodePtr &node,
-                                             float targetHeight = 0.0f);
 
 /// A drawable bone→parent segment, in world space.
 struct BoneSegment
@@ -179,8 +160,12 @@ public:
     /// ROW's name — the same rule `attachClipsFromFile` follows for its
     /// refusals. Empty = use the file's base name, which is right for a load
     /// straight off disk.
+    /// `assetGuid` (IMPORT-1) is the MODEL ROW this path belongs to: the parse
+    /// is given that row's import recipe, so the page shows the size the scene
+    /// places. Empty = whatever that content's default variant is.
     bool load(const QString &path, QString *error = nullptr,
-              const QString &displayName = QString());
+              const QString &displayName = QString(),
+              const QString &assetGuid = QString());
 
     // ---- the SPLIT load (AV1: the frozen app) -----------------------------
     //
@@ -200,14 +185,20 @@ public:
         QString displayName;     ///< the catalog row's name, or empty
         iris::SceneNodePtr node; ///< the parsed fragment, not yet in a document
         std::shared_ptr<QTemporaryDir> scratch;   ///< where embedded textures went
+        /// The CHARACTER ASSET's import recipe, resolved by the caller on the
+        /// thread that may touch the catalog (the same split the mesh prewarm
+        /// uses). It is what the parse below applied, and it is also what a
+        /// later clip file has to be read with — see loadAnimation.
+        iris::ImportTransform xf;
         QString error;
         bool ok() const { return error.isEmpty() && !node.isNull(); }
     };
     /// THREAD-SAFE: parses `path` and extracts its embedded textures into a
     /// fresh scratch dir. Never touches this object (it is static); the result
     /// is inert until `applySubject` takes it.
-    static std::shared_ptr<PreparedSubject> prepareSubject(const QString &path,
-                                                           const QString &displayName = QString());
+    static std::shared_ptr<PreparedSubject> prepareSubject(
+        const QString &path, const QString &displayName = QString(),
+        const iris::ImportTransform &xf = iris::ImportTransform());
     /// UI thread: replaces the loaded subject with `prepared`. False + `error`
     /// when the prepare failed (the loaded subject is then left alone).
     bool applySubject(const std::shared_ptr<PreparedSubject> &prepared, QString *error = nullptr);
@@ -234,13 +225,10 @@ public:
     /// loaded character" with the same key `loadAnimation` refuses on.
     const QSet<QString> &nodeNames() const { return mNodeNames; }
 
-    /// Sets the loaded subject's height in metres, exactly (`metres` > 0), or
-    /// re-runs the AUTO rule (`metres` <= 0). False when nothing is loaded or
-    /// the subject has no geometry to measure.
-    bool setCharacterHeight(float metres, QString *error = nullptr);
-    /// What normalization did to the loaded subject (all zeros when nothing is
-    /// loaded).
-    const HeightNormalization &normalization() const { return mNormalization; }
+    /// The loaded subject's measured height in metres — the size its import
+    /// settings baked into the asset, because nothing here scales it. 0 when
+    /// nothing is loaded or the subject carries no geometry.
+    float characterHeight() const { return mCharacterHeight; }
 
     QString filePath() const { return mFilePath; }
     /// The file's base name — also the fallback display name for junk clips.
@@ -384,7 +372,10 @@ private:
 
     QString mFilePath;
     QString mName;
-    HeightNormalization mNormalization;
+    float mCharacterHeight = 0.0f;
+    /// The loaded character's import recipe — what its geometry was built with,
+    /// and what a clip file loaded against it must be read with.
+    iris::ImportTransform mImportTransform;
     std::shared_ptr<QTemporaryDir> mScratch;
 
     // Clip display names, in the order they were added: the character file's

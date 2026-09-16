@@ -40,7 +40,9 @@ For more information see the LICENSE file
 #include "app/firstrun.h"
 #include "ui/dialogs/donatedialog.h"
 #include "services/assetstorepaths.h"
+#include "services/assetmetadata.h"
 #include "services/assetstore.h"
+#include "services/meshbakestore.h"
 #include "data/settingsmanager.h"
 #include "app/cli/scriptrunner.h"
 #include "app/cli/selftestrunner.h"
@@ -198,6 +200,15 @@ int main(int argc, char *argv[])
     // And this is fork F5-A: every irisLog() call site gains a timestamp, a
     // category and rotation without one of them being edited.
     JahLog::absorbIrisLogger();
+
+    // THE IMPORT RECIPE SEAM (IMPORT-1, services/assetmetadata.h): a model's
+    // metadata describe has to parse the file the way the ASSET was imported,
+    // and the lookup is a catalog query that lives in MeshBakeStore. Wired here
+    // so the describe service stays linkable on its own.
+    AssetMetadata::setImportTransformResolver(
+        [](const QString &sourcePath, const QString &assetGuid) {
+            return MeshBakeStore::transformFor(sourcePath, assetGuid);
+        });
 
     // Apply the app theme (Qlementine Dark by default, archived Classic on
     // request) BEFORE any widget exists — the Upgrader dialog and the engine

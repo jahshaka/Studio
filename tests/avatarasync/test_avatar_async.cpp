@@ -551,7 +551,6 @@ int main(int argc, char **argv)
                            "refusals.push(refused(function(){ avatar.setDefaultClip(''); }));"
                            "refusals.push(refused(function(){ avatar.removeClip('%3'); }));"
                            "refusals.push(refused(function(){ avatar.setClipOptions('%3', {looping: true}); }));"
-                           "refusals.push(refused(function(){ avatar.setCharacterHeight(1.9); }));"
                            "refusals.push(refused(function(){ avatar.setClip('%3'); }));"
                            "({running: avatar.progress().running, open: opened.guid,"
                            "  refusals: refusals, clips: avatar.asset().definition.clips.length});")
@@ -559,7 +558,10 @@ int main(int argc, char **argv)
         std::printf("info: during the switch: %s\n",
                     QJsonDocument(duringSwitch).toJson(QJsonDocument::Compact).constData());
         const QJsonArray refusals = duringSwitch.value("refusals").toArray();
-        bool allRefused = refusals.size() == 6;
+        // FIVE, not six: avatar.setCharacterHeight retired with the height rule
+        // (SPECS/IMPORT_DIALOG_SPEC.md §12.3) — a character's size is an import
+        // setting, so there is no per-subject height edit left to refuse.
+        bool allRefused = refusals.size() == 5;
         for (const QJsonValue &v : refusals) allRefused = allRefused && v.toBool();
         CHECK(duringSwitch.value("running").toBool(),
               "the switch was still in flight while the edits were attempted");

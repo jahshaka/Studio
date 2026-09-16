@@ -205,6 +205,25 @@ public:
     /// Imports a mesh file straight into the scene. The path must be a real
     /// file — the file dialog stays in the shell.
     void addMesh(const QString &path, bool ignore = false, iris::Vec3 position = iris::Vec3());
+
+    /// REIMPORT'S OPEN-SCENE HALF (SPECS/IMPORT_DIALOG_SPEC.md §5): swaps every
+    /// MeshNode in the open scene that was built from `meshGuid` to the
+    /// geometry that guid's bake now holds, and returns how many moved.
+    ///
+    /// A MeshNode records the MESH MEMBER guid it was built from
+    /// (SceneReader::createMesh writes it to `meshPath`), so the sweep is by
+    /// guid and never by file name. Node TRANSFORMS are untouched, deliberately:
+    /// every placement is at scale 1 since the import dialog, and the new
+    /// geometry is the new size.
+    ///
+    /// It lives HERE, on the service, rather than inside the verb, so the
+    /// import-settings dialog (lane 2) reuses it instead of writing a second
+    /// walk that has to agree with this one.
+    ///
+    /// NOT UNDOABLE, like every asset mutation: it does not push a command, and
+    /// an undo of an earlier structural edit restores a node holding the OLD
+    /// mesh pointer.
+    int refreshAssetMeshes(const QString &meshGuid, const QString &sourcePath);
     /// Instantiates a stored object asset (drag-drop / assets.addToScene).
     void addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                          const QString &guid, const QString &assetName,

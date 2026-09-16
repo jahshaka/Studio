@@ -38,8 +38,7 @@ public:
     Q_INVOKABLE QVariantMap metadata(const QString &guid);
     /// ATOM stage 1: the LOD chain the asset's bake carries.
     Q_INVOKABLE QVariantList meshLods(const QString &guid);
-    Q_INVOKABLE QVariantMap setFit(const QString &guid, const QVariantMap &options = QVariantMap());
-    Q_INVOKABLE QString import(const QString &path);
+    Q_INVOKABLE QString import(const QString &path, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString importFile(const QString &path, int drawerId = -1,
                                    const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool rename(const QString &guid, const QString &name);
@@ -73,6 +72,9 @@ public:
     Q_INVOKABLE bool setStoreRoot(const QString &path, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap storeStatus();
     Q_INVOKABLE QVariantMap importSettings(const QString &guid);
+    Q_INVOKABLE QVariantMap reimport(const QString &guid,
+                                     const QVariantMap &options = QVariantMap());
+
     Q_INVOKABLE QVariantMap checkConsistency(const QString &guid);
     Q_INVOKABLE QVariantMap verify(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap rebuildCatalog(const QString &dbPath, const QVariantMap &options = QVariantMap());

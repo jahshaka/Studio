@@ -331,19 +331,20 @@ private:
 	void rebuildAssetList();
 	QString assetViewMode = QStringLiteral("tiles");
 
-	// FIT TO SIZE (services/fitsize.h): the "Imported size: 17.3 m -> fitted to
-	// 1.75 m [Re-measure] [Reset] [Set...]" row. Model rows only; hidden for
-	// everything else. Replaced a dead "Normalize" button that was constructed,
-	// styled and never put in a layout or connected to anything.
+	// THE SIZE ROW (SPECS/IMPORT_DIALOG_SPEC.md §6): "Imported size: 1.75 m"
+	// and ONE button, "Import settings…". Model rows only; hidden for
+	// everything else.
+	//
+	// It used to be three buttons — Re-measure / Reset / Set… — over a policy
+	// that GUESSED a model's size from an envelope and re-applied the guess at
+	// every instantiation. The size is decided at import now, by a person,
+	// looking at the model, and baked into the asset; the one button reopens
+	// that decision (lane 2 fills it with the dialog in reimport mode).
 	QWidget *fitRow = nullptr;
 	QLabel *fitLabel = nullptr;
-	QPushButton *fitRemeasure = nullptr;
-	QPushButton *fitReset = nullptr;
-	QPushButton *fitSet = nullptr;
-	/// Renders (or hides) the fit row for the selected tile's metadata block.
+	QPushButton *importSettingsButton = nullptr;
+	/// Renders (or hides) the size row for the selected tile's metadata block.
 	void refreshFitRow(const QString &guid, int assetType, const QJsonObject &meta);
-	/// Runs one assets.setFit-equivalent write and re-renders the pane.
-	void applyFitChange(const QString &guid, const QVariantMap &options);
 	QLabel *metadataMissing;
 	QLabel *metadataDetails;   // the two-column metadata table (all rows)
 

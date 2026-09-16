@@ -175,7 +175,19 @@ public:
     void restoreCustomPieces(iris::PbrMaterialPtr mat, const QJsonObject& values);
 
     // extracts meshes and animations from model file
-    void extractAssetsFromAssimpScene(QString filePath);
+    //
+    // `assetGuid` (IMPORT-1) is the LIBRARY ROW this geometry belongs to. A
+    // PATH stopped being a complete identity when import settings started
+    // being baked in: the store is content-addressed, so two rows imported
+    // from the same file with different settings share one object and one
+    // path, and they are two different meshes. Every cache below is therefore
+    // keyed by path AND the row's settings hash; an empty guid asks for that
+    // content's default variant, which is what a built-in primitive and a
+    // loose file on disk get.
+    void extractAssetsFromAssimpScene(QString filePath, const QString &assetGuid = QString());
+
+    /// path + the row's settings hash — the key every per-file cache here uses.
+    QString assetCacheKey(const QString &filePath, const QString &assetGuid) const;
 
     /**
      * Returns mesh from mesh file at index
@@ -184,7 +196,8 @@ public:
      * @param index
      * @return
      */
-    iris::MeshPtr getMesh(QString filePath, int index);
+    iris::MeshPtr getMesh(QString filePath, int index,
+                          const QString &assetGuid = QString());
 
     /// `assetGuid` (F5, optional) is the STABLE half of the reference: a
     /// stored file's name is a sha256, so the persisted path cannot resolve a

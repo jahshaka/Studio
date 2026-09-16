@@ -65,13 +65,13 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
+#include "services/meshbakestore.h"
 #include "services/editgate.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/materialpreset.h"
 #include "irisgl/core/logger.h"
 #include "services/assetmetadata.h"
-#include "services/fitsize.h"
 #include "services/nodenaming.h"
 #include "services/imagematerial.h"
 #include "services/materialdefaults.h"
@@ -375,6 +375,36 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     return node;
 }
 
+int SceneEditService::refreshAssetMeshes(const QString &meshGuid, const QString &sourcePath)
+{
+    if (meshGuid.isEmpty() || sourcePath.isEmpty()) return 0;
+    auto live = scene();
+    if (!live || !live->getRootNode()) return 0;
+
+    // The bake the asset holds NOW — MeshBakeStore's model cache was dropped by
+    // the reimport that called us, so this reads the new blob.
+    const iris::BakedModelPtr baked = MeshBakeStore::load(sourcePath, meshGuid);
+    int swapped = 0;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (!node) return;
+        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            auto meshNode = node.staticCast<iris::MeshNode>();
+            if (meshNode->meshPath == meshGuid) {
+                iris::MeshPtr mesh;
+                if (baked && meshNode->meshIndex >= 0
+                    && meshNode->meshIndex < baked->meshes.size())
+                    mesh = baked->meshes.at(meshNode->meshIndex);
+                // The mirror re-attaches on a mesh POINTER change
+                // (scenemirror.cpp), so nothing else has to be told.
+                if (mesh) { meshNode->setMesh(mesh); ++swapped; }
+            }
+        }
+        for (const iris::SceneNodePtr &child : node->children()) walk(child);
+    };
+    walk(live->getRootNode());
+    return swapped;
+}
+
 void SceneEditService::addMesh(const QString &path, bool ignore, iris::Vec3 position)
 {
     if (path.isEmpty()) return;
@@ -457,35 +487,14 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
             anim->skeletalAnimation->source = relPath;
     }
 
-    // ---- FIT TO SIZE (services/fitsize.h) ---------------------------------
-    //
-    // THE one place an asset's fit is applied, because this is THE one
-    // instantiation route: drag-drop, assets.addToScene, assets.importAndPlace
-    // and avatar.spawn all land here. The factor is a property of the ASSET
-    // (its metadata block), so every instance of a mis-declared model comes in
-    // at the same, right size, and `assets.setFit` changes all future ones.
-    //
-    // AVATAR COORDINATION (documented at the other site too,
-    // AvatarApi::spawn): avatar.spawn calls avatar::normalizeCharacterHeight
-    // AFTER this returns, so it measures the ALREADY-FITTED character, finds a
-    // plausible height and does nothing. Nothing is normalized twice.
-    //
-    // ensure() rather than a raw properties read: a library that predates this
-    // feature has no block, and the backfill is the documented way old rows
-    // get one (the rich-metadata precedent). It costs one assimp parse, once
-    // per asset, ever.
-    const double fit = fitsize::fitScaleOf(AssetMetadata::ensure(db, guid));
-    if (fitsize::applyFit(node, fit))
-        irisLog(QStringLiteral("scene: '%1' placed at the asset's fitted size (x%2)")
-                    .arg(node->getName()).arg(fit, 0, 'g', 6));
-
     // Honour the drop position (the viewport computed where the cursor hit the
     // scene) — legacy addMesh does the same; without this every dropped asset
     // landed at the asset's authored origin (ASSET_ADD_AUDIT D1) — and REST it
     // on that point when the position came from a drop (owner, 2026-09-14: a
     // model whose pivot is its centre was buried to the waist in the floor).
-    // The fit above has already scaled the subtree, so the bounds this measures
-    // are the ones the user will see. A model with a base pivot is not lifted
+    // The asset's size is BAKED (SPECS/IMPORT_DIALOG_SPEC.md §6), so the
+    // subtree this measures is already the size the user will see and the node
+    // is placed at scale 1. A model with a base pivot is not lifted
     // at all, so nothing is lifted twice (services/surfaceplacement.h).
     surfaceplacement::place(node, position, placement);
 

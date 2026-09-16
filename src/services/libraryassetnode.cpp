@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "io/scenereader.h"
 #include "services/assetmetadata.h"
-#include "services/fitsize.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
 namespace libraryasset
@@ -37,10 +36,9 @@ iris::SceneNodePtr fromLibrary(Database *db, Project *project, const QString &gu
     iris::SceneNodePtr node = reader.readSceneNode(blob);
     if (!node) return node;             // retired root node type
 
-    // The asset's size, exactly as SceneEditService::addMaterialMesh applies it
-    // at every instantiation (services/fitsize.h). ensure() backfills the block
-    // for a row imported before the policy landed — one parse, once, ever.
-    fitsize::applyFit(node, fitsize::fitScaleOf(AssetMetadata::ensure(db, guid)));
+    // No size policy: the asset's scale is BAKED at import
+    // (SPECS/IMPORT_DIALOG_SPEC.md §6), so the library node is the model at the
+    // size every placement of it has — scale 1, here and in the scene.
     node->update(0.0f);
     return node;
 }

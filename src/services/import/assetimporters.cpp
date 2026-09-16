@@ -113,6 +113,27 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     out.mainGuid = GUIDManager::generateGUID();
     out.meshGuid = GUIDManager::generateGUID();
 
+    // THE IMPORT SETTINGS (SPECS/IMPORT_DIALOG_SPEC.md §3): the user's scale,
+    // orientation, origin and tuning, decided once and BAKED into the asset.
+    // A record this build cannot parse is an IMPORT FAILURE, not a silent
+    // identity import — the geometry would be the wrong size and nothing later
+    // could tell.
+    QString settingsError;
+    const iris::ImportSettings settings =
+        iris::ImportSettings::fromJson(request.settings, &settingsError);
+    if (!settingsError.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("import settings: %1").arg(settingsError);
+        return false;
+    }
+    const iris::ImportTransform xf = settings.transform();
+    // Recorded in the determinism record as the COMPLETE record, not as
+    // whatever subset the caller wrote: one shape for the dialog, the verbs and
+    // the re-bake lookup to read. An all-defaults record hashes exactly as an
+    // absent one does (iris::ImportSettings::identityHash), so a plain import
+    // still keys as it always did.
+    out.appliedSettings = settings.toJson();
+    const QString settingsHash = settings.hash();
+
     if (progress && !progress(QStringLiteral("convert"), 0, 0)) {
         if (errorOut) *errorOut = QStringLiteral("cancelled");
         return false;
@@ -133,7 +154,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     iris::SceneSource modelScene;
     auto node = AssetHelper::extractTexturesAndMaterialFromMesh(
         request.sourcePath, textureNames, texturePaths, hasEmbedded, &modelStats, stagingDir,
-        &modelScene);
+        &modelScene, xf);
     // Texture references that named a file outside the model's own folder:
     // contained by MaterialHelper (the path never resolves outside), reported
     // here so the user learns their model lost a map (deep audit 2026-09 F2).
@@ -189,11 +210,11 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // back to the parse it has always done.
     out.sourceOid = AssetCas::hashFile(request.sourcePath);
     if (!out.sourceOid.isEmpty()) {
-        const QString bakeName = iris::MeshBake::fileNameFor(out.sourceOid);
+        const QString bakeName = iris::MeshBake::fileNameFor(out.sourceOid, settingsHash);
         const QString bakePath = QDir(stagingDir).filePath(bakeName);
         iris::MeshBake::Model baked = iris::MeshBake::buildFromScene(
             modelScene, request.sourcePath,
-            iris::MeshBake::fingerprintFor(out.sourceOid), stagingDir);
+            iris::MeshBake::fingerprintFor(out.sourceOid, settingsHash), stagingDir, xf);
         QString bakeError;
         if (baked.valid && iris::MeshBake::write(bakePath, baked, &bakeError)) {
             out.files.append({ bakePath, out.mainGuid, iris::MeshBake::casRole(), bakeName });

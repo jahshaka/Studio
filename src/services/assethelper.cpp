@@ -250,7 +250,8 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     bool& hasEmbeddedTexture,
     QJsonObject *modelStats,
     const QString &extractDir,
-    iris::SceneSource *keepScene)
+    iris::SceneSource *keepScene,
+    const iris::ImportTransform &xf)
 {
     sMeshParseCount.fetchAndAddRelaxed(1);
     // Owns the parse (the importer and with it the scene) for the duration of
@@ -300,7 +301,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
             data.diffuseColor = QColor(255, 255, 255);
         }
         return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
-    }, ssource, nullptr, extractDir);
+    }, ssource, nullptr, extractDir, xf);
 
     // Import-time metadata (ASSET_DRAWERS_SPEC addendum): count from the
     // scene just parsed — no second parse of the file, ever.

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 // as the widget). No viewer, no dialogs — the thumbnail is the caller's job
 // (assets.refreshThumbnail).
 
+#include <QJsonObject>
 #include <QString>
 
 class Database;
@@ -47,7 +48,12 @@ public:
     /// Animation asset (AnimationImporter). Pure document/DB work — safe
     /// headless. `project` is the live Project whose guid stamps the created
     /// asset rows (Phase 4: was the Globals::project static).
-    static Result importMesh(const QString &filePath, Database *db, Project *project);
+    /// `settings` is the IMPORT-SETTINGS RECORD (irisgl/import/importsettings.h):
+    /// the scale, units, rotation, origin and tuning this import bakes into the
+    /// asset. Empty = identity, which is what every caller that does not ask
+    /// gets and what every row imported before the import dialog carries.
+    static Result importMesh(const QString &filePath, Database *db, Project *project,
+                             const QJsonObject &settings = QJsonObject());
 
     /// Imports any library-supported file into the global asset store: ONE
     /// dispatch keyed on ModelTypes (ASSET_DRAWERS_SPEC §3). Images (Texture)
@@ -58,7 +64,8 @@ public:
     /// `typeHint`: a ModelTypes value that overrides the pipeline's sniff
     /// (-1 = sniff), the ImportRequest field the .jaf/drop paths already set.
     static Result importFile(const QString &filePath, Database *db, Project *project,
-                             int drawerId = -1, int typeHint = -1);
+                             int drawerId = -1, int typeHint = -1,
+                             const QJsonObject &settings = QJsonObject());
 };
 
 #endif // SERVICES_ASSETIMPORTER_H

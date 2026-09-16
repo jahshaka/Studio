@@ -1,0 +1,164 @@
+// scripting.e2e.import_settings — the import decision, end to end through the
+// verbs (SPECS/IMPORT_DIALOG_SPEC.md §9).
+//
+// An asset's scale, orientation and origin are decided ONCE, at import, and
+// BAKED into the asset: every instance is placed at scale 1. The unit suite
+// (importer.extent) pins the arithmetic. THIS pins what the user actually
+// does, through the real binary, the real library and the real instantiation
+// route, with no viewport help:
+//
+//   import -> node.size = the recorded extent, node.scale = (1,1,1)
+//          -> assets.reimport({scale:2}) -> the size DOUBLES, the scale stays 1
+//          -> assets.importSettings reads the record back, with the file's own
+//             declaration under `defaults`
+//          -> the bake oid changed and assets.gc reaps the old one
+//          -> the retired verb is gone
+//
+// It replaces scripting.e2e.fitsize, whose subject (an inferred fit applied at
+// every instantiation, and assets.setFit) retired with the import dialog.
+//
+// Headless: every verb here is document-side.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b, tol) { return Math.abs(a - b) <= (tol === undefined ? 1e-2 : tol); }
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+var GIANT = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_giant.glb";  // 17.25 m as authored
+var PLAIN = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";        //  2.00 m as authored
+
+var proj = project.create("Import Settings " + Date.now());
+assert(proj.length > 10, "project.create");
+
+// THIS SUITE'S LIBRARY PERSISTS BETWEEN RUNS (its ctest home is not wiped), and
+// a bake is content-addressed: an asset imported from this fixture with the
+// SAME settings in an earlier run still references the same bake object. The
+// reimport section below asserts that a RETIRED bake becomes garbage, which is
+// only true when nothing else names it — so every import here carries a
+// run-unique ORIGIN SHIFT of at most 100 micrometres — small enough that every
+// measurement below is unaffected at the 1 cm tolerances they use, large enough
+// to be exactly representable. It changes the settings hash, and therefore the
+// bake, and nothing else. Section 0 above imports with NO settings at all, so
+// the identity path is covered end to end too.
+var UNIQ = [0, 0, (Date.now() % 100000) / 1e9];
+
+// ---- 0. AN IDENTITY IMPORT, end to end ------------------------------------
+// Every row imported before the dialog carries no settings at all, and that is
+// by far the common case — so one import here passes NOTHING and is asserted to
+// key as identity and place as the file.
+var asIs = assets.import(PLAIN);
+var asIsRecord = assets.importSettings(asIs);
+assert(asIsRecord.settings.scale === 1 && asIsRecord.settings.units === "auto"
+       && asIsRecord.settings.skeleton === true && asIsRecord.settings.clips === true
+       && asIsRecord.settings.materials === "import",
+       "assets.import(path) with no options records the IDENTITY record");
+assert(near(assets.metadata(asIs).extent.y, 2.0),
+       "and it measures the file's authored 2 m (" + assets.metadata(asIs).extent.y + ")");
+
+// ---- 1. a plain import is the file, as authored ---------------------------
+var plain = assets.import(PLAIN, { translate: UNIQ });
+assert(plain.length > 10, "assets.import(rig2.glb)");
+
+var meta = assets.metadata(plain);
+assert(meta.kind === "model", "the metadata block is a model block");
+assert(meta.extent !== undefined, "an extent was recorded");
+assert(near(meta.extent.y, 2.0), "the file measures 2 m tall (got " + meta.extent.y + ")");
+assert(meta.unitScale !== undefined, "unitScale reports the file's own declaration");
+assert(meta.fitScale === undefined, "the retired fit block is not written any more");
+
+assets.addToProject(plain);
+var placed = assets.addToScene(plain, { position: [0, 0, 0] });
+assert(placed.length > 10, "assets.addToScene");
+assert(near(node.size(placed).height, meta.extent.y),
+       "the PLACED model measures exactly what the record says (" + node.size(placed).height + ")");
+var t = node.transform(placed);
+assert(near(t.scale.x, 1, 1e-6) && near(t.scale.y, 1, 1e-6) && near(t.scale.z, 1, 1e-6),
+       "and it is placed at scale 1, 1, 1 — nothing rescales an instance");
+
+// ---- 2. the settings go in at IMPORT --------------------------------------
+var half = assets.import(PLAIN, { scale: 0.5, translate: UNIQ });
+var halfMeta = assets.metadata(half);
+assert(near(halfMeta.extent.y, 1.0),
+       "assets.import(path, {scale: 0.5}) imports at 1 m (got " + halfMeta.extent.y + ")");
+assets.addToProject(half);
+var halfNode = assets.addToScene(half, { position: [3, 0, 0] });
+assert(near(node.size(halfNode).height, 1.0), "and it PLACES at 1 m");
+assert(near(node.transform(halfNode).scale.y, 1, 1e-6), "still at scale 1");
+
+var record = assets.importSettings(half);
+assert(record.settings !== undefined, "assets.importSettings reads the record back");
+assert(near(record.settings.scale, 0.5, 1e-9), "with the scale that was applied");
+assert(record.settings.units === "auto", "and every other key at its default");
+assert(record.defaults !== undefined && record.defaults.declaredUnitScale !== undefined,
+       "…plus `defaults`: what the FILE itself declares");
+
+// A record the build cannot apply FAILS the import.
+mustThrow(function () { assets.import(PLAIN, { scale: 0 }); }, "a zero scale is refused");
+mustThrow(function () { assets.import(PLAIN, { units: "furlongs" }); }, "an unknown unit is refused");
+mustThrow(function () { assets.import(PLAIN, { siz: 2 }); }, "an unknown key is refused");
+
+// ---- 3. REIMPORT re-decides it --------------------------------------------
+var beforeOid = assets.importSettings(plain).sourceOid;
+var before = assets.meshLods(plain);
+var again = assets.reimport(plain, { scale: 2 });
+assert(again.guid === plain, "assets.reimport returns the same row guid");
+assert(near(again.settings.scale, 2, 1e-9), "the new settings are recorded");
+assert(again.extent !== undefined && near(again.extent.y, 4.0),
+       "the extent DOUBLED (got " + again.extent.y + ")");
+assert(again.bakeOid !== undefined && again.bakeOid.length === 64, "a new bake was produced");
+assert(again.bakeOid !== again.previousBakeOid, "and it is not the old one");
+assert(assets.importSettings(plain).sourceOid === beforeOid,
+       "the SOURCE content id is unchanged — a reimport is not a new import");
+
+assert(near(assets.metadata(plain).extent.y, 4.0), "assets.metadata reports the new size");
+assert(near(assets.importSettings(plain).settings.scale, 2, 1e-9),
+       "assets.importSettings reads the new record back");
+
+// The node already in the scene is swapped to the new geometry, and its
+// TRANSFORM is untouched — which is right, because every placement is scale 1.
+assert(near(node.transform(placed).scale.y, 1, 1e-6),
+       "the placed node's scale is still 1 after a reimport");
+assert(near(node.size(placed).height, 4.0),
+       "and it now measures the reimported size (" + node.size(placed).height + ")");
+
+// A fresh placement gets the same thing.
+var afterNode = assets.addToScene(plain, { position: [6, 0, 0] });
+assert(near(node.size(afterNode).height, 4.0), "a placement made after the reimport is 4 m");
+
+// The old bake is unreferenced: the sweep finds it.
+var sweep = assets.gc({ dryRun: true });
+var reaped = JSON.stringify(sweep).indexOf(again.previousBakeOid) >= 0;
+assert(reaped, "assets.gc's sweep names the retired bake as unreferenced");
+
+// ---- 3b. a TUNING switch is a different asset too -------------------------
+// The switches decide what is BUILT from the parse (§4.3) and they are in the
+// bake key, so changing one is a new bake — not a silently-reused old one.
+var tuned = assets.reimport(plain, { clips: false });
+assert(tuned.bakeOid !== tuned.previousBakeOid,
+       "assets.reimport({clips:false}) produces a DIFFERENT bake");
+assert(assets.importSettings(plain).settings.clips === false,
+       "and the record says the clips are off");
+assert(near(tuned.extent.y, 4.0),
+       "…while the geometry keeps the scale the earlier reimport set (" + tuned.extent.y + ")");
+
+// ---- 4. refusals and the retired verb -------------------------------------
+mustThrow(function () { assets.reimport("no-such-guid", {}); }, "an unknown guid is refused");
+mustThrow(function () { assets.reimport(plain, { scale: -1 }); }, "a negative scale is refused");
+mustThrow(function () { assets.reimport(plain, { siz: 1 }); }, "an unknown key is refused");
+assert(typeof assets.setFit !== "function",
+       "assets.setFit is RETIRED — the size is decided at import, not per asset row");
+
+// A node with no geometry measures zero — an answer, not an error.
+var light = scene.addLight("point");
+var lightSize = node.size(light);
+assert(lightSize.x === 0 && lightSize.y === 0 && lightSize.z === 0,
+       "node.size of a light is all zeros");
+mustThrow(function () { node.size("no-such-node"); }, "node.size of an unknown id is refused");
+
+console.log("scripting.e2e.import_settings: all assertions passed");
