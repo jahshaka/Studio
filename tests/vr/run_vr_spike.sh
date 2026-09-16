@@ -54,7 +54,13 @@ XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" \
 # The parity arm: the same scene on an OGRE-created device. Equal bytes = the
 # runtime's device and Ogre's own device render the same picture, which is what
 # ogre-patch 0068's exported extension list and feature chain exist to make true.
-"$SPIKE" --plain --size 320 240 --out "$OUT" || rc=1
+#
+# NO --size HERE ON PURPOSE. Both arms render the parity pose at the binary's own
+# kParityW x kParityH, never at the runtime's recommended eye size — which differs
+# between Monado's null (320x240) and xcb (896x1007) compositors and between runtimes.
+# A size passed from this script would be a second definition of that constant, and the
+# first version of this check passed only because the two happened to agree.
+"$SPIKE" --plain --out "$OUT" || rc=1
 if [ -f "$OUT/parity-xr.ppm" ] && [ -f "$OUT/parity-plain.ppm" ]; then
     a=$(sha256sum "$OUT/parity-xr.ppm" | cut -d' ' -f1)
     b=$(sha256sum "$OUT/parity-plain.ppm" | cut -d' ' -f1)

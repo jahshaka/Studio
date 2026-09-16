@@ -155,6 +155,15 @@ static Ogre::MeshPtr makeBoxMesh(const std::string &name) {
     return mesh;
 }
 
+/// THE PARITY PICTURE'S SIZE IS FIXED HERE AND NOWHERE ELSE.
+/// The parity check compares the picture an OpenXR-created device renders with the
+/// picture Ogre's own device renders, byte for byte — so both arms must render at the
+/// same resolution, and that resolution must not depend on the runtime. It used to be
+/// the runtime's RECOMMENDED EYE SIZE, which happens to be 320x240 under Monado's null
+/// compositor and 896x1007 under its xcb one: the check held by coincidence on the
+/// first and would have redded on the second with the engine blameless.
+static const unsigned kParityW = 320u, kParityH = 240u;
+
 struct SpikeScene {
     Ogre::SceneManager *sceneMgr = nullptr;
     Ogre::Camera *camera = nullptr;
@@ -217,8 +226,13 @@ static bool buildScene(Ogre::Root *root, SpikeScene &out, unsigned w, unsigned h
     out.rtt = tm->createTexture("spikeEye", GpuPageOutStrategy::Discard,
                                 TextureFlags::RenderToTexture, TextureTypes::Type2D);
     out.rtt->setResolution(w, h);
-    // SRGB on purpose: the XR swapchain format both runtimes offer first is
-    // VK_FORMAT_R8G8B8A8_SRGB, and vkCmdCopyImage wants compatible formats.
+    // SRGB on purpose, and 8-bit on purpose: vkCmdCopyImage requires the two images
+    // to be format-COMPATIBLE (same texel block size), so the eye target's format and
+    // the XR swapchain's must agree in bytes per pixel. Monado offers
+    // R16G16B16A16_UNORM first and R8G8B8A8_SRGB third (measured, FINDINGS §2); the
+    // spike insists on the 8-bit sRGB one and refuses to run otherwise rather than
+    // copy 4 bytes per pixel into an 8-byte texel. Phase 2's HDR profile pairs an
+    // RGBA16F target with the runtime's 16-bit format instead.
     out.rtt->setPixelFormat(PFG_RGBA8_UNORM_SRGB);
     out.rtt->scheduleTransitionTo(GpuResidency::Resident);
 
@@ -345,6 +359,54 @@ static void setParityPose(Ogre::Camera *cam) {
     cam->setFOVy(Ogre::Degree(70.0f));
 }
 
+/// Render the fixed parity pose into a target of our own at kParityW x kParityH and
+/// write it out. Used by BOTH arms, so the two pictures are comparable by construction
+/// rather than by the runtime happening to recommend that eye size. The scene's usual
+/// workspace is switched off for the duration so only this one draws.
+static void renderParityPose(Ogre::Root *root, SpikeScene &sc, const std::string &path) {
+    using namespace Ogre;
+    const bool needOwnTarget = sc.rtt->getWidth() != kParityW || sc.rtt->getHeight() != kParityH;
+
+    TextureGpu *target = sc.rtt;
+    CompositorWorkspace *ws = nullptr;
+    if (needOwnTarget) {
+        TextureGpuManager *tm = root->getRenderSystem()->getTextureGpuManager();
+        target = tm->createTexture("spikeParity", GpuPageOutStrategy::Discard,
+                                   TextureFlags::RenderToTexture, TextureTypes::Type2D);
+        target->setResolution(kParityW, kParityH);
+        target->setPixelFormat(PFG_RGBA8_UNORM_SRGB);
+        target->scheduleTransitionTo(GpuResidency::Resident);
+        ws = root->getCompositorManager2()->addWorkspace(sc.sceneMgr, target, sc.camera,
+                                                         "spikeWs", true);
+        sc.workspace->setEnabled(false);
+    }
+
+    setParityPose(sc.camera);
+    for (int i = 0; i < 4; ++i) root->renderOneFrame();
+    root->getRenderSystem()->flushCommands();   // AsyncTextureTicket reads stale VRAM otherwise
+
+    std::vector<unsigned char> px; unsigned rw, rh;
+    readRtt(target, px, rw, rh);
+    writePpm(path, px, rw, rh);
+
+    // "Something was drawn" = more than the clear colour is present. On the external
+    // route this is the whole of patch 0068 hunk 1: at the unpatched pin every frame is
+    // vetoed and this picture stays the clear colour for ever.
+    size_t distinct = 0;
+    const unsigned char c0 = px[0], c1 = px[1], c2 = px[2];
+    for (size_t i = 0; i < size_t(rw) * rh; ++i)
+        if (px[i * 4] != c0 || px[i * 4 + 1] != c1 || px[i * 4 + 2] != c2) ++distinct;
+    say("PARITY %ux%u written, %zu of %u pixels differ from the corner pixel", rw, rh,
+        distinct, rw * rh);
+    check(distinct > (size_t(rw) * rh) / 20u, "a frame RENDERS (the parity pose drew a scene)");
+
+    if (needOwnTarget) {
+        root->getCompositorManager2()->removeWorkspace(ws);
+        root->getRenderSystem()->getTextureGpuManager()->destroyTexture(target);
+        sc.workspace->setEnabled(true);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // --plain: Ogre creates its own instance and device; render the parity pose.
 static int runPlain(const std::string &outDir, unsigned w, unsigned h) {
@@ -353,13 +415,7 @@ static int runPlain(const std::string &outDir, unsigned w, unsigned h) {
     reportCaps(root, "plain");
     SpikeScene sc;
     if (!buildScene(root, sc, w, h)) { fail("scene"); return 1; }
-    setParityPose(sc.camera);
-    for (int i = 0; i < 4; ++i) root->renderOneFrame();
-    root->getRenderSystem()->flushCommands();   // AsyncTextureTicket reads stale VRAM otherwise
-    std::vector<unsigned char> px; unsigned rw, rh;
-    readRtt(sc.rtt, px, rw, rh);
-    writePpm(outDir + "/parity-plain.ppm", px, rw, rh);
-    say("PARITY plain written %ux%u", rw, rh);
+    renderParityPose(root, sc, outDir + "/parity-plain.ppm");
     delete root;
     return g_failures ? 1 : 0;
 }
@@ -410,19 +466,46 @@ static bool xrBegin(Xr &xr) {
         n, int(hasEnable2), int(hasVisMask), int(hasDepth), int(hasRefresh));
     if (!check(hasEnable2, "runtime advertises XR_KHR_vulkan_enable2")) return false;
 
+    // THE API VERSION IS NEGOTIATED, NOT ASSUMED (VR_SPEC §0 after the Oculus audit,
+    // ledger §580). Asking for whatever version the SDK headers happen to carry
+    // (XR_CURRENT_API_VERSION — 1.1.47 on this box) is a hard requirement on the
+    // runtime: a runtime that implements only OpenXR 1.0 answers
+    // XR_ERROR_API_VERSION_UNSUPPORTED and the app simply does not start. Everything
+    // this file uses is OpenXR 1.0 core plus XR_KHR_vulkan_enable2, so 1.0 is a real
+    // floor and not a pretence: ask for 1.1, fall back to 1.0 on exactly that error.
     const char *want[] = { XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME };
     XrInstanceCreateInfo ici{ XR_TYPE_INSTANCE_CREATE_INFO };
     std::strcpy(ici.applicationInfo.applicationName, "JahshakaVrSpike");
-    ici.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
     ici.enabledExtensionCount = 1;
     ici.enabledExtensionNames = want;
-    XR_TRY(xrCreateInstance(&ici, &xr.instance), "xrCreateInstance");
 
+    const XrVersion ladder[2] = { XR_MAKE_VERSION(1, 1, 0), XR_MAKE_VERSION(1, 0, 0) };
+    XrResult created = XR_ERROR_RUNTIME_FAILURE;
+    XrVersion gotVersion = 0;
+    for (XrVersion v : ladder) {
+        ici.applicationInfo.apiVersion = v;
+        created = xrCreateInstance(&ici, &xr.instance);
+        if (XR_SUCCEEDED(created)) { gotVersion = v; break; }
+        if (created != XR_ERROR_API_VERSION_UNSUPPORTED) break;  // a real failure
+        say("XRAPI  the runtime refused OpenXR %d.%d — trying the next one down",
+            int(XR_VERSION_MAJOR(v)), int(XR_VERSION_MINOR(v)));
+    }
+    if (XR_FAILED(created)) { say("FAIL  xrCreateInstance -> XrResult %d", int(created)); return false; }
+    say("XRAPI  instance created at OpenXR %d.%d (headers %d.%d)",
+        int(XR_VERSION_MAJOR(gotVersion)), int(XR_VERSION_MINOR(gotVersion)),
+        int(XR_VERSION_MAJOR(XR_CURRENT_API_VERSION)),
+        int(XR_VERSION_MINOR(XR_CURRENT_API_VERSION)));
+
+    // The runtime's NAME AND VERSION, logged unconditionally: the one line that tells a
+    // later reader which runtime a transcript came from (§0's "native" definition, and
+    // the manifest law — the user manifest is whatever a headset last wrote).
     XrInstanceProperties ip{ XR_TYPE_INSTANCE_PROPERTIES };
     XR_TRY(xrGetInstanceProperties(xr.instance, &ip), "xrGetInstanceProperties");
     xr.runtimeName = ip.runtimeName;
-    say("RUNTIME name='%s' version=%llu", ip.runtimeName,
-        (unsigned long long)ip.runtimeVersion);
+    say("RUNTIME name='%s' version=%llu (%d.%d.%d)", ip.runtimeName,
+        (unsigned long long)ip.runtimeVersion,
+        int(XR_VERSION_MAJOR(ip.runtimeVersion)), int(XR_VERSION_MINOR(ip.runtimeVersion)),
+        int(XR_VERSION_PATCH(ip.runtimeVersion)));
     if (!g_expectRuntime.empty() &&
         !check(xr.runtimeName.find(g_expectRuntime) != std::string::npos,
                ("the runtime is the one the caller named ('" + g_expectRuntime + "')").c_str()))
@@ -515,8 +598,9 @@ static bool copyEyeToSwapchain(Ogre::VulkanRenderSystem *vkRs, Ogre::TextureGpu 
         vkRs->executeResourceTransition(trans);
     }
     dev->mGraphicsQueue.endAllEncoders();
+    // getCurrentCmdBuffer NEVER returns null: on a lost device its own checkVkResult
+    // throws (the accessor patch 0040 made linkable). There is nothing to test here.
     VkCommandBuffer cmd = dev->mGraphicsQueue.getCurrentCmdBuffer();
-    if (!cmd) { fail("no frame command buffer for the eye copy"); return false; }
 
     VkImageMemoryBarrier b{};
     b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -762,26 +846,10 @@ static int runXr(const std::string &outDir, int wantFrames) {
         (unsigned long long)static_cast<VulkanTextureGpu *>(sc.rtt)->getFinalTextureName());
 
     // ---- 6b. THE BLACK-FRAME PROOF (patch 0068 hunk 1) ---------------------
-    // Before anything XR-shaped: does a frame render at all on an external
-    // device? At the unpatched pin validateDevice() vetoes every frame and this
-    // picture is the clear colour for ever.
-    setParityPose(sc.camera);
-    for (int i = 0; i < 4; ++i) root->renderOneFrame();
-    root->getRenderSystem()->flushCommands();
-    {
-        std::vector<unsigned char> px; unsigned rw, rh;
-        readRtt(sc.rtt, px, rw, rh);
-        writePpm(outDir + "/parity-xr.ppm", px, rw, rh);
-        // "Something was drawn" = more than the clear colour is present.
-        size_t distinct = 0;
-        unsigned char c0 = px[0], c1 = px[1], c2 = px[2];
-        for (size_t i = 0; i < size_t(rw) * rh; ++i)
-            if (px[i * 4] != c0 || px[i * 4 + 1] != c1 || px[i * 4 + 2] != c2) ++distinct;
-        say("FRAME  external-device render: %zu of %u pixels differ from the corner pixel",
-            distinct, rw * rh);
-        check(distinct > (size_t(rw) * rh) / 20u,
-              "a frame RENDERS on the runtime's device (patch 0068 hunk 1)");
-    }
+    // Before anything XR-shaped: does a frame render at all on an external device?
+    // Rendered at the FIXED parity size, never the runtime's eye size, so the picture
+    // is comparable with the --plain arm's on any runtime and any compositor.
+    renderParityPose(root, sc, outDir + "/parity-xr.ppm");
 
     // ---- 7. the session ----------------------------------------------------
     XrGraphicsBindingVulkan2KHR binding{ XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR };
@@ -813,8 +881,13 @@ static int runXr(const std::string &outDir, int wantFrames) {
     xr.swapchainFormat = 0;
     for (int64_t f : formats)
         if (f == VK_FORMAT_R8G8B8A8_SRGB) { xr.swapchainFormat = f; break; }
-    if (!check(xr.swapchainFormat != 0, "the runtime offers VK_FORMAT_R8G8B8A8_SRGB"))
-        xr.swapchainFormat = formats.empty() ? 0 : formats[0];
+    // NO FALLBACK. Taking formats[0] would hand vkCmdCopyImage a 4-byte-per-pixel
+    // source and (on Monado) an 8-byte-per-pixel destination — not format-compatible,
+    // undefined, and silently wrong. A runtime that does not offer this format needs a
+    // matching eye target, which is a change, not a fallback.
+    if (!check(xr.swapchainFormat != 0,
+               "the runtime offers VK_FORMAT_R8G8B8A8_SRGB (the eye target's format)"))
+        return 1;
 
     for (int eye = 0; eye < 2; ++eye) {
         XrSwapchainCreateInfo swci{ XR_TYPE_SWAPCHAIN_CREATE_INFO };
@@ -960,11 +1033,33 @@ static int runXr(const std::string &outDir, int wantFrames) {
                 say("FOV    L(%.4f %.4f %.4f %.4f) R(%.4f %.4f %.4f %.4f)",
                     fl.angleLeft, fl.angleRight, fl.angleUp, fl.angleDown,
                     fr.angleLeft, fr.angleRight, fr.angleUp, fr.angleDown);
-                Matrix4 pl = projectionFromFov(fl, 0.05f, 500.0f);
-                Matrix4 pr = projectionFromFov(fr, 0.05f, 500.0f);
-                check(pl != pr || std::fabs(fl.angleLeft - fr.angleLeft) > 1e-6f ||
-                          ipd > 0.03f,
-                      "the per-eye projections/poses are not the same matrix");
+                // TWO INDEPENDENT THINGS, asserted independently.
+                // (1) The POSES differ — that is what makes the two pictures stereo on
+                //     every runtime, and it is the only one the simulated HMD can show.
+                check((eyePos[1] - eyePos[0]).squaredLength() > 1e-8f,
+                      "the two eyes are located at DIFFERENT positions");
+                // (2) The PROJECTIONS differ — only where the runtime's fovs differ.
+                //     Monado's simulated HMD hands both eyes the same symmetric fov, so
+                //     asserting a difference there would assert the runtime, not us;
+                //     what is asserted instead is that the two agree exactly when the
+                //     fovs do. A real headset (the Quest Pro, phase 1b) has asymmetric
+                //     per-eye fovs and takes the other arm.
+                const Matrix4 pl = projectionFromFov(fl, 0.05f, 500.0f);
+                const Matrix4 pr = projectionFromFov(fr, 0.05f, 500.0f);
+                const bool fovsDiffer =
+                    std::fabs(fl.angleLeft - fr.angleLeft) > 1e-6f ||
+                    std::fabs(fl.angleRight - fr.angleRight) > 1e-6f ||
+                    std::fabs(fl.angleUp - fr.angleUp) > 1e-6f ||
+                    std::fabs(fl.angleDown - fr.angleDown) > 1e-6f;
+                if (fovsDiffer) {
+                    check(pl != pr,
+                          "the per-eye fovs differ, and so do the per-eye projections");
+                } else {
+                    say("NOTE   this runtime gives both eyes the SAME fov, so the per-eye "
+                        "projections are one matrix and only the poses separate the eyes "
+                        "(an asymmetric projection is unexercised until a real headset)");
+                    check(pl == pr, "identical fovs produce identical projections");
+                }
             }
             haveLayer = true;
             layer.space = xr.space;
@@ -1053,7 +1148,7 @@ static int runProbe() {
 int main(int argc, char **argv) {
     std::string mode = "xr", outDir = ".";
     int frames = 60;
-    int pw = 320, ph = 240;
+    int pw = int(kParityW), ph = int(kParityH);
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--plain") mode = "plain";
