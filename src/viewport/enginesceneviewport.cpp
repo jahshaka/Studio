@@ -2054,6 +2054,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     case jahshaka::engine::GiStaleReason::Camera: out.lastStaleReason = QStringLiteral("camera"); break;
     }
     out.cascadesAwaitingCamera = st.cascadesAwaitingCamera;
+    out.cascadeVoxelLod = st.cascadeVoxelLod;
     out.cascades.clear();
     out.cascades.reserve(int(st.cascades.size()));
     for (const auto &c : st.cascades) {

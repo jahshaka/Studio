@@ -611,6 +611,9 @@ public:
         /// The chain is wanted but no view has tracked a camera yet, so there is
         /// nowhere honest to put it — `cascades` is empty for a REASON.
         bool    cascadesAwaitingCamera = false;
+        /// ATOM stage 1's far-field proxy, as APPLIED — whether the cascades
+        /// are voxelising the baked LOD levels at all.
+        bool    cascadeVoxelLod = true;
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;

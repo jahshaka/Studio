@@ -21,9 +21,16 @@
 //      0.078 / 0.156 / 0.469 / 1.875 m at the High tier, halved by the sub-voxel
 //      rule: 0.039 / 0.078 / 0.234 / 0.9375. The fixture's errors are
 //      0.05 / 0.20 / 0.60, so the levels must be 0 / 1 / 2 / 3.
-//   2. THE MESH'S UNITS ARE NOT THE WORLD'S. A second instance of the SAME mesh
-//      at scale 4 has four times the world-space error per level, so the outer
-//      cascade must take a FINER level for it — in the same histogram.
+//   2. THE MESH'S UNITS ARE NOT THE WORLD'S. A second mesh with the same data,
+//      instanced at scale 4, has four times the world-space error per level, so
+//      the outer cascade takes a FINER level for it — two levels in one
+//      histogram. It needs its OWN Ogre mesh to do so, which is case 2b:
+//   2b. THE LEVEL BELONGS TO THE MESH, NOT TO THE ITEM (round-1 F1). The
+//      voxeliser converts a mesh's geometry once for every item that shares it
+//      (ogre-patch 0064), so two instances of ONE mesh asking for different
+//      levels are both voxelised at the FINER — and the histogram has to report
+//      that, because a reading that claims a level the dispatch never spent is
+//      worse than no reading.
 //   3. A MESH WITH NO CHAIN IS UNTOUCHED: the ground cube is level 0 in every
 //      cascade, which is what every scene built from primitives is today.
 //   4. IT IS CHEAPER, AND THE A/B IS IN ONE PROCESS: with
@@ -158,16 +165,35 @@ int main()
     enginetest::setNodePosition(scene, ground, Vec3(0.0f, -0.55f, 0.0f));
     enginetest::setNodeScale(scene, ground, Vec3(200.0f, 0.1f, 200.0f));
 
-    // The relief, twice: once at its authored scale, once at scale 4.
-    const MeshId relief = scene->createMesh(reliefMesh());
-    CHECK(relief != 0, "the relief mesh with its three extra levels was created");
+    // THE RELIEF, FIVE INSTANCES OVER THREE MESHES, and which mesh each one
+    // holds is the whole of cases 2 and 2b:
+    //   mesh A — `small` (scale 1) AND `twin` (scale 4). They ask for different
+    //            levels, because the baked error is in MESH units and the 4x
+    //            instance's world-space error is four times as large; one mesh
+    //            entry carries one level, so BOTH are voxelised at the finer.
+    //   mesh B — `solo` (scale 1), alone: free to take the unscaled answer.
+    //   mesh C — `big` (scale 4), alone: free to take the scaled one, which is
+    //            finer. B and C in one histogram are the scale term reaching
+    //            the DISPATCH and not merely the request.
+    const MeshId meshA = scene->createMesh(reliefMesh());
+    const MeshId meshB = scene->createMesh(reliefMesh());
+    const MeshId meshC = scene->createMesh(reliefMesh());
+    CHECK(meshA && meshB && meshC && meshA != meshB && meshB != meshC,
+          "three relief meshes, each with its three extra levels, were created");
     PbrParams p; p.albedo = Colour(0.85f, 0.2f, 0.2f); p.metalness = 0.0f; p.roughness = 0.8f;
     const MaterialId mat = scene->createPbrMaterial(p);
     const NodeId small = scene->createNode();
-    CHECK(scene->attachMesh(small, relief, mat), "the authored-scale instance is attached");
+    CHECK(scene->attachMesh(small, meshA, mat), "mesh A at the authored scale is attached");
     enginetest::setNodePosition(scene, small, Vec3(0.0f, 0.5f, 0.0f));
+    const NodeId twin = scene->createNode();
+    CHECK(scene->attachMesh(twin, meshA, mat), "and a 4x instance SHARING mesh A");
+    enginetest::setNodePosition(scene, twin, Vec3(-24.0f, 2.0f, 0.0f));
+    enginetest::setNodeScale(scene, twin, Vec3(4.0f, 4.0f, 4.0f));
+    const NodeId solo = scene->createNode();
+    CHECK(scene->attachMesh(solo, meshB, mat), "mesh B at the authored scale is attached");
+    enginetest::setNodePosition(scene, solo, Vec3(12.0f, 0.5f, 0.0f));
     const NodeId big = scene->createNode();
-    CHECK(scene->attachMesh(big, relief, mat), "the 4x instance is attached");
+    CHECK(scene->attachMesh(big, meshC, mat), "mesh C at 4x is attached");
     enginetest::setNodePosition(scene, big, Vec3(24.0f, 2.0f, 0.0f));
     enginetest::setNodeScale(scene, big, Vec3(4.0f, 4.0f, 4.0f));
 
@@ -203,8 +229,8 @@ int main()
         int expect = 0;
         const float errs[3] = { kErr1, kErr2, kErr3 };
         for (int L = 0; L < 3; ++L) { if (!(errs[L] < budget)) break; expect = L + 1; }
-        // The unscaled instance is the one in EVERY cascade's attach set with
-        // that level; the histogram must contain it.
+        // Mesh B is the unscaled, unshared instance — the one whose level is
+        // exactly this arithmetic; the histogram must contain it.
         const bool present = countAt(st.cascades[i].lodLevels, size_t(expect)) > 0;
         CHECK(present, ("cascade " + std::to_string(i) + " voxelises a level-" +
                         std::to_string(expect) + " item (budget " +
@@ -219,14 +245,33 @@ int main()
     CHECK(maxLevel(st.cascades[1].lodLevels) == 1 && maxLevel(st.cascades[2].lodLevels) == 2,
           "and the two middle cascades take exactly the levels their cells allow");
 
-    // ---- 2. THE SCALE TERM ---------------------------------------------
-    // The 4x instance carries 4x the world-space error, so in the outermost
-    // cascade (budget 0.9375 m) it takes level 2 (0.8 < 0.9375) while the
-    // unscaled one takes level 3: two different levels in one histogram.
-    CHECK(countAt(st.cascades.back().lodLevels, 2) >= 1 &&
-          countAt(st.cascades.back().lodLevels, 3) >= 1,
-          ("A SCALED INSTANCE TAKES A FINER LEVEL — the outermost cascade holds both, " +
-           histText(st.cascades.back().lodLevels)).c_str());
+    // ---- 2. THE SCALE TERM REACHES THE DISPATCH -------------------------
+    // Mesh C is instanced at 4x and carries 4x the world-space error per level,
+    // so in the outermost cascade (budget 0.9375 m) it takes level 2 while mesh
+    // B, unscaled and alone, takes level 3: two levels in ONE histogram.
+    const std::vector<int> &outer = st.cascades.back().lodLevels;
+    CHECK(countAt(outer, 2) >= 1 && countAt(outer, 3) == 1,
+          ("A SCALED INSTANCE TAKES A FINER LEVEL — one item at the coarse end, the "
+           "scaled ones below it: " + histText(outer)).c_str());
+
+    // ---- 2b. THE LEVEL BELONGS TO THE MESH (round-1 F1) ------------------
+    // Mesh A is held by TWO items that ask for different levels (scale 1 and
+    // scale 4). The voxeliser converts a mesh once, finest request wins, so
+    // BOTH are voxelised at the 4x instance's level — the same level mesh C
+    // took. The histogram therefore has exactly one item at the coarse end
+    // (mesh B's) and THREE at the fine one (mesh A twice plus mesh C), and NOT
+    // two levels for mesh A.
+    CHECK(countAt(outer, 2) == 3,
+          ("THE FINEST REQUEST WINS FOR A SHARED MESH — both of mesh A's items and mesh C "
+           "at one level: " + histText(outer)).c_str());
+    // And it is what the voxeliser HOLDS, not what was asked: the triangles
+    // reconcile exactly with that histogram (the ground is 12, each relief
+    // level is 8192 / 2048 / 512 / 128).
+    const long long expectOuter = 12 + 3 * 512 + 128;
+    CHECK(st.cascades.back().voxelTriangles == expectOuter,
+          ("and the triangle reading is that histogram, exactly (" +
+           std::to_string(st.cascades.back().voxelTriangles) + " == " +
+           std::to_string(expectOuter) + ")").c_str());
 
     // ---- 3. A MESH WITH NO CHAIN IS UNTOUCHED --------------------------
     // The ground cube has one VAO; it is counted at level 0 in every cascade,
@@ -281,6 +326,11 @@ int main()
            std::to_string(offOuter) + " triangles)").c_str());
     CHECK(onOuter * 4 <= offOuter,
           "and it is a REDUCTION worth having — at most a quarter of the authored count");
+    CHECK(off.cascades.back().voxelTriangles == 12 + 4 * 8192,
+          ("with the levels off the outer cascade is the authored total (" +
+           std::to_string(off.cascades.back().voxelTriangles) + ")").c_str());
+    CHECK(off.cascadeVoxelLod == false && st.cascadeVoxelLod == true,
+          "and giStatus NAMES the arm it is on (cascadeVoxelLod)");
     CHECK(st.cascades[0].voxelTriangles == off.cascades[0].voxelTriangles,
           "while cascade 0 is UNCHANGED, byte for byte, by the whole feature");
 
