@@ -1,0 +1,84 @@
+# vr.spike_1a — VR phase 1a's spike, as a gate suite (SPECS/VR_SPEC.md §6).
+#
+# The SUBJECT is the external-device route: an OpenXR runtime creates the
+# VkInstance and the VkDevice, Ogre renders on them, the frame reaches the
+# runtime's swapchain. It is the only test in the tree that would catch a pin
+# bump undoing ogre-patch 0068 (the validateDevice veto, the exported extension
+# list + feature chain).
+#
+# It compiles `xr_spike.cpp` beside this file — ONE source, which `standalone/`
+# also builds as a plain binary (that is how phase 1b points it at WiVRn and a
+# real headset without building Studio). A second copy would rot; phase 2 replaces
+# both with the engine's VrSession and its `vr.session` suite.
+#
+# EVERYTHING HERE IS OPTIONAL. Without libopenxr-dev, without the Vulkan render
+# system, or on macOS, nothing is built and nothing is registered; without
+# monado-service on the box the registered test SKIPS (exit 77). A box with no VR
+# stack is a supported box.
+
+if(NOT UNIX OR APPLE)
+    return()
+endif()
+
+find_package(OpenXR QUIET)
+find_package(Vulkan QUIET)
+if(NOT OpenXR_FOUND OR NOT Vulkan_FOUND OR NOT OGRE_NEXT_VULKAN_RS_LIB)
+    message(STATUS "Jahshaka: vr.spike_1a NOT built — openxr=${OpenXR_FOUND} "
+                   "vulkan=${Vulkan_FOUND} vulkanRs='${OGRE_NEXT_VULKAN_RS_LIB}'")
+    return()
+endif()
+
+set(JAH_VR_SPIKE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/xr_spike.cpp")
+if(NOT EXISTS "${JAH_VR_SPIKE_SRC}")
+    message(STATUS "Jahshaka: vr.spike_1a NOT built — no ${JAH_VR_SPIKE_SRC}")
+    return()
+endif()
+
+add_executable(test_vr_spike_1a "${JAH_VR_SPIKE_SRC}")
+set_target_properties(test_vr_spike_1a PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_vr_spike_1a PRIVATE
+    "${OGRE_NEXT_PREFIX}/include/OGRE-Next"
+    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Common"
+    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Pbs"
+    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Unlit"
+    # Both Vulkan header roots — the install flattens the render system's headers
+    # but they include their siblings as `Vao/...`, which only resolves under
+    # .../include (the trap recorded in irisgl/engine/CMakeLists.txt).
+    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
+    "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
+    ${Vulkan_INCLUDE_DIRS})
+target_link_directories(test_vr_spike_1a PRIVATE "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_vr_spike_1a PRIVATE
+    OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit
+    "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} OpenXR::openxr_loader)
+target_compile_definitions(test_vr_spike_1a PRIVATE
+    JAH_OGRE_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    # The TREE'S OWN staged media, so the suite fails when the media a patch
+    # needs is missing rather than reading the engine source tree behind the
+    # staging step's back.
+    JAH_OGRE_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}")
+add_dependencies(test_vr_spike_1a JahshakaEngineMedia)
+
+# The manifest is named EXPLICITLY and the runtime's name is asserted inside the
+# spike: the USER-level manifest (~/.config/openxr/1/) is WiVRn's and is
+# rewritten whenever the owner plugs a headset in (VR_SPEC §2.6, §7 item 10).
+set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
+    CACHE FILEPATH "OpenXR manifest of the simulated-HMD runtime the VR gate uses")
+
+add_test(NAME vr.spike_1a
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_spike.sh"
+                 "$<TARGET_FILE:test_vr_spike_1a>" "${JAH_MONADO_MANIFEST}" 60
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.spike_1a PROPERTIES
+    LABELS "engine"
+    TIMEOUT 600
+    # The runtime is a SECOND Vulkan instance (its compositor) beside ours, and
+    # it owns an IPC socket: never two of these at once (the VRAM law).
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-home")
