@@ -217,8 +217,8 @@ public:
     /// geometry is the new size.
     ///
     /// It lives HERE, on the service, rather than inside the verb, so the
-    /// import-settings dialog (lane 2) reuses it instead of writing a second
-    /// walk that has to agree with this one.
+    /// import-settings dialog's reimport reuses it — through the verb — instead
+    /// of a second walk that has to agree with this one.
     ///
     /// NOT UNDOABLE, like every asset mutation: it does not push a command, and
     /// an undo of an earlier structural edit restores a node holding the OLD

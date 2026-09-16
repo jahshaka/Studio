@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/assetwidget.h"
+
+#include "ui/dialogs/importsettingsdialog.h"
 #include "ui_assetwidget.h"
 
 #include <iostream>
@@ -832,9 +834,13 @@ void AssetWidget::dropEvent(QDropEvent *evt)
 		list << fileInfo.absoluteFilePath();
 	}
 
-	if (!list.isEmpty()) importAsset(list);
-
 	evt->acceptProposedAction();
+
+	// Deferred out of the drop handler on purpose: the import decision is a
+	// modal dialog (SPECS/IMPORT_DIALOG_SPEC.md §8) and a nested event loop
+	// inside a drop leaves the drag source waiting on the XDND handshake.
+	if (!list.isEmpty())
+		QTimer::singleShot(0, this, [this, list]() { importAsset(list); });
 }
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
@@ -1065,6 +1071,18 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		                .value(QStringLiteral("hasSkeleton")).toBool()) {
 			action = new QAction(QIcon(), "Create Avatar", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(createAvatarFromModel()));
+			menu.addAction(action);
+		}
+
+		// THE IMPORT DECISION, REOPENED (SPECS/IMPORT_DIALOG_SPEC.md §8) —
+		// model rows only. It is the only way to change how big an asset is:
+		// the size is baked in and every placement is at scale 1.
+		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
+			const QString objectGuid = item->data(MODEL_GUID_ROLE).toString();
+			action = new QAction(QIcon(), "Reimport\u2026", this);
+			connect(action, &QAction::triggered, this, [this, objectGuid]() {
+				emit reimportAssetRequested(objectGuid);
+			});
 			menu.addAction(action);
 		}
 
@@ -2044,6 +2062,33 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 		ImportRequest request;
 		request.sourcePath = fileName;
 		requests.append(request);
+	}
+
+	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per
+	// MODEL file before anything is read — the same question the Assets page
+	// asks, asked by the same shell code. Media never prompts; a skipped file
+	// drops out and the rest of the drop still imports.
+	QStringList modelFiles;
+	for (const ImportRequest &request : requests)
+		if (isModelImportPath(request.sourcePath)) modelFiles.append(request.sourcePath);
+	if (!modelFiles.isEmpty()) {
+		const QHash<QString, QJsonObject> records =
+		    ImportSettingsDialog::askForFiles(modelFiles, this);
+		QVector<ImportRequest> kept;
+		for (ImportRequest request : requests) {
+			if (!isModelImportPath(request.sourcePath)) { kept.append(request); continue; }
+			if (!records.contains(request.sourcePath)) continue;   // the user skipped it
+			request.settings = records.value(request.sourcePath);
+			kept.append(request);
+		}
+		requests = kept;
+	}
+	if (requests.isEmpty()) {          // every file was skipped
+		progressDialog->hide();
+		auto *runner = importRunner;
+		importRunner = nullptr;
+		if (runner) runner->deleteLater();
+		return;
 	}
 	importRunner->setRequests(requests);
 

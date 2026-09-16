@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "modules/avatar/avatarpage.h"
+
+#include "ui/dialogs/importsettingsdialog.h"
 #include "ui/dialogs/progressdialog.h"
 #include "ui/style/panelmetrics.h"
 #include "ui/style/themeroles.h"
@@ -481,13 +483,28 @@ void AvatarPage::onImportClicked()
         this, tr("Import an avatar"), QString(), tr("Models (%1)").arg(filters.join(' ')));
     if (path.isEmpty()) return;
 
+    // THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): a character is a
+    // model, and its size, orientation and origin are decided here, ONCE, and
+    // baked in — which is what replaced the module's old spawn-time height
+    // rule. Cancel means "do not import this file".
+    const QHash<QString, QJsonObject> records =
+        ImportSettingsDialog::askForFiles({ path }, this);
+    if (!records.contains(path)) return;
+
     // THREADED (AV1): the assimp parse, the texture extraction and the store
     // used to run on the UI thread — 9.3 s of an app that looks crashed on the
     // owner's Jennifer.fbx. {async: true} is the pipeline's own
     // ImportBatchRunner, the same one the Assets page drives, and the progress
-    // dialog comes up from the API's busyStarted signal.
-    const QVariantMap started =
-        mApi->quietly([&] { return mApi->importAvatar(path, { { "async", true } }); });
+    // dialog comes up from the API's busyStarted signal. The record's keys ride
+    // through avatar.importAvatar onto the same ImportRequest a verb import
+    // fills, so the two are byte-identical.
+    QVariantMap options{ { "async", true } };
+    const QVariantMap record = records.value(path).toVariantMap();
+    for (auto it = record.constBegin(); it != record.constEnd(); ++it) {
+        if (it.key() == QStringLiteral("version")) continue;   // not an option
+        options.insert(it.key(), it.value());
+    }
+    const QVariantMap started = mApi->quietly([&] { return mApi->importAvatar(path, options); });
     if (started.isEmpty() && !mApi->lastError().isEmpty())
         QMessageBox::warning(this, tr("Import Avatar"), mApi->lastError());
     refreshFromModel();

@@ -32,6 +32,7 @@ class Subscriber;
 #include <QVariantList>
 
 #include "io/assetmanager.h"
+#include "services/import/importtypes.h"
 #include "ui/dialogs/progressdialog.h"
 #include "services/thumbnailgenerator.h"
 #include "data/project.h"
@@ -307,6 +308,11 @@ signals:
 	/// viewport's drop of an avatar row). Routed through the shell for the
 	/// same reason.
 	void spawnAvatarInScene(const QString &guid);
+	/// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8), both halves,
+	/// routed through the shell for the same reason as the rows above — the
+	/// dialog's OK commits through the assets.reimport verb, and this panel
+	/// never includes the scripting layer.
+	void reimportAssetRequested(const QString &guid);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
