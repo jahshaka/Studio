@@ -115,12 +115,17 @@ set_tests_properties(vr.session PROPERTIES
 # the suites above use, with its own HOME and data root like every other
 # app-spawning suite.
 set(_vr_verbs_home "${CMAKE_CURRENT_BINARY_DIR}/vr-verbs-home")
-file(MAKE_DIRECTORY "${_vr_verbs_home}/run")
+# THE WORKING DIRECTORY IS THE SUITE'S OWN BUILD DIRECTORY, not a subdirectory
+# of the scratch HOME: ctest chdir's into it BEFORE the command runs, so a run
+# whose home was swept between a configure and a gate does not start at all
+# ("Failed to change working directory ... Not Run", measured on this lane's own
+# gate after a cleanup). The build directory always exists — the test binary is
+# in it — and HOME still isolates the library, the settings and the data root.
 add_test(NAME vr.verbs_session
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js"
-         WORKING_DIRECTORY "${_vr_verbs_home}/run")
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.verbs_session PROPERTIES
     LABELS "scripting"
     TIMEOUT 600
