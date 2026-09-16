@@ -1,0 +1,152 @@
+// scripting.e2e.import_dialog — THE IMPORT DIALOG, DRIVEN
+// (SPECS/IMPORT_DIALOG_SPEC.md §8/§9).
+//
+// ui.import_dialog pins the record the widgets produce; scripting.e2e.
+// import_settings pins the verbs. THIS pins the JOIN — that the dialog's own
+// OK button, in the real binary, on a real library asset, actually re-bakes
+// the asset, and that what it produces is what the verbs produce:
+//
+//   import a cm-declared cube  -> 0.01 m
+//   open the dialog on it      -> it comes up pre-filled with the stored record
+//   set {units:"m"} and press OK (app.dialog's `accept`, which IS the button)
+//                              -> the asset re-bakes at 1 m
+//   a node placed BEFORE the reimport follows, still at scale 1,1,1
+//   the record the dialog wrote reads back identical from the verb
+//
+// The dialog needs the editor window, so this runs WITHOUT --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b, tol) { return Math.abs(a - b) <= (tol === undefined ? 1e-3 : tol); }
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+var CUBE = "@SOURCE_DIR@/tests/importer/fixtures/unit_cube_cm.fbx";
+
+var proj = project.create("Import Dialog " + Date.now());
+assert(proj.length > 10, "project.create");
+
+// A run-unique origin shift, for the reason e2e_import_settings documents: this
+// suite's library persists between runs and a bake is content-addressed, so a
+// fresh bake per run keeps the assertions about NEW bakes honest.
+var UNIQ = [0, 0, (Date.now() % 100000) / 1e9];
+
+// ---- 0. the dialog is in the catalog --------------------------------------
+var names = app.dialogs().map(function (d) { return d.name; });
+assert(names.indexOf("importSettings") >= 0,
+       "app.dialogs() lists importSettings (so the theme walk opens it too)");
+
+// Opened with NO asset it is an inspection-only dialog, like newProject's.
+var bare = app.dialog("importSettings");
+assert(bare.open === true, "app.dialog('importSettings') opens with nothing selected");
+assert(bare.settings !== undefined && bare.settings.scale === 1,
+       "…showing the identity record");
+app.dialog("importSettings", false);
+
+// ---- 1. an asset to reopen the decision on --------------------------------
+var guid = assets.import(CUBE, { translate: UNIQ });
+assert(guid.length > 10, "assets.import(unit_cube_cm.fbx)");
+var meta = assets.metadata(guid);
+assert(near(meta.extent.y, 0.01, 1e-4),
+       "the file declares centimetres, so it imports at 0.01 m (" + meta.extent.y + ")");
+
+assets.addToProject(guid);
+var placed = assets.addToScene(guid, { position: [0, 0, 0] });
+assert(near(node.size(placed).height, 0.01, 1e-4), "the placed node measures the same");
+assert(near(node.transform(placed).scale.y, 1, 1e-6), "and it is placed at scale 1");
+
+// ---- 2. the dialog opens PRE-FILLED on that asset -------------------------
+var opened = app.dialog("importSettings", { guid: guid });
+assert(opened.open === true, "app.dialog('importSettings', {guid}) opens on the asset");
+assert(opened.settings !== undefined, "…and reports the record it holds");
+assert(opened.settings.units === "auto" && opened.settings.scale === 1,
+       "…pre-filled from assets.importSettings: the record this asset was imported with");
+// The dialog's title and its pre-read both come from the VERB, not from a reach
+// past it into the database and the content store.
+var readBack = assets.importSettings(guid);
+assert(readBack.name !== undefined && readBack.name.length > 0,
+       "assets.importSettings reports the row's display name");
+assert(readBack.sourceName !== undefined
+       && readBack.sourceName.toLowerCase().indexOf(".fbx") > 0,
+       "…and the stored source file's name, whose extension a reader of the "
+       + "hash-named object needs (" + readBack.sourceName + ")");
+assert(near(opened.settings.translate[2], UNIQ[2], 1e-12),
+       "…including the translation the import carried");
+
+// ---- 3. OK re-bakes, through the verb -------------------------------------
+var before = assets.importSettings(guid).sourceOid;
+var accepted = app.dialog("importSettings", { settings: { units: "m" }, accept: true });
+assert(accepted.accepted === true, "pressing OK with {units:'m'} accepts the dialog");
+assert(accepted.settings.units === "m", "…and the record it committed says so");
+
+var after = assets.importSettings(guid);
+assert(after.settings.units === "m",
+       "the ASSET now carries the dialog's record (assets.importSettings reads it back)");
+// THE ONE-FIELD EDIT IS ONE FIELD. {settings:{units:'m'}} is MERGED over what
+// the dialog holds, exactly as assets.reimport merges over the stored record —
+// parsed standalone it would have reset the units, axes, rotation, ORIGIN and
+// clip choice on the way to changing one number.
+assert(near(after.settings.translate[2], UNIQ[2], 1e-12),
+       "…and the translation the import carried is still there, untouched by a one-key edit");
+assert(after.settings.scale === 1 && after.settings.axes.up === "+Y"
+       && after.settings.clips === true && after.settings.skeleton === true,
+       "…as is every other key the edit did not name");
+assert(after.sourceOid === before,
+       "…and the source content id did not move: a reimport is not a new import");
+assert(near(assets.metadata(guid).extent.y, 1.0, 1e-3),
+       "the cube re-baked at 1 m (" + assets.metadata(guid).extent.y + ")");
+
+// ---- 4. the open scene followed, and nothing was rescaled -----------------
+assert(near(node.size(placed).height, 1.0, 1e-3),
+       "the node already in the scene measures the new size (" + node.size(placed).height + ")");
+assert(near(node.transform(placed).scale.y, 1, 1e-6),
+       "…with its transform untouched: every placement is at scale 1");
+
+// ---- 5. the dialog's record IS the verb's record --------------------------
+// The whole point of the dialog being a record producer: the same decision made
+// through the verb keys the same bake, so the two paths can never fork.
+var byDialog = JSON.stringify(after.settings);
+assets.reimport(guid, { units: "m" });
+assert(JSON.stringify(assets.importSettings(guid).settings) === byDialog,
+       "assets.reimport with the same values records a byte-identical record");
+
+// ---- 6. refusals ----------------------------------------------------------
+app.dialog("importSettings", false);
+mustThrow(function () { app.dialog("importSettings", { settings: { scale: 0 } }); },
+          "a record the pipeline refuses is refused by the dialog verb too");
+app.dialog("importSettings", false);
+mustThrow(function () { app.dialog("noSuchDialog"); }, "an unknown dialog name is refused");
+
+// A ROW WITH NO IMPORT RECORD is refused with a REASON, and — the part that
+// matters — refused as a STRING. A verb that stopped on a modal message box
+// would hang the run and everything queued behind it (the same defect
+// import.shutdown caught on the interactive-import path), so this assertion is
+// really "the call came back at all".
+var light = scene.addLight("point");
+var noRecord = false;
+try { app.dialog("importSettings", { guid: "no-such-asset" }); }
+catch (e) { noRecord = String(e).indexOf("import record") >= 0
+                      || String(e).indexOf("assets.importSettings") >= 0; }
+assert(noRecord, "a guid with no import record is refused with a reason, not a modal box");
+assert(app.dialogs().filter(function (d) { return d.name === "importSettings"; })[0].open === false,
+       "…and no dialog was left open");
+
+// ---- 7. ONE IMPORT AT A TIME ----------------------------------------------
+// The abort the second read found: ImportBatchRunner::isRunning() is false
+// while a question (or a just-started batch) is pending, and a second batch
+// started behind the first does setRequests on a RUNNING runner, connects every
+// signal twice and start()s again — Q_ASSERT(!mRunning) in a Debug build. The
+// verb has to REFUSE instead. (The modal-question half of the same guard cannot
+// be reached from a script — a script cannot raise the tray's own dialog — so
+// what is asserted here is the runner half, which is the one that aborts.)
+assert(editor.importAssets([CUBE]) === true, "editor.importAssets starts a batch");
+var refused = false;
+try { editor.importAssets([CUBE]); } catch (e) { refused = String(e).indexOf("already") >= 0; }
+assert(refused, "…and a second one, while it runs, is REFUSED rather than started behind it");
+
+console.log("scripting.e2e.import_dialog: all assertions passed");

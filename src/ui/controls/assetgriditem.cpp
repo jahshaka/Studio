@@ -141,6 +141,17 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 		menu.addAction(&createAvatar);
 	}
 
+	// MODEL tiles: the import decision is reopenable, always (§8). It is the
+	// only way to change how big an asset is — the size is baked in and every
+	// placement is at scale 1.
+	QAction reimport("Reimport\u2026", this);
+	if (tileType == ModelTypes::Object) {
+		connect(&reimport, &QAction::triggered, this, [this]() {
+			emit reimportAsset(this);
+		});
+		menu.addAction(&reimport);
+	}
+
 	QAction remove("Delete", this);
 	connect(&remove, &QAction::triggered, this, [this]() {
 		emit deleteAssetFromLibrary(this);

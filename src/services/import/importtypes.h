@@ -25,6 +25,7 @@ For more information see the LICENSE file
 // parallel import implementations.
 
 #include <QJsonObject>
+#include <QHash>
 #include <QMap>
 #include <QString>
 #include <QStringList>
@@ -43,6 +44,11 @@ struct ImportRequest
     QJsonObject settings;       // recorded per-import; part of the determinism key
     bool wantViewerThumbnail = false;  // UI refreshes the thumbnail after preview
 };
+
+/// Is this path a MODEL file — the one kind the import dialog asks about?
+/// Media never prompts, and a .jaf archive carries assets that were already
+/// imported with their own settings.
+bool isModelImportPath(const QString &path);
 
 struct ImportResult
 {

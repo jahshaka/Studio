@@ -419,10 +419,34 @@ public:
     /// demand exists only while it is open. Every entry opens NON-modally (a
     /// verb cannot sit in exec()); openDialog returns nullptr for an unknown
     /// name, closeDialog false when that dialog was not open.
+    ///
+    /// `options` is per-dialog and almost always empty; `importSettings` reads
+    /// {guid, settings, accept} from it (SPECS/IMPORT_DIALOG_SPEC.md §8) so a
+    /// script and an MCP client can drive the import decision the way a person
+    /// does, through the dialog. Anything a dialog wants to REPORT back —
+    /// `importSettings` answers with the record it holds — lands in `extra`.
     QStringList dialogNames() const;
-    QWidget *openDialog(const QString &name);
+    QWidget *openDialog(const QString &name, const QVariantMap &options = QVariantMap(),
+                        QVariantMap *extra = nullptr);
     bool closeDialog(const QString &name);
     bool isDialogOpen(const QString &name) const;
+
+    /// THE IMPORT DECISION, REOPENED (SPECS/IMPORT_DIALOG_SPEC.md §8/§5): the
+    /// import-settings dialog for a library asset, pre-filled from
+    /// `assets.importSettings(guid)` and committing through `assets.reimport`.
+    /// The ONE entry point behind the Assets page's "Import settings…" button,
+    /// the tray's and the page's "Reimport…" rows and
+    /// `app.dialog('importSettings', {guid})` — pages never reach for the
+    /// scripting layer themselves. Returns null when the asset has no import
+    /// record to reopen.
+    ///
+    /// `errorOut` decides HOW that refusal is delivered, and it matters: a
+    /// button press gets a message box (errorOut null), a VERB gets the string
+    /// (errorOut set) — a verb that stopped on a modal box would hang the run
+    /// and everything queued behind it, which is exactly the defect
+    /// import.shutdown caught on the interactive-import path.
+    class ImportSettingsDialog *openImportSettings(const QString &guid,
+                                                   QString *errorOut = nullptr);
 
     /// Orderly teardown of every background worker the window owns (import
     /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
@@ -734,6 +758,12 @@ public slots:
 
 signals:
 	void projectionChangeRequested(bool val);
+
+	/// An asset was REIMPORTED through the import-settings dialog: its bake,
+	/// its metadata block and every placed instance of it have changed
+	/// (SPECS/IMPORT_DIALOG_SPEC.md §5). The Assets page and the project tray
+	/// re-read the row's size line and thumbnail on it.
+	void assetReimported(const QString &guid);
 
 public slots:
     // public for the scripting API (editor.play()/stop() set the mode
@@ -1100,6 +1130,14 @@ private:
     class McpServer *mcpServer = nullptr;
     class ClaudeChatHost *claudeChatHost = nullptr;
     class ClaudeChatWindow *claudeChatWindow = nullptr;
+
+    /// Per-dialog options and answers for openDialog (only importSettings has
+    /// any — see mainwindowdialogs.cpp).
+    void applyDialogOptions(const QString &name, QWidget *widget, const QVariantMap &options,
+                            QVariantMap *extra);
+    /// The message a dialog's own OK handler failed with, for the verb that
+    /// pressed it.
+    QString mDialogError;
 
     // dialogs opened by name (openDialog); QPointer: owned entries delete
     // themselves on close

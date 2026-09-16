@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/modelsceneinfo.h"
 
+#include "data/constants.h"
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assetcas.h"
@@ -151,6 +152,17 @@ QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
 
     const QString guid = match.value(0).toString();
     return db->setAssetListed(guid, true) ? guid : QString();
+}
+
+// THE ONE "is this a model?" test the import dialog keys on
+// (SPECS/IMPORT_DIALOG_SPEC.md §8). By EXTENSION, deliberately: the question is
+// asked BEFORE anything is read, so a sniff is not available yet — and the
+// extension is also what the browse dialogs filter on.
+bool isModelImportPath(const QString &path)
+{
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix.isEmpty() || suffix == Constants::ASSET_EXT) return false;
+    return Constants::MODEL_EXTS.contains(suffix);
 }
 
 AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request,
@@ -684,9 +696,9 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
 
     // THE MEMO, dropped HERE and not by the caller (the second read's F5):
     // MeshBakeStore's settings cache is keyed by (path, guid) and is never
-    // otherwise invalidated, so a caller that forgot this — lane 2's dialog
-    // calling the service directly — would serve the OLD transform for the
-    // rest of the session.
+    // otherwise invalidated, so a caller that forgot this — a dialog calling
+    // the service directly instead of the verb — would serve the OLD transform
+    // for the rest of the session.
     MeshBakeStore::clear();
 
     QString casError;

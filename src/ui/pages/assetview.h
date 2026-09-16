@@ -37,6 +37,7 @@ class WaveformWidget;
 
 #include <QTreeWidget>
 #include <QPushButton>
+#include <QHash>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QApplication>
@@ -110,6 +111,14 @@ signals:
 	/// (where it shells out to an external editor).
 	void editAssetInModule(const QString &guid, const QString &moduleId,
 	                       const QString &scope);
+
+	/// THE IMPORT DECISION, REOPENED (SPECS/IMPORT_DIALOG_SPEC.md §8): the
+	/// "Import settings…" button under the size row, and "Reimport…" on a
+	/// model tile. The SHELL opens the dialog (it is the one place with both
+	/// the widgets and the ScriptHost, so the commit goes through the
+	/// assets.reimport verb) — this page never reaches for the scripting layer.
+	void reimportAssetRequested(const QString &guid);
+
 
 public slots:
 	void fetchMetadata(AssetGridItem*, bool allowBackfill = true);
@@ -339,7 +348,13 @@ private:
 	// that GUESSED a model's size from an envelope and re-applied the guess at
 	// every instantiation. The size is decided at import now, by a person,
 	// looking at the model, and baked into the asset; the one button reopens
-	// that decision (lane 2 fills it with the dialog in reimport mode).
+	// that decision — the import-settings dialog in reimport mode, opened by
+	// the shell (§8) so its OK commits through the assets.reimport verb.
+	/// True while the import-settings dialog is up (SPECS/IMPORT_DIALOG_SPEC.md
+	/// §8): an open question is an import in progress, and a second one must
+	/// not start behind it.
+	bool mAsking = false;
+
 	QWidget *fitRow = nullptr;
 	QLabel *fitLabel = nullptr;
 	QPushButton *importSettingsButton = nullptr;

@@ -70,7 +70,8 @@ public:
     Q_INVOKABLE QVariantMap theme();
     Q_INVOKABLE QVariantMap styleSheets(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList dialogs();
-    Q_INVOKABLE QVariantMap dialog(const QString &name, bool open = true);
+    Q_INVOKABLE QVariantMap dialog(const QString &name,
+                                   const QVariant &openOrOptions = QVariant(true));
 };
 
 #endif // SCRIPTING_APPAPI_H

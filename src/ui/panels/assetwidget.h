@@ -32,6 +32,7 @@ class Subscriber;
 #include <QVariantList>
 
 #include "io/assetmanager.h"
+#include "services/import/importtypes.h"
 #include "ui/dialogs/progressdialog.h"
 #include "services/thumbnailgenerator.h"
 #include "data/project.h"
@@ -249,6 +250,13 @@ public:
     /// Public entry to the interactive threaded import (editor.importAssets
     /// verb; same path as the Import button and panel drops). Returns false
     /// while a batch is already running.
+    /// THE VERB'S ENTRY (editor.importAssets, through
+    /// MainWindow::startInteractiveImport): the same threaded batch and the
+    /// same progress dialog the panel's own gestures run, but WITHOUT the
+    /// import-settings dialog — a script cannot answer a modal question, and a
+    /// verb that stopped on one would hang the run and everything queued
+    /// behind it (found by import.shutdown, IMPORT-2). A script that wants
+    /// import settings passes them: assets.import(path, {...}).
     bool importFiles(const QStringList &files);
 
     /// Shutdown teardown: close the progress dialog, abort a running import
@@ -307,6 +315,11 @@ signals:
 	/// viewport's drop of an avatar row). Routed through the shell for the
 	/// same reason.
 	void spawnAvatarInScene(const QString &guid);
+	/// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8), both halves,
+	/// routed through the shell for the same reason as the rows above — the
+	/// dialog's OK commits through the assets.reimport verb, and this panel
+	/// never includes the scripting layer.
+	void reimportAssetRequested(const QString &guid);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -361,11 +374,20 @@ protected slots:
     void createSky();
     void createFolder();
     void importAssetB();
-    void importAsset(const QStringList &path);
+    /// `askImportSettings` opens the import dialog once per MODEL file first
+    /// (SPECS/IMPORT_DIALOG_SPEC.md §8). True for the panel's own gestures — a
+    /// drop, the Import Asset row — and false for the verb (above).
+    void importAsset(const QStringList &path, bool askImportSettings = true);
 
     void onThumbnailResult(const ThumbnailResult &result);
 
 private:
+    /// True while the import-settings dialog is up. It is part of the
+    /// one-import-at-a-time guard: ImportBatchRunner::isRunning() is false
+    /// while a modal question waits, and a second batch started behind it
+    /// aborts the Debug build (SPECS/IMPORT_DIALOG_SPEC.md §8).
+    bool mAsking = false;
+
     Ui::AssetWidget *ui;
     QPoint startPos;
 

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "ui/pages/headlessassetviewer.h"
 #include "ui/pages/importviewertail.h"
 #include <QTimer>
+#include "ui/dialogs/importsettingsdialog.h"
 #include "ui/dialogs/progressdialog.h"
 #include "data/settingsmanager.h"
 #include "services/assettags.h"
@@ -146,8 +147,13 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 					list << fileInfo.absoluteFilePath();
 				}
 
-				// Every URL imports (the old path took only the first).
-				importFiles(list);
+				// Every URL imports (the old path took only the first) —
+				// but NOT inside the drop handler: the import decision is a
+				// modal dialog now (SPECS/IMPORT_DIALOG_SPEC.md §8), and a
+				// nested event loop inside a drop leaves the drag source (which
+				// may be another application) waiting on the XDND handshake.
+				// Acknowledge the drop, then ask.
+				QTimer::singleShot(0, this, [this, list]() { importFiles(list); });
 
 				break;
 			}
@@ -1167,20 +1173,13 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		fetchMetadata(selectedGridItem);
 	});
 
-	// THE SIZE ROW's one action. Lane 2 of SPECS/IMPORT_DIALOG_SPEC.md replaces
-	// this body with the import-settings dialog in REIMPORT mode (pre-filled
-	// from assets.importSettings, committing through assets.reimport — the verb
-	// exists and is tested; only the dialog is missing). Until then the button
-	// says so rather than doing nothing silently.
+	// THE SIZE ROW's one action (SPECS/IMPORT_DIALOG_SPEC.md §8): reopen the
+	// import decision. The shell owns the dialog — it is the one place that has
+	// both the widget layer and the ScriptHost, so OK commits through the
+	// assets.reimport verb and the open-scene swap happens with it.
 	connect(importSettingsButton, &QPushButton::clicked, this, [this]() {
 		if (!selectedGridItem || selectedGridItem->metadata.isEmpty()) return;
-		QMessageBox::information(
-		    this, tr("Import settings"),
-		    tr("The import-settings dialog is not wired up yet. Until it is, an asset's "
-		       "scale, orientation and origin are changed by reimporting it:\n\n"
-		       "    assets.reimport(\"%1\", { scale: 2 })\n\n"
-		       "in the script console (Ctrl+`).")
-		        .arg(selectedGridItem->metadata["guid"].toString()));
+		emit reimportAssetRequested(selectedGridItem->metadata["guid"].toString());
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
@@ -1573,6 +1572,33 @@ void AssetView::importFiles(const QStringList &fileNames)
 			}
 		}
 		requests.append(request);
+	}
+	if (requests.isEmpty()) return;
+
+	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per
+	// MODEL file, before anything is read and before any progress dialog is
+	// up. Media never prompts. A file the user skipped drops out of the batch —
+	// the rest of the drop still imports, and "Skip the rest" drops the tail.
+	QStringList modelFiles;
+	for (const ImportRequest &request : requests)
+		if (isModelImportPath(request.sourcePath)) modelFiles.append(request.sourcePath);
+	if (!modelFiles.isEmpty()) {
+		// AN OPEN QUESTION IS AN IMPORT IN PROGRESS. Nothing else may start one
+		// while a modal dialog of ours is up — see AssetWidget::importAsset for
+		// the abort this guards against.
+		if (mAsking) return;
+		mAsking = true;
+		const QHash<QString, QJsonObject> records =
+		    ImportSettingsDialog::askForFiles(modelFiles, this);
+		mAsking = false;
+		QVector<ImportRequest> kept;
+		for (ImportRequest request : requests) {
+			if (!isModelImportPath(request.sourcePath)) { kept.append(request); continue; }
+			if (!records.contains(request.sourcePath)) continue;   // the user skipped it
+			request.settings = records.value(request.sourcePath);
+			kept.append(request);
+		}
+		requests = kept;
 	}
 	if (!requests.isEmpty()) runImportBatch(requests);
 }
@@ -2751,6 +2777,11 @@ void AssetView::wireTile(AssetGridItem *gridItem)
 	});
 	connect(gridItem, &AssetGridItem::createAvatarFromModel, [this](AssetGridItem *item) {
 		createAvatarFromModelTile(item);
+	});
+
+	connect(gridItem, &AssetGridItem::reimportAsset, this, [this](AssetGridItem *item) {
+		if (!item || item->metadata.isEmpty()) return;
+		emit reimportAssetRequested(item->metadata["guid"].toString());
 	});
 }
 

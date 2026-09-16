@@ -2828,6 +2828,12 @@ void MainWindow::setupDockWidgets()
     connect(assetWidget, &AssetWidget::editAssetInModule, this, &MainWindow::openAssetInModule);
     connect(assetWidget, &AssetWidget::spawnAvatarInScene, this,
             [this](const QString &guid) { spawnAvatarAsset(guid, iris::Vec3(), false); });
+    // THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8), both halves. The
+    // shell owns the dialog: it is the one place with the widget layer AND the
+    // ScriptHost, so a reimport commits through the assets.reimport verb.
+    connect(assetWidget, &AssetWidget::reimportAssetRequested, this,
+            [this](const QString &guid) { openImportSettings(guid); });
+
 
 	assetWidget->sceneView = sceneView;
 
@@ -3970,6 +3976,18 @@ void MainWindow::setupDesktop()
 	// asset to be opened in a module; the shell switches space and calls that
 	// module's VERB. Neither side learns about the other.
 	connect(_assetView, &AssetView::editAssetInModule, this, &MainWindow::openAssetInModule);
+	// THE IMPORT DECISION (§8) — the same two handlers the project tray gets.
+	connect(_assetView, &AssetView::reimportAssetRequested, this,
+	        [this](const QString &guid) { openImportSettings(guid); });
+	// A reimport changed the asset's bake, its size line and its thumbnail:
+	// the library view and the project tray both re-read the row.
+	// QUEUED: the signal is emitted from inside the dialog's accept(), and a
+	// tile re-selection loads a preview — not something to start while the
+	// dialog is still closing.
+	connect(this, &MainWindow::assetReimported, this, [this](const QString &guid) {
+		if (_assetView) _assetView->selectAsset(guid);
+		if (assetWidget) assetWidget->refresh();
+	}, Qt::QueuedConnection);
 
 	ui->stackedWidget->addWidget(pmContainer);
 	

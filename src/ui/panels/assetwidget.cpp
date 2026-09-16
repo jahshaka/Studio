@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/assetwidget.h"
+
+#include "ui/dialogs/importsettingsdialog.h"
 #include "ui_assetwidget.h"
 
 #include <iostream>
@@ -832,9 +834,13 @@ void AssetWidget::dropEvent(QDropEvent *evt)
 		list << fileInfo.absoluteFilePath();
 	}
 
-	if (!list.isEmpty()) importAsset(list);
-
 	evt->acceptProposedAction();
+
+	// Deferred out of the drop handler on purpose: the import decision is a
+	// modal dialog (SPECS/IMPORT_DIALOG_SPEC.md §8) and a nested event loop
+	// inside a drop leaves the drag source waiting on the XDND handshake.
+	if (!list.isEmpty())
+		QTimer::singleShot(0, this, [this, list]() { importAsset(list); });
 }
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
@@ -1065,6 +1071,18 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		                .value(QStringLiteral("hasSkeleton")).toBool()) {
 			action = new QAction(QIcon(), "Create Avatar", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(createAvatarFromModel()));
+			menu.addAction(action);
+		}
+
+		// THE IMPORT DECISION, REOPENED (SPECS/IMPORT_DIALOG_SPEC.md §8) —
+		// model rows only. It is the only way to change how big an asset is:
+		// the size is baked in and every placement is at scale 1.
+		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
+			const QString objectGuid = item->data(MODEL_GUID_ROLE).toString();
+			action = new QAction(QIcon(), "Reimport\u2026", this);
+			connect(action, &QAction::triggered, this, [this, objectGuid]() {
+				emit reimportAssetRequested(objectGuid);
+			});
 			menu.addAction(action);
 		}
 
@@ -1984,8 +2002,10 @@ void AssetWidget::importAssetB()
 
 bool AssetWidget::importFiles(const QStringList &files)
 {
-	if (importRunner && importRunner->isRunning()) return false;
-	importAsset(files);
+	// A QUESTION IS AN IMPORT (see importAsset): the verb answers "already
+	// importing" rather than starting a second batch behind the user's dialog.
+	if (mAsking || (importRunner && importRunner->isRunning())) return false;
+	importAsset(files, false);   // no modal question on a scripted import
 	return true;
 }
 
@@ -2003,7 +2023,7 @@ bool AssetWidget::shutdownImports(int msTimeout)
 	return false;
 }
 
-void AssetWidget::importAsset(const QStringList &fileNames)
+void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettings)
 {
 	// ONE pipeline + reference-with-pin (phases 3+4): a project-panel drop
 	// is a library import through AssetImportService followed by a pin into
@@ -2025,11 +2045,49 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 
 	if (expanded.isEmpty()) return;
 
+	// ONE IMPORT AT A TIME, AND AN OPEN QUESTION COUNTS AS ONE. `isRunning()` is
+	// false while the modal dialog below is up, so without mAsking a scripted
+	// editor.importAssets arriving during a user's dialog would replace the
+	// runner and start it — and the outer call would then setRequests on a
+	// RUNNING runner, connect every signal twice and start() again, which is a
+	// Q_ASSERT(!mRunning) abort in a Debug build.
+	if (mAsking || (importRunner && importRunner->isRunning())) return;
+
+	QVector<ImportRequest> requests;
+	for (const QString &fileName : expanded) {
+		ImportRequest request;
+		request.sourcePath = fileName;
+		requests.append(request);
+	}
+
+	// THE IMPORT DECISION (SPECS/IMPORT_DIALOG_SPEC.md §8): one dialog per
+	// MODEL file BEFORE anything is read and before any progress dialog is up —
+	// a busy bar spinning under a question is a lie about what the app is
+	// doing. Media never prompts; a skipped file drops out and the rest of the
+	// drop still imports; "Skip the rest" drops the tail.
+	QStringList modelFiles;
+	if (askImportSettings)
+		for (const ImportRequest &request : requests)
+			if (isModelImportPath(request.sourcePath)) modelFiles.append(request.sourcePath);
+	if (!modelFiles.isEmpty()) {
+		mAsking = true;
+		const QHash<QString, QJsonObject> records =
+		    ImportSettingsDialog::askForFiles(modelFiles, this);
+		mAsking = false;
+		QVector<ImportRequest> kept;
+		for (ImportRequest request : requests) {
+			if (!isModelImportPath(request.sourcePath)) { kept.append(request); continue; }
+			if (!records.contains(request.sourcePath)) continue;   // the user skipped it
+			request.settings = records.value(request.sourcePath);
+			kept.append(request);
+		}
+		requests = kept;
+	}
+	if (requests.isEmpty()) return;          // every file was skipped
+
 	// THREADED (UI-freeze fix): the pipeline's heavy half runs on
 	// ImportBatchRunner's worker with one cancellable dialog for the whole
 	// drop; the pin + panel refresh land back here per file / at the end.
-	if (importRunner && importRunner->isRunning()) return;
-
 	progressDialog->resetCancel();
 	progressDialog->setCancelVisible(true);
 	progressDialog->setRange(0, 0);
@@ -2039,12 +2097,6 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 	progressDialog->show();
 
 	importRunner = new ImportBatchRunner(db, project, this);
-	QVector<ImportRequest> requests;
-	for (const QString &fileName : expanded) {
-		ImportRequest request;
-		request.sourcePath = fileName;
-		requests.append(request);
-	}
 	importRunner->setRequests(requests);
 
 	connect(progressDialog, &ProgressDialog::canceled,

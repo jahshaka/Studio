@@ -101,6 +101,10 @@ signals:
 	/// from the gesture, so a rigged statue stays a statue).
 	void editAvatarAsset(AssetGridItem*);
 	void createAvatarFromModel(AssetGridItem*);
+	/// MODEL tiles only (SPECS/IMPORT_DIALOG_SPEC.md §8): reopen the import
+	/// decision — scale, orientation, origin and what to build from the file —
+	/// and re-bake the asset with the answer.
+	void reimportAsset(AssetGridItem*);
 
 private:
 	void startDrag();

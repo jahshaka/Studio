@@ -394,6 +394,7 @@ set(SRCS
     src/ui/panels/timeline/keyframelabel.cpp 
     src/ui/panels/timeline/keyframecurvewidget.cpp 
     src/ui/dialogs/getnamedialog.cpp 
+    src/ui/dialogs/importsettingsdialog.cpp
     src/ui/panels/timeline/createanimationwidget.cpp 
     src/data/database/database.cpp 
     src/data/database/projectdatabase.cpp 
@@ -662,6 +663,7 @@ set(HEADERS
     src/ui/panels/timeline/keyframecurvewidget.h 
     src/ui/panels/timeline/animationwidgetdata.h 
     src/ui/dialogs/getnamedialog.h 
+    src/ui/dialogs/importsettingsdialog.h
     src/ui/panels/timeline/createanimationwidget.h 
     src/data/database/database.h 
     src/data/database/projectdatabase.h 

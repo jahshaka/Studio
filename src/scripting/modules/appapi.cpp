@@ -522,15 +522,21 @@ QVector<VerbInfo> AppApi::verbs() const
         { "dialogs", "app.dialogs() -> [{name, open}]",
           "The dialogs app.dialog can open, by name, and whether each is open right now.",
           Needs::Window },
-        { "dialog", "app.dialog(name, open=true) -> {name, open, window, title, x, y, width, height}",
-          "Opens (or, with open=false, closes) one of the app's dialogs by name — see app.dialogs. "
-          "INSPECTION ONLY: shown with show(), never exec() (a verb cannot wait inside exec()), so "
-          "there is no result to consume — a dialog whose production caller reads its result after "
-          "exec() (newProject, renameProject, getName) shows an accept button that does NOTHING "
-          "here. A dialog that sets its own window modality (Preferences is application-modal) is "
-          "still modal. For the theme walk (a dialog built on demand exists only while it is open) "
-          "and for rigs that photograph the UI — not for asking the user anything. Returns {} for "
-          "an unknown name.",
+        { "dialog", "app.dialog(name, openOrOptions=true) -> {name, open, window, title, x, y, width, height}",
+          "Opens (or, with false, closes) one of the app's dialogs by name — see app.dialogs. "
+          "INSPECTION ONLY for most of them: shown with show(), never exec() (a verb cannot wait "
+          "inside exec()), so there is no result to consume — a dialog whose production caller "
+          "reads its result after exec() (newProject, renameProject, getName) shows an accept "
+          "button that does NOTHING here. A dialog that sets its own window modality (Preferences "
+          "is application-modal) is still modal. For the theme walk (a dialog built on demand "
+          "exists only while it is open) and for rigs that photograph the UI. Returns {} for an "
+          "unknown name. "
+          "THE SECOND ARGUMENT may be an OBJECT instead of a bool, carrying {open} plus that "
+          "dialog's own keys; only 'importSettings' has any: {guid} opens the import-settings "
+          "dialog on a library asset, pre-filled from assets.importSettings; {settings} writes "
+          "the record's fields into it; {accept} presses its OK button, which in that mode runs "
+          "assets.reimport — the very path the user's click takes. The answer then also carries "
+          "`settings` (the record the dialog holds) and `accepted`.",
           Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
@@ -1413,7 +1419,7 @@ QVariantList AppApi::dialogs()
     return out;
 }
 
-QVariantMap AppApi::dialog(const QString &name, bool open)
+QVariantMap AppApi::dialog(const QString &name, const QVariant &openOrOptions)
 {
     QVariantMap out;
     if (!host.mainWindow) {
@@ -1424,13 +1430,42 @@ QVariantMap AppApi::dialog(const QString &name, bool open)
         fail(QStringLiteral("app.dialog: no dialog named '%1' (app.dialogs() lists them)").arg(name));
         return out;
     }
+
+    // A BOOL is the old shape and still the common one; an OBJECT carries that
+    // dialog's own keys (and `open`, should a caller want to close one by
+    // object). Nothing else is accepted — a number or a string here is a
+    // mistake, not an opinion about opening.
+    bool open = true;
+    QVariantMap options;
+    const QVariant given = scriptmod::normalizeJs(openOrOptions);
+    if (given.isValid() && given.typeId() == QMetaType::Bool) {
+        open = given.toBool();
+    } else if (given.typeId() == QMetaType::QVariantMap) {
+        options = given.toMap();
+        open = options.value(QStringLiteral("open"), true).toBool();
+        options.remove(QStringLiteral("open"));
+    } else if (given.isValid()) {
+        fail(QStringLiteral("app.dialog: the second argument is true/false or an options object"));
+        return out;
+    }
+
     out["name"] = name;
     if (!open) {
         host.mainWindow->closeDialog(name);
         out["open"] = false;
         return out;
     }
-    QWidget *w = host.mainWindow->openDialog(name);
+    QVariantMap extra;
+    QWidget *w = host.mainWindow->openDialog(name, options, &extra);
+    // THE DIALOG'S OWN MESSAGE FIRST, whether or not it opened: a refusal with
+    // a reason ("this asset has no import record") is worth more than "could
+    // not be opened in this session".
+    const QString dialogError = extra.take(QStringLiteral("error")).toString();
+    for (auto it = extra.constBegin(); it != extra.constEnd(); ++it) out[it.key()] = it.value();
+    if (!dialogError.isEmpty()) {
+        fail(QStringLiteral("app.dialog('%1'): %2").arg(name, dialogError));
+        return out;
+    }
     if (!w) {
         fail(QStringLiteral("app.dialog: '%1' could not be opened in this session").arg(name));
         return out;
