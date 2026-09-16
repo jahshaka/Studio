@@ -185,6 +185,16 @@ int main(int argc, char **argv)
     // number that describes every launch a user ever sees after the first two.
     const QJsonObject steady = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
     CHECK(rc == 0, "run 3 exited cleanly");
+    // THE NUMBER, PRINTED, because "NOTHING AT ALL" with no count sends the next
+    // reader back to the logs to find out what three shaders they were. (Measured
+    // 2026-09-16: with Photon's cascade chain on at every tier this is 3, and they
+    // are `20/33/44LightVctBounceInject_cs` — COMPUTE permutations of the bounce
+    // injection, which the Hlms disk cache structurally cannot hold:
+    // `Ogre::HlmsTypes` has no compute member and `HlmsCompute` is reached through
+    // `getComputeHlms()`, outside the range this cache's save and load loops walk.
+    // Recorded in spikes/photon-e2/PROGRESS.md; the fix is a shader-cache lane's.)
+    std::printf("   run 3: compiled %d, loaded %d\n", steady.value("compiledThisRun").toInt(),
+                steady.value("loadedThisRun").toInt());
     CHECK(steady.value("compiledThisRun").toInt() == 0, "run 3 compiled NOTHING AT ALL");
     CHECK(steady.value("loadedThisRun").toInt() > 0, "and served everything from the cache");
 
