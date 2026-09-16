@@ -313,3 +313,7 @@ add_subdirectory(apppaths)
 # greeting's driven-session predicate, src/app/firstrun.h.
 add_subdirectory(firstrun)
 add_subdirectory(update)
+# VR phase 1a's external-device route (SPECS/VR_SPEC.md §5/§6). Builds only where
+# libopenxr-dev and the Vulkan render system exist; SKIPS where monado-service is
+# not installed. Nothing here runs on a box with no VR stack.
+add_subdirectory(vr)
