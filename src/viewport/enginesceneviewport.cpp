@@ -2054,6 +2054,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     case jahshaka::engine::GiStaleReason::Camera: out.lastStaleReason = QStringLiteral("camera"); break;
     }
     out.cascadesAwaitingCamera = st.cascadesAwaitingCamera;
+    out.cascadeVoxelLod = st.cascadeVoxelLod;
     out.cascades.clear();
     out.cascades.reserve(int(st.cascades.size()));
     for (const auto &c : st.cascades) {
@@ -2068,6 +2069,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         ci.items      = c.items;
         ci.attached   = c.attached;
         ci.lastCpuMs  = c.lastCpuMs;
+        ci.lodLevels.reserve(int(c.lodLevels.size()));
+        for (int n : c.lodLevels) ci.lodLevels.append(n);
+        ci.voxelTriangles = qint64(c.voxelTriangles);
         out.cascades.append(ci);
     }
     out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);
