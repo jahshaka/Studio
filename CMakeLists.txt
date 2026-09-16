@@ -220,6 +220,8 @@ set(SRCS
     src/modules/publish/publishapi.cpp
     src/modules/publish/publishmodule.cpp
     src/modules/publish/publishrecord.cpp
+    src/modules/vr/vrapi.cpp
+    src/modules/vr/vrmodule.cpp
     src/modules/avatar/avatarmodule.cpp
     src/modules/avatar/avatarpage.cpp
     src/modules/avatar/avatarpreviewmodel.cpp
@@ -516,6 +518,8 @@ set(HEADERS
     src/modules/publish/publishapi.h
     src/modules/publish/publishmodule.h
     src/modules/publish/publishrecord.h
+    src/modules/vr/vrapi.h
+    src/modules/vr/vrmodule.h
     src/modules/avatar/avatarmodule.h
     src/modules/avatar/avatarpage.h
     src/modules/avatar/avatarpreviewmodel.h

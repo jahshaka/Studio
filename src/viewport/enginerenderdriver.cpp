@@ -188,6 +188,18 @@ void EngineRenderDriver::setPacingMode(framepacing::Mode m)
     applyPacing();
 }
 
+void EngineRenderDriver::setVrSessionActive(bool on)
+{
+    if (mVrSession == on) return;
+    mVrSession = on;
+    // The same price the Unlimited mode pays, for the same reason and with the
+    // same one-swapchain-rebuild cost (Engine::setVsync): with the display
+    // still gating the acquire, a zero interval buys nothing but a busier CPU.
+    // On the way out the user's own pacing mode decides again.
+    if (mEngine) mEngine->setVsync(on ? false : framepacing::vsyncFor(mMode));
+    applyPacing();
+}
+
 void EngineRenderDriver::setRefreshHz(double hz)
 {
     if (!(hz > 0.0)) hz = 0.0;                  // NaN-safe: anything unusable is "unknown"

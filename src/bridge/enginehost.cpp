@@ -22,9 +22,12 @@
 
 namespace {
 bool gCliNoRayQuery = false;
+bool gCliVr = false;
 }
 void setCliNoRayQuery(bool on) { gCliNoRayQuery = on; }
 bool cliNoRayQuery() { return gCliNoRayQuery; }
+void setCliVr(bool on) { gCliVr = on; }
+bool cliVr() { return gCliVr; }
 
 
 using namespace jahshaka::engine;
@@ -194,6 +197,13 @@ EngineConfig EngineHost::resolveConfig()
     // picture a machine without the hardware renders and every fallback is
     // proved on each push instead of assumed.
     cfg.rayTracing = !cliNoRayQuery();
+    // OPENXR, PER RUN (SPECS/VR_SPEC.md §4.1 / VrMode). Disabled unless this
+    // launch asked for it: the IfAvailable route creates the Vulkan instance
+    // and device THROUGH THE RUNTIME before the render system loads, so it is a
+    // different boot — and a box whose headset last connected left a WiVRn
+    // manifest behind must not silently get that boot on every launch.
+    cfg.vr = cliVr() ? jahshaka::engine::VrMode::IfAvailable
+                     : jahshaka::engine::VrMode::Disabled;
     // OFF MUST REACH THE DEVICE, not just our tier (the lead's call, round 3
     // item 10). ogre-patch 0038 decides at vkCreateDevice whether to ask for
     // the ray extensions at all, and it reads the environment because the pin

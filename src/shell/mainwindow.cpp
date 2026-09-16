@@ -157,6 +157,7 @@ For more information see the LICENSE file
 #include "modules/materials/materialsmodule.h"
 #include "modules/publish/publishmodule.h"
 #include "modules/avatar/avatarmodule.h"
+#include "modules/vr/vrmodule.h"
 #include "modules/avatar/api/avatarapi.h"
 #include "player/playermodule.h"
 #include "services/playerservice.h"
@@ -4008,11 +4009,16 @@ void MainWindow::setupDesktop()
 	materialsModule = new MaterialsModule;
 	publishModule = new PublishModule;
 	avatarModule = new AvatarModule;
+	// VR (SPECS/VR_SPEC.md §4.6, phase 2): verbs only, NO page — the session's
+	// UI is phase 3's (the Player's VR mode) and phase 4's (the editor
+	// preview), and both will call the same `vr.*` verbs this module
+	// registers. A module with no page still gets a place in the loop.
+	vrModule = new VrModule;
 	// The Player space contributes VERBS only (verb-coverage audit F1): its
 	// page is PlayerWidget, built in setupViewPort, because the stacked-widget
 	// index order is load-bearing (PLAYER = 4).
 	playerModule = new PlayerModule;
-	modules = { materialsModule, publishModule, avatarModule, playerModule };
+	modules = { materialsModule, publishModule, avatarModule, playerModule, vrModule };
 	for (auto *module : modules) module->initialize(moduleHost);
 	materialsModule->setAssetView(_assetView);
 

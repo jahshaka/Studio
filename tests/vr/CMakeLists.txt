@@ -74,6 +74,60 @@ add_test(NAME vr.spike_1a
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_spike.sh"
                  "$<TARGET_FILE:test_vr_spike_1a>" "${JAH_MONADO_MANIFEST}" 60
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# ---------------------------------------------------------------------------
+# vr.session — PHASE 2's suite: the session inside the engine (VR_SPEC §6).
+#
+# Links JahshakaEngine, like every other engine suite, and nothing else: the
+# OpenXR loader is linked INTO that library by the one TU that uses it
+# (jahshaka_engine_vr), so this file does not name OpenXR at all.
+add_executable(test_vr_session "${CMAKE_CURRENT_SOURCE_DIR}/test_vr_session.cpp")
+set_target_properties(test_vr_session PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_vr_session PRIVATE JahshakaEngine)
+target_compile_definitions(test_vr_session PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_vr_session JahshakaEngineMedia)
+
+add_test(NAME vr.session
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
+                 "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session PROPERTIES
+    LABELS "engine"
+    TIMEOUT 600
+    # A second Vulkan instance (the runtime's compositor) and one IPC socket:
+    # never two of these at once.
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-home")
+
+# ---------------------------------------------------------------------------
+# vr.verbs_session — the `vr.*` verbs through the APP, against the simulated
+# runtime (VR_SPEC §6 / §4.6). The other half of scripting.e2e.vr_verbs, which
+# proves the same verbs refuse cleanly with no runtime at all.
+#
+# It runs the real binary with `--vr --script`, inside the same monado wrapper
+# the suites above use, with its own HOME and data root like every other
+# app-spawning suite.
+set(_vr_verbs_home "${CMAKE_CURRENT_BINARY_DIR}/vr-verbs-home")
+file(MAKE_DIRECTORY "${_vr_verbs_home}/run")
+add_test(NAME vr.verbs_session
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js"
+         WORKING_DIRECTORY "${_vr_verbs_home}/run")
+set_tests_properties(vr.verbs_session PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_verbs_home};JAHSHAKA_DATA_ROOT=${_vr_verbs_home}/.local/share/Jahshaka")
+
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600

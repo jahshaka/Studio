@@ -192,6 +192,11 @@ int main(int argc, char *argv[])
         setCliNoRayQuery(true);
         qputenv("JAHSHAKA_NO_RAY_QUERY", "1");
     }
+    // THE --vr LATCH (SPECS/VR_SPEC.md §4.1), the same shape and the same
+    // reason: EngineConfig::vr is decided before any engine exists, because on
+    // the OpenXR route the runtime creates the Vulkan instance and device the
+    // engine boots on. JAHSHAKA_VR=1 is the runner's form (the suites use it).
+    if (cli.vr || qgetenv("JAHSHAKA_VR") == "1") setCliVr(true);
     // The funnel is what makes the ~61 existing qDebug/qWarning call sites land
     // in the file with zero edits to any of them — LoadTimeline's open profile,
     // the slow-frame warning, the watchdog's stall line, SceneMirror's skeleton

@@ -129,6 +129,9 @@ if(JAHSHAKA_ASAN)
     # The ray-query tier is NEW code, so the sanitised twin must carry it too
     # (PHOTON_SPEC §7 R1's gate: test_engine and test_engine_asan both green).
     jahshaka_engine_ray_query(JahshakaEngineAsan)
+    # ...and the VR session TU, for the same reason (VR_SPEC §6's gate:
+    # test_engine and test_engine_asan both green with the new TU compiled in).
+    jahshaka_engine_vr(JahshakaEngineAsan)
     target_compile_definitions(JahshakaEngineAsan PRIVATE
         JAHSHAKA_OGRE_PATCH_SERIES="${JAHSHAKA_OGRE_PATCH_SERIES}")
     set_target_properties(JahshakaEngineAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)

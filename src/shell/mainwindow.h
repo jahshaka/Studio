@@ -49,6 +49,7 @@ class StudioModule;
 class MaterialsModule;
 class PublishModule;
 class AvatarModule;
+class VrModule;
 class PlayerModule;
 
 class QPushButton;
@@ -1101,6 +1102,7 @@ private:
 	MaterialsModule *materialsModule = nullptr;
 	PublishModule *publishModule = nullptr;
 	AvatarModule *avatarModule = nullptr;
+	VrModule *vrModule = nullptr;
 	PlayerModule *playerModule = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
