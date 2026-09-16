@@ -1310,3 +1310,37 @@ add_test(NAME ui.presets_favorites COMMAND test_presets_favorites
 set_tests_properties(ui.presets_favorites PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.presets_favorites)
+
+# ui.import_dialog — THE IMPORT DECISION, AS A DIALOG
+# (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). The dialog's product is an
+# iris::ImportSettings record, so the load-bearing assertion is that the record
+# its widgets emit is byte-identical (canonical JSON, and therefore bake key) to
+# the one a verb call with the same values produces. Beside it: the live extent
+# preview's arithmetic, the origin helpers, the suggestion line's states and the
+# batch state machine, all driven through the dialog's static helpers — plus the
+# real pre-read on the real fixtures, because the whole preview rests on a
+# flags-0 parse leaving vertices in the FILE's units.
+# Widgets + IrisGL only: no database, no engine, no display.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test Concurrent)
+add_executable(test_import_dialog test_import_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/importsettingsdialog.cpp
+    # the dialog asks StyleSheet whether Classic is active (ThemeRoles)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp)
+set_target_properties(test_import_dialog PROPERTIES
+    AUTOMOC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_definitions(test_import_dialog PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_include_directories(test_import_dialog PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_import_dialog PRIVATE IrisGL Qt6::Widgets Qt6::Test Qt6::Concurrent)
+add_test(NAME ui.import_dialog COMMAND test_import_dialog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.import_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.import_dialog)

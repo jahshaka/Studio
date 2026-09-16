@@ -704,6 +704,25 @@ set_tests_properties(scripting.e2e.assets_page PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.import_dialog — THE IMPORT DIALOG, DRIVEN
+# (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). ui.import_dialog pins the record the
+# widgets produce and scripting.e2e.import_settings pins the verbs; this pins
+# the JOIN — the dialog's own OK button, on a real library asset, re-bakes it,
+# the open scene follows at scale 1, and the record it writes is byte-identical
+# to the one the verb writes. Needs the editor window (app.dialog) -> no
+# --headless.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_import_dialog.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_dialog.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_dialog)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.import_dialog
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_dialog.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.import_dialog PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # VISUAL_PARITY_SPEC item 5: a saved shader GRAPH gets a real thumbnail —
 # createGraph -> colour wired into Base Color -> save -> refreshThumbnail
 # renders the evaluated PbrMaterial on the preview sphere, and the stored PNG's
