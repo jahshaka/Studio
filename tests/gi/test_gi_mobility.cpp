@@ -592,18 +592,26 @@ static void sectionC(Engine *engine)
     std::printf("   against the full-count reference: in motion %u px differ (worst %.1f/255), "
                 "at rest %u px (worst %.1f/255)\n",
                 movedPixels, movedWorst, restedPixels, restedWorst);
-    // THE GUARD THAT THIS CASE IS MEASURING SOMETHING, re-anchored with its reason
-    // (PHOTON_SPEC §7 E2 round 2). The REFERENCE moved: the at-rest re-injection
-    // now runs two sweeps over a cascade chain, because a chain's radiance is a
-    // fixed point over coupled volumes and one sweep is one Jacobi iteration from
-    // whatever the volumes held — so the at-rest picture is the full solve EXACTLY
-    // rather than nearly. The in-motion picture is untouched; what changed is what
-    // it is being held against, and the gap it opens measures 155 px here where
-    // the old reference gave over 200. The threshold is the guard's floor, not a
-    // budget: it exists so that a case which accidentally compared a picture with
-    // itself could not pass.
-    CHECK(movedPixels > 100u,
-          "the in-motion injection really is a cheaper picture (the economy is measurable)");
+    // THE CLAIM IS NOW THE OPPOSITE ONE, AND IT IS THE RULE (PHOTON-M2, F-D).
+    //
+    // This case used to assert that the in-motion picture DIFFERS from the
+    // full-count reference — "the in-motion injection really is a cheaper
+    // picture" — because the moving tick dropped a single volume to zero extra
+    // bounces and the coarse ray march. DRAG-1 outlawed exactly that for a
+    // cascade chain (a volume's radiance must not depend on which path last
+    // injected it: the rebuild path injects at the document's full count, so the
+    // two answers alternate and the picture steps through a drag) and PHOTON-M2
+    // applies the same rule to the single volume. There is no cheaper picture to
+    // measure any more: the tick computes what a rebuild computes.
+    //
+    // MEASURED, both arms in this fixture: in motion 0 px differ from the
+    // full-count reference (worst 0.0/255), at rest 0 px. The assertion is
+    // therefore EQUALITY, which is a stronger statement than the old floor and
+    // is the one the rule makes. `JAHSHAKA_GI_LEGACY_MOVING_TICK` restores the
+    // old behaviour, and with it this case's old reading (>100 px) comes back —
+    // which is what keeps this from being a test that cannot fail.
+    CHECK(movedPixels == 0u && movedWorst < 0.5f,
+          "the in-motion injection computes the SAME picture a rebuild does (F-D)");
     // ...AND THE AT-REST ONE IS THE FULL-COUNT PICTURE, now BIT FOR BIT rather
     // than within 1/255 — the second sweep is what made that true, and asserting
     // the stronger thing is the point of having measured it.
