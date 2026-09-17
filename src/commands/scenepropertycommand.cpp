@@ -139,10 +139,6 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->fogBreakFalloff = v.toFloat(); });
     // The retired LINEAR pair — no panel row writes them, but world.fog's
     // `start`/`end` still do, and a verb records through this table too.
-    add("fogStart", [](const ScenePtr &s) { return QVariant(s->fogStart); },
-        [](const ScenePtr &s, const QVariant &v) { s->fogStart = v.toFloat(); });
-    add("fogEnd", [](const ScenePtr &s) { return QVariant(s->fogEnd); },
-        [](const ScenePtr &s, const QVariant &v) { s->fogEnd = v.toFloat(); });
     add("shadowEnabled", [](const ScenePtr &s) { return QVariant(s->shadowEnabled); },
         [](const ScenePtr &s, const QVariant &v) { s->shadowEnabled = v.toBool(); });
 

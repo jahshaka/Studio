@@ -365,20 +365,23 @@ int main(int argc, char **argv)
 
         // LightNode
         auto refLight = iris::LightNode::create();
-        advertises(refLight, { "lightType", "shadowColor", "shadowAlpha", "shadowMapType",
-                               "shadowMapResolution", "shadowBias", "doubleSided",
+        // `shadowColor`, `shadowAlpha` and `shadowBias` are GONE (render audit
+        // I-6, lane CRUD-RENDER-1): three advertised, serialized, panel-bound
+        // fields the renderer never read — no per-light shadow tint exists on
+        // this engine, and the depth bias is the shadow node's own constant.
+        advertises(refLight, { "lightType", "shadowMapType",
+                               "shadowMapResolution", "doubleSided",
                                "accurate", "iconSize", "name", "visible" }, "LightNode");
         roundTrip(refLight, "lightType", int(iris::LightType::Spot), "LightNode");
-        roundTrip(refLight, "shadowAlpha", 0.25f, "LightNode");
         roundTrip(refLight, "shadowMapType", int(iris::ShadowMapType::VerySoft), "LightNode");
         roundTrip(refLight, "shadowMapResolution", 1024, "LightNode");
-        roundTrip(refLight, "shadowBias", 0.05f, "LightNode");
         roundTrip(refLight, "doubleSided", true, "LightNode");
         roundTrip(refLight, "accurate", true, "LightNode");
         roundTrip(refLight, "iconSize", 1.5f, "LightNode");
-        refLight->setPropertyValue("shadowColor", QColor(10, 20, 30));
-        CHECK(refLight->getPropertyValue("shadowColor").value<QColor>() == QColor(10, 20, 30),
-              "LightNode: shadowColor round-trips");
+        CHECK(!refLight->getPropertyValue("shadowAlpha").isValid() &&
+              !refLight->getPropertyValue("shadowColor").isValid() &&
+              !refLight->getPropertyValue("shadowBias").isValid(),
+              "LightNode: the three dead shadow properties are gone, not merely hidden");
         CHECK(refLight->getPropertyValue("intensity").isValid(),
               "LightNode: the pre-existing keys still resolve");
 
@@ -1035,7 +1038,8 @@ int main(int argc, char **argv)
         pbr->setValue(QStringLiteral("baseColorMap"), texPath);
         pbr->setValue(QStringLiteral("detail0Blend"), 4);
         pbr->setValue(QStringLiteral("normalMapAddress"), 1);
-        CHECK(pbr->useBaseColorMap, "dup: the original carries a base colour map");
+        CHECK(pbr->textures.contains(QStringLiteral("u_baseColorMap")),
+              "dup: the original carries a base colour map");
         source->setMaterial(pbr);
 
         auto dupNode = source->duplicate().dynamicCast<iris::MeshNode>();
@@ -1059,7 +1063,7 @@ int main(int argc, char **argv)
             CHECK(dupMat->getName() == pbr->getName() && dupMat->getGuid() == pbr->getGuid() &&
                   dupMat->renderLayer == pbr->renderLayer,
                   "dup: the name, the source guid and the render layer travel");
-            CHECK(dupMat->useBaseColorMap && dupMat->textures.contains(QStringLiteral("u_baseColorMap")) &&
+            CHECK(dupMat->textures.contains(QStringLiteral("u_baseColorMap")) &&
                   dupMat->textures.value(QStringLiteral("u_baseColorMap"))->source == texPath,
                   "dup: the base colour map travels (the same file)");
             // THE ROWS: what the panel shows and what SceneWriter saves. Equal

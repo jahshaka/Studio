@@ -2040,6 +2040,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeShapeMax        = q(st.probeShapeMax);
     out.cubemapProbeSlotsPerCell = st.cubemapProbeSlotsPerCell;
     out.probesClampedToRegion    = st.probesClampedToRegion;
+    out.probesExceedingCell      = st.probesExceedingCell;
     out.worstProbeShapeCellRatio = st.worstProbeShapeCellRatio;
     out.reusedLastRefresh    = st.reusedLastRefresh;
     out.ifdBound             = st.ifdBound;

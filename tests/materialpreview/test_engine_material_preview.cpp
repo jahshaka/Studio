@@ -203,7 +203,7 @@ int main(int argc, char **argv)
             CHECK(baked.maps.contains("baseColorMap"), "baked-map: math chain baked a baseColorMap PNG");
 
             auto bakedMaterial = PbrGraphEvaluator::materialFromValues(baked.eval.values);
-            CHECK(!!bakedMaterial && bakedMaterial->useBaseColorMap,
+            CHECK(!!bakedMaterial && bakedMaterial->textures.contains("u_baseColorMap"),
                   "baked-map: material carries the baked map");
             preview.setMaterial(bakedMaterial);
             img = render(preview, *engine, view, 8);

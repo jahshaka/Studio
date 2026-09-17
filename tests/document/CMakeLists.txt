@@ -199,6 +199,35 @@ if(Python3_Interpreter_FOUND)
     jah_no_display(document.no_silent_setters)
 endif()
 
+# document.reader_defaults — THE READER-DEFAULTS LAW, as a command (render audit
+# I-5, lane READER-DEFAULTS-1), shaped like document.no_silent_setters and
+# theme.no_raw_sheets: a lint over the source, because the class it guards
+# against is a LITERAL somebody types, not a value somebody can assert.
+#
+# `src/io/scenereader.cpp` default-constructs the document object and overwrites
+# only the keys the file carries, so every stated fallback must be the object's
+# own value — `node->x`, never `1.0`. Two definitions of one default drift, and
+# when they drift "never saved" and "saved without the key" become two different
+# scenes: the shadow type (SUN1), `exposure` (which shipped five samples at half
+# brightness), a light's radius, a light's shadow resolution, the explorer
+# camera's far clip and six particle fields have all been that bug. The script
+# carries the documented exceptions — a quaternion identity, a retired key on its
+# way to the bin, a node type, a sentinel — each with its reason, and FAILS both
+# on a new literal and on an exception that no longer matches anything.
+#
+# (Why not a write/strip/read round trip: nothing in this tree links SceneReader
+# — it needs the library database, the asset store, the material helper, the bake
+# store and the load timeline. tests/mirror and tests/defaults record the same
+# constraint. The runtime half is scene.reopen_fidelity and
+# scripting.e2e.exposure_defaults, which open real archives with keys missing.)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME document.reader_defaults
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/reader_defaults.py
+                     ${CMAKE_SOURCE_DIR})
+    set_tests_properties(document.reader_defaults PROPERTIES LABELS "document" TIMEOUT 60)
+    jah_no_display(document.reader_defaults)
+endif()
+
 # document.mesh_cache — ONE FILE IS PARSED ONCE (ADD-1). The parse cache behind
 # `Mesh::loadMesh`: the sharing, the weak references that make it not a leak,
 # the per-node skeleton clone that is the one thing a shared mesh could have

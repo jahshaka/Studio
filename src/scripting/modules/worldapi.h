@@ -87,6 +87,7 @@ public:
     Q_INVOKABLE QVariantMap clearOverride(const QVariantMap &params);
     Q_INVOKABLE QVariantMap clearOverrides();
     Q_INVOKABLE QVariantMap modeTable();
+    Q_INVOKABLE QVariantMap tierTable();
     Q_INVOKABLE QVariantMap postFx(const QVariantMap &params = QVariantMap());
 
     // ---- THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1) --------------------------

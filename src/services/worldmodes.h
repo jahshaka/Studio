@@ -242,6 +242,31 @@ int photonProbeSize(PhotonTier t);
 /// unless a scene pins `giCascades` off.
 int photonCascades(PhotonTier t);
 
+/// WHAT A TIER IS, GENERATED FROM THE TABLES — the cure for the five tier
+/// tooltips that described a renderer which did not exist (render audit A5,
+/// lane CRUD-RENDER-1).
+///
+/// The numbers come from TWO tables and nowhere else: this file's kPhotonTable
+/// (which technique, which quality, how many bounces, the field, the chain) and
+/// the ENGINE's own `jahshaka::engine::giQualityFacts` (what a quality dial
+/// physically is: the cascade chain and its cells, the single volume's
+/// resolution, the probe face size, the HDR/shadow defaults). Nothing here is
+/// prose about the renderer that a human has to keep in step.
+///
+/// `photonTierSentence` is one tier in one sentence ("Low: two camera cascades,
+/// 5 m at 64 cubed (0.16 m cells) ... the irradiance field on, 1 bounce, no
+/// reflection probes."); `photonTierSummary` is all four, for a tooltip that
+/// describes the dial rather than a setting.
+QString photonTierSentence(PhotonTier t);
+QString photonTierSummary();
+/// The VOXEL RESOLUTIONS a tier actually uses, as a phrase: the chain's
+/// distinct resolutions when the chain is on ("64", "64 and 128"), which is
+/// what the quality dial buys.
+QString photonTierVoxelPhrase(PhotonTier t);
+/// The probe cube-face size a tier resolves to, in pixels (the engine's own
+/// quality dial; 0 is never returned).
+int photonTierProbeFaceSize(PhotonTier t);
+
 /// Applies a Photon state: records the tier, writes each Photon-tiered row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes
 /// giMode (OFF when disabled, the resolved technique when enabled).

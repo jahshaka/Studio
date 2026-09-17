@@ -32,7 +32,13 @@ target_include_directories(test_structural_undo PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     # iris headers expose bullet types; this is IrisGL's own include path
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # worldmodes.cpp reads the ENGINE's tier table (giQualityFacts, a
+    # header-only function in jahshaka/engine/Types.h) so a tier's description
+    # cannot drift from what the tier does — render audit A5. Header only; this
+    # target links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+)
 target_link_libraries(test_structural_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql)
 # A document node IS an engine node (SCENEGRAPH_SPEC D2), so even this suite
 # boots the headless engine — NULL render system, no display, no GPU.

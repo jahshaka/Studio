@@ -12,6 +12,9 @@ For more information see the LICENSE file
 #include "services/worldmodes.h"
 
 #include "irisgl/document/scenegraph/scene.h"
+#include "jahshaka/engine/Types.h"
+
+#include <algorithm>
 
 #include <QJsonValue>
 
@@ -585,16 +588,15 @@ QVector<Row> buildRows()
         // is "not the expensive one". So the mapping is unchanged and what it
         // buys is better.
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 4;
+        // GENERATED from the two tables (photonTierSummary): this text used to
+        // say "Medium voxelizes at twice the resolution" while both tiers were
+        // 64 (render audit A5).
         r.cost = QStringLiteral("Photon — realtime global illumination: light that bounces off "
                                 "surfaces and colours everything it lands on, recomputed live "
-                                "instead of baked. The quality tier picks the techniques for you: "
-                                "Low voxelizes what is around the camera in two coarse steps and "
-                                "feeds an irradiance field from it (the cheapest tier that still "
-                                "bounces light everywhere); Medium voxelizes at twice the "
-                                "resolution; High adds a grid of reflection probes with HDR, "
-                                "shadowed captures; Epic adds three light bounces. Every knob a "
-                                "tier sets is still reachable one by one under Advanced, and "
-                                "anything you set there stays set.");
+                                "instead of baked. What each tier actually runs — ") +
+                 photonTierSummary() +
+                 QStringLiteral(" Every knob a tier sets is still reachable one by one under "
+                                "Advanced, and anything you set there stays set.");
         r.get = [](const iris::ScenePtr &s) {
             if (!s || s->giMode == iris::GiMode::OFF) return 0;
             return qBound(0, s->giTier, 3) + 1;
@@ -643,11 +645,35 @@ QVector<Row> buildRows()
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 1 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   2 } };
         photonColumns(r, 1);
-        r.cost = QStringLiteral("Ray/voxel budget: 32/64/128 voxels per axis and 128/256/512 pixel "
-                                "probe faces. In VCT + Probes it ALSO turns on HDR and shadowed "
-                                "probe captures at High (world.gi's probeHdr/probeShadows pin "
-                                "either one independently). High is a re-solve-latency trap in an "
-                                "editor: every geometry or light edit pays for it again.");
+        // GENERATED: the resolutions and probe sizes are the ENGINE's
+        // (giQualityFacts). The hand-written "32/64/128 voxels per axis" was
+        // the single-volume arm's numbers, and the cascade chain — on at every
+        // tier — uses 64/64/128 (render audit A5).
+        r.cost = QStringLiteral("Ray/voxel budget. With Photon's camera cascades on (every tier), "
+                                "this dial picks the chain: ") +
+                 QStringLiteral("Low %1 voxels per axis, Medium %2, High %3")
+                     .arg(photonTierVoxelPhrase(PhotonTier::Low),
+                          photonTierVoxelPhrase(PhotonTier::Medium),
+                          photonTierVoxelPhrase(PhotonTier::High)) +
+                 QStringLiteral("; with the cascades off it sizes the one scene-fitted volume "
+                                "instead (%1 / %2 / %3 per axis). It also sets the reflection "
+                                "probe's cube face: %4 / %5 / %6 pixels")
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Low)
+                              .voxelResolution)
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
+                              .voxelResolution)
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
+                              .voxelResolution)
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Low)
+                              .probeFaceSize)
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
+                              .probeFaceSize)
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
+                              .probeFaceSize) +
+                 QStringLiteral(". In VCT + Probes High ALSO turns on HDR and shadowed probe "
+                                "captures (world.gi's probeHdr/probeShadows pin either one "
+                                "independently). High is a re-solve-latency trap in an editor: "
+                                "every geometry or light edit pays for it again.");
         r.get = [](const iris::ScenePtr &s) { return int(s->giQuality); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giQuality = iris::GiQuality(v); };
         out.append(r);
@@ -671,9 +697,11 @@ QVector<Row> buildRows()
                                 "— cone-traced bounce blows out corners because a cone cannot tell "
                                 "a wall from empty space. Turning it on turns the voxel-cone "
                                 "diffuse OFF (it replaces that term rather than adding to it); "
-                                "reflections, probes and planar are untouched. Needs a voxel "
-                                "technique (VCT or VCT + Probes) to be fed from, which is why "
-                                "every tier from Medium up turns it on and Low cannot.");
+                                "reflections, probes and planar are untouched. It needs a voxel "
+                                "volume to be fed from, and EVERY Photon tier builds one — "
+                                "including Low, whose two camera cascades exist for exactly this "
+                                "— so every tier turns it on. (It said \"Low cannot\" here for "
+                                "months; Low's column has always been 1.)");
         // -1 (auto) is what a scene no tier has ever been applied to holds, and
         // the engine renders it as OFF — so that is what it RESOLVES to. Any
         // tier application writes a concrete 0/1 through.
@@ -702,14 +730,26 @@ QVector<Row> buildRows()
                       { QStringLiteral("256"),  QStringLiteral("256 px"),  256 },
                       { QStringLiteral("512"),  QStringLiteral("512 px"),  512 } };
         photonColumns(r, 4);
+        // GENERATED: "Automatic" is the engine's quality dial and only two
+        // tiers build probes at all. The hand-written version claimed 256 "at
+        // every tier from Medium up" while High and Epic resolve 512, and
+        // Medium builds no probe grid to size (render audit A5).
         r.cost = QStringLiteral("The pixel size of ONE reflection-probe cube face. A probe is six "
                                 "of them plus a mip chain, so the grid's video memory goes with "
                                 "the SQUARE of this: at 256 a probe is 4.0 MB in HDR and a "
                                 "32-probe room 128 MB; at 512 it is 16.0 MB and 512 MB. "
-                                "Automatic follows the quality dial — 128 at Low, 256 above — "
-                                "and 256 is the shipped answer at every tier from Medium up, "
-                                "because the roughness blur the renderer convolves into these "
-                                "captures hides the difference on everything but a mirror.");
+                                "Automatic follows the quality dial (%1 px at Low, %2 at Medium, "
+                                "%3 at High and Epic), and only High and Epic build a probe grid "
+                                "at all, so %3 is the shipped answer wherever this row has "
+                                "anything to size. The roughness blur the renderer convolves "
+                                "into these captures hides the difference on everything but a "
+                                "mirror.")
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Low)
+                              .probeFaceSize)
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
+                              .probeFaceSize)
+                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
+                              .probeFaceSize);
         r.get = [](const iris::ScenePtr &s) { return qBound(0, s->giProbeCaptureSize, 1024); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giProbeCaptureSize = qBound(0, v, 1024); };
         out.append(r);
@@ -752,11 +792,17 @@ QVector<Row> buildRows()
         r.tierSpace = TierSpace::Photon;
         r.minValue = 1; r.maxValue = 4;
         photonColumns(r, 3);
+        // GENERATED: "128^3 at High/Epic" named one resolution for a chain
+        // whose four cascades are 128, 128, 64 and 64 (render audit A5).
         r.cost = QStringLiteral("Total light bounces, 1-4. Each bounce past the first is another "
-                                "light-propagation pass over the whole voxel volume on every "
-                                "re-solve (128^3 at High/Epic), and the irradiance field is fed "
-                                "from that volume, so the extra bounces reach the probe-stored "
-                                "diffuse too. Epic's column: 3; every other tier 1.");
+                                "light-propagation pass over EVERY voxel volume on every "
+                                "re-solve — at High and Epic that is a chain at %1 voxels per "
+                                "axis — and the irradiance field is fed from those volumes, so "
+                                "the extra bounces reach the probe-stored diffuse too. Epic's "
+                                "column: %2; every other tier %3.")
+                     .arg(photonTierVoxelPhrase(PhotonTier::High))
+                     .arg(photonBounces(PhotonTier::Epic))
+                     .arg(photonBounces(PhotonTier::Low));
         r.get = [](const iris::ScenePtr &s) { return qBound(1, s->giNumBounces, 4); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giNumBounces = qBound(1, v, 4); };
         out.append(r);
@@ -1121,6 +1167,114 @@ int photonDdgi(PhotonTier t)      { return kPhotonTable[tierIndex(t)].ddgi; }
 int photonBounces(PhotonTier t)   { return kPhotonTable[tierIndex(t)].bounces; }
 int photonProbeSize(PhotonTier t) { return kPhotonTable[tierIndex(t)].probeSize; }
 int photonCascades(PhotonTier t)  { return kPhotonTable[tierIndex(t)].cascades; }
+
+// ---------------------------------------------------------------------------
+// WHAT A TIER IS, IN WORDS, GENERATED (render audit A5).
+//
+// Five tooltips in this file used to describe a renderer that did not exist —
+// "Medium voxelizes at twice the resolution" (both are 64), "32/64/128 voxels
+// per axis" (the cascade chain, on at every tier, is 64/64/128), "256 at every
+// tier from Medium up" (High and Epic are 512), "128^3 at High/Epic" (two of
+// the four cascades are 64) and "Low cannot [feed the field]" (Low's column has
+// always been 1). Every one of them was a HAND COPY of a number that lives
+// somewhere else. These functions read the two tables instead: kPhotonTable
+// above, and the engine's `giQualityFacts`.
+namespace {
+
+QString metres(float v)
+{
+    // Two decimals, trailing zeros trimmed: "5", "0.16", "1.88".
+    QString s = QString::number(double(v), 'f', 2);
+    while (s.contains(QLatin1Char('.')) && (s.endsWith(QLatin1Char('0')) || s.endsWith(QLatin1Char('.'))))
+        s.chop(1);
+    return s;
+}
+
+/// The engine's physical facts for a tier's quality column.
+jahshaka::engine::GiQualityFacts factsFor(PhotonTier t)
+{
+    return jahshaka::engine::giQualityFacts(
+        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)));
+}
+
+}   // namespace
+
+QString photonTierVoxelPhrase(PhotonTier t)
+{
+    const auto facts = factsFor(t);
+    if (!photonCascades(t) || facts.cascadeCount <= 0)
+        return QString::number(facts.voxelResolution);
+    QList<int> seen;
+    for (int i = 0; i < facts.cascadeCount; ++i)
+        if (!seen.contains(facts.cascades[i].resolution)) seen.append(facts.cascades[i].resolution);
+    std::sort(seen.begin(), seen.end());
+    QStringList parts;
+    for (int r : seen) parts << QString::number(r);
+    if (parts.size() == 1) return parts.first();
+    const QString last = parts.takeLast();
+    return parts.join(QStringLiteral(", ")) + QStringLiteral(" and ") + last;
+}
+
+int photonTierProbeFaceSize(PhotonTier t)
+{
+    const int pinned = photonProbeSize(t);
+    return pinned > 0 ? pinned : int(factsFor(t).probeFaceSize);
+}
+
+QString photonTierSentence(PhotonTier t)
+{
+    const auto facts = factsFor(t);
+    QString out = photonTierName(t);
+    out[0] = out[0].toUpper();
+    out += QStringLiteral(": ");
+
+    if (photonCascades(t) && facts.cascadeCount > 0) {
+        QStringList rows;
+        for (int i = 0; i < facts.cascadeCount; ++i) {
+            const auto &c = facts.cascades[i];
+            rows << QStringLiteral("%1 m at %2 cubed (%3 m cells)")
+                        .arg(metres(c.halfSize))
+                        .arg(c.resolution)
+                        .arg(metres(jahshaka::engine::giCascadeCell(c)));
+        }
+        out += QStringLiteral("%1 camera-centred voxel cascade%2 — %3")
+                   .arg(facts.cascadeCount)
+                   .arg(facts.cascadeCount == 1 ? QString() : QStringLiteral("s"))
+                   .arg(rows.join(QStringLiteral(", ")));
+    } else {
+        out += QStringLiteral("one scene-fitted voxel volume at %1 cubed")
+                   .arg(facts.voxelResolution);
+    }
+
+    out += photonDdgi(t) ? QStringLiteral("; the irradiance field ON")
+                         : QStringLiteral("; no irradiance field");
+    out += QStringLiteral("; %1 light bounce%2")
+               .arg(photonBounces(t))
+               .arg(photonBounces(t) == 1 ? QString() : QStringLiteral("s"));
+
+    // The probe grid is the TECHNIQUE column, not the quality one: only the
+    // hybrid (ordinal 2) builds one.
+    if (photonTechnique(t) == 2) {
+        out += QStringLiteral("; a reflection-probe grid at %1 px per cube face")
+                   .arg(photonTierProbeFaceSize(t));
+        if (facts.probeHdrDefault) out += QStringLiteral(", HDR");
+        if (facts.probeShadowsDefault) out += QStringLiteral(", shadowed");
+    } else {
+        out += QStringLiteral("; no reflection probes");
+    }
+    return out + QStringLiteral(".");
+}
+
+QString photonTierSummary()
+{
+    QStringList lines;
+    for (const QString &name : photonTierNames()) {
+        bool ok = false;
+        const PhotonTier t = photonTierFromName(name, &ok);
+        if (ok) lines << photonTierSentence(t);
+    }
+    return lines.join(QStringLiteral(" "));
+}
 
 namespace {
 /// The four values a scene RENDERS, in kPhotonTable column order.

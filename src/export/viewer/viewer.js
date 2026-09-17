@@ -74,12 +74,21 @@
     var renderer, scene, camera, controls, mixer, clock;
     var documentCameras = [];
 
+    // The depth bias every shadow-casting light in this viewer uses. three.js
+    // needs one (its shadow map is a plain depth texture with no slope term);
+    // the editor's own renderer does not read a per-light bias at all, so the
+    // number is the viewer's and lives here rather than travelling per light.
+    var kShadowDepthBias = 0.0015;
+
     function applyShadow(light, jah) {
         if (!jah || !jah.shadow || !jah.shadow.castShadow) return;
         light.castShadow = true;
         var size = jah.shadow.mapSize || 1024;
         light.shadow.mapSize.set(size, size);
-        light.shadow.bias = -(jah.shadow.bias || 0.0015);
+        // THE VIEWER'S OWN DEPTH BIAS. It used to be exported per light, from a
+        // document field the editor's renderer never read (render audit I-6);
+        // the number that matters here is three.js's, and this is it.
+        light.shadow.bias = -kShadowDepthBias;
         if (light.isDirectionalLight) {
             light.shadow.camera.left = light.shadow.camera.bottom = -20;
             light.shadow.camera.right = light.shadow.camera.top = 20;
@@ -141,12 +150,10 @@
         if (jah.fog) {
             // Exponential fog, like the editor. exp2Density is the exporter's
             // conversion of the editor's 2^(-density*d) into three's
-            // exp(-(rho*d)^2) (matched at half transmittance); older exports carry
-            // only the linear start/end pair, which still maps through the same
-            // rule the editor uses for old scenes.
-            var rho = jah.fog.exp2Density;
-            if (rho === undefined)
-                rho = 0.83255461 * (2.0 / Math.max((jah.fog.start || 0) + (jah.fog.end || 100), 0.001));
+            // exp(-(rho*d)^2), matched at half transmittance. It is the only
+            // spelling: the editor's retired linear start/end pair is gone from
+            // the document and from this format.
+            var rho = jah.fog.exp2Density || 0.0;
             scene.fog = new THREE.FogExp2(new THREE.Color(jah.fog.color || "#ffffff"), rho);
         }
 

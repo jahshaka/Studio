@@ -536,7 +536,7 @@ int main(int argc, char **argv)
             default: break;
             }
         }
-        CHECK(reloaded->useBaseColorMap && reloaded->textures.contains("u_baseColorMap"),
+        CHECK(reloaded->textures.contains("u_baseColorMap"),
               "reloaded material has its base colour map");
         CHECK(std::fabs(reloaded->roughnessLowerBound - 0.2f) < 1e-4f &&
               std::fabs(reloaded->roughnessUpperBound - 0.5f) < 1e-4f, "roughness bounds round-tripped");

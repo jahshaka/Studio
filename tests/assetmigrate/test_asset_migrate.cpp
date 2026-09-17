@@ -453,7 +453,8 @@ int main(int argc, char **argv)
             CHECK(stored != texGuid, "texture property is NOT the raw guid");
             CHECK(stored.contains("/objects/") && QFileInfo::exists(stored),
                   "texture property resolves to an existing CAS object file");
-            CHECK(pbr->useBaseColorMap, "the map actually loaded (no guid reached Texture2D::load)");
+            CHECK(pbr->textures.contains("u_baseColorMap"),
+                  "the map actually loaded (no guid reached Texture2D::load)");
         }
 
         AssetStorePaths::setRootOverride(QString());

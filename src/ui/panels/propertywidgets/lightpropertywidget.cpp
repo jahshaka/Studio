@@ -226,19 +226,13 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
         QStringLiteral("A REQUEST, not a guarantee. Every light shares one shadow atlas: the "
                        "largest Shadow Size in the scene sizes it, and World > Shadows > "
                        "Shadow Quality overrides that."));
-    //shadowBias = this->addFloatValueSlider("Shadow Bias",0,1);
+	// (THREE ROWS ARE GONE — Shadow Transparency, Shadow Color and the
+	// commented-out Shadow Bias, render audit I-6 / A5 "dead or misleading".
+	// Two of them were BUILT and then hidden on every light in every scene,
+	// because Ogre-Next's PBR pipeline has no per-light shadow tint and never
+	// will: a shadow is the absence of light. The document fields are deleted
+	// with them, so there is nothing left to hide.)
 
-	shadowAlpha = this->addFloatValueSlider("Shadow Transparency", 0, 1.f);
-	shadowColor = this->addColorPicker("Shadow Color");
-
-	// Per-light shadow colour/transparency have no engine equivalent (Ogre-Next's
-	// PBR pipeline has no per-light shadow tint — and legacy's own PBR shader
-	// ignored the colour too). Hide the controls in engine mode; legacy keeps them.
-	mShadowTintSupported = false;  // engine viewport: HlmsPbs has no shadow tint
-	if (!mShadowTintSupported) {
-		PropertyRows::setPanelVisible(shadowAlpha, false);
-		PropertyRows::setPanelVisible(shadowColor, false);
-	}
 	// The legacy renderer never shadowed point lights, so the panel hid their
 	// shadow controls. The engine renders point shadows (focused/DPSM maps), so
 	// in engine mode Shadow Type and Size stay available for point lights too.
@@ -262,8 +256,6 @@ void LightPropertyWidget::wireRows()
     rowundo::bind(rectHeight, rows(QStringLiteral("rectHeight")));
     rowundo::bind(doubleSided, rows(QStringLiteral("doubleSided")));
     rowundo::bind(accurate, rows(QStringLiteral("accurate")));
-    rowundo::bind(shadowAlpha, rows(QStringLiteral("shadowAlpha")));
-    rowundo::bind(shadowColor->getPicker(), rows(QStringLiteral("shadowColor")));
     rowundo::bind(shadowType, rows(QStringLiteral("shadowMapType"), [this](const QVariant &row) {
         return QVariant(int(evalShadowMapType(shadowType->getWidget()->itemText(row.toInt()))));
     }));
@@ -300,9 +292,6 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         spotCutOff->setValue(lightNode->spotCutOff);
         spotCutOffSoftness->setValue(lightNode->spotCutOffSoftness);
         spotFalloff->setValue(lightNode->spotFalloff);
-
-		shadowColor->setColorValue(lightNode->shadowColor);
-		shadowAlpha->setValue(lightNode->shadowAlpha);
 
         // Does not emit: setMask is the quiet setter, so selecting a light
         // cannot write its own value back into it.
@@ -348,7 +337,6 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap->resolution));
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
         refreshSunRows();
-        //shadowBias->setValue(lightNode->shadowMap->bias);
 
         // Point lights: legacy never shadowed them (controls hidden); the engine
         // does, so engine mode keeps Shadow Type/Size. Tint stays per-backend.
@@ -358,8 +346,6 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
             // Light because it has no place to cast from. Hide every control.
             PropertyRows::setPanelVisible(shadowSize, false);
             PropertyRows::setPanelVisible(shadowType, false);
-            PropertyRows::setPanelVisible(shadowColor, false);
-            PropertyRows::setPanelVisible(shadowAlpha, false);
         } else if (lightNode->getLightType()==iris::LightType::Point) {
             if (mPointShadowsSupported) {
                 PropertyRows::setPanelVisible(shadowSize, true);
@@ -368,17 +354,9 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
                 PropertyRows::setPanelVisible(shadowSize, false);
                 PropertyRows::setPanelVisible(shadowType, false);
             }
-			PropertyRows::setPanelVisible(shadowColor, false);
-			PropertyRows::setPanelVisible(shadowAlpha, false);
-            //shadowBias->hide();
         } else {
             PropertyRows::setPanelVisible(shadowSize, true);
             PropertyRows::setPanelVisible(shadowType, true);
-			if (mShadowTintSupported) {
-				PropertyRows::setPanelVisible(shadowColor, true);
-				PropertyRows::setPanelVisible(shadowAlpha, true);
-			}
-            //shadowBias->show();
         }
         loading = false;
     }
