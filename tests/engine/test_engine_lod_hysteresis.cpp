@@ -40,7 +40,7 @@
 //      picture outside the inset must not move by one bit, while the inset
 //      region must (or the sibling never rendered and the case proves nothing).
 //      FAILS BEFORE: with the band on every pass and one shared state slot, the
-//      inset's coarse level reaches the view and 20k+ pixels move.
+//      inset's coarse level reaches the view and 1,760 pixels move (the whole level-0/level-1 difference at 192²; measured).
 //   3. THE BAND IS BOUNDED: a bias genuinely past it switches, and the way back
 //      to the finest level is exact.
 //
