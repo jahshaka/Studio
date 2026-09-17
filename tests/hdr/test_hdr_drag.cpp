@@ -247,7 +247,18 @@ int main()
             engine->renderOneFrame();
             drag.push_back(view->measuredExposureScale());
         }
-        // ...and at rest, with nothing moving at all.
+        // ...and at rest, with nothing moving at all — ONCE THE ADAPTATION HAS
+        // CLOSED. The filter moves 2.284 % of the remaining gap per frame, so
+        // the frames right after the drag stops are still legitimately
+        // closing whatever gap the last drag frame left: from a 1.5 % step it
+        // takes ln(0.4/1.5)/ln(1 - 0.02284) = 58 frames to fall under the 0.4 %
+        // bound below by arithmetic alone. The Average rows were quiet from
+        // the first rest frame only because their drag steps were small; the
+        // centre-weighted row read 0.669 % at its first rest frame (lead, at
+        // merge). "Quiet at rest" means the METER is quiet, not that the
+        // filter has no gap left, so the rest window starts after one filter
+        // settle of kFrames (60) — the same bound, every row.
+        for (int f = 0; f < kFrames; ++f) engine->renderOneFrame();
         std::vector<float> rest;
         for (int f = 0; f < kFrames; ++f) {
             engine->renderOneFrame();
