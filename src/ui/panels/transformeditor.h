@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 
+#include <functional>
+
 namespace iris
 {
     class SceneNode;
@@ -95,6 +97,16 @@ private:
                 DragSpinBox*& x, DragSpinBox*& y, DragSpinBox*& z,
                 double perPixelStep, bool withLock = false);
     DragSpinBox* createField(const QString& objectName, double perPixelStep);
+
+    /// EVERY WRITE THIS PANEL MAKES, and the undo step a TYPED one earns.
+    /// `box` is the field the value came from: while it is scrubbing nothing is
+    /// recorded (onScrubFinished records the whole gesture as one step);
+    /// otherwise the transform is snapshotted, `write` runs, and if the
+    /// document moved the step is pushed — the same TransformSceneNodeCommand,
+    /// pushed the same way (rewind, then push) so it captures the pre-edit
+    /// SCENE_STATIC classification.
+    void writeTransform(DragSpinBox *box,
+                        const std::function<void(const QSharedPointer<iris::SceneNode> &)> &write);
 
     /// ONE SCALE CHANNEL, written the one way the whole app writes one
     /// (iris::scalelock::apply): the node's lock, or Shift held during THIS

@@ -235,7 +235,12 @@ void ScaleGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 	// move node along line
 	// do snapping here as well
 	iris::Vec3 diff = slidingPos - hitPos;
-	auto mods = QApplication::keyboardModifiers();
+	// ONE SOURCE OF MODIFIERS IN A DRAG (SCALE-LOCK-1 round 2): the ones the
+	// viewport hands us from the event driving this gesture, for Ctrl's snap as
+	// well as Shift's uniform. Reading the live keyboard here and the gesture
+	// there would let the two disagree — and only one of them can be driven by
+	// a test.
+	auto mods = currentDragModifiers();
 	if (mods.testFlag(Qt::ControlModifier)) {
 		float length = diff.length();
 		float snapLength = Gizmo::snap(length, SnapSettings::scaleSize());
@@ -255,11 +260,6 @@ void ScaleGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 	{
 	case GizmoAxis::Center: {
 		float length = diff.length();
-
-		// determine whether or not to invert scale
-		//iris::Vec3 curDir = (slidingPos - nodeStartPos).normalized();
-		//length = iris::Vec3::dotProduct(curDir, hitDir) > 0 ? length : -length;
-
 		diff = iris::Vec3(length, length, length);
 		handleVisualScale = iris::Vec3(
 			qAbs(qBound(-2.0f, 1.0f + length *0.1f, 2.0f)),
@@ -314,8 +314,17 @@ bool ScaleGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 	return false;
 }
 
-// returns hit position of the hit handle
-ScaleHandle* ScaleGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPos)
+// The handle under the ray, and where on it the ray landed.
+//
+// THE DISTANCE IS THE CANDIDATE'S (found by the lead's review of SCALE-LOCK-1):
+// this measured `hitPos` — the caller's OUT parameter, which still held
+// whatever the caller passed in and then the previous winner's hit — instead of
+// `hit`, the point just computed. After the first hit, dist == closestDistance
+// exactly, so `<` was false for every later candidate and the FIRST handle in
+// construction order (X, then Y, then Z) always won a contested ray, however
+// much nearer another one was. The centre still takes precedence over all: it
+// is drawn on top of the three axes' shared origin.
+ScaleHandle* ScaleGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPosOut)
 {
 	ScaleHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
@@ -323,12 +332,12 @@ ScaleHandle* ScaleGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris
 	for (auto i = 0; i< handles.size(); i++)
 	{
 		if (handles[i]->isHit(rayPos, rayDir)) {
-			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);// bad, move hitPos to ref variable
-			auto dist = hitPos.distanceToPoint(rayPos);
+			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);
+			auto dist = hit.distanceToPoint(rayPos);
 			if (dist < closestDistance) {
 				closestHandle = handles[i];
 				closestDistance = dist;
-				hitPos = hit;
+				hitPosOut = hit;
 
 				// center takes precedence over all
 				if (closestHandle->axis == GizmoAxis::Center)

@@ -160,22 +160,54 @@ int main(int argc, char **argv)
     const iris::Vec3 start(1.0f, 2.0f, 0.5f);
     const float travel = 0.6f;
 
-    // ---- A: the fixture grabs the X handle --------------------------------
+    // ---- A: the fixture grabs the handle under the ray, BY DISTANCE --------
     {
         rig.node->setLocalScale(start);
         rig.node->update(0.0f);
         ScaleGizmo *gizmo = makeGizmo(rig);
+        const auto axisName = [](ScaleHandle *h) {
+            return h == nullptr ? "nothing"
+                 : h->axis == GizmoAxis::X ? "the X handle"
+                 : h->axis == GizmoAxis::Y ? "the Y handle"
+                 : h->axis == GizmoAxis::Z ? "the Z handle" : "the centre";
+        };
         const iris::Vec3 grab = onXHandle(*gizmo);
         const iris::Vec3 dir = (grab - rig.eye).normalized();
         iris::Vec3 hit;
         ScaleHandle *handle = gizmo->getHitHandle(rig.eye, dir, rig.viewDir, hit);
         std::printf("    A: the ray at (%.4f, 0, 0) grabs %s\n", double(grab.x()),
-                    handle == nullptr ? "nothing"
-                        : handle->axis == GizmoAxis::X ? "the X handle"
-                        : handle->axis == GizmoAxis::Y ? "the Y handle"
-                        : handle->axis == GizmoAxis::Z ? "the Z handle" : "the centre");
+                    axisName(handle));
         CHECK(handle != nullptr && handle->axis == GizmoAxis::X,
               "A: a ray aimed half way along the X handle grabs the X handle");
+
+        // …AND THE ANSWER IS THE HANDLE THE RAY IS AIMED AT, with that handle's
+        // own hit point. getHitHandle used to measure its "closest" with the
+        // caller's OUT parameter instead of the candidate it had just computed
+        // (fixed in this round), so after the first hit every later
+        // `dist < closestDistance` was false and the first handle in
+        // construction order would have won a CONTESTED ray.
+        //
+        // MEASURED, and worth writing down: at this pin's geometry that
+        // contest cannot be staged. An axis handle's pick radius is
+        // handleScale^2 * gizmoScale (0.0025 of it), the three segments meet
+        // only at the origin, and any ray passing within that radius of two of
+        // them also passes inside the CENTRE handle's pick sphere
+        // (0.015 * gizmoScale, six times larger) — and the centre is tested
+        // first and short-circuits. So the defect was real but unreachable: the
+        // arm below is a regression guard on "the handle answered is the one
+        // aimed at, and the point it reports is on THAT handle", and flipping
+        // the fixed line back does not change its verdict.
+        const float reach = 1.5f * gizmo->getGizmoScale() * 0.05f;
+        const iris::Vec3 onZ(0.0f, 0.0f, 0.5f * reach);
+        const iris::Vec3 zDir = (onZ - rig.eye).normalized();
+        ScaleHandle *zHandle = gizmo->getHitHandle(rig.eye, zDir, rig.viewDir, hit);
+        std::printf("    A: the ray at (0, 0, %.4f) grabs %s, and the point it reports is "
+                    "(%.4f, %.4f, %.4f)\n", double(onZ.z()), axisName(zHandle),
+                    double(hit.x()), double(hit.y()), double(hit.z()));
+        CHECK(zHandle != nullptr && zHandle->axis == GizmoAxis::Z,
+              "A: a ray aimed at the Z handle grabs Z, not the first handle in the list");
+        CHECK(std::fabs(hit.z() - onZ.z()) < 0.2f * reach,
+              "A: …and the hit point it hands back is the one on THAT handle");
         delete gizmo;
     }
 

@@ -76,7 +76,7 @@ node.setScaleLock(cube, true);
 // ---- B. the arithmetic ---------------------------------------------------
 // A deliberately NON-UNIFORM start: "preserve the ratio" is about the ratio the
 // object has, not about making it a cube.
-node.transform(cube, { scale: { x: 1, y: 2, z: 0.5 }, scaleUniform: false });
+node.transform(cube, { scale: { x: 1, y: 2, z: 0.5 } });
 assertScale(cube, 1, 2, 0.5, "B: the authored non-uniform scale");
 
 node.transform(cube, { scale: { x: 2 } });
@@ -96,15 +96,28 @@ assert(near(back.scale.x, 3) && near(back.scale.y, 6) && near(back.scale.z, 1.5)
 node.transform(cube, { scale: { x: 1, y: 2, z: 0.5 } });
 
 // ---- C. the three degenerate rules --------------------------------------
-// A ZERO CHANNEL HAS NO RATIO. Every multiple of 0 is 0, so nothing can be
-// recovered from "it was 0 and now it is 3": the edited channel takes the value
-// and the other two keep theirs. (A flattened axis is a thing people have on
-// purpose — throwing away the other two numbers would be the surprise.)
+// ZERO HAS NO RATIO, ON EITHER SIDE. Every multiple of 0 is 0, so nothing can be
+// recovered from "it was 0 and now it is 3" — and nothing can REACH 0 by a ratio
+// without taking the other two with it, for good. Both halves move the edited
+// channel alone. (A flattened axis is a thing people have on purpose; the
+// surprise would be losing the two numbers they never touched — and with a
+// typed value in the panel, losing them in one keystroke.)
 node.transform(cube, { scale: { x: 0, y: 2, z: 0.5 } });
 assertScale(cube, 0, 2, 0.5, "C: a channel set to zero (all three named — literal)");
 node.transform(cube, { scale: { x: 3 } });
 assertScale(cube, 3, 2, 0.5,
             "C: 0 -> 3 has NO ratio: x takes the value, y and z keep theirs");
+
+// THE ROUND TRIP THROUGH ZERO, which is the one that used to be irrecoverable:
+// {x: 0} then {x: 1} on a locked (1, 2, 0.5) must come back to (1, 2, 0.5).
+node.transform(cube, { scale: { x: 1, y: 2, z: 0.5 } });
+node.transform(cube, { scale: { x: 0 } });
+assertScale(cube, 0, 2, 0.5,
+            "C: a locked write of ZERO flattens that channel and only that channel");
+node.transform(cube, { scale: { x: 1 } });
+assertScale(cube, 1, 2, 0.5,
+            "C: …so un-flattening it brings the object back exactly (it used to collapse to " +
+            "(1, 0, 0) and stay there)");
 
 // A NEGATIVE RATIO MIRRORS ALL THREE, sign included.
 node.transform(cube, { scale: { x: 1, y: 2, z: 0.5 } });
@@ -127,6 +140,29 @@ assertScale(cube, 1, 2, 0.5, "D: the array spelling is the whole vector, taken l
 
 node.transform(cube, { scale: { x: 2 }, scaleUniform: false });
 assertScale(cube, 2, 2, 0.5, "D: scaleUniform:false is per-channel on a LOCKED node");
+
+// …and where it could only be a misunderstanding, it is REFUSED rather than
+// silently ignored (a malformed call is loud — the vr.begin whitelist rule).
+node.transform(cube, { scale: { x: 1, y: 2, z: 0.5 } });
+// (A refused verb THROWS in this host and carries the reason; app.lastError()
+// holds the same text.)
+function refusal(fn) {
+    try { fn(); } catch (e) { return String(e.message || e); }
+    return "";
+}
+var why = refusal(function () {
+    node.transform(cube, { scale: { x: 4, y: 4 }, scaleUniform: true });
+});
+assert(why.indexOf("scaleUniform") >= 0,
+       "D: scaleUniform with TWO channels named is refused, and says why: " + why);
+assertScale(cube, 1, 2, 0.5, "D: …and the refused call wrote nothing");
+why = refusal(function () {
+    node.transform(cube, { position: { x: 1 }, scaleUniform: true });
+});
+assert(why.indexOf("no scale at all") >= 0,
+       "D: scaleUniform with NO scale is refused too: " + why);
+assert(node.transform(cube).position.x === 0,
+       "D: …and that refusal wrote no position either");
 
 node.setScaleLock(cube, false);
 node.transform(cube, { scale: { x: 1, y: 2, z: 0.5 } });

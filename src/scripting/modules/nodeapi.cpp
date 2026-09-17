@@ -89,7 +89,8 @@ QVector<VerbInfo> NodeApi::verbs() const
           "node whose SCALE RATIO IS LOCKED (node.setScaleLock) scales the other two by the same ratio; naming two "
           "or three channels is taken literally, because it already says what every channel should be. "
           "`scaleUniform` overrides the flag for one call in either direction (true = preserve the ratio anyway, "
-          "the verb's spelling of Shift-dragging a scale field; false = per-channel even on a locked node). "
+          "the verb's spelling of Shift-dragging a scale field; false = per-channel even on a locked node) and is "
+          "REFUSED on a call that does not name exactly one channel, where it could only be a misunderstanding. "
           "WITH NO CHANGE \u2014 node.transform(id) \u2014 it is a pure READ: "
           "nothing is pushed onto the undo stack and a SCENE_STATIC node stays static (a write of a node's own "
           "values back onto it still counts as a move, and rule 4 demotes the subtree for it).",
@@ -219,10 +220,13 @@ QVector<VerbInfo> NodeApi::verbs() const
           "duplicate or a paste, and read back by node.scaleLock(id) or node.property(id, "
           "\"scaleLock\"). It changes no pixel by itself: it changes what a one-channel scale "
           "edit means, wherever that edit comes from (this verb, the Scale fields in the "
-          "transform panel, a scale gizmo axis handle). Three rules worth knowing: the ratio "
-          "carries the SIGN (1 \u2192 -1 mirrors all three), a channel that was ZERO has no "
-          "ratio so the other two keep their values, and writing a channel the value it already "
-          "had does nothing at all. Undoable.",
+          "transform panel, a scale gizmo axis handle). Three rules worth knowing. ZERO ON "
+          "EITHER SIDE HAS NO RATIO: setting a channel to 0, or editing one that IS 0, moves "
+          "that channel alone and leaves the other two \u2014 so flattening an axis is not a way "
+          "to lose the other two numbers, and un-flattening it brings the object back. THE "
+          "RATIO'S SIGN APPLIES TO ALL THREE: taking a channel through zero to the other side "
+          "flips the handedness of the whole object (1 \u2192 -1 mirrors it). And writing a "
+          "channel the value it already had does nothing at all. Undoable.",
           Needs::Document },
         { "scaleLock", "node.scaleLock(id) -> bool",
           "Whether this object preserves its scale ratio (node.setScaleLock).",
@@ -788,6 +792,20 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
     // on a panel field or a gizmo handle: true asks for the ratio for this one
     // call whatever the flag says, false suppresses it whatever the flag says.
     const int channel = singleScaleChannel(change.value("scale"));
+    // `scaleUniform` WHERE IT CANNOT APPLY IS A REFUSAL, NOT A SHRUG (the lead's
+    // review): it only means anything for a write that names ONE channel, and a
+    // caller who sends it with {x, y, z} — or with no scale at all — believes
+    // something about this call that is not true. Silence there is the class of
+    // bug the vr.begin whitelist exists to stop.
+    if (change.contains(QStringLiteral("scaleUniform")) && channel < 0) {
+        fail(QStringLiteral("node.transform: `scaleUniform` applies to a scale that names ONE "
+                            "channel (e.g. {scale: {x: 2}, scaleUniform: true}) \u2014 %1")
+                 .arg(change.contains(QStringLiteral("scale"))
+                          ? QStringLiteral("this call names more than one, which already says "
+                                           "what every channel should be")
+                          : QStringLiteral("this call names no scale at all")));
+        return QVariantMap();
+    }
     if (channel >= 0) {
         const QVariant uniformOpt = normalizeJs(change.value("scaleUniform"));
         const bool uniform = uniformOpt.isValid() ? uniformOpt.toBool() : node->getScaleLock();

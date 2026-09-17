@@ -1161,17 +1161,63 @@ int main(int argc, char **argv)
                       qAbs(undone.z() - 0.5f) < 1e-3,
                   "scalelock: 3. …which undoes all three channels together");
 
-            // A TYPED value obeys the lock too (no gesture, no modifier).
+            // A TYPED value obeys the lock too (no gesture, no modifier) — AND
+            // IT IS ONE UNDO STEP. Until this lane the nine slots recorded
+            // nothing for a typed value at all: only a scrub was bracketed, so
+            // Ctrl+Z after typing into this panel undid whatever came before.
+            // With the lock that is three channels written by one keystroke,
+            // which is what made it worth fixing rather than noting.
             node->setLocalScale(iris::Vec3(1, 2, 0.5f));
             editor.refreshUi();
             pump();
+            steps = stack.index();
             xscale->setValue(2.0);
             pump();
             const iris::Vec3 typed = node->getLocalScale();
-            std::printf("    scalelock: typed x = 2 -> node scale %.4f/%.4f/%.4f\n", typed.x(),
-                        typed.y(), typed.z());
+            std::printf("    scalelock: typed x = 2 -> node scale %.4f/%.4f/%.4f (%d step(s))\n",
+                        typed.x(), typed.y(), typed.z(), stack.index() - steps);
             CHECK(qAbs(typed.y() - 4.0f) < 1e-3 && qAbs(typed.z() - 1.0f) < 1e-3,
                   "scalelock: 3. a TYPED value on a locked node scales the other two as well");
+            CHECK(stack.index() == steps + 1,
+                  "scalelock: 3. …and a typed commit is ONE undo step");
+            stack.undo();
+            pump();
+            const iris::Vec3 typedUndone = node->getLocalScale();
+            CHECK(qAbs(typedUndone.x() - 1.0f) < 1e-3 && qAbs(typedUndone.y() - 2.0f) < 1e-3 &&
+                      qAbs(typedUndone.z() - 0.5f) < 1e-3,
+                  "scalelock: 3. …which undoes all three channels together");
+            // The same value again is not an edit and records nothing.
+            editor.refreshUi();
+            pump();
+            steps = stack.index();
+            xscale->setValue(node->getLocalScale().x());
+            pump();
+            CHECK(stack.index() == steps,
+                  "scalelock: 3. …and typing the value it already has records nothing");
+
+            // ZERO HAS NO RATIO IN EITHER DIRECTION, which is what keeps a
+            // typed 0 from being a one-keystroke way to lose the other two
+            // channels: with a ratio of 0 the node collapsed to (0, 0, 0) and
+            // every later edit was then a 0 -> v edit with no ratio, so it
+            // stayed there for ever.
+            node->setLocalScale(iris::Vec3(1, 2, 0.5f));
+            editor.refreshUi();
+            pump();
+            xscale->setValue(0.0);
+            pump();
+            const iris::Vec3 flat = node->getLocalScale();
+            xscale->setValue(1.0);
+            pump();
+            const iris::Vec3 back = node->getLocalScale();
+            std::printf("    scalelock: typed x = 0 -> %.4f/%.4f/%.4f, then x = 1 -> "
+                        "%.4f/%.4f/%.4f\n", flat.x(), flat.y(), flat.z(), back.x(), back.y(),
+                        back.z());
+            CHECK(qAbs(flat.x()) < 1e-4 && qAbs(flat.y() - 2.0f) < 1e-4 &&
+                      qAbs(flat.z() - 0.5f) < 1e-4,
+                  "scalelock: 3. a typed ZERO flattens that channel and only that channel");
+            CHECK(qAbs(back.x() - 1.0f) < 1e-4 && qAbs(back.y() - 2.0f) < 1e-4 &&
+                      qAbs(back.z() - 0.5f) < 1e-4,
+                  "scalelock: 3. …and typing it back restores the object exactly");
 
             // ---- 4. Shift, and only for the gesture ------------------------
             // Unlock first: this is the stateless half.
@@ -1248,6 +1294,23 @@ int main(int argc, char **argv)
                   "scalelock: 5. …and Position keeps Shift's coarse x10 rate (25 px = 5 units)");
             CHECK(qAbs(stillScaled.x() - 1.0f) < 1e-4 && qAbs(stillScaled.y() - 2.0f) < 1e-4,
                   "scalelock: 5. …and the scale did not move at all");
+
+            // …and the typed-value undo step is every row's, not the scale
+            // row's: the nine slots share one write path.
+            node->setLocalPos(iris::Vec3(0, 0, 0));
+            editor.refreshUi();
+            pump();
+            steps = stack.index();
+            ypos->setValue(3.0);
+            pump();
+            const bool posTyped = qAbs(node->getLocalPos().y() - 3.0f) < 1e-4;
+            const int posSteps = stack.index() - steps;
+            stack.undo();
+            pump();
+            std::printf("    scalelock: typed Position Y = 3 -> %.4f (%d step), undo -> %.4f\n",
+                        3.0, posSteps, node->getLocalPos().y());
+            CHECK(posTyped && posSteps == 1 && qAbs(node->getLocalPos().y()) < 1e-4,
+                  "scalelock: 5. a typed POSITION value is one undo step too, and it undoes");
         }
     }
 

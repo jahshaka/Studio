@@ -405,31 +405,81 @@ void TransformEditor::onScrubFinished(bool cancelled)
         services->undo->push(new TransformSceneNodeCommand(sceneNode, newPos, newRot, newScale));
 }
 
+// A TYPED COMMIT IS ONE UNDO STEP (SCALE-LOCK-1 round 2; debt L6's last corner).
+//
+// These nine slots write the document LIVE, which is right — the viewport is
+// the feedback — and until now only a SCRUB was ever recorded: DragSpinBox
+// brackets a drag with scrubStarted/scrubFinished and onScrubFinished pushes the
+// one command. A value the user TYPED (or stepped with an arrow key) reached the
+// document with nothing on the stack at all, so Ctrl+Z after typing into this
+// panel undid whatever came BEFORE it. The lock made that sharp enough to fix:
+// one typed zero on a locked node writes all three channels.
+//
+// So every slot routes through here. `box` is the field the value came from;
+// while it is SCRUBBING this records nothing (the gesture's own single step is
+// onScrubFinished's job, and a step per tick is exactly what that avoids).
+// Otherwise: snapshot, let the write run, and if the transform actually moved,
+// rewind and push the same command the scrub pushes — the rewind is not
+// ceremony, it is what lets the command capture the pre-edit SCENE_STATIC
+// classification before its own redo() demotes the subtree (the shape
+// onScrubFinished and Gizmo::createUndoAction both use).
+void TransformEditor::writeTransform(DragSpinBox *box,
+                                     const std::function<void(const iris::SceneNodePtr &)> &write)
+{
+    const QSharedPointer<iris::SceneNode> node = editableNode();
+    if (!node) return;                     // empty selection, or a script owns the document
+
+    const bool typed = !(box && box->isScrubbing());
+    iris::Vec3 oldPos, oldScale;
+    iris::Quat oldRot;
+    if (typed) {
+        oldPos = node->getLocalPos();
+        oldRot = node->getLocalRot();
+        oldScale = node->getLocalScale();
+    }
+
+    write(node);
+
+    if (!typed) return;
+    if (!services || !services->undo) return;   // nothing to record it; leave the write standing
+
+    const iris::Vec3 newPos = node->getLocalPos();
+    const iris::Quat newRot = node->getLocalRot();
+    const iris::Vec3 newScale = node->getLocalScale();
+    if (newPos == oldPos && newRot == oldRot && newScale == oldScale)
+        return;                            // the same value again is not an edit
+
+    node->setLocalPos(oldPos);
+    node->setLocalRot(oldRot);
+    node->setLocalScale(oldScale);
+    services->undo->push(new TransformSceneNodeCommand(node, newPos, newRot, newScale));
+}
+
 void TransformEditor::xPosChanged(double value)
 {
-    if (auto sceneNode = editableNode()) {
-        auto pos = sceneNode->getLocalPos();
-        pos.setX(value);
-        sceneNode->setLocalPos(pos);
-    }
+    writeTransform(xpos, [value](const iris::SceneNodePtr &node) {
+        auto pos = node->getLocalPos();
+        pos.setX(float(value));
+        node->setLocalPos(pos);
+    });
 }
 
 void TransformEditor::yPosChanged(double value)
 {
-    if (auto sceneNode = editableNode()) {
-        auto pos = sceneNode->getLocalPos();
-        pos.setY(value);
-        sceneNode->setLocalPos(pos);
-    }
+    writeTransform(ypos, [value](const iris::SceneNodePtr &node) {
+        auto pos = node->getLocalPos();
+        pos.setY(float(value));
+        node->setLocalPos(pos);
+    });
 }
 
 void TransformEditor::zPosChanged(double value)
 {
-    if (auto sceneNode = editableNode()) {
-        auto pos = sceneNode->getLocalPos();
-        pos.setZ(value);
-        sceneNode->setLocalPos(pos);
-    }
+    writeTransform(zpos, [value](const iris::SceneNodePtr &node) {
+        auto pos = node->getLocalPos();
+        pos.setZ(float(value));
+        node->setLocalPos(pos);
+    });
 }
 
 /**
@@ -468,11 +518,20 @@ void TransformEditor::applyRotationFromFields()
     rotationMemoValid = true;
 }
 
-void TransformEditor::xRotChanged(double) { applyRotationFromFields(); }
+void TransformEditor::xRotChanged(double)
+{
+    writeTransform(xrot, [this](const iris::SceneNodePtr &) { applyRotationFromFields(); });
+}
 
-void TransformEditor::yRotChanged(double) { applyRotationFromFields(); }
+void TransformEditor::yRotChanged(double)
+{
+    writeTransform(yrot, [this](const iris::SceneNodePtr &) { applyRotationFromFields(); });
+}
 
-void TransformEditor::zRotChanged(double) { applyRotationFromFields(); }
+void TransformEditor::zRotChanged(double)
+{
+    writeTransform(zrot, [this](const iris::SceneNodePtr &) { applyRotationFromFields(); });
+}
 
 /**
  * scale change callbacks
@@ -487,33 +546,31 @@ void TransformEditor::zRotChanged(double) { applyRotationFromFields(); }
  */
 void TransformEditor::scaleChannelChanged(int axis, DragSpinBox* box, double value)
 {
-    auto sceneNode = editableNode();
-    if (!sceneNode) return;
+    writeTransform(box, [this, axis, box, value](const iris::SceneNodePtr &sceneNode) {
+        // SHIFT = UNIFORM FOR THIS GESTURE ONLY, and it is read from the gesture
+        // rather than from the keyboard: the modifiers ride the mouse events
+        // driving the scrub, so pressing Shift halfway through a drag turns the
+        // rest of that drag uniform and releasing it hands the rest back to the one
+        // axis. A TYPED value is not a gesture — it carries no modifier and obeys
+        // the lock alone (holding Shift while typing digits is not a thing anyone
+        // means).
+        const bool shiftHeld =
+            box && box->isScrubbing() && box->scrubModifiers().testFlag(Qt::ShiftModifier);
 
-    // SHIFT = UNIFORM FOR THIS GESTURE ONLY, and it is read from the gesture
-    // rather than from the keyboard: the modifiers ride the mouse events
-    // driving the scrub, so pressing Shift halfway through a drag turns the
-    // rest of that drag uniform and releasing it hands the rest back to the one
-    // axis. A TYPED value is not a gesture — it carries no modifier and obeys
-    // the lock alone (holding Shift while typing digits is not a thing anyone
-    // means).
-    const bool shiftHeld =
-        box && box->isScrubbing() && box->scrubModifiers().testFlag(Qt::ShiftModifier);
+        const bool uniform = shiftHeld || sceneNode->getScaleLock();
 
-    const bool uniform = shiftHeld || sceneNode->getScaleLock();
-
-    // THE RATIO IS MEASURED FROM THE SCALE THE GESTURE STARTED AT, exactly as
-    // the scale gizmo measures it from the scale it captured at press
-    // (scalegizmo.cpp) — so the two surfaces agree, a long drag cannot
-    // accumulate per-tick rounding in the two channels it is scaling, and a
-    // modifier tapped and released mid-drag leaves NO residue: the other two
-    // channels come back to precisely where they were. A TYPED value is not a
-    // gesture and has no start, so its base is the value on the node.
-    const iris::Vec3 base = (box && box->isScrubbing()) ? scrubStartScale
-                                                        : sceneNode->getLocalScale();
-    sceneNode->setLocalScale(iris::scalelock::apply(base, axis, float(value), uniform));
-    if (uniform || (box && box->isScrubbing()))
-        refreshScaleFields();              // the other two may have moved with it
+        // THE RATIO IS MEASURED FROM THE SCALE THE GESTURE STARTED AT, exactly as
+        // the scale gizmo measures it from the scale it captured at press
+        // (scalegizmo.cpp) — so the two surfaces agree, a long drag cannot
+        // accumulate per-tick rounding in the two channels it is scaling, and a
+        // modifier tapped and released mid-drag leaves NO residue: the other two
+        // channels come back to precisely where they were. A TYPED value is not a
+        // gesture and has no start, so its base is the value on the node.
+        const iris::Vec3 base = (box && box->isScrubbing()) ? scrubStartScale
+                                                            : sceneNode->getLocalScale();
+        sceneNode->setLocalScale(iris::scalelock::apply(base, axis, float(value), uniform));
+        if (uniform) refreshScaleFields();     // the other two moved with it
+    });
 }
 
 void TransformEditor::refreshScaleFields()
