@@ -280,7 +280,8 @@ void EditorVrPreview::step()
 }
 
 // LOCOMOTION AS A VERB (vr.move), the same call the held fly keys make in
-// step() — and the Player's `player.vrMove` in the other mode. A script, an MCP
+// step() — and the Player's own move in the other mode, both behind the one
+// verb `vr.move` (the CRUD of `player.vrMove`). A script, an MCP
 // session and the suite can walk the wearer with no keyboard in the room, which
 // is also the only way to MEASURE a rig that a runtime alone never moves.
 bool EditorVrPreview::move(const flystep::Keys &keys, float seconds)

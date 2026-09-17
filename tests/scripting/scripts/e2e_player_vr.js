@@ -47,8 +47,13 @@ assert(player.playing() === false,
 // ---- the other VR verbs refuse the same way ------------------------------
 
 assert(player.endVr() === false, "player.endVr() refuses when the player is not in VR");
-assert(player.vrMove({ forward: true }) === false, "player.vrMove() refuses");
-assert(app.lastError().indexOf("not in VR") >= 0, "...saying the player is not in VR");
+// `player.vrMove` was DELETED in VR input stage 1: `vr.move` is the one
+// locomotion verb and it moves whoever is in the headset (editor preview or
+// Player). With no session at all it refuses, naming both hosts.
+assert(typeof player.vrMove === "undefined", "player.vrMove is GONE (vr.move replaced it)");
+assert(vr.move({ forward: true }) === false, "vr.move() refuses with nobody in VR");
+assert(app.lastError().indexOf("nobody is in VR") >= 0,
+       "...saying nobody is in VR: " + app.lastError());
 assert(player.vrRecenter() === false, "player.vrRecenter() refuses");
 
 // ---- the toggle refuses WITHOUT touching the page or the scene -----------
@@ -85,8 +90,8 @@ function throws(fn, needle, msg) {
 }
 throws(function () { player.play({ nosuchoption: 1 }); }, "nosuchoption",
        "an unknown play option throws, naming the option");
-throws(function () { player.vrMove({ sideways: true }); }, "sideways",
-       "an unknown vrMove key throws, naming the key");
+throws(function () { vr.move({ sideways: true }); }, "sideways",
+       "an unknown vr.move key throws, naming the key");
 
 // ---- and the editor is untouched -----------------------------------------
 

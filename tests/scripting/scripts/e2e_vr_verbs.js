@@ -71,7 +71,7 @@ assert(vr.move({ forward: true }) === false,
 var moveErr = app.lastError();
 assert(typeof moveErr === "string" && moveErr.indexOf("vr.move") >= 0,
        "...and says which verb refused: " + moveErr);
-// AN UNKNOWN KEY IS AN ERROR, NOT A REFUSAL (player.vrMove's rule, shared): a
+// AN UNKNOWN KEY IS AN ERROR, NOT A REFUSAL (the house rule, shared): a
 // misspelled intent that answered `false` would be indistinguishable from "no
 // session", which is exactly the confusion the refuse/fail split exists for.
 var threw = false;
