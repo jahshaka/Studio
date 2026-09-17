@@ -119,8 +119,9 @@ QJsonObject importRecordForGuid(QSqlDatabase conn, const QString &guid)
 /// source content, so it is reachable from each of them (Object + Mesh member)
 /// and dies with the last one — the same shape the source itself has, which is
 /// what makes `assets.gc` reap it without knowing bakes exist.
-/// Record a bake whose bytes a WORKER already staged and flushed into the
-/// store (FSYNC-2): `staged` is non-null then, and publishing is a rename.
+///
+/// `staged` non-null = the bytes are ALREADY in the store and already flushed,
+/// put there by the bake worker (FSYNC-2), so publishing them here is a rename.
 /// Null = the synchronous path (Preferences' bake-all), which ingests here.
 bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid,
                 const QString &bakePath, QString *errorOut,
@@ -519,9 +520,9 @@ void startNext()
         const BakeOutput out = watcher->result();
         watcher->deleteLater();
         sBakeInFlight = false;
+        AssetCas::Staged staged = out.staged;
         if (!out.path.isEmpty() && !sCancelled) {
             QString error;
-            AssetCas::Staged staged = out.staged;
             if (recordBake(QSqlDatabase::database(), AssetStorePaths::root(),
                            out.sourceOid, out.path, &error, &staged)) {
                 clear();
@@ -530,6 +531,11 @@ void startNext()
                 irisLog("mesh bake: " + error);
             }
         }
+        // A bake that was cancelled, failed, or never recorded leaves the temp
+        // the worker staged; it names no object and no row (discardStaged is a
+        // no-op once commitStaged has renamed it).
+        QVector<AssetCas::Staged> leftover{ staged };
+        AssetCas::discardStaged(leftover);
         pumpQueue();
     });
     // The PARSE runs on a worker: it is the cost the bake exists to remove and
