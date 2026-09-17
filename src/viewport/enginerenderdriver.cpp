@@ -8,7 +8,7 @@
 #include "services/framemonitor.h"
 #include "services/jahlog.h"
 #include "services/loadtimeline.h"
-
+#include "viewport/devicelossend.h"
 /// A frame this long is a visible hitch, not a frame.
 static const double kSlowFrameMs = 100.0;
 
@@ -118,6 +118,19 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
         if (anythingToDraw) { mEngine->renderOneFrame(); ++mStats.rendered; }
         else                { ++mStats.skipped; }
+
+        // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).
+        // The one render loop is the one place that can notice. After a device
+        // loss the renderer vetoes every frame (ogre-patch 0072), so without this
+        // the window simply stops updating, for ever, with the UI still alive —
+        // exactly what the owner saw and reported as "the app froze".
+        //
+        // AND THE PROCESS ENDS WITHOUT DESTRUCTORS. `vkDestroyDevice` on a device
+        // whose channel the driver has not reclaimed does not return (measured:
+        // a 100 %-of-a-core spin inside libnvidia-glcore, still spinning ten
+        // minutes later), so an orderly quit through ~Engine IS the freeze. The
+        // message goes out first, then `_exit`.
+        devicelossend::checkAfterFrame(mEngine);
         // The Live pacing clock, restarted from the END of the frame (see the
         // header). Unconditional and two instructions, so the no-script loop
         // reads exactly as it did.
