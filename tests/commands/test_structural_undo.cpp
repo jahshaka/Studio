@@ -44,6 +44,7 @@
 #include "commands/transformscenenodecommand.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -316,6 +317,51 @@ int main(int argc, char **argv)
         CHECK(scene->sunLight() == sun, "sun pin: ...and the priority order decides again");
         stack.redo();
         CHECK(scene->sunLight() == second, "sun pin: redo pins it again");
+    }
+
+    // ---------------------------------------------------------------------
+    // 9. THE FIRST CAMERA ADDED TAKES THE SHOT — and undo/redo are symmetric
+    //    (PLAYER-SPAWN-1 rule 2, owner 2026-09-17).
+    //
+    // The rule lives on the document (Scene::armCameraIfNoneActive, pinned by
+    // cameras.document); WHO applies it is this command, because an ADD is the
+    // only thing that should — a project LOAD builds its graph through the
+    // reader, which pushes no commands, so a saved file's silence about the
+    // active camera keeps meaning the free viewer.
+    // ---------------------------------------------------------------------
+    {
+        auto scene = iris::Scene::create();
+        auto first = iris::CameraNode::create();
+        first->setName(QStringLiteral("Camera"));
+        auto second = iris::CameraNode::create();
+        second->setName(QStringLiteral("Camera2"));
+
+        QUndoStack stack;
+        push(stack, new AddSceneNodeCommand(scene->getRootNode(), first), &services);
+        CHECK(scene->getActiveCamera() == first,
+              "camera add: the FIRST camera added becomes the active camera");
+
+        push(stack, new AddSceneNodeCommand(scene->getRootNode(), second), &services);
+        CHECK(scene->getActiveCamera() == first,
+              "camera add: a SECOND camera never steals the shot");
+
+        stack.undo();
+        CHECK(scene->getActiveCamera() == first,
+              "camera add/undo: undoing the second add leaves the first armed");
+        stack.undo();
+        CHECK(scene->getActiveCameraGuid().isEmpty(),
+              "camera add/undo: undoing the FIRST add takes its camera out of the scene, and "
+              "Scene::removeNode clears the choice with it");
+        stack.redo();
+        CHECK(scene->getActiveCamera() == first,
+              "camera add/redo: the same camera is armed again — undo and redo are symmetric, "
+              "rather than leaving a scene with one camera and no shot");
+
+        // A NON-CAMERA ADD IS NOT A CAMERA ADD (the branch's other side).
+        auto plain = iris::SceneNode::create();
+        plain->setName(QStringLiteral("Empty"));
+        push(stack, new AddSceneNodeCommand(scene->getRootNode(), plain), &services);
+        CHECK(scene->getActiveCamera() == first, "adding a non-camera node changes nothing");
     }
 
     if (failures) printf("\n%d of %d checks FAILED\n", failures, checks);

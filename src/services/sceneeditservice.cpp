@@ -295,11 +295,17 @@ iris::CameraNodePtr SceneEditService::addCamera(bool ignorePlacement)
     auto node = iris::CameraNode::create();
     node->setName("Camera");
     // A scene camera is a document object the user places, points and keys, so
-    // it takes the normal spawn-in-front-of-the-editor-camera placement. It
-    // does NOT become the active camera on creation: what play renders through
-    // is an explicit choice (scene.setActiveCamera), never a side effect of an
-    // add — a second camera silently taking the shot is the failure the old
-    // viewer-node add had and cameras will not.
+    // it takes the normal spawn-in-front-of-the-editor-camera placement.
+    //
+    // THE FIRST ONE BECOMES THE ACTIVE CAMERA (PLAYER-SPAWN-1 rule 2, owner
+    // 2026-09-17 — this comment used to say an add is never a side effect at
+    // all). A scene with no camera plays through the free viewer, which is
+    // wherever the editor was standing; putting the first camera in the scene
+    // IS the statement "play through this". A SECOND camera still never steals
+    // the shot — past the first, the choice has two answers and stays explicit
+    // and saved (scene.setActiveCamera). The rule lives on the document
+    // (Scene::armCameraIfNoneActive) and is applied by the add COMMAND, so an
+    // undo/redo of this add arms and disarms symmetrically.
     addNodeToScene(node, ignorePlacement);
     return node;
 }
