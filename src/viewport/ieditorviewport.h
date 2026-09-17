@@ -24,6 +24,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QVector3D>
+#include <functional>
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
@@ -901,6 +902,37 @@ public:
     virtual QStringList heldFlyKeys() const { return QStringList(); }
     /// True while the fly keys are armed — the right mouse button is held.
     virtual bool flying() const { return false; }
+
+    // ---- THE EDITOR'S VR PREVIEW (SPECS/VR_SPEC.md §5 phase 4) ------------
+    /// A VR SESSION IS PREVIEWING THIS VIEWPORT'S SCENE, AND THE WEARER IS NOT
+    /// THIS CAMERA.
+    ///
+    /// The desktop viewport stays a full editor while somebody stands in the
+    /// same scene with a headset on — its own camera, its own framing, its
+    /// gizmos and its selection. The one thing that moves is the SUBJECT of the
+    /// fly keys: while this is set, the editor's own gesture (right button +
+    /// the arrow cluster + Shift, at the editor's own speed) walks the WEARER
+    /// through the world instead of this camera, because a person wearing a
+    /// headset cannot see the desktop and the camera they want to move is the
+    /// one behind their eyes. Everything else about the camera — orbit, pan,
+    /// dolly, F, the axis views — is untouched.
+    ///
+    /// SET BY THE VR MODULE FOR THE LIFE OF THE SESSION, never derived from "a
+    /// VR session exists": the Player's VR mode runs a session on this same
+    /// scene (there is one scene), and there the editor's camera is not the
+    /// wearer and its fly keys are nobody's.
+    /// `step` runs once per SYNCED FRAME — a driver tick and a scripted
+    /// `editor.frame()` alike, which is why it is a callback here and not a
+    /// signal on the render driver: a script that steps frames itself never
+    /// reaches the driver's, and the wearer would stand still through a whole
+    /// scripted run (measured on this lane's first cut: the rig's placement
+    /// never fired). It is called INSTEAD OF the camera controller's own fly,
+    /// in its place in the frame, so the two can never both move somebody.
+    ///
+    /// A null `step` clears the whole arrangement and the camera has its fly
+    /// keys back.
+    virtual void setVrPreviewStep(std::function<void()> step) { Q_UNUSED(step); }
+    virtual bool vrPreview() const { return false; }
     /// "A world is about to be loaded into me": raises the loading cover and
     /// PRESENTS it before returning, so it is on screen before the load blocks
     /// the thread. `title` names the world (shown under the message). A no-op

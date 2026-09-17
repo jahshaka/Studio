@@ -915,6 +915,319 @@ int main() {
         }
     }
 
+    // =======================================================================
+    // 6. THE DRIVER'S OWN RULE, WITH ZERO VIEWS ENABLED (lane VR-4; the named
+    //    follow-up from VR-3b's second read).
+    //
+    // WHAT CASE 4 ABOVE DOES NOT PROVE. It calls `renderOneFrame` on every
+    // iteration, unconditionally — so it shows that a frame with nothing
+    // enabled still pumps the session, and says nothing at all about the rule
+    // that decides whether that frame HAPPENS. The host's render driver skips
+    // the frame when `hasEnabledViews()` is false (EngineRenderDriver::tick's
+    // `anythingToDraw`), and on the owner's WiVRn smoke that skip was the whole
+    // defect: the session's own View is off through the no-picture stretch, the
+    // Player's is off by design, the editor's is hidden — nothing is enabled,
+    // the driver skips, the pump never calls xrWaitFrame again, the runtime
+    // never synchronises and keeps answering "no picture" for ever. The fix is
+    // one line in the engine (`hasEnabledViews()` returns true while a session
+    // exists: the frame loop IS the session's heartbeat) and it had no test.
+    //
+    // So this case is the DRIVER, in three lines: the same gate, the same
+    // order, with every view in the process switched off. Revert that one line
+    // and this case hangs at frame one and fails on the count (measured: 1
+    // accepted frame instead of 30).
+    // =======================================================================
+    {
+        setFixtureSky(scene, false);
+        setenv("JAHSHAKA_VR_TEST_NO_RENDER_FRAMES", "40", 1);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession: %s",
+                                     engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_NO_RENDER_FRAMES");
+        if (began) {
+            desktop->setEnabled(false);
+            // EVERY view, not just the desktop's: the session's own View is off
+            // for a no-picture frame, and this asserts there is nothing else.
+            std::vector<View *> all;
+            engine->listViews(all);
+            for (View *v : all) v->setEnabled(false);
+            CHECK_MSG(engine->hasEnabledViews(),
+                      "A VR SESSION IS SOMETHING TO DRAW: hasEnabledViews() is true with every "
+                      "View in the process switched off, which is what keeps the driver calling "
+                      "renderOneFrame");
+
+            // THE DRIVER'S LOOP, exactly as enginerenderdriver.cpp writes it.
+            // FEWER TICKS THAN THE FORCED STRETCH (40), so every frame in the
+            // loop is a no-picture one and `rendered` is an exact zero rather
+            // than a threshold.
+            unsigned long long skipped = 0ull;
+            for (int i = 0; i < 30; ++i) {
+                if (engine->hasEnabledViews()) {
+                    engine->advanceResources();
+                    engine->renderOneFrame();
+                } else {
+                    ++skipped;
+                }
+            }
+            const VrStatus st = engine->vrStatus();
+            CHECK_MSG(skipped == 0ull, "the driver skipped %llu of 30 ticks", skipped);
+            CHECK_MSG(st.frames >= 25ull,
+                      "THE HEARTBEAT: the session submitted %llu frames under the driver's own "
+                      "gate with nothing enabled anywhere", st.frames);
+            CHECK_MSG(st.rendered == 0ull,
+                      "...and drew none of them (the forced no-picture stretch): %llu",
+                      st.rendered);
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+            // ...and with the session gone the rule goes back to what it was.
+            CHECK_MSG(!engine->hasEnabledViews(),
+                      "with no session and no enabled view the driver skips again");
+            desktop->setEnabled(true);
+        }
+    }
+
+    // =======================================================================
+    // 7. THE HANDS (lane VR-4, VR_SPEC §5 phase 4). POSES ONLY.
+    //
+    // WHAT IS ASSERTED, and what cannot be. The action set, its two grip-pose
+    // actions on the simple-controller profile and the attach are OURS and are
+    // asserted: `handActions` is the answer to "did the runtime take them".
+    // Whether a POSE arrives is the RUNTIME's business — Monado's simulated
+    // builder creates two Simple Controllers only when the runner asks it to
+    // (SIMULATED_LEFT/SIMULATED_RIGHT, run_vr_session.sh), and a box whose
+    // Monado is older or differently built simply reports no hands. So the pose
+    // half is reported and checked FOR CONSISTENCY (a valid hand must be a
+    // finite pose near the room), never asserted into existence: a suite that
+    // demanded two controllers would red on every box that has none, which is
+    // the same mistake as demanding a headset.
+    // =======================================================================
+    {
+        setFixtureSky(scene, false);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession: %s",
+                                     engine->lastError().c_str());
+        if (began) {
+            pump(engine.get(), 60ull, 600u);
+            const VrStatus st = engine->vrStatus();
+            CHECK_MSG(st.handActions,
+                      "THE ACTION SET IS ATTACHED: one set, two grip-pose actions bound on "
+                      "/interaction_profiles/khr/simple_controller, attached once before the "
+                      "first xrSyncActions");
+            std::printf("HANDS  left valid=%d (%.3f %.3f %.3f) | right valid=%d (%.3f %.3f %.3f) "
+                        "| actions=%d joints=%d\n",
+                        int(st.hands[VrHandLeft].valid), st.hands[VrHandLeft].position.x,
+                        st.hands[VrHandLeft].position.y, st.hands[VrHandLeft].position.z,
+                        int(st.hands[VrHandRight].valid), st.hands[VrHandRight].position.x,
+                        st.hands[VrHandRight].position.y, st.hands[VrHandRight].position.z,
+                        int(st.handActions), int(st.handJoints));
+            int located = 0;
+            for (unsigned h = 0; h < VrHandCount; ++h) {
+                const VrPose &p = st.hands[h];
+                if (!p.valid) continue;
+                ++located;
+                const float len = std::sqrt(p.position.x * p.position.x +
+                                            p.position.y * p.position.y +
+                                            p.position.z * p.position.z);
+                CHECK_MSG(std::isfinite(len) && len < 100.0f,
+                          "hand %u is located %.3f m from the rig's origin — a pose, not a "
+                          "garbage read", h, len);
+                const float q = std::sqrt(p.rotation.x * p.rotation.x +
+                                          p.rotation.y * p.rotation.y +
+                                          p.rotation.z * p.rotation.z +
+                                          p.rotation.w * p.rotation.w);
+                CHECK_MSG(std::fabs(q - 1.0f) < 1e-3f,
+                          "...with a unit orientation (|q| = %.5f)", q);
+            }
+            if (!located)
+                std::printf("NOTE   this runtime located no controller (Monado's simulated "
+                            "builder makes none unless SIMULATED_LEFT/RIGHT ask for one). The "
+                            "action set is still proved; the poses are the runtime's half.\n");
+
+            // THE HANDS RIDE THE RIG, exactly as the head does — the one thing
+            // about them that is ours and not the runtime's. Moving the origin
+            // must move a located hand by the same vector it moves the head.
+            if (located) {
+                const Vec3 headBefore = st.headPosition;
+                const VrPose handBefore = st.hands[st.hands[VrHandLeft].valid ? VrHandLeft
+                                                                              : VrHandRight];
+                engine->setVrOrigin(Vec3{ 7.0f, 0.0f, -3.0f }, 0.0f);
+                pump(engine.get(), engine->vrStatus().frames + 4ull, 60u);
+                const VrStatus moved = engine->vrStatus();
+                const VrPose handAfter = moved.hands[moved.hands[VrHandLeft].valid ? VrHandLeft
+                                                                                   : VrHandRight];
+                if (CHECK_MSG(handAfter.valid, "the hand is still located after the rig moved")) {
+                    // A simulated head DRIFTS on a wall clock, so the two
+                    // deltas are compared to each other rather than to the
+                    // rig's own vector: what is asserted is that the hand and
+                    // the head were carried by the SAME transform.
+                    const float dxHand = handAfter.position.x - handBefore.position.x;
+                    const float dxHead = moved.headPosition.x - headBefore.x;
+                    CHECK_MSG(std::fabs(dxHand - dxHead) < 0.25f,
+                              "THE HAND RIDES THE RIG WITH THE HEAD: the origin moved +7 m in x, "
+                              "the head by %.3f and the hand by %.3f", dxHead, dxHand);
+                }
+                engine->setVrOrigin(Vec3{ 0.0f, 0.0f, 0.0f }, 0.0f);
+            }
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+            CHECK_MSG(!engine->vrStatus().hands[VrHandLeft].valid &&
+                          !engine->vrStatus().hands[VrHandRight].valid,
+                      "and an ended session reports no hands");
+        }
+    }
+
+    // =======================================================================
+    // 8. WHAT THE WEARER SEES, IN BOTH MODES (lane VR-4; the rule is the
+    //    owner's, 2026-09-17). The picture matrix, on the EYES' own pixels.
+    //
+    // WHAT WAS WRONG BEFORE THIS LANE, measured at this tree: the session's View
+    // simply inherited `helpersVisible = true` and never said so, so the
+    // HEADSET DREW THE WHOLE DESK in every mode — including the Player's, which
+    // shows no furniture at all on the desktop.
+    //
+    // THE RULE, in two sentences. The DESK'S furniture (grid, light and camera
+    // icons, selection outline, gizmo — kHelperBit) follows the HOST MODE: an
+    // editor preview shows it in the headset, because watching the editor work
+    // from inside the scene is the mode's whole purpose, and a Player shows
+    // none. The WEARER'S furniture (the controller proxies — kVrHelperBit) is
+    // drawn in EVERY eye, in both modes, because a player needs to see their own
+    // hands as much as an author does.
+    //
+    // HOW IT IS MEASURED. Not by byte equality: the simulated head drifts on a
+    // wall clock, so two eye readbacks minutes or milliseconds apart are never
+    // identical. Two SATURATED HUES are counted instead — a magenta ring of
+    // desk-helpers and a cyan ring of VR-channel objects, both surrounding the
+    // wearer so a drifting heading always has some of each in frame — and what
+    // is asserted is presence and ABSENCE of a colour, which head motion cannot
+    // manufacture.
+    // =======================================================================
+    {
+        setFixtureSky(scene, false);
+        // TWO RINGS AROUND THE WEARER, at the cardinal points plus underfoot:
+        // Monado's simulated head drifts, and a single object in one direction
+        // is a coin toss.
+        NodeId deskHelper[5] = { 0, 0, 0, 0, 0 };
+        NodeId vrHelper[5] = { 0, 0, 0, 0, 0 };
+        const Vec3 ringA[5] = { Vec3{ 0.0f, 1.3f, -1.4f }, Vec3{ 0.0f, 1.3f, 1.4f },
+                                Vec3{ -1.4f, 1.3f, 0.0f }, Vec3{ 1.4f, 1.3f, 0.0f },
+                                Vec3{ 0.0f, 0.30f, 0.0f } };
+        const Vec3 ringB[5] = { Vec3{ 0.0f, 0.55f, -1.1f }, Vec3{ 0.0f, 0.55f, 1.1f },
+                                Vec3{ -1.1f, 0.55f, 0.0f }, Vec3{ 1.1f, 0.55f, 0.0f },
+                                Vec3{ 0.0f, 2.30f, 0.0f } };
+        for (int i = 0; i < 5; ++i) {
+            deskHelper[i] = addTestCube(scene, Colour{ 0.95f, 0.02f, 0.95f, 1.0f }, 0.0f, 0.6f);
+            setNodePosition(scene, deskHelper[i], ringA[i]);
+            setNodeScale(scene, deskHelper[i], Vec3{ 0.8f, 0.8f, 0.8f });
+            scene->setNodeHelper(deskHelper[i], true);          // the DESK's
+
+            vrHelper[i] = addTestCube(scene, Colour{ 0.02f, 0.95f, 0.95f, 1.0f }, 0.0f, 0.6f);
+            setNodePosition(scene, vrHelper[i], ringB[i]);
+            setNodeScale(scene, vrHelper[i], Vec3{ 0.6f, 0.6f, 0.6f });
+            scene->setNodeHelper(vrHelper[i], true);
+            scene->setNodeVrHelper(vrHelper[i], true);          // ...and the WEARER'S
+        }
+        // How much of a picture is magenta / cyan. A DIFFERENCE test, not a
+        // ratio: the VR view carries HDR and the filmic tonemap (the phase-2
+        // profile) and a bright saturated surface comes back through it
+        // DESATURATED — a ratio test on the raw channels read the magenta ring
+        // as colourless and scored a picture full of it at zero (measured on
+        // this fixture: 45,813 magenta px in the plain desktop readback, 0 in
+        // the graded eye). What survives any grade is which channel is LOWER.
+        const auto countHues = [](const Image &im, size_t &magenta, size_t &cyan) {
+            magenta = cyan = 0;
+            for (size_t i = 0; i + 3 < im.rgba.size(); i += 4) {
+                const int r = im.rgba[i], g = im.rgba[i + 1], b = im.rgba[i + 2];
+                if (r - g > 25 && b - g > 25) ++magenta;
+                if (g - r > 25 && b - r > 25) ++cyan;
+            }
+        };
+
+        // ---- THE PLAYER'S SHAPE: no desk furniture in the eyes ------------
+        {
+            VrConfig cfg;
+            cfg.mirror = VrMirrorMode::None;
+            cfg.helpers = false;              // what the Player passes (the default)
+            const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg),
+                                         "beginVrSession (player shape): %s",
+                                         engine->lastError().c_str());
+            if (began) {
+                View *vrView = engine->vrView();
+                REQUIRE(vrView != nullptr);
+                CHECK(!vrView->helpersVisible());
+                CHECK(vrView->vrHelpersVisible());
+                pump(engine.get(), 50ull, 500u);
+                Image eyes;
+                REQUIRE(vrView->readPixels(eyes));
+                size_t magenta = 0, cyan = 0;
+                countHues(eyes, magenta, cyan);
+                std::printf("EYES   player shape: %zu magenta (the desk's) / %zu cyan (the "
+                            "wearer's) of %zu px\n", magenta, cyan,
+                            eyes.rgba.size() / 4u);
+                CHECK_MSG(cyan > 200u,
+                          "A PLAYER SEES THEIR OWN CONTROLLERS: %zu px of the VR channel",
+                          cyan);
+                CHECK_MSG(magenta == 0u,
+                          "...AND NONE OF THE DESK'S FURNITURE: %zu px of kHelperBit geometry "
+                          "reached the eyes", magenta);
+                engine->endVrSession();
+            }
+        }
+
+        // ---- THE EDITOR'S SHAPE: the desk comes with them -----------------
+        {
+            VrConfig cfg;
+            cfg.mirror = VrMirrorMode::None;
+            cfg.helpers = true;               // what EditorVrPreview passes
+            const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg),
+                                         "beginVrSession (editor shape): %s",
+                                         engine->lastError().c_str());
+            if (began) {
+                View *vrView = engine->vrView();
+                REQUIRE(vrView != nullptr);
+                CHECK(vrView->helpersVisible());
+                CHECK(vrView->vrHelpersVisible());
+                pump(engine.get(), 50ull, 500u);
+                Image eyes;
+                REQUIRE(vrView->readPixels(eyes));
+                size_t magenta = 0, cyan = 0;
+                countHues(eyes, magenta, cyan);
+                std::printf("EYES   editor shape: %zu magenta (the desk's) / %zu cyan (the "
+                            "wearer's) of %zu px\n", magenta, cyan,
+                            eyes.rgba.size() / 4u);
+                // THE THIRD ROW OF THE MATRIX, and the control for the two
+                // above: the DESK sees both rings, so "the eyes saw none of the
+                // magenta" is a statement about the eyes and not about a
+                // fixture that drew nothing.
+                {
+                    Image dsk;
+                    if (desktop->readPixels(dsk)) {
+                        size_t dm = 0, dc = 0;
+                        countHues(dsk, dm, dc);
+                        std::printf("EYES   the desk: %zu magenta / %zu cyan\n", dm, dc);
+                        CHECK_MSG(dm > 200u && dc > 200u,
+                                  "THE DESKTOP EDITOR VIEW SEES BOTH: %zu px of the desk's "
+                                  "furniture and %zu of the wearer's", dm, dc);
+                    }
+                }
+                CHECK_MSG(magenta > 200u,
+                          "AN EDITOR PREVIEW SHOWS THE EDITOR WORKING: %zu px of the desk's "
+                          "furniture — the grid, the icons, the selection outline — in the "
+                          "headset", magenta);
+                CHECK_MSG(cyan > 200u, "...and the controllers too: %zu px", cyan);
+                engine->endVrSession();
+            }
+        }
+        CHECK(!engine->vrStatus().active);
+        // The fixture goes back exactly as it was, so the desktop A/B below
+        // compares the same world it opened with.
+        for (int i = 0; i < 5; ++i) {
+            scene->setNodeVisible(deskHelper[i], false);
+            scene->setNodeVisible(vrHelper[i], false);
+        }
+    }
+
     // ---- THE DESKTOP'S PICTURE, AFTER -------------------------------------
     // THE SCENE BACK AS IT WAS. The `before` picture was taken with no sky (the
     // first session's control needs none) and the second session added one, so

@@ -38,6 +38,12 @@ assert(st.active === false, "no session is running");
 assert(st.state === "unavailable", "the state is `unavailable`, not a lie about idling");
 assert(st.frames === 0, "no frames have been submitted");
 assert(st.ipd === 0, "no eyes have been located");
+assert(st.head.valid === false, "the head has not been located");
+assert(st.hands.left.valid === false && st.hands.right.valid === false,
+       "and neither hand has: `hands` is a pair of poses, always, valid or not");
+assert(st.handActions === false, "no action set was attached (there is no session)");
+assert(st.preview.active === false, "the editor's VR preview is not running");
+assert(st.proxies === true, "the wearer's controller proxies are on by default (nothing to draw)");
 
 // ---- begin / end refuse, they do not throw and they do not hang -----------
 
@@ -52,6 +58,12 @@ assert(typeof err === "string" && err.indexOf("vr.begin") >= 0,
 assert(vr.begin({ mirror: "right", worldScale: 2 }) === false,
        "...with options too, and the options are not what it refuses over");
 assert(vr.end() === false, "vr.end() refuses when no session is running");
+
+// ---- the proxies answer with no session, and change nothing ---------------
+
+assert(typeof vr.proxies() === "boolean", "vr.proxies() answers a boolean with no session");
+assert(vr.proxies(false) === false, "...and can be turned off");
+assert(vr.proxies(true) === true, "...and on again, without a session to draw them in");
 
 // ---- and the editor is untouched -----------------------------------------
 

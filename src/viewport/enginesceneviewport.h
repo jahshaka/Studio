@@ -34,6 +34,7 @@ class OrbitalCameraController;
 #include <QPointer>
 #include <QPointF>
 #include <QHash>
+#include <functional>
 
 class EngineSceneViewport : public EngineViewWidget, public IEditorViewport
 {
@@ -221,6 +222,9 @@ public:
     /// The active camera controller's held-key set, by name, sorted (§356).
     QStringList heldFlyKeys() const override;
     bool flying() const override;
+    /// The editor's VR preview (VR_SPEC §5 phase 4) — see IEditorViewport.
+    void setVrPreviewStep(std::function<void()> step) override { mVrPreviewStep = std::move(step); }
+    bool vrPreview() const override { return bool(mVrPreviewStep); }
     /// Bridges EngineViewWidget's own (non-virtual, and on the OTHER base) copy
     /// onto the interface — C++ does not override across hierarchies, and the
     /// shell holds an IEditorViewport*.
@@ -504,6 +508,11 @@ private:
     /// GI volume boxes (fix 9). Diagnostic, default off, not persisted — it is
     /// a thing you turn on while chasing a lighting question.
     bool mShowGiVolume = false;
+    /// A VR session is previewing this viewport's scene: the wearer's per-frame
+    /// step, which runs in the camera controller's place (IEditorViewport::
+    /// setVrPreviewStep). Installed by the VR module for the life of a session;
+    /// not persisted — a session does not survive a restart.
+    std::function<void()> mVrPreviewStep;
     bool mShowShadowAtlas = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     /// The grid plane pushGridForView last PUSHED to the mirror (not what a

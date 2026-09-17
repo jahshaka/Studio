@@ -31,7 +31,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-XDG_RUNTIME_DIR="$XDG_DIR" SIMULATED_ENABLE=1 XRT_COMPOSITOR_NULL=1 XRT_NO_STDIN=1 \
+# SIMULATED_LEFT/RIGHT=simple: TWO SIMPLE CONTROLLERS beside the simulated
+# HMD (lane VR-4). Monado's simulated builder makes none by default (the
+# variables take a controller TYPE — `simple`, `wmr` or `ml2`; a bare `1`
+# logs "Unsupported controller '1'" and creates nothing), and without them
+# there is nothing for the grip-pose actions to bind to and the hand half of
+# the suite has no subject. `simple` is the profile our action set suggests
+# bindings for, which is the point.
+XDG_RUNTIME_DIR="$XDG_DIR" SIMULATED_ENABLE=1 SIMULATED_LEFT=simple SIMULATED_RIGHT=simple \
+    XRT_COMPOSITOR_NULL=1 XRT_NO_STDIN=1 \
     monado-service > "$XDG_DIR/monado.log" 2>&1 &
 MON_PID=$!
 
