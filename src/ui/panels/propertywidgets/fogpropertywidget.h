@@ -64,7 +64,6 @@ private:
     CheckBoxWidget* fogAtmosphere;           // aerial perspective (SKY-GPU)
     CheckBoxWidget* shadowEnabled;
     HFloatSliderWidget* fogDensity;
-    HFloatSliderWidget* fogStart;            // disabled: linear-fog leftover
     HFloatSliderWidget* fogHeightDensity;
     HFloatSliderWidget* fogHeightFalloff;
     HFloatSliderWidget* fogHeightLevel;

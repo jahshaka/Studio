@@ -60,6 +60,61 @@ for (var k = 0; k < table.rows.length; ++k) {
         assert(!!r.tiers.low && !!r.tiers.epic, "row " + r.id + " declares all four tier values");
 }
 
+// ---- world.tierTable(): WHAT A TIER IS, from the renderer's own tables ------
+//
+// The cure for render audit A5 — five tier tooltips that described a renderer
+// which did not exist, for months, because nothing compared a tier's
+// DESCRIPTION with what the tier DOES. The verb is generated from
+// worldmodes::kPhotonTable and the engine's own giQualityFacts, and the panel's
+// tooltips are generated from the same two tables, so this is the door a test
+// (or a doc, or a person) checks the claim through.
+var tiers = world.tierTable();
+assert(tiers.photon.length === 4, "four Photon tiers: " + tiers.photon.length);
+assert(tiers.world.length === 4, "four World modes mapped onto Photon");
+var byTier = {};
+for (var t = 0; t < tiers.photon.length; ++t) byTier[tiers.photon[t].tier] = tiers.photon[t];
+assert(!!byTier.low && !!byTier.medium && !!byTier.high && !!byTier.epic,
+       "the four tiers are named low/medium/high/epic");
+for (var tn in byTier) {
+    var row = byTier[tn];
+    assert(row.description.length > 20, tn + " carries a generated description");
+    assert(row.ddgi === 1, tn + " turns the irradiance field on (it said \"Low cannot\" for months)");
+    assert(row.cascades === 1 && row.chain.length >= 2,
+           tn + " builds a camera-centred chain of at least two cascades");
+    // The chain must grow OUTWARD in reach AND in cell or the cone march
+    // cannot hand one cascade over to the next.
+    for (var c = 1; c < row.chain.length; ++c)
+        assert(row.chain[c].halfSize > row.chain[c - 1].halfSize &&
+               row.chain[c].cell > row.chain[c - 1].cell,
+               tn + " cascade " + c + " is bigger and coarser than the one inside it");
+    // The cell is the number that says what a cascade can resolve.
+    assert(Math.abs(row.chain[0].cell -
+                    2 * row.chain[0].halfSize / row.chain[0].resolution) < 1e-4,
+           tn + " reports each cascade's cell as 2*halfSize/resolution");
+}
+// THE THREE CLAIMS THE OLD TOOLTIPS GOT WRONG, now assertable:
+assert(byTier.low.chain[0].resolution === byTier.medium.chain[0].resolution,
+       "Low and Medium voxelise at the SAME resolution — \"Medium is twice Low\" was never true");
+assert(byTier.low.voxelResolution === 32 && byTier.low.chain[0].resolution === 64,
+       "Low's CHAIN is 64 per axis while its single scene-fitted volume is 32");
+assert(byTier.high.chain[0].resolution === 128 &&
+       byTier.high.chain[byTier.high.chain.length - 1].resolution === 64,
+       "High's chain is 128 near the eye and 64 far away — not \"128^3\"");
+assert(byTier.low.technique === "vct" && byTier.high.technique === "vct_pcc_hybrid" &&
+       byTier.medium.technique === "vct",
+       "only High and Epic build a reflection-probe grid");
+assert(byTier.high.probeFaceSize === 512 && byTier.high.probeHdr === true &&
+       byTier.high.probeShadows === true,
+       "High's probes are 512 px per face, HDR and shadowed");
+assert(byTier.epic.bounces === 3 && byTier.high.bounces === 1,
+       "Epic's one column over High is the bounce count");
+// The World mode -> Photon tier mapping, by name rather than by ordinal.
+var worldMap = {};
+for (var wi = 0; wi < tiers.world.length; ++wi) worldMap[tiers.world[wi].mode] = tiers.world[wi].photon;
+assert(worldMap.low === "off" && worldMap.medium === "off" &&
+       worldMap.high === "low" && worldMap.epic === "epic",
+       "World Low/Medium leave Photon off, High selects Photon Low, Epic selects Epic");
+
 // ---- a fresh scene starts on EPIC ------------------------------------------
 // POST_CHAIN_SPEC §12 decision 8 (owner call): new scenes are Epic, and a
 // document written before World Modes existed reads as Epic too.

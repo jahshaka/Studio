@@ -138,7 +138,8 @@ int main(int argc, char **argv)
             if (pbr) {
                 CHECK(nearly(pbr->metallicFactor, 0.75f), "metallicFactor read from the file (0.75)");
                 CHECK(nearly(pbr->roughnessFactor, 0.3f), "roughnessFactor read from the file (0.3)");
-                CHECK(pbr->useBaseColorMap, "baseColorMap bound from the embedded texture");
+                CHECK(pbr->textures.contains("u_baseColorMap"),
+                      "baseColorMap bound from the embedded texture");
             }
         }
         CHECK(texPaths.contains(png), "texture discovery lists the extracted file");

@@ -39,6 +39,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 
 #include "services/worldmodes.h"
+#include "jahshaka/engine/Types.h"
 
 #include "../support/documentgraph.h"
 
@@ -134,6 +135,99 @@ static void testTierTable()
             }
         }
     }
+    // ---- THE TIER AGAINST THE ENGINE'S OWN TABLE (render audit A5) --------
+    //
+    // Everything above asserts the registry against ITSELF: the rows against
+    // kPhotonTable, the write-through against the rows. That is exactly the
+    // hole the audit named — five tier tooltips described a renderer that did
+    // not exist, for MONTHS, because nothing compared a tier's description
+    // with what the engine does with it. These assertions read
+    // `jahshaka::engine::giQualityFacts` — the engine's OWN tier table, the one
+    // OgreGi.cpp builds the cascade chain, the voxel volume and the probe faces
+    // from — and require the generated text to contain its numbers.
+    {
+        using jahshaka::engine::GiQuality;
+        using jahshaka::engine::giQualityFacts;
+        using jahshaka::engine::giCascadeCell;
+
+        // (i) the facts themselves, as physics: a chain must grow OUTWARD in
+        // both reach and cell or the cone march cannot hand over (the rule
+        // resolveCascadeTable enforces on a PINNED table; the tier's own table
+        // has to satisfy it too, and nothing checked that it did).
+        for (int q = 0; q < 3; ++q) {
+            const auto facts = giQualityFacts(GiQuality(q));
+            CHECK(facts.cascadeCount > 0 && facts.cascadeCount <= 4,
+                  qPrintable(QStringLiteral("quality %1: the tier table has 1-4 cascades").arg(q)));
+            bool grows = true;
+            for (int i = 1; i < facts.cascadeCount; ++i)
+                grows = grows && facts.cascades[i].halfSize > facts.cascades[i - 1].halfSize &&
+                        giCascadeCell(facts.cascades[i]) > giCascadeCell(facts.cascades[i - 1]);
+            CHECK(grows, qPrintable(QStringLiteral("quality %1: every cascade is bigger AND "
+                                                   "coarser than the one inside it").arg(q)));
+            CHECK(facts.voxelResolution >= 16u && facts.probeFaceSize >= 64u,
+                  qPrintable(QStringLiteral("quality %1: the single volume and the probe face "
+                                            "are sane sizes").arg(q)));
+        }
+        // (ii) the two expensive probe options resolve ON at High and Epic and
+        // nowhere else — the pair GiToggle::Auto reads.
+        CHECK(giQualityFacts(GiQuality::High).probeHdrDefault &&
+                  giQualityFacts(GiQuality::High).probeShadowsDefault &&
+                  !giQualityFacts(GiQuality::Medium).probeHdrDefault &&
+                  !giQualityFacts(GiQuality::Low).probeShadowsDefault,
+              "HDR and shadowed probe captures are the High quality column, and only it");
+
+        // (iii) THE DESCRIPTION IS THE TABLE. Each tier's generated sentence
+        // must carry its own cascade count and the innermost cascade's
+        // resolution — the two numbers the old hand-written tooltips got wrong
+        // ("Medium voxelizes at twice the resolution"; "32/64/128 voxels per
+        // axis"). A sentence that stops naming them has stopped being generated.
+        for (int t = 0; t < 4; ++t) {
+            const PhotonTier tier = PhotonTier(t);
+            const auto facts = giQualityFacts(GiQuality(qBound(0, worldmodes::photonQuality(tier), 2)));
+            const QString text = worldmodes::photonTierSentence(tier);
+            CHECK(text.contains(QString::number(facts.cascadeCount)) &&
+                      text.contains(QString::number(facts.cascades[0].resolution)),
+                  qPrintable(QStringLiteral("tier %1's description names its own chain (%2 "
+                                            "cascades, innermost %3 cubed): %4")
+                                 .arg(worldmodes::photonTierName(tier))
+                                 .arg(facts.cascadeCount)
+                                 .arg(facts.cascades[0].resolution)
+                                 .arg(text)));
+            CHECK(text.contains(QStringLiteral("%1 light bounce").arg(worldmodes::photonBounces(tier))),
+                  qPrintable(QStringLiteral("tier %1's description names its bounce count")
+                                 .arg(worldmodes::photonTierName(tier))));
+            // Probes are the TECHNIQUE column, not the quality one.
+            const bool probes = worldmodes::photonTechnique(tier) == 2;
+            CHECK(text.contains(QStringLiteral("no reflection probes")) != probes,
+                  qPrintable(QStringLiteral("tier %1's description tells the truth about probes")
+                                 .arg(worldmodes::photonTierName(tier))));
+            if (probes)
+                CHECK(text.contains(QString::number(worldmodes::photonTierProbeFaceSize(tier))),
+                      qPrintable(QStringLiteral("tier %1 names its probe face size (%2 px)")
+                                     .arg(worldmodes::photonTierName(tier))
+                                     .arg(worldmodes::photonTierProbeFaceSize(tier))));
+        }
+        // (iv) Low's chain is 64, NOT the quality dial's 32 — the exact claim
+        // the tooltip used to get backwards, and the one PHOTON_SPEC §7 E2 (4)
+        // decided (a 0.31 m cell smears a room's own walls).
+        CHECK(giQualityFacts(GiQuality::Low).cascades[0].resolution == 64 &&
+                  giQualityFacts(GiQuality::Low).voxelResolution == 32u,
+              "Low: the CHAIN is 64 per axis while the single volume is 32");
+        CHECK(worldmodes::photonTierVoxelPhrase(PhotonTier::Low) == QStringLiteral("64") &&
+                  worldmodes::photonTierVoxelPhrase(PhotonTier::Medium) == QStringLiteral("64"),
+              "Low and Medium voxelise the chain at the SAME resolution — the "
+              "\"Medium is twice Low\" tooltip was never true");
+        CHECK(worldmodes::photonTierVoxelPhrase(PhotonTier::High).contains(QStringLiteral("64")) &&
+                  worldmodes::photonTierVoxelPhrase(PhotonTier::High).contains(QStringLiteral("128")),
+              "High's chain is BOTH 64 and 128 — two of its four cascades are 64");
+        // (v) every tier feeds the irradiance field, Low included. The panel
+        // said "Low cannot" for months; the column has always been 1.
+        for (int t = 0; t < 4; ++t)
+            CHECK(worldmodes::photonDdgi(PhotonTier(t)) == 1,
+                  qPrintable(QStringLiteral("tier %1 turns the irradiance field ON")
+                                 .arg(worldmodes::photonTierName(PhotonTier(t)))));
+    }
+
     // High and Epic differ in TWO rows and nowhere else — the whole point of
     // Epic's column (before option (b) they differed only in the field, and
     // once High is DDGI-fed that would have collapsed them onto one row).

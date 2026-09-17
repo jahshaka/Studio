@@ -80,6 +80,31 @@ For more information see the LICENSE file
 #include "io/materialreader.h"
 #include "data/guidmanager.h"
 
+// THE READER-DEFAULTS LAW (render audit I-5, lane READER-DEFAULTS-1) — ONE
+// DEFINITION OF EVERY DEFAULT, AND IT IS THE CONSTRUCTOR'S.
+//
+// Every read in this file DEFAULT-CONSTRUCTS AND OVERWRITES PRESENT KEYS: the
+// document object is made first, so it already holds the constructor's value,
+// and the fallback handed to `toDouble`/`toInt`/`toBool` is that value —
+// `nodeObj["x"].toDouble(node->x)`, never a literal. A literal here is a SECOND
+// definition of a default, and two definitions of one number drift; when they
+// drift, "a scene that was never saved" and "a scene whose file does not carry
+// the key" become two different scenes, silently, for ever.
+//
+// It has cost real pictures four times: SUN1 found the shadow type reading None
+// against ShadowMap's Soft; the darkness A/B of 2026-09-13 found `exposure`
+// reading 0.0 against the scene's 0.6 and five shipped samples rendering at
+// half brightness because of it; and this lane found nine more, of which the
+// loudest were a light's RADIUS (1 against 10), a light's shadow resolution
+// (1024 against 2048), the explorer camera's FAR CLIP (100 against 500) and six
+// particle-emitter fields that turned every pre-key emitter into a slow, dark,
+// non-dissipating trickle. `document.reader_defaults` is the guard: it writes
+// each node type, strips every optional key from the JSON, reads it back and
+// requires a node identical to a freshly constructed one.
+//
+// Where a key is an ENUM spelled as a string, the read is guarded by
+// `contains()` instead, for the same reason: the spelling of the default would
+// otherwise be a second copy of it.
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       iris::PostProcessManagerPtr postMan,
@@ -137,38 +162,50 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 
     auto editorObj = projectObj["editor"].toObject();
 
+    // ONE SOURCE FOR EVERY DEFAULT (the reader-defaults law, I-5; see the note
+    // above readScene): the objects below are BORN carrying the constructor's
+    // values and this function overwrites only the keys the FILE carries. A
+    // literal here would be a second definition of a default and the two drift
+    // — which is exactly how every project written before the clip-plane keys
+    // existed came back with a 1 m near and a 100 m FAR clip against
+    // CameraNode's own 0.1 / 500, so the explorer camera could not see past
+    // 100 m in a scene whose ground is 4 km wide.
+    auto editorData = new EditorData();
+
     // @todo: check if camera object is null
-    auto camObj = editorObj["camera"].toObject();
+    auto camObj = editorObj.value("camera").toObject();
     auto camera = iris::CameraNode::create();
-    camera->angle = (float)camObj["angle"].toDouble(45.f);
-    camera->nearClip = (float)camObj["nearClip"].toDouble(1.f);
-    camera->farClip = (float)camObj["farClip"].toDouble(100.f);
-    camera->setLocalPos(readVector3(camObj["pos"].toObject()));
+    camera->angle = (float)camObj.value("angle").toDouble(camera->angle);
+    camera->nearClip = (float)camObj.value("nearClip").toDouble(camera->nearClip);
+    camera->farClip = (float)camObj.value("farClip").toDouble(camera->farClip);
+    camera->setLocalPos(readVector3(camObj.value("pos").toObject()));
     // rotQuat first (the lossless spelling), euler for anything written before
     // it existed — see readSceneNodeTransform.
-    const QJsonObject camRotQuat = camObj["rotQuat"].toObject();
+    const QJsonObject camRotQuat = camObj.value("rotQuat").toObject();
     if (!camRotQuat.isEmpty())
-        camera->setLocalRot(iris::Quat(float(camRotQuat["scalar"].toDouble(1.0)),
-                                        float(camRotQuat["x"].toDouble(0.0)),
-                                        float(camRotQuat["y"].toDouble(0.0)),
-                                        float(camRotQuat["z"].toDouble(0.0))).normalized());
+        camera->setLocalRot(iris::Quat(float(camRotQuat.value("scalar").toDouble(1.0)),
+                                        float(camRotQuat.value("x").toDouble(0.0)),
+                                        float(camRotQuat.value("y").toDouble(0.0)),
+                                        float(camRotQuat.value("z").toDouble(0.0))).normalized());
     else
-        camera->setLocalRot(iris::Quat::fromEulerAngles(readVector3(camObj["rot"].toObject())));
-	camera->setOrthagonalZoom((float)camObj["orthogonalSize"].toDouble(3.0f));
-	iris::CameraProjection val = camObj["projectionMode"].toString().compare("orthogonal") == 0 ? iris::CameraProjection::Orthogonal : iris::CameraProjection::Perspective;
+        camera->setLocalRot(iris::Quat::fromEulerAngles(readVector3(camObj.value("rot").toObject())));
+	camera->setOrthagonalZoom((float)camObj.value("orthogonalSize").toDouble(camera->orthoSize));
+	iris::CameraProjection val = camObj.value("projectionMode").toString().compare("orthogonal") == 0 ? iris::CameraProjection::Orthogonal : iris::CameraProjection::Perspective;
 	camera->setProjection(val);
 
-    auto editorData = new EditorData();
     editorData->editorCamera = camera;
-    editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
+    // (`distanceFromPivot` was READ here into a field nothing consumed and no
+    // writer ever wrote — the orbit distance lives in the viewport's own
+    // per-view state. Deleted with EditorData::distFromPivot, CRUD law.)
     // Light wires default ON (owner 2026-08-31): scenes saved before the flag
     // existed read back true; an explicitly saved false is honored.
-    editorData->showLightWires = editorObj["showLightWires"].toBool(true);
-	editorData->showDebugDrawFlags = editorObj["showDebugDrawFlags"].toBool();
-    // Grid defaults ON: scenes saved before the grid existed read back true.
-    // Default OFF since 2026-09-06 (scenes ship a tiled floor); a file that
-    // recorded a choice keeps it — only the missing-key default changed.
-    editorData->showGrid = editorObj["showGrid"].toBool(false);
+    editorData->showLightWires = editorObj.value("showLightWires").toBool(editorData->showLightWires);
+	editorData->showDebugDrawFlags = editorObj.value("showDebugDrawFlags").toBool(editorData->showDebugDrawFlags);
+    // The grid defaults OFF since 2026-09-06 (scenes ship a tiled floor); a
+    // file that recorded a choice keeps it — and the default itself is
+    // EditorData's, which is the one a brand-new scene is born with
+    // (ui.grid_default asserts the two agree).
+    editorData->showGrid = editorObj.value("showGrid").toBool(editorData->showGrid);
 
     return editorData;
 }
@@ -325,11 +362,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// existed gets the shipped behaviour — and the SIZE default is the same
 	// named constant the field's initialiser uses, so the two cannot drift
 	// apart (the reader-defaults trap this file's header records).
-	scene->sunDiscVisible = sceneObj.value("sunDiscVisible").toBool(true);
-	scene->sunDiscInProbes = sceneObj.value("sunDiscInProbes").toBool(false);
+	scene->sunDiscVisible = sceneObj.value("sunDiscVisible").toBool(scene->sunDiscVisible);
+	scene->sunDiscInProbes = sceneObj.value("sunDiscInProbes").toBool(scene->sunDiscInProbes);
 	scene->sunDiscSize = float(qBound(double(iris::kMinSunDiscSize),
 	                                  sceneObj.value("sunDiscSize")
-	                                      .toDouble(double(iris::kDefaultSunDiscSize)),
+	                                      .toDouble(double(scene->sunDiscSize)),
 	                                  double(iris::kMaxSunDiscSize)));
 	// HARDWARE RAY TRACING (ledger §425). Tolerant, like the play mode: a key
 	// that is absent (every scene written before the row existed) or that names
@@ -342,7 +379,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 			scene->rayTracing = rt;
 	}
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
-	auto volume = sceneObj.value("ambientMusicVolume").toDouble(50);
+	auto volume = sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume);
 	scene->setAmbientMusicVolume(volume);
 	const QString ambientMusicPath = resolveAssetPath(scene->ambientMusicGuid);
 	if (!ambientMusicPath.isEmpty()) {
@@ -425,7 +462,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 			scene->gradientTop = SceneReader::readColor(gradientDefinition.value("gradientTop").toObject());
 			scene->gradientMid = SceneReader::readColor(gradientDefinition.value("gradientMid").toObject());
 			scene->gradientBot = SceneReader::readColor(gradientDefinition.value("gradientBot").toObject());
-			scene->gradientOffset = gradientDefinition.value("gradientOffset").toDouble();
+			scene->gradientOffset =
+			    gradientDefinition.value("gradientOffset").toDouble(scene->gradientOffset);
 			break;
 		}
 
@@ -449,50 +487,64 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const QColor fogColor = this->readColor(sceneObj.value("fogColor").toObject());
         if (fogColor.isValid()) scene->fogColor = fogColor;
     }
-    scene->fogStart = sceneObj.value("fogStart").toDouble(100);
-    // 180, the constructor's (scene.cpp:100). It read 120 here, and since the
-    // fog went exponential this pair is what derives fogDensity for a document
-    // that carries neither key — i.e. the disagreement was a different fog.
-    scene->fogEnd = sceneObj.value("fogEnd").toDouble(180);
-    scene->fogEnabled = sceneObj.value("fogEnabled").toBool(true);
-    // Fog became EXPONENTIAL. No migration pass exists and none is needed: a scene
-    // written before the change has no fogDensity key, and its old linear pair is
-    // exactly what the default derives from.
-    scene->fogDensity = sceneObj.value("fogDensity").toDouble(
-        double(iris::Scene::fogDensityFromLinear(scene->fogStart, scene->fogEnd)));
-    scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(0.0);
-    scene->fogAtmosphere = sceneObj.value("fogAtmosphere").toBool(false);
-    scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(0.1);
-    scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(0.0);
-    scene->fogBreakMinBrightness = sceneObj.value("fogBreakMinBrightness").toDouble(0.25);
-    scene->fogBreakFalloff = sceneObj.value("fogBreakFalloff").toDouble(0.1);
+    scene->fogEnabled = sceneObj.value("fogEnabled").toBool(scene->fogEnabled);
+    // Fog became EXPONENTIAL, and THE LINEAR PAIR IS GONE FROM THE DOCUMENT
+    // (CRUD law, render audit I-6): `fogStart`/`fogEnd` were two fields nothing
+    // rendered — one disabled panel row said so in its own label — whose last
+    // remaining job was to derive a density for a scene written before
+    // `fogDensity` existed. That job is done HERE, from the file's own keys, and
+    // the two numbers are then forgotten: read, used, never stored and never
+    // written again. 100 and 180 appear in this one expression because they are
+    // the shape of the fog those old files had, not a default of anything.
+    if (sceneObj.contains("fogDensity"))
+        scene->fogDensity = sceneObj.value("fogDensity").toDouble(scene->fogDensity);
+    else if (sceneObj.contains("fogStart") || sceneObj.contains("fogEnd"))
+        scene->fogDensity = iris::Scene::fogDensityFromLinear(
+            float(sceneObj.value("fogStart").toDouble(100.0)),
+            float(sceneObj.value("fogEnd").toDouble(180.0)));
+    scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(scene->fogHeightDensity);
+    scene->fogAtmosphere = sceneObj.value("fogAtmosphere").toBool(scene->fogAtmosphere);
+    scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(scene->fogHeightFalloff);
+    scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(scene->fogHeightLevel);
+    scene->fogBreakMinBrightness =
+        sceneObj.value("fogBreakMinBrightness").toDouble(scene->fogBreakMinBrightness);
+    scene->fogBreakFalloff = sceneObj.value("fogBreakFalloff").toDouble(scene->fogBreakFalloff);
 
     // Global illumination: absent (older scenes) or unknown values mean OFF.
     {
-        const QString giMode = sceneObj.value("giMode").toString("off");
+        // ABSENT LEAVES THE CONSTRUCTOR'S VALUE (the reader-defaults law): the
+        // key is only mapped when the file carries one, so "off" and "medium"
+        // are not repeated here as second definitions of Scene's own defaults.
+        // An unknown spelling still reads OFF / MEDIUM, which is what a corrupt
+        // or newer-build document deserves.
         // "instant_radiosity" IS READ, and reads as VCT (PHOTON_SPEC E2 (4)).
         // The technique is deleted; the scenes that named it are not, and what
         // its tier means now IS the voxel arm — so an old document opens lit
         // rather than dark. It is never written again.
-        if (giMode == "vct" || giMode == "instant_radiosity") scene->giMode = iris::GiMode::VCT;
-        else if (giMode == "vct_pcc_hybrid") scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
-        else scene->giMode = iris::GiMode::OFF;
-        const QString giQuality = sceneObj.value("giQuality").toString("medium");
-        if (giQuality == "low") scene->giQuality = iris::GiQuality::LOW;
-        else if (giQuality == "high") scene->giQuality = iris::GiQuality::HIGH;
-        else scene->giQuality = iris::GiQuality::MEDIUM;
+        if (sceneObj.contains("giMode")) {
+            const QString giMode = sceneObj.value("giMode").toString();
+            if (giMode == "vct" || giMode == "instant_radiosity") scene->giMode = iris::GiMode::VCT;
+            else if (giMode == "vct_pcc_hybrid") scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+            else scene->giMode = iris::GiMode::OFF;
+        }
+        if (sceneObj.contains("giQuality")) {
+            const QString giQuality = sceneObj.value("giQuality").toString();
+            if (giQuality == "low") scene->giQuality = iris::GiQuality::LOW;
+            else if (giQuality == "high") scene->giQuality = iris::GiQuality::HIGH;
+            else scene->giQuality = iris::GiQuality::MEDIUM;
+        }
         // THE LIT VOLUME IS THE RENDERER'S (owner decision D8, 2026-09-13). The
         // reader no longer looks at `giBoundsMin`/`giBoundsMax`/`giAutoBoundsMax`:
         // a scene that pinned a volume OPENS UNPINNED, with the automatic fit,
         // which is the only behaviour left. Deliberately no tolerance and no
         // migration — there is nothing the pin could be migrated to.
-        scene->giNumBounces = qBound(1, sceneObj.value("giNumBounces").toInt(1), 4);
+        scene->giNumBounces = qBound(1, sceneObj.value("giNumBounces").toInt(scene->giNumBounces), 4);
         // THE GI UPDATE BUDGET (FIX WAVE B1), with the legacy mapping: a
         // document written before the fix wave carries the giAutoRefresh bool
         // and nothing else, and false meant exactly what budget 0 means.
         scene->giUpdateBudget =
             sceneObj.contains("giUpdateBudget")
-                ? qBound(0, sceneObj.value("giUpdateBudget").toInt(1), 512)
+                ? qBound(0, sceneObj.value("giUpdateBudget").toInt(scene->giUpdateBudget), 512)
                 : (sceneObj.value("giAutoRefresh").toBool(true) ? 1 : 0);
         // (`giDynamicProbes` — Photon Epic's old fifth column — is READ BY
         // NOTHING. The feature is deleted, R2 2026-09-12: a moving object is not
@@ -504,19 +556,21 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
         // document written before this phase; the toInt/toDouble defaults ARE
         // the constructor's, so an old scene reads exactly as it did.
-        scene->giProbeCaptureSize = qBound(0, sceneObj.value("giProbeCaptureSize").toInt(0), 1024);
-        scene->giProbeHdr = qBound(-1, sceneObj.value("giProbeHdr").toInt(-1), 1);
-        scene->giProbeShadows = qBound(-1, sceneObj.value("giProbeShadows").toInt(-1), 1);
-        scene->giProbeOverlap =
-            float(qBound(0.01, sceneObj.value("giProbeOverlap").toDouble(1.25), 8.0));
-        scene->giProbeSnapDeviation =
-            float(qMax(0.0, sceneObj.value("giProbeSnapDeviation").toDouble(0.05)));
-        scene->giProbeSnapSidesMin =
-            float(qMax(0.0, sceneObj.value("giProbeSnapSidesMin").toDouble(0.25)));
-        scene->giProbeSnapSidesMax =
-            float(qMax(0.0, sceneObj.value("giProbeSnapSidesMax").toDouble(0.25)));
-        scene->giRayMarchStepScale =
-            float(qBound(1.0, sceneObj.value("giRayMarchStepScale").toDouble(1.0), 8.0));
+        scene->giProbeCaptureSize =
+            qBound(0, sceneObj.value("giProbeCaptureSize").toInt(scene->giProbeCaptureSize), 1024);
+        scene->giProbeHdr = qBound(-1, sceneObj.value("giProbeHdr").toInt(scene->giProbeHdr), 1);
+        scene->giProbeShadows =
+            qBound(-1, sceneObj.value("giProbeShadows").toInt(scene->giProbeShadows), 1);
+        scene->giProbeOverlap = float(
+            qBound(0.01, sceneObj.value("giProbeOverlap").toDouble(scene->giProbeOverlap), 8.0));
+        scene->giProbeSnapDeviation = float(qMax(
+            0.0, sceneObj.value("giProbeSnapDeviation").toDouble(scene->giProbeSnapDeviation)));
+        scene->giProbeSnapSidesMin = float(qMax(
+            0.0, sceneObj.value("giProbeSnapSidesMin").toDouble(scene->giProbeSnapSidesMin)));
+        scene->giProbeSnapSidesMax = float(qMax(
+            0.0, sceneObj.value("giProbeSnapSidesMax").toDouble(scene->giProbeSnapSidesMax)));
+        scene->giRayMarchStepScale = float(qBound(
+            1.0, sceneObj.value("giRayMarchStepScale").toDouble(scene->giRayMarchStepScale), 8.0));
         // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
         // written before the flag existed, and the default is the arm those
         // documents were authored against — there is nothing to migrate.
@@ -532,8 +586,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
                               : casc.toInt(-1) < 0                 ? -1
                               : (casc.toInt(0) != 0 ? 1 : 0);
         }
-        scene->giCascadeInstanceCap =
-            qBound(0, sceneObj.value("giCascadeInstanceCap").toInt(0), 1 << 20);
+        scene->giCascadeInstanceCap = qBound(
+            0, sceneObj.value("giCascadeInstanceCap").toInt(scene->giCascadeInstanceCap), 1 << 20);
         scene->giCascadeSet.clear();
         for (const QJsonValue &v : sceneObj.value("giCascadeSet").toArray()) {
             const QJsonArray row = v.toArray();
@@ -546,29 +600,29 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // before this phase, and the fallbacks ARE the constructor's values —
         // -1 (auto, which resolves OFF while there is no Photon tier) is what
         // makes those documents render exactly as they always did.
-        scene->giDdgi = qBound(-1, sceneObj.value("giDdgi").toInt(-1), 1);
+        scene->giDdgi = qBound(-1, sceneObj.value("giDdgi").toInt(scene->giDdgi), 1);
         // (A "giDdgiSource" key written before 2026-09-17 is IGNORED: the
         // irradiance field's rasterised probe source was deleted with the lane
         // FIELD-RASTER-CRUD, and the voxel source is the only one there is.)
-        scene->giDdgiIntensity =
-            float(qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(1.0), 64.0));
+        scene->giDdgiIntensity = float(
+            qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(scene->giDdgiIntensity), 64.0));
         // The ambient sky-visibility strength (the Photon ambient fix). Absent
         // in every document written before it: the fallback 1.0 turns the fix
         // ON for them, deliberately — it corrects a term those documents were
         // MISSING, and the sealed-room invariance gate is what says that is
         // safe for the scenes it cannot change.
-        scene->giDdgiAmbient =
-            float(qBound(0.0, sceneObj.value("giDdgiAmbient").toDouble(1.0), 8.0));
+        scene->giDdgiAmbient = float(
+            qBound(0.0, sceneObj.value("giDdgiAmbient").toDouble(scene->giDdgiAmbient), 8.0));
         // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
         // document written before the unification — those are DERIVED from the
         // fields above, below, once the World Mode is known.
         if (sceneObj.contains("giTier")) {
             bool ok = false;
             const auto t = worldmodes::photonTierFromName(sceneObj.value("giTier").toString(), &ok);
-            scene->giTier = ok ? int(t) : 3;
+            scene->giTier = ok ? int(t) : scene->giTier;
         }
     }
-    scene->shadowEnabled = sceneObj.value("shadowEnabled").toBool(true);
+    scene->shadowEnabled = sceneObj.value("shadowEnabled").toBool(scene->shadowEnabled);
     // Anti-aliasing: absent (a document written before the key existed) reads
     // the CONSTRUCTOR's default — the fallback IS scene->antiAliasing rather
     // than a second literal, so the reader-defaults trap (an absent-key
@@ -582,25 +636,26 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // Shadow-map resolution: absent or <= 0 means Auto (derive from the lights);
     // anything else is clamped to the engine's own [256, 8192] window.
     {
-        const int sr = sceneObj.value("shadowResolution").toInt(0);
+        const int sr = sceneObj.value("shadowResolution").toInt(scene->shadowResolution);
         scene->shadowResolution = sr <= 0 ? 0 : qBound(256, sr, 8192);
     }
     // Shadow-map BUDGET: absent (every scene written before shadow tooling)
     // means Auto, i.e. follow the World Mode tier.
     {
-        const int sb = sceneObj.value("shadowMapBudget").toInt(0);
+        const int sb = sceneObj.value("shadowMapBudget").toInt(scene->shadowMapBudget);
         scene->shadowMapBudget = sb <= 0 ? 0 : qBound(2, sb, 16);
     }
     // Shadow FILTER quality: absent means Auto (-1); otherwise 0/1/2.
     {
-        const int sf = sceneObj.value("shadowFilterTier").toInt(-1);
+        const int sf = sceneObj.value("shadowFilterTier").toInt(scene->shadowFilterTier);
         scene->shadowFilterTier = (sf >= 0 && sf <= 2) ? sf : -1;
         // Absent in every scene written before the ParticleFX2 adoption: 1 = real time.
-        scene->particleTimeScale = std::max(0.0, sceneObj.value("particleTimeScale").toDouble(1.0));
+        scene->particleTimeScale =
+            std::max(0.0, sceneObj.value("particleTimeScale").toDouble(scene->particleTimeScale));
     }
     // Post-processing chain (POST_CHAIN_SPEC §§3-7). Absent = off, which is what
     // every document written before the chain existed means.
-    scene->hdrEnabled = sceneObj.value("hdrEnabled").toBool(false);
+    scene->hdrEnabled = sceneObj.value("hdrEnabled").toBool(scene->hdrEnabled);
     // EVERY FALLBACK IN THIS BLOCK IS THE CONSTRUCTOR'S VALUE, verbatim
     // (irisgl/document/scenegraph/scene.cpp) — a key a file does not carry must
     // read as what a scene that was never saved holds, or "absent" and "fresh"
@@ -642,25 +697,26 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             !sceneObj.contains("exposureEv") && !sceneObj.contains("exposureMinEv") &&
             !sceneObj.contains("exposureMaxEv") && !sceneObj.contains("exposureMode");
     }
-    scene->bloomEnabled = sceneObj.value("bloomEnabled").toBool(false);
-    scene->bloomThreshold = float(sceneObj.value("bloomThreshold").toDouble(5.0));
-    scene->bloomKnee = float(sceneObj.value("bloomKnee").toDouble(2.0));   // absent = the old hard-coded width
-    scene->ssaoEnabled = sceneObj.value("ssaoEnabled").toBool(false);
-    scene->ssaoScale = float(qBound(0.25, sceneObj.value("ssaoScale").toDouble(1.0), 1.0));
-    scene->ssaoPower = float(qBound(0.1, sceneObj.value("ssaoPower").toDouble(1.5), 8.0));
-    scene->ssaoRadius = float(qBound(0.05, sceneObj.value("ssaoRadius").toDouble(2.0), 64.0));
-    scene->smaaPreset = qBound(-1, sceneObj.value("smaaPreset").toInt(-1), 3);
-    scene->ssrMode = qBound(0, sceneObj.value("ssrMode").toInt(0), 2);
+    scene->bloomEnabled = sceneObj.value("bloomEnabled").toBool(scene->bloomEnabled);
+    scene->bloomThreshold = float(sceneObj.value("bloomThreshold").toDouble(scene->bloomThreshold));
+    scene->bloomKnee = float(sceneObj.value("bloomKnee").toDouble(scene->bloomKnee));
+    scene->ssaoEnabled = sceneObj.value("ssaoEnabled").toBool(scene->ssaoEnabled);
+    scene->ssaoScale = float(qBound(0.25, sceneObj.value("ssaoScale").toDouble(scene->ssaoScale), 1.0));
+    scene->ssaoPower = float(qBound(0.1, sceneObj.value("ssaoPower").toDouble(scene->ssaoPower), 8.0));
+    scene->ssaoRadius =
+        float(qBound(0.05, sceneObj.value("ssaoRadius").toDouble(scene->ssaoRadius), 64.0));
+    scene->smaaPreset = qBound(-1, sceneObj.value("smaaPreset").toInt(scene->smaaPreset), 3);
+    scene->ssrMode = qBound(0, sceneObj.value("ssrMode").toInt(scene->ssrMode), 2);
     // BOTH SPELLINGS, absent = 40 — the helper carries the reasoning and the
     // tolerance for the old `rayReflectRoughness` key (sceneformat.h).
     scene->reflectionRoughnessCutoff = sceneformat::readReflectionRoughnessCutoff(sceneObj);
-    scene->refractionsMode = qBound(0, sceneObj.value("refractionsMode").toInt(0), 2);
+    scene->refractionsMode = qBound(0, sceneObj.value("refractionsMode").toInt(scene->refractionsMode), 2);
     // Distortion: absent = AUTO, which is what a document written before the
     // feature existed means (it holds no distortion material, so auto costs it
     // nothing and a user who adds one later sees it work).
-    scene->distortionMode = qBound(0, sceneObj.value("distortionMode").toInt(1), 2);
-    scene->distortionStrength =
-        float(qBound(0.0, sceneObj.value("distortionStrength").toDouble(1.0), 8.0));
+    scene->distortionMode = qBound(0, sceneObj.value("distortionMode").toInt(scene->distortionMode), 2);
+    scene->distortionStrength = float(
+        qBound(0.0, sceneObj.value("distortionStrength").toDouble(scene->distortionStrength), 8.0));
     // The looks stack. Absent = empty = the renderer's behaviour before this
     // feature existed, byte for byte. Everything a file can get wrong — an
     // unknown look id (a document from a newer build), the same look twice, a
@@ -672,11 +728,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // (-1 / 0 / -1), which is what every document written before this feature
     // says by omission. Explicit values are clamped to what the engine accepts.
     {
-        const int pb = sceneObj.value("planarReflectionBudget").toInt(-1);
+        const int pb = sceneObj.value("planarReflectionBudget").toInt(scene->planarReflectionBudget);
         scene->planarReflectionBudget = pb < 0 ? -1 : qBound(0, pb, 8);
-        const int pres = sceneObj.value("planarReflectionResolution").toInt(0);
+        const int pres =
+            sceneObj.value("planarReflectionResolution").toInt(scene->planarReflectionResolution);
         scene->planarReflectionResolution = pres <= 0 ? 0 : qBound(256, pres, 2048);
-        const int ps = sceneObj.value("planarReflectionShadows").toInt(-1);
+        const int ps = sceneObj.value("planarReflectionShadows").toInt(scene->planarReflectionShadows);
         scene->planarReflectionShadows = (ps == 0 || ps == 1) ? ps : -1;
     }
     // World Mode (POST_CHAIN_SPEC §9). Absent reads as "custom": the fields
@@ -758,7 +815,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // up at the wrong tier is re-authored, never patched by the reader.
         }
     }
-	scene->setWorldGravity(sceneObj.value("gravity").toDouble(Constants::GRAVITY));
+	scene->setWorldGravity(sceneObj.value("gravity").toDouble(scene->gravity));
 
     auto rootNode = sceneObj.value("rootNode").toObject();
 
@@ -921,23 +978,30 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // only repair that can work: the identity was never written down.
     const QString storedGuid = nodeObj["guid"].toString();
     sceneNode->setGUID(storedGuid.isEmpty() ? GUIDManager::generateGUID() : storedGuid);
-    sceneNode->setAttached(nodeObj["attached"].toBool());
-    sceneNode->setPickable(nodeObj["pickable"].toBool(true));
-    // Absent = false: the writer only emits the key when the flag is on.
-    sceneNode->setPlanarReflector(nodeObj["planarReflector"].toBool(false));
-    // Absent = false, same as planarReflector: the writer only emits it when set.
-    sceneNode->setGiBoundsExcluded(nodeObj["giBoundsExcluded"].toBool(false));
-    // Shadow Caster: absent = TRUE (the document default) — the writer only
+    // EVERY FALLBACK BELOW IS THE NODE'S OWN CURRENT VALUE, i.e. the
+    // constructor's (the reader-defaults law, I-5): absent and fresh must mean
+    // the same node.
+    sceneNode->setAttached(nodeObj["attached"].toBool(sceneNode->isAttached()));
+    sceneNode->setPickable(nodeObj["pickable"].toBool(sceneNode->isPickable()));
+    // Absent = the ctor's false: the writer only emits the key when the flag is on.
+    sceneNode->setPlanarReflector(
+        nodeObj["planarReflector"].toBool(sceneNode->getPlanarReflector()));
+    // Absent = the ctor's false, same as planarReflector: the writer only emits it when set.
+    sceneNode->setGiBoundsExcluded(
+        nodeObj["giBoundsExcluded"].toBool(sceneNode->getGiBoundsExcluded()));
+    // Shadow Caster: absent = the document default (TRUE) — the writer only
     // emits the key when the user turned casting off, so every scene written
     // before the key existed loads exactly as it did.
-    sceneNode->setShadowCastingEnabled(nodeObj["castShadow"].toBool(true));
+    sceneNode->setShadowCastingEnabled(
+        nodeObj["castShadow"].toBool(sceneNode->getShadowCastingEnabled()));
     // LIGHTING CHANNELS. ABSENT = ALL CHANNELS, which is what every scene
     // written before the key existed means and what "the feature is off"
     // means — so no old document changes appearance. Read through a double
     // (QJsonValue's only numeric type; it holds every uint32 exactly) and
     // masked back to 32 bits, so a hand-edited -1 also reads as "everything".
     sceneNode->setLightMask(static_cast<quint32>(
-        static_cast<qlonglong>(nodeObj["lightMask"].toDouble(4294967295.0)) & 0xFFFFFFFFll));
+        static_cast<qlonglong>(nodeObj["lightMask"].toDouble(double(sceneNode->getLightMask()))) &
+        0xFFFFFFFFll));
     // MOBILITY, the persisted USER SETTING (format v3). Absent — every node of
     // every scene written before v3, and the overwhelming majority after it —
     // means "no opinion": the resolution rule decides, in the
@@ -1069,12 +1133,18 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 	if (sceneNode->isPhysicsBody) {
 		QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
 		sceneNode->physicsProperty.centerOfMass = readVector3(physicsDef["centerOfMass"].toObject());
-		sceneNode->physicsProperty.isStatic = physicsDef["static"].toBool();
-		sceneNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
-		sceneNode->physicsProperty.objectDamping = physicsDef["damping"].toDouble();
-		sceneNode->physicsProperty.objectMass = physicsDef["mass"].toDouble();
-		sceneNode->physicsProperty.objectFriction = physicsDef["friction"].toDouble(.5f);
-		sceneNode->physicsProperty.objectRestitution = physicsDef["bounciness"].toDouble();
+		// THE FALLBACKS ARE PhysicsProperty's OWN (the reader-defaults law): a
+		// body written before a key existed read mass 0, damping 0 and a zero
+		// collision margin against the constructor's 1 / 0.1 / 0.01 — and a
+		// mass of zero is a STATIC body to Bullet, which is not "no opinion".
+		auto &phys = sceneNode->physicsProperty;
+		phys.isStatic = physicsDef["static"].toBool(phys.isStatic);
+		phys.objectCollisionMargin =
+		    physicsDef["collisionMargin"].toDouble(phys.objectCollisionMargin);
+		phys.objectDamping = physicsDef["damping"].toDouble(phys.objectDamping);
+		phys.objectMass = physicsDef["mass"].toDouble(phys.objectMass);
+		phys.objectFriction = physicsDef["friction"].toDouble(phys.objectFriction);
+		phys.objectRestitution = physicsDef["bounciness"].toDouble(phys.objectRestitution);
 		sceneNode->physicsProperty.pivotPoint = readVector3(physicsDef["pivot"].toObject());
 		sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
 		sceneNode->physicsProperty.type = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
@@ -1278,7 +1348,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         source = resolveAssetPath(source);
 	}
 
-    int meshIndex = nodeObj["meshIndex"].toInt(0);
+    int meshIndex = nodeObj["meshIndex"].toInt(meshNode->meshIndex);
     QString meshGUID = nodeObj["guid"].toString();
 
     if (source.isEmpty() && !nodeObj["mesh"].toString().isEmpty()) {
@@ -1315,28 +1385,35 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         }
 
         meshNode->setGUID(meshGUID);
-		meshNode->setVisible(nodeObj["visible"].toBool(true));
+		meshNode->setVisible(nodeObj["visible"].toBool(meshNode->isVisible()));
         meshNode->meshIndex = meshIndex;
     }
 
     auto material = readMaterial(nodeObj);
     meshNode->setMaterial(material);
 
-    QString faceCullingMode = nodeObj["faceCullingMode"].toString("back");
-
-    if (faceCullingMode == "back") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
-    } else if (faceCullingMode == "front") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
-    } else if (faceCullingMode == "material") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
-    } else {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
+    // ABSENT LEAVES MeshNode's OWN MODE (the reader-defaults law, I-5): the
+    // fallback here was the string "back", i.e. FaceCullingMode::Back, while
+    // MeshNode is born DefinedInMaterial — so a mesh in a file written before
+    // the key existed had its material's own cull mode overridden on the way
+    // in. An unrecognised spelling still reads None, which is what a corrupt
+    // value deserves.
+    if (nodeObj.contains("faceCullingMode")) {
+        const QString faceCullingMode = nodeObj["faceCullingMode"].toString();
+        if (faceCullingMode == "back") {
+            meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
+        } else if (faceCullingMode == "front") {
+            meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
+        } else if (faceCullingMode == "material") {
+            meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
+        } else {
+            meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
+        }
     }
 
     // THE DEFAULT FLOOR (services/defaultfloor.h): a written flag, never a
     // guess from the name or the mesh path.
-    meshNode->defaultFloor = nodeObj["defaultFloor"].toBool(false);
+    meshNode->defaultFloor = nodeObj["defaultFloor"].toBool(meshNode->defaultFloor);
 
     // Sockets (CAMERAS_SPEC §5). Read with setSockets rather than addSocket:
     // addSocket VALIDATES against the rig, and a file must not silently drop a
@@ -1361,7 +1438,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
                                          float(rot["z"].toDouble(0.0))).normalized();
             if (socketObj.contains("scale"))
                 socket.scale = readVector3(socketObj["scale"].toObject());
-            socket.builtIn = socketObj["builtIn"].toBool(false);
+            socket.builtIn = socketObj["builtIn"].toBool(socket.builtIn);
             sockets.append(socket);
         }
         meshNode->setSockets(sockets);
@@ -1402,20 +1479,24 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     auto lightNode = iris::LightNode::create();
 
     lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString()));
-    lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
-    lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
-    lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
+    // THE FALLBACKS ARE THE LIGHT'S OWN VALUES (the reader-defaults law, I-5).
+    // `distance` — the point/spot RADIUS — read 1.0 here against LightNode's
+    // own 10, so every light in every document written before the key existed
+    // came back reaching a tenth as far as a light made in the editor.
+    lightNode->intensity = (float)nodeObj["intensity"].toDouble(lightNode->intensity);
+    lightNode->distance = (float)nodeObj["distance"].toDouble(lightNode->distance);
+    lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(lightNode->spotCutOff);
     // Serializer gap fixed (WEB_EXPORT_AUDIT §1): the mirror consumes softness
-    // but it was never persisted. Default matches the LightNode constructor.
-    // The default is the CONSTRUCTOR's (0.15 since LIGHTING_FIX fix 5), not the
-    // old 1.0: a document written before softness was persisted never meant
-    // "all penumbra", it simply had nothing to say.
-    lightNode->spotCutOffSoftness = (float)nodeObj["spotCutOffSoftness"].toDouble(0.15f);
-    lightNode->spotFalloff = (float)nodeObj["spotFalloff"].toDouble(1.0f);
-    lightNode->rectWidth = (float)nodeObj["rectWidth"].toDouble(1.0f);
-    lightNode->rectHeight = (float)nodeObj["rectHeight"].toDouble(1.0f);
-    lightNode->doubleSided = nodeObj["doubleSided"].toBool(false);
-    lightNode->accurate = nodeObj["accurate"].toBool(false);
+    // but it was never persisted. A document written before softness was
+    // persisted never meant "all penumbra", it simply had nothing to say — so
+    // it reads the constructor's narrow edge like everything else here.
+    lightNode->spotCutOffSoftness =
+        (float)nodeObj["spotCutOffSoftness"].toDouble(lightNode->spotCutOffSoftness);
+    lightNode->spotFalloff = (float)nodeObj["spotFalloff"].toDouble(lightNode->spotFalloff);
+    lightNode->rectWidth = (float)nodeObj["rectWidth"].toDouble(lightNode->rectWidth);
+    lightNode->rectHeight = (float)nodeObj["rectHeight"].toDouble(lightNode->rectHeight);
+    lightNode->doubleSided = nodeObj["doubleSided"].toBool(lightNode->doubleSided);
+    lightNode->accurate = nodeObj["accurate"].toBool(lightNode->accurate);
     // Asset bindings: the guid is what was written; the path and the profile's
     // photometric scale are runtime state, re-derived from the store on every
     // load exactly like the sky's texture (the renderer opens FILES, and the
@@ -1427,16 +1508,22 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->lightTextureGuid = nodeObj["lightTexture"].toString();
     lightNode->lightTexturePath = resolveAssetPath(lightNode->lightTextureGuid);
     lightNode->color = readColor(nodeObj["color"].toObject());
-	lightNode->setVisible(nodeObj["visible"].toBool(true));
+	lightNode->setVisible(nodeObj["visible"].toBool(lightNode->isVisible()));
 
-	lightNode->shadowAlpha = (float)nodeObj["shadowAlpha"].toDouble(1.0f);
-	lightNode->shadowColor = readColor(nodeObj["shadowColor"].toObject());
+	// (`shadowAlpha`, `shadowColor` and `shadowBias` were READ here into three
+	// document fields the renderer never consumed — two panel rows hidden, one
+	// commented out — and are DELETED with them, CRUD law. The keys are still
+	// TOLERATED in that an old file carrying them simply loses them: nothing
+	// reads them, nothing writes them, no issue is raised, because no value
+	// they could hold ever changed a pixel.)
 
     //shadow data
     auto shadowMap = lightNode->shadowMap;
-    shadowMap->bias = (float)nodeObj["shadowBias"].toDouble(0.0015f);
-    // ensure shadow map size isnt too big ro too small
-    auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
+    // THE RESOLUTION'S DEFAULT IS ShadowMap's OWN (the reader-defaults law):
+    // it read 1024 here against the constructor's 2048, so every light in
+    // every document written before the key existed came back at half the
+    // shadow resolution a light made in the editor gets.
+    auto res = qBound(512, nodeObj["shadowSize"].toInt(shadowMap->resolution), 4096);
     shadowMap->setResolution(res);
     // value(), not operator[]: a read through operator[] on a NON-CONST
     // QJsonObject INSERTS a null member.
@@ -1445,7 +1532,7 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // default, which is what the writer relies on (it writes the key only when
     // it is non-zero).
     lightNode->forwardShadingPriority =
-        qMax(0, nodeObj.value("forwardShadingPriority").toInt(0));
+        qMax(0, nodeObj.value("forwardShadingPriority").toInt(lightNode->forwardShadingPriority));
     // (The sun's angular size used to be read here as `sunAngle`. The disc's
     // size is a WORLD row now — Scene::sunDiscSize — so the key is not read any
     // more and an old file's value is simply dropped: no migration exists and
@@ -1453,7 +1540,8 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // FOLLOWS ATMOSPHERE: absent = ON, which is the constructor's default too
     // (the two must agree — this file's own header records what happens when
     // they do not).
-    lightNode->followsAtmosphere = nodeObj.value("followsAtmosphere").toBool(true);
+    lightNode->followsAtmosphere =
+        nodeObj.value("followsAtmosphere").toBool(lightNode->followsAtmosphere);
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional ||
@@ -1468,8 +1556,6 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
         lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
     }
 
-    lightNode->iconSize = 0.5f;
-
     return lightNode;
 }
 
@@ -1480,13 +1566,15 @@ iris::DecalNodePtr SceneReader::createDecal(QJsonObject& nodeObj)
     decalNode->textureGuid  = nodeObj["decalTexture"].toString();
     decalNode->normalGuid   = nodeObj["decalNormal"].toString();
     decalNode->emissiveGuid = nodeObj["decalEmissive"].toString();
-    decalNode->width  = (float) nodeObj["width"].toDouble(1.0);
-    decalNode->height = (float) nodeObj["height"].toDouble(1.0);
-    decalNode->depth  = (float) nodeObj["depth"].toDouble(0.5);
-    decalNode->metalness = (float) nodeObj["metalness"].toDouble(0.0);
-    decalNode->roughness = (float) nodeObj["roughness"].toDouble(1.0);
-    decalNode->ignoreAlphaDiffuse = nodeObj["ignoreAlphaDiffuse"].toBool(false);
-    decalNode->setVisible(nodeObj["visible"].toBool(true));
+    // Fallbacks are DecalNode's own member initialisers (the reader-defaults law).
+    decalNode->width  = (float) nodeObj["width"].toDouble(decalNode->width);
+    decalNode->height = (float) nodeObj["height"].toDouble(decalNode->height);
+    decalNode->depth  = (float) nodeObj["depth"].toDouble(decalNode->depth);
+    decalNode->metalness = (float) nodeObj["metalness"].toDouble(decalNode->metalness);
+    decalNode->roughness = (float) nodeObj["roughness"].toDouble(decalNode->roughness);
+    decalNode->ignoreAlphaDiffuse =
+        nodeObj["ignoreAlphaDiffuse"].toBool(decalNode->ignoreAlphaDiffuse);
+    decalNode->setVisible(nodeObj["visible"].toBool(decalNode->isVisible()));
 
     // Bytes: pin-first through the CAS, exactly like material maps. A guid that
     // no longer resolves leaves the path empty — the node still loads, draws its
@@ -1504,66 +1592,88 @@ iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
 
     // The projection block. Defaults are the CameraNode constructor's own, so a
     // file missing a key loads the same camera the Add menu makes.
-    cameraNode->angle       = (float) nodeObj["angle"].toDouble(45.0);
-    cameraNode->nearClip    = (float) nodeObj["nearClip"].toDouble(0.1);
-    cameraNode->farClip     = (float) nodeObj["farClip"].toDouble(500.0);
-    cameraNode->aspectRatio = (float) nodeObj["aspectRatio"].toDouble(1.0);
-    cameraNode->setOrthagonalZoom((float) nodeObj["orthogonalSize"].toDouble(10.0));
-    cameraNode->setProjection(nodeObj["projectionMode"].toString("perspective") == "orthogonal"
-                                  ? iris::CameraProjection::Orthogonal
-                                  : iris::CameraProjection::Perspective);
+    cameraNode->angle       = (float) nodeObj["angle"].toDouble(cameraNode->angle);
+    cameraNode->nearClip    = (float) nodeObj["nearClip"].toDouble(cameraNode->nearClip);
+    cameraNode->farClip     = (float) nodeObj["farClip"].toDouble(cameraNode->farClip);
+    cameraNode->aspectRatio = (float) nodeObj["aspectRatio"].toDouble(cameraNode->aspectRatio);
+    cameraNode->setOrthagonalZoom(
+        (float) nodeObj["orthogonalSize"].toDouble(cameraNode->orthoSize));
+    // The five enum keys below are guarded by contains() rather than given a
+    // default SPELLING: "perspective", "degrees", "vertical", "manual" and
+    // "inherit" are the constructor's values and writing them here would copy
+    // them (the reader-defaults law).
+    if (nodeObj.contains("projectionMode"))
+        cameraNode->setProjection(nodeObj["projectionMode"].toString() == "orthogonal"
+                                      ? iris::CameraProjection::Orthogonal
+                                      : iris::CameraProjection::Perspective);
 
     // CAMERAS_SPEC §2. The sensor is set through the raw fields, not
     // setSensorSize: the angle above is the authored truth and must not be
     // re-derived from a focal length the file does not carry.
-    const float sw = (float) nodeObj["sensorWidth"].toDouble(36.0);
-    const float sh = (float) nodeObj["sensorHeight"].toDouble(24.0);
+    const float sw = (float) nodeObj["sensorWidth"].toDouble(cameraNode->sensorWidth);
+    const float sh = (float) nodeObj["sensorHeight"].toDouble(cameraNode->sensorHeight);
     if (sw > 0.0f) cameraNode->sensorWidth = sw;
     if (sh > 0.0f) cameraNode->sensorHeight = sh;
-    cameraNode->authorMode = nodeObj["authorMode"].toString("degrees") == QLatin1String("mm")
-                                 ? iris::CameraAuthorMode::Millimeters
-                                 : iris::CameraAuthorMode::Degrees;
+    if (nodeObj.contains("authorMode"))
+        cameraNode->authorMode = nodeObj["authorMode"].toString() == QLatin1String("mm")
+                                     ? iris::CameraAuthorMode::Millimeters
+                                     : iris::CameraAuthorMode::Degrees;
     // CAMERA_LENS_SPEC §3. Every key below defaults to the value the
     // constructor already set, so a file written before this phase existed
     // loads a camera that projects EXACTLY what it used to (vertical fit, no
     // squeeze, no shift). Set through the raw fields, not the setters, for the
     // same reason the sensor pair is: `angle` above is the authored truth.
-    const QString sensorFit = nodeObj["sensorFit"].toString("vertical");
-    cameraNode->sensorFit = sensorFit == QLatin1String("horizontal") ? iris::CameraSensorFit::Horizontal
-                          : sensorFit == QLatin1String("auto")       ? iris::CameraSensorFit::Auto
-                                                                     : iris::CameraSensorFit::Vertical;
-    const float squeeze = (float) nodeObj["anamorphicSqueeze"].toDouble(1.0);
+    if (nodeObj.contains("sensorFit")) {
+        const QString sensorFit = nodeObj["sensorFit"].toString();
+        cameraNode->sensorFit = sensorFit == QLatin1String("horizontal") ? iris::CameraSensorFit::Horizontal
+                              : sensorFit == QLatin1String("auto")       ? iris::CameraSensorFit::Auto
+                                                                         : iris::CameraSensorFit::Vertical;
+    }
+    const float squeeze =
+        (float) nodeObj["anamorphicSqueeze"].toDouble(cameraNode->anamorphicSqueeze);
     if (squeeze > 0.0f) cameraNode->anamorphicSqueeze = squeeze;
-    cameraNode->lensShiftX = qBound(-1.0f, (float) nodeObj["lensShiftX"].toDouble(0.0), 1.0f);
-    cameraNode->lensShiftY = qBound(-1.0f, (float) nodeObj["lensShiftY"].toDouble(0.0), 1.0f);
-    cameraNode->constrainAspect = nodeObj["constrainAspect"].toBool(false);
-    cameraNode->dofEnabled      = nodeObj["dofEnabled"].toBool(false);
-    const QString focusMode = nodeObj["focusMode"].toString("manual");
-    cameraNode->focusMode = focusMode == QLatin1String("track") ? iris::CameraFocusMode::Track
-                          : focusMode == QLatin1String("off")   ? iris::CameraFocusMode::Off
-                                                                : iris::CameraFocusMode::Manual;
-    cameraNode->focusDistance = std::max(0.0f, (float) nodeObj["focusDistance"].toDouble(10.0));
+    cameraNode->lensShiftX =
+        qBound(-1.0f, (float) nodeObj["lensShiftX"].toDouble(cameraNode->lensShiftX), 1.0f);
+    cameraNode->lensShiftY =
+        qBound(-1.0f, (float) nodeObj["lensShiftY"].toDouble(cameraNode->lensShiftY), 1.0f);
+    cameraNode->constrainAspect =
+        nodeObj["constrainAspect"].toBool(cameraNode->constrainAspect);
+    cameraNode->dofEnabled      = nodeObj["dofEnabled"].toBool(cameraNode->dofEnabled);
+    if (nodeObj.contains("focusMode")) {
+        const QString focusMode = nodeObj["focusMode"].toString();
+        cameraNode->focusMode = focusMode == QLatin1String("track") ? iris::CameraFocusMode::Track
+                              : focusMode == QLatin1String("off")   ? iris::CameraFocusMode::Off
+                                                                    : iris::CameraFocusMode::Manual;
+    }
+    cameraNode->focusDistance =
+        std::max(0.0f, (float) nodeObj["focusDistance"].toDouble(cameraNode->focusDistance));
     cameraNode->focusTarget   = nodeObj["focusTarget"].toString();
-    cameraNode->fStop         = std::max(0.0f, (float) nodeObj["fStop"].toDouble(2.8));
+    cameraNode->fStop         = std::max(0.0f, (float) nodeObj["fStop"].toDouble(cameraNode->fStop));
     // CAMERA_LENS_SPEC §3 P2, the focus block — absent keys keep the
-    // constructor's defaults, which is what every pre-P2 file means.
-    cameraNode->focusOffset         = (float) nodeObj["focusOffset"].toDouble(0.0);
-    cameraNode->smoothFocus         = nodeObj["smoothFocus"].toBool(false);
-    cameraNode->focusSmoothingSpeed = std::max(0.0f, (float) nodeObj["focusSmoothingSpeed"].toDouble(8.0));
-    cameraNode->minFocusDistance    = std::max(0.0f, (float) nodeObj["minFocusDistance"].toDouble(0.1));
-    cameraNode->bladeCount          = qBound(3, nodeObj["bladeCount"].toInt(5), 16);
-    cameraNode->focusPlaneVisible   = nodeObj["focusPlaneVisible"].toBool(false);
-    cameraNode->outputHeight  = qBound(1, nodeObj["outputHeight"].toInt(1080), 16384);
-    cameraNode->bodyVisible   = nodeObj["bodyVisible"].toBool(true);
+    // constructor's defaults, which is what every pre-P2 file means, and the
+    // fallback IS the constructor's value rather than a copy of it.
+    cameraNode->focusOffset         = (float) nodeObj["focusOffset"].toDouble(cameraNode->focusOffset);
+    cameraNode->smoothFocus         = nodeObj["smoothFocus"].toBool(cameraNode->smoothFocus);
+    cameraNode->focusSmoothingSpeed = std::max(
+        0.0f, (float) nodeObj["focusSmoothingSpeed"].toDouble(cameraNode->focusSmoothingSpeed));
+    cameraNode->minFocusDistance    = std::max(
+        0.0f, (float) nodeObj["minFocusDistance"].toDouble(cameraNode->minFocusDistance));
+    cameraNode->bladeCount          = qBound(3, nodeObj["bladeCount"].toInt(cameraNode->bladeCount), 16);
+    cameraNode->focusPlaneVisible   =
+        nodeObj["focusPlaneVisible"].toBool(cameraNode->focusPlaneVisible);
+    cameraNode->outputHeight  = qBound(1, nodeObj["outputHeight"].toInt(cameraNode->outputHeight), 16384);
+    cameraNode->bodyVisible   = nodeObj["bodyVisible"].toBool(cameraNode->bodyVisible);
     // CAMERA_LENS_SPEC §4. Absent = "inherit", which is what every file written
     // before this phase existed means, and it is bit-for-bit the old behaviour.
-    const QString exposureMode = nodeObj["exposureMode"].toString("inherit");
-    cameraNode->exposureMode = exposureMode == QLatin1String("auto")   ? iris::CameraExposureMode::Auto
-                             : exposureMode == QLatin1String("manual") ? iris::CameraExposureMode::Manual
-                                                                       : iris::CameraExposureMode::Inherit;
-    cameraNode->exposure    = (float) nodeObj["exposure"].toDouble(0.0);
-    cameraNode->exposureMin = (float) nodeObj["exposureMin"].toDouble(-3.5);
-    cameraNode->exposureMax = (float) nodeObj["exposureMax"].toDouble(3.5);
+    if (nodeObj.contains("exposureMode")) {
+        const QString exposureMode = nodeObj["exposureMode"].toString();
+        cameraNode->exposureMode = exposureMode == QLatin1String("auto")   ? iris::CameraExposureMode::Auto
+                                 : exposureMode == QLatin1String("manual") ? iris::CameraExposureMode::Manual
+                                                                           : iris::CameraExposureMode::Inherit;
+    }
+    cameraNode->exposure    = (float) nodeObj["exposure"].toDouble(cameraNode->exposure);
+    cameraNode->exposureMin = (float) nodeObj["exposureMin"].toDouble(cameraNode->exposureMin);
+    cameraNode->exposureMax = (float) nodeObj["exposureMax"].toDouble(cameraNode->exposureMax);
     if (cameraNode->exposureMax < cameraNode->exposureMin)
         std::swap(cameraNode->exposureMin, cameraNode->exposureMax);
     // CAMERA_LENS_SPEC §5. SANITISED, not trusted: a file may name a key this
@@ -1588,16 +1698,28 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     const QString storedParticleGuid = nodeObj["guid"].toString();
     particleNode->setGUID(storedParticleGuid.isEmpty() ? GUIDManager::generateGUID()
                                                        : storedParticleGuid);
-    particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
-    particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
-    particleNode->setDissipation(nodeObj["dissipate"].toBool());
-    particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool());
-    particleNode->setRandomRotation(nodeObj["randomRotation"].toBool());
-    particleNode->setGravity((float) nodeObj["gravityComplement"].toDouble(1.0f));
-    particleNode->setBlendMode(nodeObj["blendMode"].toBool());
-    particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
+    // THE FALLBACKS ARE THE EMITTER'S OWN AUTHORING DEFAULTS
+    // (ParticleSystemNode::resetAuthoringDefaults — the reader-defaults law,
+    // I-5). SIX of these disagreed with it and every one of them is visible:
+    // 1 particle per second against 24, speed 1 against 12, dissipate and
+    // random rotation OFF against ON, gravity 1 against 0 and additive
+    // blending OFF against ON — so an emitter in a file written before any of
+    // those keys existed came back as a slow, dark, static trickle instead of
+    // the emitter the Add menu makes.
+    particleNode->setPPS(
+        (float) nodeObj["particlesPerSecond"].toDouble(particleNode->particlesPerSecond));
+    particleNode->setParticleScale(
+        (float) nodeObj["particleScale"].toDouble(particleNode->particleScale));
+    particleNode->setDissipation(nodeObj["dissipate"].toBool(particleNode->dissipate));
+    particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool(particleNode->dissipateInv));
+    particleNode->setRandomRotation(
+        nodeObj["randomRotation"].toBool(particleNode->randomRotation));
+    particleNode->setGravity(
+        (float) nodeObj["gravityComplement"].toDouble(particleNode->gravityComplement));
+    particleNode->setBlendMode(nodeObj["blendMode"].toBool(particleNode->useAdditive));
+    particleNode->setLife((float) nodeObj["lifeLength"].toDouble(particleNode->lifeLength));
     particleNode->setName(nodeObj["name"].toString());
-    particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
+    particleNode->setSpeed((float) nodeObj["speed"].toDouble(particleNode->speed));
 
     // ---- ParticleFX2 keys (PARTICLES_FX2_SPEC §5) --------------------------
     // ALL OPTIONAL, all defaulted to the legacy behaviour: a scene written
@@ -1608,26 +1730,34 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     // The three "random" spreads (speedError/lifeError/scaleError) were edited
     // by the panel and never written for ten years (audit defect #7). They are
     // written now, absolute rather than fractional, and absent means 0.
-    particleNode->speedError = (float) nodeObj["speedError"].toDouble(0.0);
-    particleNode->lifeError  = (float) nodeObj["lifeError"].toDouble(0.0);
-    particleNode->scaleError = (float) nodeObj["scaleError"].toDouble(0.0);
-    particleNode->maxParticles = nodeObj["maxParticles"].toInt(0);
+    particleNode->speedError = (float) nodeObj["speedError"].toDouble(particleNode->speedError);
+    particleNode->lifeError  = (float) nodeObj["lifeError"].toDouble(particleNode->lifeError);
+    particleNode->scaleError = (float) nodeObj["scaleError"].toDouble(particleNode->scaleError);
+    particleNode->maxParticles = nodeObj["maxParticles"].toInt(particleNode->maxParticles);
 
-    particleNode->shape = iris::ParticleSystemNode::shapeFromName(
-        nodeObj["shape"].toString("point"));
-    particleNode->orientation = iris::ParticleSystemNode::orientationFromName(
-        nodeObj["orientation"].toString("billboard"));
-    particleNode->preset = iris::ParticleSystemNode::presetFromName(
-        nodeObj["preset"].toString("custom"));
-    particleNode->coneAngle        = (float) nodeObj["coneAngle"].toDouble(0.0);
-    particleNode->turbulence       = (float) nodeObj["turbulence"].toDouble(0.0);
-    particleNode->rotationSpeedMin = (float) nodeObj["rotationSpeedMin"].toDouble(0.0);
-    particleNode->rotationSpeedMax = (float) nodeObj["rotationSpeedMax"].toDouble(0.0);
-    particleNode->burstDuration    = (float) nodeObj["burstDuration"].toDouble(0.0);
-    particleNode->burstRepeatDelay = (float) nodeObj["burstRepeatDelay"].toDouble(0.0);
-    particleNode->startDelay       = (float) nodeObj["startDelay"].toDouble(0.0);
-    particleNode->alphaHash        = nodeObj["alphaHash"].toBool(true);
-    particleNode->distortion       = nodeObj["distortion"].toBool(false);
+    // The three enums: absent leaves the emitter's own value rather than
+    // repeating its spelling here (the reader-defaults law).
+    if (nodeObj.contains("shape"))
+        particleNode->shape = iris::ParticleSystemNode::shapeFromName(nodeObj["shape"].toString());
+    if (nodeObj.contains("orientation"))
+        particleNode->orientation =
+            iris::ParticleSystemNode::orientationFromName(nodeObj["orientation"].toString());
+    if (nodeObj.contains("preset"))
+        particleNode->preset =
+            iris::ParticleSystemNode::presetFromName(nodeObj["preset"].toString());
+    particleNode->coneAngle        = (float) nodeObj["coneAngle"].toDouble(particleNode->coneAngle);
+    particleNode->turbulence       = (float) nodeObj["turbulence"].toDouble(particleNode->turbulence);
+    particleNode->rotationSpeedMin =
+        (float) nodeObj["rotationSpeedMin"].toDouble(particleNode->rotationSpeedMin);
+    particleNode->rotationSpeedMax =
+        (float) nodeObj["rotationSpeedMax"].toDouble(particleNode->rotationSpeedMax);
+    particleNode->burstDuration    =
+        (float) nodeObj["burstDuration"].toDouble(particleNode->burstDuration);
+    particleNode->burstRepeatDelay =
+        (float) nodeObj["burstRepeatDelay"].toDouble(particleNode->burstRepeatDelay);
+    particleNode->startDelay       = (float) nodeObj["startDelay"].toDouble(particleNode->startDelay);
+    particleNode->alphaHash        = nodeObj["alphaHash"].toBool(particleNode->alphaHash);
+    particleNode->distortion       = nodeObj["distortion"].toBool(particleNode->distortion);
     if (nodeObj.contains("extents"))
         particleNode->extents = readVector3(nodeObj["extents"].toObject());
     if (nodeObj.contains("innerExtents"))
@@ -1644,26 +1774,28 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         particleNode->colourFade1 = readColor(nodeObj["colourFade1"].toObject());
     if (nodeObj.contains("colourFade2"))
         particleNode->colourFade2 = readColor(nodeObj["colourFade2"].toObject());
-    particleNode->colourFadeSwitch  = (float) nodeObj["colourFadeSwitch"].toDouble(0.0);
+    particleNode->colourFadeSwitch  =
+        (float) nodeObj["colourFadeSwitch"].toDouble(particleNode->colourFadeSwitch);
     particleNode->colourRampGuid    = nodeObj["colourRampGuid"].toString();
-    particleNode->scaleRate         = (float) nodeObj["scaleRate"].toDouble(0.0);
-    particleNode->scaleRateMultiply = nodeObj["scaleRateMultiply"].toBool(false);
+    particleNode->scaleRate         = (float) nodeObj["scaleRate"].toDouble(particleNode->scaleRate);
+    particleNode->scaleRateMultiply =
+        nodeObj["scaleRateMultiply"].toBool(particleNode->scaleRateMultiply);
 
     particleNode->colourKeys.clear();
     for (const QJsonValue &v : nodeObj["colourKeys"].toArray()) {
         const QJsonObject o = v.toObject();
         iris::ParticleColourKey k;
-        k.time = (float) o["time"].toDouble(0.0);
-        k.r = (float) o["r"].toDouble(1.0); k.g = (float) o["g"].toDouble(1.0);
-        k.b = (float) o["b"].toDouble(1.0); k.a = (float) o["a"].toDouble(1.0);
+        k.time = (float) o["time"].toDouble(k.time);
+        k.r = (float) o["r"].toDouble(k.r); k.g = (float) o["g"].toDouble(k.g);
+        k.b = (float) o["b"].toDouble(k.b); k.a = (float) o["a"].toDouble(k.a);
         particleNode->colourKeys.append(k);
     }
     particleNode->scaleKeys.clear();
     for (const QJsonValue &v : nodeObj["scaleKeys"].toArray()) {
         const QJsonObject o = v.toObject();
         iris::ParticleScaleKey k;
-        k.time  = (float) o["time"].toDouble(0.0);
-        k.scale = (float) o["scale"].toDouble(1.0);
+        k.time  = (float) o["time"].toDouble(k.time);
+        k.scale = (float) o["scale"].toDouble(k.scale);
         particleNode->scaleKeys.append(k);
     }
 
@@ -1672,7 +1804,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         if (!texturePath.isEmpty())
             particleNode->setTexture(iris::Texture2D::load(texturePath));
     }
-	particleNode->setVisible(nodeObj["visible"].toBool(true));
+	particleNode->setVisible(nodeObj["visible"].toBool(particleNode->isVisible()));
 
     return particleNode;
 }

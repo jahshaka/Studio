@@ -401,8 +401,6 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
     // meaningless on it. Reporting them anyway teaches a model to set fields
     // that do nothing — the same reason a point light has no spot cone here.
     if (light->lightType == iris::LightType::Sky) return m;
-    m["shadowAlpha"] = light->shadowAlpha;
-    m["shadowColor"] = colorToJs(light->shadowColor);
     if (light->lightType != iris::LightType::Directional)
         m["distance"] = light->distance;
     // (The sun's angular size is NOT a light row any more — the disc's size is
@@ -453,12 +451,18 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
         m["emissiveIntensity"] = pbr->emissiveIntensity;
         m["alpha"] = pbr->alpha;
         m["alphaMode"] = kAlphaModes[qBound(0, pbr->alphaMode, 6)];
+        // FROM THE TEXTURES THEMSELVES, not from a flag beside them: the six
+        // `use*Map` booleans are gone (render audit I-6) and `textures` is
+        // what the renderer binds from, so this list cannot disagree with the
+        // picture. Reflection is included — it is a map like any other.
         QVariantList maps;
-        if (pbr->useBaseColorMap) maps << QStringLiteral("baseColor");
-        if (pbr->useMetallicMap)  maps << QStringLiteral("metallic");
-        if (pbr->useRoughnessMap) maps << QStringLiteral("roughness");
-        if (pbr->useNormalMap)    maps << QStringLiteral("normal");
-        if (pbr->useEmissiveMap)  maps << QStringLiteral("emissive");
+        static const struct { const char *slot, *name; } kPbrMapSlots[] = {
+            { "u_baseColorMap", "baseColor" }, { "u_metallicMap", "metallic" },
+            { "u_roughnessMap", "roughness" }, { "u_normalMap", "normal" },
+            { "u_emissiveMap", "emissive" },   { "u_reflectionMap", "reflection" } };
+        for (const auto &slot : kPbrMapSlots)
+            if (pbr->textures.contains(QLatin1String(slot.slot)))
+                maps << QString::fromLatin1(slot.name);
         m["maps"] = maps;
     } else {
         m["class"] = QStringLiteral("material");

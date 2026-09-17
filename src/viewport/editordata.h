@@ -18,7 +18,12 @@ class EditorData
 {
 public:
     iris::CameraNodePtr editorCamera;
-    float distFromPivot = 0.0f;
+    // (`distFromPivot` is GONE — render audit I-6's class, CRUD law. SceneReader
+    // read it out of a `distanceFromPivot` key NO WRITER EVER WROTE, into a
+    // field nothing consumed: the explorer's orbit distance lives in the
+    // viewport's own per-view camera state (EngineSceneViewport::ViewCameraState)
+    // and is re-derived from the restored pose. Its reader default disagreed
+    // with this initialiser too — 5.0 against 0.0 — which is how it was found.)
     bool showLightWires = true;
     bool showDebugDrawFlags = false;
     /// Ground grid (EDITOR_SHORTCUTS_SPEC §3): per-scene like showLightWires.

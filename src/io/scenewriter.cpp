@@ -153,11 +153,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["gravity"] = scene->gravity;
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
-    // fogStart/fogEnd are the RETIRED linear pair: written so a scene still opens
-    // in an older build, and so fogEnd keeps deriving the density for scenes
-    // written before fogDensity existed (iris::Scene documents the mapping).
-    sceneObj["fogStart"] = scene->fogStart;
-    sceneObj["fogEnd"] = scene->fogEnd;
+    // (`fogStart`/`fogEnd`, the retired LINEAR pair, are no longer written —
+    // the fields are gone from the document, CRUD law. `fogDensity` below is
+    // the whole fog; the reader still READS the old pair, once, to derive a
+    // density for a file that predates this key.)
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["fogDensity"] = scene->fogDensity;
     sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
@@ -1097,14 +1096,13 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["lightTexture"] = lightNode->lightTextureGuid;
 	sceneNodeObject["color"] = jsonColor(lightNode->color);
 
-	sceneNodeObject["shadowAlpha"] = lightNode->shadowAlpha;
-	sceneNodeObject["shadowColor"] = jsonColor(lightNode->shadowColor);
-
+    // (`shadowAlpha`, `shadowColor` and `shadowBias` are no longer written —
+    // the three fields are gone from the document, CRUD law: the renderer never
+    // read any of them.)
     //shadow data
     auto shadowMap = lightNode->shadowMap;
     sceneNodeObject["shadowType"] = evalShadowTypeName(shadowMap->shadowType);
     sceneNodeObject["shadowSize"] = shadowMap->resolution;
-    sceneNodeObject["shadowBias"] = shadowMap->bias;
 }
 
 void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)

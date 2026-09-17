@@ -229,8 +229,6 @@ int main(int argc, char **argv)
     scene->gradientOffset = 0.5f;
     scene->fogEnabled = true;
     scene->fogColor = QColor(180, 180, 190);
-    scene->fogStart = 10.0f;
-    scene->fogEnd = 200.0f;
     scene->fogDensity = 0.02f;
     scene->fogHeightDensity = 0.05f;
     scene->fogHeightFalloff = 0.4f;
@@ -538,7 +536,10 @@ int main(int argc, char **argv)
               "gradient sky baked to equirect extras");
         CHECK(sky["image"].toString().startsWith("data:image/"), "sky image is a data URI");
         const QJsonObject fog = jah["fog"].toObject();
-        CHECK(fog["end"].toDouble() == 200.0, "fog extras");
+        // The retired LINEAR pair is not exported any more (render audit I-6):
+        // the document has no start/end and `exp2Density` is what the viewer reads.
+        CHECK(!fog.contains("start") && !fog.contains("end"),
+              "the retired linear fog pair is not exported");
         // float document fields, double JSON: compare with a tolerance, never ==.
         CHECK(std::abs(fog["density"].toDouble() - 0.02) < 1e-7, "fog density exported");
         // three.js has only FogExp2 (exp(-(rho*d)^2)) against our 2^(-density*d);

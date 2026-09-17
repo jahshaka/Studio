@@ -117,10 +117,9 @@ private:
     LightChannelsWidget* lightChannels = nullptr;
     //EnumPicker* lightTypePicker;
 
-	ColorValueWidget* shadowColor;
-	HFloatSliderWidget* shadowAlpha;
-	// False in engine mode: no per-light shadow tint exists there (controls hidden).
-	bool mShadowTintSupported = true;
+	// (`shadowColor`, `shadowAlpha` and their `mShadowTintSupported` gate are
+	// GONE with the document fields — render audit I-6. There is no per-light
+	// shadow tint on this engine and there never was on the last one either.)
 	bool mPointShadowsSupported = false;   // engine mode: point lights get Shadow Type/Size
 
     Database *db = nullptr;
@@ -148,7 +147,6 @@ private:
 
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;
-    HFloatSliderWidget* shadowBias;
 };
 
 #endif // LIGHTPROPERTYWIDGET_H

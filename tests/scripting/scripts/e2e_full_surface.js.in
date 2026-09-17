@@ -17,17 +17,21 @@ assert(guid.length > 10, "project created");
 var skyLight0 = world.skyLight();
 assert(skyLight0.light !== "", "a new scene ships with a Sky Light");
 node.setProperty(skyLight0.light, "intensity", 1.4);
-world.fog({ enabled: true, color: "#a0a0a0", start: 50, end: 150 });
+// The retired linear pair (start/end) is GONE from the document and refused by
+// name (render audit I-6): a script that wants the fog those two described
+// computes the density itself, which is the one number the renderer reads.
+world.fog({ enabled: true, color: "#a0a0a0", density: 2 / (50 + 150) });
 world.gravity(12);
 world.gi({ mode: "vct", quality: "high", bounces: 2 });
 world.shadows({ enabled: true });
 var w = world.get();
 assert(w.skyLight.light !== "" && near(w.skyLight.intensity, 1.4, 0.001),
        "the Sky Light and its strength round-trip through world.get()");
-assert(w.fog.enabled === true && near(w.fog.start, 50) && near(w.fog.end, 150), "fog round-trips");
-// Fog is exponential: `end` is kept as the linear pair's convenience and SETS the
-// density (4.32/end = the distance where the old linear fog was total).
-assert(near(w.fog.density, 2 / (50 + 150)), "the linear start/end pair derives the density");
+assert(w.fog.enabled === true && w.fog.start === undefined && w.fog.end === undefined,
+       "fog round-trips, and the retired linear pair is not reported");
+// Fog is EXPONENTIAL and density is the whole setting: 2/(start+end) is the
+// density at which the old linear pair and this curve are both half fogged.
+assert(near(w.fog.density, 2 / (50 + 150)), "the density round-trips");
 world.fog({ density: 0.05, heightDensity: 0.02, heightFalloff: 0.4, heightLevel: -1,
             breakMinBrightness: 0.3, breakFalloff: 0.2 });
 var wf = world.get().fog;

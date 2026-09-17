@@ -206,7 +206,7 @@ int main(int argc, char **argv)
                         specgloss->workflow, specgloss->roughnessFactor,
                         specgloss->baseColor.name().toUtf8().constData(),
                         specgloss->specularColor.name().toUtf8().constData(),
-                        int(specgloss->useBaseColorMap));
+                        int(specgloss->textures.contains("u_baseColorMap")));
             CHECK(specgloss->workflow == 1,
                   "2: spec-gloss imports NATIVELY into the Specular workflow (no conversion)");
             CHECK(nearly(specgloss->roughnessFactor, 0.9822f, 2e-3f),
@@ -214,7 +214,7 @@ int main(int argc, char **argv)
             CHECK(specgloss->specularColor.red() == 0 && specgloss->specularColor.green() == 0 &&
                   specgloss->specularColor.blue() == 0,
                   "2: ... and specularFactor [0,0,0] arrives as kS verbatim, not as 'metallic 0'");
-            CHECK(specgloss->useBaseColorMap,
+            CHECK(specgloss->textures.contains("u_baseColorMap"),
                   "2: ... and its diffuse texture is bound as the base-colour map");
             CHECK(specgloss->shadingModel == 0, "2: ... as a LIT material");
         }
@@ -333,10 +333,10 @@ int main(int argc, char **argv)
         if (unlit) {
             std::printf("    unlit:     shadingModel %d base %s map %d emissiveIntensity %.2f\n",
                         unlit->shadingModel, unlit->baseColor.name().toUtf8().constData(),
-                        int(unlit->useBaseColorMap), unlit->emissiveIntensity);
+                        int(unlit->textures.contains("u_baseColorMap")), unlit->emissiveIntensity);
             CHECK(unlit->shadingModel == 1,
                   "3: KHR_materials_unlit imports as the UNLIT shading model");
-            CHECK(unlit->useBaseColorMap,
+            CHECK(unlit->textures.contains("u_baseColorMap"),
                   "3: ... with the emissive artwork bound as the colour map "
                   "(Unlit consumes no emissive input)");
             CHECK(unlit->baseColor.red() > 240 && unlit->baseColor.green() > 240,

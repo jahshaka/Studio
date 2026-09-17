@@ -44,8 +44,10 @@ function assert(cond, msg) {
 function snapshot() {
     var nodes = scene.nodes();
     var arr = [];
+    // (`shadowAlpha` and `shadowBias` were in this list and are GONE with the
+    // document fields — render audit I-6: the renderer never read either.)
     var keys = ["intensity", "color", "distance", "spotCutOff", "shadowType",
-                "shadowAlpha", "shadowBias", "castShadow", "visible", "lightType"];
+                "shadowMapResolution", "castShadow", "visible", "lightType"];
     for (var i = 0; i < nodes.length; i++) {
         var n = nodes[i];
         var rec = { id: n.id, name: n.name, type: n.type };

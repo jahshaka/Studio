@@ -154,15 +154,14 @@ void WorldGiPropertyWidget::rebuild()
     } else {
         tierSelector->setCurrentIndex(int(tier));
     }
-    QString tierTip =
-        tr("How much machinery Photon uses. Low bounces one light off the scene (cheapest — and "
-           "the one tier where emissive surfaces and area lights contribute nothing). Medium "
-           "voxelizes the lit volume and feeds an irradiance field from it: probe-stored bounce "
-           "that cannot leak through walls. High adds a grid of reflection probes, captured in "
-           "HDR with shadows. Epic adds three light bounces and dynamic reflection probes — the "
-           "probes covering whatever moves re-capture every frame instead of waiting their turn "
-           "in the update budget.\n\n"
-           "New scenes start at Epic.");
+    // GENERATED FROM THE TABLES (worldmodes::photonTierSummary → the engine's
+    // giQualityFacts). Every sentence that used to be here described a
+    // renderer that no longer existed — Low as "one light bounced off the
+    // scene" (it was Instant Radiosity, deleted), Epic as "dynamic reflection
+    // probes" (deleted with R2) — which is the defect render audit A5 names.
+    QString tierTip = tr("How much machinery Photon uses, and what each tier actually runs:\n\n")
+                      + worldmodes::photonTierSummary()
+                      + tr("\n\nNew scenes start at Epic.");
     if (!deviations.isEmpty())
         tierTip += tr("\n\nCUSTOM: %1 %2 been set by hand and no longer follow the tier. They stay "
                       "that way through tier switches; Advanced > Reset Advanced Settings hands "
@@ -290,9 +289,14 @@ void WorldGiPropertyWidget::rebuild()
         // Voxel + Reflections adds a grid of reflection probes blended with the
         // cone-traced reflections by distance. Live in the engine viewport.
         quality = this->addComboBox(tr("Quality") + pinMark(scene, "giQuality"));
-        quality->addItem(tr("Low"));        // 32^3 voxels, 128px probes
-        quality->addItem(tr("Medium"));     // 64^3, 256px
-        quality->addItem(tr("High"));       // 128^3, 512px
+        // (The voxel resolutions per tier are the engine's, not this file's:
+        // world.tierTable() / worldmodes::photonTierVoxelPhrase report them.
+        // The comments that used to sit here said 32/64/128, which is the
+        // single-volume arm — the cascade chain, on at every tier, is
+        // 64/64/128.)
+        quality->addItem(tr("Low"));
+        quality->addItem(tr("Medium"));
+        quality->addItem(tr("High"));
         quality->setCurrentIndex(qBound(0, static_cast<int>(scene->giQuality), 2));
         connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldGiPropertyWidget::onQualityChanged);
@@ -361,9 +365,13 @@ void WorldGiPropertyWidget::rebuild()
                    "plus a mip chain, so the probe array's video memory goes with the SQUARE "
                    "of this: at 256 a probe costs 4.0 MB in HDR and a 32-probe room 128 MB; "
                    "at 512 it is 16.0 MB and 512 MB.\n\n"
-                   "Automatic follows the quality dial — 128 at Low, 256 above — and is the "
-                   "shipped answer, because the roughness blur the renderer convolves into "
-                   "these captures hides the difference on everything but a mirror."));
+                   "Automatic follows the quality dial (%1 px at Low, %2 at Medium, %3 at "
+                   "High and Epic) and is the shipped answer, because the roughness blur the "
+                   "renderer convolves into these captures hides the difference on everything "
+                   "but a mirror. Only High and Epic build a probe grid at all.")
+                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Low))
+                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Medium))
+                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::High)));
             connect(probeSize, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                     this, &WorldGiPropertyWidget::onProbeSizeChanged);
         }
@@ -379,8 +387,8 @@ void WorldGiPropertyWidget::rebuild()
                "every direction, plus a depth map that decides what each probe can see. It is "
                "the leak fix: a cone cannot tell a wall from empty space, and this can.\n\n"
                "Turning it on turns the voxel-cone diffuse OFF — it replaces that term rather "
-               "than adding to it. Reflections, probes and planar are untouched. Every voxel "
-               "tier (Medium, High, Epic) turns it on; Low has no volume to feed it from."));
+               "than adding to it. Reflections, probes and planar are untouched. EVERY Photon "
+               "tier turns it on, Low included — Low's two camera cascades exist to feed it."));
         connect(ddgiToggle, &CheckBoxWidget::valueChanged,
                 this, &WorldGiPropertyWidget::onDdgiToggled);
         if (scene->giDdgi > 0) {

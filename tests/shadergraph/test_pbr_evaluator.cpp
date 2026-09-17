@@ -168,7 +168,6 @@ int main(int argc, char** argv)
 
         auto material = PbrGraphEvaluator::createMaterial(graph);
         CHECK(!!material, "graph 2: material created");
-        CHECK(material->useBaseColorMap, "graph 2: PbrMaterial uses base color map");
         CHECK(material->textures.contains("u_baseColorMap"), "graph 2: u_baseColorMap texture bound");
         CHECK(material->textures.contains("u_normalMap"), "graph 2: u_normalMap texture bound");
         CHECK(material->textures.value("u_baseColorMap")

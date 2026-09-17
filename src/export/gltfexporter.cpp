@@ -938,7 +938,9 @@ QJsonObject shadowExtras(iris::LightNode *light)
     sh["castShadow"] = light->lightType != iris::LightType::Area && filter != "none";
     sh["filter"] = filter;
     sh["mapSize"] = sm ? sm->resolution : 1024;
-    sh["bias"] = sm ? double(sm->bias) : 0.0015;
+    // (NO `bias` KEY. The document's per-light shadow bias is deleted — the
+    // renderer never read it, render audit I-6 — and the depth bias three.js
+    // needs is the VIEWER's own constant, which is where it now lives.)
     return sh;
 }
 
@@ -1508,8 +1510,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // viewer has no atmosphere to take a fog colour from, and saying the
         // scene asked for one is the honest half of what an archive can do.
         if (scene->fogAtmosphere) fog["atmosphere"] = true;
-        fog["start"] = double(scene->fogStart);
-        fog["end"] = double(scene->fogEnd);
+        // (NO `start`/`end`. The retired linear pair is gone from the document
+        // — CRUD law — and `exp2Density` above is what the viewer reads.)
         jahScene["fog"] = fog;
     }
     jahScene["shadowEnabled"] = scene->shadowEnabled;

@@ -283,7 +283,13 @@ target_include_directories(test_photon_panel PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # worldmodes.cpp reads the ENGINE's tier table (giQualityFacts, a
+    # header-only function in jahshaka/engine/Types.h) so a tier's description
+    # cannot drift from what the tier does — render audit A5. Header only; this
+    # target links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+)
 target_link_libraries(test_photon_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 # A document node is an engine node (SCENEGRAPH_SPEC D2): the headless graph.
 jah_document_graph(test_photon_panel)
@@ -400,7 +406,13 @@ target_include_directories(test_selection_cost PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # worldmodes.cpp reads the ENGINE's tier table (giQualityFacts, a
+    # header-only function in jahshaka/engine/Types.h) so a tier's description
+    # cannot drift from what the tier does — render audit A5. Header only; this
+    # target links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+)
 target_link_libraries(test_selection_cost
     PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
 jah_document_graph(test_selection_cost)
@@ -514,7 +526,13 @@ target_include_directories(test_panel_undo PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # worldmodes.cpp reads the ENGINE's tier table (giQualityFacts, a
+    # header-only function in jahshaka/engine/Types.h) so a tier's description
+    # cannot drift from what the tier does — render audit A5. Header only; this
+    # target links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+)
 target_link_libraries(test_panel_undo
     PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
 jah_document_graph(test_panel_undo)
@@ -631,7 +649,13 @@ target_include_directories(test_panel_lifetime PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # worldmodes.cpp reads the ENGINE's tier table (giQualityFacts, a
+    # header-only function in jahshaka/engine/Types.h) so a tier's description
+    # cannot drift from what the tier does — render audit A5. Header only; this
+    # target links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+)
 target_link_libraries(test_panel_lifetime
     PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
 jah_document_graph(test_panel_lifetime)
@@ -760,7 +784,13 @@ target_include_directories(test_properties_width PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # worldmodes.cpp reads the ENGINE's tier table (giQualityFacts, a
+    # header-only function in jahshaka/engine/Types.h) so a tier's description
+    # cannot drift from what the tier does — render audit A5. Header only; this
+    # target links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+)
 target_link_libraries(test_properties_width
     PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
 jah_document_graph(test_properties_width)

@@ -525,6 +525,13 @@ public:
         int   cubemapProbeSlotsPerCell = 0;
         int   probesClampedToRegion = 0;
         float worstProbeShapeCellRatio = 0.0f;
+        /// How many probes reach FURTHER past their own cell than the fit is
+        /// allowed to (the engine's kProbeShapeCellAllowance). Non-zero is a
+        /// defect and not a tuning matter — the shrink-fit has returned a box
+        /// unrelated to the space that probe is responsible for. The engine has
+        /// computed it since the 2026-09-07 fix wave and nothing reported it
+        /// until render audit I-10 asked what giStatus was hiding.
+        int   probesExceedingCell = 0;
         /// Whether the last full refresh RE-USED the voxel arm instead of
         /// rebuilding it from scratch (FIX WAVE B4).
         bool reusedLastRefresh = false;

@@ -43,16 +43,11 @@ FogPropertyWidget::FogPropertyWidget()
         "keeps half its colour, and by 4.32/density it has all but disappeared. 0.01 = half gone "
         "at 100 units."));
 
-    // The linear pair's near distance. Exponential fog has no start: it begins at
-    // the camera and never stops. Kept visible, and disabled, so the row's
-    // disappearance is not mistaken for a lost setting — and SAY SO in the label,
-    // because the app's stylesheet paints row labels at a fixed colour and a
-    // disabled row is otherwise indistinguishable from a live one.
-    fogStart        = this->addFloatValueSlider("Fog Start (unused)", 0, 1000.f);
-    fogStart->setEnabled(false);
-    fogStart->setToolTip(QStringLiteral(
-        "Not used any more. Fog is exponential now — it starts at the camera and thickens with "
-        "distance, so there is no start distance. The value is still saved with the scene."));
+    // (THE "Fog Start (unused)" ROW IS GONE — render audit I-6 / A5's dead
+    // rows, CRUD law. It was shown DISABLED, with a label and a tooltip that
+    // said it did nothing, for a document field nothing rendered; the field is
+    // deleted and so is the row. Exponential fog begins at the camera and
+    // never stops: Fog Density above is the whole setting.)
 
     fogHeightDensity = this->addFloatValueSlider("Height Fog Density", 0.f, 0.5f);
     fogHeightDensity->setDecimals(4);
@@ -126,7 +121,6 @@ void FogPropertyWidget::refreshRows()
     loading = true;
     fogColor->setColorValue(scene->fogColor);
     fogDensity->setValue(scene->fogDensity);
-    fogStart->setValue(scene->fogStart);
     fogHeightDensity->setValue(scene->fogHeightDensity);
     fogHeightFalloff->setValue(scene->fogHeightFalloff);
     fogHeightLevel->setValue(scene->fogHeightLevel);
