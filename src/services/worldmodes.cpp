@@ -1476,8 +1476,14 @@ bool valueFromId(const Row &r, const QString &id, int &out)
             { out = 0; return true; }
         return false;
     }
+    // CASE-INSENSITIVE, and the caller's spelling is what is being forgiven —
+    // not the table's. Every option id was lowercase until EXPOSURE-2 gave the
+    // metering row `centreWeighted`, which is the DOCUMENT's own serialised
+    // spelling (iris::exposureMeteringName) and must stay that on both surfaces;
+    // comparing against a lowercased `n` silently refused it. Every existing id
+    // is unaffected, being lowercase already.
     for (const EnumOption &o : r.options)
-        if (o.id == n) { out = o.value; return true; }
+        if (o.id.compare(n, Qt::CaseInsensitive) == 0) { out = o.value; return true; }
     bool ok = false;
     const int v = n.toInt(&ok);
     if (!ok) return false;
