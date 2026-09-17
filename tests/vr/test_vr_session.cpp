@@ -1746,6 +1746,129 @@ int main() {
                   "A SESSION LEAVES NO INJECTION BEHIND: the store is emptied at endVrSession");
     }
 
+    // =======================================================================
+    // A FRAME THAT THREW STILL OWES THE RUNTIME ITS FRAME (lane FRAME-CATCH-1,
+    // 2026-09-18). THE ONE CASE THAT NEEDS A REAL RUNTIME.
+    // =======================================================================
+    // `JAH_CATCH` returns, so everything `renderOneFrame` did after its catch
+    // ran on the normal path only — and the first casualty was the session's
+    // `xrEndFrame`. What that costs is not a missing log line: the eye copies
+    // acquire one swapchain image per eye INSIDE the frame and only the close
+    // releases them, so a throw strands both. The runtime then has nothing to
+    // hand the next acquire (and answers XR_ERROR_CALL_ORDER_INVALID to the
+    // next begin), which is a headset that goes black while the frame counter
+    // climbs — the shape the owner would have found wearing one.
+    //
+    // Monado is what makes it assertable: the fault is injected through the
+    // engine's own hook and the RUNTIME's counters answer.
+    {
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg),
+                                     "beginVrSession for the thrown-frame case: %s",
+                                     engine->lastError().c_str());
+        if (began) {
+            View *vrView = engine->vrView();
+            pump(engine.get(), 12ull, 300u);
+            Image warm;
+            const bool gotWarm = vrView && vrView->readPixels(warm);
+            const double drewBefore = gotWarm ? drawnFraction(warm.rgba) : 0.0;
+            CHECK_MSG(drewBefore > 0.02, "the session draws before anything is faulted (%.3f)",
+                      drewBefore);
+
+            engine->setFrameMonitor(MonitorLevel::Review);
+            const unsigned long long frames0 = engine->vrStatus().frames;
+            const unsigned long long rec0 = engine->monitorStatus().framesRecorded;
+            const unsigned kThrown = 5u;
+            engine->setFrameFault(FrameFault::Throw, kThrown);
+            unsigned fired = 0;
+            for (unsigned i = 0; i < kThrown; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+                if (engine->lastError().find("injected frame fault") != std::string::npos) ++fired;
+            }
+            CHECK_MSG(fired == kThrown, "the fault fired on all %u frames (not vacuous)", kThrown);
+            const VrStatus thrown = engine->vrStatus();
+            std::printf("THROWN frames %llu -> %llu, monitor records +%llu, state=%d\n",
+                        frames0, thrown.frames,
+                        engine->monitorStatus().framesRecorded - rec0, int(thrown.state));
+            // THE RUNTIME WAS GIVEN EVERY ONE OF THEM. `VrSession::endFrame`
+            // counts a frame when xrEndFrame succeeds, so this number IS the
+            // proof that the close ran on a thrown frame — and with it that the
+            // two acquired images were released.
+            CHECK_MSG(thrown.frames - frames0 == (unsigned long long)kThrown,
+                      "EVERY THROWN FRAME STILL CLOSED THE RUNTIME'S FRAME (%llu of %u)",
+                      thrown.frames - frames0, kThrown);
+            CHECK_MSG(engine->monitorStatus().framesRecorded - rec0 ==
+                          (unsigned long long)kThrown,
+                      "...and each one closed the monitor's record too");
+            CHECK_MSG(thrown.active && thrown.state != VrState::Lost,
+                      "...and the session is neither lost nor wedged (state %d)",
+                      int(thrown.state));
+            engine->setFrameMonitor(MonitorLevel::Off);
+            std::vector<FrameRecord> sink;
+            engine->takeFrameRecords(sink);
+
+            // AND THE EYES ARE NOT BLACK. A leaked acquire cannot be seen in a
+            // counter alone: the next frames' copies would have no image to
+            // write into. So the picture is read again after the faults.
+            const unsigned long long resumeFrom = engine->vrStatus().frames;
+            pump(engine.get(), resumeFrom + 12ull, 300u);
+            Image after;
+            const bool gotAfter = vrView && vrView->readPixels(after);
+            const double drewAfter = gotAfter ? drawnFraction(after.rgba) : 0.0;
+            CHECK_MSG(engine->vrStatus().frames >= resumeFrom + 12ull,
+                      "the session goes on submitting frames after the throws (%llu)",
+                      engine->vrStatus().frames);
+            CHECK_MSG(drewAfter > 0.02,
+                      "THE HEADSET IS NOT BLACK AFTER N THROWN FRAMES: the eye target still "
+                      "draws (%.3f of it, against %.3f before)", drewAfter, drewBefore);
+            CHECK(!engine->deviceLost());
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+        }
+    }
+
+    // ...AND A SESSION THE RUNTIME TAKES AWAY IS ENDED FROM A THROWN FRAME.
+    // The lost/stopped end is the third step of the frame's close, and it was
+    // as unreachable as the rest: a runtime that stops the session while the
+    // frames are throwing would have left the engine spinning in the session's
+    // own pacing (a zero interval, vsync off) against a pump that no longer
+    // blocks. `JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES` asks the runtime to walk the
+    // session down for real (vr.no_picture_start's hook), and every frame of
+    // the walk throws.
+    {
+        setenv("JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES", "3", 1);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg),
+                                     "beginVrSession for the stopped-session case: %s",
+                                     engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES");
+        if (began) {
+            pump(engine.get(), 4ull, 200u);
+            engine->setFrameFault(FrameFault::Throw, 400u);
+            unsigned rendered = 0;
+            for (; rendered < 400u && engine->vrStatus().active; ++rendered) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            engine->setFrameFault(FrameFault::None, 0u);
+            std::printf("STOPPED after %u thrown frames, active=%d, lastError='%s'\n", rendered,
+                        int(engine->vrStatus().active), engine->lastError().c_str());
+            // NOT VACUOUS: the frame that ended the session is a frame that
+            // THREW, and its own error is still the one standing.
+            CHECK_MSG(engine->lastError().find("injected frame fault") != std::string::npos,
+                      "the session was ended by a frame that threw ('%s')",
+                      engine->lastError().c_str());
+            CHECK_MSG(!engine->vrStatus().active,
+                      "A STOPPED SESSION IS ENDED FROM A THROWN FRAME (%u thrown frames)",
+                      rendered);
+            if (engine->vrStatus().active) engine->endVrSession();
+        }
+        engine->setFrameFault(FrameFault::None, 0u);
+    }
+
     // ---- a session on a dead runtime must refuse, never hang --------------
     CHECK(!engine->beginVrSession(nullptr, VrConfig()));
     CHECK(!engine->lastError().empty());
