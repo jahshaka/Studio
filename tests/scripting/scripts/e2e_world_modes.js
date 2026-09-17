@@ -195,6 +195,53 @@ assert(world.settings().exposureMode.valueId === "auto",
 world.override({ id: "exposureMode", value: "manual" });
 world.mode({ mode: "high" });
 
+// ---- THE METER (EXPOSURE-2): the pattern is a row, the clips are tuning -----
+// WHERE the meter looks is a CHOICE, so it is a row beside Exposure Mode and a
+// TierSpace::None one for the same reason (metering is an art decision, not a
+// scalability question). WHICH SLICE of what it sees it believes is two
+// numbers, so they are postFx tuning like the window.
+assert(byId["exposureMetering"] && byId["exposureMetering"].tierSpace === "none",
+       "the Metering row exists and no tier resolves it");
+assert(world.settings().exposureMetering.valueId === "centreWeighted",
+       "a new scene meters CENTRE WEIGHTED (the classic camera default): " +
+       world.settings().exposureMetering.valueId);
+world.override({ id: "exposureMetering", value: "spot" });
+assert(world.settings().exposureMetering.valueId === "spot",
+       "world.override sets the metering pattern");
+world.override({ id: "exposureMetering", value: "average" });
+assert(world.settings().exposureMetering.valueId === "average",
+       "…and every one of the three patterns round-trips");
+world.override({ id: "exposureMetering", value: "centreWeighted" });
+var meter = world.postFx();
+assert(Math.abs(meter.exposureMeterLow - 10) < 0.001 &&
+       Math.abs(meter.exposureMeterHigh - 90) < 0.001,
+       "the meter's percentile clips default to 10/90: " + meter.exposureMeterLow +
+       ".." + meter.exposureMeterHigh);
+meter = world.postFx({ exposureMeterLow: 2.5, exposureMeterHigh: 97.5 });
+assert(Math.abs(meter.exposureMeterLow - 2.5) < 0.001 &&
+       Math.abs(meter.exposureMeterHigh - 97.5) < 0.001,
+       "world.postFx sets them");
+// A REVERSED pair is ORDERED, not obeyed: the renderer walks a cumulative
+// weight and a reversed pair would select nothing at all.
+meter = world.postFx({ exposureMeterLow: 80, exposureMeterHigh: 20 });
+assert(meter.exposureMeterLow === 20 && meter.exposureMeterHigh === 80,
+       "a reversed percentile pair is put back in order: " + meter.exposureMeterLow +
+       ".." + meter.exposureMeterHigh);
+assert(world.postFx({ exposureMeterHigh: 999 }).exposureMeterHigh === 100,
+       "out-of-range percentiles clamp");
+world.postFx({ exposureMeterLow: 10, exposureMeterHigh: 90 });
+// ...and a tier switch leaves the meter exactly where it was, like the rest of
+// the exposure model.
+world.override({ id: "exposureMetering", value: "spot" });
+world.postFx({ exposureMeterLow: 5 });
+world.mode({ mode: "low" });
+assert(world.settings().exposureMetering.valueId === "spot" &&
+       Math.abs(world.postFx().exposureMeterLow - 5) < 0.001,
+       "a tier switch regrades nothing about the meter");
+world.mode({ mode: "high" });
+world.clearOverride({ id: "exposureMetering" });
+world.postFx({ exposureMeterLow: 10 });
+
 // ---- serialization round-trip ----------------------------------------------
 assert(world.get().mode === "high", "world.get() reports the mode too");
 project.save();

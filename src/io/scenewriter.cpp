@@ -192,6 +192,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["exposureEv"] = scene->exposure;
     sceneObj["exposureMinEv"] = scene->exposureMin;
     sceneObj["exposureMaxEv"] = scene->exposureMax;
+    // THE METER (EXPOSURE-2). Written always, read only in Auto: a scene that
+    // is developed manually today still remembers the meter it would use.
+    sceneObj["exposureMetering"] =
+        QString::fromLatin1(iris::exposureMeteringName(scene->exposureMetering));
+    sceneObj["exposureMeterLow"] = scene->exposureMeterLowPercent;
+    sceneObj["exposureMeterHigh"] = scene->exposureMeterHighPercent;
     sceneObj["bloomEnabled"] = scene->bloomEnabled;
     sceneObj["bloomThreshold"] = scene->bloomThreshold;
     sceneObj["bloomKnee"] = scene->bloomKnee;

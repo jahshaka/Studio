@@ -209,6 +209,19 @@ int main()
         fx.ssr = r.ssr;
         fx.ssrMaxDistance = 40.0f;
         fx.exposure = kExposure; fx.exposureMin = kExpMin; fx.exposureMax = kExpMax;
+        // AVERAGE METERING, DELIBERATELY (EXPOSURE-2). This fixture DRAGS A
+        // LIGHT THROUGH THE FRAME CENTRE, and a centre-weighted meter — the
+        // shipped default — is SUPPOSED to follow that: it puts 40 % of its
+        // sensitivity in the middle eleventh of the picture, so the dragged
+        // highlight moves the measurement several times as much and the bounds
+        // below would be measuring the PATTERN's sensitivity rather than this
+        // suite's subject, which is whether an UNUSABLE SAMPLE can lurch the
+        // grade. Measured on this fixture with the shipped pattern: the SSR
+        // arms move 1.05 % of the gap per frame against average's 0.26 %, both
+        // of them smooth and both well under the filter's own 2.284 % ceiling.
+        // The pattern's own behaviour is asserted where it can be exact, in
+        // hdr.meter and cameras.exposure part D.
+        fx.meterPattern = ExposureMeterPattern::Average;
         view->setPostFx(fx);
 
         // Settle at the start pose: the adaptation and the shadow caches.

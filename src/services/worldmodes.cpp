@@ -205,6 +205,47 @@ QVector<Row> buildRows()
         out.append(r);
     }
     {
+        // METERING PATTERN (EXPOSURE-2). Beside Exposure Mode, and a
+        // TierSpace::None row for the same reason: how a scene is metered is an
+        // ART decision, so no quality tier writes it. Shown only under Auto —
+        // it is the one thing that would be a LIE under Manual, which measures
+        // nothing (the same rule the auto window's pair has).
+        Row r;
+        r.id = QStringLiteral("exposureMetering");
+        r.label = QStringLiteral("Metering");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Enum;
+        r.tierSpace = TierSpace::None;
+        r.options = { { QStringLiteral("average"), QStringLiteral("Average"),
+                        int(iris::ExposureMetering::Average) },
+                      { QStringLiteral("centreWeighted"), QStringLiteral("Centre Weighted"),
+                        int(iris::ExposureMetering::CentreWeighted) },
+                      { QStringLiteral("spot"), QStringLiteral("Spot"),
+                        int(iris::ExposureMetering::Spot) } };
+        r.visible = [](const iris::ScenePtr &s) {
+            return s->exposureMode == iris::ExposureMode::Auto;
+        };
+        r.cost = QStringLiteral("WHERE the automatic exposure looks. AVERAGE weighs the whole "
+                                "frame equally, so a bright sky or a white floor filling most "
+                                "of it takes everything else down. CENTRE WEIGHTED (the "
+                                "default, and what a camera does) puts about 40% of the "
+                                "sensitivity in the middle eleventh of the picture and 81% "
+                                "inside the circle that fits its height, with the corners "
+                                "still counting for a twentieth. SPOT reads a disc of about "
+                                "2.5% of the frame at the centre and nothing else — point it "
+                                "at the subject. It costs nothing either way: the pattern is a "
+                                "per-pixel weight in the meter's own compute pass.");
+        r.get = [](const iris::ScenePtr &s) { return int(s->exposureMetering); };
+        r.set = [](const iris::ScenePtr &s, int v) {
+            s->exposureMetering = v == int(iris::ExposureMetering::Average)
+                                      ? iris::ExposureMetering::Average
+                                  : v == int(iris::ExposureMetering::Spot)
+                                      ? iris::ExposureMetering::Spot
+                                      : iris::ExposureMetering::CentreWeighted;
+        };
+        out.append(r);
+    }
+    {
         Row r;
         r.id = QStringLiteral("bloom");
         r.label = QStringLiteral("Bloom");
@@ -869,6 +910,46 @@ static QVector<ParamRow> buildPostFxParams()
     }
     {
         ParamRow p;
+        p.id = QStringLiteral("exposureMeterLow");
+        p.label = QStringLiteral("Meter Low Percentile");
+        p.ownerRowId = QStringLiteral("exposureMode");
+        p.minValue = 0.0; p.maxValue = 100.0; p.perPixelStep = 0.25; p.decimals = 1;
+        p.doc = QStringLiteral("WHICH SLICE of what the meter sees it believes, from the dark "
+                               "end: 10 throws away the darkest tenth of the metered weight. "
+                               "The meter builds a histogram of the frame's log luminance and "
+                               "averages between this percentile and the high one, so a deep "
+                               "shadow region cannot pull the grade the way it pulls an "
+                               "average. 0 keeps everything. Read only in Auto.");
+        p.enabled = [](const iris::ScenePtr &s) { return s->hdrEnabled; };
+        p.visible = [](const iris::ScenePtr &s) {
+            return s->exposureMode == iris::ExposureMode::Auto;
+        };
+        p.get = [](const iris::ScenePtr &s) { return double(s->exposureMeterLowPercent); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->exposureMeterLowPercent = float(v); };
+        out.append(p);
+    }
+    {
+        ParamRow p;
+        p.id = QStringLiteral("exposureMeterHigh");
+        p.label = QStringLiteral("Meter High Percentile");
+        p.ownerRowId = QStringLiteral("exposureMode");
+        p.minValue = 0.0; p.maxValue = 100.0; p.perPixelStep = 0.25; p.decimals = 1;
+        p.doc = QStringLiteral("The same from the bright end: 90 throws away the brightest "
+                               "tenth of the metered weight, which is what keeps a sun disc, "
+                               "a blown window or a specular firefly out of the measurement. "
+                               "100 keeps everything, and is the closest this meter gets to "
+                               "the plain mean it replaced. A pair that keeps nothing is read "
+                               "as the whole frame. Read only in Auto.");
+        p.enabled = [](const iris::ScenePtr &s) { return s->hdrEnabled; };
+        p.visible = [](const iris::ScenePtr &s) {
+            return s->exposureMode == iris::ExposureMode::Auto;
+        };
+        p.get = [](const iris::ScenePtr &s) { return double(s->exposureMeterHighPercent); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->exposureMeterHighPercent = float(v); };
+        out.append(p);
+    }
+    {
+        ParamRow p;
         p.id = QStringLiteral("bloomThreshold");
         p.label = QStringLiteral("Bloom Threshold");
         p.ownerRowId = QStringLiteral("bloom");
@@ -959,7 +1040,8 @@ const QStringList &postFxRowIds()
     // and its grade first, then what rides on it, then what runs after the
     // tonemap, then the two that are neither (reflections, refraction).
     static const QStringList ids = {
-        QStringLiteral("hdr"), QStringLiteral("exposureMode"), QStringLiteral("bloom"),
+        QStringLiteral("hdr"), QStringLiteral("exposureMode"),
+        QStringLiteral("exposureMetering"), QStringLiteral("bloom"),
         QStringLiteral("ssao"),
         QStringLiteral("smaa"), QStringLiteral("ssr"), QStringLiteral("refractions"),
         QStringLiteral("distortion"),
@@ -1394,8 +1476,14 @@ bool valueFromId(const Row &r, const QString &id, int &out)
             { out = 0; return true; }
         return false;
     }
+    // CASE-INSENSITIVE, and the caller's spelling is what is being forgiven —
+    // not the table's. Every option id was lowercase until EXPOSURE-2 gave the
+    // metering row `centreWeighted`, which is the DOCUMENT's own serialised
+    // spelling (iris::exposureMeteringName) and must stay that on both surfaces;
+    // comparing against a lowercased `n` silently refused it. Every existing id
+    // is unaffected, being lowercase already.
     for (const EnumOption &o : r.options)
-        if (o.id == n) { out = o.value; return true; }
+        if (o.id.compare(n, Qt::CaseInsensitive) == 0) { out = o.value; return true; }
     bool ok = false;
     const int v = n.toInt(&ok);
     if (!ok) return false;
