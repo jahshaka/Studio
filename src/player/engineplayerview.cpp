@@ -172,35 +172,38 @@ bool EnginePlayerView::stepPlayerFrames(int n, float dt)
 // only the widget knows — which View the headset mirrors onto, and the render
 // DRIVER whose clock the runtime takes over.
 
+// EVERY REFUSAL THAT CAN BE KNOWN BEFORE ANYTHING MOVES, in one place, asked by
+// the service before it starts the run (IPlayerHost::canBeginPlayerVr) and
+// again by the begin below, which must remain safe on its own.
+//
+// THE MOST INFORMATIVE ONE FIRST: on a box with no runtime — every box, most
+// days — the honest answer is "there is no VR in this process", not "the Player
+// page has not been shown", which is a true sentence about an irrelevant fact.
+bool EnginePlayerView::canBeginPlayerVr(QString *why) const
+{
+    const auto no = [why](const QString &text) {
+        if (why) *why = text;
+        return false;
+    };
+    if (!mEngine || !mScene) return no(QStringLiteral("this session has no player backend"));
+    if (!mEngine->vrAvailable())
+        return no(QStringLiteral("VR is not available (%1)")
+                      .arg(QString::fromStdString(mEngine->vrInfo().reason)));
+    // THE MIRROR IS THIS VIEW, so there has to be one: the player's on-screen
+    // View is created by its show event, and a VR session started from a page
+    // that has never been shown would have nowhere to put the desktop's
+    // picture. The toggle switches to the Player page first, which is exactly
+    // what creates it.
+    if (!view())
+        return no(QStringLiteral("the Player page has not been shown yet — its on-screen "
+                                 "view is created when the page opens"));
+    return true;
+}
+
 bool EnginePlayerView::beginPlayerVr(const QVariantMap &options, QString *error)
 {
-    if (!mEngine || !mScene) {
-        if (error) *error = QStringLiteral("this session has no player backend");
-        return false;
-    }
-    // THE MOST INFORMATIVE REFUSAL FIRST, and that is the whole reason this
-    // guard is here as well as inside PlayerVr::begin: on a box with no
-    // runtime — every box, most days — the honest answer is "there is no VR
-    // in this process", not "the Player page has not been shown", which is a
-    // true sentence about an irrelevant fact.
-    if (!mEngine || !mEngine->vrAvailable()) {
-        if (error)
-            *error = QStringLiteral("VR is not available (%1)")
-                         .arg(mEngine ? QString::fromStdString(mEngine->vrInfo().reason)
-                                      : QStringLiteral("no engine is running in this process"));
-        return false;
-    }
+    if (!canBeginPlayerVr(error)) return false;
     adoptEditorScene();
-    if (!view()) {
-        // THE MIRROR IS THIS VIEW, so there has to be one: the player's
-        // on-screen View is created by its show event, and a VR session started
-        // from a page that has never been shown would have nowhere to put the
-        // desktop's picture. The toggle switches to the Player page first,
-        // which is exactly what creates it.
-        if (error) *error = QStringLiteral("the Player page has not been shown yet — its "
-                                           "on-screen view is created when the page opens");
-        return false;
-    }
     if (!mScene->attach(view())) {
         if (error) *error = QStringLiteral("the player has no scene to show yet");
         return false;

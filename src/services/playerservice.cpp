@@ -35,6 +35,21 @@ bool PlayerService::play(bool vr)
     // is any" is two calls (vrAvailable() then play), which is the honest
     // shape of a question with two answers.
     //
+    // ---- VR: EVERY KNOWABLE REFUSAL BEFORE ANYTHING MOVES ---------------
+    //
+    // Asked FIRST, and that is the whole reason this predicate exists: the
+    // session can only begin after the scene is playing (below), so a refusal
+    // discovered at that point would have started and stopped a run inside one
+    // call — a transform snapshot, a physics restart and a possession edge, for
+    // a caller that was told nothing happened.
+    if (vr && !mHost->isPlayerVrActive()) {
+        QString why;
+        if (!mHost->canBeginPlayerVr(&why)) {
+            mLastError = why;
+            return false;
+        }
+    }
+
     // THE SCENE RUNS FIRST, THEN THE SESSION — and the order is load-bearing
     // (lead review F1). The rig is placed on the camera the Player RENDERS
     // THROUGH, and which camera that is depends on whether the scene is playing
@@ -43,9 +58,19 @@ bool PlayerService::play(bool vr)
     // wearer on the free camera and then watch the Player draw an authored shot
     // metres away.
     //
-    // Nothing has MOVED in between: playScene starts the run and this begins
-    // the session before a single frame is stepped, so "where the run began" is
-    // still exactly where the run began.
+    // WHICH PATH GOT HERE MATTERS, so both are stated plainly:
+    //
+    //   * THE VERB (`player.play({vr:true})` on a stopped player) starts the
+    //     run on the next line and begins the session before a single frame is
+    //     stepped, so the wearer's anchor is the camera exactly as the run
+    //     found it.
+    //   * THE TOGGLE (`vr.toggle()`, the icon, Ctrl+Shift+V) has already shown
+    //     the Player page, and showing it STARTS the scene (switchSpace(PLAYER)
+    //     plays, by design since audit F4) — so `wasPlaying` is true here, the
+    //     rollback below is unreachable on that path, and the anchor is where
+    //     the camera was WHEN VR BEGAN, a tick after the run did. That is the
+    //     product meaning of the gesture and it is what `player.vrRecenter()`
+    //     is documented to return to.
     const bool wasPlaying = mHost->isScenePlaying();
     if (!wasPlaying) mHost->playScene();
     const bool now = mHost->isScenePlaying();
@@ -58,17 +83,17 @@ bool PlayerService::play(bool vr)
         QString error;
         if (!mHost->beginPlayerVr(QVariantMap(), &error)) {
             // THE HEADSET DID NOT GO ON, SO THE RUN DOES NOT START (F6's
-            // rollback, in this order): `player.play({vr:true})` answered
-            // false, and a caller that was told nothing happened must not be
-            // left with a scene running. A run that was ALREADY going is left
-            // alone — it was not ours to stop.
+            // rollback). Reachable only from the VERB path on a stopped player,
+            // and only for a failure the predicate above cannot know in
+            // advance — the runtime refusing the session itself. A run that was
+            // already going is left alone: it was not ours to stop.
             if (!wasPlaying) mHost->stopScene();
             mLastError = error;
             return false;
         }
     }
-    if (now && !wasPlaying) emit playingChanged(true);
-    return now;
+    if (!wasPlaying) emit playingChanged(true);
+    return true;
 }
 
 bool PlayerService::stop()

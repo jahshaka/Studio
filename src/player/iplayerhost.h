@@ -65,9 +65,18 @@ public:
     // icon must reach ONE implementation, and a headless session (no player
     // backend at all) must refuse them in words rather than crash.
 
+    /// COULD a VR session begin right now? Asked BEFORE anything moves, which
+    /// is the whole point: `player.play({vr:true})` has to start the scene
+    /// before it can begin the session (which camera the Player renders through
+    /// depends on the scene playing), and a refusal after that would have
+    /// started and stopped a run inside one call — a snapshot, a physics
+    /// restart and a possession edge for a caller that was told nothing
+    /// happened. False with `why` filled: no runtime, or a Player page that has
+    /// never been shown and so has no view to mirror onto.
+    virtual bool canBeginPlayerVr(QString *why) const = 0;
     /// Starts the player's VR session: the headset shows this player's scene,
     /// this player's on-screen View becomes the mirror, and the rig is placed
-    /// on the play camera. False with `error` filled and NOTHING changed.
+    /// on the render camera. False with `error` filled and NOTHING changed.
     virtual bool beginPlayerVr(const QVariantMap &options, QString *error) = 0;
     /// Ends it. Safe when none is running.
     virtual void endPlayerVr() = 0;

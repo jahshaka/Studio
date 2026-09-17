@@ -39,6 +39,24 @@ console.log("player.state().vr: " + JSON.stringify(st.vr));
 assert(st.vr.available === true, "the player reports VR available: " + vr.available().runtime);
 assert(st.vr.active === false, "and no session yet");
 
+// ---- 0b. FROM A PAGE THAT HAS NEVER BEEN SHOWN, NOTHING MOVES -----------
+//
+// The mirror is the Player's on-screen View and that View is created by the
+// page's show event, so a session cannot begin before the page has been up.
+// The refusal has to happen BEFORE the run starts (lead review, second read):
+// the session can only begin after the scene is playing, so a refusal
+// discovered at that point would have started and stopped a run inside one
+// call — a transform snapshot, a physics restart and a possession edge, for a
+// caller that was told nothing happened.
+
+assert(player.playing() === false, "nothing is playing yet");
+assert(player.play({ vr: true }) === false,
+       "player.play({vr:true}) refuses from a page that has never been shown");
+console.log("app.lastError: " + app.lastError());
+assert(app.lastError().indexOf("has not been shown") >= 0,
+       "...saying which: " + app.lastError());
+assert(player.playing() === false, "AND THE RUN DID NOT START (nothing moved)");
+
 // The Player page has to be the space on screen: its on-screen View is created
 // by the show event and that View is what the headset mirrors onto. This is
 // exactly what the toggle does for a user (case 5 below drives the toggle
@@ -201,6 +219,18 @@ var awayFrom = Math.sqrt(Math.pow(walked.x - cam0.position.x, 2) +
 console.log("walked " + awayFrom.toFixed(2) + " m from where the run began");
 assert(awayFrom > 10.0, "the wearer is well away from the start (" + awayFrom.toFixed(2) + " m)");
 assert(player.vrRecenter() === true, "player.vrRecenter() is accepted");
+// A MOVE ARRIVING IN THE GAP IS ANSWERED BY THE TELEPORT, NOT ADDED TO IT
+// (lead review, second read): a `vrMove` between the request and the placement
+// would move the rig under a head already located for the old one — the
+// mismatched pair the placement's guard exists to avoid, rebuilt from outside
+// the frame loop where no guard can see it. The verb answers true (the caller
+// asked for a move and is getting a teleport a moment later) and the landing
+// must be unaffected.
+assert(player.vrMove({ right: true, seconds: 2.0 }) === true,
+       "a vrMove in the recentre's gap is accepted");
+player.frame(1);
+assert(player.vrMove({ forward: true, seconds: 2.0 }) === true,
+       "...and another, after a pump");
 player.frame(3);
 var back = player.state().vr.head;
 var backOff = Math.sqrt(Math.pow(back.x - cam0.position.x, 2) +
@@ -208,7 +238,8 @@ var backOff = Math.sqrt(Math.pow(back.x - cam0.position.x, 2) +
                         Math.pow(back.z - cam0.position.z, 2));
 console.log("after the recentre the head is " + backOff.toFixed(4) + " m from the start pose");
 assert(backOff < 2.0 * wander + 0.02,
-       "RECENTRE PUTS THE WEARER BACK WHERE THE RUN BEGAN (" + backOff.toFixed(4) + " m)");
+       "RECENTRE PUTS THE WEARER BACK WHERE VR BEGAN, and the two moves that arrived in " +
+       "its gap changed nothing (" + backOff.toFixed(4) + " m)");
 
 // ---- 4. vr.end() mid-play: VR stops, the scene keeps playing ------------
 

@@ -38,6 +38,7 @@ public:
     bool isPlayerActive() const override { return mActive; }
     QImage takePlayerScreenshot(int width, int height, int grade) override;
     bool stepPlayerFrames(int n, float dt) override;
+    bool canBeginPlayerVr(QString *why) const override;
     bool beginPlayerVr(const QVariantMap &options, QString *error) override;
     void endPlayerVr() override;
     bool isPlayerVrActive() const override;

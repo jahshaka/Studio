@@ -105,14 +105,16 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     // `recenter()` uses. WORLD space, because that is the frame the engine
     // composes the rig in — a camera parented to anything (a socket, a rig, a
     // moving platform) has a local transform that means nothing here.
-    mRig = vrorigin::Rig();
+    // The rig starts where a fresh session's does — at the world origin, facing
+    // -Z — and is pushed once so the engine and this object cannot disagree
+    // about it before the first frame.
+    applyRig(vrorigin::Rig());
     armPlacement(VrStatus());
     mCamera = camera;
     if (camera) {
         mStartPos = camera->getGlobalPosition();
         mStartRot = camera->getGlobalRotation();
     }
-    applyRig();
     return true;
 }
 
@@ -149,9 +151,21 @@ void PlayerVr::armPlacement(const jahshaka::engine::VrStatus &st)
     mPlaceAfterRendered = st.rendered + 1ull;
 }
 
-void PlayerVr::applyRig()
+vrorigin::Rig PlayerVr::rigOf(const VrStatus &st)
 {
-    if (auto engine = mEngine.lock()) engine->setVrOrigin(toEngine(mRig.position), mRig.yaw);
+    // THE ENGINE'S ORIGIN IS THE ONE TRUTH (see the class header). Not a cached
+    // copy, and not lagged the way the head is: `origin` is what the engine
+    // HOLDS at this moment — whatever the host last pushed, composed with any
+    // runtime recentre the pump absorbed since.
+    vrorigin::Rig rig;
+    rig.position = toIris(st.origin);
+    rig.yaw = st.originYaw;
+    return rig;
+}
+
+void PlayerVr::applyRig(const vrorigin::Rig &rig)
+{
+    if (auto engine = mEngine.lock()) engine->setVrOrigin(toEngine(rig.position), rig.yaw);
 }
 
 void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
@@ -184,8 +198,7 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         // WHERE THE PLAYER'S CAMERA STOOD IS WHERE THE HEAD IS. Position and
         // heading; the wearer keeps their own pitch, their own roll and their
         // own offset from the middle of their room.
-        mRig = vrorigin::placedOn(mRig, head, headRot, mStartPos, mStartRot);
-        applyRig();
+        applyRig(vrorigin::placedOn(rigOf(st), head, headRot, mStartPos, mStartRot));
         mPlacePending = false;
         // NO CAMERA WRITE ON THIS FRAME, deliberately: the rig has just been
         // chosen so that the head lands on the camera, and the pose above is
@@ -208,8 +221,9 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     const iris::Vec3 delta = vrorigin::flyDelta(headRot, PlayerMouseController::heldFlyKeys(),
                                                 flySpeed(), vrorigin::frameSeconds(dt));
     if (!delta.isNull()) {
-        mRig.position += delta;
-        applyRig();
+        vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
+        rig.position += delta;
+        applyRig(rig);
     }
 
     // THE DOCUMENT'S CAMERA IS WHERE THE WEARER IS. It is what player.
@@ -240,13 +254,22 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
 bool PlayerVr::move(const flystep::Keys &keys, float seconds)
 {
     if (!isActive()) return false;
+    // A PLACEMENT IN FLIGHT WINS, and it wins here as well as in step(): a
+    // wearer being put back where VR began is not also walking, and a rig moved
+    // between the request and the placement is the mismatched pair the
+    // placement's whole guard exists to avoid — which a `vrMove` arriving in
+    // that gap would rebuild, from outside the frame loop, where no guard can
+    // see it. Not a refusal: the move is ANSWERED, and what answers it is the
+    // teleport the caller asked for a moment earlier.
+    if (mPlacePending) return true;
     auto engine = mEngine.lock();
     const VrStatus st = engine->vrStatus();
     const iris::Vec3 delta =
         vrorigin::flyDelta(toIris(st.headRotation), keys, flySpeed(), seconds);
     if (delta.isNull()) return true;    // nothing held is not a failure
-    mRig.position += delta;
-    applyRig();
+    vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
+    rig.position += delta;
+    applyRig(rig);
     return true;
 }
 
@@ -256,7 +279,8 @@ bool PlayerVr::recenter()
     auto engine = mEngine.lock();
     // Deferred to the next located frame that can be PAIRED with the rig this
     // object holds, exactly like the first placement (armPlacement's note). The
-    // target is the start pose either way, so the two paths are one operation.
+    // target is the session's start pose either way, so the two are one
+    // operation.
     armPlacement(engine->vrStatus());
     return true;
 }

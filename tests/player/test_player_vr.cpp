@@ -191,6 +191,65 @@ int main()
               "the rig absorbed it without tilting the horizon");
     }
 
+    // ---- 4c. THE ABSORB SURVIVES THE NEXT FLY ----------------------------
+    //
+    // THE DEFECT THIS CASE EXISTS FOR (lead review, second read): the ENGINE
+    // moves the rig by itself when a runtime recentres, and a host that kept
+    // its own copy would push that copy plus a fly delta on the very next held
+    // key — undoing the absorb and throwing the wearer back by exactly what the
+    // runtime moved. The rule is that the ENGINE'S ORIGIN IS THE ONE TRUTH and
+    // the host reads it back before every delta; this is that rule as
+    // arithmetic, with the engine's expression on one side and the host's on
+    // the other.
+    {
+        // The engine holds O; the wearer stands still inside their room.
+        vrorigin::Rig engineRig;
+        engineRig.position = iris::Vec3(8.0f, 0.0f, -3.0f);
+        engineRig.yaw = 15.0f;
+        const iris::Vec3 stage(0.35f, 1.7f, -0.15f);      // the runtime's pose
+        const iris::Quat stageRot = yaw(5.0f);
+        const auto worldOf = [](const vrorigin::Rig &r, const iris::Vec3 &p) {
+            return r.position + vrorigin::rotateY(p, r.yaw);
+        };
+        const iris::Vec3 before = worldOf(engineRig, stage);
+
+        // THE RUNTIME RECENTRES. The engine absorbs it (this is the engine's
+        // side of the rule) and every pose it reports afterwards is in the new
+        // space.
+        const iris::Vec3 t(2.0f, 0.0f, 1.0f);
+        const float tYaw = 40.0f;
+        engineRig = vrorigin::rigAfterSpaceChange(engineRig, t, yaw(tYaw));
+        const iris::Vec3 stageAfter = vrorigin::rotateY(stage - t, -tYaw);
+        const iris::Quat stageRotAfter = yaw(tYaw).conjugated() * stageRot;
+        CHECK(nearVec(worldOf(engineRig, stageAfter), before, 1e-3f),
+              "the absorb left the wearer where they were standing");
+
+        // NOW THE HOST FLIES, reading the rig back from the engine (rigOf's
+        // job) rather than from a copy of its own.
+        flystep::Keys forward;
+        forward.forward = true;
+        const iris::Vec3 step = vrorigin::flyDelta(yaw(engineRig.yaw) * stageRotAfter,
+                                                   forward, 12.0f, 0.25f);
+        vrorigin::Rig flown = engineRig;      // == what vrStatus reports
+        flown.position += step;
+        const iris::Vec3 after = worldOf(flown, stageAfter);
+        show("moved by", after - before);
+        CHECK(nearVec(after - before, step, 1e-3f),
+              "AND THE FLY MOVED THEM BY THE FLY, AND BY NOTHING ELSE");
+
+        // ...and the counter-case, so the assertion above is known to be able
+        // to fail: a host that kept a STALE rig (the pre-absorb O) and pushed
+        // O + step throws the wearer back by the recentre.
+        vrorigin::Rig stale;
+        stale.position = iris::Vec3(8.0f, 0.0f, -3.0f);
+        stale.yaw = 15.0f;
+        stale.position += step;
+        const iris::Vec3 wrong = worldOf(stale, stageAfter);
+        show("a stale host rig would move them by", wrong - before);
+        CHECK(!nearVec(wrong - before, step, 0.5f),
+              "(and a stale host rig would have thrown them by the recentre instead)");
+    }
+
     // ---- 5. THE FLY: the HEAD's heading, LEVEL ---------------------------
     {
         flystep::Keys forward;

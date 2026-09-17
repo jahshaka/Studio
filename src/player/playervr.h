@@ -37,6 +37,16 @@ For more information see the LICENSE file
 //      through Engine::setVrOrigin. The arithmetic is in vrorigin.h, with no
 //      engine in it, so it is asserted without a headset.
 //
+//      THIS OBJECT HOLDS NO RIG THAT SURVIVES A FRAME, and that is a
+//      correctness rule rather than a style: THE ENGINE'S ORIGIN IS THE ONE
+//      TRUTH. The engine moves it by itself — a runtime recentre is absorbed
+//      inside the pump (VrSession::pollEvents) so the wearer does not jump —
+//      and a host that kept its own copy would overwrite that absorb with the
+//      very next fly key, throwing the wearer back by exactly what the runtime
+//      moved, and would then pair a stale rig with a head composed under the
+//      new one. So every entry point below READS the rig from `vrStatus()`,
+//      applies its delta and pushes the result.
+//
 //   3. THE MIRROR. The Player's on-screen View becomes the mirror target and is
 //      SWITCHED OFF while the session runs: the desktop then costs one quad
 //      that copies the left eye, instead of a second full render of the world
@@ -107,12 +117,20 @@ public:
     /// with no keyboard in the room. False when no session is running.
     bool move(const flystep::Keys &keys, float seconds);
 
-    /// TAKE ME BACK TO WHERE THE RUN BEGAN — the product gesture, and the only
-    /// one that means anything (lead review F2): the wearer's head is re-placed
-    /// onto the pose the play camera had when the session started, keeping
+    /// TAKE ME BACK TO WHERE VR BEGAN — the product gesture, and the only one
+    /// that means anything (lead review F2): the wearer's head is re-placed
+    /// onto the pose the render camera had WHEN THE SESSION STARTED, keeping
     /// their own offset from the middle of their room. "Re-place onto the
     /// camera" would be a no-op, because the camera is written FROM the head
-    /// every frame. False when no session is running.
+    /// every frame.
+    ///
+    /// WHERE VR BEGAN, not where the RUN began, and the difference is real on
+    /// the toggle path: the toggle shows the Player page, which starts the
+    /// scene, and only then begins the session — so a scene that moves its
+    /// camera on the first tick has moved it before this anchor is taken. That
+    /// is the product meaning of the gesture (put me back where I put the
+    /// headset on), and it is what the name says. False when no session is
+    /// running.
     bool recenter();
 
     /// What player.state().vr answers with.
@@ -124,10 +142,12 @@ public:
 
 private:
     /// Arms a placement for the first locate that can be paired with the rig
-    /// this object holds.
+    /// the ENGINE holds.
     void armPlacement(const jahshaka::engine::VrStatus &status);
-    /// Pushes the rig to the engine. Cheap; the engine composes it next frame.
-    void applyRig();
+    /// THE RIG, READ BACK FROM THE ENGINE — the only place a rig comes from.
+    static vrorigin::Rig rigOf(const jahshaka::engine::VrStatus &status);
+    /// Pushes a rig to the engine. Cheap; the engine composes it next frame.
+    void applyRig(const vrorigin::Rig &rig);
     /// Puts the mirror view back the way it was found.
     void restoreMirrorView();
 
@@ -135,7 +155,6 @@ private:
     std::function<void()> mRestoreView;
     /// The Player's on-screen View, borrowed. Null once it has been restored.
     jahshaka::engine::View *mMirrorView = nullptr;
-    vrorigin::Rig mRig;
     /// Waiting to place the rig (at begin, and at every recenter).
     bool mPlacePending = false;
     /// THE FIRST LOCATE THAT CAN BE TRUSTED FOR A PLACEMENT — `VrStatus::
@@ -147,6 +166,14 @@ private:
     /// PREVIOUS rig, and correcting with a mismatched pair moves the wearer by
     /// exactly the difference. Measured, and it is not subtle — a recentre
     /// after a 75 m fly threw the wearer 75 m past the target.
+    ///
+    /// PLUS ONE, AND FROM A VERB THAT IS ONE FRAME CONSERVATIVE. Inside the
+    /// frame loop `rendered + 1` is exact: the host pushes before the frame and
+    /// the engine composes inside it, so the next locate is the first that can
+    /// be paired. A verb arriving BETWEEN frames pushes nothing (it only arms),
+    /// so its `+1` waits for a locate that would already have been pairable —
+    /// one frame of latency on a teleport nobody can perceive, in exchange for
+    /// one rule instead of two.
     unsigned long long mPlaceAfterRendered = 0ull;
     /// This object started the session that is running (so it is this object's
     /// to end, and its half to put back when it goes away).
@@ -154,8 +181,8 @@ private:
     /// The camera the head is written to, as resolved by the last frame — for
     /// the verbs that arrive between frames.
     iris::CameraNodePtr mCamera;
-    /// WHERE THE RUN BEGAN, in WORLD space: the render camera's pose at
-    /// begin(). The placement and every recentre land the head here.
+    /// WHERE VR BEGAN, in WORLD space: the render camera's pose at begin().
+    /// The placement and every recentre land the head here.
     iris::Vec3 mStartPos;
     iris::Quat mStartRot;
 };
