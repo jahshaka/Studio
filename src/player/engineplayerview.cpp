@@ -122,6 +122,7 @@ void EnginePlayerView::start()
 
 void EnginePlayerView::end()
 {
+    if (mScene && mScene->vrIfAny() && mScene->vr()->isActive()) qWarning("Jahshaka VR: the Player view is ending (page leave / stop) - the VR session ends with it");
     // THE HEADSET COMES OFF WITH THE PAGE (lead review F3, and this lane's own
     // rule that a session belongs to the RUN). Leaving the Player page used to
     // leave the engine's session pumping at the runtime's cadence behind a page

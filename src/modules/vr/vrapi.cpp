@@ -180,6 +180,7 @@ bool VrApi::end()
     if (moduleHost.engine && moduleHost.engine->driver())
         moduleHost.engine->driver()->setVrSessionActive(false);
     e->setVrMirrorView(nullptr);
+    qWarning("Jahshaka VR: vr.end() called");
     e->endVrSession();
     return true;
 }

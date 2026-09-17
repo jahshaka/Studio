@@ -130,6 +130,7 @@ bool PlayerService::isVrActive() const { return mHost && mHost->isPlayerVrActive
 
 bool PlayerService::endVr()
 {
+    qWarning("Jahshaka VR: player.endVr() called");
     if (!mHost || !mHost->isPlayerVrActive()) return false;
     mHost->endPlayerVr();
     return true;
