@@ -11,9 +11,9 @@ carries the rules.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$" -E "^gi\.ddgi_raster$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`) and the raster probe build; `--timeout 120` is the default for rows that set none. **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$" -E "^gi\.ddgi_raster$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`); `--timeout 120` is the default for rows that set none. (The trailing `-E "^gi\.ddgi_raster$"` now excludes NOTHING — that suite was deleted with the irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD — and is kept only so this command stays byte-identical to the one quoted in `CLAUDE.md`; drop both when that copy is next revised.) **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
 | **PUSH** | the MERGE tier + the `--engine-selftest` sha256 (the moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
-| **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, gi.ddgi_raster, the rigperf bench, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under `glibc's built-in malloc checks + MALLOC_PERTURB_ (the real checker is an opt-in — it aborts under the NVIDIA GLX library)`; ~110 s, RUN_SERIAL, labelled `benchmark` because that label IS the nightly marker the MERGE/PUSH commands exclude — read one failure as "run it again", three as a regression of the open's slice-boundary drive) — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box, and whenever a batch touched the open path, the scene teardown or the engine's resource handling | the lead |
+| **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, the rigperf bench, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under `glibc's built-in malloc checks + MALLOC_PERTURB_ (the real checker is an opt-in — it aborts under the NVIDIA GLX library)`; ~110 s, RUN_SERIAL, labelled `benchmark` because that label IS the nightly marker the MERGE/PUSH commands exclude — read one failure as "run it again", three as a regression of the open's slice-boundary drive) — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box, and whenever a batch touched the open path, the scene teardown or the engine's resource handling | the lead |
 
 Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
 its selection; the lead's merge audit reads that line.
@@ -112,7 +112,7 @@ not a gate.
 
 **CURRENT COUNTS (2026-09-13, the last three PUSH-tier gates — ledger §211/§214/§219):
 368 suites REGISTERED, 364 of them RUN in the MERGE/PUSH tier (the four excluded are
-the two `benchmark`/`shadercache-attack` labels and `gi.ddgi_raster`, all nightly), in
+the two `benchmark`/`shadercache-attack` labels, all nightly), in
 488-680 s at -j4.** The spread is load, not content: 488 s on a quiet box (push #24,
 353/353 — one suite has been added since), 672 s with a sibling lane compiling at -j10
 beside it (push #26, 354/354), 680 s on push #25, whose two reds — open.responsive and
@@ -132,7 +132,6 @@ samples.session 37, workflow_grid 36, reopen_fidelity 36, shadercache.app 36.
 |---|---|---|
 | shadercache.container_asan | 572 | 56 engine cycles under ASan, 18 of them re-seeds |
 | scenegraph.benchmark (RUN_SERIAL) | 287 (518 under load) | wall-clock regression guard; ctest runs it alone |
-| gi.ddgi_raster | 155 | probe total fixed at 8192, converges 10× |
 | 70 Vulkan app boots | 894 | ~7 s of engine boot before the first assertion |
 | 11 RUN_SERIAL islands | 410 | pure wall time |
 

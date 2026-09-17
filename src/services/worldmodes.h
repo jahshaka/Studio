@@ -177,17 +177,16 @@ const Row *row(const QString &id);
 // Epic's two extra columns are ordinary document fields the engine already
 // reads (numBounces), written through like the other two.
 //
-//   tier    technique             voxels  ddgi  ddgiSource  DDGI grid  bounces  probe faces/HDR/shadows  budget
-//   Low     Instant Radiosity     —       off   —           —          1        —                        (dial)
-//   Medium  VCT                   64^3    ON    auto=voxel  8192 fit   1        — (no probes)            (dial)
-//   High    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   1        512 / HDR / shadowed     (dial)
-//   Epic    VCT + probes (hybrid) 128^3   ON    auto=voxel  8192 fit   3        512 / HDR / shadowed     (dial)
+//   tier    technique             voxels  ddgi  DDGI grid  bounces  probe faces/HDR/shadows  budget
+//   Low     Instant Radiosity     —       off   —          1        —                        (dial)
+//   Medium  VCT                   64^3    ON    8192 fit   1        — (no probes)            (dial)
+//   High    VCT + probes (hybrid) 128^3   ON    8192 fit   1        512 / HDR / shadowed     (dial)
+//   Epic    VCT + probes (hybrid) 128^3   ON    8192 fit   3        512 / HDR / shadowed     (dial)
 //
 // Derived columns (not rows): voxels and probe faces/HDR/shadows follow
 // `giQuality` (OgreGi.cpp giVoxelResolution / buildPcc); the DDGI grid is the
-// engine's fixed 8192-probe aspect fit (kIfdTotalProbes); ddgiSource "auto" is
-// voxel at every tier — the raster feed (3.4-9 ms per probe, rayon2 S3) is an
-// Advanced opt-in and never a default. Epic's bounce column is measured:
+// engine's fixed 8192-probe aspect fit (kIfdTotalProbes). Epic's bounce column
+// is measured:
 // bounces 1 -> 3 raises the DDGI-fed floor bounce (gi.ddgi case 7).
 //
 // THE FIFTH COLUMN IS GONE (lane R2, 2026-09-12). "Dynamic probes" reserved

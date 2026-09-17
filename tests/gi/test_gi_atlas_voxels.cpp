@@ -4,8 +4,8 @@
 // THE DEFECT. The shadow atlas is one texture whose layout lives in a shadow
 // NODE DEFINITION, and Ogre refuses to replace a definition while anything
 // instantiates it. The hybrid's reflection probes instantiate it — one
-// workspace each, naming the probe shadow node — and so does the raster
-// irradiance field. So every atlas change had to drop them first, and the way
+// workspace each, naming the probe shadow node. So every atlas change had to
+// drop them first, and the way
 // the engine did that was `teardownVct()` followed by `rebuildVct()`: the whole
 // voxel arm destroyed and rebuilt, every probe re-PLACED and photographed twice
 // synchronously, because a shadow atlas GREW.

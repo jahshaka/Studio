@@ -397,9 +397,10 @@ def main():
         rationale.append((p, "; ".join(hit) or "NO RULE → merge tier"))
     if code_moved: add(ALWAYS_ON_CODE, "code moved: smoke + contract")
 
-    # The nightly guards never ride a scoped gate (they are the PUSH/NIGHTLY tier's);
-    # gi.ddgi_raster likewise.
-    nightly = [n for n in selected if (inv[n]["labels"] & NIGHTLY_LABELS) or n == "gi.ddgi_raster"]
+    # The nightly guards never ride a scoped gate (they are the PUSH/NIGHTLY tier's).
+    # (gi.ddgi_raster used to be named here beside them; the suite was deleted with the
+    # irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD.)
+    nightly = [n for n in selected if inv[n]["labels"] & NIGHTLY_LABELS]
     for n in nightly: selected.pop(n)
     names = sorted(selected)
     est = sum(costs.get(n, 10.0) for n in names)

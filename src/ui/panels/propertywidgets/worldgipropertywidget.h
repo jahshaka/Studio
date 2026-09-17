@@ -91,7 +91,6 @@ protected slots:
     void onProbeSizeChanged(int row);
     void onBouncesChanged(float value);
     void onDdgiToggled(bool on);
-    void onDdgiSourceChanged(int index);
     void onResetAdvancedClicked();
 
 private:
@@ -158,7 +157,6 @@ private:
     RowPtr<CheckBoxWidget> ddgiToggle;
     RowPtr<HFloatSliderWidget> ddgiIntensity;
     RowPtr<HFloatSliderWidget> ddgiAmbient;
-    RowPtr<ComboBoxWidget> ddgiSource;
     RowPtr<QPushButton> advancedButton;
     RowPtr<QPushButton> resetAdvancedButton;
     /// Disclosure state, per session (the panel is rebuilt on every edit).
