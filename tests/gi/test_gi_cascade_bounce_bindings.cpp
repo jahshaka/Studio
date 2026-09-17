@@ -18,11 +18,12 @@
 // cascade had been dispatching its bounces through cascade 0's voxels. At any
 // count above one bounce that is a whole-picture corruption.
 //
-// (The parity half is real and reachable but is NOT what reds here: measured,
-// the per-cascade stabilisation resolves to 1 / 2 / 4 / 8 on the four-cascade
-// table at three total bounces — only cascade 0 is odd, and cascade 0's own
-// light voxel is the one slot upstream already re-binds after its swap. Two
-// total bounces gives 1 / 1 / 2 / 4, where the outer odd counts do fire.)
+// (The parity half is real and reachable but is NOT what reds here: since
+// PHOTON-M1 retired the pin's per-cascade stabilisation every cascade runs the
+// DOCUMENT's count, so three total bounces is 2 / 2 / 2 / 2 — every count even,
+// every cascade back on the texture it started from. TWO total bounces is
+// 1 / 1 / 1 / 1, where the odd counts do fire on every cascade, which is the
+// arm that exercises the re-bind.)
 //
 // THE OBSERVABLE, and why it is this one. "Reads the previous injection's
 // radiance" is a statement about HISTORY, so the assertion is a history test and
@@ -115,7 +116,7 @@ int main()
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;     // the four-cascade table: 5/10/15/60 m
-    gi.numBounces = 3;                // -> cascadeBounces 1 / 3 / 7: three odd counts
+    gi.numBounces = 3;                // -> every cascade runs 3 (uniform since PHOTON-M1): odd everywhere
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
     gi.cascades = true;
