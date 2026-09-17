@@ -158,6 +158,26 @@ bool splitEyes(const Image &img, Half &left, Half &right) {
 /// drawn through the wrong projection convention — moves 44 % of the picture
 /// (measured: 133,940 of 307,200 bytes, worst 65/255).
 struct PictureDiff { double meanAbs = 0.0; double fractionOver = 0.0; int worst = 0; };
+/// The same comparison over a BAND of rows — the sky is the top of the picture,
+/// and "where does the residual live" is the question that separates a routing
+/// difference from a grading one.
+PictureDiff pictureDiffRows(const std::vector<unsigned char> &a, const std::vector<unsigned char> &b,
+                            unsigned w, unsigned y0, unsigned y1, int tol = 8) {
+    PictureDiff d;
+    size_t over = 0, n = 0; double sum = 0.0;
+    for (unsigned y = y0; y < y1; ++y)
+        for (unsigned x = 0; x < w; ++x)
+            for (int c = 0; c < 3; ++c) {
+                const size_t i = (size_t(y) * w + x) * 4u + size_t(c);
+                if (i >= a.size() || i >= b.size()) continue;
+                const int delta = std::abs(int(a[i]) - int(b[i]));
+                sum += delta; ++n;
+                if (delta > tol) ++over;
+                if (delta > d.worst) d.worst = delta;
+            }
+    if (n) { d.meanAbs = sum / double(n); d.fractionOver = double(over) / double(n); }
+    return d;
+}
 PictureDiff pictureDiff(const std::vector<unsigned char> &a, const std::vector<unsigned char> &b,
                         int tol = 8) {
     PictureDiff d;
@@ -403,6 +423,84 @@ int main() {
         // left eye painted over it.
         engine->setVrMirrorView(desktop);
         pump(engine.get(), 30ull, 300u);
+
+        // ---- THE SKY CHANGES UNDER THE SESSION (V2F-1 and V2F-2) ---------
+        // Both halves of the screen-quad swap are exercised by one churn: the
+        // sky's quad is DESTROYED when the sky goes (the session holds a raw
+        // pointer to it and must not touch it again), and when it comes back
+        // the material has the same NAME as the clone the session made last
+        // time (cloning onto a registered name throws ERR_DUPLICATE_ITEM —
+        // inside beginFrame, which takes the whole frame down with it: no eye,
+        // no desktop, every frame until the session ends).
+        //
+        // The assertion is therefore the plainest one there is: THE FRAMES KEEP
+        // COMING. A thrown clone stops them dead.
+        {
+            const unsigned long long before = engine->vrStatus().frames;
+            setFixtureSky(scene, false);
+            pump(engine.get(), before + 10ull, 200u);
+            const unsigned long long mid = engine->vrStatus().frames;
+            CHECK_MSG(mid >= before + 10ull,
+                      "the sky switched OFF mid-session and the frames kept coming (%llu -> %llu)",
+                      before, mid);
+            setFixtureSky(scene, true);
+            pump(engine.get(), mid + 10ull, 200u);
+            const unsigned long long after = engine->vrStatus().frames;
+            CHECK_MSG(after >= mid + 10ull,
+                      "...and back ON, with the same material name as last time (%llu -> %llu)",
+                      mid, after);
+
+            // ...AND THE HARDER HALF: A SKY WHOSE QUAD SURVIVES THE CHANGE.
+            // `SceneManager::setSky` re-applies its own material to its own
+            // quad on EVERY call (OgreSceneManager.cpp:1153), so an equirect
+            // sky re-pushed with a different image hands the session a quad it
+            // already owns, holding the BASE material again. Cloning a second
+            // time under the name the first clone still holds throws
+            // ERR_DUPLICATE_ITEM inside beginFrame, which takes the whole
+            // frame — every frame — with it. The atmosphere above cannot show
+            // that (its quad is its own and its material is set once); this
+            // can, and it is the case V2F-1 was reported from.
+            unsigned char px[4 * 4 * 4];
+            for (int i = 0; i < 4 * 4; ++i) {
+                px[i * 4 + 0] = (unsigned char)(40 + i * 3);
+                px[i * 4 + 1] = 70; px[i * 4 + 2] = 150; px[i * 4 + 3] = 255;
+            }
+            const TextureId equirect = scene->createTexture(4, 4, px, true);
+            for (int i = 0; i < 4 * 4; ++i) px[i * 4 + 1] = 200;   // a second image
+            const TextureId equirect2 = scene->createTexture(4, 4, px, true);
+            if (equirect && equirect2) {
+                SkyDesc eq;
+                eq.mode = SkyMode::Equirectangular;
+                eq.equirect = equirect;
+                scene->setSky(eq);
+                const unsigned long long base = engine->vrStatus().frames;
+                pump(engine.get(), base + 10ull, 200u);
+                const unsigned long long once = engine->vrStatus().frames;
+                CHECK_MSG(once >= base + 10ull,
+                          "an equirect sky's quad joined the session (%llu -> %llu)", base, once);
+                // ...and now a DIFFERENT image through the same sky, which is
+                // what re-applies the base material onto a quad the session
+                // already swapped (the engine only re-calls setSky when the
+                // description really changed — SkyDesc::sameSky compares the
+                // texture id, so a second image is the smallest real change).
+                eq.equirect = equirect2;
+                scene->setSky(eq);
+                pump(engine.get(), once + 10ull, 200u);
+                const unsigned long long twice = engine->vrStatus().frames;
+                CHECK_MSG(twice >= once + 10ull,
+                          "THE SKY CHANGED ON A QUAD THE SESSION ALREADY OWNED and the frames "
+                          "kept coming (%llu -> %llu)", once, twice);
+                CHECK_MSG(engine->lastError().find("Duplicate") == std::string::npos,
+                          "no duplicate-material throw: lastError is '%s'",
+                          engine->lastError().c_str());
+            }
+            setFixtureSky(scene, true);
+            pump(engine.get(), engine->vrStatus().frames + 5ull, 100u);
+            CHECK_MSG(engine->vrStatus().state == VrState::Focused,
+                      "the session is still focused after the churn (state %d)",
+                      int(engine->vrStatus().state));
+        }
+        pump(engine.get(), engine->vrStatus().frames + 10ull, 100u);
         View *vrView = engine->vrView();
         REQUIRE(vrView != nullptr);
         Image oneImg;
@@ -482,9 +580,22 @@ int main() {
         // for VrData (the defect this round fixed) renders the headset with
         // INVERTED DEPTH while every other picture in the process is right —
         // and this is the assertion that says so.
+        // THE RESIDUAL FOLLOWS THE ORDER, NOT THE EYE — measured, and it is
+        // what closes the question of whether the second eye's ray route is as
+        // good as the first's (V2F-3). `vrEyeScreenshot` renders ~90 frames of
+        // its own and the session's auto-exposure moves a little through them,
+        // so whichever control is taken FIRST is compared with the session's
+        // picture at the moment its exposure constant was read and reads
+        // 0.000/255 — and the other carries the drift, whether that is the
+        // right eye (1.209 over the sky rows) or, with this switch on, the left
+        // (1.230). The routes are not the difference; the clock is.
+        const bool rightFirst = std::getenv("JAH_VR_RIGHT_FIRST") != nullptr;
+        Image firstShot;
+        if (rightFirst) engine->vrEyeScreenshot(1u, firstShot);
         Image mono;
         if (CHECK_MSG(engine->vrEyeScreenshot(0u, mono), "vrEyeScreenshot(left): %s",
                       engine->lastError().c_str())) {
+
             CHECK_MSG(mono.width == l.w && mono.height == l.h,
                       "the control is one eye's size (%ux%u vs %ux%u)", mono.width, mono.height,
                       l.w, l.h);
@@ -499,6 +610,10 @@ int main() {
             // this assertion exists for) moves 133,940 of 307,200 bytes, worst
             // 65/255, and collapses the parallax below from 26,473 bytes to 288
             // — four orders of magnitude of margin over the tolerance.
+            const PictureDiff mdSky = pictureDiffRows(mono.rgba, l.px, l.w, 0, l.h / 4u);
+            const PictureDiff mdRest = pictureDiffRows(mono.rgba, l.px, l.w, l.h / 4u, l.h);
+            std::printf("    SPLIT left: sky rows mean %.3f (worst %d), the rest mean %.3f "
+                        "(worst %d)\n", mdSky.meanAbs, mdSky.worst, mdRest.meanAbs, mdRest.worst);
             CHECK_MSG(md.meanAbs < 1.0 && md.fractionOver < 0.02,
                       "THE LEFT EYE IS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION: mean "
                       "%.3f/255, %.3f%% of bytes over 8 (the bar is 2%%), worst %d (the unconverted-projection "
@@ -509,8 +624,9 @@ int main() {
         // right half is the one a viewport-index failure leaves empty and the
         // one a per-eye-ray failure paints with the left eye's sky.
         Image monoR;
-        if (CHECK_MSG(engine->vrEyeScreenshot(1u, monoR), "vrEyeScreenshot(right): %s",
-                      engine->lastError().c_str())) {
+        if (rightFirst) monoR = firstShot;
+        if (CHECK_MSG(rightFirst ? !monoR.rgba.empty() : engine->vrEyeScreenshot(1u, monoR),
+                      "vrEyeScreenshot(right): %s", engine->lastError().c_str())) {
             if (const char *dir = std::getenv("JAH_VR_DUMP")) {
                 auto dumpImg = [&](const std::vector<unsigned char> &px, unsigned w, unsigned h,
                                    const char *name) {
@@ -526,6 +642,11 @@ int main() {
                 dumpImg(mono.rgba, mono.width, mono.height, "left-control");
             }
             const PictureDiff rd = pictureDiff(monoR.rgba, r.px);
+            const PictureDiff rdSky = pictureDiffRows(monoR.rgba, r.px, r.w, 0, r.h / 4u);
+            const PictureDiff rdRest = pictureDiffRows(monoR.rgba, r.px, r.w, r.h / 4u, r.h);
+            std::printf("    SPLIT right: sky rows mean %.3f (worst %d), the rest mean %.3f "
+                        "(worst %d)%s\n", rdSky.meanAbs, rdSky.worst, rdRest.meanAbs,
+                        rdRest.worst, rightFirst ? "  [right control taken FIRST]" : "");
             CHECK_MSG(rd.meanAbs < 1.0 && rd.fractionOver < 0.02,
                       "THE RIGHT EYE IS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION: mean "
                       "%.3f/255, %.3f%% of bytes over 8, worst %d — the half that a "
@@ -537,6 +658,29 @@ int main() {
         engine->setVrMirrorView(nullptr);
         engine->endVrSession();
         CHECK(!engine->vrStatus().active);
+    }
+
+    // =======================================================================
+    // 3. THE QUAD DIES UNDER THE SESSION (V2F-2): a sky that goes away destroys
+    //    the Rectangle2D the session swapped, and the session holds a RAW
+    //    pointer to it. The end of the session must not hand a material back to
+    //    freed memory.
+    // =======================================================================
+    {
+        setFixtureSky(scene, true);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        REQUIRE(engine->beginVrSession(scene, cfg));
+        pump(engine.get(), 10ull, 200u);
+        setFixtureSky(scene, false);          // the sky's quad is destroyed here
+        pump(engine.get(), engine->vrStatus().frames + 10ull, 200u);
+        CHECK_MSG(engine->vrStatus().frames >= 20ull,
+                  "the sky's quad died mid-session and the frames kept coming (%llu)",
+                  engine->vrStatus().frames);
+        engine->endVrSession();               // ...and this must not touch it
+        CHECK(!engine->vrStatus().active);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        CHECK_MSG(true, "the session ended after its screen quad was destroyed");
     }
 
     // ---- THE DESKTOP'S PICTURE, AFTER -------------------------------------
