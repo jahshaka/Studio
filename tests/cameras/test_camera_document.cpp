@@ -332,6 +332,66 @@ int main(int argc, char **argv)
         CHECK(scene->isPlaying(), "setPlaying(true) is visible to the mirror");
     }
 
+    // ---- 7b. THE FIRST CAMERA ADDED TAKES THE SHOT ------------------------
+    //
+    // PLAYER-SPAWN-1 rule 2 (owner 2026-09-17): a scene with no camera plays
+    // through the free viewer — wherever the editor was standing — so the
+    // first camera somebody puts in the scene IS the statement "play through
+    // this". The SECOND never steals it: past the first, the choice has two
+    // answers and stays an explicit, saved one.
+    //
+    // This is the DOCUMENT's half of the rule. Who applies it (an ADD, never a
+    // LOAD) is the add command's half, pinned by commands.structural_undo.
+    {
+        auto scene = iris::Scene::create();
+        auto a = iris::CameraNode::create(); a->setName("A");
+        auto b = iris::CameraNode::create(); b->setName("B");
+        auto orphan = iris::CameraNode::create(); orphan->setName("not in this scene");
+        scene->getRootNode()->addChild(a);
+        scene->getRootNode()->addChild(b);
+
+        CHECK(!scene->armCameraIfNoneActive(iris::CameraNodePtr()),
+              "armCameraIfNoneActive(null) does nothing");
+        CHECK(!scene->armCameraIfNoneActive(orphan),
+              "...and refuses a camera that is not in this scene");
+        CHECK(scene->getActiveCameraGuid().isEmpty(), "neither one armed anything");
+
+        CHECK(scene->armCameraIfNoneActive(a) && scene->getActiveCamera() == a,
+              "the FIRST camera arms itself when nothing is armed");
+        CHECK(!scene->armCameraIfNoneActive(b) && scene->getActiveCamera() == a,
+              "a SECOND camera never steals the shot — the pick stays explicit and saved");
+        CHECK(!scene->armCameraIfNoneActive(a) && scene->getActiveCamera() == a,
+              "and re-arming the armed one is not a special case either");
+
+        // DELETING THE ACTIVE CAMERA CLEARS THE CHOICE AND PROMOTES NOBODY.
+        // `b` is right there and stays unchosen: it was never picked, and a
+        // silent promotion is the same failure as a silent steal.
+        scene->getRootNode()->removeChild(a);
+        CHECK(scene->getActiveCameraGuid().isEmpty(),
+              "deleting the armed camera leaves NO camera armed...");
+        CHECK(scene->cameras.contains(b->getGUID()),
+              "...with the other camera still in the scene, unpromoted");
+
+        // ...and the NEXT camera added arms itself again, by the same rule.
+        auto c = iris::CameraNode::create(); c->setName("C");
+        scene->getRootNode()->addChild(c);
+        CHECK(scene->armCameraIfNoneActive(c) && scene->getActiveCamera() == c,
+              "the next camera ADDED after that deletion arms itself");
+
+        // A LOAD IS NOT AN ADD. Nothing in the document applies the rule by
+        // itself: registering a camera (which is what the reader's graph build
+        // does, through Scene::addNode) leaves the choice exactly as the file
+        // said it was — including "no choice at all".
+        auto loaded = iris::Scene::create();
+        auto l1 = iris::CameraNode::create();
+        auto l2 = iris::CameraNode::create();
+        loaded->getRootNode()->addChild(l1);
+        loaded->getRootNode()->addChild(l2);
+        CHECK(loaded->cameras.size() == 2 && loaded->getActiveCameraGuid().isEmpty(),
+              "a scene BUILT with cameras (the reader's path) arms nothing by itself — a saved "
+              "file's silence about the active camera is itself the choice");
+    }
+
     // ---- 8. lookAt is rotation only ---------------------------------------
     {
         auto cam = iris::CameraNode::create();

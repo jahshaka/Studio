@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "commands/addscenenodecommand.h"
 
 #include "commands/structuralundo.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/services.h"
 #include "services/sceneeditservice.h"
@@ -64,6 +66,23 @@ void AddSceneNodeCommand::redo()
     // the subtree actually had, exactly that (scripting audit F3).
     if (staticState.isEmpty()) sceneNode->applyStaticDefaults();
     else structuralundo::restoreStatic(sceneNode, staticState);
+    // THE FIRST CAMERA ADDED TAKES THE SHOT (PLAYER-SPAWN-1 rule 2, owner
+    // 2026-09-17: "unless a camera node is present"). The rule itself is the
+    // document's — Scene::armCameraIfNoneActive, which refuses when anything is
+    // already armed — and it is applied HERE, on the one funnel every add,
+    // duplicate and paste of a node goes through, for two reasons:
+    //
+    //   * it is the ADD half of the rule and nothing else: a project LOAD
+    //     builds its graph through the reader, which never pushes a command,
+    //     so a saved file's silence about the active camera keeps meaning the
+    //     free viewer;
+    //   * undo and redo stay symmetric. Undoing the add removes the node, and
+    //     Scene::removeNode clears the choice when the removed camera was the
+    //     armed one; redoing it arms the same camera again, by the same rule,
+    //     rather than leaving a scene with one camera and no shot.
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Camera)
+        if (auto scene = sceneNode->getScene())
+            scene->armCameraIfNoneActive(sceneNode.staticCast<iris::CameraNode>());
     if (services && services->sceneEdit) services->sceneEdit->notifyNodeInserted(sceneNode);
     if (services && services->selection) services->selection->select(sceneNode);
 }

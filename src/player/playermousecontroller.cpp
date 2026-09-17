@@ -27,30 +27,25 @@ For more information see the LICENSE file
 #include "irisgl/core/geometry/trimesh.h"
 
 
+// TAKING A CAMERA OVER: read its heading, write nothing.
+//
+// PlayBack calls this when it binds a controller and, since PLAYER-SPAWN-1,
+// whenever the camera the run flies CHANGES under it (the play edge that
+// switches to the scene's armed camera, and the stop that hands the free
+// viewer back).
+//
+// THE SECOND HALF OF THIS PAIR IS GONE (CRUD, 2026-09-17): `end()` used to put
+// the camera back where start() found it, behind a `shouldRestoreCameraTransform`
+// flag that nothing ever cleared and a call PlayBack could not make — the one
+// `camController->end()` in setController only fires when the controller
+// POINTER changes, and PlayBack has exactly one controller for its whole life.
+// It was a second, unreachable copy of a restore that two live mechanisms
+// already do: PlayBack::restoreNodeTransforms puts every node back at stop,
+// and EnginePlayerScene::end puts the play camera's pose and lens back when
+// the page goes.
 void PlayerMouseController::start()
 {
-    // capture cam transform
-    camPos = camera->getLocalPos();
-    camRot = camera->getLocalRot();
-
-	// capture yaw and pitch
-	float roll;
-	camera->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
-}
-
-void PlayerMouseController::end()
-{
-	if (shouldRestoreCameraTransform) {
-		// restore cam transform
-		camera->setLocalPos(camPos);
-		camera->setLocalRot(camRot);
-	}
-	camera->update(0);
-}
-
-void PlayerMouseController::setRestoreCameraTransform(bool shouldRestore)
-{
-	this->shouldRestoreCameraTransform = shouldRestore;
+	captureYawPitchRollFromCamera();
 }
 
 void PlayerMouseController::onMouseMove(int dx, int dy)
@@ -237,14 +232,19 @@ void PlayerMouseController::setViewport(const iris::Viewport &viewport)
 
 void PlayerMouseController::updateCameraTransform()
 {
-	camera->setLocalRot(iris::Quat::fromEulerAngles(pitch, yaw, 0));
+	// THE ROLL IS THE CAMERA'S OWN (PLAYER-SPAWN-1 rule 3). This wrote a hard
+	// zero, which is right for a free viewer — mouse-look never rolls one, and
+	// the value captured below is therefore always 0 for one — and wrong for an
+	// AUTHORED camera, which the play controller now flies when the scene has
+	// an active one: a dutch angle somebody keyed would be levelled by the
+	// first frame of flight. Captured, kept, written back.
+	camera->setLocalRot(iris::Quat::fromEulerAngles(pitch, yaw, roll));
     camera->update(0);
 }
 
 void PlayerMouseController::captureYawPitchRollFromCamera()
 {
-	// capture yaw and pitch
-	float roll; // roll not used
+	// capture yaw, pitch and roll from whatever the camera is doing NOW
 	camera->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
 }
 
@@ -285,11 +285,11 @@ void PlayerMouseController::update(float dt)
 	// The other half of this branch drove the removed viewer node's character
 	// controller (AVATAR_LOCOMOTION_SPEC Stage 0); piloted movement comes back
 	// as its own component in Stage 2.
-	camera->setLocalPos(camera->getLocalPos()
-	                    + flystep::direction(camera->getLocalRot(), heldFlyKeys())
-	                          * linearSpeed);
-
-	updateCameraTransform();
+	if (!flyThisFrame(heldFlyKeys(), linearSpeed) && camera) {
+		// Nothing held: the run's own camera is left exactly as the document
+		// put it (see flyThisFrame).
+		camera->update(0);
+	}
 
     if (!!pickedNode && pickedNode->isPhysicsBody) {
         scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromVec3(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
@@ -314,10 +314,38 @@ void PlayerMouseController::doGodMode(float dt)
     // SAME STEP AS PLAY MODE, and as the editor's (S13): viewport/flystep.h.
     // This function's own version differed in one detail nobody wanted — it
     // strafed along the camera's ROLLED right rather than a horizontal one.
+    if (!flyThisFrame(heldFlyKeys(), linearSpeed) && camera) camera->update(0);
+}
+
+// ONE FRAME OF FREE FLIGHT, AND NOTHING AT ALL WHEN NOTHING IS HELD
+// (PLAYER-SPAWN-1 rule 3, 2026-09-17).
+//
+// Both fly paths used to write the camera's POSITION and its ROTATION on every
+// frame, held keys or not — a zero-length step, then a rotation rebuilt from
+// this controller's own yaw and pitch. That is invisible while the only camera
+// a player ever flies is the free viewer nothing else writes to, and it is a
+// silent overwrite the moment the run flies the ACTIVE camera: a keyframed
+// pan, a camera riding a socket or an avatar's head would be stamped flat with
+// the heading the mouse-look happened to hold, sixty times a second, with the
+// fly keys untouched.
+//
+// So an idle frame writes NOTHING and READS instead: the controller tracks
+// whatever moved the camera, and the first flown frame therefore continues
+// from where the camera actually is rather than snapping back to a heading
+// from before the cut.
+///
+/// Returns true when this frame actually flew the camera.
+bool PlayerMouseController::flyThisFrame(const flystep::Keys &keys, float linearSpeed)
+{
+    if (!camera) return false;
+    if (!keys.any()) {
+        captureYawPitchRollFromCamera();
+        return false;
+    }
     camera->setLocalPos(camera->getLocalPos()
-                        + flystep::direction(camera->getLocalRot(), heldFlyKeys())
-                              * linearSpeed);
+                        + flystep::direction(camera->getLocalRot(), keys) * linearSpeed);
     updateCameraTransform();
+    return true;
 }
 
 // WHAT IS HELD, as flight intentions — both spellings, one table (the arrow

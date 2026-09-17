@@ -84,12 +84,19 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "player.play({vr:true}) does when the session starts. False when the player is not "
           "in VR.",
           Needs::Engine },
-        { "state", "player.state() -> {available, playing, active, vr:{...}}",
+        { "state", "player.state() -> {available, playing, active, camera:{...}, vr:{...}}",
           "The player space in one read. `available` is false in sessions with no player backend "
           "(headless runs) — the honest answer to \"can I even ask\"; `playing` is whether its "
           "scene is running; `active` is whether the Player page is the space on screen, which is "
           "the difference between playing and playing where anyone can see it (the player only "
           "steps and renders while its page is shown).\n\n"
+          "`camera` is WHERE THE PLAYER IS LOOKING FROM and through WHAT: `source` is "
+          "\"active\" when the scene has an armed camera and the run is rendering through it "
+          "(`id`/`name` then name that node) and \"viewport\" when it is the free viewer the "
+          "Player takes from the editor's viewpoint at play start; `position`/`rotation` are "
+          "WORLD (an armed camera can be parented to anything), and `fov`, `projection`, "
+          "`orthoSize`, `nearClip`, `farClip` are the lens it is framing with. Empty in a "
+          "session with no player backend or before a project is open.\n\n"
           "`vr` is the headset half (SPECS/VR_SPEC.md §4.5) and is answerable on every box: "
           "`available` (can this process do VR at all — fixed at boot) and `reason` when it "
           "cannot, `active` (is the player in the headset right now), `state` (the runtime's own "
@@ -246,6 +253,9 @@ QVariantMap PlayerApi::state()
     return QVariantMap{ { "available", available },
                         { "playing", available && service->isPlaying() },
                         { "active", available && service->isActive() },
+                        // WHERE THE PLAYER IS LOOKING FROM, and through what
+                        // (PLAYER-SPAWN-1). Empty until a document is open.
+                        { "camera", available ? service->cameraReport() : QVariantMap() },
                         // The headset half, answerable in every session — a
                         // box with no runtime included, which is the case that
                         // has to be right on every gate.

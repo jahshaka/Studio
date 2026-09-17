@@ -22,7 +22,6 @@ PlayBack::PlayBack()
 {
 	camController = nullptr;
 	mouseController = new PlayerMouseController();
-	this->setRestoreCameraTransform(true);
 }
 
 void PlayBack::init()
@@ -34,8 +33,26 @@ void PlayBack::setScene(iris::ScenePtr scene)
 	this->scene = scene;
 
 	mouseController->setScene(scene);
-	mouseController->setCamera(scene->getCamera());
+	mouseController->setCamera(playCamera(scene));
 }
+
+// THE CAMERA THIS RUN IS FLOWN THROUGH (PLAYER-SPAWN-1 rule 3, owner
+// 2026-09-17: "the play camera is the one the Player pilots").
+//
+// It is the camera the run RENDERS through, and the document already owns that
+// three-term rule — Scene::renderCamera: the host's own camera while editing,
+// the armed ACTIVE camera while playing, the host's again when an avatar is
+// possessed (the spring arm drives it). Asking the document instead of reading
+// `scene->camera` directly is what closes the seam the owner hit: a scene with
+// an active camera used to RENDER through that camera while the fly keys and
+// the mouse-look moved the free viewer nobody could see — input that did
+// nothing, with no way to tell why.
+iris::CameraNodePtr PlayBack::playCamera(const iris::ScenePtr &forScene)
+{
+	if (!forScene) return iris::CameraNodePtr();
+	return forScene->renderCamera(forScene->getCamera());
+}
+
 
 void PlayBack::setController(CameraControllerBase * controller)
 {
@@ -48,8 +65,7 @@ void PlayBack::setController(CameraControllerBase * controller)
 	// (EngineSceneViewport::setScene, EnginePlayerScene::setDocument). Re-sync
 	// whenever the CAMERA moved too, not only the controller.
 	auto liveScene = editorViewport ? editorViewport->getScene() : this->scene;
-	const auto liveCam = (liveScene && liveScene->getCamera()) ? liveScene->getCamera()
-	                                                           : iris::CameraNodePtr();
+	const auto liveCam = playCamera(liveScene);
 	if (controller != camController) {
 		// end old one and begin new one
 		if (camController)
@@ -62,13 +78,17 @@ void PlayBack::setController(CameraControllerBase * controller)
 		camController = controller;
 	} else if (camController && liveCam && camController->getCamera() != liveCam) {
 		camController->setCamera(liveCam);
+		// AND RE-READ THE POSE IT IS NOW DRIVING (PLAYER-SPAWN-1 rule 3). The
+		// free-fly controllers hold their own yaw and pitch — the mouse-look's
+		// state — and write it back onto the camera whenever the player flies.
+		// Handing them a DIFFERENT camera without re-reading it made the first
+		// flown frame snap the new camera to the old one's heading: harmless
+		// while the camera never changed under a running player, and an
+		// authored camera silently re-aimed the moment play started rendering
+		// through one. start() is what a controller does when it takes a
+		// camera over.
+		camController->start();
 	}
-}
-
-void PlayBack::setRestoreCameraTransform(bool shouldRestore)
-{
-	this->shouldRestoreCameraTransform = shouldRestore;
-	this->mouseController->setRestoreCameraTransform(shouldRestore);
 }
 
 float PlayBack::update(iris::Viewport& viewport, float dt)

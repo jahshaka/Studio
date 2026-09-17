@@ -184,6 +184,11 @@ QVariantMap PlayerService::vrReport() const
                           QStringLiteral("this session has no player backend") } };
 }
 
+QVariantMap PlayerService::cameraReport() const
+{
+    return mHost ? mHost->playerCameraReport() : QVariantMap();
+}
+
 bool PlayerService::showSpace()
 {
     if (!mShowSpace) return false;

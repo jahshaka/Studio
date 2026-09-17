@@ -97,6 +97,10 @@ public:
     bool recenterVr();
     /// What player.state().vr reports; answerable in every session.
     QVariantMap vrReport() const;
+    /// What player.state().camera reports: where the player is looking from and
+    /// through which camera (PLAYER-SPAWN-1). Empty in a session with no player
+    /// backend, and before a document is open.
+    QVariantMap cameraReport() const;
     /// The last refusal, for a caller that asked for VR and was told no.
     const QString &lastError() const { return mLastError; }
 

@@ -125,4 +125,84 @@ assert(badGrade, "an unknown player grade is refused, catchably");
 
 assert(player.stop(), "stop");
 
+// ---- WHERE THE PLAYER SPAWNS (PLAYER-SPAWN-1, owner 2026-09-17) -----------
+//
+// "The player spawned the camera in the middle of the sky — it should share the
+// editor viewpoint when we switch unless a camera node is present."  Three
+// rules, and this is the half of them a script can see:
+//
+//   (a) with NO camera in the scene, the Player starts at the editor
+//       viewport's exact pose and lens;
+//   (b) the FIRST camera added becomes the active one, and the Player renders
+//       through it;
+//   (c) a SECOND never steals it;
+//   (d) deleting the active one clears the choice, and the next camera ADDED
+//       arms itself again.
+//
+// player.state().camera is the observable: `source` says which of the two the
+// run is looking through, and the pose is WORLD.
+
+function nearly(a, b, eps, msg) {
+    var d = Math.abs(a - b);
+    assert(d <= (eps || 1e-3), msg + " (" + a + " vs " + b + ")");
+}
+
+// A DISTINCTIVE EDITOR VIEWPOINT — nowhere near the default (0, 5, 14) and on a
+// different lens, so "it matched" cannot mean "they were both at the default".
+editor.setCamera({ position: { x: 8, y: 3, z: -12 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 37 });
+editor.frame(2);
+var eye = editor.camera();
+console.log("the editor viewpoint: " + JSON.stringify(eye.position) + " fov " + eye.fov);
+
+// THE PAGE SWITCH IS THE GESTURE the owner described ("when we switch"), and
+// showing the Player page starts its scene by design (audit F4).
+app.space("player");
+assert(app.columns().space === "player", "the Player page is up");
+player.frame(2);
+
+var pc = player.state().camera;
+console.log("the player's camera: " + JSON.stringify(pc));
+assert(pc.source === "viewport",
+       "(a) with no camera in the scene the Player flies the free viewer");
+nearly(pc.position.x, eye.position.x, 1e-3, "(a) the Player starts at the editor's x");
+nearly(pc.position.y, eye.position.y, 1e-3, "…y");
+nearly(pc.position.z, eye.position.z, 1e-3, "…z");
+var dot = pc.rotation.x * eye.rotation.x + pc.rotation.y * eye.rotation.y +
+          pc.rotation.z * eye.rotation.z + pc.rotation.scalar * eye.rotation.scalar;
+assert(Math.abs(dot) > 0.9999, "(a) …facing the way the editor faced (|dot| " + dot + ")");
+nearly(pc.fov, eye.fov, 1e-3, "(a) …through the lens the editor view is framing with");
+
+// (b) A CAMERA NODE IS PRESENT. The first one arms itself, and the run renders
+// through it — "unless a camera node is present", in pixels' terms.
+var shotA = scene.addCamera({ position: { x: -4, y: 2, z: 6 }, name: "Shot A" });
+assert(scene.activeCamera() === shotA, "(b) the first camera added is the active camera");
+player.frame(2);
+pc = player.state().camera;
+assert(pc.source === "active" && pc.id === shotA,
+       "(b) the Player renders through it, not through the editor's viewpoint");
+nearly(pc.position.x, -4, 1e-2, "(b) …from where that camera stands");
+nearly(pc.position.z, 6, 1e-2, "…z");
+
+// (c) a second camera changes nothing.
+var shotB = scene.addCamera({ position: { x: 9, y: 9, z: 9 }, name: "Shot B" });
+assert(scene.activeCamera() === shotA, "(c) a second camera does not steal the shot");
+player.frame(2);
+assert(player.state().camera.id === shotA, "(c) …and the Player is still on the first");
+
+// (d) delete the active one: nobody is promoted, and the next ADD arms itself.
+assert(node.remove(shotA), "(d) remove the active camera");
+player.frame(2);
+pc = player.state().camera;
+assert(pc.source === "viewport",
+       "(d) with nothing armed the Player is back on the free viewer — the OTHER camera is " +
+       "not promoted, because nobody chose it");
+var shotC = scene.addCamera({ position: { x: 0, y: 1, z: -8 }, name: "Shot C" });
+assert(scene.activeCamera() === shotC, "(d) the next camera ADDED arms itself");
+player.frame(2);
+assert(player.state().camera.id === shotC, "(d) …and the Player renders through it");
+
+assert(node.remove(shotB) && node.remove(shotC), "tidy the cameras away");
+app.space("editor");
+assert(player.stop(), "stop the player again");
+
 console.log("e2e_player_verbs: ALL OK");

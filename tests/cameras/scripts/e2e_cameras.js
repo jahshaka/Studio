@@ -1,6 +1,7 @@
 // cameras.e2e — CAMERAS_SPEC phase 1 through the verbs, in the real app.
 //
-// Phase A: scene.addCamera makes a real scene node (and does NOT arm play).
+// Phase A: scene.addCamera makes a real scene node, and the FIRST one arms
+//          play (PLAYER-SPAWN-1 rule 2).
 // Phase B: camera.settings reads and writes the whole §2 table, including the
 //          angle <-> focal-length binding and the refusals.
 // Phase C: camera.lookAt.
@@ -46,8 +47,13 @@ assert(info.type === "camera",
 near(info.position.x, 1, 1e-3, "the camera landed at the requested position");
 near(info.position.y, 2, 1e-3, "…y");
 near(info.position.z, 3, 1e-3, "…z");
-assert(isNone(scene.activeCamera()),
-       "adding a camera does NOT arm it for play — that is always an explicit choice");
+// THE FIRST CAMERA ADDED TAKES THE SHOT (PLAYER-SPAWN-1 rule 2, owner
+// 2026-09-17). A scene with no camera plays through the free viewer — wherever
+// the editor happened to be standing — so the first camera somebody puts in the
+// scene IS the statement "play through this". Everything below phase C asserts
+// the other half: a SECOND camera never steals it.
+assert(scene.activeCamera() === cam,
+       "the FIRST camera added arms itself for play");
 
 // ---- phase B: the settings block ----------------------------------------
 var s = camera.settings(cam);
@@ -149,6 +155,9 @@ assert(JSON.stringify(camera.settings(cam, writeBack)) === JSON.stringify(before
 
 // ---- phase C: lookAt ----------------------------------------------------
 var shot = scene.addCamera({ position: { x: 0, y: 0, z: 5 } });
+assert(scene.activeCamera() === cam,
+       "a SECOND camera does NOT steal the shot — past the first one the pick is an " +
+       "explicit, saved choice");
 assert(camera.lookAt(shot, { x: 0, y: 0, z: 0 }), "camera.lookAt(point)");
 var rot = node.info(shot).rotation;
 assert(Math.abs(rot.x) < 1 && Math.abs(rot.y) < 1,
@@ -172,13 +181,14 @@ refuses(function () { camera.lookAt(cube, { x: 0, y: 0, z: 0 }); },
 var list = scene.cameras();
 assert(list.length === 2, "scene.cameras() sees both cameras (got " + list.length + ")");
 assert(list[0].id === cam && list[1].id === shot, "…in scene-graph order");
-assert(list[0].active === false && list[1].active === false, "neither is active yet");
+assert(list[0].active === true && list[1].active === false,
+       "the first camera added is the active one, the second is not");
 assert(list[0].angle !== undefined && list[0].focalLength !== undefined,
        "each row carries the settings block");
 
 refuses(function () { scene.setActiveCamera(cube); },
         "setActiveCamera refuses a node that is not a camera");
-assert(isNone(scene.activeCamera()), "…and leaves the choice alone");
+assert(scene.activeCamera() === cam, "…and leaves the choice alone");
 assert(scene.setActiveCamera(shot), "scene.setActiveCamera(shot)");
 assert(scene.activeCamera() === shot, "scene.activeCamera() reads it back");
 var l2 = scene.cameras();
@@ -275,5 +285,14 @@ assert(node.remove(active), "removing the ACTIVE camera");
 assert(isNone(scene.activeCamera()),
        "deleting the active camera falls back to the free viewer rather than leaving play " +
        "pointed at a guid that resolves to nothing");
+// AND NOBODY IS PROMOTED. The other camera is right there and stays unchosen:
+// it was never picked, and a silent promotion is the same failure as a silent
+// steal (PLAYER-SPAWN-1 rule 2).
+assert(scene.cameras().length === 1, "…with the other camera still in the scene");
+assert(isNone(scene.activeCamera()), "…and still nothing armed: no camera is promoted");
+// ...and the NEXT camera ADDED arms itself again, by the same rule.
+var replacement = scene.addCamera({ position: { x: 4, y: 1, z: 4 } });
+assert(scene.activeCamera() === replacement,
+       "the next camera ADDED after that deletion arms itself");
 
 console.log("cameras.e2e: all checks passed");

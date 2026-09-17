@@ -99,11 +99,31 @@ public:
     /// cannot be looking through two different cameras (lead review F1).
     iris::CameraNodePtr renderCamera() const;
 
-    /// Page shown: remembers the camera transform and primes the mouse controller
-    /// so the camera does not jump (PlayerView::start).
+    /// Page shown: remembers the camera's pose AND its lens, and primes the
+    /// mouse controller so the camera does not jump (PlayerView::start).
     void begin();
-    /// Page hidden: restores the camera transform (PlayerView::end).
+    /// Page hidden: puts the camera's pose and lens back (PlayerView::end).
     void end();
+
+    /// THE PLAYER STARTS WHERE THE EDITOR IS LOOKING (PLAYER-SPAWN-1 rule 1,
+    /// owner 2026-09-17: "it should share the editor viewpoint when we switch
+    /// unless a camera node is present").
+    ///
+    /// Called at the two moments a run can begin — the page switch and the
+    /// stopped->playing edge — with the camera the EDITOR VIEW is actually
+    /// rendering through (its free explorer, or the scene camera it is
+    /// piloting). The player's free viewer is placed on that pose and given
+    /// that lens, so the first frame of the Player is the frame the editor was
+    /// showing, and the VR rig — which anchors on whatever camera the run
+    /// renders through — stands the wearer in the same place.
+    ///
+    /// NOTHING HAPPENS when the scene has an ACTIVE camera: the scene has said
+    /// where play looks from, and that is the "unless a camera node is
+    /// present" half of the owner's rule. Nothing happens either when the two
+    /// cameras are the SAME NODE, which is the ordinary case — the player has
+    /// flown the editor's own camera since SceneViewWidget — so this is a
+    /// no-op in every session that never pilots.
+    void spawnFrom(const iris::CameraNodePtr &editorViewCamera);
 
     /// One frame: PlayBack::update (controllers, then the document's
     /// simulation clock — animation, physics, avatars), then document ->
@@ -151,7 +171,21 @@ private:
     iris::ScenePtr mDocument;
     PlayBack *mPlayback = nullptr;
     std::unique_ptr<PlayerVr> mVr;
-    iris::Mat4 mSavedCameraMatrix;
+    /// What the play camera was before the player took it over — restored by
+    /// end(). The LENS is in here beside the transform because spawnFrom can
+    /// change it (a piloted camera's angle is not the explorer's), and an
+    /// explorer left with somebody else's field of view after a visit to the
+    /// Player is a viewport that silently zoomed.
+    struct CameraState
+    {
+        iris::Mat4 transform;
+        float angle = 45.0f;
+        float orthoSize = 10.0f;
+        float nearClip = 0.1f;
+        float farClip = 1000.0f;
+        bool perspective = true;
+    };
+    CameraState mSavedCamera;
     bool mHaveSavedCamera = false;
     /// The wall clock behind a `dt` < 0 step: time since the previous step.
     QElapsedTimer mFrameTimer;

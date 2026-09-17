@@ -42,14 +42,12 @@ class PlayerMouseController : public CameraControllerBase
 
     float pitch;
     float yaw;
+    /// The camera's OWN roll, captured with the other two and written back
+    /// unchanged (PLAYER-SPAWN-1 rule 3): a free viewer never has one, an
+    /// authored camera may, and flying is not a reason to level it.
+    float roll = 0.0f;
 
-    // pos and rot of editor camera before being assigned
-    // to this controller
-    iris::Quat camRot;
-    iris::Vec3 camPos;
 	bool _isPlaying = false;
-
-	bool shouldRestoreCameraTransform;
 
     iris::Viewport viewport;
 
@@ -68,6 +66,10 @@ public:
 
 	void update(float dt) override;
     void doGodMode(float dt);
+    /// One frame of free flight — and NOTHING when nothing is held, which is
+    /// what makes it safe to fly the run's ACTIVE camera (PLAYER-SPAWN-1 rule
+    /// 3; the reasoning is on the definition). True when it flew.
+    bool flyThisFrame(const flystep::Keys &keys, float linearSpeed);
     /// What is held right now, as flight intentions (S13): arrows and W/A/S/D
     /// are aliases here, Q/E (PageDown/PageUp) are the vertical pair. Both the
     /// play-mode fly and the free camera turn it into motion through
@@ -92,10 +94,9 @@ public:
 
     void updateCameraTransform();
 	void captureYawPitchRollFromCamera();
+    /// Takes a camera over: reads its heading and writes nothing (see the
+    /// definition — the matching end() is deleted, not forgotten).
     void start() override;
-    void end() override;
-
-	void setRestoreCameraTransform(bool shouldRestore);
 };
 
 #endif // VIEWERCONTROLLER_H
