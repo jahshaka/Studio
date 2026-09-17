@@ -149,8 +149,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
           "MODELS also carry their SIZE, as information (services/extentmeasure.h): `extent` {x,y,z} — the model's axis-aligned size in METRES as this asset was IMPORTED, i.e. after its import settings (scale, units, rotation) were baked in, which is the size every placement of it has; and `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none), which is what the import dialog shows so a user can disagree with the file. Nothing reads these to scale anything: an asset's size is decided once, at import (assets.importSettings / assets.reimport), and every instance is placed at scale 1. (The retired fit-to-size block — fitKind/fitScale/fitReason/fitSource, and the assets.setFit verb behind it — guessed a size from an envelope on every instantiation; a stale row may still carry those keys and nothing reads them.)",
           Needs::Document },
-        { "meshLods", "assets.meshLods(guid) -> [{mesh, level, triangles, error, switchDistance}]",
-          "The automatic LOD chain a MODEL asset's bake carries (ATOM stage 1, SPECS/NANITE_SPEC.md §7), one row per mesh per level, level 0 (the authored geometry) included. `error` is that level's simplifier error (position + attribute quadrics, >= the geometric error) as a LENGTH IN THE MODEL'S OWN UNITS — 0 for level 0 — and `switchDistance` is where the renderer swaps to it at LOD bias 1: the distance from the object's bounding sphere at which that error covers one pixel at the reference projection (1080 lines, 45 degree vertical field of view). "
+        { "meshLods", "assets.meshLods(guid) -> [{mesh, level, triangles, error, switchPixels}]",
+          "The automatic LOD chain a MODEL asset's bake carries (ATOM stage 1, SPECS/NANITE_SPEC.md §7), one row per mesh per level, level 0 (the authored geometry) included. `error` is that level's simplifier error (position + attribute quadrics, >= the geometric error) as a LENGTH IN THE MODEL'S OWN UNITS — 0 for level 0 — and `switchPixels` is the SIZE ON SCREEN at which the renderer swaps to it at LOD bias 1: the projected radius of the mesh's bounding sphere, in pixels, at which that level's error covers one pixel. It is a size and not a distance because the renderer's rule is a real screen-space pixel error at whatever lens, window and render target the pass is using — the same asset switches at the same SIZE on a 4K window, in a 256-pixel thumbnail and in either eye of a headset, and therefore at very different distances. "
           "An EMPTY list is the honest answer for a model with no chain, and there are four ways to have none: the asset has no bake yet (assets.bakeAll builds them), the mesh is SKINNED (stage 1 ships static meshes only), it is too small to be worth simplifying, or its topology stopped the simplifier before it could shed a useful fraction. Nothing here is authored: the chain is built at import and the levels are derived, never stored as a user setting.",
           Needs::Document },
         { "rename", "assets.rename(guid, name) -> bool",
@@ -604,7 +604,7 @@ QVariantList AssetsApi::meshLods(const QString &guid)
         row["level"] = 0;
         row["triangles"] = baseTriangles;
         row["error"] = 0.0;
-        row["switchDistance"] = 0.0;
+        row["switchPixels"] = 0.0;
         out.append(row);
         const int levels = std::min(mesh->lodIndices.size(), mesh->lodErrors.size());
         for (int i = 0; i < levels; ++i) {
@@ -613,9 +613,19 @@ QVariantList AssetsApi::meshLods(const QString &guid)
             lod["level"] = i + 1;
             lod["triangles"] = int(mesh->lodIndices.at(i).size() / 3);
             lod["error"] = double(mesh->lodErrors.at(i));
-            // The SAME function the backend derives the mesh's LOD values with,
-            // so the verb cannot drift from what the renderer does.
-            lod["switchDistance"] = double(jahshaka::engine::lodSwitchDistance(mesh->lodErrors.at(i)));
+            // THE SCREEN SIZE, not a distance (ATOM-3 A1): the renderer's rule
+            // is a PIXEL budget at the live lens and viewport, so a level has
+            // no fixed switch distance any more — it has a size on screen.
+            // `budget * radius / error` is the projected RADIUS of the mesh's
+            // bounding sphere, in pixels, at which its error covers the budget
+            // (exact in the far field, where `distance - radius ~ distance`);
+            // below that size the renderer takes this level, on any lens, at
+            // any resolution, in either eye of a headset.
+            const float r = mesh->getBoundingSphere().radius;
+            const float e = mesh->lodErrors.at(i);
+            lod["switchPixels"] = (r > 0.0f && e > 0.0f)
+                                      ? double(jahshaka::engine::kLodBudgetPixels * r / e)
+                                      : 0.0;
             out.append(lod);
         }
     }

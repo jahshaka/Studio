@@ -18,9 +18,13 @@
 //
 // THE CASES:
 //   1. THE LEVEL PER CASCADE IS THE ARITHMETIC. Four cascades, cells
-//      0.078 / 0.156 / 0.469 / 1.875 m at the High tier, halved by the sub-voxel
-//      rule: 0.039 / 0.078 / 0.234 / 0.9375. The fixture's errors are
-//      0.05 / 0.20 / 0.60, so the levels must be 0 / 1 / 2 / 3.
+//      0.078 / 0.156 / 0.469 / 1.875 m at the High tier, times the MEASURED LOD
+//      fraction (1/256 — ATOM-3 A2, `kCascadeLodCellFraction`, whose picture
+//      evidence is beside the constant): 0.000305 / 0.00061 / 0.00183 /
+//      0.00732 m. The fixture's errors are 0.0005 / 0.001 / 0.004, so the
+//      levels must be 0 / 1 / 2 / 3. (Until ATOM-3 the fraction was a HALF of
+//      the cell and the fixture's errors were 100x these; the arithmetic under
+//      test is the same, the constant it is done with is not.)
 //   2. THE MESH'S UNITS ARE NOT THE WORLD'S. A second mesh with the same data,
 //      instanced at scale 4, has four times the world-space error per level, so
 //      the outer cascade takes a FINER level for it — two levels in one
@@ -71,7 +75,7 @@ static const unsigned kSize = 128;
 // is the rule ATOM stage 1's bake obeys and the reason a level change costs no
 // draw call. The errors are the deviations a consumer would measure, stated
 // rather than derived so the level boundaries are exact.
-static const float kErr1 = 0.05f, kErr2 = 0.20f, kErr3 = 0.60f;
+static const float kErr1 = 0.0005f, kErr2 = 0.001f, kErr3 = 0.004f;
 
 static MeshData reliefMesh()
 {
@@ -221,11 +225,15 @@ int main()
                     st.cascades[i].voxelTriangles);
 
     // ---- 1. THE LEVEL PER CASCADE IS THE ARITHMETIC --------------------
-    // The rule is `error < cell * 0.5` (lodLevelForCellSize at
-    // OgreScene::cascadeVoxelLod), so the expected level of the unscaled
-    // instance is computable from the cascade's own reported cell.
+    // The rule is `error < cell * kCascadeLodCellFraction`
+    // (lodLevelForWorldError at OgreScene::cascadeVoxelLod), so the expected
+    // level of the unscaled instance is computable from the cascade's own
+    // reported cell. THE FRACTION IS PINNED HERE ON PURPOSE: it is a measured
+    // number (ATOM-3 A2), and a suite that re-derived it from the engine could
+    // not tell a re-measurement from a typo.
+    const float kLodFraction = 1.0f / 256.0f;
     for (size_t i = 0; i < st.cascades.size(); ++i) {
-        const float budget = st.cascades[i].cell * 0.5f;
+        const float budget = st.cascades[i].cell * kLodFraction;
         int expect = 0;
         const float errs[3] = { kErr1, kErr2, kErr3 };
         for (int L = 0; L < 3; ++L) { if (!(errs[L] < budget)) break; expect = L + 1; }
@@ -247,7 +255,7 @@ int main()
 
     // ---- 2. THE SCALE TERM REACHES THE DISPATCH -------------------------
     // Mesh C is instanced at 4x and carries 4x the world-space error per level,
-    // so in the outermost cascade (budget 0.9375 m) it takes level 2 while mesh
+    // so in the outermost cascade (budget 0.00732 m) it takes level 2 while mesh
     // B, unscaled and alone, takes level 3: two levels in ONE histogram.
     const std::vector<int> &outer = st.cascades.back().lodLevels;
     CHECK(countAt(outer, 2) >= 1 && countAt(outer, 3) == 1,

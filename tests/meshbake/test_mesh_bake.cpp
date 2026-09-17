@@ -53,6 +53,7 @@
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <cstdio>
+#include <string>
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
@@ -869,7 +870,7 @@ static void storeIntegration()
 //       level that comes back subtly different draws holes at a distance and
 //       nothing else in the tree would notice;
 //   (c) the CONTRACT the LOD levels are consumed through, MeshData::
-//       lodForCellSize — Photon's voxelizer and its far-field proxy pick a
+//       lodForWorldError — Photon's voxelizer and its far-field proxy pick a
 //       level with it, and "the coarsest level whose error is below this cell
 //       size" has to mean exactly that at both ends of the range.
 // ---------------------------------------------------------------------------
@@ -905,6 +906,19 @@ static void lodChain()
     }
     CHECK_LOUD(ordered, "levels get coarser and their errors grow, monotonically");
     CHECK_LOUD(mesh->lodErrors.first() > 0.0f, "the first level's error is a real length, not zero");
+
+    // THE CHAIN ENDS ON A RULE ABOUT THE CONTENT, NOT ON A LEVEL COUNT (ATOM-3
+    // A6). `kMaxLevels` used to stop every chain at four levels — 1/16 of the
+    // triangles, whatever the asset — so no model had a far-field proxy. The
+    // chain now halves until the TRIANGLE FLOOR (kMinTriangles = 128, which is
+    // also Nanite's root cluster), until a level cannot shed 15 %, or until the
+    // error passes 5 % of the extent. This fixture is small enough that the
+    // floor is what stops it: its coarsest level cannot be halved again.
+    const int coarsestTris = mesh->lodIndices.isEmpty()
+                                 ? 0 : int(mesh->lodIndices.last().size()) / 3;
+    CHECK_LOUD(coarsestTris > 0 && coarsestTris < 2 * 128,
+               ("the chain ran down to the triangle floor, not to a level count (coarsest level " +
+                std::to_string(coarsestTris) + " triangles)").c_str());
 
     // (b) THE SERIALIZER: through the blob and back, byte for byte.
     const QString blob = QDir(staging.path()).filePath(QStringLiteral("lod.jmb"));
@@ -949,16 +963,16 @@ static void lodChain()
     data.lodErrors = { 0.01f, 0.05f, 0.20f };
     CHECK_LOUD(data.lodLevelCount() == 4, "lodLevelCount counts level 0 too");
     CHECK_LOUD(&data.lodLevelIndices(0) == &data.indices, "level 0 IS the mesh's own index list");
-    CHECK_LOUD(data.lodForCellSize(0.005f) == 0,
+    CHECK_LOUD(data.lodForWorldError(0.005f) == 0,
                "a cell finer than every level's error asks for the finest level");
-    CHECK_LOUD(data.lodForCellSize(0.02f) == 1, "a 2 cm cell takes the 1 cm level");
-    CHECK_LOUD(data.lodForCellSize(0.10f) == 2, "a 10 cm cell takes the 5 cm level");
-    CHECK_LOUD(data.lodForCellSize(10.0f) == 3, "a cell coarser than every level takes the coarsest");
-    CHECK_LOUD(data.lodForCellSize(0.0f) == 0 && data.lodForCellSize(-1.0f) == 0,
+    CHECK_LOUD(data.lodForWorldError(0.02f) == 1, "a 2 cm cell takes the 1 cm level");
+    CHECK_LOUD(data.lodForWorldError(0.10f) == 2, "a 10 cm cell takes the 5 cm level");
+    CHECK_LOUD(data.lodForWorldError(10.0f) == 3, "a cell coarser than every level takes the coarsest");
+    CHECK_LOUD(data.lodForWorldError(0.0f) == 0 && data.lodForWorldError(-1.0f) == 0,
                "a non-positive cell size means the finest, never a wrap-around");
     jahshaka::engine::MeshData plain;
     plain.indices = { 0, 1, 2 };
-    CHECK_LOUD(plain.lodLevelCount() == 1 && plain.lodForCellSize(100.0f) == 0,
+    CHECK_LOUD(plain.lodLevelCount() == 1 && plain.lodForWorldError(100.0f) == 0,
                "a mesh with no chain has exactly one level at every cell size");
 }
 
