@@ -119,6 +119,12 @@ iris::CameraNodePtr EnginePlayerScene::camera() const
     return mDocument ? mDocument->getCamera() : iris::CameraNodePtr();
 }
 
+iris::CameraNodePtr EnginePlayerScene::renderCamera() const
+{
+    const iris::CameraNodePtr host = camera();
+    return mDocument ? mDocument->renderCamera(host) : host;
+}
+
 void EnginePlayerScene::begin()
 {
     // Taking the screen back from the editor. One scene now, so there is no
@@ -181,7 +187,7 @@ void EnginePlayerScene::step(float dt, int width, int height)
     // the engine, and the head's world pose becomes the camera — so the last
     // word on where the camera is belongs to the person wearing the headset.
     // A frame with no session costs one pointer test.
-    if (mVr) mVr->step(dt >= 0.0f ? dt : wall, cam);
+    if (mVr) mVr->step(dt >= 0.0f ? dt : wall, renderCamera());
 
     cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror) {

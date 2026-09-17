@@ -162,6 +162,38 @@ inline iris::Vec3 flyDelta(const iris::Quat &headRot, const flystep::Keys &keys,
     return dir * speed * (keys.boost ? flystep::kBoost : 1.0f) * seconds;
 }
 
+/// THE RIG, AFTER THE RUNTIME RECENTRED THE ROOM UNDER THE WEARER.
+///
+/// A runtime may re-origin its own reference space at any moment — the Quest's
+/// long-press, a guardian re-setup — and it announces it with
+/// `XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING` carrying
+/// `poseInPreviousSpace`: the NEW space's origin expressed in the OLD one, here
+/// `pose*`. Every pose reported afterwards is in the new space, so a wearer
+/// standing perfectly still JUMPS across the world by whatever the runtime
+/// moved — the most violent thing a VR renderer can do to somebody, and done by
+/// a gesture they may have made for an entirely different reason.
+///
+/// The rig absorbs it. A pose that read P in the old space reads T^-1 * P in
+/// the new one and the wearer's world pose is Origin * P, so keeping that
+/// constant needs `Origin' = Origin * T` — PROJECTED onto what a rig may be
+/// (a position and a HEADING; a recentre that carried a pitch into the rig
+/// would tilt the horizon under a standing person).
+///
+/// THIS IS THE HOST-SIDE STATEMENT OF ARITHMETIC THE ENGINE PERFORMS (the
+/// session sees the event and must correct before the same frame's locate, and
+/// it cannot include this file — the engine links no document maths). It is
+/// here because it is the one place the rule can be ASSERTED: `player.vr`
+/// checks the invariant it exists for — a wearer's world pose unchanged across
+/// a recentre — which is what would catch either expression drifting.
+inline Rig rigAfterSpaceChange(const Rig &rig, const iris::Vec3 &posePosition,
+                               const iris::Quat &poseRotation, float worldScale = 1.0f)
+{
+    Rig out;
+    out.position = rig.position + rotateY(posePosition * worldScale, rig.yaw);
+    out.yaw = rig.yaw + yawDegrees(poseRotation);
+    return out;
+}
+
 /// THE LONGEST A SINGLE FRAME MAY MOVE A WEARER, in seconds.
 ///
 /// The host charges the wall clock of the frame just gone, so a UI-thread block

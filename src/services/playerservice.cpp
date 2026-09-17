@@ -35,21 +35,39 @@ bool PlayerService::play(bool vr)
     // is any" is two calls (vrAvailable() then play), which is the honest
     // shape of a question with two answers.
     //
-    // THE SESSION IS STARTED BEFORE THE SCENE RUNS because the rig is placed on
-    // the play camera, and the play camera is where it stands NOW — a session
-    // begun after a second of physics would stand the wearer wherever the scene
-    // had already carried the camera to.
+    // THE SCENE RUNS FIRST, THEN THE SESSION — and the order is load-bearing
+    // (lead review F1). The rig is placed on the camera the Player RENDERS
+    // THROUGH, and which camera that is depends on whether the scene is playing
+    // (`iris::Scene::renderCamera`: playing + an armed active camera + nothing
+    // possessed = the authored shot). Begun first, the session would anchor the
+    // wearer on the free camera and then watch the Player draw an authored shot
+    // metres away.
+    //
+    // Nothing has MOVED in between: playScene starts the run and this begins
+    // the session before a single frame is stepped, so "where the run began" is
+    // still exactly where the run began.
+    const bool wasPlaying = mHost->isScenePlaying();
+    if (!wasPlaying) mHost->playScene();
+    const bool now = mHost->isScenePlaying();
+    if (!now) {
+        mLastError = QStringLiteral("the player's scene did not start (it has no scene or "
+                                    "no camera)");
+        return false;
+    }
     if (vr && !mHost->isPlayerVrActive()) {
         QString error;
         if (!mHost->beginPlayerVr(QVariantMap(), &error)) {
+            // THE HEADSET DID NOT GO ON, SO THE RUN DOES NOT START (F6's
+            // rollback, in this order): `player.play({vr:true})` answered
+            // false, and a caller that was told nothing happened must not be
+            // left with a scene running. A run that was ALREADY going is left
+            // alone — it was not ours to stop.
+            if (!wasPlaying) mHost->stopScene();
             mLastError = error;
             return false;
         }
     }
-    if (mHost->isScenePlaying()) return true;
-    mHost->playScene();
-    const bool now = mHost->isScenePlaying();
-    if (now) emit playingChanged(true);
+    if (now && !wasPlaying) emit playingChanged(true);
     return now;
 }
 

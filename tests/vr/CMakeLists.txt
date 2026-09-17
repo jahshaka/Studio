@@ -149,7 +149,11 @@ add_test(NAME vr.player_session
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(vr.player_session PROPERTIES
     LABELS "scripting"
-    TIMEOUT 900
+    # 600, like every other app-spawning suite: this one is PACED BY THE
+    # RUNTIME (Monado's null compositor runs the second session of a process at
+    # 20 Hz), so it is longer than a desktop suite — it measured 16 s — but it
+    # is not in the class that needs 900.
+    TIMEOUT 600
     RUN_SERIAL TRUE
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_player_home};JAHSHAKA_DATA_ROOT=${_vr_player_home}/.local/share/Jahshaka")

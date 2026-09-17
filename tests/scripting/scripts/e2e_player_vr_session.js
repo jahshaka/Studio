@@ -66,13 +66,72 @@ assert(st.mirrorView.indexOf("player") >= 0,
 
 // ---- 2. the runtime paces the frames, and the wearer is somewhere --------
 
-player.frame(90);
+// FRAME BY FRAME UP TO THE PLACEMENT, so the placement can be MEASURED rather
+// than bounded by a number big enough to hide a third of a metre. The rig is
+// placed on the first frame the runtime locates a pose; one more frame carries
+// it into the head the engine reports.
+var located = 0;
+while (located < 400 && player.state().vr.posesValid !== true) { player.frame(1); ++located; }
+assert(player.state().vr.posesValid === true,
+       "the runtime located the wearer's head after " + located + " frames");
+player.frame(1);                       // the frame that carries the placed rig
+var placed = player.state().vr.head;
+
+// THE WANDER OF THIS SIMULATED HEAD, over the SAME two frames the measurement
+// spans — it moves on its own, and that motion is the only honest tolerance
+// available here (the placement itself is asserted exactly, from both sides, in
+// `player.vr`).
+var w0 = player.state().vr.head;
+player.frame(2);
+var w1 = player.state().vr.head;
+var wander = Math.sqrt(Math.pow(w1.x - w0.x, 2) + Math.pow(w1.y - w0.y, 2) +
+                       Math.pow(w1.z - w0.z, 2));
+var off = Math.sqrt(Math.pow(placed.x - cam0.position.x, 2) +
+                    Math.pow(placed.y - cam0.position.y, 2) +
+                    Math.pow(placed.z - cam0.position.z, 2));
+console.log("placed at " + JSON.stringify(placed) + " vs the camera " +
+            JSON.stringify(cam0.position) + " — " + off.toFixed(4) +
+            " m, and this head wanders " + wander.toFixed(4) + " m in 2 frames");
+assert(off < 2.0 * wander + 0.01,
+       "THE WEARER STANDS WHERE THE RUN BEGAN: " + off.toFixed(4) + " m off, inside two " +
+       "frames of the head's own wander (" + wander.toFixed(4) + ")");
+// ...FACING ITS WAY. yaw 0 looks down -Z and the fixture's camera is level, so
+// the two headings are directly comparable.
+var camYaw = Math.atan2(-2 * (cam0.rotation.scalar * cam0.rotation.y +
+                              cam0.rotation.z * cam0.rotation.x),
+                        1 - 2 * (cam0.rotation.x * cam0.rotation.x +
+                                 cam0.rotation.y * cam0.rotation.y)) * 180 / Math.PI;
+console.log("head yaw " + placed.yaw.toFixed(2) + " vs the camera's " + camYaw.toFixed(2));
+assert(Math.abs(placed.yaw - camYaw) < 5.0,
+       "AND FACING THE WAY IT FACED (" + placed.yaw.toFixed(2) + " vs " + camYaw.toFixed(2) + ")");
+
+player.frame(60);
 st = player.state().vr;
-console.log("vr after 90 frames: " + JSON.stringify(st));
+console.log("vr after the run: " + JSON.stringify(st));
 assert(st.frames >= 40, "the runtime ACCEPTED " + st.frames + " frames");
 assert(st.rendered >= 30, "and asked us to draw " + st.rendered + " of them");
 assert(st.state === "focused", "the session reached `focused` (it is " + st.state + ")");
 assert(st.posesValid === true, "the runtime has located the wearer's head");
+assert(st.spaceChanges === 0, "and never recentred the room under them");
+
+// THE PER-FRAME WRITE: the document's camera IS the wearer's head, every frame.
+// It is what makes player.screenshot, a script's camera read and the desktop
+// Player agree about where the wearer is.
+//
+// READ THE HEAD FIRST, THEN STEP. The write is exact but one frame behind by
+// construction — the frame's step() writes the pose located by the PREVIOUS
+// frame, and the pose this frame locates is what `state()` reports afterwards
+// (the headset itself is never behind: the engine composes the rig inside the
+// pump). So the honest assertion is "the camera ends up at the head the step
+// had to work with", and it is an equality, not a tolerance.
+for (var i = 0; i < 5; ++i) {
+    var h = player.state().vr.head;
+    player.frame(1);
+    var c = editor.camera().position;
+    assert(near(c.x, h.x, 1e-4) && near(c.y, h.y, 1e-4) && near(c.z, h.z, 1e-4),
+           "frame " + i + ": the play camera IS the head (" + c.x.toFixed(4) + ", " +
+           c.y.toFixed(4) + ", " + c.z.toFixed(4) + ")");
+}
 
 // THE PLACEMENT. The rig was placed so the head lands on the play camera, and
 // the camera then FOLLOWS the head — so after the placement the two agree.
@@ -81,35 +140,9 @@ console.log("head: " + JSON.stringify(head) + "  rig: " + JSON.stringify(st.orig
 assert(isFinite(head.x) && isFinite(head.y) && isFinite(head.z), "the head has a position");
 assert(isFinite(st.origin.yaw), "and the rig has a heading");
 
-// THE PLACEMENT, and it is the heart of phase 3: the rig was placed so that the
-// wearer's HEAD lands on the play camera — not the rig's floor origin, which is
-// a standing height below it.
-//
-// THE TOLERANCE IS MEASURED, NOT GUESSED. The placement is exact at the instant
-// it happens (asserted byte-exactly, and from both sides, in `player.vr`) — but
-// this runtime's simulated head MOVES ON ITS OWN, and every frame since the
-// placement has carried the wearer a little further across their room, which is
-// correct behaviour and not drift. So the head's own excursion over a few
-// frames is measured HERE and the placement is asserted against it: standing at
-// the camera, within a wearer's own wander.
-var wanderA = player.state().vr.head;
-player.frame(12);
-var wanderB = player.state().vr.head;
-var wander = Math.sqrt(Math.pow(wanderB.x - wanderA.x, 2) + Math.pow(wanderB.y - wanderA.y, 2) +
-                       Math.pow(wanderB.z - wanderA.z, 2));
-head = player.state().vr.head;
-var off = Math.sqrt(Math.pow(head.x - cam0.position.x, 2) + Math.pow(head.y - cam0.position.y, 2) +
-                    Math.pow(head.z - cam0.position.z, 2));
-console.log("camera was " + JSON.stringify(cam0.position) + ", head is " + JSON.stringify(head) +
-            " — " + off.toFixed(3) + " m away, and this head wanders " + wander.toFixed(3) +
-            " m in 12 frames on its own");
-assert(wander > 0.0, "the simulated head moves on its own (" + wander.toFixed(3) + " m/12 frames)");
-assert(off < 10.0 * wander + 0.05,
-       "THE WEARER IS STANDING WHERE THE PLAY CAMERA STOOD (" + off.toFixed(3) +
-       " m, inside their own wander)");
-assert(Math.abs(player.state().vr.origin.y - head.y) > 0.5,
-       "and the rig's floor is a standing height below their eyes (" +
-       (head.y - player.state().vr.origin.y).toFixed(2) + " m), not at them");
+assert(Math.abs(player.state().vr.origin.y - player.state().vr.head.y) > 0.5,
+       "the rig's floor is a standing height below their eyes (" +
+       (player.state().vr.head.y - player.state().vr.origin.y).toFixed(2) + " m), not at them");
 
 // ---- 3. THE FLY MOVES THE RIG, ALONG THE HEAD'S HEADING -----------------
 //
@@ -154,6 +187,29 @@ console.log("head before/after the rig moved: " + JSON.stringify(headA) + " -> "
 assert(!near(headB.x, headA.x, 1e-4) || !near(headB.z, headA.z, 1e-4),
        "the wearer's head moved with the rig they are standing on");
 
+// ---- 3b. RECENTRE: take me back to where the run began ------------------
+//
+// Not "re-place onto the camera" — the camera is written FROM the head every
+// frame, so that would be a no-op (lead review F2). The anchor is the pose the
+// play camera had when the run STARTED, which is the one thing in the room that
+// has not moved with the wearer.
+
+player.vrMove({ forward: true, seconds: 3.0 });     // walk well away
+var walked = player.state().vr.head;
+var awayFrom = Math.sqrt(Math.pow(walked.x - cam0.position.x, 2) +
+                         Math.pow(walked.z - cam0.position.z, 2));
+console.log("walked " + awayFrom.toFixed(2) + " m from where the run began");
+assert(awayFrom > 10.0, "the wearer is well away from the start (" + awayFrom.toFixed(2) + " m)");
+assert(player.vrRecenter() === true, "player.vrRecenter() is accepted");
+player.frame(3);
+var back = player.state().vr.head;
+var backOff = Math.sqrt(Math.pow(back.x - cam0.position.x, 2) +
+                        Math.pow(back.y - cam0.position.y, 2) +
+                        Math.pow(back.z - cam0.position.z, 2));
+console.log("after the recentre the head is " + backOff.toFixed(4) + " m from the start pose");
+assert(backOff < 2.0 * wander + 0.02,
+       "RECENTRE PUTS THE WEARER BACK WHERE THE RUN BEGAN (" + backOff.toFixed(4) + " m)");
+
 // ---- 4. vr.end() mid-play: VR stops, the scene keeps playing ------------
 
 assert(player.endVr() === true, "player.endVr() ends the session");
@@ -184,6 +240,60 @@ player.frame(20);
 assert(player.state().vr.active === true, "session running");
 assert(player.stop() === true, "player.stop() stops the run");
 assert(player.state().vr.active === false, "AND ends the session with it (the chosen order)");
+
+// ---- 6a. AN ARMED ACTIVE CAMERA IS THE ONE THE WEARER STANDS ON ---------
+//
+// THE DEFECT THIS CASE EXISTS FOR (lead review F1): the Player renders through
+// the scene's ACTIVE camera while playing (CAMERAS_SPEC D6), and a VR mode that
+// placed the wearer on the FREE camera instead would stand them somewhere the
+// Player's picture never was — metres away, in a scene authored around a shot.
+// One rule, in the document (iris::Scene::renderCamera), used by the mirror and
+// by the rig alike.
+
+var shotId = scene.addCamera({ position: { x: 30, y: 2, z: -18 } });
+assert(!!shotId, "a second camera, well away from the free one");
+assert(scene.setActiveCamera(shotId) === true, "and it is armed as the active camera");
+assert(player.play({ vr: true }) === true, "play in VR with an authored shot armed");
+var locatedShot = 0;
+while (locatedShot < 400 && player.state().vr.posesValid !== true) { player.frame(1); ++locatedShot; }
+player.frame(1);
+var atShot = player.state().vr.head;
+console.log("the wearer stands at " + JSON.stringify(atShot) + " (the shot is at 30, 2, -18)");
+assert(Math.abs(atShot.x - 30) < 0.5 && Math.abs(atShot.y - 2) < 0.5 &&
+       Math.abs(atShot.z + 18) < 0.5,
+       "THE WEARER STANDS AT THE AUTHORED SHOT, not at the free camera");
+// ...and the head writes back to THAT camera, not to the free one.
+var beforeWrite = player.state().vr.head;
+player.frame(1);
+var shotNow = node.transform(shotId).position;
+assert(near(shotNow.x, beforeWrite.x, 1e-3) && near(shotNow.z, beforeWrite.z, 1e-3),
+       "and the head writes back to the ACTIVE camera (" + shotNow.x.toFixed(3) + ", " +
+       shotNow.y.toFixed(3) + ", " + shotNow.z.toFixed(3) + ")");
+assert(player.stop() === true, "stop");
+assert(scene.setActiveCamera(null) === true, "the shot is disarmed again");
+
+// ---- 6b. LEAVING THE PLAYER PAGE TAKES THE HEADSET OFF ------------------
+//
+// A session belongs to the RUN, and the page IS the run's window: leaving it
+// used to leave the engine pumping at the runtime's cadence behind a page
+// nobody is on — the rig and the camera frozen, the driver still in VR pacing,
+// the mirror presenting into an unmapped window every frame (lead review F3).
+
+assert(player.play({ vr: true }) === true, "in VR once more");
+player.frame(20);
+assert(player.state().vr.active === true, "session running");
+app.space("editor");
+assert(app.columns().space === "editor", "the editor page is up");
+assert(player.state().vr.active === false,
+       "LEAVING THE PLAYER PAGE ENDED THE SESSION");
+assert(player.playing() === false, "and stopped the run with it");
+editor.frame(10);
+assert(player.state().vr.active === false, "still ended after more editor frames");
+// THE PACING IS THE EDITOR'S AGAIN — the driver is out of session pacing, so
+// ordinary frames run without a runtime to wait for. Asserted through the frame
+// budget the editor's own suites use: ten frames of a paced loop return.
+assert(app.renderStats().frameMs >= 0, "the editor renders on its own clock again");
+app.space("player");
 
 // ---- 7. and the desktop player is itself again --------------------------
 

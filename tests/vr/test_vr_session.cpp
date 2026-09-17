@@ -607,6 +607,32 @@ int main() {
                           "...and it is the new LEFT EYE, byte for byte: %zu of %zu differ, "
                           "worst %d/255", d, ml.px.size(), mworst);
             }
+            // ---- AND THE MIRROR FOLLOWS THE HOST'S WISH (F9) ------------
+            // The mirror does not stop when its view does — it is a workspace
+            // over that view's target — so "is anybody looking at this page" is
+            // the HOST's question and it has to be able to ANSWER it. Clearing
+            // the mirror must take the workspace down (the desktop keeps
+            // whatever it had), and re-setting it must bring the eye back.
+            engine->setVrMirrorView(nullptr);
+            CHECK_MSG(engine->vrMirrorView() == nullptr, "the mirror can be cleared");
+            Image cleared;
+            pump(engine.get(), engine->vrStatus().frames + 6ull, 60u);
+            REQUIRE(desktop->readPixels(cleared));
+            engine->setVrOrigin(Vec3(-6.0f, 0.0f, 2.0f), -20.0f);
+            pump(engine.get(), engine->vrStatus().frames + 12ull, 120u);
+            Image afterClear;
+            REQUIRE(desktop->readPixels(afterClear));
+            CHECK_MSG(differingBytes(afterClear.rgba, cleared.rgba) == 0u,
+                      "A CLEARED MIRROR STOPS PAINTING: the desktop did not move while the "
+                      "rig did (its own workspace is still disabled)");
+            engine->setVrMirrorView(desktop);
+            CHECK_MSG(engine->vrMirrorView() == desktop, "...and it can be taken again");
+            pump(engine.get(), engine->vrStatus().frames + 12ull, 120u);
+            Image afterRetake;
+            REQUIRE(desktop->readPixels(afterRetake));
+            CHECK_MSG(differingBytes(afterRetake.rgba, cleared.rgba) > 0u,
+                      "and the eye comes back");
+
             desktop->setEnabled(true);
             // PUT THE RIG BACK before the cases below read the eyes again.
             engine->setVrOrigin(Vec3(0.0f, 0.0f, 0.0f), 0.0f);

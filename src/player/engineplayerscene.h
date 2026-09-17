@@ -90,6 +90,14 @@ public:
     iris::ScenePtr document() const { return mDocument; }
     /// The camera the view is driven from (the document's scene camera).
     iris::CameraNodePtr camera() const;
+    /// THE CAMERA THE PLAYER ACTUALLY RENDERS THROUGH — `camera()` put through
+    /// the document's own active-camera rule (`iris::Scene::renderCamera`,
+    /// which the mirror's applyCamera uses for the same question). With an
+    /// authored shot armed and nothing possessed, that is the authored camera;
+    /// otherwise it is the free one. The VR mode stands the wearer on THIS and
+    /// writes the head back to THIS, so the headset and the Player's picture
+    /// cannot be looking through two different cameras (lead review F1).
+    iris::CameraNodePtr renderCamera() const;
 
     /// Page shown: remembers the camera transform and primes the mouse controller
     /// so the camera does not jump (PlayerView::start).

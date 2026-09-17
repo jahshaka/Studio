@@ -122,7 +122,18 @@ void EnginePlayerView::start()
 
 void EnginePlayerView::end()
 {
+    // THE HEADSET COMES OFF WITH THE PAGE (lead review F3, and this lane's own
+    // rule that a session belongs to the RUN). Leaving the Player page used to
+    // leave the engine's session pumping at the runtime's cadence behind a page
+    // nobody is on: the rig and the camera FROZE (syncFrame returns the moment
+    // this flag drops), the render driver stayed in VR pacing, and the mirror
+    // went on presenting into a window that is no longer mapped. Ending it here
+    // is `player.stop()`'s half of the same statement, made by the page.
+    //
+    // FIRST, while `mActive` is still true: endPlayerVr re-asserts the view's
+    // enabled flag from it, and the line below is what turns it off.
     mActive = false;
+    endPlayerVr();
     mScene->end();
     if (view()) view()->setEnabled(false);
 }
@@ -194,7 +205,14 @@ bool EnginePlayerView::beginPlayerVr(const QVariantMap &options, QString *error)
         if (error) *error = QStringLiteral("the player has no scene to show yet");
         return false;
     }
-    if (!mScene->vr()->begin(mScene->engineScene(), view(), mScene->camera(), options, error))
+    // THE VIEW'S VISIBILITY IS THIS WIDGET'S ANSWER, not the VR mode's (lead
+    // review F4): PlayerVr switches this view off for the session and asks HERE
+    // what to switch it back to, whenever the session ends — including a
+    // session ended from a script or by a lost device, when the page may no
+    // longer be up.
+    mScene->vr()->setViewRestore([this]() { if (view()) view()->setEnabled(mActive); });
+    if (!mScene->vr()->begin(mScene->engineScene(), view(), mScene->renderCamera(),
+                             options, error))
         return false;
     // THE LOOP'S CLOCK IS THE RUNTIME NOW (VR_SPEC §4.3): zero interval, vsync
     // off, and renderOneFrame blocks in xrWaitFrame instead. The driver
@@ -207,6 +225,10 @@ bool EnginePlayerView::beginPlayerVr(const QVariantMap &options, QString *error)
 void EnginePlayerView::endPlayerVr()
 {
     if (mScene && mScene->vrIfAny()) mScene->vr()->end();
+    // ...and the view goes back to whatever this page is doing NOW. The restore
+    // callback above covers the paths PlayerVr notices by itself; this covers
+    // the ordinary one and costs nothing when it is already right.
+    if (view()) view()->setEnabled(mActive);
     if (mDriver) mDriver->setVrSessionActive(false);
 }
 
@@ -239,7 +261,7 @@ bool EnginePlayerView::movePlayerVr(const flystep::Keys &keys, float seconds)
 
 bool EnginePlayerView::recenterPlayerVr()
 {
-    return mScene && mScene->vrIfAny() && mScene->vr()->recenter(mScene->camera());
+    return mScene && mScene->vrIfAny() && mScene->vr()->recenter();
 }
 
 void EnginePlayerView::syncFrame()

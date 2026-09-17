@@ -604,9 +604,17 @@ void MainWindow::wireFramePacing()
     // THE VR ICON FOLLOWS THE SESSION, not just the button that started it: a
     // session can end from a script (`vr.end()`), from a lost device or from
     // the runtime itself, and a toolbar showing "in VR" over an editor that is
-    // not would be a lie. One bool compare per frame, on the thread that owns
-    // the icon, and a QIcon is only rebuilt when the answer moves.
+    // not would be a lie.
+    //
+    // WHAT IT COSTS, stated honestly (lead review F8): in a process that CANNOT
+    // do VR — every ordinary launch, since capability is fixed at boot and only
+    // `--vr` asks for it — this is one cached bool and nothing else, which is
+    // the case that must not pay. In a VR-capable process it is a `VrStatus`
+    // read per frame on the UI thread (a ~20-word struct built from the
+    // session's own counters, no lock and no runtime call), and a QIcon is
+    // rebuilt only when the answer moves.
     connect(driver, &EngineRenderDriver::beforeFrame, this, [this]() {
+        if (!mVrCapable) return;
         if (playerService && playerService->isVrActive() != mVrIconActive) refreshVrUi();
     });
 }
@@ -663,7 +671,10 @@ void MainWindow::refreshVrUi()
 {
     if (!actionVr) return;
     const bool available = playerService && playerService->vrAvailable();
-    const bool active = playerService && playerService->isVrActive();
+    const bool active = available && playerService->isVrActive();
+    // FIXED AT BOOT, so it is asked once and cached: the per-frame follower
+    // above tests this before it asks anything else.
+    mVrCapable = available;
     actionVr->setEnabled(available);
     actionVr->setChecked(active);
     mVrIconActive = active;

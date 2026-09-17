@@ -148,6 +148,49 @@ int main()
               "...facing the camera's way");
     }
 
+    // ---- 4b. THE RUNTIME RECENTRES THE ROOM UNDER THE WEARER -------------
+    //
+    // The invariant, and it is the whole point of the handling: after a
+    // recentre the wearer's WORLD POSE IS UNCHANGED. A runtime that re-origins
+    // its space (the Quest's long-press) reports every later pose in a new
+    // frame; absorbed into the rig, a wearer standing still stays standing
+    // still, and un-absorbed they are thrown across the world by whatever the
+    // runtime moved. Asserted here rather than on the formula, because the
+    // engine performs the same arithmetic in its own expression (it cannot
+    // include this file) and an invariant catches either one drifting.
+    {
+        vrorigin::Rig rig;
+        rig.position = iris::Vec3(-4.0f, 0.0f, 11.0f);
+        rig.yaw = 47.0f;
+        // Where the wearer is, before: the runtime's pose composed with the rig.
+        const iris::Vec3 p(0.7f, 1.65f, -0.2f);
+        const iris::Quat q = yaw(20.0f) * iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -15.0f);
+        const iris::Vec3 worldBefore = rig.position + vrorigin::rotateY(p, rig.yaw);
+        const iris::Quat worldRotBefore = yaw(rig.yaw) * q;
+
+        // THE RECENTRE: the new space's origin, in the old space's coordinates.
+        const iris::Vec3 t(1.5f, 0.0f, -2.25f);
+        const float tYaw = -63.0f;
+        const iris::Quat u = yaw(tYaw);
+        // What the runtime will report afterwards: T^-1 * P.
+        const iris::Vec3 pAfter = vrorigin::rotateY(p - t, -tYaw);
+        const iris::Quat qAfter = u.conjugated() * q;
+
+        const vrorigin::Rig moved = vrorigin::rigAfterSpaceChange(rig, t, u);
+        const iris::Vec3 worldAfter = moved.position + vrorigin::rotateY(pAfter, moved.yaw);
+        const iris::Quat worldRotAfter = yaw(moved.yaw) * qAfter;
+        show("world before the recentre", worldBefore);
+        show("world after  the recentre", worldAfter);
+        CHECK(nearVec(worldAfter, worldBefore, 1e-3f),
+              "A RUNTIME RECENTRE DOES NOT MOVE THE WEARER: same world position");
+        CHECK(near(vrorigin::yawDegrees(worldRotAfter), vrorigin::yawDegrees(worldRotBefore), 1e-2f),
+              "...and the same world heading");
+        // AND THE RIG IS STILL A RIG: position and heading, no tilt anywhere.
+        const iris::Vec3 up = yaw(moved.yaw).rotatedVector(iris::Vec3(0, 1, 0));
+        CHECK(nearVec(up, iris::Vec3(0, 1, 0), 1e-5f),
+              "the rig absorbed it without tilting the horizon");
+    }
+
     // ---- 5. THE FLY: the HEAD's heading, LEVEL ---------------------------
     {
         flystep::Keys forward;

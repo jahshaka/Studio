@@ -78,15 +78,18 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, ipd, mirror, worldScale, asymmetricFov}",
+          "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
           "runtime ACCEPTED (xrEndFrame), which is the only honest measure of a session on a "
           "loaded box: wall-clock time measures the box, not the session. `ipd` is the distance "
           "between the two located eyes and `asymmetricFov` says whether the runtime gives the "
           "eyes different projections (a real headset does; a simulated one usually does not). "
-          "`space` is \"stage\" (a floor origin) or \"local\". With no session every field is at "
-          "its zero and `state` is \"idle\" or \"unavailable\".",
+          "`space` is \"stage\" (a floor origin) or \"local\". `spaceChanges` counts the times "
+          "the RUNTIME recentred that space under the wearer (a Quest long-press, a guardian "
+          "re-setup) — each one is absorbed into the rig so the wearer does not move, and a "
+          "count climbing while nobody touched the headset is a runtime problem. With no "
+          "session every field is at its zero and `state` is \"idle\" or \"unavailable\".",
           Needs::Engine },
     };
 }
@@ -219,5 +222,6 @@ QVariantMap VrApi::state()
     out[QStringLiteral("mirror")] = vrnames::mirror(s.mirror);
     out[QStringLiteral("worldScale")] = s.worldScale;
     out[QStringLiteral("asymmetricFov")] = s.asymmetricFov;
+    out[QStringLiteral("spaceChanges")] = QVariant::fromValue(qulonglong(s.spaceChanges));
     return out;
 }

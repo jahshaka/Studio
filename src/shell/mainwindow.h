@@ -1053,9 +1053,13 @@ private:
     /// (PlayerService::toggleVr, which is what `vr.toggle()` calls); this is
     /// held so its icon and its tooltip can follow the session.
     QAction *actionVr = nullptr;
-    /// What the icon is currently showing, so the per-frame refresh is a bool
-    /// compare and not a QIcon rebuild.
+    /// What the icon is currently showing, so the per-frame refresh only
+    /// rebuilds a QIcon when the answer moves.
     bool mVrIconActive = false;
+    /// Can this PROCESS do VR at all? Fixed at boot (the engine asks the
+    /// runtime once, and only under `--vr`), so the per-frame follower reads
+    /// this cached bool first and an ordinary launch pays nothing.
+    bool mVrCapable = false;
 
     QAction *wireCheckAction;
     QAction *physicsCheckAction;

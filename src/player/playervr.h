@@ -47,6 +47,7 @@ For more information see the LICENSE file
 // copies (the engine's session), and the input bindings (phase 4 — there are no
 // controllers and no hands here, by the brief).
 
+#include <functional>
 #include <memory>
 
 #include <QString>
@@ -66,11 +67,25 @@ public:
     ~PlayerVr();
 
     /// Starts the session on `scene`, mirrors it onto `mirrorView` and arms the
-    /// rig to be placed on `camera` at the first located pose. False with
-    /// `error` filled — no runtime, a session already running, no scene, no
-    /// view — and NOTHING changed.
+    /// rig to be placed at the first located pose on WHERE THE RUN BEGAN — the
+    /// world pose of `camera`, read now. False with `error` filled — no
+    /// runtime, a session already running, no scene, no view — and NOTHING
+    /// changed.
+    ///
+    /// `camera` is the camera the PLAYER RENDERS THROUGH, resolved by
+    /// `iris::Scene::renderCamera` (the active-camera seam's own rule, lead
+    /// review F1): with an authored shot armed, the wearer must stand where the
+    /// Player's picture was, not where the free camera happens to be parked.
     bool begin(jahshaka::engine::Scene *scene, jahshaka::engine::View *mirrorView,
                const iris::CameraNodePtr &camera, const QVariantMap &options, QString *error);
+
+    /// WHO PUTS THE MIRROR VIEW BACK when a session ends — including a session
+    /// that ended somewhere else (a script, a lost device). This object
+    /// switched the view off; it must not GUESS what to switch it back to,
+    /// because by then the page may be hidden (a hidden view left rendering and
+    /// presenting every frame is the defect this callback exists to avoid).
+    /// The widget knows, so the widget says.
+    void setViewRestore(const std::function<void()> &restore) { mRestoreView = restore; }
 
     /// Ends the session and puts the mirror view back on the screen. Safe when
     /// none is running (and called by the destructor).
@@ -82,7 +97,8 @@ public:
     /// ONE FRAME, after PlayBack has moved the document and before the mirror
     /// pushes it: reconcile with the engine, place or fly the rig, push it, and
     /// put the head's world pose on the play camera so the document agrees with
-    /// the wearer. `dt` is the seconds the frame is charging.
+    /// the wearer. `dt` is the seconds the frame is charging, and `camera` is
+    /// the RESOLVED render camera for this frame (see begin()).
     void step(float dt, const iris::CameraNodePtr &camera);
 
     /// LOCOMOTION AS A VERB (player.vrMove). The same call the held fly keys
@@ -91,9 +107,13 @@ public:
     /// with no keyboard in the room. False when no session is running.
     bool move(const flystep::Keys &keys, float seconds);
 
-    /// Re-place the rig on the play camera, as the first frame did: "I am here,
-    /// facing this way". False when no session is running.
-    bool recenter(const iris::CameraNodePtr &camera);
+    /// TAKE ME BACK TO WHERE THE RUN BEGAN — the product gesture, and the only
+    /// one that means anything (lead review F2): the wearer's head is re-placed
+    /// onto the pose the play camera had when the session started, keeping
+    /// their own offset from the middle of their room. "Re-place onto the
+    /// camera" would be a no-op, because the camera is written FROM the head
+    /// every frame. False when no session is running.
+    bool recenter();
 
     /// What player.state().vr answers with.
     QVariantMap report() const;
@@ -103,23 +123,41 @@ public:
     static QVariantMap idleReport();
 
 private:
+    /// Arms a placement for the first locate that can be paired with the rig
+    /// this object holds.
+    void armPlacement(const jahshaka::engine::VrStatus &status);
     /// Pushes the rig to the engine. Cheap; the engine composes it next frame.
     void applyRig();
     /// Puts the mirror view back the way it was found.
     void restoreMirrorView();
 
     std::weak_ptr<jahshaka::engine::Engine> mEngine;
+    std::function<void()> mRestoreView;
     /// The Player's on-screen View, borrowed. Null once it has been restored.
     jahshaka::engine::View *mMirrorView = nullptr;
     vrorigin::Rig mRig;
-    /// Waiting for the first located pose to place the rig on the camera.
+    /// Waiting to place the rig (at begin, and at every recenter).
     bool mPlacePending = false;
+    /// THE FIRST LOCATE THAT CAN BE TRUSTED FOR A PLACEMENT — `VrStatus::
+    /// rendered` at the moment the placement was asked for, plus one.
+    ///
+    /// A placement is a correction computed from the PAIR (the rig, the head it
+    /// composed), and the engine composes the head inside its own pump: a head
+    /// reported before the frame that first used the current rig belongs to the
+    /// PREVIOUS rig, and correcting with a mismatched pair moves the wearer by
+    /// exactly the difference. Measured, and it is not subtle — a recentre
+    /// after a 75 m fly threw the wearer 75 m past the target.
+    unsigned long long mPlaceAfterRendered = 0ull;
     /// This object started the session that is running (so it is this object's
     /// to end, and its half to put back when it goes away).
     bool mOwnsSession = false;
-    /// The camera the rig was last placed on / flown from, for the verbs that
-    /// arrive between frames.
+    /// The camera the head is written to, as resolved by the last frame — for
+    /// the verbs that arrive between frames.
     iris::CameraNodePtr mCamera;
+    /// WHERE THE RUN BEGAN, in WORLD space: the render camera's pose at
+    /// begin(). The placement and every recentre land the head here.
+    iris::Vec3 mStartPos;
+    iris::Quat mStartRot;
 };
 
 #endif   // PLAYERVR_H

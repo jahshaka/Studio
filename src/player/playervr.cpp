@@ -95,13 +95,23 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     // session ends, with the chain the mirror has kept pushing to it all along.
     if (mMirrorView) mMirrorView->setEnabled(false);
 
-    // THE RIG STARTS AT THE WORLD ORIGIN AND IS PLACED ON THE CAMERA at the
-    // first frame the runtime locates a pose — which is never the frame a
-    // session begins on (the runtime has not reached Focused yet, and a pose
-    // before that is not one to stand on).
+    // THE RIG STARTS AT THE WORLD ORIGIN AND IS PLACED AT THE FIRST LOCATED
+    // POSE — never on the frame a session begins (the runtime has not reached
+    // Focused yet, and a pose before that is not one to stand on).
+    //
+    // WHERE IT IS PLACED IS CAPTURED NOW, not read at placement time: "where
+    // the run began" is a pose from BEFORE any physics, any animation and any
+    // camera cut had a frame to move it, and it is the same anchor
+    // `recenter()` uses. WORLD space, because that is the frame the engine
+    // composes the rig in — a camera parented to anything (a socket, a rig, a
+    // moving platform) has a local transform that means nothing here.
     mRig = vrorigin::Rig();
-    mPlacePending = true;
+    armPlacement(VrStatus());
     mCamera = camera;
+    if (camera) {
+        mStartPos = camera->getGlobalPosition();
+        mStartRot = camera->getGlobalRotation();
+    }
     applyRig();
     return true;
 }
@@ -121,8 +131,22 @@ void PlayerVr::end()
 
 void PlayerVr::restoreMirrorView()
 {
-    if (mMirrorView) mMirrorView->setEnabled(true);
+    // NOT `setEnabled(true)` (lead review F4). This object switched the view
+    // off; what it must be switched back TO is whatever its owner is showing by
+    // then, and a session can end while the Player page is hidden — leaving a
+    // hidden on-screen view rendering and presenting a picture nobody can see,
+    // every frame, for the rest of the run. The widget owns that answer.
+    if (mMirrorView && mRestoreView) mRestoreView();
     mMirrorView = nullptr;
+}
+
+void PlayerVr::armPlacement(const jahshaka::engine::VrStatus &st)
+{
+    mPlacePending = true;
+    // The next locate is the first one that can use the rig this object holds
+    // (the host pushes before the frame, the engine composes inside it), so it
+    // is the first whose head can be paired with that rig.
+    mPlaceAfterRendered = st.rendered + 1ull;
 }
 
 void PlayerVr::applyRig()
@@ -153,14 +177,15 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     const iris::Quat headRot = toIris(st.headRotation);
 
     if (mPlacePending) {
-        // WHERE THE PLAYER'S CAMERA STANDS IS WHERE THE HEAD IS. Position and
+        // NOT YET: this head was composed with a rig that is no longer the one
+        // held here (see mPlaceAfterRendered). Correcting from a mismatched
+        // pair is a teleport, not a placement.
+        if (st.rendered < mPlaceAfterRendered) return;
+        // WHERE THE PLAYER'S CAMERA STOOD IS WHERE THE HEAD IS. Position and
         // heading; the wearer keeps their own pitch, their own roll and their
         // own offset from the middle of their room.
-        if (mCamera) {
-            mRig = vrorigin::placedOn(mRig, head, headRot,
-                                      mCamera->getLocalPos(), mCamera->getLocalRot());
-            applyRig();
-        }
+        mRig = vrorigin::placedOn(mRig, head, headRot, mStartPos, mStartRot);
+        applyRig();
         mPlacePending = false;
         // NO CAMERA WRITE ON THIS FRAME, deliberately: the rig has just been
         // chosen so that the head lands on the camera, and the pose above is
@@ -170,6 +195,10 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         return;
     }
 
+    // NOT WHILE A PLACEMENT IS PENDING — a wearer being put back where the run
+    // began is not also walking, and a rig moved between the request and the
+    // placement is the mismatched pair again.
+    //
     // ONE FRAME OF FLIGHT, from the keys the player's controller is already
     // reading. The controller has ALSO flown the camera with them a moment ago
     // (PlayerMouseController::update); that move is discarded by the camera
@@ -193,9 +222,17 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     // rig on the next locate. The HEADSET is exact (the composition happens
     // inside the pump); only the desktop's idea of the camera lags, by one
     // frame, which is the same lag every host-side camera read has.
+    //
+    // A WORLD WRITE, through the one setter that takes both (one parent
+    // resolution instead of two, and none at all at the root): the head's pose
+    // is in world space and the camera may be parented to anything. An ordinary
+    // document write, like the camera controller's own per-frame one — no undo
+    // entry, no new cadence — and PlayBack's stop puts the pre-play transforms
+    // back at the end of the run, which is what makes it safe to write an
+    // AUTHORED camera here: while a session runs the wearer IS the camera the
+    // Player renders through, whichever camera that is.
     if (mCamera) {
-        mCamera->setLocalPos(head);
-        mCamera->setLocalRot(headRot);
+        mCamera->setGlobalPosRot(head, headRot);
         mCamera->update(0);
     }
 }
@@ -213,14 +250,14 @@ bool PlayerVr::move(const flystep::Keys &keys, float seconds)
     return true;
 }
 
-bool PlayerVr::recenter(const iris::CameraNodePtr &camera)
+bool PlayerVr::recenter()
 {
     if (!isActive()) return false;
-    if (camera) mCamera = camera;
-    // Deferred to the next located frame, exactly like the first placement —
-    // the pose this frame's `vrStatus` holds may be a frame old, and a recentre
-    // that used it would leave the wearer that much off the mark.
-    mPlacePending = true;
+    auto engine = mEngine.lock();
+    // Deferred to the next located frame that can be PAIRED with the rig this
+    // object holds, exactly like the first placement (armPlacement's note). The
+    // target is the start pose either way, so the two paths are one operation.
+    armPlacement(engine->vrStatus());
     return true;
 }
 
@@ -233,6 +270,7 @@ QVariantMap PlayerVr::idleReport()
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(0));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(0));
     out[QStringLiteral("posesValid")] = false;
+    out[QStringLiteral("spaceChanges")] = QVariant::fromValue(qulonglong(0));
     out[QStringLiteral("worldScale")] = 1.0;
     QVariantMap zero = vec(iris::Vec3());
     zero[QStringLiteral("yaw")] = 0.0;
@@ -258,6 +296,11 @@ QVariantMap PlayerVr::report() const
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(st.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(st.rendered));
     out[QStringLiteral("posesValid")] = st.posesValid;
+    // HOW OFTEN THE RUNTIME RECENTRED THE ROOM under this session, absorbed
+    // into the rig so the wearer stayed put. Reported because a wearer who did
+    // not press anything and sees this climbing is looking at a runtime
+    // problem, and because the absorb is otherwise invisible by design.
+    out[QStringLiteral("spaceChanges")] = QVariant::fromValue(qulonglong(st.spaceChanges));
     out[QStringLiteral("worldScale")] = double(st.worldScale);
     // THE RIG AS THE ENGINE HOLDS IT, not as this object remembers it: the
     // point of reporting it is to show that the two agree.

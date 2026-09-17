@@ -98,7 +98,8 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "clock), `mirror`/`mirrorView` (which eye goes to the desktop, and onto which view), "
           "`origin` (the rig: {x,y,z,yaw} of the room the wearer stands in, as the ENGINE holds "
           "it), `head` ({x,y,z,yaw} of the wearer's head in the world), `posesValid`, "
-          "`worldScale` and `flySpeed`.",
+          "`spaceChanges` (times the RUNTIME recentred the room under the wearer — absorbed "
+          "into the rig so they do not move), `worldScale` and `flySpeed`.",
           Needs::Document },
         { "flySpeed", "player.flySpeed() -> {multiplier, base, speed, steps:[...]}",
           "THE PLAYER'S FREE-CAMERA SPEED — editor.flySpeed for the other space, and a "
