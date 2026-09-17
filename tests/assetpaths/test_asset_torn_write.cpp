@@ -359,6 +359,37 @@ int main(int argc, char **argv)
                   "content — the truncate-in-place writers could only have left a stub");
         }
 
+        // ---- 7. Durability::Derived keeps the ATOMICITY, drops the WAIT -----
+        // FSYNC-2: the sidecar is a projection of catalog rows SQLite has
+        // already made durable, so its write skips the fsync — and must keep
+        // everything else, because the property this whole suite is about (a
+        // reader never sees half a file) is the RENAME's, not the flush's.
+        {
+            const QString derivedDir = QDir(root).filePath(QStringLiteral("derived-policy"));
+            const QString target = QDir(derivedDir).filePath(QStringLiteral("sidecar.json"));
+            const QByteArray v1("{\"formatVersion\":1,\"files\":[]}\n");
+            const QByteArray v2("{\"formatVersion\":1,\"files\":[\"a\",\"b\",\"c\"]}\n");
+
+            QString werr;
+            CHECK(FileWrite::writeFileAtomic(target, v1, &werr, FileWrite::Durability::Derived),
+                  "a Derived write creates the file (and its directory)");
+            CHECK(readAll(target) == v1, "with exactly the bytes asked for");
+            CHECK(tempsUnder(derivedDir).isEmpty(), "and leaves no staging temp");
+
+            CHECK(FileWrite::writeFileAtomic(target, v2, &werr, FileWrite::Durability::Derived),
+                  "a Derived write REPLACES an existing file, in one rename");
+            CHECK(readAll(target) == v2, "with the new bytes");
+            CHECK(tempsUnder(derivedDir).isEmpty(), "still no staging temp");
+
+            werr.clear();
+            CHECK(!FileWrite::writeFileAtomic(target, [](QFile &) { return false; }, &werr,
+                                              FileWrite::Durability::Derived),
+                  "a Derived writer that fails reports failure");
+            CHECK(readAll(target) == v2,
+                  "and the EXISTING file is untouched (never truncated first)");
+            CHECK(tempsUnder(derivedDir).isEmpty(), "and its temp is cleaned up");
+        }
+
         ::unlink(QFile::encodeName(fifo).constData());
     }
 

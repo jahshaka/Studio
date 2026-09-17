@@ -535,9 +535,20 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // the live sidecar and then write, so an interrupted import left a
     // zero/half-length JSON that rebuildCatalog would read as an asset with no
     // files at all (deep audit 2026-09, area 6).
+    //
+    // DERIVED, so no fsync (FSYNC-2). Everything above this line is a SELECT:
+    // the sidecar is a projection of catalog rows that SQLite has already made
+    // durable, and re-writing it is this function. Flushing it cost 167-1 153
+    // ms of frozen UI on this box's store device, once per touched guid, and
+    // bought only "the last sidecar is not lost" — while the rename it still
+    // does is what buys "no reader ever sees half of one". A sidecar that a
+    // power cut leaves torn does not parse, and the rebuild skips what does not
+    // parse (assetmigration.cpp's guid.isEmpty() guard), so the failure mode is
+    // a re-write, never a wrong row.
     const QString path = AssetStorePaths::sidecarPathIn(root, guid);
     return FileWrite::writeFileAtomic(
-        path, QJsonDocument(sidecar).toJson(QJsonDocument::Indented), errorOut);
+        path, QJsonDocument(sidecar).toJson(QJsonDocument::Indented), errorOut,
+        FileWrite::Durability::Derived);
 }
 
 QString resolveFile(QSqlDatabase conn, const QString &root,

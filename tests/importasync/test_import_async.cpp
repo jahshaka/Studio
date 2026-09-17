@@ -203,9 +203,34 @@ int main(int argc, char **argv)
         CHECK(!prepared.staged.fileOids.isEmpty(),
               "content hashes prepaid on the worker (StagedAsset::fileOids)");
 
+        // FSYNC-2: THE BYTES ARE THE WORKER'S JOB TOO. prepare() copies every
+        // content file into the store under a temp name and flushes the batch,
+        // so the main-thread commit is left with a rename and the rows — the
+        // fsync that used to freeze the window (avatar.responsive's watchdog
+        // caught the UI thread inside libc fsync under commitStagedAsset) is
+        // paid here, on the thread that exists to pay it.
+        CHECK(!prepared.staged.stagedBytes.isEmpty(),
+              "the worker staged the content BYTES into the store (StagedAsset::stagedBytes)");
+        bool everyByteReady = !prepared.staged.stagedBytes.isEmpty();
+        for (const AssetCas::Staged &entry : prepared.staged.stagedBytes)
+            if (entry.oid.isEmpty() || (entry.tmpPath.isEmpty() && !entry.present))
+                everyByteReady = false;
+        CHECK(everyByteReady,
+              "... every staged file is hashed and either staged or already stored");
+        // Staged is not PUBLISHED: the content-addressed name appears only when
+        // the commit renames it, which is the durability order restated (the
+        // bytes are on the device before the name that claims them exists).
+        const QString stagedOid = prepared.staged.stagedBytes.first().oid;
+        const QString publishedPath =
+            AssetStorePaths::objectPathIn(root, stagedOid, QStringLiteral("png"));
+        CHECK(!QFileInfo::exists(publishedPath),
+              "... and nothing is published under its content name before the commit");
+
         const ImportResult result = service.commit(prepared);
         CHECK(result.ok(), "main-thread commit of the worker-prepared plan succeeded");
         CHECK(!result.objectOids.isEmpty(), "commit recorded the stored objects");
+        CHECK(QFileInfo::exists(publishedPath),
+              "the commit published the staged object at its content name");
     }
 
     // ---- 3. cancel mid-import rolls back ----------------------------------

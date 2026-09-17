@@ -392,6 +392,48 @@ void Database::announceBatchCommit(bool ok)
 
 // Note that this is the default connection, any queries called without
 // an explicit connection will use this database
+// THE LIBRARY'S DURABILITY SETTING (FSYNC-2, 2026-09-17).
+//
+// SQLite's defaults are journal_mode=DELETE + synchronous=FULL, which means
+// every write transaction fsyncs the rollback journal, then the database, then
+// the directory — three waits for the device, on the thread that ran the
+// statement. Every Database method rides the default connection, and that
+// connection belongs to the UI thread (assetcas.h says so, and nothing may
+// change it), so those waits ARE the UI thread's. Measured on this box, during
+// one threaded avatar import with the store's device busy: 89, 342, 380 and
+// 707 ms for single commits, and 3 150 ms for AvatarAssets::create, which is
+// five statements and therefore five implicit transactions. The app was frozen
+// for all of it. (The box's `/` is a USB-attached flash device — the numbers
+// scale with the device, the shape does not.)
+//
+// WAL + synchronous=NORMAL is the answer, and this is what it does and does not
+// give up:
+//   * INTEGRITY IS UNCHANGED. WAL never leaves a torn database: recovery
+//     replays the -wal to the last COMPLETE transaction, whatever killed the
+//     process, including a power cut. There is no "corrupt library" state to
+//     trade into.
+//   * A PROCESS CRASH LOSES NOTHING. A committed transaction is in the -wal
+//     file (an ordinary write(2)), which outlives the process; the next open
+//     replays it. This covers every crash the app can have.
+//   * A POWER CUT may lose transactions committed since the last WAL sync —
+//     the last few seconds of catalog writes. It cannot lose half of one.
+//   * WHAT THAT COSTS US IS BOUNDED, because the catalog is not the only copy:
+//     every asset's row is also written to <store>/sidecar/<guid>.json, and
+//     `assets.rebuildCatalog` reconstructs the library from those sidecars.
+//     An import lost to a power cut leaves its objects and its sidecar on
+//     disk and is recoverable; the bytes, which are the part that cannot be
+//     re-derived, are still fsynced by AssetCas (Durability::Flush).
+// Reverting is one line: SQLite converts the journal mode back in place.
+static void applyDurabilityPragmas(QSqlDatabase &conn)
+{
+    QSqlQuery pragma(conn);
+    if (!pragma.exec(QStringLiteral("PRAGMA journal_mode = WAL")))
+        irisLog(QString("could not put the library in WAL mode: %1").arg(pragma.lastError().text()));
+    if (!pragma.exec(QStringLiteral("PRAGMA synchronous = NORMAL")))
+        irisLog(QString("could not set the library's synchronous mode: %1")
+                    .arg(pragma.lastError().text()));
+}
+
 bool Database::initializeDatabase(const QString &pathToBlob)
 {
     if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) {
@@ -404,6 +446,7 @@ bool Database::initializeDatabase(const QString &pathToBlob)
 
     if (db.isValid()) {
         if (!db.open()) irisLog(QString("Couldn't open a database connection! %1").arg(db.lastError().text()));
+        if (db.isOpen()) applyDurabilityPragmas(db);
         return db.isOpen();
     }
     else {

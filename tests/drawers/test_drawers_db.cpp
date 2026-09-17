@@ -47,6 +47,25 @@ int main(int argc, char **argv)
     Database db;
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
 
+    // FSYNC-2: the library opens in WAL with synchronous=NORMAL, so a catalog
+    // write never makes its thread wait for the device. That thread is the UI
+    // thread (every Database method rides the default connection), and at the
+    // SQLite defaults one commit measured 707 ms of frozen window on this box.
+    // Integrity is untouched — WAL recovers to a transaction boundary from any
+    // crash; what it gives up is the last few seconds of catalog writes after a
+    // POWER CUT, which the store's sidecars can rebuild (database.cpp).
+    {
+        QSqlQuery pragma;
+        pragma.exec(QStringLiteral("PRAGMA journal_mode"));
+        const QString mode = pragma.next() ? pragma.value(0).toString().toLower() : QString();
+        CHECK(mode == QStringLiteral("wal"), "the library database is in WAL mode");
+        QSqlQuery sync;
+        sync.exec(QStringLiteral("PRAGMA synchronous"));
+        // 0 = OFF, 1 = NORMAL, 2 = FULL.
+        const int level = sync.next() ? sync.value(0).toInt() : -1;
+        CHECK(level == 1, "... at synchronous = NORMAL");
+    }
+
     // --- Simulate a PRE-DRAWERS library: the collections table as it shipped
     //     before the parent column existed, with the seeded Uncategorized row
     //     and one user collection, plus assets living in each.

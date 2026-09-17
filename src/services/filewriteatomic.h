@@ -32,6 +32,30 @@ For more information see the LICENSE file
 // fsynced: losing the rename loses the write, and a missing artifact is a
 // re-write, not a corruption.
 //
+// THE FLUSH IS A POLICY, NOT A CONSTANT (FSYNC-2, 2026-09-17). fsync() is the
+// only call in this file that waits for hardware, and on this box it waits
+// for the WHOLE filesystem's journal: measured 220-1 153 ms per call, per
+// artifact, while anything else was writing to the same device. So the
+// question every writer has to answer is what a LOST or TORN file costs, and
+// the two answers are different enough to name:
+//
+//   Durability::Flush    the bytes ARE the artifact and nothing re-derives
+//                        them — a CAS object (its name is a sha256 claim
+//                        about content nobody re-hashes on read), store.json,
+//                        a baked map. Torn = silent corruption that outlives
+//                        the crash. These flush, always.
+//   Durability::Derived  the file is a PROJECTION of something else that is
+//                        itself durable, and re-writing it is a function call
+//                        — the CAS sidecar is literally a SELECT over the
+//                        catalog. Losing it costs a re-write; tearing it
+//                        cannot be mistaken for content, because a truncated
+//                        JSON document does not parse and every reader of
+//                        these files skips what does not parse (the rebuild's
+//                        `guid.isEmpty()` guard, assetmigration.cpp). These
+//                        keep the atomic rename and skip the wait — the same
+//                        trade this header already makes for the directory
+//                        entry, one level up.
+//
 // std::filesystem::rename, not QFile::rename: Qt's refuses when the target
 // exists (documented), which is precisely the case that must work.
 
@@ -53,6 +77,13 @@ For more information see the LICENSE file
 
 namespace FileWrite
 {
+
+/// What a lost or torn copy of this file costs — see the header comment.
+enum class Durability
+{
+    Flush,    ///< the bytes are the artifact: fsync before the rename
+    Derived   ///< a projection of durable state: atomic rename, no wait
+};
 
 /// A unique sibling temp path for `finalPath` — same directory, so the
 /// rename below stays within one filesystem. pid + serial keeps concurrent
@@ -115,7 +146,8 @@ inline bool atomicRename(const QString &tmpPath, const QString &finalPath,
 /// aborts the write and leaves the existing file untouched.
 inline bool writeFileAtomic(const QString &path,
                             const std::function<bool(QFile &)> &writer,
-                            QString *errorOut = nullptr)
+                            QString *errorOut = nullptr,
+                            Durability durability = Durability::Flush)
 {
     const QString dir = QFileInfo(path).absolutePath();
     if (!QDir().mkpath(dir)) {
@@ -143,17 +175,18 @@ inline bool writeFileAtomic(const QString &path,
         out.close();
     }
 
-    fsyncPath(tmpPath);
+    if (durability == Durability::Flush) fsyncPath(tmpPath);
     return atomicRename(tmpPath, path, errorOut);
 }
 
 /// The byte-array overload — sidecars, store.json, any serialized document.
 inline bool writeFileAtomic(const QString &path, const QByteArray &bytes,
-                            QString *errorOut = nullptr)
+                            QString *errorOut = nullptr,
+                            Durability durability = Durability::Flush)
 {
     return writeFileAtomic(path, [&bytes](QFile &out) {
         return out.write(bytes) == bytes.size();
-    }, errorOut);
+    }, errorOut, durability);
 }
 
 } // namespace FileWrite
