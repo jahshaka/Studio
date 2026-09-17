@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "bridge/vrnames.h"
 #include "irisgl/mirror/scenemirror.h"
+#include "viewport/flystep.h"
 #include "services/playerservice.h"
 #include "services/services.h"
 #include "viewport/enginerenderdriver.h"
@@ -102,6 +103,31 @@ QVector<VerbInfo> VrApi::verbs() const
           "profile, which every runtime maps from whatever the wearer is holding) or, where the "
           "runtime offers hand tracking and no controller answers, from the palm joint. POSES "
           "ONLY — no buttons are read anywhere in this build.",
+          Needs::Engine },
+        { "move", "vr.move({forward?, back?, left?, right?, up?, down?, boost?, seconds?}) -> bool",
+          "MOVES THE WEARER of the editor's VR preview, exactly as holding the editor's fly "
+          "keys would: along the HEAD's level heading for forward/back and the horizontal "
+          "beside it for left/right, along the world's up for up/down, at the editor's own fly "
+          "speed for `seconds` (default one 1/60 s step). It moves the RIG — the room the "
+          "wearer stands in — so their own step across the floor still counts on top of it, "
+          "and their pitch and roll are never touched.\n\n"
+          "The same call the held keys make each frame, which is what lets a script, an MCP "
+          "session or a suite walk a wearer through a world with no keyboard in the room. "
+          "`player.vrMove` is the Player's half of the same gesture. False when the editor's "
+          "preview is not running (a session somebody else started is not this verb's).",
+          Needs::Engine },
+        { "proxyPose", "vr.proxyPose(\"left\"|\"right\") -> {drawn, x, y, z, rotation, yaw}",
+          "WHERE THE WEARER'S CONTROLLER IS ACTUALLY DRAWN — the world pose of the proxy node "
+          "itself, read back out of the scene graph, as against `vr.state().hands` which is "
+          "what the runtime REPORTED.\n\n"
+          "The two are the same number when everything is right, and that is the point: the "
+          "poses do not exist until the runtime has been asked inside the frame, so a marker "
+          "positioned from outside the frame loop necessarily lags it (two frames, ~22 ms at "
+          "90 Hz, before the engine took the placement over). This verb is how that is "
+          "measured rather than assumed — `scripting.e2e`/`vr.verbs_session` asserts the two "
+          "agree to a millimetre on the frame a move happens.\n\n"
+          "`drawn` is false when there is no proxy node at all (no session has asked for one, "
+          "or `vr.proxies(false)`), and the pose is then all zeros.",
           Needs::Engine },
         { "end", "vr.end() -> bool",
           "Ends the session and puts everything back — the mirror, the stereo view, the "
@@ -210,8 +236,20 @@ bool VrApi::end()
     qWarning("Jahshaka VR: vr.end() called");
     // A PREVIEW ENDS THROUGH ITS OWN OBJECT (the viewport has to get its fly
     // keys and its helpers back); a session somebody ELSE started — the
-    // Player's — is ended the plain way, and that host notices on its next step.
+    // Player's — is ended the plain way, and that host notices on its next
+    // step. One routine for both, shared with the shell's own shutdown.
+    endForShutdown();
+    return true;
+}
+
+// THE SHELL'S END OF A SESSION (finding 7). Through EditorVrPreview when it
+// owns one — it has the viewport's fly keys and its own callbacks to give back
+// — and the plain way for a session somebody else started (the Player's).
+bool VrApi::endForShutdown()
+{
     if (editor.end()) return true;
+    Engine *e = engine();
+    if (!e || !e->vrStatus().active) return false;
     if (moduleHost.engine && moduleHost.engine->driver())
         moduleHost.engine->driver()->setVrSessionActive(false);
     e->setVrMirrorView(nullptr);
@@ -246,6 +284,63 @@ void VrApi::pushProxies()
     // A scene that has never worn VR pays one comparison a frame: the mirror's
     // own sync short-circuits on `active` and builds nothing.
     mirror->setVrProxies(showProxies && st.active, st);
+}
+
+// LOCOMOTION AS A VERB, the editor's half (the Player's is player.vrMove).
+// Both are callers of one piece of arithmetic (vrorigin::flyDelta) and neither
+// is a second path into the engine.
+bool VrApi::move(const QVariantMap &intent)
+{
+    static const QStringList known = { "forward", "back", "left", "right",
+                                       "up", "down", "boost", "seconds" };
+    for (auto it = intent.constBegin(); it != intent.constEnd(); ++it)
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("vr.move: unknown key '%1' — known keys are %2")
+                            .arg(it.key(), known.join(QStringLiteral(", "))));
+    flystep::Keys keys;
+    keys.forward = intent.value(QStringLiteral("forward")).toBool();
+    keys.back    = intent.value(QStringLiteral("back")).toBool();
+    keys.left    = intent.value(QStringLiteral("left")).toBool();
+    keys.right   = intent.value(QStringLiteral("right")).toBool();
+    keys.up      = intent.value(QStringLiteral("up")).toBool();
+    keys.down    = intent.value(QStringLiteral("down")).toBool();
+    keys.boost   = intent.value(QStringLiteral("boost")).toBool();
+    // ONE 1/60 s STEP BY DEFAULT — the motion one frame of held keys makes, so
+    // a script calling this in a loop walks at the rate a wearer walks at.
+    const double seconds = intent.value(QStringLiteral("seconds"), 1.0 / 60.0).toDouble();
+    if (seconds < 0.0) return fail(QStringLiteral("vr.move: seconds must not be negative"));
+    if (!editor.move(keys, float(seconds)))
+        return refuse(QStringLiteral("vr.move: the editor's VR preview is not running "
+                                     "(vr.state().preview.active says so)"));
+    return true;
+}
+
+/// WHERE THE MARKER IS, AS AGAINST WHERE THE HAND WAS SAID TO BE.
+///
+/// The node is the mirror's (it made it); the pose is the SCENE's, because the
+/// session moves it inside the frame. Reading it back through the scene rather
+/// than remembering what was pushed is the whole value: a lag, a missed frame
+/// or a mirror that stopped syncing all show up as a difference from
+/// `vr.state().hands`, and nothing else in the editor can see that.
+QVariantMap VrApi::proxyPose(const QString &hand)
+{
+    QVariantMap out;
+    const QString h = hand.trimmed().toLower();
+    const int index = h == QLatin1String("right") ? 1 : 0;
+    NodeId nodes[2] = { 0, 0 };
+    if (SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr)
+        mirror->vrProxyNodes(nodes);
+    Scene *scene = moduleHost.viewport ? moduleHost.viewport->engineScene() : nullptr;
+    Vec3 position;
+    Quat rotation;
+    const bool drawn = scene && nodes[index] &&
+                       scene->nodeWorldPose(nodes[index], position, rotation);
+    out = vrnames::pose(position, rotation, drawn);
+    // `valid` on a POSE means "the runtime located it"; here the question is
+    // "is there a marker in the scene at all", so it is named for what it is.
+    out.remove(QStringLiteral("valid"));
+    out[QStringLiteral("drawn")] = drawn;
+    return out;
 }
 
 bool VrApi::toggle()

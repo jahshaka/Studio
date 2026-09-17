@@ -35,6 +35,7 @@
 //      preview's eyes because THAT session opens the desk's channel, and it is
 //      absent from a Player's for the same reason the grid is).
 #include <QGuiApplication>
+#include <cmath>
 #include <cstdio>
 
 #include "irisgl/irisglfwd.h"
@@ -195,6 +196,70 @@ int main(int argc, char **argv)
           "C: ...and the EDITOR's shape draws more — the controllers AND the outline, grid and "
           "icons the wearer of an editor preview is meant to see");
     view->setVrHelpersVisible(false);
+
+    // ---- E. THE SESSION IS TOLD WHICH NODES THEY ARE (VR-4-FIX finding 4) --
+    // The mirror makes the markers; a running VrSession places them INSIDE its
+    // own frame, right after it has located the hands, because that is the only
+    // moment this frame's poses exist. It finds them through the scene, and
+    // this is the registration that puts them there. (The placement itself
+    // needs a runtime: `vr.verbs_session` measures the lag in frames.)
+    {
+        NodeId registered[2] = { 0, 0 };
+        target->vrProxyNodes(registered);
+        CHECK(registered[0] == nodes[0] && registered[1] == nodes[1] &&
+              registered[0] && registered[1],
+              "E: the scene knows both proxy nodes, left first — so a session can place them "
+              "inside the frame it draws them in");
+        // ...and the read-back the measurement uses answers for them.
+        Vec3 pos;
+        Quat rot;
+        const bool got = target->nodeWorldPose(registered[0], pos, rot);
+        std::printf("   left proxy world pose: %.3f %.3f %.3f (got=%d)\n",
+                    double(pos.x), double(pos.y), double(pos.z), int(got));
+        CHECK(got && std::abs(pos.x - st.hands[VrHandLeft].position.x) < 1e-4f &&
+              std::abs(pos.y - st.hands[VrHandLeft].position.y) < 1e-4f &&
+              std::abs(pos.z - st.hands[VrHandLeft].position.z) < 1e-4f,
+              "E: nodeWorldPose reads the marker back where the hand was put — the read half of "
+              "the lag measurement");
+        CHECK(!target->nodeWorldPose(999999u, pos, rot),
+              "E: ...and refuses an id that is not a node");
+    }
+
+    // ---- F. A HELPER BILLBOARD IS IN THE WEARER'S CHANNEL TOO (finding 9) --
+    // The two-bit rule used to reach Items only: a billboard set marked
+    // vrHelper carried kHelperBit alone, so a marker built as a billboard —
+    // phase 4b's hit marker, most obviously — would have been desk-only,
+    // silently. The Player's eye shape is where that shows.
+    {
+        const NodeId quad = target->createNode();
+        CHECK(quad != 0, "F: a node for a helper billboard");
+        target->setNodeHelper(quad, true);
+        target->setNodeTransform(quad, Vec3{ 0.0f, 1.0f, -3.0f }, Quat{ 0, 0, 0, 1 },
+                                 Vec3{ 1, 1, 1 });
+        CHECK(target->createBillboardSet(quad, 0, false, 1), "F: ...with one billboard on it");
+        BillboardInstance b;
+        b.position = Vec3{ 0.0f, 1.0f, -3.0f };
+        b.size = 0.5f;
+        b.colour = Colour(1.0f, 0.2f, 0.8f, 1.0f);
+        target->setBillboards(quad, &b, 1);
+
+        // The Player's eye: the VR channel only. Not a vrHelper yet — invisible.
+        view->setHelpersVisible(false);
+        view->setVrHelpersVisible(true);
+        renderN(3);
+        const std::vector<unsigned char> beforeBit = img.rgba;
+        target->setNodeVrHelper(quad, true);
+        renderN(3);
+        const size_t moved = differing(img.rgba, beforeBit);
+        std::printf("   helper billboard given the VR channel: %zu bytes moved\n", moved);
+        CHECK(moved > 200u,
+              "F: A HELPER BILLBOARD JOINS THE WEARER'S CHANNEL — setNodeVrHelper reaches "
+              "billboard sets, not only Items");
+        target->removeNode(quad);
+        view->setVrHelpersVisible(false);
+        view->setHelpersVisible(true);
+        renderN(3);
+    }
 
     // ---- D (second half). the outline is the desk's only ------------------
     unsigned helperCount = 0, vrHelperCount = 0;

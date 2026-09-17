@@ -63,6 +63,16 @@ public:
     virtual void keyReleaseEvent(QKeyEvent *event);
     virtual void setMousePos(int x, int y);
 
+    /// SOMEBODY ELSE IS BEING FLOWN (VR-4-FIX finding 5; VR_SPEC §5 phase 4).
+    ///
+    /// While the editor's VR preview runs, the fly gesture — right button plus
+    /// the arrow cluster — walks the WEARER instead of this camera. Only the
+    /// FLY is somebody else's: the axis-view lerp, the orbit and everything
+    /// else update() does are still this controller's business and still run,
+    /// which is what the first cut got wrong by skipping the whole update.
+    void setFlySuppressed(bool on) { flySuppressed = on; }
+    bool isFlySuppressed() const { return flySuppressed; }
+
     virtual void start();
     virtual void update(float dt);
     virtual void end();
@@ -142,6 +152,8 @@ protected:
     /// Degrees dragged so far, cumulative.
     float altOrbitYaw = 0.0f, altOrbitPitch = 0.0f;
     bool rotationLocked = false;
+    /// The fly belongs to a wearer for now (setFlySuppressed). Only the fly.
+    bool flySuppressed = false;
 
     QSharedPointer<iris::CameraNode> camera;
 

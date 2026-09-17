@@ -15,6 +15,13 @@ For more information see the LICENSE file
 // THE RIG'S ARITHMETIC — where the wearer's room stands in the world, and what
 // the fly keys do to it (SPECS/VR_SPEC.md §4.5, phase 3).
 //
+// IT LIVES IN services/ BECAUSE IT HAS THREE READERS (VR-4-FIX finding 10): the
+// Player's VR mode (src/player), the editor's VR preview (src/modules/vr) and
+// the pose spelling every verb answers with (src/bridge/vrnames.h, which needed
+// nothing of the Player but this file's yawDegrees and used to reach into
+// src/player for it). A shared, engine-free, Qt-free header belongs beside the
+// other things every layer may include.
+//
 // WHY THIS IS A HEADER OF PURE FUNCTIONS. An OpenXR runtime reports the head in
 // a ROOM — a floor origin with the wearer somewhere on it — and the engine
 // composes that pose with a rig the host places (Engine::setVrOrigin). Every

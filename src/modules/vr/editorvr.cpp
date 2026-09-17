@@ -168,6 +168,11 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // the camera controller's place, once per synced frame. Put back by
     // release().
     mViewport->setVrPreviewStep([this] { step(); });
+    // ...AND THE HEADSET COMES OFF WITH THE WORLD (VR-4-FIX finding 1). The
+    // session renders the viewport's ENGINE SCENE and holds a raw pointer to
+    // it; a project close or an open-in-place destroys that scene. This is the
+    // viewport telling us first, while everything is still alive.
+    mViewport->setVrPreviewSceneClosing([this] { end(); });
     mFrameTimer.start();
     return true;
 }
@@ -192,8 +197,10 @@ void EditorVrPreview::release()
     // NOT IF THE VIEWPORT HAS ALREADY GONE (see mViewportAlive): this runs from
     // a destructor at shutdown as well as from vr.end(), and a widget torn down
     // by the shell takes the callback with it — there is nothing left to clear.
-    if (mViewport && (!mViewportIsWidget || mViewportAlive))
+    if (mViewport && (!mViewportIsWidget || mViewportAlive)) {
         mViewport->setVrPreviewStep(nullptr);
+        mViewport->setVrPreviewSceneClosing(nullptr);
+    }
     mDriver = nullptr;
     mViewport = nullptr;
     mViewportAlive = nullptr;
@@ -272,11 +279,41 @@ void EditorVrPreview::step()
     applyRig(rig);
 }
 
+// LOCOMOTION AS A VERB (vr.move), the same call the held fly keys make in
+// step() — and the Player's `player.vrMove` in the other mode. A script, an MCP
+// session and the suite can walk the wearer with no keyboard in the room, which
+// is also the only way to MEASURE a rig that a runtime alone never moves.
+bool EditorVrPreview::move(const flystep::Keys &keys, float seconds)
+{
+    const auto engine = mEngine.lock();
+    if (!mOwnsSession || !engine) return false;
+    const VrStatus st = engine->vrStatus();
+    if (!st.active) return false;
+    // A PLACEMENT IN FLIGHT WINS (PlayerVr::move's rule, and for its reason): a
+    // wearer being put where the editor camera stands is not also walking, and
+    // a rig moved between the request and the placement is the mismatched pair
+    // the placement's guard exists to avoid. Answered, not refused.
+    if (mPlacePending) return true;
+    const iris::Vec3 delta = vrorigin::flyDelta(toIris(st.headRotation), keys,
+                                                flySpeed(), seconds);
+    if (delta.isNull()) return true;    // nothing held is not a failure
+    vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
+    rig.position += delta;
+    applyRig(rig);
+    return true;
+}
+
 QVariantMap EditorVrPreview::report() const
 {
     QVariantMap out;
     out[QStringLiteral("active")] = isActive();
-    out[QStringLiteral("flyRedirected")] = mViewport ? mViewport->vrPreview() : false;
+    // THROUGH THE SAME GUARD AS EVERY OTHER TOUCH OF THE VIEWPORT (VR-4-FIX
+    // finding 7): `mViewport` is a raw pointer to a widget the shell may have
+    // destroyed under a session that is still nominally running, and a state
+    // verb is exactly the call somebody makes while a window is closing.
+    // `mViewportAlive` is what tells "gone" from "never had a widget".
+    const bool viewportUsable = mViewport && (!mViewportIsWidget || mViewportAlive);
+    out[QStringLiteral("flyRedirected")] = viewportUsable ? mViewport->vrPreview() : false;
     // The editor preview is the one session that opens the ordinary helper
     // channel in the headset (VrConfig::helpers) — "see the editor working".
     out[QStringLiteral("helpers")] = mOwnsSession;

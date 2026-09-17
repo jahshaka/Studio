@@ -930,7 +930,9 @@ int main() {
     // the driver skips, the pump never calls xrWaitFrame again, the runtime
     // never synchronises and keeps answering "no picture" for ever. The fix is
     // one line in the engine (`hasEnabledViews()` returns true while a session
-    // exists: the frame loop IS the session's heartbeat) and it had no test.
+    // exists: the frame loop IS the session's heartbeat) — WHICH THIS TREE
+    // ALREADY CARRIES, from VR-3b. This case does not fix anything: it PINS
+    // that line, which until now had no test at all.
     //
     // So this case is the DRIVER, in three lines: the same gate, the same
     // order, with every view in the process switched off. Revert that one line

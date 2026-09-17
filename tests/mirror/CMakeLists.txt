@@ -166,11 +166,12 @@ add_test(NAME mirror.sun_night COMMAND test_sun_night WORKING_DIRECTORY "${CMAKE
 set_tests_properties(mirror.sun_night PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 300 LABELS "mirror")
 
-# mirror.vr_proxies — THE WEARER, DRAWN AT THE DESK AND NOWHERE ELSE (VR_SPEC
-# §5 phase 4, lane VR-4). The head and hand markers the editor's VR preview
-# shows, the two-bit helper rule that keeps them out of the headset's own eyes,
-# and the proof that a helper-less picture — the Player's view, a thumbnail, a
-# user's screenshot — is byte-identical to one with no session at all.
+# mirror.vr_proxies — THE WEARER, DRAWN AT THE DESK AND IN EVERY EYE (VR_SPEC
+# §5 phase 4, lane VR-4). The two HAND markers the editor's VR preview shows
+# (there is no head marker, by the owner's rule), the two-bit helper rule that
+# decides which picture draws which furniture, and the proof that a helper-less
+# picture — the Player's desktop window, a thumbnail, a user's screenshot — is
+# byte-identical to one with no session at all.
 #
 # NEEDS NO RUNTIME: setVrProxies takes a VrStatus as data, so the suite hands it
 # three poses and never asks OpenXR anything. The runtime half is vr.session.

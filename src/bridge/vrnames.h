@@ -25,7 +25,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "jahshaka/engine/Engine.h"
-#include "player/vrorigin.h"
+#include "services/vrorigin.h"
 
 namespace vrnames {
 

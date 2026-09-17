@@ -347,9 +347,14 @@ QVariantMap PlayerVr::report() const
     QVariantMap origin = vec(toIris(st.origin));
     origin[QStringLiteral("yaw")] = double(st.originYaw);
     out[QStringLiteral("origin")] = origin;
-    QVariantMap head = vec(toIris(st.headPosition));
-    head[QStringLiteral("yaw")] = double(vrorigin::yawDegrees(toIris(st.headRotation)));
-    out[QStringLiteral("head")] = head;
+    // THE POSE SPELLING, NOT A SECOND ONE (VR-4-FIX finding 10): vrnames::pose
+    // is what `vr.state().head` and `vr.state().hands` answer with, and this
+    // map used to be a hand-built {x,y,z,yaw} beside it — so a caller that
+    // learned the shape from one verb found a different shape here, which is
+    // exactly what that helper's header says cannot happen. Now it cannot: the
+    // rotation and the located flag come with it.
+    out[QStringLiteral("head")] =
+        vrnames::pose(st.headPosition, st.headRotation, st.posesValid);
     out[QStringLiteral("flySpeed")] = double(flySpeed());
     return out;
 }

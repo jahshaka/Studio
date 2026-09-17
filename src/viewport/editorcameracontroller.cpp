@@ -347,6 +347,13 @@ void EditorCameraController::updateCameraRot()
 void EditorCameraController::update(float dt)
 {
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
+    // NOT WHILE A WEARER HAS THE KEYS (VR-4-FIX finding 5). The editor's VR
+    // preview redirects this one gesture to the rig, and the suppression lives
+    // HERE rather than at the call site so that everything else update() does
+    // — the orbit controller's axis-view lerp above all — goes on running while
+    // a session is on. (It used to be a skipped `update(dt)` in the viewport,
+    // which froze a Views-dropdown snap for the length of a session.)
+    if (flySuppressed) return;
 
     // NO SINGLE FLY STEP IS LONGER THAN kMaxFlyStep (ledger §356's collateral
     // defect, measured on the rig): the host charges the WALL CLOCK of the

@@ -18,7 +18,12 @@ For more information see the LICENSE file
 
 void VrModule::registerApi(ScriptEngine &engine)
 {
-    engine.addModule(new VrApi(engine.scriptHost(), host));
+    // KEPT, WEAKLY. The ScriptEngine owns the module from here; this pointer is
+    // only so shutdown() can end a session through the object that started it
+    // (VR-4-FIX finding 7) rather than behind its back — and a QPointer because
+    // the scripting engine may well be torn down first.
+    api = new VrApi(engine.scriptHost(), host);
+    engine.addModule(api);
 }
 
 void VrModule::shutdown()
@@ -27,6 +32,14 @@ void VrModule::shutdown()
     // scene, a second workspace on the viewport's target and a set of XR
     // swapchains; the engine's own destructor ends one too, but by then the
     // shell has already begun taking the scene apart.
+    //
+    // THROUGH THE VR API, which ends a PREVIEW through EditorVrPreview: that
+    // object installed two callbacks on the editor viewport and redirected its
+    // fly keys, and ending the session underneath it left all of that in place
+    // — harmless at shutdown only for as long as the order never changes,
+    // which is not a thing to rely on. The plain path below is the fallback for
+    // a session this process's API object cannot reach any more.
+    if (api && api->endForShutdown()) return;
     if (!host.engine) return;
     const auto e = host.engine->engine();
     if (!e) return;
