@@ -61,16 +61,34 @@ assert(player.playing() === false, "AND THE RUN DID NOT START (nothing moved)");
 // by the show event and that View is what the headset mirrors onto. This is
 // exactly what the toggle does for a user (case 5 below drives the toggle
 // itself); doing it by hand here keeps the cases independent.
+// A DISTINCTIVE EDITOR VIEWPOINT FIRST (PLAYER-SPAWN-1 rule 1, owner
+// 2026-09-17: "it should share the editor viewpoint when we switch"). Nowhere
+// near the default pose, so "the wearer stood where the camera was" cannot
+// pass by both of them being at the same default — and set BEFORE the page
+// switch, which is the gesture that places the Player's camera.
+editor.setCamera({ position: { x: 6, y: 2, z: -9 }, lookAt: { x: 0, y: 1, z: 0 } });
+editor.frame(2);
+
 app.space("player");
 assert(app.columns().space === "player", "the Player page is up");
 
 // ---- 1. play in VR -------------------------------------------------------
 
-// WHERE THE PLAY CAMERA STANDS, before anything starts. The Player's camera IS
-// the editor camera (the legacy rule EnginePlayerScene keeps), so this is the
-// pose the wearer must find themselves standing in.
+// WHERE THE PLAY CAMERA STANDS, before anything starts — and it is the EDITOR
+// VIEWPOINT, which is the pose the wearer must find themselves standing in
+// (PLAYER-SPAWN-1 rule 1; with no camera armed the Player's camera is the
+// editor's own node, so the rule holds by identity here and the assertion
+// below is what proves it from outside).
 var cam0 = editor.camera();
 console.log("the play camera: " + JSON.stringify(cam0.position));
+var pc0 = player.state().camera;
+assert(pc0.source === "viewport",
+       "no camera is armed, so the Player flies the viewpoint the editor handed it");
+assert(Math.abs(pc0.position.x - cam0.position.x) < 1e-3 &&
+       Math.abs(pc0.position.y - cam0.position.y) < 1e-3 &&
+       Math.abs(pc0.position.z - cam0.position.z) < 1e-3,
+       "and it is standing exactly where the editor was looking from: " +
+       JSON.stringify(pc0.position));
 
 assert(player.play({ vr: true }) === true, "player.play({vr:true}) starts the run in VR");
 assert(player.playing() === true, "the scene is running");
@@ -131,8 +149,17 @@ assert(off < tolerance,
        "this head can wander in the placement's own gap (" + tolerance.toFixed(4) + " m)");
 // ...FACING ITS WAY. yaw 0 looks down -Z and the fixture's camera is level, so
 // the two headings are directly comparable.
-var camYaw = Math.atan2(-2 * (cam0.rotation.scalar * cam0.rotation.y +
-                              cam0.rotation.z * cam0.rotation.x),
+//
+// THE SIGN WAS WRONG HERE UNTIL PLAYER-SPAWN-1 (2026-09-17) and nothing could
+// see it: this fixture used to run at the DEFAULT editor pose, which looks down
+// -Z at yaw 0, and -0 compares equal to 0. Derived rather than remembered — the
+// level forward of a quaternion (w,x,y,z) is
+//     f = R*(0,0,-1) = ( -2(xz + wy), *, -(1 - 2(x^2 + y^2)) )
+// and the heading is atan2(-f.x, -f.z), which is the expression below WITHOUT a
+// minus in front of the first term. A camera at a real heading reads its own
+// yaw negated with the old one (the run that caught it: 145.22 vs -146.31).
+var camYaw = Math.atan2(2 * (cam0.rotation.scalar * cam0.rotation.y +
+                             cam0.rotation.z * cam0.rotation.x),
                         1 - 2 * (cam0.rotation.x * cam0.rotation.x +
                                  cam0.rotation.y * cam0.rotation.y)) * 180 / Math.PI;
 console.log("head yaw " + placed.yaw.toFixed(2) + " vs the camera's " + camYaw.toFixed(2));

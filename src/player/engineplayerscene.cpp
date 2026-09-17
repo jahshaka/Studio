@@ -134,7 +134,12 @@ void EnginePlayerScene::begin()
     if (mMirror) mMirror->invalidateEnvironment();
     auto cam = camera();
     if (!cam) return;
-    mSavedCameraMatrix = cam->getLocalTransform();
+    mSavedCamera.transform = cam->getLocalTransform();
+    mSavedCamera.angle = cam->angle;
+    mSavedCamera.orthoSize = cam->orthoSize;
+    mSavedCamera.nearClip = cam->nearClip;
+    mSavedCamera.farClip = cam->farClip;
+    mSavedCamera.perspective = cam->projMode == iris::CameraProjection::Perspective;
     mHaveSavedCamera = true;
     // The first frame after the page comes up must not be charged the whole
     // time the editor was showing.
@@ -145,10 +150,59 @@ void EnginePlayerScene::begin()
     mPlayback->getMouseController()->updateCameraTransform();
 }
 
+void EnginePlayerScene::spawnFrom(const iris::CameraNodePtr &editorViewCamera)
+{
+    if (!mDocument || !editorViewCamera) return;
+    // THE SCENE'S OWN SHOT WINS (the owner's "unless a camera node is
+    // present"): with a camera armed, the run renders through it and moving
+    // the free viewer would place the VR rig — which anchors on the camera the
+    // run RENDERS through — somewhere the picture never was.
+    if (mDocument->getActiveCamera()) return;
+    auto cam = camera();
+    if (!cam) return;
+    // THE ORDINARY CASE IS ONE NODE. The play camera has been the editor's own
+    // camera since SceneViewWidget, so there is nothing to copy and nothing to
+    // restore; only a viewport that is PILOTING a scene camera renders through
+    // a camera the player does not already hold.
+    if (cam == editorViewCamera) return;
+
+    // WORLD SPACE, through the one setter that takes both: the editor's camera
+    // may be parented to anything (a piloted scene camera can ride a socket),
+    // and what is being copied is where it is LOOKING FROM, not its place in
+    // somebody else's hierarchy.
+    cam->setGlobalPosRot(editorViewCamera->getGlobalPosition(),
+                         editorViewCamera->getGlobalRotation());
+    // ...AND THE LENS THE EDITOR VIEW IS USING — the projection block only
+    // (field of view, projection mode, the ortho height and the clip planes).
+    // The film back, the focus and the exposure of an authored camera are its
+    // own look and belong to it; what the player's free viewer needs is to
+    // FRAME what the editor framed.
+    cam->angle = editorViewCamera->angle;
+    cam->orthoSize = editorViewCamera->orthoSize;
+    cam->nearClip = editorViewCamera->nearClip;
+    cam->farClip = editorViewCamera->farClip;
+    cam->setProjection(editorViewCamera->projMode);
+    cam->update(0);
+    // The controller is about to fly this camera and holds its own heading:
+    // re-read it, or the first flown frame snaps back to where the player was
+    // last looking.
+    if (mPlayback && mPlayback->getMouseController())
+        mPlayback->getMouseController()->captureYawPitchRollFromCamera();
+}
+
 void EnginePlayerScene::end()
 {
     auto cam = camera();
-    if (cam && mHaveSavedCamera) cam->setLocalTransform(mSavedCameraMatrix);
+    if (cam && mHaveSavedCamera) {
+        cam->setLocalTransform(mSavedCamera.transform);
+        cam->angle = mSavedCamera.angle;
+        cam->orthoSize = mSavedCamera.orthoSize;
+        cam->nearClip = mSavedCamera.nearClip;
+        cam->farClip = mSavedCamera.farClip;
+        cam->setProjection(mSavedCamera.perspective ? iris::CameraProjection::Perspective
+                                                    : iris::CameraProjection::Orthogonal);
+        cam->update(0);
+    }
     mHaveSavedCamera = false;
 }
 

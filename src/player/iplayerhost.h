@@ -52,6 +52,13 @@ public:
     /// `grade` is IEditorViewport::ScreenshotGrade as an int.
     virtual QImage takePlayerScreenshot(int width, int height, int grade) = 0;
 
+    /// WHERE THE PLAYER IS LOOKING FROM, and through what (PLAYER-SPAWN-1).
+    /// The camera the player RENDERS through — the scene's armed camera while
+    /// a run is on, the free viewer otherwise — as `player.state().camera`
+    /// documents it. An EMPTY map when the player has no document yet, which
+    /// is the honest answer to "where is it" before anything is open.
+    virtual QVariantMap playerCameraReport() const = 0;
+
     /// Steps and renders exactly n player frames synchronously; `dt` < 0 uses
     /// the wall clock. The deterministic stepping player assertions need,
     /// mirroring editor.frame. FALSE when there is nothing to step — the

@@ -26,6 +26,8 @@
 #include "jahshaka/engine/Engine.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
+#include "player/playermousecontroller.h"
+#include "viewport/keyboardstate.h"
 #include "irisgl/mirror/scenemirror.h"
 
 using namespace jahshaka::engine;
@@ -289,6 +291,97 @@ static void testPlayPauseResumeStop()
     CHECK(!playback.isScenePaused(), "and clears the paused state");
 }
 
+// --------------------------------------------------------------------------
+// THE PLAY CAMERA IS THE ONE THE PLAYER PILOTS (PLAYER-SPAWN-1 rule 3, owner
+// 2026-09-17).
+//
+// A scene with an armed camera RENDERED through that camera while the fly keys
+// and the mouse-look moved the free viewer nobody could see: input that did
+// nothing, with no way to tell why. PlayBack asks the document which camera the
+// run renders through (iris::Scene::renderCamera) and hands the controller that
+// one — which is only safe because an idle frame no longer writes the camera at
+// all (PlayerMouseController::flyThisFrame): an armed camera is an AUTHORED
+// object that animation, a socket or an avatar may be moving, and a controller
+// stamping its own heading onto it sixty times a second would erase all of it.
+static void testPlayCameraRouting()
+{
+    std::printf("\n-- the play camera is the one the player pilots --\n");
+    auto scene = iris::Scene::create();
+
+    auto freeViewer = iris::CameraNode::create();     // the host's own, as the editor's is
+    freeViewer->setName("free viewer");
+    freeViewer->setLocalPos(iris::Vec3(0, 2, 10));
+    scene->setCamera(freeViewer);
+
+    auto shot = iris::CameraNode::create();
+    shot->setName("Shot A");
+    shot->setLocalPos(iris::Vec3(3, 1, -4));
+    // A DUTCH ANGLE, on purpose: the controller used to write a hard zero roll
+    // on every frame, which would level this the moment the run took it over.
+    const iris::Quat dutch = iris::Quat::fromEulerAngles(-12.0f, 35.0f, 7.0f);
+    shot->setLocalRot(dutch);
+    scene->getRootNode()->addChild(shot);
+    scene->refresh();
+
+    CHECK(PlayBack::playCamera(scene) == freeViewer,
+          "routing: with nothing armed, the run flies the host's free viewer");
+    CHECK(scene->setActiveCamera(shot->getGUID()), "routing: a camera is armed");
+    CHECK(PlayBack::playCamera(scene) == freeViewer,
+          "routing: armed but NOT playing is EDITING — still the free viewer");
+
+    PlayBack playback;
+    playback.init();
+    playback.setScene(scene);
+    iris::Viewport vp;
+    vp.width = 64; vp.height = 64; vp.pixelRatioScale = 1.0f;
+    auto step = [&](int frames) { for (int i = 0; i < frames; ++i) playback.update(vp, 1.0f / 60.0f); };
+
+    playback.playScene();
+    CHECK(PlayBack::playCamera(scene) == shot,
+          "routing: PLAYING with a camera armed, the run flies THAT camera");
+
+    const iris::Vec3 pos0 = shot->getLocalPos();
+    step(10);
+    CHECK((shot->getLocalRot() - dutch).length() < 1e-5f,
+          "routing: ten idle frames leave the armed camera's rotation EXACTLY as authored "
+          "(the controller writes nothing when nothing is held)");
+    CHECK((shot->getLocalPos() - pos0).length() < 1e-5f, "routing: ...and its position");
+    CHECK((freeViewer->getLocalPos() - iris::Vec3(0, 2, 10)).length() < 1e-5f,
+          "routing: ...and the free viewer, which nobody is flying, is untouched too");
+
+    // A DOCUMENT WRITE DURING THE RUN SURVIVES, which is the whole reason the
+    // idle frame reads instead of writing: a keyframed pan, a socket rider or
+    // an avatar's head moves the armed camera and the controller follows.
+    const iris::Quat panned = iris::Quat::fromEulerAngles(-12.0f, 95.0f, 7.0f);
+    shot->setLocalRot(panned);
+    shot->update(0);
+    step(3);
+    CHECK((shot->getLocalRot() - panned).length() < 1e-5f,
+          "routing: a rotation written by the DOCUMENT mid-run is not stamped over");
+
+    // ...and the fly keys move THAT camera, from where it now is.
+    KeyboardState::keyStates[Qt::Key_W] = true;
+    step(5);
+    KeyboardState::reset();
+    const iris::Vec3 flown = shot->getLocalPos();
+    std::printf("    armed camera: %.3f %.3f %.3f -> %.3f %.3f %.3f after 5 flown frames\n",
+                double(pos0.x()), double(pos0.y()), double(pos0.z()),
+                double(flown.x()), double(flown.y()), double(flown.z()));
+    CHECK((flown - pos0).length() > 0.1f,
+          "routing: a held fly key moves the ARMED camera — the player's input reaches the "
+          "camera the player is looking through");
+    CHECK((freeViewer->getLocalPos() - iris::Vec3(0, 2, 10)).length() < 1e-5f,
+          "routing: ...and still not the free viewer");
+    CHECK(std::fabs(shot->getLocalRot().z() - panned.z()) < 1e-3f,
+          "routing: flying an authored camera keeps its ROLL (a dutch angle is not levelled)");
+
+    playback.stopScene();
+    CHECK((shot->getLocalPos() - pos0).length() < 1e-4f,
+          "routing: stop puts the armed camera's pre-play transform back");
+    CHECK(PlayBack::playCamera(scene) == freeViewer,
+          "routing: and a stopped scene is the free viewer's again");
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -436,6 +529,79 @@ int main(int argc, char **argv)
         CHECK(back <= 8, "after stop the picture matches the first frame");
         CHECK(isMaterial(at(again, W / 2, H / 2)), "cube is back at the centre");
 
+        // ---- 3b. THE PLAYER STARTS WHERE THE EDITOR IS LOOKING -------------
+        //
+        // PLAYER-SPAWN-1 rule 1 (owner 2026-09-17): "it should share the editor
+        // viewpoint when we switch unless a camera node is present". In the app
+        // the play camera IS the editor's own camera node, so the copy is a
+        // no-op and the rule holds by identity; what this case models is the
+        // one arrangement where the two differ — the editor PILOTING a scene
+        // camera, where the camera the user is looking through is not the one
+        // the player holds.
+        {
+            auto editorView = iris::CameraNode::create();
+            editorView->setName("the editor's viewpoint");
+            editorView->setLocalPos(iris::Vec3(-9, 4, 3));
+            editorView->lookAt(iris::Vec3(0, 2, 0));
+            editorView->angle = 21.0f;
+            editorView->nearClip = 0.25f;
+            editorView->farClip = 321.0f;
+            editorView->update(0);
+
+            const iris::Vec3 playerPos = camera->getGlobalPosition();
+            const float playerAngle = camera->angle;
+            CHECK((playerPos - editorView->getGlobalPosition()).length() > 1.0f,
+                  "spawn: the two cameras start somewhere different");
+
+            player.begin();                        // remembers pose AND lens
+            player.spawnFrom(editorView);
+            CHECK((camera->getGlobalPosition() - editorView->getGlobalPosition()).length() < 1e-4f,
+                  "spawn: the player's camera is placed on the editor's viewpoint");
+            CHECK((camera->getGlobalRotation() - editorView->getGlobalRotation()).length() < 1e-4f,
+                  "spawn: ...facing the way it faced");
+            CHECK(camera->angle == 21.0f && camera->nearClip == 0.25f && camera->farClip == 321.0f,
+                  "spawn: ...with the LENS the editor view is framing with");
+
+            // AND THE EDITOR'S OWN CAMERA IS NOT TOUCHED: the copy goes one
+            // way. A player that moved the viewport's camera would be the old
+            // "leave the Player and the editor has jumped" defect.
+            CHECK((editorView->getLocalPos() - iris::Vec3(-9, 4, 3)).length() < 1e-4f,
+                  "spawn: the editor's camera is read, never written");
+
+            // WITH A SHOT ARMED, NOTHING MOVES. The scene has said where play
+            // looks from — the owner's "unless a camera node is present" — and
+            // the VR rig anchors on the camera the run RENDERS through, so
+            // moving the free viewer would put the wearer where no picture was.
+            auto shot = iris::CameraNode::create();
+            shot->setName("Shot A");
+            doc->getRootNode()->addChild(shot);
+            CHECK(doc->setActiveCamera(shot->getGUID()), "spawn: a camera is armed");
+            camera->setLocalPos(iris::Vec3(1, 1, 1));
+            camera->update(0);
+            player.spawnFrom(editorView);
+            CHECK((camera->getLocalPos() - iris::Vec3(1, 1, 1)).length() < 1e-4f,
+                  "spawn: with an ACTIVE camera armed the player's free viewer is left alone");
+            CHECK(player.renderCamera() == camera,
+                  "spawn: ...and while the scene is STOPPED the run still renders the free one");
+            doc->setPlaying(true);
+            CHECK(player.renderCamera() == shot,
+                  "spawn: ...while PLAYING it renders the armed camera (Scene::renderCamera)");
+            doc->setPlaying(false);
+            doc->setActiveCamera(QString());
+            doc->getRootNode()->removeChild(shot);
+
+            // end() puts BOTH back — the pose and the lens. An explorer left
+            // with a piloted camera's field of view after a visit to the Player
+            // is a viewport that silently zoomed.
+            player.end();
+            CHECK((camera->getGlobalPosition() - playerPos).length() < 1e-4f,
+                  "spawn: end() puts the player's camera back where the page found it");
+            CHECK(camera->angle == playerAngle && camera->nearClip == 0.1f
+                      && camera->farClip == 100.0f,
+                  "spawn: ...and its own lens with it");
+            player.begin();   // re-arm the snapshot for case 4 below
+        }
+
         // ---- 4. end(): the scene camera is restored to what begin() saw ----
         camera->setLocalPos(iris::Vec3(5, 5, 5));
         player.end();
@@ -450,6 +616,7 @@ int main(int argc, char **argv)
     // node (SCENEGRAPH_SPEC D2) and this is where PlayBack is already linked.
     testCollisionShapeOwnership();
     testPlayPauseResumeStop();
+    testPlayCameraRouting();
 
     engine->destroyView(view);
     engine->destroyView(editorView);

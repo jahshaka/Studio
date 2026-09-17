@@ -37,6 +37,7 @@ public:
     void stopScene() override;
     bool isPlayerActive() const override { return mActive; }
     QImage takePlayerScreenshot(int width, int height, int grade) override;
+    QVariantMap playerCameraReport() const override;
     bool stepPlayerFrames(int n, float dt) override;
     bool canBeginPlayerVr(QString *why) const override;
     bool beginPlayerVr(const QVariantMap &options, QString *error) override;
@@ -87,6 +88,9 @@ private:
     /// The editor viewport's camera, when there is one: the play camera is the
     /// editor camera (legacy rule), and the editor and player share the document.
     iris::CameraNodePtr editorCamera() const;
+    /// The camera the EDITOR VIEW renders through — the explorer, or the scene
+    /// camera it is piloting (PLAYER-SPAWN-1 rule 1; see the definition).
+    iris::CameraNodePtr editorViewCamera() const;
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
     EngineRenderDriver *mDriver = nullptr;

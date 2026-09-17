@@ -15,6 +15,7 @@
 #include "viewport/ieditorviewport.h"
 #include "viewport/keyboardstate.h"
 #include "irisgl/core/viewport.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/input/inputmap.h"
 
@@ -47,6 +48,19 @@ EnginePlayerView::~EnginePlayerView()
 iris::CameraNodePtr EnginePlayerView::editorCamera() const
 {
     return mEditorViewport ? mEditorViewport->editorCamera() : iris::CameraNodePtr();
+}
+
+// THE CAMERA THE EDITOR VIEW IS ACTUALLY RENDERING THROUGH (PLAYER-SPAWN-1
+// rule 1) — its free explorer, or the scene camera it is PILOTING, which is a
+// different node and the one the user is looking through while it lasts
+// (EngineSceneViewport::viewCamera). `editorCamera()` above is the explorer's
+// own state and stays that: it is what the player's camera IS, and what the
+// EditorData round trip saves.
+iris::CameraNodePtr EnginePlayerView::editorViewCamera() const
+{
+    if (!mEditorViewport) return iris::CameraNodePtr();
+    if (auto piloted = mEditorViewport->pilotedCamera()) return piloted;
+    return mEditorViewport->editorCamera();
 }
 
 void EnginePlayerView::setEditorViewport(IEditorViewport *viewport)
@@ -97,6 +111,10 @@ void EnginePlayerView::start()
     // The editor camera may have been replaced since setScene (EditorData load).
     if (mDocument) mScene->setDocument(mDocument, editorCamera());
     mScene->begin();
+    // WHEN WE SWITCH, THE PLAYER SHARES THE EDITOR'S VIEWPOINT (PLAYER-SPAWN-1
+    // rule 1). AFTER begin(), which is what remembers the pose to put back on
+    // the way out, and before the page's own playScene().
+    mScene->spawnFrom(editorViewCamera());
     if (view()) view()->setEnabled(true);
     // THE EXPOSURE HAND-OVER. Auto-exposure is per view and it ADAPTS: a view
     // that has never presented starts from the authored midpoint and walks to
@@ -140,7 +158,19 @@ void EnginePlayerView::end()
 }
 
 bool EnginePlayerView::isScenePlaying() { return mScene->isPlaying(); }
-void EnginePlayerView::playScene()      { mScene->play(); }
+
+void EnginePlayerView::playScene()
+{
+    // A RUN STARTS WHERE THE EDITOR IS LOOKING (PLAYER-SPAWN-1 rule 1), on the
+    // stopped->playing EDGE and nowhere else: `player.play()` on an already
+    // running player is documented idempotent, and re-placing the camera under
+    // a wearer or a pilot would be anything but. This is the half that covers a
+    // scripted play with no page switch; start() above covers the switch
+    // itself. A no-op whenever the player already holds the editor's camera,
+    // which is every session that is not piloting (EnginePlayerScene::spawnFrom).
+    if (!mScene->isPlaying()) mScene->spawnFrom(editorViewCamera());
+    mScene->play();
+}
 void EnginePlayerView::stopScene()      { mScene->stop(); }
 
 QImage EnginePlayerView::takePlayerScreenshot(int width, int height, int grade)
@@ -153,6 +183,48 @@ QImage EnginePlayerView::takePlayerScreenshot(int width, int height, int grade)
     // from the scene either way.
     if (view()) mScene->attach(view());
     return mScene->takeScreenshot(width, height, grade);
+}
+
+// WHERE THE PLAYER IS LOOKING FROM, AND THROUGH WHAT (PLAYER-SPAWN-1). The one
+// read that can tell a run using the scene's armed camera from a run using the
+// free viewer the editor handed it — which is the whole of the owner's rule
+// seen from a script, and the observable the suites assert on.
+//
+// WORLD SPACE, deliberately: an armed camera can be parented to anything (a
+// socket, an avatar's head), and "where is the player looking from" is a
+// question about the world, not about somebody's local frame.
+QVariantMap EnginePlayerView::playerCameraReport() const
+{
+    QVariantMap out;
+    if (!mScene) return out;
+    const iris::CameraNodePtr cam = mScene->renderCamera();
+    if (!cam) return out;                       // no document open yet
+    const iris::ScenePtr doc = mScene->document();
+    const iris::CameraNodePtr armed = doc ? doc->getActiveCamera() : iris::CameraNodePtr();
+    const bool authored = armed && armed == cam;
+    const iris::Vec3 pos = cam->getGlobalPosition();
+    const iris::Quat rot = cam->getGlobalRotation();
+    // The armed camera is a scene NODE and names itself; the free viewer is
+    // not in the document at all, so it has no id to give.
+    out[QStringLiteral("id")] = authored ? QVariant(cam->getGUID()) : QVariant();
+    out[QStringLiteral("name")] = authored ? QVariant(cam->getName()) : QVariant();
+    out[QStringLiteral("source")] = authored ? QStringLiteral("active")
+                                             : QStringLiteral("viewport");
+    out[QStringLiteral("position")] = QVariantMap{ { QStringLiteral("x"), pos.x() },
+                                                   { QStringLiteral("y"), pos.y() },
+                                                   { QStringLiteral("z"), pos.z() } };
+    out[QStringLiteral("rotation")] = QVariantMap{ { QStringLiteral("x"), rot.x() },
+                                                   { QStringLiteral("y"), rot.y() },
+                                                   { QStringLiteral("z"), rot.z() },
+                                                   { QStringLiteral("scalar"), rot.scalar() } };
+    out[QStringLiteral("fov")] = cam->angle;
+    out[QStringLiteral("projection")] = cam->projMode == iris::CameraProjection::Perspective
+                                            ? QStringLiteral("perspective")
+                                            : QStringLiteral("orthogonal");
+    out[QStringLiteral("orthoSize")] = cam->orthoSize;
+    out[QStringLiteral("nearClip")] = cam->nearClip;
+    out[QStringLiteral("farClip")] = cam->farClip;
+    return out;
 }
 
 bool EnginePlayerView::stepPlayerFrames(int n, float dt)

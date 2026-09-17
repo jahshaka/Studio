@@ -55,7 +55,6 @@ class PlayBack
 	CameraControllerBase* camController;
 	PlayerMouseController* mouseController;
 
-	bool shouldRestoreCameraTransform;
 
 	iris::ScenePtr scene;
 
@@ -87,7 +86,11 @@ public:
 	void setScene(iris::ScenePtr scene);
 	void setController(CameraControllerBase* controller);
 
-	void setRestoreCameraTransform(bool shouldRestore);
+	/// THE CAMERA A RUN IS FLOWN THROUGH — the one the run RENDERS through
+	/// (iris::Scene::renderCamera): the host's free viewer while nothing is
+	/// armed, the ACTIVE scene camera while playing, the host's again while an
+	/// avatar is possessed. PLAYER-SPAWN-1 rule 3; see the definition.
+	static iris::CameraNodePtr playCamera(const iris::ScenePtr &forScene);
 
 	/// One frame without drawing: controller selection and update, then the
 	/// document's simulation clock (iris::Scene::advance — keyframe and
