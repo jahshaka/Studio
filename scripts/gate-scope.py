@@ -36,7 +36,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AREA_RULES = [
     # --- engine: anything that changes pixels or the boundary ---------------------------
     (r"^irisgl/(engine/|thirdparty/ogre-patches/|scripts/build-ogre)",
-     ["engine", "gi", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
+     # `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING
+     # from this list, so no engine change ever selected the ray-traced
+     # reflection suites — DRAG-1 changed what the ray arm reads from the voxels
+     # and two scoped gates came back green while gi.rt_reflect was red. The
+     # entries here are test DIRECTORY names, not ctest labels, so a suite whose
+     # dir is not named is invisible however it is labelled.
+     ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
       "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
       "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
       "shutdown", "openasync", "*vulkan-scripts"], []),
