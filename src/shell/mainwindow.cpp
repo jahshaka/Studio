@@ -668,7 +668,7 @@ void MainWindow::toggleVrMode()
     // the Player's run in the headset (phase 3). Before this the button always
     // took the user to the Player, and the preview existed only as a verb (the
     // owner, at the first controller smoke).
-    if (currentSpace == WindowSpaces::DESKTOP && vrModule) {
+    if (currentSpace == WindowSpaces::EDITOR && vrModule) {
         vrModule->toggleEditorPreview();
         refreshVrUi();
         return;
@@ -696,7 +696,7 @@ void MainWindow::refreshVrUi()
     // whole engine runs on (VR_SPEC §7 risk 11). Plugging a headset in later
     // needs a restart, and nothing in the editor can change that at runtime.
     if (available) {
-        const bool onEditor = currentSpace == WindowSpaces::DESKTOP;
+        const bool onEditor = currentSpace == WindowSpaces::EDITOR;
         actionVr->setToolTip(active
             ? (previewActive ? QStringLiteral("Leave VR | End the editor preview")
                              : QStringLiteral("Leave VR | Stop the run and take the headset off"))
