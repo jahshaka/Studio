@@ -230,11 +230,13 @@ void pinWorkspaceGrade(const iris::ScenePtr &scene)
     // defaults cannot silently re-grade the page.)
     scene->hdrEnabled  = false;
     scene->bloomEnabled = false;
-    // If HDR is ever switched on for this surface, the exposure is PINNED
-    // (min == max) — a workspace that breathed with auto-exposure would make
-    // every avatar screenshot a different picture.
-    scene->exposureMin = scene->exposure;
-    scene->exposureMax = scene->exposure;
+    // If HDR is ever switched on for this surface the exposure is MANUAL — a
+    // workspace that breathed with an auto-exposure meter would make every
+    // avatar screenshot a different picture. (This used to be the min == max
+    // recipe; that recipe is deleted, EXPOSURE-1. It is a mode now, and it is
+    // the scene default anyway — stated here so a change to the default cannot
+    // silently make this surface breathe.)
+    scene->exposureMode = iris::ExposureMode::Manual;
     scene->ssaoEnabled = false;
     scene->smaaPreset  = -1;
     scene->ssrMode     = 0;

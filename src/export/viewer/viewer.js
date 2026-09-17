@@ -226,7 +226,13 @@
         var post = jah.post || {};
         if (post.tonemap === "hable") {
             renderer.toneMapping = THREE.CustomToneMapping;
-            renderer.toneMappingExposure = Math.pow(2, post.exposure || 0);
+            // THE MULTIPLIER, AS THE EXPORTER COMPUTED IT (EXPOSURE-1). This
+            // used to be `Math.pow(2, post.exposure)` over a value the exporter
+            // wrote on the post chain's natural-log axis — right arithmetic,
+            // wrong unit, and every published picture a fraction of a stop off.
+            // The viewer derives nothing now: the editor and the web read one
+            // number, and the fallback is the multiplier a default scene has.
+            renderer.toneMappingExposure = post.exposureMultiplier || 1.364563;
             if (THREE.ShaderChunk) {
                 // FinalToneMapping_ps.glsl, verbatim: Uncharted2 with the
                 // sample's constants, then its hand grade tail. Both halves or

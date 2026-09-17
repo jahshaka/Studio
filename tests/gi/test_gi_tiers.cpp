@@ -107,13 +107,13 @@ static void testTierTable()
         // the serializer, world.gi) sees the tier without knowing it exists.
         for (const QString &id : worldmodes::photonRowIds()) {
             const worldmodes::Row *r = worldmodes::row(id);
-            CHECK(r && r->photonTiered &&
+            CHECK(r && r->tierSpace == worldmodes::TierSpace::Photon &&
                       worldmodes::resolved(s, *r) == worldmodes::tierValue(*r, worldmodes::mode(s), s),
                   qPrintable(QStringLiteral("write-through holds for %1").arg(id)));
         }
     }
     CHECK(worldmodes::photonRowIds().size() == 6, "the tier writes exactly six rows through");
-    // 5 x 4: EVERY cell of every photonTiered row is the table's cell. The rows
+    // 5 x 4: EVERY cell of every Photon-tiered row is the table's cell. The rows
     // derive their tier[] from kPhotonTable (worldmodes.cpp photonColumns) and
     // the public readers read the same table one column at a time, so a cell
     // that disagrees here is a second copy of the table — which is exactly what

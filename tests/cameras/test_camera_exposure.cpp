@@ -180,18 +180,47 @@ void populate(Scene *s)
     enginetest::setNodeScale(s, cube, Vec3(1.15f, 1.15f, 1.15f));
 }
 
-/// A pinned (manual-equivalent) HDR description at a given chain exposure.
+/// A MANUALLY exposed HDR description at a given chain exposure.
 PostFxDesc pinned(float chainExposure, bool bloom = false, float bloomThreshold = 3.0f)
 {
     PostFxDesc fx;
     fx.allowOffscreen = true;   // the ONLY way an offscreen view gets a chain
     fx.hdr = true;
     fx.exposure = chainExposure;
-    // The manual pin: min == max clamps the shader's measurement, so the grade
-    // is a number rather than an average that drifts with what is on screen.
-    fx.exposureMin = fx.exposureMax = iris::lens::manualExposureClamp();
+    // MANUAL EXPOSURE IS THE CHAIN'S FIXED FORM (EXPOSURE-1): the luminance
+    // ladder is replaced by a clear to e^(E-2)/0.18, so the grade is a number
+    // rather than an average that drifts with what is on screen — and it is
+    // exact on the FIRST frame instead of a second of adaptation away. The old
+    // spelling (min == max, pinning the shader's clamp to a derived constant)
+    // is deleted; this is what the mirror now pushes for Manual.
+    fx.tonemapFixed = true;
     fx.bloom = bloom;
     fx.bloomThreshold = bloomThreshold;
+    return fx;
+}
+
+/// AN AUTOMATIC HDR DESCRIPTION WHOSE METER IS CLAMPED TO ONE VALUE.
+///
+/// A3's subject is the adaptation HISTORY — the temporal filter a camera cut
+/// re-seeds — and MANUAL exposure has no history at all: it is the chain's
+/// fixed form, a clear to a constant, which lands instantly whether or not
+/// anybody re-seeds it (measured: 130.96 both ways). So that case needs the
+/// METER, and it needs the meter to converge somewhere PREDICTABLE, or it would
+/// be measuring the fixture's content instead.
+///
+/// `7.5 - ln(1024 * 0.18)` is the clamp that makes the shader's multiplier
+/// exactly `e^(E-2)/0.18` whatever is on screen. EXPOSURE-1 deleted this as the
+/// PRODUCT's way of spelling manual exposure (it needed a derived constant to
+/// avoid counting the exposure twice, and it arrived over about a second); it
+/// is still the right arithmetic for pinning a meter in a fixture, and it is
+/// spelled out here rather than shared, because nothing ships it any more.
+PostFxDesc clampedAuto(float chainExposure)
+{
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.hdr = true;
+    fx.exposure = chainExposure;
+    fx.exposureMin = fx.exposureMax = 7.5f - float(std::log(1024.0 * 0.18));
     return fx;
 }
 
@@ -317,24 +346,24 @@ void a3_cut_reseeds_the_exposure_history()
     // CONVERGED, both times: "the same starting point" is what makes the two
     // two-frame shots below comparable, and a wall-clock settle could not
     // promise it under load.
-    v->setPostFx(pinned(-1.4f));
+    v->setPostFx(clampedAuto(-1.4f));
     const double darkLuma = settledLuma(v, nullptr, "A3 dark");
 
     // THE CUT, without the hook: a new exposure, two frames. The history still
     // holds the old grade, so almost nothing has moved yet.
-    v->setPostFx(pinned(2.0f));
+    v->setPostFx(clampedAuto(2.0f));
     frames(2);
     Image fading; v->readPixels(fading);
     const double fadingLuma = luma(fading);
 
     // ...and the same cut WITH the hook, from the same starting point.
-    v->setPostFx(pinned(-1.4f));
+    v->setPostFx(clampedAuto(-1.4f));
     const double darkAgain = settledLuma(v, nullptr, "A3 dark again");
     CHECK(std::fabs(darkAgain - darkLuma) < 0.5,
           "CONTROL: the second run-up reaches the SAME dark grade as the first "
           "(%.2f vs %.2f) — the two cuts below start from one place",
           darkAgain, darkLuma);
-    v->setPostFx(pinned(2.0f));
+    v->setPostFx(clampedAuto(2.0f));
     v->resetExposureHistory();
     frames(2);
     Image cut; v->readPixels(cut);
@@ -416,14 +445,13 @@ struct Doc {
         // A world with a graded, blooming look — the BASE every camera below
         // either inherits or overrides.
         scene->hdrEnabled = true;
-        // PINNED, so every number this suite prints is a grade and not a
-        // measurement that drifts with what happens to be on screen. The pin is
-        // the same constant the camera's manual mode uses, so a world and a
-        // camera at the same exposure are the same picture — which is what
+        // MANUAL, so every number this suite prints is a grade and not a
+        // measurement that drifts with what happens to be on screen. The world
+        // and a camera in Manual reach the identical constant, which is what
         // makes the inherit assertions meaningful.
-        scene->exposure = 1.5f;               // a bright frame, with highlights to bloom
-        scene->exposureMin = iris::lens::manualExposureClamp();
-        scene->exposureMax = scene->exposureMin;
+        scene->exposureMode = iris::ExposureMode::Manual;
+        // STOPS (EXPOSURE-1): a bright frame, with highlights to bloom.
+        scene->exposure = iris::lens::exposureChainToStops(1.5f);
         scene->bloomEnabled = true;
         scene->bloomThreshold = 0.02f;        // everything blooms
     }
@@ -515,24 +543,90 @@ void partB()
         const float one  = iris::lens::exposureStopsToChain(1.0f);
         CHECK(std::fabs((one - zero) - 0.6931472f) < 1e-5f,
               "one stop is ln 2 on the chain's exposure axis (%.7f)", double(one - zero));
-        CHECK(std::fabs(zero - 0.6f) < 1e-6f,
-              "zero stops is the default world grade, +0.6 (%.4f)", double(zero));
-        // The pin agrees with the deterministic tonemap constant, which is what
-        // makes a manually exposed viewport and a thumbnail of the same world
-        // grade identically.
-        const float pin = iris::lens::manualExposureClamp();
-        const double viaPin = 1024.0 * std::exp(double(zero) - 2.0) / std::exp(7.5 - double(pin));
-        const double viaFixed = double(iris::lens::exposureMultiplier(zero));
-        CHECK(std::fabs(viaPin - viaFixed) < 1e-4,
-              "the manual clamp pin reproduces the fixed-tonemap constant (%.6f vs %.6f)",
-              viaPin, viaFixed);
+        // ZERO STOPS IS THE DERIVED DEFAULT GRADE (EXPOSURE-1), not a tuned
+        // number. THE WHOLE DERIVATION, recomputed here by hand from the two
+        // things it depends on — the default template's lights and the SHIPPED
+        // film curve — so that changing either without re-deriving fails here.
+        {
+            const double pi = 3.14159265358979323846;
+            // (1) the film curve, inverted: the tonemapper input that makes the
+            // display emit 18 %. FinalToneMapping_ps.glsl's second constant set
+            // plus its hand grade tail, spelled out again rather than shared.
+            const double A = 0.22, B = 0.30, C = 0.10, D = 0.20, Ee = 0.01, Ff = 0.30, W = 11.2;
+            auto hable = [&](double x) {
+                return ((x * (A * x + C * B) + D * Ee) / (x * (A * x + B) + D * Ff)) - Ee / Ff;
+            };
+            const double hw = hable(W);
+            const double h = ((0.18 - 0.61) / 1.25 + 0.5) * hw;
+            const double k = h + Ee / Ff;
+            const double qa = A * (1.0 - k), qb = B * (C - k), qc = D * (Ee - k * Ff);
+            const double xStar = (-qb + std::sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa);
+            CHECK(std::fabs(double(iris::lens::greyCardFilmInput()) - xStar) < 1e-6,
+                  "the film curve inverts to x* = %.6f (the tonemapper input that displays as "
+                  "18%% grey); the shipped constant is %.6f", xStar,
+                  double(iris::lens::greyCardFilmInput()));
+            // ...and the inversion is really an inversion: put x* through the
+            // curve and the display gets 0.18.
+            const double back = (hable(xStar) / hw - 0.5) * 1.25 + 0.61;
+            CHECK(std::fabs(back - 0.18) < 1e-6, "...and x* develops to 0.18 (%.6f)", back);
+
+            // (2) the default template's lights: a sun and a Sky Light at
+            // intensity 1 over a 96-grey sky.
+            const double skySrgb = 96.0 / 255.0;
+            const double skyLin = std::pow((skySrgb + 0.055) / 1.055, 2.4);
+            const double eKey = pi * (1.0 + skyLin);
+            CHECK(std::fabs(double(iris::lens::keyIrradiance(1.0f, 1.0f, float(skyLin))) - eKey)
+                      < 1e-4,
+                  "keyIrradiance(sun 1, sky light 1, sky %.5f) = %.5f", skyLin, eKey);
+
+            // (3) the exposure that develops an 18 % grey card under it at x*.
+            const double byHand = 2.0 + std::log(xStar * pi / eKey);
+            CHECK(std::fabs(double(zero) - byHand) < 1e-5,
+                  "zero stops is the DERIVED default grade (%.6f vs the hand computation %.6f)",
+                  double(zero), byHand);
+            CHECK(std::fabs(double(iris::lens::exposureForKeyIrradiance(float(eKey))) - byHand)
+                      < 1e-5,
+                  "the derivation and the default agree");
+            // AND IT IS A METER: doubling the light is exactly one stop down.
+            const double half = double(iris::lens::exposureForKeyIrradiance(float(2.0 * eKey)));
+            CHECK(std::fabs((byHand - half) - 0.6931472) < 1e-5,
+                  "twice the light is one stop down (%.6f)", byHand - half);
+            // THE END-TO-END CLAIM, in one line: a grey card under the default
+            // scene's own lights displays at 18 %.
+            const double greyRadiance = 0.18 * eKey / pi;
+            const double displayed =
+                (hable(greyRadiance * double(iris::lens::exposureMultiplier(zero))) / hw - 0.5) *
+                    1.25 + 0.61;
+            CHECK(std::fabs(displayed - 0.18) < 1e-4,
+                  "an 18%% grey card under the default lights displays at 18%% (%.5f)", displayed);
+        }
+        // MANUAL IS THE FIXED-TONEMAP CONSTANT — not "agrees with it", IS it, so
+        // a manually exposed viewport and a thumbnail of the same world grade
+        // identically by construction rather than through a derived pin.
+        {
+            iris::ExposureDesc d;
+            d.mode = iris::ExposureMode::Manual;
+            d.stops = 0.0f;
+            float e = 0.0f, lo = 0.0f, hi = 0.0f;
+            bool fixed = false;
+            iris::lens::toChain(d, e, lo, hi, fixed);
+            CHECK(fixed, "Manual resolves to the chain's FIXED-exposure form");
+            CHECK(std::fabs(double(e) - double(zero)) < 1e-6, "...at zero stops' exposure");
+            d.mode = iris::ExposureMode::Auto;
+            d.minStops = -1.0f; d.maxStops = 1.0f;
+            iris::lens::toChain(d, e, lo, hi, fixed);
+            CHECK(!fixed, "Auto does not");
+            CHECK(std::fabs(double(hi - lo) - 2.0 * 0.6931472) < 1e-5,
+                  "...and its window is two stops wide on the chain's axis (%.6f)",
+                  double(hi - lo));
+        }
     }
 
     // ---- B2: per-camera BLOOM, both ways round ----------------------------
     // A camera pinned at the SAME grade the world is, so the only thing that
     // moves between the two measurements below is the bloom.
     doc.camera->exposureMode = iris::CameraExposureMode::Manual;
-    doc.camera->exposure = iris::lens::exposureChainToStops(doc.scene->exposure);
+    doc.camera->exposure = doc.scene->exposure;   // STOPS, both of them now
     doc.camera->postOverrides = QJsonObject();
     const double bloomyWorld = shoot(mirror, view, doc.camera, true);
     CHECK(doc.camera->setPostOverride(QStringLiteral("bloom"), false),

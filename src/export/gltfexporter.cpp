@@ -1521,7 +1521,21 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     {
         QJsonObject post;
         post["tonemap"] = scene->hdrEnabled ? QStringLiteral("hable") : QStringLiteral("neutral");
-        post["exposure"] = double(scene->exposure);
+        // THE MULTIPLIER, NOT THE DIAL (EXPOSURE-1, lead review item 2). The
+        // viewer's tonemapper takes a linear multiplier, and the number that
+        // produces the editor's picture is `e^(E-2)/0.18` — the constant the
+        // manual grade IS. Exporting the stops instead made the viewer compute
+        // 2^stops, which is 1.0 at the default against the editor's 1.3646: the
+        // web picture would be 0.45 stops dark for no reason a reader of either
+        // file could see. The derivation belongs where the derivation lives.
+        //
+        // The stops travel too, as the AUTHORED value, because that is what a
+        // future writer would edit; nothing renders from them.
+        post["exposureMode"] =
+            QString::fromLatin1(iris::exposureModeName(scene->exposureMode));
+        post["exposureEv"] = double(scene->exposure);
+        post["exposureMultiplier"] =
+            double(iris::lens::exposureMultiplier(iris::lens::exposureStopsToChain(scene->exposure)));
         post["bloom"] = scene->hdrEnabled && scene->bloomEnabled;
         // THE LOOKS STACK, RECORDED AND NOT IMPLEMENTED (POST_LOOKS_SPEC §8).
         // Looks are editor/player only: the shipped three.js viewer renders the

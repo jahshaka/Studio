@@ -286,8 +286,8 @@ world.setSky("color", { color: "#112233" });
 assert(world.get().sky.color === "#112233", "world.setSky moves the sky");
 assert(world.setMode({ mode: "high" }) === "high", "world.setMode applies a tier");
 assert(world.mode() === "high", "…and the noun reads it back");
-var fx = world.setPostFx({ exposure: 1.25 });
-assert(Math.abs(fx.exposure - 1.25) < 0.001, "world.setPostFx moves the post chain");
+var fx = world.setPostFx({ exposureEv: 1.25 });
+assert(Math.abs(fx.exposureEv - 1.25) < 0.001, "world.setPostFx moves the post chain");
 
 // Reading through the alias is the same read (setMode with no argument).
 assert(world.setMode() === "high", "world.setMode() with no argument still reads");

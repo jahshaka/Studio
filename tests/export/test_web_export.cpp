@@ -36,6 +36,7 @@
 #include "irisgl/document/physics/avatarmovement.h"
 
 #include "export/gltfexporter.h"
+#include "irisgl/document/scenegraph/cameralens.h"
 #include "export/exportservice.h"
 #include "export/previewlauncher.h"
 
@@ -553,6 +554,24 @@ int main(int argc, char **argv)
         // travels so a future one does not have to guess. Only ENABLED looks:
         // a look switched off is not part of the picture.
         const QJsonObject post = jah["post"].toObject();
+
+        // THE GRADE THE WEB RENDERS WITH (EXPOSURE-1, lead review item 2). The
+        // viewer takes a linear MULTIPLIER and derives nothing, so what travels
+        // has to be the number the editor's own manual grade is —
+        // `e^(E-2)/0.18` at the scene's exposure — and not the authored stops,
+        // which a viewer computing 2^stops would render 0.45 stops dark at the
+        // default. Asserted against the document's own conversion, so the two
+        // cannot drift.
+        CHECK(post["exposureMode"].toString() == "manual",
+              "extras.jah.post carries the exposure MODE");
+        CHECK(std::abs(post["exposureEv"].toDouble() - double(scene->exposure)) < 1e-6,
+              "…the authored exposure, in stops");
+        const double wantMul = double(
+            iris::lens::exposureMultiplier(iris::lens::exposureStopsToChain(scene->exposure)));
+        std::printf("    web grade multiplier: %.6f\n", post["exposureMultiplier"].toDouble());
+        CHECK(std::abs(post["exposureMultiplier"].toDouble() - wantMul) < 1e-6,
+              "…and the MULTIPLIER the viewer actually grades with");
+
         const QJsonArray looks = post["looks"].toArray();
         CHECK(looks.size() == 1, "extras.jah.post.looks carries the ENABLED looks only");
         if (looks.size() == 1) {

@@ -229,9 +229,12 @@ int main(int argc, char **argv)
     // THE WORLD GRADES. hdrEnabled is what makes the main view's chain tonemap,
     // and it is what a host reads into ViewPipDesc::tonemap for the inset.
     doc->hdrEnabled = true;
-    doc->exposure = 0.6f;                       // the scene default
-    doc->exposureMin = iris::lens::manualExposureClamp();
-    doc->exposureMax = doc->exposureMin;
+    // MANUAL, at the scene default (zero stops = the exposure the default
+    // template's lights derive). Manual is the chain's fixed form, so this
+    // grade is a number from the first frame — EXPOSURE-1 replaced the old
+    // min == max clamp pin with a mode.
+    doc->exposureMode = iris::ExposureMode::Manual;
+    doc->exposure = 0.0f;
 
     // Two cameras at the SAME pose: the explorer that drives the view and the
     // scene camera the inset previews. Identical shots make the grade

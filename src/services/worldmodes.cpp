@@ -44,7 +44,7 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// bounces (total, 1..4). Owner option (b), 2026-09-09; the fifth column
 /// (dynamic probes) was deleted with the feature by lane R2, 2026-09-12.
 ///
-/// ONE SOURCE. The four `photonTiered` rows buildRows() declares take their
+/// ONE SOURCE. The four Photon-tiered rows buildRows() declares take their
 /// `tier[]` columns FROM this table (photonColumns below) and the public
 /// per-column readers (photonTechnique .. photonBounces) read it too, so
 /// there is no second copy to drift — gi.tiers asserts the rows against the
@@ -80,7 +80,7 @@ const PhotonRow kPhotonTable[4] = {
     /* High   */ { 2, 2, 1, 1, 0, 1 },   // + probes, the chain's High table, HDR + shadowed
     /* Epic   */ { 2, 2, 1, 3, 0, 1 },   // ... plus 3 bounces
 };
-/// The photonTiered row ids, in kPhotonTable column order.
+/// The Photon-tiered row ids, in kPhotonTable column order.
 const int kPhotonRowCount = 6;
 int photonColumn(const PhotonRow &r, int i) {
     switch (i) {
@@ -92,7 +92,7 @@ int photonColumn(const PhotonRow &r, int i) {
     default: return r.cascades;
     }
 }
-/// Fills a photonTiered row's four tier cells from the table's column `column`.
+/// Fills a Photon-tiered row's four tier cells from the table's column `column`.
 void photonColumns(Row &r, int column)
 {
     for (int t = 0; t < 4; ++t) r.tier[t] = photonColumn(kPhotonTable[t], column);
@@ -162,11 +162,46 @@ QVector<Row> buildRows()
         r.type = RowType::Bool;
         r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
         r.cost = QStringLiteral("Renders into a floating-point buffer and grades it with a film "
-                                "curve and automatic exposure. The luminance and bloom work is at "
+                                "curve at the scene's exposure (the Exposure Mode row below says "
+                                "whether that is a number or a measurement). The bloom work is at "
                                 "a fixed size, so only the final pass scales with the window. Off "
                                 "at Low purely to save the buffer.");
         r.get = [](const iris::ScenePtr &s) { return s->hdrEnabled ? 1 : 0; };
         r.set = [](const iris::ScenePtr &s, int v) { s->hdrEnabled = v != 0; };
+        out.append(r);
+    }
+    {
+        // EXPOSURE MODE (EXPOSURE-1, 2026-09-17; RENDER AUDIT A1/A3). A
+        // TierSpace::None row: how a scene is exposed is an ART decision, so no
+        // World Mode column writes it and a tier switch never regrades anybody's
+        // picture — the same rule the continuous parameters have always had.
+        // It is a Row rather than a ParamRow because it is a CHOICE of two
+        // things, not a number, and because the panel and world.override then
+        // get it for free.
+        Row r;
+        r.id = QStringLiteral("exposureMode");
+        r.label = QStringLiteral("Exposure Mode");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Enum;
+        r.tierSpace = TierSpace::None;
+        r.options = { { QStringLiteral("manual"), QStringLiteral("Manual"),
+                        int(iris::ExposureMode::Manual) },
+                      { QStringLiteral("auto"), QStringLiteral("Auto"),
+                        int(iris::ExposureMode::Auto) } };
+        r.cost = QStringLiteral("MANUAL (the default) develops the picture at the Exposure below "
+                                "and measures nothing: it is exact on the first frame, it is five "
+                                "passes and four textures cheaper than the meter, and it is the "
+                                "same grade a thumbnail or a screenshot of this world gets. AUTO "
+                                "meters the frame and adapts within the window — which is what a "
+                                "camera does, and what makes a white surface filling the frame "
+                                "darken everything else by about two and a half stops. Use Auto "
+                                "when the light in the shot changes and you want the picture to "
+                                "follow it.");
+        r.get = [](const iris::ScenePtr &s) { return int(s->exposureMode); };
+        r.set = [](const iris::ScenePtr &s, int v) {
+            s->exposureMode = v == int(iris::ExposureMode::Auto) ? iris::ExposureMode::Auto
+                                                                 : iris::ExposureMode::Manual;
+        };
         out.append(r);
     }
     {
@@ -477,7 +512,7 @@ QVector<Row> buildRows()
 
     // ---- Global illumination = PHOTON (GI_UNIFIED_SPEC.md §2) ---------------
     // ONE row is the dial the World Mode drives; the five below it are the
-    // machinery that dial consumes, and they are `photonTiered` — resolved by
+    // machinery that dial consumes, and they are Photon-tiered (Row::tierSpace) — resolved by
     // the PHOTON tier, not by the World Mode, because two dials must never own
     // one backing field. THE TABLE ITSELF is kPhotonTable above; each row's
     // tier[] columns are READ from it (photonColumns), never copied.
@@ -537,7 +572,7 @@ QVector<Row> buildRows()
         r.label = QStringLiteral("Photon Technique");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.photonTiered = true;
+        r.tierSpace = TierSpace::Photon;
         r.options = { { QStringLiteral("off"),            QStringLiteral("Off"),          0 },
                       { QStringLiteral("vct"),            QStringLiteral("VCT"),          1 },
                       { QStringLiteral("vct_pcc_hybrid"), QStringLiteral("VCT + Probes"), 2 } };
@@ -562,7 +597,7 @@ QVector<Row> buildRows()
         r.label = QStringLiteral("Photon Voxel/Probe Quality");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.photonTiered = true;
+        r.tierSpace = TierSpace::Photon;
         r.options = { { QStringLiteral("low"),    QStringLiteral("Low"),    0 },
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 1 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   2 } };
@@ -582,7 +617,7 @@ QVector<Row> buildRows()
         r.label = QStringLiteral("Photon Irradiance Field (DDGI)");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.photonTiered = true;
+        r.tierSpace = TierSpace::Photon;
         r.options = { { QStringLiteral("off"), QStringLiteral("Off"), 0 },
                       { QStringLiteral("on"),  QStringLiteral("On"),  1 } };
         // Owner option (b), 2026-09-09: every voxel tier feeds the field — it
@@ -611,7 +646,7 @@ QVector<Row> buildRows()
     // quality dial is untouched (it is the RESOLUTION dial, and Epic changes
     // no resolution).
     // THE PROBE CAPTURE SIZE (owner decision 2026-09-13 Q4: "yes halve it but
-    // add it to the world settings"). A photonTiered row like the four above, so
+    // add it to the world settings"). A Photon-tiered row like the four above, so
     // an edit PINS it; every tier's column is 0 = "follow the quality dial",
     // because the halving itself is the engine's default now.
     {
@@ -620,7 +655,7 @@ QVector<Row> buildRows()
         r.label = QStringLiteral("Photon Probe Capture Size");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.photonTiered = true;
+        r.tierSpace = TierSpace::Photon;
         r.options = { { QStringLiteral("auto"), QStringLiteral("Automatic"), 0 },
                       { QStringLiteral("128"),  QStringLiteral("128 px"),  128 },
                       { QStringLiteral("256"),  QStringLiteral("256 px"),  256 },
@@ -638,7 +673,7 @@ QVector<Row> buildRows()
         r.set = [](const iris::ScenePtr &s, int v) { s->giProbeCaptureSize = qBound(0, v, 1024); };
         out.append(r);
     }
-    // THE CASCADE CHAIN, as a tier row (PHOTON_SPEC §7 E2 (6)). A photonTiered
+    // THE CASCADE CHAIN, as a tier row (PHOTON_SPEC §7 E2 (6)). A Photon-tiered
     // Enum like the technique above it, so an edit here PINS the chain on or off
     // against the tier, and every tier's column is 1.
     {
@@ -647,7 +682,7 @@ QVector<Row> buildRows()
         r.label = QStringLiteral("Photon Camera Cascades");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
-        r.photonTiered = true;
+        r.tierSpace = TierSpace::Photon;
         r.options = { { QStringLiteral("off"), QStringLiteral("Off"), 0 },
                       { QStringLiteral("on"),  QStringLiteral("On"),  1 } };
         photonColumns(r, 5);
@@ -673,7 +708,7 @@ QVector<Row> buildRows()
         r.label = QStringLiteral("Photon Light Bounces");
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Int;
-        r.photonTiered = true;
+        r.tierSpace = TierSpace::Photon;
         r.minValue = 1; r.maxValue = 4;
         photonColumns(r, 3);
         r.cost = QStringLiteral("Total light bounces, 1-4. Each bounce past the first is another "
@@ -767,16 +802,28 @@ const Row *row(const QString &id)
 static QVector<ParamRow> buildPostFxParams()
 {
     QVector<ParamRow> out;
+    // ---- EXPOSURE (EXPOSURE-1, 2026-09-17) --------------------------------
+    //
+    // STOPS, all three, on the same axis a camera's block uses. The post chain
+    // takes a natural-log `E` and the conversion happens once, at the mirror
+    // (iris::lens::toChain) — nothing in the document or in this table holds a
+    // chain-unit exposure any more. The `Ev` in the id is what says so, and it
+    // is what keeps a script written against the old chain-unit `exposure` from
+    // silently regrading a scene: that name is gone and the verb refuses it.
     {
         ParamRow p;
-        p.id = QStringLiteral("exposure");
+        p.id = QStringLiteral("exposureEv");
         p.label = QStringLiteral("Exposure");
-        p.ownerRowId = QStringLiteral("hdr");
-        p.minValue = -8.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
-        p.doc = QStringLiteral("The auto-exposure midpoint. NOT stops: the value is used as "
-                               "e^(exposure-2), so +0.69 is one doubling. The scene default is "
-                               "+0.6, which is what puts mid-grey back where it was when HDR "
-                               "comes on.");
+        p.ownerRowId = QStringLiteral("exposureMode");
+        p.minValue = -16.0; p.maxValue = 16.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("The exposure in STOPS: 0 is the grade a new scene's own lights "
+                               "derive (a sun and a Sky Light at intensity 1 over the default "
+                               "sky put an 18% grey card on the film's grey card), +1 is one "
+                               "doubling, -1 one halving. In Manual it IS the exposure; in Auto "
+                               "it is the grade the meter works around, and the window below "
+                               "says how far either side of it the meter may go. The same unit "
+                               "as a camera's own exposure block.");
+        p.enabled = [](const iris::ScenePtr &s) { return s->hdrEnabled; };
         p.get = [](const iris::ScenePtr &s) { return double(s->exposure); };
         p.set = [](const iris::ScenePtr &s, double v) { s->exposure = float(v); };
         out.append(p);
@@ -784,16 +831,20 @@ static QVector<ParamRow> buildPostFxParams()
     {
         ParamRow p;
         p.id = QStringLiteral("exposureMin");
-        p.label = QStringLiteral("Exposure Min");
-        p.ownerRowId = QStringLiteral("hdr");
-        p.minValue = -8.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
-        p.doc = QStringLiteral("The bottom of the window automatic exposure may adapt within. "
-                               "Set equal to Exposure Max and the exposure stops following the "
-                               "scene's content — but it is still the automatic chain, which "
-                               "takes about a second to arrive, and it is NOT the constant "
-                               "thumbnails and previews grade with (measured, they land far "
-                               "apart). A screenshot that has to be identical every time asks "
-                               "for the \"tonemap\" or \"scene\" grade instead.");
+        p.label = QStringLiteral("Auto Exposure Min");
+        p.ownerRowId = QStringLiteral("exposureMode");
+        p.minValue = -16.0; p.maxValue = 16.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("The bottom of the window the AUTOMATIC exposure may adapt "
+                               "within, in stops AROUND THE EXPOSURE ABOVE: -3.5 lets the meter "
+                               "land up to three and a half stops under the exposure you typed, "
+                               "and 0 stops means it may not go under it at all. A window of "
+                               "0..0 is the exposure you typed and nothing else — the same "
+                               "picture Manual renders. Read only in Auto: Manual measures "
+                               "nothing, so there is nothing to bound.");
+        p.enabled = [](const iris::ScenePtr &s) { return s->hdrEnabled; };
+        p.visible = [](const iris::ScenePtr &s) {
+            return s->exposureMode == iris::ExposureMode::Auto;
+        };
         p.get = [](const iris::ScenePtr &s) { return double(s->exposureMin); };
         p.set = [](const iris::ScenePtr &s, double v) { s->exposureMin = float(v); };
         out.append(p);
@@ -801,12 +852,17 @@ static QVector<ParamRow> buildPostFxParams()
     {
         ParamRow p;
         p.id = QStringLiteral("exposureMax");
-        p.label = QStringLiteral("Exposure Max");
-        p.ownerRowId = QStringLiteral("hdr");
-        p.minValue = -8.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
-        p.doc = QStringLiteral("The top of the auto-exposure window. A narrow window is a "
-                               "steadier image; a wide one copes with walking from a dark room "
-                               "into daylight.");
+        p.label = QStringLiteral("Auto Exposure Max");
+        p.ownerRowId = QStringLiteral("exposureMode");
+        p.minValue = -16.0; p.maxValue = 16.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("The top of the automatic exposure's window, in stops above the "
+                               "exposure above. A narrow window is a steadier image; a wide one "
+                               "copes with walking from a dark room into daylight. Read only in "
+                               "Auto.");
+        p.enabled = [](const iris::ScenePtr &s) { return s->hdrEnabled; };
+        p.visible = [](const iris::ScenePtr &s) {
+            return s->exposureMode == iris::ExposureMode::Auto;
+        };
         p.get = [](const iris::ScenePtr &s) { return double(s->exposureMax); };
         p.set = [](const iris::ScenePtr &s, double v) { s->exposureMax = float(v); };
         out.append(p);
@@ -903,7 +959,8 @@ const QStringList &postFxRowIds()
     // and its grade first, then what rides on it, then what runs after the
     // tonemap, then the two that are neither (reflections, refraction).
     static const QStringList ids = {
-        QStringLiteral("hdr"), QStringLiteral("bloom"), QStringLiteral("ssao"),
+        QStringLiteral("hdr"), QStringLiteral("exposureMode"), QStringLiteral("bloom"),
+        QStringLiteral("ssao"),
         QStringLiteral("smaa"), QStringLiteral("ssr"), QStringLiteral("refractions"),
         QStringLiteral("distortion"),
     };
@@ -1175,7 +1232,9 @@ int tierValue(const Row &r, Mode m, const iris::ScenePtr &scene)
     // A Photon-tiered row answers in the PHOTON tier space: its columns are the
     // GI dial's tiers, and the World Mode has nothing to say about it directly
     // (it drives the `photon` row, which drives this one).
-    if (r.photonTiered) return r.tier[int(photonTier(scene))];
+    if (r.tierSpace == TierSpace::Photon) return r.tier[int(photonTier(scene))];
+    // NO TIER RESOLVES THIS ROW (TierSpace::None): its value is the backing field.
+    if (r.tierSpace == TierSpace::None) return resolved(scene, r);
     if (m == Mode::Custom) return resolved(scene, r);
     return r.tier[int(m)];
 }
@@ -1197,6 +1256,9 @@ QString source(const iris::ScenePtr &scene, const Row &r)
 {
     if (!scene) return QStringLiteral("custom");
     if (scene->worldOverrides.contains(r.id)) return QStringLiteral("override");
+    // A row NO TIER RESOLVES was never set by a mode, so saying "mode" would be
+    // a claim about a dial that does not own it (EXPOSURE-1).
+    if (r.tierSpace == TierSpace::None) return QStringLiteral("custom");
     return mode(scene) == Mode::Custom ? QStringLiteral("custom") : QStringLiteral("mode");
 }
 
@@ -1238,7 +1300,7 @@ void setMode(const iris::ScenePtr &scene, Mode m)
         // A Photon-tiered row is written by the `photon` row (which IS in this
         // loop and honours the same pins) — never twice, and never from the
         // world tier's columns, which are not this row's tier space at all.
-        if (r.photonTiered) continue;
+        if (r.tierSpace != TierSpace::World) continue;
         if (scene->worldOverrides.contains(r.id)) continue;   // pinned: survives the switch
         writeField(scene, r, r.tier[int(m)]);
     }
@@ -1282,10 +1344,17 @@ bool clearOverride(const iris::ScenePtr &scene, const QString &id)
     // setPhoton rather than a bare field write: the technique row doubles as the
     // on/off switch, so writing its tier value directly would switch GI back on
     // for a scene that has it off.
-    if (r && r->photonTiered) {
+    if (r && r->tierSpace == TierSpace::Photon) {
         setPhoton(scene, photonEnabled(scene), photonTier(scene));
         return true;
     }
+    // A ROW NO TIER RESOLVES HAS NOTHING TO FALL BACK TO, and `r->tier[]` is a
+    // block of zeros nobody ever filled in — writing it would silently reset
+    // the field to whatever zero happens to mean (for Exposure Mode: MANUAL, so
+    // an Auto scene would flip the moment ANY pin anywhere was cleared, since
+    // clearOverrides walks the whole map). Dropping the pin is the whole
+    // operation for these rows.
+    if (r && r->tierSpace == TierSpace::None) return true;
     // Fall back to the tier value. In Custom mode there is no tier, so the
     // field simply keeps whatever it had — dropping the pin is all that happens.
     if (r && m != Mode::Custom) writeField(scene, *r, r->tier[int(m)]);

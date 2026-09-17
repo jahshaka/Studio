@@ -858,20 +858,33 @@ assert(ray.tier === want.tier,
 assert(ray.custom === false && (!ray.deviations || ray.deviations.length === 0),
        "  ...with no deviations (custom " + ray.custom + ", deviations " +
        JSON.stringify(ray.deviations || []) + ")");
-// THE GRADE THE SAMPLE SHIPS WITH (the exposure lane, 2026-09-13). Five of the
-// eight archives — Matcaps, Particles, Physics, Skeletal Animation and World
-// Background — carried "exposure": 0 in their saved scene while the document
-// class default is +0.6 and the other three carried 0.6, so half the shipped
-// samples opened about half as bright as the same scene made today (Physics
-// mean luma 18.5 versus 38.1; the measurements are in
-// spikes/render-review-2026-09-13/darkness/INDEX.md). Nothing asserted it, so
-// nothing caught it for as long as it was true. A sample ships at the
-// document's own exposure unless its block says otherwise, in as many words.
-var DOC_EXPOSURE = 0.6;   // iris::Scene's constructor, scene.cpp:161
-var wantExposure = want.exposure === undefined ? DOC_EXPOSURE : want.exposure;
+// THE GRADE THE SAMPLE SHIPS WITH (the exposure lane, 2026-09-13; re-spelled by
+// EXPOSURE-1, 2026-09-17). Five of the eight archives — Matcaps, Particles,
+// Physics, Skeletal Animation and World Background — once carried "exposure": 0
+// in their saved scene while the document class default was +0.6, so half the
+// shipped samples opened about half as bright as the same scene made today
+// (Physics mean luma 18.5 versus 38.1; spikes/render-review-2026-09-13/
+// darkness/INDEX.md). Nothing asserted it, so nothing caught it for as long as
+// it was true.
+//
+// IT IS ALSO THE READER'S ABSENT-KEY CONTRACT, ON A REAL FILE. Every shipped
+// archive predates the exposure keys, so it carries NONE of them, and these
+// eight runs are the only place "an absent key reads the CONSTRUCTOR" is
+// exercised against a document on disk rather than against a literal in a test
+// (nothing links SceneReader; tests/mirror records why). The constructor is
+// MANUAL at zero stops — zero being the grade the scene's own lights derive —
+// and a sample with nothing to say about exposure must come back as exactly
+// that.
+var DOC_EXPOSURE_EV = 0.0;    // iris::Scene's constructor, in STOPS
+var wantExposure = want.exposureEv === undefined ? DOC_EXPOSURE_EV : want.exposureEv;
 var shipFx = world.postFx();
-assert(Math.abs(shipFx.exposure - wantExposure) < 1e-4,
-       SAMPLE + " ships at exposure " + wantExposure + " (" + shipFx.exposure + ")");
+assert(Math.abs(shipFx.exposureEv - wantExposure) < 1e-4,
+       SAMPLE + " ships at exposure " + wantExposure + " stops (" + shipFx.exposureEv + ")");
+assert(world.settings().exposureMode.valueId === "manual",
+       "  ...and at the constructor's MODE, manual — an absent key is the ctor");
+assert(shipFx.exposureMin === -3.5 && shipFx.exposureMax === 3.5,
+       "  ...and the constructor's automatic window (" + shipFx.exposureMin + ".." +
+       shipFx.exposureMax + ")");
 
 var s = structure();
 console.log("structure: " + J(s.byType) + " total " + s.count);

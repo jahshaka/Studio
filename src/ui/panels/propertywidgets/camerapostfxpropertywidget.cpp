@@ -125,10 +125,10 @@ void CameraPostFxPropertyWidget::rebuild()
     if (!camera) { loading = false; return; }
 
     // ---- §4, the exposure block -------------------------------------------
-    // Three stops-based numbers and a mode. NOT the same unit as the World
-    // panel's Exposure row (which is the post chain's own natural-log value) —
-    // the tooltip says so, because the two rows sit two panels apart and read
-    // like the same dial.
+    // Three stops-based numbers and a mode — THE SAME UNIT AND THE SAME AXIS as
+    // the World panel's Exposure row since EXPOSURE-1 (the world used to store
+    // the post chain's own natural-log value; it stores stops now, and the one
+    // conversion happens at the mirror). Two panels, one dial, one unit.
     {
         auto *mode = this->addComboBox(QStringLiteral("Exposure"));
         mode->addItem(QStringLiteral("Inherit from World"), int(iris::CameraExposureMode::Inherit));
@@ -139,7 +139,7 @@ void CameraPostFxPropertyWidget::rebuild()
             "How THIS camera is exposed while it is the one you are looking through — "
             "piloting it, playing through it, or shooting it with camera.screenshot. "
             "Inherit leaves the world's exposure exactly as it is. Auto gives the camera its "
-            "own adaptation midpoint and window; Manual pins the grade so it measures nothing. "
+            "own adaptation midpoint and window; Manual grades at a number and measures nothing. "
             "Never applies to thumbnails, previews or renders that asked for a neutral readback."));
         rowundo::Binding modeBinding = row(QStringLiteral("exposureMode"),
                                           [mode](const QVariant &r) {
@@ -159,9 +159,10 @@ void CameraPostFxPropertyWidget::rebuild()
                                          double(camera->exposure), -20.0, 20.0, 0.01, 2);
         stops->setEnabled(own);
         stops->setToolTip(QStringLiteral(
-            "The camera's exposure in STOPS: 0 is the default world grade and +1 is one "
-            "doubling. This is not the World panel's Exposure number, which is the post "
-            "chain's own natural-log value — one stop is ln 2 of it, converted for you."));
+            "The camera's exposure in STOPS: 0 is the default world grade (the exposure a new "
+            "scene's own lights derive) and +1 is one doubling. The same unit as the World "
+            "panel's Exposure row — this one simply replaces it while this camera drives the "
+            "view."));
         {
             rowundo::Binding b = row(QStringLiteral("exposure"),
                                      [](const QVariant &v) { return QVariant(v.toFloat()); });
@@ -181,10 +182,16 @@ void CameraPostFxPropertyWidget::rebuild()
                                                    : QStringLiteral("Auto Max (stops)"),
                                              double(isMin ? camera->exposureMin : camera->exposureMax),
                                              -20.0, 20.0, 0.01, 2);
+            // HIDDEN, not greyed, outside Auto — the same rule the World panel
+            // applies to its own pair (EXPOSURE-1): a window bounding a
+            // measurement nobody is making is not a disabled control, it is not
+            // a control. The mode combo rebuilds this blade, so this is read
+            // afresh whenever it can change.
             field->setEnabled(autoMode);
+            field->setVisible(autoMode);
             field->setToolTip(QStringLiteral(
-                "The window automatic exposure may adapt within, in stops. Ignored in Manual "
-                "mode, which pins the grade outright."));
+                "The window automatic exposure may adapt within, in stops. Read only in Auto — "
+                "Manual measures nothing, so there is nothing to bound."));
             {
                 rowundo::Binding b = row(key, [](const QVariant &v) { return QVariant(v.toFloat()); });
                 auto write = b.write;

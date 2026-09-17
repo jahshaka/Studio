@@ -84,6 +84,16 @@ void WorldModesPropertyWidget::build()
     for (int i = 0; i < rows.size(); ++i) {
         const worldmodes::Row &r = rows[i];
 
+        // A ROW NO TIER RESOLVES IS NOT A SCALABILITY ROW (EXPOSURE-1). This
+        // blade IS the tier table — every control in it has four columns behind
+        // it and a mode switch writes them — so a row with no columns at all
+        // would be a control the blade cannot explain. It lives in the section
+        // it belongs to (exposure under Post Process) and nowhere else.
+        if (r.tierSpace == worldmodes::TierSpace::None) {
+            rowControls.append(nullptr);
+            continue;
+        }
+
         if (!r.available) {
             // Declared, not yet implemented (POST_CHAIN_SPEC §9.2). Shown so the
             // tier table is honest about what a mode WILL mean, disabled so it
@@ -157,8 +167,13 @@ void WorldModesPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row &
     else if (r.id == QLatin1String("ssao"))
         keywords << QStringLiteral("ao") << QStringLiteral("ambient occlusion");
     else if (r.id == QLatin1String("hdr"))
-        keywords << QStringLiteral("tonemap") << QStringLiteral("tone mapping")
-                 << QStringLiteral("exposure");
+        keywords << QStringLiteral("tonemap") << QStringLiteral("tone mapping");
+    // "exposure" belongs to the EXPOSURE rows, not to HDR: it used to be a
+    // synonym here because HDR owned the exposure parameters, and since
+    // EXPOSURE-1 it would send a search for "exposure" to the wrong row.
+    else if (r.id == QLatin1String("exposureMode"))
+        keywords << QStringLiteral("exposure") << QStringLiteral("ev")
+                 << QStringLiteral("stops") << QStringLiteral("auto exposure");
     else if (r.id == QLatin1String("photon"))
         keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
     PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);

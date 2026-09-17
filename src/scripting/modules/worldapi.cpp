@@ -19,6 +19,9 @@ For more information see the LICENSE file
 #include <QJsonArray>
 
 #include <utility>
+#include <cmath>
+
+#include "irisgl/document/scenegraph/cameralens.h"
 
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
@@ -408,8 +411,8 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "clearOverrides", "world.clearOverrides() -> object",
           "Drops every pinned row and re-applies the current mode. Returns world.settings(). Undoable.",
           Needs::Document },
-        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius, distortionStrength}) -> object",
-          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal stops the exposure from following the scene's content, but it is still the AUTOMATIC chain (a temporal filter that takes about a second to arrive) and it is NOT the constant the secondary surfaces grade with: that one substitutes a 0.18 grey card for the measurement and lands somewhere else entirely (measured on one floor region, 12.9 against 86.6 — SS1, 2026-09-13). For a picture that is deterministic by construction ask editor.screenshot for the \"tonemap\" or \"scene\" grade; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres; distortionStrength is a global multiplier on every distortion material's own strength (0 is inert — the frame is bit for bit the frame with no distortion at all). Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
+        { "postFx", "world.postFx({exposureEv, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius, distortionStrength}) -> object + {exposureMeasured}",
+          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). EXPOSURE (EXPOSURE-1, 2026-09-17): 'exposureEv' is the exposure in STOPS — 0 is the grade a new scene's own lights derive (a sun and a Sky Light at intensity 1 over the default sky put an 18% grey card on the film's grey card; the arithmetic is iris::lens::defaultExposureChain), +1 one doubling — and it is the SAME unit and the same axis as a camera's own exposure block. WHETHER it is a number or a measurement is world.override({id:'exposureMode', value:'manual'|'auto'}), and the editor default is MANUAL: an averaging meter is right for a camera and wrong for an authoring tool, because a white surface filling the frame is normalised to the grey card and takes everything else down with it (measured: a default plane dropped the objects in a new scene by 56-62%, while the same scene at a fixed exposure got BRIGHTER, since a plane bounces light). Manual is the chain's fixed-exposure form: exact on the first frame, five passes and four textures cheaper than the meter, and the identical grade a thumbnail or a screenshot of the same world gets. 'exposureMin'/'exposureMax' are the window the AUTOMATIC exposure may adapt within, in stops, and are read only in Auto — the old \"set them equal to pin the grade\" recipe is gone with the constant it needed. The old chain-unit 'exposure' key is DELETED and refused by name, because the same number means two different pictures in the two units. 'exposureMin'/'exposureMax' are stops AROUND 'exposureEv', not absolute values: 0..0 is the exposure you asked for and nothing else (the picture Manual renders), -3.5..3.5 lets the meter land three and a half stops either side of it. READING, not a setting: 'exposureMeasured' is where the automatic exposure actually SETTLED, in stops from the grade 'exposureEv' asks for — 0 meaning exactly where Manual would have put it — and it is null when there is nothing to read (no viewport, no HDR, nothing presented yet, or manual, where the grade is a constant the caller already has). bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres; distortionStrength is a global multiplier on every distortion material's own strength (0 is inert — the frame is bit for bit the frame with no distortion at all). Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
           Needs::Document },
         // ---- THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1) ----------------------
         { "looks", "world.looks() -> [{id, label, enabled, params}]",
@@ -2226,6 +2229,19 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
     // and these answer "how does it look". Tiering an art decision would mean a
     // mode switch silently regrading the user's scene.
     for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        // THE ONE NAME THAT IS REFUSED WITH A SENTENCE (EXPOSURE-1). `exposure`
+        // used to be the post chain's natural-log value; the document holds
+        // STOPS now, so the same number would be a different picture. A script
+        // carrying the old key must be re-read by a person, not translated by
+        // us.
+        if (it.key() == QLatin1String("exposure")) {
+            fail(QStringLiteral(
+                "world.postFx: 'exposure' is gone — it was the post chain's natural-log value. "
+                "Use 'exposureEv' (STOPS: 0 is the grade the scene's own lights derive, +1 is "
+                "one doubling), and world.override({id:'exposureMode', value:'manual'|'auto'}) "
+                "for whether it is a number or a measurement."));
+            return QVariantMap();
+        }
         if (!worldmodes::postFxParam(it.key())) {
             QStringList known;
             for (const auto &p : worldmodes::postFxParams()) known << p.id;
@@ -2244,6 +2260,28 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
         std::swap(scene->exposureMin, scene->exposureMax);
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
         out[p.id] = p.get(scene);
+    // THE READING (RENDER AUDIT A11/A14: the monitor and this verb could see
+    // every pass and not the one number that decides how bright the picture
+    // is). Where the automatic exposure actually SETTLED, reported in the same
+    // unit as everything else here — STOPS from the grade `exposureEv` asks
+    // for, so 0 means "the meter landed exactly where Manual would" and -1
+    // means "a stop under it". The engine hands back a multiplier; the
+    // conversion is one log, here, so no caller has to know the chain's units.
+    //
+    // NULL, NOT 0, when there is nothing to read — no viewport, HDR off,
+    // nothing presented yet, or MANUAL, where the grade is a constant the
+    // caller already has. 0 is now a real reading and cannot double as "none".
+    {
+        const float measured = (host.isEngineReady() && host.viewport)
+                                   ? host.viewport->measuredExposureScale()
+                                   : 0.0f;
+        const float manual =
+            iris::lens::exposureMultiplier(iris::lens::exposureStopsToChain(scene->exposure));
+        out[QStringLiteral("exposureMeasured")] =
+            (measured > 0.0f && manual > 0.0f)
+                ? QVariant(std::log(double(measured) / double(manual)) / std::log(2.0))
+                : QVariant();
+    }
     return out;
 }
 
@@ -2482,8 +2520,12 @@ QVariantMap WorldApi::modeTable()
         // quality tier (world.photon), and their `tiers` map below is therefore
         // in THAT tier space. Without this the table would read as though a
         // World Mode set them, which is exactly the double-ownership this
-        // phase removed.
-        row["tierSpace"] = r.photonTiered ? QStringLiteral("photon") : QStringLiteral("world");
+        // phase removed. "none" means NO dial resolves it — the row is a
+        // setting the user (or the document) owns outright and no mode switch
+        // touches it, so it carries no `tiers` map at all (EXPOSURE-1).
+        row["tierSpace"] = r.tierSpace == worldmodes::TierSpace::Photon ? QStringLiteral("photon")
+                        : r.tierSpace == worldmodes::TierSpace::None  ? QStringLiteral("none")
+                                                                     : QStringLiteral("world");
         if (r.type == worldmodes::RowType::Int) {
             row["min"] = r.minValue;
             row["max"] = r.maxValue;
@@ -2492,16 +2534,22 @@ QVariantMap WorldApi::modeTable()
         for (const worldmodes::EnumOption &o : r.options)
             options.append(QVariantMap{ { "id", o.id }, { "label", o.label }, { "value", o.value } });
         if (!options.isEmpty()) row["options"] = options;
-        QVariantMap tiers;
-        // A Photon row's four columns are the PHOTON tiers; they happen to carry
-        // the same four names, which is exactly why `tierSpace` above says
-        // which set of four these are.
-        const QStringList names = r.photonTiered ? worldmodes::photonTierNames()
-                                                : worldmodes::modeNames();
-        for (int i = 0; i < names.size(); ++i)
-            tiers.insert(names[i], QVariantMap{ { "value", r.tier[i] },
-                                                { "valueId", worldmodes::valueId(r, r.tier[i]) } });
-        row["tiers"] = tiers;
+        // A "none" row has NO tier columns to report (EXPOSURE-1): nothing
+        // resolves it, so an empty map is the honest answer and a table of four
+        // identical cells would be a lie about what a mode switch does.
+        if (r.tierSpace != worldmodes::TierSpace::None) {
+            QVariantMap tiers;
+            // A Photon row's four columns are the PHOTON tiers; they happen to
+            // carry the same four names, which is exactly why `tierSpace` above
+            // says which set of four these are.
+            const QStringList names = r.tierSpace == worldmodes::TierSpace::Photon
+                                          ? worldmodes::photonTierNames()
+                                          : worldmodes::modeNames();
+            for (int i = 0; i < names.size(); ++i)
+                tiers.insert(names[i], QVariantMap{ { "value", r.tier[i] },
+                                                    { "valueId", worldmodes::valueId(r, r.tier[i]) } });
+            row["tiers"] = tiers;
+        }
         rowList.append(row);
     }
     out["modes"] = worldmodes::modeNames();
