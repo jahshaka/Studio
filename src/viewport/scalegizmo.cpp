@@ -27,8 +27,6 @@ For more information see the LICENSE file
 #include "viewport/gizmomeshes.h"
 #include "commands/transformscenenodecommand.h"
 #include "irisgl/core/math/mathhelper.h"
-#include "ui/panels/scenenodepropertieswidget.h"
-#include "ui/panels/propertywidgets/transformpropertywidget.h"
 
 #include "viewport/snapsettings.h"
 #define CENTER_CIRCLE_RADIUS (0.015f)
