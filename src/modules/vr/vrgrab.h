@@ -233,6 +233,15 @@ inline Pose spunAboutUp(const Pose &pose, const iris::Vec3 &pivot, float degrees
 }
 
 /// How far the turntable turns in one frame at this stick deflection.
+///
+/// POSITIVE IS THE STICK'S OWN SIGN, like `snapTurnDegrees` and
+/// `smoothTurnDegrees` beside it and for the same reason: this file holds the
+/// arithmetic and the CALLER owns the convention, because the tree's yaw is the
+/// right-handed rotation about +Y (a positive angle is counter-clockwise seen
+/// from above) while every VR title's stick turns the world the other way. The
+/// one call site (VrInteraction::followGesture) negates, exactly as the turn
+/// does, so that A FLICK RIGHT SPINS THE HELD OBJECT CLOCKWISE FROM ABOVE —
+/// the same direction the same stick turns the wearer.
 inline float turntableDegrees(float stickX, float seconds,
                               float degreesPerSecond = kTurntableDegreesPerSecond)
 {

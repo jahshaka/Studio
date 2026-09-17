@@ -4,10 +4,12 @@
 // THE POINT OF THE INJECTION ROUTE, demonstrated: this process was launched
 // WITHOUT --vr, so no OpenXR loader was ever opened and no session exists — and
 // every controller gesture still runs, end to end, through the same code a
-// wearer drives. `vr.inputInject` writes the per-hand state the runtime's action
-// system would have written and the interaction cannot tell the difference: the
-// aim ray, the document pick, the selection, the rigid grab, the snap and the
-// undo macro are all the real ones.
+// wearer drives. `vr.inject` writes the per-hand state the runtime's action
+// system would have written — into THE ENGINE's own store, the one a session
+// fills, which is why there is no second store to disagree with it — and
+// `vr.step()` runs one interaction frame on it. The interaction cannot tell the
+// difference: the aim ray, the document pick, the selection, the rigid grab,
+// the snap and the undo macro are all the real ones.
 //
 // WHAT IS *NOT* HERE, and where it is instead:
 //   * THE ARITHMETIC (rigid attach, the far lever, the snap quantisation, the
@@ -45,18 +47,25 @@ function showPos(tag, id) {
                 + p.z.toFixed(3) + ")");
 }
 
-/// ONE FRAME OF CONTROLLER INPUT. Every field is passed EVERY time on purpose:
-/// an injected hand keeps what it was given until it is changed (that is the
-/// verb's contract), so a test that omitted a button would be asserting against
-/// whatever the previous case left held.
+/// ONE FRAME OF CONTROLLER INPUT: `vr.inject` says what the hand is doing and
+/// `vr.step()` does it. Every field is passed EVERY time — `vr.inject` REPLACES
+/// a hand's whole sample (the engine's contract: poses included, from the call
+/// until the next one), so there is nothing to inherit and nothing to forget.
 function sendHand(o) {
     var pose = { x: o.x, y: o.y, z: o.z, yaw: o.yaw || 0, pitch: o.pitch || 0 };
-    var m = { hand: o.hand || "right", valid: true, aim: pose, grip: pose,
-              select: o.select || 0, grab: o.grab || 0, menu: !!o.menu,
-              stickX: o.stickX || 0, stickY: o.stickY || 0 };
-    assert(vr.inputInject(m) === true, "inject " + (o.hand || "right") + " at ("
-           + o.x + ", " + o.y + ", " + o.z + ") yaw " + (o.yaw || 0) + " pitch " + (o.pitch || 0)
-           + (o.select ? " select" : "") + (o.grab ? " grab" : "") + (o.menu ? " menu" : ""));
+    var m = { valid: true, aim: pose, grip: pose,
+              select: o.select || 0, grab: o.grab || 0, menuPressed: !!o.menu,
+              stick: { x: o.stickX || 0, y: o.stickY || 0 },
+              // FOCUS IS A PROPERTY OF THE SESSION, carried on every sample: a
+              // runtime that loses it reports `focused:false` on BOTH hands, so
+              // a test that means "the dashboard came up" says it here.
+              focused: o.focused === undefined ? true : !!o.focused };
+    var hand = o.hand || "right";
+    assert(vr.inject(hand, m) === true && vr.step() === true,
+           "one frame: " + hand + " at (" + o.x + ", " + o.y + ", " + o.z + ") yaw "
+           + (o.yaw || 0) + " pitch " + (o.pitch || 0)
+           + (o.select ? " select" : "") + (o.grab ? " grab" : "") + (o.menu ? " menu" : "")
+           + (o.focused === false ? " UNFOCUSED" : ""));
 }
 
 /// A TRIGGER CLICK — the pose with the trigger UP, then the same pose with it
@@ -146,21 +155,26 @@ var floorAny = scene.raycast({ x: 8, y: 3, z: 8 }, { x: 0, y: -1, z: 0 },
 var floorPickable = scene.raycast({ x: 8, y: 3, z: 8 }, { x: 0, y: -1, z: 0 });
 console.log("straight down at (8, 8): " + floorAny.length + " node(s), "
             + floorPickable.length + " of them pickable");
-if (floorAny.length > 0 && floorPickable.length === 0) {
-    sendHand({ x: 8, y: 3, z: 8, pitch: -90 });
-    assert(vr.hover() === null,
-           "a ray on a LOCKED node (" + floorAny[0].name + ") hovers NOTHING — the lock IS "
-           + "pickable, exactly as a desktop click reads it");
-    // ...AND A PRESS ON IT IS A PRESS ON NOTHING, which DESELECTS — the desktop
-    // rule, not a special case for locked things (VR_INPUT_SPEC §4).
-    editor.select(cubeB);
-    assert(editor.selection() === cubeB, "with cube B selected");
-    assert(vr.select() === true, "a press on the locked floor is a press on NOTHING...");
-    assert(editor.selectionSet().length === 0,
-           "...so it DESELECTS, exactly as a desktop click on the floor does");
-} else {
-    console.log("note: this scene has no locked floor under (8, 8) — lock case not exercised");
-}
+// ASSERTED, NOT SKIPPED (the Fable read of 1S, finding 5): this used to be an
+// `if` with a `note:` in its else, so a project template that stopped shipping
+// a locked floor would have retired the whole case in silence. The floor IS the
+// fixture — every new project has one and it ships locked — so a scene without
+// it is a defect in the template and this line is where it surfaces.
+assert(floorAny.length > 0,
+       "a new project's scene has a floor under (8, 8) (" + floorAny.length + " node(s))");
+assert(floorPickable.length === 0,
+       "...and it ships LOCKED, so the document's own raycast refuses it");
+sendHand({ x: 8, y: 3, z: 8, pitch: -90 });
+assert(vr.hover() === null,
+       "a ray on a LOCKED node (" + floorAny[0].name + ") hovers NOTHING — the lock IS "
+       + "pickable, exactly as a desktop click reads it");
+// ...AND A PRESS ON IT IS A PRESS ON NOTHING, which DESELECTS — the desktop
+// rule, not a special case for locked things (VR_INPUT_SPEC §4).
+editor.select(cubeB);
+assert(editor.selection() === cubeB, "with cube B selected");
+assert(vr.select() === true, "a press on the locked floor is a press on NOTHING...");
+assert(editor.selectionSet().length === 0,
+       "...so it DESELECTS, exactly as a desktop click on the floor does");
 
 // ---- 3. SELECT, TOGGLE, DESELECT ----------------------------------------
 
@@ -245,25 +259,78 @@ assert(gFar.grabbing === true && gFar.far === true, "a squeeze at range is a FAR
 assert(near(gFar.distance, hFar.distance, 0.05), "held at the distance it was grabbed at ("
        + gFar.distance.toFixed(3) + " m)");
 
-// Twenty frames of full stick forward: the distance is MULTIPLIED, so the
-// object pushes away. 3.0 * e^(1.5 * 20/90) = 4.19 m.
-for (var i = 0; i < 20; ++i) sendHand({ x: 0, y: 1, z: 4, grab: 1, stickY: 1 });
+// TWENTY FRAMES OF FULL STICK FORWARD, and the whole gesture computed here
+// rather than bounded (the Fable read of 1S, finding 5: this used to assert
+// "more than 3.4 m" for a number the arithmetic pins to four figures).
+//
+// THE DISTANCE is exact: the stick MULTIPLIES it (d *= e^(k·y·dt), the same
+// gesture at every scale), so twenty frames of full forward at 1/90 s a frame
+// and k = 1.5 is d0 · e^(1.5·20/90).
+//
+// THE OBJECT'S POSITION IS THE SAME ARITHMETIC THROUGH ONE MORE STEP: the
+// virtual far hand is LOW-PASSED, deliberately and by an amount that grows with
+// the distance (kLeverTauPerMetre = 0.02 s per metre beyond arm's reach —
+// at range the lever multiplies the wrist's own tremor), so the object LAGS the
+// distance the gesture is holding. The lag is not a tolerance to hide in: the
+// one-pole recursion is replayed below, frame by frame, and the object is
+// asserted against it to the millimetre.
+var dt = 1 / 90;
+var expect = hFar.distance;                     // the distance the gesture holds
+var handNow = 4 - hFar.distance;                // z of the virtual hand at the grab
+var handStart = handNow;
+for (var i = 0; i < 20; ++i) {
+    sendHand({ x: 0, y: 1, z: 4, grab: 1, stickY: 1 });
+    expect *= Math.exp(1.5 * dt);
+    var tau = Math.max(0, expect - 0.9) * 0.02;     // vrgrab::leverTau
+    var alpha = tau <= 0 ? 1 : 1 - Math.exp(-dt / tau);
+    handNow += ((4 - expect) - handNow) * alpha;    // smoothedTowards, one axis
+}
 var gPush = vr.interactionMode();
-console.log("after 20 frames of push: distance " + gPush.distance.toFixed(3));
-assert(gPush.distance > hFar.distance + 0.4,
-       "the stick PUSHED it away along the ray (" + hFar.distance.toFixed(3) + " -> "
-       + gPush.distance.toFixed(3) + " m)");
+console.log("after 20 frames of push: distance " + gPush.distance.toFixed(4)
+            + " (arithmetic: " + expect.toFixed(4) + "), the filtered hand at z "
+            + handNow.toFixed(4));
+assert(near(gPush.distance, expect, 0.01),
+       "the stick PUSHED it away along the ray, by exactly e^(1.5·20/90): "
+       + hFar.distance.toFixed(3) + " -> " + gPush.distance.toFixed(3) + " m");
+assert(near(gPush.distance, 4.187, 0.01),
+       "...which is 4.187 m for this 3.000 m grab, to the centimetre");
 showPos("cube A pushed away", cubeA);
 var pushed = posOf(cubeA);
-assert(pushed.z < -0.2, "and the object went with it, down the ray (z = " + pushed.z.toFixed(3)
-       + ")");
-assert(near(pushed.x, 0, 0.05) && near(pushed.y, 1, 0.05),
-       "...staying ON the ray (x and y unmoved)");
+assert(near(pushed.z, handNow - handStart, 2e-3),
+       "and the object went with the FILTERED hand, to the millimetre: z "
+       + pushed.z.toFixed(4) + " against the replayed one-pole " + (handNow - handStart).toFixed(4)
+       + " (it lags the 4.187 m the gesture holds, which is what the lever filter is for)");
+assert(near(pushed.x, 0, 1e-4) && near(pushed.y, 1, 1e-4),
+       "...staying ON the ray to a tenth of a millimetre (x and y unmoved)");
 
-// Pull it back in, then release.
+// Pull it back in.
 for (var j = 0; j < 20; ++j) sendHand({ x: 0, y: 1, z: 4, grab: 1, stickY: -1 });
 assert(vr.interactionMode().distance < gPush.distance,
        "and the stick the other way PULLS it back in");
+
+// ---- 5b. THE TURNTABLE TURNS THE HELD OBJECT THE WAY THE STICK POINTS ---
+//
+// The dominant stick's X spins a far-held object about the world's up — the one
+// rotation a far grab cannot do with the wrist. THE SIGN IS THE SUBJECT (the
+// Fable read of stage 1, finding 6): the tree's yaw is the right-handed
+// rotation about +Y, under which a positive angle is counter-clockwise seen
+// from above, so a flick RIGHT has to arrive at the maths negated — otherwise
+// the one stick turns the wearer clockwise and the thing in their hand
+// anti-clockwise. Ten frames of full right at 90 deg/s is -10 degrees of yaw.
+var spinBefore = node.transform(cubeA).rotation.y;
+for (var t = 0; t < 10; ++t) sendHand({ x: 0, y: 1, z: 4, grab: 1, stickX: 1 });
+var spinAfter = node.transform(cubeA).rotation.y;
+console.log("      ten frames of full stick right: yaw " + spinBefore.toFixed(3) + " -> "
+            + spinAfter.toFixed(3));
+assert(near(spinAfter, spinBefore - 10.0, 0.2),
+       "stick RIGHT spins the held object CLOCKWISE from above, by 90 deg/s: "
+       + spinBefore.toFixed(2) + " -> " + spinAfter.toFixed(2)
+       + " (the same direction the same stick turns the wearer)");
+for (var t2 = 0; t2 < 10; ++t2) sendHand({ x: 0, y: 1, z: 4, grab: 1, stickX: -1 });
+assert(near(node.transform(cubeA).rotation.y, spinBefore, 0.2),
+       "...and the other way brings it back");
+
+// Release.
 sendHand({ x: 0, y: 1, z: 4, grab: 0 });
 assert(editor.undoState().pushes === pushes + 1, "the far gesture is also ONE undo step");
 
@@ -300,8 +367,12 @@ sendHand({ x: 0, y: 1, z: 1.7, grab: 1 });
 sendHand({ x: 1.5, y: 1, z: 1.7, grab: 1 });
 assert(near(posOf(cubeA).x, 1.5, 1e-3), "the object is 1.5 m out, mid-gesture");
 var cancels = vr.interactionMode().cancels;
-assert(vr.inputInject({ hand: "right", focused: false }) === true,
-       "the runtime takes the input away (a dashboard over the session)");
+// THE RUNTIME TAKES THE INPUT AWAY (a dashboard over the session): the sample
+// says `focused:false`, which is exactly what a runtime outside its Focused
+// state reports. The squeeze is still "held" in the sample and it makes no
+// difference — the focus is read BEFORE any press edge, so the gesture is
+// cancelled rather than released.
+sendHand({ x: 1.5, y: 1, z: 1.7, grab: 1, focused: false });
 var gCancel = vr.interactionMode();
 assert(gCancel.grabbing === false, "the gesture is over");
 assert(gCancel.cancels === cancels + 1, "...and it was CANCELLED, not released");
@@ -310,7 +381,7 @@ assert(near(posOf(cubeA).x, 0, 1e-3),
        "the object went back exactly where it was found");
 assert(editor.undoState().pushes === pushes,
        "and NOTHING was pushed — a cancelled gesture is not an undo step");
-assert(vr.inputInject({ hand: "right", focused: true }) === true, "the input comes back");
+sendHand({ x: 1.5, y: 1, z: 1.7 });     // the input comes back, nothing held
 
 // ---- 8. A TWO-OBJECT GESTURE IS ONE MACRO OF TWO COMMANDS --------------
 
@@ -383,12 +454,16 @@ assert(app.lastError().indexOf("nobody is in VR") >= 0,
 
 // ---- 11. MALFORMED CALLS THROW; ANSWERS DO NOT -------------------------
 
-throws(function () { vr.inputInject({ hand: "middle" }); }, "middle",
+throws(function () { vr.inject("middle", {}); }, "middle",
        "an unknown hand throws, naming it");
-throws(function () { vr.inputInject({ hand: "right", nosuch: 1 }); }, "nosuch",
+throws(function () { vr.inject("right", { nosuch: 1 }); }, "nosuch",
        "an unknown inject key throws, naming it");
-throws(function () { vr.inputInject({ hand: "right", aim: { nosuchpose: 1 } }); }, "nosuchpose",
-       "an unknown POSE key throws too");
+throws(function () { vr.inject("right", { aim: { nosuchpose: 1 } }); }, "nosuchpose",
+       "an unknown POSE key throws too — ONE pose reader for every vr verb, and it "
+       + "validates (a pose silently read at the origin is the collapsed-camera defect)");
+throws(function () { vr.step({ nosuch: 1 }); }, "nosuch", "an unknown step key throws");
+throws(function () { vr.step({ frames: 0 }); }, "frames",
+       "a step of no frames is refused, naming the key");
 throws(function () { vr.select({ mode: "sideways" }); }, "sideways",
        "an unknown select mode throws");
 throws(function () { vr.grab({ nosuch: 1 }); }, "nosuch", "an unknown grab key throws");
@@ -402,7 +477,8 @@ throws(function () { vr.locomotion({ snapTurnDegrees: 0 }); }, "snapTurnDegrees"
 editor.frame(2);
 assert(vr.state().active === false, "no session was ever started by any of this");
 assert(vr.interactionMode().installed === true,
-       "the interaction is installed (the injection armed it) and stepping");
+       "the interaction is installed (the first vr.step() installed it, there being no session "
+       + "to do it) and stepping");
 assert(scene.nodes().length >= 2, "the scene still has its cubes");
 
 console.log("scripting.e2e.vr_input_headless: PASS");

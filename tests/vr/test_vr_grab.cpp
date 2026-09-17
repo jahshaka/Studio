@@ -174,9 +174,25 @@ int main()
         CHECK(nearVec(orbit.position, iris::Vec3(0, 0, -1)),
               "about another pivot it ORBITS: (1,0,0) about the origin -> (0,0,-1)");
         CHECK(near(vrgrab::turntableDegrees(1.0f, 0.25f), 22.5f),
-              "a quarter second of full stick turns the turntable 22.5 degrees");
+              "a quarter second of full stick turns the turntable 22.5 degrees, in the "
+              "STICK's own sign (the call site negates it, exactly as the wearer's turn does)");
         CHECK(near(vrgrab::turntableDegrees(0.1f, 0.25f), 0.0f),
               "...and the dead zone applies to it too");
+        // WHICH WAY IS "RIGHT"? The convention, pinned in the algebra rather
+        // than in a comment (the Fable read of stage 1, finding 6: the turn and
+        // the turntable were spinning opposite ways from the same stick). The
+        // tree's yaw is the RIGHT-HANDED rotation about +Y, so a positive angle
+        // carries +Z toward +X — counter-clockwise seen from above — and a
+        // flick right therefore has to arrive here NEGATED to spin the held
+        // object CLOCKWISE from above, which is the direction the same stick
+        // turns the wearer.
+        const vrgrab::Pose spunRight = vrgrab::spunAboutUp(
+            vrgrab::Pose{ iris::Vec3(0, 0, 1), iris::Quat() }, iris::Vec3(0, 0, 0),
+            -vrgrab::turntableDegrees(1.0f, 1.0f));   // ONE SECOND of full stick right = 90 deg
+        CHECK(near(spunRight.position.x(), -1.0f, 1e-5f) &&
+                  near(spunRight.position.z(), 0.0f, 1e-5f),
+              "one second of full stick RIGHT, negated as the call site negates it, carries a "
+              "point at +Z to -X: CLOCKWISE from above, the way the wearer's own turn goes");
     }
 
     // ---- 8. SNAPPING QUANTISES THE DELTA, NEVER THE ABSOLUTE -------------
@@ -294,13 +310,20 @@ int main()
         const iris::Vec3 byStick = vrgrab::stickFlyDelta(headRot, 0.0f, 1.0f, speed, seconds);
         show("one frame by the fly key ", byKeys);
         show("one frame by the stick   ", byStick);
+        // 1e-5, AND THE WORDS SAY SO (the Fable read of stage 1, finding 5).
+        // The two are the SAME vector by construction and not the same
+        // expression — the stick's goes through a deflection and a normalise —
+        // so they legitimately differ in the last bits of a float. The right
+        // fix is the claim, not the tolerance: a tolerance tightened to zero
+        // here would be a suite that reds on a compiler's FMA.
         CHECK(nearVec(byKeys, byStick, 1e-5f),
-              "a full-forward stick IS the forward fly key, to the last bit");
+              "a full-forward stick IS the forward fly key, to a hundredth of a millimetre");
         flystep::Keys right;
         right.right = true;
         CHECK(nearVec(vrorigin::flyDelta(headRot, right, speed, seconds),
                       vrgrab::stickFlyDelta(headRot, 1.0f, 0.0f, speed, seconds), 1e-5f),
-              "...and a full-right stick IS the strafe key");
+              "...and a full-right stick IS the strafe key, to the same hundredth of a "
+              "millimetre");
         // ANALOG: half deflection is half the distance, and the DIRECTION is
         // the stick's own rather than one of eight.
         const iris::Vec3 half = vrgrab::stickFlyDelta(headRot, 0.0f, 0.75f, speed, seconds);

@@ -339,9 +339,10 @@ add_script_e2e(vr_verbs e2e_vr_verbs.js)
 # ray, the document pick, select/toggle/deselect, the near and far rigid grabs,
 # the stick along the ray, snapping under the menu button, one undo macro per
 # gesture, a cancelled gesture pushing nothing, the dominant-hand swap and the
-# locomotion refusals. It runs on the injection route (`vr.inputInject`), which
-# is what makes all of it gateable on a box with no runtime at all; the
-# arithmetic under it is `vr.grab_maths` and the rig half is `vr.input_session`.
+# locomotion refusals. It runs on the injection route (`vr.inject` writes the
+# hands into the ENGINE's own store, `vr.step()` runs the frame), which is what
+# makes all of it gateable on a box with no runtime at all; the arithmetic under
+# it is `vr.grab_maths` and the rig half is `vr.input_session`.
 add_script_e2e(vr_input_headless e2e_vr_input_headless.js)
 # THE PLAYER'S VR MODE WITH NO RUNTIME (SPECS/VR_SPEC.md §4.5, phase 3) — the
 # other everywhere case, and the owner's rule in executable form: without a

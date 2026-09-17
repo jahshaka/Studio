@@ -222,11 +222,14 @@ set_tests_properties(vr.no_picture_start PROPERTIES
 # left stick walks the wearer and the snap turn turns their room about their own
 # head — measured, not assumed.
 #
-# The CONTROLLERS are injected (`vr.inputInject`): Monado's simulated rig
+# The CONTROLLERS are injected (`vr.inject` + `vr.step`): Monado's simulated rig
 # reports poses and no buttons and no stick at all (VR_INPUT_SPEC §17), so this
 # is also the suite that proves the injection route composes with a live
-# session. JAHSHAKA_VR_TEST_INJECT is set for the engine-side guard that lands
-# with the action set — an injection must never be able to fool a smoke on a
+# session — including the part that only a session has: an injected sample is
+# read by the session INSIDE its frame, so the script renders one between
+# writing a hand and stepping the interaction. JAHSHAKA_VR_TEST_INJECT is what
+# lets it inject at all: the engine refuses to fake a hand whose runtime has a
+# real interaction profile bound, so an injection can never fool a smoke on a
 # real headset.
 set(_vr_input_home "${CMAKE_CURRENT_BINARY_DIR}/vr-input-home")
 add_test(NAME vr.input_session
