@@ -2020,6 +2020,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.ifdMax               = q(st.ifdMax);
     out.ifdFollows           = quint64(st.ifdFollows);
     out.probeCapturesLastFrame = st.probeCapturesLastFrame;
+    out.probeCapturesDeferred  = quint64(st.probeCapturesDeferred);
     out.staleProbes            = st.staleProbes;
     out.staleSerial            = quint64(st.staleSerial);
     out.rebuilds               = quint64(st.rebuilds);

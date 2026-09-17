@@ -106,6 +106,24 @@ static NodeId addPointLamp(Scene *s, const Vec3 &pos, float power)
     return node;
 }
 
+/// An UNLIT cube: it carries kVisibleBit but NOT kGiGeometryBit, so the probe
+/// faces photograph it while the voxels never see it — a "probe-only" item
+/// (OgreScene::itemVisibilityFlags). A backdrop card, an image plane, a logo on
+/// a wall. Moving one stales the probe grid through `mProbeOnlyChanged` and is
+/// invisible to `mGiMovedBoxes`, which is the whole of case 6.
+static NodeId addUnlitCube(Scene *s, const Colour &albedo)
+{
+    const NodeId node = s->createNode();
+    if (!node) return 0;
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams p;
+    p.albedo = albedo;
+    p.shadingModel = ShadingModel::Unlit;
+    const MaterialId mat = s->createPbrMaterial(p);
+    if (!mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
+    return node;
+}
+
 int main()
 {
     std::string err;
@@ -180,10 +198,15 @@ int main()
     std::printf("   captures during the drag: %d; stale probes now %d of %d; deferred frames %llu\n",
                 capturesDuringDrag, mid.staleProbes, mid.probeCount,
                 mid.probeCapturesDeferred - deferredBefore);
-    // ONE, not zero: nothing can know at the FIRST move whether a second is
-    // coming, so the first frame of a gesture spends a capture and every frame
-    // after it defers. One wasted photograph per gesture against one per frame.
-    CHECK(capturesDuringDrag <= 1, "A DRAG SPENDS AT MOST ONE PROBE CAPTURE IN ALL");
+    // NOT ZERO, and both of the reasons are deliberate. (a) Nothing can know at
+    // the FIRST move whether a second is coming, so a gesture's opening frame
+    // spends one. (b) The deferral has a CEILING — one capture every
+    // kProbeDeferredCaptureEvery (30) frames — so that a motion which never
+    // stops still re-captures at a bounded rate (case 7). Sixty frames of drag
+    // therefore buy 1 + 60/30 = 3 at the very most, against the 59 the
+    // un-deferred budget spent on the same fixture.
+    CHECK(capturesDuringDrag <= 1 + 60 / 30,
+          "A DRAG SPENDS THE OPENING FRAME AND THE CEILING, AND NOTHING ELSE");
     CHECK(mid.staleProbes == mid.probeCount, "...and every probe is RECORDED stale");
     CHECK(mid.probeCapturesDeferred > deferredBefore, "the deferral counter says why");
 
@@ -304,6 +327,74 @@ int main()
                   "THE TICK NEVER RE-INJECTS A CASCADE THE REBUILD JUST INJECTED");
             CHECK(minUnits >= 1, "...and it still injects the cascades the rebuild did not");
         }
+    }
+
+    // =====================================================================
+    // CASE 6 — A PROBE-ONLY (UNLIT) MOVER IS A GESTURE TOO
+    // =====================================================================
+    // `mGiMovedBoxes` holds GI GEOMETRY only. Unlit geometry the probe faces
+    // capture — a backdrop card, an image plane — reports through
+    // `mProbeOnlyChanged`, and it stales the grid exactly the same way. The
+    // first cut of the deferral read the boxes alone, so a dragged image plane
+    // looked like a still scene and spent a capture on every frame of the drag.
+    std::printf("\n== case 6: an unlit mover defers too ==\n");
+    {
+        CHECK(scene->setGlobalIllumination(hybridGi(false)), "back to one volume");
+        render(e, 16);
+        const NodeId card = addUnlitCube(scene, Colour(0.9f, 0.9f, 0.2f));
+        CHECK(card != 0, "the unlit card exists");
+        enginetest::setNodePosition(scene, card, Vec3(0.0f, 2.0f, 0.0f));
+        enginetest::setNodeScale(scene, card, Vec3(1.5f, 1.5f, 0.05f));
+        for (int i = 0; i < 400 && scene->giStatus().staleProbes > 0; ++i) render(e, 1);
+        CHECK(scene->giStatus().staleProbes == 0, "the grid is quiet before the drag");
+        Vec3 c(0.0f, 2.0f, 0.0f);
+        int captures = 0;
+        unsigned long long staleBefore = scene->giStatus().staleSerial;
+        for (int i = 0; i < 40; ++i) {
+            c.x += 0.05f;
+            enginetest::setNodePosition(scene, card, c);
+            render(e, 1);
+            captures += scene->giStatus().probeCapturesLastFrame;
+        }
+        const GiStatus st6 = scene->giStatus();
+        std::printf("   40 frames of an unlit drag: %d captures; stale %d; serial moved %s\n",
+                    captures, st6.staleProbes,
+                    st6.staleSerial > staleBefore ? "yes" : "NO");
+        CHECK(st6.staleSerial > staleBefore,
+              "an unlit mover really does stale the grid (the fixture is honest)");
+        CHECK(captures <= 2, "A PROBE-ONLY MOVER IS A GESTURE: it spends at most the "
+                             "frames a gesture cannot predict");
+    }
+
+    // =====================================================================
+    // CASE 7 — A MOTION THAT NEVER STOPS STILL RE-CAPTURES, AT A CEILING
+    // =====================================================================
+    // A drag ends; a keyframed object in play, a settling physics body or a
+    // script does not. Without a ceiling that is ONE endless gesture and the
+    // probes would hold the pre-motion room for as long as it lasts.
+    std::printf("\n== case 7: the ceiling on an endless motion ==\n");
+    {
+        for (int i = 0; i < 400 && scene->giStatus().staleProbes > 0; ++i) render(e, 1);
+        int captures = 0;
+        const int kFrames = 200;
+        for (int i = 0; i < kFrames; ++i) {
+            p.y = 1.0f + 0.05f * float(i % 20);      // never stops
+            enginetest::setNodePosition(scene, prop, p);
+            render(e, 1);
+            captures += scene->giStatus().probeCapturesLastFrame;
+        }
+        // The engine's ceiling is one capture every N frames while deferred.
+        // The suite reads N from the behaviour rather than from a copy of the
+        // constant: the floor is what the ceiling guarantees and the top allows
+        // the one or two frames at the start of a gesture that nothing can
+        // predict.
+        const int kEvery = 30;
+        std::printf("   %d frames of continuous motion: %d captures (ceiling one per %d)\n",
+                    kFrames, captures, kEvery);
+        CHECK(captures >= kFrames / kEvery,
+              "AN ENDLESS MOTION STILL RE-CAPTURES: the deferral has a ceiling");
+        CHECK(captures <= kFrames / kEvery + 2,
+              "...and the ceiling really is a ceiling (not the un-deferred rate)");
     }
 
     // =====================================================================

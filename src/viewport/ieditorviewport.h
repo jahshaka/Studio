@@ -557,6 +557,11 @@ public:
         /// | fog) with a serial per event, and the scene's
         /// from-scratch GI builds so far.
         int     probeCapturesLastFrame = 0;
+        /// How many frames the probe budget has DEFERRED a capture for, over the
+        /// scene's life (DRAG-1): a capture of something that is still moving is
+        /// out of date before it is displayed, so the spend waits for the
+        /// content to hold still. 0 for ever in a scene nothing moves in.
+        quint64 probeCapturesDeferred = 0;
         int     staleProbes = 0;
         QString lastStaleReason = QStringLiteral("none");
         quint64 staleSerial = 0;

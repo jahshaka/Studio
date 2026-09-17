@@ -44,6 +44,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/core/color.h"
+#include "jahshaka/engine/Types.h"
 
 static int failures = 0;
 #define CHECK(cond, msg)                                                        \
@@ -93,7 +94,10 @@ int main(int argc, char **argv)
     // one-sample-per-pixel trace first appears.
     iris::Scene scene;
     const float cutoff = float(scene.reflectionRoughnessCutoff) / 100.0f;
-    const float feather = 0.1f;          // kRayReflectFeather (engine-side)
+    // THE SHIPPED FEATHER, read rather than copied (DRAG-1 round 2, F13): a
+    // guard that carries its own copy of the number it guards against stops
+    // guarding the day somebody moves the real one.
+    const float feather = jahshaka::engine::kRayReflectFeather;
     const float bandTop = cutoff + feather;
     const float margin = m->roughnessFactor - bandTop;
     std::printf("   cutoff %.2f, feather %.2f -> the ray band ends at %.2f; the default is %.2f "

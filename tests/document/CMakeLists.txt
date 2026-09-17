@@ -126,6 +126,10 @@ set_target_properties(test_material_defaults PROPERTIES AUTOMOC OFF)
 target_include_directories(test_material_defaults PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
+    # The PUBLIC engine header only, for kRayReflectFeather: the guard reads the
+    # shipped feather instead of copying it (DRAG-1). Header-only — this target
+    # links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_material_defaults PRIVATE IrisGL Qt6::Gui)
 jah_document_graph(test_material_defaults)

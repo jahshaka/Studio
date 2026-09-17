@@ -62,9 +62,14 @@ AREA_RULES = [
      ["document", "skeletal", "avatar", "particles", "player", "cameras", "samples",
       "*headless-scripts"], ["node", "anim", "avatar", "player", "scene"]),
     (r"^irisgl/document/",
+     # `ui` and `theme` are here because THE PANELS DISPLAY THE DOCUMENT: the
+     # properties column reads a document object's values and its suites pin
+     # them, so a document change can red a ui suite and this rule selected
+     # none. DRAG-1 changed the unauthored material's values and
+     # ui.material_panel went red at a gate that had never run it.
      ["document", "math", "input", "gizmo", "picking", "commands", "skeletal", "sockets",
       "cameras", "mirror", "samples", "reopen", "export", "meshbake", "hygiene",
-      "*headless-scripts"],
+      "ui", "theme", "*headless-scripts"],
      []),
     (r"^irisgl/core/",
      ["document", "math", "input", "gizmo", "cameras", "hygiene", "*headless-scripts"], []),
