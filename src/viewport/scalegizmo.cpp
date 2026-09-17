@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/scalegizmo.h"
+
+#include "irisgl/document/scenegraph/scalelock.h"
 #include <QApplication>
 
 #include "irisgl/core/math/intersectionhelper.h"
@@ -242,6 +244,15 @@ void ScaleGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 		diff = diff.normalized() * snapLength;
 	}
 
+	// PRESERVE THE RATIO ON AN AXIS HANDLE (SCALE-LOCK-1): the node's own lock,
+	// or Shift held for this gesture. The CENTRE handle is untouched — it has
+	// always been the uniform one, and it is uniform in the additive sense the
+	// drag maths give it (the same length onto all three), which is a different
+	// gesture and not one this lane changes.
+	const bool uniformAxis =
+		draggedHandle->axis != GizmoAxis::Center &&
+		(selectedNode->getScaleLock() || currentDragModifiers().testFlag(Qt::ShiftModifier));
+
 	switch (draggedHandle->axis)
 	{
 	case GizmoAxis::Center: {
@@ -272,7 +283,21 @@ void ScaleGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 		break;
 	}
 
-	selectedNode->setLocalScale(startScale + diff);
+	if (uniformAxis) {
+		// THE RATIO IS TAKEN AGAINST THE SCALE AT DRAG START, not against the
+		// last frame's: the handle's own value is startScale + diff at every
+		// tick, so a ratio measured from the start is stable, is exactly what
+		// the panel's fields would compute for the same end value, and cannot
+		// compound per frame. Zero and negative channels follow the documented
+		// rules in iris::scalelock (a channel that was 0 has no ratio; a
+		// negative one keeps its sign).
+		const int axis = draggedHandle->axis == GizmoAxis::X ? 0
+		               : draggedHandle->axis == GizmoAxis::Y ? 1 : 2;
+		selectedNode->setLocalScale(iris::scalelock::apply(
+			startScale, axis, startScale[axis] + diff[axis], true));
+	} else {
+		selectedNode->setLocalScale(startScale + diff);
+	}
 	// The rest of the selection follows the primary's delta (one place,
 	// EDITOR_MULTISELECT_SPEC §2.4); a no-op when nothing else is selected.
 	applyGroupDelta();

@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include <QSlider>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QToolButton>
 #include <QMouseEvent>
 #include <QVector3D>
 #include <QUndoStack>
@@ -168,26 +169,35 @@ static DragFloatWidget *dragWith(QWidget *w, const QString &label)
 /// by dx * the row's per-pixel step. Returns the value the field held just
 /// before the release (the live half of the gesture), or NaN if the box is
 /// missing, so a renamed field FAILS rather than passing silently.
-static double scrub(DragSpinBox *box, int dx)
+/// `mods` rides every MOVE of the gesture, which is where DragSpinBox reads
+/// them (SCALE-LOCK-1: Shift on a scale field means "all three by this
+/// gesture's ratio"). `modsAfterHalf`, when given, replaces them from the
+/// half-way move on — a key pressed or released MID-DRAG, which is the rule
+/// the uniform modifier is specified with.
+static double scrub(DragSpinBox *box, int dx, Qt::KeyboardModifiers mods = Qt::NoModifier,
+                    Qt::KeyboardModifiers modsAfterHalf = Qt::KeyboardModifiers(-1))
 {
     QWidget *edit = box ? box->findChild<QLineEdit *>() : nullptr;
     if (!edit) return std::numeric_limits<double>::quiet_NaN();
     const QPointF local(6, 6);
     const QPointF origin = edit->mapToGlobal(local.toPoint());
     QMouseEvent press(QEvent::MouseButtonPress, local, origin, Qt::LeftButton, Qt::LeftButton,
-                      Qt::NoModifier);
+                      mods);
     QCoreApplication::sendEvent(edit, &press);
     const int step = dx > 0 ? 4 : -4;
     for (int moved = step; qAbs(moved) <= qAbs(dx); moved += step) {
         const QPointF at = origin + QPointF(moved, 0);
+        const bool second = qAbs(moved) * 2 > qAbs(dx);
+        const Qt::KeyboardModifiers now =
+            (second && modsAfterHalf != Qt::KeyboardModifiers(-1)) ? modsAfterHalf : mods;
         QMouseEvent move(QEvent::MouseMove, local + QPointF(moved, 0), at, Qt::NoButton,
-                         Qt::LeftButton, Qt::NoModifier);
+                         Qt::LeftButton, now);
         QCoreApplication::sendEvent(edit, &move);
     }
     const double live = box->value();
     const QPointF end = origin + QPointF(dx, 0);
     QMouseEvent release(QEvent::MouseButtonRelease, local + QPointF(dx, 0), end, Qt::LeftButton,
-                        Qt::NoButton, Qt::NoModifier);
+                        Qt::NoButton, mods);
     QCoreApplication::sendEvent(edit, &release);
     return live;
 }
@@ -1029,6 +1039,216 @@ int main(int argc, char **argv)
         CHECK(node->getLocalPos().x() == 0 && node->getLocalPos().y() == 0
                   && node->getLocalPos().z() == 0,
               "reset: …and the position with it");
+    }
+
+    // ---- THE SCALE-RATIO LOCK (SCALE-LOCK-1) -------------------------------
+    //
+    // The owner asked for two things and said "both will be cool": a per-node
+    // LOCK that keeps an object's proportions when one scale channel is edited,
+    // and a STATELESS Shift-drag that does it for one gesture. The document
+    // half (the flag, the arithmetic, the three degenerate rules, the file) is
+    // scripting.e2e.scale_lock; what belongs here is what only a real panel can
+    // answer:
+    //
+    //   1. the icon is WHERE the owner put it — right of the "Scale" label,
+    //      before the three fields — and it cost the fields nothing: the Scale
+    //      boxes are pixel-for-pixel where the Position boxes are;
+    //   2. a click on it writes the DOCUMENT's flag and lands ONE undo step
+    //      that puts it back, and the icon follows the document (an undo, or
+    //      another writer, moves it);
+    //   3. a locked drag on one field moves all three — on the node AND in the
+    //      other two fields, which is the only feedback the user gets — and
+    //      still lands exactly ONE undo step for the whole gesture;
+    //   4. Shift-dragging an UNLOCKED field does the same for that gesture
+    //      only, and a Shift RELEASED half-way through hands the rest of the
+    //      drag back to the one axis;
+    //   5. the rotation and position rows are untouched by any of it.
+    {
+        auto node = iris::SceneNode::create();
+        node->setLocalScale(iris::Vec3(1, 2, 0.5f));      // deliberately non-uniform
+        TransformEditor editor;
+        editor.setServices(&services);
+        editor.setSceneNode(node);
+        editor.resize(420, 200);
+        editor.show();
+        pump();
+
+        auto *lock = editor.findChild<QToolButton *>("scaleLockBtn");
+        auto *xscale = editor.findChild<DragSpinBox *>("xscale");
+        auto *yscale = editor.findChild<DragSpinBox *>("yscale");
+        auto *zscale = editor.findChild<DragSpinBox *>("zscale");
+        auto *xpos = editor.findChild<DragSpinBox *>("xpos");
+        auto *ypos = editor.findChild<DragSpinBox *>("ypos");
+        auto *zpos = editor.findChild<DragSpinBox *>("zpos");
+        CHECK(lock != nullptr, "scalelock: the lock button is on the Scale row");
+        CHECK(xscale && yscale && zscale && xpos && ypos && zpos,
+              "scalelock: the six fields this section drives are on the panel");
+
+        if (lock && xscale && yscale && zscale && xpos && ypos && zpos) {
+            // ---- 1. where it sits, and what it cost --------------------------
+            const QRect lockRect = lock->geometry();
+            std::printf("    scalelock: the button is %dx%d at x %d..%d; the Scale fields start "
+                        "at x %d (Position at %d)\n", lockRect.width(), lockRect.height(),
+                        lock->mapTo(&editor, QPoint(0, 0)).x(),
+                        lock->mapTo(&editor, QPoint(0, 0)).x() + lockRect.width(),
+                        xscale->geometry().x(), xpos->geometry().x());
+            CHECK(lock->mapTo(&editor, QPoint(0, 0)).x() + lockRect.width() <=
+                      xscale->geometry().x(),
+                  "scalelock: 1. the icon sits BEFORE the first data box");
+            // NO BOX NARROWS: the three Scale fields have the same geometry as
+            // the three Position fields, which is the row the lock does not
+            // touch. (The label gave up the width, inside a title cell that is
+            // still exactly as wide as the other rows' labels.)
+            CHECK(xscale->geometry().x() == xpos->geometry().x() &&
+                      xscale->geometry().width() == xpos->geometry().width(),
+                  "scalelock: 1. …and the X box is exactly where the Position X box is");
+            // x and width, not the whole rect: the two rows sit at different
+            // heights, which is the only thing that may differ.
+            CHECK(yscale->geometry().x() == ypos->geometry().x() &&
+                      yscale->geometry().width() == ypos->geometry().width() &&
+                      zscale->geometry().x() == zpos->geometry().x() &&
+                      zscale->geometry().width() == zpos->geometry().width(),
+                  "scalelock: 1. …as are Y and Z (no box narrowed for the icon)");
+            CHECK(lock->isCheckable() && !lock->isChecked(),
+                  "scalelock: 1. it is a toggle and it starts OFF (the document's default)");
+
+            // ---- 2. the click, the document, the undo step -------------------
+            int steps = stack.index();
+            lock->click();
+            pump();
+            CHECK(node->getScaleLock(),
+                  "scalelock: 2. clicking the icon locks the NODE's ratio");
+            CHECK(stack.index() == steps + 1, "scalelock: 2. …in ONE undo step");
+            stack.undo();
+            pump();
+            CHECK(!node->getScaleLock(), "scalelock: 2. …and undo unlocks it again");
+            editor.refreshUi();
+            pump();
+            CHECK(!lock->isChecked(),
+                  "scalelock: 2. …with the icon following the document, not its own click");
+            stack.redo();
+            pump();
+            editor.refreshUi();
+            pump();
+            CHECK(node->getScaleLock() && lock->isChecked(),
+                  "scalelock: 2. …and redo locks both again");
+
+            // ---- 3. a locked drag ------------------------------------------
+            node->setLocalScale(iris::Vec3(1, 2, 0.5f));
+            editor.refreshUi();
+            pump();
+            steps = stack.index();
+            const double live = scrub(xscale, 25);            // +0.5 on x: 1 -> 1.5
+            pump();
+            const iris::Vec3 after = node->getLocalScale();
+            std::printf("    scalelock: locked drag x -> %.4f, node scale %.4f/%.4f/%.4f, "
+                        "fields %.4f/%.4f/%.4f\n", live, after.x(), after.y(), after.z(),
+                        xscale->value(), yscale->value(), zscale->value());
+            const double ratio = live / 1.0;
+            CHECK(qAbs(after.x() - live) < 1e-3 &&
+                      qAbs(after.y() - 2.0 * ratio) < 1e-3 &&
+                      qAbs(after.z() - 0.5 * ratio) < 1e-3,
+                  "scalelock: 3. a locked drag on X scales all three by the same ratio");
+            CHECK(qAbs(yscale->value() - after.y()) < 1e-3 &&
+                      qAbs(zscale->value() - after.z()) < 1e-3,
+                  "scalelock: 3. …and the other two FIELDS show it (the only feedback there is)");
+            CHECK(stack.index() == steps + 1,
+                  "scalelock: 3. …and the whole gesture is ONE undo step");
+            stack.undo();
+            pump();
+            const iris::Vec3 undone = node->getLocalScale();
+            CHECK(qAbs(undone.x() - 1.0f) < 1e-3 && qAbs(undone.y() - 2.0f) < 1e-3 &&
+                      qAbs(undone.z() - 0.5f) < 1e-3,
+                  "scalelock: 3. …which undoes all three channels together");
+
+            // A TYPED value obeys the lock too (no gesture, no modifier).
+            node->setLocalScale(iris::Vec3(1, 2, 0.5f));
+            editor.refreshUi();
+            pump();
+            xscale->setValue(2.0);
+            pump();
+            const iris::Vec3 typed = node->getLocalScale();
+            std::printf("    scalelock: typed x = 2 -> node scale %.4f/%.4f/%.4f\n", typed.x(),
+                        typed.y(), typed.z());
+            CHECK(qAbs(typed.y() - 4.0f) < 1e-3 && qAbs(typed.z() - 1.0f) < 1e-3,
+                  "scalelock: 3. a TYPED value on a locked node scales the other two as well");
+
+            // ---- 4. Shift, and only for the gesture ------------------------
+            // Unlock first: this is the stateless half.
+            node->setScaleLock(false);
+            node->setLocalScale(iris::Vec3(1, 2, 0.5f));
+            editor.refreshUi();
+            pump();
+            steps = stack.index();
+            const double shiftLive = scrub(xscale, 25, Qt::ShiftModifier);
+            pump();
+            const iris::Vec3 shifted = node->getLocalScale();
+            std::printf("    scalelock: Shift-drag x -> %.4f, node scale %.4f/%.4f/%.4f\n",
+                        shiftLive, shifted.x(), shifted.y(), shifted.z());
+            // Shift is NOT the coarse x10 rate on this field any more — it
+            // cannot mean two things in one gesture — so the travel is the same
+            // 0.02/px the unmodified drag above used.
+            CHECK(qAbs(shiftLive - live) < 1e-3,
+                  "scalelock: 4. Shift does not also multiply the rate on a scale field");
+            const double shiftRatio = shiftLive / 1.0;
+            CHECK(qAbs(shifted.y() - 2.0 * shiftRatio) < 1e-3 &&
+                      qAbs(shifted.z() - 0.5 * shiftRatio) < 1e-3,
+                  "scalelock: 4. Shift-dragging an UNLOCKED field scales all three");
+            CHECK(!node->getScaleLock(),
+                  "scalelock: 4. …without touching the flag (the gesture is stateless)");
+            CHECK(stack.index() == steps + 1, "scalelock: 4. …and it is one undo step");
+
+            // The same field, no Shift: one axis only.
+            node->setLocalScale(iris::Vec3(1, 2, 0.5f));
+            editor.refreshUi();
+            pump();
+            scrub(xscale, 25);
+            pump();
+            const iris::Vec3 plain = node->getLocalScale();
+            CHECK(qAbs(plain.y() - 2.0f) < 1e-4 && qAbs(plain.z() - 0.5f) < 1e-4,
+                  "scalelock: 4. …and without Shift the other two do not move at all");
+
+            // SHIFT TAPPED AND RELEASED MID-DRAG LEAVES NO RESIDUE. Both
+            // surfaces measure the ratio from the scale the GESTURE started at
+            // (the panel from its scrub-start snapshot, the gizmo from the
+            // scale it captured at press), so while Shift is held the other two
+            // channels follow live, and the moment it is released they are back
+            // at exactly the values the drag began with — an accidental tap
+            // cannot silently leave two channels scaled.
+            node->setLocalScale(iris::Vec3(1, 2, 0.5f));
+            editor.refreshUi();
+            pump();
+            const double halfLive = scrub(xscale, 25, Qt::ShiftModifier, Qt::NoModifier);
+            pump();
+            const iris::Vec3 half = node->getLocalScale();
+            std::printf("    scalelock: Shift released half-way: x -> %.4f, node scale "
+                        "%.4f/%.4f/%.4f (had it been held: %.4f/%.4f)\n", halfLive, half.x(),
+                        half.y(), half.z(), 2.0 * halfLive, 0.5 * halfLive);
+            CHECK(qAbs(half.x() - halfLive) < 1e-3 && qAbs(half.y() - 2.0f) < 1e-4 &&
+                      qAbs(half.z() - 0.5f) < 1e-4,
+                  "scalelock: 4. a Shift released mid-drag leaves the other two exactly where "
+                  "the gesture found them");
+
+            // ---- 5. the other two rows -------------------------------------
+            node->setLocalScale(iris::Vec3(1, 2, 0.5f));
+            node->setLocalPos(iris::Vec3(0, 0, 0));
+            node->setScaleLock(true);
+            editor.refreshUi();
+            pump();
+            scrub(xpos, 25, Qt::ShiftModifier);
+            pump();
+            const iris::Vec3 pos = node->getLocalPos();
+            const iris::Vec3 stillScaled = node->getLocalScale();
+            std::printf("    scalelock: a Shift-drag on Position X -> pos %.4f/%.4f/%.4f, "
+                        "scale %.4f/%.4f/%.4f\n", pos.x(), pos.y(), pos.z(), stillScaled.x(),
+                        stillScaled.y(), stillScaled.z());
+            CHECK(qAbs(pos.y()) < 1e-4 && qAbs(pos.z()) < 1e-4,
+                  "scalelock: 5. the lock is about SCALE: a position drag moves one axis");
+            CHECK(qAbs(pos.x()) > 1.0,
+                  "scalelock: 5. …and Position keeps Shift's coarse x10 rate (25 px = 5 units)");
+            CHECK(qAbs(stillScaled.x() - 1.0f) < 1e-4 && qAbs(stillScaled.y() - 2.0f) < 1e-4,
+                  "scalelock: 5. …and the scale did not move at all");
+        }
     }
 
     // ---- THE EDIT GATE: NON-EDITABLE WHILE A SCRIPT RUNS --------------------

@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/locomotion.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/scalelock.h"
 #include "scripting/modules/nodeapi.h"
 
 #include "scripting/modules/moduleshared.h"
@@ -84,7 +85,12 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "transform", "node.transform(id, {position, rotation, scale}) -> {position, rotation, scale}",
           "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) "
-          "and returns the result. Undoable. WITH NO CHANGE \u2014 node.transform(id) \u2014 it is a pure READ: "
+          "and returns the result. Undoable. A scale that names ONE channel \u2014 {scale: {x: 2}} \u2014 on a "
+          "node whose SCALE RATIO IS LOCKED (node.setScaleLock) scales the other two by the same ratio; naming two "
+          "or three channels is taken literally, because it already says what every channel should be. "
+          "`scaleUniform` overrides the flag for one call in either direction (true = preserve the ratio anyway, "
+          "the verb's spelling of Shift-dragging a scale field; false = per-channel even on a locked node). "
+          "WITH NO CHANGE \u2014 node.transform(id) \u2014 it is a pure READ: "
           "nothing is pushed onto the undo stack and a SCENE_STATIC node stays static (a write of a node's own "
           "values back onto it still counts as a move, and rule 4 demotes the subtree for it).",
           Needs::Document },
@@ -203,6 +209,23 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "castShadow", "node.castShadow(id) -> bool",
           "Whether this object casts shadows. True unless somebody turned it off.",
+          Needs::Document },
+        { "setScaleLock", "node.setScaleLock(id, locked) -> bool",
+          "PRESERVE THE SCALE RATIO on this object \u2014 Unreal's per-actor preserve-ratio, the "
+          "chain link beside the Scale row. With it on, setting ONE scale channel multiplies the "
+          "other two by the same ratio, so the object keeps its proportions: node.transform(id, "
+          "{scale: {x: 2}}) on a locked 1/1/1 object leaves it 2/2/2. Off (the default) each "
+          "channel is its own. The flag is the NODE's \u2014 saved with the scene, carried by a "
+          "duplicate or a paste, and read back by node.scaleLock(id) or node.property(id, "
+          "\"scaleLock\"). It changes no pixel by itself: it changes what a one-channel scale "
+          "edit means, wherever that edit comes from (this verb, the Scale fields in the "
+          "transform panel, a scale gizmo axis handle). Three rules worth knowing: the ratio "
+          "carries the SIGN (1 \u2192 -1 mirrors all three), a channel that was ZERO has no "
+          "ratio so the other two keep their values, and writing a channel the value it already "
+          "had does nothing at all. Undoable.",
+          Needs::Document },
+        { "scaleLock", "node.scaleLock(id) -> bool",
+          "Whether this object preserves its scale ratio (node.setScaleLock).",
           Needs::Document },
         { "setLightMask", "node.setLightMask(id, channels) -> bool",
           "LIGHTING CHANNELS — \"this light only affects these objects\". Set on a LIGHT it is "
@@ -430,6 +453,29 @@ bool NodeApi::castShadow(const QString &id)
     auto node = nodeOrFail(id, QStringLiteral("node.castShadow"));
     if (!node) return false;
     return node->getShadowCastingEnabled();
+}
+
+// PRESERVE THE SCALE RATIO (SCALE-LOCK-1). A plain document flag, recorded the
+// same way setCastShadow records its own — the write is one setter, so the undo
+// entry is that setter with the old value.
+bool NodeApi::setScaleLock(const QString &id, bool locked)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setScaleLock"));
+    if (!node) return false;
+    const bool was = node->getScaleLock();
+    if (was == locked) return true;        // idempotent, and no undo entry for a no-op
+    node->setScaleLock(locked);
+    recordNodeEdit(QStringLiteral("lock scale ratio"),
+                   [node, locked]() { node->setScaleLock(locked); },
+                   [node, was]() { node->setScaleLock(was); });
+    return true;
+}
+
+bool NodeApi::scaleLock(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.scaleLock"));
+    if (!node) return false;
+    return node->getScaleLock();
 }
 
 bool NodeApi::planarReflector(const QString &id)
@@ -685,6 +731,26 @@ QString NodeApi::deserialize(const QVariantMap &fragmentMap, const QString &pare
     return node->getGUID();
 }
 
+namespace {
+/// WHICH ONE SCALE CHANNEL a `{scale: …}` argument names, or -1 when it names
+/// none or more than one (SCALE-LOCK-1). The map spelling is the only one that
+/// can name a single channel: `[2, 1, 1]` is a whole vector and says all three.
+int singleScaleChannel(const QVariant &raw)
+{
+    const QVariant value = normalizeJs(raw);
+    if (value.typeId() != QMetaType::QVariantMap) return -1;
+    const QVariantMap m = value.toMap();
+    static const char *keys[3] = { "x", "y", "z" };
+    int found = -1;
+    for (int i = 0; i < 3; ++i) {
+        if (!m.contains(QLatin1String(keys[i]))) continue;
+        if (found >= 0) return -1;         // two or three named — taken literally
+        found = i;
+    }
+    return found;
+}
+}   // namespace
+
 QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.transform"));
@@ -707,7 +773,26 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
 
     const iris::Vec3 pos = vecFromJs(change.value("position"), node->getLocalPos());
     const iris::Vec3 rotEuler = vecFromJs(change.value("rotation"), node->getLocalRot().toEulerAngles());
-    const iris::Vec3 scale = vecFromJs(change.value("scale"), node->getLocalScale());
+    iris::Vec3 scale = vecFromJs(change.value("scale"), node->getLocalScale());
+
+    // THE SCALE RATIO LOCK (SCALE-LOCK-1), on the ONE-CHANNEL write only.
+    //
+    // `{scale: {x: 2}}` says one thing and leaves the other two to the node —
+    // so on a locked node it is the "scale X to 2" the lock is about, and the
+    // other two follow the ratio. `{scale: {x: 2, y: 1, z: 1}}` says what all
+    // three should be, and is taken at its word: a caller that names every
+    // channel has already answered the question the lock answers. (`scale:
+    // [2, 1, 1]` is the array spelling of naming all three.)
+    //
+    // `scaleUniform` is the STATELESS form — the verb's spelling of Shift-drag
+    // on a panel field or a gizmo handle: true asks for the ratio for this one
+    // call whatever the flag says, false suppresses it whatever the flag says.
+    const int channel = singleScaleChannel(change.value("scale"));
+    if (channel >= 0) {
+        const QVariant uniformOpt = normalizeJs(change.value("scaleUniform"));
+        const bool uniform = uniformOpt.isValid() ? uniformOpt.toBool() : node->getScaleLock();
+        scale = iris::scalelock::apply(node->getLocalScale(), channel, scale[channel], uniform);
+    }
 
     host.services->undo->push(new TransformSceneNodeCommand(
         node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));

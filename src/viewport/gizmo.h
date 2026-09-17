@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QColor>
 #include <QList>
 #include <QPointF>
+#include <Qt>
 #include <QVector>
 #include "irisgl/irisglfwd.h"
 
@@ -208,6 +209,8 @@ protected:
 	QVector<MemberStart> groupStart;
 	iris::Vec3 pivotStartPos, pivotStartScale;
 	iris::Quat pivotStartRot;
+	/// The modifiers the current gesture is driven with (setDragModifiers).
+	Qt::KeyboardModifiers dragModifiers = Qt::NoModifier;
 
 	/// Snapshots every member's start transform (called by setInitialTransform,
 	/// which every subclass's startDragging already calls).
@@ -273,6 +276,19 @@ public:
 	// the transform is calculated based on the transform's space (local or global)
 	virtual iris::Mat4 getTransform();
 	virtual bool isHit(iris::Vec3 rayPos, iris::Vec3 rayDir);
+
+	// ---- THE GESTURE'S MODIFIERS (SCALE-LOCK-1) --------------------------
+	//
+	// The viewport hands the gizmo the modifiers carried by the very mouse
+	// event that is driving the drag, on the press and on every move, for the
+	// same reason DragSpinBox reads them off its own events: a key pressed or
+	// released mid-drag then takes effect for the remainder of the gesture, and
+	// a test can drive a modified drag without a keyboard (QApplication::
+	// keyboardModifiers() reads the real one and cannot be synthesised).
+	// Today only the scale gizmo reads it — Shift = scale all three axes by
+	// this drag's ratio.
+	void setDragModifiers(Qt::KeyboardModifiers mods) { dragModifiers = mods; }
+	Qt::KeyboardModifiers currentDragModifiers() const { return dragModifiers; }
 
 	virtual bool isDragging() = 0;
 	virtual void startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) = 0;

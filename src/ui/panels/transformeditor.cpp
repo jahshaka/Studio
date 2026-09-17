@@ -10,8 +10,12 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/quat.h"
+#include "irisgl/document/scenegraph/scalelock.h"
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
+#include <QPainter>
+#include <QToolButton>
 
 #include "services/extentmeasure.h"
 #include <QPushButton>
@@ -20,6 +24,7 @@ For more information see the LICENSE file
 
 #include "services/editgate.h"
 #include "ui/controls/dragspinbox.h"
+#include "commands/nodeeditcommand.h"
 
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/services.h"
@@ -32,6 +37,40 @@ namespace {
 const double kPosScaleStepPerPx = 0.02;
 const double kRotStepPerPx = 0.5; // degrees
 const int kTitleWidth = 56;
+// The lock's share of the fixed-width title cell: a 16 px button holding a
+// 12 px icon, 3 px from the label. The label keeps the rest — "Scale" needs
+// far less than the 56 px the widest row title does.
+const int kLockButtonPx = 16;
+const int kLockIconPx = 12;
+const int kLockSpacing = 3;
+
+/// The chain-link icon in its two states: full strength when the ratio is
+/// locked, a third of it when it is not. ONE pixmap source (the app's
+/// link-symbol.svg), so the two states can never drift apart, and the dim half
+/// is composited here rather than shipped as a second file or asked for with a
+/// stylesheet (raw sheets are forbidden outside src/ui/style).
+QIcon lockIcon()
+{
+    const QIcon source(QStringLiteral(":/icons/link-symbol.svg"));
+    const QSize size(kLockIconPx, kLockIconPx);
+    QIcon icon;
+    const QPixmap on = source.pixmap(size);
+    icon.addPixmap(on, QIcon::Normal, QIcon::On);
+    // A NULL source (an offscreen test target that carries no resources) stays
+    // null rather than producing a 12x12 transparent square that looks like a
+    // missing icon.
+    if (on.isNull()) return icon;
+    QPixmap off(on.size());
+    off.setDevicePixelRatio(on.devicePixelRatio());
+    off.fill(Qt::transparent);
+    {
+        QPainter p(&off);
+        p.setOpacity(0.35);
+        p.drawPixmap(0, 0, on);
+    }
+    icon.addPixmap(off, QIcon::Normal, QIcon::Off);
+    return icon;
+}
 }
 
 TransformEditor::TransformEditor(QWidget* parent) :
@@ -51,7 +90,9 @@ TransformEditor::TransformEditor(QWidget* parent) :
     // three horizontal rows: title on the left, X/Y/Z side by side
     addRow(grid, 0, "Position", xpos, ypos, zpos, kPosScaleStepPerPx);
     addRow(grid, 1, "Rotation", xrot, yrot, zrot, kRotStepPerPx);
-    addRow(grid, 2, "Scale",    xscale, yscale, zscale, kPosScaleStepPerPx);
+    // The Scale row carries the PRESERVE-RATIO LOCK in its title cell
+    // (SCALE-LOCK-1).
+    addRow(grid, 2, "Scale",    xscale, yscale, zscale, kPosScaleStepPerPx, true);
 
     // THE MEASUREMENT (services/extentmeasure.h): what this node actually MEASURES in
     // the scene, in metres. Read-only, and the only number on this panel that
@@ -90,20 +131,69 @@ TransformEditor::TransformEditor(QWidget* parent) :
 
     connect(resetBtn, SIGNAL(clicked(bool)),        SLOT(onResetBtnClicked()));
 
+    if (scaleLockBtn)
+        connect(scaleLockBtn, &QToolButton::toggled, this, &TransformEditor::onScaleLockToggled);
+
     for (auto box : { xpos, ypos, zpos, xrot, yrot, zrot, xscale, yscale, zscale }) {
         connect(box, &DragSpinBox::scrubStarted,  this, &TransformEditor::onScrubStarted);
         connect(box, &DragSpinBox::scrubFinished, this, &TransformEditor::onScrubFinished);
     }
+
+    // SHIFT MEANS UNIFORM ON THE SCALE FIELDS (SCALE-LOCK-1), so it cannot also
+    // mean the coarse x10 rate there — a modifier with two meanings in one
+    // gesture is a modifier with none. Ctrl's fine x0.1 is untouched, and the
+    // position/rotation fields keep both.
+    for (auto box : { xscale, yscale, zscale })
+        box->setShiftCoarseEnabled(false);
 }
 
 void TransformEditor::addRow(QGridLayout* grid, int row, const QString& title,
                              DragSpinBox*& x, DragSpinBox*& y, DragSpinBox*& z,
-                             double perPixelStep)
+                             double perPixelStep, bool withLock)
 {
     auto label = new QLabel(title, this);
-    label->setFixedWidth(kTitleWidth);
     label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    grid->addWidget(label, row, 0);
+    if (!withLock) {
+        label->setFixedWidth(kTitleWidth);
+        grid->addWidget(label, row, 0);
+    } else {
+        // THE TITLE CELL IS THE SAME WIDTH IT ALWAYS WAS (SCALE-LOCK-1, the
+        // owner's shape: the lock sits to the RIGHT of the label and BEFORE
+        // the fields). The icon is paid for out of the LABEL's width inside a
+        // cell of exactly kTitleWidth, so column 0 does not grow, the three
+        // stretch columns keep their share, and the Scale fields land pixel for
+        // pixel where the Position fields are. Putting the button in a grid
+        // column of its own would have taken that width off the fields.
+        auto *cell = new QWidget(this);
+        cell->setObjectName(QStringLiteral("scaleTitleCell"));
+        cell->setFixedWidth(kTitleWidth);
+        auto *cellLayout = new QHBoxLayout(cell);
+        cellLayout->setContentsMargins(0, 0, 0, 0);
+        cellLayout->setSpacing(kLockSpacing);
+        cellLayout->addWidget(label, 1);
+
+        scaleLockBtn = new QToolButton(cell);
+        scaleLockBtn->setObjectName(QStringLiteral("scaleLockBtn"));
+        scaleLockBtn->setCheckable(true);
+        scaleLockBtn->setAutoRaise(true);
+        scaleLockBtn->setFocusPolicy(Qt::NoFocus);
+        scaleLockBtn->setCursor(Qt::ArrowCursor);
+        scaleLockBtn->setFixedSize(kLockButtonPx, kLockButtonPx);
+        scaleLockBtn->setIconSize(QSize(kLockIconPx, kLockIconPx));
+        // The app's own chain-link icon (app/icons.qrc) — the affordance
+        // Unreal and Blender both use for "these numbers move together". No
+        // stylesheet: the CHECKED state is the style's own (theme.no_raw_sheets),
+        // and the OFF state is the same link drawn at a third of its opacity,
+        // which is how the hierarchy's lock column reads too (a dim icon and a
+        // filled one).
+        scaleLockBtn->setIcon(lockIcon());
+        scaleLockBtn->setToolTip(
+            QObject::tr("Preserve the scale ratio: a change to one axis scales the other two by "
+                        "the same ratio.\nShift-drag a scale field or a gizmo handle to do it "
+                        "once without the lock."));
+        cellLayout->addWidget(scaleLockBtn, 0);
+        grid->addWidget(cell, row, 0);
+    }
 
     const char* suffix = (row == 0) ? "pos" : (row == 1) ? "rot" : "scale";
     x = createField(QString("x") + suffix, perPixelStep);
@@ -248,6 +338,10 @@ void TransformEditor::refreshUi()
 		yscale->setValue(scale.y());
 		zscale->setValue(scale.z());
 
+		// The lock reads the DOCUMENT, like every other control here — so an
+		// undo, a script, a paste or a new selection puts the right icon up.
+		refreshLockButton();
+
 		// The measured world size of this node's subtree, in metres.
 		const extent::Extent extent = extent::measureNode(sceneNode);
 		sizeLabel->setText(extent.valid
@@ -382,30 +476,100 @@ void TransformEditor::zRotChanged(double) { applyRotationFromFields(); }
 
 /**
  * scale change callbacks
+ *
+ * ONE CHANNEL AT A TIME, THROUGH THE DOCUMENT'S OWN RULE (SCALE-LOCK-1):
+ * iris::scalelock::apply is what node.transform's one-channel write and the
+ * gizmo's axis handles compute with too, so "scale X to 2" means the same thing
+ * from a field, a script and a handle. The panel's only additions are the two
+ * things a panel knows and the document does not: whether SHIFT is held for
+ * this gesture, and that the other two fields have to show what the ratio did
+ * to them.
  */
-void TransformEditor::xScaleChanged(double value)
+void TransformEditor::scaleChannelChanged(int axis, DragSpinBox* box, double value)
 {
-    if (auto sceneNode = editableNode()) {
-        auto scale = sceneNode->getLocalScale();
-        scale.setX(value);
-        sceneNode->setLocalScale(scale);
-    }
+    auto sceneNode = editableNode();
+    if (!sceneNode) return;
+
+    // SHIFT = UNIFORM FOR THIS GESTURE ONLY, and it is read from the gesture
+    // rather than from the keyboard: the modifiers ride the mouse events
+    // driving the scrub, so pressing Shift halfway through a drag turns the
+    // rest of that drag uniform and releasing it hands the rest back to the one
+    // axis. A TYPED value is not a gesture — it carries no modifier and obeys
+    // the lock alone (holding Shift while typing digits is not a thing anyone
+    // means).
+    const bool shiftHeld =
+        box && box->isScrubbing() && box->scrubModifiers().testFlag(Qt::ShiftModifier);
+
+    const bool uniform = shiftHeld || sceneNode->getScaleLock();
+
+    // THE RATIO IS MEASURED FROM THE SCALE THE GESTURE STARTED AT, exactly as
+    // the scale gizmo measures it from the scale it captured at press
+    // (scalegizmo.cpp) — so the two surfaces agree, a long drag cannot
+    // accumulate per-tick rounding in the two channels it is scaling, and a
+    // modifier tapped and released mid-drag leaves NO residue: the other two
+    // channels come back to precisely where they were. A TYPED value is not a
+    // gesture and has no start, so its base is the value on the node.
+    const iris::Vec3 base = (box && box->isScrubbing()) ? scrubStartScale
+                                                        : sceneNode->getLocalScale();
+    sceneNode->setLocalScale(iris::scalelock::apply(base, axis, float(value), uniform));
+    if (uniform || (box && box->isScrubbing()))
+        refreshScaleFields();              // the other two may have moved with it
 }
 
-void TransformEditor::yScaleChanged(double value)
+void TransformEditor::refreshScaleFields()
 {
-    if (auto sceneNode = editableNode()) {
-        auto scale = sceneNode->getLocalScale();
-        scale.setY(value);
-        sceneNode->setLocalScale(scale);
-    }
+    if (!sceneNode) return;
+    // Display-only, blocked: the values on the node are the unrounded ones and
+    // a 4-decimal echo back into setLocalScale would round them (the same trap
+    // refreshUi documents at length).
+    const QSignalBlocker b1(xscale), b2(yscale), b3(zscale);
+    const auto scale = sceneNode->getLocalScale();
+    xscale->setValue(scale.x());
+    yscale->setValue(scale.y());
+    zscale->setValue(scale.z());
 }
 
-void TransformEditor::zScaleChanged(double value)
+void TransformEditor::xScaleChanged(double value) { scaleChannelChanged(0, xscale, value); }
+
+void TransformEditor::yScaleChanged(double value) { scaleChannelChanged(1, yscale, value); }
+
+void TransformEditor::zScaleChanged(double value) { scaleChannelChanged(2, zscale, value); }
+
+// THE LOCK ITSELF (SCALE-LOCK-1). One undo step, in the shape every other
+// row's one-shot edit has: applied first, recorded after, with the edit gate
+// asked before either — a click while a script owns the document puts the
+// button back instead of writing (services/editgate.h; the same refusal
+// editableNode() gives the value rows, asked here because this control does not
+// go through them).
+//
+// It records through NodeEditCommand directly rather than through
+// panelundo::pushEdit: two suites outside tests/ui compile this panel for its
+// transform rows alone (ui.material_panel, importer.glb), and the helper would
+// drag the whole property-row spine into both for one button.
+void TransformEditor::onScaleLockToggled(bool locked)
 {
-    if (auto sceneNode = editableNode()) {
-        auto scale = sceneNode->getLocalScale();
-        scale.setZ(value);
-        sceneNode->setLocalScale(scale);
-    }
+    if (!sceneNode || refreshingLock) return;
+    if (sceneNode->getScaleLock() == locked) return;
+    if (editgate::refuse()) { refreshLockButton(); return; }
+
+    const iris::SceneNodePtr node = sceneNode;
+    node->setScaleLock(locked);
+    if (services && services->undo)
+        services->undo->push(new NodeEditCommand(
+            locked ? QObject::tr("lock scale ratio") : QObject::tr("unlock scale ratio"),
+            [node, locked]() { node->setScaleLock(locked); },
+            [node, locked]() { node->setScaleLock(!locked); }));
+    // An undo of that step (or a refusal) may have put the flag back: the
+    // button shows the DOCUMENT, never its own click.
+    refreshLockButton();
+}
+
+void TransformEditor::refreshLockButton()
+{
+    if (!scaleLockBtn) return;
+    const bool locked = !!sceneNode && sceneNode->getScaleLock();
+    if (scaleLockBtn->isChecked() == locked) return;
+    refreshingLock = true;
+    scaleLockBtn->setChecked(locked);
+    refreshingLock = false;
 }

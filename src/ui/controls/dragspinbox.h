@@ -42,6 +42,20 @@ public:
 
     bool isScrubbing() const;
 
+    /// SHIFT'S ROLE ON THIS FIELD (SCALE-LOCK-1). Shift is the coarse x10 rate
+    /// everywhere by default; on the transform panel's three SCALE fields it
+    /// means UNIFORM instead (scale all three by this gesture's ratio), and a
+    /// modifier cannot mean two things in one gesture. A field that gives Shift
+    /// away keeps Ctrl's fine x0.1.
+    void setShiftCoarseEnabled(bool enabled);
+
+    /// The modifiers the CURRENT gesture is being driven with — taken from the
+    /// mouse events themselves, so a key pressed or released mid-drag is
+    /// reflected from the next move on (which is exactly the "takes effect for
+    /// the remainder of the gesture" rule the uniform modifier needs). Cleared
+    /// when no scrub is running.
+    Qt::KeyboardModifiers scrubModifiers() const;
+
     // AXIS IDENTITY (X red / Y green / Z blue): a 3 px strip painted on the
     // field's left edge. The style draws the field itself — this is the
     // sheet-free replacement for the Classic theme's `border-left: 3px solid`
@@ -67,6 +81,8 @@ private:
     double perPixelStep_ = 0.02;
     bool pressed_ = false;
     bool scrubbing_ = false;
+    bool shiftCoarse_ = true;
+    Qt::KeyboardModifiers scrubMods_ = Qt::NoModifier;
     // True only while the user is actually TYPING in the box (entered via our
     // own click-release or Tab). NOT the same as hasFocus(): Qt hands the box
     // click-focus BEFORE the press reaches the event filter (and the line
