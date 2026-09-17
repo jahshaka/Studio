@@ -180,7 +180,10 @@ int main()
     std::printf("   captures during the drag: %d; stale probes now %d of %d; deferred frames %llu\n",
                 capturesDuringDrag, mid.staleProbes, mid.probeCount,
                 mid.probeCapturesDeferred - deferredBefore);
-    CHECK(capturesDuringDrag == 0, "A DRAG SPENDS NO PROBE CAPTURES AT ALL");
+    // ONE, not zero: nothing can know at the FIRST move whether a second is
+    // coming, so the first frame of a gesture spends a capture and every frame
+    // after it defers. One wasted photograph per gesture against one per frame.
+    CHECK(capturesDuringDrag <= 1, "A DRAG SPENDS AT MOST ONE PROBE CAPTURE IN ALL");
     CHECK(mid.staleProbes == mid.probeCount, "...and every probe is RECORDED stale");
     CHECK(mid.probeCapturesDeferred > deferredBefore, "the deferral counter says why");
 
@@ -219,7 +222,7 @@ int main()
             render(e, 1);
             captures += scene->giStatus().probeCapturesLastFrame;
         }
-        CHECK(captures == 0, "still nothing while only the box moves");
+        CHECK(captures <= 1, "at most the one frame a gesture cannot predict");
         addPointLamp(scene, Vec3(2.0f, 4.0f, -1.0f), 4.0f);
         int afterLight = 0;
         for (int i = 0; i < 6; ++i) {

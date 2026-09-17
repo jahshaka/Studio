@@ -413,7 +413,14 @@ int main(int argc, char **argv)
             if (m.contains("alphaMode")) continue;          // the opaque one: the cube
             const QJsonArray bcf = m["pbrMetallicRoughness"].toObject()["baseColorFactor"].toArray();
             if (bcf.size() != 4) continue;
-            if (std::abs(bcf[0].toDouble() - 1.0) < 1e-6) continue;   // the white ones
+            // THE CUBE IS THE SATURATED ONE, and that is what has to be asked
+            // (DRAG-1): this used to skip "the white ones" by testing red
+            // against 1.0, which stopped finding the cube the day the
+            // unauthored material became a physical GREY — the default
+            // material's own 0.5775 red walked into this loop and failed on
+            // its green. A neutral material has three equal channels whatever
+            // its brightness; the picked (200, 40, 40) does not.
+            if (std::abs(bcf[0].toDouble() - bcf[1].toDouble()) < 1e-4) continue;
             std::printf("    cube baseColorFactor = %.4f %.4f %.4f (want 0.5776 0.0212 0.0212)\n",
                         bcf[0].toDouble(), bcf[1].toDouble(), bcf[2].toDouble());
             // 200 sRGB is 0.5776 linear; 40 sRGB is 0.0212. (The raw values
