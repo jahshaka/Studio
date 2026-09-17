@@ -239,7 +239,7 @@ function resizeViewportTo(w, h) {
 }
 
 // The distance at which the FIRST level change happens, found by DOLLYING
-// OUTWARDS — never by bisection. With ogre-patch 0074's hysteresis band the
+// OUTWARDS — never by bisection. With ogre-patch 0075's hysteresis band the
 // level depends on where the camera came from, by design, so a probe sequence
 // that jumps about measures the probe order; a monotone approach measures the
 // switch (and shifts it by the band, identically in every arm, which is why the
