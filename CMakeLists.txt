@@ -222,6 +222,7 @@ set(SRCS
     src/modules/publish/publishrecord.cpp
     src/modules/vr/editorvr.cpp
     src/modules/vr/vrapi.cpp
+    src/modules/vr/vrinteraction.cpp
     src/modules/vr/vrmodule.cpp
     src/modules/avatar/avatarmodule.cpp
     src/modules/avatar/avatarpage.cpp
@@ -523,6 +524,7 @@ set(HEADERS
     src/modules/vr/editorvr.h
     src/modules/vr/vrapi.h
     src/modules/vr/vrgrab.h
+    src/modules/vr/vrinteraction.h
     src/modules/vr/vrmodule.h
     src/modules/avatar/avatarmodule.h
     src/modules/avatar/avatarpage.h

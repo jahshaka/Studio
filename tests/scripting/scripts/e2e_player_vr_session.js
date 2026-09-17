@@ -216,7 +216,7 @@ var rig0 = player.state().vr.origin;
 var head0 = player.state().vr.head;
 // One second of forward, in one call. The wearer's heading is head0.yaw and
 // yaw 0 looks down -Z, so forward = (-sin yaw, 0, -cos yaw).
-player.vrMove({ forward: true, seconds: 1.0 });
+vr.move({ forward: true, seconds: 1.0 });
 var rig1 = player.state().vr.origin;
 var moved = { x: rig1.x - rig0.x, y: rig1.y - rig0.y, z: rig1.z - rig0.z };
 var dist = Math.sqrt(moved.x * moved.x + moved.y * moved.y + moved.z * moved.z);
@@ -231,14 +231,14 @@ assert(near(moved.x / dist, -Math.sin(rad), 1e-3) && near(moved.z / dist, -Math.
 assert(near(rig1.yaw, rig0.yaw, 1e-4), "flying never turns the rig (no induced yaw)");
 
 // Back where we came from: the same call with `back` must undo it exactly.
-player.vrMove({ back: true, seconds: 1.0 });
+vr.move({ back: true, seconds: 1.0 });
 var rig2 = player.state().vr.origin;
 assert(near(rig2.x, rig0.x, 1e-2) && near(rig2.z, rig0.z, 1e-2),
        "and `back` for the same second returns the wearer to where they were");
 
 // The head follows the rig (the engine composes them): one more frame and the
 // reported head has moved by what the rig moved.
-player.vrMove({ right: true, seconds: 0.5 });
+vr.move({ right: true, seconds: 0.5 });
 var rigA = player.state().vr.origin;
 var headA = player.state().vr.head;
 player.frame(3);
@@ -255,7 +255,7 @@ assert(!near(headB.x, headA.x, 1e-4) || !near(headB.z, headA.z, 1e-4),
 // play camera had when the run STARTED, which is the one thing in the room that
 // has not moved with the wearer.
 
-player.vrMove({ forward: true, seconds: 3.0 });     // walk well away
+vr.move({ forward: true, seconds: 3.0 });     // walk well away
 var walked = player.state().vr.head;
 var awayFrom = Math.sqrt(Math.pow(walked.x - cam0.position.x, 2) +
                          Math.pow(walked.z - cam0.position.z, 2));
@@ -270,10 +270,10 @@ assert(player.vrRecenter() === true, "player.vrRecenter() is accepted");
 // the frame loop where no guard can see it. The verb answers true (the caller
 // asked for a move and is getting a teleport a moment later) and the landing
 // must be unaffected.
-assert(player.vrMove({ right: true, seconds: 2.0 }) === true,
+assert(vr.move({ right: true, seconds: 2.0 }) === true,
        "a vrMove in the recentre's gap is accepted");
 player.frame(1);
-assert(player.vrMove({ forward: true, seconds: 2.0 }) === true,
+assert(vr.move({ forward: true, seconds: 2.0 }) === true,
        "...and another, after a pump");
 player.frame(3);
 var recentreMs = Math.max(1, Date.now() - tRecenter);

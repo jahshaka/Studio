@@ -97,7 +97,8 @@ public:
     /// LOCOMOTION AS A VERB (`vr.move`) — the same step the held fly keys make
     /// above, for `seconds` at the editor's own fly speed, so a script, an MCP
     /// session or a suite can walk the wearer with no keyboard in the room.
-    /// The Player's half is `player.vrMove`. False when no session is running.
+    /// `vr.move` is the one verb over this and the Player's own move (the CRUD
+    /// of `player.vrMove`, VR input stage 1). False when no session is running.
     bool move(const flystep::Keys &keys, float seconds);
 
     /// What this object is doing, for `vr.state().preview`.

@@ -67,17 +67,6 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "(player.stop() is the other order — it ends the session AND stops the scene, because "
           "a session belongs to the run it was started in.)",
           Needs::Engine },
-        { "vrMove", "player.vrMove({forward?, back?, left?, right?, up?, down?, boost?, seconds?}) -> bool",
-          "MOVES THE WEARER, exactly as holding the fly keys would: along the HEAD's level "
-          "heading for forward/back and the horizontal beside it for left/right, along the "
-          "world's up for up/down, at the player's own fly speed (player.flySpeed) for `seconds` "
-          "(default one 1/60 s step). It moves the RIG — the room the wearer stands in — so "
-          "their own step across the floor still counts on top of it, and their pitch and roll "
-          "are never touched (a rig with a tilt in it tilts the horizon under a standing person).\n\n"
-          "The same call the held keys make each frame, which is what lets a script, an MCP "
-          "session or a suite walk a wearer through a world with no keyboard in the room. False "
-          "when the player is not in VR.",
-          Needs::Engine },
         { "vrRecenter", "player.vrRecenter() -> bool",
           "\"I am standing HERE, facing THIS way\": re-places the rig so the wearer's head "
           "lands on the play camera, at the next pose the runtime locates. The same placement "
@@ -180,36 +169,6 @@ bool PlayerApi::endVr()
     auto *service = serviceOrFail("player.endVr");
     if (!service) return false;
     return service->endVr();
-}
-
-bool PlayerApi::vrMove(const QVariantMap &intent)
-{
-    auto *service = serviceOrFail("player.vrMove");
-    if (!service) return false;
-    static const QStringList known = { "forward", "back", "left", "right",
-                                       "up", "down", "boost", "seconds" };
-    for (auto it = intent.constBegin(); it != intent.constEnd(); ++it)
-        if (!known.contains(it.key()))
-            return fail(QStringLiteral("player.vrMove: unknown key '%1' — known keys are %2")
-                            .arg(it.key(), known.join(QStringLiteral(", "))));
-    flystep::Keys keys;
-    keys.forward = intent.value(QStringLiteral("forward")).toBool();
-    keys.back    = intent.value(QStringLiteral("back")).toBool();
-    keys.left    = intent.value(QStringLiteral("left")).toBool();
-    keys.right   = intent.value(QStringLiteral("right")).toBool();
-    keys.up      = intent.value(QStringLiteral("up")).toBool();
-    keys.down    = intent.value(QStringLiteral("down")).toBool();
-    keys.boost   = intent.value(QStringLiteral("boost")).toBool();
-    // ONE 1/60 s STEP BY DEFAULT — the same amount of motion one frame of held
-    // keys produces, so a script that calls this in a loop moves at exactly the
-    // rate a wearer holding the key moves at.
-    const double seconds = intent.value(QStringLiteral("seconds"), 1.0 / 60.0).toDouble();
-    if (seconds < 0.0)
-        return fail(QStringLiteral("player.vrMove: seconds must not be negative"));
-    if (!service->moveVr(keys, float(seconds)))
-        return refuse(QStringLiteral("player.vrMove: the player is not in VR "
-                                     "(player.state().vr.active says so)"));
-    return true;
 }
 
 bool PlayerApi::vrRecenter()

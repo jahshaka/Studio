@@ -211,6 +211,36 @@ set_tests_properties(vr.no_picture_start PROPERTIES
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200")
 
+# ---------------------------------------------------------------------------
+# vr.input_session — LOCOMOTION AGAINST A REAL RUNTIME (stage 1,
+# SPECS/VR_INPUT_SPEC.md §6/§10).
+#
+# The rig half of the VR interaction, and the one half that CANNOT be asserted
+# without a session: Engine::setVrOrigin is a no-op without one, so with no
+# runtime the thumbstick walks nobody (the headless suite asserts exactly that
+# refusal). Here Monado's simulated headset gives the session a real rig, the
+# left stick walks the wearer and the snap turn turns their room about their own
+# head — measured, not assumed.
+#
+# The CONTROLLERS are injected (`vr.inputInject`): Monado's simulated rig
+# reports poses and no buttons and no stick at all (VR_INPUT_SPEC §17), so this
+# is also the suite that proves the injection route composes with a live
+# session. JAHSHAKA_VR_TEST_INJECT is set for the engine-side guard that lands
+# with the action set — an injection must never be able to fool a smoke on a
+# real headset.
+set(_vr_input_home "${CMAKE_CURRENT_BINARY_DIR}/vr-input-home")
+add_test(NAME vr.input_session
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_input_session.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.input_session PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
+
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600

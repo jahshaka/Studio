@@ -47,7 +47,6 @@ public:
 
     Q_INVOKABLE bool play(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool endVr();
-    Q_INVOKABLE bool vrMove(const QVariantMap &intent = QVariantMap());
     Q_INVOKABLE bool vrRecenter();
     Q_INVOKABLE bool stop();
     Q_INVOKABLE bool playing();

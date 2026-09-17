@@ -290,7 +290,7 @@ int main()
         CHECK(vrorigin::flyDelta(bowed, flystep::Keys(), 10.0f, 0.1f).isNull(),
               "no keys, no motion");
 
-        // A REQUEST IS A DISTANCE: player.vrMove({seconds: 2}) walks the wearer
+        // A REQUEST IS A DISTANCE: vr.move({seconds: 2}) walks the wearer
         // for two seconds, whatever a frame would have done.
         CHECK(near(vrorigin::flyDelta(bowed, forward, 10.0f, 2.0f).length(), 20.0f, 1e-3f),
               "an explicit two seconds moves two seconds' worth (the verb's contract)");
