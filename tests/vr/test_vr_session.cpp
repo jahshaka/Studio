@@ -1861,9 +1861,17 @@ int main() {
             CHECK_MSG(engine->lastError().find("injected frame fault") != std::string::npos,
                       "the session was ended by a frame that threw ('%s')",
                       engine->lastError().c_str());
-            CHECK_MSG(!engine->vrStatus().active,
-                      "A STOPPED SESSION IS ENDED FROM A THROWN FRAME (%u thrown frames)",
-                      rendered);
+            // ENDED, NOT MERELY WEDGED, and the difference is the whole case:
+            // a session that has been TAKEN DOWN reports `Idle` (there is no
+            // session object left to ask), while a session whose frames simply
+            // stopped reaching the runtime goes to `Lost` and keeps existing.
+            // Both read `active` false — so this asserts the state, or the case
+            // would pass on the defect it exists to catch (measured: with the
+            // close reverted it does).
+            const VrStatus over = engine->vrStatus();
+            CHECK_MSG(!over.active && over.state == VrState::Idle,
+                      "A STOPPED SESSION IS ENDED FROM A THROWN FRAME — ended, not wedged "
+                      "(%u thrown frames, state %d)", rendered, int(over.state));
             if (engine->vrStatus().active) engine->endVrSession();
         }
         engine->setFrameFault(FrameFault::None, 0u);
