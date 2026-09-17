@@ -49,3 +49,15 @@ void VrModule::shutdown()
         e->endVrSession();
     }
 }
+
+bool VrModule::toggleEditorPreview()
+{
+    if (!api) return false;
+    if (api->editorPreviewActive()) { api->end(); return false; }
+    return api->begin();
+}
+
+bool VrModule::isEditorPreviewActive() const
+{
+    return api && api->editorPreviewActive();
+}

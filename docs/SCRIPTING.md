@@ -749,7 +749,7 @@ A GRAB TAKEN BY THE OFF HAND IS RELEASED ONLY BY `vr.release`. The squeeze edges
 A gesture that is taken away rather than finished — the session ends, the runtime takes focus for its own dashboard, a project is closed — is CANCELLED instead: the objects go back where they were and NOTHING is pushed. Committing half a gesture the wearer could no longer see would be worse than the snap back.
 
 False when no gesture was running, and in the PLAYER (which edits nothing). |
-| `vr.locomotion({turn?, dominant?, snapTurnDegrees?, smoothTurnDegreesPerSecond?}) -> {turn, dominant, snapTurnDegrees, smoothTurnDegreesPerSecond}` | document | HOW THE WEARER MOVES, read with no argument and set with one (owner answers 2 and 3). SESSION OPTIONS, deliberately not a preference and not saved: they are set by whoever starts the session until the owner has tried them in a headset.
+| `vr.locomotion({turn?, fly?, dominant?, snapTurnDegrees?, smoothTurnDegreesPerSecond?}) -> {turn, dominant, snapTurnDegrees, smoothTurnDegreesPerSecond}` | document | HOW THE WEARER MOVES, read with no argument and set with one (owner answers 2 and 3). SESSION OPTIONS, deliberately not a preference and not saved: they are set by whoever starts the session until the owner has tried them in a headset.
 
 `turn` is "snap" (the default — 30 degrees per flick of the stick, which is what nearly every shipping VR tool does because a continuous turn makes a proportion of people sick) or "smooth". Either way the wearer turns about their OWN HEAD and not about the middle of their room: turning about the rig's origin swings somebody standing at the edge of their play space sideways through a metre of world they did not ask to travel.
 

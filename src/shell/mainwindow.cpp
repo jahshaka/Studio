@@ -615,7 +615,7 @@ void MainWindow::wireFramePacing()
     // rebuilt only when the answer moves.
     connect(driver, &EngineRenderDriver::beforeFrame, this, [this]() {
         if (!mVrCapable) return;
-        if (playerService && playerService->isVrActive() != mVrIconActive) refreshVrUi();
+        if ((playerService && playerService->isVrActive()) != mVrIconActive || (vrModule && vrModule->isEditorPreviewActive() && !mVrIconActive)) refreshVrUi();
     });
 }
 
@@ -662,6 +662,17 @@ void MainWindow::updateFramePacingScreen()
 
 void MainWindow::toggleVrMode()
 {
+    // THE BUTTON MEANS "VR, HERE": on the editor page it starts (or ends) the
+    // EDITOR PREVIEW — the headset as a live window on the editor, the
+    // controllers pointing and grabbing (VR phase 4); on the Player page it is
+    // the Player's run in the headset (phase 3). Before this the button always
+    // took the user to the Player, and the preview existed only as a verb (the
+    // owner, at the first controller smoke).
+    if (currentSpace == WindowSpaces::DESKTOP && vrModule) {
+        vrModule->toggleEditorPreview();
+        refreshVrUi();
+        return;
+    }
     if (!playerService) return;
     playerService->toggleVr();
     refreshVrUi();
@@ -671,7 +682,8 @@ void MainWindow::refreshVrUi()
 {
     if (!actionVr) return;
     const bool available = playerService && playerService->vrAvailable();
-    const bool active = available && playerService->isVrActive();
+    const bool previewActive = vrModule && vrModule->isEditorPreviewActive();
+    const bool active = available && (playerService->isVrActive() || previewActive);
     // FIXED AT BOOT, so it is asked once and cached: the per-frame follower
     // above tests this before it asks anything else.
     mVrCapable = available;
@@ -684,10 +696,14 @@ void MainWindow::refreshVrUi()
     // whole engine runs on (VR_SPEC §7 risk 11). Plugging a headset in later
     // needs a restart, and nothing in the editor can change that at runtime.
     if (available) {
+        const bool onEditor = currentSpace == WindowSpaces::DESKTOP;
         actionVr->setToolTip(active
-            ? QStringLiteral("Leave VR | Stop the run and take the headset off")
-            : QStringLiteral("Enter VR | Run the scene in the headset (the Player page, "
-                             "mirrored here)"));
+            ? (previewActive ? QStringLiteral("Leave VR | End the editor preview")
+                             : QStringLiteral("Leave VR | Stop the run and take the headset off"))
+            : (onEditor ? QStringLiteral("Enter VR | The editor in the headset: point, select and "
+                                         "grab with the controllers; the desktop stays the editor")
+                        : QStringLiteral("Enter VR | Run the scene in the headset (the Player page, "
+                                         "mirrored here)")));
     } else {
         QString why = playerService ? playerService->vrUnavailableReason() : QString();
         if (!cliVr())

@@ -329,6 +329,24 @@ inline float stickMagnitude(float x, float y, float deadZone = kStickDeadZone)
 /// At FULL cardinal deflection it is exactly vrorigin::flyDelta's answer, and
 /// `vr.grab_maths` asserts that equality — which is what keeps the two from
 /// drifting.
+/// THE FLY ALONG THE HAND (the owner's choice, 2026-09-17, at the first
+/// controller smoke: "fly like Unreal"): the stick's Y flies the wearer along
+/// the AIM of the hand holding the stick — the full direction, up and down
+/// included — so the wrist steers and the gaze stays free. The level fly above
+/// stays as the comfort option (`vr.locomotion({fly:"level"})`) and as the
+/// arrow keys' rule. Pushing forward moves along the aim, pulling back moves
+/// against it; the magnitude is the dead-zoned |y|.
+inline iris::Vec3 aimFlyDelta(const iris::Quat &aimRot, float y, float speed, float seconds,
+                              bool boost = false, float deadZone = kStickDeadZone)
+{
+    const float magnitude = stickMagnitude(0.0f, y, deadZone);
+    if (magnitude <= 0.0f) return iris::Vec3();
+    iris::Vec3 fwd = aimRot.rotatedVector(iris::Vec3(0, 0, -1));
+    if (fwd.isNull()) return iris::Vec3();
+    fwd = fwd.normalized() * (y < 0.0f ? -1.0f : 1.0f);
+    return fwd * (speed * (boost ? flystep::kBoost : 1.0f) * seconds * magnitude);
+}
+
 inline iris::Vec3 stickFlyDelta(const iris::Quat &headRot, float x, float y, float speed,
                                 float seconds, bool boost = false,
                                 float deadZone = kStickDeadZone)

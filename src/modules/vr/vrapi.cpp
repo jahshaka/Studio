@@ -391,7 +391,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "False when no gesture was running, and in the PLAYER (which edits nothing).",
           Needs::Engine },
         { "locomotion",
-          "vr.locomotion({turn?, dominant?, snapTurnDegrees?, smoothTurnDegreesPerSecond?}) -> "
+          "vr.locomotion({turn?, fly?, dominant?, snapTurnDegrees?, smoothTurnDegreesPerSecond?}) -> "
           "{turn, dominant, snapTurnDegrees, smoothTurnDegreesPerSecond}",
           "HOW THE WEARER MOVES, read with no argument and set with one (owner answers 2 and "
           "3). SESSION OPTIONS, deliberately not a preference and not saved: they are set by "
@@ -1056,7 +1056,7 @@ bool VrApi::release(const QVariantMap &options)
 
 QVariantMap VrApi::locomotion(const QVariantMap &options)
 {
-    static const QStringList known = { "turn", "dominant", "snapTurnDegrees",
+    static const QStringList known = { "turn", "fly", "dominant", "snapTurnDegrees",
                                        "smoothTurnDegreesPerSecond" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
@@ -1072,6 +1072,16 @@ QVariantMap VrApi::locomotion(const QVariantMap &options)
         else {
             fail(QStringLiteral("vr.locomotion: turn must be \"snap\" or \"smooth\", not '%1'")
                      .arg(turn));
+            return QVariantMap();
+        }
+    }
+    if (options.contains(QStringLiteral("fly"))) {
+        const QString fly = options.value(QStringLiteral("fly")).toString().trimmed().toLower();
+        if (fly == QLatin1String("aim")) o.fly = VrInteraction::Fly::Aim;
+        else if (fly == QLatin1String("level")) o.fly = VrInteraction::Fly::Level;
+        else {
+            fail(QStringLiteral("vr.locomotion: fly must be \"aim\" or \"level\", not '%1'")
+                     .arg(fly));
             return QVariantMap();
         }
     }
@@ -1108,6 +1118,8 @@ QVariantMap VrApi::locomotion(const QVariantMap &options)
     QVariantMap out;
     out[QStringLiteral("turn")] =
         o.turn == VrInteraction::Turn::Snap ? QStringLiteral("snap") : QStringLiteral("smooth");
+    out[QStringLiteral("fly")] =
+        o.fly == VrInteraction::Fly::Aim ? QStringLiteral("aim") : QStringLiteral("level");
     out[QStringLiteral("dominant")] =
         o.dominantRight ? QStringLiteral("right") : QStringLiteral("left");
     out[QStringLiteral("snapTurnDegrees")] = double(o.snapTurnDegrees);

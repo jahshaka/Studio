@@ -636,7 +636,8 @@ bool VrInteraction::turn(float degrees)
     return true;
 }
 
-bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost)
+bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost,
+                        const VrPose *aim)
 {
     // ...AND THE SAME GUARD ON THE WALK: both hosts refuse their OWN fly while
     // a placement is pending (EditorVrPreview::move, PlayerVr::move), and the
@@ -648,8 +649,14 @@ bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost)
     if (!rigNow(rig, head, headRot)) return false;
     const float speed = mDeps.wearerSpeed ? mDeps.wearerSpeed() : 0.0f;
     if (speed <= 0.0f) return false;
-    const iris::Vec3 delta = vrgrab::stickFlyDelta(headRot, stickX, stickY, speed,
-                                                   vrorigin::frameSeconds(seconds), boost);
+    // ALONG THE HAND when the option says so and the hand is located (the
+    // owner: "fly like Unreal"); level along the head's heading otherwise.
+    const bool alongAim = mOptions.fly == Fly::Aim && aim && aim->valid;
+    const iris::Vec3 delta =
+        alongAim ? vrgrab::aimFlyDelta(toIris(aim->rotation), stickY, speed,
+                                       vrorigin::frameSeconds(seconds), boost)
+                 : vrgrab::stickFlyDelta(headRot, stickX, stickY, speed,
+                                         vrorigin::frameSeconds(seconds), boost);
     if (delta.isNull()) return false;
     Engine *engine = engineNow();
     if (!engine) return false;
@@ -729,7 +736,7 @@ void VrInteraction::step(float seconds)
     // wearer's own feet always did. Reviewed after the owner's smoke.
     const VrHandState &o = hands[offHand()];
     if (o.valid) {
-        fly(0.0f, o.stickY, dt, false);
+        fly(0.0f, o.stickY, dt, false, &o.aim);
         // STICK RIGHT TURNS THE WEARER RIGHT (the lead, from the Fable read at
         // merge): vrgrab's turn functions are "positive = the stick's own sign",
         // and the tree's yaw is the right-handed rotation about +Y (vrorigin.h),

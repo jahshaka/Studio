@@ -187,6 +187,9 @@ public:
     };
 
     enum class Turn { Snap, Smooth };
+    /// How the stick flies: along the stick hand's AIM (Unreal's VR editor; the
+    /// owner's pick) or LEVEL along the head's heading (the comfort option).
+    enum class Fly { Aim, Level };
     enum class SelectMode { Replace, Toggle, Add };
 
     /// SESSION OPTIONS (owner answers 2 and 3). Not persisted and not a
@@ -195,6 +198,7 @@ public:
     struct Options
     {
         Turn turn = Turn::Snap;
+        Fly  fly = Fly::Aim;
         /// Right hand manipulates and the LEFT stick walks; a swap swaps both
         /// (answer 3 — one flag, never two).
         bool dominantRight = true;
@@ -277,7 +281,8 @@ public:
     /// Turn the wearer about their own head. False with no session/rig.
     bool turn(float degrees);
     /// One step of stick flight. False with no session/rig, or nothing pushed.
-    bool fly(float stickX, float stickY, float seconds, bool boost = false);
+    bool fly(float stickX, float stickY, float seconds, bool boost = false,
+             const jahshaka::engine::VrPose *aim = nullptr);
 
     // ---- what a verb reports ---------------------------------------------
     Hover hover() const { return mHover; }

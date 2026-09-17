@@ -38,6 +38,13 @@ public:
     void initialize(ModuleHost &host) override { this->host = host; }
     void registerApi(ScriptEngine &engine) override;
     void shutdown() override;
+    /// THE VR BUTTON ON THE EDITOR PAGE (the owner, 2026-09-17, at the first
+    /// controller smoke: "the VR button takes me to the Player"): from the
+    /// editor page the button is the EDITOR PREVIEW (vr.begin / vr.end), from
+    /// the Player page it is the Player's run. Both call the same verbs the
+    /// console calls. Returns the preview's state after the toggle.
+    bool toggleEditorPreview();
+    bool isEditorPreviewActive() const;
 
 private:
     ModuleHost host;

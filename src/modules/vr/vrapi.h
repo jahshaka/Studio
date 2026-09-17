@@ -85,6 +85,8 @@ public:
     /// fly keys and helper state to give back, and VrModule::shutdown used to
     /// reach past it straight into the engine. Returns whether anything ended.
     bool endForShutdown();
+    /// The editor preview's state, for the shell's VR button (VrModule).
+    bool editorPreviewActive() const { return editor.isActive(); }
 
 private:
     /// The running engine, or null (headless runs, or before the engine starts).
