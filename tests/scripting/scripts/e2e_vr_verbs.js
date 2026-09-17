@@ -81,6 +81,94 @@ var marker = vr.proxyPose("left");
 assert(marker.drawn === false && marker.x === 0 && marker.y === 0 && marker.z === 0,
        "vr.proxyPose answers with no session at all: nothing is drawn, and the pose is zero");
 
+// ---- THE INPUT HOOK, WITH NO RUNTIME AT ALL (phase 4b stage 1) -----------
+//
+// This is the backbone (SPECS/VR_INPUT_SPEC.md §2.4 I1): the whole interaction
+// layer is arithmetic over two poses and four booleans, so on a box with no
+// headset, no controller and no runtime a script writes a hand's sample and
+// reads it back through exactly the fields the runtime fills. Every gesture
+// test in the tree stands on this.
+
+assert(st.input.left.valid === false && st.input.right.valid === false,
+       "vr.state().input is a pair of hands, always, valid or not");
+assert(st.input.left.select === 0 && st.input.left.selectPressed === false &&
+       st.input.left.stick.x === 0 && st.input.left.stickPressed === false,
+       "...every control at its zero with nothing reporting");
+assert(st.profile === "", "no interaction profile is bound (there is no runtime)");
+assert(st.bindings.offered === 0 && st.bindings.accepted === 0,
+       "and no suggested-binding block was offered");
+
+assert(vr.inject("right", {
+    grip: { x: 1, y: 1.4, z: -2, rotation: { x: 0, y: 0, z: 0, w: 1 } },
+    aim:  { x: 1, y: 1.45, z: -2.05, rotation: { x: 0, y: 0, z: 0, w: 1 } },
+    select: 1, grab: 0.25, menuPressed: true, stick: { x: -0.5, y: 0.75 },
+    stickPressed: true
+}) === true, "vr.inject writes a hand with no runtime running");
+
+var inj = vr.state().input.right;
+console.log("injected: " + JSON.stringify(inj));
+assert(inj.valid === true && inj.fromInjection === true,
+       "...and vr.state().input reports it as an INJECTED sample, never as a wearer's");
+assert(inj.grip.valid === true && Math.abs(inj.grip.x - 1) < 1e-5 &&
+       Math.abs(inj.grip.z + 2) < 1e-5,
+       "the grip pose comes back exactly as written, in world space");
+assert(inj.aim.valid === true && Math.abs(inj.aim.z + 2.05) < 1e-5,
+       "...and the aim pose beside it — two different answers, not one derived from the other");
+assert(inj.select === 1 && inj.selectPressed === true,
+       "a select of 1 is a press (the verb derives it at 0.5 when it is not said)");
+assert(Math.abs(inj.grab - 0.25) < 1e-6 && inj.grabPressed === false,
+       "...and a quarter-squeeze is not a press");
+assert(inj.menuPressed === true && inj.stickPressed === true &&
+       Math.abs(inj.stick.x + 0.5) < 1e-5 && Math.abs(inj.stick.y - 0.75) < 1e-5,
+       "menu, stick and its press as written");
+assert(inj.focused === true,
+       "a sample says nothing about focus, so the wearer was there (`focused` defaults true)");
+assert(vr.inject("right", { grip: { x: 1, y: 1.4, z: -2 }, select: 1, focused: false }) === true &&
+       vr.state().input.right.focused === false,
+       "...and a sample can say focus was LOST — how a gesture's cancel is driven with no " +
+       "runtime to take the dashboard up");
+assert(vr.state().input.left.focused === false,
+       "a hand nobody is reporting is not focused either (there is no session at all)");
+assert(vr.state().hands.right.valid === true &&
+       Math.abs(vr.state().hands.right.x - 1) < 1e-5,
+       "`hands` IS `input.grip`, injection included — one pose, reported twice");
+assert(vr.state().hands.left.valid === false, "and the other hand is untouched");
+
+// THE PRESS CAN BE SAID OUTRIGHT, which is what a gesture test that wants a
+// half-pulled trigger held down needs.
+assert(vr.inject("right", { grip: { x: 0, y: 1, z: -1 }, select: 0.2,
+                            selectPressed: true }) === true,
+       "an explicit press overrides the derivation");
+assert(vr.state().input.right.selectPressed === true &&
+       Math.abs(vr.state().input.right.select - 0.2) < 1e-6, "...and both are reported as written");
+
+// A DEFAULT STATE STOPS INJECTING.
+assert(vr.inject("right") === true, "vr.inject(hand) with no state withdraws the injection");
+assert(vr.state().input.right.valid === false &&
+       vr.state().input.right.fromInjection === false,
+       "...and the hand is nobody's again");
+assert(vr.state().hands.right.valid === false, "...`hands` with it");
+
+// THE REFUSALS ARE ERRORS, NOT SILENT FALSES.
+var badHand = false;
+try { vr.inject("middle", {}); } catch (e) { badHand = String(e).indexOf("left") >= 0; }
+assert(badHand, "vr.inject THROWS on a hand that is not a hand");
+var badKey = false;
+try { vr.inject("left", { trigger: 1 }); } catch (e) { badKey = String(e).indexOf("trigger") >= 0; }
+assert(badKey, "...and on an unknown key, naming it");
+var badRot = false;
+try { vr.inject("left", { grip: { x: 0, y: 0, z: 0, rotation: { x: 0, y: 1, z: 0, s: 0 } } }); }
+catch (e) { badRot = String(e).indexOf("rotation") >= 0; }
+assert(badRot, "...and on a rotation it cannot parse (the unnamed-fourth-number rule)");
+
+// THE HAPTIC refuses with no session, because there is nothing to buzz.
+assert(vr.haptic("left") === false, "vr.haptic refuses with no session running");
+assert(app.lastError().indexOf("vr.haptic") >= 0,
+       "...and says which verb refused: " + app.lastError());
+var badHaptic = false;
+try { vr.haptic("both"); } catch (e) { badHaptic = String(e).indexOf("left") >= 0; }
+assert(badHaptic, "...and throws on a hand that is not a hand");
+
 // ---- and the editor is untouched -----------------------------------------
 
 var id = scene.addPrimitive("Cube");

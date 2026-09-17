@@ -94,6 +94,37 @@ if (st.hands.left.valid) {
            "the left hand is at a finite world pose");
 }
 
+// ---- THE CONTROLS, THROUGH THE APP (phase 4b stage 1) --------------------
+// The engine suite `vr.session` asserts the action set, the four binding blocks
+// and the injection rule at the boundary; this is the same thing through the
+// VERBS, which is what a script, the MCP server and the Studio-side interaction
+// service actually call.
+assert(st.bindings.offered >= 3 && st.bindings.accepted === st.bindings.offered,
+       "THE SUGGESTED BINDINGS PARSE: the runtime took " + st.bindings.accepted + " of the " +
+       st.bindings.offered + " profiles offered");
+assert(st.profile.indexOf("/interaction_profiles/") === 0,
+       "...and it says which one it bound: " + st.profile);
+assert(typeof st.input.left.valid === "boolean" && typeof st.input.right.valid === "boolean",
+       "both hands report their controls (left " + st.input.left.valid + ", right " +
+       st.input.right.valid + ")");
+if (st.input.left.valid) {
+    assert(st.input.left.grip.valid === st.hands.left.valid,
+           "input.grip and hands are the same answer");
+    assert(st.input.left.fromInjection === false,
+           "...and nothing here is an injected sample: this is the runtime's own");
+    console.log("left aim " + JSON.stringify(st.input.left.aim));
+}
+// THE REFUSAL RULE, in the app: a runtime with a bound profile wins.
+assert(vr.inject("left", { grip: { x: 5, y: 5, z: 5 } }) === false,
+       "an injection is REFUSED while the runtime reports a bound profile");
+assert(app.lastError().indexOf("JAHSHAKA_VR_TEST_INJECT") >= 0,
+       "...and names the one explicit override: " + app.lastError());
+assert(vr.state().input.left.fromInjection === false, "...and nothing was written");
+// THE ONE OUTPUT. A simulated controller has no haptic output and the call
+// still succeeds — a controller that cannot buzz is a supported controller.
+assert(vr.haptic("right", 1, 0.05) === true,
+       "vr.haptic is accepted by the runtime (nothing buzzes on a simulated controller)");
+
 // ---- THE EDITOR'S CAMERA IS NOT THE WEARER --------------------------------
 // Nothing writes the head pose back into the document: take the headset off and
 // the viewport is exactly where you left it. (The Player's VR mode does the

@@ -22,5 +22,7 @@
         <file>content/primitives/teapot.obj</file>
         <file>content/primitives/sponge.obj</file>
         <file>models/ground.obj</file>
+        <file>content/vr/meta-quest-touch-pro/left.obj</file>
+        <file>content/vr/meta-quest-touch-pro/right.obj</file>
     </qresource>
 </RCC>

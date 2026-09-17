@@ -56,6 +56,9 @@ public:
     Q_INVOKABLE bool proxies(const QVariant &on = QVariant());
     Q_INVOKABLE bool move(const QVariantMap &intent = QVariantMap());
     Q_INVOKABLE QVariantMap proxyPose(const QString &hand);
+    Q_INVOKABLE bool inject(const QVariant &hand, const QVariantMap &state = QVariantMap());
+    Q_INVOKABLE bool haptic(const QVariant &hand, double amplitude = 1.0,
+                            double seconds = 0.05);
 
     // ---- STAGE 1: THE CONTROLLERS' INTERACTION (VR_INPUT_SPEC §2.4) -------
     //

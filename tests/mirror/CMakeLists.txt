@@ -175,7 +175,13 @@ set_tests_properties(mirror.sun_night PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 #
 # NEEDS NO RUNTIME: setVrProxies takes a VrStatus as data, so the suite hands it
 # three poses and never asks OpenXR anything. The runtime half is vr.session.
-add_executable(test_vr_proxies test_vr_proxies.cpp
+# THE APP'S OWN MODEL RESOURCES, compiled into this suite (claim H, phase 4b
+# stage 1): the mirror's default controller-model path is a qrc path
+# (":/content/vr/meta-quest-touch-pro/left.obj"), so the suite that asserts the
+# model is drawn must carry the same resource the app ships or it would be
+# testing a path the product does not use.
+qt6_add_resources(_vr_proxies_qrc ${CMAKE_SOURCE_DIR}/app/models.qrc)
+add_executable(test_vr_proxies test_vr_proxies.cpp ${_vr_proxies_qrc}
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_vr_proxies PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
@@ -185,6 +191,9 @@ target_include_directories(test_vr_proxies PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_vr_proxies PRIVATE
+    # The VR controller MODELS are read from the source tree (claim H): this
+    # binary is not the app and carries none of the app's qrc resources.
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_vr_proxies PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_vr_proxies JahshakaEngineMedia)

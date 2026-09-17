@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "bridge/vrnames.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "scripting/modules/moduleshared.h"   // vecFromJs / quatFromJs (vr.inject)
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/flyspeedsettings.h"
 #include "viewport/flystep.h"
@@ -158,10 +159,43 @@ QVector<VerbInfo> VrApi::verbs() const
           "enter, and VR capability is fixed at boot — a process not started with --vr never "
           "has any).",
           Needs::Engine },
+        { "inject",
+          "vr.inject(hand, {valid?, aim?, grip?, select?, grab?, menuPressed?, stick?, "
+          "stickPressed?, focused?}) -> bool",
+          "TEST-FACING: WRITES ONE HAND'S SAMPLE AS IF THE RUNTIME HAD REPORTED IT — the "
+          "backbone every VR gesture test in this tree drives (SPECS/VR_INPUT_SPEC.md §2.4).\n\n"
+          "The interaction logic above the boundary is arithmetic on two poses and four "
+          "booleans, so given this hook it runs — and is asserted — with no headset, no "
+          "controller and no runtime at all. What is written REPLACES the whole hand, poses "
+          "included, until the next call or until `vr.inject(hand)` with no state clears it. "
+          "The poses are already in WORLD space (the frame vr.state() reports); the rig is not "
+          "applied to them a second time. `vr.state().input` reads them back, "
+          "`hands.left/right` follows, and the controller proxy is drawn where they say.\n\n"
+          "`aim` and `grip` are {x, y, z, rotation:{x,y,z,w}} (Euler degrees {x,y,z} are "
+          "accepted for the rotation, as everywhere else); `select` and `grab` are 0..1 and "
+          "their presses are derived at 0.5 unless given; `stick` is {x, y} in -1..1. "
+          "`focused` (true by default) is whether the app had input FOCUS when the sample was "
+          "taken — the runtime takes focus away for its own dashboard and every control then "
+          "reads its zero, so a gesture in flight is CANCELLED on a false rather than "
+          "committed, and injecting false is how that rule is driven with no runtime.\n\n"
+          "REFUSED (false, app.lastError) while a session is running and the runtime has a real "
+          "interaction profile bound for that hand, unless the process was started with "
+          "JAHSHAKA_VR_TEST_INJECT=1: a smoke in a headset can never be fooled by an injection "
+          "a script left behind. The wearer's own hardware always wins.",
+          Needs::Engine },
+        { "haptic", "vr.haptic(hand, amplitude?, seconds?) -> bool",
+          "BUZZES ONE CONTROLLER (amplitude 0..1, default 1; seconds default 0.05, clamped to "
+          "2 s) — the one output a controller has, and what a gesture uses to say \"that "
+          "landed\".\n\n"
+          "False when no session is running or the hand is not a hand. TRUE, deliberately, when "
+          "the runtime took the call and nothing buzzed: a profile with no haptic output at all "
+          "(bare hands, a simulated controller) is a supported controller, not an error.",
+          Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
           "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges, head, "
-          "hands:{left,right}, handActions, handJoints, proxies, preview}",
+          "hands:{left,right}, input:{left,right}, profile, bindings:{offered, accepted}, "
+          "handActions, handJoints, proxies, preview}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
           "runtime ACCEPTED (xrEndFrame), which is the only honest measure of a session on a "
@@ -180,7 +214,20 @@ QVector<VerbInfo> VrApi::verbs() const
           "hand's is this frame's answer alone, so a controller that is put down or switched off "
           "leaves nothing behind. `handActions` says the action set was attached — i.e. "
           "controllers CAN report — and `handJoints` that hand tracking supplied a pose. "
-          "`preview` describes the editor's VR preview (see vr.begin).",
+          "`preview` describes the editor's VR preview (see vr.begin).\n\n"
+          "`input.left` / `input.right` are the CONTROLS (phase 4b stage 1): {valid, aim, grip, "
+          "select, selectPressed, grab, grabPressed, menuPressed, stick:{x,y}, stickPressed, "
+          "fromInjection, focused}. `aim` is where the hand POINTS (the ray is -Z of its rotation) and "
+          "`grip` where it IS — the runtime's two different answers, not one derived from the "
+          "other; `grip` is the same pose as `hands`. The presses come from the analogue values "
+          "through one threshold with hysteresis, so a trigger resting on the line cannot "
+          "chatter. `profile` is the interaction profile the runtime actually bound "
+          "(\"/interaction_profiles/oculus/touch_controller\"), empty when it has bound none, "
+          "and `bindings` counts the suggested-binding blocks offered and accepted — four are "
+          "offered (simple, Touch, WMR and hand interaction) and a runtime takes the ones it "
+          "knows. `fromInjection` is true for a sample vr.inject wrote, and `focused` is "
+          "whether the app had input focus when it was taken — a gesture in flight is "
+          "cancelled on a false, never committed.",
           Needs::Engine },
 
         // ---- STAGE 1: THE CONTROLLERS (SPECS/VR_INPUT_SPEC.md) ------------
@@ -500,6 +547,98 @@ QVariantMap VrApi::proxyPose(const QString &hand)
     return out;
 }
 
+// THE INJECTION HOOK AS A VERB (VR_INPUT_SPEC §2.4 I1). Pure engine plumbing:
+// it parses the map, hands the struct to `Engine::vrInjectInput` and reports
+// what the engine decided — the refusal rule, the world-space contract and the
+// "a default state stops injecting" spelling all live below the boundary, where
+// the session can enforce them.
+bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
+{
+    Engine *e = engine();
+    if (!e) return refuse(QStringLiteral("vr.inject: no engine is running in this process"));
+    const int index = vrnames::handFrom(hand);
+    if (index < 0)
+        return fail(QStringLiteral("vr.inject: hand must be \"left\" or \"right\" (or 0/1)"));
+
+    static const QStringList known = { "valid", "aim", "grip", "select", "selectPressed",
+                                       "grab", "grabPressed", "menuPressed", "stick",
+                                       "stickPressed", "focused" };
+    for (auto it = state.constBegin(); it != state.constEnd(); ++it)
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("vr.inject: unknown key '%1' — known keys are %2")
+                            .arg(it.key(), known.join(QStringLiteral(", "))));
+
+    VrHandState s;
+    // AN EMPTY MAP IS THE "STOP INJECTING" SPELLING, which is why `valid`
+    // defaults to whether anything was said at all rather than to false.
+    s.valid = state.value(QStringLiteral("valid"), !state.isEmpty()).toBool();
+    auto readPose = [&](const char *key, VrPose &out, QString &error) {
+        if (!state.contains(QLatin1String(key))) return true;
+        const QVariantMap m = state.value(QLatin1String(key)).toMap();
+        const iris::Vec3 p = scriptmod::vecFromJs(m, iris::Vec3(0, 0, 0));
+        // AN OMITTED ROTATION IS IDENTITY, not a parse failure: a gesture test
+        // that only cares where the hand IS writes three numbers, and a verb
+        // that refused them would make every such test carry a quaternion it
+        // does not mean. A rotation that IS given and cannot be read is still
+        // an error (the unnamed-fourth-number rule — a pose silently read as
+        // identity is the "the saved camera collapsed" defect).
+        bool rotOk = true;
+        const iris::Quat q = m.contains(QStringLiteral("rotation"))
+                                 ? scriptmod::quatFromJs(m.value(QStringLiteral("rotation")),
+                                                         iris::Quat(), &rotOk)
+                                 : iris::Quat();
+        if (!rotOk) {
+            error = QStringLiteral("vr.inject: %1.rotation is neither a quaternion "
+                                   "{x,y,z,w} nor Euler degrees {x,y,z}").arg(QLatin1String(key));
+            return false;
+        }
+        out.position = Vec3(p.x(), p.y(), p.z());
+        out.rotation = Quat(q.x(), q.y(), q.z(), q.scalar());
+        out.valid = true;
+        return true;
+    };
+    QString error;
+    if (!readPose("aim", s.aim, error) || !readPose("grip", s.grip, error))
+        return fail(error);
+    s.select = float(state.value(QStringLiteral("select"), 0.0).toDouble());
+    s.grab = float(state.value(QStringLiteral("grab"), 0.0).toDouble());
+    // THE PRESS IS DERIVED WHEN IT IS NOT SAID, at the same 0.5 the engine's
+    // own threshold uses: a script that injects `select: 1` means the trigger
+    // is down, and saying so twice is a chance to disagree with itself.
+    s.selectPressed = state.contains(QStringLiteral("selectPressed"))
+                          ? state.value(QStringLiteral("selectPressed")).toBool()
+                          : s.select >= 0.5f;
+    s.grabPressed = state.contains(QStringLiteral("grabPressed"))
+                        ? state.value(QStringLiteral("grabPressed")).toBool()
+                        : s.grab >= 0.5f;
+    s.menuPressed = state.value(QStringLiteral("menuPressed"), false).toBool();
+    const QVariantMap stick = state.value(QStringLiteral("stick")).toMap();
+    s.stickX = float(stick.value(QStringLiteral("x"), 0.0).toDouble());
+    s.stickY = float(stick.value(QStringLiteral("y"), 0.0).toDouble());
+    s.stickPressed = state.value(QStringLiteral("stickPressed"), false).toBool();
+    // FOCUS DEFAULTS TO TRUE: a test that says nothing about it means "the
+    // wearer was there". Injecting it FALSE is how the focus-loss rule — a
+    // gesture in flight is cancelled, never committed — is driven with no
+    // runtime to take the focus away.
+    s.focused = state.value(QStringLiteral("focused"), true).toBool();
+
+    if (!e->vrInjectInput(index, s))
+        return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(e->lastError())));
+    return true;
+}
+
+bool VrApi::haptic(const QVariant &hand, double amplitude, double seconds)
+{
+    Engine *e = engine();
+    if (!e) return refuse(QStringLiteral("vr.haptic: no engine is running in this process"));
+    const int index = vrnames::handFrom(hand);
+    if (index < 0)
+        return fail(QStringLiteral("vr.haptic: hand must be \"left\" or \"right\" (or 0/1)"));
+    if (!e->vrHaptic(index, float(amplitude), float(seconds)))
+        return refuse(QStringLiteral("vr.haptic: %1").arg(QString::fromStdString(e->lastError())));
+    return true;
+}
+
 bool VrApi::toggle()
 {
     // THE VERB IS A CALLER OF THE PLAYER'S CAPABILITY, not a second path into
@@ -547,6 +686,17 @@ QVariantMap VrApi::state()
     hands[QStringLiteral("left")] = vrnames::pose(s.hands[VrHandLeft]);
     hands[QStringLiteral("right")] = vrnames::pose(s.hands[VrHandRight]);
     out[QStringLiteral("hands")] = hands;
+    // THE CONTROLS (phase 4b stage 1): the two poses and every button, in the
+    // one spelling vrnames owns.
+    QVariantMap input;
+    input[QStringLiteral("left")] = vrnames::handState(s.input[VrHandLeft]);
+    input[QStringLiteral("right")] = vrnames::handState(s.input[VrHandRight]);
+    out[QStringLiteral("input")] = input;
+    out[QStringLiteral("profile")] = QString::fromStdString(s.profile);
+    QVariantMap bindings;
+    bindings[QStringLiteral("offered")] = s.bindingProfiles;
+    bindings[QStringLiteral("accepted")] = s.bindingProfilesAccepted;
+    out[QStringLiteral("bindings")] = bindings;
     out[QStringLiteral("handActions")] = s.handActions;
     out[QStringLiteral("handJoints")] = s.handJoints;
     out[QStringLiteral("proxies")] = showProxies;

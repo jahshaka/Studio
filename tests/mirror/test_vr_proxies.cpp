@@ -34,6 +34,17 @@
 //      SELECTION OUTLINE is in the desk's channel only (it reaches an editor
 //      preview's eyes because THAT session opens the desk's channel, and it is
 //      absent from a Player's for the same reason the grid is).
+//
+// PHASE 4b STAGE 1 ADDED TWO MORE (lane VR-INPUT-1E, VR_INPUT_SPEC §3):
+//   G. THE RAY AND ITS HIT MARKER are two more nodes on the same two channels,
+//      and they are HIDDEN until a live session places them — a host with no
+//      session never shows a ray, and a node born visible would draw a metre
+//      of line at the world origin for one frame;
+//   H. THE CONTROLLER MODEL follows the runtime's own interaction profile: a
+//      wearer holding a Touch controller gets the vendored Touch model
+//      (app/content/vr/, MIT — PROVENANCE.md beside it), and every other
+//      profile gets the hand-made wand, because a wand is the honest drawing
+//      for a controller whose shape we do not know.
 #include <QGuiApplication>
 #include <cmath>
 #include <cstdio>
@@ -269,10 +280,109 @@ int main(int argc, char **argv)
         if (target->nodeVrHelper(id)) ++vrHelperCount;
     }
     std::printf("   scene helpers: %u, of which VR helpers: %u\n", helperCount, vrHelperCount);
-    CHECK(vrHelperCount == 2u,
-          "D: EXACTLY THE TWO CONTROLLERS ARE IN THE VR CHANNEL — the selection outline, the "
-          "grid and the wires are the desk's, and a Player's eyes show none of them");
+    // FOUR SINCE PHASE 4b STAGE 1, RE-ANCHORED WITH ITS REASON (it was two):
+    // the two controllers, plus the RAY and its HIT MARKER. They are the
+    // wearer's own furniture by exactly the same argument — a pointer a wearer
+    // cannot see is not a pointer — and nothing else in the tree may join this
+    // channel without saying so here.
+    CHECK(vrHelperCount == 4u,
+          "D: EXACTLY FOUR THINGS ARE IN THE VR CHANNEL — the two controllers and the ray with "
+          "its hit marker. The selection outline, the grid and the wires are the desk's, and a "
+          "Player's eyes show none of them");
     mirror.setHighlightedNodes({}, iris::SceneNodePtr());
+
+    // ---- G. THE RAY AND ITS HIT MARKER (phase 4b stage 1) ----------------
+    {
+        NodeId ray[2] = { 0, 0 };
+        mirror.vrRayNodes(ray);
+        CHECK(ray[0] && ray[1] && ray[0] != nodes[0] && ray[0] != nodes[1],
+              "G: the ray has two nodes of its own — the line and the hit marker");
+        bool channels = true;
+        for (int i = 0; i < 2; ++i)
+            channels = channels && target->nodeHelper(ray[i]) && target->nodeVrHelper(ray[i]);
+        CHECK(channels,
+              "G: ...both on the wearer's two channels: every VR eye and the desk's picture, no "
+              "capture and no user's screenshot");
+        NodeId registered[2] = { 0, 0 };
+        target->vrRayNodes(registered);
+        CHECK(registered[0] == ray[0] && registered[1] == ray[1],
+              "G: the scene knows both, the LINE first — so a session can place them inside the "
+              "frame that draws them (Engine::setVrRay)");
+        // HIDDEN WITH NO SESSION. The mirror never places a ray: the session
+        // is its only writer, because a ray computed outside the frame leaves
+        // the wearer's own hand. So with a hand-built status and no runtime the
+        // picture must be exactly the picture with the two wands in it.
+        renderN(3);
+        CHECK(differing(img.rgba, withProxies) == 0u,
+              "G: with no live session the ray is not drawn at all — the picture is the two "
+              "controllers and nothing else");
+    }
+
+    // ---- H. THE CONTROLLER MODEL FOLLOWS THE PROFILE ---------------------
+    {
+        // CLOSE ENOUGH TO READ. A 7 cm controller at 1.8 m is ten pixels wide
+        // in a 256-pixel view; the model case therefore brings the hands to
+        // arm's length, where the difference between a wand and a solid model
+        // is a picture and not a rounding.
+        VrStatus near = st;
+        near.hands[VrHandLeft].position = Vec3{ -0.20f, 1.10f, -0.55f };
+        near.hands[VrHandRight].position = Vec3{ 0.20f, 1.10f, -0.55f };
+        near.profile = "/interaction_profiles/khr/simple_controller";
+        mirror.setVrProxies(true, near);
+        renderN(3);
+        const std::vector<unsigned char> wands = img.rgba;
+
+        // THE DEFAULT PATH, WHICH IS THE PRODUCT'S: the app's own models.qrc
+        // is compiled into this suite (see its CMakeLists), so what is asserted
+        // below is the resource path the shipped editor reads and not a copy of
+        // it in the source tree.
+        near.profile = "/interaction_profiles/oculus/touch_controller";
+        mirror.setVrProxies(true, near);
+        renderN(3);
+        const size_t modelMoved = differing(img.rgba, wands);
+        std::printf("   Touch profile: %zu of %zu bytes differ from the wands\n", modelMoved,
+                    wands.size());
+        CHECK(modelMoved > 1000u,
+              "H: A TOUCH PROFILE DRAWS THE TOUCH MODEL — the runtime's own answer decides what "
+              "the wearer's hand looks like");
+
+        // ...AND THE WAND IS THE ANSWER FOR EVERY OTHER PROFILE, including
+        // none at all: we do not know what that controller looks like.
+        near.profile = "/interaction_profiles/microsoft/motion_controller";
+        mirror.setVrProxies(true, near);
+        renderN(3);
+        CHECK(differing(img.rgba, wands) == 0u,
+              "H: ...and WMR — or bare hands, or nothing bound — gets the wand back, byte for "
+              "byte");
+
+        // ...AND THE SLOT ITSELF (the owner's "a slot games can fill later").
+        // A DIFFERENT SHAPE, deliberately: the vendored pair are mirror images
+        // of each other and the fixture is nearly symmetric, so "the models
+        // swapped between the hands" could read as the same picture even when
+        // the swap worked. A cone cannot.
+        near.profile = "/interaction_profiles/oculus/touch_controller";
+        mirror.setVrProxies(true, near);
+        renderN(3);
+        const std::vector<unsigned char> touchModels = img.rgba;
+        mirror.setVrProxyModels(QStringLiteral(":/content/primitives/cone.obj"),
+                                QStringLiteral(":/content/primitives/cone.obj"));
+        renderN(3);
+        const size_t slotMoved = differing(img.rgba, touchModels);
+        std::printf("   the model slot, pointed at a cone: %zu bytes differ from the Touch "
+                    "models\n", slotMoved);
+        CHECK(slotMoved > 1000u,
+              "H: THE MODEL SLOT TAKES A HOST'S OWN PATHS — and a path that CHANGES is really "
+              "reloaded (the first cut returned the cached mesh before it looked at the path, "
+              "so a host's model was accepted and silently ignored)");
+        mirror.setVrProxyModels(
+            QStringLiteral(":/content/vr/meta-quest-touch-pro/left.obj"),
+            QStringLiteral(":/content/vr/meta-quest-touch-pro/right.obj"));
+        renderN(3);
+        CHECK(differing(img.rgba, touchModels) == 0u,
+              "H: ...and the vendored pair comes back byte for byte");
+        mirror.setVrProxies(true, st);
+        renderN(3);
+    }
 
     // ---- ...and the proxies go when the session does ----------------------
     mirror.setHighlightedNodes({}, iris::SceneNodePtr());
