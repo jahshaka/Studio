@@ -28,7 +28,6 @@
 //   4. A HUNDRED METRES LATER IT IS STILL THERE: bound, converged, centred on
 //      cascade 0, with the chain's own contract (at most one rebuild a frame)
 //      unbroken.
-//   5. THE RASTER SOURCE FOLLOWS TOO (its probe cameras read the volume live).
 //
 // Its own binary like every GI suite: the voxel lighting and the field bind
 // process-wide to HlmsPbs, so this scene must not share a process with another
@@ -389,38 +388,7 @@ int main()
     }
 
     // =====================================================================
-    // CASE 5 — the raster source follows the same centre
-    // =====================================================================
-    std::printf("\n== case 5: the raster source ==\n");
-    {
-        GiParams raster = fieldGi();
-        raster.ddgiSource = GiSource::Raster;
-        CHECK(scene->setGlobalIllumination(raster), "the raster-sourced field under a chain accepts");
-        render(e, 8);
-        const GiStatus a = scene->giStatus();
-        if (a.ifdSource != GiSource::Raster) {
-            std::printf("   raster source refused (media or workspace not staged) — "
-                        "the placement half is still asserted below\n");
-        }
-        const float step0 = a.cascades[0].step;
-        for (int f = 1; f <= 16; ++f) {
-            const float x = 100.0f + float(f) * step0 / 8.0f;
-            view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
-                                                             Vec3(x, 1.0f, 0.0f)));
-            render(e, 1);
-        }
-        const GiStatus b = scene->giStatus();
-        std::printf("   source %s: follows %llu -> %llu, field centre %.1f vs cascade 0 %.1f\n",
-                    b.ifdSource == GiSource::Raster ? "raster" : "voxel",
-                    a.ifdFollows, b.ifdFollows, centreOf(b).x, b.cascades[0].centre.x);
-        CHECK(b.ifdFollows > a.ifdFollows, "the field followed the cascade with a raster source too");
-        CHECK(dist(centreOf(b), b.cascades[0].centre) < 0.5f * b.cascades[0].halfSize,
-              "...onto cascade 0's centre (its probe cameras read the volume live)");
-        CHECK(b.ifdBound, "and it is still bound");
-    }
-
-    // =====================================================================
-    // CASE 6 — THE RING KEEPS ITS BOUNCE (PHOTON_SPEC §13 G3)
+    // CASE 5 — THE RING KEEPS ITS BOUNCE (PHOTON_SPEC §13 G3)
     // =====================================================================
     // The bar G3 exists for, stated as the light in the picture. Binding an
     // irradiance field makes HlmsPbs switch the cone-traced diffuse off for the
@@ -434,7 +402,7 @@ int main()
     // So: a white lamp on a red wall, and a patch of grey ground in front of it
     // TWENTY METRES from the camera — outside cascade 0's 10 m box, inside the
     // chain. Nothing but indirect light can make that ground red.
-    std::printf("\n== case 6: the bounce beyond cascade 0 ==\n");
+    std::printf("\n== case 5: the bounce beyond cascade 0 ==\n");
     {
         // A DARK ambient for this case, and a lamp that does not clip: the
         // measurement is a COLOUR difference on grey ground, so a saturated
@@ -534,7 +502,7 @@ int main()
     }
 
     // =====================================================================
-    // CASE 7 — WHAT IT COSTS AT 1080p, WALKING (PHOTON_SPEC §13 G3's third bar)
+    // CASE 6 — WHAT IT COSTS AT 1080p, WALKING (PHOTON_SPEC §13 G3's third bar)
     // =====================================================================
     // G3-a hands the cone diffuse back to every pixel outside the field, and
     // that term is six cone marches per pixel — the ~0.8 ms/frame the field
@@ -549,7 +517,7 @@ int main()
     // red. For scale, the lane's own measurement of the SHIPPED Showroom at
     // this tier and this resolution is a p95 of 4.5 ms and a worst of 14.95
     // over a 4,000-frame 100 m walk (spikes/photon-e2/BASELINE.md).
-    std::printf("\n== case 7: 1080p, walking ==\n");
+    std::printf("\n== case 6: 1080p, walking ==\n");
     {
         View *big = e->createOffscreenView("field-1080p", 1920, 1080, Colour(0, 0, 0));
         if (!big) {

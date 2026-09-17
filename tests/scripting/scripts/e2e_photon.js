@@ -44,7 +44,6 @@ assert(r.row && r.row.tier === "epic" && r.row.bounces === 3 && r.row.dynamicPro
        r.row.technique === "vct_pcc_hybrid" && r.row.quality === "high" && r.row.ddgi === true,
        "world.photon().row is the effective table row: " + J(r.row));
 assert(Math.abs(r.ddgiIntensity - 1.0) < 1e-6, "at the calibrated intensity 1.0");
-assert(r.ddgiSource === "auto", "the field's source is auto (voxel at every tier)");
 assert(r.custom === false, "and nothing pinned: " + J(r.deviations));
 // world.gi is the same model, read through the full surface.
 var gi = world.get().gi;

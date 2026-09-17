@@ -112,7 +112,7 @@ void WorldGiPropertyWidget::rebuild()
     quality = nullptr; bounces = nullptr;
     pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr; reflectionsText.clear();
     updateBudget = nullptr; ddgiToggle = nullptr;
-    ddgiIntensity = nullptr; ddgiAmbient = nullptr; ddgiSource = nullptr;
+    ddgiIntensity = nullptr; ddgiAmbient = nullptr;
     advancedButton = nullptr; resetAdvancedButton = nullptr;
     editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
     if (!scene) return;
@@ -406,25 +406,6 @@ void WorldGiPropertyWidget::rebuild()
                    "sees no difference either way: it has no sky to see."));
             wirePlainRow(ddgiAmbient, QStringLiteral("giDdgiAmbient"), tr("Ambient Fill"),
                          [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 8.0f)); });
-            // THE PROBE SOURCE (GI_UNIFIED_SPEC P3 "A2", rayon2 S3). Advanced
-            // only, by decree: no tier writes it, epic stays voxel-fed, so it
-            // carries no pin mark and no registry row.
-            ddgiSource = this->addComboBox(tr("Probe Source"));
-            ddgiSource->addItem(tr("Automatic (voxel)"));
-            ddgiSource->addItem(tr("Voxel cone tracing"));
-            ddgiSource->addItem(tr("Rasterised captures (sees animation)"));
-            ddgiSource->setCurrentIndex(qBound(0, scene->giDdgiSource + 1, 2));
-            ddgiSource->setToolTip(
-                tr("Where the field's probes get their light.\n\n"
-                   "Voxel cone tracing reads the voxel volume the field sits over: cheap, and "
-                   "blind to anything the voxelizer did not bake — a skinned character "
-                   "animates inside a static voxel of itself.\n\n"
-                   "Rasterised captures render six small faces per probe from the live scene "
-                   "instead and re-capture while rigs move, under the same GI Update Budget. "
-                   "The field is never born dark: it starts from the voxel answer."));
-            // Row 0 is "Automatic" = -1 on the document.
-            wirePlainRow(ddgiSource, QStringLiteral("giDdgiSource"), tr("Probe Source"),
-                         [](const QVariant &row) { return QVariant(qBound(-1, row.toInt() - 1, 1)); });
         }
 
         break;
@@ -718,11 +699,6 @@ void WorldGiPropertyWidget::onDdgiToggled(bool on)
         scene->giDdgi = on ? 1 : 0;
         worldmodes::pinRowValue(scene, QStringLiteral("giDdgi"), scene->giDdgi);
     });   // the intensity rows only exist while the field is on
-}
-
-void WorldGiPropertyWidget::onDdgiSourceChanged(int index)
-{
-    Q_UNUSED(index)   // wired through wirePlainRow (giDdgiSource)
 }
 
 void WorldGiPropertyWidget::onResetAdvancedClicked()

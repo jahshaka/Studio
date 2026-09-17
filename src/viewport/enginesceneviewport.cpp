@@ -2016,7 +2016,6 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.ifdProbes            = st.ifdProbes;
     out.ifdConverged         = st.ifdConverged;
     out.ifdProbesPerFrame    = st.ifdProbesPerFrame;
-    out.ifdRaster            = st.ifdSource == jahshaka::engine::GiSource::Raster;
     out.ifdMin               = q(st.ifdMin);
     out.ifdMax               = q(st.ifdMax);
     out.ifdFollows           = quint64(st.ifdFollows);

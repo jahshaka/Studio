@@ -157,8 +157,6 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giDdgiIntensity = v.toFloat(); });
     add("giDdgiAmbient", [](const ScenePtr &s) { return QVariant(s->giDdgiAmbient); },
         [](const ScenePtr &s, const QVariant &v) { s->giDdgiAmbient = v.toFloat(); });
-    add("giDdgiSource", [](const ScenePtr &s) { return QVariant(s->giDdgiSource); },
-        [](const ScenePtr &s, const QVariant &v) { s->giDdgiSource = v.toInt(); });
     // Verb-only integrator knobs (world.gi): no panel row, but the verb's one
     // undo step records them through this table like every other world field.
     add("giRayMarchStepScale", [](const ScenePtr &s) { return QVariant(s->giRayMarchStepScale); },

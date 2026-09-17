@@ -66,8 +66,8 @@ static void testTierTable()
     std::printf("\n-- 1. the tier table --\n");
     // THE TABLE AS SHIPPED (worldmodes.h carries the readable form). Every
     // column that is a registry row is pinned here; the derived columns
-    // (voxel resolution, probe faces/HDR/shadows, the 8192-probe field grid,
-    // ddgiSource auto = voxel) follow giQuality / the engine and are pinned
+    // (voxel resolution, probe faces/HDR/shadows, the 8192-probe field grid)
+    // follow giQuality / the engine and are pinned
     // by gi.modes, gi.pcc_mirror and gi.ddgi.
     // The fifth column is the PROBE CAPTURE SIZE (owner 2026-09-13 Q4): 0 at
     // every tier = "follow the engine's quality dial", because the halving that
@@ -329,7 +329,6 @@ static void testNewSceneDefault()
           "which is the hybrid, high quality, irradiance field on");
     CHECK(giBounces(s) == 3, "with three bounces (Epic's column)");
     CHECK(s->giDdgiIntensity == 1.0f, "at the calibrated intensity 1.0");
-    CHECK(s->giDdgiSource == -1, "and the field's source left at auto (voxel at every tier)");
 }
 
 // ---------------------------------------------------------------------------

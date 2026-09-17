@@ -539,9 +539,6 @@ public:
         int  ifdProbes = 0;
         bool ifdConverged = false;
         int  ifdProbesPerFrame = 0;
-        /// What is feeding the probes: true = rasterised captures (world.gi's
-        /// ddgiSource resolved to raster and the engine took it), false = voxel.
-        bool ifdRaster = false;
         /// WHERE THE FIELD IS — the corners of the volume its probes span. The
         /// scene's fitted box in the single-volume arm; cascade 0's box, which
         /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).

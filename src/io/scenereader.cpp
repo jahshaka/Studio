@@ -547,9 +547,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // -1 (auto, which resolves OFF while there is no Photon tier) is what
         // makes those documents render exactly as they always did.
         scene->giDdgi = qBound(-1, sceneObj.value("giDdgi").toInt(-1), 1);
-        // The probe source (rayon2 S3): absent in every document written
-        // before it, and -1 (auto = voxel) is exactly what those rendered.
-        scene->giDdgiSource = qBound(-1, sceneObj.value("giDdgiSource").toInt(-1), 1);
+        // (A "giDdgiSource" key written before 2026-09-17 is IGNORED: the
+        // irradiance field's rasterised probe source was deleted with the lane
+        // FIELD-RASTER-CRUD, and the voxel source is the only one there is.)
         scene->giDdgiIntensity =
             float(qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(1.0), 64.0));
         // The ambient sky-visibility strength (the Photon ambient fix). Absent
