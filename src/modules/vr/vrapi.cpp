@@ -144,10 +144,10 @@ QVector<VerbInfo> VrApi::verbs() const
           "document — take the headset off and the viewport is exactly where you left it. The "
           "Player's VR mode (`vr.toggle`, `player.play({vr:true})`) is the other arrangement: "
           "there the wearer IS the play camera and the desktop becomes a mirror.\n\n"
-          "`mirror` is \"none\" (THE DEFAULT HERE), \"left\", \"right\" or \"both\" — which half "
-          "of the headset's picture is painted over the desktop viewport. It is off by default "
-          "because the editor's own picture is the thing worth showing at the desk, and a mirror "
-          "over it would pay for two renders and show one. `worldScale` is metres of world per "
+          "`mirror` is \"left\" (THE DEFAULT: the desktop is a COPY of the left eye, one render pipeline — the owner's rule), \"right\", \"both\" or \"none\" (the desktop as its own editor camera with the wearer's markers in it — a third render, for a second person at the desk) — which half "
+          "of the headset's picture is painted over the desktop viewport; with a mirror the "
+          "editor's own View is switched off once the headset has drawn, so the frame is the two "
+          "eyes and a copy. `worldScale` is metres of world per "
           "metre of room (1 = life size). `eyeWidth`/`eyeHeight` override the size each eye is "
           "RENDERED at, for measurement only; the runtime's swapchains keep the runtime's size, "
           "so the copy scales.\n\n"
@@ -694,11 +694,13 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     // unfocused — the stale-injection class this whole round is about. A
     // WITHDRAWAL (an empty state) says nothing about focus and leaves it alone;
     // with no hand injected at all the status reports the session's own focus.
-    if (!state.isEmpty())
-        e->vrInjectFocus(state.value(QStringLiteral("focused"), true).toBool());
-
+    // THE INJECTION FIRST, THE FOCUS ONLY IF IT WAS TAKEN (the lead, from the
+    // Fable read at merge): a refused injection (a bound profile, no override —
+    // the headset case) must not rewrite the session's focus bit on the way.
     if (!e->vrInjectInput(index, s))
         return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(e->lastError())));
+    if (!state.isEmpty())
+        e->vrInjectFocus(state.value(QStringLiteral("focused"), true).toBool());
     return true;
 }
 

@@ -289,12 +289,11 @@ assert(vr.begin() === true, "a session can be started AGAIN in the same process"
 editor.frame(20);
 var second = vr.state();
 assert(second.frames >= 5, "the second session submits frames too");
-// THE DEFAULT MIRROR IS `none` FOR THE EDITOR (vr.begin's contract): the
-// desktop keeps drawing the EDITOR's picture, with the wearer's proxies in it,
-// rather than paying for two renders and showing one. The first session above
-// asked for "left" explicitly and got it.
-assert(second.mirror === "none",
-       "and it takes no mirror by default: the desktop stays an editor");
+// THE DEFAULT MIRROR IS `left` FOR THE EDITOR TOO (the owner, 2026-09-17: one
+// render pipeline for VR — the desktop is a COPY of the eye, like the Player;
+// `mirror:"none"` is the third-render option for a second person at the desk).
+assert(second.mirror === "left",
+       "and it mirrors the left eye by default: the desktop is a copy, not a third camera");
 assert(vr.end() === true, "and ends");
 editor.frame(5);
 
