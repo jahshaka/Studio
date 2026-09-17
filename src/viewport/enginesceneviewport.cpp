@@ -1,6 +1,7 @@
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "viewport/devicelossend.h"
 #include "viewport/enginesceneviewport.h"
 
 #include <QShowEvent>
@@ -2141,6 +2142,11 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         if (framemonitor::active())
             mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Scripted);
         mEngine->renderOneFrame();
+        // ...and the device-loss end for the same reason (lane XID-2): a
+        // scripted run that loses the GPU would otherwise keep calling frames
+        // that all throw -- measured at 4,348 VK_ERROR_DEVICE_LOST in one run,
+        // painting nothing -- and end in a SEGV in the ordinary teardown.
+        devicelossend::checkAfterFrame(mEngine.get());
         // The deterministic path bypasses EngineRenderDriver entirely, so it
         // has to drain the engine's error sink itself or a scripted/headless
         // run would be the one place failures stay silent — which is exactly
@@ -2732,7 +2738,11 @@ void EngineSceneViewport::presentCovered(int frames)
     // disabled. Enable it for exactly these frames and put it back.
     const bool wasEnabled = view()->isEnabled();
     view()->setEnabled(true);
-    for (int i = 0; i < frames; ++i) { ++mFrameEpoch; mEngine->renderOneFrame(); }
+    for (int i = 0; i < frames; ++i) {
+        ++mFrameEpoch;
+        mEngine->renderOneFrame();
+        devicelossend::checkAfterFrame(mEngine.get());
+    }
     view()->setEnabled(wasEnabled);
     // A COVERED frame IS NOT A FRAME OF THE WORLD, and presentsSinceBind means
     // exactly that: "how many frames of the world bound right now are on
