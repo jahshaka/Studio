@@ -249,11 +249,22 @@ bool VrInteraction::applySelection(const Hover &h, SelectMode mode)
         return true;
     }
     bool changed = false;
-    // THE WORLD ROOT REPLACES (D6) — it is not a thing you add to a set.
-    if (h.node && h.node->isRootNode()) { sel->select(h.node); changed = true; }
-    else if (mode == SelectMode::Toggle)  changed = sel->toggle(h.node) || true;
-    else if (mode == SelectMode::Add)     changed = sel->add(h.node);
-    else                                { sel->select(h.node); changed = true; }
+    if (h.node && h.node->isRootNode()) {
+        // THE WORLD ROOT REPLACES (D6) — it is not a thing you add to a set.
+        sel->select(h.node);
+        changed = true;
+    } else if (mode == SelectMode::Toggle) {
+        // toggle()'s answer is MEMBERSHIP AFTER THE CALL, not "did anything
+        // change" — a toggle always changes the set, which is why the return is
+        // dropped here rather than tested.
+        sel->toggle(h.node);
+        changed = true;
+    } else if (mode == SelectMode::Add) {
+        changed = sel->add(h.node);
+    } else {
+        sel->select(h.node);
+        changed = true;
+    }
     if (changed) {
         ++mSelects;
         haptic(h.hand, kTickAmplitude, kTickSeconds);
@@ -322,12 +333,10 @@ bool VrInteraction::beginGrab(unsigned hand)
         g.far = true;
         g.distance = h.distance;
         g.handStart = vrgrab::virtualFarHand(aim, g.distance);
-    } else if (!h.hit) {
-        // NO HIT, BUT A SELECTION: a near grab of what is already selected —
-        // the wearer reaches out and takes hold of it (§5.1's near-grab case).
-        g.far = false;
-        g.handStart = grip;
     } else {
+        // NEAR — either the ray is on something within arm's reach, or there is
+        // no hit at all and the wearer is reaching out to take hold of what is
+        // already selected (§5.1's near-grab case). Both ride the GRIP pose.
         g.far = false;
         g.handStart = grip;
     }

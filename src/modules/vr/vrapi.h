@@ -107,8 +107,9 @@ private:
     /// editor's preview or to the Player, and this is the one place above both
     /// that runs once per rendered frame.
     void stepInteraction();
-    /// "left"/"right" (or an index) -> a VrHand; the dominant hand when the
-    /// caller said nothing.
+    /// "left"/"right" -> a VrHand; the DOMINANT hand when the caller said
+    /// nothing at all, and `*ok = false` for anything else (which the verbs
+    /// turn into a throw, naming what was passed).
     unsigned handFrom(const QVariant &value, bool *ok = nullptr) const;
 
     /// THE WEARER'S CONTROLLERS ON THE SCENE (VR_INPUT_SPEC stage 1). Owned

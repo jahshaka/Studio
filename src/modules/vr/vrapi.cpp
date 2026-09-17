@@ -307,9 +307,10 @@ QVector<VerbInfo> VrApi::verbs() const
           "cancels, turns}",
           "WHAT THE INTERACTION IS DOING. `grabbing` and `hovering` are this moment's state; "
           "`far`, `snapping`, `distance` and `nodes` describe a gesture in flight; and the "
-          "five tallies are COUNTS for the life of the session — a suite brackets a gesture "
-          "with them instead of timing it, which is the house rule for anything a loaded box "
-          "could slow down (a wall clock measures the box, not the gesture).\n\n"
+          "five tallies are COUNTS, monotonic for as long as the process lives — a suite "
+          "brackets a gesture with them instead of timing it, which is the house rule for "
+          "anything a loaded box could slow down (a wall clock measures the box, not the "
+          "gesture).\n\n"
           "`rig` is WHERE THE WEARER'S ROOM STANDS in the world, read back out of the engine "
           "(which owns it) rather than remembered here — the number locomotion moves, beside "
           "the `turns` count that says a flick of the stick was answered. `live` false means "
