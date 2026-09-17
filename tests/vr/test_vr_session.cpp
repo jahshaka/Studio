@@ -54,15 +54,20 @@ int gFailures = 0, gChecks = 0;
         if (!(cond)) { ++gFailures; std::printf("    FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
         else std::printf("    ok   %s\n", #cond);                                \
     } while (0)
+/// An EXPRESSION, not a statement: several checks below guard the work that
+/// follows them ("if the control rendered at all, compare it"), and a macro
+/// that cannot be tested would have to be written twice at every such site.
 #define CHECK_MSG(cond, ...)                                                     \
-    do {                                                                         \
+    ([&]() -> bool {                                                             \
         ++gChecks;                                                               \
-        if (!(cond)) {                                                           \
+        const bool ok_ = (cond);                                                 \
+        if (!ok_) {                                                              \
             ++gFailures;                                                         \
             std::printf("    FAIL %s:%d: %s — ", __FILE__, __LINE__, #cond);     \
             std::printf(__VA_ARGS__); std::printf("\n");                         \
         } else { std::printf("    ok   %s — ", #cond); std::printf(__VA_ARGS__); std::printf("\n"); } \
-    } while (0)
+        return ok_;                                                              \
+    }())
 #define REQUIRE(cond)                                                            \
     do { const bool ok_ = (cond); CHECK(ok_); if (!ok_) return 1; } while (0)
 
@@ -83,11 +88,20 @@ EngineConfig vrConfig() {
 /// mean anything, and near geometry is what makes it so.
 void buildScene(Scene *scene) {
     addDirectionalLight(scene, Vec3{ -0.4f, -1.0f, -0.55f }, 3.14159f);
-    const NodeId near = addTestCube(scene, Colour{ 0.80f, 0.25f, 0.15f, 1.0f }, 0.0f, 0.45f);
-    setNodePosition(scene, near, Vec3{ 0.0f, 1.3f, -0.6f });
-    const NodeId mid = addTestCube(scene, Colour{ 0.20f, 0.55f, 0.85f, 1.0f }, 0.0f, 0.55f);
-    setNodePosition(scene, mid, Vec3{ 0.7f, 1.6f, -2.0f });
-    setNodeScale(scene, mid, Vec3{ 0.8f, 0.8f, 0.8f });
+    // A NEAR SILHOUETTE AGAINST A FAR SURFACE, AND BOTH TALL. The parallax the
+    // eyes' 6 cm produces is only visible where a near edge crosses a far one,
+    // and a runtime's head sits where IT decides — Monado's simulated HMD puts
+    // it at the stage's origin, i.e. on the floor, so a fixture built at a
+    // person's eye height is out of frame and the picture is all floor (which
+    // is how the first version of this scene measured 6 bytes of parallax and
+    // called it stereo). A pillar in front of a wall, both spanning several
+    // metres vertically, is in frame from any head height.
+    const NodeId pillar = addTestCube(scene, Colour{ 0.80f, 0.25f, 0.15f, 1.0f }, 0.0f, 0.45f);
+    setNodePosition(scene, pillar, Vec3{ 0.35f, 1.0f, -1.0f });
+    setNodeScale(scene, pillar, Vec3{ 0.25f, 4.0f, 0.25f });
+    const NodeId wall = addTestCube(scene, Colour{ 0.20f, 0.55f, 0.85f, 1.0f }, 0.0f, 0.55f);
+    setNodePosition(scene, wall, Vec3{ 0.0f, 1.5f, -4.0f });
+    setNodeScale(scene, wall, Vec3{ 12.0f, 8.0f, 0.2f });
     const NodeId floor = addTestCube(scene, Colour{ 0.35f, 0.36f, 0.38f, 1.0f }, 0.0f, 0.9f);
     setNodePosition(scene, floor, Vec3{ 0.0f, -0.05f, 0.0f });
     setNodeScale(scene, floor, Vec3{ 40.0f, 0.1f, 40.0f });
@@ -246,7 +260,15 @@ int main() {
         CHECK(fx.ssr == 0);
         CHECK(vrView->sampleCount() == 1u);
 
+        // THE DESKTOP KEEPS DRAWING WHILE A SESSION RUNS (F4). The runtime's
+        // first frames carry shouldRender = 0, and the pump used to answer
+        // those by returning out of renderOneFrame before ANY view rendered —
+        // so a headset that was taken off, a dashboard that came up or a
+        // runtime that paused froze the editor's viewport and every host that
+        // counts frames. The desktop view's own counter is the witness.
+        const unsigned long long deskBefore = desktop->framesPresented();
         const unsigned long long frames = pump(engine.get(), 60ull, 600u);
+        const unsigned long long deskDrawn = desktop->framesPresented() - deskBefore;
         const VrStatus st = engine->vrStatus();
         CHECK_MSG(frames >= 60ull, "the runtime accepted %llu frames (>= 60)", frames);
         CHECK_MSG(st.state == VrState::Focused, "the session reached FOCUSED (state %d)",
@@ -265,6 +287,10 @@ int main() {
         // The IPD is a property of the RUNTIME, not of us: it is reported and
         // sanity-checked, never asserted to a value.
         CHECK_MSG(st.ipd > 0.03f && st.ipd < 0.10f, "the located eyes are %.4f m apart", st.ipd);
+        CHECK_MSG(deskDrawn >= st.rendered,
+                  "the desktop view drew %llu frames while the session drew %llu — a session "
+                  "the runtime is not asking pictures for must not stop the editor",
+                  deskDrawn, st.rendered);
         if (!st.asymmetricFov)
             std::printf("NOTE   this runtime gives both eyes the SAME fov, so only the POSES "
                         "separate them (an asymmetric per-eye projection is unexercised "
@@ -320,16 +346,67 @@ int main() {
                   "difference IS the parallax the IPD produces",
                   diff, l.px.size(), worst);
 
-        // THE MIRROR SHOWS THE LEFT EYE. The desktop view keeps rendering its
-        // own picture and the mirror is painted over it, so "the desktop's
-        // pixels changed while a session runs" is the assertion — the exact
-        // bytes cannot match the eye's, because the mirror RESAMPLES a
-        // 320x240-per-eye picture into a 320x240 window (VR_SPEC §4.3).
+        // ---- THE MIRROR IS THE LEFT EYE, BYTE FOR BYTE ------------------
+        // NOT "the desktop's pixels changed": the mirror quad loads DontCare,
+        // so a mirror that painted uninitialised memory would pass that and a
+        // mirror of the WRONG HALF would pass it twice over. When the desktop
+        // view and the runtime's eye are the same size the quad's resample is
+        // an identity — a destination pixel centre at (i+0.5)/w maps to source
+        // u = (i+0.5)/2w, i.e. exactly the source texel's centre, so bilinear
+        // returns that texel unchanged — and the assertion can be equality.
         Image mirrored;
         REQUIRE(desktop->readPixels(mirrored));
-        const size_t mirrorDiff = differingBytes(mirrored.rgba, before.rgba);
-        CHECK_MSG(mirrorDiff > 0u, "the mirror changed the desktop view's picture (%zu bytes)",
-                  mirrorDiff);
+        if (mirrored.width == l.w && mirrored.height == l.h) {
+            int mworst = 0;
+            const size_t mirrorDiff = differingBytes(mirrored.rgba, l.px, &mworst);
+            CHECK_MSG(mirrorDiff == 0u,
+                      "THE MIRROR IS THE LEFT EYE: %zu of %zu bytes differ, worst %d/255",
+                      mirrorDiff, l.px.size(), mworst);
+        } else {
+            // A runtime whose eye size is not the mirror's: the resample is
+            // real and only the "it is not the desktop's own picture" half can
+            // be asserted. Said out loud rather than silently weakened.
+            const size_t mirrorDiff = differingBytes(mirrored.rgba, before.rgba);
+            CHECK_MSG(mirrorDiff > 0u,
+                      "the mirror changed the desktop view's picture (%zu bytes; the eye is "
+                      "%ux%u and the mirror %ux%u, so equality is not available here)",
+                      mirrorDiff, l.w, l.h, mirrored.width, mirrored.height);
+        }
+
+        // ---- THE REVERSE-Z DETECTOR (VR_SPEC §6) ------------------------
+        // The left eye, rendered MONO through Camera::setCustomProjectionMatrix
+        // at that eye's exact pose and projection, must be the left half of the
+        // stereo frame. The two paths differ in exactly one place: the stereo
+        // one hands its projections to VrData, which stores them RAW, and the
+        // mono one hands the same matrix to the Camera, which runs it through
+        // the render system's own conversion. A session that stops converting
+        // for VrData (the defect this round fixed) renders the headset with
+        // INVERTED DEPTH while every other picture in the process is right —
+        // and this is the assertion that says so.
+        Image mono;
+        if (CHECK_MSG(engine->vrEyeScreenshot(0u, mono), "vrEyeScreenshot(left): %s",
+                      engine->lastError().c_str())) {
+            CHECK_MSG(mono.width == l.w && mono.height == l.h,
+                      "the control is one eye's size (%ux%u vs %ux%u)", mono.width, mono.height,
+                      l.w, l.h);
+            int mworst = 0;
+            const size_t monoDiff = differingBytes(mono.rgba, l.px, &mworst);
+            // <= 1/255, AND THE MARGIN IS MEASURED, NOT ASSUMED. The two
+            // pictures come out of two chain INSTANCES: the session's tonemap
+            // reduces its own exposure over frames, the control's multiplies by
+            // the constant that reduction converged to, and the last bits of
+            // that constant are where the residual lives — one channel of one
+            // pixel, measured on this fixture. The A/B that says this is still
+            // a detector: handing VrData the UNCONVERTED projection (the defect
+            // this assertion exists for) moves 133,940 of 307,200 bytes, worst
+            // 65/255, and collapses the parallax below from 26,473 bytes to 288
+            // — four orders of magnitude of margin over the tolerance.
+            CHECK_MSG(mworst <= 1,
+                      "THE LEFT EYE EQUALS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION: "
+                      "%zu of %zu bytes differ, worst %d/255 (the unconverted-projection "
+                      "defect reads 133,940 and 65/255 here)",
+                      monoDiff, l.px.size(), mworst);
+        }
 
         engine->setVrMirrorView(nullptr);
         engine->endVrSession();
