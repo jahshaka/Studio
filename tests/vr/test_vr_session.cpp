@@ -1817,9 +1817,11 @@ int main() {
                         int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays,
                         rq.reflectMs);
             // A MACHINE WITHOUT RAY QUERIES IS A SUPPORTED MACHINE: with no
-            // trace there is no reflection to assert, and the row bought the
-            // prepass and the clear — which is the honest fallback picture, not
-            // a failure. (`gi.rt_reflect` skips on the same reading.)
+            // trace there is nothing to assert, and in stereo the chain builds
+            // no reflection stage AT ALL — not even the prepass, since
+            // `chain::build` declines when neither source can write the texture
+            // (OgreChain.cpp) — so the honest picture is exactly the row-off
+            // one. (`gi.rt_reflect` skips on the same reading.)
             if (!engine->rayQueryAvailable() || !engine->rayTracing()) {
                 std::printf("    NOTE this machine has no ray queries; the per-eye reflection "
                             "assertions are about the tier and skip\n");
@@ -1891,8 +1893,8 @@ int main() {
                     // BEFORE the fix: tracing the stereo target through ONE
                     // camera for both halves — the shape before this lane,
                     // reproducible on demand with `JAH_R5_MONO_EYES=1` — reads
-                    // a mean of 2.84/255 and 6.1 % of bytes over 8 in the LEFT
-                    // eye and 10.42 with 21.6 % in the RIGHT one (measured, one
+                    // a mean of 2.702/255 and 5.6 % of bytes over 8 in the LEFT
+                    // eye and 6.258 with 12.8 % in the RIGHT one (measured, one
                     // run each side). The asymmetry is itself the explanation:
                     // the rendering camera carries the LEFT eye's projection
                     // (OgreVrSession.cpp's F2), so a one-camera trace is nearly
@@ -1909,15 +1911,18 @@ int main() {
                     // trace INDEPENDENT ray sequences, so the pixels of a
                     // silhouette (where a ray either finds the near surface or
                     // passes it) differ by construction and no convergence
-                    // removes them. Measured: mean 0.33-0.37 and 0.65-1.25 % of
-                    // bytes over 8 with the fix, against 2.84 at 6.1 % (left
-                    // eye) and 10.42 at 21.6 % (right) without it.
+                    // removes them. Measured, with the control asked for the
+                    // SAME reflection source as the eye (`ssrScreenMarch`,
+                    // which reaches the chain since the lead's read): mean
+                    // 0.339 and 0.367 at 0.39 % and 0.45 % of bytes over 8,
+                    // against 2.702 at 5.6 % (left eye) and 6.258 at 12.8 %
+                    // (right) through one camera for both halves.
                     CHECK_MSG(d.meanAbs < 1.0 && d.fractionOver < 0.03,
                               "THE EYE'S REFLECTION IS THAT EYE'S: mean %.3f/255 against a mono "
                               "render at this eye's own pose and projection (the bar is 1.0; ONE "
-                              "camera for two eyes reads 2.84 in the left eye and 10.42 in the "
-                              "right), with %.3f%% of bytes over 8 (bar 3%%, the defect 6.1 and "
-                              "21.6)", d.meanAbs, 100.0 * d.fractionOver);
+                              "camera for two eyes reads 2.70 in the left eye and 6.26 in the "
+                              "right), with %.3f%% of bytes over 8 (bar 3%%, the defect 5.6 and "
+                              "12.8)", d.meanAbs, 100.0 * d.fractionOver);
                 }
             }
             engine->endVrSession();

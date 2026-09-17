@@ -483,6 +483,23 @@ bool VrApi::begin(const QVariantMap &options)
     // proxies are one object's business, and the Player's VR mode is the other
     // one. Two paths into beginVrSession from two places is how the two modes
     // would drift apart.
+    // THE KEYS THIS VERB READS, AND A THROW FOR ANY OTHER — the same rule
+    // `player.play` has carried since VR phase 3, and the same reason: a
+    // MALFORMED CALL is a programming error and must be loud (a misspelt
+    // `reflection` for `reflections` silently got the project's row, which is
+    // the worst kind of "it works"), while a refusal is reserved for the
+    // questions that legitimately have two answers — no headset, a session
+    // already running, no scene. Every key here is one EditorVrPreview::begin
+    // actually reads.
+    static const QStringList known = { QStringLiteral("mirror"),
+                                       QStringLiteral("worldScale"),
+                                       QStringLiteral("eyeWidth"),
+                                       QStringLiteral("eyeHeight"),
+                                       QStringLiteral("reflections") };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("vr.begin: unknown option '%1' — known options are %2")
+                            .arg(it.key(), known.join(QStringLiteral(", "))));
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.begin: no engine is running in this process"));
     if (!e->vrAvailable() && QString::fromStdString(e->vrInfo().reason).isEmpty())
