@@ -42,6 +42,10 @@ public:
     bool canBeginPlayerVr(QString *why) const override;
     bool beginPlayerVr(const QVariantMap &options, QString *error) override;
     void endPlayerVr() override;
+    /// The Player's VR session must end BEFORE the engine scene it is bound
+    /// to is destroyed (a project close or an open-in-place): the shell calls
+    /// this ahead of removeScene(). A no-op when no session is running.
+    void endVrForSceneClose();
     bool isPlayerVrActive() const override;
     QVariantMap playerVrReport() const override;
     bool movePlayerVr(const flystep::Keys &keys, float seconds) override;

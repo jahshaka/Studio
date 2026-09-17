@@ -1633,8 +1633,10 @@ void MainWindow::openStageBegin()
 	LoadTimeline::mark(QStringLiteral("cover+teardown"));
 	sceneView->beginSceneLoad(project ? project->getProjectName() : QString());
 
-	if (!!scene)
+	if (!!scene) {
+		playerView->endVrForSceneClose();   // the Player's session before its scene (see closeProject)
 		removeScene();
+	}
 
 	updateWindowTitle();
 }
@@ -2207,6 +2209,14 @@ void MainWindow::closeProject()
     // runs BEFORE scene->cleanup(): clearScene() writes the warm-up set down
     // from the still-live engine scene, and the mirror is dropped while the
     // document it mirrors still exists.
+    //
+    // THE PLAYER'S VR SESSION ENDS BEFORE ITS SCENE GOES (the lead, from the
+    // Fable read of VR-4-FIX): the Player's session is bound to the editor's
+    // one engine scene, and playerView->end() used to run only AFTER
+    // switchSpace below — so a close with the headset on reached the engine's
+    // own safety net in OgreEngine::destroyScene instead of the Player's end.
+    // The net stays; the ordinary flow does not need it.
+    playerView->endVrForSceneClose();
     removeScene();
 
     scene->cleanup();

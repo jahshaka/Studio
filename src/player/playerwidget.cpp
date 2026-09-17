@@ -164,3 +164,8 @@ void PlayerWidget::onPlayScene()
     }
     showPlaying(playerView->isScenePlaying());
 }
+
+void PlayerWidget::endVrForSceneClose()
+{
+	if (playerView) playerView->endVrForSceneClose();
+}

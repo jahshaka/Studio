@@ -315,7 +315,8 @@ QVariantMap PlayerVr::idleReport()
     QVariantMap zero = vec(iris::Vec3());
     zero[QStringLiteral("yaw")] = 0.0;
     out[QStringLiteral("origin")] = zero;
-    out[QStringLiteral("head")] = zero;
+    // The same shape as the live report (vrnames::pose) — one head, one spelling.
+    out[QStringLiteral("head")] = vrnames::pose(VrPose{});
     out[QStringLiteral("flySpeed")] = double(flySpeed());
     return out;
 }

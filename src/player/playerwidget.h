@@ -22,6 +22,10 @@ class PlayerWidget : public QWidget
 public:
 	/// The widget takes ownership of `view`.
 	explicit PlayerWidget(QWidget* parent = nullptr, EnginePlayerView* view = nullptr);
+	/// The shell calls this ahead of removeScene(): the Player's VR session
+	/// must end before the engine scene it is bound to goes (see
+	/// EnginePlayerView::endVrForSceneClose). A no-op without a session.
+	void endVrForSceneClose();
 	~PlayerWidget() {}
 	void createUI();
 

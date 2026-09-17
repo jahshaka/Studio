@@ -298,6 +298,14 @@ bool EnginePlayerView::beginPlayerVr(const QVariantMap &options, QString *error)
     return true;
 }
 
+void EnginePlayerView::endVrForSceneClose()
+{
+    if (mScene && mScene->vrIfAny() && mScene->vr()->isActive()) {
+        qWarning("Jahshaka VR: the Player's session ends before its scene closes (project close / open in place)");
+        endPlayerVr();
+    }
+}
+
 void EnginePlayerView::endPlayerVr()
 {
     if (mScene && mScene->vrIfAny()) mScene->vr()->end();
