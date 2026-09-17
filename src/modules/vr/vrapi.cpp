@@ -1078,9 +1078,10 @@ QVariantMap VrApi::locomotion(const QVariantMap &options)
     if (options.contains(QStringLiteral("fly"))) {
         const QString fly = options.value(QStringLiteral("fly")).toString().trimmed().toLower();
         if (fly == QLatin1String("aim")) o.fly = VrInteraction::Fly::Aim;
+        else if (fly == QLatin1String("gaze")) o.fly = VrInteraction::Fly::Gaze;
         else if (fly == QLatin1String("level")) o.fly = VrInteraction::Fly::Level;
         else {
-            fail(QStringLiteral("vr.locomotion: fly must be \"aim\" or \"level\", not '%1'")
+            fail(QStringLiteral("vr.locomotion: fly must be \"aim\", \"gaze\" or \"level\", not '%1'")
                      .arg(fly));
             return QVariantMap();
         }
@@ -1119,7 +1120,8 @@ QVariantMap VrApi::locomotion(const QVariantMap &options)
     out[QStringLiteral("turn")] =
         o.turn == VrInteraction::Turn::Snap ? QStringLiteral("snap") : QStringLiteral("smooth");
     out[QStringLiteral("fly")] =
-        o.fly == VrInteraction::Fly::Aim ? QStringLiteral("aim") : QStringLiteral("level");
+        o.fly == VrInteraction::Fly::Aim ? QStringLiteral("aim")
+        : o.fly == VrInteraction::Fly::Gaze ? QStringLiteral("gaze") : QStringLiteral("level");
     out[QStringLiteral("dominant")] =
         o.dominantRight ? QStringLiteral("right") : QStringLiteral("left");
     out[QStringLiteral("snapTurnDegrees")] = double(o.snapTurnDegrees);

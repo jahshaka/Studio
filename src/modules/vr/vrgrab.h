@@ -347,6 +347,18 @@ inline iris::Vec3 aimFlyDelta(const iris::Quat &aimRot, float y, float speed, fl
     return fwd * (speed * (boost ? flystep::kBoost : 1.0f) * seconds * magnitude);
 }
 
+/// THE FLY WHERE YOU LOOK (the owner, 2026-09-17: "I would love to fly in the
+/// direction I am looking — maybe hold a button down to override the hand"):
+/// the head's FULL forward, up and down included. Held on the left squeeze it
+/// overrides the hand for as long as the button is down; as the `gaze` fly
+/// option it is the default. The same shape as aimFlyDelta with the head's
+/// rotation, which is why it is that function.
+inline iris::Vec3 gazeFlyDelta(const iris::Quat &headRot, float y, float speed, float seconds,
+                               bool boost = false, float deadZone = kStickDeadZone)
+{
+    return aimFlyDelta(headRot, y, speed, seconds, boost, deadZone);
+}
+
 inline iris::Vec3 stickFlyDelta(const iris::Quat &headRot, float x, float y, float speed,
                                 float seconds, bool boost = false,
                                 float deadZone = kStickDeadZone)
