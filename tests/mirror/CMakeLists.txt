@@ -165,3 +165,29 @@ add_dependencies(test_sun_night JahshakaEngineMedia)
 add_test(NAME mirror.sun_night COMMAND test_sun_night WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.sun_night PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 300 LABELS "mirror")
+
+# mirror.vr_proxies — THE WEARER, DRAWN AT THE DESK AND NOWHERE ELSE (VR_SPEC
+# §5 phase 4, lane VR-4). The head and hand markers the editor's VR preview
+# shows, the two-bit helper rule that keeps them out of the headset's own eyes,
+# and the proof that a helper-less picture — the Player's view, a thumbnail, a
+# user's screenshot — is byte-identical to one with no session at all.
+#
+# NEEDS NO RUNTIME: setVrProxies takes a VrStatus as data, so the suite hands it
+# three poses and never asks OpenXR anything. The runtime half is vr.session.
+add_executable(test_vr_proxies test_vr_proxies.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_vr_proxies PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_vr_proxies PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_vr_proxies PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_vr_proxies PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_vr_proxies JahshakaEngineMedia)
+add_test(NAME mirror.vr_proxies COMMAND test_vr_proxies
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.vr_proxies PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 180 LABELS "mirror")

@@ -29,17 +29,18 @@ For more information see the LICENSE file
 // without a headset" being a claim and being a test.
 
 #include <QVariantMap>
+#include <memory>
 
 #include "jahshaka/engine/Engine.h"
 #include "modules/studiomodule.h"
+#include "modules/vr/editorvr.h"
 #include "scripting/apimodule.h"
 
 class VrApi : public ApiModule
 {
     Q_OBJECT
 public:
-    VrApi(ScriptHost &host, const ModuleHost &moduleHost)
-        : ApiModule(host), moduleHost(moduleHost) {}
+    VrApi(ScriptHost &host, const ModuleHost &moduleHost);
 
     QString jsName() const override { return QStringLiteral("vr"); }
     QVector<VerbInfo> verbs() const override;
@@ -50,12 +51,29 @@ public:
     Q_INVOKABLE bool end();
     Q_INVOKABLE QVariantMap state();
     Q_INVOKABLE bool toggle();
+    Q_INVOKABLE bool proxies(const QVariant &on = QVariant());
 
 private:
     /// The running engine, or null (headless runs, or before the engine starts).
     jahshaka::engine::Engine *engine() const;
 
+    /// THE CONTROLLER PROXIES, PUSHED FOR ANY SESSION (owner, 2026-09-17):
+    /// the editor's preview AND the Player's VR mode, because the wearer's own
+    /// hands belong in both. The push is per frame, into the ONE SceneMirror
+    /// the editor viewport owns — which is also the mirror the Player page
+    /// syncs, the two being two views on one scene.
+    void pushProxies();
+
     ModuleHost moduleHost;
+    /// THE EDITOR'S VR PREVIEW (phase 4). Owned here because the verbs are the
+    /// only way in and out of it; stepped from the render driver's beforeFrame,
+    /// which this object connects to once.
+    EditorVrPreview editor;
+    /// Are the controller proxies drawn at all? `vr.proxies(false)` is the
+    /// off switch, and it survives a session ending — a user who turned the
+    /// markers off does not want them back on the next time they put a headset
+    /// on.
+    bool showProxies = true;
 };
 
 #endif // VRAPI_H

@@ -22,8 +22,10 @@ For more information see the LICENSE file
 // mean something else against the other.
 
 #include <QString>
+#include <QVariantMap>
 
 #include "jahshaka/engine/Engine.h"
+#include "player/vrorigin.h"
 
 namespace vrnames {
 
@@ -65,6 +67,38 @@ inline jahshaka::engine::VrMirrorMode mirrorFrom(const QString &name,
     if (n == QLatin1String("right")) return VrMirrorMode::Right;
     if (n == QLatin1String("both"))  return VrMirrorMode::Both;
     return fallback;
+}
+
+/// A LOCATED POSE AS A VERB ANSWERS IT (phase 4): world position, world
+/// rotation, the level HEADING in degrees (the number a script actually
+/// reasons with) and whether the runtime located it at all.
+///
+/// One spelling, for the same reason the two enums above have one: the head is
+/// reported by `vr.state().head` and by `player.state().vr.head`, and the hands
+/// by `vr.state().hands`, and a caller that learned the shape from one of them
+/// must not find a different shape in the next.
+inline QVariantMap pose(const jahshaka::engine::Vec3 &position,
+                        const jahshaka::engine::Quat &rotation, bool valid)
+{
+    const iris::Quat rot(rotation.w, rotation.x, rotation.y, rotation.z);
+    QVariantMap out;
+    out[QStringLiteral("valid")] = valid;
+    out[QStringLiteral("x")] = double(position.x);
+    out[QStringLiteral("y")] = double(position.y);
+    out[QStringLiteral("z")] = double(position.z);
+    QVariantMap q;
+    q[QStringLiteral("x")] = double(rotation.x);
+    q[QStringLiteral("y")] = double(rotation.y);
+    q[QStringLiteral("z")] = double(rotation.z);
+    q[QStringLiteral("w")] = double(rotation.w);
+    out[QStringLiteral("rotation")] = q;
+    out[QStringLiteral("yaw")] = double(vrorigin::yawDegrees(rot));
+    return out;
+}
+
+inline QVariantMap pose(const jahshaka::engine::VrPose &p)
+{
+    return pose(p.position, p.rotation, p.valid);
 }
 
 }   // namespace vrnames

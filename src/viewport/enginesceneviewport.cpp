@@ -619,6 +619,14 @@ bool EngineSceneViewport::ensureEngineScene()
     mEngineScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
     view()->setScene(mEngineScene);
     view()->setShadows(true);           // directional PSSM; lights opt in via the document
+    // THE WEARER'S OWN FURNITURE IS DRAWN AT THE DESK TOO (VR_SPEC §5 phase 4;
+    // owner 2026-09-17). The VR channel (Scene::setNodeVrHelper) carries the
+    // controller proxies — and later the controller ray and the in-VR gizmo —
+    // and this is the ONE desktop view that opens it: the editor's. A
+    // thumbnail, a preview, the Player's window and the offscreen view a user's
+    // screenshot renders through all leave it shut, which is what keeps a
+    // wearer's hands out of pictures that are not theirs.
+    view()->setVrHelpersVisible(true);
     mMirror.reset(new SceneMirror(mEngineScene));
     mOverlay.reset(new GizmoOverlay(mEngineScene));
     if (mScene) mMirror->setSource(mScene);
@@ -631,6 +639,7 @@ void EngineSceneViewport::viewRecreated()
     if (view() && mEngineScene) {
         view()->setScene(mEngineScene);
         view()->setShadows(true);
+        view()->setVrHelpersVisible(true);   // ...and a recreated view keeps it
     }
     // A fresh View starts its present count at zero, so the baseline must too —
     // otherwise presentsSinceBind() reads a subtraction of a larger number and
@@ -1876,7 +1885,16 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         // controller clamps its own step to flystep::kMaxFlyStep — the
         // invariant lives with the controller so it holds for every caller —
         // and the DOCUMENT clock below still gets the real dt.
-        if (mCamController) mCamController->update(dt);
+        // ...UNLESS THE FLY KEYS BELONG TO A WEARER (VR_SPEC §5 phase 4).
+        // While a VR session previews this scene the same gesture — right
+        // button, the arrow cluster, Shift, the editor's own speed — walks the
+        // person in the headset instead of this camera: the step reads this
+        // viewport's own heldFlyKeys() and moves the RIG. It stands exactly
+        // where the controller's fly stood, so the two can never both move
+        // somebody, and everything else about the camera — orbit, pan, dolly,
+        // the axis views — is untouched. The desktop stays a full editor.
+        if (mVrPreviewStep)            mVrPreviewStep();
+        else if (mCamController)       mCamController->update(dt);
         // A PAUSED play-in-place (PlayBack still playing, this flag down so the
         // editor camera answers the mouse) holds the document AND the engine's
         // simulation: no clock step, a 0 delta below. Otherwise the editor's

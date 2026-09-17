@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include "bridge/enginehost.h"
 #include "bridge/vrnames.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "services/playerservice.h"
 #include "services/services.h"
 #include "viewport/enginerenderdriver.h"
@@ -20,6 +21,21 @@ For more information see the LICENSE file
 
 using namespace jahshaka::engine;
 
+VrApi::VrApi(ScriptHost &host, const ModuleHost &moduleHost)
+    : ApiModule(host), moduleHost(moduleHost)
+{
+    // THE PROXIES FOLLOW THE DRIVER'S OWN TICK, because they belong to ANY
+    // session — including the Player's, whose page the editor viewport is not
+    // syncing at all. The editor preview's own per-frame step is installed on
+    // the VIEWPORT instead (IEditorViewport::setVrPreviewStep), which is the
+    // only place that also runs on a scripted `editor.frame()`.
+    //
+    // Pushing a status twice in a frame costs nothing: it is a store, and the
+    // mirror reads it once when it syncs.
+    if (moduleHost.engine && moduleHost.engine->driver())
+        connect(moduleHost.engine->driver(), &EngineRenderDriver::beforeFrame, this,
+                [this] { pushProxies(); });
+}
 
 QVector<VerbInfo> VrApi::verbs() const
 {
@@ -43,17 +59,49 @@ QVector<VerbInfo> VrApi::verbs() const
           "tool schema reads better with both.",
           Needs::Engine },
         { "begin", "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?}) -> bool",
-          "Starts the VR session on the editor's scene and returns true once it exists. "
-          "From the next frame the render loop is PACED BY THE RUNTIME (xrWaitFrame), both eyes "
-          "are drawn in one pass into a target two eyes wide, each eye is copied into the "
-          "runtime's swapchain and one projection layer is submitted.\n\n"
-          "`mirror` is \"left\" (the default), \"right\", \"both\" or \"none\" — which half of "
-          "the headset's picture is painted over the desktop viewport. `worldScale` is metres of "
-          "world per metre of room (1 = life size). `eyeWidth`/`eyeHeight` override the size each "
-          "eye is RENDERED at, for measurement only; the runtime's swapchains keep the runtime's "
-          "size, so the copy scales.\n\n"
+          "THE EDITOR'S VR PREVIEW (SPECS/VR_SPEC.md §5 phase 4): starts the VR session on the "
+          "editor's scene and returns true once it exists. From the next frame the render loop is "
+          "PACED BY THE RUNTIME (xrWaitFrame), both eyes are drawn in one pass into a target two "
+          "eyes wide, each eye is copied into the runtime's swapchain and one projection layer is "
+          "submitted.\n\n"
+          "THE WEARER SEES THE EDITOR WORKING. An editor preview puts the editor's own furniture "
+          "in the headset — the grid, the light and camera icons, the SELECTION OUTLINE, the "
+          "gizmo — because standing inside the scene while it is authored is the whole point. "
+          "(The Player's VR mode shows none of it, exactly as the desktop Player shows none.) "
+          "The wearer's two CONTROLLERS are drawn in both modes, and in the desktop viewport as "
+          "well, so somebody at the desk can see where they are reaching: `vr.proxies`.\n\n"
+          "THE DESKTOP VIEWPORT KEEPS BEING AN EDITOR while the session runs — its own camera, "
+          "its own framing, its gizmos and its grid. Two things change: the editor's FLY KEYS "
+          "(right button + the arrow cluster, Shift to boost, at the editor's own speed) walk the "
+          "WEARER instead of the viewport camera, and nothing writes the head pose back into the "
+          "document — take the headset off and the viewport is exactly where you left it. The "
+          "Player's VR mode (`vr.toggle`, `player.play({vr:true})`) is the other arrangement: "
+          "there the wearer IS the play camera and the desktop becomes a mirror.\n\n"
+          "`mirror` is \"none\" (THE DEFAULT HERE), \"left\", \"right\" or \"both\" — which half "
+          "of the headset's picture is painted over the desktop viewport. It is off by default "
+          "because the editor's own picture is the thing worth showing at the desk, and a mirror "
+          "over it would pay for two renders and show one. `worldScale` is metres of world per "
+          "metre of room (1 = life size). `eyeWidth`/`eyeHeight` override the size each eye is "
+          "RENDERED at, for measurement only; the runtime's swapchains keep the runtime's size, "
+          "so the copy scales.\n\n"
           "REFUSES (false, with app.lastError set) rather than throwing when VR is unavailable, "
           "when a session is already running, or when there is no scene yet.",
+          Needs::Engine },
+        { "proxies", "vr.proxies(on?) -> bool",
+          "THE WEARER'S HANDS: a small wand at each controller, drawn IN THE HEADSET — in the "
+          "editor's preview and in the Player alike, the way a VR engine draws a wearer's own "
+          "controllers — and in the desktop editor viewport, so somebody at the desk can see "
+          "where the wearer is reaching. On by default; called with no argument it answers "
+          "whether they are on.\n\n"
+          "THERE IS NO HEAD MARKER, deliberately: in the headset it would be a box in the "
+          "wearer's own eyes, and on the desktop \"where is the wearer\" is already the camera.\n\n"
+          "They reach no reflection-probe capture, no shadow map, no GI and no user-grade "
+          "screenshot — a controller cannot light the room or turn up in a picture somebody "
+          "takes. No document node is created: nothing in the outliner, nothing saved.\n\n"
+          "The poses come from the OpenXR action system (a grip pose on the simple-controller "
+          "profile, which every runtime maps from whatever the wearer is holding) or, where the "
+          "runtime offers hand tracking and no controller answers, from the palm joint. POSES "
+          "ONLY — no buttons are read anywhere in this build.",
           Needs::Engine },
         { "end", "vr.end() -> bool",
           "Ends the session and puts everything back — the mirror, the stereo view, the "
@@ -78,7 +126,8 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges}",
+          "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges, head, "
+          "hands:{left,right}, handActions, handJoints, proxies, preview}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
           "runtime ACCEPTED (xrEndFrame), which is the only honest measure of a session on a "
@@ -89,7 +138,15 @@ QVector<VerbInfo> VrApi::verbs() const
           "the RUNTIME recentred that space under the wearer (a Quest long-press, a guardian "
           "re-setup) — each one is absorbed into the rig so the wearer does not move, and a "
           "count climbing while nobody touched the headset is a runtime problem. With no "
-          "session every field is at its zero and `state` is \"idle\" or \"unavailable\".",
+          "session every field is at its zero and `state` is \"idle\" or \"unavailable\".\n\n"
+          "`head` and `hands.left` / `hands.right` are POSES in WORLD space — {valid, position, "
+          "rotation, yaw} — the runtime's own, composed through the rig, which is the only frame "
+          "a caller can reason in. The head's `valid` LATCHES once the session has located "
+          "anything (a locomotion rule that stopped dead on one skipped frame would stutter); a "
+          "hand's is this frame's answer alone, so a controller that is put down or switched off "
+          "leaves nothing behind. `handActions` says the action set was attached — i.e. "
+          "controllers CAN report — and `handJoints` that hand tracking supplied a pose. "
+          "`preview` describes the editor's VR preview (see vr.begin).",
           Needs::Engine },
     };
 }
@@ -127,48 +184,21 @@ QVariantMap VrApi::info() { return available(); }
 
 bool VrApi::begin(const QVariantMap &options)
 {
+    // THE WHOLE VERB IS A CALLER OF EditorVrPreview (phase 4): the session, the
+    // rig's placement on the editor's render camera, the fly redirect and the
+    // proxies are one object's business, and the Player's VR mode is the other
+    // one. Two paths into beginVrSession from two places is how the two modes
+    // would drift apart.
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.begin: no engine is running in this process"));
-    if (!e->vrAvailable()) {
-        const QString why = QString::fromStdString(e->vrInfo().reason);
-        return refuse(QStringLiteral("vr.begin: VR is not available (%1)")
-                          .arg(why.isEmpty() ? QStringLiteral("this process was not started "
-                                                              "with --vr")
-                                             : why));
-    }
-    if (e->vrStatus().active)
-        return refuse(QStringLiteral("vr.begin: a session is already running"));
-    Scene *scene = moduleHost.viewport ? moduleHost.viewport->engineScene() : nullptr;
-    if (!scene) return refuse(QStringLiteral("vr.begin: there is no scene to show yet"));
-
-    VrConfig cfg;
-    cfg.mirror = vrnames::mirrorFrom(options.value(QStringLiteral("mirror")).toString(), cfg.mirror);
-    if (options.contains(QStringLiteral("worldScale"))) {
-        const double s = options.value(QStringLiteral("worldScale")).toDouble();
-        if (s > 0.0) cfg.worldScale = float(s);
-    }
-    cfg.overrideEyeWidth  = options.value(QStringLiteral("eyeWidth"), 0).toUInt();
-    cfg.overrideEyeHeight = options.value(QStringLiteral("eyeHeight"), 0).toUInt();
-    if (!cfg.overrideEyeWidth != !cfg.overrideEyeHeight)
-        return refuse(QStringLiteral("vr.begin: eyeWidth and eyeHeight are set together or "
-                                     "not at all"));
-
-    if (!e->beginVrSession(scene, cfg))
-        return refuse(QStringLiteral("vr.begin: %1").arg(QString::fromStdString(e->lastError())));
-
-    // THE MIRROR IS THE EDITOR'S OWN VIEWPORT (VR_SPEC §4.3): the desktop keeps
-    // drawing its picture and the headset's left eye is painted over it. Phase
-    // 3 moves this to the Player's widget, through the same call.
-    if (moduleHost.viewport && cfg.mirror != VrMirrorMode::None) {
-        std::vector<View *> views;
-        e->listViews(views);
-        for (View *v : views)
-            if (v && !v->isOffscreen() && v->scene() == scene) { e->setVrMirrorView(v); break; }
-    }
-    // THE LOOP'S CLOCK IS THE RUNTIME NOW (VR_SPEC §4.3): zero interval, vsync
-    // off, and renderOneFrame blocks in xrWaitFrame instead. Restored by end().
-    if (moduleHost.engine && moduleHost.engine->driver())
-        moduleHost.engine->driver()->setVrSessionActive(true);
+    if (!e->vrAvailable() && QString::fromStdString(e->vrInfo().reason).isEmpty())
+        return refuse(QStringLiteral("vr.begin: VR is not available (this process was not "
+                                     "started with --vr)"));
+    QString error;
+    if (!editor.begin(moduleHost.engine ? moduleHost.engine->engine() : nullptr,
+                      moduleHost.viewport,
+                      moduleHost.engine ? moduleHost.engine->driver() : nullptr, options, &error))
+        return refuse(QStringLiteral("vr.begin: %1").arg(error));
     return true;
 }
 
@@ -177,12 +207,45 @@ bool VrApi::end()
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.end: no engine is running in this process"));
     if (!e->vrStatus().active) return refuse(QStringLiteral("vr.end: no session is running"));
+    qWarning("Jahshaka VR: vr.end() called");
+    // A PREVIEW ENDS THROUGH ITS OWN OBJECT (the viewport has to get its fly
+    // keys and its helpers back); a session somebody ELSE started — the
+    // Player's — is ended the plain way, and that host notices on its next step.
+    if (editor.end()) return true;
     if (moduleHost.engine && moduleHost.engine->driver())
         moduleHost.engine->driver()->setVrSessionActive(false);
     e->setVrMirrorView(nullptr);
-    qWarning("Jahshaka VR: vr.end() called");
     e->endVrSession();
     return true;
+}
+
+bool VrApi::proxies(const QVariant &on)
+{
+    if (on.isValid()) {
+        showProxies = on.toBool();
+        pushProxies();      // the next frame is not soon enough for a verb's answer
+    }
+    return showProxies;
+}
+
+/// THE ONE PUSH, EVERY FRAME, FOR WHATEVER SESSION IS RUNNING.
+///
+/// NOT `editor.step()`'s business, and that is the owner's rule rather than
+/// tidiness: the controller proxies belong to the WEARER, so they are drawn in
+/// the Player's VR mode as well as the editor's preview — and the Player's
+/// session is owned by a different object entirely. What both have in common is
+/// the engine's `vrStatus()` and the ONE SceneMirror (the Player page is a
+/// second view on the editor's scene, and syncs the same mirror), so the push
+/// lives here, above both.
+void VrApi::pushProxies()
+{
+    SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr;
+    if (!mirror) return;
+    Engine *e = engine();
+    const VrStatus st = e ? e->vrStatus() : VrStatus();
+    // A scene that has never worn VR pays one comparison a frame: the mirror's
+    // own sync short-circuits on `active` and builds nothing.
+    mirror->setVrProxies(showProxies && st.active, st);
 }
 
 bool VrApi::toggle()
@@ -224,5 +287,17 @@ QVariantMap VrApi::state()
     out[QStringLiteral("worldScale")] = s.worldScale;
     out[QStringLiteral("asymmetricFov")] = s.asymmetricFov;
     out[QStringLiteral("spaceChanges")] = QVariant::fromValue(qulonglong(s.spaceChanges));
+    // THE POSES (phase 4). WORLD space, the rig applied — the only frame a
+    // caller can reason in — and each one reports its own validity rather than
+    // a shared flag: the head latches, a hand does not (VrPose's note).
+    out[QStringLiteral("head")] = vrnames::pose(s.headPosition, s.headRotation, s.posesValid);
+    QVariantMap hands;
+    hands[QStringLiteral("left")] = vrnames::pose(s.hands[VrHandLeft]);
+    hands[QStringLiteral("right")] = vrnames::pose(s.hands[VrHandRight]);
+    out[QStringLiteral("hands")] = hands;
+    out[QStringLiteral("handActions")] = s.handActions;
+    out[QStringLiteral("handJoints")] = s.handJoints;
+    out[QStringLiteral("proxies")] = showProxies;
+    out[QStringLiteral("preview")] = editor.report();
     return out;
 }
