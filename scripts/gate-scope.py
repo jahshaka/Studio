@@ -43,12 +43,18 @@ AREA_RULES = [
      # entries here are test DIRECTORY names, not ctest labels, so a suite whose
      # dir is not named is invisible however it is labelled.
      ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
+      "compute", "hdr", "sky", "pieces", "vr",
       "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
       "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
       "shutdown", "openasync", "*vulkan-scripts"], []),
     (r"^irisgl/mirror/",
      ["mirror", "skeletal", "sockets", "cameras", "gizmo", "player", "thumbnails",
-      "materialpreview", "samples", "picking", "particles", "*vulkan-scripts"], []),
+      "materialpreview", "samples", "picking", "particles",
+      # THE MIRROR PUSHES EVERY ENVIRONMENT DESC EACH FRAME (GATE-SCOPE-2, 2026-09-17): the
+      # GI/planar/shadow/post/sky/fog/ray settings and their staleness machine live in
+      # scenemirror.cpp, so a mirror edit can move any of these pictures.
+      "gi", "rtreflect", "lights", "looks", "planar", "ssr", "shadow", "hdr", "sky", "distortion", "vr",
+      "*vulkan-scripts"], []),
     # `hygiene` rides irisgl/import, irisgl/document and irisgl/core because
     # source.bake_key_guard (BAKEKEY-1) watches files in all three: the mesh
     # bake's format version is HAND-bumped, and the lane that has to bump it is
@@ -101,13 +107,17 @@ AREA_RULES = [
     (r"^src/services/", ["services", "*headless-scripts"], []),
     (r"^src/(data|io|commands)/", ["document", "commands", "reopen", "export", "samples", "assetpaths",
                                    "assetmigrate", "services", "*headless-scripts"], ["project", "scene", "node"]),
-    (r"^src/viewport/", ["app", "input", "gizmo", "picking", "cameras", "sockets", "ui"],
-     ["editor", "camera", "input"]),
+    (r"^src/viewport/", ["app", "input", "gizmo", "picking", "cameras", "sockets", "ui",
+                         # the render driver, the frame monitor host, the screenshot grades and the
+                         # VR pacing live here (GATE-SCOPE-2, 2026-09-17)
+                         "perf", "hdr", "vr", "player", "thumbnails"],
+     ["editor", "camera", "input", "perf", "vr"]),
     (r"^src/(bridge|player)/", ["player", "thumbnails", "materialpreview", "assets", "avatar", "app"],
      ["player", "avatar", "materials", "assets"]),
     (r"^src/modules/materials/", ["shadergraph", "pieces", "materialpreview", "ui"],
      ["materials", "material", "graph"]),
     (r"^src/modules/avatar/", ["avatar", "skeletal", "ui"], ["avatar", "anim"]),
+    (r"^src/modules/vr/", ["vr", "player", "app"], ["vr", "player"]),
     (r"^src/(modules/publish|export)/", ["export", "ui"], ["project", "publish"]),
     (r"^src/(ui|shell)/", ["ui", "app", "theme", "shortcuts", "desktops", "drawers"], ["editor", "app", "desktop"]),
     (r"^src/app/", ["app", "apppaths", "log", "shutdown", "hygiene", "threading", "api"], ["app"]),
