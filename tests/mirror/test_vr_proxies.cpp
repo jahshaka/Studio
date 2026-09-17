@@ -384,6 +384,124 @@ int main(int argc, char **argv)
         renderN(3);
     }
 
+    // ---- I. THE MEMO IS NOT THE ONLY WRITER (VR-INPUT-1E-FIX finding 4) --
+    //
+    // The mirror remembers whether it last showed or hid each wand, so a still
+    // frame writes no flag. But the running SESSION hides an unlocated hand
+    // itself, inside its own frame (VrSession::placeProxies) — and every frame
+    // loop that calls renderOneFrame without a host tick in front of it (the
+    // scripted editor loops, the stable offscreen render, the Player's own
+    // loop) runs that hide with no mirror sync behind it. With the memo still
+    // saying "shown", nothing ever wrote the flag back and the wearer's hand
+    // stayed missing until the next invalid→valid transition the mirror
+    // happened to see.
+    //
+    // THE HIDE HERE IS EXACTLY THE SESSION'S: one setNodeVisible(false) on the
+    // node, with the hand still valid in the status.
+    {
+        NodeId px[2] = { 0, 0 };
+        mirror.vrProxyNodes(px);
+        target->setNodeVisible(px[0], false);
+        target->setNodeVisible(px[1], false);
+        renderN(2);
+        const size_t stranded = differing(img.rgba, withProxies);
+        std::printf("   after a session-style hide, one sync later: %zu bytes differ from the "
+                    "picture with both wands\n", stranded);
+        CHECK(stranded == 0u,
+              "I: A PROXY ANOTHER WRITER HID COMES BACK ON THE NEXT SYNC — the mirror's show "
+              "side writes the flag every frame, because the session is a second writer");
+
+        // ...AND THE ORDINARY CYCLE STILL COSTS NOTHING AND STILL WORKS:
+        // valid -> invalid -> valid, which no suite covered.
+        VrStatus goneLeft = st;
+        goneLeft.hands[VrHandLeft].valid = false;
+        mirror.setVrProxies(true, goneLeft);
+        renderN(2);
+        const size_t oneHand = differing(img.rgba, withProxies);
+        CHECK(oneHand > 100u,
+              "I: a hand that stops being reported takes its wand out of the picture");
+        mirror.setVrProxies(true, st);
+        renderN(2);
+        CHECK(differing(img.rgba, withProxies) == 0u,
+              "I: ...and a hand that comes back gets it back, byte for byte");
+    }
+
+    // ---- J. THE RAY IS NOT A HAND MARKER (VR-INPUT-1E-FIX finding 6) -----
+    //
+    // `vr.proxies(false)` is the WANDS' off switch: "do not draw a marker where
+    // my hand is". The ray is the pointing TOOL — it is what tells a wearer
+    // what they are about to select — so it is independent of that switch and
+    // belongs to the SESSION, which is its only writer. The first cut took the
+    // ray down with the wands, so the behaviour depended on the ORDER the two
+    // were toggled in: the session put back every frame what the host had just
+    // hidden (the very asymmetry VrSession::placeProxies forbids), and with the
+    // switch off BEFORE a session the ray's nodes were never built at all.
+    {
+        NodeId ray[2] = { 0, 0 };
+        mirror.vrRayNodes(ray);
+        // A SESSION'S PLACEMENT, STOOD IN FOR: the mirror never places a ray
+        // (a ray computed outside the frame leaves the wearer's own hand), so
+        // this is the one write a live session would have made — three metres
+        // of line in front of the camera.
+        target->setNodeTransform(ray[0], Vec3{ 0.0f, 1.0f, -1.5f }, Quat{ 0, 0, 0, 1 },
+                                 Vec3{ 1.0f, 1.0f, 3.0f });
+
+        // The reference: the wands switched off and the ray NOT placed.
+        mirror.setVrProxies(false, st);
+        target->setNodeVisible(ray[0], false);
+        renderN(3);
+        const std::vector<unsigned char> noWands = img.rgba;
+        CHECK(differing(noWands, quiet) == 0u,
+              "J: with the wands switched off and no ray placed, the picture is the one with no "
+              "session at all");
+
+        // ...and now the session draws its ray, with the switch still off.
+        target->setNodeVisible(ray[0], true);
+        renderN(3);
+        const size_t rayPixels = differing(img.rgba, noWands);
+        std::printf("   the ray with vr.proxies(false): %zu bytes moved\n", rayPixels);
+        // A LINE IS ONE PIXEL WIDE, and three metres of it seen end-on in a
+        // 256-pixel view is about twenty pixels: measured 84 bytes = 21 px, and
+        // the reference above is byte-identical to the no-session picture, so
+        // ANY difference here is the ray and nothing else.
+        CHECK(rayPixels > 40u,
+              "J: THE RAY SURVIVES `vr.proxies(false)` — the wearer still sees what they are "
+              "pointing at, and the mirror no longer fights the session for the flag");
+
+        // ...AND THE ORDER DOES NOT MATTER: a mirror whose switch was off
+        // before the session ever started still builds the ray's nodes.
+        {
+            Scene *second = engine->createScene("proxies-order");
+            CHECK(second != nullptr, "J: a second scene for the toggle-order case");
+            if (second) {
+                {
+                    auto doc2 = iris::Scene::create();
+                    SceneMirror m2(second);
+                    m2.setSource(doc2);
+                    m2.setVrProxies(false, st);       // OFF before anything is built
+                    m2.sync();
+                    NodeId ray2[2] = { 0, 0 }, px2[2] = { 0, 0 };
+                    m2.vrRayNodes(ray2);
+                    m2.vrProxyNodes(px2);
+                    CHECK(ray2[0] && ray2[1],
+                          "J: the ray's two nodes are built by the SESSION even with the wands "
+                          "switched off first — the feature does not depend on the order the "
+                          "two switches were thrown in");
+                    CHECK(px2[0] && px2[1],
+                          "J: ...and the wands exist too (built, hidden), so switching them on "
+                          "mid-session costs no construction");
+                }
+                engine->destroyScene(second);
+            }
+        }
+
+        target->setNodeVisible(ray[0], false);
+        mirror.setVrProxies(true, st);
+        renderN(3);
+        CHECK(differing(img.rgba, withProxies) == 0u,
+              "J: ...and with the switch back on the picture is the two wands again");
+    }
+
     // ---- ...and the proxies go when the session does ----------------------
     mirror.setHighlightedNodes({}, iris::SceneNodePtr());
     st.active = false;

@@ -27,8 +27,13 @@ no model for (the simple controller, WMR, bare hands, nothing bound).
   python3 make-controller-obj.py left.glb  meta-quest-touch-pro/left.obj
   python3 make-controller-obj.py right.glb meta-quest-touch-pro/right.obj
   ```
-  Results checked in: `left.obj` sha256 `f80c7672309e9220bd7be06cb92e19fc103304adfdc82071859c5824517537b5`,
-  `right.obj` sha256 `08a3fa8b62b85cd8871b3a079c63060f7de3c2eaecdf1e5ae33d76604191e180`.
+  Results checked in: `left.obj` sha256 `dae11179d9eed961aeb40696dc18587d751160d87bb8106352a2dc14054304ca`,
+  `right.obj` sha256 `775a78be9a71920edfe7b24cff24e5d267749d1fb32018a9d44421b1f37ae94e`.
+  (Re-recorded 2026-09-17 by lane VR-INPUT-1E-FIX: each file's header now carries the licence
+  line `# MIT (c) 2019 Amazon — see PROVENANCE.md`, written by the script above, because the
+  .obj ships inside the app's qrc where this file does not follow it. The geometry is
+  byte-identical — the previous hashes were `f80c7672…` / `08a3fa8b…`, the same files without
+  that one comment line.)
 
 **WHY A DERIVED FILE AND NOT THE .glb.** The upstream asset places its six parts (body,
 trigger, squeeze, thumbstick, two buttons) by NODE TRANSFORM, and this tree's one assimp read

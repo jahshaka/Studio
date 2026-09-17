@@ -190,10 +190,10 @@ set_target_properties(test_vr_proxies PROPERTIES
 target_include_directories(test_vr_proxies PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+# (No JAHSHAKA_SOURCE_DIR here: the app's own models.qrc is compiled in above,
+# which is the point of claim H — the suite reads the SHIPPED resource path and
+# never the source tree. The define was left behind by the first cut and unused.)
 target_compile_definitions(test_vr_proxies PRIVATE
-    # The VR controller MODELS are read from the source tree (claim H): this
-    # binary is not the app and carries none of the app's qrc resources.
-    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_vr_proxies PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_vr_proxies JahshakaEngineMedia)

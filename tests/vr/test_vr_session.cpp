@@ -676,21 +676,42 @@ int main() {
         // for VrData (the defect this round fixed) renders the headset with
         // INVERTED DEPTH while every other picture in the process is right —
         // and this is the assertion that says so.
-        // THE RESIDUAL FOLLOWS THE ORDER, NOT THE EYE — measured, and it is
-        // what closes the question of whether the second eye's ray route is as
-        // good as the first's (V2F-3). `vrEyeScreenshot` renders ~90 frames of
-        // its own and the session's auto-exposure moves a little through them,
-        // so whichever control is taken FIRST is compared with the session's
-        // picture at the moment its exposure constant was read and reads
-        // 0.000/255 — and the other carries the drift, whether that is the
-        // right eye (1.209 over the sky rows) or, with this switch on, the left
-        // (1.230). The routes are not the difference; the clock is.
-        const bool rightFirst = std::getenv("JAH_VR_RIGHT_FIRST") != nullptr;
-        Image firstShot;
-        if (rightFirst) engine->vrEyeScreenshot(1u, firstShot);
-        Image mono;
-        if (CHECK_MSG(engine->vrEyeScreenshot(0u, mono), "vrEyeScreenshot(left): %s",
+        // EACH CONTROL IS PAIRED WITH ITS OWN READ OF THE STEREO PICTURE, AND
+        // THAT IS WHAT MAKES THIS A TEST ABOUT STEREO RATHER THAN ABOUT TIME
+        // (VR-INPUT-1E-FIX, the lead's item after two reds under three-lane
+        // load: 2.096 % and 2.042 % of bytes over 8, worst 231/255, 3/3 solo).
+        //
+        // THE MECHANISM. `vrEyeScreenshot` pins its control camera to
+        // `mEyeWorldPos/Rot` — the eye poses of the LAST COMPLETED FRAME — and
+        // then renders ~90 frames of its own to settle its chain. Monado's
+        // simulated head MOVES with wall time, and those ~90 frames are wall
+        // time: so the second control was pinned to a pose ninety frames after
+        // the stereo picture it was compared with, and every silhouette in the
+        // fixture differed by however far the head had walked in between. Under
+        // load that gap grows, which is why it reddened on a busy box and never
+        // solo. The old JAH_VR_RIGHT_FIRST experiment measured exactly this
+        // (whichever control was taken FIRST read 0.000 and the other carried
+        // the drift) and is DELETED with the defect it diagnosed — it can only
+        // move which arm pays, and now neither does.
+        //
+        // THE PAIRING. `View::readPixels` renders nothing (it downloads the
+        // target), so a readback taken immediately before a control call holds
+        // the very frame whose eye poses that call is about to pin — and the
+        // exposure constant it reads is the one that frame converged to. No
+        // wall clock is in the comparison at all, at either end, on any load.
+        const auto stereoHalfNow = [&](unsigned eye, Image &shot, Half &half) {
+            Half a, b;
+            if (!engine->vrView()->readPixels(shot) || !splitEyes(shot, a, b)) return false;
+            half = eye ? b : a;
+            return true;
+        };
+        Image stereoL, mono;
+        Half lPair;
+        if (CHECK_MSG(stereoHalfNow(0u, stereoL, lPair) &&
+                          engine->vrEyeScreenshot(0u, mono),
+                      "the left eye's pair — one stereo read and its control: %s",
                       engine->lastError().c_str())) {
+            const Half &l = lPair;
 
             CHECK_MSG(mono.width == l.w && mono.height == l.h,
                       "the control is one eye's size (%ux%u vs %ux%u)", mono.width, mono.height,
@@ -719,10 +740,13 @@ int main() {
         // THE RIGHT EYE TOO, and it is not a symmetry for its own sake: the
         // right half is the one a viewport-index failure leaves empty and the
         // one a per-eye-ray failure paints with the left eye's sky.
-        Image monoR;
-        if (rightFirst) monoR = firstShot;
-        if (CHECK_MSG(rightFirst ? !monoR.rgba.empty() : engine->vrEyeScreenshot(1u, monoR),
-                      "vrEyeScreenshot(right): %s", engine->lastError().c_str())) {
+        Image stereoR, monoR;
+        Half rPair;
+        if (CHECK_MSG(stereoHalfNow(1u, stereoR, rPair) &&
+                          engine->vrEyeScreenshot(1u, monoR),
+                      "the right eye's pair — its OWN stereo read and its control: %s",
+                      engine->lastError().c_str())) {
+            const Half &r = rPair;
             if (const char *dir = std::getenv("JAH_VR_DUMP")) {
                 auto dumpImg = [&](const std::vector<unsigned char> &px, unsigned w, unsigned h,
                                    const char *name) {
@@ -734,17 +758,18 @@ int main() {
                 };
                 dumpImg(r.px, r.w, r.h, "right-eye");
                 dumpImg(monoR.rgba, monoR.width, monoR.height, "right-control");
-                dumpImg(l.px, l.w, l.h, "left-eye");
+                dumpImg(lPair.px, lPair.w, lPair.h, "left-eye");
                 dumpImg(mono.rgba, mono.width, mono.height, "left-control");
             }
             const PictureDiff rd = pictureDiff(monoR.rgba, r.px);
             const PictureDiff rdSky = pictureDiffRows(monoR.rgba, r.px, r.w, 0, r.h / 4u);
             const PictureDiff rdRest = pictureDiffRows(monoR.rgba, r.px, r.w, r.h / 4u, r.h);
             std::printf("    SPLIT right: sky rows mean %.3f (worst %d), the rest mean %.3f "
-                        "(worst %d)%s\n", rdSky.meanAbs, rdSky.worst, rdRest.meanAbs,
-                        rdRest.worst, rightFirst ? "  [right control taken FIRST]" : "");
+                        "(worst %d)\n", rdSky.meanAbs, rdSky.worst, rdRest.meanAbs,
+                        rdRest.worst);
             CHECK_MSG(rd.meanAbs < 1.0 && rd.fractionOver < 0.02,
-                      "THE RIGHT EYE IS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION: mean "
+                      "THE RIGHT EYE IS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION "
+                      "(compared against its OWN stereo read, so no wall clock is in it): mean "
                       "%.3f/255, %.3f%% of bytes over 8, worst %d — the half that a "
                       "viewport-index failure leaves empty and a per-eye-ray failure paints "
                       "with the LEFT eye's sky",
@@ -1282,12 +1307,43 @@ int main() {
         scene->setVrProxyNodes(proxy[0], proxy[1]);
         scene->setVrRayNodes(rayNode[0], rayNode[1]);
 
+        // A SCRIPT'S LEFTOVER, WRITTEN BEFORE ANYBODY PUT A HEADSET ON
+        // (VR-INPUT-1E-FIX finding 1). With no session an injection is always
+        // accepted — that is the headless backbone — and it is addressed to
+        // THAT situation. Carried into the session it replaced the wearer's own
+        // hand for the session's life, and the write-side refusal never saw it
+        // because nothing was being written any more.
+        {
+            VrHandState stale;
+            stale.valid = true;
+            stale.grip.valid = true;
+            stale.grip.position = Vec3{ -9.0f, -9.0f, -9.0f };
+            stale.grip.rotation = Quat{ 0.0f, 0.0f, 0.0f, 1.0f };
+            CHECK_MSG(engine->vrInjectInput(VrHandLeft, stale),
+                      "an injection with NO session is accepted (the headless backbone)");
+            CHECK(engine->vrStatus().input[VrHandLeft].fromInjection);
+        }
+
         VrConfig cfg;
         cfg.mirror = VrMirrorMode::None;
         const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession: %s",
                                      engine->lastError().c_str());
         if (began) {
             pump(engine.get(), 60ull, 600u);
+            // ...AND THE SESSION STARTED WITH AN EMPTY STORE. The wearer's own
+            // hand is what reports, and nothing anywhere says `fromInjection`.
+            {
+                const VrStatus fresh = engine->vrStatus();
+                CHECK_MSG(!fresh.input[VrHandLeft].fromInjection &&
+                              !fresh.input[VrHandRight].fromInjection,
+                          "A SESSION INHERITS NO INJECTION: the store is emptied at "
+                          "beginVrSession, so the wearer's own hands report (left valid=%d "
+                          "injected=%d)", int(fresh.input[VrHandLeft].valid),
+                          int(fresh.input[VrHandLeft].fromInjection));
+                CHECK_MSG(!fresh.hands[VrHandLeft].valid ||
+                              std::fabs(fresh.hands[VrHandLeft].position.x + 9.0f) > 1e-3f,
+                          "...and the stale pose is nowhere in the status");
+            }
             const VrStatus st = engine->vrStatus();
             std::printf("INPUT  profile='%s' bindings %u/%u | left valid=%d aim=%d | "
                         "right valid=%d aim=%d\n",
@@ -1307,7 +1363,7 @@ int main() {
                       "offered — no XR_ERROR_PATH_UNSUPPORTED anywhere",
                       st.bindingProfilesAccepted, st.bindingProfiles);
             // (b) AND IT SAYS WHICH ONE IT BOUND.
-            CHECK_MSG(st.profile.rfind("/interaction_profiles/", 0) == 0,
+            CHECK_MSG(st.profile.startsWith("/interaction_profiles/"),
                       "the runtime reports the profile it bound ('%s')", st.profile.c_str());
             // (c) THE AIM POSE, beside the grip — two different answers, both
             // composed through the rig.
@@ -1355,12 +1411,38 @@ int main() {
                       engine->lastError().c_str());
             CHECK(engine->lastError().find("JAHSHAKA_VR_TEST_INJECT") != std::string::npos);
 
+            // (d2) ...BUT A WITHDRAWAL IS NEVER REFUSED (VR-INPUT-1E-FIX
+            // finding 1). "Stop injecting" cannot fool a smoke in a headset,
+            // and refusing it made the SAFE direction the one that needed the
+            // override — a script that had legally put a hand somewhere (before
+            // the profile arrived) could not take it back again.
+            CHECK_MSG(engine->vrInjectInput(VrHandLeft, VrHandState()),
+                      "A WITHDRAWAL IS ACCEPTED even while a bound profile reports, with no "
+                      "override: taking a fake hand away is always safe");
+
             // (e) ...AND THE OVERRIDE IS EXPLICIT AND PROCESS-LEVEL. Read live
             // rather than latched at boot, which is what lets one process prove
             // both halves of the rule.
             setenv("JAHSHAKA_VR_TEST_INJECT", "1", 1);
             CHECK(engine->vrInjectInput(VrHandLeft, fake));
             CHECK(!engine->vrInjectInput(7, fake));      // not a hand
+            // ...AND IT READS BACK AT ONCE, NOT FROM THE NEXT FRAME (the lead's
+            // item, 2026-09-17). The session's `input[]` is a per-frame copy
+            // (readInput applies the injection inside the frame), so this used
+            // to answer the runtime's hand until something rendered — while the
+            // same call with NO session answered the store immediately. A host
+            // that injects a gesture and reads the state back had to render a
+            // frame it did not otherwise need.
+            {
+                const VrStatus now = engine->vrStatus();
+                CHECK_MSG(now.input[VrHandLeft].fromInjection &&
+                              std::fabs(now.input[VrHandLeft].grip.position.x - 1.5f) < 1e-5f &&
+                              std::fabs(now.hands[VrHandLeft].position.x - 1.5f) < 1e-5f,
+                          "AN INJECTION IS VISIBLE THE MOMENT IT IS WRITTEN, with a session "
+                          "running exactly as without one (injected %d, grip x %.3f)",
+                          int(now.input[VrHandLeft].fromInjection),
+                          now.input[VrHandLeft].grip.position.x);
+            }
             pump(engine.get(), engine->vrStatus().frames + 4ull, 60u);
             {
                 const VrStatus inj = engine->vrStatus();
@@ -1385,19 +1467,22 @@ int main() {
                 CHECK_MSG(inj.hands[VrHandLeft].valid &&
                               std::fabs(inj.hands[VrHandLeft].position.x - 1.5f) < 1e-5f,
                           "...and `hands[]` IS `input[].grip`, injection included");
-                // FOCUS RIDES THE SAMPLE (the Studio side's focus-loss cancel
-                // reads it): true here because the session IS focused, and a
-                // test drives the cancel by injecting it false.
-                CHECK_MSG(got.focused == (inj.state == VrState::Focused),
-                          "the sample carries the session's FOCUS (state %d, focused %d)",
-                          int(inj.state), int(got.focused));
-                VrHandState unfocused = fake;
-                unfocused.focused = false;
-                CHECK(engine->vrInjectInput(VrHandLeft, unfocused));
+                // FOCUS IS THE SESSION'S, ONCE (VR-INPUT-1E-FIX): a runtime
+                // takes input focus away for the whole application, never for
+                // one hand, so there is one bit — and while a test drives the
+                // hands it is the test's bit, which is how a focus-loss cancel
+                // is asserted against a runtime whose dashboard nothing can
+                // raise. It defaults to TRUE: an injection that says nothing
+                // about focus means "the wearer was there".
+                CHECK_MSG(inj.inputFocused,
+                          "the status carries ONE input focus, true while the session is "
+                          "focused and nothing says otherwise (state %d)", int(inj.state));
+                engine->vrInjectFocus(false);
                 pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
-                CHECK_MSG(!engine->vrStatus().input[VrHandLeft].focused,
-                          "...and an injected sample can say focus was LOST, which is how a "
+                CHECK_MSG(!engine->vrStatus().inputFocused,
+                          "...and an injection can say focus was LOST, which is how a "
                           "gesture's cancel is driven with no dashboard to raise");
+                engine->vrInjectFocus(true);
                 CHECK(engine->vrInjectInput(VrHandLeft, fake));
                 pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
                 // THE PROXY FOLLOWS, placed by the session inside the frame.
@@ -1498,10 +1583,19 @@ int main() {
                           "THE RAY LEAVES THE HAND, NOT THE HOST'S STALE ORIGIN: the line stands "
                           "at this frame's aim pose (%.3f, %.3f, %.3f)", linePos.x, linePos.y,
                           linePos.z);
-                CHECK_MSG(haveMark && std::fabs(markerPos.z - (-2.05f - 3.0f)) < 1e-3f &&
-                              std::fabs(markerPos.x - 1.5f) < 1e-3f,
-                          "...and the hit marker stands at the host's own distance along it "
-                          "(%.3f, %.3f, %.3f)", markerPos.x, markerPos.y, markerPos.z);
+                // THE MARKER IS AT THE HIT, NOT AT A DISTANCE ALONG THE AIM
+                // (VR-INPUT-1E-FIX finding 2). The first cut kept the host's
+                // LENGTH and re-anchored the DIRECTION too, which put the
+                // marker at freshOrigin + freshDir * L — three metres down THIS
+                // frame's aim, two metres from the surface that was actually
+                // picked, and codified in that shape by this very test. The
+                // picked surface has not moved; the hand has.
+                CHECK_MSG(haveMark && std::fabs(markerPos.x - ray.hitPoint.x) < 1e-4f &&
+                              std::fabs(markerPos.y - ray.hitPoint.y) < 1e-4f &&
+                              std::fabs(markerPos.z - ray.hitPoint.z) < 1e-4f,
+                          "...and THE HIT MARKER STANDS ON THE HIT POINT (%.3f, %.3f, %.3f) — "
+                          "the place the pick found, whatever the hand has done since",
+                          markerPos.x, markerPos.y, markerPos.z);
                 // A RAY NOBODY IS POINTING is not drawn — and the engine keeps
                 // what it was handed, so a host can read its own state back.
                 VrRayState off;
@@ -1516,6 +1610,32 @@ int main() {
             CHECK_MSG(!engine->vrStatus().input[VrHandLeft].fromInjection,
                       "an injection is withdrawn by a default state — the hand is the runtime's "
                       "again");
+
+            // (g2) A SAMPLE THE PROFILE OVERTOOK IS IGNORED AND FORGOTTEN
+            // (VR-INPUT-1E-FIX finding 1). The write-side refusal cannot be
+            // the whole rule: the override was ON when this was written (a
+            // suite), or nothing was bound yet (a session's first frames), and
+            // then the sample would have stood in for the wearer's own hand for
+            // the rest of the session with nothing left to refuse. So the
+            // per-frame read drops it the moment a real profile reports.
+            {
+                CHECK(engine->vrInjectInput(VrHandLeft, fake));
+                pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
+                CHECK(engine->vrStatus().input[VrHandLeft].fromInjection);
+                unsetenv("JAHSHAKA_VR_TEST_INJECT");
+                pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
+                const VrStatus back = engine->vrStatus();
+                CHECK_MSG(!back.input[VrHandLeft].fromInjection,
+                          "A BOUND PROFILE OVERTAKES A LIVE INJECTION: the wearer's own hand "
+                          "reports again the moment the override is gone (valid=%d)",
+                          int(back.input[VrHandLeft].valid));
+                CHECK_MSG(std::fabs(back.hands[VrHandLeft].position.x - 1.5f) > 1e-3f ||
+                              !back.hands[VrHandLeft].valid,
+                          "...and the injected pose is out of `hands[]` with it");
+                // ...AND IT IS FORGOTTEN, not merely ignored: with the session
+                // over (below) nothing comes back to life.
+                setenv("JAHSHAKA_VR_TEST_INJECT", "1", 1);
+            }
 
             // (h) THE ONE OUTPUT. On a simulated controller nothing buzzes and
             // the call still succeeds: a profile with no haptic output is a
@@ -1546,6 +1666,84 @@ int main() {
         scene->removeNode(proxy[1]);
         scene->removeNode(rayNode[0]);
         scene->removeNode(rayNode[1]);
+    }
+
+    // =======================================================================
+    // A SESSION WHOSE RUNTIME REFUSED THE ACTION SET (VR-INPUT-1E-FIX finding
+    // 3). It is a real shape — a runtime may refuse `xrCreateActionSet` or
+    // `xrAttachSessionActionSets`, and then the session has no controllers, no
+    // aim poses and no sync at all — and it used to take the whole per-frame
+    // INPUT read down with it: the read hung off the hand LOCATE, whose two
+    // early returns (no action set; a failed sync) skipped it. Such a session
+    // reported focus from a struct default for ever and could not be
+    // driven by an injection through the session at all, which is the one
+    // route a wearer-less test has.
+    //
+    // No simulated runtime will refuse on request, so the refusal is armed
+    // with the session's own test hook (JAHSHAKA_VR_TEST_NO_ACTIONS).
+    // =======================================================================
+    {
+        setenv("JAHSHAKA_VR_TEST_NO_ACTIONS", "1", 1);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg),
+                                     "beginVrSession with no action set: %s",
+                                     engine->lastError().c_str());
+        setenv("JAHSHAKA_VR_TEST_NO_ACTIONS", "0", 1);
+        if (began) {
+            pump(engine.get(), engine->vrStatus().frames + 8ull, 300u);
+            const VrStatus na = engine->vrStatus();
+            std::printf("NOACT  handActions=%d profile='%s' left valid=%d inputFocused=%d "
+                        "state=%d\n", int(na.handActions), na.profile.c_str(),
+                        int(na.input[VrHandLeft].valid), int(na.inputFocused), int(na.state));
+            CHECK_MSG(!na.handActions,
+                      "the hook holds: this session has NO action set, and it still runs");
+            CHECK_MSG(na.profile.empty(),
+                      "...so the runtime binds no profile, and an injection needs no override");
+            // FOCUS COMES FROM THE SESSION, not from a struct's default — and a
+            // session with no action set has one exactly like any other.
+            CHECK_MSG(na.inputFocused == (na.state == VrState::Focused),
+                      "a session with no actions still reports the SESSION's own input focus "
+                      "(state %d, inputFocused %d)", int(na.state), int(na.inputFocused));
+            VrHandState hand;
+            hand.valid = true;
+            hand.grip.valid = true;
+            hand.grip.position = Vec3{ 0.4f, 1.2f, -1.5f };
+            hand.grip.rotation = Quat{ 0.0f, 0.0f, 0.0f, 1.0f };
+            hand.select = 0.9f;
+            hand.selectPressed = true;
+            CHECK(engine->vrInjectInput(VrHandRight, hand));
+            // ...visible at once here too, and this session has no profile at
+            // all, so it is the permitted path rather than the override's.
+            CHECK_MSG(engine->vrStatus().input[VrHandRight].fromInjection,
+                      "an injection into a session with nothing bound reads back before the "
+                      "next frame");
+            pump(engine.get(), engine->vrStatus().frames + 4ull, 120u);
+            const VrStatus inj = engine->vrStatus();
+            CHECK_MSG(inj.input[VrHandRight].fromInjection &&
+                          std::fabs(inj.input[VrHandRight].grip.position.x - 0.4f) < 1e-5f &&
+                          inj.input[VrHandRight].selectPressed,
+                      "AN INJECTED HAND REACHES A SESSION WITH NO ACTIONS AT ALL: the input "
+                      "read no longer hangs off the locate (grip x %.3f, injected %d)",
+                      inj.input[VrHandRight].grip.position.x,
+                      int(inj.input[VrHandRight].fromInjection));
+            CHECK_MSG(inj.hands[VrHandRight].valid &&
+                          std::fabs(inj.hands[VrHandRight].position.x - 0.4f) < 1e-5f,
+                      "...and `hands[]` follows it, as it does in a session with actions");
+            engine->vrInjectInput(VrHandRight, VrHandState());
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+        }
+        unsetenv("JAHSHAKA_VR_TEST_NO_ACTIONS");
+        unsetenv("JAHSHAKA_VR_TEST_INJECT");
+        // AND NOTHING SURVIVED EITHER SESSION (finding 1): the store is emptied
+        // at endVrSession, so the headless answer after a session is "no hand"
+        // rather than whatever the last suite wrote.
+        const VrStatus after = engine->vrStatus();
+        CHECK_MSG(!after.input[VrHandLeft].fromInjection &&
+                      !after.input[VrHandRight].fromInjection &&
+                      !after.hands[VrHandLeft].valid && !after.hands[VrHandRight].valid,
+                  "A SESSION LEAVES NO INJECTION BEHIND: the store is emptied at endVrSession");
     }
 
     // ---- a session on a dead runtime must refuse, never hang --------------
