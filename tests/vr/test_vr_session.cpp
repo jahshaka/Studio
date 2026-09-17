@@ -1669,6 +1669,271 @@ int main() {
     }
 
     // =======================================================================
+    // 10. THE REFLECTION IS IN BOTH EYES (lane REFLECT-VR-1; PHOTON_SPEC §7 R5).
+    //
+    // THE OBSERVATION THIS CASE EXISTS FOR (the owner, WiVRn + Quest Pro): "on
+    // the desktop I see the reflections, in the headset I don't". The mechanism
+    // was not subtle once looked for — phase 2 set the session View's SSR row
+    // to ZERO, and the ray-traced reflection rides that row's chain (its
+    // prepass writes the normals and roughness the trace reads;
+    // `jahSsrReflection` is what it writes and what HlmsPbs composites) — so
+    // the headset had no reflection of any kind while the desktop had both
+    // sources. Phase 2's reason was right about the MARCH (a screen-space walk
+    // cannot cross a target that holds two eyes) and wrong to take the rays
+    // with it: a ray is traced in the WORLD, from the eye that owns its pixel.
+    //
+    // WHAT IS ASSERTED, and why each half is needed:
+    //
+    //   (a) WITH THE ROW OFF, the mirror shows nothing — the phase-2 picture,
+    //       measured in the same session and the same fixture, which is what
+    //       makes the arm below a difference rather than a number.
+    //   (b) WITH THE ROW ON, BOTH EYES show the reflection, in the band the
+    //       geometry puts it in and NOT in the band it does not: a trace that
+    //       ran ONE camera across both halves (the shape before this lane's
+    //       shader change) maps each eye's half onto half of the head's
+    //       frustum, so a reflection 22 degrees off axis lands in the wrong
+    //       eye or in neither.
+    //   (c) EACH EYE AGREES WITH A MONO RENDER AT THAT EYE'S POSE
+    //       (`vrEyeScreenshot`, the control the reverse-Z detector already
+    //       uses) — the statement that the eye's reflection is THAT EYE'S and
+    //       not the head's, to the same tolerance as the rest of the picture.
+    //
+    // THE FIXTURE is rt_reflect's, in a headset: a mirror wall the wearer faces
+    // and an EMISSIVE red cube behind them, off to one side. Emissive because a
+    // hit is shaded from the Photon voxels, so the reflected radiance must owe
+    // nothing to a light's direction; off to one side because a reflection on
+    // the view axis is the one place a mono trace would also put it.
+    // =======================================================================
+    {
+        setFixtureSky(scene, false);
+        // Grey ambient: what a metal falls back to when nothing answers, and
+        // the neutral the red is measured against.
+        scene->setAmbient(Colour{ 0.20f, 0.20f, 0.20f, 1.0f },
+                          Colour{ 0.15f, 0.15f, 0.15f, 1.0f });
+        // THE MIRROR, filling the wearer's view: metal, roughness 0, two metres
+        // in front of the stage origin (where every simulated runtime puts the
+        // head) and large enough to fill any fov from there.
+        const NodeId mirror = addTestCube(scene, Colour{ 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f, 0.0f);
+        setNodePosition(scene, mirror, Vec3{ 0.0f, 0.0f, -2.0f });
+        setNodeScale(scene, mirror, Vec3{ 24.0f, 20.0f, 0.2f });
+        // THE RED CUBE, BEHIND the wearer and to their RIGHT. Its virtual image
+        // in the mirror sits about 22 degrees right of the view axis, which is
+        // the whole point: inside each eye's own frustum, outside the left half
+        // of a head-wide one.
+        const NodeId red = scene->createNode();
+        {
+            PbrParams rp;
+            rp.albedo = Colour{ 0.05f, 0.05f, 0.05f, 1.0f };
+            rp.emissive = Colour{ 6.0f, 0.0f, 0.0f, 1.0f };
+            rp.roughness = 0.6f;
+            const MaterialId m = scene->createPbrMaterial(rp);
+            const MeshId mesh = scene->createMesh(enginetest::unitCubeMesh());
+            REQUIRE(red && m && mesh && scene->attachMesh(red, mesh, m));
+        }
+        setNodePosition(scene, red, Vec3{ 1.6f, 0.2f, 1.6f });
+        setNodeScale(scene, red, Vec3{ 1.2f, 1.2f, 1.2f });
+        // THE VOXELS A HIT IS SHADED FROM have to reach the cube AND the mirror.
+        {
+            GiParams gi;
+            gi.mode = GiMode::Vct;
+            gi.quality = GiQuality::High;
+            gi.numBounces = 1;
+            gi.testBoundsMin = Vec3{ -8.0f, -4.0f, -8.0f };
+            gi.testBoundsMax = Vec3{ 8.0f, 6.0f, 8.0f };
+            CHECK_MSG(scene->setGlobalIllumination(gi), "the voxel arm builds over the fixture");
+        }
+
+        /// HOW MUCH RED A REGION HOLDS THAT IS NOT GREY — the same measure
+        /// gi.rt_reflect uses, and the reason the fixture's one coloured object
+        /// is emissive: R minus the mean of G and B is zero for every grey the
+        /// ambient can produce and positive only where the cube's radiance
+        /// arrived. In 0..255 units, per pixel.
+        const auto redExcess = [](const Half &h, float x0, float x1, float y0, float y1) {
+            if (!h.w || !h.h) return 0.0;
+            const unsigned ax = unsigned(x0 * float(h.w)), bx = unsigned(x1 * float(h.w));
+            const unsigned ay = unsigned(y0 * float(h.h)), by = unsigned(y1 * float(h.h));
+            double sum = 0.0; size_t n = 0;
+            for (unsigned y = ay; y < by && y < h.h; ++y)
+                for (unsigned x = ax; x < bx && x < h.w; ++x) {
+                    const size_t i = (size_t(y) * h.w + x) * 4u;
+                    sum += double(h.px[i]) - 0.5 * (double(h.px[i + 1]) + double(h.px[i + 2]));
+                    ++n;
+                }
+            return n ? sum / double(n) : 0.0;
+        };
+        /// The same over an Image (a control render is one eye's worth).
+        const auto redExcessImg = [&redExcess](const Image &img, float x0, float x1,
+                                               float y0, float y1) {
+            Half h; h.w = img.width; h.h = img.height; h.px = img.rgba;
+            return redExcess(h, x0, x1, y0, y1);
+        };
+        // THE WHOLE PICTURE, NOT A BAND, and the reason is worth a line because
+        // a band was tried first: the mirror fills the wearer's view, so every
+        // pixel of the shot is a reflection of something, and WHERE the cube's
+        // own image lands depends on a head pose the runtime chooses (this one
+        // wobbles by the clock). A mean over the frame is the same measure
+        // `gi.rt_reflect` uses and it needs no geometry to be right — while the
+        // statement about WHERE the reflection is comes from the per-eye control
+        // below, which is a stronger one than any band could make.
+        const float kAx0 = 0.02f, kAx1 = 0.98f, kAy0 = 0.02f, kAy1 = 0.98f;
+
+        double offLeftEye = 0.0, offRightEye = 0.0;
+        // ---- (a) THE ROW OFF: the phase-2 headset, in this fixture ---------
+        {
+            VrConfig cfg;
+            cfg.mirror = VrMirrorMode::None;
+            cfg.ssr = 0;
+            if (CHECK_MSG(engine->beginVrSession(scene, cfg),
+                          "a session with the reflection row OFF: %s",
+                          engine->lastError().c_str())) {
+                pump(engine.get(), engine->vrStatus().frames + 24ull, 600u);
+                Image img; Half l, r;
+                if (CHECK_MSG(engine->vrView() && engine->vrView()->readPixels(img) &&
+                                  splitEyes(img, l, r), "and it draws both eyes")) {
+                    offLeftEye = redExcess(l, kAx0, kAx1, kAy0, kAy1);
+                    offRightEye = redExcess(r, kAx0, kAx1, kAy0, kAy1);
+                    std::printf("    ROW OFF: the mirror reads %+.2f (left eye) and %+.2f "
+                                "(right eye) 255ths of red over grey — the cone-traced answer "
+                                "alone, which is the phase-2 headset\n", offLeftEye, offRightEye);
+                }
+                engine->endVrSession();
+            }
+        }
+
+        // ---- (b) + (c) THE ROW ON ------------------------------------------
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        cfg.ssr = 2;                    // Epic: one ray per pixel of the eye
+        if (CHECK_MSG(engine->beginVrSession(scene, cfg),
+                      "a session with the project's reflection row ON: %s",
+                      engine->lastError().c_str())) {
+            // ENOUGH FRAMES FOR THE TRACE'S OWN WARM-UP: the filter composites
+            // a young mean at a reduced confidence for its first frames by
+            // design, and a mirror converges on the first ray. Counted, never
+            // timed.
+            pump(engine.get(), engine->vrStatus().frames + 32ull, 900u);
+            const RayQueryStatus rq = scene->rayQueryStatus();
+            std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f\n",
+                        int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays,
+                        rq.reflectMs);
+            // A MACHINE WITHOUT RAY QUERIES IS A SUPPORTED MACHINE: with no
+            // trace there is no reflection to assert, and the row bought the
+            // prepass and the clear — which is the honest fallback picture, not
+            // a failure. (`gi.rt_reflect` skips on the same reading.)
+            if (!engine->rayQueryAvailable() || !engine->rayTracing()) {
+                std::printf("    NOTE this machine has no ray queries; the per-eye reflection "
+                            "assertions are about the tier and skip\n");
+            } else {
+                CHECK_MSG(rq.reflect && rq.reflectRays > 0,
+                          "THE TRACE RAN FOR THE SESSION'S VIEW: %d rays this frame "
+                          "(a stereo view with no located eyes declines and reads 0)",
+                          rq.reflectRays);
+                for (unsigned eye = 0; eye < 2u; ++eye) {
+                    // THE PAIR, IN THE ORDER VR-INPUT-1E-FIX ESTABLISHED: the
+                    // stereo read first (it renders nothing), then the control
+                    // that pins itself to that frame's eye poses.
+                    Image img, mono; Half l, r;
+                    if (!CHECK_MSG(engine->vrView()->readPixels(img) && splitEyes(img, l, r) &&
+                                       engine->vrEyeScreenshot(eye, mono),
+                                   "eye %u: its stereo read and its mono control: %s", eye,
+                                   engine->lastError().c_str()))
+                        continue;
+                    const Half &half = eye ? r : l;
+                    // THE PICTURES THEMSELVES, on request (`JAH_VR_DUMP=<dir>`,
+                    // the same hook case 8 uses): a band mean says a reflection
+                    // is there and the picture says WHERE, which is the
+                    // difference between diagnosing this lane's defect and
+                    // guessing at it.
+                    if (const char *dir = std::getenv("JAH_VR_DUMP")) {
+                        char path[512];
+                        std::snprintf(path, sizeof(path), "%s/reflect-eye%u.ppm", dir, eye);
+                        if (FILE *f = std::fopen(path, "wb")) {
+                            std::fprintf(f, "P6\n%u %u\n255\n", half.w, half.h);
+                            for (size_t i = 0; i < size_t(half.w) * half.h; ++i)
+                                std::fwrite(&half.px[i * 4], 1, 3, f);
+                            std::fclose(f);
+                        }
+                        std::snprintf(path, sizeof(path), "%s/reflect-control%u.ppm", dir, eye);
+                        if (FILE *f = std::fopen(path, "wb")) {
+                            std::fprintf(f, "P6\n%u %u\n255\n", mono.width, mono.height);
+                            for (size_t i = 0; i < size_t(mono.width) * mono.height; ++i)
+                                std::fwrite(&mono.rgba[i * 4], 1, 3, f);
+                            std::fclose(f);
+                        }
+                    }
+                    const double on = redExcess(half, kAx0, kAx1, kAy0, kAy1);
+                    const double ctl = redExcessImg(mono, kAx0, kAx1, kAy0, kAy1);
+                    const double off = eye ? offRightEye : offLeftEye;
+                    const PictureDiff d = pictureDiff(mono.rgba, half.px);
+                    std::printf("    ROW ON eye %u: the mirror reads %+.2f (its mono control "
+                                "%+.2f, the row-off picture %+.2f); eye vs control mean %.3f, "
+                                "%.3f%% of bytes over 8, worst %d\n", eye, on, ctl, off,
+                                d.meanAbs, 100.0 * d.fractionOver, d.worst);
+                    // (b) THE REFLECTION IS THERE, AND THE ROW IS WHAT PUT IT
+                    // THERE: the same fixture, the same eye, measured with the
+                    // row off a moment ago. That difference is the owner's
+                    // observation, in numbers.
+                    CHECK_MSG(on > off * 1.5 && on > off + 8.0,
+                              "EYE %u SHOWS THE RAY-TRACED REFLECTION: the mirror reads %+.2f "
+                              "of red against %+.2f with the reflection row off — the headset's "
+                              "own A/B, in one session and one fixture", eye, on, off);
+                    // (c) AND IT IS THIS EYE'S OWN ANSWER, which is the
+                    // statement no band can make. The control is a mono render
+                    // at this eye's exact pose and projection through the SAME
+                    // reflection source (the session's PostFxDesc, which
+                    // `vrEyeScreenshot` copies — `ssrScreenMarch` included,
+                    // which is what makes the two comparable at all), so the
+                    // two pictures may differ only by the last bits of two
+                    // chains' arithmetic. The bar is the reverse-Z detector's
+                    // own, measured on the same fixture.
+                    //
+                    // THIS IS THE ASSERTION THE LANE EXISTS FOR, and it FAILS
+                    // BEFORE the fix: tracing the stereo target through ONE
+                    // camera for both halves — the shape before this lane,
+                    // reproducible on demand with `JAH_R5_MONO_EYES=1` — reads
+                    // a mean of 2.84/255 and 6.1 % of bytes over 8 in the LEFT
+                    // eye and 10.42 with 21.6 % in the RIGHT one (measured, one
+                    // run each side). The asymmetry is itself the explanation:
+                    // the rendering camera carries the LEFT eye's projection
+                    // (OgreVrSession.cpp's F2), so a one-camera trace is nearly
+                    // right for the left half and wrong for the other one —
+                    // which is exactly the kind of defect that looks like
+                    // "reflections are a bit odd in there" instead of a bug.
+                    CHECK_MSG(ctl > off + 8.0,
+                              "the control at this eye's pose shows it too (%+.2f against the "
+                              "row-off %+.2f) — the desktop-shaped render the owner compared "
+                              "against", ctl, off);
+                    // THE MEAN IS THE PRIMARY BAR and the fraction the
+                    // secondary, which is the other way round from the
+                    // reverse-Z detector above — because the two chains here
+                    // trace INDEPENDENT ray sequences, so the pixels of a
+                    // silhouette (where a ray either finds the near surface or
+                    // passes it) differ by construction and no convergence
+                    // removes them. Measured: mean 0.33-0.37 and 0.65-1.25 % of
+                    // bytes over 8 with the fix, against 2.84 at 6.1 % (left
+                    // eye) and 10.42 at 21.6 % (right) without it.
+                    CHECK_MSG(d.meanAbs < 1.0 && d.fractionOver < 0.03,
+                              "THE EYE'S REFLECTION IS THAT EYE'S: mean %.3f/255 against a mono "
+                              "render at this eye's own pose and projection (the bar is 1.0; ONE "
+                              "camera for two eyes reads 2.84 in the left eye and 10.42 in the "
+                              "right), with %.3f%% of bytes over 8 (bar 3%%, the defect 6.1 and "
+                              "21.6)", d.meanAbs, 100.0 * d.fractionOver);
+                }
+            }
+            engine->endVrSession();
+        }
+
+        // THE FIXTURE GOES BACK: the cases after this one share the scene.
+        {
+            GiParams off;
+            off.mode = GiMode::Off;
+            scene->setGlobalIllumination(off);
+        }
+        scene->removeNode(mirror);
+        scene->removeNode(red);
+    }
+
+    // =======================================================================
     // A SESSION WHOSE RUNTIME REFUSED THE ACTION SET (VR-INPUT-1E-FIX finding
     // 3). It is a real shape — a runtime may refuse `xrCreateActionSet` or
     // `xrAttachSessionActionSets`, and then the session has no controllers, no

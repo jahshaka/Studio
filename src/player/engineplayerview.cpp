@@ -288,7 +288,7 @@ bool EnginePlayerView::beginPlayerVr(const QVariantMap &options, QString *error)
     // longer be up.
     mScene->vr()->setViewRestore([this]() { if (view()) view()->setEnabled(mActive); });
     if (!mScene->vr()->begin(mScene->engineScene(), view(), mScene->renderCamera(),
-                             options, error))
+                             mScene->document(), options, error))
         return false;
     // THE LOOP'S CLOCK IS THE RUNTIME NOW (VR_SPEC §4.3): zero interval, vsync
     // off, and renderOneFrame blocks in xrWaitFrame instead. The driver

@@ -30,7 +30,7 @@ using namespace scriptmod;
 QVector<VerbInfo> PlayerApi::verbs() const
 {
     return {
-        { "play", "player.play({vr?, worldScale?}) -> bool",
+        { "play", "player.play({vr?, worldScale?, eyeWidth?, eyeHeight?, reflections?}) -> bool",
           "Starts the PLAYER space's scene — the Player page's own PlayBack, driving the same "
           "document through the same engine scene the editor draws (the Player page is a second "
           "VIEW on it, with the editor's helper geometry masked out). This is NOT editor.play(), "
@@ -41,7 +41,10 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "same scene, the wearer stands where the play camera stands and faces the way it faces, "
           "the desktop shows the left eye (this player's view becomes the mirror and stops "
           "rendering its own picture), the render loop is paced by the runtime, and the fly keys "
-          "walk the wearer along the direction the HEAD is looking. `worldScale` is metres of "
+          "walk the wearer along the direction the HEAD is looking. `reflections` (0 off, 1 "
+          "half-resolution, 2 full) overrides the PROJECT's own reflection row for the headset, "
+          "for a measurement; in VR the row buys ray-traced reflections per eye rather than the "
+          "desktop's screen-space march. `worldScale` is metres of "
           "world per metre of room (1 = life size).\n\n"
           "IT REFUSES rather than playing flat when there is no runtime — app.lastError says why "
           "— because a caller that asked for VR cannot tell the two apart. A plain "
@@ -148,7 +151,8 @@ bool PlayerApi::play(const QVariantMap &options)
     auto *service = serviceOrFail("player.play");
     if (!service) return false;
     if (!requireEngine()) return false;
-    static const QStringList known = { "vr", "worldScale", "eyeWidth", "eyeHeight" };
+    static const QStringList known = { "vr", "worldScale", "eyeWidth", "eyeHeight",
+                                       "reflections" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("player.play: unknown option '%1' — known options are %2")
