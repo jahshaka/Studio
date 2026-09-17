@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "modules/vr/editorvr.h"
 
+#include <QWidget>
+
 #include "bridge/vrnames.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -128,6 +130,8 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     }
     mEngine = engine;
     mViewport = viewport;
+    mViewportAlive = static_cast<QObject *>(viewport->asWidget());
+    mViewportIsWidget = mViewportAlive != nullptr;
     mDriver = driver;
     mOwnsSession = true;
 
@@ -185,9 +189,14 @@ bool EditorVrPreview::end()
 void EditorVrPreview::release()
 {
     if (mDriver) mDriver->setVrSessionActive(false);
-    if (mViewport) mViewport->setVrPreviewStep(nullptr);
+    // NOT IF THE VIEWPORT HAS ALREADY GONE (see mViewportAlive): this runs from
+    // a destructor at shutdown as well as from vr.end(), and a widget torn down
+    // by the shell takes the callback with it — there is nothing left to clear.
+    if (mViewport && (!mViewportIsWidget || mViewportAlive))
+        mViewport->setVrPreviewStep(nullptr);
     mDriver = nullptr;
     mViewport = nullptr;
+    mViewportAlive = nullptr;
     mEngine.reset();
 }
 

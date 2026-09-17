@@ -111,6 +111,17 @@ private:
     /// reason; the viewport is neither, and is cleared by release().
     std::weak_ptr<jahshaka::engine::Engine> mEngine;
     IEditorViewport *mViewport = nullptr;
+    /// ...AND THE VIEWPORT'S OWN LIFETIME, watched through the QWidget it is
+    /// (IEditorViewport is not a QObject, so it cannot be held by QPointer
+    /// itself). A session that is still running when the shell takes the
+    /// viewport apart would otherwise clear a callback on freed memory from a
+    /// destructor. Null for a headless stand-in, which has no widget and
+    /// outlives this object anyway.
+    QPointer<QObject> mViewportAlive;
+    /// Did this viewport HAVE a widget at all? A headless stand-in has none,
+    /// so a null guard means "nothing to watch" there and "it is gone" in the
+    /// editor — two different answers from one pointer, told apart here.
+    bool mViewportIsWidget = false;
     QPointer<EngineRenderDriver> mDriver;
     bool mOwnsSession = false;
     bool mPlacePending = false;
