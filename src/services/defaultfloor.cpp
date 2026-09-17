@@ -88,6 +88,15 @@ iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *til
     // the workflow/ior/specular trio is the floor's ZERO SPECULAR, and the
     // header states why it takes two values rather than one.
     auto material = iris::PbrMaterial::create();
+    // THE TILE, UNTINTED — stated rather than inherited (DRAG-1). baseColor
+    // MULTIPLIES the base-colour map, and the floor has always relied on the
+    // constructor's white to show the checker at its own brightness. The
+    // constructor's default is a physical grey now (RENDER_AUDIT I-1), which
+    // would have dimmed the shipped ground by 0.58 as a side effect of a
+    // decision about UNAUTHORED surfaces. This floor is authored: GF1 tuned
+    // every other value on it by hand, and this is the one it was reading off
+    // the default.
+    material->setValue("baseColor", QColor(255, 255, 255));
     material->setValue("baseColorMap", tilePath);
     material->setValue("textureScale", kTextureScale);
     material->setValue("roughness", kRoughness);

@@ -119,6 +119,30 @@ add_test(NAME mirror.grid_floor COMMAND test_grid_floor WORKING_DIRECTORY "${CMA
 set_tests_properties(mirror.grid_floor PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
 
+# mirror.ground_horizon — A HIDE IS NOT A DELETE (DRAG-1; render audit IRISGL
+# I-2). Hiding the default floor used to DETACH the 4 km horizon plane and
+# release its material, so the ground went from infinite to its own 100 m square
+# and showing it again had to rebuild the mesh and re-fit its UV map — the
+# owner's "hiding the plane changed its size". The horizon follows visibility
+# now; the DELETE branch still releases. Pixels plus the engine's object census.
+add_executable(test_ground_horizon test_ground_horizon.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_ground_horizon PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_ground_horizon PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_ground_horizon PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_ground_horizon PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_ground_horizon JahshakaEngineMedia)
+add_test(NAME mirror.ground_horizon COMMAND test_ground_horizon
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.ground_horizon PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "mirror")
+
 # mirror.sun_night — WHEN THE SUN GOES OUT (SKY-SMALL / SKY-NIGHT-1). The disc
 # and the sun's PSSM passes used to be dropped on a RELATIVE tint test, which
 # with SKY-DENSITY-1's physical transmittance crossed at +3.6 degrees of sun

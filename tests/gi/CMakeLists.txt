@@ -584,6 +584,29 @@ add_test(NAME gi.cascade_dirty COMMAND test_gi_cascade_dirty
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# gi.drag_cadence — WHAT A DRAG COSTS THE CACHES (DRAG-1, render audit REFLECT
+# F2/F3): a dragged STILL item spends NO probe captures while it is moving (the
+# staleness is recorded and the whole grid is re-captured at the settle, one per
+# frame), a NON-motion input reaches the probes mid-drag anyway, and under a
+# cascade chain the moving light tick never writes a second, different answer
+# over the cascade the scheduler just rebuilt. RUN_SERIAL: the voxel lighting
+# binds process-wide and the suite counts captures per frame.
+add_executable(test_gi_drag_cadence test_gi_drag_cadence.cpp)
+set_target_properties(test_gi_drag_cadence PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_drag_cadence PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_drag_cadence PRIVATE JahshakaEngine)
+add_dependencies(test_gi_drag_cadence JahshakaEngineMedia)
+add_test(NAME gi.drag_cadence COMMAND test_gi_drag_cadence
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.drag_cadence PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT, NOT OF ITS OWN HISTORY
 # (ogre-patch 0060). The pin binds the EXTRA CASCADES' light voxels once and
 # never again, while every cascade swaps its own on every bounce iteration, so

@@ -36,7 +36,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AREA_RULES = [
     # --- engine: anything that changes pixels or the boundary ---------------------------
     (r"^irisgl/(engine/|thirdparty/ogre-patches/|scripts/build-ogre)",
-     ["engine", "gi", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
+     # `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING
+     # from this list, so no engine change ever selected the ray-traced
+     # reflection suites — DRAG-1 changed what the ray arm reads from the voxels
+     # and two scoped gates came back green while gi.rt_reflect was red. The
+     # entries here are test DIRECTORY names, not ctest labels, so a suite whose
+     # dir is not named is invisible however it is labelled.
+     ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
       "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
       "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
       "shutdown", "openasync", "*vulkan-scripts"], []),
@@ -56,9 +62,14 @@ AREA_RULES = [
      ["document", "skeletal", "avatar", "particles", "player", "cameras", "samples",
       "*headless-scripts"], ["node", "anim", "avatar", "player", "scene"]),
     (r"^irisgl/document/",
+     # `ui` and `theme` are here because THE PANELS DISPLAY THE DOCUMENT: the
+     # properties column reads a document object's values and its suites pin
+     # them, so a document change can red a ui suite and this rule selected
+     # none. DRAG-1 changed the unauthored material's values and
+     # ui.material_panel went red at a gate that had never run it.
      ["document", "math", "input", "gizmo", "picking", "commands", "skeletal", "sockets",
       "cameras", "mirror", "samples", "reopen", "export", "meshbake", "hygiene",
-      "*headless-scripts"],
+      "ui", "theme", "*headless-scripts"],
      []),
     (r"^irisgl/core/",
      ["document", "math", "input", "gizmo", "cameras", "hygiene", "*headless-scripts"], []),

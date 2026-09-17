@@ -70,7 +70,16 @@ assert(anim.keyframe(lamp, "lightColor", 0, "#00ff00") === true, "a good one sti
 // A primitive arrives with a PbrMaterial already on it — no preset apply needed
 // (and no engine, so this stays a document-only run).
 var cube = scene.addPrimitive("cube");
-assert(material.get(cube).baseColor === "#ffffff", "the new cube carries a PBR material");
+var cubeMat = material.get(cube);
+// WHAT IS PINNED HERE IS THAT THERE IS ONE, not what colour it is: the
+// unauthored surface's VALUES belong to document.material_defaults, which owns
+// them and the physics behind them (DRAG-1). This used to read "#ffffff" and
+// went red the day that default stopped being a surface that reflects every
+// photon it receives.
+assert(typeof cubeMat.baseColor === "string" && cubeMat.baseColor.length === 7,
+       "the new cube carries a PBR material");
+assert(cubeMat.roughness >= 0.7,
+       "...and it is the MATTE unauthored surface (document.material_defaults owns the value)");
 
 var legacy = ["diffuseTexture", "specularTexture", "normalTexture", "reflectionTexture"];
 for (var i = 0; i < legacy.length; ++i) {

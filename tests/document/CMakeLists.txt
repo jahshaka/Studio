@@ -115,6 +115,30 @@ set_tests_properties(document.light_defaults PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.light_defaults)
 
+# document.material_defaults — THE UNAUTHORED SURFACE IS PHYSICAL AND OFF THE
+# TIER'S EDGE (DRAG-1; render audit IRISGL I-1 + APP A2). The constructor's
+# albedo was 1.0 LINEAR at perceptual roughness 0.5 (GGX alpha 0.25: satin, not
+# matte) and that roughness sat 0.0007 outside the traced-reflection band's
+# edge. A default that lands ON a tier's threshold is a defect class; this is
+# the guard. Document only: NULL render system, no display.
+add_executable(test_material_defaults test_material_defaults.cpp)
+set_target_properties(test_material_defaults PROPERTIES AUTOMOC OFF)
+target_include_directories(test_material_defaults PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    # The PUBLIC engine header only, for kRayReflectFeather: the guard reads the
+    # shipped feather instead of copying it (DRAG-1). Header-only — this target
+    # links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_material_defaults PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_material_defaults)
+add_test(NAME document.material_defaults COMMAND test_material_defaults
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.material_defaults PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.material_defaults)
+
 # document.dirty_list — THE DOCUMENT'S HALF of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.3): dedupe, the three kinds that cascade
 # over a subtree, eviction (including a node marked and then freed before the

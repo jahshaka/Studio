@@ -196,7 +196,15 @@ static void testColorPickSession()
     CHECK(rig.stack.count() == before + 1, "color: one undo entry per pick session");
 
     rig.undo.undo();
-    CHECK(rig.pbr->baseColor == QColor(255, 255, 255), "color: undo restores the field");
+    // THE UNAUTHORED SURFACE'S OWN COLOUR, not a literal (DRAG-1). The undo
+    // restores whatever the material held when `pickingStarted` recorded it,
+    // and the rig's material is an unconfigured one — so what this asserts is
+    // "the undo put back what was there", and the value belongs to
+    // iris::defaultmaterial (document.material_defaults owns it and the physics
+    // behind it). It read QColor(255,255,255) and went red the day the default
+    // stopped being a surface that reflects every photon it receives.
+    CHECK(rig.pbr->baseColor == iris::defaultmaterial::baseColor(),
+          "color: undo restores the field");
 }
 
 // A cancelled gesture (opened and closed with no change) must not pollute the
@@ -712,7 +720,10 @@ static void testRefillKeepsTheRows()
         slider->setSliderDown(false);
         CHECK(qAbs(secondMat->roughnessFactor - 0.7f) < 1e-3f,
               "refill: an edit on a reused row writes to the material now shown");
-        CHECK(qAbs(rig.pbr->roughnessFactor - 0.5f) < 1e-3f,
+        // ...which is still the UNAUTHORED value, from the one definition
+        // (DRAG-1): what the case is about is that the edit did not reach this
+        // material, not what number it happens to carry.
+        CHECK(qAbs(rig.pbr->roughnessFactor - iris::defaultmaterial::kRoughness) < 1e-3f,
               "refill: ...and NOT to the one the panel left behind");
         CHECK(rig.stack.count() == before + 1,
               "refill: ...as exactly one undo entry");
