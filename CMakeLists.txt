@@ -459,6 +459,7 @@ set(SRCS
     src/player/playermodule.cpp
     src/player/api/playerapi.cpp
     src/player/engineplayerscene.cpp
+    src/player/playervr.cpp
     src/player/engineplayerview.cpp
     src/player/playermousecontroller.cpp
     src/player/playback.cpp
@@ -729,6 +730,8 @@ set(HEADERS
     # player
     src/player/playerwidget.h
     src/player/engineplayerscene.h
+    src/player/playervr.h
+    src/player/vrorigin.h
     src/player/engineplayerview.h
     src/player/playermousecontroller.h
     src/player/playback.h

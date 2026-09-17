@@ -7,6 +7,7 @@
 #include <QShowEvent>
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
+#include "player/playervr.h"
 #include "player/playermousecontroller.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginehost.h"
@@ -121,7 +122,18 @@ void EnginePlayerView::start()
 
 void EnginePlayerView::end()
 {
+    // THE HEADSET COMES OFF WITH THE PAGE (lead review F3, and this lane's own
+    // rule that a session belongs to the RUN). Leaving the Player page used to
+    // leave the engine's session pumping at the runtime's cadence behind a page
+    // nobody is on: the rig and the camera FROZE (syncFrame returns the moment
+    // this flag drops), the render driver stayed in VR pacing, and the mirror
+    // went on presenting into a window that is no longer mapped. Ending it here
+    // is `player.stop()`'s half of the same statement, made by the page.
+    //
+    // FIRST, while `mActive` is still true: endPlayerVr re-asserts the view's
+    // enabled flag from it, and the line below is what turns it off.
     mActive = false;
+    endPlayerVr();
     mScene->end();
     if (view()) view()->setEnabled(false);
 }
@@ -149,6 +161,110 @@ bool EnginePlayerView::stepPlayerFrames(int n, float dt)
     if (!mScene->attach(view())) return false;
     mScene->stepFrames(n, dt, width(), height());
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// THE PLAYER'S VR MODE (SPECS/VR_SPEC.md §4.5, phase 3).
+//
+// The widget's half is small on purpose: the session, the rig and the mirror
+// live in PlayerVr (player/playervr.h), which is driven from the player's own
+// frame and is testable without a widget. What belongs HERE is the two things
+// only the widget knows — which View the headset mirrors onto, and the render
+// DRIVER whose clock the runtime takes over.
+
+// EVERY REFUSAL THAT CAN BE KNOWN BEFORE ANYTHING MOVES, in one place, asked by
+// the service before it starts the run (IPlayerHost::canBeginPlayerVr) and
+// again by the begin below, which must remain safe on its own.
+//
+// THE MOST INFORMATIVE ONE FIRST: on a box with no runtime — every box, most
+// days — the honest answer is "there is no VR in this process", not "the Player
+// page has not been shown", which is a true sentence about an irrelevant fact.
+bool EnginePlayerView::canBeginPlayerVr(QString *why) const
+{
+    const auto no = [why](const QString &text) {
+        if (why) *why = text;
+        return false;
+    };
+    if (!mEngine || !mScene) return no(QStringLiteral("this session has no player backend"));
+    if (!mEngine->vrAvailable())
+        return no(QStringLiteral("VR is not available (%1)")
+                      .arg(QString::fromStdString(mEngine->vrInfo().reason)));
+    // THE MIRROR IS THIS VIEW, so there has to be one: the player's on-screen
+    // View is created by its show event, and a VR session started from a page
+    // that has never been shown would have nowhere to put the desktop's
+    // picture. The toggle switches to the Player page first, which is exactly
+    // what creates it.
+    if (!view())
+        return no(QStringLiteral("the Player page has not been shown yet — its on-screen "
+                                 "view is created when the page opens"));
+    return true;
+}
+
+bool EnginePlayerView::beginPlayerVr(const QVariantMap &options, QString *error)
+{
+    if (!canBeginPlayerVr(error)) return false;
+    adoptEditorScene();
+    if (!mScene->attach(view())) {
+        if (error) *error = QStringLiteral("the player has no scene to show yet");
+        return false;
+    }
+    // THE VIEW'S VISIBILITY IS THIS WIDGET'S ANSWER, not the VR mode's (lead
+    // review F4): PlayerVr switches this view off for the session and asks HERE
+    // what to switch it back to, whenever the session ends — including a
+    // session ended from a script or by a lost device, when the page may no
+    // longer be up.
+    mScene->vr()->setViewRestore([this]() { if (view()) view()->setEnabled(mActive); });
+    if (!mScene->vr()->begin(mScene->engineScene(), view(), mScene->renderCamera(),
+                             options, error))
+        return false;
+    // THE LOOP'S CLOCK IS THE RUNTIME NOW (VR_SPEC §4.3): zero interval, vsync
+    // off, and renderOneFrame blocks in xrWaitFrame instead. The driver
+    // reconciles with the engine on every tick since VR-2's F5, so this is the
+    // fast path rather than the only thing keeping the two in step.
+    if (mDriver) mDriver->setVrSessionActive(true);
+    return true;
+}
+
+void EnginePlayerView::endPlayerVr()
+{
+    if (mScene && mScene->vrIfAny()) mScene->vr()->end();
+    // ...and the view goes back to whatever this page is doing NOW. The restore
+    // callback above covers the paths PlayerVr notices by itself; this covers
+    // the ordinary one and costs nothing when it is already right.
+    if (view()) view()->setEnabled(mActive);
+    if (mDriver) mDriver->setVrSessionActive(false);
+}
+
+bool EnginePlayerView::isPlayerVrActive() const
+{
+    const PlayerVr *vr = mScene ? mScene->vrIfAny() : nullptr;
+    return vr && vr->isActive();
+}
+
+QVariantMap EnginePlayerView::playerVrReport() const
+{
+    const PlayerVr *vr = mScene ? mScene->vrIfAny() : nullptr;
+    QVariantMap out = vr ? vr->report() : PlayerVr::idleReport();
+    // CAN THIS PROCESS DO VR AT ALL, and why not — answered whether or not a
+    // VR mode has ever been created, because that is exactly the question the
+    // toolbar icon asks before it decides to be enabled (and the one the
+    // tooltip answers when it is not). Fixed at boot: the engine asked the
+    // runtime once, before the render system existed.
+    out[QStringLiteral("available")] = mEngine && mEngine->vrAvailable();
+    out[QStringLiteral("reason")] =
+        mEngine ? QString::fromStdString(mEngine->vrInfo().reason)
+                : QStringLiteral("no engine is running in this process");
+    return out;
+}
+
+bool EnginePlayerView::movePlayerVr(const flystep::Keys &keys, float seconds)
+{
+    return mScene && mScene->vrIfAny() && mScene->vr()->move(keys, seconds);
+}
+
+bool EnginePlayerView::recenterPlayerVr()
+{
+    return mScene && mScene->vrIfAny() && mScene->vr()->recenter();
 }
 
 void EnginePlayerView::syncFrame()

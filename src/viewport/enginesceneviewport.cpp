@@ -2493,12 +2493,32 @@ void EngineSceneViewport::begin()
     // SceneMirror::invalidateEnvironment.)
     if (mMirror) mMirror->invalidateEnvironment();
     if (view()) view()->setEnabled(true);
+    // THE MIRROR FOLLOWS THE PAGE (VR phase 3, lead review F9). A session begun
+    // with `vr.begin()` mirrors the headset's eye onto THIS view (phase 2's
+    // path, which the console and the MCP server still use), and a mirror is a
+    // workspace of its own over this view's target — it does not stop when the
+    // view does. Coming back, take it again.
+    if (mVrMirrorWasOurs)
+        if (auto engine = EngineHost::instance().engine())
+            if (engine->vrStatus().active) { engine->setVrMirrorView(view()); }
+    mVrMirrorWasOurs = false;
     refreshOverlay();
 }
 
 void EngineSceneViewport::end()
 {
     mActive = false;
+    // ...AND IT GOES WITH THE PAGE (F9). Leaving this page with a session
+    // mirroring onto it left a workspace presenting the headset's eye into a
+    // window nobody is looking at, every frame, for the rest of the session.
+    // The mirror is the HOST's wish and this is the host saying it is no longer
+    // looking; `begin()` above says it again on the way back.
+    if (auto engine = EngineHost::instance().engine()) {
+        if (engine->vrStatus().active && engine->vrMirrorView() == view() && view()) {
+            mVrMirrorWasOurs = true;
+            engine->setVrMirrorView(nullptr);
+        }
+    }
     if (view()) view()->setEnabled(false);
 }
 

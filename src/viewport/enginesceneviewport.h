@@ -514,6 +514,10 @@ private:
     bool mGameView = false;             // G: helpers hidden; never persisted
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;
+    /// A VR session's mirror was pointed at THIS view when the page was left
+    /// (VR phase 3, F9), so begin() takes it back. The mirror is a workspace of
+    /// its own over this view's target and does not stop when the view does.
+    bool mVrMirrorWasOurs = false;
     bool mActive = false;
     unsigned mViewSerial = 0;
 };

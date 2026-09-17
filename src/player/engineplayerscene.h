@@ -41,6 +41,7 @@
 
 class SceneMirror;
 class PlayBack;
+class PlayerVr;
 
 class EnginePlayerScene
 {
@@ -74,7 +75,7 @@ public:
     /// (the L2 lane's finding, applied here 2026-09-10 — Ogre hands the
     /// replacement View the freed one's address, so the stale unbind landed on
     /// the NEW View: a silently blank player).
-    void forgetView() { mView = nullptr; }
+    void forgetView();
     jahshaka::engine::Scene *engineScene() const { return mScene; }
     jahshaka::engine::View *view() const { return mView; }
 
@@ -89,6 +90,14 @@ public:
     iris::ScenePtr document() const { return mDocument; }
     /// The camera the view is driven from (the document's scene camera).
     iris::CameraNodePtr camera() const;
+    /// THE CAMERA THE PLAYER ACTUALLY RENDERS THROUGH — `camera()` put through
+    /// the document's own active-camera rule (`iris::Scene::renderCamera`,
+    /// which the mirror's applyCamera uses for the same question). With an
+    /// authored shot armed and nothing possessed, that is the authored camera;
+    /// otherwise it is the free one. The VR mode stands the wearer on THIS and
+    /// writes the head back to THIS, so the headset and the Player's picture
+    /// cannot be looking through two different cameras (lead review F1).
+    iris::CameraNodePtr renderCamera() const;
 
     /// Page shown: remembers the camera transform and primes the mouse controller
     /// so the camera does not jump (PlayerView::start).
@@ -106,6 +115,14 @@ public:
     void step(float dt, int width, int height);
 
     PlayBack *playback() const { return mPlayback; }
+
+    /// THE PLAYER'S VR MODE (SPECS/VR_SPEC.md §4.5, phase 3) — created on
+    /// demand, driven from step(), and never anything at all in a session that
+    /// never asks for a headset. Null before the first ask.
+    PlayerVr *vr();
+    /// The VR mode as it stands, WITHOUT creating one: the read every state
+    /// verb makes, on every box, with no runtime.
+    const PlayerVr *vrIfAny() const { return mVr.get(); }
     bool isPlaying() const;
     void play();
     void stop();
@@ -133,6 +150,7 @@ private:
     SceneMirror *mMirror = nullptr;
     iris::ScenePtr mDocument;
     PlayBack *mPlayback = nullptr;
+    std::unique_ptr<PlayerVr> mVr;
     iris::Mat4 mSavedCameraMatrix;
     bool mHaveSavedCamera = false;
     /// The wall clock behind a `dt` < 0 step: time since the previous step.

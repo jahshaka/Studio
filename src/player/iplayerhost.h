@@ -27,6 +27,10 @@ For more information see the LICENSE file
 // contract every other service in this layer has.
 
 #include <QImage>
+#include <QString>
+#include <QVariantMap>
+
+#include "viewport/flystep.h"
 
 class IPlayerHost
 {
@@ -55,6 +59,38 @@ public:
     /// has never been shown cannot render a frame, and saying so is better
     /// than answering true and drawing nothing.
     virtual bool stepPlayerFrames(int n, float dt) = 0;
+
+    // ---- THE PLAYER'S VR MODE (SPECS/VR_SPEC.md §4.5, phase 3) -------------
+    // The same seam, for the same reason: `player.play({vr:true})` and the VR
+    // icon must reach ONE implementation, and a headless session (no player
+    // backend at all) must refuse them in words rather than crash.
+
+    /// COULD a VR session begin right now? Asked BEFORE anything moves, which
+    /// is the whole point: `player.play({vr:true})` has to start the scene
+    /// before it can begin the session (which camera the Player renders through
+    /// depends on the scene playing), and a refusal after that would have
+    /// started and stopped a run inside one call — a snapshot, a physics
+    /// restart and a possession edge for a caller that was told nothing
+    /// happened. False with `why` filled: no runtime, or a Player page that has
+    /// never been shown and so has no view to mirror onto.
+    virtual bool canBeginPlayerVr(QString *why) const = 0;
+    /// Starts the player's VR session: the headset shows this player's scene,
+    /// this player's on-screen View becomes the mirror, and the rig is placed
+    /// on the render camera. False with `error` filled and NOTHING changed.
+    virtual bool beginPlayerVr(const QVariantMap &options, QString *error) = 0;
+    /// Ends it. Safe when none is running.
+    virtual void endPlayerVr() = 0;
+    /// Is the ENGINE running the session this player started?
+    virtual bool isPlayerVrActive() const = 0;
+    /// Everything player.state().vr reports. Answerable with no session and
+    /// with no runtime (every field at its zero).
+    virtual QVariantMap playerVrReport() const = 0;
+    /// Moves the wearer as the fly keys would, for `seconds` at the player's
+    /// fly speed. False when no session is running.
+    virtual bool movePlayerVr(const flystep::Keys &keys, float seconds) = 0;
+    /// "I am standing here, facing this way": re-places the rig on the play
+    /// camera at the next located pose. False when no session is running.
+    virtual bool recenterPlayerVr() = 0;
 };
 
 #endif // IPLAYERHOST_H

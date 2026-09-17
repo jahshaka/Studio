@@ -545,6 +545,102 @@ int main() {
                       mirrorDiff, l.w, l.h, mirrored.width, mirrored.height);
         }
 
+        // ---- THE RIG, AND A MIRROR ONTO A SWITCHED-OFF VIEW (phase 3) ---
+        //
+        // TWO PHASE-3 FACTS IN ONE A/B, because each is the other's control.
+        //
+        //   * `Engine::setVrOrigin` places the runtime's reference space in the
+        //     WORLD. Moving it must move the picture the eyes see — that is the
+        //     whole of locomotion, and a setter that quietly did nothing would
+        //     pass every state assertion ever written.
+        //   * A View that has been switched OFF is still a mirror (VR-2's F7,
+        //     the Player's VR mode): the mirror is its own workspace over the
+        //     view's target, so a disabled view stops drawing the world a
+        //     second time at window size and keeps receiving the eye. That is
+        //     what makes the desktop cost A COPY rather than A SECOND RENDER.
+        //
+        // The A/B: switch the desktop view OFF, move the rig, pump. If the
+        // mirror were dead, the desktop would still hold the picture it holds
+        // now (nothing else writes that target — the view's own workspace is
+        // disabled). It must instead be the NEW left eye, byte for byte.
+        {
+            Image beforeMove;
+            REQUIRE(desktop->readPixels(beforeMove));
+            desktop->setEnabled(false);
+            engine->setVrOrigin(Vec3(3.0f, 0.0f, -4.0f), 35.0f);
+            pump(engine.get(), engine->vrStatus().frames + 12ull, 120u);
+
+            const VrStatus moved = engine->vrStatus();
+            CHECK_MSG(moved.origin.x == 3.0f && moved.origin.z == -4.0f && moved.originYaw == 35.0f,
+                      "the engine reports the rig it was given: (%.2f, %.2f, %.2f) yaw %.2f",
+                      moved.origin.x, moved.origin.y, moved.origin.z, moved.originYaw);
+            CHECK_MSG(moved.posesValid, "the head is located in the moved rig");
+            // The head must be WHERE THE RIG PUT IT: the runtime's own pose,
+            // turned by the rig's yaw and carried by its translation. The
+            // simulated HMD sits at a fixed spot, so "not at the world origin
+            // any more" is the honest statement available here.
+            std::printf("    head after the rig moved: (%.3f, %.3f, %.3f)\n",
+                        moved.headPosition.x, moved.headPosition.y, moved.headPosition.z);
+            CHECK_MSG(std::fabs(moved.headPosition.x - 3.0f) < 3.0f &&
+                          std::fabs(moved.headPosition.z + 4.0f) < 3.0f,
+                      "and the head moved with it (within arm's reach of the rig's origin)");
+
+            Image movedEye;
+            REQUIRE(engine->vrView()->readPixels(movedEye));
+            Half ml, mr;
+            REQUIRE(splitEyes(movedEye, ml, mr));
+            const size_t eyeMoved = differingBytes(ml.px, l.px);
+            CHECK_MSG(eyeMoved > 0u,
+                      "MOVING THE RIG MOVES THE PICTURE: %zu of %zu bytes of the left eye",
+                      eyeMoved, l.px.size());
+
+            Image mirroredOff;
+            REQUIRE(desktop->readPixels(mirroredOff));
+            const size_t desktopMoved = differingBytes(mirroredOff.rgba, beforeMove.rgba);
+            CHECK_MSG(desktopMoved > 0u,
+                      "A SWITCHED-OFF VIEW IS STILL A MIRROR: the desktop picture changed by "
+                      "%zu bytes while its own workspace was disabled", desktopMoved);
+            if (mirroredOff.width == ml.w && mirroredOff.height == ml.h) {
+                int mworst = 0;
+                const size_t d = differingBytes(mirroredOff.rgba, ml.px, &mworst);
+                CHECK_MSG(d == 0u,
+                          "...and it is the new LEFT EYE, byte for byte: %zu of %zu differ, "
+                          "worst %d/255", d, ml.px.size(), mworst);
+            }
+            // ---- AND THE MIRROR FOLLOWS THE HOST'S WISH (F9) ------------
+            // The mirror does not stop when its view does — it is a workspace
+            // over that view's target — so "is anybody looking at this page" is
+            // the HOST's question and it has to be able to ANSWER it. Clearing
+            // the mirror must take the workspace down (the desktop keeps
+            // whatever it had), and re-setting it must bring the eye back.
+            engine->setVrMirrorView(nullptr);
+            CHECK_MSG(engine->vrMirrorView() == nullptr, "the mirror can be cleared");
+            Image cleared;
+            pump(engine.get(), engine->vrStatus().frames + 6ull, 60u);
+            REQUIRE(desktop->readPixels(cleared));
+            engine->setVrOrigin(Vec3(-6.0f, 0.0f, 2.0f), -20.0f);
+            pump(engine.get(), engine->vrStatus().frames + 12ull, 120u);
+            Image afterClear;
+            REQUIRE(desktop->readPixels(afterClear));
+            CHECK_MSG(differingBytes(afterClear.rgba, cleared.rgba) == 0u,
+                      "A CLEARED MIRROR STOPS PAINTING: the desktop did not move while the "
+                      "rig did (its own workspace is still disabled)");
+            engine->setVrMirrorView(desktop);
+            CHECK_MSG(engine->vrMirrorView() == desktop, "...and it can be taken again");
+            pump(engine.get(), engine->vrStatus().frames + 12ull, 120u);
+            Image afterRetake;
+            REQUIRE(desktop->readPixels(afterRetake));
+            CHECK_MSG(differingBytes(afterRetake.rgba, cleared.rgba) > 0u,
+                      "and the eye comes back");
+
+            desktop->setEnabled(true);
+            // PUT THE RIG BACK before the cases below read the eyes again.
+            engine->setVrOrigin(Vec3(0.0f, 0.0f, 0.0f), 0.0f);
+            pump(engine.get(), engine->vrStatus().frames + 12ull, 120u);
+            REQUIRE(engine->vrView()->readPixels(oneImg));
+            REQUIRE(splitEyes(oneImg, l, r));
+        }
+
         // ---- THE SKY IS IN BOTH EYES (F2) -------------------------------
         // The sky, the atmosphere and the sun disc are SCREEN QUADS, and a
         // screen quad under instanced stereo is drawn twice by the pass but

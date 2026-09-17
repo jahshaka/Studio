@@ -56,18 +56,27 @@ inline constexpr float kBoost = 3.0f;
 /// below 15 fps flies at 15 fps's rate.
 inline constexpr float kMaxFlyStep = 1.0f / 15.0f;
 
-/// The world-space direction the held keys mean for a camera at `rot`, or a
-/// null vector when nothing is held. NORMALISED (diagonals do not go faster).
-inline iris::Vec3 direction(const iris::Quat &rot, const Keys &keys)
+/// THE COMBINATION RULES, over a forward that the caller chose.
+///
+/// Split out of direction() for the Player's VR mode (SPECS/VR_SPEC.md §4.5),
+/// which flies along the HEAD's LEVEL heading rather than along a camera's true
+/// forward — a different forward, and exactly the same rules about strafing
+/// horizontally, going up and down along the world, normalising diagonals and
+/// answering with a null vector when nothing is held. Two copies of those rules
+/// is how the player's fly and the editor's drifted apart in the first place
+/// (owner smoke S13), so there is one, here.
+///
+/// `fallbackRight` is used only where `forward x worldUp` degenerates (the
+/// poles); a caller whose forward is already level can never reach it.
+inline iris::Vec3 directionAlong(const iris::Vec3 &forward, const iris::Vec3 &fallbackRight,
+                                 const Keys &keys)
 {
     const iris::Vec3 worldUp(0, 1, 0);
-    const iris::Vec3 forward = rot.rotatedVector(iris::Vec3(0, 0, -1));
-    const iris::Vec3 camRight = rot.rotatedVector(iris::Vec3(1, 0, 0));
     // Strafe stays HORIZONTAL in free flight — except at the poles, where
     // forward x worldUp degenerates to zero (Vec3::normalized() returns a null
     // vector there) and the camera's own right is the only defined answer.
     iris::Vec3 right = iris::Vec3::crossProduct(forward, worldUp).normalized();
-    if (right.isNull()) right = camRight;
+    if (right.isNull()) right = fallbackRight;
 
     iris::Vec3 move;
     if (keys.forward) move += forward;
@@ -78,6 +87,14 @@ inline iris::Vec3 direction(const iris::Quat &rot, const Keys &keys)
     if (keys.down)    move -= worldUp;
     if (move.isNull()) return move;
     return move.normalized();
+}
+
+/// The world-space direction the held keys mean for a camera at `rot`, or a
+/// null vector when nothing is held. NORMALISED (diagonals do not go faster).
+inline iris::Vec3 direction(const iris::Quat &rot, const Keys &keys)
+{
+    return directionAlong(rot.rotatedVector(iris::Vec3(0, 0, -1)),
+                          rot.rotatedVector(iris::Vec3(1, 0, 0)), keys);
 }
 
 /// One frame of flight: the world-space offset for `dt` seconds at `speed`

@@ -12,50 +12,14 @@ For more information see the LICENSE file
 #include "modules/vr/vrapi.h"
 
 #include "bridge/enginehost.h"
+#include "bridge/vrnames.h"
+#include "services/playerservice.h"
+#include "services/services.h"
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 
 using namespace jahshaka::engine;
 
-namespace {
-
-QString stateName(VrState s)
-{
-    switch (s) {
-    case VrState::Unavailable:  return QStringLiteral("unavailable");
-    case VrState::Idle:         return QStringLiteral("idle");
-    case VrState::Ready:        return QStringLiteral("ready");
-    case VrState::Synchronized: return QStringLiteral("synchronized");
-    case VrState::Visible:      return QStringLiteral("visible");
-    case VrState::Focused:      return QStringLiteral("focused");
-    case VrState::Stopping:     return QStringLiteral("stopping");
-    case VrState::Lost:         return QStringLiteral("lost");
-    }
-    return QStringLiteral("unknown");
-}
-
-QString mirrorName(VrMirrorMode m)
-{
-    switch (m) {
-    case VrMirrorMode::None:  return QStringLiteral("none");
-    case VrMirrorMode::Left:  return QStringLiteral("left");
-    case VrMirrorMode::Right: return QStringLiteral("right");
-    case VrMirrorMode::Both:  return QStringLiteral("both");
-    }
-    return QStringLiteral("left");
-}
-
-VrMirrorMode mirrorFrom(const QString &name, VrMirrorMode fallback)
-{
-    const QString n = name.trimmed().toLower();
-    if (n == QLatin1String("none"))  return VrMirrorMode::None;
-    if (n == QLatin1String("left"))  return VrMirrorMode::Left;
-    if (n == QLatin1String("right")) return VrMirrorMode::Right;
-    if (n == QLatin1String("both"))  return VrMirrorMode::Both;
-    return fallback;
-}
-
-}  // namespace
 
 QVector<VerbInfo> VrApi::verbs() const
 {
@@ -97,17 +61,35 @@ QVector<VerbInfo> VrApi::verbs() const
           "A session that the runtime has already lost (a disconnected headset) ends the same "
           "way; VR cannot be started again in that process, which vr.state() says.",
           Needs::Engine },
+        { "toggle", "vr.toggle() -> bool",
+          "ENTER OR LEAVE VR — the whole product gesture in one verb (SPECS/VR_SPEC.md §4.5, "
+          "phase 3), and what the editor toolbar's VR icon, the Player page's VR button and "
+          "the Ctrl+Shift+V binding all call.\n\n"
+          "Not in VR: the Player page comes up and the scene starts IN THE HEADSET — "
+          "`player.play({vr:true})`, so the wearer stands where the play camera stands, the "
+          "desktop mirrors the left eye and the runtime paces the loop. Already in VR: the run "
+          "STOPS (`player.stop()`), which takes the headset off and stops the scene, because "
+          "that is what a second press of one button means. `player.endVr()` is the other "
+          "order — leave VR, keep playing.\n\n"
+          "Answers whether the player is IN VR after the call: true on entry, false on exit AND "
+          "false on a refusal, with app.lastError saying which (a box with no runtime cannot "
+          "enter, and VR capability is fixed at boot — a process not started with --vr never "
+          "has any).",
+          Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, ipd, mirror, worldScale, asymmetricFov}",
+          "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
           "runtime ACCEPTED (xrEndFrame), which is the only honest measure of a session on a "
           "loaded box: wall-clock time measures the box, not the session. `ipd` is the distance "
           "between the two located eyes and `asymmetricFov` says whether the runtime gives the "
           "eyes different projections (a real headset does; a simulated one usually does not). "
-          "`space` is \"stage\" (a floor origin) or \"local\". With no session every field is at "
-          "its zero and `state` is \"idle\" or \"unavailable\".",
+          "`space` is \"stage\" (a floor origin) or \"local\". `spaceChanges` counts the times "
+          "the RUNTIME recentred that space under the wearer (a Quest long-press, a guardian "
+          "re-setup) — each one is absorbed into the rig so the wearer does not move, and a "
+          "count climbing while nobody touched the headset is a runtime problem. With no "
+          "session every field is at its zero and `state` is \"idle\" or \"unavailable\".",
           Needs::Engine },
     };
 }
@@ -160,7 +142,7 @@ bool VrApi::begin(const QVariantMap &options)
     if (!scene) return refuse(QStringLiteral("vr.begin: there is no scene to show yet"));
 
     VrConfig cfg;
-    cfg.mirror = mirrorFrom(options.value(QStringLiteral("mirror")).toString(), cfg.mirror);
+    cfg.mirror = vrnames::mirrorFrom(options.value(QStringLiteral("mirror")).toString(), cfg.mirror);
     if (options.contains(QStringLiteral("worldScale"))) {
         const double s = options.value(QStringLiteral("worldScale")).toDouble();
         if (s > 0.0) cfg.worldScale = float(s);
@@ -202,6 +184,25 @@ bool VrApi::end()
     return true;
 }
 
+bool VrApi::toggle()
+{
+    // THE VERB IS A CALLER OF THE PLAYER'S CAPABILITY, not a second path into
+    // the engine: everything below happens inside PlayerService, which is what
+    // the two buttons call as well (SCRIPTING_SPEC §2.3).
+    PlayerService *player = moduleHost.services ? moduleHost.services->player : nullptr;
+    if (!player || !player->isAvailable())
+        return refuse(QStringLiteral("vr.toggle: this session has no player (headless runs "
+                                     "have no player backend)"));
+    const bool wasActive = player->isVrActive();
+    const bool active = player->toggleVr();
+    if (!active && !wasActive)
+        return refuse(QStringLiteral("vr.toggle: %1")
+                          .arg(player->lastError().isEmpty()
+                                   ? player->vrUnavailableReason()
+                                   : player->lastError()));
+    return active;
+}
+
 QVariantMap VrApi::state()
 {
     QVariantMap out;
@@ -209,7 +210,7 @@ QVariantMap VrApi::state()
     const VrStatus s = e ? e->vrStatus() : VrStatus();
     const VrInfo info = e ? e->vrInfo() : VrInfo();
     out[QStringLiteral("active")] = s.active;
-    out[QStringLiteral("state")] = stateName(s.state);
+    out[QStringLiteral("state")] = vrnames::state(s.state);
     out[QStringLiteral("runtime")] = QString::fromStdString(info.runtime);
     out[QStringLiteral("version")] = QString::fromStdString(info.runtimeVersion);
     out[QStringLiteral("space")] = QString::fromStdString(info.space);
@@ -218,8 +219,9 @@ QVariantMap VrApi::state()
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(s.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(s.rendered));
     out[QStringLiteral("ipd")] = s.ipd;
-    out[QStringLiteral("mirror")] = mirrorName(s.mirror);
+    out[QStringLiteral("mirror")] = vrnames::mirror(s.mirror);
     out[QStringLiteral("worldScale")] = s.worldScale;
     out[QStringLiteral("asymmetricFov")] = s.asymmetricFov;
+    out[QStringLiteral("spaceChanges")] = QVariant::fromValue(qulonglong(s.spaceChanges));
     return out;
 }

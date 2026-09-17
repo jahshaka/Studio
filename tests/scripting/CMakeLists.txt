@@ -335,6 +335,13 @@ add_script_e2e(scene_issues e2e_scene_issues.js)
 # refusal in words instead of throwing, hanging or crashing. The session half
 # lives in tests/vr (vr.verbs_session), where the simulated runtime is.
 add_script_e2e(vr_verbs e2e_vr_verbs.js)
+# THE PLAYER'S VR MODE WITH NO RUNTIME (SPECS/VR_SPEC.md §4.5, phase 3) — the
+# other everywhere case, and the owner's rule in executable form: without a
+# headset the tool is today's tool. `player.play({vr:true})` must refuse and
+# leave the scene STOPPED, the toggle must refuse without switching the page
+# (switchSpace(PLAYER) starts the scene), and the plain player must be exactly
+# what it has always been. The session half is `vr.player_session`.
+add_script_e2e(player_vr e2e_player_vr.js)
 add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 
