@@ -1385,6 +1385,21 @@ int main() {
                 CHECK_MSG(inj.hands[VrHandLeft].valid &&
                               std::fabs(inj.hands[VrHandLeft].position.x - 1.5f) < 1e-5f,
                           "...and `hands[]` IS `input[].grip`, injection included");
+                // FOCUS RIDES THE SAMPLE (the Studio side's focus-loss cancel
+                // reads it): true here because the session IS focused, and a
+                // test drives the cancel by injecting it false.
+                CHECK_MSG(got.focused == (inj.state == VrState::Focused),
+                          "the sample carries the session's FOCUS (state %d, focused %d)",
+                          int(inj.state), int(got.focused));
+                VrHandState unfocused = fake;
+                unfocused.focused = false;
+                CHECK(engine->vrInjectInput(VrHandLeft, unfocused));
+                pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
+                CHECK_MSG(!engine->vrStatus().input[VrHandLeft].focused,
+                          "...and an injected sample can say focus was LOST, which is how a "
+                          "gesture's cancel is driven with no dashboard to raise");
+                CHECK(engine->vrInjectInput(VrHandLeft, fake));
+                pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
                 // THE PROXY FOLLOWS, placed by the session inside the frame.
                 Vec3 pos;
                 Quat rot;

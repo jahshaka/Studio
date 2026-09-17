@@ -125,6 +125,10 @@ inline QVariantMap handState(const jahshaka::engine::VrHandState &h)
     out[QStringLiteral("stick")] = stick;
     out[QStringLiteral("stickPressed")] = h.stickPressed;
     out[QStringLiteral("fromInjection")] = h.fromInjection;
+    // WAS THE APP FOCUSED when this sample was taken (the runtime's dashboard
+    // takes focus away and every control then reads its zero)? A gesture in
+    // flight is cancelled on a false, never committed.
+    out[QStringLiteral("focused")] = h.focused;
     return out;
 }
 

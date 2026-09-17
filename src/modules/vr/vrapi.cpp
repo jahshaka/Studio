@@ -153,7 +153,7 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "inject",
           "vr.inject(hand, {valid?, aim?, grip?, select?, grab?, menuPressed?, stick?, "
-          "stickPressed?}) -> bool",
+          "stickPressed?, focused?}) -> bool",
           "TEST-FACING: WRITES ONE HAND'S SAMPLE AS IF THE RUNTIME HAD REPORTED IT — the "
           "backbone every VR gesture test in this tree drives (SPECS/VR_INPUT_SPEC.md §2.4).\n\n"
           "The interaction logic above the boundary is arithmetic on two poses and four "
@@ -165,7 +165,11 @@ QVector<VerbInfo> VrApi::verbs() const
           "`hands.left/right` follows, and the controller proxy is drawn where they say.\n\n"
           "`aim` and `grip` are {x, y, z, rotation:{x,y,z,w}} (Euler degrees {x,y,z} are "
           "accepted for the rotation, as everywhere else); `select` and `grab` are 0..1 and "
-          "their presses are derived at 0.5 unless given; `stick` is {x, y} in -1..1.\n\n"
+          "their presses are derived at 0.5 unless given; `stick` is {x, y} in -1..1. "
+          "`focused` (true by default) is whether the app had input FOCUS when the sample was "
+          "taken — the runtime takes focus away for its own dashboard and every control then "
+          "reads its zero, so a gesture in flight is CANCELLED on a false rather than "
+          "committed, and injecting false is how that rule is driven with no runtime.\n\n"
           "REFUSED (false, app.lastError) while a session is running and the runtime has a real "
           "interaction profile bound for that hand, unless the process was started with "
           "JAHSHAKA_VR_TEST_INJECT=1: a smoke in a headset can never be fooled by an injection "
@@ -205,7 +209,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "`preview` describes the editor's VR preview (see vr.begin).\n\n"
           "`input.left` / `input.right` are the CONTROLS (phase 4b stage 1): {valid, aim, grip, "
           "select, selectPressed, grab, grabPressed, menuPressed, stick:{x,y}, stickPressed, "
-          "fromInjection}. `aim` is where the hand POINTS (the ray is -Z of its rotation) and "
+          "fromInjection, focused}. `aim` is where the hand POINTS (the ray is -Z of its rotation) and "
           "`grip` where it IS — the runtime's two different answers, not one derived from the "
           "other; `grip` is the same pose as `hands`. The presses come from the analogue values "
           "through one threshold with hysteresis, so a trigger resting on the line cannot "
@@ -213,7 +217,9 @@ QVector<VerbInfo> VrApi::verbs() const
           "(\"/interaction_profiles/oculus/touch_controller\"), empty when it has bound none, "
           "and `bindings` counts the suggested-binding blocks offered and accepted — four are "
           "offered (simple, Touch, WMR and hand interaction) and a runtime takes the ones it "
-          "knows. `fromInjection` is true for a sample vr.inject wrote.",
+          "knows. `fromInjection` is true for a sample vr.inject wrote, and `focused` is "
+          "whether the app had input focus when it was taken — a gesture in flight is "
+          "cancelled on a false, never committed.",
           Needs::Engine },
     };
 }
@@ -399,7 +405,7 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
 
     static const QStringList known = { "valid", "aim", "grip", "select", "selectPressed",
                                        "grab", "grabPressed", "menuPressed", "stick",
-                                       "stickPressed" };
+                                       "stickPressed", "focused" };
     for (auto it = state.constBegin(); it != state.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.inject: unknown key '%1' — known keys are %2")
@@ -453,6 +459,11 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     s.stickX = float(stick.value(QStringLiteral("x"), 0.0).toDouble());
     s.stickY = float(stick.value(QStringLiteral("y"), 0.0).toDouble());
     s.stickPressed = state.value(QStringLiteral("stickPressed"), false).toBool();
+    // FOCUS DEFAULTS TO TRUE: a test that says nothing about it means "the
+    // wearer was there". Injecting it FALSE is how the focus-loss rule — a
+    // gesture in flight is cancelled, never committed — is driven with no
+    // runtime to take the focus away.
+    s.focused = state.value(QStringLiteral("focused"), true).toBool();
 
     if (!e->vrInjectInput(index, s))
         return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(e->lastError())));

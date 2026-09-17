@@ -121,6 +121,14 @@ assert(Math.abs(inj.grab - 0.25) < 1e-6 && inj.grabPressed === false,
 assert(inj.menuPressed === true && inj.stickPressed === true &&
        Math.abs(inj.stick.x + 0.5) < 1e-5 && Math.abs(inj.stick.y - 0.75) < 1e-5,
        "menu, stick and its press as written");
+assert(inj.focused === true,
+       "a sample says nothing about focus, so the wearer was there (`focused` defaults true)");
+assert(vr.inject("right", { grip: { x: 1, y: 1.4, z: -2 }, select: 1, focused: false }) === true &&
+       vr.state().input.right.focused === false,
+       "...and a sample can say focus was LOST — how a gesture's cancel is driven with no " +
+       "runtime to take the dashboard up");
+assert(vr.state().input.left.focused === false,
+       "a hand nobody is reporting is not focused either (there is no session at all)");
 assert(vr.state().hands.right.valid === true &&
        Math.abs(vr.state().hands.right.x - 1) < 1e-5,
        "`hands` IS `input.grip`, injection included — one pose, reported twice");
