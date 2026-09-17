@@ -11,6 +11,10 @@ For more information see the LICENSE file
 
 #include "commands/deletescenenodecommand.h"
 
+#include "irisgl/document/scenegraph/scene.h"
+
+#include <functional>
+
 #include "commands/structuralundo.h"
 #include "data/database/database.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -62,6 +66,8 @@ void DeleteSceneNodeCommand::undo()
     sceneNode = restored;
     if (staticState.isEmpty()) sceneNode->applyStaticDefaults();
     else structuralundo::restoreStatic(sceneNode, staticState);
+    if (!unarmedCameraGuid.isEmpty())
+        if (auto scene = sceneNode->getScene()) scene->setActiveCamera(unarmedCameraGuid);
     if (services && services->sceneEdit) services->sceneEdit->notifyNodeInserted(sceneNode);
     if (services && services->selection) services->selection->select(sceneNode);
 }
@@ -82,6 +88,22 @@ void DeleteSceneNodeCommand::redo()
         if (actual >= 0) position = actual;
         staticState = structuralundo::captureStatic(sceneNode);
     }
+    if (sceneNode)
+        if (auto scene = sceneNode->getScene()) {
+            const QString armed = scene->getActiveCameraGuid();
+            unarmedCameraGuid.clear();
+            if (!armed.isEmpty()) {
+                std::function<bool(const iris::SceneNodePtr &)> carries =
+                    [&](const iris::SceneNodePtr &n) -> bool {
+                        if (!n) return false;
+                        if (n->getGUID() == armed) return true;
+                        for (const auto &c : n->children())
+                            if (carries(c)) return true;
+                        return false;
+                    };
+                if (carries(sceneNode)) unarmedCameraGuid = armed;
+            }
+        }
     if (services && services->sceneEdit) services->sceneEdit->notifyNodeRemoved(sceneNode);
     sceneNode->removeFromParent();// important that this is done after!
     if (services && services->selection) services->selection->select(iris::SceneNodePtr());

@@ -40,6 +40,10 @@ class DeleteSceneNodeCommand : public StudioCommand
     Database *db = nullptr;
     QString assetGuid;
     bool nodeDeleted = false;
+    /// The camera this delete un-armed (rule 2's symmetry, the lead at merge):
+    /// undo puts the node back AND the pick, so the scene never lands in
+    /// "one camera and no shot" by way of Ctrl+Z.
+    QString unarmedCameraGuid;
 public:
     DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode,
                            Database *db = nullptr, const QString &assetGuid = QString());

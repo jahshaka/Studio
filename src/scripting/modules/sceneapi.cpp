@@ -151,8 +151,9 @@ QVector<VerbInfo> SceneApi::verbs() const
           "through a 36x24 mm sensor), clip planes, aspect + output height, and the focus/DOF "
           "block. It is NOT the viewport's explorer camera, which is not a scene node at all. "
           "`settings` is a camera.settings block applied to the new camera in the same undo "
-          "step. Adding a camera does NOT arm it for play — that is scene.setActiveCamera, "
-          "always an explicit choice. Undoable.",
+          "step. THE FIRST camera added to a scene with none armed becomes the active camera "
+          "(the play camera); a second never steals it — past the first, scene.setActiveCamera "
+          "is the explicit pick. Undoable.",
           Needs::Document },
         { "cameras", "scene.cameras() -> [{id, name, active, position, rotation, angle, focalLength, ...}]",
           "Every scene camera, with its full settings block and an `active` flag marking the one "

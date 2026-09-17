@@ -13,6 +13,8 @@ For more information see the LICENSE file
 
 #include "commands/structuralundo.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+
+#include <functional>
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/services.h"
@@ -80,9 +82,21 @@ void AddSceneNodeCommand::redo()
     //     Scene::removeNode clears the choice when the removed camera was the
     //     armed one; redoing it arms the same camera again, by the same rule,
     //     rather than leaving a scene with one camera and no shot.
-    if (sceneNode->sceneNodeType == iris::SceneNodeType::Camera)
-        if (auto scene = sceneNode->getScene())
-            scene->armCameraIfNoneActive(sceneNode.staticCast<iris::CameraNode>());
+    // The rule covers the whole ADDED SUBTREE (a pasted or duplicated group
+    // carrying a camera is an add of that camera too — the lead's second read
+    // at merge): the first camera found, root first then depth-first, arms.
+    if (auto scene = sceneNode->getScene()) {
+        std::function<bool(const iris::SceneNodePtr &)> armFirst =
+            [&](const iris::SceneNodePtr &n) -> bool {
+                if (!n) return false;
+                if (n->sceneNodeType == iris::SceneNodeType::Camera)
+                    return scene->armCameraIfNoneActive(n.staticCast<iris::CameraNode>());
+                for (const auto &c : n->children())
+                    if (armFirst(c)) return true;
+                return false;
+            };
+        armFirst(sceneNode);
+    }
     if (services && services->sceneEdit) services->sceneEdit->notifyNodeInserted(sceneNode);
     if (services && services->selection) services->selection->select(sceneNode);
 }

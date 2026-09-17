@@ -62,9 +62,21 @@ void PlayerMouseController::onMouseMove(int dx, int dy)
         if(rightMouseDown) {
             this->yaw += dx/10.0f;
             this->pitch += dy/10.0f;
+            // THE POLE IS OUT OF REACH (the lead's fix at PLAYER-SPAWN-1's merge):
+            // the controller re-reads the camera's heading on every idle frame
+            // now, and a pitch dragged past 90 decomposes back as (180 - pitch,
+            // yaw + 180, roll 180) — the same rotation, the other decomposition —
+            // which inverts the next drag's pitch sense and rolls a free viewer
+            // by 180. The editor's controller clamps for the same reason
+            // (editorcameracontroller.cpp); a hair inside the pole keeps the
+            // decomposition unambiguous.
+            this->pitch = this->pitch < -89.5f ? -89.5f : (this->pitch > 89.5f ? 89.5f : this->pitch);
+            // Written only while the right button drives the look: a hover used
+            // to stamp the last-captured heading onto the camera on every move,
+            // a Transform mark per hover on an armed, authored camera.
+            updateCameraTransform();
         }
     }
-    updateCameraTransform();
 }
 
 iris::Vec3 PlayerMouseController::calculateMouseRay(const QPointF& pos)

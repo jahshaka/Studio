@@ -362,6 +362,29 @@ int main(int argc, char **argv)
         plain->setName(QStringLiteral("Empty"));
         push(stack, new AddSceneNodeCommand(scene->getRootNode(), plain), &services);
         CHECK(scene->getActiveCamera() == first, "adding a non-camera node changes nothing");
+
+        // THE RULE COVERS THE ADDED SUBTREE (the lead's second read at merge): a
+        // pasted or duplicated GROUP that carries a camera is an add of that
+        // camera too — with nothing armed, the first camera found arms.
+        push(stack, new DeleteSceneNodeCommand(scene->getRootNode(), first), &services);
+        CHECK(scene->getActiveCameraGuid().isEmpty(),
+              "deleting the armed camera clears the choice and promotes nobody");
+        stack.undo();
+        CHECK(scene->getActiveCamera() == first,
+              "camera delete/undo: the pick comes back WITH the node (rule 2's symmetry) — "
+              "never one camera and no shot by way of Ctrl+Z");
+        stack.redo();
+        CHECK(scene->getActiveCameraGuid().isEmpty(), "camera delete/redo: cleared again");
+        auto group = iris::SceneNode::create();
+        group->setName(QStringLiteral("Group"));
+        auto nested = iris::CameraNode::create();
+        nested->setName(QStringLiteral("Nested"));
+        group->addChild(nested);
+        push(stack, new AddSceneNodeCommand(scene->getRootNode(), group), &services);
+        CHECK(scene->getActiveCamera() == nested,
+              "adding a GROUP that carries a camera arms that camera (the subtree rule)");
+        CHECK(scene->getActiveCamera() != second,
+              "...and an EXISTING camera is never auto-promoted by it");
     }
 
     if (failures) printf("\n%d of %d checks FAILED\n", failures, checks);

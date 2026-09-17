@@ -109,12 +109,13 @@ float PlayBack::update(iris::Viewport& viewport, float dt)
 	// irisLog("Controller mismatch!") right here — i.e. a mutex, a formatted
 	// QTextStream write, an out->flush() AND a qInfo() to stderr, ONCE PER
 	// FRAME for as long as the mismatch held. And it can hold indefinitely:
-	// setController() only calls setCamera() when the controller POINTER
-	// changes (see above), so once the scene's camera is reassigned underneath
-	// it — which the player does, engineplayerscene.cpp `mDocument->setCamera`
-	// — nothing re-syncs the controller and the branch is true every frame
-	// thereafter. That is a per-frame flushed write on the frame path, which
-	// the logging discipline forbids outright.
+	// the mismatch can hold indefinitely (a controller left on a camera the
+	// scene no longer plays through), so a per-frame write here is a flushed
+	// write on the frame path, which the logging discipline forbids outright.
+	// Since PLAYER-SPAWN-1 the controller drives playCamera(scene) — the ARMED
+	// camera when one is set, else the host — so the comparison is against
+	// that, not the bare host camera (the lead's fix at merge: the old compare
+	// fired on the intended armed-camera path and said the opposite of the truth).
 	//
 	// It is NOT deleted, because the condition is a real defect signal (it is
 	// adjacent to the 2026-09-05 "can't click anything after play" class); it
@@ -122,7 +123,7 @@ float PlayBack::update(iris::Viewport& viewport, float dt)
 	// distinct controller/camera pair once, and once more when it clears.
 	{
 		iris::CameraNode *ctrlCam = camController->getCamera().data();
-		iris::CameraNode *sceneCam = scene ? scene->camera.data() : nullptr;
+		iris::CameraNode *sceneCam = playCamera(scene).data();
 		if (ctrlCam != sceneCam) {
 			if (!mMismatchLatched || mMismatchController != ctrlCam
 			    || mMismatchScene != sceneCam) {
