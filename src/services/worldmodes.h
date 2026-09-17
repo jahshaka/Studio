@@ -55,6 +55,10 @@ enum class Mode { Custom = -1, Low = 0, Medium = 1, High = 2, Epic = 3 };
 /// How a row's integer value is presented.
 enum class RowType { Bool, Enum, Int };
 
+/// Which dial resolves a row (Row::tierSpace). The names are the ones
+/// `world.modeTable` reports.
+enum class TierSpace { World, Photon, None };
+
 /// One choice of an Enum row. `value` is what lands in the backing field.
 struct EnumOption {
     QString id;      ///< stable, script-facing ("vct", "4x", "auto")
@@ -72,18 +76,27 @@ struct Row {
     int      tier[4] = { 0, 0, 0, 0 };  ///< Low, Medium, High, Epic
     QString  cost;                     ///< one line, shown as the row tooltip
     bool     available = true;         ///< false = declared but not yet implemented
-    /// TIER SPACE (GI_UNIFIED_SPEC.md §2 — the Photon unification). A row is
-    /// resolved by the WORLD mode by default; a `photonTiered` row is resolved by
-    /// the scene's PHOTON tier instead, and its `tier[]` columns are the Photon
-    /// tiers (Low/Medium/High/Epic of the GI dial), not the world's.
+    /// TIER SPACE — WHICH DIAL, IF ANY, RESOLVES THIS ROW.
     ///
-    /// It exists because two dials must never own one backing field. Photon's
-    /// technique, quality and DDGI rows used to be world-mode rows; the world
-    /// mode now drives the single `photon` row, and THAT row writes the five
-    /// Photon rows (technique, quality, field, bounces, dynamic probes) through.
-    /// setMode() therefore skips them (the photon row already wrote them,
-    /// honouring their pins) and tierValue() reads their Photon column.
-    bool     photonTiered = false;
+    ///  * `World`  (the default) — the World Mode tier; `tier[]` is its four
+    ///    columns.
+    ///  * `Photon` (GI_UNIFIED_SPEC.md §2 — the Photon unification) — the
+    ///    scene's PHOTON tier, and `tier[]` is the Photon columns, not the
+    ///    world's. It exists because two dials must never own one backing
+    ///    field: Photon's technique, quality and DDGI rows used to be
+    ///    world-mode rows; the world mode now drives the single `photon` row,
+    ///    and THAT row writes them through. setMode() skips them and
+    ///    tierValue() reads their Photon column.
+    ///  * `None`   (EXPOSURE-1) — NO tier resolves it. `tier[]` is not read,
+    ///    setMode() never writes it, and its value is simply the backing field
+    ///    the user (or the document) put there. It is for settings that are not
+    ///    a scalability question at all — how a scene is EXPOSED is an art
+    ///    decision, and a mode switch must never regrade somebody's picture
+    ///    (the same reasoning the continuous ParamRows carry). Such a row still
+    ///    PINS when it is edited, so `source()` reads "override" and the panel
+    ///    marks it, and a mode switch leaves it alone whether it is pinned or
+    ///    not.
+    TierSpace tierSpace = TierSpace::World;
 
     /// The backing field. Both are null for a row with no backing field yet
     /// (`available == false`): its value lives only in worldOverrides.
@@ -112,6 +125,18 @@ struct ParamRow {
     int     decimals = 2;
     QString doc;         ///< the row tooltip AND the verb's documentation
 
+    /// WHEN THIS PARAMETER IS LIVE. Null (the common case) means "its owner row
+    /// is on", which is the right rule for a Bool owner and the only rule this
+    /// table had. A parameter under an ENUM owner needs to say so itself.
+    std::function<bool(const iris::ScenePtr &)> enabled;
+    /// WHEN THIS PARAMETER EXISTS AT ALL. Null = always. A parameter that is
+    /// dead weight is greyed rather than hidden ("why is it grey" beats "where
+    /// did it go"), so this is reserved for one that would be a LIE: the
+    /// auto-exposure window under Manual exposure bounds a measurement that is
+    /// not being made (EXPOSURE-1). The camera's panel has hidden its own pair
+    /// the same way since CAMERA_LENS_SPEC §4.
+    std::function<bool(const iris::ScenePtr &)> visible;
+
     std::function<double(const iris::ScenePtr &)>       get;
     std::function<void(const iris::ScenePtr &, double)> set;
 };
@@ -138,7 +163,7 @@ const Row *row(const QString &id);
 // under an Advanced disclosure. NOTHING new was invented to do it — a Photon
 // tier is a registry row (`photon`) whose write-through targets are four other
 // registry rows (`giMode`, `giQuality`, `giDdgi`, `giBounces`, all
-// `photonTiered`). The invariant is the same one line as
+// Photon-tiered). The invariant is the same one line as
 // everywhere else in this file:
 //
 //     a backing field is ALWAYS the resolved value.
@@ -210,7 +235,7 @@ int photonProbeSize(PhotonTier t);
 /// unless a scene pins `giCascades` off.
 int photonCascades(PhotonTier t);
 
-/// Applies a Photon state: records the tier, writes each `photonTiered` row's
+/// Applies a Photon state: records the tier, writes each Photon-tiered row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes
 /// giMode (OFF when disabled, the resolved technique when enabled).
 ///
@@ -220,13 +245,13 @@ int photonCascades(PhotonTier t);
 /// — survives the trip, which is what makes the toggle non-destructive.
 void setPhoton(const iris::ScenePtr &scene, bool enabled, PhotonTier tier);
 
-/// True when a `photonTiered` row RESOLVES to something other than the tier's
+/// True when a Photon-tiered row RESOLVES to something other than the tier's
 /// value — the honest "Custom" indicator for the tier row. False whenever Photon
 /// is off (there is nothing to deviate from: the picture is no GI either way).
 bool photonCustom(const iris::ScenePtr &scene);
 /// The labels of the deviating rows, for the tier row's tooltip.
 QStringList photonDeviations(const iris::ScenePtr &scene);
-/// Drops the pins on the `photonTiered` rows and re-applies the tier.
+/// Drops the pins on the Photon-tiered rows and re-applies the tier.
 void clearPhotonOverrides(const iris::ScenePtr &scene);
 
 /// MIGRATION (spec §2's table), for a document written before the tier existed:
@@ -283,7 +308,9 @@ bool setRowValueByOptionId(const iris::ScenePtr &scene, const QString &id,
 void pinRowValue(const iris::ScenePtr &scene, const QString &id, int value);
 
 /// Drops the pin and writes the tier value back (no-op in Custom mode beyond
-/// dropping the pin, since there is no tier to fall back to).
+/// dropping the pin, since there is no tier to fall back to — and likewise for
+/// a `TierSpace::None` row, which has no tier at all: its value is the user's
+/// and clearing a pin must not reset it).
 bool clearOverride(const iris::ScenePtr &scene, const QString &id);
 void clearOverrides(const iris::ScenePtr &scene);
 

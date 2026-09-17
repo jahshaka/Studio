@@ -106,7 +106,7 @@ private:
     void editPhotonRow(const QString &id, int value, const QString &text);
     void beginPhotonEdit();
     void endPhotonEdit(const QString &text);
-    /// Wires a photonTiered slider: start/tick/end -> snapshot/write/push.
+    /// Wires a Photon-tiered slider: start/tick/end -> snapshot/write/push.
     void wirePhotonSlider(HFloatSliderWidget *slider,
                          void (WorldGiPropertyWidget::*tick)(float), const QString &text);
     /// Wires one of the rows the TIER DOES NOT OWN (the volume, the probe grid,

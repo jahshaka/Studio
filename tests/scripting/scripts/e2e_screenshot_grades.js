@@ -228,7 +228,7 @@ assert(maxDelta(plainNoHdr, sceneNoHdr) <= 1,
 // +2.0 the film curve has something to do: a linear readback of this room is
 // dim, the graded one is not.
 world.override({ id: "hdr", value: true });
-world.postFx({ exposure: 2.0 });
+world.postFx({ exposureEv: 2.0 });
 settle();
 var plainHdr = shoot("plain");
 var sceneHdr = shoot("scene");
@@ -237,7 +237,7 @@ console.log("   HDR on: plain mean " + mean(plainHdr).toFixed(1) +
             ", max channel delta " + maxDelta(plainHdr, sceneHdr));
 assert(maxDelta(plainHdr, sceneHdr) > 20,
        "HDR on: the shot IS graded (max channel delta " + maxDelta(plainHdr, sceneHdr) + ")");
-world.postFx({ exposure: 0.6 });
+world.postFx({ exposureEv: 0.0 });
 
 // ---------------------------------------------------------------------------
 // PHASE C — THE WORLD'S EXPOSURE REACHES THE PICTURE.
@@ -246,12 +246,12 @@ world.postFx({ exposure: 0.6 });
 // measured: world exposure 0.6 -> 2.4 moved the viewport's mean from 63.9 to
 // 187.9 and the built-in tool's shot not at all.
 console.log("---- phase C: the world's exposure changes the shot ----");
-world.postFx({ exposure: 0.6 });
+world.postFx({ exposureEv: 0.0 });
 settle();
 var dimScene   = shoot("scene");
 var dimThumb   = shoot("tonemap");
 
-world.postFx({ exposure: 2.4 });
+world.postFx({ exposureEv: 2.6 });
 settle();
 var brightScene = shoot("scene");
 var brightThumb = shoot("tonemap");
@@ -273,7 +273,7 @@ var again = shoot("scene");
 assert(maxDelta(brightScene, again) === 0,
        "two shots of the same converged viewport are the same picture");
 
-world.postFx({ exposure: 0.6 });
+world.postFx({ exposureEv: 0.0 });
 settle();
 
 // ---------------------------------------------------------------------------
@@ -289,10 +289,11 @@ assert(rows.ssao.valueId !== "off", "Epic has ambient occlusion on: " + rows.ssa
 assert(rows.smaa.valueId !== "off", "Epic has SMAA on: " + rows.smaa.valueId);
 assert(rows.hdr.value !== 0, "Epic has HDR on");
 // A LIT room for the rest of the suite. The differences the chain makes are
-// measured in 8-bit levels, and at the scene default (+0.6) this room sits in
-// the bottom sixth of the range where quantisation eats them; +2.0 is the same
-// picture with the grade opened up, not a different test.
-world.postFx({ exposure: 2.0 });
+// measured in 8-bit levels, and at the scene default (0 stops) this room sits
+// in the bottom sixth of the range where quantisation eats them; +2 STOPS is
+// the same picture with the grade opened up, not a different test. (EXPOSURE-1
+// moved this verb to stops; these numbers are the same grades in the new unit.)
+world.postFx({ exposureEv: 2.0 });
 settle();
 
 var epicPlain = shoot("plain");

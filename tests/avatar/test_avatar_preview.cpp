@@ -443,8 +443,8 @@ int main(int argc, char **argv)
                   "S12: the workspace grade has no tonemapper and no bloom");
             CHECK(doc && doc->giMode == iris::GiMode::OFF && doc->worldMode == -1,
                   "S12: ... GI off, World Mode Custom (the binding is process-wide)");
-            CHECK(doc && doc->exposureMin == doc->exposureMax,
-                  "S12: ... and a PINNED exposure, so the page never breathes");
+            CHECK(doc && doc->exposureMode == iris::ExposureMode::Manual,
+                  "S12: ... and a MANUAL exposure, so the page never breathes");
 
             if (built) {
                 Image img = render(arena, *engine, arenaView, 4);

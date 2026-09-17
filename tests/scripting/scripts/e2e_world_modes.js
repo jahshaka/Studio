@@ -14,6 +14,11 @@ function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
+function refuses(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
 
 var guid = project.create("World Modes Test " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
@@ -46,7 +51,13 @@ assert(byId["planarBudget"].available === true,
 for (var k = 0; k < table.rows.length; ++k) {
     var r = table.rows[k];
     assert(r.label.length > 0 && r.cost.length > 0, "row " + r.id + " has a label and a cost note");
-    assert(!!r.tiers.low && !!r.tiers.epic, "row " + r.id + " declares all four tier values");
+    // A row in the "none" TIER SPACE has no tier columns and must not pretend
+    // to (EXPOSURE-1): nothing resolves it, so four identical cells would be a
+    // claim about a dial that does not own it. Every other row declares four.
+    if (r.tierSpace === "none")
+        assert(!r.tiers, "row " + r.id + " is in no tier space and declares no tier values");
+    else
+        assert(!!r.tiers.low && !!r.tiers.epic, "row " + r.id + " declares all four tier values");
 }
 
 // ---- a fresh scene starts on EPIC ------------------------------------------
@@ -153,18 +164,35 @@ assert(world.get().shadowResolution === 2048, "while High moves the unpinned row
 
 // ---- the continuous tuning is a verb, not a tier ----------------------------
 var fxTuning = world.postFx();
-assert(Math.abs(fxTuning.exposure - 0.6) < 0.001,
-       "a new scene's default exposure is the derived +0.6: " + fxTuning.exposure);
-fxTuning = world.postFx({ exposure: 1.25, bloomThreshold: 3.0, ssaoPower: 2.5, ssaoRadius: 4 });
-assert(Math.abs(fxTuning.exposure - 1.25) < 0.001, "world.postFx sets the exposure");
+// EXPOSURE-1: the exposure is in STOPS and a new scene is at ZERO of them —
+// which is the grade its own lights derive, not a tuned constant.
+assert(Math.abs(fxTuning.exposureEv) < 0.001,
+       "a new scene's exposure is 0 stops (the derived default grade): " + fxTuning.exposureEv);
+assert(world.settings().exposureMode.valueId === "manual",
+       "…and the Exposure Mode row is MANUAL");
+assert(byId["exposureMode"] && byId["exposureMode"].tierSpace === "none",
+       "…a row NO tier resolves, so no mode switch can regrade a scene");
+assert(!byId["exposureMode"].tiers,
+       "…and it carries no tier columns at all, because there are none to carry");
+// The old chain-unit key is REFUSED BY NAME rather than translated — the same
+// number means two different pictures in the two units.
+refuses(function () { world.postFx({ exposure: 1.25 }); },
+        "world.postFx refuses the old chain-unit 'exposure' key");
+fxTuning = world.postFx({ exposureEv: 1.25, bloomThreshold: 3.0, ssaoPower: 2.5, ssaoRadius: 4 });
+assert(Math.abs(fxTuning.exposureEv - 1.25) < 0.001, "world.postFx sets the exposure");
 assert(Math.abs(fxTuning.bloomThreshold - 3.0) < 0.001, "world.postFx sets the bloom threshold");
 assert(Math.abs(fxTuning.ssaoPower - 2.5) < 0.001, "world.postFx sets the AO power");
-assert(world.postFx({ exposure: 999 }).exposure === 8, "out-of-range exposure clamps");
-world.postFx({ exposure: 1.25 });
-// A mode switch must NOT regrade the scene: tuning is not a tier.
+assert(world.postFx({ exposureEv: 999 }).exposureEv === 16, "out-of-range exposure clamps");
+world.postFx({ exposureEv: 1.25 });
+// A mode switch must NOT regrade the scene: tuning is not a tier. NOR is the
+// MODE a tier — it is a TierSpace::None row, so a mode switch leaves it too.
+world.override({ id: "exposureMode", value: "auto" });
 world.mode({ mode: "medium" });
-assert(Math.abs(world.postFx().exposure - 1.25) < 0.001,
-       "a mode switch leaves the tuning alone: " + world.postFx().exposure);
+assert(Math.abs(world.postFx().exposureEv - 1.25) < 0.001,
+       "a mode switch leaves the tuning alone: " + world.postFx().exposureEv);
+assert(world.settings().exposureMode.valueId === "auto",
+       "…and leaves the exposure MODE alone too (no tier owns it)");
+world.override({ id: "exposureMode", value: "manual" });
 world.mode({ mode: "high" });
 
 // ---- serialization round-trip ----------------------------------------------

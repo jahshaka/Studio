@@ -79,9 +79,17 @@ var PORTS = [
       names: ["Floor", "Sun", "Sky Light", "Palette_r0_f0"],
       check: function () {
           var fx = world.get().postFx;
-          assert(Math.abs(fx.exposureMin + 1.0) < 1e-3 && Math.abs(fx.exposureMax - 2.5) < 1e-3,
+          // Their chain-unit preset (-1.0 .. 2.5) in OUR unit. The WINDOW is
+          // stops on the METER's axis (iris::lens::meterGreyCardChain), not the
+          // exposure's — the renderer clamps a measurement with it — so these
+          // are not the exposure's stops and the same three numbers reach the
+          // renderer (EXPOSURE-1).
+          assert(Math.abs(fx.exposureMin - (-4.7368)) < 1e-3 &&
+                 Math.abs(fx.exposureMax - (0.3126)) < 1e-3,
                  "Hdr: their bright-day exposure window survived (" +
                  fx.exposureMin + " .. " + fx.exposureMax + ")");
+          assert(world.settings().exposureMode.valueId === "auto",
+                 "Hdr: and it is on the AUTOMATIC exposure, which is what the sample IS");
           var sun = node.property(world.sun().light, "intensity");
           assert(Math.abs(sun - 97.0 / Math.PI) < 1e-2,
                  "Hdr: the sun still carries their 97.0 power scale (" + sun.toFixed(3) + ")");

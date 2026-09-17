@@ -240,10 +240,18 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // AT THE DOCUMENT'S OWN EXPOSURE (SS1, 2026-09-13). This used to take the
     // header's default and therefore ignored the World's exposure completely:
     // a scene the user had regraded produced thumbnails of the ungraded world.
-    // Asset previews are built at iris::Scene's default (+0.6), so their
-    // pictures are byte-identical to what they were; only a regraded document
-    // moves, and it moves TOWARDS the viewport.
-    secondaryfx::apply(view(), true, document->exposure);
+    // Asset previews are built at iris::Scene's default, so their pictures move
+    // only when that default does; a regraded document moves TOWARDS the
+    // viewport.
+    //
+    // THE UNIT (EXPOSURE-1): the document holds STOPS and secondaryfx::apply
+    // takes the post chain's `E`, so this is the same one conversion the mirror
+    // does — iris::lens, in both places, and nowhere else. The thumbnail grade
+    // itself is unchanged: it is the chain's fixed-exposure form, which is
+    // exactly what MANUAL exposure now is on screen, so a manually exposed
+    // world and its thumbnails agree by construction rather than by a derived
+    // constant.
+    secondaryfx::apply(view(), true, iris::lens::exposureStopsToChain(document->exposure));
 
     view()->setEnabled(true);
     // The editor does not pay for a thumbnail (fps audit F5): renderOneFrame

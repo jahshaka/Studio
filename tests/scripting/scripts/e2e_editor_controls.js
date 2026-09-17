@@ -763,14 +763,18 @@ assert(player.setFlySpeed(1).multiplier === 1, "player back to 1x (leave no pers
 
 // ---------------------------------------------------------------------------
 // POST PROCESS PARAMETERS (fix wave item 8). world.postFx is generated from the
-// same table the new World > Post Process section is built from, so the two
-// cannot disagree about a range. exposureMin/exposureMax are the gap that
-// section had to fill: both were engine fields the document could not reach.
+// same table the World > Post Process section is built from, so the two cannot
+// disagree about a range. Everything here is in STOPS since EXPOSURE-1, and
+// `exposureEv` is the key that says so.
 var pf0 = world.postFx();
-assert(typeof pf0.exposure === "number", "postFx().exposure");
+assert(typeof pf0.exposureEv === "number", "postFx().exposureEv");
 assert(typeof pf0.exposureMin === "number" && typeof pf0.exposureMax === "number",
-    "postFx() reports the auto-exposure WINDOW as well as its midpoint");
+    "postFx() reports the automatic window as well as the exposure");
 assert(pf0.exposureMin <= pf0.exposureMax, "the window is ordered");
+// NULL under Manual: there is no measurement to report, and 0 is a real
+// reading now (0 stops = "the meter landed where Manual would").
+assert(pf0.exposureMeasured === null || pf0.exposureMeasured === undefined,
+    "postFx().exposureMeasured is null while the exposure is a number, not a measurement");
 
 var pf1 = world.postFx({ exposureMin: -1.0, exposureMax: 1.5 });
 assert(near(pf1.exposureMin, -1.0) && near(pf1.exposureMax, 1.5), "the window round-trips");
@@ -779,12 +783,15 @@ assert(near(pf1.exposureMin, -1.0) && near(pf1.exposureMax, 1.5), "the window ro
 var pf2 = world.postFx({ exposureMin: 3.0 });
 assert(pf2.exposureMin <= pf2.exposureMax,
     "an inverted window is re-ordered, never stored: " + pf2.exposureMin + ".." + pf2.exposureMax);
-assert(near(world.postFx({ exposureMin: 0.5, exposureMax: 0.5 }).exposureMin, 0.5),
-    "min == max is legal — it PINS the exposure");
+// THE PIN IS A MODE NOW, not a pair of equal numbers (EXPOSURE-1): the old
+// "min == max" recipe is deleted, and the window is only read under Auto.
+var badExposure = false;
+try { world.postFx({ exposure: 1.0 }); } catch (e) { badExposure = true; }
+assert(badExposure, "the old chain-unit 'exposure' key is refused by name");
 var badParam = false;
 try { world.postFx({ nonsense: 1 }); } catch (e) { badParam = true; }
 assert(badParam, "an unknown post-fx parameter is refused by name");
-world.postFx({ exposureMin: -2.5, exposureMax: 2.5 });   // back to the defaults
+world.postFx({ exposureMin: -3.5, exposureMax: 3.5 });   // back to the defaults
 
 // ---------------------------------------------------------------------------
 // SCREENSHOT GRADES (fix wave item 6). The default MUST stay raw — this verb is

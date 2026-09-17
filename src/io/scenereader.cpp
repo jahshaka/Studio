@@ -604,18 +604,44 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // EVERY FALLBACK IN THIS BLOCK IS THE CONSTRUCTOR'S VALUE, verbatim
     // (irisgl/document/scenegraph/scene.cpp) — a key a file does not carry must
     // read as what a scene that was never saved holds, or "absent" and "fresh"
-    // mean two different scenes. `exposure` disagreed until now: the
-    // constructor says +0.6 = ln(1.8) (the amount that puts mid-grey back where
-    // it was for 8-bit content; the reasoning is written out at scene.cpp:161)
-    // and this line said 0.0, which lands the filmic curve at about 0.31 —
-    // every document without the key opened two stops dark. Same defect class
-    // as the shadow key SUN1 fixed.
-    scene->exposure = float(sceneObj.value("exposure").toDouble(0.6));
-    // The adaptation window. Absent = the engine's historical hard-coded pair,
-    // so an older document grades exactly as it did.
-    scene->exposureMin = float(qBound(-8.0, sceneObj.value("exposureMin").toDouble(-2.5), 8.0));
-    scene->exposureMax = float(qBound(double(scene->exposureMin),
-                                      sceneObj.value("exposureMax").toDouble(2.5), 8.0));
+    // mean two different scenes. This block DEFAULT-CONSTRUCTS AND OVERWRITES
+    // PRESENT KEYS rather than repeating literals, which is the reader-defaults
+    // law as code (`exposure` disagreed for a week and every document without
+    // the key opened two stops dark; SUN1's shadow key was the same defect).
+    //
+    // THE EXPOSURE KEYS CHANGED NAME AND UNIT (EXPOSURE-1, 2026-09-17): the
+    // document stores STOPS now, on the same axis a camera uses, with a MODE.
+    // `exposureEv`/`exposureMinEv`/`exposureMaxEv` are the new keys precisely
+    // so an old file's chain-unit `exposure` cannot be read as stops and
+    // silently regrade a scene by a factor: an old file carries none of them,
+    // reads the constructor — Manual at the derived default — and is developed
+    // by physics instead of by a meter. No migration, by the CRUD law.
+    {
+        bool ok = false;
+        const iris::ExposureMode m = iris::exposureModeFromName(
+            sceneObj.value("exposureMode").toString().toLatin1().constData(), &ok);
+        if (ok) scene->exposureMode = m;
+        if (sceneObj.contains("exposureEv"))
+            scene->exposure = float(qBound(-16.0, sceneObj.value("exposureEv").toDouble(), 16.0));
+        if (sceneObj.contains("exposureMinEv"))
+            scene->exposureMin =
+                float(qBound(-16.0, sceneObj.value("exposureMinEv").toDouble(), 16.0));
+        if (sceneObj.contains("exposureMaxEv"))
+            scene->exposureMax =
+                float(qBound(-16.0, sceneObj.value("exposureMaxEv").toDouble(), 16.0));
+        if (scene->exposureMax < scene->exposureMin)
+            std::swap(scene->exposureMin, scene->exposureMax);
+        // TOLD ONCE, NOT MIGRATED (lead review item 4). A file with the retired
+        // chain-unit keys and none of the new ones opened at the constructor's
+        // grade — which is a decision, not an accident, and the one thing a
+        // user cannot deduce from the picture. The scene carries the fact and
+        // the issue bar says it; nothing converts anything.
+        scene->legacyExposureKeyIgnored =
+            (sceneObj.contains("exposure") || sceneObj.contains("exposureMin") ||
+             sceneObj.contains("exposureMax")) &&
+            !sceneObj.contains("exposureEv") && !sceneObj.contains("exposureMinEv") &&
+            !sceneObj.contains("exposureMaxEv") && !sceneObj.contains("exposureMode");
+    }
     scene->bloomEnabled = sceneObj.value("bloomEnabled").toBool(false);
     scene->bloomThreshold = float(sceneObj.value("bloomThreshold").toDouble(5.0));
     scene->bloomKnee = float(sceneObj.value("bloomKnee").toDouble(2.0));   // absent = the old hard-coded width

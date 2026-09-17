@@ -199,6 +199,14 @@ int main(int argc, char **argv)
     doc->fogColor       = QColor(40, 220, 120);
     doc->fogDensity     = 0.06f;
     doc->hdrEnabled     = true;                   // THE symptom: filmic tonemap + auto exposure
+    // AUTO, EXPLICITLY (EXPOSURE-1): the editor's default is MANUAL now, and
+    // this suite's section 5 is about the AUTOMATIC exposure's hand-over
+    // between two on-screen views — a mechanism that exists only when there is
+    // a measurement to hand over. Under Manual the chain has no meter at all
+    // (measuredExposureScale reads 0 by design, because the grade is a constant
+    // the caller already has), so naming the mode is what keeps this section
+    // testing its own subject rather than the default.
+    doc->exposureMode   = iris::ExposureMode::Auto;
     doc->exposure       = 0.0f;
     doc->bloomEnabled   = true;
     doc->bloomThreshold = 5.0f;

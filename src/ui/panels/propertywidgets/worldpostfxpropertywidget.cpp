@@ -69,8 +69,13 @@ void WorldPostFxPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row 
     else if (r.id == QLatin1String("ssao"))
         keywords << QStringLiteral("ao") << QStringLiteral("ambient occlusion");
     else if (r.id == QLatin1String("hdr"))
-        keywords << QStringLiteral("tonemap") << QStringLiteral("tone mapping")
-                 << QStringLiteral("exposure");
+        keywords << QStringLiteral("tonemap") << QStringLiteral("tone mapping");
+    // "exposure" belongs to the EXPOSURE rows, not to HDR: it used to be a
+    // synonym here because HDR owned the exposure parameters, and since
+    // EXPOSURE-1 it would send a search for "exposure" to the wrong row.
+    else if (r.id == QLatin1String("exposureMode"))
+        keywords << QStringLiteral("exposure") << QStringLiteral("ev")
+                 << QStringLiteral("stops") << QStringLiteral("auto exposure");
     else if (r.id == QLatin1String("photon"))
         keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
     PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);
@@ -216,8 +221,16 @@ void WorldPostFxPropertyWidget::refreshRows()
         pf.field->setValue(p->get ? p->get(scene) : 0.0);   // quiet: does not emit
         // A parameter is dead weight while its effect is off; showing it greyed
         // is more honest than hiding it, because "where did the exposure slider
-        // go" is a worse question than "why is it grey".
-        pf.field->setEnabled(owner ? worldmodes::resolved(scene, *owner) != 0 : true);
+        // go" is a worse question than "why is it grey". The table says when —
+        // `enabled` for a row whose owner is not a simple on/off (EXPOSURE-1),
+        // the historical "the owner row is on" rule otherwise.
+        pf.field->setEnabled(p->enabled ? p->enabled(scene)
+                                        : (owner ? worldmodes::resolved(scene, *owner) != 0 : true));
+        // AND THE ONE CASE THAT IS HIDDEN RATHER THAN GREYED: a parameter that
+        // would be a LIE in the current mode. The auto-exposure window bounds a
+        // measurement Manual exposure does not make, so under Manual it is not
+        // a disabled control, it is not a control.
+        if (p->visible) pf.field->setVisible(p->visible(scene));
     }
 
     if (looksHeading) {
