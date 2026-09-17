@@ -125,7 +125,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "\"what is this runtime\" are two questions a caller asks at different times, and a "
           "tool schema reads better with both.",
           Needs::Engine },
-        { "begin", "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?}) -> bool",
+        { "begin", "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?, reflections?}) -> bool",
           "THE EDITOR'S VR PREVIEW (SPECS/VR_SPEC.md §5 phase 4): starts the VR session on the "
           "editor's scene and returns true once it exists. From the next frame the render loop is "
           "PACED BY THE RUNTIME (xrWaitFrame), both eyes are drawn in one pass into a target two "
@@ -151,6 +151,12 @@ QVector<VerbInfo> VrApi::verbs() const
           "metre of room (1 = life size). `eyeWidth`/`eyeHeight` override the size each eye is "
           "RENDERED at, for measurement only; the runtime's swapchains keep the runtime's size, "
           "so the copy scales.\n\n"
+          "REFLECTIONS IN THE HEADSET follow the PROJECT by default — the World panel's SSR "
+          "row, the same row the desktop viewport renders with — and `reflections` (0 off, 1 "
+          "half-resolution, 2 full) overrides it for a measurement. In a headset the row buys "
+          "RAY-TRACED reflections per eye rather than the desktop's screen-space march, which a "
+          "target holding two eyes side by side cannot carry: a ray is traced in the world from "
+          "the eye that owns its pixel, a screen march would walk into the other eye.\n\n"
           "REFUSES (false, with app.lastError set) rather than throwing when VR is unavailable, "
           "when a session is already running, or when there is no scene yet.",
           Needs::Engine },
@@ -477,6 +483,23 @@ bool VrApi::begin(const QVariantMap &options)
     // proxies are one object's business, and the Player's VR mode is the other
     // one. Two paths into beginVrSession from two places is how the two modes
     // would drift apart.
+    // THE KEYS THIS VERB READS, AND A THROW FOR ANY OTHER — the same rule
+    // `player.play` has carried since VR phase 3, and the same reason: a
+    // MALFORMED CALL is a programming error and must be loud (a misspelt
+    // `reflection` for `reflections` silently got the project's row, which is
+    // the worst kind of "it works"), while a refusal is reserved for the
+    // questions that legitimately have two answers — no headset, a session
+    // already running, no scene. Every key here is one EditorVrPreview::begin
+    // actually reads.
+    static const QStringList known = { QStringLiteral("mirror"),
+                                       QStringLiteral("worldScale"),
+                                       QStringLiteral("eyeWidth"),
+                                       QStringLiteral("eyeHeight"),
+                                       QStringLiteral("reflections") };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("vr.begin: unknown option '%1' — known options are %2")
+                            .arg(it.key(), known.join(QStringLiteral(", "))));
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.begin: no engine is running in this process"));
     if (!e->vrAvailable() && QString::fromStdString(e->vrInfo().reason).isEmpty())

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include "bridge/vrnames.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "player/playermousecontroller.h"
 #include "viewport/flyspeedsettings.h"
 
@@ -53,7 +54,7 @@ bool PlayerVr::isActive() const
 }
 
 bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &camera,
-                     const QVariantMap &options, QString *error)
+                     const iris::ScenePtr &document, const QVariantMap &options, QString *error)
 {
     const auto fail = [error](const QString &why) {
         if (error) *error = why;
@@ -77,6 +78,14 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     cfg.overrideEyeHeight = options.value(QStringLiteral("eyeHeight"), 0).toUInt();
     if (!cfg.overrideEyeWidth != !cfg.overrideEyeHeight)
         return fail(QStringLiteral("eyeWidth and eyeHeight are set together or not at all"));
+    // THE REFLECTION ROW IS THE PROJECT'S (lane REFLECT-VR-1), the same row the
+    // flat Player renders with: the World panel's SSR row, passed here because
+    // the session builds its own View and no mirror reaches it. In the headset
+    // the row buys RAY-TRACED reflections rather than the screen-space march,
+    // which a stereo target cannot carry — see PostFxDesc::ssrScreenMarch.
+    if (document) cfg.ssr = document->ssrMode;
+    if (options.contains(QStringLiteral("reflections")))
+        cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
 
     // THE MIRROR IS NAMED BEFORE THE SESSION EXISTS (Engine::setVrMirrorView
     // keeps the wish and applies it on begin), so the very first frame the

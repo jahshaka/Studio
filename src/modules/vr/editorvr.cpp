@@ -118,6 +118,21 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // that is what an editor PREVIEW is for. The Player passes nothing and gets
     // VrConfig's default (none), exactly as its desktop window shows none.
     cfg.helpers = true;
+    // AND THE WEARER SEES THE REFLECTIONS THE AUTHOR SEES (lane REFLECT-VR-1).
+    // The reflection row is the PROJECT's — the World panel's SSR row, which
+    // the mirror pushes into this viewport's own view every frame — and this
+    // config is the only channel to a view the session makes for itself. A
+    // project at Low or Medium (row 0) asks for none and pays for none, exactly
+    // as its desktop viewport does.
+    //
+    // WHAT THE HEADSET DOES WITH IT is not the desktop's screen-space march
+    // (impossible in a stereo target) but the RAYS, per eye — see
+    // PostFxDesc::ssrScreenMarch. `vr.begin({reflections:n})` overrides the row
+    // for a measurement; it is deliberately not a persisted setting.
+    if (const iris::ScenePtr doc = viewport->getScene())
+        cfg.ssr = doc->ssrMode;
+    if (options.contains(QStringLiteral("reflections")))
+        cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
     // THE MIRROR VIEW IS NAMED BEFORE THE SESSION EXISTS (the engine keeps the
     // wish and applies it on begin), and only when one was ASKED for: with
     // `mirror: "none"` there is nothing to paint and the editor's view is left
