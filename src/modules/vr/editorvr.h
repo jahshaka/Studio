@@ -44,8 +44,10 @@ For more information see the LICENSE file
 //     plus the arrow cluster, Shift to boost, at the editor's own speed
 //     setting — walks the RIG along the head's LEVEL heading, exactly as the
 //     Player's does (vrorigin::flyDelta). It is the only input this object
-//     takes, and the viewport suppresses its camera's fly for the duration
-//     (IEditorViewport::setVrPreview).
+//     takes, and the viewport suppresses its camera's FLY for the duration —
+//     only the fly (IEditorViewport::setVrPreviewStep, and the flag it sets on
+//     the camera controller): the orbit, the pan, the dolly and the axis-view
+//     lerp all keep running, because the desktop stays a full editor.
 //
 // THE RIG IS THE ENGINE'S (Engine::setVrOrigin) — this object holds no copy and
 // reads `vrStatus().origin` every time, so a runtime recentre the session

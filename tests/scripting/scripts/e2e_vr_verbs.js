@@ -65,6 +65,22 @@ assert(typeof vr.proxies() === "boolean", "vr.proxies() answers a boolean with n
 assert(vr.proxies(false) === false, "...and can be turned off");
 assert(vr.proxies(true) === true, "...and on again, without a session to draw them in");
 
+// ---- and the two measuring verbs answer honestly with no session ----------
+assert(vr.move({ forward: true }) === false,
+       "vr.move refuses when the editor's VR preview is not running");
+var moveErr = app.lastError();
+assert(typeof moveErr === "string" && moveErr.indexOf("vr.move") >= 0,
+       "...and says which verb refused: " + moveErr);
+// AN UNKNOWN KEY IS AN ERROR, NOT A REFUSAL (player.vrMove's rule, shared): a
+// misspelled intent that answered `false` would be indistinguishable from "no
+// session", which is exactly the confusion the refuse/fail split exists for.
+var threw = false;
+try { vr.move({ sideways: true }); } catch (e) { threw = String(e).indexOf("sideways") >= 0; }
+assert(threw, "vr.move THROWS on an unknown key, naming it");
+var marker = vr.proxyPose("left");
+assert(marker.drawn === false && marker.x === 0 && marker.y === 0 && marker.z === 0,
+       "vr.proxyPose answers with no session at all: nothing is drawn, and the pose is zero");
+
 // ---- and the editor is untouched -----------------------------------------
 
 var id = scene.addPrimitive("Cube");
