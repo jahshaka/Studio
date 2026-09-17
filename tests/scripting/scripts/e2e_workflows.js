@@ -145,26 +145,50 @@ assert(dumpKs.indexOf("\"specular\"") >= 0,
 // One directional light, no GI/SSAO churn: the fixture is a shipped preset on
 // a primitive, framed from a fixed angle, so the two probes differ only in the
 // shading model the workflow selects.
-function ballColour(name) {
+// FIVE PROBES, NOT ONE (PHOTON-M2). The centre pixel alone was a coincidence
+// waiting to happen and it happened: with the voxel injection storing radiance
+// instead of pi times it (ogre-patch 0077) the two workflows agree at the ball's
+// CENTRE to the bit — rgb(13,13,15) both — while the two IMAGES differ on 46.7 %
+// of their pixels by up to 169/255 (measured on this very fixture's two shots).
+// A full metal has no diffuse at all and a dielectric does, so where they differ
+// most is a diffuse-lit pixel; the centre one here is lit indirectly and is now
+// dark in both. The claim is "the workflow reaches pixels", so the probe set is
+// the picture rather than one texel of it.
+// The upper half of the ball is where a metal and a dielectric part company: the
+// metal reflects the sky as its WHOLE answer and the dielectric adds a diffuse
+// term to a 4 % reflection. Measured on this fixture's two shots, the largest
+// deltas sit at (0.47, 0.22) and its neighbours — 169/255 — and every probe
+// below is in that band; the centre stays in the list and is still printed,
+// because it is the one the older reading quoted.
+var BALL_PROBES = [ { x: 0.50, y: 0.50 }, { x: 0.47, y: 0.22 }, { x: 0.40, y: 0.22 },
+                    { x: 0.55, y: 0.22 }, { x: 0.30, y: 0.30 } ];
+function ballProbes(name) {
     editor.select(null);
     editor.frameNode(ball, { yaw: 25, pitch: 20, distance: 3.2 });
     editor.frame(3);
-    return editor.screenshot(name, 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
+    return editor.screenshot(name, 128, 128, BALL_PROBES).probes;
+}
+function maxProbeDelta(a, b) {
+    var m = 0;
+    for (var i = 0; i < a.length && i < b.length; ++i)
+        m = Math.max(m, Math.abs(a[i].r - b[i].r), Math.abs(a[i].g - b[i].g),
+                     Math.abs(a[i].b - b[i].b));
+    return m;
 }
 assert(material.set(ball, { workflow: "Metallic", metallic: 1.0, roughness: 0.15,
                             specularColor: { r: 255, g: 255, b: 255 },
                             useFresnelColor: false }),
        "author a full metal");
-var metalPx = ballColour("workflow_metallic.png");
-console.log("    " + show("METALLIC", metalPx));
+var metalPx = ballProbes("workflow_metallic.png");
+console.log("    " + show("METALLIC centre", metalPx[0]));
 
 assert(material.set(ball, { workflow: "Specular", ior: 1.5 }), "same surface, specular workflow");
-var specPx = ballColour("workflow_specular.png");
-console.log("    " + show("SPECULAR", specPx));
-assert(Math.abs(specPx.r - metalPx.r) > 6 || Math.abs(specPx.g - metalPx.g) > 6 ||
-       Math.abs(specPx.b - metalPx.b) > 6,
+var specPx = ballProbes("workflow_specular.png");
+console.log("    " + show("SPECULAR centre", specPx[0]) +
+            "  max delta over 5 probes " + maxProbeDelta(metalPx, specPx));
+assert(maxProbeDelta(metalPx, specPx) > 6,
        "the workflow reaches PIXELS: a full metal and a dielectric are different images " +
-       show("metal", metalPx) + " vs " + show("spec", specPx));
+       show("metal centre", metalPx[0]) + " vs " + show("spec centre", specPx[0]));
 
 // ---- 8. save / close / open, values kept across a workflow switch ----
 assert(material.set(ball, { workflow: "Specular (Fresnel)", ior: 1.8,
