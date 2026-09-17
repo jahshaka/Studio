@@ -192,7 +192,7 @@ node.setProperty(skylight, "intensity", 1.5); // strength (1.0 = the sky as it i
 node.setProperty(skylight, "lightColor", "#ffeedd");   // a tint on the sky's light
 scene.addLight("sky");                        // ...or add one to a scene without
 world.sunDisc({ visible: true });             // the disc drawn where the sun points
-world.fog({ enabled: true, color: "#aabbcc", start: 20, end: 120 });
+world.fog({ enabled: true, color: "#aabbcc", density: 2 / (20 + 120) }); // exponential; density is the whole setting (no start/end)
 world.shadows({ enabled: true });
 world.sky("gradient", { top: "#2a4d6e", mid: "#87a5c0", bottom: "#d8c8a8" });
 world.gi({ mode: "vct", quality: "medium", bounces: 2 });

@@ -19,7 +19,7 @@ ever. It has cost real pictures four times:
   * SUN1 (2026-09-12) — the shadow type read None against ShadowMap's Soft.
   * the darkness A/B (2026-09-13) — `exposure` read 0.0 against the scene's
     0.6, and FIVE SHIPPED SAMPLES rendered at half brightness because of it.
-  * READER-DEFAULTS-1 (2026-09-17) — nine more, of which the loudest were a
+  * READER-DEFAULTS-1 (2026-09-17) — nineteen more, of which the loudest were a
     light's RADIUS (1 against 10), a light's shadow resolution (1024 against
     2048), the explorer camera's far clip (100 against 500) and six particle
     emitter fields that turned every pre-key emitter into a slow, dark,

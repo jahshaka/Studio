@@ -173,6 +173,8 @@ static void testTierTable()
         CHECK(giQualityFacts(GiQuality::High).probeHdrDefault &&
                   giQualityFacts(GiQuality::High).probeShadowsDefault &&
                   !giQualityFacts(GiQuality::Medium).probeHdrDefault &&
+                  !giQualityFacts(GiQuality::Low).probeHdrDefault &&
+                  !giQualityFacts(GiQuality::Medium).probeShadowsDefault &&
                   !giQualityFacts(GiQuality::Low).probeShadowsDefault,
               "HDR and shadowed probe captures are the High quality column, and only it");
 

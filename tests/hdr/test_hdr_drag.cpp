@@ -193,11 +193,19 @@ int main()
     const float kNoMeasurement = 1024.0f * std::exp(kExposure - 2.0f) / std::exp(7.5f - kExpMax);
     std::printf("== the chain's 'no measurement' constant is %.3f ==\n", kNoMeasurement);
 
-    struct Run { const char *name; int ssr; bool spark; float dragBound; };
-    const Run runs[] = { { "SSR off",              0, false, 0.8f },
-                         { "SSR full-res",         2, false, 0.8f },
-                         { "SSR off,      spark",  0, true,  0.8f },
-                         { "SSR full-res, spark",  2, true,  0.8f } };
+    struct Run { const char *name; int ssr; bool spark; float dragBound; ExposureMeterPattern pattern; };
+    // THE FIFTH ROW METERS WITH THE SHIPPED PATTERN (lead review at merge,
+    // EXPOSURE-2): the four Average rows isolate this suite's subject (below),
+    // but nothing else asserts that the grade moves SMOOTHLY under the
+    // centre-weighted default a user actually gets. Measured on this fixture:
+    // 1.05 % of the gap per frame (the dragged highlight crosses the meter's
+    // sensitive middle, so it moves four times Average's 0.26 %) — still well
+    // under the ~2 % a NaN-frame lurch would be, so 1.5 % discriminates.
+    const Run runs[] = { { "SSR off",              0, false, 0.8f, ExposureMeterPattern::Average },
+                         { "SSR full-res",         2, false, 0.8f, ExposureMeterPattern::Average },
+                         { "SSR off,      spark",  0, true,  0.8f, ExposureMeterPattern::Average },
+                         { "SSR full-res, spark",  2, true,  0.8f, ExposureMeterPattern::Average },
+                         { "SSR full-res, centre-weighted", 2, false, 1.5f, ExposureMeterPattern::CentreWeighted } };
     float clean[2] = { 0.0f, 0.0f };
 
     for (const Run &r : runs) {
@@ -211,7 +219,7 @@ int main()
         fx.exposure = kExposure; fx.exposureMin = kExpMin; fx.exposureMax = kExpMax;
         // AVERAGE METERING, DELIBERATELY (EXPOSURE-2). This fixture DRAGS A
         // LIGHT THROUGH THE FRAME CENTRE, and a centre-weighted meter — the
-        // shipped default — is SUPPOSED to follow that: it puts 40 % of its
+        // shipped default — is SUPPOSED to follow that: it puts 41 % of its
         // sensitivity in the middle eleventh of the picture, so the dragged
         // highlight moves the measurement several times as much and the bounds
         // below would be measuring the PATTERN's sensitivity rather than this
@@ -221,7 +229,7 @@ int main()
         // of them smooth and both well under the filter's own 2.284 % ceiling.
         // The pattern's own behaviour is asserted where it can be exact, in
         // hdr.meter and cameras.exposure part D.
-        fx.meterPattern = ExposureMeterPattern::Average;
+        fx.meterPattern = r.pattern;
         view->setPostFx(fx);
 
         // Settle at the start pose: the adaptation and the shadow caches.
@@ -264,7 +272,7 @@ int main()
         CHECK_MSG(drag[0] > 0.0f, "%s: the chain reports an adapted luminance (%.4f)",
                   r.name, drag[0]);
         if (!r.spark) {
-            clean[r.ssr ? 1 : 0] = mid;
+            if (r.pattern == ExposureMeterPattern::Average) clean[r.ssr ? 1 : 0] = mid;
         } else {
             // THE ASSERTION THIS SUITE EXISTS FOR. A few pixels of unusable
             // radiance - a specular lobe past what RGBA16F can say, or a sum of

@@ -33,8 +33,9 @@ public:
     /// while a loaded one did not). The three, which the ui.grid_default gate
     /// asserts agree:
     ///   1. HERE — what a brand-new scene's EditorData is born with;
-    ///   2. SceneReader::readEditorData — `editorObj["showGrid"].toBool(false)`,
-    ///      the value a scene file that predates the key reads back as;
+    ///   2. SceneReader::readEditorData — reads the key with THIS member as the
+    ///      fallback (READER-DEFAULTS-1), so a scene file that predates the key
+    ///      reads back what a new scene is born with;
     ///   3. EngineSceneViewport::mShowGrid — the viewport's own initial state,
     ///      which is what a session shows before any scene is opened.
     /// It flipped to OFF on 2026-09-06 (scenes ship a tiled floor, so the

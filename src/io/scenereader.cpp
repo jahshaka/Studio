@@ -94,7 +94,7 @@ For more information see the LICENSE file
 // It has cost real pictures four times: SUN1 found the shadow type reading None
 // against ShadowMap's Soft; the darkness A/B of 2026-09-13 found `exposure`
 // reading 0.0 against the scene's 0.6 and five shipped samples rendering at
-// half brightness because of it; and this lane found nine more, of which the
+// half brightness because of it; and this lane found nineteen more, of which the
 // loudest were a light's RADIUS (1 against 10), a light's shadow resolution
 // (1024 against 2048), the explorer camera's FAR CLIP (100 against 500) and six
 // particle-emitter fields that turned every pre-key emitter into a slow, dark,

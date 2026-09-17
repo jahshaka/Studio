@@ -146,6 +146,8 @@ assert(fogAfter.density === fogBefore.density && fogAfter.enabled === fogBefore.
        "a refused fog write changed nothing");
 // A mixed call — one good key, one bad — is refused WHOLE: the good half must
 // not land, or a caller cannot tell what state it is in.
+refuses(function () { world.fog({ start: 20, end: 120 }); },
+        "the retired linear fog pair is refused BY NAME (CRUD-RENDER-1): a write that changed nothing must not answer true");
 refuses(function () { world.fog({ density: 0.9, heightFallof: 1 }); },
         "F6: a typo beside a good key still refuses the whole call");
 assert(world.get().fog.density === fogBefore.density,
