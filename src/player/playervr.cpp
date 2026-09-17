@@ -88,12 +88,18 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     }
     mOwnsSession = true;
     mMirrorView = mirrorView;
-    // THE DESKTOP STOPS RENDERING THE WORLD (VR-2's F7, deferred to here). The
-    // View keeps its workspace, its chain and its camera — it simply does not
-    // execute, so the window costs the mirror's one quad instead of a second
-    // render of the scene at window size. It comes straight back on when the
-    // session ends, with the chain the mirror has kept pushing to it all along.
-    if (mMirrorView) mMirrorView->setEnabled(false);
+    mMirrorViewOff = false;
+    // THE DESKTOP STOPS RENDERING THE WORLD (VR-2's F7) — BUT NOT YET
+    // (lane VR-3b, 2026-09-17, the owner's WiVRn smoke). The View keeps its
+    // workspace, its chain and its camera and simply stops executing, so the
+    // window costs the mirror's one quad instead of a second render of the
+    // scene at window size. That trade only exists once there IS a mirror
+    // picture: a runtime answers "no picture" for its first frames (WiVRn does,
+    // for as long as it takes to synchronise), and switching the desktop off
+    // before the first eye was drawn leaves the window painted by nobody —
+    // stale VRAM, which is what the owner photographed. So the switch-off waits
+    // for `status().rendered` to move (step(), below), which is the same moment
+    // the engine's mirror starts painting.
 
     // THE RIG STARTS AT THE WORLD ORIGIN AND IS PLACED AT THE FIRST LOCATED
     // POSE — never on the frame a session begins (the runtime has not reached
@@ -138,7 +144,8 @@ void PlayerVr::restoreMirrorView()
     // then, and a session can end while the Player page is hidden — leaving a
     // hidden on-screen view rendering and presenting a picture nobody can see,
     // every frame, for the rest of the run. The widget owns that answer.
-    if (mMirrorView && mRestoreView) mRestoreView();
+    if (mMirrorView && mMirrorViewOff && mRestoreView) mRestoreView();
+    mMirrorViewOff = false;
     mMirrorView = nullptr;
 }
 
@@ -183,6 +190,15 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         engine->setVrMirrorView(nullptr);
         restoreMirrorView();
         return;
+    }
+    // THE FIRST EYE PICTURE IS WHAT PAYS FOR THE DESKTOP'S (see begin()): from
+    // here on the window shows the mirror, so the view that was drawing the
+    // world at window size can stop. Before it, the desktop keeps its own
+    // picture — a runtime that answers "no picture" for a hundred frames must
+    // not leave the user looking at an unpainted window.
+    if (!mMirrorViewOff && mMirrorView && st.rendered > 0ull) {
+        mMirrorView->setEnabled(false);
+        mMirrorViewOff = true;
     }
     if (camera) mCamera = camera;
     if (!st.posesValid) return;      // nothing located yet: nowhere to stand

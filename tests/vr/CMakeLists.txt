@@ -158,6 +158,31 @@ set_tests_properties(vr.player_session PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_player_home};JAHSHAKA_DATA_ROOT=${_vr_player_home}/.local/share/Jahshaka")
 
+# ---------------------------------------------------------------------------
+# vr.no_picture_start — THE OWNER'S FAILED WiVRn SMOKE, AS A SUITE (lane VR-3b,
+# 2026-09-17; VR_SPEC §6).
+#
+# The same wrapper and the same app as vr.player_session, with the pump's two
+# test hooks armed: the first frames of every session in the run are answered
+# "no picture" (which is what WiVRn answers while it synchronises, and what no
+# simulated runtime will do on request), and after 200 accepted frames the
+# runtime is asked to take the session away so the real STOPPING event arrives.
+# Between them they reproduce both of the owner's failed runs — the frame loop
+# that stopped because nothing was enabled, and the session that was stopped
+# with nobody noticing — in the app, through the Player page and the real driver.
+set(_vr_nopic_home "${CMAKE_CURRENT_BINARY_DIR}/vr-nopicture-home")
+add_test(NAME vr.no_picture_start
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_no_picture_start.js")
+set_tests_properties(vr.no_picture_start PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200")
+
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600

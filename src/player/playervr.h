@@ -157,6 +157,11 @@ private:
     jahshaka::engine::View *mMirrorView = nullptr;
     /// Waiting to place the rig (at begin, and at every recenter).
     bool mPlacePending = false;
+    /// HAS THIS OBJECT SWITCHED THE DESKTOP VIEW OFF YET? (lane VR-3b.) It is
+    /// switched off on the first frame the headset actually drew, never before:
+    /// until then the mirror has no picture to show and the desktop must keep
+    /// drawing its own (the engine's mirror waits for the same moment).
+    bool mMirrorViewOff = false;
     /// THE FIRST LOCATE THAT CAN BE TRUSTED FOR A PLACEMENT — `VrStatus::
     /// rendered` at the moment the placement was asked for, plus one.
     ///
