@@ -130,6 +130,50 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set_tests_properties(engine.window PROPERTIES TIMEOUT 120 LABELS "engine")
 endif()
 
+# A FRAME THAT THREW STILL CLOSES (lane FRAME-CATCH-1): the monitor's record,
+# the frame after it, and the device-lost latch — driven by the engine's own
+# frame-fault hook (Engine::setFrameFault). Its own binary because it latches a
+# (faked) lost device, which is one-way for the process that does it. The VR
+# half of the same fix — the eye swapchain images an unclosed frame never
+# releases — is `vr.session` under Monado.
+add_executable(test_engine_frame_catch test_engine_frame_catch.cpp)
+set_target_properties(test_engine_frame_catch PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_frame_catch PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_frame_catch PRIVATE JahshakaEngine)
+add_dependencies(test_engine_frame_catch JahshakaEngineMedia)
+add_test(NAME engine.frame_catch COMMAND test_engine_frame_catch
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.frame_catch PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# WHAT COUNTS AS SCENE MOVEMENT (lane VR-SCAN-1): the movement epoch's
+# precision, which is a 90 Hz bill in a VR session — the controller proxies and
+# the pointing ray are written inside every frame that locates a hand, and a
+# caster test that keyed on Ogre's default-set LAYER_SHADOW_CASTER bit rather
+# than on a caster CHANNEL re-ran the full item scan for each of them. Both
+# sides are asserted (furniture free, a real mover still counted) and the scan's
+# cost is measured in-process; JAH_VR_SCAN_BENCH=1 adds the 5k/10k arms, which
+# the gate does not run.
+add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)
+set_target_properties(test_engine_gi_scan PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_gi_scan PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_gi_scan PRIVATE JahshakaEngine)
+add_dependencies(test_engine_gi_scan JahshakaEngineMedia)
+add_test(NAME engine.gi_scan COMMAND test_engine_gi_scan
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL like every cascade suite (it holds a voxel volume) and 300 s: the
+# 1k-item arm voxelises once in a Debug build.
+set_tests_properties(engine.gi_scan PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
