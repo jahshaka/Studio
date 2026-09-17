@@ -122,7 +122,42 @@ int main()
     // therefore this pose's, measured, with ~12 % of headroom, and the
     // comparative bar below is the one that carries the actual claim: moving the
     // field onto a cascade must not leak MORE than the scene-fitted field does.
-    const float bars[4] = { 0.050f, 0.050f, 0.058f, 0.080f };
+    //
+    // RE-ANCHORED BY PHOTON-M2 (F-C), and this one admits a LARGER absolute
+    // leak, so here is the whole of it.
+    //
+    // The irradiance field's atlas holds the mean of RAW light-voxel samples,
+    // normalised by the brightest light's radiance over pi (the injection's
+    // bakingMultiplier). The cone-traced diffuse multiplies that normalisation
+    // back out; the field's composite did NOT, so the field's brightness went as
+    // 1/D_max -- correct only in a scene whose brightest light has radiance pi.
+    // THIS FIXTURE'S OUTSIDE LAMP IS INTENSITY 25, so its factor is 25 and the
+    // field was 25 times too DARK here: these bars were fitted to a field that
+    // was contributing almost nothing. With the units fixed (measured
+    // intensity-independent to within 2 %: field/cone 1.127 / 1.144 / 1.145 at
+    // lamp intensity 0.03 / 0.12 / 0.5, spikes/photon-m2) the same walls read
+    //
+    //    wall   chain (asserted)   single     old chain   old single
+    //    0.50       0.0608         0.1023       0.0431      0.0452
+    //    0.20       0.0633         0.1331       0.0438      0.0507
+    //    0.10       0.0829         0.1239       0.0539      0.0501
+    //    0.05       0.2898         0.4876       0.0723      0.1018
+    //
+    // and the bars below are this pose's again, measured, with ~12 % of
+    // headroom, exactly as the paragraph above describes.
+    //
+    // WHAT THAT MEANS, SAID PLAINLY: a 0.05 m wall is SUB-VOXEL at every cascade
+    // cell size (cascade 0 is 10 m over 128 = 0.078 m), so it occludes nothing
+    // in the voxel volume and the field's depth moments -- computed from the
+    // same voxel trace -- cannot find a surface the volume does not hold. The
+    // leak was always there; what changed is that it is no longer scaled down by
+    // a units error into invisibility. The claim this suite says it carries --
+    // the field on a CASCADE leaks no more than the field on the scene-fitted
+    // box -- is untouched and passes with margin (0.0608 against 0.1023 at
+    // 0.50 m). The absolute leak at the corrected brightness is a QUALITY
+    // question for the irradiance field's occlusion, reported to the lead by
+    // PHOTON-M2 rather than hidden by a bar.
+    const float bars[4] = { 0.068f, 0.071f, 0.093f, 0.325f };
 
     std::string err;
     EngineConfig cfg;

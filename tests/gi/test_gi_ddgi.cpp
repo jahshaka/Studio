@@ -277,7 +277,42 @@ int main(int argc, char **argv)
     // tracing was not leaking, the answers match. (The leak-vs-field comparison
     // the P0 spike ran needs an ENCLOSED corner; this scene has an open floor
     // and a wall, deliberately, because that is what gi.modes measures.)
-    CHECK(std::fabs(rawFar.r - vctFar.r) < 0.06f,
+    //
+    // RE-ANCHORED 0.06 -> 0.20 BY PHOTON-M2 (F-C), measured 0.1883 (VCT 0.6235,
+    // DDGI 0.8118), and the reason is a UNITS FIX in the field's favour.
+    //
+    // The field's atlas holds the mean of RAW light-voxel samples, which are
+    // normalised by the brightest light's radiance over pi (the injection's
+    // bakingMultiplier). The cone-traced diffuse multiplies that normalisation
+    // back out; the field's composite did not (JahIfd_piece_ps.any's
+    // ifdIrradianceScale), so the field's brightness went as 1/D_max: right in a
+    // scene whose brightest light has radiance pi and wrong everywhere else --
+    // and this fixture's lamp is not that, which is why the two used to "agree
+    // closely" here by 0.04 and the field was pinned at the UNORM ceiling in
+    // brighter scenes (the 5x response asymmetry of ledger §659 F-C). With the
+    // multiplier applied, the field/cone ratio is INTENSITY-INDEPENDENT:
+    // measured 1.127 / 1.144 / 1.145 on a closed room at lamp intensity
+    // 0.03 / 0.12 / 0.5 (spikes/photon-m2, m2-field.js) where before the fix it
+    // was 13.4 / 4.1 / 1.6.
+    //
+    // What is left is the two ESTIMATORS differing, which is what this
+    // assertion is for: 144 rays per texel with a full cosine convolution
+    // against six 60-degree cones whose escape estimate is a deliberate
+    // under-estimate (patch 0021's min3: 65 % of an open floor's ambient against
+    // 93 % isotropic). The field reads HIGHER, by 1.14x on the bounce in a
+    // closed room and by 1.85x on this open scene's floor. NOT the sky-visibility
+    // ambient (the lead's correction from the Fable read at merge: this fixture's
+    // ambient is BLACK, and `ifdSkyVis / sumIfdWeight` is a weighted MEAN
+    // visibility in [0,1], not a unit error); the plausible mechanism is the cone
+    // estimator's coarse-mip dilution of the 0.9 m wall seen from the far patch
+    // at grazing — a 60-degree cone's 7 m footprint averages the wall with the
+    // empty voxels around it while the field's narrow rays do not; a closed room
+    // has thick walls at every mip, hence 1.14. The one-voxel-reader item (V2
+    // stage C / FIELD-2) owns that gap; measure the attribution there.
+    // 0.20 admits that and nothing structural: a collapsed lookup is still
+    // caught by the three assertions below, which compare the two arms as a
+    // RATIO rather than a difference.
+    CHECK(std::fabs(rawFar.r - vctFar.r) < 0.20f,
           "far from the wall, DDGI and the cone-traced diffuse agree closely");
 
     // ---- 2. brightness calibration ---------------------------------------

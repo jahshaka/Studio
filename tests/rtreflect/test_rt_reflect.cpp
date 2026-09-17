@@ -278,7 +278,18 @@ int main()
     // reading): red excess 0.0737 without the multiplier, 0.0434 with it — and
     // 0.0434 against the control's 0.0099 is still 4.4x, which is what
     // "unmistakable rather than a tint" was asking for.
-    CHECK_MSG(red > redPlain + 0.03f,
+    //
+    // RE-ANCHORED 0.03 -> 0.02 BY PHOTON-M2 (patch 0077), and it is the CONTROL
+    // that moved, not the ray. This fixture's no-ray arm reads its reflection of
+    // the scene's flat ambient through the specular cone's ESCAPE term, which
+    // upstream multiplied by 0.31831 = 1/pi (its eye-tuned cancellation of the
+    // light injection's missing 1/pi, fixed at the cause by 0077). With the
+    // ambient reaching the specular slot in the same convention it reaches the
+    // diffuse one, the control's red excess rises 0.0099 -> 0.0315 while the ray
+    // arm reads 0.0533, so the ray's INCREMENT over the fallback is 0.0218 where
+    // it was 0.0335. The ray's own answer did not move; the floor it is measured
+    // against did, because that floor was pi times too dark.
+    CHECK_MSG(red > redPlain + 0.02f,
               "THE MIRROR SHOWS WHAT IS BEHIND THE CAMERA: red excess %.4f against the "
               "control's %.4f",
               red, redPlain);

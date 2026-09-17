@@ -169,7 +169,17 @@ int main()
     // 128^3 -> 64^3 cell-size jump in the tier's cascade table (0.821-0.839x),
     // which is a table question and not a march one. The bracket is tight around
     // those: a regression toward the old staircase reds.
-    const float kSingleFaceMax = 1.05f;      // measured 1.007-1.029 over four ambients
+    // RE-ANCHORED 1.05 -> 1.08 BY PHOTON-M2 (patch 0077), measured 1.057 here.
+    // The specular cone's ESCAPE ambient used to be multiplied by 0.31831 =
+    // 1/pi on its way into envColourS -- upstream's eye-tuned cancellation of
+    // the light injection's missing 1/pi, which 0077 fixes at the cause -- so
+    // the one ambient this engine has (setAmbient's single convention, ledger
+    // 177 defect A) reached the specular slot pi times darker than it reached
+    // the diffuse one. It now reaches both the same, and the face reads
+    // 1.057x instead of 1.029x: +1.4/255 on a 24/255 band, inside the volume
+    // where the escape is unoccluded. The bracket's purpose is a REGRESSION
+    // toward the 1.9x staircase, and 1.08 keeps it.
+    const float kSingleFaceMax = 1.08f;      // measured 1.007-1.057 over four ambients
     const float kChainFaceMax  = 1.35f;      // measured 0.821-1.252 over four ambients
     const float kChainFaceMin  = 0.75f;
     const auto measure = [&](const char *what, bool chain, const Amb &a, float camX, float orthoHalf) {

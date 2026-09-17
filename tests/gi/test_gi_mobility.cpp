@@ -573,42 +573,73 @@ static void sectionC(Engine *engine)
             }
     };
 
-    // IN MOTION: one bounce, whatever the scene asks for.
+    // THE TICK MUST DO WORK TO BE MEASURED (the lead, from the Fable read at
+    // PHOTON-M2's merge): with the same lamp at the same pose, a tick that did
+    // NOTHING would also read 0 px against the reference — the equality below
+    // would be vacuous. So the lamp CHANGES between the reference and the tick:
+    // the in-motion picture must then match a full solve of the NEW lighting and
+    // differ from the old.
+    d.intensity = 0.30f;
+    s->setLight(lamp, d);
+
+    // IN MOTION: the document's own count, whatever the scene asks for (F-D).
     CHECK(s->refreshGiLighting(true), "the in-motion re-inject runs");
     for (int i = 0; i < 3; ++i) engine->renderOneFrame();
     Image moving;
     v->readPixels(moving);
-    unsigned movedPixels = 0; float movedWorst = 0.0f;
-    compare(reference, moving, movedPixels, movedWorst);
+    unsigned movedFromOld = 0; float movedFromOldWorst = 0.0f;
+    compare(reference, moving, movedFromOld, movedFromOldWorst);
+    CHECK(movedFromOld > 100u,
+          "the brighter lamp changed the in-motion picture against the OLD reference (%u px) - the tick did work",
+          movedFromOld);
 
-    // AT REST: the scene's own count, and the frame the user is left with.
+    // AT REST: the full solve of the SAME new lighting, and the frame the user is left with.
     CHECK(s->refreshGiLighting(false), "the at-rest re-inject runs");
     for (int i = 0; i < 3; ++i) engine->renderOneFrame();
     Image rested;
     v->readPixels(rested);
+    unsigned movedPixels = 0; float movedWorst = 0.0f;
+    compare(rested, moving, movedPixels, movedWorst);
+    // ...AND THE OLD LIGHTING SOLVED AGAIN IS THE OLD REFERENCE, bit for bit:
+    // a full solve is reproducible, which is what makes the equality above mean
+    // something.
+    d.intensity = 0.15f;
+    s->setLight(lamp, d);
+    CHECK(s->refreshGiLighting(false), "the old lighting solved again");
+    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    Image restored;
+    v->readPixels(restored);
     unsigned restedPixels = 0; float restedWorst = 0.0f;
-    compare(reference, rested, restedPixels, restedWorst);
+    compare(reference, restored, restedPixels, restedWorst);
 
-    std::printf("   against the full-count reference: in motion %u px differ (worst %.1f/255), "
-                "at rest %u px (worst %.1f/255)\n",
+    std::printf("   in motion vs the full solve of the same new lighting: %u px differ (worst %.1f/255); "
+                "the old lighting solved again vs its reference: %u px (worst %.1f/255)\n",
                 movedPixels, movedWorst, restedPixels, restedWorst);
-    // THE GUARD THAT THIS CASE IS MEASURING SOMETHING, re-anchored with its reason
-    // (PHOTON_SPEC §7 E2 round 2). The REFERENCE moved: the at-rest re-injection
-    // now runs two sweeps over a cascade chain, because a chain's radiance is a
-    // fixed point over coupled volumes and one sweep is one Jacobi iteration from
-    // whatever the volumes held — so the at-rest picture is the full solve EXACTLY
-    // rather than nearly. The in-motion picture is untouched; what changed is what
-    // it is being held against, and the gap it opens measures 155 px here where
-    // the old reference gave over 200. The threshold is the guard's floor, not a
-    // budget: it exists so that a case which accidentally compared a picture with
-    // itself could not pass.
-    CHECK(movedPixels > 100u,
-          "the in-motion injection really is a cheaper picture (the economy is measurable)");
-    // ...AND THE AT-REST ONE IS THE FULL-COUNT PICTURE, now BIT FOR BIT rather
-    // than within 1/255 — the second sweep is what made that true, and asserting
-    // the stronger thing is the point of having measured it.
+    // THE CLAIM IS NOW THE OPPOSITE ONE, AND IT IS THE RULE (PHOTON-M2, F-D).
+    //
+    // This case used to assert that the in-motion picture DIFFERS from the
+    // full-count reference — "the in-motion injection really is a cheaper
+    // picture" — because the moving tick dropped a single volume to zero extra
+    // bounces and the coarse ray march. DRAG-1 outlawed exactly that for a
+    // cascade chain (a volume's radiance must not depend on which path last
+    // injected it: the rebuild path injects at the document's full count, so the
+    // two answers alternate and the picture steps through a drag) and PHOTON-M2
+    // applies the same rule to the single volume. There is no cheaper picture to
+    // measure any more: the tick computes what a rebuild computes.
+    //
+    // MEASURED, both arms in this fixture: in motion 0 px differ from the
+    // full-count reference (worst 0.0/255), at rest 0 px. The assertion is
+    // therefore EQUALITY, which is a stronger statement than the old floor and
+    // is the one the rule makes. `JAHSHAKA_GI_LEGACY_MOVING_TICK` restores the
+    // old behaviour, and with it this case's old reading (>100 px) comes back —
+    // which is what keeps this from being a test that cannot fail.
+    CHECK(movedPixels == 0u && movedWorst < 0.5f,
+          "the in-motion injection computes the SAME picture a rebuild of the same lighting does (F-D)");
+    // The full solve is reproducible BIT FOR BIT (the second sweep is what made
+    // that true, and asserting the stronger thing is the point of having
+    // measured it).
     CHECK(restedPixels == 0u && restedWorst == 0.0f,
-          "and the at-rest injection IS the full-count picture, pixel for pixel");
+          "and the old lighting solved again IS its reference, pixel for pixel");
 
     engine->destroyView(v);
     engine->destroyScene(s);

@@ -197,7 +197,22 @@ int main()
         CHECK(step > 0.95f && step < 1.05f,
               "the ambient does not step across the volume boundary (within 5%)");
         // 2. WHICH CONVENTION SURVIVED: the GI-off one, on both sides.
-        CHECK(std::fabs(outside - flatGiOff) < 0.05f * flatGiOff,
+        //
+        // RE-ANCHORED 5 % -> 10 % BY PHOTON-M2 (patch 0077), measured +7.9 %
+        // (0.0941 GI off, 0.1015 GI on, i.e. +2/255 on a 24/255 band), and the
+        // 2/255 is ATTRIBUTED: zeroing the specular cone's escape ambient in the
+        // staged media brings this band back to 0.0941 EXACTLY, so the whole
+        // difference is that one term. Patch 0077 removed the 0.31831 = 1/pi
+        // upstream multiplied it by ("I'm not sure why is it even needed") --
+        // an eye-tuned cancellation of the light injection's missing 1/pi, fixed
+        // at the cause -- so the scene's one ambient now reaches the specular
+        // slot in the same convention it reaches the diffuse one. The GI-OFF arm
+        // has no specular ambient at all under this engine's AmbientSh (the
+        // hemisphere piece is not compiled in), so the term has no counterpart
+        // there and the two arms cannot agree to better than it: what this
+        // assertion guards is the 3.4x convention error it was written for, and
+        // 10 % still guards that with a factor of 30 to spare.
+        CHECK(std::fabs(outside - flatGiOff) < 0.10f * flatGiOff,
               "outside the volume, turning GI on does not change the flat ambient");
         CHECK(std::fabs(inside - flatGiOff) < 0.08f * flatGiOff,
               "inside the volume, turning GI on does not change the flat ambient");
