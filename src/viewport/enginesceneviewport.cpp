@@ -1893,8 +1893,20 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         // where the controller's fly stood, so the two can never both move
         // somebody, and everything else about the camera — orbit, pan, dolly,
         // the axis views — is untouched. The desktop stays a full editor.
-        if (mVrPreviewStep)            mVrPreviewStep();
-        else if (mCamController)       mCamController->update(dt);
+        //
+        // ONLY THE FLY IS SUPPRESSED (VR-4-FIX finding 5): the controller's
+        // update() still runs, because it is also what animates an axis-view
+        // snap (OrbitalCameraController's lerp) — skipping the whole call froze
+        // the Views dropdown for the length of a session. The suppression is a
+        // flag ON the controller, so the invariant holds for every caller.
+        //
+        // AND THE CALLABLE IS COPIED BEFORE IT IS CALLED (finding 6): the step
+        // can end the session — a runtime that stopped, a device lost — and
+        // ending it clears mVrPreviewStep, which would destroy the closure that
+        // is executing.
+        if (mCamController) mCamController->setFlySuppressed(bool(mVrPreviewStep));
+        if (const std::function<void()> step = mVrPreviewStep) step();
+        if (mCamController)            mCamController->update(dt);
         // A PAUSED play-in-place (PlayBack still playing, this flag down so the
         // editor camera answers the mouse) holds the document AND the engine's
         // simulation: no clock step, a 0 delta below. Otherwise the editor's
@@ -2335,6 +2347,26 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                                              unsigned(width), unsigned(height),
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
+    // THE USER'S PICTURE OPENS NEITHER HELPER CHANNEL (VR-4-FIX finding 2).
+    //
+    // `pushEditorHelpers(false)` below takes away the furniture the MIRROR
+    // owns — the grid, the wires and icons, the outline, the gizmo — and that
+    // is everything the editor puts in the scene ITSELF. It is not everything
+    // in the scene: while a VR session runs, the wearer's CONTROLLER PROXIES
+    // are pushed by the VR module, carry kHelperBit|kVrHelperBit, and a view
+    // whose ordinary channel is open therefore drew them straight into the
+    // user's screenshot. The channels are the structural answer — one mask,
+    // set once at view creation, that no future helper can slip past — and
+    // saying it here makes Engine.h's claim ("a view that hides the furniture
+    // altogether … hides this too") true of a user's shot as well.
+    //
+    // ALWAYS for the Scene grade, Game View included: Game View has the mirror
+    // push no furniture, but nothing in it excludes a proxy. The script grades
+    // (Plain, Tonemap, Viewport) are measuring instruments whose contents
+    // suites pin — several photograph a gizmo on purpose — so they keep the
+    // channel, and kUserShotKeepsEditorHelpers stays the one switch.
+    if (!kUserShotKeepsEditorHelpers && grade == ScreenshotGrade::Scene)
+        shot->setHelpersVisible(false);
     shot->setScene(mEngineScene);
 
     // THE GIZMO IS SIZED FOR THE SHOT, NOT FOR THE WINDOW (hygiene lane,
@@ -2962,6 +2994,16 @@ void EngineSceneViewport::clearScene()
     // mActive is deliberately NOT cleared here: syncFrame's members are all
     // null-guarded, and clearing it would leave the viewport silently frozen
     // if no space switch follows (mActive belongs to begin()/end()).
+    //
+    // THE HEADSET COMES OFF FIRST (VR-4-FIX finding 1). A VR session renders
+    // the engine scene this function is about to destroy and holds a raw
+    // pointer to it — every frame, for its stereo quads, and again in its own
+    // destructor — so a preview still running here was a use-after-free one
+    // frame later. Its owner ends it properly (and takes its fly keys back off
+    // this viewport, which is why the call is here and not in the engine
+    // alone). COPIED BEFORE IT IS CALLED: ending the session clears this very
+    // std::function, and a closure must not be destroyed while it runs.
+    if (const std::function<void()> closing = mVrPreviewSceneClosing) closing();
     // WRITE THE WORLD DOWN BEFORE IT GOES (audit F1a). This is the scene-close
     // half of the recording, and it is the half that was missing entirely:
     // recordWarmUpSet had exactly two callers, EngineHost::shutdown and the

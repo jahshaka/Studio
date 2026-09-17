@@ -570,6 +570,7 @@ set(HEADERS
     src/services/assetmigration.h
     src/services/assetstore.h
     src/services/apppaths.h
+    src/services/vrorigin.h
     src/services/assetstorepaths.h
     src/data/database/casschema.h
     src/services/audiopeaks.h
@@ -733,7 +734,6 @@ set(HEADERS
     src/player/playerwidget.h
     src/player/engineplayerscene.h
     src/player/playervr.h
-    src/player/vrorigin.h
     src/player/engineplayerview.h
     src/player/playermousecontroller.h
     src/player/playback.h

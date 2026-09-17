@@ -685,6 +685,14 @@ THERE IS NO HEAD MARKER, deliberately: in the headset it would be a box in the w
 They reach no reflection-probe capture, no shadow map, no GI and no user-grade screenshot — a controller cannot light the room or turn up in a picture somebody takes. No document node is created: nothing in the outliner, nothing saved.
 
 The poses come from the OpenXR action system (a grip pose on the simple-controller profile, which every runtime maps from whatever the wearer is holding) or, where the runtime offers hand tracking and no controller answers, from the palm joint. POSES ONLY — no buttons are read anywhere in this build. |
+| `vr.move({forward?, back?, left?, right?, up?, down?, boost?, seconds?}) -> bool` | engine | MOVES THE WEARER of the editor's VR preview, exactly as holding the editor's fly keys would: along the HEAD's level heading for forward/back and the horizontal beside it for left/right, along the world's up for up/down, at the editor's own fly speed for `seconds` (default one 1/60 s step). It moves the RIG — the room the wearer stands in — so their own step across the floor still counts on top of it, and their pitch and roll are never touched.
+
+The same call the held keys make each frame, which is what lets a script, an MCP session or a suite walk a wearer through a world with no keyboard in the room. `player.vrMove` is the Player's half of the same gesture. False when the editor's preview is not running (a session somebody else started is not this verb's). |
+| `vr.proxyPose("left"\|"right") -> {drawn, x, y, z, rotation, yaw}` | engine | WHERE THE WEARER'S CONTROLLER IS ACTUALLY DRAWN — the world pose of the proxy node itself, read back out of the scene graph, as against `vr.state().hands` which is what the runtime REPORTED.
+
+The two are the same number when everything is right, and that is the point: the poses do not exist until the runtime has been asked inside the frame, so a marker positioned from outside the frame loop necessarily lags it (two frames, ~22 ms at 90 Hz, before the engine took the placement over). This verb is how that is measured rather than assumed — `scripting.e2e`/`vr.verbs_session` asserts the two agree to a millimetre on the frame a move happens.
+
+`drawn` is false when there is no proxy node at all (no session has asked for one, or `vr.proxies(false)`), and the pose is then all zeros. |
 | `vr.end() -> bool` | engine | Ends the session and puts everything back — the mirror, the stereo view, the both-eyes target, the swapchains, the frame's pacing. False when none was running. A session that the runtime has already lost (a disconnected headset) ends the same way; VR cannot be started again in that process, which vr.state() says. |
 | `vr.toggle() -> bool` | engine | ENTER OR LEAVE VR — the whole product gesture in one verb (SPECS/VR_SPEC.md §4.5, phase 3), and what the editor toolbar's VR icon, the Player page's VR button and the Ctrl+Shift+V binding all call.
 

@@ -25,7 +25,11 @@ For more information see the LICENSE file
 // running session, because a session outliving the editor's scene would hold a
 // View and a workspace on a target that is about to die.
 
+#include <QPointer>
+
 #include "modules/studiomodule.h"
+
+class VrApi;
 
 class VrModule : public StudioModule
 {
@@ -37,6 +41,9 @@ public:
 
 private:
     ModuleHost host;
+    /// The module's ApiModule, owned by the ScriptEngine — held weakly so
+    /// shutdown() can end a session through the object that owns it.
+    QPointer<VrApi> api;
 };
 
 #endif // VRMODULE_H

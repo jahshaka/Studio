@@ -23,11 +23,13 @@ For more information see the LICENSE file
 //
 //   * THE DESKTOP VIEWPORT KEEPS RENDERING ITS OWN PICTURE. It stays an editor:
 //     its camera, its framing, its gizmos, its selection, its grid. The cost is
-//     real and is MEASURED rather than assumed (§3.4: a second workspace means a
-//     second shadow-atlas pass a frame) — the measurement is in the lane's
-//     report and the mirror is therefore OFF by default here, because painting
-//     the headset's eye over the editor's picture would pay for both and show
-//     one.
+//     real (§3.4: a second workspace means a second shadow-atlas pass a frame —
+//     4 passes a frame became 8 on the default scene, 9 draws became 15), and
+//     what was measured is the DESKTOP VIEW'S own GPU time, which did not move
+//     beyond the noise floor of that rig; no cadence figure was taken, and this
+//     is a design rule rather than a measurement. The mirror is OFF by default
+//     here because painting the headset's eye over the editor's picture would
+//     pay for both and show one.
 //   * THE EDITOR'S CAMERA IS NOT THE WEARER. Nothing writes the head pose back
 //     into the document camera (the Player does, deliberately). The person at
 //     the desk — or the person who takes the headset off — finds the viewport
@@ -42,8 +44,10 @@ For more information see the LICENSE file
 //     plus the arrow cluster, Shift to boost, at the editor's own speed
 //     setting — walks the RIG along the head's LEVEL heading, exactly as the
 //     Player's does (vrorigin::flyDelta). It is the only input this object
-//     takes, and the viewport suppresses its camera's fly for the duration
-//     (IEditorViewport::setVrPreview).
+//     takes, and the viewport suppresses its camera's FLY for the duration —
+//     only the fly (IEditorViewport::setVrPreviewStep, and the flag it sets on
+//     the camera controller): the orbit, the pan, the dolly and the axis-view
+//     lerp all keep running, because the desktop stays a full editor.
 //
 // THE RIG IS THE ENGINE'S (Engine::setVrOrigin) — this object holds no copy and
 // reads `vrStatus().origin` every time, so a runtime recentre the session
@@ -61,7 +65,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
-#include "player/vrorigin.h"
+#include "services/vrorigin.h"
 
 class EngineRenderDriver;
 class IEditorViewport;
@@ -89,6 +93,12 @@ public:
     /// rendered frame, which is what a rig must be moved on (a wall-clock timer
     /// would walk the wearer while the loop is blocked in xrWaitFrame).
     void step();
+
+    /// LOCOMOTION AS A VERB (`vr.move`) — the same step the held fly keys make
+    /// above, for `seconds` at the editor's own fly speed, so a script, an MCP
+    /// session or a suite can walk the wearer with no keyboard in the room.
+    /// The Player's half is `player.vrMove`. False when no session is running.
+    bool move(const flystep::Keys &keys, float seconds);
 
     /// What this object is doing, for `vr.state().preview`.
     QVariantMap report() const;

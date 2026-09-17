@@ -65,7 +65,7 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
-#include "player/vrorigin.h"
+#include "services/vrorigin.h"
 #include "viewport/flystep.h"
 
 class PlayerVr

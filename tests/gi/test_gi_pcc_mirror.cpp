@@ -380,6 +380,28 @@ int main()
         CHECK(std::fabs(withHelper.r - hyMirror.r) < 0.06f,
               "...and the reflection is the same one it was before the plate existed");
 
+        // ...AND WITH THE WEARER'S CHANNEL ON TOP OF IT (VR_SPEC §5 phase 4's
+        // capture gate, built by VR-4-FIX). A controller proxy carries
+        // kHelperBit|kVrHelperBit — two bits, neither of them kVisibleBit — and
+        // it is drawn in every VR eye and in the desktop editor, which is
+        // exactly the combination somebody might expect a capture to pick up.
+        // It does not: the probe face pass asks for kVisibleBit and the same
+        // plate, now carrying a proxy's flags, is still absent. A wearer's
+        // hands light nothing and reflect in nothing.
+        s->setNodeVrHelper(helper, true);
+        CHECK(s->nodeVrHelper(helper), "vr helper: setNodeVrHelper reads back");
+        CHECK(s->setGlobalIllumination(hybrid), "vr helper: the hybrid rebuilds with both flags");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour withVrHelper = img.at(mirrorX, mirrorY);
+        show("mirror, plate in BOTH helper channels (a controller proxy's flags)", withVrHelper);
+        CHECK(withVrHelper.r > withVrHelper.g + 0.12f,
+              "A CONTROLLER PROXY'S FLAGS ARE IN NO PROBE CAPTURE EITHER: the mirror still "
+              "shows the red wall");
+        CHECK(std::fabs(withVrHelper.r - withHelper.r) < 0.06f,
+              "...and the reflection is the one the desk's channel alone produced");
+        s->setNodeVrHelper(helper, false);
+
         // The same plate, no longer a helper: now it MUST take the mirror over.
         s->setNodeHelper(helper, false);
         CHECK(!s->nodeHelper(helper), "helper: clearing the flag reads back");

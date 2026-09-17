@@ -225,6 +225,8 @@ public:
     /// The editor's VR preview (VR_SPEC §5 phase 4) — see IEditorViewport.
     void setVrPreviewStep(std::function<void()> step) override { mVrPreviewStep = std::move(step); }
     bool vrPreview() const override { return bool(mVrPreviewStep); }
+    void setVrPreviewSceneClosing(std::function<void()> closing) override
+    { mVrPreviewSceneClosing = std::move(closing); }
     /// Bridges EngineViewWidget's own (non-virtual, and on the OTHER base) copy
     /// onto the interface — C++ does not override across hierarchies, and the
     /// shell holds an IEditorViewport*.
@@ -513,6 +515,9 @@ private:
     /// setVrPreviewStep). Installed by the VR module for the life of a session;
     /// not persisted — a session does not survive a restart.
     std::function<void()> mVrPreviewStep;
+    /// ...and "the world you are rendering is going" (finding 1), called from
+    /// clearScene() while the engine scene is still alive.
+    std::function<void()> mVrPreviewSceneClosing;
     bool mShowShadowAtlas = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     /// The grid plane pushGridForView last PUSHED to the mirror (not what a

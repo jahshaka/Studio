@@ -52,6 +52,14 @@ public:
     Q_INVOKABLE QVariantMap state();
     Q_INVOKABLE bool toggle();
     Q_INVOKABLE bool proxies(const QVariant &on = QVariant());
+    Q_INVOKABLE bool move(const QVariantMap &intent = QVariantMap());
+    Q_INVOKABLE QVariantMap proxyPose(const QString &hand);
+
+    /// THE SHELL IS CLOSING (VR-4-FIX finding 7). Ends whatever this module
+    /// started, through the object that owns it — the preview has a viewport's
+    /// fly keys and helper state to give back, and VrModule::shutdown used to
+    /// reach past it straight into the engine. Returns whether anything ended.
+    bool endForShutdown();
 
 private:
     /// The running engine, or null (headless runs, or before the engine starts).
