@@ -1,5 +1,6 @@
 # right.obj, baked from mqtp-right.glb by make-controller-obj.py
 # WebXR grip space = the OpenXR grip pose frame: metres, Y up, -Z forward.
+# MIT (c) 2019 Amazon — see PROVENANCE.md
 v 0.000533 0.011354 -0.015139
 v 0.000050 0.009596 -0.018117
 v -0.000872 0.010253 -0.017207

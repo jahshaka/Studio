@@ -101,6 +101,9 @@ def main():
     with open(dst, 'w') as f:
         f.write('# %s, baked from %s by make-controller-obj.py\n' % (dst.split('/')[-1], src.split('/')[-1]))
         f.write('# WebXR grip space = the OpenXR grip pose frame: metres, Y up, -Z forward.\n')
+        # THE LICENCE TRAVELS WITH THE FILE (VR-INPUT-1E-FIX finding 10): the .obj
+        # ships inside the app's qrc, where PROVENANCE.md does not follow it.
+        f.write('# MIT (c) 2019 Amazon \u2014 see PROVENANCE.md\n')
         for v in verts: f.write('v %.6f %.6f %.6f\n' % v)
         for n in norms: f.write('vn %.6f %.6f %.6f\n' % n)
         for a, b, c in faces: f.write('f %d//%d %d//%d %d//%d\n' % (a, a, b, b, c, c))

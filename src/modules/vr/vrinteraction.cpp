@@ -73,26 +73,14 @@ VrHandState VrEngineInput::hand(unsigned hand) const
 bool VrEngineInput::focused() const
 {
     if (!mEngine) return false;
-    const VrStatus st = mEngine->vrStatus();
-    // FOCUS IS REPORTED PER SAMPLE, and it is read from the samples for a
-    // reason: FOCUSED is the only state in which a runtime reports input at
-    // all (VR_INPUT_SPEC §2.3 — xrSyncActions answers XR_SESSION_NOT_FOCUSED
-    // otherwise and every action reads its zero), and an INJECTED sample
-    // carries its own bit, which is how the focus-loss rule (a gesture in
-    // flight is cancelled, never committed) is driven with no dashboard to
-    // raise. A hand nobody reports says nothing either way, so it is skipped:
-    // focus is lost when no REPORTING hand has it.
-    bool reporting = false, focused = false;
-    for (unsigned h = 0; h < VrHandCount; ++h) {
-        if (!st.input[h].valid) continue;
-        reporting = true;
-        if (st.input[h].focused) focused = true;
-    }
-    if (reporting) return focused;
-    // NO HAND AT ALL: the session's own word, so a focused session with the
-    // controllers switched off still reads as focused (there is simply nothing
-    // to do with it) and a process with no session reads as not.
-    return st.active && st.state == VrState::Focused;
+    // FOCUS IS THE SESSION'S, ONE BIT (VR-INPUT-1E-FIX, the lead's re-point at
+    // merge): `VrStatus::inputFocused` is the session's state, or the injected
+    // focus while any hand is injected — so an injected focus loss cancels a
+    // gesture in flight, a focused session with the controllers switched off
+    // still reads as focused, and a process with no session reads as not. The
+    // per-hand bit it replaced was a scripting trap (an unfocus on one hand
+    // beside a stale valid injection on the other cancelled nothing).
+    return mEngine->vrStatus().inputFocused;
 }
 
 // ---------------------------------------------------------------------------
