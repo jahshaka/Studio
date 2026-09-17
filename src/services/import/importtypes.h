@@ -33,6 +33,8 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
+#include "services/assetcas.h"
+
 class QTemporaryDir;
 
 struct ImportRequest
@@ -138,6 +140,16 @@ struct StagedAsset
     /// AssetImportService::prepare fills this on the worker so the UI-thread
     /// commit never re-hashes big files; ingestFile trusts a present entry.
     QMap<QString, QString> fileOids;
+
+    /// THE BYTES, ALREADY IN THE STORE AND ALREADY DURABLE (FSYNC-2).
+    /// prepare() runs AssetCas::stage + flushStaged over every file above on
+    /// the worker, so the commit has nothing left to copy and nothing left to
+    /// flush — it renames each staged temp into place and writes the rows
+    /// (AssetCas::commitStaged). Keyed by StagedFile::path through
+    /// stagedEntryFor(); a file with no entry here (a hand-built plan, a
+    /// staging failure) falls back to the synchronous AssetCas::ingestFile, so
+    /// this is an optimisation the commit never depends on.
+    QVector<AssetCas::Staged> stagedBytes;
 };
 
 /// The output of AssetImportService::prepare — everything the CPU-heavy half

@@ -37,8 +37,9 @@
 // on four runs of one afternoon, so it redded under a -j4 gate and once even
 // solo, with the commit count — the actual contract — reading 1 every time.
 // Both shapes are measured in the SAME run on the SAME disk and the clear must
-// be at least 3x cheaper than the one it replaced (it measures 30x-50x, and a
-// regression to per-destructor commits measures 1x — see the factor's note). That
+// be at least 1.5x cheaper than the one it replaced (it measures 1.9x-2.0x since
+// the library went to WAL, and a regression to per-destructor commits measures
+// 1x — see the factor's note). That
 // catches a regression to per-destructor commits, which is what the bound was
 // for, and cannot be made to fail by a busy machine. On a build dir that lives
 // on tmpfs, where a sync costs nothing, the old shape falls below a 5 ms floor
@@ -274,17 +275,26 @@ int main(int argc, char **argv)
                    "(a tmpfs build dir?), the ratio is NOT asserted\n",
                    static_cast<long long>(direct.micros));
         } else {
-            // THE FACTOR IS 3, AND THE REASON IS WHAT THE TEST HAS TO
+            // THE FACTOR IS 1.5, AND THE REASON IS WHAT THE TEST HAS TO
             // DISTINGUISH. A regression to one commit per destructor makes the
-            // two shapes the SAME shape — a ratio of about 1. Measured here it
-            // is 32x-52x solo, and it fell to 11x once under a -j4 gate,
-            // because the two halves inflate under different contention (the
-            // clear with CPU, the old shape with I/O) and the ratio between
-            // them is therefore not load-invariant. Any factor comfortably
-            // between 1 and the worst honest reading does the job; picking the
-            // tightest one just re-invents the flake the absolute bound was.
-            CHECK(clearMicros > 0 && direct.micros > clearMicros * 3,
-                  "clearing the stack is at least 3x cheaper than one delete per command");
+            // two shapes the SAME shape — a ratio of about 1.
+            //
+            // IT USED TO BE 3, when it measured 32x-52x solo, and FSYNC-2 moved
+            // it: the library now opens in WAL at synchronous=NORMAL
+            // (database.cpp), so a commit no longer waits for the device and
+            // the 300 extra transactions the old shape pays are 300 lots of
+            // TRANSACTION OVERHEAD instead of 300 fdatasyncs. That is the same
+            // collapse the tmpfs floor above describes, arriving by a different
+            // route, and it is not a regression in the thing this suite guards:
+            // the CONTRACT is the commit COUNT, asserted exactly above (1
+            // against 300, from sqlite3_commit_hook), and it still reads 1.
+            // Measured after the move, five solo runs: 18.3-19.2 ms against
+            // 35.5-37.7 ms, i.e. 1.9x-2.0x every time — stable, because both
+            // halves are now CPU in one process rather than one half being the
+            // disk. 1.5 sits comfortably between that and the 1.0 a regression
+            // would read.
+            CHECK(clearMicros > 0 && double(direct.micros) > double(clearMicros) * 1.5,
+                  "clearing the stack is at least 1.5x cheaper than one delete per command");
         }
     }
 

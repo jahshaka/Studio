@@ -58,10 +58,14 @@ public:
     ImportResult import(const ImportRequest &request,
                         const ImportProgressFn &progress = ImportProgressFn());
 
-    /// The CPU half: sniff → validate → convert (staging) + content hashing.
-    /// Thread-agnostic — touches neither the default DB connection nor any
-    /// GUI object, so ImportBatchRunner runs it on a worker. The returned
-    /// PreparedImport owns the staging dir backing the staged file paths.
+    /// The CPU half: sniff → validate → convert (staging), content hashing AND
+    /// the store's byte writes — every part of an import that waits, including
+    /// the fsync (FSYNC-2). Thread-agnostic: touches neither the default DB
+    /// connection nor any GUI object, so ImportBatchRunner runs it on a worker.
+    /// The returned PreparedImport owns the staging dir backing the staged file
+    /// paths, and carries the CAS temps its bytes already live in
+    /// (StagedAsset::stagedBytes) — a prepare that is never committed leaves
+    /// those behind for `assets.gc`'s stale-staging sweep.
     PreparedImport prepare(const ImportRequest &request,
                            const ImportProgressFn &progress = ImportProgressFn());
 
@@ -74,10 +78,12 @@ public:
     static void logImportRecord(const ImportRequest &request, const ImportResult &result,
                                 qint64 elapsedMs);
 
-    /// The DB half: store (CAS) + register + drawer filing, one transaction
+    /// The DB half: publish (CAS) + register + drawer filing, one transaction
     /// with the existing rollback/orphan-cleanup semantics. MUST run on the
     /// thread that owns the default QSqlDatabase connection (the UI thread in
-    /// the app). Hashing was prepaid by prepare (StagedAsset::fileOids).
+    /// the app), which is exactly why it no longer writes bytes: prepare
+    /// prepaid the hashing, the copy and the flush (StagedAsset::fileOids /
+    /// ::stagedBytes), so publishing an object here is one rename(2).
     ImportResult commit(PreparedImport &prepared,
                         const ImportProgressFn &progress = ImportProgressFn());
 

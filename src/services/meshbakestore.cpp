@@ -119,8 +119,13 @@ QJsonObject importRecordForGuid(QSqlDatabase conn, const QString &guid)
 /// source content, so it is reachable from each of them (Object + Mesh member)
 /// and dies with the last one — the same shape the source itself has, which is
 /// what makes `assets.gc` reap it without knowing bakes exist.
+///
+/// `staged` non-null = the bytes are ALREADY in the store and already flushed,
+/// put there by the bake worker (FSYNC-2), so publishing them here is a rename.
+/// Null = the synchronous path (Preferences' bake-all), which ingests here.
 bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid,
-                const QString &bakePath, QString *errorOut)
+                const QString &bakePath, QString *errorOut,
+                AssetCas::Staged *staged = nullptr)
 {
     QStringList owners;
     QSqlQuery owner(conn);
@@ -138,9 +143,17 @@ bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid
     const QString bakeName = QFileInfo(bakePath).fileName();
     for (const QString &ownerGuid : owners) {
         QString oid;
-        if (!AssetCas::ingestFile(conn, root, bakePath, ownerGuid,
-                                  iris::MeshBake::casRole(), bakeName, &oid, errorOut))
+        if (staged && !staged->oid.isEmpty()) {
+            // Every owner records the SAME content: the first publish renames
+            // the staged temp into place, the rest find the object already
+            // there and only write their rows.
+            staged->role = iris::MeshBake::casRole();
+            staged->name = bakeName;
+            if (!AssetCas::commitStaged(conn, root, ownerGuid, *staged, errorOut)) return false;
+        } else if (!AssetCas::ingestFile(conn, root, bakePath, ownerGuid,
+                                         iris::MeshBake::casRole(), bakeName, &oid, errorOut)) {
             return false;
+        }
     }
     for (const QString &ownerGuid : owners) {
         QString casError;
@@ -474,6 +487,13 @@ struct BakeOutput
     std::shared_ptr<QTemporaryDir> dir;
     QString path;
     QString sourceOid;
+    /// The blob, already copied into the store and already flushed, ON THE
+    /// BAKE WORKER (FSYNC-2). The UI-thread tail below used to do both: the
+    /// bake is written into a QTemporaryDir under /tmp, so the store ingest
+    /// was always a cross-device COPY plus an fsync — 351 ms of frozen window
+    /// measured inside an avatar import, for a file the worker had in its
+    /// hands.
+    AssetCas::Staged staged;
 };
 
 void pumpQueue();
@@ -500,16 +520,22 @@ void startNext()
         const BakeOutput out = watcher->result();
         watcher->deleteLater();
         sBakeInFlight = false;
+        AssetCas::Staged staged = out.staged;
         if (!out.path.isEmpty() && !sCancelled) {
             QString error;
             if (recordBake(QSqlDatabase::database(), AssetStorePaths::root(),
-                           out.sourceOid, out.path, &error)) {
+                           out.sourceOid, out.path, &error, &staged)) {
                 clear();
                 irisLog("mesh bake: baked " + out.sourceOid.left(12));
             } else if (!error.isEmpty()) {
                 irisLog("mesh bake: " + error);
             }
         }
+        // A bake that was cancelled, failed, or never recorded leaves the temp
+        // the worker staged; it names no object and no row (discardStaged is a
+        // no-op once commitStaged has renamed it).
+        QVector<AssetCas::Staged> leftover{ staged };
+        AssetCas::discardStaged(leftover);
         pumpQueue();
     });
     // The PARSE runs on a worker: it is the cost the bake exists to remove and
@@ -522,7 +548,10 @@ void startNext()
         settingsHashFor(QSqlDatabase::database(), root, sourcePath, target.assetGuid);
     const iris::ImportTransform xf =
         transformFor(QSqlDatabase::database(), root, sourcePath, target.assetGuid);
-    watcher->setFuture(QtConcurrent::run([sourcePath, sourceOid, settings, xf]() -> BakeOutput {
+    // The store root is read HERE, on the UI thread, and handed to the worker
+    // as a value — the same split ProjectArchiver's staging uses.
+    const QString storeRoot = root;
+    watcher->setFuture(QtConcurrent::run([sourcePath, sourceOid, settings, xf, storeRoot]() -> BakeOutput {
         BakeOutput out;
         out.sourceOid = sourceOid;
         auto dir = std::make_shared<QTemporaryDir>();
@@ -536,6 +565,18 @@ void startNext()
         if (!iris::MeshBake::write(path, model, &error)) return out;
         out.dir = dir;
         out.path = path;
+        // The store's half of the write, here and not on the UI thread: hash,
+        // copy into objects/ under a temp name, flush. The tail renames it.
+        out.staged.srcPath = path;
+        out.staged.role = iris::MeshBake::casRole();
+        out.staged.name = QFileInfo(path).fileName();
+        if (AssetCas::stage(storeRoot, out.staged)) {
+            QVector<AssetCas::Staged> batch{ out.staged };
+            AssetCas::flushStaged(batch);
+            out.staged = batch.first();
+        } else {
+            out.staged = AssetCas::Staged();   // the tail ingests synchronously
+        }
         return out;
     }));
 }

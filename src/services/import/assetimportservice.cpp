@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
+#include <utility>
+
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/modelsceneinfo.h"
 
@@ -287,19 +289,71 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
                                                        : staged.appliedSettings },
     };
 
-    // Prepay the content hashing (the CPU cost of the store stage) so the
-    // DB-thread commit never re-hashes; a cancel here still costs nothing —
-    // no store/DB writes have happened yet.
+    // ---- store, phase 1: the BYTES (FSYNC-2) ------------------------------
+    //
+    // The hashes used to be all this stage prepaid, and the commit then COPIED
+    // and FSYNCED every object on the DB thread — which is the UI thread in the
+    // app. An fsync waits for the whole device (220-1 153 ms each on this box's
+    // store while anything else was writing), so a threaded import froze the
+    // window it was threaded to keep alive: avatar.responsive's watchdog caught
+    // the UI thread inside libc fsync, 2 019 ms, under commitStagedAsset.
+    //
+    // So the store stage splits here exactly where AssetCas already splits it
+    // (assetcas.h, the two-phase ingest): stage() hashes and puts the bytes in
+    // their destination directory under a temp name, flushStaged() makes the
+    // whole batch durable in ONE pass, and the commit is left with renames and
+    // rows. Both halves of the wait — the copy and the flush — are on this
+    // worker thread, where waiting is the job.
+    //
+    // A cancel here still costs nothing: nothing is published and no row is
+    // written, so the staged temps are simply removed.
+    const QString storeRoot = AssetStorePaths::root();
+    const auto stageBytes = [&](const QString &path, const QString &role, const QString &name) {
+        for (const AssetCas::Staged &already : std::as_const(staged.stagedBytes))
+            if (already.srcPath == path) return;
+        AssetCas::Staged entry;
+        entry.srcPath = path;
+        entry.role = role;
+        entry.name = name;
+        entry.knownOid = staged.fileOids.value(path);
+        // A staging failure is NOT fatal: the commit falls back to the
+        // synchronous ingest, which produces the user-facing error with the
+        // wording the pipeline has always used.
+        if (!AssetCas::stage(storeRoot, entry)) return;
+        staged.fileOids.insert(path, entry.oid);
+        staged.stagedBytes.append(entry);
+    };
+
+    int stagedCount = 0;
     for (const StagedFile &file : staged.files) {
-        if (staged.fileOids.contains(file.path)) continue;
-        if (progress && !progress(QStringLiteral("hash"),
-                                  staged.fileOids.size(), staged.files.size())) {
+        if (progress && !progress(QStringLiteral("hash"), stagedCount, staged.files.size())) {
+            AssetCas::discardStaged(staged.stagedBytes);
             result.error = QStringLiteral("cancelled");
             return prepared;
         }
-        const QString oid = AssetCas::hashFile(file.path);
-        if (!oid.isEmpty()) staged.fileOids.insert(file.path, oid);
+        stageBytes(file.path, file.role, file.name);
+        ++stagedCount;
     }
+    // .jaf archives: the rows come from the archive's own catalog on the DB
+    // thread, but the PAYLOAD is already extracted and its bytes are nobody's
+    // secret — stage them by path here and let the commit match them up once
+    // it knows which guid each one belongs to.
+    if (!staged.jaf.assetsDir.isEmpty()) {
+        QDirIterator payload(staged.jaf.assetsDir,
+                             QDir::NoDotAndDotDot | QDir::Files | QDir::Hidden,
+                             QDirIterator::Subdirectories);
+        while (payload.hasNext()) {
+            const QFileInfo info(payload.next());
+            if (progress && !progress(QStringLiteral("hash"), stagedCount, stagedCount + 1)) {
+                AssetCas::discardStaged(staged.stagedBytes);
+                result.error = QStringLiteral("cancelled");
+                return prepared;
+            }
+            stageBytes(info.absoluteFilePath(), QStringLiteral("file"), info.fileName());
+            ++stagedCount;
+        }
+    }
+    AssetCas::flushStaged(staged.stagedBytes);   // the batch's one wait for the device
     return prepared;
 }
 
@@ -337,6 +391,9 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
                 QStringLiteral("import: '%1' is the content of UNLISTED asset %2 — re-listed it "
                                "in the library instead of creating a duplicate row")
                     .arg(QFileInfo(request.sourcePath).fileName(), relisted));
+        // The staged convert is thrown away, and so are the bytes it staged:
+        // the content is in the store already (that is what re-listing means).
+        AssetCas::discardStaged(staged.stagedBytes);
         return back;
     }
 
@@ -357,6 +414,49 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     }
     return result;
 }
+
+namespace
+{
+/// The bytes prepare() already staged for `path`, or nullptr when it staged
+/// none (a hand-built plan, a staging failure) — the caller then ingests
+/// synchronously, exactly as the pipeline did before FSYNC-2.
+AssetCas::Staged *stagedEntryFor(StagedAsset &staged, const QString &path)
+{
+    for (AssetCas::Staged &entry : staged.stagedBytes)
+        if (entry.srcPath == path) return &entry;
+    return nullptr;
+}
+
+/// Publish one content file: the staged bytes when prepare() left some (a
+/// rename plus the rows — no copy, no flush, microseconds), the synchronous
+/// ingest otherwise.
+bool storeOneFile(QSqlDatabase conn, const QString &root, StagedAsset &staged,
+                  const QString &path, const QString &guid, const QString &role,
+                  const QString &name, QString *oidOut, QString *errorOut)
+{
+    // A store-root change between prepare and commit (Preferences moves the
+    // store mid-import) would make the staged temp a CROSS-DEVICE rename: the
+    // synchronous ingest is the honest answer there, not a failed publish.
+    AssetCas::Staged *pre = stagedEntryFor(staged, path);
+    // A store root that MOVED between prepare and commit: the temp is under the
+    // old root, so a rename would cross devices — fall back to the synchronous
+    // ingest. The separator matters: '/x/store' is a string prefix of '/x/store2'.
+    const QString rootSlash = root.endsWith(QLatin1Char('/')) ? root : root + QLatin1Char('/');
+    if (pre && !pre->tmpPath.isEmpty() && !pre->tmpPath.startsWith(rootSlash)) pre = nullptr;
+    if (pre) {
+        // The role and name are the COMMIT's to decide (a .jaf payload file is
+        // 'source' or 'file' depending on a catalog name only this thread can
+        // read), so they are set here rather than at staging time.
+        pre->role = role;
+        pre->name = name;
+        if (!AssetCas::commitStaged(conn, root, guid, *pre, errorOut)) return false;
+        if (oidOut) *oidOut = pre->oid;
+        return true;
+    }
+    return AssetCas::ingestFile(conn, root, path, guid, role, name, oidOut, errorOut,
+                                staged.fileOids.value(path));
+}
+}   // namespace
 
 bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedAsset &staged,
                                            ImportResult &result, const ImportProgressFn &progress)
@@ -402,6 +502,9 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
             irisLog("import rollback: no transaction of our own to roll back — "
                     "object cleanup may be reading uncommitted rows");
         tx.rollback();   // idempotent; a no-op if commit() already unwound
+        // Whatever prepare() staged and this commit never published is a temp
+        // file in the store's own objects/ tree; it names no object and no row.
+        AssetCas::discardStaged(staged.stagedBytes);
         for (const QString &oid : createdOids) {
             QSqlQuery still(conn);
             still.prepare("SELECT 1 FROM files WHERE oid = ?");
@@ -433,8 +536,8 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
                     const QString role = (info.fileName() == memberName)
                                              ? QStringLiteral("source") : QStringLiteral("file");
                     QString oid;
-                    if (!AssetCas::ingestFile(conn, root, info.absoluteFilePath(), it.value(),
-                                              role, info.fileName(), &oid, &result.error)) {
+                    if (!storeOneFile(conn, root, staged, info.absoluteFilePath(), it.value(),
+                                      role, info.fileName(), &oid, &result.error)) {
                         rollbackAndCleanupObjects();
                         return false;
                     }
@@ -465,8 +568,8 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
                 const QString role = (info.fileName() == assetName)
                                          ? QStringLiteral("source") : QStringLiteral("file");
                 QString oid;
-                if (!AssetCas::ingestFile(conn, root, info.absoluteFilePath(), guid,
-                                          role, info.fileName(), &oid, &result.error)) {
+                if (!storeOneFile(conn, root, staged, info.absoluteFilePath(), guid,
+                                  role, info.fileName(), &oid, &result.error)) {
                     rollbackAndCleanupObjects();
                     return false;
                 }
@@ -512,9 +615,8 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
                 return false;
             }
             QString oid;
-            if (!AssetCas::ingestFile(conn, root, file.path, file.forGuid,
-                                      file.role, file.name, &oid, &result.error,
-                                      staged.fileOids.value(file.path))) {
+            if (!storeOneFile(conn, root, staged, file.path, file.forGuid,
+                              file.role, file.name, &oid, &result.error)) {
                 rollbackAndCleanupObjects();
                 return false;
             }
@@ -543,6 +645,10 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         AssetCas::writeSidecar(conn, root, guid, &casError);
         if (!casError.isEmpty()) irisLog("import post-commit: " + casError);
     }
+
+    // Anything prepare() staged that this plan never named (it should be
+    // nothing) would otherwise sit in objects/ as a stale temp until the GC.
+    AssetCas::discardStaged(staged.stagedBytes);
 
     if (staged.registerSession) staged.registerSession();
     return true;
