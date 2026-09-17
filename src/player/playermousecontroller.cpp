@@ -285,7 +285,7 @@ void PlayerMouseController::update(float dt)
 	// The other half of this branch drove the removed viewer node's character
 	// controller (AVATAR_LOCOMOTION_SPEC Stage 0); piloted movement comes back
 	// as its own component in Stage 2.
-	if (!flyThisFrame(heldFlyKeys(), linearSpeed)) {
+	if (!flyThisFrame(heldFlyKeys(), linearSpeed) && camera) {
 		// Nothing held: the run's own camera is left exactly as the document
 		// put it (see flyThisFrame).
 		camera->update(0);
@@ -314,7 +314,7 @@ void PlayerMouseController::doGodMode(float dt)
     // SAME STEP AS PLAY MODE, and as the editor's (S13): viewport/flystep.h.
     // This function's own version differed in one detail nobody wanted — it
     // strafed along the camera's ROLLED right rather than a horizontal one.
-    if (!flyThisFrame(heldFlyKeys(), linearSpeed)) camera->update(0);
+    if (!flyThisFrame(heldFlyKeys(), linearSpeed) && camera) camera->update(0);
 }
 
 // ONE FRAME OF FREE FLIGHT, AND NOTHING AT ALL WHEN NOTHING IS HELD
