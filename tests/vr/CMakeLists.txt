@@ -11,10 +11,38 @@
 # real headset without building Studio). A second copy would rot; phase 2 replaces
 # both with the engine's VrSession and its `vr.session` suite.
 #
-# EVERYTHING HERE IS OPTIONAL. Without libopenxr-dev, without the Vulkan render
-# system, or on macOS, nothing is built and nothing is registered; without
-# monado-service on the box the registered test SKIPS (exit 77). A box with no VR
-# stack is a supported box.
+# EVERYTHING BELOW THE FIRST GUARD IS OPTIONAL. Without libopenxr-dev, without
+# the Vulkan render system, or on macOS, none of the RUNTIME suites is built and
+# none is registered; without monado-service on the box the registered ones SKIP
+# (exit 77). A box with no VR stack is a supported box.
+#
+# `vr.grab_maths` (stage 1, immediately below) is the exception and is
+# registered FIRST, before any guard: it is pure arithmetic with no runtime, no
+# display and no GPU in it, so it runs everywhere — see its own note.
+
+# ---------------------------------------------------------------------------
+# vr.grab_maths — THE GRAB'S AND THE LOCOMOTION'S ARITHMETIC
+# (SPECS/VR_INPUT_SPEC.md §5.1/§6, stage 1).
+#
+# REGISTERED BEFORE EVERY GUARD IN THIS FILE, deliberately: it needs no OpenXR,
+# no Vulkan render system, no runtime, no display and no GPU — it is
+# src/modules/vr/vrgrab.h and nothing else, compiled against IrisGL's maths. A
+# box with no VR stack at all (and macOS, and a CI container) still runs it, and
+# it is the only test in the tree that would catch a sign in the pose algebra
+# before somebody found it wearing a headset. Same shape and same reasons as
+# `player.vr` in tests/player, which asserts the rig's half.
+add_executable(test_vr_grab "${CMAKE_CURRENT_SOURCE_DIR}/test_vr_grab.cpp")
+set_target_properties(test_vr_grab PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_vr_grab PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_vr_grab PRIVATE IrisGL Qt6::Gui)
+add_test(NAME vr.grab_maths COMMAND ${CMAKE_BINARY_DIR}/bin/test_vr_grab
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(vr.grab_maths PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "services")
+jah_no_display(vr.grab_maths)
 
 if(NOT UNIX OR APPLE)
     return()

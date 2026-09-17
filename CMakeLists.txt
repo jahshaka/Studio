@@ -522,6 +522,7 @@ set(HEADERS
     src/modules/publish/publishrecord.h
     src/modules/vr/editorvr.h
     src/modules/vr/vrapi.h
+    src/modules/vr/vrgrab.h
     src/modules/vr/vrmodule.h
     src/modules/avatar/avatarmodule.h
     src/modules/avatar/avatarpage.h
