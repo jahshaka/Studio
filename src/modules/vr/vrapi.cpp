@@ -220,7 +220,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "has any).",
           Needs::Engine },
         { "inject",
-          "vr.inject(hand, {valid?, aim?, grip?, select?, grab?, menuPressed?, stick?, "
+          "vr.inject(hand, {valid?, aim?, grip? (defaults to aim), select?, grab?, menuPressed?, stick?, "
           "stickPressed?, focused?}) -> bool",
           "TEST-FACING: WRITES ONE HAND'S SAMPLE AS IF THE RUNTIME HAD REPORTED IT — the "
           "backbone every VR gesture test in this tree drives (SPECS/VR_INPUT_SPEC.md §2.4).\n\n"
@@ -653,6 +653,11 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     };
     if (!readPose("aim", s.aim) || !readPose("grip", s.grip))
         return fail(error);
+    // A GRAB NEEDS A GRIP (the lead, from the Fable read at merge): the retired
+    // Studio-side hook defaulted grip := aim, and a script that says only where
+    // the hand POINTS still holds the thing where it points — with no grip the
+    // grab would refuse and the session would hide the proxy. Said, not silent.
+    if (state.contains(QStringLiteral("aim")) && !state.contains(QStringLiteral("grip"))) s.grip = s.aim;
     s.select = float(state.value(QStringLiteral("select"), 0.0).toDouble());
     s.grab = float(state.value(QStringLiteral("grab"), 0.0).toDouble());
     // THE PRESS IS DERIVED WHEN IT IS NOT SAID, at the same 0.5 the engine's
@@ -829,8 +834,7 @@ void VrApi::installInteraction()
     deps.locomotionBlocked = [this] {
         if (editor.isActive()) return editor.placing();
         PlayerService *player = moduleHost.services ? moduleHost.services->player : nullptr;
-        if (player && player->isVrActive())
-            return player->vrReport().value(QStringLiteral("placing"), false).toBool();
+        if (player && player->isVrActive()) return player->isVrPlacing();
         return false;
     };
     interaction.setDeps(deps);
@@ -929,6 +933,14 @@ QVariantMap VrApi::inputState()
 bool VrApi::step(const QVariantMap &options)
 {
     syncInteractionSession();
+    // A WORN SESSION IS STEPPED BY THE DRIVER (the lead, from the Fable read at
+    // merge): under the Live policy the driver keeps ticking, so a console
+    // `vr.step({frames:1000})` would integrate the wearer's REAL stick for 11 s
+    // in one hop on top of the driver's own. A scripted step is for injected
+    // input; with a real session and no injection it is refused, by name.
+    if (interactionSessionActive && !interaction.injectionArmed())
+        return refuse(QStringLiteral("vr.step: a worn session is stepped by the driver; "
+                                     "inject input first (vr.inject) to step it from a script"));
     static const QStringList known = { "seconds", "frames" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key()))

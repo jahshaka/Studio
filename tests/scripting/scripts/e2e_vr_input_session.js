@@ -190,6 +190,8 @@ assert(near(after.yaw, before.yaw, 1e-4), "nor turns them");
 for (var g = 0; g < 45; ++g) leftStick(0, -1);
 var back = showRig("after 45 frames of full back stick");
 var headDrift = Math.abs(yawDelta(vr.state().head.yaw, headYaw0));
+assert(headDrift < 30.0, "the runtime's head drifted less than 30 degrees over the walk (" + headDrift.toFixed(3)
+       + ") - a fixture ceiling, so the geometric budget below cannot go vacuous");
 var returnBudget = Math.max(0.05, 2.0 * walked * Math.abs(Math.sin(headDrift * Math.PI / 360.0)));
 console.log("      the head's heading drifted " + headDrift.toFixed(3)
             + " degrees over the two legs: the return budget is "

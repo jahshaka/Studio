@@ -128,6 +128,12 @@ QString PlayerService::vrUnavailableReason() const
 
 bool PlayerService::isVrActive() const { return mHost && mHost->isPlayerVrActive(); }
 
+bool PlayerService::isVrPlacing() const
+{
+    return mHost && mHost->isPlayerVrActive()
+           && mHost->playerVrReport().value(QStringLiteral("placing"), false).toBool();
+}
+
 bool PlayerService::endVr()
 {
     qWarning("Jahshaka VR: player.endVr() called");

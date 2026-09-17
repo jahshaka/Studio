@@ -222,10 +222,13 @@ VrInteraction::Hover VrInteraction::pick(unsigned hand, const VrHandState &state
         // hand.
         const iris::Vec3 a = out.origin;
         const iris::Vec3 b = out.origin + out.direction * kRayLength;
-        // THE GLOBAL-TRANSFORM WALK, ONLY WHEN SOMETHING WAS WRITTEN. `update(0)`
-        // makes the document's world transforms agree with its locals, and a
-        // local can only change through a transform write or a reparent — both
-        // of which bump the epoch (nodegraph.cpp). So refreshing when the
+        // THE `update(0)` WALK, ONLY WHEN SOMETHING WAS WRITTEN — and at this
+        // tree it does no transform work at all (scenenode.cpp: composition,
+        // invalidation and propagation are Ogre's; world transforms come back
+        // through getGlobalTransform), so skipping it is exact for that reason
+        // and `ScenePicker::pickAll`'s `refreshTransforms` is a vestige for a
+        // viewport CRUD. A local can only change through a transform write or
+        // a reparent — both bump the epoch (nodegraph.cpp). So refreshing when the
         // counter has not moved since the last refresh cannot change an answer;
         // it is the full recursive walk of the scene the picker's header tells
         // callers inside a live drag to skip.
@@ -657,6 +660,16 @@ bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost)
 
 void VrInteraction::step(float seconds)
 {
+    // THE MEMO LIVES ONE FRAME (the lead, from the Fable read at merge): its
+    // key covers the geometric inputs (the aim pose, the transform/structure
+    // epoch) and nothing the picker decides per candidate — a node locked,
+    // hidden or re-meshed under a STILL hand, or a camera moved (a camera's
+    // transform write does not bump the epoch), would answer from the old pick
+    // until the next pose change. In a headset that is the next frame anyway;
+    // for a script or an MCP session it is a wrong answer. Expiring here keeps
+    // the measured win (select/grab reuse the FRAME's hover; no second pick)
+    // and gives up only the at-rest 0.2 ms.
+    mMemo.valid = false;
     const float dt = vrorigin::frameSeconds(seconds > 0.0f ? seconds : kNominalFrame);
     VrHandState hands[VrHandCount];
     for (unsigned i = 0; i < VrHandCount; ++i) hands[i] = handState(i);

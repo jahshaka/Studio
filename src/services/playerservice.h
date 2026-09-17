@@ -82,6 +82,9 @@ public:
     QString vrUnavailableReason() const;
     /// Is the player running in the headset right now?
     bool isVrActive() const;
+    /// True while the Player's VR rig placement is pending (the frames after a
+    /// begin or a recentre): the interaction's locomotion holds off until it lands.
+    bool isVrPlacing() const;
     /// Ends the VR session and LEAVES THE SCENE PLAYING. The other order —
     /// stop() — ends both (see stop()).
     bool endVr();
