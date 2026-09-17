@@ -23,19 +23,31 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "services/services.h"
 #include "scripting/modules/flyspeedverb.h"
+#include "viewport/flystep.h"
 
 using namespace scriptmod;
 
 QVector<VerbInfo> PlayerApi::verbs() const
 {
     return {
-        { "play", "player.play() -> bool",
+        { "play", "player.play({vr?, worldScale?}) -> bool",
           "Starts the PLAYER space's scene — the Player page's own PlayBack, driving the same "
           "document through the same engine scene the editor draws (the Player page is a second "
           "VIEW on it, with the editor's helper geometry masked out). This is NOT editor.play(), "
           "which runs the scene in place inside the editor viewport; the two spaces have "
           "independent play state and both can be running. Idempotent: already playing "
-          "answers true. The Player page's play button follows this, whoever calls it.",
+          "answers true. The Player page's play button follows this, whoever calls it.\n\n"
+          "`vr: true` runs it IN THE HEADSET (SPECS/VR_SPEC.md §4.5): a VR session begins on the "
+          "same scene, the wearer stands where the play camera stands and faces the way it faces, "
+          "the desktop shows the left eye (this player's view becomes the mirror and stops "
+          "rendering its own picture), the render loop is paced by the runtime, and the fly keys "
+          "walk the wearer along the direction the HEAD is looking. `worldScale` is metres of "
+          "world per metre of room (1 = life size).\n\n"
+          "IT REFUSES rather than playing flat when there is no runtime — app.lastError says why "
+          "— because a caller that asked for VR cannot tell the two apart. A plain "
+          "player.play() is untouched and works exactly as it always has, headset or no headset. "
+          "player.stop() ends the session with the run; player.endVr() ends the session and "
+          "leaves the scene playing.",
           Needs::Engine },
         { "stop", "player.stop() -> bool",
           "Stops the player's scene and puts the pre-play transforms back (PlayBack's stop). "
@@ -48,12 +60,45 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "Stop then play, in one call: the run begins again from the scene's pre-play "
           "transforms. A restart of a stopped player is simply a play.",
           Needs::Engine },
-        { "state", "player.state() -> {available, playing, active}",
+        { "endVr", "player.endVr() -> bool",
+          "Takes the headset off and LEAVES THE SCENE PLAYING: the VR session ends, the mirror "
+          "clears, the Player's own view starts drawing its own picture again and the render "
+          "loop goes back to the editor's pacing. False when the player is not in VR. "
+          "(player.stop() is the other order — it ends the session AND stops the scene, because "
+          "a session belongs to the run it was started in.)",
+          Needs::Engine },
+        { "vrMove", "player.vrMove({forward?, back?, left?, right?, up?, down?, boost?, seconds?}) -> bool",
+          "MOVES THE WEARER, exactly as holding the fly keys would: along the HEAD's level "
+          "heading for forward/back and the horizontal beside it for left/right, along the "
+          "world's up for up/down, at the player's own fly speed (player.flySpeed) for `seconds` "
+          "(default one 1/60 s step). It moves the RIG — the room the wearer stands in — so "
+          "their own step across the floor still counts on top of it, and their pitch and roll "
+          "are never touched (a rig with a tilt in it tilts the horizon under a standing person).\n\n"
+          "The same call the held keys make each frame, which is what lets a script, an MCP "
+          "session or a suite walk a wearer through a world with no keyboard in the room. False "
+          "when the player is not in VR.",
+          Needs::Engine },
+        { "vrRecenter", "player.vrRecenter() -> bool",
+          "\"I am standing HERE, facing THIS way\": re-places the rig so the wearer's head "
+          "lands on the play camera, at the next pose the runtime locates. The same placement "
+          "player.play({vr:true}) does when the session starts. False when the player is not "
+          "in VR.",
+          Needs::Engine },
+        { "state", "player.state() -> {available, playing, active, vr:{...}}",
           "The player space in one read. `available` is false in sessions with no player backend "
           "(headless runs) — the honest answer to \"can I even ask\"; `playing` is whether its "
           "scene is running; `active` is whether the Player page is the space on screen, which is "
           "the difference between playing and playing where anyone can see it (the player only "
-          "steps and renders while its page is shown).",
+          "steps and renders while its page is shown).\n\n"
+          "`vr` is the headset half (SPECS/VR_SPEC.md §4.5) and is answerable on every box: "
+          "`available` (can this process do VR at all — fixed at boot) and `reason` when it "
+          "cannot, `active` (is the player in the headset right now), `state` (the runtime's own "
+          "lifecycle word: idle, ready, synchronized, visible, focused, stopping, lost), "
+          "`frames`/`rendered` (what the runtime accepted and asked for — counts, never a wall "
+          "clock), `mirror`/`mirrorView` (which eye goes to the desktop, and onto which view), "
+          "`origin` (the rig: {x,y,z,yaw} of the room the wearer stands in, as the ENGINE holds "
+          "it), `head` ({x,y,z,yaw} of the wearer's head in the world), `posesValid`, "
+          "`worldScale` and `flySpeed`.",
           Needs::Document },
         { "flySpeed", "player.flySpeed() -> {multiplier, base, speed, steps:[...]}",
           "THE PLAYER'S FREE-CAMERA SPEED — editor.flySpeed for the other space, and a "
@@ -101,12 +146,72 @@ PlayerService *PlayerApi::serviceOrFail(const char *verb)
     return service;
 }
 
-bool PlayerApi::play()
+bool PlayerApi::play(const QVariantMap &options)
 {
     auto *service = serviceOrFail("player.play");
     if (!service) return false;
     if (!requireEngine()) return false;
-    return service->play();
+    static const QStringList known = { "vr", "worldScale", "eyeWidth", "eyeHeight" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("player.play: unknown option '%1' — known options are %2")
+                            .arg(it.key(), known.join(QStringLiteral(", "))));
+    const bool vr = options.value(QStringLiteral("vr"), false).toBool();
+    if (!vr) return service->play(false);
+    // A REFUSAL, NOT A THROW: "is there a headset on this box" is a question
+    // with two answers and a script that asked for VR must be able to take the
+    // no (ApiModule::refuse — false, with the reason in app.lastError). A
+    // malformed CALL is still a throw, which is the case above.
+    if (!service->play(true))
+        return refuse(QStringLiteral("player.play: %1").arg(service->lastError()));
+    return true;
+}
+
+bool PlayerApi::endVr()
+{
+    auto *service = serviceOrFail("player.endVr");
+    if (!service) return false;
+    return service->endVr();
+}
+
+bool PlayerApi::vrMove(const QVariantMap &intent)
+{
+    auto *service = serviceOrFail("player.vrMove");
+    if (!service) return false;
+    static const QStringList known = { "forward", "back", "left", "right",
+                                       "up", "down", "boost", "seconds" };
+    for (auto it = intent.constBegin(); it != intent.constEnd(); ++it)
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("player.vrMove: unknown key '%1' — known keys are %2")
+                            .arg(it.key(), known.join(QStringLiteral(", "))));
+    flystep::Keys keys;
+    keys.forward = intent.value(QStringLiteral("forward")).toBool();
+    keys.back    = intent.value(QStringLiteral("back")).toBool();
+    keys.left    = intent.value(QStringLiteral("left")).toBool();
+    keys.right   = intent.value(QStringLiteral("right")).toBool();
+    keys.up      = intent.value(QStringLiteral("up")).toBool();
+    keys.down    = intent.value(QStringLiteral("down")).toBool();
+    keys.boost   = intent.value(QStringLiteral("boost")).toBool();
+    // ONE 1/60 s STEP BY DEFAULT — the same amount of motion one frame of held
+    // keys produces, so a script that calls this in a loop moves at exactly the
+    // rate a wearer holding the key moves at.
+    const double seconds = intent.value(QStringLiteral("seconds"), 1.0 / 60.0).toDouble();
+    if (seconds < 0.0)
+        return fail(QStringLiteral("player.vrMove: seconds must not be negative"));
+    if (!service->moveVr(keys, float(seconds)))
+        return refuse(QStringLiteral("player.vrMove: the player is not in VR "
+                                     "(player.state().vr.active says so)"));
+    return true;
+}
+
+bool PlayerApi::vrRecenter()
+{
+    auto *service = serviceOrFail("player.vrRecenter");
+    if (!service) return false;
+    if (!service->recenterVr())
+        return refuse(QStringLiteral("player.vrRecenter: the player is not in VR "
+                                     "(player.state().vr.active says so)"));
+    return true;
 }
 
 bool PlayerApi::stop()
@@ -139,7 +244,13 @@ QVariantMap PlayerApi::state()
     const bool available = service && service->isAvailable();
     return QVariantMap{ { "available", available },
                         { "playing", available && service->isPlaying() },
-                        { "active", available && service->isActive() } };
+                        { "active", available && service->isActive() },
+                        // The headset half, answerable in every session — a
+                        // box with no runtime included, which is the case that
+                        // has to be right on every gate.
+                        { "vr", service ? service->vrReport()
+                                        : QVariantMap{ { "active", false },
+                                                       { "available", false } } } };
 }
 
 bool PlayerApi::frame(int count, double dt)

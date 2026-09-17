@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QObject>
 #include <QIcon>
+#include <functional>
 #include "irisgl/irisglfwd.h"
 
 class EnginePlayerView;
@@ -15,7 +16,9 @@ class PlayerWidget : public QWidget
 
 	EnginePlayerView* playerView;
 	QPushButton* playBtn;
+	QPushButton* vrBtn = nullptr;
 	QIcon playIcon, stopIcon;
+	std::function<void()> vrToggle;
 public:
 	/// The widget takes ownership of `view`.
 	explicit PlayerWidget(QWidget* parent = nullptr, EnginePlayerView* view = nullptr);
@@ -31,6 +34,14 @@ public:
 	/// starts the player — this button, a script, an MCP session — the icon
 	/// follows. Wired by the shell to PlayerService::playingChanged.
 	void showPlaying(bool playing);
+
+	/// THE PLAYER PAGE'S VR BUTTON (SPECS/VR_SPEC.md §4.5, phase 3). The shell
+	/// hands it the same call the editor toolbar's icon makes — one
+	/// implementation, in PlayerService — and `showVr` keeps the button
+	/// honest: disabled when this process cannot do VR at all (with the reason
+	/// in the tooltip), pressed while a session runs.
+	void setVrToggle(const std::function<void()> &toggle, const QIcon &icon);
+	void showVr(bool available, bool active);
 
 	/// PLAY, not "toggle play" (audit F4). Entering the player SPACE is not a
 	/// button press: switchSpace(PLAYER) used to call onPlayScene(), so a script

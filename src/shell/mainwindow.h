@@ -220,6 +220,13 @@ public:
 	void assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node);
 	void deselectViewports();
 
+    /// Enters or leaves the Player's VR mode — the toolbar icon, the Player
+    /// page's button and the `vr.toggle()` verb all end up here, and all of
+    /// them go through PlayerService so there is one implementation.
+    void toggleVrMode();
+    /// Icon + tooltip + enabled state of the VR actions, from the live session.
+    void refreshVrUi();
+
 	/// Views dropdown / view.* shortcuts / editor.setView verb — ONE path:
 	/// snaps the editor camera to a canonical view ("top", "bottom", "left",
 	/// "right", "front", "back", "perspective"), switches projection (axis
@@ -1040,6 +1047,15 @@ private:
     QToolBar *toolBar;
     AssetView *_assetView;
 	QAction *actionSaveScene;
+
+    /// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3) — the editor toolbar's
+    /// half. The Player page has its own button and both make the same call
+    /// (PlayerService::toggleVr, which is what `vr.toggle()` calls); this is
+    /// held so its icon and its tooltip can follow the session.
+    QAction *actionVr = nullptr;
+    /// What the icon is currently showing, so the per-frame refresh is a bool
+    /// compare and not a QIcon rebuild.
+    bool mVrIconActive = false;
 
     QAction *wireCheckAction;
     QAction *physicsCheckAction;

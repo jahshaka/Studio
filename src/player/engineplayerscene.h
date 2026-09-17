@@ -41,6 +41,7 @@
 
 class SceneMirror;
 class PlayBack;
+class PlayerVr;
 
 class EnginePlayerScene
 {
@@ -74,7 +75,7 @@ public:
     /// (the L2 lane's finding, applied here 2026-09-10 — Ogre hands the
     /// replacement View the freed one's address, so the stale unbind landed on
     /// the NEW View: a silently blank player).
-    void forgetView() { mView = nullptr; }
+    void forgetView();
     jahshaka::engine::Scene *engineScene() const { return mScene; }
     jahshaka::engine::View *view() const { return mView; }
 
@@ -106,6 +107,14 @@ public:
     void step(float dt, int width, int height);
 
     PlayBack *playback() const { return mPlayback; }
+
+    /// THE PLAYER'S VR MODE (SPECS/VR_SPEC.md §4.5, phase 3) — created on
+    /// demand, driven from step(), and never anything at all in a session that
+    /// never asks for a headset. Null before the first ask.
+    PlayerVr *vr();
+    /// The VR mode as it stands, WITHOUT creating one: the read every state
+    /// verb makes, on every box, with no runtime.
+    const PlayerVr *vrIfAny() const { return mVr.get(); }
     bool isPlaying() const;
     void play();
     void stop();
@@ -133,6 +142,7 @@ private:
     SceneMirror *mMirror = nullptr;
     iris::ScenePtr mDocument;
     PlayBack *mPlayback = nullptr;
+    std::unique_ptr<PlayerVr> mVr;
     iris::Mat4 mSavedCameraMatrix;
     bool mHaveSavedCamera = false;
     /// The wall clock behind a `dt` < 0 step: time since the previous step.

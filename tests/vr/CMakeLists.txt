@@ -133,6 +133,27 @@ set_tests_properties(vr.verbs_session PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_verbs_home};JAHSHAKA_DATA_ROOT=${_vr_verbs_home}/.local/share/Jahshaka")
 
+# ---------------------------------------------------------------------------
+# vr.player_session — THE PLAYER IN THE HEADSET (SPECS/VR_SPEC.md §4.5, phase 3).
+#
+# The same wrapper as vr.verbs_session, pointed at the Player's own script: the
+# app with `--vr`, a real session, the Player page up, the mirror on the
+# player's own view, the rig placed on the play camera and flown by the verb the
+# fly keys call. The no-runtime half is `scripting.e2e.player_vr`; the rig's
+# arithmetic is `player.vr`, which needs nothing at all.
+set(_vr_player_home "${CMAKE_CURRENT_BINARY_DIR}/vr-player-home")
+add_test(NAME vr.player_session
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_player_vr_session.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.player_session PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 900
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_player_home};JAHSHAKA_DATA_ROOT=${_vr_player_home}/.local/share/Jahshaka")
+
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600

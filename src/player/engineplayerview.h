@@ -38,6 +38,12 @@ public:
     bool isPlayerActive() const override { return mActive; }
     QImage takePlayerScreenshot(int width, int height, int grade) override;
     bool stepPlayerFrames(int n, float dt) override;
+    bool beginPlayerVr(const QVariantMap &options, QString *error) override;
+    void endPlayerVr() override;
+    bool isPlayerVrActive() const override;
+    QVariantMap playerVrReport() const override;
+    bool movePlayerVr(const flystep::Keys &keys, float seconds) override;
+    bool recenterPlayerVr() override;
 
     EnginePlayerScene *playerScene() const { return mScene.get(); }
 

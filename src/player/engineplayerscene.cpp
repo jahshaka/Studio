@@ -13,6 +13,7 @@
 #include <string>
 #include "irisgl/mirror/scenemirror.h"
 #include "player/playback.h"
+#include "player/playervr.h"
 #include "player/playermousecontroller.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -78,8 +79,20 @@ bool EnginePlayerScene::attach(View *view)
     return true;
 }
 
+void EnginePlayerScene::forgetView()
+{
+    // A VR SESSION CANNOT OUTLIVE THE VIEW IT MIRRORS ONTO. The widget's native
+    // window is being recreated, so the View this object mirrors the headset's
+    // eye onto is about to be freed: the session goes first, while every
+    // pointer it holds is still good.
+    if (mVr) mVr->end();
+    mView = nullptr;
+}
+
 void EnginePlayerScene::release()
 {
+    // Same rule as forgetView, for the ordinary teardown.
+    if (mVr) mVr->end();
     // The Scene and the mirror belong to the editor viewport: this object
     // created neither and destroys neither. Only the view binding is ours.
     auto engine = mEngine.lock();
@@ -163,6 +176,12 @@ void EnginePlayerScene::step(float dt, int width, int height)
     // camera it renders (AVATAR_LOCOMOTION_SPEC §8.5).
     if (mDocument && mDocument->getPossession())
         mDocument->getPossession()->applyToViewCamera(cam);
+    // THE WEARER, IF THERE IS ONE (phase 3). AFTER everything that moves the
+    // play camera and BEFORE the mirror reads it: the rig is flown, pushed to
+    // the engine, and the head's world pose becomes the camera — so the last
+    // word on where the camera is belongs to the person wearing the headset.
+    // A frame with no session costs one pointer test.
+    if (mVr) mVr->step(dt >= 0.0f ? dt : wall, cam);
 
     cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror) {
@@ -187,6 +206,15 @@ void EnginePlayerScene::step(float dt, int width, int height)
     }
     if (auto engine = mEngine.lock())
         engine->setFixedFrameDelta(simulated * mDocument->particleTimeScale);
+}
+
+PlayerVr *EnginePlayerScene::vr()
+{
+    // CREATED ON THE FIRST ASK, never at construction: the object holds nothing
+    // but a weak engine pointer and a rig, and a player that is never asked for
+    // a headset should not carry even that.
+    if (!mVr) mVr.reset(new PlayerVr(mEngine.lock()));
+    return mVr.get();
 }
 
 bool EnginePlayerScene::isPlaying() const { return mPlayback->isScenePlaying(); }

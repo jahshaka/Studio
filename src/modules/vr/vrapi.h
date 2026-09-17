@@ -49,6 +49,7 @@ public:
     Q_INVOKABLE bool begin(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool end();
     Q_INVOKABLE QVariantMap state();
+    Q_INVOKABLE bool toggle();
 
 private:
     /// The running engine, or null (headless runs, or before the engine starts).

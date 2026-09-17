@@ -600,6 +600,15 @@ void MainWindow::wireFramePacing()
     // avoid, and this needs no help from it.
     hookFramePacingScreenSignal(8);
     updateFramePacingScreen();
+
+    // THE VR ICON FOLLOWS THE SESSION, not just the button that started it: a
+    // session can end from a script (`vr.end()`), from a lost device or from
+    // the runtime itself, and a toolbar showing "in VR" over an editor that is
+    // not would be a lie. One bool compare per frame, on the thread that owns
+    // the icon, and a QIcon is only rebuilt when the answer moves.
+    connect(driver, &EngineRenderDriver::beforeFrame, this, [this]() {
+        if (playerService && playerService->isVrActive() != mVrIconActive) refreshVrUi();
+    });
 }
 
 void MainWindow::hookFramePacingScreenSignal(int retriesLeft)
@@ -632,6 +641,49 @@ void MainWindow::updateFramePacingScreen()
                     });
     }
     driver->setRefreshHz(s ? double(s->refreshRate()) : 0.0);
+}
+
+// ---------------------------------------------------------------------------
+// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3).
+//
+// Both surfaces — the editor toolbar's icon (and its Ctrl+Shift+V row) and the
+// Player page's own button — end up in these two functions, and the functions
+// do nothing but call PlayerService. That is the API-first rule as wiring: the
+// capability is `player.play({vr:true})` / `player.stop()`, the verb `vr.toggle()`
+// calls the service, and so does every button.
+
+void MainWindow::toggleVrMode()
+{
+    if (!playerService) return;
+    playerService->toggleVr();
+    refreshVrUi();
+}
+
+void MainWindow::refreshVrUi()
+{
+    if (!actionVr) return;
+    const bool available = playerService && playerService->vrAvailable();
+    const bool active = playerService && playerService->isVrActive();
+    actionVr->setEnabled(available);
+    actionVr->setChecked(active);
+    mVrIconActive = active;
+    // THE TOOLTIP CARRIES THE RUNTIME'S OWN REASON when the icon is dead, plus
+    // the sentence a user can act on: VR capability is decided once, at boot,
+    // because the OpenXR route has the RUNTIME create the Vulkan device the
+    // whole engine runs on (VR_SPEC §7 risk 11). Plugging a headset in later
+    // needs a restart, and nothing in the editor can change that at runtime.
+    if (available) {
+        actionVr->setToolTip(active
+            ? QStringLiteral("Leave VR | Stop the run and take the headset off")
+            : QStringLiteral("Enter VR | Run the scene in the headset (the Player page, "
+                             "mirrored here)"));
+    } else {
+        QString why = playerService ? playerService->vrUnavailableReason() : QString();
+        if (!cliVr())
+            why = QStringLiteral("VR capability is fixed at boot — restart with --vr");
+        actionVr->setToolTip(QStringLiteral("Enter VR | Unavailable: %1").arg(why));
+    }
+    if (playerView) playerView->showVr(available, active);
 }
 
 SettingsManager* MainWindow::getSettingsManager()
@@ -1031,10 +1083,20 @@ void MainWindow::setupServices()
     // player.* verbs refuse cleanly.
     playerService = new PlayerService(this);
     playerService->setHost(playerBackend);
+    // SHOWING THE PLAYER PAGE is the one thing the service cannot do for
+    // itself, and the VR toggle's whole contract is "put me in the Player, in
+    // the headset" — from a button, a script or an MCP session. The shell
+    // hands it the one call rather than the service learning about windows.
+    playerService->setSpaceActivator([this]() { this->switchSpace(WindowSpaces::PLAYER); });
     if (playerView) {
         auto *widget = playerView;
         connect(playerService, &PlayerService::playingChanged, widget,
                 [widget](bool playing) { widget->showPlaying(playing); });
+        QVariantMap vrIconOptions;
+        vrIconOptions.insert("color", QColor(255, 255, 255));
+        vrIconOptions.insert("color-active", QColor(255, 255, 255));
+        widget->setVrToggle([this]() { this->toggleVrMode(); },
+                            fontIcons->icon(fa::binoculars, vrIconOptions));
     }
 
     projectService = new ProjectService(db, project, settings,
@@ -4170,6 +4232,23 @@ void MainWindow::setupToolBar()
     cameraGroup->addAction(actionArcballCam);
     actionFreeCamera->setChecked(true);
 
+    // THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3). One action, beside the
+    // camera controls it belongs with: press it and the Player page comes up
+    // with the scene running in the headset; press it again and the run stops.
+    // It calls PlayerService, which is what the `vr.toggle()` verb calls — the
+    // button is a caller of the capability, never a second path into it.
+    //
+    // fa::binoculars is the closest thing the shipped icon font (Font Awesome
+    // 4) has to a headset: a two-lens device held to the eyes. Stated because
+    // it is a choice, not an obvious match.
+    actionVr = new QAction;
+    actionVr->setObjectName(QStringLiteral("actionVr"));
+    actionVr->setCheckable(true);
+    actionVr->setIcon(fontIcons->icon(fa::binoculars, options));
+    toolBar->addAction(actionVr);
+    connect(actionVr, &QAction::triggered, this, [this]() { toggleVrMode(); });
+    refreshVrUi();
+
     // this acts as a spacer
     QWidget* empty = new QWidget();
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -4465,6 +4544,11 @@ void MainWindow::setupShortcuts()
     // row exists so the Preferences table says so.
     reg.addFixed("properties.filter.clear", "Properties: Clear the Filter", "Windows",
                  "Esc (while the filter box has focus)");
+    // VR (SPECS/VR_SPEC.md §4.5). Its own row rather than a "Windows" one: it
+    // is not a space switch, it is a MODE — the Player page comes up and the
+    // run happens in the headset.
+    reg.add("vr.toggle", "Enter / leave VR", "VR", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V),
+            this, [this]() { toggleVrMode(); });
     reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
     reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,

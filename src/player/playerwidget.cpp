@@ -56,6 +56,24 @@ void PlayerWidget::createUI()
 	connect(playBtn, &QPushButton::pressed, [this]() {
         onPlayScene();
 	});
+
+	// THE VR BUTTON, beside Play, because that is what it is: play this scene
+	// in the headset. It calls what the editor toolbar's icon calls
+	// (PlayerService::toggleVr, the same thing `vr.toggle()` calls); the shell
+	// hands the call over with setVrToggle, so this widget learns nothing about
+	// services, engines or runtimes. Disabled until the shell says VR is
+	// available — which on a process that was not started with --vr is never.
+	vrBtn = new QPushButton(playerControls);
+	vrBtn->setObjectName(QStringLiteral("playerVrButton"));
+	vrBtn->setCursor(Qt::PointingHandCursor);
+	vrBtn->setCheckable(true);
+	vrBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
+	ThemeRoles::setFlat(vrBtn);
+	vrBtn->setIconSize(QSize(24, 24));
+	vrBtn->setEnabled(false);
+	vrBtn->setToolTip("VR is unavailable in this session");
+	connect(vrBtn, &QPushButton::clicked, [this]() { if (vrToggle) vrToggle(); });
+	playerControlsLayout->addWidget(vrBtn);
 	playerControls->setLayout(playerControlsLayout);
 
 	auto mainLayout = new QVBoxLayout();
@@ -90,6 +108,25 @@ void PlayerWidget::end()
 		playerView->stopScene();
     }
 	showPlaying(playerView->isScenePlaying());
+}
+
+// THE ICON COMES FROM THE SHELL, which owns the QtAwesome font set (one
+// instance per process). The alternative — a second QtAwesome here — would load
+// the font twice for one glyph.
+void PlayerWidget::setVrToggle(const std::function<void()> &toggle, const QIcon &icon)
+{
+	vrToggle = toggle;
+	if (vrBtn && !icon.isNull()) vrBtn->setIcon(icon);
+}
+
+void PlayerWidget::showVr(bool available, bool active)
+{
+	if (!vrBtn) return;
+	vrBtn->setEnabled(available);
+	vrBtn->setChecked(active);
+	vrBtn->setToolTip(!available ? "VR is unavailable in this session"
+	                  : active   ? "Leave VR"
+	                             : "Play this scene in the headset");
 }
 
 void PlayerWidget::showPlaying(bool playing)

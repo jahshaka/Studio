@@ -6,6 +6,10 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets)
 add_executable(test_engine_player test_engine_player.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/player/engineplayerscene.cpp
+    # The player owns its VR mode since phase 3 (EnginePlayerScene::vr()), so
+    # every target that compiles the scene needs its implementation — a link
+    # error otherwise, and a STALE BINARY if the gate runs without a build.
+    ${CMAKE_SOURCE_DIR}/src/player/playervr.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playback.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
@@ -32,6 +36,7 @@ set_tests_properties(player.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
 # the pixels must match. Same sources, same stubs; only the driver differs.
 add_executable(test_editor_player_parity test_editor_player_parity.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/player/engineplayerscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/player/playervr.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playback.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
@@ -81,3 +86,22 @@ add_test(NAME player.playback_routing COMMAND ${CMAKE_BINARY_DIR}/bin/test_playb
 set_tests_properties(player.playback_routing PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "services")
 jah_no_display(player.playback_routing)
+
+# ---- player.vr (SPECS/VR_SPEC.md §4.5, phase 3) ---------------------------
+# THE RIG'S ARITHMETIC: where a wearer stands when the Player enters VR, and
+# where the fly keys take them. Pure functions over iris maths (player/
+# vrorigin.h) — no engine, no display, no OpenXR, no headset — because every
+# decision in them is a sign or an axis whose only other witness is a person
+# feeling sick inside a headset. Qt for the maths types and nothing else.
+add_executable(test_player_vr test_player_vr.cpp)
+set_target_properties(test_player_vr PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_player_vr PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_player_vr PRIVATE IrisGL Qt6::Gui)
+add_test(NAME player.vr COMMAND ${CMAKE_BINARY_DIR}/bin/test_player_vr
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(player.vr PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "services")
+jah_no_display(player.vr)
