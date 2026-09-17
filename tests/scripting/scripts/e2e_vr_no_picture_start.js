@@ -3,13 +3,20 @@
 //
 // WHAT THIS IS. On a real headset the runtime answers "no picture"
 // (`shouldRender = 0`) for the first frames of a session — WiVRn does it for as
-// long as it takes to synchronise. In that state the session's own View is
-// switched off (VR_SPEC F4), the Player's View is off because the desktop shows
-// the mirror, and the editor's viewport is hidden behind the Player page: the
-// engine runs whole frames with NOTHING enabled. The owner's smoke died there —
-// the host skipped the frame ("nothing is showing anywhere"), so the pump never
-// called xrWaitFrame again, the runtime never synchronised and kept answering
-// "no picture": a black headset, a spinning desktop, for ever.
+// long as it takes to synchronise. The owner's smoke died there: with the
+// session's own View off (VR_SPEC F4), the Player's View off and the editor
+// hidden, the host skipped the frame ("nothing is showing anywhere"), so the
+// pump never called xrWaitFrame again, the runtime never synchronised and kept
+// answering "no picture": a black headset, a spinning desktop, for ever.
+//
+// WHAT THIS SUITE PROVES (the lead's second read, 2026-09-17): that the pump
+// keeps accepting frames while the runtime asks for none, that the runtime then
+// synchronises, that the desktop keeps ITS OWN picture until the first drawn eye
+// (the Player's View stays ON through the no-picture stretch since VR-3b), and
+// that a runtime-stopped session hands the Player back. It does NOT put the
+// driver's "nothing enabled" skip on the line — with a session alive
+// `hasEnabledViews()` is true by construction (OgreEngine.cpp), and no view is
+// off here; a driver-level case for that heartbeat is a named follow-up.
 //
 // Monado's simulated HMD asks for a picture on its first or second frame and
 // cannot be told otherwise, so the PUMP is told instead: the runner arms
@@ -51,7 +58,7 @@ st = player.state().vr;
 console.log("after 40 frames of 'no picture': " + JSON.stringify(st));
 assert(st.rendered === 0, "the runtime has asked for NO picture so far (rendered " +
                           st.rendered + ")");
-assert(st.frames >= 35, "AND THE LOOP KEPT RUNNING WITH NOTHING ENABLED: " + st.frames +
+assert(st.frames >= 35, "AND THE PUMP KEPT ACCEPTING FRAMES WHILE THE RUNTIME ASKED FOR NO PICTURE: " + st.frames +
                         " frames accepted");
 assert(seen[39] > seen[0], "the count climbed every stretch (" + seen[0] + " -> " + seen[39] + ")");
 assert(st.active === true, "the session is still alive");

@@ -234,6 +234,7 @@ var awayFrom = Math.sqrt(Math.pow(walked.x - cam0.position.x, 2) +
                          Math.pow(walked.z - cam0.position.z, 2));
 console.log("walked " + awayFrom.toFixed(2) + " m from where the run began");
 assert(awayFrom > 10.0, "the wearer is well away from the start (" + awayFrom.toFixed(2) + " m)");
+var tRecenter = Date.now();                       // the recentre's OWN gap (lead, second read)
 assert(player.vrRecenter() === true, "player.vrRecenter() is accepted");
 // A MOVE ARRIVING IN THE GAP IS ANSWERED BY THE TELEPORT, NOT ADDED TO IT
 // (lead review, second read): a `vrMove` between the request and the placement
@@ -248,15 +249,20 @@ player.frame(1);
 assert(player.vrMove({ forward: true, seconds: 2.0 }) === true,
        "...and another, after a pump");
 player.frame(3);
+var recentreMs = Math.max(1, Date.now() - tRecenter);
+// The same physics as the placement: this head wanders on a wall clock, so the
+// recentre is allowed the distance it can cover in the recentre's own gap —
+// measured here, not borrowed from the placement's (the lead's second read).
+var recentreTolerance = 3.0 * speed * recentreMs + 0.02;
 var back = player.state().vr.head;
 var backOff = Math.sqrt(Math.pow(back.x - cam0.position.x, 2) +
                         Math.pow(back.y - cam0.position.y, 2) +
                         Math.pow(back.z - cam0.position.z, 2));
 console.log("after the recentre the head is " + backOff.toFixed(4) + " m from the start pose");
-assert(backOff < tolerance,
+assert(backOff < recentreTolerance,
        "RECENTRE PUTS THE WEARER BACK WHERE VR BEGAN, and the two moves that arrived in " +
        "its gap changed nothing (" + backOff.toFixed(4) + " m, tolerance " +
-       tolerance.toFixed(4) + ")");
+       recentreTolerance.toFixed(4) + " over the recentre's " + recentreMs + " ms)");
 
 // ---- 4. vr.end() mid-play: VR stops, the scene keeps playing ------------
 
