@@ -231,6 +231,9 @@ int main()
     // reported cell. THE FRACTION IS PINNED HERE ON PURPOSE: it is a measured
     // number (ATOM-3 A2), and a suite that re-derived it from the engine could
     // not tell a re-measurement from a typo.
+    // (ATOM-3-FIX re-measured it on two further fixtures and left it exactly
+    // here — what changed is the CLAIM the constant carries, not its value;
+    // the comment beside it in OgreGi.cpp and FINDINGS.md §6 say why.)
     const float kLodFraction = 1.0f / 256.0f;
     for (size_t i = 0; i < st.cascades.size(); ++i) {
         const float budget = st.cascades[i].cell * kLodFraction;
