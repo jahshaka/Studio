@@ -92,27 +92,43 @@ var located = 0;
 while (located < 400 && player.state().vr.posesValid !== true) { player.frame(1); ++located; }
 assert(player.state().vr.posesValid === true,
        "the runtime located the wearer's head after " + located + " frames");
+var tBefore = Date.now();
 player.frame(1);                       // the frame that carries the placed rig
 var placed = player.state().vr.head;
+var gapMs = Math.max(1, Date.now() - tBefore);
 
-// THE WANDER OF THIS SIMULATED HEAD, over the SAME two frames the measurement
-// spans — it moves on its own, and that motion is the only honest tolerance
-// available here (the placement itself is asserted exactly, from both sides, in
-// `player.vr`).
+// THE WANDER OF THIS SIMULATED HEAD — AS A SPEED, NOT AS "two frames"
+// (lane VR-3b, 2026-09-17, measured). This head moves on a WALL CLOCK: it is a
+// simulated device driven by the runtime's own time, not by our frame count. The
+// placement is exact, and what separates `placed` from the pose it was computed
+// from is the TIME between two locates — so a tolerance expressed in frames is a
+// tolerance that shrinks exactly when the box gets slower. It failed that way
+// under the Vulkan validation layer (0.0851 m against a two-frame wander of
+// 0.0374) and would fail the same way on a loaded box or a cold shader cache.
+//
+// So: measure the head's SPEED here, over the same kind of frames, and allow it
+// the distance it can cover in the time the placement gap actually took. The
+// placement's exactness itself is asserted arithmetically, from both sides, in
+// `player.vr`; this case exists to catch a wearer standing somewhere ELSE.
+var tA = Date.now();
 var w0 = player.state().vr.head;
 player.frame(2);
 var w1 = player.state().vr.head;
+var wanderMs = Math.max(1, Date.now() - tA);
 var wander = Math.sqrt(Math.pow(w1.x - w0.x, 2) + Math.pow(w1.y - w0.y, 2) +
                        Math.pow(w1.z - w0.z, 2));
+var speed = wander / wanderMs;                       // metres per millisecond
+var tolerance = 3.0 * speed * gapMs + 0.02;          // the gap, with room for jitter
 var off = Math.sqrt(Math.pow(placed.x - cam0.position.x, 2) +
                     Math.pow(placed.y - cam0.position.y, 2) +
                     Math.pow(placed.z - cam0.position.z, 2));
 console.log("placed at " + JSON.stringify(placed) + " vs the camera " +
             JSON.stringify(cam0.position) + " — " + off.toFixed(4) +
-            " m, and this head wanders " + wander.toFixed(4) + " m in 2 frames");
-assert(off < 2.0 * wander + 0.01,
-       "THE WEARER STANDS WHERE THE RUN BEGAN: " + off.toFixed(4) + " m off, inside two " +
-       "frames of the head's own wander (" + wander.toFixed(4) + ")");
+            " m; this head moves " + (speed * 1000).toFixed(3) + " m/s and the placement gap " +
+            "was " + gapMs + " ms, so the tolerance is " + tolerance.toFixed(4) + " m");
+assert(off < tolerance,
+       "THE WEARER STANDS WHERE THE RUN BEGAN: " + off.toFixed(4) + " m off, inside what " +
+       "this head can wander in the placement's own gap (" + tolerance.toFixed(4) + " m)");
 // ...FACING ITS WAY. yaw 0 looks down -Z and the fixture's camera is level, so
 // the two headings are directly comparable.
 var camYaw = Math.atan2(-2 * (cam0.rotation.scalar * cam0.rotation.y +
@@ -237,9 +253,10 @@ var backOff = Math.sqrt(Math.pow(back.x - cam0.position.x, 2) +
                         Math.pow(back.y - cam0.position.y, 2) +
                         Math.pow(back.z - cam0.position.z, 2));
 console.log("after the recentre the head is " + backOff.toFixed(4) + " m from the start pose");
-assert(backOff < 2.0 * wander + 0.02,
+assert(backOff < tolerance,
        "RECENTRE PUTS THE WEARER BACK WHERE VR BEGAN, and the two moves that arrived in " +
-       "its gap changed nothing (" + backOff.toFixed(4) + " m)");
+       "its gap changed nothing (" + backOff.toFixed(4) + " m, tolerance " +
+       tolerance.toFixed(4) + ")");
 
 // ---- 4. vr.end() mid-play: VR stops, the scene keeps playing ------------
 

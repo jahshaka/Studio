@@ -779,6 +779,142 @@ int main() {
         CHECK_MSG(true, "the session ended after its screen quad was destroyed");
     }
 
+    // =======================================================================
+    // 4. THE WiVRn SHAPE: THE RUNTIME WANTS NO PICTURE AND NO VIEW IS ENABLED
+    //    (lane VR-3b, 2026-09-17 — the owner's failed smoke, as a suite).
+    //
+    // WHAT FAILED ON THE HEADSET, and what no test could reach before. WiVRn
+    // answers `shouldRender = 0` for its first frames; the pump switches the
+    // session's own View off for those (VR_SPEC F4), the Player's is off by
+    // design and the editor's is hidden behind the Player page — so the engine
+    // runs whole frames with NOTHING enabled, and everything that assumed "a
+    // frame draws something" was wrong at once: the host skipped the frame
+    // entirely (so the pump never called xrWaitFrame again and the runtime
+    // never synchronised — a black headset for ever), the mirror painted an eye
+    // target no pass had ever written (stale VRAM on the desktop), and a view's
+    // ray-reflection listener was torn down mid-frame, submitting to the queue
+    // from a destructor.
+    //
+    // Monado's simulated HMD asks for a picture immediately and cannot be told
+    // not to, so the pump is told instead: JAHSHAKA_VR_TEST_NO_RENDER_FRAMES
+    // replaces the runtime's answer for the first N frames of ONE session (the
+    // frames are really waited for, begun and ended). See vrTestNoRenderFrames.
+    // =======================================================================
+    {
+        setFixtureSky(scene, false);
+        // The desktop's own picture, settled, with no session anywhere near it.
+        Image quiet;
+        REQUIRE(stableReadback(engine.get(), desktop, quiet));
+
+        setenv("JAHSHAKA_VR_TEST_NO_RENDER_FRAMES", "30", 1);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::Left;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession: %s",
+                                     engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_NO_RENDER_FRAMES");
+        if (began) {
+            engine->setVrMirrorView(desktop);
+            // ...AND NOW NOTHING AT ALL IS ENABLED: the session's View is off
+            // for every no-picture frame, and this is the only other one.
+            desktop->setEnabled(false);
+
+            // THE FRAME LOOP IS THE SESSION'S HEARTBEAT. Frames the runtime
+            // ACCEPTED must climb while `rendered` stays at nothing — that is
+            // the pair the owner's log could not show: a session that stopped
+            // being pumped answers "no picture" for ever.
+            for (int i = 0; i < 20; ++i) { engine->advanceResources(); engine->renderOneFrame(); }
+            const VrStatus noPicture = engine->vrStatus();
+            CHECK_MSG(noPicture.frames >= 15ull && noPicture.rendered == 0ull,
+                      "THE LOOP RUNS WITH NOTHING ENABLED: %llu frames accepted, %llu drawn",
+                      noPicture.frames, noPicture.rendered);
+            CHECK_MSG(noPicture.active, "and the session is alive (state %d)", int(noPicture.state));
+
+            // THE MIRROR PAINTS NOTHING YET, PROVED ON THE PIXELS. The desktop
+            // view is switched off, so its target can only change if the mirror
+            // wrote it — and the only thing the mirror could write is an eye
+            // target no pass has ever touched.
+            Image duringNoPicture;
+            REQUIRE(desktop->readPixels(duringNoPicture));
+            int worstStale = 0;
+            const size_t staleDiff =
+                differingBytes(duringNoPicture.rgba, quiet.rgba, &worstStale);
+            CHECK_MSG(staleDiff == 0u,
+                      "THE MIRROR NEVER PAINTS AN EYE NOBODY HAS DRAWN: %zu of %zu bytes "
+                      "moved, worst %d/255", staleDiff, quiet.rgba.size(), worstStale);
+
+            // ...AND IT DOES PAINT once the runtime asks for a picture again.
+            for (int i = 0; i < 200 && engine->vrStatus().rendered == 0ull; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            CHECK_MSG(engine->vrStatus().rendered > 0ull,
+                      "the runtime asked for a picture again after the forced stretch (%llu drawn)",
+                      engine->vrStatus().rendered);
+            for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            Image mirroredNow;
+            REQUIRE(desktop->readPixels(mirroredNow));
+            CHECK_MSG(differingBytes(mirroredNow.rgba, quiet.rgba) > 0u,
+                      "AND THE MIRROR PAINTS THE EYE ONCE THERE IS ONE (the still-disabled "
+                      "desktop view's target changed)");
+
+            engine->setVrMirrorView(nullptr);
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+            desktop->setEnabled(true);
+        }
+    }
+
+    // =======================================================================
+    // 5. THE SESSION THE RUNTIME TAKES AWAY (lane VR-3b — the owner's second
+    //    WiVRn run: READY -> SYNCHRONIZED -> stopped inside a second).
+    //
+    // A stopped session used to read `Idle` with `active` still true, which is
+    // indistinguishable from a session that has not begun — so no host could
+    // act on it: the desktop view stayed switched off, the render driver kept
+    // the session's pacing (a zero interval with vsync off) against a pump that
+    // would never block again, and the log's only trace was 131,505 skipped
+    // ticks. A session the runtime stops is OVER: `active` says so and the
+    // engine ends it inside the frame, exactly as it ends a lost one.
+    //
+    // The hook asks the runtime to exit; the STOPPING event, the xrEndSession
+    // and everything after are the product path (see vrTestStopAfterFrames).
+    // =======================================================================
+    {
+        setFixtureSky(scene, false);
+        setenv("JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES", "10", 1);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession: %s",
+                                     engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES");
+        if (began) {
+            bool ended = false;
+            int frames = 0;
+            for (; frames < 400 && !ended; ++frames) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+                ended = !engine->vrStatus().active;
+            }
+            CHECK_MSG(ended,
+                      "A SESSION THE RUNTIME STOPPED IS OVER: vrStatus().active went false "
+                      "after %d frames", frames);
+            CHECK_MSG(engine->vrView() == nullptr,
+                      "...and the engine ENDED it inside the frame (no session View is left)");
+            CHECK_MSG(engine->vrState() == VrState::Idle,
+                      "...leaving the engine idle and able to start another (state %d)",
+                      int(engine->vrState()));
+            // The proof that it is really gone: a new session begins.
+            if (CHECK_MSG(engine->beginVrSession(scene, VrConfig()), "a new session begins after "
+                          "the runtime took the last one away: %s", engine->lastError().c_str())) {
+                pump(engine.get(), 5ull, 200u);
+                CHECK_MSG(engine->vrStatus().frames >= 5ull, "and it pumps (%llu frames)",
+                          engine->vrStatus().frames);
+                engine->endVrSession();
+            }
+            CHECK(!engine->vrStatus().active);
+        }
+    }
+
     // ---- THE DESKTOP'S PICTURE, AFTER -------------------------------------
     // THE SCENE BACK AS IT WAS. The `before` picture was taken with no sky (the
     // first session's control needs none) and the second session added one, so
