@@ -86,6 +86,24 @@ EngineConfig vrConfig() {
 /// pixel between eyes at 6 cm of separation and 320 px of width — the stereo
 /// difference has to be visible for the worldScale-one half of the control to
 /// mean anything, and near geometry is what makes it so.
+/// The fixture's sky, on or off. THE FIRST SESSION RUNS WITHOUT ONE, and that
+/// is not tidiness: the worldScale-0 control asserts the two halves BIT-EXACT,
+/// and a sky is the one thing in the picture whose two eyes are computed by two
+/// numerically different (and equally correct) routes — the first eye
+/// unprojects the pass camera's own inverse view-projection, the second mixes
+/// four corner rays — so at a camera height where the scattering integral is
+/// steep the last bits of those two routes are worth tens of thousands of
+/// bytes. The sky's own proofs live in the second session, against a mono
+/// render of each eye, which is the comparison that can carry them.
+void setFixtureSky(Scene *scene, bool on) {
+    SkyDesc sky;
+    sky.mode = on ? SkyMode::Atmosphere : SkyMode::NoSky;
+    sky.sun.enabled = on;
+    sky.sun.dir[0] = 0.35f; sky.sun.dir[1] = 0.45f; sky.sun.dir[2] = -0.82f;
+    sky.sun.angularDiameterDeg = 6.0f;
+    scene->setSky(sky);
+}
+
 void buildScene(Scene *scene) {
     addDirectionalLight(scene, Vec3{ -0.4f, -1.0f, -0.55f }, 3.14159f);
     // A NEAR SILHOUETTE AGAINST A FAR SURFACE, AND BOTH TALL. The parallax the
@@ -124,6 +142,37 @@ bool splitEyes(const Image &img, Half &left, Half &right) {
         std::memcpy(&right.px[size_t(y) * half * 4u], row + size_t(half) * 4u, size_t(half) * 4u);
     }
     return true;
+}
+
+/// How much of a picture really disagrees with another: the fraction of BYTES
+/// that differ by more than `tol`, and the mean absolute difference.
+///
+/// WHY NOT BIT-EXACT, measured rather than assumed (lane VR-2's F2 round): two
+/// renders of the same pose through two different chain INSTANCES differ by ~1
+/// in 255 everywhere (each chain's tonemap converged on its own) and by a lot
+/// on the pixels of a high-contrast EDGE, because the two paths compose the
+/// same pose through different arithmetic (a per-eye view matrix built from a
+/// head matrix times an eye offset, against one built from the eye's own pose)
+/// and the last bits move a boundary by one pixel. Neither is a defect and
+/// neither hides one: the failure this comparison exists to catch — the eyes
+/// drawn through the wrong projection convention — moves 44 % of the picture
+/// (measured: 133,940 of 307,200 bytes, worst 65/255).
+struct PictureDiff { double meanAbs = 0.0; double fractionOver = 0.0; int worst = 0; };
+PictureDiff pictureDiff(const std::vector<unsigned char> &a, const std::vector<unsigned char> &b,
+                        int tol = 8) {
+    PictureDiff d;
+    const size_t n = std::min(a.size(), b.size());
+    if (!n) return d;
+    size_t over = 0; double sum = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        const int delta = std::abs(int(a[i]) - int(b[i]));
+        sum += delta;
+        if (delta > tol) ++over;
+        if (delta > d.worst) d.worst = delta;
+    }
+    d.meanAbs = sum / double(n);
+    d.fractionOver = double(over) / double(n);
+    return d;
 }
 
 size_t differingBytes(const std::vector<unsigned char> &a, const std::vector<unsigned char> &b,
@@ -237,6 +286,7 @@ int main() {
     // =======================================================================
     Image zeroImg;
     {
+        setFixtureSky(scene, false);
         VrConfig cfg;
         cfg.mirror = VrMirrorMode::None;
         cfg.worldScale = 0.0f;
@@ -303,6 +353,23 @@ int main() {
         // collapses to the space's origin as well as the eyes, so what this
         // arm looks at is the floor of the room from the floor. What it is for
         // is the equality below, and the picture's content is beside the point.
+        {   // JAH_VR_DUMP=<dir>: the two halves, for a human to look at. Kept
+            // because every question this suite could not answer in words was
+            // answered by opening these two files side by side.
+            const char *dir = std::getenv("JAH_VR_DUMP");
+            if (dir) {
+                auto dump = [&](const Half &h, const char *name) {
+                    char path[512]; std::snprintf(path, sizeof(path), "%s/%s.ppm", dir, name);
+                    FILE *f = std::fopen(path, "wb");
+                    if (!f) return;
+                    std::fprintf(f, "P6\n%u %u\n255\n", h.w, h.h);
+                    for (size_t i = 0; i < size_t(h.w) * h.h; ++i)
+                        std::fwrite(&h.px[i * 4], 1, 3, f);
+                    std::fclose(f);
+                };
+                dump(l, "scale0-left"); dump(r, "scale0-right");
+            }
+        }
         int worst = 0;
         const size_t diff = differingBytes(l.px, r.px, &worst);
         CHECK_MSG(diff == 0u,
@@ -319,6 +386,13 @@ int main() {
     // 2. THE REAL SESSION: worldScale ONE — the same two halves must now DIFFER.
     // =======================================================================
     {
+        // A SKY AND A SUN DISC for this one, because they are drawn by SCREEN
+        // QUADS and a screen quad is the one thing instanced stereo does not
+        // carry on its own: the pass draws it twice, but only a vertex shader
+        // that writes `gl_ViewportIndex` sends the second copy to the second
+        // eye, and only one that knows that eye's own view points its rays
+        // where the eye looks. A fixture with no sky cannot see either failure.
+        setFixtureSky(scene, true);
         VrConfig cfg;
         cfg.mirror = VrMirrorMode::Left;
         cfg.worldScale = 1.0f;
@@ -373,6 +447,31 @@ int main() {
                       mirrorDiff, l.w, l.h, mirrored.width, mirrored.height);
         }
 
+        // ---- THE SKY IS IN BOTH EYES (F2) -------------------------------
+        // The sky, the atmosphere and the sun disc are SCREEN QUADS, and a
+        // screen quad under instanced stereo is drawn twice by the pass but
+        // sent twice to the SAME viewport unless its vertex shader says
+        // otherwise — so the right eye's sky rows are the clear colour, and the
+        // left eye's rays come from a camera that is not an eye. The top of
+        // each eye is sky by construction in this fixture (the pillar and the
+        // wall do not reach it), so the test is that both tops are lit and that
+        // they agree with a mono render of that eye.
+        const auto topRowMean = [](const Half &h) {
+            double sum = 0.0; size_t n = 0;
+            for (unsigned y = 0; y < h.h / 8u; ++y)
+                for (unsigned x = 0; x < h.w; ++x) {
+                    const size_t i = (size_t(y) * h.w + x) * 4u;
+                    sum += h.px[i] + h.px[i + 1] + h.px[i + 2]; n += 3;
+                }
+            return n ? sum / double(n) : 0.0;
+        };
+        const double skyL = topRowMean(l), skyR = topRowMean(r);
+        CHECK_MSG(skyL > 8.0 && skyR > 8.0,
+                  "BOTH EYES HAVE A SKY: the top eighth reads %.1f/255 left and %.1f/255 right",
+                  skyL, skyR);
+        CHECK_MSG(std::fabs(skyL - skyR) < 0.5 * std::max(skyL, skyR),
+                  "and they are the same sky (%.1f vs %.1f)", skyL, skyR);
+
         // ---- THE REVERSE-Z DETECTOR (VR_SPEC §6) ------------------------
         // The left eye, rendered MONO through Camera::setCustomProjectionMatrix
         // at that eye's exact pose and projection, must be the left half of the
@@ -389,8 +488,7 @@ int main() {
             CHECK_MSG(mono.width == l.w && mono.height == l.h,
                       "the control is one eye's size (%ux%u vs %ux%u)", mono.width, mono.height,
                       l.w, l.h);
-            int mworst = 0;
-            const size_t monoDiff = differingBytes(mono.rgba, l.px, &mworst);
+            const PictureDiff md = pictureDiff(mono.rgba, l.px);
             // <= 1/255, AND THE MARGIN IS MEASURED, NOT ASSUMED. The two
             // pictures come out of two chain INSTANCES: the session's tonemap
             // reduces its own exposure over frames, the control's multiplies by
@@ -401,11 +499,39 @@ int main() {
             // this assertion exists for) moves 133,940 of 307,200 bytes, worst
             // 65/255, and collapses the parallax below from 26,473 bytes to 288
             // — four orders of magnitude of margin over the tolerance.
-            CHECK_MSG(mworst <= 1,
-                      "THE LEFT EYE EQUALS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION: "
-                      "%zu of %zu bytes differ, worst %d/255 (the unconverted-projection "
-                      "defect reads 133,940 and 65/255 here)",
-                      monoDiff, l.px.size(), mworst);
+            CHECK_MSG(md.meanAbs < 1.0 && md.fractionOver < 0.02,
+                      "THE LEFT EYE IS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION: mean "
+                      "%.3f/255, %.3f%% of bytes over 8 (the bar is 2%%), worst %d (the unconverted-projection "
+                      "defect reads mean 11.5 and 44%% here)",
+                      md.meanAbs, 100.0 * md.fractionOver, md.worst);
+        }
+        // THE RIGHT EYE TOO, and it is not a symmetry for its own sake: the
+        // right half is the one a viewport-index failure leaves empty and the
+        // one a per-eye-ray failure paints with the left eye's sky.
+        Image monoR;
+        if (CHECK_MSG(engine->vrEyeScreenshot(1u, monoR), "vrEyeScreenshot(right): %s",
+                      engine->lastError().c_str())) {
+            if (const char *dir = std::getenv("JAH_VR_DUMP")) {
+                auto dumpImg = [&](const std::vector<unsigned char> &px, unsigned w, unsigned h,
+                                   const char *name) {
+                    char path[512]; std::snprintf(path, sizeof(path), "%s/%s.ppm", dir, name);
+                    FILE *f = std::fopen(path, "wb"); if (!f) return;
+                    std::fprintf(f, "P6\n%u %u\n255\n", w, h);
+                    for (size_t i = 0; i < size_t(w) * h; ++i) std::fwrite(&px[i * 4], 1, 3, f);
+                    std::fclose(f);
+                };
+                dumpImg(r.px, r.w, r.h, "right-eye");
+                dumpImg(monoR.rgba, monoR.width, monoR.height, "right-control");
+                dumpImg(l.px, l.w, l.h, "left-eye");
+                dumpImg(mono.rgba, mono.width, mono.height, "left-control");
+            }
+            const PictureDiff rd = pictureDiff(monoR.rgba, r.px);
+            CHECK_MSG(rd.meanAbs < 1.0 && rd.fractionOver < 0.02,
+                      "THE RIGHT EYE IS A MONO RENDER AT THAT EYE'S POSE AND PROJECTION: mean "
+                      "%.3f/255, %.3f%% of bytes over 8, worst %d — the half that a "
+                      "viewport-index failure leaves empty and a per-eye-ray failure paints "
+                      "with the LEFT eye's sky",
+                      rd.meanAbs, 100.0 * rd.fractionOver, rd.worst);
         }
 
         engine->setVrMirrorView(nullptr);
@@ -414,6 +540,12 @@ int main() {
     }
 
     // ---- THE DESKTOP'S PICTURE, AFTER -------------------------------------
+    // THE SCENE BACK AS IT WAS. The `before` picture was taken with no sky (the
+    // first session's control needs none) and the second session added one, so
+    // a desktop A/B taken now would be comparing two different WORLDS — which
+    // is a fixture bug, not a VR one, and it read 230,400 bytes when this line
+    // was missing.
+    setFixtureSky(scene, false);
     CHECK_MSG(desktop->postFx() == desktopFxBefore,
               "the desktop view's post chain is exactly what it was before the session");
     Image after;
