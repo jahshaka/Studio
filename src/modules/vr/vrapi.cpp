@@ -174,7 +174,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "`aim` and `grip` are {x, y, z, rotation:{x,y,z,w}} (Euler degrees {x,y,z} are "
           "accepted for the rotation, as everywhere else); `select` and `grab` are 0..1 and "
           "their presses are derived at 0.5 unless given; `stick` is {x, y} in -1..1. "
-          "`focused` (true by default) is the SESSION's input focus, not the hand's: the "
+          "`focused` (true by default on every call that writes a hand) is the SESSION's "
+          "input focus, not the hand's: the "
           "runtime takes focus away for the whole application — for its own dashboard, or when "
           "the headset comes off — and every control then reads its zero, so a gesture in "
           "flight is CANCELLED on a false rather than committed. It is read back as "
@@ -627,8 +628,16 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     // means "the wearer was there". Injecting it FALSE is how the focus-loss
     // rule — a gesture in flight is cancelled, never committed — is driven with
     // no runtime to take the focus away.
-    if (state.contains(QStringLiteral("focused")))
-        e->vrInjectFocus(state.value(QStringLiteral("focused")).toBool());
+    // ...AND IT IS WRITTEN BY EVERY INJECTION THAT CARRIES A STATE, defaulting
+    // to true, so that "a sample that says nothing about focus means the wearer
+    // was there" holds for the SESSION bit exactly as it held for the old
+    // per-hand one. A bit that only ever moved when the key was present would
+    // let one focus-loss test leave every later gesture in the process
+    // unfocused — the stale-injection class this whole round is about. A
+    // WITHDRAWAL (an empty state) says nothing about focus and leaves it alone;
+    // with no hand injected at all the status reports the session's own focus.
+    if (!state.isEmpty())
+        e->vrInjectFocus(state.value(QStringLiteral("focused"), true).toBool());
 
     if (!e->vrInjectInput(index, s))
         return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(e->lastError())));

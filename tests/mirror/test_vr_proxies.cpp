@@ -46,8 +46,10 @@
 //      profile gets the hand-made wand, because a wand is the honest drawing
 //      for a controller whose shape we do not know.
 #include <QGuiApplication>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/materials/defaultmaterial.h"
@@ -345,6 +347,37 @@ int main(int argc, char **argv)
         CHECK(modelMoved > 1000u,
               "H: A TOUCH PROFILE DRAWS THE TOUCH MODEL — the runtime's own answer decides what "
               "the wearer's hand looks like");
+
+        // ...AND IT IS LIT (the owner's headset smoke, 2026-09-17: with an
+        // UNLIT flat grey the models read as PURE WHITE SILHOUETTES in the
+        // eyes — the shape moved correctly in 3D and had no geometry in it,
+        // because one constant colour through the eye's exposure is one output
+        // value over the whole outline). A controller is a solid object in the
+        // room and has to shade like one; the assertion is that its own pixels
+        // carry MANY values rather than one.
+        {
+            // The model's own pixels: where the Touch picture differs from the
+            // wands' — and this fixture renders at 1x (offscreen views stay 1x
+            // so pixel suites keep exact colours), so an unlit flat surface
+            // would give exactly ONE value with no antialiased edge to hide in.
+            std::vector<unsigned> shades;
+            const std::vector<unsigned char> &a = img.rgba;
+            for (size_t i = 0; i + 3 < a.size() && i + 3 < wands.size(); i += 4) {
+                if (a[i] == wands[i] && a[i + 1] == wands[i + 1] && a[i + 2] == wands[i + 2])
+                    continue;
+                const unsigned v = (unsigned(a[i]) << 16) | (unsigned(a[i + 1]) << 8) |
+                                   unsigned(a[i + 2]);
+                shades.push_back(v);
+            }
+            std::sort(shades.begin(), shades.end());
+            shades.erase(std::unique(shades.begin(), shades.end()), shades.end());
+            std::printf("   the Touch models' own pixels carry %zu distinct colours\n",
+                        shades.size());
+            CHECK(shades.size() > 8u,
+                  "H: THE CONTROLLER IS LIT — its own pixels carry many shades under the "
+                  "fixture's sun, not the one flat value an unlit helper gave (a white cut-out "
+                  "in the headset: the owner's smoke)");
+        }
 
         // ...AND THE WAND IS THE ANSWER FOR EVERY OTHER PROFILE, including
         // none at all: we do not know what that controller looks like.
