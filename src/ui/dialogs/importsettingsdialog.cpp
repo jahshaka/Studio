@@ -150,6 +150,15 @@ ImportSettingsDialog::Origin ImportSettingsDialog::originOf(const iris::ImportSe
 {
     const double t[3] = { settings.translate[0], settings.translate[1], settings.translate[2] };
     if (t[0] == 0.0 && t[1] == 0.0 && t[2] == 0.0) return Origin::Keep;
+    // NO BOX, NO HELPER (the lead, 2026-09-17, from a defect-verifier's read of
+    // the `import_dialog` "flake"): before the pre-read has answered, every
+    // helper's translation is (0,0,0), so any record within the tolerance of
+    // zero on all three axes read as "Centre" — and setPreRead then APPLIED
+    // that helper for real, overwriting a translation the user never asked to
+    // change. A one-percent coin on the suite's Date.now() value, a silent
+    // edit of a user's record in the product. With no box the only honest
+    // answers are Keep (exact zero, above) and Custom.
+    if (!box.valid) return Origin::Custom;
     // A helper's answer is a computed double; a record that came back from
     // JSON carries the same double. Compare with a tolerance scaled to the
     // model, so a millimetre-sized asset and a kilometre-sized one are both

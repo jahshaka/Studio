@@ -93,6 +93,21 @@ assert(after.settings.units === "m",
 // clip choice on the way to changing one number.
 assert(near(after.settings.translate[2], UNIQ[2], 1e-12),
        "…and the translation the import carried is still there, untouched by a one-key edit");
+// THE NEAR-ZERO TRANSLATION SURVIVES THE DIALOG (the lead, 2026-09-17): the
+// assertion above used to red about one run in a hundred — whenever UNIQ[2]
+// fell within 1e-6 of zero, the origin classifier read the record as the
+// "Centre" helper BEFORE the pre-read had a box, and the pre-read's arrival
+// applied that helper for real (-0.5 x the unit scale). A deterministic
+// value inside that window pins the fix: fails-before at -0.005 / -0.5.
+var tiny = 5e-7;
+assert(assets.reimport(guid, { translate: [0, 0, tiny] }).guid === guid, "a record with a near-zero translation");
+app.dialog("importSettings", { guid: guid });
+app.dialog("importSettings", { settings: { units: "m" }, accept: true });
+var afterTiny = assets.importSettings(guid);
+assert(near(afterTiny.settings.translate[2], tiny, 1e-12),
+       "a translation within 1e-6 of zero is NOT read as the Centre helper before the box exists: "
+       + afterTiny.settings.translate[2] + " vs " + tiny);
+assert(assets.reimport(guid, { translate: UNIQ }).guid === guid, "the run's own translation put back");
 assert(after.settings.scale === 1 && after.settings.axes.up === "+Y"
        && after.settings.clips === true && after.settings.skeleton === true,
        "…as is every other key the edit did not name");
