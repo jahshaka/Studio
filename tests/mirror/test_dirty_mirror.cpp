@@ -526,7 +526,6 @@ int main(int argc, char **argv)
     });
     differential(r, "camera.setAnamorphicSqueeze", [&] { r.camera->setAnamorphicSqueeze(2.0f); });
     differential(r, "camera.setOrthagonalZoom",   [&] { r.camera->setOrthagonalZoom(7.5f); });
-    differential(r, "camera.setVrViewScale",      [&] { r.camera->setVrViewScale(1.5f); });
     differential(r, "camera.setFramingAspect",    [&] { r.camera->setFramingAspect(16.0f / 9.0f); });
     differential(r, "camera.setPostOverride",     [&] {
         r.camera->setPostOverride(QStringLiteral("bloom"), true);
@@ -554,7 +553,6 @@ int main(int argc, char **argv)
         r.camera->setAspectRatio(r.camera->aspectRatio);
         r.camera->setOrthagonalZoom(r.camera->orthoSize);
         r.camera->setProjection(r.camera->getProjection());
-        r.camera->setVrViewScale(r.camera->getVrViewScale());
         r.camera->setSensorFit(r.camera->sensorFit);
         r.emitter->setSpeed(r.emitter->getSpeed());
         r.emitter->setPPS(r.emitter->getPPS());

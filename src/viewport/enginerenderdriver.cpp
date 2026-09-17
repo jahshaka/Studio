@@ -63,6 +63,9 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         QElapsedTimer frame;
         frame.start();
         ++mStats.ticks;
+        // THE SESSION'S PACING, RECONCILED (F5). One branch when no session has
+        // ever run; see syncVrPacing.
+        if (mVrSession) syncVrPacing();
         // THE RENDER-LOOP MONITOR (RENDER_LOOP_MONITOR_SPEC §4.2), and it costs
         // one not-taken branch when no capture is running. The tick's TOP is
         // where the gap since the previous tick is closed and split into idle
@@ -198,6 +201,52 @@ void EngineRenderDriver::setPacingMode(framepacing::Mode m)
     // one swapchain rebuild per on-screen window, which is why this only ever
     // happens on a deliberate change (Engine::setVsync documents the price).
     if (mEngine) mEngine->setVsync(framepacing::vsyncFor(m));
+    applyPacing();
+}
+
+void EngineRenderDriver::syncVrPacing()
+{
+    if (!mEngine) return;
+    const jahshaka::engine::VrStatus st = mEngine->vrStatus();
+    if (!st.active) {
+        // THE ENGINE ENDED IT WITHOUT US. A runtime that went away or a device
+        // that was lost ends the session inside the frame (OgreEngine::
+        // renderOneFrame), and nothing tells the host; left alone this loop
+        // would keep a zero interval and vsync off against a pump that no
+        // longer exists. `setVrSessionActive(false)` is the SAME call the host
+        // makes on `vr.end()`, so the restore happens in exactly one place.
+        setVrSessionActive(false);
+        return;
+    }
+    // A LIVE SESSION ONLY BLOCKS BETWEEN READY AND FOCUSED. Outside that —
+    // before the runtime is ready, while it is stopping, while it is lost —
+    // xrWaitFrame returns at once and a zero interval becomes a spin at
+    // whatever the CPU can manage. The user's own pacing mode answers for
+    // those frames; vsync is deliberately left off for the whole session
+    // (flipping it is a swapchain rebuild per transition, which is worse than
+    // the transition).
+    const bool pumping = st.state == jahshaka::engine::VrState::Ready ||
+                         st.state == jahshaka::engine::VrState::Synchronized ||
+                         st.state == jahshaka::engine::VrState::Visible ||
+                         st.state == jahshaka::engine::VrState::Focused;
+    if (pumping == mVrPumping) return;
+    mVrPumping = pumping;
+    applyPacing();
+}
+
+void EngineRenderDriver::setVrSessionActive(bool on)
+{
+    if (mVrSession == on) return;
+    mVrSession = on;
+    // A session begins in Idle and reaches Ready a frame or two later; assuming
+    // it pumps from the first tick is what lets the very first xrWaitFrame be
+    // the clock instead of racing a timer.
+    mVrPumping = on;
+    // The same price the Unlimited mode pays, for the same reason and with the
+    // same one-swapchain-rebuild cost (Engine::setVsync): with the display
+    // still gating the acquire, a zero interval buys nothing but a busier CPU.
+    // On the way out the user's own pacing mode decides again.
+    if (mEngine) mEngine->setVsync(on ? false : framepacing::vsyncFor(mMode));
     applyPacing();
 }
 

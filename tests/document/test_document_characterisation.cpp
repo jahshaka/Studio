@@ -394,14 +394,16 @@ int main(int argc, char **argv)
 
         // CameraNode
         auto refCam = iris::CameraNode::create();
+        // vrViewScale is GONE (VR_SPEC §8's CRUD, lane VR-2): it was never
+        // serialized and never read outside its own class, and the VR world
+        // scale is a session parameter now (VrConfig::worldScale).
         advertises(refCam, { "aspectRatio", "angle", "nearClip", "farClip", "orthoSize",
-                             "projMode", "vrViewScale" }, "CameraNode");
+                             "projMode" }, "CameraNode");
         roundTrip(refCam, "aspectRatio", 1.5f, "CameraNode");
         roundTrip(refCam, "angle", 60.0f, "CameraNode");
         roundTrip(refCam, "nearClip", 0.25f, "CameraNode");
         roundTrip(refCam, "farClip", 250.0f, "CameraNode");
         roundTrip(refCam, "orthoSize", 4.0f, "CameraNode");
-        roundTrip(refCam, "vrViewScale", 3.0f, "CameraNode");
         roundTrip(refCam, "projMode", int(iris::CameraProjection::Orthogonal), "CameraNode");
         CHECK(refCam->isPerspective == false,
               "CameraNode: setting projMode keeps isPerspective in lock-step");

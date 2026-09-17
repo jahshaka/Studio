@@ -260,7 +260,6 @@ int main(int argc, char **argv)
         cam->aspectRatio = 2.39f;
         cam->setOrthagonalZoom(7.5f);
         cam->setProjection(iris::CameraProjection::Orthogonal);
-        cam->vrViewScale = 3.5f;
         cam->constrainAspect = true;
         cam->dofEnabled = true;
         cam->focusMode = iris::CameraFocusMode::Track;
@@ -288,8 +287,6 @@ int main(int argc, char **argv)
               "duplicate: the projection PAIR (projMode and isPerspective in lock-step — the "
               "old createDuplicate copied neither, so an orthographic camera duplicated "
               "perspective)");
-        CHECK(near(dup->vrViewScale, 3.5f),
-              "duplicate: vrViewScale (silently dropped before this change)");
         CHECK(dup->constrainAspect && dup->dofEnabled, "duplicate: constrainAspect + dofEnabled");
         CHECK(dup->focusMode == iris::CameraFocusMode::Track && near(dup->focusDistance, 6.25f) &&
                   dup->focusTarget == QLatin1String("target-guid") && near(dup->fStop, 1.8f),

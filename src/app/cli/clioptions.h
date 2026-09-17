@@ -96,6 +96,13 @@ struct CliOptions
     /// saved with the scene), and this flag overrides it downward for one run
     /// without touching the document.
     bool noRayQuery = false;
+    /// `--vr`: ask the OpenXR runtime for a session-capable boot
+    /// (SPECS/VR_SPEC.md §4.1). OFF by default and per process, because the
+    /// route has the RUNTIME create the Vulkan instance and device the whole
+    /// engine runs on — a plain launch must stay bit-identical to an engine
+    /// that has never heard of VR. JAHSHAKA_VR=1 does the same for a runner
+    /// that cannot pass an argument.
+    bool vr = false;
 
     static CliOptions parse(int argc, char *argv[]);
 

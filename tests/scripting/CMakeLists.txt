@@ -329,6 +329,12 @@ add_script_e2e(sun_light e2e_sun_light.js)
 # shadows are off standing over something it lights straight through. Plus the
 # case that is deliberately NOT an issue: a scene with no directional light.
 add_script_e2e(scene_issues e2e_scene_issues.js)
+# vr.* WITH NO RUNTIME (SPECS/VR_SPEC.md §6) — the cheap case, and the one that
+# runs on every box in every gate: this app is launched WITHOUT --vr, so no
+# OpenXR loader is opened at all, and every verb must still answer with a
+# refusal in words instead of throwing, hanging or crashing. The session half
+# lives in tests/vr (vr.verbs_session), where the simulated runtime is.
+add_script_e2e(vr_verbs e2e_vr_verbs.js)
 add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 

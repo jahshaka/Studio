@@ -77,7 +77,36 @@ public:
     void setRefreshHz(double hz);
     double refreshHz() const { return mRefreshHz; }
     /// What the two above currently imply, whether or not the loop is running.
-    int pacedIntervalMs() const { return framepacing::intervalMsFor(mMode, mRefreshHz); }
+    int pacedIntervalMs() const {
+        // A VR SESSION IS THE CLOCK (SPECS/VR_SPEC.md §4.3). While one runs,
+        // `Engine::renderOneFrame` blocks at the top in `xrWaitFrame` until the
+        // runtime wants the next picture, so a timer of our own can only make
+        // the loop LATE — "two pacers, the slower wins", and the slower one
+        // must be the headset. Zero interval, and vsync off below so the
+        // mirror window's own swapchain cannot gate the loop either.
+        if (mVrSession && mVrPumping) return 0;
+        return framepacing::intervalMsFor(mMode, mRefreshHz);
+    }
+
+    // ---- VR (SPECS/VR_SPEC.md §4.3) ---------------------------------------
+    /// Called once when a VR session begins and once when it ends. It does NOT
+    /// touch the pacing MODE — that is the user's setting and must survive the
+    /// session — it overrides the interval and vsync for the duration and puts
+    /// both back afterwards.
+    void setVrSessionActive(bool on);
+    bool vrSessionActive() const { return mVrSession; }
+
+private:
+    /// Reconciles this loop with the engine's session, once per tick (F5).
+    /// TWO things can make the driver's pacing a lie, and neither of them goes
+    /// through the host: the engine ENDS a session by itself when the runtime
+    /// or the device goes away, and a live session STOPS BLOCKING whenever it
+    /// is not between Ready and Focused (the headset is off, the runtime is
+    /// still coming up, the session is stopping). Either way a zero interval
+    /// with the pump not blocking is a spin, so the tick asks and re-times.
+    void syncVrPacing();
+
+public:
 
     Stats stats() const { return mStats; }
 
@@ -146,6 +175,12 @@ private:
     double  mRefreshHz = 0.0;
     /// What the script run in flight (if any) is doing to this loop.
     ScriptRun mScriptRun = ScriptRun::None;
+    /// True between Engine::beginVrSession and endVrSession (setVrSessionActive).
+    bool mVrSession = false;
+    /// True while that session is actually PUMPING — i.e. while renderOneFrame
+    /// blocks in xrWaitFrame and is therefore the clock. False for the states
+    /// either side of it, where this loop must pace itself again.
+    bool mVrPumping = false;
     /// Since the END of the last rendered tick, for the Live pacing above.
     /// From the END, not the start: a 33 ms Debug frame measured from its start
     /// is already past a 16.7 ms period the instant it finishes, and the
