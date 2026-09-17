@@ -128,6 +128,13 @@ void VrInteraction::end()
     mInstalled = false;
     mHover = Hover();
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = VrHandState();
+    // AN INJECTION DIES WITH THE SESSION (the lead, from the Fable read): the
+    // test store armed by vr.inputInject stayed armed for the life of the
+    // process, so one console injection in a real session took the controllers
+    // away for good and the driver-paced step never resumed. The engine-side
+    // refusal (a bound profile reports -> refuse) lands with the engine half;
+    // until then, and always, a session end disarms.
+    mInjected.clear();
 }
 
 iris::ScenePtr VrInteraction::scene() const
@@ -615,10 +622,17 @@ void VrInteraction::step(float seconds)
     const VrHandState &o = hands[offHand()];
     if (o.valid) {
         fly(0.0f, o.stickY, dt, false);
+        // STICK RIGHT TURNS THE WEARER RIGHT (the lead, from the Fable read at
+        // merge): vrgrab's turn functions are "positive = the stick's own sign",
+        // and the tree's yaw is the right-handed rotation about +Y (vrorigin.h),
+        // under which +30 degrees carries a wearer facing -Z toward -X, i.e. to
+        // their LEFT. The sign lives HERE, at the one call site, so the pure
+        // functions stay what they say and every VR title's convention holds:
+        // a flick right turns the view clockwise from above.
         if (mOptions.turn == Turn::Smooth) {
-            turn(vrgrab::smoothTurnDegrees(o.stickX, dt, mOptions.smoothTurnDegreesPerSecond));
+            turn(-vrgrab::smoothTurnDegrees(o.stickX, dt, mOptions.smoothTurnDegreesPerSecond));
         } else {
-            const float deg = vrgrab::snapTurnDegrees(o.stickX, mTurnArmed, mOptions.snapTurnDegrees);
+            const float deg = -vrgrab::snapTurnDegrees(o.stickX, mTurnArmed, mOptions.snapTurnDegrees);
             if (std::fabs(deg) > 1e-4f && turn(deg)) mTurnArmed = false;
             if (vrgrab::snapTurnRearmed(o.stickX)) mTurnArmed = true;
         }

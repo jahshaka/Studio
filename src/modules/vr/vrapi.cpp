@@ -743,7 +743,10 @@ QVariantMap VrApi::inputState()
     out[QStringLiteral("source")] = interaction.sourceName();
     Engine *e = engine();
     const VrStatus st = e ? e->vrStatus() : VrStatus();
-    out[QStringLiteral("focused")] = st.state == VrState::Focused;
+    // The focus the interaction actually consulted (the injection's when armed,
+    // the session's otherwise) - the lead, from the Fable read at merge.
+    out[QStringLiteral("focused")] = interaction.activeSource() ? interaction.activeSource()->focused()
+                                                          : (st.state == VrState::Focused);
     out[QStringLiteral("session")] = st.active;
     return out;
 }

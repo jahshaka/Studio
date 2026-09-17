@@ -253,6 +253,9 @@ public:
     /// The source is NOT owned. Null falls back to the injection store, which
     /// is what every headless gate uses.
     void setSource(VrInputSource *source) { mSource = source; }
+    /// The source the interaction consults this frame: the injection while it
+    /// is armed, else the engine's report (null before install).
+    const VrInputSource *activeSource() const { return mInjected.armed() ? &mInjected : mSource; }
     VrInjectedInput &injection() { return mInjected; }
     const VrInjectedInput &injection() const { return mInjected; }
 

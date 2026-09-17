@@ -264,14 +264,14 @@ assert(awayFrom > 10.0, "the wearer is well away from the start (" + awayFrom.to
 var tRecenter = Date.now();                       // the recentre's OWN gap (lead, second read)
 assert(player.vrRecenter() === true, "player.vrRecenter() is accepted");
 // A MOVE ARRIVING IN THE GAP IS ANSWERED BY THE TELEPORT, NOT ADDED TO IT
-// (lead review, second read): a `vrMove` between the request and the placement
+// (lead review, second read): a `vr.move` between the request and the placement
 // would move the rig under a head already located for the old one — the
 // mismatched pair the placement's guard exists to avoid, rebuilt from outside
 // the frame loop where no guard can see it. The verb answers true (the caller
 // asked for a move and is getting a teleport a moment later) and the landing
 // must be unaffected.
 assert(vr.move({ right: true, seconds: 2.0 }) === true,
-       "a vrMove in the recentre's gap is accepted");
+       "a vr.move in the recentre's gap is accepted");
 player.frame(1);
 assert(vr.move({ forward: true, seconds: 2.0 }) === true,
        "...and another, after a pump");

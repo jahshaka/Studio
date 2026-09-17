@@ -273,7 +273,7 @@ bool PlayerVr::move(const flystep::Keys &keys, float seconds)
     // A PLACEMENT IN FLIGHT WINS, and it wins here as well as in step(): a
     // wearer being put back where VR began is not also walking, and a rig moved
     // between the request and the placement is the mismatched pair the
-    // placement's whole guard exists to avoid — which a `vrMove` arriving in
+    // placement's whole guard exists to avoid — which a `vr.move` arriving in
     // that gap would rebuild, from outside the frame loop, where no guard can
     // see it. Not a refusal: the move is ANSWERED, and what answers it is the
     // teleport the caller asked for a moment earlier.

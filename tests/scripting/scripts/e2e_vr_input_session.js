@@ -152,8 +152,12 @@ leftStick(1, 0);                              // one flick right
 var afterTurn = vr.interactionMode();
 var rigAfter = showRig("after one flick right");
 assert(afterTurn.turns === turnsBefore + 1, "the flick was answered: one turn");
-assert(near(rigAfter.yaw, rigBefore.yaw + 30.0, 1e-3),
-       "the room turned by exactly 30 degrees (" + rigBefore.yaw.toFixed(2) + " -> "
+// A flick RIGHT turns the wearer RIGHT = a NEGATIVE step in the tree's
+// right-handed yaw about +Y (yaw 0 looks down -Z; +yaw carries -Z toward -X,
+// the wearer's left) — the lead's fix at merge; the suite asserted the number
+// before and could not see the direction.
+assert(near(rigAfter.yaw, rigBefore.yaw - 30.0, 1e-3),
+       "the room turned by exactly 30 degrees, clockwise from above (" + rigBefore.yaw.toFixed(2) + " -> "
        + rigAfter.yaw.toFixed(2) + ")");
 // The head is re-composed by the engine INSIDE the next frame, so ask for one.
 editor.frame(2);
@@ -165,7 +169,7 @@ assert(dist2(headAfter, headBefore) < posBudget,
        "AND THE WEARER STAYED WHERE THEY WERE STANDING (" + dist2(headAfter, headBefore).toFixed(5)
        + " m, against a budget of " + posBudget.toFixed(5) + " m measured off this runtime's "
        + "own drift) — the turn moved the room around them, it did not carry them");
-assert(near(headAfter.yaw, headBefore.yaw + 30.0, yawBudget),
+assert(near(headAfter.yaw, headBefore.yaw - 30.0, yawBudget),
        "...while what they are facing turned by the same 30 degrees ("
        + headBefore.yaw.toFixed(2) + " -> " + headAfter.yaw.toFixed(2) + ", budget "
        + yawBudget.toFixed(2) + ")");
@@ -180,8 +184,8 @@ leftStick(0, 0);                              // re-arm
 leftStick(-1, 0);
 var leftTurn = vr.interactionMode();
 assert(leftTurn.turns === heldTurns + 1, "released and flicked the other way, it turns again");
-assert(near(leftTurn.rig.yaw, rigAfter.yaw - 30.0, 1e-3),
-       "...by -30 degrees (" + leftTurn.rig.yaw.toFixed(2) + ")");
+assert(near(leftTurn.rig.yaw, rigAfter.yaw + 30.0, 1e-3),
+       "...counter-clockwise, +30 in the tree's yaw (" + leftTurn.rig.yaw.toFixed(2) + ")");
 
 // ---- 3. SMOOTH TURN IS A SESSION OPTION ---------------------------------
 assert(vr.locomotion({ turn: "smooth" }).turn === "smooth", "smooth turn can be chosen");
@@ -190,8 +194,8 @@ for (var sm = 0; sm < 10; ++sm) leftStick(1, 0);
 var smoothAfter = vr.interactionMode().rig.yaw;
 console.log("      ten smooth frames: yaw " + smoothBefore.toFixed(3) + " -> "
             + smoothAfter.toFixed(3));
-assert(smoothAfter > smoothBefore + 5.0 && smoothAfter < smoothBefore + 15.0,
-       "ten frames of smooth turn is about 10 degrees (90 deg/s at 1/90 s a frame), and it "
+assert(smoothAfter < smoothBefore - 5.0 && smoothAfter > smoothBefore - 15.0,
+       "ten frames of smooth turn RIGHT is about 10 degrees clockwise (90 deg/s at 1/90 s a frame), and it "
        + "does NOT need to be released between frames");
 vr.locomotion({ turn: "snap" });
 

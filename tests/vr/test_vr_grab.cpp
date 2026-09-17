@@ -267,7 +267,7 @@ int main()
     // ---- 11. SNAP AND SMOOTH TURN, AND THE RE-ARM ------------------------
     {
         CHECK(near(vrgrab::snapTurnDegrees(1.0f, true), 30.0f),
-              "a full stick right, armed, asks for +30 degrees");
+              "a full stick right, armed, asks for +30 in the stick's own sign (the caller negates it into the tree's right-handed yaw, so the wearer turns RIGHT)");
         CHECK(near(vrgrab::snapTurnDegrees(-0.8f, true), -30.0f),
               "...and left for -30, whatever the deflection past the dead zone");
         CHECK(near(vrgrab::snapTurnDegrees(1.0f, false), 0.0f),

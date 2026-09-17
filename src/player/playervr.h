@@ -111,7 +111,7 @@ public:
     /// the RESOLVED render camera for this frame (see begin()).
     void step(float dt, const iris::CameraNodePtr &camera);
 
-    /// LOCOMOTION AS A VERB (player.vrMove). The same call the held fly keys
+    /// LOCOMOTION AS A VERB (`vr.move`, dispatched to this host; `player.vrMove` was deleted by VR-INPUT-1S). The same call the held fly keys
     /// make, for `seconds` at the Player's fly speed — which is what lets a
     /// script, an MCP session and the suite walk the wearer through a world
     /// with no keyboard in the room. False when no session is running.
