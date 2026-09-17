@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QUndoStack>
 
 #include "commands/transformscenenodecommand.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/editgate.h"
@@ -56,55 +57,41 @@ inline constexpr float kTickAmplitude = 0.4f;
 }   // namespace
 
 // ---------------------------------------------------------------------------
-// The two sources
-
-VrHandState VrInjectedInput::hand(unsigned hand) const
-{
-    if (hand >= VrHandCount) return VrHandState();
-    return mHands[hand];
-}
-
-void VrInjectedInput::set(unsigned hand, const VrHandState &state)
-{
-    if (hand >= VrHandCount) return;
-    mHands[hand] = state;
-    // SAID BY THE SOURCE, NOT BY THE CALLER: whatever a script passes, a state
-    // that arrived here did not come from a runtime, and the flag is what a
-    // suite asserts to prove a smoke on a headset is not reading an injection.
-    mHands[hand].fromInjection = true;
-    mArmed = true;
-}
-
-void VrInjectedInput::clear()
-{
-    for (unsigned i = 0; i < VrHandCount; ++i) mHands[i] = VrHandState();
-    mArmed = false;
-    mFocused = true;
-}
+// THE ONE SOURCE
 
 VrHandState VrEngineInput::hand(unsigned hand) const
 {
     if (!mEngine || hand >= VrHandCount) return VrHandState();
-#ifdef JAH_ENGINE_HAS_VRHANDSTATE
+    // WHOEVER WROTE IT. The runtime's action system fills these fields inside
+    // the session's frame and `Engine::vrInjectInput` fills them from a script
+    // with no runtime at all; the engine reports them through the same field
+    // either way and marks the injected ones (`fromInjection`), which is what
+    // lets every gesture below be driven headlessly without a second store.
     return mEngine->vrStatus().input[hand];
-#else
-    // THE ENGINE HALF HAS NOT LANDED (see the header's contract note). "No
-    // controller reports" is the truthful answer, and it is also what a box
-    // with a headset but no action set would say — so nothing downstream needs
-    // a second code path for it.
-    return VrHandState();
-#endif
 }
 
 bool VrEngineInput::focused() const
 {
     if (!mEngine) return false;
     const VrStatus st = mEngine->vrStatus();
-    // FOCUSED IS THE ONLY STATE IN WHICH A RUNTIME REPORTS INPUT
-    // (VR_INPUT_SPEC §2.3): xrSyncActions answers XR_SESSION_NOT_FOCUSED
-    // otherwise and every action reads "nothing pressed". Asking the lifecycle
-    // word rather than the values is what lets a gesture CANCEL instead of
-    // believing a release nobody made.
+    // FOCUS IS REPORTED PER SAMPLE, and it is read from the samples for a
+    // reason: FOCUSED is the only state in which a runtime reports input at
+    // all (VR_INPUT_SPEC §2.3 — xrSyncActions answers XR_SESSION_NOT_FOCUSED
+    // otherwise and every action reads its zero), and an INJECTED sample
+    // carries its own bit, which is how the focus-loss rule (a gesture in
+    // flight is cancelled, never committed) is driven with no dashboard to
+    // raise. A hand nobody reports says nothing either way, so it is skipped:
+    // focus is lost when no REPORTING hand has it.
+    bool reporting = false, focused = false;
+    for (unsigned h = 0; h < VrHandCount; ++h) {
+        if (!st.input[h].valid) continue;
+        reporting = true;
+        if (st.input[h].focused) focused = true;
+    }
+    if (reporting) return focused;
+    // NO HAND AT ALL: the session's own word, so a focused session with the
+    // controllers switched off still reads as focused (there is simply nothing
+    // to do with it) and a process with no session reads as not.
     return st.active && st.state == VrState::Focused;
 }
 
@@ -117,6 +104,8 @@ void VrInteraction::begin()
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = VrHandState();
     mHover = Hover();
     mTurnArmed = true;
+    mMemo = PickMemo();
+    mRefreshed = false;
 }
 
 void VrInteraction::end()
@@ -127,14 +116,19 @@ void VrInteraction::end()
     cancel();
     mInstalled = false;
     mHover = Hover();
+    mMemo = PickMemo();
+    mRefreshed = false;
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = VrHandState();
-    // AN INJECTION DIES WITH THE SESSION (the lead, from the Fable read): the
-    // test store armed by vr.inputInject stayed armed for the life of the
-    // process, so one console injection in a real session took the controllers
-    // away for good and the driver-paced step never resumed. The engine-side
-    // refusal (a bound profile reports -> refuse) lands with the engine half;
-    // until then, and always, a session end disarms.
-    mInjected.clear();
+    // AN INJECTION DIES WITH THE SESSION — AND THAT IS NOW THE ENGINE'S RULE,
+    // NOT THIS OBJECT'S. The Studio-local store this used to clear here (the
+    // lead's §666 fix: one console injection in a real session took the
+    // controllers away for the life of the process) is GONE, and the samples
+    // live in the one place that can enforce the rule for every host at once:
+    // the engine clears its store on a session's begin and end, refuses a
+    // write while a bound profile reports, and ignores a stale one
+    // (VR_INPUT_SPEC §2.4 I1, engine lane VR-INPUT-1E-FIX). A second
+    // withdrawal from up here would be a second owner of the same rule, which
+    // is how the two stores came about in the first place.
 }
 
 iris::ScenePtr VrInteraction::scene() const
@@ -145,6 +139,16 @@ iris::ScenePtr VrInteraction::scene() const
 Engine *VrInteraction::engineNow() const
 {
     return mDeps.engine ? mDeps.engine() : nullptr;
+}
+
+bool VrInteraction::locomotionBlocked() const
+{
+    return mDeps.locomotionBlocked && mDeps.locomotionBlocked();
+}
+
+bool VrInteraction::playerHosted() const
+{
+    return mDeps.playerMode && mDeps.playerMode();
 }
 
 unsigned VrInteraction::dominantHand() const
@@ -159,20 +163,27 @@ unsigned VrInteraction::offHand() const
 
 VrHandState VrInteraction::handState(unsigned hand) const
 {
-    // THE INJECTION WINS ONCE ANYTHING HAS BEEN INJECTED, and that is the whole
-    // of the test route on this side: the guard against fooling a real smoke
-    // lives at the ENGINE's injection entry point (it refuses while a bound
-    // profile reports, VR_INPUT_SPEC §2.4 I1), because that is where "a runtime
-    // is answering" is knowable.
-    if (mInjected.armed()) return mInjected.hand(hand);
+    // ONE STORE, ONE ANSWER. Whether a runtime or a script wrote the sample is
+    // the SAMPLE's word (`fromInjection`) and changes nothing here; the guard
+    // against fooling a real smoke lives at the ENGINE's injection entry point
+    // (it refuses while a bound profile reports, VR_INPUT_SPEC §2.4 I1),
+    // because that is where "a runtime is answering" is knowable.
     if (mSource) return mSource->hand(hand);
     return VrHandState();
 }
 
+bool VrInteraction::injectionArmed() const
+{
+    if (!mSource) return false;
+    for (unsigned h = 0; h < VrHandCount; ++h)
+        if (mSource->hand(h).fromInjection) return true;
+    return false;
+}
+
 QString VrInteraction::sourceName() const
 {
-    if (mInjected.armed()) return mInjected.name();
-    return mSource ? mSource->name() : QStringLiteral("none");
+    if (!mSource) return QStringLiteral("none");
+    return injectionArmed() ? QStringLiteral("injection") : mSource->name();
 }
 
 bool VrInteraction::ray(const VrHandState &state, iris::Vec3 &origin, iris::Vec3 &direction) const
@@ -190,32 +201,81 @@ VrInteraction::Hover VrInteraction::pick(unsigned hand, const VrHandState &state
     if (!ray(state, out.origin, out.direction)) return out;
     const iris::ScenePtr doc = scene();
     if (!doc) return out;
-    // THE DOCUMENT'S OWN PICKER, the same entry point a viewport click uses
-    // (EngineSceneViewport::pickAt): Ogre's broad phase, our triangles, and
-    // `pickable` — the LOCK — decided per candidate inside it. The camera
-    // position it ranks from is the RAY's origin, which for a hand is the hand.
-    const iris::Vec3 a = out.origin;
-    const iris::Vec3 b = out.origin + out.direction * kRayLength;
-    const QList<ScenePick> hits = ScenePicker::pickAll(doc, a, b, a);
-    const ScenePick best = ScenePicker::nearest(hits);
-    if (!best.node) return out;
+
+    // THE MEMO'S KEY (see the header): the hand, the scene, the aim pose's own
+    // numbers and the document's transform/structure epoch. Everything the
+    // GEOMETRIC pick depends on and nothing else.
+    const unsigned long long writes = iris::graph::transformWrites();
+    const bool sameRay =
+        mMemo.valid && mMemo.scene == doc.data() && mMemo.hand == hand &&
+        mMemo.writes == writes &&
+        mMemo.px == state.aim.position.x && mMemo.py == state.aim.position.y &&
+        mMemo.pz == state.aim.position.z && mMemo.rx == state.aim.rotation.x &&
+        mMemo.ry == state.aim.rotation.y && mMemo.rz == state.aim.rotation.z &&
+        mMemo.rw == state.aim.rotation.w;
+
+    if (!sameRay) {
+        // THE DOCUMENT'S OWN PICKER, the same entry point a viewport click uses
+        // (EngineSceneViewport::pickAt): Ogre's broad phase, our triangles, and
+        // `pickable` — the LOCK — decided per candidate inside it. The camera
+        // position it ranks from is the RAY's origin, which for a hand is the
+        // hand.
+        const iris::Vec3 a = out.origin;
+        const iris::Vec3 b = out.origin + out.direction * kRayLength;
+        // THE GLOBAL-TRANSFORM WALK, ONLY WHEN SOMETHING WAS WRITTEN. `update(0)`
+        // makes the document's world transforms agree with its locals, and a
+        // local can only change through a transform write or a reparent — both
+        // of which bump the epoch (nodegraph.cpp). So refreshing when the
+        // counter has not moved since the last refresh cannot change an answer;
+        // it is the full recursive walk of the scene the picker's header tells
+        // callers inside a live drag to skip.
+        const bool refresh = !mRefreshed || mRefreshedAtWrites != writes;
+        const QList<ScenePick> hits =
+            ScenePicker::pickAll(doc, a, b, a, false, true, true, refresh, true);
+        if (refresh) { mRefreshed = true; mRefreshedAtWrites = writes; }
+        const ScenePick best = ScenePicker::nearest(hits);
+        mMemo = PickMemo();
+        mMemo.valid = true;
+        mMemo.scene = doc.data();
+        mMemo.hand = hand;
+        mMemo.writes = writes;
+        mMemo.px = state.aim.position.x;
+        mMemo.py = state.aim.position.y;
+        mMemo.pz = state.aim.position.z;
+        mMemo.rx = state.aim.rotation.x;
+        mMemo.ry = state.aim.rotation.y;
+        mMemo.rz = state.aim.rotation.z;
+        mMemo.rw = state.aim.rotation.w;
+        mMemo.origin = out.origin;
+        mMemo.direction = out.direction;
+        if (best.node) {
+            mMemo.hit = true;
+            mMemo.picked = best.node;
+            mMemo.point = best.hitPoint;
+            mMemo.distance = (best.hitPoint - a).length();
+            mMemo.triangleIndex = best.triangleIndex;
+        }
+    }
+
+    if (!mMemo.hit) return out;
     out.hit = true;
-    out.picked = best.node;
-    out.point = best.hitPoint;
-    out.distance = (best.hitPoint - a).length();
-    out.triangleIndex = best.triangleIndex;
+    out.picked = mMemo.picked;
+    out.point = mMemo.point;
+    out.distance = mMemo.distance;
+    out.triangleIndex = mMemo.triangleIndex;
     // THE ROOT RULE AGAINST THE SET (EDITOR_MULTISELECT_SPEC §3.5) — a ray on a
     // part of an asset selects the asset, and only a ray on an asset that IS
-    // already selected drills into the part.
+    // already selected drills into the part. RE-RESOLVED EVERY CALL, memo or
+    // not: it depends on the SELECTION, which a press changes, so caching it
+    // would be the way the second press on an asset stopped drilling in.
     out.node = ScenePicker::resolveRootSelection(
-        best.node, mDeps.selection ? mDeps.selection->selectedSet() : QList<iris::SceneNodePtr>(),
+        mMemo.picked, mDeps.selection ? mDeps.selection->selectedSet() : QList<iris::SceneNodePtr>(),
         true);
     return out;
 }
 
 void VrInteraction::pushRay() const
 {
-#ifdef JAH_ENGINE_HAS_VRHANDSTATE
     Engine *engine = engineNow();
     if (!engine) return;
     VrRayState ray;
@@ -224,20 +284,19 @@ void VrInteraction::pushRay() const
     ray.dir = toEngine(mHover.direction);
     ray.hit = mHover.hit;
     ray.hitPoint = toEngine(mHover.point);
+    // WHICH HAND IT BELONGS TO, so the session can re-anchor the line to THIS
+    // frame's aim pose and keep only its far end as old as the pick
+    // (VrRayState::hand). The pick is this side's; the line is the engine's.
+    ray.hand = int(mHover.hand);
     engine->setVrRay(ray);
-#endif
-    // WITHOUT THE ENGINE HALF the ray is still COMPUTED and reported by
-    // `vr.hover()` — nothing about the gesture depends on it being drawn, which
-    // is why the hit is this side's and the line is the engine's.
 }
 
 void VrInteraction::haptic(unsigned hand, float amplitude, float seconds) const
 {
-#ifdef JAH_ENGINE_HAS_VRHANDSTATE
-    if (Engine *engine = engineNow()) engine->vrHaptic(hand, amplitude, seconds);
-#else
-    Q_UNUSED(hand); Q_UNUSED(amplitude); Q_UNUSED(seconds);
-#endif
+    // REFUSED WITH NO SESSION (there is nothing to buzz), and that is not an
+    // error here: a gesture driven by a script on a box with no runtime is a
+    // gesture nobody's hand is holding.
+    if (Engine *engine = engineNow()) engine->vrHaptic(int(hand), amplitude, seconds);
 }
 
 bool VrInteraction::applySelection(const Hover &h, SelectMode mode)
@@ -282,6 +341,13 @@ bool VrInteraction::applySelection(const Hover &h, SelectMode mode)
 bool VrInteraction::select(unsigned hand, SelectMode mode)
 {
     if (hand >= VrHandCount) return false;
+    // IN THE PLAYER, ONLY LOCOMOTION RUNS, AND NOW THE VERBS SAY SO TOO. The
+    // rule was enforced on the button EDGES only (step() skips the whole
+    // editing half), so `vr.select`/`vr.grab`/`vr.release` from a console or an
+    // MCP session edited the document of a run the Player is showing —
+    // precisely what the header's promise forbids. One refusal, in the service,
+    // so an edge and a verb cannot disagree about it.
+    if (playerHosted()) return false;
     const VrHandState st = handState(hand);
     if (!st.valid) return false;
     return applySelection(pick(hand, st), mode);
@@ -309,6 +375,7 @@ QList<iris::SceneNodePtr> VrInteraction::grabTargets(const iris::SceneNodePtr &u
 bool VrInteraction::beginGrab(unsigned hand)
 {
     if (hand >= VrHandCount) return false;
+    if (playerHosted()) return false;       // the Player edits nothing (see select())
     if (mGesture.active) return false;      // stage 1 is SINGLE-hand (owner answer 7)
     const VrHandState st = handState(hand);
     if (!st.valid || !st.grip.valid) return false;
@@ -380,7 +447,13 @@ void VrInteraction::followGesture(float seconds)
         // THE STICK ALONG THE RAY, and a turntable about the world's up — the
         // two things a far grab cannot do with the wrist.
         mGesture.distance = vrgrab::pushPulled(mGesture.distance, st.stickY, seconds);
-        mGesture.turntable += vrgrab::turntableDegrees(st.stickX, seconds);
+        // STICK RIGHT SPINS THE HELD OBJECT CLOCKWISE FROM ABOVE — the same
+        // convention, and the same minus sign at the same kind of call site, as
+        // the wearer's own turn (see step()): `turntableDegrees` returns the
+        // stick's own sign and the tree's yaw about +Y is counter-clockwise
+        // from above. A turntable that span the other way from the turn would
+        // be the one gesture in the editor where right meant left.
+        mGesture.turntable -= vrgrab::turntableDegrees(st.stickX, seconds);
         const vrgrab::Pose aim{ toIris(st.aim.position), toIris(st.aim.rotation) };
         const vrgrab::Pose target = vrgrab::virtualFarHand(aim, mGesture.distance);
         // THE LEVER'S FILTER (§12.6): at range the hand's own tremor is
@@ -433,6 +506,7 @@ void VrInteraction::rewindGesture()
 
 bool VrInteraction::endGrab(unsigned hand)
 {
+    if (playerHosted()) return false;       // the Player edits nothing (see select())
     if (!mGesture.active) return false;
     // THE OTHER HAND'S RELEASE IS NOT THIS GESTURE'S. With single-hand grab
     // (stage 1) the off hand's squeeze does nothing at all, and must not end
@@ -539,6 +613,14 @@ bool VrInteraction::rigNow(vrorigin::Rig &rig, iris::Vec3 &headPosition,
 bool VrInteraction::turn(float degrees)
 {
     if (std::fabs(degrees) < 1e-4f) return false;
+    // THE HOST IS STILL PUTTING THE WEARER SOMEWHERE (see Deps::
+    // locomotionBlocked). Turning the rig now would be composed with a head
+    // the engine has not yet paired with it, and the placement that lands next
+    // frame would overwrite the turn anyway: the flick is not lost, it is
+    // answered on the first frame after the placement (the stick is still over
+    // and the snap turn stays ARMED, because only a turn that happened disarms
+    // it).
+    if (locomotionBlocked()) return false;
     vrorigin::Rig rig;
     iris::Vec3 head;
     iris::Quat headRot;
@@ -553,6 +635,10 @@ bool VrInteraction::turn(float degrees)
 
 bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost)
 {
+    // ...AND THE SAME GUARD ON THE WALK: both hosts refuse their OWN fly while
+    // a placement is pending (EditorVrPreview::move, PlayerVr::move), and the
+    // stick used to write the rig from here and walk straight past that.
+    if (locomotionBlocked()) return false;
     vrorigin::Rig rig;
     iris::Vec3 head;
     iris::Quat headRot;
@@ -575,8 +661,10 @@ void VrInteraction::step(float seconds)
     VrHandState hands[VrHandCount];
     for (unsigned i = 0; i < VrHandCount; ++i) hands[i] = handState(i);
 
-    const bool focused = mInjected.armed() ? mInjected.focused()
-                                           : (mSource ? mSource->focused() : false);
+    // THE SOURCE'S OWN ANSWER, whoever wrote the samples (VrEngineInput::
+    // focused() reads the sample's `focused` bit when a hand is reporting and
+    // the session's lifecycle word when none is).
+    const bool focused = mSource && mSource->focused();
     if (!focused) {
         // THE RUNTIME TOOK THE INPUT AWAY (the dashboard came up, the session
         // left Focused). A gesture in flight CANCELS — see the header.
@@ -588,8 +676,15 @@ void VrInteraction::step(float seconds)
     }
 
     // IN THE PLAYER, ONLY LOCOMOTION RUNS (the Player edits nothing).
-    const bool player = mDeps.playerMode && mDeps.playerMode();
+    const bool player = playerHosted();
     const unsigned dominant = dominantHand();
+
+    // THE PLAYER TOOK THE SESSION OVER MID-GESTURE (the editor preview ended,
+    // the Player's VR mode began on the same headset). The gesture cannot be
+    // followed any more — nothing in the Player steps the editing half — so it
+    // is CANCELLED rather than left holding an object nobody will put down,
+    // which is the same rule as a lost focus.
+    if (player) cancel();
 
     if (!player) {
         const VrHandState &d = hands[dominant];

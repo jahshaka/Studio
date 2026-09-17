@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include "bridge/vrnames.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "scripting/modules/moduleshared.h"   // vecFromJs / quatFromJs (vr.inject)
+#include "scripting/modules/moduleshared.h"   // quatFromJs (the one pose reader)
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/flyspeedsettings.h"
 #include "viewport/flystep.h"
@@ -26,6 +26,66 @@ For more information see the LICENSE file
 #include "viewport/scenepicker.h"
 
 using namespace jahshaka::engine;
+
+namespace {
+
+/// A POSE OUT OF A SCRIPT'S MAP — THE ONE READER, for `vr.inject` and for every
+/// pose any vr verb takes. Position as x/y/z (or a nested `position`), rotation
+/// as a quaternion {x,y,z,w} or — far easier to write and to read — as `yaw`,
+/// `pitch` and `roll` in DEGREES, in the document's own convention (yaw 0,
+/// pitch 0 looks down -Z). `valid` defaults to true: a caller who describes a
+/// pose means it.
+///
+/// AN UNKNOWN KEY IS AN ERROR, and a rotation that cannot be read is an error:
+/// a pose silently taken as the origin, or as identity, is the "the saved
+/// camera collapsed" defect (the unnamed-fourth-number rule — `quatFromJs`
+/// enforces it, which is why the quaternion branch goes through that helper
+/// rather than reading w with a default of 1).
+bool poseFromMap(const QVariantMap &map, VrPose &out, QString *error)
+{
+    static const QStringList known = { "valid", "x",   "y",     "z",    "position",
+                                        "rotation", "yaw", "pitch", "roll" };
+    for (auto it = map.constBegin(); it != map.constEnd(); ++it)
+        if (!known.contains(it.key())) {
+            if (error)
+                *error = QStringLiteral("unknown pose key '%1' — known keys are %2")
+                             .arg(it.key(), known.join(QStringLiteral(", ")));
+            return false;
+        }
+    QVariantMap pos = map;
+    if (map.contains(QStringLiteral("position")))
+        pos = map.value(QStringLiteral("position")).toMap();
+    out.position = Vec3(float(pos.value(QStringLiteral("x")).toDouble()),
+                        float(pos.value(QStringLiteral("y")).toDouble()),
+                        float(pos.value(QStringLiteral("z")).toDouble()));
+    iris::Quat rot;
+    if (map.contains(QStringLiteral("rotation"))) {
+        bool ok = true;
+        rot = scriptmod::quatFromJs(map.value(QStringLiteral("rotation")), iris::Quat(), &ok);
+        if (!ok) {
+            if (error)
+                *error = QStringLiteral("rotation is neither a quaternion {x,y,z,w} nor "
+                                        "Euler degrees {x,y,z}");
+            return false;
+        }
+    } else {
+        // YAW THEN PITCH THEN ROLL, applied in that order — the same product
+        // the rig's own suite builds its head poses with
+        // (`yaw(90) * pitch(-20)`), so a script and a test mean the same thing.
+        const float yaw = float(map.value(QStringLiteral("yaw"), 0.0).toDouble());
+        const float pitch = float(map.value(QStringLiteral("pitch"), 0.0).toDouble());
+        const float roll = float(map.value(QStringLiteral("roll"), 0.0).toDouble());
+        rot = iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), yaw) *
+              iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), pitch) *
+              iris::Quat::fromAxisAndAngle(iris::Vec3(0, 0, 1), roll);
+    }
+    rot = rot.normalized();
+    out.rotation = Quat(rot.x(), rot.y(), rot.z(), rot.scalar());
+    out.valid = map.value(QStringLiteral("valid"), true).toBool();
+    return true;
+}
+
+}   // namespace
 
 VrApi::VrApi(ScriptHost &host, const ModuleHost &moduleHost)
     : ApiModule(host), moduleHost(moduleHost)
@@ -235,7 +295,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "vr.inputState() -> {hands:[{hand, valid, aim, grip, select, selectPressed, grab, "
           "grabPressed, menuPressed, stick:{x,y,pressed}, fromInjection}], source, focused}",
           "WHAT THE INTERACTION READ THIS FRAME, whoever wrote it — the runtime's action "
-          "system or an injection (`vr.inputInject`). `source` says which, and each hand's "
+          "system or an injection (`vr.inject`). `source` says which, and each hand's "
           "`fromInjection` says it again per hand, so a smoke on a real headset can prove it "
           "is not looking at a stale test value.\n\n"
           "The poses are WORLD space, through the rig, in the same spelling as "
@@ -247,34 +307,27 @@ QVector<VerbInfo> VrApi::verbs() const
           "Focused state (the system dashboard is up) and a gesture in flight is CANCELLED "
           "rather than committed when that happens.",
           Needs::Engine },
-        { "inputInject",
-          "vr.inputInject({hand, valid?, aim?:{x,y,z,rotation|yaw,pitch}, grip?:{…}, select?, "
-          "selectPressed?, grab?, grabPressed?, menu?, stickX?, stickY?, stickPressed?}) -> bool",
-          "DRIVE A CONTROLLER FROM A SCRIPT — the hook that makes every VR gesture testable "
-          "with no headset, no runtime and no hands (VR_INPUT_SPEC §2.4 I1).\n\n"
-          "It writes the SAME per-hand state the runtime's action system fills, and the "
-          "interaction cannot tell the difference: the ray, the pick, the selection, the grab, "
-          "the undo macro and the locomotion all run exactly as they do in a headset. A hand "
-          "keeps the state it was given until it is changed, so a script sets a pose once and "
-          "then presses buttons.\n\n"
-          "`aim`/`grip` are poses in WORLD space. A rotation may be given as a quaternion "
-          "({x,y,z,w}) or, far more readably, as `yaw` and `pitch` in DEGREES — yaw 0 with "
-          "pitch 0 points down -Z, which is the convention the whole document model uses. "
-          "`select` and `grab` are the analog values; the booleans are derived from them at "
-          "0.5 unless given explicitly. `menu` is the modifier (the Ctrl of VR): held with a "
-          "press it toggles the selection, held during a grab it snaps.\n\n"
-          "ONE INJECTED SAMPLE IS ONE INTERACTION FRAME: this verb steps it. So a script's "
-          "injection is a frame — press, read, release, read — and the render loop stands down "
-          "from stepping the interaction for as long as anything has been injected, which is "
-          "what makes a suite's gesture exact instead of a race with the frame rate. (A worn "
-          "session is never injected into: the engine refuses it while a real controller "
-          "profile reports.)\n\n"
-          "`focused:false` is the runtime TAKING THE INPUT AWAY (a system dashboard over the "
-          "session): everything reads as not pressed and a gesture in flight is cancelled — the "
-          "objects go back where they were and no undo step is recorded. It belongs to the "
-          "source rather than to a hand, because a runtime does not unfocus one controller.\n\n"
-          "Unknown keys and an unknown hand THROW (a malformed call is a bug in the script); "
-          "everything else answers true.",
+        { "step",
+          "vr.step({seconds?, frames?}) -> bool",
+          "RUN ONE INTERACTION FRAME (or `frames` of them) FROM A SCRIPT — the clock of every "
+          "VR gesture test, and the companion of `vr.inject` (VR_INPUT_SPEC §2.4 I1).\n\n"
+          "`vr.inject` writes what a hand is doing; this reads both hands and DOES it: the aim "
+          "ray, the document pick, the press edges, a live gesture's follow, the stick's walk "
+          "and turn. So a gesture from a script is `inject` then `step`, as many times as it "
+          "has frames — press, step, read, release, step, read — and nothing about the code "
+          "under it knows it is not being worn.\n\n"
+          "WHY A SCRIPT HAS TO STEP IT AT ALL. The render driver steps the interaction once "
+          "per rendered frame, but it STANDS DOWN while an injection is armed (any hand whose "
+          "sample carries `fromInjection`): a driver tick stepping a script's held stick again "
+          "would integrate it twice and turn the wearer twice per flick. And a script run "
+          "holds the render loop still anyway (SCRIPTING_LIVE_SPEC §3.1). With no session "
+          "there is no VR loop in the process at all, which is exactly the case every headless "
+          "gesture gate runs in.\n\n"
+          "`seconds` is the frame this step charges, defaulting to 1/90 — a headset's own "
+          "period, so a scripted step costs a worn one's worth of stick travel; it is clamped "
+          "like every other frame the rig is moved on. `frames` (default 1) repeats the step "
+          "with the same input, which is how a push/pull or a smooth turn is driven for a "
+          "measured number of frames without restating the hand. Frames, never a wall clock.",
           Needs::Engine },
         { "hover",
           "vr.hover() -> {hand, id, rootId, name, x, y, z, distance, triangleIndex} | null",
@@ -299,8 +352,9 @@ QVector<VerbInfo> VrApi::verbs() const
           "modified press on empty space keeps the set, because a slightly missed toggle must "
           "not throw a whole selection away. `hand` is \"left\"/\"right\", and defaults to "
           "the dominant one (`vr.locomotion`).\n\n"
-          "False when nothing changed — no controller is reporting, or the press landed "
-          "somewhere that means nothing.",
+          "False when nothing changed — no controller is reporting, the press landed "
+          "somewhere that means nothing, or the PLAYER is hosting the session (it edits "
+          "nothing: in the Player only locomotion runs, for a verb exactly as for a button).",
           Needs::Engine },
         { "grab", "vr.grab({hand?}) -> bool",
           "WHAT A SQUEEZE DOES: take hold of what the ray is on — selecting it first if it "
@@ -317,9 +371,13 @@ QVector<VerbInfo> VrApi::verbs() const
           "selected moves once, not twice), and MENU HELD SNAPS: the gesture's own delta is "
           "quantised by the editor's snap sizes, translation and rotation, never the absolute "
           "position.\n\n"
-          "REFUSED (false) when there is nothing to grab, when no controller reports — and "
-          "while a SCRIPT owns the document (the edit gate): the ray still hovers and still "
-          "selects during a run, because those are reads.",
+          "REFUSED (false) when there is nothing to grab, when no controller reports, while a "
+          "SCRIPT owns the document (the edit gate — the ray still hovers and still selects "
+          "during a run, because those are reads), and in the PLAYER, which edits nothing.\n\n"
+          "A GRAB TAKEN BY THE OFF HAND IS RELEASED ONLY BY `vr.release`. The squeeze edges "
+          "are read from the DOMINANT hand alone (the other hand's stick is locomotion), so "
+          "`vr.grab({hand:\"left\"})` is ended by the verb, or cancelled by a focus loss or "
+          "the session ending — never by squeezing that hand.",
           Needs::Engine },
         { "release", "vr.release({hand?}) -> bool",
           "ENDS THE GRAB AND COMMITS IT — ONE undo step for the whole gesture, whatever it "
@@ -330,7 +388,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "takes focus for its own dashboard, a project is closed — is CANCELLED instead: the "
           "objects go back where they were and NOTHING is pushed. Committing half a gesture "
           "the wearer could no longer see would be worse than the snap back.\n\n"
-          "False when no gesture was running.",
+          "False when no gesture was running, and in the PLAYER (which edits nothing).",
           Needs::Engine },
         { "locomotion",
           "vr.locomotion({turn?, dominant?, snapTurnDegrees?, smoothTurnDegreesPerSecond?}) -> "
@@ -346,7 +404,12 @@ QVector<VerbInfo> VrApi::verbs() const
           "of world they did not ask to travel.\n\n"
           "`dominant` is \"right\" (the default) or \"left\" and swaps BOTH roles at once: "
           "the dominant hand points, selects and grabs, the other hand's stick walks and "
-          "turns. One flag, because two would eventually disagree.",
+          "turns. One flag, because two would eventually disagree.\n\n"
+          "NOBODY IS MOVED WHILE THEY ARE STILL BEING PLACED. A session begins (and every "
+          "recentre) with the host waiting for a located frame it can pair with the rig it "
+          "holds, because a correction from a mismatched pair is a teleport; the stick is "
+          "refused over those frames and a flick held across them is answered on the first "
+          "frame after the placement lands.",
           Needs::Document },
         { "interactionMode",
           "vr.interactionMode() -> {dominant, turn, grabbing, hovering, far, snapping, "
@@ -558,7 +621,10 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     if (!e) return refuse(QStringLiteral("vr.inject: no engine is running in this process"));
     const int index = vrnames::handFrom(hand);
     if (index < 0)
-        return fail(QStringLiteral("vr.inject: hand must be \"left\" or \"right\" (or 0/1)"));
+        // NAMING WHAT WAS PASSED, like every other refusal in this file: a
+        // script that said "middle" wants to read "middle" back.
+        return fail(QStringLiteral("vr.inject: hand must be \"left\" or \"right\" (or 0/1), "
+                                   "not '%1'").arg(hand.toString()));
 
     static const QStringList known = { "valid", "aim", "grip", "select", "selectPressed",
                                        "grab", "grabPressed", "menuPressed", "stick",
@@ -572,33 +638,20 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     // AN EMPTY MAP IS THE "STOP INJECTING" SPELLING, which is why `valid`
     // defaults to whether anything was said at all rather than to false.
     s.valid = state.value(QStringLiteral("valid"), !state.isEmpty()).toBool();
-    auto readPose = [&](const char *key, VrPose &out, QString &error) {
-        if (!state.contains(QLatin1String(key))) return true;
-        const QVariantMap m = state.value(QLatin1String(key)).toMap();
-        const iris::Vec3 p = scriptmod::vecFromJs(m, iris::Vec3(0, 0, 0));
-        // AN OMITTED ROTATION IS IDENTITY, not a parse failure: a gesture test
-        // that only cares where the hand IS writes three numbers, and a verb
-        // that refused them would make every such test carry a quaternion it
-        // does not mean. A rotation that IS given and cannot be read is still
-        // an error (the unnamed-fourth-number rule — a pose silently read as
-        // identity is the "the saved camera collapsed" defect).
-        bool rotOk = true;
-        const iris::Quat q = m.contains(QStringLiteral("rotation"))
-                                 ? scriptmod::quatFromJs(m.value(QStringLiteral("rotation")),
-                                                         iris::Quat(), &rotOk)
-                                 : iris::Quat();
-        if (!rotOk) {
-            error = QStringLiteral("vr.inject: %1.rotation is neither a quaternion "
-                                   "{x,y,z,w} nor Euler degrees {x,y,z}").arg(QLatin1String(key));
-            return false;
-        }
-        out.position = Vec3(p.x(), p.y(), p.z());
-        out.rotation = Quat(q.x(), q.y(), q.z(), q.scalar());
-        out.valid = true;
-        return true;
-    };
+    // ONE POSE PARSER IN THIS FILE (the 1E integration's CRUD): this verb used
+    // to carry its own, which read x/y/z and `rotation` and silently accepted
+    // any other key — so `aim: {nosuchkey: 1}` was a pose at the origin. The
+    // one below validates its keys AND takes a rotation the two readable ways
+    // (a quaternion, or yaw/pitch/roll in degrees), so the two spellings the
+    // two halves of stage 1 grew cannot drift apart.
     QString error;
-    if (!readPose("aim", s.aim, error) || !readPose("grip", s.grip, error))
+    auto readPose = [&](const char *key, VrPose &out) {
+        if (!state.contains(QLatin1String(key))) return true;
+        if (poseFromMap(state.value(QLatin1String(key)).toMap(), out, &error)) return true;
+        error = QStringLiteral("vr.inject: %1: %2").arg(QLatin1String(key), error);
+        return false;
+    };
+    if (!readPose("aim", s.aim) || !readPose("grip", s.grip))
         return fail(error);
     s.select = float(state.value(QStringLiteral("select"), 0.0).toDouble());
     s.grab = float(state.value(QStringLiteral("grab"), 0.0).toDouble());
@@ -633,7 +686,8 @@ bool VrApi::haptic(const QVariant &hand, double amplitude, double seconds)
     if (!e) return refuse(QStringLiteral("vr.haptic: no engine is running in this process"));
     const int index = vrnames::handFrom(hand);
     if (index < 0)
-        return fail(QStringLiteral("vr.haptic: hand must be \"left\" or \"right\" (or 0/1)"));
+        return fail(QStringLiteral("vr.haptic: hand must be \"left\" or \"right\" (or 0/1), "
+                                   "not '%1'").arg(hand.toString()));
     if (!e->vrHaptic(index, float(amplitude), float(seconds)))
         return refuse(QStringLiteral("vr.haptic: %1").arg(QString::fromStdString(e->lastError())));
     return true;
@@ -716,72 +770,16 @@ QVariantMap VrApi::state()
 
 namespace {
 
-/// A POSE OUT OF A SCRIPT'S MAP. Position as x/y/z (or a nested `position`),
-/// rotation as a quaternion {x,y,z,w} or — far easier to write and to read — as
-/// `yaw` and `pitch` in DEGREES, in the document's own convention (yaw 0, pitch
-/// 0 looks down -Z). `valid` defaults to true: a caller who describes a pose
-/// means it.
-bool poseFromMap(const QVariantMap &map, VrPose &out, QString *error)
-{
-    static const QStringList known = { "valid", "x",   "y",     "z",    "position",
-                                        "rotation", "yaw", "pitch", "roll" };
-    for (auto it = map.constBegin(); it != map.constEnd(); ++it)
-        if (!known.contains(it.key())) {
-            if (error)
-                *error = QStringLiteral("unknown pose key '%1' — known keys are %2")
-                             .arg(it.key(), known.join(QStringLiteral(", ")));
-            return false;
-        }
-    QVariantMap pos = map;
-    if (map.contains(QStringLiteral("position")))
-        pos = map.value(QStringLiteral("position")).toMap();
-    out.position = Vec3(float(pos.value(QStringLiteral("x")).toDouble()),
-                        float(pos.value(QStringLiteral("y")).toDouble()),
-                        float(pos.value(QStringLiteral("z")).toDouble()));
-    iris::Quat rot;
-    if (map.contains(QStringLiteral("rotation"))) {
-        const QVariantMap q = map.value(QStringLiteral("rotation")).toMap();
-        rot = iris::Quat(float(q.value(QStringLiteral("w"), 1.0).toDouble()),
-                         float(q.value(QStringLiteral("x")).toDouble()),
-                         float(q.value(QStringLiteral("y")).toDouble()),
-                         float(q.value(QStringLiteral("z")).toDouble()))
-                  .normalized();
-    } else {
-        // YAW THEN PITCH THEN ROLL, applied in that order — the same product
-        // the rig's own suite builds its head poses with
-        // (`yaw(90) * pitch(-20)`), so a script and a test mean the same thing.
-        const float yaw = float(map.value(QStringLiteral("yaw"), 0.0).toDouble());
-        const float pitch = float(map.value(QStringLiteral("pitch"), 0.0).toDouble());
-        const float roll = float(map.value(QStringLiteral("roll"), 0.0).toDouble());
-        rot = iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), yaw) *
-              iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), pitch) *
-              iris::Quat::fromAxisAndAngle(iris::Vec3(0, 0, 1), roll);
-        rot = rot.normalized();
-    }
-    out.rotation = Quat(rot.x(), rot.y(), rot.z(), rot.scalar());
-    out.valid = map.value(QStringLiteral("valid"), true).toBool();
-    return true;
-}
-
 QVariantMap handStateMap(const VrHandState &state, unsigned hand)
 {
-    QVariantMap out;
+    // THE ONE HAND-STATE SPELLING (vrnames::handState — what `vr.state().input`
+    // answers with), plus the hand's NAME, because this verb answers a LIST and
+    // a caller iterating it needs to know which hand it is holding. A second
+    // hand-built map beside that helper is how two verbs come to report the
+    // same struct differently; there was one here until the 1E integration.
+    QVariantMap out = vrnames::handState(state);
     out[QStringLiteral("hand")] =
         hand == VrHandRight ? QStringLiteral("right") : QStringLiteral("left");
-    out[QStringLiteral("valid")] = state.valid;
-    out[QStringLiteral("aim")] = vrnames::pose(state.aim);
-    out[QStringLiteral("grip")] = vrnames::pose(state.grip);
-    out[QStringLiteral("select")] = double(state.select);
-    out[QStringLiteral("selectPressed")] = state.selectPressed;
-    out[QStringLiteral("grab")] = double(state.grab);
-    out[QStringLiteral("grabPressed")] = state.grabPressed;
-    out[QStringLiteral("menuPressed")] = state.menuPressed;
-    QVariantMap stick;
-    stick[QStringLiteral("x")] = double(state.stickX);
-    stick[QStringLiteral("y")] = double(state.stickY);
-    stick[QStringLiteral("pressed")] = state.stickPressed;
-    out[QStringLiteral("stick")] = stick;
-    out[QStringLiteral("fromInjection")] = state.fromInjection;
     return out;
 }
 
@@ -820,6 +818,21 @@ void VrApi::installInteraction()
         Engine *e = engine();
         return e && e->vrStatus().active && !editor.isActive();
     };
+    // MAY THE WEARER BE MOVED THIS FRAME? Both hosts place the rig on the first
+    // located frame they can pair with the rig the engine holds, and both
+    // refuse their own fly until it lands (EditorVrPreview::move,
+    // PlayerVr::move) — the stick wrote `setVrOrigin` from the interaction and
+    // walked straight past that, which is an origin/head mismatch for the
+    // frames before the placement and a turn the placement then overwrote.
+    // Asked of whichever host owns the session; a host that is not running
+    // places nobody.
+    deps.locomotionBlocked = [this] {
+        if (editor.isActive()) return editor.placing();
+        PlayerService *player = moduleHost.services ? moduleHost.services->player : nullptr;
+        if (player && player->isVrActive())
+            return player->vrReport().value(QStringLiteral("placing"), false).toBool();
+        return false;
+    };
     interaction.setDeps(deps);
     engineInput.setEngine(engine());
     interaction.setSource(&engineInput);
@@ -854,12 +867,17 @@ void VrApi::stepInteraction()
     if (!interactionSessionActive) return;
     // AN ARMED INJECTION OWNS THE STEPPING, and that is what makes a suite
     // deterministic: with a script writing the hands, one injected sample IS
-    // one interaction frame (`vr.inputInject` steps it), so a driver tick
+    // one interaction frame (`vr.step()` is the clock), so a driver tick
     // stepping the same values again would integrate the stick twice and turn
     // the wearer twice per flick. Nothing is injected in a real session — the
     // engine refuses it while a bound profile reports (VR_INPUT_SPEC §2.4 I1)
     // — so the worn path is unchanged and driver-paced.
-    if (interaction.injection().armed()) return;
+    //
+    // ASKED OF THE SAMPLES, not of a flag of ours (`fromInjection`, which the
+    // engine sets on every sample it wrote for a test): the store is the
+    // engine's since the two halves of stage 1 met, so the question "is a test
+    // driving this?" has exactly one answer in the process.
+    if (interaction.injectionArmed()) return;
     // THE FRAME JUST GONE, and it is clamped before it may move anybody
     // (vrorigin::frameSeconds): a UI-thread block arrives here as one enormous
     // dt, and in a headset that is an involuntary lurch rather than a nuisance.
@@ -873,13 +891,20 @@ void VrApi::stepInteraction()
 unsigned VrApi::handFrom(const QVariant &value, bool *ok) const
 {
     if (ok) *ok = true;
+    // NOTHING SAID IS THE DOMINANT HAND — the one this file adds to the shared
+    // reader, because a verb about a gesture is about the hand that gestures.
     if (!value.isValid() || value.toString().trimmed().isEmpty())
         return interaction.dominantHand();
-    const QString name = value.toString().trimmed().toLower();
-    if (name == QLatin1String("right")) return VrHandRight;
-    if (name == QLatin1String("left")) return VrHandLeft;
-    if (ok) *ok = false;
-    return interaction.dominantHand();
+    // ...AND THE REST IS `vrnames::handFrom`, the reader `vr.inject` and
+    // `vr.haptic` use: "left"/"l"/0, "right"/"r"/1, and -1 for anything else. A
+    // second spelling of the same question in one file is how "r" came to work
+    // in one verb and throw in another.
+    const int index = vrnames::handFrom(value);
+    if (index < 0) {
+        if (ok) *ok = false;
+        return interaction.dominantHand();
+    }
+    return unsigned(index);
 }
 
 QVariantMap VrApi::inputState()
@@ -901,78 +926,30 @@ QVariantMap VrApi::inputState()
     return out;
 }
 
-bool VrApi::inputInject(const QVariantMap &state)
+bool VrApi::step(const QVariantMap &options)
 {
     syncInteractionSession();
-    static const QStringList known = { "hand",  "valid",  "aim",         "grip",
-                                       "select", "selectPressed", "grab", "grabPressed",
-                                       "menu",  "stickX", "stickY",      "stickPressed",
-                                       "focused" };
-    for (auto it = state.constBegin(); it != state.constEnd(); ++it)
+    static const QStringList known = { "seconds", "frames" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key()))
-            return fail(QStringLiteral("vr.inputInject: unknown key '%1' — known keys are %2")
+            return fail(QStringLiteral("vr.step: unknown key '%1' — known keys are %2")
                             .arg(it.key(), known.join(QStringLiteral(", "))));
-    bool ok = false;
-    const unsigned hand = handFrom(state.value(QStringLiteral("hand")), &ok);
-    if (!ok)
-        return fail(QStringLiteral("vr.inputInject: hand must be \"left\" or \"right\", not '%1'")
-                        .arg(state.value(QStringLiteral("hand")).toString()));
-    // THE RUNTIME TAKING THE INPUT AWAY, as a key: `focused:false` is what a
-    // system dashboard coming up over the session does — every action reads
-    // "nothing pressed" and a gesture in flight is CANCELLED rather than
-    // committed. It belongs to the SOURCE and not to a hand (a runtime does not
-    // unfocus one controller), which is why it is not in VrHandState.
-    if (state.contains(QStringLiteral("focused")))
-        interaction.injection().setFocused(state.value(QStringLiteral("focused")).toBool());
-
-    // WHAT THE HAND ALREADY HELD is the starting point: a script sets a pose
-    // once and then presses buttons, which is what the verb promises.
-    VrHandState hs = interaction.injection().hand(hand);
-    QString error;
-    if (state.contains(QStringLiteral("aim"))) {
-        if (!poseFromMap(state.value(QStringLiteral("aim")).toMap(), hs.aim, &error))
-            return fail(QStringLiteral("vr.inputInject: aim: %1").arg(error));
-    }
-    if (state.contains(QStringLiteral("grip"))) {
-        if (!poseFromMap(state.value(QStringLiteral("grip")).toMap(), hs.grip, &error))
-            return fail(QStringLiteral("vr.inputInject: grip: %1").arg(error));
-    }
-    // A HAND WITH AN AIM AND NO GRIP IS A HAND: the grip follows the aim, which
-    // is true enough of a real controller (they are centimetres apart) and
-    // spares every test a second pose it does not care about.
-    if (state.contains(QStringLiteral("aim")) && !state.contains(QStringLiteral("grip"))
-        && !hs.grip.valid)
-        hs.grip = hs.aim;
-    hs.valid = state.value(QStringLiteral("valid"), true).toBool();
-    if (state.contains(QStringLiteral("select")))
-        hs.select = float(state.value(QStringLiteral("select")).toDouble());
-    if (state.contains(QStringLiteral("grab")))
-        hs.grab = float(state.value(QStringLiteral("grab")).toDouble());
-    // THE BOOLEAN FOLLOWS THE ANALOG VALUE unless it was given: 0.5 is the
-    // threshold the touch profile's trigger and squeeze use.
-    hs.selectPressed = state.contains(QStringLiteral("selectPressed"))
-                           ? state.value(QStringLiteral("selectPressed")).toBool()
-                           : hs.select >= 0.5f;
-    hs.grabPressed = state.contains(QStringLiteral("grabPressed"))
-                         ? state.value(QStringLiteral("grabPressed")).toBool()
-                         : hs.grab >= 0.5f;
-    if (state.contains(QStringLiteral("menu")))
-        hs.menuPressed = state.value(QStringLiteral("menu")).toBool();
-    if (state.contains(QStringLiteral("stickX")))
-        hs.stickX = float(state.value(QStringLiteral("stickX")).toDouble());
-    if (state.contains(QStringLiteral("stickY")))
-        hs.stickY = float(state.value(QStringLiteral("stickY")).toDouble());
-    if (state.contains(QStringLiteral("stickPressed")))
-        hs.stickPressed = state.value(QStringLiteral("stickPressed")).toBool();
-    interaction.injection().set(hand, hs);
-
-    // AN INJECTED SAMPLE IS AN INTERACTION FRAME (see the verb's doc and
-    // stepInteraction's note). Nothing else can step it: with no session there
-    // is no VR loop at all, and with one there is a script run holding the
-    // render loop still by design — and the driver stands down while an
-    // injection is armed precisely so that this is the ONLY clock.
+    // THE FRAME A SCRIPTED STEP CHARGES. Negative means "the nominal frame" to
+    // VrInteraction (1/90 s, a headset's own period), which is what a step with
+    // no clock in the room should cost; an explicit `seconds` is clamped by
+    // vrorigin::frameSeconds below it, exactly like a driver-paced one.
+    const double seconds = options.value(QStringLiteral("seconds"), -1.0).toDouble();
+    const int frames = options.contains(QStringLiteral("frames"))
+                           ? options.value(QStringLiteral("frames")).toInt()
+                           : 1;
+    if (frames < 1 || frames > 100000)
+        return fail(QStringLiteral("vr.step: frames must be between 1 and 100000, not %1")
+                        .arg(frames));
+    // INSTALLED BY A STEP WHEN THERE IS NO SESSION TO INSTALL IT. Every
+    // headless gesture gate is this case: no runtime, no loop, and the
+    // interaction is nevertheless the real one.
     if (!interaction.installed()) interaction.begin();
-    interaction.step(-1.0f);
+    for (int i = 0; i < frames; ++i) interaction.step(float(seconds));
     return true;
 }
 
@@ -1017,8 +994,11 @@ bool VrApi::select(const QVariantMap &options)
         return fail(QStringLiteral("vr.select: mode must be \"replace\", \"toggle\" or "
                                    "\"add\", not '%1'").arg(modeName));
     if (!interaction.select(hand, mode))
-        return refuse(QStringLiteral("vr.select: nothing changed (no controller is reporting, "
-                                     "or the ray is on nothing)"));
+        return refuse(interaction.playerHosted()
+                          ? QStringLiteral("vr.select: the PLAYER is hosting this session and "
+                                           "the Player edits nothing — only locomotion runs")
+                          : QStringLiteral("vr.select: nothing changed (no controller is "
+                                           "reporting, or the ray is on nothing)"));
     return true;
 }
 
@@ -1034,9 +1014,12 @@ bool VrApi::grab(const QVariantMap &options)
     const unsigned hand = handFrom(options.value(QStringLiteral("hand")), &ok);
     if (!ok) return fail(QStringLiteral("vr.grab: hand must be \"left\" or \"right\""));
     if (!interaction.beginGrab(hand))
-        return refuse(QStringLiteral("vr.grab: nothing to grab (no controller is reporting, "
-                                     "nothing is under the ray and nothing is selected), or a "
-                                     "script owns the document"));
+        return refuse(interaction.playerHosted()
+                          ? QStringLiteral("vr.grab: the PLAYER is hosting this session and the "
+                                           "Player edits nothing — only locomotion runs")
+                          : QStringLiteral("vr.grab: nothing to grab (no controller is "
+                                           "reporting, nothing is under the ray and nothing is "
+                                           "selected), or a script owns the document"));
     return true;
 }
 
@@ -1052,7 +1035,10 @@ bool VrApi::release(const QVariantMap &options)
     const unsigned hand = handFrom(options.value(QStringLiteral("hand")), &ok);
     if (!ok) return fail(QStringLiteral("vr.release: hand must be \"left\" or \"right\""));
     if (!interaction.endGrab(hand))
-        return refuse(QStringLiteral("vr.release: no grab is running"));
+        return refuse(interaction.playerHosted()
+                          ? QStringLiteral("vr.release: the PLAYER is hosting this session and "
+                                           "the Player edits nothing — only locomotion runs")
+                          : QStringLiteral("vr.release: no grab is running"));
     return true;
 }
 

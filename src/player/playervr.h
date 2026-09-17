@@ -104,6 +104,18 @@ public:
     /// Is the ENGINE running the session this object started?
     bool isActive() const;
 
+    /// IS THE WEARER STILL BEING PUT SOMEWHERE? True between begin (or a
+    /// recentre) and the first locate this object can PAIR with the rig the
+    /// engine holds — the frames over which `move()` refuses, because a
+    /// correction from a mismatched pair is a teleport (measured: a recentre
+    /// after a 75 m fly threw the wearer 75 m past the target).
+    ///
+    /// Asked by the CONTROLLER's locomotion as well as by this object's own
+    /// fly (VrInteraction::Deps::locomotionBlocked, through
+    /// `player.state().vr.placing`): the thumbstick writes `setVrOrigin`
+    /// itself, so it has to be told what the host is in the middle of.
+    bool placing() const { return mPlacePending; }
+
     /// ONE FRAME, after PlayBack has moved the document and before the mirror
     /// pushes it: reconcile with the engine, place or fly the rig, push it, and
     /// put the head's world pose on the play camera so the document agrees with

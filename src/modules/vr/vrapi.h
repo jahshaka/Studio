@@ -67,7 +67,12 @@ public:
     // inside VrInteraction call exactly these operations, the suites call them,
     // and the MCP calls them (SCRIPTING_SPEC §2.3).
     Q_INVOKABLE QVariantMap inputState();
-    Q_INVOKABLE bool inputInject(const QVariantMap &state);
+    /// ONE INTERACTION FRAME, from a script (`vr.inject` writes the hands, this
+    /// does what they say). The Studio-side `vr.inputInject` it replaced held a
+    /// SECOND store of hand samples beside the engine's and was deleted at the
+    /// stage-1 integration: the samples live in `Engine::vrInjectInput` /
+    /// `vrStatus().input[]` now, whoever wrote them.
+    Q_INVOKABLE bool step(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariant hover();
     Q_INVOKABLE bool select(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool grab(const QVariantMap &options = QVariantMap());

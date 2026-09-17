@@ -15,11 +15,13 @@
 // THE CONTROLLERS ARE INJECTED, not real: Monado's simulated rig reports poses
 // and NO BUTTONS and NO STICK (verified in the exact source of the installed
 // build — VR_INPUT_SPEC §17), so a stick deflection can only arrive through
-// `vr.inputInject`. That is what the injection route is for, and this suite is
-// the one that proves it composes with a live session: an injected sample is
-// one interaction frame, and the render loop stands down from stepping the
-// interaction while anything is injected, so the walk below is exact rather
-// than a race with the runtime's frame rate.
+// `vr.inject` — the ENGINE's own store, the one the runtime's action system
+// fills, with `JAHSHAKA_VR_TEST_INJECT=1` in this suite's environment because
+// the engine otherwise refuses to fake a hand a real profile is reporting. This
+// suite is the one that proves that route composes with a live session:
+// `vr.step()` is the clock, and the render loop STANDS DOWN from stepping the
+// interaction while any sample carries `fromInjection`, so the walk below is
+// exact rather than a race with the runtime's frame rate.
 //
 // FRAMES, NEVER WALL TIME (VR_SPEC §6 flake class (b)).
 
@@ -38,14 +40,41 @@ function showRig(tag) {
                 + r.z.toFixed(3) + ") yaw " + r.yaw.toFixed(2));
     return r;
 }
-/// The LEFT hand (the non-dominant one by default) with a stick deflection and
-/// nothing else — one interaction frame per call.
+/// ONE FRAME WITH THE LEFT STICK somewhere — the non-dominant hand by default,
+/// so this is the locomotion hand.
+///
+/// WHY THERE IS A RENDERED FRAME IN THE MIDDLE, and it is a MEASURED property
+/// of a live session rather than a convenience: with a session running, the
+/// engine's `vrStatus().input[]` is the SESSION's own per-frame copy, filled by
+/// `readInput` inside the frame (the injected sample replaces the runtime's
+/// answer there — OgreVrSession.cpp). So an injection written between frames is
+/// not visible to anybody until the next frame carries it in: inject, render,
+/// then step. With NO session there is no copy and no frame — the engine
+/// reports the injected store directly, which is why the headless suite needs
+/// neither (`scripting.e2e.vr_input_headless`).
+///
+/// The driver's own step stands down from the second injected frame onward (any
+/// sample carrying `fromInjection`), and the frame before that carries the
+/// PREVIOUS sample, so the stick below is integrated exactly once per call.
 function leftStick(x, y) {
-    assert(vr.inputInject({ hand: "left", valid: true,
-                            aim: { x: 0, y: 1.4, z: 0 }, grip: { x: 0, y: 1.4, z: 0 },
-                            select: 0, grab: 0, menu: false,
-                            stickX: x, stickY: y }) === true,
-           "inject the left stick (" + x + ", " + y + ")");
+    var wrote = vr.inject("left", { valid: true,
+                                    aim: { x: 0, y: 1.4, z: 0 }, grip: { x: 0, y: 1.4, z: 0 },
+                                    select: 0, grab: 0, menuPressed: false,
+                                    stick: { x: x, y: y } });
+    editor.frame(1);
+    assert(wrote === true && vr.step() === true,
+           "one frame with the left stick at (" + x + ", " + y + ")");
+}
+/// A SIGNED YAW DIFFERENCE, WRAPPED (the Fable read of stage 1, finding 4). The
+/// RIG's yaw is stored unnormalised and may be compared directly, but the HEAD's
+/// comes out of a quaternion in (-180, 180]: a wearer facing 170 degrees who
+/// turns 30 more reads -160, and a plain subtraction calls that a 330-degree
+/// turn. Every head-yaw check below goes through this.
+function yawDelta(a, b) {
+    var d = a - b;
+    while (d > 180.0) d -= 360.0;
+    while (d <= -180.0) d += 360.0;
+    return d;
 }
 
 project.create("vr input session " + Date.now());
@@ -56,6 +85,50 @@ console.log("vr.available: " + JSON.stringify(a));
 assert(a.available === true, "the runtime answered: " + a.runtime);
 
 assert(vr.begin({ mirror: "none" }) === true, "vr.begin() starts a session on the editor's scene");
+
+// ---- 0. NOBODY IS WALKED WHILE THEY ARE STILL BEING PLACED --------------
+//
+// THE FIX FOR THE FABLE READ'S (a). A session begins with the host owing the
+// wearer a PLACEMENT: it waits for a located frame it can PAIR with the rig the
+// engine holds and then writes the rig that puts them where the editor camera
+// stands, because a correction computed from a mismatched pair is a teleport.
+// Both hosts refuse their own fly over those frames — and the thumbstick, which
+// writes `setVrOrigin` from the interaction rather than from the host, used to
+// walk and turn straight past that refusal: an origin the host then overwrote
+// (the walk lost) composed with a head it was never paired with (the frames
+// between wrong).
+//
+// Asserted before anything else in this file, because it is only true at the
+// very beginning of a session: a full stick over the placing frames moves
+// nobody, and the same stick moves them the moment the placement lands.
+var placingSeen = false, movedWhilePlacing = false, turnedWhilePlacing = false;
+for (var pf = 0; pf < 200; ++pf) {
+    if (vr.state().preview.placing !== true) break;
+    placingSeen = true;
+    // The sample, then the frame that carries it into the session (see
+    // leftStick) — and then the placement is asked AGAIN: if it landed inside
+    // that frame, the step below would legitimately be allowed to walk, so
+    // there is nothing left to assert and the loop is done.
+    assert(vr.inject("left", { valid: true,
+                               aim: { x: 0, y: 1.4, z: 0 }, grip: { x: 0, y: 1.4, z: 0 },
+                               stick: { x: 1, y: 1 } }) === true,
+           "a FULL stick, forward and right, while the wearer is being placed");
+    editor.frame(1);
+    if (vr.state().preview.placing !== true) break;
+    var r0 = vr.interactionMode().rig;
+    var t0 = vr.interactionMode().turns;
+    vr.step();
+    var r1 = vr.interactionMode().rig;
+    if (r1.live && (Math.abs(r1.x - r0.x) > 1e-6 || Math.abs(r1.z - r0.z) > 1e-6))
+        movedWhilePlacing = true;
+    if (vr.interactionMode().turns !== t0) turnedWhilePlacing = true;
+}
+assert(placingSeen === true,
+       "the session began owing the wearer a placement (preview.placing was true)");
+assert(movedWhilePlacing === false,
+       "a FULL stick over every one of those frames walked the wearer nowhere");
+assert(turnedWhilePlacing === false, "...and turned them not at all");
+leftStick(0, 0);                            // centre the stick and re-arm the snap turn
 
 // THE POSES COME FROM INSIDE THE FRAME: nothing is located until the runtime
 // has been asked, and the rig's first PLACEMENT waits for a located frame it
@@ -85,23 +158,46 @@ assert(mode.installed === true, "and it was installed when the session began");
 // speed. The direction is the HEAD's level heading (vrorigin::levelForward),
 // so the assertion is about DISTANCE and about the horizon: a wearer must never
 // be flown up or down by a stick.
+// THE DISTANCE IS THE EDITOR'S OWN FLY SPEED × THE FRAMES, and it is asserted
+// as that product rather than as "more than a metre": 45 frames at the nominal
+// 1/90 s is half a second of travel, and the level heading is a unit vector, so
+// the path length is exactly speed/2. (Read from the preview's own report so
+// this does not hard-code a preference's default.)
+var flySpeed = vr.state().preview.flySpeed;
+var headYaw0 = vr.state().head.yaw;
 var before = showRig("before the walk");
 for (var f = 0; f < 45; ++f) leftStick(0, 1);
 var after = showRig("after 45 frames of full forward stick");
 var walked = Math.sqrt((after.x - before.x) * (after.x - before.x)
                        + (after.z - before.z) * (after.z - before.z));
-console.log("      walked " + walked.toFixed(3) + " m");
-assert(walked > 1.0, "the wearer's room MOVED (" + walked.toFixed(3) + " m over 45 frames)");
+console.log("      walked " + walked.toFixed(3) + " m at a fly speed of " + flySpeed.toFixed(2)
+            + " u/s (45 frames at 1/90 s = " + (flySpeed * 0.5).toFixed(3) + " m)");
+assert(near(walked, flySpeed * 0.5, 0.05),
+       "the wearer's room MOVED by exactly the fly speed's half second: " + walked.toFixed(3)
+       + " m against " + (flySpeed * 0.5).toFixed(3));
 assert(near(after.y, before.y, 1e-4),
        "and it stayed LEVEL — a stick never flies a wearer up or down");
 assert(near(after.yaw, before.yaw, 1e-4), "nor turns them");
 
-// Back the other way: the same gesture reversed returns them.
+// BACK THE OTHER WAY, AGAINST A MEASURED BUDGET rather than a fixed one — and
+// the budget is GEOMETRY, not slack. The stick walks along the HEAD's level
+// heading, and this runtime's simulated head drifts with wall time (the suite
+// measures that drift for the turn case below); the two legs are therefore not
+// quite anti-parallel, and two legs of length L whose headings differ by Δ
+// leave the wearer up to 2·L·sin(Δ/2) from where they started. Measured here
+// over exactly the window that matters, because a fixed tolerance would be an
+// assertion about how loaded the box is.
 for (var g = 0; g < 45; ++g) leftStick(0, -1);
 var back = showRig("after 45 frames of full back stick");
-assert(dist2(back, before) < 0.05,
+var headDrift = Math.abs(yawDelta(vr.state().head.yaw, headYaw0));
+var returnBudget = Math.max(0.05, 2.0 * walked * Math.abs(Math.sin(headDrift * Math.PI / 360.0)));
+console.log("      the head's heading drifted " + headDrift.toFixed(3)
+            + " degrees over the two legs: the return budget is "
+            + returnBudget.toFixed(4) + " m");
+assert(dist2(back, before) < returnBudget,
        "and the same gesture reversed brings them back to where they started ("
-       + dist2(back, before).toFixed(4) + " m off)");
+       + dist2(back, before).toFixed(4) + " m off, against the drift's own "
+       + returnBudget.toFixed(4) + " m)");
 
 // A stick inside the DEAD ZONE walks nobody.
 var quiet = showRig("before a dead-zone nudge");
@@ -139,7 +235,7 @@ var ctrlBefore = vr.state().head;
 editor.frame(2);
 var ctrlAfter = vr.state().head;
 var driftM = dist2(ctrlAfter, ctrlBefore);
-var driftDeg = Math.abs(ctrlAfter.yaw - ctrlBefore.yaw);
+var driftDeg = Math.abs(yawDelta(ctrlAfter.yaw, ctrlBefore.yaw));
 console.log("      the runtime's OWN drift over two frames: " + driftM.toFixed(5) + " m, "
             + driftDeg.toFixed(3) + " degrees");
 var posBudget = Math.max(0.25, driftM * 4.0);
@@ -169,10 +265,12 @@ assert(dist2(headAfter, headBefore) < posBudget,
        "AND THE WEARER STAYED WHERE THEY WERE STANDING (" + dist2(headAfter, headBefore).toFixed(5)
        + " m, against a budget of " + posBudget.toFixed(5) + " m measured off this runtime's "
        + "own drift) — the turn moved the room around them, it did not carry them");
-assert(near(headAfter.yaw, headBefore.yaw - 30.0, yawBudget),
+assert(near(yawDelta(headAfter.yaw, headBefore.yaw), -30.0, yawBudget),
        "...while what they are facing turned by the same 30 degrees ("
-       + headBefore.yaw.toFixed(2) + " -> " + headAfter.yaw.toFixed(2) + ", budget "
-       + yawBudget.toFixed(2) + ")");
+       + headBefore.yaw.toFixed(2) + " -> " + headAfter.yaw.toFixed(2) + ", delta "
+       + yawDelta(headAfter.yaw, headBefore.yaw).toFixed(2) + ", budget "
+       + yawBudget.toFixed(2) + ") — through the ±180 WRAP, because a head yaw comes out of "
+       + "a quaternion and a plain subtraction across the seam reads 330 for a 30-degree turn");
 
 // ONE FLICK, ONE TURN: the stick held over does nothing until it comes back.
 var heldTurns = vr.interactionMode().turns;
@@ -209,10 +307,13 @@ assert(cubes.length >= 1, "the scene has a cube");
 node.transform(cubes[0].id, { position: { x: 0, y: 1, z: 0 } });
 editor.frame(1);
 // The aim pose is WORLD space, so it does not matter where the rig walked to.
-assert(vr.inputInject({ hand: "right", valid: true,
-                        aim: { x: 0, y: 1, z: 3 }, grip: { x: 0, y: 1, z: 3 },
-                        select: 0, grab: 0, menu: false, stickX: 0, stickY: 0 }) === true,
-       "inject the right hand in front of the cube");
+var wroteRight = vr.inject("right", { valid: true,
+                                      aim: { x: 0, y: 1, z: 3 }, grip: { x: 0, y: 1, z: 3 },
+                                      select: 0, grab: 0, menuPressed: false,
+                                      stick: { x: 0, y: 0 } });
+editor.frame(1);                        // the session reads it inside a frame (see leftStick)
+assert(wroteRight === true && vr.step() === true,
+       "inject the right hand in front of the cube, carry it in on a frame, and step");
 var h = vr.hover();
 console.log("vr.hover: " + JSON.stringify(h));
 assert(h !== null && h.id === cubes[0].id, "the ray finds the cube inside a live session");
@@ -232,5 +333,66 @@ var ended = vr.interactionMode();
 console.log("vr.interactionMode after end: " + JSON.stringify(ended));
 assert(ended.rig.live === false, "there is no rig any more");
 assert(vr.move({ forward: true }) === false, "and vr.move() refuses again");
+
+// ---- 7. IN THE PLAYER, ONLY LOCOMOTION RUNS — FOR THE VERBS TOO ---------
+//
+// THE FIX FOR THE FABLE READ'S (c). "The Player edits nothing" was enforced on
+// the button EDGES only (the interaction's step() skips the whole editing half
+// when the Player hosts the session), so `vr.select` / `vr.grab` / `vr.release`
+// from a console, a script or an MCP session edited the document of a run the
+// Player was showing — the docstring promised otherwise. Now the refusal lives
+// in the service, where a verb and a button cannot disagree about it, and it
+// SAYS which reason it refused for.
+//
+// A SECOND SESSION IN THIS PROCESS, deliberately: the rule is about WHO hosts
+// the session, so the only way to assert it is to let the other host have one.
+// (This is the same sequence `vr.player_session` uses; the page has to have
+// been shown, because the mirror is the Player's own on-screen View.)
+app.space("player");
+assert(app.columns().space === "player", "the Player page is up");
+assert(player.play({ vr: true }) === true, "player.play({vr:true}) starts the run in VR");
+assert(player.state().vr.active === true, "the Player is hosting a session now");
+player.frame(2);
+
+var pmode = vr.interactionMode();
+console.log("vr.interactionMode under the Player: " + JSON.stringify(pmode));
+assert(pmode.installed === true, "the interaction is installed (a session is running)");
+// WHATEVER THE SELECTION IS, it must come out of this unchanged — the set is
+// not empty here (a new primitive selects itself) and "nothing was edited" is
+// about what these three verbs did, not about the state they found.
+var selBefore = JSON.stringify(editor.selectionSet());
+
+// A hand IS reporting — the refusal below is about the HOST, not about an empty
+// ray, which is exactly what the old boolean could not tell apart.
+var wrotePlayerHand = vr.inject("right", { valid: true, aim: { x: 0, y: 1, z: 3 },
+                                           grip: { x: 0, y: 1, z: 3 } });
+player.frame(1);                        // ...carried in by the Player's own frame
+assert(wrotePlayerHand === true && vr.step() === true,
+       "a controller reports, pointing where the cube is");
+assert(vr.select() === false, "vr.select() REFUSES in the Player");
+console.log("app.lastError: " + app.lastError());
+assert(app.lastError().indexOf("PLAYER") >= 0,
+       "...naming the reason: " + app.lastError());
+assert(vr.grab() === false, "vr.grab() refuses too");
+assert(app.lastError().indexOf("PLAYER") >= 0, "...and says so: " + app.lastError());
+assert(vr.release() === false, "and so does vr.release()");
+assert(app.lastError().indexOf("PLAYER") >= 0, "...with the same reason: " + app.lastError());
+assert(JSON.stringify(editor.selectionSet()) === selBefore,
+       "AND THE SELECTION IS EXACTLY WHAT IT WAS — nothing was selected, toggled or "
+       + "deselected by any of that: " + selBefore);
+
+// ...AND THE STICK STILL WALKS THE WEARER, because locomotion is the half the
+// Player DOES run.
+var pRig = vr.interactionMode().rig;
+assert(pRig.live === true, "there is a rig again (the Player's)");
+assert(vr.move({ forward: true, seconds: 0.5 }) === true,
+       "vr.move() moves the wearer of the Player's session");
+var pRigAfter = vr.interactionMode().rig;
+assert(dist2(pRigAfter, pRig) > 0.5, "and the rig went with it ("
+       + dist2(pRigAfter, pRig).toFixed(3) + " m)");
+
+assert(player.endVr() === true, "player.endVr() ends the Player's session");
+player.stop();
+assert(vr.inject("right") === true, "the injection is withdrawn");
 
 console.log("vr.input_session: PASS");

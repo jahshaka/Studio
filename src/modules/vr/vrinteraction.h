@@ -17,7 +17,8 @@ For more information see the LICENSE file
 // manipulation, §6 locomotion; the owner's ten answers are §16).
 //
 // ONE OBJECT, AND IT KNOWS NOTHING ABOUT VR. It takes a VrHandState per hand
-// from a SOURCE (the runtime's action system, or an injection) and turns it
+// from a SOURCE (the engine's `vrStatus().input[]`, whether the runtime's
+// action system or `Engine::vrInjectInput` wrote it) and turns it
 // into the editor's own verbs: the document's picker for the ray, the
 // SelectionService for the selection, TransformSceneNodeCommand for the undo,
 // SnapSettings for the grid, vrgrab.h for the arithmetic. There is no OpenXR in
@@ -58,9 +59,19 @@ For more information see the LICENSE file
 //     and writes through `Engine::setVrOrigin` — never a host-side copy, which
 //     is the rule VR-4-FIX paid for (a remembered rig overwrites a runtime
 //     recentre the session already absorbed).
-//   * IN THE PLAYER, ONLY LOCOMOTION RUNS. The Player edits nothing — no
-//     selection, no gizmo, no transform writes — so the ray, the select and the
-//     grab are not installed there; the stick still walks the wearer.
+//   * ...BUT NOT WHILE THE HOST IS STILL PLACING THE WEARER. A host places the
+//     rig on the first located frame it can PAIR with the rig it holds, and a
+//     correction from a mismatched pair is a teleport; both hosts refuse their
+//     own fly meanwhile, and the stick asks the same question through
+//     `Deps::locomotionBlocked` instead of writing the origin behind their
+//     backs.
+//   * IN THE PLAYER, ONLY LOCOMOTION RUNS — FOR THE VERBS AS WELL AS FOR THE
+//     BUTTONS. The Player edits nothing — no selection, no gizmo, no transform
+//     writes — so the ray, the select and the grab are skipped there, and
+//     `select()`/`beginGrab()`/`endGrab()` refuse outright, which is what makes
+//     the promise true for a script and an MCP session too. A gesture in flight
+//     when the Player takes the session over is CANCELLED, like one that loses
+//     focus: nothing in the Player would ever follow it.
 
 #include <functional>
 
@@ -80,51 +91,17 @@ class SelectionService;
 struct StudioServices;
 
 // ---------------------------------------------------------------------------
-// THE ENGINE CONTRACT, STATED HERE UNTIL THE ENGINE CARRIES IT.
-//
-// The engine lane (VR-INPUT-1E) adds this struct to
-// irisgl/engine/include/jahshaka/engine/Types.h beside VrPose, together with
-// `VrStatus::input[VrHandCount]`, `Engine::vrInjectInput/vrHaptic/setVrRay`. It
-// is written out here, byte for byte the same shape, so the Studio half could
-// be built, tested and reviewed against the contract before the engine half
-// landed — and it disappears the moment Types.h defines
-// JAH_ENGINE_HAS_VRHANDSTATE (the engine lane defines it beside the struct; if
-// it does not, deleting this block at integration is a one-line change).
-//
-// WORLD SPACE, THROUGH THE RIG, exactly like VrStatus::hands and the head: the
-// only frame a host can reason in. The aim pose's ray points along -Z of its
-// rotation.
-#ifndef JAH_ENGINE_HAS_VRHANDSTATE
-namespace jahshaka {
-namespace engine {
 
-struct VrHandState
-{
-    bool   valid = false;          ///< the runtime located this hand THIS frame
-    VrPose aim;                    ///< the pointing pose (-Z is the ray)
-    VrPose grip;                   ///< where the hand holds the controller
-    float  select = 0.0f;          ///< the trigger, 0..1
-    bool   selectPressed = false;  ///< ...past its threshold, hysteresis applied
-    float  grab = 0.0f;            ///< the squeeze, 0..1
-    bool   grabPressed = false;
-    bool   menuPressed = false;    ///< the modifier (the Ctrl of VR)
-    float  stickX = 0.0f, stickY = 0.0f;
-    bool   stickPressed = false;
-    /// The values came from Engine::vrInjectInput, not from a runtime. A suite
-    /// asserts it so a smoke on a headset can never be reading a stale
-    /// injection and calling it the controller.
-    bool   fromInjection = false;
-};
-
-}   // namespace engine
-}   // namespace jahshaka
-#endif
-
-// ---------------------------------------------------------------------------
-
-/// WHERE A FRAME'S HAND STATES COME FROM. Two implementations below; the
-/// service cannot tell them apart, which is the whole point of the injection
-/// route (VR_INPUT_SPEC §2.4 I1).
+/// WHERE A FRAME'S HAND STATES COME FROM.
+///
+/// ONE IMPLEMENTATION, AND THAT IS THE POINT (the 1E integration, 2026-09-17):
+/// there is exactly one store of hand samples in the process and it is the
+/// ENGINE's (`Engine::vrInjectInput` writes it, `vrStatus().input[]` reports
+/// it), so an injected gesture and a worn one arrive here down the same wire
+/// and the service could not tell them apart if it tried. The interface
+/// survives the merge of the two sources because a HOST stand-in in a test
+/// still wants to answer "no controller" without an engine, and because naming
+/// the question keeps the service free of `vrStatus()` calls.
 class VrInputSource
 {
 public:
@@ -136,41 +113,20 @@ public:
     /// reports nothing pressed, and a gesture in flight must cancel rather than
     /// believe the release.
     virtual bool focused() const = 0;
-    /// For `vr.interactionMode().source` — "runtime" or "injection".
+    /// For `vr.interactionMode().source` — the KIND of source; whether a
+    /// given sample was injected is the sample's own word (`fromInjection`).
     virtual QString name() const = 0;
 };
 
-/// THE INJECTION SOURCE — the test hook that makes every gesture gateable.
+/// THE ENGINE'S HAND SAMPLES — `VrStatus::input[hand]`, whoever wrote them.
 ///
-/// It holds one state per hand and answers with it until it is changed, which
-/// is the contract `vr.inputInject` documents: a script sets a hand's pose and
-/// buttons, steps the interaction, and reads what the editor did. Nothing about
-/// the gesture code knows it is being driven.
-class VrInjectedInput : public VrInputSource
-{
-public:
-    jahshaka::engine::VrHandState hand(unsigned hand) const override;
-    bool focused() const override { return mFocused; }
-    QString name() const override { return QStringLiteral("injection"); }
-
-    void set(unsigned hand, const jahshaka::engine::VrHandState &state);
-    void setFocused(bool focused) { mFocused = focused; }
-    /// Forget everything — both hands invalid, as if no controller existed.
-    void clear();
-    /// Has anything ever been injected? The service prefers the runtime's own
-    /// input until it has.
-    bool armed() const { return mArmed; }
-
-private:
-    jahshaka::engine::VrHandState mHands[jahshaka::engine::VrHandCount];
-    bool mArmed = false;
-    bool mFocused = true;
-};
-
-/// THE RUNTIME SOURCE — `VrStatus::input[hand]`, once the engine carries it.
-/// Until then it answers "no controller", which is the truthful answer on a box
-/// whose engine has no action system: the service then does nothing until
-/// something is injected.
+/// THE WHOLE SOURCE, since stage 1's two halves met: the runtime's action
+/// system fills those fields inside the session's frame, `Engine::vrInjectInput`
+/// fills them from a script with no runtime at all, and each sample says which
+/// it was (`fromInjection`). A second, Studio-side injection store used to sit
+/// beside this one and was DELETED at the integration: two stores meant two
+/// answers to "what is the left hand doing", and the one a gesture read
+/// depended on which verb had been called last.
 class VrEngineInput : public VrInputSource
 {
 public:
@@ -215,6 +171,19 @@ public:
         /// Is the PLAYER the host of the running session? Then only locomotion
         /// runs (the Player edits nothing).
         std::function<bool()> playerMode;
+        /// MAY THE WEARER BE MOVED AT ALL THIS FRAME?
+        ///
+        /// A host PLACES the wearer when a session begins and at every recentre
+        /// — it waits for a located frame it can pair with the rig it holds and
+        /// then writes the rig that puts the wearer where the editor camera
+        /// stands (EditorVrPreview::armPlacement, PlayerVr's the same). A
+        /// correction computed from a MISMATCHED pair is a teleport, which is
+        /// why both hosts refuse their own fly while one is pending — and the
+        /// stick used to walk straight past that refusal, because it writes
+        /// `setVrOrigin` from this object instead of from the host. Every
+        /// locomotion here asks first; a flick held over the blocked frames is
+        /// answered on the first frame after the placement lands.
+        std::function<bool()> locomotionBlocked;
     };
 
     enum class Turn { Snap, Smooth };
@@ -250,14 +219,20 @@ public:
     VrInteraction() = default;
 
     void setDeps(const Deps &deps) { mDeps = deps; }
-    /// The source is NOT owned. Null falls back to the injection store, which
-    /// is what every headless gate uses.
+    /// The source is NOT owned. Null means "no controller reports", which is
+    /// the truthful answer in a process with no engine.
     void setSource(VrInputSource *source) { mSource = source; }
-    /// The source the interaction consults this frame: the injection while it
-    /// is armed, else the engine's report (null before install).
-    const VrInputSource *activeSource() const { return mInjected.armed() ? &mInjected : mSource; }
-    VrInjectedInput &injection() { return mInjected; }
-    const VrInjectedInput &injection() const { return mInjected; }
+    /// The source the interaction consults, or null before install.
+    const VrInputSource *activeSource() const { return mSource; }
+    /// IS A TEST WRITING THE HANDS? True while either hand's sample carries
+    /// `fromInjection` — the engine's own word, not a flag of ours.
+    ///
+    /// The render driver stands down from stepping this object while it is
+    /// true, and that is what makes a suite exact: with a script writing the
+    /// hands, ONE injected sample IS one interaction frame (`vr.step()`), so a
+    /// driver tick stepping the same values again would integrate the stick
+    /// twice and turn the wearer twice per flick.
+    bool injectionArmed() const;
 
     void setOptions(const Options &options) { mOptions = options; }
     Options options() const { return mOptions; }
@@ -280,14 +255,21 @@ public:
     // rule, SCRIPTING_SPEC §2.3).
 
     /// What a trigger press does. False when nothing changed (no hand, or the
-    /// press landed on empty space with the modifier down).
+    /// press landed on empty space with the modifier down) and when the PLAYER
+    /// hosts the session (it edits nothing).
     bool select(unsigned hand, SelectMode mode);
     /// What a squeeze press does: capture the selection (or the node under the
     /// ray, selecting it first) and hold it. False when refused — nothing to
-    /// grab, or the edit gate.
+    /// grab, the edit gate, or the Player.
+    ///
+    /// A GRAB TAKEN BY THE OFF HAND IS RELEASABLE ONLY BY `endGrab`. The button
+    /// edges in step() run for the DOMINANT hand alone (the off hand's stick is
+    /// locomotion), so a `vr.grab({hand:"left"})` is ended by `vr.release`, by
+    /// a cancel (focus loss, session end, the Player taking over) — never by
+    /// squeezing the off hand.
     bool beginGrab(unsigned hand);
     /// What a squeeze release does: commit ONE undo macro. False when no
-    /// gesture was live.
+    /// gesture was live, or in the Player.
     bool endGrab(unsigned hand);
     /// Put everything back and push nothing (focus loss, session end, a
     /// project switch). False when no gesture was live.
@@ -304,6 +286,11 @@ public:
     QList<iris::SceneNodePtr> gestureNodes() const;
     unsigned dominantHand() const;
     unsigned offHand() const;
+    /// Is the PLAYER hosting the running session (Deps::playerMode)? Then only
+    /// locomotion runs — for the button edges AND for the verbs, and public
+    /// because a verb that refused for this reason should SAY so rather than
+    /// answer "nothing to grab".
+    bool playerHosted() const;
     /// The state the service READ for that hand this frame, whoever wrote it.
     jahshaka::engine::VrHandState handState(unsigned hand) const;
     QString sourceName() const;
@@ -335,7 +322,31 @@ private:
     /// The aim ray of a hand, or false when it is not located.
     bool ray(const jahshaka::engine::VrHandState &state, iris::Vec3 &origin,
              iris::Vec3 &direction) const;
-    /// The document pick along a ray, resolved to what a press would select.
+    /// THE DOCUMENT PICK ALONG A RAY, resolved to what a press would select —
+    /// and MEMOISED for the frame, which is the whole of finding (b)'s fix.
+    ///
+    /// WHAT IT COST BEFORE. Every step() picked once for the hover, and then a
+    /// trigger or a squeeze in the same frame picked AGAIN for the same hand at
+    /// the same pose; each pick ran `ScenePicker::pickAll` with
+    /// `refreshTransforms = true`, i.e. a full recursive `update(0)` walk of
+    /// the whole document (the header warns callers inside a live drag to pass
+    /// false for exactly this reason) plus the ray query and a QList of hits.
+    ///
+    /// WHAT IT COSTS NOW. The geometric half of the answer is remembered
+    /// against the hand, the scene, the aim pose's own bits and
+    /// `iris::graph::transformWrites()` — the document's transform/structure
+    /// epoch — so a hand that did not move in a document that did not move is
+    /// answered without touching the scene at all, and the walk runs only when
+    /// something has actually been written since the last one. The ROOT RULE is
+    /// re-resolved on every call regardless (it depends on the SELECTION, which
+    /// a press changes), so a second press still drills into the part of an
+    /// asset that is already selected.
+    ///
+    /// THE ONE THING THE EPOCH DOES NOT SEE is a change that moves nothing and
+    /// writes no transform — a node LOCKED or hidden while the hand is already
+    /// crossing it. That is answered on the next pose change, which in a
+    /// headset is the next frame (a tracked hand never repeats a pose bit for
+    /// bit); a script that wants it sooner moves the hand.
     Hover pick(unsigned hand, const jahshaka::engine::VrHandState &state) const;
     /// THE SELECTION RULES, over a pick that has already happened — shared by
     /// `select()` (the verb and the trigger) and by a grab on something that
@@ -357,10 +368,12 @@ private:
     bool rigNow(vrorigin::Rig &rig, iris::Vec3 &headPosition, iris::Quat &headRotation) const;
     /// The engine right now, or null (see Deps::engine).
     jahshaka::engine::Engine *engineNow() const;
+    /// Is a host mid-placement (see Deps::locomotionBlocked)? False when no
+    /// host said — a headless stand-in places nobody.
+    bool locomotionBlocked() const;
 
     Deps mDeps;
     Options mOptions;
-    VrInjectedInput mInjected;
     VrInputSource *mSource = nullptr;
     bool mInstalled = false;
 
@@ -369,6 +382,38 @@ private:
     Gesture mGesture;
     /// The snap turn's re-arm (one flick, one turn — vrgrab::snapTurnRearmed).
     bool mTurnArmed = true;
+
+    /// THE FRAME'S PICK, REMEMBERED (see pick()). Mutable because picking is a
+    /// READ of the document: `hover()`, `select()` and `beginGrab()` are all
+    /// const-correct about the scene and none of them should have to be a
+    /// non-const operation to be cheap.
+    struct PickMemo
+    {
+        bool valid = false;
+        const iris::Scene *scene = nullptr;
+        unsigned hand = ~0u;
+        /// The aim pose, compared FIELD BY FIELD against the next frame's: a
+        /// runtime's pose is a copy of what it reported, so two frames in which
+        /// the hand did not move carry identical floats.
+        float px = 0.0f, py = 0.0f, pz = 0.0f;
+        float rx = 0.0f, ry = 0.0f, rz = 0.0f, rw = 0.0f;
+        /// The document's transform/structure epoch at the pick
+        /// (iris::graph::transformWrites(), which a reparent bumps too).
+        unsigned long long writes = 0ull;
+        /// The GEOMETRIC half of the hit — everything except the root rule.
+        bool hit = false;
+        iris::SceneNodePtr picked;
+        iris::Vec3 origin, direction, point;
+        float distance = 0.0f;
+        int triangleIndex = -1;
+    };
+    mutable PickMemo mMemo;
+    /// `transformWrites()` as it stood when this object last asked the picker
+    /// to refresh the document's global transforms. A pick refreshes only when
+    /// the counter has moved since — the walk is idempotent, so skipping it
+    /// when nothing was written is exact rather than optimistic.
+    mutable unsigned long long mRefreshedAtWrites = 0ull;
+    mutable bool mRefreshed = false;
     /// Counts, for the suites: every number a COUNT, never a wall clock.
     unsigned long long mSelects = 0, mGrabs = 0, mCommits = 0, mCancels = 0, mTurns = 0;
 };

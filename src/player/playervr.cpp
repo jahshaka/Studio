@@ -337,6 +337,13 @@ QVariantMap PlayerVr::report() const
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(st.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(st.rendered));
     out[QStringLiteral("posesValid")] = st.posesValid;
+    // WAITING TO PUT THE WEARER SOMEWHERE (see placing()). Reported because the
+    // thumbstick's locomotion — which lives above this object, in
+    // VrInteraction — has to refuse over exactly these frames, and because a
+    // `placing` that never clears is what a session with no locate looks like
+    // from the outside. The editor's preview reports the same field as
+    // `vr.state().preview.placing`.
+    out[QStringLiteral("placing")] = mPlacePending;
     // HOW OFTEN THE RUNTIME RECENTRED THE ROOM under this session, absorbed
     // into the rig so the wearer stayed put. Reported because a wearer who did
     // not press anything and sees this climbing is looking at a runtime

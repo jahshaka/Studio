@@ -88,6 +88,18 @@ public:
     /// A session started HERE is still running.
     bool isActive() const;
 
+    /// IS THE WEARER STILL BEING PUT SOMEWHERE? True between a session's begin
+    /// (or a recentre) and the first located frame that can be PAIRED with the
+    /// rig the engine holds — the frames over which this object refuses its own
+    /// fly, because a correction computed from a mismatched pair is a teleport.
+    ///
+    /// Asked by the CONTROLLER's locomotion (VrInteraction::Deps::
+    /// locomotionBlocked), which writes `setVrOrigin` itself and would
+    /// otherwise walk and turn the rig behind this placement's back. Also
+    /// reported as `vr.state().preview.placing`, which is what the session
+    /// suites wait on.
+    bool placing() const { return mPlacePending; }
+
     /// One frame: the placement, then the wearer's fly. Called from the render
     /// driver's beforeFrame — the one place in the editor that runs once per
     /// rendered frame, which is what a rig must be moved on (a wall-clock timer
