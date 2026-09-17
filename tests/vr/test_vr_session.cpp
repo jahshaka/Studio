@@ -1247,6 +1247,292 @@ int main() {
               "THE DESKTOP RENDERS THE SAME BYTES AFTER A SESSION AS BEFORE ONE: %zu of %zu "
               "bytes differ, worst %d/255", deskDiff, before.rgba.size(), worst);
 
+    // =======================================================================
+    // 9. THE CONTROLS (lane VR-INPUT-1E, phase 4b stage 1; VR_INPUT_SPEC §2).
+    //
+    // FOUR THINGS ARE OURS HERE and each is asserted: the four suggested
+    // binding blocks (this runtime takes all four — measured), the AIM pose
+    // beside the grip, the INJECTION HOOK with its refusal rule, and the RAY
+    // placed inside the frame from the state the host pushed. What the wearer's
+    // hardware reports stays the runtime's half: Monado's simulated controllers
+    // hold no buttons at all (their input values are never written — the
+    // preflight read the installed build's source), so a suite that demanded a
+    // trigger press here would red on every box. That is exactly what the
+    // injection hook is for, and why it is the backbone rather than a
+    // convenience.
+    // =======================================================================
+    {
+        setFixtureSky(scene, false);
+        // THE WEARER'S FURNITURE, as the mirror builds it in the app: two
+        // proxies, the ray's unit line down -Z and its hit marker. Made here
+        // so the session's own placement can be READ BACK out of the graph,
+        // which is the only honest way to assert "it drew it there".
+        // THE PROXIES CARRY GEOMETRY, in the wearer's own channel and in a
+        // hue that survives the eye's grade: what makes the visibility rule
+        // below a PICTURE rather than an inspection (case 8's lesson).
+        const NodeId proxy[2] = {
+            addTestCube(scene, Colour{ 0.02f, 0.95f, 0.95f, 1.0f }, 0.0f, 0.6f),
+            addTestCube(scene, Colour{ 0.02f, 0.95f, 0.95f, 1.0f }, 0.0f, 0.6f) };
+        const NodeId rayNode[2] = { scene->createNode(), scene->createNode() };
+        REQUIRE(proxy[0] && proxy[1] && rayNode[0] && rayNode[1]);
+        for (int h = 0; h < 2; ++h) {
+            scene->setNodeHelper(proxy[h], true);
+            scene->setNodeVrHelper(proxy[h], true);
+        }
+        scene->setVrProxyNodes(proxy[0], proxy[1]);
+        scene->setVrRayNodes(rayNode[0], rayNode[1]);
+
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession: %s",
+                                     engine->lastError().c_str());
+        if (began) {
+            pump(engine.get(), 60ull, 600u);
+            const VrStatus st = engine->vrStatus();
+            std::printf("INPUT  profile='%s' bindings %u/%u | left valid=%d aim=%d | "
+                        "right valid=%d aim=%d\n",
+                        st.profile.c_str(), st.bindingProfilesAccepted, st.bindingProfiles,
+                        int(st.input[VrHandLeft].valid), int(st.input[VrHandLeft].aim.valid),
+                        int(st.input[VrHandRight].valid), int(st.input[VrHandRight].aim.valid));
+            // (a) THE BINDINGS PARSE. Three blocks are unconditional (simple,
+            // Touch, WMR) and the fourth rides XR_EXT_hand_interaction; what is
+            // asserted is that the runtime REFUSED none of what it was offered,
+            // because a refusal is a path we spelled wrong and it takes that
+            // hardware's input away silently.
+            CHECK_MSG(st.bindingProfiles >= 3u,
+                      "at least the three controller profiles were offered (%u)",
+                      st.bindingProfiles);
+            CHECK_MSG(st.bindingProfilesAccepted == st.bindingProfiles,
+                      "THE SUGGESTED BINDINGS PARSE: the runtime took %u of the %u profiles "
+                      "offered — no XR_ERROR_PATH_UNSUPPORTED anywhere",
+                      st.bindingProfilesAccepted, st.bindingProfiles);
+            // (b) AND IT SAYS WHICH ONE IT BOUND.
+            CHECK_MSG(st.profile.rfind("/interaction_profiles/", 0) == 0,
+                      "the runtime reports the profile it bound ('%s')", st.profile.c_str());
+            // (c) THE AIM POSE, beside the grip — two different answers, both
+            // composed through the rig.
+            for (unsigned h = 0; h < VrHandCount; ++h) {
+                const VrHandState &in = st.input[h];
+                if (!in.valid) continue;
+                CHECK_MSG(in.grip.valid == st.hands[h].valid,
+                          "hand %u: input.grip and hands[] are the same answer", h);
+                if (!in.aim.valid) continue;
+                const float q = std::sqrt(in.aim.rotation.x * in.aim.rotation.x +
+                                          in.aim.rotation.y * in.aim.rotation.y +
+                                          in.aim.rotation.z * in.aim.rotation.z +
+                                          in.aim.rotation.w * in.aim.rotation.w);
+                CHECK_MSG(std::fabs(q - 1.0f) < 1e-3f,
+                          "hand %u: the aim pose is a unit orientation (|q| = %.5f)", h, q);
+            }
+
+            // (d) THE REFUSAL RULE. A session whose runtime has bound a real
+            // profile refuses an injection — the wearer's own hardware always
+            // wins, and a smoke in a headset cannot be fooled by a stale
+            // script.
+            VrHandState fake;
+            fake.valid = true;
+            fake.grip.valid = true;
+            fake.grip.position = Vec3{ 1.5f, 1.0f, -2.0f };
+            fake.grip.rotation = Quat{ 0.0f, 0.0f, 0.0f, 1.0f };
+            fake.aim.valid = true;
+            fake.aim.position = Vec3{ 1.5f, 1.05f, -2.05f };
+            fake.aim.rotation = Quat{ 0.0f, 0.0f, 0.0f, 1.0f };
+            // THE STRUCT IS THE WHOLE TRUTH, presses included: the engine
+            // replaces the runtime's sample with exactly this and applies no
+            // threshold of its own to it (the JS verb `vr.inject` derives an
+            // unsaid press from the value at 0.5 — that convenience belongs to
+            // the verb, not to the boundary).
+            fake.select = 0.8f;
+            fake.selectPressed = true;
+            fake.grab = 1.0f;
+            fake.grabPressed = true;
+            fake.menuPressed = true;
+            fake.stickX = -0.25f;
+            fake.stickY = 0.5f;
+            fake.stickPressed = true;
+            CHECK_MSG(!engine->vrInjectInput(VrHandLeft, fake),
+                      "AN INJECTION IS REFUSED while the runtime reports a bound profile: %s",
+                      engine->lastError().c_str());
+            CHECK(engine->lastError().find("JAHSHAKA_VR_TEST_INJECT") != std::string::npos);
+
+            // (e) ...AND THE OVERRIDE IS EXPLICIT AND PROCESS-LEVEL. Read live
+            // rather than latched at boot, which is what lets one process prove
+            // both halves of the rule.
+            setenv("JAHSHAKA_VR_TEST_INJECT", "1", 1);
+            CHECK(engine->vrInjectInput(VrHandLeft, fake));
+            CHECK(!engine->vrInjectInput(7, fake));      // not a hand
+            pump(engine.get(), engine->vrStatus().frames + 4ull, 60u);
+            {
+                const VrStatus inj = engine->vrStatus();
+                const VrHandState &got = inj.input[VrHandLeft];
+                CHECK_MSG(got.fromInjection,
+                          "THE INJECTED SAMPLE ROUND-TRIPS: the hand is reported as injected");
+                CHECK(got.valid && got.grip.valid && got.aim.valid);
+                CHECK_MSG(std::fabs(got.grip.position.x - 1.5f) < 1e-5f &&
+                              std::fabs(got.aim.position.z + 2.05f) < 1e-5f,
+                          "...with the poses exactly as written, in WORLD space (the rig is not "
+                          "applied twice): grip x %.4f, aim z %.4f",
+                          got.grip.position.x, got.aim.position.z);
+                CHECK_MSG(std::fabs(got.select - 0.8f) < 1e-5f && got.selectPressed &&
+                              std::fabs(got.grab - 1.0f) < 1e-5f && got.grabPressed &&
+                              got.menuPressed && got.stickPressed &&
+                              std::fabs(got.stickX + 0.25f) < 1e-5f &&
+                              std::fabs(got.stickY - 0.5f) < 1e-5f,
+                          "...and every control as written (select %.2f/%d grab %.2f/%d menu %d "
+                          "stick %.2f,%.2f/%d)", got.select, int(got.selectPressed), got.grab,
+                          int(got.grabPressed), int(got.menuPressed), got.stickX, got.stickY,
+                          int(got.stickPressed));
+                CHECK_MSG(inj.hands[VrHandLeft].valid &&
+                              std::fabs(inj.hands[VrHandLeft].position.x - 1.5f) < 1e-5f,
+                          "...and `hands[]` IS `input[].grip`, injection included");
+                // THE PROXY FOLLOWS, placed by the session inside the frame.
+                Vec3 pos;
+                Quat rot;
+                const bool got0 = scene->nodeWorldPose(proxy[0], pos, rot);
+                CHECK_MSG(got0 && std::fabs(pos.x - 1.5f) < 1e-4f &&
+                              std::fabs(pos.y - 1.0f) < 1e-4f && std::fabs(pos.z + 2.0f) < 1e-4f,
+                          "THE CONTROLLER PROXY IS DRAWN WHERE THE HAND IS: (%.3f, %.3f, %.3f)",
+                          pos.x, pos.y, pos.z);
+            }
+
+            // (e2) A HAND THAT STOPS REPORTING IS HIDDEN IN THE SAME FRAME
+            // (VR-4-FIX's second read, finding 2), and a hand that reports is
+            // left exactly as the host set it.
+            //
+            // THE ASYMMETRY IS THE RULE: the session may take a proxy AWAY (the
+            // runtime's answer is the only one that can be a frame late, and a
+            // stale wand at a stale pose is what the wearer would see), but it
+            // may never put one back — whether the markers are drawn at all is
+            // the host's switch (`vr.proxies(false)`), which lives in the
+            // mirror. Getting that backwards drew the controllers through a
+            // user's own "off", which `vr.verbs_session` caught.
+            {
+                const VrStatus live = engine->vrStatus();
+                // In front of the wearer's own head, so a drifting simulated
+                // pose cannot put the cube out of frame — and far enough out
+                // that the fixture's UNIT cube does not enclose the eye
+                // (inside a cube every face is a back face and nothing draws:
+                // measured at 0.40 m, 0 px).
+                VrHandState near = fake;
+                near.grip.position = Vec3{ live.headPosition.x, live.headPosition.y - 0.30f,
+                                           live.headPosition.z - 1.60f };
+                near.aim = near.grip;
+                CHECK(engine->vrInjectInput(VrHandLeft, near));
+                pump(engine.get(), engine->vrStatus().frames + 4ull, 60u);
+                const auto cyanPixels = [&]() {
+                    View *v = engine->vrView();
+                    Image eye;
+                    if (!v || !v->readPixels(eye)) return size_t(0);
+                    size_t cyan = 0;
+                    for (size_t i = 0; i + 3 < eye.rgba.size(); i += 4) {
+                        const int r = eye.rgba[i], g = eye.rgba[i + 1], b = eye.rgba[i + 2];
+                        if (g - r > 25 && b - r > 25) ++cyan;
+                    }
+                    return cyan;
+                };
+                const size_t shown = cyanPixels();
+                CHECK_MSG(shown > 200u,
+                          "THE WEARER SEES THE HAND THE RUNTIME IS REPORTING: %zu px of the "
+                          "proxy in the eye", shown);
+                // ...and now the hand stops reporting: `valid` true, no GRIP.
+                // (A wearer switching a controller off, or stepping out of the
+                // tracking volume.)
+                VrHandState gone = near;
+                gone.grip.valid = false;
+                gone.aim.valid = false;
+                CHECK(engine->vrInjectInput(VrHandLeft, gone));
+                pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
+                const size_t hidden = cyanPixels();
+                CHECK_MSG(hidden == 0u,
+                          "A HAND THAT STOPS REPORTING IS GONE FROM THE PICTURE THE SAME "
+                          "FRAME: %zu px left (it used to draw one stale frame)", hidden);
+                CHECK(engine->vrInjectInput(VrHandLeft, fake));
+                pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
+                // NOT SHOWN AGAIN BY THE SESSION, deliberately: nothing here
+                // re-shows a node. In the app the mirror does it on its next
+                // sync, which is the writer that knows the user's own switch.
+                CHECK_MSG(cyanPixels() == 0u,
+                          "...and the session does not put it back: showing a proxy is the "
+                          "host's decision, not the runtime's");
+            }
+
+            // (f) THE RAY, placed in the frame — and RE-ANCHORED to this
+            // frame's aim pose while keeping the host's own length.
+            {
+                VrRayState ray;
+                ray.visible = true;
+                ray.hand = int(VrHandLeft);
+                // A DELIBERATELY STALE ORIGIN (a metre away from the aim
+                // pose): what a host computed a frame or two ago. The line must
+                // come out at the AIM pose, not here.
+                ray.origin = Vec3{ 0.0f, 1.0f, 0.0f };
+                ray.dir = Vec3{ 0.0f, 0.0f, -1.0f };
+                ray.hit = true;
+                ray.hitPoint = Vec3{ 0.0f, 1.0f, -3.0f };       // 3 m of reach
+                engine->setVrRay(ray);
+                pump(engine.get(), engine->vrStatus().frames + 3ull, 60u);
+                Vec3 linePos, markerPos;
+                Quat q;
+                const bool haveLine = scene->nodeWorldPose(rayNode[0], linePos, q);
+                const bool haveMark = scene->nodeWorldPose(rayNode[1], markerPos, q);
+                std::printf("RAY    line at (%.3f, %.3f, %.3f), marker at (%.3f, %.3f, %.3f)\n",
+                            linePos.x, linePos.y, linePos.z, markerPos.x, markerPos.y,
+                            markerPos.z);
+                CHECK_MSG(haveLine && std::fabs(linePos.x - 1.5f) < 1e-4f &&
+                              std::fabs(linePos.z + 2.05f) < 1e-4f,
+                          "THE RAY LEAVES THE HAND, NOT THE HOST'S STALE ORIGIN: the line stands "
+                          "at this frame's aim pose (%.3f, %.3f, %.3f)", linePos.x, linePos.y,
+                          linePos.z);
+                CHECK_MSG(haveMark && std::fabs(markerPos.z - (-2.05f - 3.0f)) < 1e-3f &&
+                              std::fabs(markerPos.x - 1.5f) < 1e-3f,
+                          "...and the hit marker stands at the host's own distance along it "
+                          "(%.3f, %.3f, %.3f)", markerPos.x, markerPos.y, markerPos.z);
+                // A RAY NOBODY IS POINTING is not drawn — and the engine keeps
+                // what it was handed, so a host can read its own state back.
+                VrRayState off;
+                engine->setVrRay(off);
+                CHECK(!engine->vrRay().visible && !engine->vrRay().hit);
+            }
+
+            // (g) CLEARING IS A DEFAULT STATE, and the runtime's own answer
+            // comes straight back.
+            CHECK(engine->vrInjectInput(VrHandLeft, VrHandState()));
+            pump(engine.get(), engine->vrStatus().frames + 4ull, 60u);
+            CHECK_MSG(!engine->vrStatus().input[VrHandLeft].fromInjection,
+                      "an injection is withdrawn by a default state — the hand is the runtime's "
+                      "again");
+
+            // (h) THE ONE OUTPUT. On a simulated controller nothing buzzes and
+            // the call still succeeds: a profile with no haptic output is a
+            // supported controller, not an error.
+            const bool buzzed = engine->vrHaptic(VrHandRight, 1.0f, 0.05f);
+            std::printf("HAPTIC vrHaptic(right) = %d (%s)\n", int(buzzed),
+                        buzzed ? "the runtime took it" : engine->lastError().c_str());
+            CHECK_MSG(buzzed, "the haptic call is accepted by the runtime");
+            CHECK(!engine->vrHaptic(9, 1.0f, 0.05f));
+            unsetenv("JAHSHAKA_VR_TEST_INJECT");
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+            CHECK_MSG(!engine->vrHaptic(VrHandLeft, 1.0f, 0.05f),
+                      "...and with no session there is nothing to buzz");
+            // WITH NO SESSION THE HOOK STILL ANSWERS — which is what makes
+            // every gesture test in the tree runnable on a box with no headset
+            // (the no-runtime half is scripting.e2e.vr_verbs).
+            CHECK(engine->vrInjectInput(VrHandRight, fake));
+            CHECK_MSG(engine->vrStatus().input[VrHandRight].fromInjection &&
+                          std::fabs(engine->vrStatus().hands[VrHandRight].position.x - 1.5f) < 1e-5f,
+                      "AN INJECTION NEEDS NO SESSION AT ALL: with none running the engine "
+                      "reports the written sample, hands[] included");
+            engine->vrInjectInput(VrHandRight, VrHandState());
+        }
+        scene->setVrProxyNodes(0, 0);
+        scene->setVrRayNodes(0, 0);
+        scene->removeNode(proxy[0]);
+        scene->removeNode(proxy[1]);
+        scene->removeNode(rayNode[0]);
+        scene->removeNode(rayNode[1]);
+    }
+
     // ---- a session on a dead runtime must refuse, never hang --------------
     CHECK(!engine->beginVrSession(nullptr, VrConfig()));
     CHECK(!engine->lastError().empty());

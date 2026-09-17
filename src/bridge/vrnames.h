@@ -101,6 +101,48 @@ inline QVariantMap pose(const jahshaka::engine::VrPose &p)
     return pose(p.position, p.rotation, p.valid);
 }
 
+/// ONE HAND'S WHOLE INPUT AS A VERB ANSWERS IT (phase 4b stage 1,
+/// VR_INPUT_SPEC §2.4): the two poses in the shape above and every control as
+/// a value beside its press.
+///
+/// One spelling for the same reason as the rest of this header: `vr.state()
+/// .input.left` reports it, the `vr.input.*` verbs report it, and a caller that
+/// learned the shape from one must find the same shape in the other.
+inline QVariantMap handState(const jahshaka::engine::VrHandState &h)
+{
+    QVariantMap out;
+    out[QStringLiteral("valid")] = h.valid;
+    out[QStringLiteral("aim")] = pose(h.aim);
+    out[QStringLiteral("grip")] = pose(h.grip);
+    out[QStringLiteral("select")] = double(h.select);
+    out[QStringLiteral("selectPressed")] = h.selectPressed;
+    out[QStringLiteral("grab")] = double(h.grab);
+    out[QStringLiteral("grabPressed")] = h.grabPressed;
+    out[QStringLiteral("menuPressed")] = h.menuPressed;
+    QVariantMap stick;
+    stick[QStringLiteral("x")] = double(h.stickX);
+    stick[QStringLiteral("y")] = double(h.stickY);
+    out[QStringLiteral("stick")] = stick;
+    out[QStringLiteral("stickPressed")] = h.stickPressed;
+    out[QStringLiteral("fromInjection")] = h.fromInjection;
+    return out;
+}
+
+/// WHICH HAND A VERB WAS GIVEN: "left"/"l"/0 or "right"/"r"/1, and -1 for
+/// anything else (a verb refuses on -1 rather than guessing a hand).
+inline int handFrom(const QVariant &raw)
+{
+    if (raw.typeId() == QMetaType::Int || raw.typeId() == QMetaType::Double ||
+        raw.typeId() == QMetaType::LongLong || raw.typeId() == QMetaType::UInt) {
+        const int i = raw.toInt();
+        return (i == 0 || i == 1) ? i : -1;
+    }
+    const QString n = raw.toString().trimmed().toLower();
+    if (n == QLatin1String("left") || n == QLatin1String("l")) return 0;
+    if (n == QLatin1String("right") || n == QLatin1String("r")) return 1;
+    return -1;
+}
+
 }   // namespace vrnames
 
 #endif   // VRNAMES_H
