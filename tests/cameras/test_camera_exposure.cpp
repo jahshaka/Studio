@@ -795,6 +795,164 @@ void partC()
           "createDuplicate copies the exposure block and the whole override map");
 }
 
+// ---------------------------------------------------------------------------
+// PART D — THE METER, THROUGH THE DOCUMENT (EXPOSURE-2).
+//
+// hdr.meter asserts the histogram meter's ARITHMETIC against numbers computed
+// on paper. This part asserts the other half: that the scene's choice of
+// METERING PATTERN reaches the view that renders it, that a camera override
+// does not silently reset it, and that it MOVES THE PICTURE in the direction
+// the pattern promises.
+//
+// THE FIXTURE IS THE CLASSIC PHOTOGRAPHIC CASE, and it is what this part
+// exists to demonstrate: a SUBJECT DARKER THAN THE SKY BEHIND IT — the backlit
+// portrait. An averaging meter reads mostly sky and stops down, leaving the
+// subject in shadow; a SPOT meter reads the subject and opens up. That is the
+// whole reason a metering pattern exists, and it is a picture, not a number.
+//
+// THE PREMISE IS MEASURED, not assumed: part D first reads the centre ninth of
+// the frame against its surround under a MANUAL grade, where no meter is
+// involved at all, and only then asserts what the patterns do about it.
+// ---------------------------------------------------------------------------
+
+/// Mean luminance of the middle ninth of a frame, and of everything outside it.
+void centreAndSurround(const Image &img, double &centre, double &surround)
+{
+    double cs = 0.0, ss = 0.0;
+    long cn = 0, sn = 0;
+    for (unsigned y = 0; y < img.height; ++y)
+        for (unsigned x = 0; x < img.width; ++x) {
+            const size_t i = (size_t(y) * img.width + x) * 4;
+            if (i + 3 >= img.rgba.size()) continue;
+            const double l = 0.2126 * img.rgba[i] + 0.7152 * img.rgba[i + 1] +
+                             0.0722 * img.rgba[i + 2];
+            const bool inCentre = x >= img.width / 3 && x < img.width * 2 / 3 &&
+                                  y >= img.height / 3 && y < img.height * 2 / 3;
+            if (inCentre) { cs += l; ++cn; } else { ss += l; ++sn; }
+        }
+    centre = cn ? cs / double(cn) : 0.0;
+    surround = sn ? ss / double(sn) : 0.0;
+}
+
+void partD()
+{
+    Doc doc;
+    Scene *target = gEngine->createScene("meterDoc");
+    View *view = gEngine->createOffscreenView("meterDocView", 192, 108,
+                                              Colour(0.10f, 0.10f, 0.12f));
+    if (!target || !view) { std::printf("FAIL: part D scene/view\n"); ++failures; return; }
+    SceneMirror mirror(target);
+    mirror.setSource(doc.scene);
+    view->setScene(target);
+
+    // ---- D1: the document's defaults -----------------------------------
+    CHECK(doc.scene->exposureMetering == iris::ExposureMetering::CentreWeighted,
+          "a new scene meters CENTRE WEIGHTED");
+    CHECK(std::fabs(doc.scene->exposureMeterLowPercent - 10.0f) < 1e-6f &&
+              std::fabs(doc.scene->exposureMeterHighPercent - 90.0f) < 1e-6f,
+          "…and clips the darkest and brightest tenth (%.1f/%.1f)",
+          double(doc.scene->exposureMeterLowPercent),
+          double(doc.scene->exposureMeterHighPercent));
+    CHECK(std::string(iris::exposureMeteringName(iris::ExposureMetering::Spot)) == "spot" &&
+              iris::exposureMeteringFromName("average") == iris::ExposureMetering::Average,
+          "the pattern's names round-trip");
+    bool badOk = true;
+    iris::exposureMeteringFromName("sideways", &badOk);
+    CHECK(!badOk, "…and an unknown name is REFUSED rather than silently defaulted");
+
+    // ---- D2: it reaches the view that renders it ------------------------
+    doc.scene->exposureMode = iris::ExposureMode::Auto;
+    doc.scene->exposureMin = -6.0f;
+    doc.scene->exposureMax = 6.0f;                 // wide: the meter decides
+    doc.scene->exposureMetering = iris::ExposureMetering::Spot;
+    doc.scene->exposureMeterLowPercent = 2.0f;
+    doc.scene->exposureMeterHighPercent = 98.0f;
+    shoot(mirror, view, doc.camera, true, nullptr, 3);
+    CHECK(view->postFx().meterPattern == ExposureMeterPattern::Spot &&
+              std::fabs(view->postFx().meterLowPercent - 2.0f) < 1e-6f &&
+              std::fabs(view->postFx().meterHighPercent - 98.0f) < 1e-6f,
+          "the scene's metering pattern and clips reach the view's description");
+
+    // ---- D3: A CAMERA OVERRIDE DOES NOT RESET THE WORLD'S METER ---------
+    // The meter is the WORLD's: a CameraNode has an exposure block and no
+    // metering block (per camera comes later), so a camera that overrides the
+    // MODE must leave the pattern the world chose alone. It is one line in the
+    // mirror (applyExposure and applyMeter are separate calls, and only the
+    // world makes the second) and it would fail silently otherwise — a camera
+    // would quietly meter centre-weighted.
+    doc.camera->exposureMode = iris::CameraExposureMode::Auto;
+    doc.camera->exposure = 0.0f;
+    doc.camera->exposureMin = -6.0f;
+    doc.camera->exposureMax = 6.0f;
+    shoot(mirror, view, doc.camera, true, nullptr, 3);
+    CHECK(view->postFx().meterPattern == ExposureMeterPattern::Spot &&
+              std::fabs(view->postFx().meterLowPercent - 2.0f) < 1e-6f,
+          "a camera in Auto over the world's Spot meter still meters SPOT");
+    doc.camera->exposureMode = iris::CameraExposureMode::Inherit;
+
+    // ---- D4: THE FIXTURE'S PREMISE, under a grade with no meter in it ----
+    doc.scene->exposureMode = iris::ExposureMode::Manual;
+    doc.scene->exposureMetering = iris::ExposureMetering::Average;
+    doc.scene->exposureMeterLowPercent = 10.0f;
+    doc.scene->exposureMeterHighPercent = 90.0f;
+    shoot(mirror, view, doc.camera, true, nullptr, 8);
+    Image manual;
+    double centre = 0.0, surround = 0.0;
+    if (view->readPixels(manual)) centreAndSurround(manual, centre, surround);
+    std::printf("    manual grade: centre ninth %.2f, surround %.2f\n", centre, surround);
+    CHECK(surround > centre + 5.0,
+          "PREMISE: the SUBJECT in the middle of this frame is DARKER than the sky around "
+          "it (%.2f against %.2f) — the backlit case, and without it nothing below would "
+          "mean anything", centre, surround);
+
+    // ---- D5: AVERAGE vs SPOT, in the picture ----------------------------
+    doc.scene->exposureMode = iris::ExposureMode::Auto;
+    const double avgLuma = shoot(mirror, view, doc.camera, true);
+    const double avgScale = double(view->measuredExposureScale());
+    doc.scene->exposureMetering = iris::ExposureMetering::Spot;
+    const double spotLuma = shoot(mirror, view, doc.camera, true);
+    const double spotScale = double(view->measuredExposureScale());
+    std::printf("    average: multiplier %.4f, frame %.2f | spot: multiplier %.4f, frame %.2f\n",
+                avgScale, avgLuma, spotScale, spotLuma);
+    CHECK(avgScale > 0.0 && spotScale > 0.0,
+          "both patterns produced a measurement (%.4f, %.4f)", avgScale, spotScale);
+    CHECK(spotScale > avgScale * 1.02,
+          "SPOT exposes for the SUBJECT and not for the sky behind it, so it OPENS UP "
+          "(multiplier %.4f against average's %.4f)", spotScale, avgScale);
+    CHECK(spotLuma > avgLuma + 1.0,
+          "…and the picture is brighter for it (%.2f vs %.2f) — the backlit subject comes "
+          "out of shadow, which is the whole point of the dial", spotLuma, avgLuma);
+    // The SUBJECT itself is what moved, not just the frame's average.
+    Image spotImg;
+    double spotCentre = 0.0, spotSurround = 0.0;
+    if (view->readPixels(spotImg)) centreAndSurround(spotImg, spotCentre, spotSurround);
+    std::printf("    spot: centre ninth %.2f, surround %.2f\n", spotCentre, spotSurround);
+    CHECK(spotCentre > centre + 5.0,
+          "…and it is the SUBJECT that came up (centre ninth %.2f against the manual "
+          "grade's %.2f)", spotCentre, centre);
+
+    // ---- D6: the clips move the grade, in the direction they promise -----
+    // A window of 0..100 keeps the brightest pixels the 90 clip threw away, so
+    // the measurement rises and the grade comes DOWN.
+    doc.scene->exposureMetering = iris::ExposureMetering::Average;
+    doc.scene->exposureMeterLowPercent = 0.0f;
+    doc.scene->exposureMeterHighPercent = 100.0f;
+    shoot(mirror, view, doc.camera, true);
+    const double keepAll = double(view->measuredExposureScale());
+    doc.scene->exposureMeterHighPercent = 60.0f;   // cut the brightest 40 %
+    shoot(mirror, view, doc.camera, true);
+    const double cutBright = double(view->measuredExposureScale());
+    std::printf("    keep everything %.4f -> cut the brightest 40 %% %.4f\n",
+                keepAll, cutBright);
+    CHECK(cutBright > keepAll * 1.02,
+          "CUTTING THE BRIGHT TAIL raises the grade (%.4f -> %.4f): the pixels a mean "
+          "could not resist are out of the measurement", keepAll, cutBright);
+
+    gEngine->destroyView(view);
+    mirror.setSource(iris::ScenePtr());
+    gEngine->destroyScene(target);
+}
+
 }   // namespace
 
 int main(int argc, char **argv)
@@ -816,6 +974,7 @@ int main(int argc, char **argv)
     std::printf("\n-- A3 a cut re-seeds the exposure history --\n");        a3_cut_reseeds_the_exposure_history();
     std::printf("\n-- B  camera exposure and overrides through the mirror --\n"); partB();
     std::printf("\n-- C  the document contract --\n");                      partC();
+    std::printf("\n-- D  the METER, through the document --\n");            partD();
 
     gEngine = nullptr;
     engine.reset();

@@ -641,6 +641,23 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
              sceneObj.contains("exposureMax")) &&
             !sceneObj.contains("exposureEv") && !sceneObj.contains("exposureMinEv") &&
             !sceneObj.contains("exposureMaxEv") && !sceneObj.contains("exposureMode");
+        // THE METER (EXPOSURE-2). An absent key is the constructor's default
+        // (centre-weighted, 10/90) — a file written before the meter existed
+        // was metered by a whole-frame mean, and there is no honest conversion
+        // from "no choice recorded" to one, so it opens at the default like
+        // everything else the CRUD law leaves unmigrated.
+        bool meterOk = false;
+        const iris::ExposureMetering meter = iris::exposureMeteringFromName(
+            sceneObj.value("exposureMetering").toString().toLatin1().constData(), &meterOk);
+        if (meterOk) scene->exposureMetering = meter;
+        if (sceneObj.contains("exposureMeterLow"))
+            scene->exposureMeterLowPercent =
+                float(qBound(0.0, sceneObj.value("exposureMeterLow").toDouble(), 100.0));
+        if (sceneObj.contains("exposureMeterHigh"))
+            scene->exposureMeterHighPercent =
+                float(qBound(0.0, sceneObj.value("exposureMeterHigh").toDouble(), 100.0));
+        if (scene->exposureMeterHighPercent < scene->exposureMeterLowPercent)
+            std::swap(scene->exposureMeterLowPercent, scene->exposureMeterHighPercent);
     }
     scene->bloomEnabled = sceneObj.value("bloomEnabled").toBool(false);
     scene->bloomThreshold = float(sceneObj.value("bloomThreshold").toDouble(5.0));

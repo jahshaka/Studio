@@ -174,6 +174,10 @@ void WorldModesPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row &
     else if (r.id == QLatin1String("exposureMode"))
         keywords << QStringLiteral("exposure") << QStringLiteral("ev")
                  << QStringLiteral("stops") << QStringLiteral("auto exposure");
+    else if (r.id == QLatin1String("exposureMetering"))
+        keywords << QStringLiteral("metering") << QStringLiteral("meter")
+                 << QStringLiteral("spot") << QStringLiteral("centre weighted")
+                 << QStringLiteral("center weighted");
     else if (r.id == QLatin1String("photon"))
         keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
     PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);
@@ -217,6 +221,11 @@ void WorldModesPropertyWidget::refreshRows()
             const int index = combo->findData(value);
             combo->setCurrentIndex(index >= 0 ? index : 0);
         }
+        // A row that would be a LIE in this mode is not shown at all
+        // (Row::visible; the Metering pattern under Manual exposure, which
+        // takes no measurement). The Post Process section applies the same
+        // predicate to the same row, so the two views agree.
+        if (r.visible) control->setVisible(r.visible(scene));
     }
 
     if (resetRow) {

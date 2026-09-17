@@ -76,6 +76,10 @@ void WorldPostFxPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row 
     else if (r.id == QLatin1String("exposureMode"))
         keywords << QStringLiteral("exposure") << QStringLiteral("ev")
                  << QStringLiteral("stops") << QStringLiteral("auto exposure");
+    else if (r.id == QLatin1String("exposureMetering"))
+        keywords << QStringLiteral("metering") << QStringLiteral("meter")
+                 << QStringLiteral("spot") << QStringLiteral("centre weighted")
+                 << QStringLiteral("center weighted");
     else if (r.id == QLatin1String("photon"))
         keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
     PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);
@@ -211,6 +215,16 @@ void WorldPostFxPropertyWidget::refreshRows()
             const QSignalBlocker quiet(row.combo->getWidget());
             const int index = row.combo->findData(value);
             row.combo->setCurrentIndex(index >= 0 ? index : 0);
+        }
+        // ...AND THE ROW THAT IS HIDDEN RATHER THAN GREYED, same rule as the
+        // parameters below (Row::visible): one that would be a LIE in this
+        // mode. The METERING PATTERN says how a measurement is taken and
+        // Manual exposure takes none, so under Manual it is not a control.
+        if (r->visible) {
+            const bool show = r->visible(scene);
+            if (row.box) row.box->setVisible(show);
+            if (row.combo) row.combo->setVisible(show);
+            if (row.unavailable) row.unavailable->setVisible(show);
         }
     }
 

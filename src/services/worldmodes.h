@@ -98,6 +98,14 @@ struct Row {
     ///    not.
     TierSpace tierSpace = TierSpace::World;
 
+    /// WHEN THIS ROW EXISTS AT ALL. Null (the common case) = always. Reserved,
+    /// exactly as ParamRow::visible is, for a row that would be a LIE in the
+    /// current mode rather than merely inert: the METERING PATTERN describes
+    /// how a measurement is taken, and Manual exposure takes none (EXPOSURE-2).
+    /// A dead row is greyed, not hidden — "why is it grey" beats "where did it
+    /// go" — so this is for the one class where the row is not a control.
+    std::function<bool(const iris::ScenePtr &)> visible;
+
     /// The backing field. Both are null for a row with no backing field yet
     /// (`available == false`): its value lives only in worldOverrides.
     std::function<int(const iris::ScenePtr &)>       get;
