@@ -438,7 +438,11 @@ bool storeOneFile(QSqlDatabase conn, const QString &root, StagedAsset &staged,
     // store mid-import) would make the staged temp a CROSS-DEVICE rename: the
     // synchronous ingest is the honest answer there, not a failed publish.
     AssetCas::Staged *pre = stagedEntryFor(staged, path);
-    if (pre && !pre->tmpPath.isEmpty() && !pre->tmpPath.startsWith(root)) pre = nullptr;
+    // A store root that MOVED between prepare and commit: the temp is under the
+    // old root, so a rename would cross devices — fall back to the synchronous
+    // ingest. The separator matters: '/x/store' is a string prefix of '/x/store2'.
+    const QString rootSlash = root.endsWith(QLatin1Char('/')) ? root : root + QLatin1Char('/');
+    if (pre && !pre->tmpPath.isEmpty() && !pre->tmpPath.startsWith(rootSlash)) pre = nullptr;
     if (pre) {
         // The role and name are the COMMIT's to decide (a .jaf payload file is
         // 'source' or 'file' depending on a catalog name only this thread can

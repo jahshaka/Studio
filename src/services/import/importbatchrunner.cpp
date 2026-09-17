@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QtConcurrent>
 #include <memory>
 
+#include "services/assetcas.h"
 #include "services/import/assetimportservice.h"
 
 ImportBatchRunner::ImportBatchRunner(Database *db, Project *project, QObject *parent)
@@ -109,7 +110,13 @@ void ImportBatchRunner::runBatch()
         auto prepared = std::make_shared<PreparedImport>(
             mService->prepare(request, workerProgress));
 
-        if (mAborted.load()) break;   // shutting down: nothing was committed
+        if (mAborted.load()) {
+            // Shutting down: nothing was committed, and the WORKER-STAGED bytes
+            // (FSYNC-2) are full-size temps under objects/ that only a manual
+            // clean-up would ever sweep — discard them here, not an hour later.
+            AssetCas::discardStaged(prepared->staged.stagedBytes);
+            break;
+        }
 
         // ---- DB half, shutdown-safe hop to the UI thread -----------------
         // (the default QSqlDatabase connection, AssetManager registration and
@@ -126,6 +133,9 @@ void ImportBatchRunner::runBatch()
         // plan and the semaphore alive for whichever side runs last.
         auto hopDone = std::make_shared<QSemaphore>();
         QMetaObject::invokeMethod(this, [this, i, prepared, hopDone, fileClock]() {
+            if (mAborted.load()) {
+                AssetCas::discardStaged(prepared->staged.stagedBytes);   // FSYNC-2: no leak on a shutdown
+            }
             if (!mAborted.load()) {
                 ImportResult result;
                 if (!prepared->ok()) {

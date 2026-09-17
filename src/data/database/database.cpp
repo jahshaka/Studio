@@ -420,15 +420,23 @@ void Database::announceBatchCommit(bool ok)
 //   * WHAT THAT COSTS US IS BOUNDED, because the catalog is not the only copy:
 //     every asset's row is also written to <store>/sidecar/<guid>.json, and
 //     `assets.rebuildCatalog` reconstructs the library from those sidecars.
-//     An import lost to a power cut leaves its objects and its sidecar on
-//     disk and is recoverable; the bytes, which are the part that cannot be
-//     re-derived, are still fsynced by AssetCas (Durability::Flush).
+//     An import lost to a power cut is lost CLEANLY, never corruptly: its
+//     sidecar is a Derived write (unflushed) and goes with the rows, and its
+//     flushed objects then have no row and are swept as strays by the GC —
+//     a clean re-import, not a torn library. The bytes are still fsynced by
+//     AssetCas (Durability::Flush) so nothing half-written ever bears a name.
 // Reverting is one line: SQLite converts the journal mode back in place.
 static void applyDurabilityPragmas(QSqlDatabase &conn)
 {
     QSqlQuery pragma(conn);
+    // SQLite reports a REFUSED journal mode by its RETURN VALUE, not by an
+    // error: on a filesystem without shared memory (or a read-only file) the
+    // statement succeeds and answers "delete". Read what it answered.
     if (!pragma.exec(QStringLiteral("PRAGMA journal_mode = WAL")))
         irisLog(QString("could not put the library in WAL mode: %1").arg(pragma.lastError().text()));
+    else if (!pragma.next() || pragma.value(0).toString().compare(QStringLiteral("wal"), Qt::CaseInsensitive) != 0)
+        irisLog(QString("the library did not enter WAL mode (answered '%1'); it stays at its previous journal mode")
+                    .arg(pragma.next() ? pragma.value(0).toString() : pragma.value(0).toString()));
     if (!pragma.exec(QStringLiteral("PRAGMA synchronous = NORMAL")))
         irisLog(QString("could not set the library's synchronous mode: %1")
                     .arg(pragma.lastError().text()));
