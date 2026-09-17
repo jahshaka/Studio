@@ -6,12 +6,19 @@
 // level change costs no extra draw call.
 //
 // It is the LOD BIAS that makes this assertable at all. The dial multiplies the
-// distance the strategy measures, so sweeping it walks the same camera through
+// PIXEL BUDGET the strategy spends, so sweeping it walks the same camera through
 // every level of the chain in a fixed pose: bias 0 pins the finest level (which
 // is also how a user turns automatic LOD off), and each level's own
-// `switchDistance` — reported by assets.meshLods, computed by the SAME function
-// the backend derives the mesh's thresholds with — says exactly which bias
-// selects it. Nothing here waits on wall-clock time or eyeballs a picture.
+// `switchPixels` — reported by assets.meshLods: the on-screen radius at which
+// the renderer takes it — says exactly which bias selects it at a known pose.
+// Nothing here waits on wall-clock time or eyeballs a picture.
+//
+// AND SECTION 5 IS WHY THE RULE CHANGED (ATOM-3, the render audit's A1): the
+// switch is a REAL screen-space pixel error at the live lens and the live
+// render target, so the same object switches at a DIFFERENT DISTANCE on a
+// shorter window and a narrower lens — and at the same pixel error. Before
+// ATOM-3 it switched at one distance for every window and every lens, which
+// gave a 2376-line VR eye twice the error the desktop had.
 //
 // THE FIXTURE is the shipped gizmo sphere: 960 triangles, no skeleton, and
 // measured to simplify to two clean levels (480 and 240). A primitive cube
@@ -46,7 +53,7 @@ for (var i = 0; i < rows.length; ++i) {
 }
 assert(levels[0].triangles === 960, "level 0 is the authored 960 triangles");
 assert(levels[0].error === 0, "level 0 has no error, by definition");
-assert(levels[0].switchDistance === 0, "and no switch distance");
+assert(levels[0].switchPixels === 0, "and no switch size");
 
 for (var L = 1; L < levels.length; ++L) {
     assert(levels[L].triangles < levels[L - 1].triangles,
@@ -54,13 +61,23 @@ for (var L = 1; L < levels.length; ++L) {
            " (" + levels[L].triangles + " < " + levels[L - 1].triangles + ")");
     assert(levels[L].error > levels[L - 1].error,
            "level " + L + "'s error is larger (" + levels[L].error.toFixed(6) + ")");
-    assert(levels[L].switchDistance > levels[L - 1].switchDistance,
-           "level " + L + " switches in further away (" + levels[L].switchDistance.toFixed(2) + " m)");
-    // The projection is linear in the error: twice the error, twice the distance.
-    var ratio = levels[L].switchDistance / levels[L].error;
-    var ratio1 = levels[1].switchDistance / levels[1].error;
+    // Level 0 reports 0 ("not applicable — the authored geometry is what an
+    // object of any size starts from"), so the ordering is asserted from the
+    // first REAL threshold onwards.
+    if (L > 1)
+        assert(levels[L].switchPixels < levels[L - 1].switchPixels,
+               "level " + L + " is taken at a SMALLER size on screen (" +
+               levels[L].switchPixels.toFixed(1) + " px radius, under level " + (L - 1) +
+               "'s " + levels[L - 1].switchPixels.toFixed(1) + ")");
+    else
+        assert(levels[L].switchPixels > 0,
+               "level 1 has a real switch size (" + levels[L].switchPixels.toFixed(1) +
+               " px radius)");
+    // The projection is linear in the error: twice the error, half the size.
+    var ratio = levels[L].switchPixels * levels[L].error;
+    var ratio1 = levels[1].switchPixels * levels[1].error;
     assert(Math.abs(ratio / ratio1 - 1) < 1e-3,
-           "every level's switch distance comes from ONE projection (" + ratio.toFixed(1) + ")");
+           "every level's switch size comes from ONE budget (" + ratio.toFixed(3) + ")");
 }
 
 // The chain is HALVING triangles per level, which is what makes the far
@@ -122,10 +139,13 @@ function measure(tag, bias) {
     return { triangles: rs.triangles, draws: rs.draws, limb: probes.join("|") };
 }
 
-// bias 0 pins level 0. Then, for each level, the smallest bias that selects it:
-// the strategy's value is (distance - radius) * bias, so a bias of
-// switchDistance / (EYE - radius) puts the object exactly at the threshold —
-// 5% past it selects the level without ambiguity.
+// bias 0 pins level 0. Then, for each level, the smallest bias that selects it.
+// The strategy's value is the world error one pixel covers at this pose,
+// (distance - radius) * 2 * bias / (proj11 * viewportHeight), and it selects a
+// level once that reaches the level's error — so the bias that puts the object
+// exactly at level k's threshold is error_k / valueAtBiasOne. 5% past it
+// selects the level without ambiguity. The two live terms come from the app
+// itself (the viewport's height, the camera's lens), which is the point.
 var pinned = measure("pinned", 0);
 assert(pinned.triangles > 0, "the pinned level draws triangles");
 
@@ -135,8 +155,10 @@ for (var k = 1; k < levels.length; ++k) {
     // so (EYE - radius) is the strategy's value at bias 1. Being generous with
     // the radius only makes the bias LARGER, i.e. it cannot select a finer
     // level than intended.
-    var valueAtBiasOne = EYE - 1.0;
-    var bias = (levels[k].switchDistance / valueAtBiasOne) * 1.05;
+    var vp = editor.viewportState();
+    var proj11 = 1.0 / Math.tan(0.5 * editor.camera().fov * Math.PI / 180.0);
+    var valueAtBiasOne = (EYE - 1.0) * 2.0 / (proj11 * vp.height);
+    var bias = (levels[k].error / valueAtBiasOne) * 1.05;
     readings.push(measure("level" + k, bias));
 }
 
@@ -178,5 +200,110 @@ assert(back.triangles === pinned.triangles,
 var refused = null;
 try { world.setLodBias(-1); } catch (e) { refused = "" + e; }
 assert(refused !== null, "a negative bias is refused: " + refused);
+
+// ---------------------------------------------------------------------------
+// 5. THE SWITCH IS A PIXEL ERROR, NOT A DISTANCE (ATOM-3 A1). The same object,
+//    the same lens, HALF the window height: the level switches at half the
+//    distance from the bounding sphere, because half the lines is half the
+//    pixels that error covers. Then the same window with a narrower lens: the
+//    distance grows with proj[1][1]. Both are the SAME pixel error, which is
+//    what a headset eye and a thumbnail need and what the reference-projection
+//    rule could not give them.
+world.setLodBias(1);
+// Ogre's world radius is the AABB's, and the fixture's is not a round number, so
+// it is SOLVED FOR from the three arms rather than assumed: the rule is
+//     switch distance = radius + c * proj[1][1] * viewport height
+// with one c, so two arms give both unknowns and the third is the assertion.
+
+// THE SCENE MUST HOLD THIS OBJECT AND NOTHING ELSE that can change its triangle
+// count: the default floor carries a chain of its own since ATOM-3's bake floor,
+// and anything entering or leaving the frustum as the camera dollies would be
+// counted as a switch. (The sections above are unaffected by other objects —
+// they move the DIAL at a fixed pose, so only chained objects can respond.)
+var others = scene.nodes();
+for (var o = 0; o < others.length; ++o) {
+    if (others[o].id === nodeId) continue;
+    try { node.remove(others[o].id); } catch (ignored) { /* the World root refuses */ }
+}
+editor.frame(4);
+
+function resizeViewportTo(w, h) {
+    for (var attempt = 0; attempt < 8; ++attempt) {
+        var vp = editor.viewportState(), win = app.window();
+        if (vp.width === w && vp.height === h) return true;
+        app.resizeWindow(win.width + (w - vp.width), win.height + (h - vp.height));
+        editor.frame(4);
+    }
+    var got = editor.viewportState();
+    return got.width === w && got.height === h;
+}
+
+// The distance at which the FIRST level change happens, found by DOLLYING
+// OUTWARDS — never by bisection. With ogre-patch 0074's hysteresis band the
+// level depends on where the camera came from, by design, so a probe sequence
+// that jumps about measures the probe order; a monotone approach measures the
+// switch (and shifts it by the band, identically in every arm, which is why the
+// RATIOS below are still exact).
+var RESET = 1.6;    // close enough that no arm's band can hold a coarse level here
+
+function switchDistance(fov) {
+    function trianglesAt(d) {
+        editor.setCamera({ position: { x: 0, y: 0, z: d }, lookAt: { x: 0, y: 0, z: 0 } });
+        editor.frame(2);
+        return app.renderStats().triangles;
+    }
+    editor.setCamera({ position: { x: 0, y: 0, z: RESET }, lookAt: { x: 0, y: 0, z: 0 }, fov: fov });
+    editor.frame(4);
+    // THE RESET POSE MUST REALLY BE AT LEVEL 0. The band holds the level the
+    // camera arrived with, so a measurement that started from the previous
+    // arm's far pose would measure the NEXT threshold instead — which is
+    // exactly what a first version of this section did.
+    var base = trianglesAt(RESET);
+    world.setLodBias(0);
+    var finest = trianglesAt(RESET);
+    world.setLodBias(1);
+    trianglesAt(RESET);
+    assert(base === finest, "the sweep starts at the authored level (" + base + ")");
+    var d = RESET, coarse = -1;
+    for (var i = 0; i < 200; ++i) {           // 1.6 -> 51.6 m in 0.25 m steps
+        d += 0.25;
+        if (trianglesAt(d) < base) { coarse = d; break; }
+    }
+    if (coarse < 0) return -1;
+    trianglesAt(RESET);                       // back to level 0, then walk in finely
+    var fine = coarse - 0.25;
+    for (var j = 0; j < 60; ++j) {
+        fine += 0.005;
+        if (trianglesAt(fine) < base) return fine;
+    }
+    return coarse;
+}
+
+if (resizeViewportTo(1920, 1080)) {
+    var tall = switchDistance(45);
+    var narrowD = switchDistance(30);
+    var shortD = resizeViewportTo(960, 540) ? switchDistance(45) : -1;
+    console.log("   switch distances: 1080/45 " + tall.toFixed(3) + " m, 1080/30 " +
+                narrowD.toFixed(3) + " m, 540/45 " + shortD.toFixed(3) + " m");
+    assert(tall > 0 && narrowD > 0 && shortD > 0, "every arm found a switch");
+    var P45 = 1.0 / Math.tan(22.5 * Math.PI / 180.0), P30 = 1.0 / Math.tan(15 * Math.PI / 180.0);
+    // Two arms fix the line (the metres per pixel-of-error, and the object's
+    // own bounding radius)...
+    var c = (narrowD - tall) / ((P30 - P45) * 1080);
+    var radius = tall - c * P45 * 1080;
+    // ...and the THIRD arm is the claim: a different window height lands on the
+    // same line, i.e. the switch is one pixel error everywhere.
+    var predictShort = radius + c * P45 * 540;
+    assert(Math.abs(predictShort - shortD) < 0.05,
+           "ONE PIXEL ERROR ON EVERY WINDOW AND EVERY LENS — 540 lines predicted " +
+           predictShort.toFixed(3) + " m, measured " + shortD.toFixed(3) + " m (radius " +
+           radius.toFixed(3) + " m)");
+    // And the same statement the other way round, which is the reading a person
+    // wants: half the lines, half the distance from the bounding sphere.
+    var heightRatio = (tall - radius) / (shortD - radius);
+    assert(Math.abs(heightRatio - 2.0) < 0.05,
+           "HALF THE WINDOW HEIGHT SWITCHES AT HALF THE DISTANCE (" + heightRatio.toFixed(3) + ")");
+    resizeViewportTo(1920, 1080);
+}
 
 console.log("ALL ATOM LOD CHECKS PASSED");
