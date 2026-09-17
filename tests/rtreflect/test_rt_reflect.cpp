@@ -265,7 +265,20 @@ int main()
     // THE BAR. The cube's emissive is 4.0 linear; after the tonemap the wall
     // cannot read that literally, so the bar is on the DIFFERENCE from the arm
     // that has no ray: the reflection must be unmistakable rather than a tint.
-    CHECK_MSG(red > redPlain + 0.05f,
+    //
+    // RE-ANCHORED 0.05 -> 0.03 BY DRAG-1, and the reason is a units fix rather
+    // than a regression. VctLighting normalises everything it injects by the
+    // brightest light's radiance over pi and the PIXEL path multiplies that
+    // back out (Vct_piece_ps.any's finalMultiplier); the ray arm read the voxel
+    // RAW, so a traced reflection was in baking-normalised units and came out
+    // right only in a scene whose brightest light happens to have radiance pi.
+    // This fixture's brightest light is radiance 2.0, so its factor is
+    // 2/pi = 0.6366 and the ray used to show it 57 % TOO BRIGHT. Measured on
+    // this suite, both arms in one binary (JAH_RQ_NO_MULT restores the old
+    // reading): red excess 0.0737 without the multiplier, 0.0434 with it — and
+    // 0.0434 against the control's 0.0099 is still 4.4x, which is what
+    // "unmistakable rather than a tint" was asking for.
+    CHECK_MSG(red > redPlain + 0.03f,
               "THE MIRROR SHOWS WHAT IS BEHIND THE CAMERA: red excess %.4f against the "
               "control's %.4f",
               red, redPlain);
