@@ -497,7 +497,7 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Document },
         { "interactionMode",
           "vr.interactionMode() -> {dominant, turn, snapTurnDegrees, smoothTurnDegreesPerSecond, "
-          "flySpeed, fly, grabbing, twoHanded, scale, rollDegrees, hovering, far, snapping, "
+          "flySpeed, fly, grabbing, hand, hand2, twoHanded, scale, rollDegrees, hovering, far, snapping, "
           "distance, nodes, source, installed, rig:{live,x,y,z,yaw}, gizmo:{…}, teleport:{…}, "
           "selects, grabs, commits, cancels, turns, twoHands}",
           "WHAT THE INTERACTION IS DOING. `grabbing` and `hovering` are this moment's state; "
@@ -1219,6 +1219,16 @@ bool VrApi::select(const QVariantMap &options)
     return true;
 }
 
+namespace {
+
+/// THE HAND'S NAME, for a refusal that has to say which one.
+QString handName(unsigned hand)
+{
+    return hand == VrHandRight ? QStringLiteral("right") : QStringLiteral("left");
+}
+
+}   // namespace
+
 bool VrApi::grab(const QVariantMap &options)
 {
     syncInteractionSession();
@@ -1230,13 +1240,30 @@ bool VrApi::grab(const QVariantMap &options)
     bool ok = false;
     const unsigned hand = handFrom(options.value(QStringLiteral("hand")), &ok);
     if (!ok) return fail(QStringLiteral("vr.grab: hand must be \"left\" or \"right\""));
-    if (!interaction.beginGrab(hand))
-        return refuse(interaction.playerHosted()
-                          ? QStringLiteral("vr.grab: the PLAYER is hosting this session and the "
-                                           "Player edits nothing — only locomotion runs")
-                          : QStringLiteral("vr.grab: nothing to grab (no controller is "
-                                           "reporting, nothing is under the ray and nothing is "
-                                           "selected), or a script owns the document"));
+    if (!interaction.beginGrab(hand)) {
+        if (interaction.playerHosted())
+            return refuse(QStringLiteral("vr.grab: the PLAYER is hosting this session and the "
+                                         "Player edits nothing — only locomotion runs"));
+        // A THIRD MESSAGE, because the second one LIED (the lead's read, item
+        // 9): a grab refused because that hand is ALREADY holding the object —
+        // or because both hands are on it and there is no third — read
+        // "nothing to grab", which sent a reader looking at their ray and
+        // their selection for a refusal that was about neither.
+        unsigned primary = 0, second = 0;
+        if (interaction.gestureHands(&primary, &second)) {
+            if (primary == second && hand == primary)
+                return refuse(QStringLiteral("vr.grab: the %1 hand is already holding it — "
+                                             "squeeze the OTHER hand to take it with both")
+                                  .arg(handName(hand)));
+            if (primary != second)
+                return refuse(QStringLiteral("vr.grab: both hands are already on it (the %1 "
+                                             "and the %2) — there is no third hand to add")
+                                  .arg(handName(primary), handName(second)));
+        }
+        return refuse(QStringLiteral("vr.grab: nothing to grab (no controller is "
+                                     "reporting, nothing is under the ray and nothing is "
+                                     "selected), or a script owns the document"));
+    }
     return true;
 }
 
@@ -1251,11 +1278,22 @@ bool VrApi::release(const QVariantMap &options)
     bool ok = false;
     const unsigned hand = handFrom(options.value(QStringLiteral("hand")), &ok);
     if (!ok) return fail(QStringLiteral("vr.release: hand must be \"left\" or \"right\""));
-    if (!interaction.endGrab(hand))
-        return refuse(interaction.playerHosted()
-                          ? QStringLiteral("vr.release: the PLAYER is hosting this session and "
-                                           "the Player edits nothing — only locomotion runs")
-                          : QStringLiteral("vr.release: no grab is running"));
+    if (!interaction.endGrab(hand)) {
+        if (interaction.playerHosted())
+            return refuse(QStringLiteral("vr.release: the PLAYER is hosting this session and "
+                                         "the Player edits nothing — only locomotion runs"));
+        // ...AND THE SAME LIE ON THE WAY OUT (the lead's read, item 9): a
+        // release named on a hand that is not the one holding — the second
+        // `vr.release({hand:"left"})` after a two-hand hold handed the object
+        // back to the right — answered "no grab is running" while a gesture
+        // plainly was.
+        unsigned primary = 0, second = 0;
+        if (interaction.gestureHands(&primary, &second))
+            return refuse(QStringLiteral("vr.release: the %1 hand is not holding anything — the "
+                                         "%2 hand is")
+                              .arg(handName(hand), handName(primary)));
+        return refuse(QStringLiteral("vr.release: no grab is running"));
+    }
     return true;
 }
 

@@ -480,21 +480,39 @@ int main()
         const vrgrab::Pose r0{ iris::Vec3(0.25f, 1, 0), iris::Quat() };
         const vrgrab::Pose l1{ iris::Vec3(-0.5f, 1, 0), iris::Quat() };
         const vrgrab::Pose r1{ iris::Vec3(0.5f, 1, 0), iris::Quat() };
-        // TEN METRES AWAY. About the hands' own midpoint a doubling would
-        // throw it to twenty metres; about its own place it grows where it
-        // stands and only the midpoint's move carries it (which is zero here).
+        // TEN METRES AWAY, GRABBED ON ITS NEAR FACE. About the hands' own
+        // midpoint a doubling would throw it to twenty metres — the lever arm
+        // again. The far arrangement pivots about the VIRTUAL HAND instead: the
+        // point on the ray where the grab took hold, which is the very point
+        // the ONE-hand far gesture already rotates the object about
+        // (rigidFollow's hand). The lead's read, item 7: the two arrangements
+        // pivot about one point, so a second hand joining a far grab changes
+        // what the gesture can DO and not where it happens. (The first cut used
+        // the node's ORIGIN, which is that point only when the ray happened to
+        // hit the origin — i.e. nearly never.)
         const vrgrab::Pose node0{ iris::Vec3(0, 1, -10), iris::Quat() };
+        const iris::Vec3 virtualHand(0, 1, -9);      // the hit on its near face
         const vrgrab::TwoHandStart start = vrgrab::twoHandStart(l0, r0);
         const vrgrab::TwoHandDelta d = vrgrab::twoHandDelta(start, l1, r1);
         const vrgrab::Pose about0 = vrgrab::twoHandFollow(start, d, node0);
-        const vrgrab::Pose aboutSelf =
-            vrgrab::twoHandFollow(start, d, node0, node0.position);
+        const vrgrab::Pose aboutHand = vrgrab::twoHandFollow(start, d, node0, virtualHand);
         show("a 10 m object doubled about the HANDS", about0.position);
-        show("...and about ITSELF", aboutSelf.position);
+        show("...and about the virtual hand at the hit", aboutHand.position);
         CHECK(nearVec(about0.position, iris::Vec3(0, 1, -20)),
               "about the hands, doubling a 10 m object moves it to 20 m (the lever)");
-        CHECK(nearVec(aboutSelf.position, node0.position, 1e-5f),
-              "about its own place it does not move at all — the far arrangement");
+        CHECK(nearVec(aboutHand.position, iris::Vec3(0, 1, -11), 1e-5f),
+              "about the hit, doubling moves its CENTRE by its own depth: -10 -> -11 (it grows "
+              "away from the point the hand is holding it by)");
+        // ...AND A TURN OF THE PAIR CARRIES IT ROUND THAT SAME POINT — the axis
+        // +X onto -Z is +90 degrees about +Y (test 14), under which the offset
+        // (0,0,-1) from the hit goes to (-1,0,0).
+        const vrgrab::Pose l2{ iris::Vec3(0, 1, 0.25f), iris::Quat() };
+        const vrgrab::Pose r2{ iris::Vec3(0, 1, -0.25f), iris::Quat() };
+        const vrgrab::TwoHandDelta turned = vrgrab::twoHandDelta(start, l2, r2);
+        const vrgrab::Pose spun = vrgrab::twoHandFollow(start, turned, node0, virtualHand);
+        show("...and turned 90 degrees about the hit", spun.position);
+        CHECK(nearVec(spun.position, iris::Vec3(-1, 1, -9), 1e-4f),
+              "a 90 degree turn of the pair carries it round the HIT: (0,1,-10) -> (-1,1,-9)");
         // THE SNAP QUANTISES THE FACTOR, and never to nothing.
         CHECK(near(vrgrab::snappedScale(2.13f, 0.25f), 2.25f),
               "a factor of 2.13 snaps to 2.25 at a quarter step");

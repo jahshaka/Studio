@@ -72,15 +72,12 @@ inline constexpr float kTickAmplitude = 0.4f;
 /// header's note on mMenuHeldSeconds.
 inline constexpr float kMenuHoldSeconds = 0.25f;
 
-/// THE GROUND, when the document has nothing to stand on under the arc. y = 0
-/// is the floor plane of this editor — where the grid is drawn, where the
-/// default ground plane sits, and where `scene.addPrimitive` puts a thing with
-/// no transform. It is NOT a guess about the content: the DEFAULT ground is
-/// deliberately unpickable (CLAUDE.md, "clicking the ground selects nothing in
-/// a fresh scene is not an input bug"), so a wearer aiming at the floor of a
-/// fresh project would otherwise be refused every throw with a floor plainly
-/// under their feet.
-inline constexpr float kGroundPlaneY = 0.0f;
+/// THE WORLD'S OWN FLOOR, metres — the fallback plane's fallback, used only
+/// when there is no session and therefore no wearer whose floor to continue
+/// (see traceArc's `planeY`). y = 0 is where this editor's grid is drawn, where
+/// the default ground sits and where `scene.addPrimitive` puts a thing with no
+/// transform, so it is the one plane a document with no rig can mean.
+inline constexpr float kWorldFloorY = 0.0f;
 
 /// CAN A GESTURE CHANGE THIS NODE'S SIZE? Lights and cameras are refused (§5.1:
 /// "scale is refused for lights and cameras — the two-hand gesture rotates and
@@ -176,15 +173,7 @@ void VrInteraction::end()
     // what they were holding any more, and committing a gesture they could not
     // finish would leave the object somewhere nobody chose.
     cancel();
-    // THE ARC'S NODES GO BACK while the scene that owns them is still there —
-    // and are merely FORGOTTEN when it is not (vrarc.h's lifetime note): a
-    // viewport taken apart under a running session took the nodes with it.
-    if (mArc) {
-        Scene *target = mDeps.engineScene ? mDeps.engineScene() : nullptr;
-        if (target == mArc->target()) mArc->clear();
-        else mArc->forget();
-        mArc.reset();
-    }
+    releaseArc();
     // ...AND THE GIZMO GOES BACK TO THE DESK (stage 2): the size rule, the
     // highlight and the camera-facing rules are the desktop camera's again from
     // the viewport's very next frame.
@@ -230,6 +219,10 @@ bool VrInteraction::playerHosted() const
 /// rather than stored: the defaults live in the document and nowhere else.
 vrworld::Settings VrInteraction::locomotion() const
 {
+    // THE FRAME'S COPY WHILE A FRAME IS OPEN (see FrameSettings): inside one
+    // step() the project cannot change, and this is asked six or more times a
+    // frame through a callable that reads the document.
+    if (mFrameLocoValid) return mFrameLoco;
     return mDeps.locomotion ? mDeps.locomotion() : vrworld::Settings();
 }
 
@@ -560,6 +553,16 @@ bool VrInteraction::upgradeToTwoHand(unsigned hand)
     // somebody claps.
     if (mGesture.pair.span < 0.02f) return false;
     recaptureMembers();
+    // WHERE THE PAIR TURNS AND SCALES ABOUT (the lead's read, item 7). For a
+    // near hold it is the point between the palms — the hands are ON the
+    // object. For a FAR one it is the VIRTUAL HAND out on the ray, which is the
+    // exact point the one-hand far gesture already rotates the object about
+    // (rigidFollow's hand): so a second hand joining a far grab changes what
+    // the gesture can do — scale, and roll about the palms' axis — and not
+    // where it happens. The first cut used the primary member's own ORIGIN,
+    // which is a different point whenever the ray did not hit a node's origin
+    // (i.e. nearly always), so the object stepped sideways as the pair turned.
+    mGesture.pivot = mGesture.far ? mGesture.handNow.position : mGesture.pair.midpoint;
     mGesture.two = true;
     mGesture.hand2 = hand;
     mGesture.scale = 1.0f;
@@ -587,10 +590,16 @@ void VrInteraction::downgradeToOneHand(unsigned remaining)
     // starts from a zero delta.
     const vrgrab::Pose grip{ toIris(st.grip.position), toIris(st.grip.rotation) };
     const vrgrab::Pose aim{ toIris(st.aim.position), toIris(st.aim.rotation) };
-    // THE HAND THAT KEEPS HOLDING MUST BE LOCATED TO BE CAPTURED FROM. If it
-    // is not (one hand let go on a frame the other blinked), the gesture holds
-    // and the capture waits for it — see Gesture::recapture.
-    if (!st.valid || (!st.grip.valid && !st.aim.valid)) {
+    // THE HAND THAT KEEPS HOLDING MUST BE LOCATED TO BE CAPTURED FROM — IN THE
+    // POSE THIS ARRANGEMENT ACTUALLY USES (the lead's read, item 6). The first
+    // cut accepted EITHER pose, which is two bugs in one line: a NEAR hand-off
+    // with a located aim and an unlocated grip captured `handStart` from a grip
+    // nobody located (the jump this guard exists to prevent, still reachable),
+    // and a FAR one with a located grip and an unlocated aim welded a
+    // ten-metre object to the wrist. A near hold rides the GRIP and a far hold
+    // rides the AIM, so each asks for its own.
+    const bool located = mGesture.far ? st.aim.valid : st.grip.valid;
+    if (!st.valid || !located) {
         mGesture.recapture = true;
         recaptureMembers();
         return;
@@ -832,13 +841,12 @@ void VrInteraction::followGesture(float seconds)
         mGesture.rollDegrees = delta.rollDegrees;
         const float translateStepTwo = mGesture.snapping ? SnapSettings::translateSize() : 0.0f;
         const float rotateStepTwo = mGesture.snapping ? SnapSettings::rotateSize() : 0.0f;
-        // THE PIVOT: the hands themselves when the object is in them, and the
-        // object's own place when it is out along the ray (vrgrab.h's note on
-        // the far arrangement — at ten metres a scale about the wearer's own
-        // midpoint throws the thing another ten metres away).
-        iris::Vec3 pivot = mGesture.pair.midpoint;
-        if (mGesture.far && !mGesture.members.isEmpty())
-            pivot = mGesture.members.first().startGlobal.position;
+        // THE PIVOT, CAPTURED AT THE UPGRADE (Gesture::pivot): the point
+        // between the palms for a near hold, and the virtual hand on the ray
+        // for a far one (vrgrab.h's note on the far arrangement — at ten metres
+        // a scale about the wearer's own midpoint throws the thing another ten
+        // metres away).
+        const iris::Vec3 pivot = mGesture.pivot;
         for (int i = 0; i < mGesture.members.size(); ++i) {
             const Member &m = mGesture.members.at(i);
             if (!m.node) continue;
@@ -1021,21 +1029,41 @@ bool VrInteraction::endGrab(unsigned hand)
     return true;
 }
 
-bool VrInteraction::cancel()
+bool VrInteraction::cancelEditing()
 {
     // A HANDLE DRAG CANCELS TOO (VR_INPUT_SPEC §5.4): focus loss, the session
     // ending, the Player taking the headset over. It is the same promise the
     // direct gesture makes — the object goes back and nothing is recorded.
     const bool hadHandle = cancelGizmoDrag();
-    // AN ARMED THROW GOES TOO. Focus loss, the session ending, the Player
-    // taking over: the wearer cannot see the arc any more, and a teleport
-    // committed from a curve nobody is looking at would put them somewhere
-    // they did not choose.
-    const bool hadArc = teleportCancel();
-    if (!mGesture.active) return hadHandle || hadArc;
+    if (!mGesture.active) return hadHandle;
     rewindGesture();
     mGesture = Gesture();
     ++mCancels;
+    return true;
+}
+
+bool VrInteraction::cancel()
+{
+    // THE EDITING HALF, AND THE ARC — but they are two halves and only one
+    // caller wants both (the lead's read, item 1). AN ARMED THROW IS
+    // LOCOMOTION: the Player runs locomotion and edits nothing, so its own
+    // per-frame "cancel whatever the editor was doing" must not touch the arc.
+    // It did, and because step() runs that cancel EVERY frame the Player's arc
+    // was cancelled and re-armed sixty times a second and could never be taken
+    // at all — the counters spun and the wearer never moved.
+    //
+    // Focus loss, `end()` and a project switch still want both: the wearer
+    // cannot see either the object or the curve any more.
+    const bool hadEdit = cancelEditing();
+    const bool hadArc = teleportCancel();
+    return hadEdit || hadArc;
+}
+
+bool VrInteraction::gestureHands(unsigned *primary, unsigned *second) const
+{
+    if (!mGesture.active) return false;
+    if (primary) *primary = mGesture.hand;
+    if (second) *second = mGesture.two ? mGesture.hand2 : mGesture.hand;
     return true;
 }
 
@@ -1160,6 +1188,25 @@ VrInteraction::Teleport VrInteraction::traceArc(unsigned hand, const VrHandState
     const iris::ScenePtr doc = scene();
     const float step = vrgrab::kTeleportMaxSeconds / float(vrgrab::kTeleportSegments);
 
+    // THE FLOOR THE WEARER IS STANDING ON, as the fallback plane (the lead's
+    // read, item 4). The first cut used the WORLD's y = 0, which is a guess
+    // about the content: a scene built on a raised floor, or on terrain, would
+    // land the wearer in mid-air and report it GREEN. The rig's own y is the
+    // plane the wearer's feet are on right now, so the rule reads "the floor I
+    // am standing on continues" — which is the only thing a throw that met no
+    // geometry can honestly mean.
+    //
+    // With NO SESSION there is no wearer and no floor of theirs, and the
+    // world's y = 0 is the only defensible answer — it is also what every
+    // headless gate measures against.
+    float planeY = kWorldFloorY;
+    {
+        vrorigin::Rig rig;
+        iris::Vec3 head;
+        iris::Quat headRot;
+        if (rigNow(rig, head, headRot)) planeY = rig.position.y();
+    }
+
     // THE TRANSFORM WALK, ONCE AND ONLY IF SOMETHING WAS WRITTEN — pick()'s own
     // rule and its own counter, because this traces up to twenty segments and
     // running the document's recursive update for each of them would be twenty
@@ -1178,8 +1225,15 @@ VrInteraction::Teleport VrInteraction::traceArc(unsigned hand, const VrHandState
             // around an origin (ScenePicker's note) and a person cannot stand
             // on an icon. Meshes only — and `pickable` is still honoured inside
             // the picker, so a LOCKED object is not a floor either.
+            // FORCE-PICKABLE, AND THAT IS THE POINT (the lead's read, item 3).
+            // The `pickable` flag is an EDIT guard — it stops a click from
+            // SELECTING a thing — and people lock the floor for exactly that
+            // reason (the default Ground ships locked). A teleport is not an
+            // edit: it is locomotion, and a floor you cannot select is still a
+            // floor you stand on. Passing the lock through here read the flag
+            // on the wrong axis and refused the commonest throw in the editor.
             const QList<ScenePick> hits =
-                ScenePicker::pickAll(doc, prev, next, prev, false, false, false, refresh, false);
+                ScenePicker::pickAll(doc, prev, next, prev, true, false, false, refresh, false);
             if (refresh) {
                 mRefreshed = true;
                 mRefreshedAtWrites = writes;
@@ -1194,11 +1248,15 @@ VrInteraction::Teleport VrInteraction::traceArc(unsigned hand, const VrHandState
                 if (!triangleNormal(best, dir, normal)) normal = iris::Vec3();
             }
         }
-        if (!landed && prev.y() > kGroundPlaneY && next.y() <= kGroundPlaneY) {
-            // THE GROUND PLANE, SOLVED RATHER THAN SAMPLED: the crossing is a
+        if (!landed && prev.y() > planeY && next.y() <= planeY) {
+            // THE FALLBACK PLANE, SOLVED RATHER THAN SAMPLED: the crossing is a
             // quadratic with an exact root, so the landing does not depend on
-            // how finely the curve happened to be chopped.
-            const float when = vrgrab::arcPlaneTime(aim, kGroundPlaneY);
+            // how finely the curve happened to be chopped. (A DOCUMENT hit, by
+            // contrast, is where the straight PIECE met the surface, which is
+            // up to a couple of centimetres short of where the curve does — and
+            // that is right: the hit is ON the surface, which is the thing that
+            // matters, and moving it along the curve would take it off.)
+            const float when = vrgrab::arcPlaneTime(aim, planeY);
             if (when > 0.0f) {
                 landed = true;
                 landing = vrgrab::arcPoint(aim, when);
@@ -1224,6 +1282,25 @@ VrInteraction::Teleport VrInteraction::traceArc(unsigned hand, const VrHandState
         t.reason = QStringLiteral("that face is steeper than %1 degrees from level")
                        .arg(double(vrgrab::kTeleportMaxSlopeDegrees));
     return t;
+}
+
+VrInteraction::~VrInteraction() { releaseArc(); }
+
+void VrInteraction::releaseArc()
+{
+    // NOTHING BUILT, NOTHING ASKED. This is the state every ordinary path is
+    // in by the time anything destroys this object — `end()` runs at the
+    // session's edge and at a script's withdrawal — and it matters that the
+    // host's callable is NOT consulted here: at shutdown the viewport behind it
+    // is being taken apart, and a destructor is the worst place to find out.
+    if (!mArc) return;
+    // THE SCENE THAT OWNS THE NODES, if it still answers (vrarc.h's lifetime
+    // note): give them back. A different answer — or none — means the scene
+    // was destroyed and took them with it, so they are merely forgotten.
+    Scene *target = mDeps.engineScene ? mDeps.engineScene() : nullptr;
+    if (target && target == mArc->target()) mArc->clear();
+    else mArc->forget();
+    mArc.reset();
 }
 
 void VrInteraction::drawArc()
@@ -1350,6 +1427,11 @@ QVariantMap VrInteraction::teleportReport() const
 
 void VrInteraction::step(float seconds)
 {
+    // THE PROJECT'S LOCOMOTION SETTINGS, RESOLVED ONCE FOR THE WHOLE FRAME
+    // (the lead's read, item 10) — see FrameSettings. Every `dominantHand()`,
+    // `offHand()`, turn and report below takes this copy, including on the
+    // early return.
+    const FrameSettings frame(this);
     // THE MEMO LIVES ONE FRAME (the lead, from the Fable read at merge): its
     // key covers the geometric inputs (the aim pose, the transform/structure
     // epoch) and nothing the picker decides per candidate — a node locked,
@@ -1389,7 +1471,7 @@ void VrInteraction::step(float seconds)
     // followed any more — nothing in the Player steps the editing half — so it
     // is CANCELLED rather than left holding an object nobody will put down,
     // which is the same rule as a lost focus.
-    if (player) cancel();
+    if (player) cancelEditing();
     // THE PLAYER DRAWS NO GIZMO AND EDITS NOTHING: the pointer is taken off it
     // for the duration, so the desk's own sizing is back the moment the Player
     // takes the session over.
@@ -1451,7 +1533,16 @@ void VrInteraction::step(float seconds)
             const VrHandState &offPrev = mPrev[offHand()];
             if (off.grabPressed && !offPrev.grabPressed && !mGesture.two && !mGizmoDrag.active)
                 beginGrab(offHand());
-            else if (!off.grabPressed && offPrev.grabPressed && mGesture.two)
+            else if (!off.grabPressed && offPrev.grabPressed &&
+                     (mGesture.two || mGesture.hand == offHand()))
+                // ...AND IT ENDS A GESTURE IT OWNS (the lead's read, item 2).
+                // The dominant hand letting go of a two-hand hold hands the
+                // object to the off hand, and until this edge existed NOTHING
+                // could put it down: the dominant edge needs the dominant's own
+                // transition and this one asked for a pair. The object stayed
+                // welded to the off grip with no button pressed, and the stick,
+                // the gizmo and the gaze fly were all refused meanwhile because
+                // a gesture was live.
                 endGrab(offHand());
         }
 
@@ -1528,33 +1619,63 @@ void VrInteraction::step(float seconds)
     {
         const VrHandState &t = hands[dominant];
         const bool busy = mGesture.active || mGizmoDrag.active;
-        const float y = t.valid ? t.stickY : 0.0f;
-        const bool forward = y >= vrgrab::kStickDeadZone;
-        const bool back = y <= -vrgrab::kStickDeadZone;
-        if (busy || !t.valid) {
+        if (busy) {
             // THAT STICK BELONGS TO THE GESTURE while something is held, and a
             // throw armed before the grab is not the wearer's intent any more.
             if (mTeleport.armed) teleportCancel();
-            if (forward) mTeleportArmable = false;
-        } else if (forward && mTeleportArmable) {
-            // `menu` CANCELS (the brief's rule, and the one modifier this
-            // surface has): holding it while the stick is forward puts the arc
-            // away and keeps it away until the stick comes back.
-            if (t.menuPressed) {
-                if (mTeleport.armed) teleportCancel();
-                mTeleportArmable = false;
-                mMenuConsumed = true;
-            } else {
-                teleportArm(dominant);
+            mTeleportArmable = false;
+        } else if (!t.valid) {
+            // A TRACKING BLIP HOLDS THE ARC WHERE IT IS (the lead's read, item
+            // 8) — the grab's own rule, one line of which reads "a skipped
+            // locate is not a released trigger". This used to CANCEL, and
+            // because the next located frame re-armed, one dropped frame of a
+            // controller threw the curve away, re-armed it, and reset the
+            // counters; a stick held over a blink could not be released into a
+            // teleport at all. The stick's value is unknown while the hand is
+            // unlocated, so nothing is decided from it.
+        } else {
+            const float y = t.stickY;
+            // TWO THRESHOLDS, NOT ONE (the lead's read, item 5). Arming takes
+            // the dead zone (0.5); the throw is taken only once the stick has
+            // come back through the RE-ARM band (0.2) — the snap turn's own
+            // number, and for the same reason. With one threshold a stick
+            // resting on the edge of the dead zone armed and fired on
+            // alternating frames; between the two the arc simply stays up and
+            // keeps re-aiming, which is what a wearer moving their thumb
+            // slowly is doing.
+            const bool aiming = y >= vrgrab::kStickDeadZone;
+            const bool holding = y > vrgrab::kStickRearm;
+            const bool back = y <= -vrgrab::kStickDeadZone;
+            if (mTeleport.armed) {
+                if (t.menuPressed) {
+                    // `menu` CANCELS (the brief's rule, and the one modifier
+                    // this surface has), and keeps it cancelled until the stick
+                    // comes back.
+                    teleportCancel();
+                    mTeleportArmable = false;
+                    mMenuConsumed = true;
+                } else if (back) {
+                    // A FLICK BACKWARDS is the other way to say no — what a
+                    // hand does when it changes its mind.
+                    teleportCancel();
+                } else if (holding) {
+                    teleportArm(dominant);      // still aiming: re-trace
+                } else {
+                    teleportFire();             // came back through the re-arm
+                }
+            } else if (aiming && mTeleportArmable) {
+                if (t.menuPressed) {
+                    mTeleportArmable = false;
+                    mMenuConsumed = true;
+                } else {
+                    teleportArm(dominant);
+                }
             }
-        } else if (mTeleport.armed) {
-            // THE STICK CAME BACK: forward-to-centre TAKES the landing, and
-            // forward-to-BACKWARD is the other way to say no (a flick back is
-            // what a hand does when it changes its mind).
-            if (back) teleportCancel();
-            else teleportFire();
+            // RE-ARMABLE ONLY FROM THE RE-ARM BAND, so a cancelled throw and a
+            // throw taken cannot be followed by another until the thumb has
+            // really come back.
+            if (y <= vrgrab::kStickRearm) mTeleportArmable = true;
         }
-        if (!forward) mTeleportArmable = true;
     }
 
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = hands[i];
@@ -1601,6 +1722,16 @@ QVariantMap VrInteraction::report() const
         out[QStringLiteral("rig")] = rig;
     }
     out[QStringLiteral("twoHanded")] = mGesture.active && mGesture.two;
+    // WHICH HANDS ARE ON IT — the answer a verb's refusal needs and a suite
+    // asserts the hand-off with (an empty string when nothing is held).
+    out[QStringLiteral("hand")] = mGesture.active
+                                     ? (mGesture.hand == VrHandRight ? QStringLiteral("right")
+                                                                     : QStringLiteral("left"))
+                                     : QString();
+    out[QStringLiteral("hand2")] =
+        mGesture.active && mGesture.two
+            ? (mGesture.hand2 == VrHandRight ? QStringLiteral("right") : QStringLiteral("left"))
+            : QString();
     out[QStringLiteral("scale")] = double(mGesture.active ? mGesture.scale : 1.0f);
     out[QStringLiteral("rollDegrees")] = double(mGesture.active ? mGesture.rollDegrees : 0.0f);
     out[QStringLiteral("twoHands")] = QVariant::fromValue(qulonglong(mTwoHands));

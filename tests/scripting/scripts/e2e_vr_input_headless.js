@@ -626,6 +626,160 @@ sendPair({ x: -0.5, y: 1, z: 1.7, grab: 0 }, { x: 0.5, y: 1, z: 1.7, grab: 0 });
 node.remove(lamp);
 editor.selectNone();
 
+
+// ---- 9c. EITHER HAND'S RELEASE ENDS THE GESTURE IT OWNS ----------------
+//         (the lead's read of the first round, item 2)
+//
+// THE ORDER THE FIRST ROUND COULD NOT SURVIVE: right presses, left joins,
+// RIGHT lets go first. The object is handed to the left hand — and until this
+// round nothing could put it down, because the dominant hand's edge needs the
+// dominant hand's own transition and the off hand's edge asked for a PAIR. The
+// object stayed welded to the left grip with no button pressed anywhere, and
+// the stick, the gizmo and the gaze fly were all refused meanwhile because a
+// gesture was live. Driven here with the BUTTONS, not the verbs, because the
+// defect was in the edges.
+
+node.transform(cubeA, { position: { x: 0, y: 1, z: 0 }, scale: { x: 1, y: 1, z: 1 } });
+editor.frame(1);
+editor.selectNone();
+pushes = editor.undoState().pushes;
+
+sendPair({ x: -0.25, y: 1, z: 1.7 }, { x: 0.25, y: 1, z: 1.7 });
+sendPair({ x: -0.25, y: 1, z: 1.7 }, { x: 0.25, y: 1, z: 1.7, grab: 1 });   // R presses
+var owned = vr.interactionMode();
+assert(owned.grabbing === true && owned.hand === "right", "the RIGHT hand takes hold");
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 1 });  // L joins
+assert(vr.interactionMode().twoHanded === true, "...and the left hand joins it");
+// THE DOMINANT HAND LETS GO FIRST.
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 0 });
+var handed = vr.interactionMode();
+console.log("after the RIGHT hand let go first: " + JSON.stringify({
+    grabbing: handed.grabbing, hand: handed.hand, two: handed.twoHanded }));
+assert(handed.grabbing === true, "the gesture continues");
+assert(handed.twoHanded === false, "...on one hand");
+assert(handed.hand === "left", "...and that hand is the LEFT one, which is still squeezing");
+assert(editor.undoState().pushes === pushes, "nothing committed by the hand-off");
+// The left hand carries it 30 cm up, to prove it really is the one holding.
+sendPair({ x: -0.25, y: 1.3, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 0 });
+assert(near(posOf(cubeA).y, 1.3, 2e-3), "the left hand carries it (a 30 cm lift is 30 cm)");
+// AND THE LEFT HAND'S OWN RELEASE ENDS IT — the edge this round added.
+sendPair({ x: -0.25, y: 1.3, z: 1.7, grab: 0 }, { x: 0.25, y: 1, z: 1.7, grab: 0 });
+var done = vr.interactionMode();
+assert(done.grabbing === false,
+       "the OFF hand's release ends a gesture it owns (it could not, before this round)");
+assert(done.hand === "", "nothing is held");
+assert(editor.undoState().pushes === pushes + 1,
+       "...and the whole thing is ONE undo step, committed by that release");
+assert(near(posOf(cubeA).y, 1.3, 2e-3), "the object stayed where the left hand left it");
+
+// AND THE REFUSALS TELL THE TRUTH IN THE TWO-HAND STATES (item 9): a third
+// message each, because the old two both lied — "nothing to grab" when that
+// hand was already holding it, and "no grab is running" while one plainly was.
+sendPair({ x: -0.25, y: 1, z: 1.7 }, { x: 0.25, y: 1, z: 1.7 });
+assert(vr.grab({ hand: "right" }) === true, "the right hand takes hold (by verb)");
+assert(vr.grab({ hand: "right" }) === false, "a second grab with the SAME hand refuses...");
+assert(app.lastError().indexOf("already holding") >= 0,
+       "...saying that hand is already holding it: " + app.lastError());
+assert(vr.grab({ hand: "left" }) === true, "the left hand joins");
+assert(vr.grab({ hand: "left" }) === false, "a third grab refuses...");
+assert(app.lastError().indexOf("no third hand") >= 0,
+       "...saying both hands are already on it: " + app.lastError());
+assert(vr.release({ hand: "left" }) === true, "the left hand hands it back");
+assert(vr.release({ hand: "left" }) === false, "a second release with that hand refuses...");
+assert(app.lastError().indexOf("not holding anything") >= 0
+       && app.lastError().indexOf("right hand is") >= 0,
+       "...naming the hand that IS holding it: " + app.lastError());
+assert(vr.release({ hand: "right" }) === true, "and the right hand's release commits");
+
+// ---- 9d. A HAND-OFF ASKS FOR THE POSE ITS ARRANGEMENT USES -------------
+//         (the lead's read, item 6)
+//
+// A NEAR hold rides the GRIP and a FAR hold rides the AIM, and the first
+// round's guard accepted either — so a near hand-off to a hand whose grip was
+// not located captured the follow from a pose nobody located (the jump the
+// guard exists to prevent) and a far one whose aim was not located welded a
+// ten-metre object to the wrist. Injected here, because a controller that
+// reports a pose for one and not the other is a runtime's business.
+
+/// A hand with one of its two poses UNLOCATED. `vr.inject`'s pose reader takes
+/// a `valid` key, which is exactly what a runtime says when it has a grip and
+/// no aim (or the other way round).
+function sendPairPartial(l, r) {
+    var mk = function (o) {
+        var pose = { x: o.x, y: o.y, z: o.z, yaw: o.yaw || 0, pitch: o.pitch || 0 };
+        var m = { valid: true, select: 0, grab: o.grab || 0, menuPressed: !!o.menu,
+                  stick: { x: 0, y: 0 }, focused: true };
+        m.aim = o.noAim ? { valid: false } : pose;
+        m.grip = o.noGrip ? { valid: false } : pose;
+        return m;
+    };
+    assert(vr.inject("left", mk(l)) === true && vr.inject("right", mk(r)) === true
+           && vr.step() === true,
+           "one frame: left" + (l.noGrip ? " NO GRIP" : "") + (l.noAim ? " NO AIM" : "")
+           + (l.grab ? " grab" : "") + ", right" + (r.noGrip ? " NO GRIP" : "")
+           + (r.noAim ? " NO AIM" : "") + (r.grab ? " grab" : ""));
+}
+
+node.transform(cubeA, { position: { x: 0, y: 1, z: 0 }, scale: { x: 1, y: 1, z: 1 } });
+editor.frame(1);
+editor.selectNone();
+// A NEAR two-hand hold, then the right hand lets go on a frame where the left
+// hand has an AIM but no GRIP. The near follow needs the grip.
+sendPair({ x: -0.25, y: 1, z: 1.7 }, { x: 0.25, y: 1, z: 1.7 });
+assert(vr.grab({ hand: "right" }) === true && vr.grab({ hand: "left" }) === true,
+       "both hands on the cube, near");
+var atHandoff = posOf(cubeA);
+sendPairPartial({ x: -0.25, y: 1, z: 1.7, grab: 1, noGrip: true },
+                { x: 0.25, y: 1, z: 1.7, grab: 0 });
+// THE RELEASE IS THE VERB HERE because the SETUP was the verb: the squeeze
+// edges are transitions of the injected buttons, and these two hands never
+// pressed anything (§9c drives the same hand-off through the buttons).
+assert(vr.release({ hand: "right" }) === true, "the right hand lets go on that very frame");
+var wait = vr.interactionMode();
+assert(wait.grabbing === true && wait.hand === "left",
+       "the gesture is handed to the left hand even though its GRIP is not located");
+showPos("the cube while the hand-off waits", cubeA);
+assert(near(posOf(cubeA).x, atHandoff.x, 1e-4) && near(posOf(cubeA).y, atHandoff.y, 1e-4)
+       && near(posOf(cubeA).z, atHandoff.z, 1e-4),
+       "...and the object does not move a micron while the capture waits for a pose");
+// The grip comes back, half a metre away from where it last was: the capture is
+// taken THERE, so this frame is still a hold.
+sendPair({ x: -0.75, y: 1, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 0 });
+assert(near(posOf(cubeA).x, atHandoff.x, 2e-3),
+       "the frame the grip returns on is a HOLD, not a jump of the 0.5 m it moved while away");
+sendPair({ x: -0.55, y: 1, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 0 });
+assert(near(posOf(cubeA).x, atHandoff.x + 0.2, 3e-3),
+       "...and the follow carries on from there (20 cm right is 20 cm)");
+sendPair({ x: -0.55, y: 1, z: 1.7, grab: 0 }, { x: 0.25, y: 1, z: 1.7, grab: 0 });
+assert(vr.interactionMode().grabbing === false, "put down");
+
+// A FAR two-hand hold, then the same thing with the AIM missing: the far follow
+// needs the aim, and a located GRIP is not a substitute (it would weld a
+// four-metre object to the wrist).
+node.transform(cubeA, { position: { x: 0, y: 1, z: 0 }, scale: { x: 1, y: 1, z: 1 } });
+editor.frame(1);
+sendPair({ x: -0.25, y: 1, z: 4 }, { x: 0.25, y: 1, z: 4 });
+assert(vr.grab({ hand: "right" }) === true, "a FAR grab at 4 m");
+assert(vr.interactionMode().far === true, "...and it is far");
+assert(vr.grab({ hand: "left" }) === true, "both hands on it");
+var atFarHandoff = posOf(cubeA);
+sendPairPartial({ x: -0.25, y: 1, z: 4, grab: 1, noAim: true },
+                { x: 0.25, y: 1, z: 4, grab: 0 });
+assert(vr.release({ hand: "right" }) === true, "the right hand lets go on that very frame");
+var farWait = vr.interactionMode();
+assert(farWait.grabbing === true && farWait.hand === "left",
+       "the far gesture is handed over with the left AIM unlocated");
+showPos("the cube while the far hand-off waits", cubeA);
+assert(near(posOf(cubeA).x, atFarHandoff.x, 1e-4)
+       && near(posOf(cubeA).z, atFarHandoff.z, 1e-4),
+       "...and it does not snap to the wrist (the grip is located, and is NOT the pose a far "
+       + "hold rides)");
+sendPair({ x: -0.25, y: 1, z: 4, grab: 1 }, { x: 0.25, y: 1, z: 4, grab: 0 });
+assert(near(posOf(cubeA).z, atFarHandoff.z, 0.02),
+       "the frame the aim returns on is a hold");
+sendPair({ x: -0.25, y: 1, z: 4, grab: 0 }, { x: 0.25, y: 1, z: 4, grab: 0 });
+assert(vr.interactionMode().grabbing === false, "put down");
+
 // AND THE OFF HAND IS WITHDRAWN. An empty state is the "stop injecting"
 // spelling, and it matters to the cases below: with the LEFT hand still
 // reporting, swapping the dominant hand would find it aimed at a cube and the

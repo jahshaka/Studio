@@ -237,6 +237,14 @@ public:
     };
 
     VrInteraction() = default;
+    /// THE ARC'S NODES GO BACK (the lead's read, item 11): a VrInteraction
+    /// destroyed while its engine scene is alive used to leave twenty-one line
+    /// nodes and their mesh, materials and pool behind. It is a no-op in every
+    /// ordinary path — `end()` releases them at the session's edge and at a
+    /// script's withdrawal, so by the time anything destroys this object there
+    /// is nothing to give back, and the host's callable is never asked from a
+    /// destructor (see releaseArc).
+    ~VrInteraction();
 
     void setDeps(const Deps &deps) { mDeps = deps; }
     /// The source is NOT owned. Null means "no controller reports", which is
@@ -284,11 +292,14 @@ public:
     /// ray, selecting it first) and hold it. False when refused — nothing to
     /// grab, the edit gate, or the Player.
     ///
-    /// A GRAB TAKEN BY THE OFF HAND IS RELEASABLE ONLY BY `endGrab`. The button
-    /// edges in step() run for the DOMINANT hand alone (the off hand's stick is
-    /// locomotion), so a `vr.grab({hand:"left"})` is ended by `vr.release`, by
-    /// a cancel (focus loss, session end, the Player taking over) — never by
-    /// squeezing the off hand.
+    /// EITHER HAND'S RELEASE ENDS THE GESTURE IT OWNS (the lead's read, item
+    /// 2). The off hand's squeeze edge used to be read only as "join a
+    /// two-hand hold", so a gesture that ended up on the OFF hand — the
+    /// dominant hand letting go of a two-hand hold, or a `vr.grab({hand:
+    /// "left"})` — could not be put down by a button at all: the object stayed
+    /// welded to that grip with nothing pressed, and the stick, the gizmo and
+    /// the gaze fly were all refused because a gesture was live. The off hand's
+    /// release now ends a gesture it owns as well as a pair it is half of.
     bool beginGrab(unsigned hand);
     /// What a squeeze release does: commit ONE undo macro. False when no
     /// gesture was live, or in the Player.
@@ -324,6 +335,11 @@ public:
     /// names a place means it. False with no session/rig.
     bool teleportTo(const iris::Vec3 &point);
     bool teleportArmed() const { return mTeleport.armed; }
+    /// WHICH HANDS ARE HOLDING (the lead's read, item 9): false with no
+    /// gesture; `second` is the hand that joined a pair, or the same as
+    /// `primary` when only one hand is on it. A verb's refusal needs this to
+    /// tell "nothing to grab" from "that hand is already holding it".
+    bool gestureHands(unsigned *primary, unsigned *second = nullptr) const;
     /// {armed, valid, reason, landing:{x,y,z}, normal:{...}, points, drawn,
     ///  marker, teleports} — what `vr.teleport()` and `vr.inputState()` report.
     QVariantMap teleportReport() const;
@@ -352,8 +368,14 @@ public:
     bool cycleGizmoMode();
 
     /// Put everything back and push nothing (focus loss, session end, a
-    /// project switch). False when no gesture was live.
+    /// project switch) — the EDITING half (a gesture, a handle drag) AND an
+    /// armed teleport arc. False when none of the three was live.
     bool cancel();
+    /// THE EDITING HALF ALONE (the lead's read, item 1). The Player's step
+    /// calls this and not `cancel()`: an armed teleport is LOCOMOTION, which
+    /// the Player runs, and cancelling it every frame re-armed it every frame
+    /// and meant a throw could never be taken in the Player at all.
+    bool cancelEditing();
     /// Turn the wearer about their own head. False with no session/rig.
     bool turn(float degrees);
     /// One step of stick flight. False with no session/rig, or nothing pushed.
@@ -422,6 +444,14 @@ private:
         /// nobody ever located, which is a jump of the object's whole distance
         /// from the origin.
         bool recapture = false;
+        /// WHERE A PAIR TURNS AND SCALES ABOUT, captured at the upgrade: the
+        /// point between the palms for a near hold, and — for a far one — the
+        /// VIRTUAL HAND out on the ray, which is the very point the one-hand
+        /// far gesture already rotates the object about (the lead's read, item
+        /// 7: the two arrangements pivot about ONE point, so a second hand
+        /// joining a far grab changes what the gesture can DO and not where it
+        /// happens).
+        iris::Vec3 pivot;
         /// The factor the pair is currently applying, for the report.
         float scale = 1.0f;
         float rollDegrees = 0.0f;
@@ -479,6 +509,11 @@ private:
     /// Hand the armed arc (or nothing) to the drawer, building it on the
     /// engine scene the host named. Does nothing at all with no scene.
     void drawArc();
+    /// GIVE THE ARC'S NODES BACK while the scene that owns them still answers,
+    /// and merely forget them when it does not (vrarc.h's lifetime note).
+    /// Called by `end()` and by the destructor — where it is a no-op in every
+    /// ordinary path, because `end()` has already run.
+    void releaseArc();
     /// The active gizmo this frame, or null.
     Gizmo *gizmoNow() const;
     /// WHERE THE WEARER IS LOOKING FROM: the head through the rig when a
@@ -543,7 +578,33 @@ private:
     /// host said — a headless stand-in places nobody.
     bool locomotionBlocked() const;
 
+    /// THE FRAME'S LOCOMOTION SETTINGS, RESOLVED ONCE (the lead's read, item
+    /// 10). `locomotion()` asks the host, which asks the project, and a single
+    /// step() used to ask six or more times (every `dominantHand()`, every
+    /// `offHand()`, the turn block, the report) — for a value that cannot
+    /// change inside one frame. step() opens this for its own duration and
+    /// every reader inside takes the copy; outside a frame (a verb, a report)
+    /// the question still goes to the host, because there the project may
+    /// genuinely have just changed.
+    struct FrameSettings
+    {
+        explicit FrameSettings(const VrInteraction *self) : mSelf(self)
+        {
+            mSelf->mFrameLoco = mSelf->mDeps.locomotion ? mSelf->mDeps.locomotion()
+                                                        : vrworld::Settings();
+            mSelf->mFrameLocoValid = true;
+        }
+        ~FrameSettings() { mSelf->mFrameLocoValid = false; }
+        FrameSettings(const FrameSettings &) = delete;
+        FrameSettings &operator=(const FrameSettings &) = delete;
+
+    private:
+        const VrInteraction *mSelf;
+    };
+
     Deps mDeps;
+    mutable vrworld::Settings mFrameLoco;
+    mutable bool mFrameLocoValid = false;
     VrInputSource *mSource = nullptr;
     bool mInstalled = false;
 

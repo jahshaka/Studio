@@ -75,17 +75,21 @@ assert(app.lastError().indexOf("no arc is armed") >= 0,
        "...and says so in words: " + app.lastError());
 assert(vr.teleport({ cancel: true }) === false, "so does a cancel");
 
-// ---- 1. A LEVEL THROW LANDS ON THE FLOOR PLANE --------------------------
+// ---- 1. A LEVEL THROW LANDS ON THE LOCKED FLOOR -------------------------
 //
-// THE FLOOR IS NOT A PICK. A new project's ground ships LOCKED (the owner's own
-// model — services/defaultfloor.cpp sets pickable false), so the document's
-// picker refuses it exactly as a desktop click does, and a teleport that needed
-// a pick to find the floor would refuse every throw in a fresh project with a
-// floor plainly under the wearer's feet. The arc solves the floor PLANE
-// (y = 0) analytically instead — where the grid is, where a primitive with no
-// transform sits, and what the wearer is looking at.
+// THE LOCK IS AN EDIT GUARD, AND A TELEPORT IS NOT AN EDIT (the lead's read of
+// the first round, item 3). A new project's ground ships LOCKED — the owner's
+// own model, and people lock a floor for exactly one reason: so that clicking
+// it does not SELECT it (services/defaultfloor.cpp sets pickable false). A
+// floor you cannot select is still a floor you stand on, so the arc's trace
+// asks the picker with the lock FORCED OFF, and the commonest throw in the
+// editor — at the floor in front of you, in a fresh project — lands on it.
 var floorPickable = scene.raycast({ x: 0, y: 3, z: 0 }, { x: 0, y: -1, z: 0 });
-assert(floorPickable.length === 0, "the project's floor is LOCKED (no pickable hit under it)");
+assert(floorPickable.length === 0,
+       "the project's floor is LOCKED — the document's own raycast refuses it");
+var floorAny = scene.raycast({ x: 0, y: 3, z: 0 }, { x: 0, y: -1, z: 0 },
+                             { includeUnpickable: true });
+assert(floorAny.length > 0, "...and it is there (" + floorAny[0].name + ")");
 
 aim({ x: 0, y: 1.4, z: 3, stickY: 1 });
 var t1 = tp();
@@ -95,11 +99,48 @@ assert(t1.landed === true, "the throw found somewhere to land");
 assert(t1.valid === true, "...and it is somewhere a person may stand");
 assert(t1.reason === "", "so there is no refusal to report");
 show("the landing", t1.landing);
-assert(near(t1.landing.y, 0.0, 1e-3), "it lands ON the floor plane (y = 0)");
-assert(near(t1.landing.z, 3 - 5.3425, 5e-3),
-       "...5.343 m along the aim: z = 3 - 5.343 = -2.343, the throw's own arithmetic");
+assert(near(t1.landing.y, 0.0, 5e-3),
+       "it lands ON the locked ground (which sits a hair above y = 0)");
+// THE HIT IS WHERE THE STRAIGHT PIECE MET THE SURFACE, which is up to a couple
+// of centimetres short of where the CURVE crosses it (the curve is traced as
+// twenty straight pieces): 0.5343 s of flight is 5.343 m along the aim, and
+// the chord through that piece meets y = 0 at 5.32. That is the right answer —
+// the hit is ON the floor, which is what a landing means — and the case below
+// shows the exact arithmetic where there is no geometry to pick.
+assert(near(t1.landing.z, -2.32, 0.03),
+       "...5.32 m along the aim: the chord of the piece that crosses the floor");
 assert(near(t1.landing.x, 0.0, 1e-4), "and straight ahead (the aim had no yaw)");
-assert(near(t1.normal.y, 1.0, 1e-4), "the floor's normal is straight up");
+assert(near(t1.normal.y, 1.0, 1e-3), "the floor's normal is straight up");
+
+// ---- 1b. WITH NO GEOMETRY AT ALL, THE WEARER'S OWN FLOOR CONTINUES ------
+//         (the lead's read, item 4)
+//
+// A throw that met nothing falls back to a PLANE, and the first round used the
+// world's y = 0 — a guess about the content, which on a scene built on a raised
+// floor or on terrain would land the wearer in mid-air and report it GREEN. The
+// plane is the floor the WEARER IS STANDING ON: the rig's own y. With no
+// session there is no wearer and no floor of theirs, so it is the world's y = 0
+// — which is also what this gate measures, and where the exact arithmetic
+// shows: 0.5343 s, 5.3425 m, solved rather than sampled.
+var floorId = floorAny[0].id;
+node.remove(floorId);
+editor.frame(2);
+assert(scene.raycast({ x: 0, y: 3, z: 0 }, { x: 0, y: -1, z: 0 },
+                     { includeUnpickable: true }).length === 0,
+       "the floor is out of the scene entirely");
+aim({ x: 0, y: 1.4, z: 3, stickY: 0 });
+aim({ x: 0, y: 1.4, z: 3, stickY: 1 });
+var t1b = tp();
+show("the landing with nothing under the arc at all", t1b.landing);
+assert(t1b.landed === true && t1b.valid === true,
+       "the throw still lands: the floor the wearer stands on continues");
+assert(near(t1b.landing.y, 0.0, 1e-4),
+       "at y = 0 — with no session there is no rig, and the world's floor is the only plane "
+       + "a document can mean");
+assert(near(t1b.landing.z, -2.3425, 5e-3),
+       "...and at the CURVE's own crossing, 5.3425 m: the plane is solved, not sampled");
+assert(near(t1b.normal.y, 1.0, 1e-6), "with an upward normal");
+aim({ x: 0, y: 1.4, z: 3, stickY: 0 });
 
 // THE WEARER CAN SEE IT: the curve is line geometry in the world, on the two
 // helper channels (in the eyes and in the desktop editor's picture, in no probe
@@ -111,12 +152,14 @@ assert(t1.marker === true, "with the landing ring standing at the end of it");
 assert(t1.arms === 1, "one throw armed");
 
 // AIMING IT SOMEWHERE ELSE RE-TRACES: the same gesture, a new answer.
+aim({ x: 0, y: 1.4, z: 3, stickY: 1 });
+var armsBeforeTurn = tp().arms;
 aim({ x: 0, y: 1.4, z: 3, yaw: 90, stickY: 1 });
-var t1b = tp();
-show("the landing after turning the wrist 90 degrees", t1b.landing);
-assert(near(t1b.landing.x, -5.3425, 5e-3),
+var t1d = tp();
+show("the landing after turning the wrist 90 degrees", t1d.landing);
+assert(near(t1d.landing.x, -5.3425, 5e-3),
        "yawed 90 degrees the throw lands 5.343 m down -X (the right-handed turn about +Y)");
-assert(t1b.arms === 1, "and re-aiming an armed arc is not a second arm");
+assert(t1d.arms === armsBeforeTurn, "and re-aiming an armed arc is not a second arm");
 
 // ---- 2. LETTING THE STICK GO TAKES THE LANDING --------------------------
 //
@@ -182,16 +225,22 @@ assert(near(t4.normal.y, 1.0, 0.02), "the slab's top normal is up");
 assert(t4.reason === "", "and nothing is refused");
 aim({ x: 0, y: 1.4, z: 3, stickY: 0 });
 
-// A LOCKED PLATFORM IS NOT A FLOOR EITHER: the lock IS `pickable`, so the arc
-// passes straight through it to whatever is under — here, the floor plane.
+// A LOCKED PLATFORM IS STILL A PLATFORM (the lead's read, item 3): the lock
+// stops a CLICK from selecting it, and standing on a thing is not selecting it.
+// The first round read the flag on the wrong axis and passed locked geometry
+// through, which in a project where the author has locked the set — the normal
+// way to work — meant teleporting through the floor of every room.
 node.setProperty(wall, "pickable", false);
 editor.frame(2);
+aim({ x: 0, y: 1.4, z: 3, stickY: 0 });
 aim({ x: 0, y: 1.4, z: 3, stickY: 1 });
 var t4b = tp();
 show("the landing with the slab locked", t4b.landing);
-assert(near(t4b.landing.y, 0.0, 1e-3),
-       "a LOCKED slab is not something to stand on — the throw carries on to the floor");
-assert(near(t4b.landing.z, -2.343, 5e-3), "...at the level throw's own 5.343 m");
+assert(t4b.landed === true && t4b.valid === true, "a LOCKED slab is landed on exactly the same");
+assert(near(t4b.landing.y, 0.55, 0.02), "at the same y = 0.55 on its top face");
+assert(near(t4b.landing.z, -1.163, 0.05), "...and the same place along the curve");
+assert(scene.raycast({ x: 0, y: 3, z: -1.5 }, { x: 0, y: -1, z: 0 }).length === 0,
+       "...while the document's own raycast still refuses it, which is what the lock is FOR");
 aim({ x: 0, y: 1.4, z: 3, stickY: 0 });
 node.remove(wall);
 editor.frame(2);
@@ -230,6 +279,71 @@ assert(tp().armed === true, "...and arms again once the stick has come back thro
 aim({ x: 0, y: 1.4, z: 3, stickY: -1 });
 assert(tp().armed === false, "a flick BACKWARDS cancels too (the other way to say no)");
 assert(tp().teleports === 0, "and nobody has been moved by any of it");
+
+// ---- 6b. THE THROW IS TAKEN ON THE WAY BACK, NOT ON THE WAY DOWN -------
+//         (the lead's read, item 5)
+//
+// ONE THRESHOLD IS A DOUBLE FIRE. The first round armed at the dead zone (0.5)
+// and fired the instant the stick read below it, so a thumb RESTING on the edge
+// — which is where a thumb rests, and where a worn stick's noise lives — armed
+// and fired on alternating frames. There are two thresholds now, the snap
+// turn's own pair: the arc is ARMED at 0.5 and TAKEN only once the stick has
+// come back through 0.2, and in the band between it simply stays up and keeps
+// re-aiming, which is what a wearer moving their thumb slowly is doing.
+var arms6 = tp().arms;
+aim({ x: 0, y: 1.4, z: 3, stickY: 1 });
+assert(tp().armed === true, "armed at full deflection");
+aim({ x: 0, y: 1.4, z: 3, stickY: 0.45 });
+assert(tp().armed === true, "0.45 — below the dead zone, still aiming: the arc stays up");
+aim({ x: 0, y: 1.4, z: 3, stickY: 0.3 });
+assert(tp().armed === true, "0.30 — still in the band, still up");
+aim({ x: 0, y: 1.4, z: 3, stickY: 0.55 });
+assert(tp().armed === true, "0.55 — back over the dead zone, and it did NOT re-arm as a second "
+       + "throw");
+assert(tp().arms === arms6 + 1, "...one arm for the whole wobble, not four");
+aim({ x: 0, y: 1.4, z: 3, stickY: 0.15 });
+assert(tp().armed === false, "0.15 — through the re-arm band: THAT is when the throw is taken");
+assert(tp().teleports === 0, "(it moves nobody here: no session, no rig)");
+aim({ x: 0, y: 1.4, z: 3, stickY: 0 });
+
+// ---- 6c. A TRACKING BLIP HOLDS THE ARC WHERE IT IS ---------------------
+//         (the lead's read, item 8)
+//
+// The grab's own rule, one line of which reads "a skipped locate is not a
+// released trigger". The first round CANCELLED on an unlocated frame and
+// re-armed on the next, so one dropped frame of a controller threw the curve
+// away, reset the counters, and a stick held across a blink could not be
+// released into a teleport at all.
+aim({ x: 0, y: 1.4, z: 3, stickY: 1 });
+// THE COUNTERS AS THEY STAND WITH THE THROW ARMED — the blip must move
+// neither: an arm again would mean it was thrown away and re-traced, a cancel
+// would mean it was thrown away full stop.
+var arms8 = tp().arms;
+var cancels8 = tp().cancels;
+var armedAt = tp().landing;
+assert(tp().armed === true, "armed");
+// THE AIM STOPS BEING LOCATED for a frame, with the hand still reporting and
+// the stick still over — which is exactly what a runtime says when
+// `xrLocateSpace` on the aim space misses a frame. (A hand that stops
+// reporting ALTOGETHER is held the same way inside step(); on this injection
+// route it cannot be shown, because a script that withdraws its only hand ends
+// the whole interaction by design — stage 1's "it lets go when the hands do".)
+assert(vr.inject("right", { valid: true, aim: { valid: false },
+                            grip: { x: 0, y: 1.4, z: 3 },
+                            stick: { x: 0, y: 1 } }) === true && vr.step() === true,
+       "one frame with the AIM unlocated and the stick still forward");
+var blip = tp();
+console.log("the arc across a blip: " + JSON.stringify({ armed: blip.armed, drawn: blip.drawn,
+                                                         arms: blip.arms, cancels: blip.cancels }));
+assert(blip.armed === true, "the arc is STILL armed — a blip is not the wearer letting go");
+assert(near(blip.landing.z, armedAt.z, 1e-6), "...at exactly the landing it had");
+assert(blip.drawn >= 2, "and still drawn in the world");
+assert(blip.arms === arms8 && blip.cancels === cancels8,
+       "nothing was armed again and nothing was cancelled");
+// ...AND THE THROW IS STILL THERE TO BE TAKEN when the hand comes back.
+aim({ x: 0, y: 1.4, z: 3, stickY: 0 });
+assert(tp().armed === false, "the release after the blip takes it");
+assert(tp().cancels === cancels8, "...as a throw, not as a cancel");
 
 // ---- 7. A HAND THAT IS HOLDING SOMETHING IS NOT AIMING A THROW ---------
 //
