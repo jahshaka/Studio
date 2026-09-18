@@ -2131,6 +2131,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         ci.resolution = c.resolution;
         ci.cell       = c.cell;
         ci.step       = c.step;
+        ci.guaranteedRadius = c.guaranteedRadius;
         ci.centre     = q(c.centre);
         ci.rebuilds   = quint64(c.rebuilds);
         ci.pending    = c.pending;
