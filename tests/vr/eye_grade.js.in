@@ -1,0 +1,170 @@
+// vr.eye_grade — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane
+// EYE-GRADE-1; SPECS/VR_SPEC.md §6).
+//
+// WHAT THIS SUITE EXISTS FOR, in the owner's words after the #50 smoke: "the
+// headset must show the project's picture". Two defects were measured on the
+// rig and both are asserted here:
+//
+//   D2  THE EYE IGNORED THE PROJECT'S GRADE. The session wrote its own
+//       PostFxDesc by hand, so the wearer got the renderer's defaults —
+//       automatic exposure across a +/-2.5 stop window — whatever the author
+//       had chosen. Measured: world.postFx({exposureEv}) swept -2 -> +4 moved
+//       the desktop 8 -> 255 and the eye 79 -> 77.
+//   D1  THE COLOUR CONTRACT WITH THE RUNTIME WAS INVERTED. The swapchain was
+//       asked for as UNORM, which tells an OpenXR runtime "these bytes are
+//       LINEAR", so it encoded our already display-encoded picture a second
+//       time. Measured through Monado's XCB compositor: the desktop's bytes
+//       were the sRGB DECODE of what the runtime displayed (28 -> 3, 79 -> 20,
+//       95 -> 29, 99 -> 32, a red 164 -> 95).
+//
+// THE SHAPE. This script drives the session and writes the pictures; the SHELL
+// runner captures the runtime's own compositor window (xwd) while the script
+// holds a picture still; a small Qt reader then judges the files
+// (test_vr_eye_grade.cpp), because a script cannot open a PNG. The assertions
+// that are about DESCRIPTIONS rather than pixels are made here, where they read
+// best and where a failure names the field that differs.
+//
+// FRAMES, NEVER WALL TIME (the house rule): every wait is a frame count, and
+// the eye screenshot reads until the picture stops moving.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var OUT = "@JAH_EYE_GRADE_DIR@";
+
+// THE POLICY, AS A LIST (jahshaka::engine::applyVrViewPolicy, Types.h): the
+// fields a side-by-side stereo target cannot carry, and therefore the only
+// fields in which the eye's effective description may differ from the
+// desktop's. Everything else must be equal, field for field.
+var POLICY = ["bloom", "ssao", "smaaPreset", "ssrScreenMarch", "allowOffscreen", "looks"];
+
+function comparePostFx(fx, what) {
+    assert(fx && fx.eye && fx.desktop, what + ": both descriptions are reported");
+    var keys = Object.keys(fx.desktop);
+    var differing = [];
+    for (var i = 0; i < keys.length; ++i) {
+        var k = keys[i];
+        if (POLICY.indexOf(k) >= 0) continue;
+        var a = JSON.stringify(fx.eye[k]), b = JSON.stringify(fx.desktop[k]);
+        if (a !== b) differing.push(k + " eye=" + a + " desktop=" + b);
+    }
+    assert(differing.length === 0,
+           what + ": the eye's grade equals the desktop's in every field but the VR " +
+           "policy's" + (differing.length ? " — DIFFERING: " + differing.join(", ") : ""));
+    // ...and the policy's own fields are what the policy says they are, so a
+    // future change to it cannot quietly stop applying.
+    assert(fx.eye.bloom === false, what + ": bloom is off in the eye (one blur ladder, two eyes)");
+    assert(fx.eye.ssao === false, what + ": SSAO is off in the eye (one projection, two eyes)");
+    assert(fx.eye.smaaPreset === -1, what + ": SMAA is off in the eye (its search crosses the seam)");
+    assert(fx.eye.ssrScreenMarch === false, what + ": the screen-space march is off in the eye");
+    assert(fx.eye.allowOffscreen === true, what + ": the eye pair keeps the post chain");
+}
+
+// ---------------------------------------------------------------------------
+project.create("vr eye grade " + Date.now());
+
+// THE FIXTURE IS A FLAT COLOUR SKY, and that is what makes every measurement
+// below pose-independent: a simulated HMD sways and rotates (CLAUDE.md), so the
+// eye and the desktop camera never look in exactly the same direction — but a
+// flat sky is the same radiance in every direction, so a patch of sky is a
+// comparison of the GRADE and of nothing else.
+//
+// MANUAL EXPOSURE is the editor's default (EXPOSURE-1) and is what the arms
+// below sweep; nothing here changes the mode.
+// FOUR LEVELS, THE DARKEST STILL ABOVE THE FLOOR: at the default grade a sky
+// below about #101010 clips to code 0, and two black patches prove only that
+// both pictures can be black. The measured answers on this rig are 7, 50, 100
+// and 139 of 255 — the range over which the filmic curve does its bending.
+var SKIES = ["#404040", "#808080", "#b3b3b3", "#d9d9d9"];
+
+// AND THE DESKTOP CAMERA LOOKS AT THE SKY, deliberately: the wearer's head is
+// LEVEL (the runtime decides that, not us) while the editor camera starts
+// looking down at the scene, so a patch taken at the same place in the two
+// pictures would compare the sky against the floor. Pointing the editor camera
+// up puts sky under both patches, which is the only way "the eye is graded like
+// the desktop" is a statement about the GRADE. It is done before the session so
+// the rig is placed from a camera that is not moving afterwards (the rig takes
+// position and yaw only, so the pitch never reaches the wearer).
+editor.setCamera({ position: { x: 0, y: 1.6, z: 0 }, lookAt: { x: 0, y: 60, z: -1 } });
+
+assert(vr.available().available === true, "the runtime answered");
+assert(vr.begin({ mirror: "left" }) === true, "the session started");
+editor.frame(120);
+var st = vr.state();
+assert(st.active === true, "the session is active");
+assert(st.rendered > 0, "the runtime has asked for " + st.rendered + " pictures");
+
+// ---- (d) THE EFFECTIVE DESCRIPTIONS ---------------------------------------
+comparePostFx(vr.state().postFx, "at the default grade");
+
+// ---- (a)/(b) THE PICTURES, ONE ARM PER SKY LEVEL --------------------------
+//
+// Each arm: set the sky, settle, take the eye's own picture and the desktop's
+// screenshot, then HOLD the picture still for the runner's window capture. The
+// marker file is what tells the runner an arm is ready — a script cannot signal
+// a shell any other way, and a screenshot is a file the script CAN write.
+for (var a = 0; a < SKIES.length; ++a) {
+    world.sky("color", { color: SKIES[a] });
+    editor.frame(90);
+    var eye = vr.eyeScreenshot(0, OUT + "/eye-" + a + ".png");
+    assert(eye.width > 0, "arm " + a + ": the left eye's own picture (" + eye.width + "x" +
+                          eye.height + ", centre " + eye.center.r + "," + eye.center.g + "," +
+                          eye.center.b + ")");
+    var desk = editor.screenshot(OUT + "/desk-" + a + ".png", eye.width, eye.height, [], "scene");
+    assert(desk.width > 0, "arm " + a + ": the desktop's own picture, same grade, same size");
+    comparePostFx(vr.state().postFx, "arm " + a);
+    // The marker, then the hold. The runner captures the runtime's compositor
+    // window during the hold; the picture does not move through it.
+    editor.screenshot(OUT + "/ready-" + a + ".png", 32, 32, [], "plain");
+    editor.frame(600);
+}
+
+// ---- (c) THE EXPOSURE SWEEP -----------------------------------------------
+//
+// The rig's own sweep, as an assertion: the eye must move with the desktop.
+// Both halves are read — the DESCRIPTION (the chain's exposure value, which is
+// what the renderer acts on) and the PICTURE (the eye's own centre byte) — so a
+// pass cannot come from a description that reaches no pixel.
+world.sky("color", { color: "#404040" });
+var EV = [-2, 0, 2];
+var chain = [], seen = [];
+for (var e = 0; e < EV.length; ++e) {
+    world.postFx({ exposureEv: EV[e] });
+    editor.frame(60);
+    var fx = vr.state().postFx;
+    comparePostFx(fx, "at exposureEv " + EV[e]);
+    chain.push(fx.eye.exposure);
+    var shot = vr.eyeScreenshot(0, OUT + "/sweep-" + e + ".png");
+    seen.push(shot.center.g);
+    console.log("exposureEv " + EV[e] + ": chain exposure " + fx.eye.exposure.toFixed(4) +
+                " (desktop " + fx.desktop.exposure.toFixed(4) + "), eye centre green " +
+                shot.center.g);
+}
+assert(chain[0] < chain[1] && chain[1] < chain[2],
+       "the eye's chain exposure follows the World panel: " + chain.join(" < "));
+assert(seen[0] < seen[1] && seen[1] < seen[2],
+       "and so does the eye's own picture: " + seen.join(" < ") + " (before this lane it read " +
+       "79 -> 77 across a six-stop sweep)");
+
+// ---- THE REALISTIC-SKY ARM ------------------------------------------------
+//
+// Not a flat-patch comparison — a realistic sky is a gradient and the two
+// pictures look in different directions — but the DESCRIPTION must still agree
+// and the eye must still be a picture. It is here because the realistic sky is
+// what the owner will be wearing, and because its radiance is far above the
+// flat arms': a grade that only works on a mid-grey is not a grade.
+world.postFx({ exposureEv: 0 });
+world.sky("realistic", {});
+editor.frame(120);
+comparePostFx(vr.state().postFx, "under the realistic sky");
+var real = vr.eyeScreenshot(0, OUT + "/eye-realistic.png");
+assert(real.width > 0, "the realistic sky's eye picture (centre " + real.center.r + "," +
+                       real.center.g + "," + real.center.b + ")");
+editor.screenshot(OUT + "/desk-realistic.png", real.width, real.height, [], "scene");
+editor.screenshot(OUT + "/ready-realistic.png", 32, 32, [], "plain");
+editor.frame(600);
+
+assert(vr.end() === true, "the session ended");
+console.log("vr.eye_grade: the script's half is green; the reader judges the pictures");

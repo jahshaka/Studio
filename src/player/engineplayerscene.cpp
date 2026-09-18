@@ -266,6 +266,14 @@ void EnginePlayerScene::step(float dt, int width, int height)
         // player".
         mMirror->applySky(mView);
         mMirror->applyEnvironment(mView, mEngine.lock().get());
+        // ...AND THE HEADSET'S EYES BESIDE IT (lane EYE-GRADE-1), through the
+        // PER-VIEW half — the session's View is a view of THIS scene and is
+        // graded by the same project, and it is the one view no mirror used to
+        // reach. Never a second applyEnvironment: that function's scene half
+        // counts GI settle frames and would reach its window twice as fast.
+        if (auto engine = mEngine.lock())
+            if (jahshaka::engine::View *eyes = engine->vrView())
+                mMirror->applyViewEnvironment(eyes, cam);
         // The player's fly camera is a FREE camera and takes the wide-aspect
         // framing hold; applyCamera drops it by itself if the active-camera seam
         // substitutes an AUTHORED camera underneath (a playing scene shooting
